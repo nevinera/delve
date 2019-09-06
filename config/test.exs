@@ -2,8 +2,8 @@ use Mix.Config
 
 # Configure your database
 config :delve, Delve.Repo,
-  username: "postgres",
-  password: "postgres",
+  username: "emueller",
+  password: "",
   database: "delve_test",
   hostname: "localhost",
   pool: Ecto.Adapters.SQL.Sandbox
