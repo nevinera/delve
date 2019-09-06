@@ -6,9 +6,9 @@ defmodule Delve.AuthTest do
   describe "users" do
     alias Delve.Auth.User
 
-    @valid_attrs %{email: "some email", username: "some username"}
-    @update_attrs %{email: "some updated email", username: "some updated username"}
-    @invalid_attrs %{email: nil, username: nil}
+    @valid_attrs %{email: "some email", username: "some username", password: "fake password"}
+    @update_attrs %{email: "some updated email", username: "some updated username", password: "new password"}
+    @invalid_attrs %{email: nil, username: nil, password: nil}
 
     def user_fixture(attrs \\ %{}) do
       {:ok, user} =
@@ -21,12 +21,12 @@ defmodule Delve.AuthTest do
 
     test "list_users/0 returns all users" do
       user = user_fixture()
-      assert Auth.list_users() == [user]
+      assert Auth.list_users() == [%User{user | password: nil}]
     end
 
     test "get_user!/1 returns the user with given id" do
       user = user_fixture()
-      assert Auth.get_user!(user.id) == user
+      assert Auth.get_user!(user.id) == %User{user | password: nil}
     end
 
     test "create_user/1 with valid data creates a user" do
@@ -49,7 +49,7 @@ defmodule Delve.AuthTest do
     test "update_user/2 with invalid data returns error changeset" do
       user = user_fixture()
       assert {:error, %Ecto.Changeset{}} = Auth.update_user(user, @invalid_attrs)
-      assert user == Auth.get_user!(user.id)
+      assert %User{user | password: nil} == Auth.get_user!(user.id)
     end
 
     test "delete_user/1 deletes the user" do
