@@ -87,6 +87,33 @@ defmodule DelveWeb.UserControllerTest do
     end
   end
 
+  describe "sign-in user" do
+    setup [:create_user]
+    
+    test "succeeds with good credentials", %{conn: conn, user: user} do
+      params = %{email: "some email", password: "some password"}
+      conn = post(conn, Routes.user_path(conn, :sign_in), params)
+
+      expected_user_data = %{"id" => user.id, "email" => user.email}
+      expected_response_data = %{"data" => %{ "user" => expected_user_data}}
+      assert json_response(conn, 200) == expected_response_data
+    end
+
+    test "fails with bad password", %{conn: conn} do
+      params = %{email: "some email", password: "wrong password"}
+      conn = post(conn, Routes.user_path(conn, :sign_in), params)
+      assert response(conn, 401)
+      assert json_response(conn, 401)["errors"]["detail"] =~ ~r/password/
+    end
+
+    test "fails with unrecognized user", %{conn: conn} do
+      params = %{email: "wrong email", password: "some password"}
+      conn = post(conn, Routes.user_path(conn, :sign_in), params)
+      assert response(conn, 401)
+      assert json_response(conn, 401)["errors"]["detail"] =~ ~r/password/
+    end
+  end
+
   defp create_user(_) do
     user = fixture(:user)
     {:ok, user: user}
