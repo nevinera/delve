@@ -66,5 +66,21 @@ defmodule Delve.AuthTest do
       user = user_fixture()
       assert %Ecto.Changeset{} = Auth.change_user(user)
     end
+
+    test "authenticate_user/2 with with correct email/password" do
+      user = user_fixture()
+      assert {:ok, authenticated_user} = Auth.authenticate_user("some email", "fake password")
+      assert authenticated_user.id == user.id
+    end
+
+    test "authenticate_user/2 with real user and wrong password" do
+      user_fixture()
+      assert {:error, "Wrong email or password"} == Auth.authenticate_user("some email", "wrong password")
+    end
+
+    test "authenticate_user/2 with unrecognized user" do
+      user_fixture()
+      assert {:error, "Wrong email or password"} == Auth.authenticate_user("missing email", "fake password")
+    end
   end
 end
