@@ -33,6 +33,7 @@ defmodule Delve.AuthTest do
       assert {:ok, %User{} = user} = Auth.create_user(@valid_attrs)
       assert user.email == "some email"
       assert user.username == "some username"
+      assert Bcrypt.verify_pass("fake password", user.password_hash)
     end
 
     test "create_user/1 with invalid data returns error changeset" do
@@ -44,12 +45,15 @@ defmodule Delve.AuthTest do
       assert {:ok, %User{} = user} = Auth.update_user(user, @update_attrs)
       assert user.email == "some updated email"
       assert user.username == "some updated username"
+      assert user.password_hash != nil
+      assert Bcrypt.verify_pass("new password", user.password_hash)
     end
 
     test "update_user/2 with invalid data returns error changeset" do
       user = user_fixture()
       assert {:error, %Ecto.Changeset{}} = Auth.update_user(user, @invalid_attrs)
       assert %User{user | password: nil} == Auth.get_user!(user.id)
+      assert Bcrypt.verify_pass("fake password", user.password_hash)
     end
 
     test "delete_user/1 deletes the user" do
