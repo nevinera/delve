@@ -69,3 +69,7 @@ discover it before it's popular, as a separate problem). There is some work
 we can do for that, but the primary solution is social - we need to make it
 convenient and appropriate to recruit people to try out more progressions.
 
+More important is the shared culture, and I don't have a good handle on how
+to influence that yet. Though I do have hopes that the open-source and
+user-contributed nature of the system will help with that - OSS tends toward
+a contributocracy, which is necessarily socially accomodating.
