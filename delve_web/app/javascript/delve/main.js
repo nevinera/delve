@@ -3,14 +3,26 @@ import * as THREE from "three"
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x87ceeb)
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
+const ASPECT = 16 / 9
+
+const camera = new THREE.PerspectiveCamera(60, ASPECT, 0.1, 1000)
 camera.position.set(0, 6, 8)
 camera.lookAt(0, 0, 0)
 
 const renderer = new THREE.WebGLRenderer({ antialias: true })
-renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setPixelRatio(window.devicePixelRatio)
 document.body.appendChild(renderer.domElement)
+
+function fitToWindow() {
+  if (window.innerWidth / window.innerHeight > ASPECT) {
+    const height = window.innerHeight
+    renderer.setSize(Math.round(height * ASPECT), height)
+  } else {
+    const width = window.innerWidth
+    renderer.setSize(width, Math.round(width / ASPECT))
+  }
+}
+fitToWindow()
 
 const sunLight = new THREE.DirectionalLight(0xffffff, 1.5)
 sunLight.position.set(5, 10, 5)
@@ -31,11 +43,7 @@ const token = new THREE.Mesh(
 token.position.y = 0.05
 scene.add(token)
 
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight
-  camera.updateProjectionMatrix()
-  renderer.setSize(window.innerWidth, window.innerHeight)
-})
+window.addEventListener("resize", fitToWindow)
 
 function animate() {
   requestAnimationFrame(animate)
