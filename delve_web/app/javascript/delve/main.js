@@ -6,13 +6,19 @@ scene.fog = new THREE.Fog(0x87ceeb, 60, 150)
 
 const ASPECT = 16 / 9
 
-const camera = new THREE.PerspectiveCamera(48, ASPECT, 0.1, 500)
-const CAM_LOOK_AT = new THREE.Vector3(0, 0, 25)
+const camera = new THREE.PerspectiveCamera(34, ASPECT, 0.1, 500)
 const CAM_ANGLE = 37 * Math.PI / 180
+const CAM_ORBIT_RADIUS = 45
+// lookAt is shifted forward from the token so it appears in the lower portion of the screen
+const CAM_LOOK_AT = new THREE.Vector3(
+  -10 * Math.sin(CAM_ANGLE),
+  0,
+  25 - 10 * Math.cos(CAM_ANGLE)
+)
 camera.position.set(
-  45 * Math.sin(CAM_ANGLE),
+  CAM_LOOK_AT.x + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE),
   50,
-  25 + 45 * Math.cos(CAM_ANGLE)
+  CAM_LOOK_AT.z + CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE)
 )
 camera.lookAt(CAM_LOOK_AT)
 
