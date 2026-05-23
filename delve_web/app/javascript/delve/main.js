@@ -65,6 +65,41 @@ const tyllani = createToken({
 tyllani.position.set(0, 0, 25)
 scene.add(tyllani)
 
+const goblinColor = 0x8B2500
+
+const grubs = createToken({
+  color: goblinColor,
+  name: 'Goblin Raider',
+  texture: loader.load(document.querySelector('meta[name="goblin-green-url"]').content),
+  diameter: 3,
+  camAngle: CAM_ANGLE,
+  health: 0.7
+})
+grubs.position.set(-1.3, 0, 21.8)
+scene.add(grubs)
+
+const skrit = createToken({
+  color: goblinColor,
+  name: 'Goblin Raider',
+  texture: loader.load(document.querySelector('meta[name="goblin-red-url"]').content),
+  diameter: 3,
+  camAngle: CAM_ANGLE,
+  health: 1.0
+})
+skrit.position.set(-3.7, 0, 23.5)
+scene.add(skrit)
+
+const morg = createToken({
+  color: goblinColor,
+  name: 'Goblin Archer',
+  texture: loader.load(document.querySelector('meta[name="goblin-yellow-url"]').content),
+  diameter: 3,
+  camAngle: CAM_ANGLE,
+  health: 0.4
+})
+morg.position.set(-22, 0, 25)
+scene.add(morg)
+
 window.addEventListener("resize", fitToWindow)
 
 function animate() {
