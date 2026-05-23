@@ -103,39 +103,57 @@ const morg = createToken({
 morg.position.set(-22, 0, 25)
 scene.add(morg)
 
-function createWall(x1, z1, x2, z2, { thickness = 1, height = 2, color = 0x333333 } = {}) {
-  const dx = x2 - x1
-  const dz = z2 - z1
-  const length = Math.sqrt(dx * dx + dz * dz)
-  const geo = new THREE.BoxGeometry(thickness, height, length)
+function createWallPath(points, { thickness = 1, height = 2, color = 0x333333 } = {}) {
+  const half = thickness / 2
+
+  const normals = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1][0] - points[i][0]
+    const dz = points[i + 1][1] - points[i][1]
+    const len = Math.sqrt(dx * dx + dz * dz)
+    normals.push([-dz / len, dx / len])
+  }
+
+  function offsetAt(i, side) {
+    let ox, oz
+    if (i === 0) {
+      ox = normals[0][0] * half; oz = normals[0][1] * half
+    } else if (i === points.length - 1) {
+      ox = normals[i - 1][0] * half; oz = normals[i - 1][1] * half
+    } else {
+      const [n0x, n0z] = normals[i - 1]
+      const [n1x, n1z] = normals[i]
+      const mx = n0x + n1x, mz = n0z + n1z
+      const mlen = Math.sqrt(mx * mx + mz * mz)
+      const dot = n0x * mx / mlen + n0z * mz / mlen
+      ox = mx / mlen * half / dot; oz = mz / mlen * half / dot
+    }
+    return [points[i][0] + side * ox, points[i][1] + side * oz]
+  }
+
+  const shape = new THREE.Shape()
+  for (let i = 0; i < points.length; i++) {
+    const [x, z] = offsetAt(i, 1)
+    if (i === 0) shape.moveTo(x, -z)
+    else shape.lineTo(x, -z)
+  }
+  for (let i = points.length - 1; i >= 0; i--) {
+    const [x, z] = offsetAt(i, -1)
+    shape.lineTo(x, -z)
+  }
+  shape.closePath()
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
   const group = new THREE.Group()
   group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.5 })))
   group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x000000 })))
-  group.rotation.y = Math.atan2(dx, dz)
-  group.position.set((x1 + x2) / 2, height / 2, (z1 + z2) / 2)
+  group.rotation.x = -Math.PI / 2
   return group
 }
 
-
-scene.add(createWall(-42.5, 7.5, -67.5, 7.5))
-scene.add(createWall(-42.5, 12.5, -42.5, 7.5))
-scene.add(createWall(-32.5, 12.5, -42.5, 12.5))
-scene.add(createWall(-32.5, 17.5, -32.5, 12.5))
-scene.add(createWall(-12.5, 17.5, -32.5, 17.5))
-scene.add(createWall(-12.5, 2.5, -12.5, 17.5))
-scene.add(createWall(-12.5, 2.5, 2.5, 2.5))
-scene.add(createWall(2.5, 2.5, 2.5, -17.5))
-
-scene.add(createWall(-42.5, 32.5, -42.5, 42.5))
-scene.add(createWall(-32.5, 32.5, -42.5, 32.5))
-scene.add(createWall(-32.5, 27.5, -32.5, 32.5))
-scene.add(createWall(-12.5, 27.5, -32.5, 27.5))
-scene.add(createWall(-12.5, 27.5, -12.5, 32.5))
-scene.add(createWall(-12.5, 32.5, -2.5, 32.5))
-scene.add(createWall(-2.5, 32.5, -2.5, 52.5))
-
-scene.add(createWall(12.5, 2.5, 12.5, -17.5))
-scene.add(createWall(12.5, 2.5, 27.5, 2.5))
+scene.add(createWallPath([[-67.5,7.5],[-42.5,7.5],[-42.5,12.5],[-32.5,12.5],[-32.5,17.5],[-12.5,17.5],[-12.5,2.5],[2.5,2.5],[2.5,-17.5]]))
+scene.add(createWallPath([[-42.5,42.5],[-42.5,32.5],[-32.5,32.5],[-32.5,27.5],[-12.5,27.5],[-12.5,32.5],[-2.5,32.5],[-2.5,52.5]]))
+scene.add(createWallPath([[12.5,-17.5],[12.5,2.5],[27.5,2.5]]))
 
 window.addEventListener("resize", fitToWindow)
 
