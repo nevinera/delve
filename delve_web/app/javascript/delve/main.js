@@ -103,6 +103,40 @@ const morg = createToken({
 morg.position.set(-22, 0, 25)
 scene.add(morg)
 
+function createWall(x1, z1, x2, z2, { thickness = 1, height = 2, color = 0x333333 } = {}) {
+  const dx = x2 - x1
+  const dz = z2 - z1
+  const length = Math.sqrt(dx * dx + dz * dz)
+  const geo = new THREE.BoxGeometry(thickness, height, length)
+  const group = new THREE.Group()
+  group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.5 })))
+  group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x000000 })))
+  group.rotation.y = Math.atan2(dx, dz)
+  group.position.set((x1 + x2) / 2, height / 2, (z1 + z2) / 2)
+  return group
+}
+
+
+scene.add(createWall(-42.5, 7.5, -67.5, 7.5))
+scene.add(createWall(-42.5, 12.5, -42.5, 7.5))
+scene.add(createWall(-32.5, 12.5, -42.5, 12.5))
+scene.add(createWall(-32.5, 17.5, -32.5, 12.5))
+scene.add(createWall(-12.5, 17.5, -32.5, 17.5))
+scene.add(createWall(-12.5, 2.5, -12.5, 17.5))
+scene.add(createWall(-12.5, 2.5, 2.5, 2.5))
+scene.add(createWall(2.5, 2.5, 2.5, -17.5))
+
+scene.add(createWall(-42.5, 32.5, -42.5, 42.5))
+scene.add(createWall(-32.5, 32.5, -42.5, 32.5))
+scene.add(createWall(-32.5, 27.5, -32.5, 32.5))
+scene.add(createWall(-12.5, 27.5, -32.5, 27.5))
+scene.add(createWall(-12.5, 27.5, -12.5, 32.5))
+scene.add(createWall(-12.5, 32.5, -2.5, 32.5))
+scene.add(createWall(-2.5, 32.5, -2.5, 52.5))
+
+scene.add(createWall(12.5, 2.5, 12.5, -17.5))
+scene.add(createWall(12.5, 2.5, 27.5, 2.5))
+
 window.addEventListener("resize", fitToWindow)
 
 function animate() {
