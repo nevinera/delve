@@ -39,7 +39,7 @@ function makeNameTexture(name, hpInner, hpOuter, diameter) {
   return new THREE.CanvasTexture(canvas)
 }
 
-export function createToken({ color, name, texture, diameter, camAngle, health = 1.0 }) {
+export function createToken({ color, name, texture, diameter, camAngle, health = 1.0, facing = null }) {
   const radius = diameter / 2
   const height = diameter / 3
   const top = height
@@ -83,6 +83,28 @@ export function createToken({ color, name, texture, diameter, camAngle, health =
   hpBar.rotation.z = camAngle
   hpBar.position.y = top + 0.021
   group.add(hpBar)
+
+  if (facing !== null) {
+    const arcInnerR = radius + 1/12
+    const arcOuterR = radius + 5/12
+    const arcHeight = height * 0.25
+    const centeredAt = Math.PI / 2 - facing
+    const startAngle = centeredAt - Math.PI / 8
+    const endAngle = centeredAt + Math.PI / 8
+
+    const shape = new THREE.Shape()
+    shape.absarc(0, 0, arcOuterR, startAngle, endAngle, false)
+    shape.absarc(0, 0, arcInnerR, endAngle, startAngle, true)
+    shape.closePath()
+
+    const facingArc = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(shape, { depth: arcHeight, bevelEnabled: false }),
+      new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.85 })
+    )
+    facingArc.rotation.x = -Math.PI / 2
+    facingArc.position.y = height
+    group.add(facingArc)
+  }
 
   const namePlane = new THREE.Mesh(
     new THREE.PlaneGeometry(diameter, diameter),

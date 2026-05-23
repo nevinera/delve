@@ -73,7 +73,8 @@ const grubs = createToken({
   texture: loader.load(document.querySelector('meta[name="goblin-green-url"]').content),
   diameter: 3,
   camAngle: CAM_ANGLE,
-  health: 0.7
+  health: 0.7,
+  facing: Math.atan2(0 - (-1.3), -(25 - 21.8))
 })
 grubs.position.set(-1.3, 0, 21.8)
 scene.add(grubs)
@@ -84,7 +85,8 @@ const skrit = createToken({
   texture: loader.load(document.querySelector('meta[name="goblin-red-url"]').content),
   diameter: 3,
   camAngle: CAM_ANGLE,
-  health: 1.0
+  health: 1.0,
+  facing: Math.atan2(0 - (-3.7), -(25 - 23.5))
 })
 skrit.position.set(-3.7, 0, 23.5)
 scene.add(skrit)
@@ -95,7 +97,8 @@ const morg = createToken({
   texture: loader.load(document.querySelector('meta[name="goblin-yellow-url"]').content),
   diameter: 3,
   camAngle: CAM_ANGLE,
-  health: 0.4
+  health: 0.4,
+  facing: Math.PI / 2
 })
 morg.position.set(-22, 0, 25)
 scene.add(morg)
