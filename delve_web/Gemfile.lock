@@ -110,6 +110,7 @@ GEM
     dotenv (3.2.0)
     drb (2.2.3)
     ed25519 (1.4.0)
+    environment_helpers (1.6.2)
     erb (6.0.4)
     erubi (1.13.1)
     et-orbi (1.4.0)
@@ -185,6 +186,7 @@ GEM
       net-pop
       net-smtp
     marcel (1.2.1)
+    memery (1.8.0)
     mini_magick (5.3.1)
       logger
     mini_mime (1.1.5)
@@ -468,11 +470,13 @@ DEPENDENCIES
   bundler-audit
   debug
   devise
+  environment_helpers
   factory_bot_rails
   image_processing (~> 1.2)
   importmap-rails
   jbuilder
   kamal
+  memery
   omniauth-google-oauth2
   omniauth-rails_csrf_protection
   pagy
