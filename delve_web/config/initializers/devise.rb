@@ -272,7 +272,11 @@ Devise.setup do |config|
   config.sign_out_via = :delete
 
   # ==> OmniAuth
-  config.omniauth :google_oauth2, ENV["GOOGLE_CLIENT_ID"], ENV["GOOGLE_CLIENT_SECRET"]
+  config.omniauth(
+    :google_oauth2,
+    ENV.string("GOOGLE_CLIENT_ID", default: nil),
+    ENV.string("GOOGLE_CLIENT_SECRET", default: nil)
+  )
 
   # ==> Warden configuration
   # If you want to use other strategies, that are not supported by Devise, or
