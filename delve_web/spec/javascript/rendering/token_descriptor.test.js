@@ -10,6 +10,11 @@ describe('TokenDescriptor', () => {
       expect(desc.body.radius).toBe(1.5)
       expect(desc.body.height).toBe(1)
     })
+
+    it('computes tipX as 2R/sqrt(3)', () => {
+      const desc = new TokenDescriptor(base)
+      expect(desc.body.tipX).toBeCloseTo(2 * 1.5 / Math.sqrt(3))
+    })
   })
 
   describe('healthBar', () => {

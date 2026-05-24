@@ -9,7 +9,7 @@ export class TokenDescriptor {
     const canvasSize = 1024
     const canvasScale = canvasSize / diameter
 
-    this.body = { radius, height }
+    this.body = { radius, height, tipX: 2 * radius / Math.sqrt(3) }
 
     this.disc = {
       radius: radius * 0.75,
