@@ -24,3 +24,24 @@ jobs:
 
       - name: Run RSpec
         run: bundle exec rspec
+
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: delve_web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.9"
+          bundler-cache: true
+          working-directory: delve_web
+
+      - name: Run standardrb
+        run: bundle exec standardrb
+
+      - name: Run rubocop (metrics)
+        run: bundle exec rubocop
