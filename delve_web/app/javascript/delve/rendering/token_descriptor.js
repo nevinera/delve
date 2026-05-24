@@ -17,9 +17,11 @@ export class TokenDescriptor {
     }
 
     this.healthBar = {
-      inner_radius: hpInner,
-      outer_radius: hpOuter,
-      position_y: height + 0.02
+      innerRadius: hpInner,
+      outerRadius: hpOuter,
+      positionY: height + 0.02,
+      canvasSize,
+      canvasScale
     }
 
     this.name = {

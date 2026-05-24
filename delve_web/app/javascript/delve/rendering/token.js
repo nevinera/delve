@@ -2,7 +2,7 @@ import * as THREE from 'three'
 
 const LETTER_SPACING = 1.2
 
-function makeNameTexture ({ text, canvasSize, canvasArcRadius, fontSize, planeSize }) {
+function makeNameTexture ({ text, canvasSize, canvasArcRadius, fontSize }) {
   const canvas = document.createElement('canvas')
   canvas.width = canvasSize
   canvas.height = canvasSize
@@ -34,79 +34,104 @@ function makeNameTexture ({ text, canvasSize, canvasArcRadius, fontSize, planeSi
   return new THREE.CanvasTexture(canvas)
 }
 
-export function renderToken (descriptor, texture) {
-  const { color, camAngle, body, disc, healthBar, facingArc, name } = descriptor
-  const group = new THREE.Group()
+function drawHpRing (canvas, healthBar, hpFraction) {
+  const { innerRadius, outerRadius, canvasSize, canvasScale } = healthBar
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvasSize, canvasSize)
 
-  // cameraGroup holds elements that must rotate to stay upright as the camera orbits.
-  // The facing arc is excluded - it stays fixed in world space.
-  const cameraGroup = new THREE.Group()
-  group.add(cameraGroup)
-  group.userData.cameraGroup = cameraGroup
+  const cx = canvasSize / 2
+  const cy = canvasSize / 2
+  const innerR = innerRadius * canvasScale
+  const outerR = outerRadius * canvasScale
+  const startAngle = Math.PI
+  const hpEnd = Math.PI + hpFraction * Math.PI
 
-  const bodyMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(body.radius, body.radius, body.height, 32),
-    new THREE.MeshLambertMaterial({ color })
-  )
-  bodyMesh.position.y = body.height / 2
-  group.add(bodyMesh)
-
-  const discMesh = new THREE.Mesh(
-    new THREE.CircleGeometry(disc.radius, 32),
-    new THREE.MeshBasicMaterial({ map: texture })
-  )
-  discMesh.rotation.x = -Math.PI / 2
-  discMesh.rotation.z = camAngle
-  discMesh.position.y = disc.position_y
-  cameraGroup.add(discMesh)
-
-  const hpBg = new THREE.Mesh(
-    new THREE.RingGeometry(
-      healthBar.inner_radius, healthBar.outer_radius, 64, 1,
-      healthBar.missing_arc.theta_start, healthBar.missing_arc.theta_length
-    ),
-    new THREE.MeshBasicMaterial({ color: 0x333333 })
-  )
-  hpBg.rotation.x = -Math.PI / 2
-  hpBg.rotation.z = camAngle
-  hpBg.position.y = body.height + 0.02
-  cameraGroup.add(hpBg)
-
-  const hpBar = new THREE.Mesh(
-    new THREE.RingGeometry(
-      healthBar.inner_radius, healthBar.outer_radius, 64, 1,
-      healthBar.current_arc.theta_start, healthBar.current_arc.theta_length
-    ),
-    new THREE.MeshBasicMaterial({ color: 0x44dd44 })
-  )
-  hpBar.rotation.x = -Math.PI / 2
-  hpBar.rotation.z = camAngle
-  hpBar.position.y = body.height + 0.021
-  cameraGroup.add(hpBar)
-
-  if (facingArc !== null) {
-    const shape = new THREE.Shape()
-    shape.absarc(0, 0, facingArc.outer_radius, facingArc.theta_start, facingArc.theta_end, false)
-    shape.absarc(0, 0, facingArc.inner_radius, facingArc.theta_end, facingArc.theta_start, true)
-    shape.closePath()
-
-    const facingMesh = new THREE.Mesh(
-      new THREE.ExtrudeGeometry(shape, { depth: facingArc.height, bevelEnabled: false }),
-      new THREE.MeshBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.85 })
-    )
-    facingMesh.rotation.x = -Math.PI / 2
-    facingMesh.position.y = facingArc.position_y
-    group.add(facingMesh)
+  if (hpFraction < 1) {
+    ctx.beginPath()
+    ctx.arc(cx, cy, outerR, hpEnd, 2 * Math.PI, false)
+    ctx.arc(cx, cy, innerR, 2 * Math.PI, hpEnd, true)
+    ctx.closePath()
+    ctx.fillStyle = '#333333'
+    ctx.fill()
   }
 
-  const namePlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(name.planeSize, name.planeSize),
-    new THREE.MeshBasicMaterial({ map: makeNameTexture(name), transparent: true })
-  )
-  namePlane.rotation.x = -Math.PI / 2
-  namePlane.rotation.z = camAngle
-  namePlane.position.y = name.position_y
-  cameraGroup.add(namePlane)
+  if (hpFraction > 0) {
+    ctx.beginPath()
+    ctx.arc(cx, cy, outerR, startAngle, hpEnd, false)
+    ctx.arc(cx, cy, innerR, hpEnd, startAngle, true)
+    ctx.closePath()
+    ctx.fillStyle = '#44dd44'
+    ctx.fill()
+  }
+}
 
-  return group
+export class TokenSceneNode {
+  constructor (descriptor, texture, camera) {
+    const { color, body, disc, healthBar, name } = descriptor
+
+    const camDir = new THREE.Vector3()
+    camera.getWorldDirection(camDir)
+    this._initialYaw = Math.atan2(camDir.x, camDir.z)
+    this._camera = camera
+    this._healthBar = healthBar
+    this._lastHp = null
+    this._lastMaxHp = null
+
+    this.group = new THREE.Group()
+
+    const cameraGroup = new THREE.Group()
+    this.group.add(cameraGroup)
+    this._cameraGroup = cameraGroup
+
+    const bodyMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(body.radius, body.radius, body.height, 32),
+      new THREE.MeshLambertMaterial({ color })
+    )
+    bodyMesh.position.y = body.height / 2
+    this.group.add(bodyMesh)
+
+    const discMesh = new THREE.Mesh(
+      new THREE.CircleGeometry(disc.radius, 32),
+      new THREE.MeshBasicMaterial({ map: texture })
+    )
+    discMesh.rotation.x = -Math.PI / 2
+    discMesh.position.y = disc.position_y
+    cameraGroup.add(discMesh)
+
+    this._hpCanvas = document.createElement('canvas')
+    this._hpCanvas.width = healthBar.canvasSize
+    this._hpCanvas.height = healthBar.canvasSize
+    this._hpTexture = new THREE.CanvasTexture(this._hpCanvas)
+
+    const hpPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(name.planeSize, name.planeSize),
+      new THREE.MeshBasicMaterial({ map: this._hpTexture, transparent: true })
+    )
+    hpPlane.rotation.x = -Math.PI / 2
+    hpPlane.position.y = healthBar.positionY
+    cameraGroup.add(hpPlane)
+
+    const namePlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(name.planeSize, name.planeSize),
+      new THREE.MeshBasicMaterial({ map: makeNameTexture(name), transparent: true })
+    )
+    namePlane.rotation.x = -Math.PI / 2
+    namePlane.position.y = name.position_y
+    cameraGroup.add(namePlane)
+  }
+
+  update (state) {
+    this.group.position.set(state.x, 0, state.z)
+
+    const camDir = new THREE.Vector3()
+    this._camera.getWorldDirection(camDir)
+    this._cameraGroup.rotation.y = Math.atan2(camDir.x, camDir.z) - this._initialYaw
+
+    if (state.hp !== this._lastHp || state.maxHp !== this._lastMaxHp) {
+      drawHpRing(this._hpCanvas, this._healthBar, state.hp / state.maxHp)
+      this._hpTexture.needsUpdate = true
+      this._lastHp = state.hp
+      this._lastMaxHp = state.maxHp
+    }
+  }
 }

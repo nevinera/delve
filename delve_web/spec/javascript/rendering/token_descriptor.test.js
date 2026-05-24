@@ -15,13 +15,13 @@ describe('TokenDescriptor', () => {
   describe('healthBar', () => {
     it('derives inner and outer radii from body radius', () => {
       const desc = new TokenDescriptor(base)
-      expect(desc.healthBar.inner_radius).toBeCloseTo(1.5 * 0.8)
-      expect(desc.healthBar.outer_radius).toBeCloseTo(1.5 * 0.95)
+      expect(desc.healthBar.innerRadius).toBeCloseTo(1.5 * 0.8)
+      expect(desc.healthBar.outerRadius).toBeCloseTo(1.5 * 0.95)
     })
 
     it('positions just above the body', () => {
       const desc = new TokenDescriptor(base)
-      expect(desc.healthBar.position_y).toBeCloseTo(1 + 0.02)
+      expect(desc.healthBar.positionY).toBeCloseTo(1 + 0.02)
     })
   })
 
