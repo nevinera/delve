@@ -12,9 +12,9 @@ const MAP_ORIGIN_Z = 102.5
 function mapToWorld (x, y) { return [x + MAP_ORIGIN_X, MAP_ORIGIN_Z - y] }
 
 const ASPECT = 16 / 9
-const CAM_ANGLE = 37 * Math.PI / 180
-const CAM_ORBIT_RADIUS = 45
+const CAM_BACK = 45
 const CAM_HEIGHT = 50
+const CAM_LOOK_AHEAD = 10
 
 export class Scene {
   constructor ({ zone, zoneBase, canvas, protagonist: protagonistData }) {
@@ -113,19 +113,9 @@ export class Scene {
     const { x, z, facing } = this.protagonist.predictedState
     const fwdX = Math.sin(facing)
     const fwdZ = -Math.cos(facing)
-    const rightX = Math.cos(facing)
-    const rightZ = Math.sin(facing)
 
-    const lookAt = new THREE.Vector3(
-      x + 10 * Math.cos(CAM_ANGLE) * fwdX - 10 * Math.sin(CAM_ANGLE) * rightX,
-      0,
-      z + 10 * Math.cos(CAM_ANGLE) * fwdZ - 10 * Math.sin(CAM_ANGLE) * rightZ
-    )
-    this._camera.position.set(
-      lookAt.x - CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE) * fwdX + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE) * rightX,
-      CAM_HEIGHT,
-      lookAt.z - CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE) * fwdZ + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE) * rightZ
-    )
+    const lookAt = new THREE.Vector3(x + CAM_LOOK_AHEAD * fwdX, 0, z + CAM_LOOK_AHEAD * fwdZ)
+    this._camera.position.set(x - CAM_BACK * fwdX, CAM_HEIGHT, z - CAM_BACK * fwdZ)
     this._camera.lookAt(lookAt)
   }
 
