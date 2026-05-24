@@ -17,14 +17,14 @@ const CAM_HEIGHT = 50
 const CAM_LOOK_AHEAD = 10
 
 export class Scene {
-  constructor ({ zone, zoneBase, canvas, protagonist: protagonistData }) {
+  constructor ({ zone, zoneBase, canvas, protagonist: protagonistData, renderer = null, textureLoader = null }) {
     this._threeScene = new THREE.Scene()
     this._threeScene.background = new THREE.Color(0x87ceeb)
     this._threeScene.fog = new THREE.Fog(0x87ceeb, 60, 150)
 
     this._camera = new THREE.PerspectiveCamera(34, ASPECT, 0.1, 500)
 
-    this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+    this._renderer = renderer ?? new THREE.WebGLRenderer({ canvas, antialias: true })
     this._renderer.setPixelRatio(window.devicePixelRatio)
     this._fitToWindow()
     window.addEventListener('resize', () => this._fitToWindow())
@@ -34,7 +34,7 @@ export class Scene {
     this._threeScene.add(sunLight)
     this._threeScene.add(new THREE.AmbientLight(0xffffff, 0.4))
 
-    const loader = new THREE.TextureLoader()
+    const loader = textureLoader ?? new THREE.TextureLoader()
 
     const mapPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(zone.dimensions.width, zone.dimensions.height),
