@@ -1,3 +1,6 @@
+// Note: parameters here use Three.js world coordinates - x/z axes, z increasing southward.
+// Zone JSON uses map coordinates - x/y axes, y increasing northward, origin at lower-left.
+// Callers must convert before constructing this descriptor.
 export class TokenDescriptor {
   constructor({ color, name, diameter, camAngle, health = 1.0, facing = null }) {
     this.color = color

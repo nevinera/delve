@@ -37,12 +37,12 @@
     },
     "location": {
       "type": "object",
-      "required": ["x", "z"],
+      "required": ["x", "y"],
       "additionalProperties": false,
-      "description": "World-space position in feet.",
+      "description": "Position in map coordinates (feet). Origin is the lower-left corner of the map; x increases eastward, y increases northward.",
       "properties": {
         "x": { "type": "number" },
-        "z": { "type": "number" }
+        "y": { "type": "number" }
       }
     },
     "tokenScale": {
