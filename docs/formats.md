@@ -34,16 +34,16 @@ JSON Schema: [schema/unit.json](schema/unit.json)
 
 ### Facing Angle
 
-`facingAngle` is in radians, measured clockwise from north on the map:
+`facingAngle` is in radians, standard compass bearing (0 = north, clockwise positive):
 
 | Value | Direction |
 |---|---|
-| `0` | South (downward on map) |
+| `0` | North (upward on map) |
 | `Math.PI / 2` | East |
-| `Math.PI` | North (upward on map) |
+| `Math.PI` | South (downward on map) |
 | `-Math.PI / 2` | West |
 
-To face a unit at another unit, compute `atan2(target.x - self.x, self.y - target.y)`.
+To face a unit at another unit, compute `atan2(target.x - self.x, target.y - self.y)`.
 
 ### Token Scale Reference
 
