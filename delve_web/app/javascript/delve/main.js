@@ -124,8 +124,23 @@ scene.add(zyllaniToken)
 
 window.addEventListener('resize', fitToWindow)
 
-function animate () {
+const orbitCenter = new THREE.Vector3(startX, 0, startZ)
+const orbitCamOffset = new THREE.Vector3().subVectors(camera.position, orbitCenter)
+const orbitLookAtOffset = new THREE.Vector3().subVectors(CAM_LOOK_AT, orbitCenter)
+const orbitAxis = new THREE.Vector3(0, 1, 0)
+const ORBIT_RATE = 20 * Math.PI / 180 // 20 degrees/sec = 2 degrees per 100ms tick
+let orbitAngle = 0
+let lastTime = null
+
+function animate (time) {
   requestAnimationFrame(animate)
+  if (lastTime !== null) {
+    orbitAngle += ORBIT_RATE * (time - lastTime) / 1000
+  }
+  lastTime = time
+  const lookAt = orbitCenter.clone().add(orbitLookAtOffset.clone().applyAxisAngle(orbitAxis, orbitAngle))
+  camera.position.copy(orbitCenter).add(orbitCamOffset.clone().applyAxisAngle(orbitAxis, orbitAngle))
+  camera.lookAt(lookAt)
   renderer.render(scene, camera)
 }
-animate()
+requestAnimationFrame(animate)
