@@ -1,10 +1,6 @@
-// Note: parameters here use Three.js world coordinates - x/z axes, z increasing southward.
-// Zone JSON uses map coordinates - x/y axes, y increasing northward, origin at lower-left.
-// Callers must convert before constructing this descriptor.
 export class TokenDescriptor {
-  constructor ({ color, name, diameter, camAngle, health = 1.0, facing = 0, showFacingArc = true }) {
+  constructor ({ color, name, diameter }) {
     this.color = color
-    this.camAngle = camAngle
 
     const radius = diameter / 2
     const height = diameter / 3
@@ -23,26 +19,8 @@ export class TokenDescriptor {
     this.healthBar = {
       inner_radius: hpInner,
       outer_radius: hpOuter,
-      current_arc: {
-        theta_start: Math.PI,
-        theta_length: health * Math.PI
-      },
-      missing_arc: {
-        theta_start: Math.PI + health * Math.PI,
-        theta_length: (1 - health) * Math.PI
-      }
+      position_y: height + 0.02
     }
-
-    this.facingArc = !showFacingArc
-      ? null
-      : {
-          inner_radius: radius + 1 / 12,
-          outer_radius: radius + 5 / 12,
-          height: height * 0.25,
-          theta_start: Math.PI / 2 - facing - Math.PI / 8,
-          theta_end: Math.PI / 2 - facing + Math.PI / 8,
-          position_y: height
-        }
 
     this.name = {
       text: name,
