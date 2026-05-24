@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { WallDescriptor, ZoneDescriptor } from 'delve/rendering/zone_descriptor'
 
 describe('WallDescriptor', () => {
-  describe('polygon_points', () => {
+  describe('polygonPoints', () => {
     it('offsets a horizontal segment symmetrically', () => {
       const wall = new WallDescriptor([[0, 0], [10, 0]], { thickness: 2 })
       // Segment direction (1,0): normal is (0,1) in XZ, so left=+Z, right=-Z
-      expect(wall.polygon_points).toEqual([
+      expect(wall.polygonPoints).toEqual([
         [0, 1], [10, 1],
         [10, -1], [0, -1]
       ])
@@ -15,7 +15,7 @@ describe('WallDescriptor', () => {
     it('offsets a vertical segment symmetrically', () => {
       const wall = new WallDescriptor([[0, 0], [0, 10]], { thickness: 2 })
       // Segment direction (0,1): normal is (-1,0) in XZ, so left=-X, right=+X
-      expect(wall.polygon_points).toEqual([
+      expect(wall.polygonPoints).toEqual([
         [-1, 0], [-1, 10],
         [1, 10], [1, 0]
       ])
@@ -23,7 +23,7 @@ describe('WallDescriptor', () => {
 
     it('computes a miter at a right-angle corner', () => {
       const wall = new WallDescriptor([[0, 0], [10, 0], [10, 10]], { thickness: 2 })
-      const pts = wall.polygon_points
+      const pts = wall.polygonPoints
       // Left miter at (10,0): inner corner of the 90-degree turn
       expect(pts[1][0]).toBeCloseTo(9)
       expect(pts[1][1]).toBeCloseTo(1)
@@ -34,7 +34,7 @@ describe('WallDescriptor', () => {
 
     it('produces 2*n polygon points for n path points', () => {
       const wall = new WallDescriptor([[0, 0], [5, 0], [5, 5], [10, 5]])
-      expect(wall.polygon_points).toHaveLength(8)
+      expect(wall.polygonPoints).toHaveLength(8)
     })
   })
 })

@@ -1,27 +1,27 @@
-import * as THREE from "three"
-import { TokenDescriptor } from "delve/rendering/token_descriptor"
-import { WallDescriptor, ZoneDescriptor } from "delve/rendering/zone_descriptor"
-import { renderToken } from "delve/rendering/token"
-import { renderZone } from "delve/rendering/zone"
+import * as THREE from 'three'
+import { TokenDescriptor } from 'delve/rendering/token_descriptor'
+import { WallDescriptor, ZoneDescriptor } from 'delve/rendering/zone_descriptor'
+import { renderToken } from 'delve/rendering/token'
+import { renderZone } from 'delve/rendering/zone'
 
 // Map coordinates: origin at lower-left, y increasing northward.
 // World coordinates: origin at scene center, z increasing southward.
 // These constants place the map's lower-left corner in world space.
 const MAP_ORIGIN_X = -132.5
 const MAP_ORIGIN_Z = 102.5
-function mapToWorld(x, y) { return [x + MAP_ORIGIN_X, MAP_ORIGIN_Z - y] }
+function mapToWorld (x, y) { return [x + MAP_ORIGIN_X, MAP_ORIGIN_Z - y] }
 
 const zoneUrl = document.querySelector('meta[name="zone-url"]').content
 const zoneBase = zoneUrl.substring(0, zoneUrl.lastIndexOf('/') + 1)
 const zone = await fetch(zoneUrl).then(r => r.json())
-function assetUrl(path) { return zoneBase + path }
+function assetUrl (path) { return zoneBase + path }
 
 const start = zone.startingLocations[0]
 const [startX, startZ] = mapToWorld(start.x, start.y)
 
 // fwd/right unit vectors in world XZ derived from the facing angle
-const fwdX = Math.sin(start.facing), fwdZ = -Math.cos(start.facing)
-const rightX = Math.cos(start.facing), rightZ = Math.sin(start.facing)
+const fwdX = Math.sin(start.facing); const fwdZ = -Math.cos(start.facing)
+const rightX = Math.cos(start.facing); const rightZ = Math.sin(start.facing)
 
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x87ceeb)
@@ -50,7 +50,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
 document.body.appendChild(renderer.domElement)
 
-function fitToWindow() {
+function fitToWindow () {
   if (window.innerWidth / window.innerHeight > ASPECT) {
     const height = window.innerHeight
     renderer.setSize(Math.round(height * ASPECT), height)
@@ -122,9 +122,9 @@ const zyllaniToken = renderToken(
 zyllaniToken.position.set(startX, 0, startZ)
 scene.add(zyllaniToken)
 
-window.addEventListener("resize", fitToWindow)
+window.addEventListener('resize', fitToWindow)
 
-function animate() {
+function animate () {
   requestAnimationFrame(animate)
   renderer.render(scene, camera)
 }

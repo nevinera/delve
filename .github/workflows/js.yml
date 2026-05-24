@@ -1,0 +1,43 @@
+name: JavaScript
+
+on:
+  push:
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: delve_web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: delve_web/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test
+
+  standard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: delve_web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: delve_web/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint

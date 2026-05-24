@@ -3,9 +3,15 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "standard"
+  },
+  "standard": {
+    "env": ["browser"],
+    "globals": ["describe", "it", "expect", "beforeEach", "afterEach", "beforeAll", "afterAll", "vi"]
   },
   "devDependencies": {
+    "standard": "^17.0.0",
     "vitest": "^3.0.0"
   }
 }

@@ -2,13 +2,13 @@
 // Zone JSON uses map coordinates - {x, y}, y increasing northward, origin at lower-left.
 // Callers must convert before constructing this descriptor.
 export class WallDescriptor {
-  constructor(points, { thickness = 1, height = 2, color = 0x333333 } = {}) {
+  constructor (points, { thickness = 1, height = 2, color = 0x333333 } = {}) {
     this.height = height
     this.color = color
-    this.polygon_points = this._computePolygon(points, thickness / 2)
+    this.polygonPoints = this._computePolygon(points, thickness / 2)
   }
 
-  _computePolygon(points, half) {
+  _computePolygon (points, half) {
     const normals = []
     for (let i = 0; i < points.length - 1; i++) {
       const dx = points[i + 1][0] - points[i][0]
@@ -26,7 +26,7 @@ export class WallDescriptor {
       } else {
         const [n0x, n0z] = normals[i - 1]
         const [n1x, n1z] = normals[i]
-        const mx = n0x + n1x, mz = n0z + n1z
+        const mx = n0x + n1x; const mz = n0z + n1z
         const mlen = Math.sqrt(mx * mx + mz * mz)
         const dot = n0x * mx / mlen + n0z * mz / mlen
         ox = mx / mlen * half / dot; oz = mz / mlen * half / dot
@@ -42,7 +42,7 @@ export class WallDescriptor {
 }
 
 export class ZoneDescriptor {
-  constructor(walls) {
+  constructor (walls) {
     this.walls = walls
   }
 }

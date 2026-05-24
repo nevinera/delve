@@ -1,14 +1,14 @@
-import * as THREE from "three"
+import * as THREE from 'three'
 
-export function renderZone(descriptor) {
+export function renderZone (descriptor) {
   const group = new THREE.Group()
   for (const wall of descriptor.walls) group.add(renderWall(wall))
   return group
 }
 
-function renderWall({ polygon_points, height, color }) {
+function renderWall ({ polygonPoints, height, color }) {
   const shape = new THREE.Shape()
-  polygon_points.forEach(([x, z], i) => {
+  polygonPoints.forEach(([x, z], i) => {
     if (i === 0) shape.moveTo(x, -z)
     else shape.lineTo(x, -z)
   })
