@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Delve</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= javascript_importmap_tags "delve/main" %>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <%= yield %>
+  </body>
+</html>
