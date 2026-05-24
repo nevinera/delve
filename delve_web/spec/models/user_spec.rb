@@ -1,4 +1,4 @@
-require 'rails_helper'
+require "rails_helper"
 
 RSpec.describe User, type: :model do
   describe ".from_omniauth" do
@@ -6,7 +6,7 @@ RSpec.describe User, type: :model do
       OmniAuth::AuthHash.new(
         provider: "google_oauth2",
         uid: "12345",
-        info: { email: "jane@example.com", name: "Jane Doe" }
+        info: {email: "jane@example.com", name: "Jane Doe"}
       )
     end
 

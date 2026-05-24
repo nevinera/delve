@@ -1,4 +1,4 @@
-require 'rails_helper'
+require "rails_helper"
 
 RSpec.describe "OmniAuth Google OAuth2 callback", type: :request do
   describe "signing in via Google" do
