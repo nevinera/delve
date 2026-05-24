@@ -153,7 +153,7 @@ function animate (time) {
   camera.position.copy(orbitCenter).add(orbitCamOffset.clone().applyAxisAngle(orbitAxis, orbitAngle))
   camera.lookAt(lookAt)
   camera.getWorldDirection(camDir)
-  zyllaniState.facing = Math.atan2(camDir.x, camDir.z)
+  zyllaniState.facing = Math.atan2(camDir.x, -camDir.z)
 
   for (const { sceneNode, state } of tokens) {
     sceneNode.update(state)

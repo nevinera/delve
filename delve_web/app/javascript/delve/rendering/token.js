@@ -79,12 +79,17 @@ export class TokenSceneNode {
     this.group.add(cameraGroup)
     this._cameraGroup = cameraGroup
 
-    const bodyMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(body.radius, body.radius, body.height, 32),
-      new THREE.MeshLambertMaterial({ color })
-    )
-    bodyMesh.position.y = body.height / 2
-    this.group.add(bodyMesh)
+    const bodyShape = new THREE.Shape()
+    bodyShape.moveTo(body.tipX, 0)
+    bodyShape.lineTo(body.radius * Math.cos(-Math.PI / 6), body.radius * Math.sin(-Math.PI / 6))
+    bodyShape.absarc(0, 0, body.radius, -Math.PI / 6, Math.PI / 6, true)
+    bodyShape.closePath()
+
+    const bodyGeometry = new THREE.ExtrudeGeometry(bodyShape, { depth: body.height, bevelEnabled: false })
+    bodyGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(-Math.PI / 2))
+    bodyGeometry.applyMatrix4(new THREE.Matrix4().makeRotationY(Math.PI / 2))
+
+    this.group.add(new THREE.Mesh(bodyGeometry, new THREE.MeshLambertMaterial({ color })))
 
     const discMesh = new THREE.Mesh(
       new THREE.CircleGeometry(disc.radius, 32),
@@ -118,6 +123,7 @@ export class TokenSceneNode {
 
   update (state) {
     this.group.position.set(state.x, 0, state.z)
+    this.group.rotation.y = -state.facing
 
     if (state.hp !== this._lastHp || state.maxHp !== this._lastMaxHp) {
       drawHpRing(this._hpCanvas, this._healthBar, state.hp / state.maxHp)
