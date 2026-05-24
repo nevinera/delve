@@ -28,7 +28,6 @@ gem "pagy"
 gem "omniauth-google-oauth2"
 gem "omniauth-rails_csrf_protection"
 
-
 # Use the database-backed adapters for Rails.cache, Active Job, and Action Cable
 gem "solid_cache"
 gem "solid_queue"
@@ -59,7 +58,7 @@ group :development, :test do
   # Static analysis for security vulnerabilities [https://brakemanscanner.org/]
   gem "brakeman", require: false
 
-  gem "standard", require: false
+  gem "standard", ">= 1.50", require: false
   gem "rubocop", require: false
 end
 
