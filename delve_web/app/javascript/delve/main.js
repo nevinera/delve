@@ -1,4 +1,5 @@
 import { Scene } from 'delve/rendering/scene'
+import { Controls } from 'delve/controls'
 
 const ZONE_BASE = '/zones/'
 
@@ -71,16 +72,15 @@ document.body.appendChild(canvas)
 const scene = new Scene({ zone, zoneBase: ZONE_BASE, canvas, protagonist })
 
 const TICK_MS = 100
-const TURN_RATE = 120 * Math.PI / 180 // radians/sec
-const MOVE_RATE = 15 // world units/sec
-const ZOOM_RATE = 0.5 // zoom scale units/sec
 let lastTickTime = performance.now()
 let lastFrameTime = performance.now()
+let elapsed = 0
 
-const keys = new Set()
-window.addEventListener('keydown', e => keys.add(e.code))
-window.addEventListener('keyup', e => keys.delete(e.code))
-window.addEventListener('blur', () => keys.clear())
+const controls = new Controls({
+  onZoom: amount => scene.adjustZoom(amount),
+  onTurn: rads => scene.turnProtagonist(rads),
+  onTranslate: (forward, side) => scene.moveProtagonist(forward, side, elapsed)
+})
 
 setInterval(() => {
   lastTickTime = performance.now()
@@ -89,30 +89,9 @@ setInterval(() => {
 
 function animate (time) {
   requestAnimationFrame(animate)
-  const elapsed = (time - lastFrameTime) / 1000
+  elapsed = (time - lastFrameTime) / 1000
   lastFrameTime = time
-
-  if (keys.has('Equal')) scene.adjustZoom(-ZOOM_RATE * elapsed)
-  if (keys.has('Minus')) scene.adjustZoom(ZOOM_RATE * elapsed)
-
-  if (keys.has('KeyA')) scene.setProtagonistFacing(scene.protagonist.predictedState.facing - TURN_RATE * elapsed)
-  if (keys.has('KeyD')) scene.setProtagonistFacing(scene.protagonist.predictedState.facing + TURN_RATE * elapsed)
-  if (keys.has('KeyW') || keys.has('KeyS') || keys.has('KeyQ') || keys.has('KeyE')) {
-    const { facing, x, z } = scene.protagonist.predictedState
-    const fwdX = Math.sin(facing); const fwdZ = -Math.cos(facing)
-    const rightX = Math.cos(facing); const rightZ = Math.sin(facing)
-    let dx = 0; let dz = 0
-    if (keys.has('KeyW')) { dx += fwdX; dz += fwdZ }
-    if (keys.has('KeyS')) { dx -= fwdX; dz -= fwdZ }
-    if (keys.has('KeyQ')) { dx -= rightX; dz -= rightZ }
-    if (keys.has('KeyE')) { dx += rightX; dz += rightZ }
-    const len = Math.sqrt(dx * dx + dz * dz)
-    if (len > 0) {
-      scene.protagonist.predictedState.x = x + (dx / len) * MOVE_RATE * elapsed
-      scene.protagonist.predictedState.z = z + (dz / len) * MOVE_RATE * elapsed
-    }
-  }
-
+  controls.update(elapsed)
   const tickProgress = Math.min((time - lastTickTime) / TICK_MS, 1)
   scene.render(tickProgress)
 }

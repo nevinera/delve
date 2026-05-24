@@ -112,6 +112,14 @@ export class Scene {
     this.protagonist.setFacing(facing)
   }
 
+  turnProtagonist (rads) {
+    this.protagonist.setFacing(this.protagonist.predictedState.facing + rads)
+  }
+
+  moveProtagonist (forward, side, elapsed) {
+    this.protagonist.move(forward, side, elapsed)
+  }
+
   adjustZoom (delta) {
     this._zoomScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._zoomScale + delta))
   }
