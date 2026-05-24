@@ -2,7 +2,7 @@
 // Zone JSON uses map coordinates - x/y axes, y increasing northward, origin at lower-left.
 // Callers must convert before constructing this descriptor.
 export class TokenDescriptor {
-  constructor({ color, name, diameter, camAngle, health = 1.0, facing = null }) {
+  constructor ({ color, name, diameter, camAngle, health = 1.0, facing = null }) {
     this.color = color
     this.camAngle = camAngle
 
@@ -20,7 +20,7 @@ export class TokenDescriptor {
       position_y: height + 0.01
     }
 
-    this.health_bar = {
+    this.healthBar = {
       inner_radius: hpInner,
       outer_radius: hpOuter,
       current_arc: {
@@ -33,21 +33,23 @@ export class TokenDescriptor {
       }
     }
 
-    this.facing_arc = facing === null ? null : {
-      inner_radius: radius + 1 / 12,
-      outer_radius: radius + 5 / 12,
-      height: height * 0.25,
-      theta_start: Math.PI / 2 - facing - Math.PI / 8,
-      theta_end: Math.PI / 2 - facing + Math.PI / 8,
-      position_y: height
-    }
+    this.facingArc = facing === null
+      ? null
+      : {
+          inner_radius: radius + 1 / 12,
+          outer_radius: radius + 5 / 12,
+          height: height * 0.25,
+          theta_start: Math.PI / 2 - facing - Math.PI / 8,
+          theta_end: Math.PI / 2 - facing + Math.PI / 8,
+          position_y: height
+        }
 
     this.name = {
       text: name,
-      canvas_size: canvasSize,
-      canvas_arc_radius: (hpInner + hpOuter) / 2 * canvasScale,
-      font_size: Math.round((hpOuter - hpInner) * canvasScale * 1.187),
-      plane_size: diameter,
+      canvasSize,
+      canvasArcRadius: (hpInner + hpOuter) / 2 * canvasScale,
+      fontSize: Math.round((hpOuter - hpInner) * canvasScale * 1.187),
+      planeSize: diameter,
       position_y: height + 0.03
     }
   }
