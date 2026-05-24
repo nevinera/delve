@@ -16,23 +16,33 @@ const zoneBase = zoneUrl.substring(0, zoneUrl.lastIndexOf('/') + 1)
 const zone = await fetch(zoneUrl).then(r => r.json())
 function assetUrl(path) { return zoneBase + path }
 
+const start = zone.startingLocations[0]
+const [startX, startZ] = mapToWorld(start.x, start.y)
+
+// fwd/right unit vectors in world XZ derived from the facing angle
+const fwdX = Math.sin(start.facing), fwdZ = -Math.cos(start.facing)
+const rightX = Math.cos(start.facing), rightZ = Math.sin(start.facing)
+
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x87ceeb)
 scene.fog = new THREE.Fog(0x87ceeb, 60, 150)
 
 const ASPECT = 16 / 9
 const camera = new THREE.PerspectiveCamera(34, ASPECT, 0.1, 500)
+// CAM_ANGLE controls both the look-ahead offset and the orbit radius components.
+// The camera sits behind and to the right of the character, looking ahead and left,
+// so the character appears in the lower-center of the frame.
 const CAM_ANGLE = 37 * Math.PI / 180
 const CAM_ORBIT_RADIUS = 45
 const CAM_LOOK_AT = new THREE.Vector3(
-  -10 * Math.sin(CAM_ANGLE),
+  startX + 10 * Math.cos(CAM_ANGLE) * fwdX - 10 * Math.sin(CAM_ANGLE) * rightX,
   0,
-  25 - 10 * Math.cos(CAM_ANGLE)
+  startZ + 10 * Math.cos(CAM_ANGLE) * fwdZ - 10 * Math.sin(CAM_ANGLE) * rightZ
 )
 camera.position.set(
-  CAM_LOOK_AT.x + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE),
+  CAM_LOOK_AT.x - CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE) * fwdX + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE) * rightX,
   50,
-  CAM_LOOK_AT.z + CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE)
+  CAM_LOOK_AT.z - CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE) * fwdZ + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE) * rightZ
 )
 camera.lookAt(CAM_LOOK_AT)
 
@@ -89,6 +99,28 @@ for (const unit of zone.units) {
   token.position.set(wx, 0, wz)
   scene.add(token)
 }
+
+const zyllani = {
+  name: 'Zyllani',
+  tokenColor: '#228B22',
+  maxHP: 40,
+  currentHP: 34,
+  tokenImageUrl: 'tokens/too-many-tokens/ThugElfFemaleRanged (7).webp'
+}
+
+const zyllaniToken = renderToken(
+  new TokenDescriptor({
+    color: parseInt(zyllani.tokenColor.slice(1), 16),
+    name: zyllani.name,
+    diameter: 3,
+    camAngle: CAM_ANGLE,
+    health: zyllani.currentHP / zyllani.maxHP,
+    facing: null
+  }),
+  loader.load(assetUrl(zyllani.tokenImageUrl))
+)
+zyllaniToken.position.set(startX, 0, startZ)
+scene.add(zyllaniToken)
 
 window.addEventListener("resize", fitToWindow)
 
