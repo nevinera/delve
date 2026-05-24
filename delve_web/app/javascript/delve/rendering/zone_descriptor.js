@@ -1,3 +1,6 @@
+// Note: wall path points use Three.js world coordinates - [x, z] pairs, z increasing southward.
+// Zone JSON uses map coordinates - {x, y}, y increasing northward, origin at lower-left.
+// Callers must convert before constructing this descriptor.
 export class WallDescriptor {
   constructor(points, { thickness = 1, height = 2, color = 0x333333 } = {}) {
     this.height = height

@@ -4,25 +4,45 @@ import { WallDescriptor, ZoneDescriptor } from "delve/rendering/zone_descriptor"
 import { renderToken } from "delve/rendering/token"
 import { renderZone } from "delve/rendering/zone"
 
+// Map coordinates: origin at lower-left, y increasing northward.
+// World coordinates: origin at scene center, z increasing southward.
+// These constants place the map's lower-left corner in world space.
+const MAP_ORIGIN_X = -132.5
+const MAP_ORIGIN_Z = 102.5
+function mapToWorld(x, y) { return [x + MAP_ORIGIN_X, MAP_ORIGIN_Z - y] }
+
+const zoneUrl = document.querySelector('meta[name="zone-url"]').content
+const zoneBase = zoneUrl.substring(0, zoneUrl.lastIndexOf('/') + 1)
+const zone = await fetch(zoneUrl).then(r => r.json())
+function assetUrl(path) { return zoneBase + path }
+
+const start = zone.startingLocations[0]
+const [startX, startZ] = mapToWorld(start.x, start.y)
+
+// fwd/right unit vectors in world XZ derived from the facing angle
+const fwdX = Math.sin(start.facing), fwdZ = -Math.cos(start.facing)
+const rightX = Math.cos(start.facing), rightZ = Math.sin(start.facing)
+
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x87ceeb)
 scene.fog = new THREE.Fog(0x87ceeb, 60, 150)
 
 const ASPECT = 16 / 9
-
 const camera = new THREE.PerspectiveCamera(34, ASPECT, 0.1, 500)
+// CAM_ANGLE controls both the look-ahead offset and the orbit radius components.
+// The camera sits behind and to the right of the character, looking ahead and left,
+// so the character appears in the lower-center of the frame.
 const CAM_ANGLE = 37 * Math.PI / 180
 const CAM_ORBIT_RADIUS = 45
-// lookAt is shifted forward from the token so it appears in the lower portion of the screen
 const CAM_LOOK_AT = new THREE.Vector3(
-  -10 * Math.sin(CAM_ANGLE),
+  startX + 10 * Math.cos(CAM_ANGLE) * fwdX - 10 * Math.sin(CAM_ANGLE) * rightX,
   0,
-  25 - 10 * Math.cos(CAM_ANGLE)
+  startZ + 10 * Math.cos(CAM_ANGLE) * fwdZ - 10 * Math.sin(CAM_ANGLE) * rightZ
 )
 camera.position.set(
-  CAM_LOOK_AT.x + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE),
+  CAM_LOOK_AT.x - CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE) * fwdX + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE) * rightX,
   50,
-  CAM_LOOK_AT.z + CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE)
+  CAM_LOOK_AT.z - CAM_ORBIT_RADIUS * Math.cos(CAM_ANGLE) * fwdZ + CAM_ORBIT_RADIUS * Math.sin(CAM_ANGLE) * rightZ
 )
 camera.lookAt(CAM_LOOK_AT)
 
@@ -48,53 +68,59 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.4))
 
 const loader = new THREE.TextureLoader()
 
-const dungeonTexture = loader.load(document.querySelector('meta[name="dungeon-url"]').content)
+const dungeonTexture = loader.load(assetUrl(zone.mapUrl))
 const plane = new THREE.Mesh(
-  new THREE.PlaneGeometry(225, 185),
+  new THREE.PlaneGeometry(zone.dimensions.width, zone.dimensions.height),
   new THREE.MeshLambertMaterial({ map: dungeonTexture })
 )
 plane.rotation.x = -Math.PI / 2
-plane.position.set(-20, 0, 10)
+plane.position.set(MAP_ORIGIN_X + zone.dimensions.width / 2, 0, MAP_ORIGIN_Z - zone.dimensions.height / 2)
 scene.add(plane)
 
-const tyllani = renderToken(
-  new TokenDescriptor({ color: 0x228b22, name: 'Tyllani', diameter: 3, camAngle: CAM_ANGLE, health: 0.85 }),
-  loader.load(document.querySelector('meta[name="token-url"]').content)
+scene.add(renderZone(new ZoneDescriptor(
+  zone.walls.map(path => new WallDescriptor(path.map(({ x, y }) => mapToWorld(x, y))))
+)))
+
+for (const unit of zone.units) {
+  const [wx, wz] = mapToWorld(unit.location.x, unit.location.y)
+  const currentHP = unit.currentHP ?? unit.maxHP
+  const token = renderToken(
+    new TokenDescriptor({
+      color: parseInt(unit.tokenColor.slice(1), 16),
+      name: unit.name,
+      diameter: 3,
+      camAngle: CAM_ANGLE,
+      health: currentHP / unit.maxHP,
+      facing: unit.facingAngle ?? null
+    }),
+    loader.load(assetUrl(unit.tokenImageUrl))
+  )
+  token.scale.setScalar(unit.tokenScale ?? 1.0)
+  token.position.set(wx, 0, wz)
+  scene.add(token)
+}
+
+const zyllani = {
+  name: 'Zyllani',
+  tokenColor: '#228B22',
+  maxHP: 40,
+  currentHP: 34,
+  tokenImageUrl: 'tokens/too-many-tokens/ThugElfFemaleRanged (7).webp'
+}
+
+const zyllaniToken = renderToken(
+  new TokenDescriptor({
+    color: parseInt(zyllani.tokenColor.slice(1), 16),
+    name: zyllani.name,
+    diameter: 3,
+    camAngle: CAM_ANGLE,
+    health: zyllani.currentHP / zyllani.maxHP,
+    facing: null
+  }),
+  loader.load(assetUrl(zyllani.tokenImageUrl))
 )
-tyllani.position.set(0, 0, 25)
-scene.add(tyllani)
-
-const goblinColor = 0x8B2500
-
-const grubs = renderToken(
-  new TokenDescriptor({ color: goblinColor, name: 'Goblin Raider', diameter: 3, camAngle: CAM_ANGLE, health: 0.7, facing: Math.atan2(0 - (-1.3), -(25 - 21.8)) }),
-  loader.load(document.querySelector('meta[name="goblin-green-url"]').content)
-)
-grubs.scale.setScalar(0.75)
-grubs.position.set(-1.3, 0, 21.8)
-scene.add(grubs)
-
-const skrit = renderToken(
-  new TokenDescriptor({ color: goblinColor, name: 'Goblin Raider', diameter: 3, camAngle: CAM_ANGLE, health: 1.0, facing: Math.atan2(0 - (-3.7), -(25 - 23.5)) }),
-  loader.load(document.querySelector('meta[name="goblin-red-url"]').content)
-)
-skrit.scale.setScalar(0.75)
-skrit.position.set(-3.7, 0, 23.5)
-scene.add(skrit)
-
-const morg = renderToken(
-  new TokenDescriptor({ color: goblinColor, name: 'Goblin Archer', diameter: 3, camAngle: CAM_ANGLE, health: 0.4, facing: Math.PI / 2 }),
-  loader.load(document.querySelector('meta[name="goblin-yellow-url"]').content)
-)
-morg.scale.setScalar(0.75)
-morg.position.set(-22, 0, 25)
-scene.add(morg)
-
-scene.add(renderZone(new ZoneDescriptor([
-  new WallDescriptor([[-67.5,7.5],[-42.5,7.5],[-42.5,12.5],[-32.5,12.5],[-32.5,17.5],[-12.5,17.5],[-12.5,2.5],[2.5,2.5],[2.5,-17.5]]),
-  new WallDescriptor([[-42.5,42.5],[-42.5,32.5],[-32.5,32.5],[-32.5,27.5],[-12.5,27.5],[-12.5,32.5],[-2.5,32.5],[-2.5,52.5]]),
-  new WallDescriptor([[12.5,-17.5],[12.5,2.5],[27.5,2.5]])
-])))
+zyllaniToken.position.set(startX, 0, startZ)
+scene.add(zyllaniToken)
 
 window.addEventListener("resize", fitToWindow)
 

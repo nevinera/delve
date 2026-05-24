@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "unit",
+  "title": "Unit",
+  "description": "A single combatant token in a zone.",
+  "type": "object",
+  "required": ["name", "maxHP", "tokenImageUrl", "location"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Display name shown on the token arc."
+    },
+    "tokenColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "default": "#8B0000",
+      "description": "CSS hex color for the token body cylinder. Defaults to dark red."
+    },
+    "maxHP": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum hit points."
+    },
+    "currentHP": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current hit points. Defaults to maxHP (full health)."
+    },
+    "tokenImageUrl": {
+      "type": "string",
+      "description": "URL of the token portrait image."
+    },
+    "facingAngle": {
+      "type": "number",
+      "description": "Facing direction in radians. 0 = south (toward camera), π/2 = east, π = north, -π/2 = west. Omit for no facing indicator."
+    },
+    "location": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "description": "Position in map coordinates (feet). Origin is the lower-left corner of the map; x increases eastward, y increases northward.",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "tokenScale": {
+      "type": "number",
+      "minimum": 0.25,
+      "maximum": 5.0,
+      "default": 1.0,
+      "description": "Token size multiplier. 1.0 = standard 3-foot diameter. Use 0.75 for small creatures, 2.0 for large, 3.0 for huge."
+    }
+  }
+}
