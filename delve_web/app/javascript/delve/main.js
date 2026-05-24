@@ -71,9 +71,14 @@ document.body.appendChild(canvas)
 const scene = new Scene({ zone, zoneBase: ZONE_BASE, canvas, protagonist })
 
 const TICK_MS = 100
-const ORBIT_RATE = 20 * Math.PI / 180 // radians/sec, for demo rotation
+const TURN_RATE = 120 * Math.PI / 180 // radians/sec
+const MOVE_RATE = 15 // world units/sec
 let lastTickTime = performance.now()
 let lastFrameTime = performance.now()
+
+const keys = new Set()
+window.addEventListener('keydown', e => keys.add(e.code))
+window.addEventListener('keyup', e => keys.delete(e.code))
 
 setInterval(() => {
   lastTickTime = performance.now()
@@ -84,7 +89,25 @@ function animate (time) {
   requestAnimationFrame(animate)
   const elapsed = (time - lastFrameTime) / 1000
   lastFrameTime = time
-  scene.setProtagonistFacing(scene.protagonist.predictedState.facing + ORBIT_RATE * elapsed)
+
+  if (keys.has('KeyA')) scene.setProtagonistFacing(scene.protagonist.predictedState.facing - TURN_RATE * elapsed)
+  if (keys.has('KeyD')) scene.setProtagonistFacing(scene.protagonist.predictedState.facing + TURN_RATE * elapsed)
+  if (keys.has('KeyW') || keys.has('KeyS') || keys.has('KeyQ') || keys.has('KeyE')) {
+    const { facing, x, z } = scene.protagonist.predictedState
+    const fwdX = Math.sin(facing); const fwdZ = -Math.cos(facing)
+    const rightX = Math.cos(facing); const rightZ = Math.sin(facing)
+    let dx = 0; let dz = 0
+    if (keys.has('KeyW')) { dx += fwdX; dz += fwdZ }
+    if (keys.has('KeyS')) { dx -= fwdX; dz -= fwdZ }
+    if (keys.has('KeyQ')) { dx -= rightX; dz -= rightZ }
+    if (keys.has('KeyE')) { dx += rightX; dz += rightZ }
+    const len = Math.sqrt(dx * dx + dz * dz)
+    if (len > 0) {
+      scene.protagonist.predictedState.x = x + (dx / len) * MOVE_RATE * elapsed
+      scene.protagonist.predictedState.z = z + (dz / len) * MOVE_RATE * elapsed
+    }
+  }
+
   const tickProgress = Math.min((time - lastTickTime) / TICK_MS, 1)
   scene.render(tickProgress)
 }
