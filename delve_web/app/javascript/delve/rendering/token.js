@@ -66,13 +66,9 @@ function drawHpRing (canvas, healthBar, hpFraction) {
 }
 
 export class TokenSceneNode {
-  constructor (descriptor, texture, camera) {
+  constructor (descriptor, texture) {
     const { color, body, disc, healthBar, name } = descriptor
 
-    const camDir = new THREE.Vector3()
-    camera.getWorldDirection(camDir)
-    this._initialYaw = Math.atan2(camDir.x, camDir.z)
-    this._camera = camera
     this._healthBar = healthBar
     this._lastHp = null
     this._lastMaxHp = null
@@ -122,10 +118,6 @@ export class TokenSceneNode {
 
   update (state) {
     this.group.position.set(state.x, 0, state.z)
-
-    const camDir = new THREE.Vector3()
-    this._camera.getWorldDirection(camDir)
-    this._cameraGroup.rotation.y = Math.atan2(camDir.x, camDir.z) - this._initialYaw
 
     if (state.hp !== this._lastHp || state.maxHp !== this._lastMaxHp) {
       drawHpRing(this._hpCanvas, this._healthBar, state.hp / state.maxHp)

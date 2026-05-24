@@ -93,8 +93,7 @@ for (const unit of zone.units) {
       name: unit.name,
       diameter: 3
     }),
-    loader.load(assetUrl(unit.tokenImageUrl)),
-    camera
+    loader.load(assetUrl(unit.tokenImageUrl))
   )
   sceneNode.group.scale.setScalar(unit.tokenScale ?? 1.0)
   scene.add(sceneNode.group)
