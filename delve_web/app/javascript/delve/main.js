@@ -79,6 +79,7 @@ let lastFrameTime = performance.now()
 const keys = new Set()
 window.addEventListener('keydown', e => keys.add(e.code))
 window.addEventListener('keyup', e => keys.delete(e.code))
+window.addEventListener('blur', () => keys.clear())
 
 setInterval(() => {
   lastTickTime = performance.now()
