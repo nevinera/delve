@@ -76,6 +76,7 @@ const grubs = createToken({
   health: 0.7,
   facing: Math.atan2(0 - (-1.3), -(25 - 21.8))
 })
+grubs.scale.setScalar(0.75)
 grubs.position.set(-1.3, 0, 21.8)
 scene.add(grubs)
 
@@ -88,6 +89,7 @@ const skrit = createToken({
   health: 1.0,
   facing: Math.atan2(0 - (-3.7), -(25 - 23.5))
 })
+skrit.scale.setScalar(0.75)
 skrit.position.set(-3.7, 0, 23.5)
 scene.add(skrit)
 
@@ -100,6 +102,7 @@ const morg = createToken({
   health: 0.4,
   facing: Math.PI / 2
 })
+morg.scale.setScalar(0.75)
 morg.position.set(-22, 0, 25)
 scene.add(morg)
 
