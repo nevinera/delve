@@ -73,6 +73,10 @@ const scene = new Scene({ zone, zoneBase: ZONE_BASE, canvas, protagonist })
 const TICK_MS = 100
 const TURN_RATE = 120 * Math.PI / 180 // radians/sec
 const MOVE_RATE = 15 // world units/sec
+const ZOOM_RATE = 0.5 // zoom scale units/sec
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 1.5
+let zoomScale = 1.0
 let lastTickTime = performance.now()
 let lastFrameTime = performance.now()
 
@@ -90,6 +94,10 @@ function animate (time) {
   requestAnimationFrame(animate)
   const elapsed = (time - lastFrameTime) / 1000
   lastFrameTime = time
+
+  if (keys.has('Equal')) zoomScale = Math.max(ZOOM_MIN, zoomScale - ZOOM_RATE * elapsed)
+  if (keys.has('Minus')) zoomScale = Math.min(ZOOM_MAX, zoomScale + ZOOM_RATE * elapsed)
+  scene.setZoom(zoomScale)
 
   if (keys.has('KeyA')) scene.setProtagonistFacing(scene.protagonist.predictedState.facing - TURN_RATE * elapsed)
   if (keys.has('KeyD')) scene.setProtagonistFacing(scene.protagonist.predictedState.facing + TURN_RATE * elapsed)

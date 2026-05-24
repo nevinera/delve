@@ -77,6 +77,7 @@ export class Scene {
       loader.load(zoneBase + protagonistData.tokenImageUrl)
     )
     this._threeScene.add(protagonistNode.group)
+    this._zoomScale = 1.0
     this.protagonist = new SceneProtagonist(protagonistNode, new TokenState({
       x: startX, z: startZ,
       facing: start.facing ?? 0,
@@ -109,14 +110,21 @@ export class Scene {
     this.protagonist.setFacing(facing)
   }
 
+  setZoom (scale) {
+    this._zoomScale = scale
+  }
+
   _updateCamera () {
     const { x, z, facing } = this.protagonist.predictedState
     const fwdX = Math.sin(facing)
     const fwdZ = -Math.cos(facing)
+    const s = this._zoomScale
 
-    const lookAt = new THREE.Vector3(x + CAM_LOOK_AHEAD * fwdX, 0, z + CAM_LOOK_AHEAD * fwdZ)
-    this._camera.position.set(x - CAM_BACK * fwdX, CAM_HEIGHT, z - CAM_BACK * fwdZ)
+    const lookAt = new THREE.Vector3(x + s * CAM_LOOK_AHEAD * fwdX, 0, z + s * CAM_LOOK_AHEAD * fwdZ)
+    this._camera.position.set(x - s * CAM_BACK * fwdX, s * CAM_HEIGHT, z - s * CAM_BACK * fwdZ)
     this._camera.lookAt(lookAt)
+    this._threeScene.fog.near = 60 * s
+    this._threeScene.fog.far = 150 * s
   }
 
   _fitToWindow () {
