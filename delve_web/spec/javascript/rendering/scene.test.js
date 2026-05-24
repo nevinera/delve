@@ -97,10 +97,10 @@ describe('Scene', () => {
     })
   })
 
-  describe('zoom', () => {
+  describe('adjustZoom', () => {
     it('scales camera distance', () => {
       const scene = makeScene()
-      scene.setZoom(0.5)
+      scene.adjustZoom(-0.5) // zoom in from default 1.0
       scene.render(0)
       expect(scene._camera.position.y).toBeCloseTo(25) // 50 * 0.5
       expect(scene._camera.position.z).toBeCloseTo(52.5 + 22.5) // CAM_BACK * 0.5
@@ -108,10 +108,22 @@ describe('Scene', () => {
 
     it('scales fog near and far', () => {
       const scene = makeScene()
-      scene.setZoom(0.5)
+      scene.adjustZoom(-0.5)
       scene.render(0)
       expect(scene._threeScene.fog.near).toBeCloseTo(30) // 60 * 0.5
       expect(scene._threeScene.fog.far).toBeCloseTo(75) // 150 * 0.5
+    })
+
+    it('clamps to ZOOM_MIN', () => {
+      const scene = makeScene()
+      scene.adjustZoom(-999)
+      expect(scene._zoomScale).toBe(0.5)
+    })
+
+    it('clamps to ZOOM_MAX', () => {
+      const scene = makeScene()
+      scene.adjustZoom(999)
+      expect(scene._zoomScale).toBe(1.5)
     })
   })
 

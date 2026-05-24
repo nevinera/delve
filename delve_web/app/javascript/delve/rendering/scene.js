@@ -15,6 +15,8 @@ const ASPECT = 16 / 9
 const CAM_BACK = 45
 const CAM_HEIGHT = 50
 const CAM_LOOK_AHEAD = 10
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 1.5
 
 export class Scene {
   constructor ({ zone, zoneBase, canvas, protagonist: protagonistData, renderer = null, textureLoader = null }) {
@@ -110,8 +112,8 @@ export class Scene {
     this.protagonist.setFacing(facing)
   }
 
-  setZoom (scale) {
-    this._zoomScale = scale
+  adjustZoom (delta) {
+    this._zoomScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._zoomScale + delta))
   }
 
   _updateCamera () {
