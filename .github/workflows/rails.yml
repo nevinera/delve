@@ -1,0 +1,28 @@
+name: Rails
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rspec:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: delve_web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.9"
+          bundler-cache: true
+          working-directory: delve_web
+
+      - name: Set up database
+        run: bundle exec rails db:schema:load RAILS_ENV=test
+
+      - name: Run RSpec
+        run: bundle exec rspec
