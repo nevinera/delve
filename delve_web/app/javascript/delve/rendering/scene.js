@@ -15,16 +15,18 @@ const ASPECT = 16 / 9
 const CAM_BACK = 45
 const CAM_HEIGHT = 50
 const CAM_LOOK_AHEAD = 10
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 1.5
 
 export class Scene {
-  constructor ({ zone, zoneBase, canvas, protagonist: protagonistData }) {
+  constructor ({ zone, zoneBase, canvas, protagonist: protagonistData, renderer = null, textureLoader = null }) {
     this._threeScene = new THREE.Scene()
     this._threeScene.background = new THREE.Color(0x87ceeb)
     this._threeScene.fog = new THREE.Fog(0x87ceeb, 60, 150)
 
     this._camera = new THREE.PerspectiveCamera(34, ASPECT, 0.1, 500)
 
-    this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+    this._renderer = renderer ?? new THREE.WebGLRenderer({ canvas, antialias: true })
     this._renderer.setPixelRatio(window.devicePixelRatio)
     this._fitToWindow()
     window.addEventListener('resize', () => this._fitToWindow())
@@ -34,7 +36,7 @@ export class Scene {
     this._threeScene.add(sunLight)
     this._threeScene.add(new THREE.AmbientLight(0xffffff, 0.4))
 
-    const loader = new THREE.TextureLoader()
+    const loader = textureLoader ?? new THREE.TextureLoader()
 
     const mapPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(zone.dimensions.width, zone.dimensions.height),
@@ -77,6 +79,7 @@ export class Scene {
       loader.load(zoneBase + protagonistData.tokenImageUrl)
     )
     this._threeScene.add(protagonistNode.group)
+    this._zoomScale = 1.0
     this.protagonist = new SceneProtagonist(protagonistNode, new TokenState({
       x: startX, z: startZ,
       facing: start.facing ?? 0,
@@ -109,14 +112,29 @@ export class Scene {
     this.protagonist.setFacing(facing)
   }
 
+  turnProtagonist (rads) {
+    this.protagonist.setFacing(this.protagonist.predictedState.facing + rads)
+  }
+
+  moveProtagonist (forward, side, elapsed) {
+    this.protagonist.move(forward, side, elapsed)
+  }
+
+  adjustZoom (delta) {
+    this._zoomScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._zoomScale + delta))
+  }
+
   _updateCamera () {
     const { x, z, facing } = this.protagonist.predictedState
     const fwdX = Math.sin(facing)
     const fwdZ = -Math.cos(facing)
+    const s = this._zoomScale
 
-    const lookAt = new THREE.Vector3(x + CAM_LOOK_AHEAD * fwdX, 0, z + CAM_LOOK_AHEAD * fwdZ)
-    this._camera.position.set(x - CAM_BACK * fwdX, CAM_HEIGHT, z - CAM_BACK * fwdZ)
+    const lookAt = new THREE.Vector3(x + s * CAM_LOOK_AHEAD * fwdX, 0, z + s * CAM_LOOK_AHEAD * fwdZ)
+    this._camera.position.set(x - s * CAM_BACK * fwdX, s * CAM_HEIGHT, z - s * CAM_BACK * fwdZ)
     this._camera.lookAt(lookAt)
+    this._threeScene.fog.near = 60 * s
+    this._threeScene.fog.far = 150 * s
   }
 
   _fitToWindow () {

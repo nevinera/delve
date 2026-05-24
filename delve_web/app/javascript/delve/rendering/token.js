@@ -7,6 +7,7 @@ function makeNameTexture ({ text, canvasSize, canvasArcRadius, fontSize }) {
   canvas.width = canvasSize
   canvas.height = canvasSize
   const ctx = canvas.getContext('2d')
+  if (!ctx) return new THREE.CanvasTexture(canvas)
   ctx.font = `bold ${fontSize}px sans-serif`
   ctx.fillStyle = 'white'
   ctx.strokeStyle = 'rgba(0,0,0,0.7)'
@@ -37,6 +38,7 @@ function makeNameTexture ({ text, canvasSize, canvasArcRadius, fontSize }) {
 function drawHpRing (canvas, healthBar, hpFraction) {
   const { innerRadius, outerRadius, canvasSize, canvasScale } = healthBar
   const ctx = canvas.getContext('2d')
+  if (!ctx) return
   ctx.clearRect(0, 0, canvasSize, canvasSize)
 
   const cx = canvasSize / 2

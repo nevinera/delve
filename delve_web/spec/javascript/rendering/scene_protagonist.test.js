@@ -27,6 +27,42 @@ describe('SceneProtagonist', () => {
     })
   })
 
+  describe('move', () => {
+    it('moves forward along facing direction', () => {
+      const p = new SceneProtagonist(makeSceneNode(), makeState(0)) // facing north (-Z)
+      p.move(1, 0, 1)
+      expect(p.predictedState.x).toBeCloseTo(0)
+      expect(p.predictedState.z).toBeCloseTo(-15) // MOVE_RATE * elapsed
+    })
+
+    it('moves sideways perpendicular to facing', () => {
+      const p = new SceneProtagonist(makeSceneNode(), makeState(0)) // facing north
+      p.move(0, 1, 1)
+      expect(p.predictedState.x).toBeCloseTo(15) // east
+      expect(p.predictedState.z).toBeCloseTo(0)
+    })
+
+    it('normalizes diagonal movement to same speed as cardinal', () => {
+      const p = new SceneProtagonist(makeSceneNode(), makeState(0))
+      p.move(1, 1, 1)
+      const dist = Math.sqrt(p.predictedState.x ** 2 + p.predictedState.z ** 2)
+      expect(dist).toBeCloseTo(15) // same as forward-only
+    })
+
+    it('scales by elapsed', () => {
+      const p = new SceneProtagonist(makeSceneNode(), makeState(0))
+      p.move(1, 0, 0.5)
+      expect(p.predictedState.z).toBeCloseTo(-7.5)
+    })
+
+    it('does nothing when both axes are zero', () => {
+      const p = new SceneProtagonist(makeSceneNode(), makeState(0))
+      p.move(0, 0, 1)
+      expect(p.predictedState.x).toBe(0)
+      expect(p.predictedState.z).toBe(0)
+    })
+  })
+
   describe('render', () => {
     it('calls sceneNode.update with predictedState', () => {
       const state = makeState(1)

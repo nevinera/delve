@@ -1,4 +1,5 @@
 import { Scene } from 'delve/rendering/scene'
+import { Controls } from 'delve/controls'
 
 const ZONE_BASE = '/zones/'
 
@@ -71,9 +72,15 @@ document.body.appendChild(canvas)
 const scene = new Scene({ zone, zoneBase: ZONE_BASE, canvas, protagonist })
 
 const TICK_MS = 100
-const ORBIT_RATE = 20 * Math.PI / 180 // radians/sec, for demo rotation
 let lastTickTime = performance.now()
 let lastFrameTime = performance.now()
+let elapsed = 0
+
+const controls = new Controls({
+  onZoom: amount => scene.adjustZoom(amount),
+  onTurn: rads => scene.turnProtagonist(rads),
+  onTranslate: (forward, side) => scene.moveProtagonist(forward, side, elapsed)
+})
 
 setInterval(() => {
   lastTickTime = performance.now()
@@ -82,9 +89,9 @@ setInterval(() => {
 
 function animate (time) {
   requestAnimationFrame(animate)
-  const elapsed = (time - lastFrameTime) / 1000
+  elapsed = (time - lastFrameTime) / 1000
   lastFrameTime = time
-  scene.setProtagonistFacing(scene.protagonist.predictedState.facing + ORBIT_RATE * elapsed)
+  controls.update(elapsed)
   const tickProgress = Math.min((time - lastTickTime) / TICK_MS, 1)
   scene.render(tickProgress)
 }
