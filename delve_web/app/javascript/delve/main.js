@@ -46,6 +46,10 @@ camera.position.set(
 )
 camera.lookAt(CAM_LOOK_AT)
 
+const camDir = new THREE.Vector3()
+camera.getWorldDirection(camDir)
+const initialYaw = Math.atan2(camDir.x, camDir.z)
+
 const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setPixelRatio(window.devicePixelRatio)
 document.body.appendChild(renderer.domElement)
@@ -81,6 +85,8 @@ scene.add(renderZone(new ZoneDescriptor(
   zone.walls.map(path => new WallDescriptor(path.map(({ x, y }) => mapToWorld(x, y))))
 )))
 
+const tokens = []
+
 for (const unit of zone.units) {
   const [wx, wz] = mapToWorld(unit.location.x, unit.location.y)
   const currentHP = unit.currentHP ?? unit.maxHP
@@ -91,13 +97,16 @@ for (const unit of zone.units) {
       diameter: 3,
       camAngle: CAM_ANGLE,
       health: currentHP / unit.maxHP,
-      facing: unit.facingAngle ?? null
+      facing: unit.facingAngle ?? 0,
+      showFacingArc: unit.facingAngle != null
     }),
     loader.load(assetUrl(unit.tokenImageUrl))
   )
   token.scale.setScalar(unit.tokenScale ?? 1.0)
   token.position.set(wx, 0, wz)
+  token.userData.facingAngle = unit.facingAngle ?? 0
   scene.add(token)
+  tokens.push(token)
 }
 
 const zyllani = {
@@ -115,12 +124,15 @@ const zyllaniToken = renderToken(
     diameter: 3,
     camAngle: CAM_ANGLE,
     health: zyllani.currentHP / zyllani.maxHP,
-    facing: null
+    facing: start.facing,
+    showFacingArc: false
   }),
   loader.load(assetUrl(zyllani.tokenImageUrl))
 )
 zyllaniToken.position.set(startX, 0, startZ)
+zyllaniToken.userData.facingAngle = start.facing
 scene.add(zyllaniToken)
+tokens.push(zyllaniToken)
 
 window.addEventListener('resize', fitToWindow)
 
@@ -141,6 +153,12 @@ function animate (time) {
   const lookAt = orbitCenter.clone().add(orbitLookAtOffset.clone().applyAxisAngle(orbitAxis, orbitAngle))
   camera.position.copy(orbitCenter).add(orbitCamOffset.clone().applyAxisAngle(orbitAxis, orbitAngle))
   camera.lookAt(lookAt)
+  camera.getWorldDirection(camDir)
+  const cameraYaw = Math.atan2(camDir.x, camDir.z)
+  zyllaniToken.userData.facingAngle = cameraYaw
+  for (const token of tokens) {
+    token.userData.cameraGroup.rotation.y = token.userData.facingAngle - initialYaw
+  }
   renderer.render(scene, camera)
 }
 requestAnimationFrame(animate)

@@ -38,6 +38,12 @@ export function renderToken (descriptor, texture) {
   const { color, camAngle, body, disc, healthBar, facingArc, name } = descriptor
   const group = new THREE.Group()
 
+  // cameraGroup holds elements that must rotate to stay upright as the camera orbits.
+  // The facing arc is excluded - it stays fixed in world space.
+  const cameraGroup = new THREE.Group()
+  group.add(cameraGroup)
+  group.userData.cameraGroup = cameraGroup
+
   const bodyMesh = new THREE.Mesh(
     new THREE.CylinderGeometry(body.radius, body.radius, body.height, 32),
     new THREE.MeshLambertMaterial({ color })
@@ -52,7 +58,7 @@ export function renderToken (descriptor, texture) {
   discMesh.rotation.x = -Math.PI / 2
   discMesh.rotation.z = camAngle
   discMesh.position.y = disc.position_y
-  group.add(discMesh)
+  cameraGroup.add(discMesh)
 
   const hpBg = new THREE.Mesh(
     new THREE.RingGeometry(
@@ -64,7 +70,7 @@ export function renderToken (descriptor, texture) {
   hpBg.rotation.x = -Math.PI / 2
   hpBg.rotation.z = camAngle
   hpBg.position.y = body.height + 0.02
-  group.add(hpBg)
+  cameraGroup.add(hpBg)
 
   const hpBar = new THREE.Mesh(
     new THREE.RingGeometry(
@@ -76,7 +82,7 @@ export function renderToken (descriptor, texture) {
   hpBar.rotation.x = -Math.PI / 2
   hpBar.rotation.z = camAngle
   hpBar.position.y = body.height + 0.021
-  group.add(hpBar)
+  cameraGroup.add(hpBar)
 
   if (facingArc !== null) {
     const shape = new THREE.Shape()
@@ -100,7 +106,7 @@ export function renderToken (descriptor, texture) {
   namePlane.rotation.x = -Math.PI / 2
   namePlane.rotation.z = camAngle
   namePlane.position.y = name.position_y
-  group.add(namePlane)
+  cameraGroup.add(namePlane)
 
   return group
 }

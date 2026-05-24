@@ -38,8 +38,8 @@ describe('TokenDescriptor', () => {
   })
 
   describe('facingArc', () => {
-    it('is null when facing is not provided', () => {
-      const desc = new TokenDescriptor(base)
+    it('is null when showFacingArc is false', () => {
+      const desc = new TokenDescriptor({ ...base, showFacingArc: false })
       expect(desc.facingArc).toBeNull()
     })
 
@@ -52,7 +52,7 @@ describe('TokenDescriptor', () => {
     })
 
     it('scales radii from token radius', () => {
-      const desc = new TokenDescriptor({ ...base, facing: 0 })
+      const desc = new TokenDescriptor(base)
       expect(desc.facingArc.inner_radius).toBeCloseTo(1.5 + 1 / 12)
       expect(desc.facingArc.outer_radius).toBeCloseTo(1.5 + 5 / 12)
     })

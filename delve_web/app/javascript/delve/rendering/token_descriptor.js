@@ -2,7 +2,7 @@
 // Zone JSON uses map coordinates - x/y axes, y increasing northward, origin at lower-left.
 // Callers must convert before constructing this descriptor.
 export class TokenDescriptor {
-  constructor ({ color, name, diameter, camAngle, health = 1.0, facing = null }) {
+  constructor ({ color, name, diameter, camAngle, health = 1.0, facing = 0, showFacingArc = true }) {
     this.color = color
     this.camAngle = camAngle
 
@@ -33,7 +33,7 @@ export class TokenDescriptor {
       }
     }
 
-    this.facingArc = facing === null
+    this.facingArc = !showFacingArc
       ? null
       : {
           inner_radius: radius + 1 / 12,
