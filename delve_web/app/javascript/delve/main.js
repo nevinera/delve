@@ -89,7 +89,12 @@ const controls = new Controls({
 setInterval(() => {
   lastTickTime = performance.now()
   const nextStates = new Map()
-  for (const [id, unit] of units) nextStates.set(id, unit.tick(scene.unitToStates().get(id)))
+  for (const [id, unit] of units) {
+    nextStates.set(id, unit.tick(
+      scene.unitToStates().get(id),
+      (x, z) => scene.pushOutFromWalls(x, z, unit.radius)
+    ))
+  }
   scene.updateUnits(nextStates)
   scene.advanceTick()
 }, TICK_MS)
