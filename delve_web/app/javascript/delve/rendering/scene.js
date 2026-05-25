@@ -126,14 +126,9 @@ export class Scene {
   }
 
   moveProtagonist (forward, side, elapsed) {
-    this.protagonist.move(forward, side, elapsed)
-    const { x, z } = this._collision.pushOutFromWalls(
-      this.protagonist.predictedState.x,
-      this.protagonist.predictedState.z,
-      this.protagonist.radius
+    this.protagonist.move(forward, side, elapsed,
+      (x, z) => this._collision.pushOutFromWalls(x, z, this.protagonist.radius)
     )
-    this.protagonist.predictedState.x = x
-    this.protagonist.predictedState.z = z
   }
 
   adjustZoom (delta) {

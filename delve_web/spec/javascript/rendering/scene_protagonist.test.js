@@ -70,6 +70,15 @@ describe('SceneProtagonist', () => {
       expect(p.predictedState.x).toBe(0)
       expect(p.predictedState.z).toBe(0)
     })
+
+    it('calls pushOut each substep and applies result', () => {
+      const p = makeProtagonist(0) // facing north, radius=1.5
+      // pushOut clamps z >= -5; large elapsed forces many substeps
+      const pushOut = vi.fn((x, z) => ({ x, z: Math.max(z, -5) }))
+      p.move(1, 0, 10, pushOut)
+      expect(pushOut).toHaveBeenCalled()
+      expect(p.predictedState.z).toBeCloseTo(-5)
+    })
   })
 
   describe('render', () => {
