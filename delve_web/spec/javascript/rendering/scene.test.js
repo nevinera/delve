@@ -19,7 +19,7 @@ const zone = {
       tokenImageUrl: 'goblin.png',
       facingAngle: 0,
       location: { x: 55, y: 50 },
-      tokenScale: 1
+      diameter: 3
     }
   ]
 }
@@ -29,7 +29,8 @@ const protagonist = {
   tokenColor: '#228B22',
   maxHP: 30,
   currentHP: 30,
-  tokenImageUrl: 'hero.png'
+  tokenImageUrl: 'hero.png',
+  diameter: 3
 }
 
 function makeRenderer () {

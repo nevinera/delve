@@ -56,10 +56,9 @@ export class Scene {
     zone.units.forEach((unit, i) => {
       const [wx, wz] = mapToWorld(unit.location.x, unit.location.y)
       const sceneNode = new TokenSceneNode(
-        new TokenDescriptor({ color: parseInt(unit.tokenColor.slice(1), 16), name: unit.name, diameter: 3 }),
+        new TokenDescriptor({ color: parseInt(unit.tokenColor.slice(1), 16), name: unit.name, diameter: unit.diameter }),
         loader.load(zoneBase + unit.tokenImageUrl)
       )
-      sceneNode.group.scale.setScalar(unit.tokenScale ?? 1.0)
       this._threeScene.add(sceneNode.group)
       const initialState = new TokenState({
         x: wx, z: wz, facing: unit.facingAngle ?? 0,
@@ -74,7 +73,7 @@ export class Scene {
       new TokenDescriptor({
         color: parseInt(protagonistData.tokenColor.slice(1), 16),
         name: protagonistData.name,
-        diameter: 3
+        diameter: protagonistData.diameter
       }),
       loader.load(zoneBase + protagonistData.tokenImageUrl)
     )
