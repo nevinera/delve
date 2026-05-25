@@ -10,18 +10,27 @@ function makeSceneNode () {
   return { update: vi.fn() }
 }
 
+function makeProtagonist (facing = 0) {
+  return new SceneProtagonist(makeSceneNode(), makeState(facing), 1.5)
+}
+
 describe('SceneProtagonist', () => {
   describe('constructor', () => {
     it('stores initialState as predictedState', () => {
       const state = makeState()
-      const p = new SceneProtagonist(makeSceneNode(), state)
+      const p = new SceneProtagonist(makeSceneNode(), state, 1.5)
       expect(p.predictedState).toBe(state)
+    })
+
+    it('stores radius', () => {
+      const p = new SceneProtagonist(makeSceneNode(), makeState(), 2)
+      expect(p.radius).toBe(2)
     })
   })
 
   describe('setFacing', () => {
     it('updates predictedState.facing', () => {
-      const p = new SceneProtagonist(makeSceneNode(), makeState(0))
+      const p = makeProtagonist(0)
       p.setFacing(Math.PI / 2)
       expect(p.predictedState.facing).toBeCloseTo(Math.PI / 2)
     })
@@ -29,37 +38,46 @@ describe('SceneProtagonist', () => {
 
   describe('move', () => {
     it('moves forward along facing direction', () => {
-      const p = new SceneProtagonist(makeSceneNode(), makeState(0)) // facing north (-Z)
+      const p = makeProtagonist(0) // facing north (-Z)
       p.move(1, 0, 1)
       expect(p.predictedState.x).toBeCloseTo(0)
       expect(p.predictedState.z).toBeCloseTo(-15) // MOVE_RATE * elapsed
     })
 
     it('moves sideways perpendicular to facing', () => {
-      const p = new SceneProtagonist(makeSceneNode(), makeState(0)) // facing north
+      const p = makeProtagonist(0) // facing north
       p.move(0, 1, 1)
       expect(p.predictedState.x).toBeCloseTo(15) // east
       expect(p.predictedState.z).toBeCloseTo(0)
     })
 
     it('normalizes diagonal movement to same speed as cardinal', () => {
-      const p = new SceneProtagonist(makeSceneNode(), makeState(0))
+      const p = makeProtagonist(0)
       p.move(1, 1, 1)
       const dist = Math.sqrt(p.predictedState.x ** 2 + p.predictedState.z ** 2)
       expect(dist).toBeCloseTo(15) // same as forward-only
     })
 
     it('scales by elapsed', () => {
-      const p = new SceneProtagonist(makeSceneNode(), makeState(0))
+      const p = makeProtagonist(0)
       p.move(1, 0, 0.5)
       expect(p.predictedState.z).toBeCloseTo(-7.5)
     })
 
     it('does nothing when both axes are zero', () => {
-      const p = new SceneProtagonist(makeSceneNode(), makeState(0))
+      const p = makeProtagonist(0)
       p.move(0, 0, 1)
       expect(p.predictedState.x).toBe(0)
       expect(p.predictedState.z).toBe(0)
+    })
+
+    it('calls pushOut each substep and applies result', () => {
+      const p = makeProtagonist(0) // facing north, radius=1.5
+      // pushOut clamps z >= -5; large elapsed forces many substeps
+      const pushOut = vi.fn((x, z) => ({ x, z: Math.max(z, -5) }))
+      p.move(1, 0, 10, pushOut)
+      expect(pushOut).toHaveBeenCalled()
+      expect(p.predictedState.z).toBeCloseTo(-5)
     })
   })
 
@@ -67,7 +85,7 @@ describe('SceneProtagonist', () => {
     it('calls sceneNode.update with predictedState', () => {
       const state = makeState(1)
       const node = makeSceneNode()
-      const p = new SceneProtagonist(node, state)
+      const p = new SceneProtagonist(node, state, 1.5)
       p.render()
       expect(node.update).toHaveBeenCalledOnce()
       expect(node.update).toHaveBeenCalledWith(state)
@@ -75,7 +93,7 @@ describe('SceneProtagonist', () => {
 
     it('reflects facing changes immediately', () => {
       const node = makeSceneNode()
-      const p = new SceneProtagonist(node, makeState(0))
+      const p = new SceneProtagonist(node, makeState(0), 1.5)
       p.setFacing(Math.PI)
       p.render()
       expect(node.update.mock.calls[0][0].facing).toBeCloseTo(Math.PI)

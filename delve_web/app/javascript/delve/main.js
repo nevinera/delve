@@ -34,7 +34,7 @@ const zone = {
       tokenImageUrl: 'tokens/too-many-tokens/GoblinGrasslandMaleGreenMelee (15).webp',
       facingAngle: 2.756,
       location: { x: 131.2, y: 80.7 },
-      tokenScale: 0.75
+      diameter: 2.25
     },
     {
       name: 'Goblin Raider',
@@ -43,7 +43,7 @@ const zone = {
       tokenImageUrl: 'tokens/too-many-tokens/GoblinGrasslandMaleRedMelee (1).webp',
       facingAngle: 1.952,
       location: { x: 128.8, y: 79.0 },
-      tokenScale: 0.75
+      diameter: 2.25
     },
     {
       name: 'Goblin Archer',
@@ -53,7 +53,7 @@ const zone = {
       tokenImageUrl: 'tokens/too-many-tokens/GoblinUnderdarkMaleYellowMelee (13).webp',
       facingAngle: 1.5708,
       location: { x: 110.5, y: 77.5 },
-      tokenScale: 0.75
+      diameter: 2.25
     }
   ]
 }
@@ -63,7 +63,8 @@ const protagonist = {
   tokenColor: '#228B22',
   maxHP: 40,
   currentHP: 34,
-  tokenImageUrl: 'tokens/too-many-tokens/ThugElfFemaleRanged (7).webp'
+  tokenImageUrl: 'tokens/too-many-tokens/ThugElfFemaleRanged (7).webp',
+  diameter: 3
 }
 
 const canvas = document.createElement('canvas')

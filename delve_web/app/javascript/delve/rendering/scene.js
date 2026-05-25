@@ -6,6 +6,7 @@ import { WallDescriptor, ZoneDescriptor } from 'delve/rendering/zone_descriptor'
 import { renderZone } from 'delve/rendering/zone'
 import { SceneUnit } from 'delve/rendering/scene_unit'
 import { SceneProtagonist } from 'delve/rendering/scene_protagonist'
+import { CollisionChecker } from 'delve/rendering/collision_checker'
 
 const MAP_ORIGIN_X = -132.5
 const MAP_ORIGIN_Z = 102.5
@@ -46,9 +47,18 @@ export class Scene {
     mapPlane.position.set(MAP_ORIGIN_X + zone.dimensions.width / 2, 0, MAP_ORIGIN_Z - zone.dimensions.height / 2)
     this._threeScene.add(mapPlane)
 
+    const wallPaths = zone.walls.map(path => path.map(({ x, y }) => mapToWorld(x, y)))
     this._threeScene.add(renderZone(new ZoneDescriptor(
-      zone.walls.map(path => new WallDescriptor(path.map(({ x, y }) => mapToWorld(x, y))))
+      wallPaths.map(points => new WallDescriptor(points))
     )))
+
+    const wallSegments = []
+    for (const points of wallPaths) {
+      for (let i = 0; i < points.length - 1; i++) {
+        wallSegments.push({ x1: points[i][0], z1: points[i][1], x2: points[i + 1][0], z2: points[i + 1][1] })
+      }
+    }
+    this._collision = new CollisionChecker(wallSegments)
 
     this._units = new Map()
     this._pendingStates = new Map()
@@ -56,10 +66,9 @@ export class Scene {
     zone.units.forEach((unit, i) => {
       const [wx, wz] = mapToWorld(unit.location.x, unit.location.y)
       const sceneNode = new TokenSceneNode(
-        new TokenDescriptor({ color: parseInt(unit.tokenColor.slice(1), 16), name: unit.name, diameter: 3 }),
+        new TokenDescriptor({ color: parseInt(unit.tokenColor.slice(1), 16), name: unit.name, diameter: unit.diameter }),
         loader.load(zoneBase + unit.tokenImageUrl)
       )
-      sceneNode.group.scale.setScalar(unit.tokenScale ?? 1.0)
       this._threeScene.add(sceneNode.group)
       const initialState = new TokenState({
         x: wx, z: wz, facing: unit.facingAngle ?? 0,
@@ -74,7 +83,7 @@ export class Scene {
       new TokenDescriptor({
         color: parseInt(protagonistData.tokenColor.slice(1), 16),
         name: protagonistData.name,
-        diameter: 3
+        diameter: protagonistData.diameter
       }),
       loader.load(zoneBase + protagonistData.tokenImageUrl)
     )
@@ -85,7 +94,7 @@ export class Scene {
       facing: start.facing ?? 0,
       hp: protagonistData.currentHP ?? protagonistData.maxHP,
       maxHp: protagonistData.maxHP
-    }))
+    }), protagonistData.diameter / 2)
   }
 
   updateUnits (stateMap) {
@@ -117,7 +126,9 @@ export class Scene {
   }
 
   moveProtagonist (forward, side, elapsed) {
-    this.protagonist.move(forward, side, elapsed)
+    this.protagonist.move(forward, side, elapsed,
+      (x, z) => this._collision.pushOutFromWalls(x, z, this.protagonist.radius)
+    )
   }
 
   adjustZoom (delta) {

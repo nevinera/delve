@@ -19,7 +19,7 @@ const zone = {
       tokenImageUrl: 'goblin.png',
       facingAngle: 0,
       location: { x: 55, y: 50 },
-      tokenScale: 1
+      diameter: 3
     }
   ]
 }
@@ -29,7 +29,8 @@ const protagonist = {
   tokenColor: '#228B22',
   maxHP: 30,
   currentHP: 30,
-  tokenImageUrl: 'hero.png'
+  tokenImageUrl: 'hero.png',
+  diameter: 3
 }
 
 function makeRenderer () {
@@ -124,6 +125,18 @@ describe('Scene', () => {
       const scene = makeScene()
       scene.adjustZoom(999)
       expect(scene._zoomScale).toBe(1.5)
+    })
+  })
+
+  describe('moveProtagonist', () => {
+    it('stops protagonist at wall boundary regardless of elapsed', () => {
+      // Protagonist starts at world (-82.5, 52.5), facing north (z decreasing).
+      // Wall centerline at map y=55 -> world z=47.5; radius=1.5 -> stops at z=49.
+      // Large elapsed (10s) would tunnel without substepping.
+      const walledZone = { ...zone, walls: [[{ x: 40, y: 55 }, { x: 60, y: 55 }]] }
+      const scene = makeScene({ zone: walledZone })
+      scene.moveProtagonist(1, 0, 10)
+      expect(scene.protagonist.predictedState.z).toBeCloseTo(49)
     })
   })
 
