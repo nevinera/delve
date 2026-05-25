@@ -103,6 +103,12 @@ export class Scene {
     }
   }
 
+  unitToStates () {
+    const states = new Map()
+    for (const [id, unit] of this._units) states.set(id, unit.toState)
+    return states
+  }
+
   advanceTick () {
     for (const [id, unit] of this._units) {
       unit.advanceTick(this._pendingStates.get(id) ?? unit.toState)
