@@ -1,5 +1,6 @@
 import { Scene } from 'delve/rendering/scene'
 import { Controls } from 'delve/controls'
+import { Unit } from 'delve/unit'
 
 const ZONE_BASE = '/zones/'
 
@@ -72,6 +73,8 @@ document.body.appendChild(canvas)
 
 const scene = new Scene({ zone, zoneBase: ZONE_BASE, canvas, protagonist })
 
+const units = new Map(zone.units.map((data, i) => [String(i), new Unit(data)]))
+
 const TICK_MS = 100
 let lastTickTime = performance.now()
 let lastFrameTime = performance.now()
@@ -85,6 +88,14 @@ const controls = new Controls({
 
 setInterval(() => {
   lastTickTime = performance.now()
+  const nextStates = new Map()
+  for (const [id, unit] of units) {
+    nextStates.set(id, unit.tick(
+      scene.unitToStates().get(id),
+      (x, z) => scene.pushOutFromWalls(x, z, unit.radius)
+    ))
+  }
+  scene.updateUnits(nextStates)
   scene.advanceTick()
 }, TICK_MS)
 
