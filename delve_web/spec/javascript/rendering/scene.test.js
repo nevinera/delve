@@ -128,6 +128,18 @@ describe('Scene', () => {
     })
   })
 
+  describe('moveProtagonist', () => {
+    it('stops protagonist at wall boundary', () => {
+      // Protagonist starts at world (-82.5, 52.5), facing north (z decreasing).
+      // Wall centerline at map y=55 -> world z=47.5; radius=1.5 -> stops at z=49.
+      // elapsed=0.3: moves 4.5 units to z=48, which is 0.5 inside radius -> pushed to z=49.
+      const walledZone = { ...zone, walls: [[{ x: 40, y: 55 }, { x: 60, y: 55 }]] }
+      const scene = makeScene({ zone: walledZone })
+      scene.moveProtagonist(1, 0, 0.3)
+      expect(scene.protagonist.predictedState.z).toBeCloseTo(49)
+    })
+  })
+
   describe('updateUnits / advanceTick', () => {
     it('advances unit state from pending map on tick', () => {
       const scene = makeScene()

@@ -1,9 +1,10 @@
 const MOVE_RATE = 15 // world units/sec
 
 export class SceneProtagonist {
-  constructor (sceneNode, initialState) {
+  constructor (sceneNode, initialState, radius) {
     this.sceneNode = sceneNode
     this.predictedState = initialState
+    this.radius = radius
   }
 
   setFacing (facing) {

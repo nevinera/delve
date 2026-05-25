@@ -6,6 +6,7 @@ import { WallDescriptor, ZoneDescriptor } from 'delve/rendering/zone_descriptor'
 import { renderZone } from 'delve/rendering/zone'
 import { SceneUnit } from 'delve/rendering/scene_unit'
 import { SceneProtagonist } from 'delve/rendering/scene_protagonist'
+import { CollisionChecker } from 'delve/rendering/collision_checker'
 
 const MAP_ORIGIN_X = -132.5
 const MAP_ORIGIN_Z = 102.5
@@ -46,9 +47,18 @@ export class Scene {
     mapPlane.position.set(MAP_ORIGIN_X + zone.dimensions.width / 2, 0, MAP_ORIGIN_Z - zone.dimensions.height / 2)
     this._threeScene.add(mapPlane)
 
+    const wallPaths = zone.walls.map(path => path.map(({ x, y }) => mapToWorld(x, y)))
     this._threeScene.add(renderZone(new ZoneDescriptor(
-      zone.walls.map(path => new WallDescriptor(path.map(({ x, y }) => mapToWorld(x, y))))
+      wallPaths.map(points => new WallDescriptor(points))
     )))
+
+    const wallSegments = []
+    for (const points of wallPaths) {
+      for (let i = 0; i < points.length - 1; i++) {
+        wallSegments.push({ x1: points[i][0], z1: points[i][1], x2: points[i + 1][0], z2: points[i + 1][1] })
+      }
+    }
+    this._collision = new CollisionChecker(wallSegments)
 
     this._units = new Map()
     this._pendingStates = new Map()
@@ -84,7 +94,7 @@ export class Scene {
       facing: start.facing ?? 0,
       hp: protagonistData.currentHP ?? protagonistData.maxHP,
       maxHp: protagonistData.maxHP
-    }))
+    }), protagonistData.diameter / 2)
   }
 
   updateUnits (stateMap) {
@@ -117,6 +127,13 @@ export class Scene {
 
   moveProtagonist (forward, side, elapsed) {
     this.protagonist.move(forward, side, elapsed)
+    const { x, z } = this._collision.pushOutFromWalls(
+      this.protagonist.predictedState.x,
+      this.protagonist.predictedState.z,
+      this.protagonist.radius
+    )
+    this.protagonist.predictedState.x = x
+    this.protagonist.predictedState.z = z
   }
 
   adjustZoom (delta) {
