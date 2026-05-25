@@ -71,8 +71,11 @@ export class Scene {
       )
       this._threeScene.add(sceneNode.group)
       const initialState = new TokenState({
-        x: wx, z: wz, facing: unit.facingAngle ?? 0,
-        hp: unit.currentHP ?? unit.maxHP, maxHp: unit.maxHP
+        x: wx,
+        z: wz,
+        facing: unit.facingAngle ?? 0,
+        hp: unit.currentHP ?? unit.maxHP,
+        maxHp: unit.maxHP
       })
       this._units.set(String(i), new SceneUnit(sceneNode, initialState))
     })
@@ -90,7 +93,8 @@ export class Scene {
     this._threeScene.add(protagonistNode.group)
     this._zoomScale = 1.0
     this.protagonist = new SceneProtagonist(protagonistNode, new TokenState({
-      x: startX, z: startZ,
+      x: startX,
+      z: startZ,
       facing: start.facing ?? 0,
       hp: protagonistData.currentHP ?? protagonistData.maxHP,
       maxHp: protagonistData.maxHP
