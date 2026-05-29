@@ -21,11 +21,12 @@ RSpec.describe CharacterClass, type: :model do
       expect(cc.errors[:definition]).to be_present
     end
 
-    it "requires the user to have a handle" do
+    it "requires the user to have a handle, with no other errors" do
       handleless = create(:user, handle: nil)
       cc = build(:character_class, user: handleless, identifier: "puncher")
       expect(cc).not_to be_valid
       expect(cc.errors[:base]).to include("owner must set a handle before registering a character class")
+      expect(cc.errors.count).to eq(1)
     end
 
     it "enforces uniqueness of identifier" do

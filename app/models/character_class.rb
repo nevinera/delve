@@ -5,11 +5,12 @@ class CharacterClass < ApplicationRecord
 
   before_validation :prefix_identifier_with_handle
 
+  validate :user_must_have_handle
   validates :identifier, presence: true, uniqueness: true,
-    format: {with: /\A[a-z0-9_]+\/[a-z0-9_]+\z/, message: "must be in the format handle/name"}
+    format: {with: /\A[a-z0-9_]+\/[a-z0-9_]+\z/, message: "must be in the format handle/name"},
+    unless: -> { errors[:base].any? }
   validates :location, presence: true
   validates :definition, presence: true
-  validate :user_must_have_handle
 
   private
 
