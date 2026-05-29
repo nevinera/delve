@@ -1,0 +1,8 @@
+<h1><%= @character_class.identifier %></h1>
+
+<p><strong>Owner:</strong> <%= @character_class.user.name %></p>
+<p><strong>Location:</strong> <%= link_to @character_class.location, @character_class.location %></p>
+<p><strong>Name:</strong> <%= @character_class.definition["name"] %></p>
+<p><strong>Description:</strong> <%= @character_class.definition["description"] %></p>
+
+<%= link_to "All classes", character_classes_path %>

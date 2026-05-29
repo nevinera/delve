@@ -1,0 +1,25 @@
+<h1>Register a Class</h1>
+
+<%= form_with model: @character_class, url: character_classes_path do |f| %>
+  <% if @character_class.errors.any? %>
+    <ul>
+      <% @character_class.errors.full_messages.each do |msg| %>
+        <li><%= msg %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <div>
+    <%= f.label :identifier, "Identifier (e.g. puncher - your handle will be prepended)" %>
+    <%= f.text_field :identifier %>
+  </div>
+
+  <div>
+    <%= f.label :location, "Definition URL" %>
+    <%= f.text_field :location %>
+  </div>
+
+  <%= f.submit "Register" %>
+<% end %>
+
+<%= link_to "Cancel", character_classes_path %>
