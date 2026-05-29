@@ -1,0 +1,10 @@
+{
+  "name": "Bind",
+  "cost": -1,
+  "graphic_from": { "type": "beam", "color": "9966CB", "duration": 0.3, "transparency": 0.6 },
+  "sound_from": { "type": "pew", "duration": 0.2, "volume": 0.5 },
+  "effects": [
+    { "type": "harm", "base": 1, "tags": ["dark", "magic"] },
+    { "type": "debuff", "name": "Warbound", "effect": "slow", "base": "0.10" }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "Warbinder",
+  "description": "Ranged caster that debuffs and DoTs enemies, healing allies as a result",
+  "detailed_description": "Warbinders take time to get rolling, but they never stop. Each Bind stacks Warbound on an enemy, and each Drain pulls life from that suffering into your most wounded ally. A skilled Warbinder never runs dry - the souls of the afflicted feed the engine.",
+  "colors": { "major": "FF00FF", "minor": "9966CB" },
+  "resource": { "name": "souls", "color": "FF00FF", "max": 50, "decay": 0.5 },
+  "abilities": [
+    {
+      "name": "Bind",
+      "cost": -1,
+      "graphic_from": { "type": "beam", "color": "9966CB", "duration": 0.3, "transparency": 0.6 },
+      "sound_from": { "type": "pew", "duration": 0.2, "volume": 0.5 },
+      "effects": [
+        { "type": "harm", "base": 1, "tags": ["dark", "magic"] },
+        { "type": "debuff", "name": "Warbound", "effect": "slow", "base": "0.10" }
+      ]
+    },
+    {
+      "name": "Drain",
+      "cost": 1,
+      "graphic_from": { "type": "beam", "color": "FF00FF", "duration": 0.4, "transparency": 0.5 },
+      "sound_from": { "type": "pew", "duration": 0.3, "volume": 0.4 },
+      "effects": [
+        { "type": "harm", "base": 1, "tags": ["dark", "magic"] },
+        { "type": "heal", "target": "most-damaged-ally", "base": 1 }
+      ]
+    }
+  ]
+}
