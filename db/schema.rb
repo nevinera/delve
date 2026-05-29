@@ -10,12 +10,13 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_22_201827) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_29_200128) do
   create_table "users", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "current_sign_in_at"
     t.string "current_sign_in_ip"
     t.string "email", default: "", null: false
+    t.string "handle"
     t.datetime "last_sign_in_at"
     t.string "last_sign_in_ip"
     t.string "name"
@@ -25,6 +26,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_22_201827) do
     t.string "uid", null: false
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["handle"], name: "index_users_on_handle", unique: true
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 end
