@@ -9,6 +9,7 @@ Rails.application.routes.draw do
   get "up" => "rails/health#show", :as => :rails_health_check
 
   resources :users, only: [:index]
+  resources :character_classes, only: [:index, :show, :new, :create], path: "classes"
   resources :instances, only: [:show]
 
   root to: "users#index"
