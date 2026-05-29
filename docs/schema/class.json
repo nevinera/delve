@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "class",
+  "title": "CharacterClass",
+  "description": "A playable character class: display info, resource, and ability list.",
+  "type": "object",
+  "required": ["name", "description", "detailed_description", "colors", "resource", "abilities"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Display name of the class."
+    },
+    "description": {
+      "type": "string",
+      "description": "Short one-line summary shown in class-selection UI."
+    },
+    "detailed_description": {
+      "type": "string",
+      "description": "Extended description shown in the class detail view."
+    },
+    "colors": {
+      "type": "object",
+      "required": ["major", "minor"],
+      "additionalProperties": false,
+      "description": "Color palette used for class UI elements.",
+      "properties": {
+        "major": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{6}$",
+          "description": "Primary class color as a 6-digit hex string (no leading #)."
+        },
+        "minor": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{6}$",
+          "description": "Secondary class color as a 6-digit hex string (no leading #)."
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "required": ["name", "color", "max", "decay"],
+      "additionalProperties": false,
+      "description": "The class-specific resource (mana, rage, souls, etc.).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name of the resource (e.g. 'mana', 'souls')."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{6}$",
+          "description": "Resource bar color as a 6-digit hex string (no leading #)."
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum resource capacity."
+        },
+        "decay": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Resource lost per second when out of combat. 0 means no decay."
+        }
+      }
+    },
+    "abilities": {
+      "type": "array",
+      "maxItems": 18,
+      "description": "Active and passive abilities. Max 12 active, 6 passive.",
+      "items": { "$ref": "ability.json" }
+    }
+  }
+}
