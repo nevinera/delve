@@ -1,6 +1,45 @@
 require "rails_helper"
 
 RSpec.describe User, type: :model do
+  describe "handle validation" do
+    it "is valid with no handle" do
+      expect(build(:user, handle: nil)).to be_valid
+    end
+
+    it "is valid with a conforming handle" do
+      expect(build(:user, handle: "nevinera")).to be_valid
+    end
+
+    it "requires at least 6 characters" do
+      expect(build(:user, handle: "abc")).not_to be_valid
+    end
+
+    it "rejects uppercase letters" do
+      expect(build(:user, handle: "Nevinera")).not_to be_valid
+    end
+
+    it "rejects spaces" do
+      expect(build(:user, handle: "nev inera")).not_to be_valid
+    end
+
+    it "rejects hyphens" do
+      expect(build(:user, handle: "nev-inera")).not_to be_valid
+    end
+
+    it "allows underscores" do
+      expect(build(:user, handle: "nev_inera")).to be_valid
+    end
+
+    it "allows digits" do
+      expect(build(:user, handle: "nevin3ra")).to be_valid
+    end
+
+    it "enforces uniqueness" do
+      create(:user, handle: "nevinera")
+      expect(build(:user, handle: "nevinera")).not_to be_valid
+    end
+  end
+
   describe ".from_omniauth" do
     let(:auth) do
       OmniAuth::AuthHash.new(
