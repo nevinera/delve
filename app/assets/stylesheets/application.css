@@ -1,10 +1,57 @@
-/*
- * This is a manifest file that'll be compiled into application.css.
- *
- * With Propshaft, assets are served efficiently without preprocessing steps. You can still include
- * application-wide styles in this file, but keep in mind that CSS precedence will follow the standard
- * cascading order, meaning styles declared later in the document or manifest will override earlier ones,
- * depending on specificity.
- *
- * Consider organizing styles into separate files for maintainability.
- */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root,
+[data-theme="dark"] {
+  /* backgrounds */
+  --pico-background-color: #0e0c12;
+  --pico-card-background-color: #16131f;
+  --pico-dropdown-background-color: #16131f;
+  --pico-code-background-color: #1c1826;
+
+  /* text */
+  --pico-color: #ddd5c0;
+  --pico-muted-color: #8a7f6e;
+  --pico-muted-border-color: #2e2840;
+
+  /* accent - deep gold */
+  --pico-primary: #c49a2a;
+  --pico-primary-hover: #e0b93a;
+  --pico-primary-focus: rgba(196, 154, 42, 0.3);
+  --pico-primary-inverse: #0e0c12;
+
+  /* borders and shadows */
+  --pico-border-color: #2e2840;
+  --pico-box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+
+  /* forms */
+  --pico-form-element-background-color: #16131f;
+  --pico-form-element-border-color: #2e2840;
+  --pico-form-element-color: #ddd5c0;
+  --pico-form-element-focus-color: #c49a2a;
+
+  /* typography */
+  --pico-font-family: 'Crimson Text', Georgia, serif;
+  --pico-font-size: 1.1rem;
+  --pico-line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #e8d5a0;
+}
+
+/* nav site name */
+header nav strong {
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  color: #c49a2a;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* tone down the button-to form wrapper */
+header nav form {
+  margin: 0;
+}
