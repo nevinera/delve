@@ -1,0 +1,20 @@
+<h1>Handles</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Identifier</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @handles.each do |handle| %>
+      <tr>
+        <td><%= link_to handle.identifier, user_handle_path(@user, handle) %></td>
+        <td><%= handle.description %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "New handle", new_user_handle_path(@user) %>

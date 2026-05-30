@@ -1,0 +1,7 @@
+<h1><%= @handle.identifier %></h1>
+
+<% if @handle.description.present? %>
+  <p><%= @handle.description %></p>
+<% end %>
+
+<%= link_to "All handles", user_handles_path(@user) %>
