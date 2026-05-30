@@ -9,15 +9,20 @@ class CharacterClassesController < ApplicationController
 
   def new
     @character_class = CharacterClass.new
+    @handles = current_user.handles.order(:identifier)
   end
 
   def create
-    @character_class = current_user.character_classes.new(identifier: params[:character_class][:identifier])
+    @character_class = current_user.character_classes.new(
+      identifier: params[:character_class][:identifier],
+      handle_id: params[:character_class][:handle_id]
+    )
     @character_class.location = params[:character_class][:location]
 
     definition_json = fetch_definition(@character_class.location)
     if definition_json.nil?
       @character_class.errors.add(:location, "could not be fetched")
+      @handles = current_user.handles.order(:identifier)
       return render :new, status: :unprocessable_entity
     end
 
@@ -26,6 +31,7 @@ class CharacterClassesController < ApplicationController
     if @character_class.save
       redirect_to @character_class, notice: "Class registered."
     else
+      @handles = current_user.handles.order(:identifier)
       render :new, status: :unprocessable_entity
     end
   end

@@ -10,7 +10,12 @@
   <% end %>
 
   <div>
-    <%= f.label :identifier, "Identifier (e.g. puncher - your handle will be prepended)" %>
+    <%= f.label :handle_id, "Handle" %>
+    <%= f.select :handle_id, @handles.map { |h| [h.identifier, h.id] }, {prompt: "Select a handle"} %>
+  </div>
+
+  <div>
+    <%= f.label :identifier, "Identifier (e.g. puncher)" %>
     <%= f.text_field :identifier %>
   </div>
 

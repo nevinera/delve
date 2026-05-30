@@ -11,7 +11,7 @@
   <tbody>
     <% @character_classes.each do |cc| %>
       <tr>
-        <td><%= link_to cc.identifier, character_class_path(cc) %></td>
+        <td><%= link_to cc.full_identifier, character_class_path(cc) %></td>
         <td><%= cc.user.name %></td>
         <td><%= link_to cc.location, cc.location %></td>
       </tr>

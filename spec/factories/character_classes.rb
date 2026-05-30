@@ -1,7 +1,8 @@
 FactoryBot.define do
   factory :character_class do
-    association :user, factory: :user, handle: "testuser"
-    sequence(:identifier) { |n| "testuser/class_#{n}" }
+    association :user
+    association :handle
+    sequence(:identifier) { |n| "class#{n.to_s.rjust(3, "0")}" }
     location { "https://github.com/example/delve/blob/main/docs/examples/classes/puncher.json" }
     definition { {"name" => "Puncher", "description" => "A punching class"} }
   end
