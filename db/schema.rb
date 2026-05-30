@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_30_132254) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_30_132432) do
   create_table "character_classes", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "definition", null: false
@@ -39,7 +39,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_30_132254) do
     t.datetime "current_sign_in_at"
     t.string "current_sign_in_ip"
     t.string "email", default: "", null: false
-    t.string "handle"
     t.datetime "last_sign_in_at"
     t.string "last_sign_in_ip"
     t.string "name"
@@ -49,7 +48,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_30_132254) do
     t.string "uid", null: false
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
-    t.index ["handle"], name: "index_users_on_handle", unique: true
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
