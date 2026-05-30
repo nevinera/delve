@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_29_200535) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_30_131739) do
   create_table "character_classes", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "definition", null: false
@@ -20,6 +20,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_29_200535) do
     t.integer "user_id", null: false
     t.index ["identifier"], name: "index_character_classes_on_identifier", unique: true
     t.index ["user_id"], name: "index_character_classes_on_user_id"
+  end
+
+  create_table "handles", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.string "identifier", null: false
+    t.datetime "updated_at", null: false
+    t.integer "user_id", null: false
+    t.index ["identifier"], name: "index_handles_on_identifier", unique: true
+    t.index ["user_id"], name: "index_handles_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -42,4 +52,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_29_200535) do
   end
 
   add_foreign_key "character_classes", "users"
+  add_foreign_key "handles", "users"
 end
