@@ -4,6 +4,7 @@ Rails.application.routes.draw do
 
   as :user do
     get "/login", to: "devise/sessions#new", as: :new_user_session
+    delete "/logout", to: "sessions#destroy", as: :destroy_user_session
   end
 
   get "up" => "rails/health#show", :as => :rails_health_check
