@@ -24,6 +24,7 @@ gem "memery"
 gem "environment_helpers"
 
 gem "devise"
+gem "cancancan"
 gem "pagy"
 gem "omniauth-google-oauth2"
 gem "omniauth-rails_csrf_protection"
