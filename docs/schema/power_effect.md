@@ -71,3 +71,28 @@ Restores HP to one or more targets.
   "tags": ["magic"]
 }
 ```
+
+---
+
+## resource
+
+Modifies a named resource on one or more targets.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `affects` | string | yes | |
+| `resourceName` | string | yes | Name of the resource to modify (must match the target's resource `name`). |
+| `delta` | float | yes | Amount added to the resource. Negative values consume it. |
+| `range` | float \| floatRange | unless `affects` is `"self"` | Distance in feet to a valid target. |
+
+### Example
+
+```json
+{
+  "type": "resource",
+  "affects": "self",
+  "resourceName": "fury",
+  "delta": 3.0,
+  "tags": ["melee"]
+}
+```
