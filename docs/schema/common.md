@@ -6,7 +6,7 @@ Shared types referenced across multiple schemas.
 
 ## AssetReference
 
-A pointer to an external config file rather than an inline definition. Any config containing one or more AssetReferences is considered **abstract** and must have a companion **concrete** config at the same path with `.full.json` substituted for `.json` (e.g. `goblin-cave.json` → `goblin-cave.full.json`), in which all references are resolved to inline definitions.
+A pointer to an external config file rather than an inline definition. Any config containing one or more AssetReferences is considered **abstract** and must have a companion **concrete** config at the same path with `.full.json` substituted for `.json` (e.g. `goblin-cave.json` -> `goblin-cave.full.json`), in which all references are resolved to inline definitions.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|

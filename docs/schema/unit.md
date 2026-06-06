@@ -11,7 +11,7 @@ See [common.md](common.md) for `Location` and `Position`.
 | `unitType` | string | yes | | Key into the enclosing zone's `unitTypes` map. |
 | `position` | Position | yes | | Placement location and initial facing direction. |
 | `hostility` | string | yes | | `"hostile"`, `"neutral"`, or `"friendly"`. Determines token color and aggro behavior. |
-| `currentHpFraction` | float | no | `1.0` | Starting HP as a fraction of `maxHP`. Range: 0.0–1.0. |
+| `currentHpFraction` | float | no | `1.0` | Starting HP as a fraction of `maxHP`. Range: 0.0-1.0. |
 | `movement` | UnitMovement | no | `{ "type": "still" }` | How the unit moves when un-aggro'd. |
 | `identifier` | string | no | | Optional identifier for this unit, used in `links`. |
 | `links` | array of strings | no | `[]` | Identifiers of other units that aggro when this unit aggros. |
@@ -45,14 +45,14 @@ The unit moves through an ordered list of positions.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `steps` | array of MovementStep | yes | At least two. |
-| `choose` | string | yes | `"return"` — reverses back through the list; `"loop"` — returns to the first step; `"random"` — picks the next step at random. |
+| `choose` | string | yes | `"return"`  -  reverses back through the list; `"loop"`  -  returns to the first step; `"random"`  -  picks the next step at random. |
 
 **MovementStep fields:**
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `position` | Position | yes | Where the unit moves to. |
-| `movementRate` | float | yes | Fraction of the unit's movement speed to use. Range: 0.0–1.0. |
+| `movementRate` | float | yes | Fraction of the unit's movement speed to use. Range: 0.0-1.0. |
 | `waitTime` | float | yes | Seconds to wait at this position before moving on. Must be non-negative. |
 
 ```json
@@ -75,7 +75,7 @@ The unit roams randomly within a radius of a fixed point.
 |---|---|---|---|
 | `location` | Location | yes | Center of the wander zone. |
 | `radius` | float | yes | Radius in feet within which the unit roams. |
-| `speed` | float \| floatRange | yes | Fraction of the unit's base movement speed. Range: 0.1–1.0. |
+| `speed` | float \| floatRange | yes | Fraction of the unit's base movement speed. Range: 0.1-1.0. |
 | `waitTime` | float \| floatRange | yes | Seconds to wait at each position before moving again. Must be non-negative. |
 
 ```json

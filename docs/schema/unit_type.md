@@ -9,8 +9,8 @@ A UnitType is a template from which individual units are created in a zone.
 | `name` | string | yes | | Display name. |
 | `description` | string | no | | Short description shown in UI. |
 | `tokenImageUrl` | string \| array of strings | yes | | Portrait image URL(s). If an array, one is chosen at random each time a unit is created from this type. |
-| `tokenRadius` | float | yes | | Token radius in feet. Range: 1.0–20.0. |
-| `speedFactor` | float | no | `1.0` | Movement speed multiplier relative to base character speed. Range: 0.0–10.0. |
+| `tokenRadius` | float | yes | | Token radius in feet. Range: 1.0-20.0. |
+| `speedFactor` | float | no | `1.0` | Movement speed multiplier relative to base character speed. Range: 0.0-10.0. |
 | `maxHP` | integer | yes | | Maximum hit points. |
 | `resource` | ResourceType | yes | | The resource used to power this unit's abilities. |
 | `powers` | array of Power \| AssetReference(`referenceTo: "power"`) | no | `[]` | Powers available to this unit. Inline Power objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
@@ -118,7 +118,7 @@ Sequences through a list of phases, each with its own tactics, advancing when a 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `tactics` | UnitTactics | yes | Tactics for this phase. May not be `phased`. |
-| `transition` | object | unless last phase | Condition that ends this phase and advances to the next. Either `{ "timeElapsed": float }` (seconds since phase started) or `{ "healthBelow": float }` (fraction of maxHP, 0.0–1.0). |
+| `transition` | object | unless last phase | Condition that ends this phase and advances to the next. Either `{ "timeElapsed": float }` (seconds since phase started) or `{ "healthBelow": float }` (fraction of maxHP, 0.0-1.0). |
 
 ```json
 {

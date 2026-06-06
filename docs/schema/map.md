@@ -77,8 +77,8 @@ A positional trigger. Units departing via this connection must intersect `positi
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `position` | Position | yes | Location and facing direction of the connection point. |
-| `fuzzRadius` | float | yes | Arrival scatter radius in feet. Range: 0.0–20.0. |
-| `fuzzAngle` | float | yes | Arrival scatter angle in degrees. Range: 0.0–360.0. |
+| `fuzzRadius` | float | yes | Arrival scatter radius in feet. Range: 0.0-20.0. |
+| `fuzzAngle` | float | yes | Arrival scatter angle in degrees. Range: 0.0-360.0. |
 
 ```json
 {

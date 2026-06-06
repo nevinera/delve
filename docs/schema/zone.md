@@ -18,7 +18,7 @@ See [map.md](map.md) for the `Map` type embedded in `maps`.
 | `entryPoints` | object | no | Maps `"mapId/connectionId"` keys to required key strings (or `null`). Players can spawn at these connections directly. |
 | `openConnections` | object | no | Maps `"mapId/connectionId"` keys to zone-level name strings. Exposes connections for other zones to link against. |
 
-> A zone must have at least one `entryPoint` or be reachable via an `openConnection` linked by another zone — otherwise there is no way for players to enter it.
+> A zone must have at least one `entryPoint` or be reachable via an `openConnection` linked by another zone  -  otherwise there is no way for players to enter it.
 
 ---
 
@@ -52,7 +52,7 @@ Links two MapConnections within the zone so that traversing one transports a uni
 
 ## Example (abstract)
 
-`goblin-cave.json` — maps are referenced externally; a `goblin-cave.full.json` must exist alongside it.
+`goblin-cave.json`  -  maps are referenced externally; a `goblin-cave.full.json` must exist alongside it.
 
 ```json
 {
@@ -85,7 +85,7 @@ Links two MapConnections within the zone so that traversing one transports a uni
 
 ## Example (concrete)
 
-`goblin-cave.full.json` — all maps inlined.
+`goblin-cave.full.json`  -  all maps inlined.
 
 ```json
 {
