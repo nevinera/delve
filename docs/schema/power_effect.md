@@ -9,9 +9,7 @@ A PowerEffect describes a single mechanical outcome applied when a power fires.
 | `type` | string | yes | Discriminator. See types below. |
 | `tags` | array of strings | no | Max 24 tags; each at most 16 characters. |
 
-### floatRange
-
-A two-element array `[min, max]` representing a uniform random draw between the two values (inclusive). Example: `[2.0, 4.0]`.
+`float | floatRange` fields accept either a single float or a floatRange (see [common.md](common.md)). When used for amounts, the value drawn is determined by the game server (typically random within the range).
 
 ### Affects Values
 
