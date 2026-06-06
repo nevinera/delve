@@ -94,3 +94,36 @@ Modifies a named resource on one or more targets.
   "tags": ["melee"]
 }
 ```
+
+---
+
+## status
+
+Applies a Status to one or more targets for a fixed duration. See [status.md](status.md) for the Status schema.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `affects` | string | yes | |
+| `duration` | float | yes | Duration in seconds. |
+| `status` | Status | yes | The status to apply. |
+| `range` | float \| floatRange | unless `affects` is `"self"` | Distance in feet to a valid target. |
+
+### Example
+
+```json
+{
+  "type": "status",
+  "affects": "self",
+  "duration": 10.0,
+  "status": {
+    "name": "Enrage",
+    "treatAs": "buff",
+    "stacking": "replace",
+    "effects": [
+      { "type": "stat", "statName": "damageDone", "modifierType": "multiply", "amount": 1.1 },
+      { "type": "stat", "statName": "attackSpeed", "modifierType": "multiply", "amount": 1.2 }
+    ]
+  },
+  "tags": ["buff"]
+}
+```
