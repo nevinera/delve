@@ -11,6 +11,7 @@ A Power is an active ability a unit can use in combat.
 | `maxRange` | float | no | | Maximum range in feet to a valid target. Omit for self-only or melee powers. |
 | `castTime` | float \| null | yes | | Cast duration in seconds. `null` means instant. |
 | `globalCooldown` | float | yes | | Seconds before the unit can use any power again after this one. |
+| `cooldown` | float | no | | Per-ability cooldown in seconds. The unit cannot use this specific power again until this duration has elapsed. |
 | `costType` | string | no | | Name of the resource required to use this power. Must match the unit's resource `name`. |
 | `costAmount` | float | no | | Amount of the resource that must be available. The power cannot be used if the unit has less than this. |
 | `graphicEffects` | array of GraphicEffect | no | `[]` | Visual effects played when this power fires. |
