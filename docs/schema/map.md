@@ -15,6 +15,7 @@ See [common.md](common.md) for `Location`, `Position`, and `floatRange`.
 | `feetDimensions` | object | yes | Map dimensions in feet: `{ "width": float, "height": float }`. Used to convert pixel coordinates to world coordinates. |
 | `barriers` | array of Barrier | no | Impassable obstacles on this map. |
 | `connections` | array of MapConnection | no | Entry/exit points on this map. The zone defines how connections pair up and which are entry points. |
+| `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |
 
 ---
 

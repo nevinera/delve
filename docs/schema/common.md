@@ -4,6 +4,21 @@ Shared types referenced across multiple schemas.
 
 ---
 
+## AssetReference
+
+A pointer to an external config file rather than an inline definition. Any config containing one or more AssetReferences is considered **abstract** and must have a companion **concrete** config at the same path with `.full.json` substituted for `.json` (e.g. `goblin-cave.json` → `goblin-cave.full.json`), in which all references are resolved to inline definitions.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `$ref` | string | yes | Relative path to the referenced config file. |
+| `referenceTo` | string | yes | Asset type: `"map"`, `"zone"`, `"unit_type"`, `"power"`, etc. |
+
+```json
+{ "$ref": "../maps/main-chamber.json", "referenceTo": "map" }
+```
+
+---
+
 ## Location
 
 A point in map coordinates (feet).

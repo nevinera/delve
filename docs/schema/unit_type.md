@@ -13,7 +13,7 @@ A UnitType is a template from which individual units are created in a zone.
 | `speedFactor` | float | no | `1.0` | Movement speed multiplier relative to base character speed. Range: 0.0–10.0. |
 | `maxHP` | integer | yes | | Maximum hit points. |
 | `resource` | ResourceType | yes | | The resource used to power this unit's abilities. |
-| `powers` | array of Power | no | `[]` | Powers available to this unit. |
+| `powers` | array of Power \| AssetReference(`referenceTo: "power"`) | no | `[]` | Powers available to this unit. Inline Power objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
 
 ## Example
 
