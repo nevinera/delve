@@ -111,6 +111,8 @@ Links two MapConnections within the zone so that traversing one transports a uni
         "returnRate": 10.0,
         "isFluid": true
       },
+      "targeting": { "type": "nearest" },
+      "tactics": { "type": "rotation", "powers": ["Slash"] },
       "powers": [
         {
           "name": "Slash",
