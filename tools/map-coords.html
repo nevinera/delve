@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Map Coordinate Tool</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #ddd;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 16px;
+      background: #2a2a2a;
+      border-bottom: 1px solid #444;
+      flex-shrink: 0;
+    }
+
+    #controls label { font-size: 13px; color: #aaa; }
+
+    #controls input[type="number"] {
+      width: 80px;
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 4px 6px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+    }
+
+    #controls input[type="file"] {
+      font-size: 13px;
+      color: #ccc;
+    }
+
+    #coords {
+      font-size: 15px;
+      color: #7cf;
+      margin-left: auto;
+      min-width: 180px;
+      text-align: right;
+    }
+
+    #points-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #222;
+      border-bottom: 1px solid #444;
+      flex-shrink: 0;
+    }
+
+    #points-bar label { font-size: 13px; color: #aaa; white-space: nowrap; }
+
+    #points {
+      flex: 1;
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 4px 8px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+    }
+
+    #clear-btn {
+      background: #444;
+      border: 1px solid #666;
+      color: #ccc;
+      padding: 4px 10px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    #clear-btn:hover { background: #555; }
+
+    #canvas-wrapper {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      padding: 16px;
+      cursor: crosshair;
+      position: relative;
+    }
+
+    .map-canvas {
+      display: block;
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      image-rendering: pixelated;
+    }
+
+    #canvas-sizer {
+      display: block;
+      visibility: hidden;
+    }
+
+    #drop-zone {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      font-size: 18px;
+      border: 2px dashed #444;
+      margin: 16px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="controls">
+  <label>Image: <input type="file" id="file-input" accept="image/*"></label>
+  <label>Width (ft): <input type="number" id="width-ft" value="200" min="1" step="0.5"></label>
+  <label>Height (ft): <input type="number" id="height-ft" value="150" min="1" step="0.5"></label>
+  <span id="coords">-</span>
+</div>
+
+<div id="points-bar">
+  <label>Points:</label>
+  <input type="text" id="points" placeholder="click the map to add points">
+  <button id="clear-btn">Clear</button>
+</div>
+
+<div id="drop-zone">Drop a map image here, or use the file picker above.</div>
+
+<script>
+  const fileInput    = document.getElementById('file-input');
+  const widthFtInput = document.getElementById('width-ft');
+  const heightFtInput= document.getElementById('height-ft');
+  const coordsDisplay= document.getElementById('coords');
+  const pointsInput  = document.getElementById('points');
+  const clearBtn     = document.getElementById('clear-btn');
+  const dropZone     = document.getElementById('drop-zone');
+
+  let baseCanvas, overlayCanvas, baseCtx, overlayCtx, img;
+
+  // --- coordinate conversion ---
+
+  function toFeet(px, py) {
+    const wFt = parseFloat(widthFtInput.value)  || 1;
+    const hFt = parseFloat(heightFtInput.value) || 1;
+    return [
+      parseFloat(((px / baseCanvas.width)  * wFt).toFixed(1)),
+      parseFloat(((1 - py / baseCanvas.height) * hFt).toFixed(1))
+    ];
+  }
+
+  function toPixels(xFt, yFt) {
+    const wFt = parseFloat(widthFtInput.value)  || 1;
+    const hFt = parseFloat(heightFtInput.value) || 1;
+    return [
+      (xFt / wFt) * baseCanvas.width,
+      (1 - yFt / hFt) * baseCanvas.height
+    ];
+  }
+
+  function canvasPos(e) {
+    const rect = baseCanvas.getBoundingClientRect();
+    return [
+      (e.clientX - rect.left) * (baseCanvas.width  / rect.width),
+      (e.clientY - rect.top)  * (baseCanvas.height / rect.height)
+    ];
+  }
+
+  // --- point parsing ---
+
+  function parsePoints(text) {
+    const pts = [];
+    for (const m of text.matchAll(/\(([0-9.]+),\s*([0-9.]+)\)/g))
+      pts.push([parseFloat(m[1]), parseFloat(m[2])]);
+    return pts;
+  }
+
+  // --- overlay drawing ---
+
+  function redrawOverlay() {
+    if (!overlayCanvas) return;
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    const pts = parsePoints(pointsInput.value);
+    if (pts.length < 2) {
+      if (pts.length === 1) drawDot(pts[0]);
+      return;
+    }
+
+    overlayCtx.strokeStyle = 'rgba(255, 80, 80, 0.9)';
+    overlayCtx.lineWidth = 2;
+    overlayCtx.beginPath();
+    const [x0, y0] = toPixels(...pts[0]);
+    overlayCtx.moveTo(x0, y0);
+    for (let i = 1; i < pts.length; i++) {
+      overlayCtx.lineTo(...toPixels(...pts[i]));
+    }
+    overlayCtx.stroke();
+
+    for (const pt of pts) drawDot(pt);
+  }
+
+  function drawDot([xFt, yFt]) {
+    const [px, py] = toPixels(xFt, yFt);
+    overlayCtx.fillStyle = 'rgba(255, 80, 80, 0.9)';
+    overlayCtx.beginPath();
+    overlayCtx.arc(px, py, 4, 0, Math.PI * 2);
+    overlayCtx.fill();
+  }
+
+  // --- image loading ---
+
+  function loadImage(src) {
+    img = new Image();
+    img.onload = () => {
+      if (dropZone.parentNode) dropZone.remove();
+
+      if (!baseCanvas) {
+        const wrapper = document.getElementById('canvas-wrapper') || (() => {
+          const w = document.createElement('div');
+          w.id = 'canvas-wrapper';
+          document.body.appendChild(w);
+          return w;
+        })();
+
+        baseCanvas = document.createElement('canvas');
+        baseCanvas.className = 'map-canvas';
+        baseCanvas.style.zIndex = 0;
+
+        overlayCanvas = document.createElement('canvas');
+        overlayCanvas.className = 'map-canvas';
+        overlayCanvas.style.zIndex = 1;
+
+        // sizer div so the wrapper scrolls correctly
+        const sizer = document.createElement('div');
+        sizer.id = 'canvas-sizer';
+        wrapper.appendChild(sizer);
+        wrapper.appendChild(baseCanvas);
+        wrapper.appendChild(overlayCanvas);
+
+        overlayCanvas.addEventListener('mousemove', e => {
+          const [px, py] = canvasPos(e);
+          const [x, y] = toFeet(px, py);
+          coordsDisplay.textContent = `x: ${x}, y: ${y}`;
+        });
+        overlayCanvas.addEventListener('mouseleave', () => { coordsDisplay.textContent = '-'; });
+        overlayCanvas.addEventListener('click', e => {
+          const [px, py] = canvasPos(e);
+          const [x, y] = toFeet(px, py);
+          const current = pointsInput.value.trim();
+          pointsInput.value = current ? `${current} (${x},${y})` : `(${x},${y})`;
+          redrawOverlay();
+        });
+      }
+
+      baseCanvas.width  = overlayCanvas.width  = img.width;
+      baseCanvas.height = overlayCanvas.height = img.height;
+      document.getElementById('canvas-sizer').style.cssText =
+        `width:${img.width}px;height:${img.height}px`;
+
+      baseCtx    = baseCanvas.getContext('2d');
+      overlayCtx = overlayCanvas.getContext('2d');
+      baseCtx.drawImage(img, 0, 0);
+      redrawOverlay();
+    };
+    img.src = src;
+  }
+
+  // --- events ---
+
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) loadImage(URL.createObjectURL(file));
+  });
+
+  pointsInput.addEventListener('change', redrawOverlay);
+
+  clearBtn.addEventListener('click', () => {
+    pointsInput.value = '';
+    redrawOverlay();
+  });
+
+  document.body.addEventListener('dragover', e => e.preventDefault());
+  document.body.addEventListener('drop', e => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImage(URL.createObjectURL(file));
+  });
+</script>
+
+</body>
+</html>
