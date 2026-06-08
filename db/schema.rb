@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_08_030338) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_08_032944) do
   create_table "character_classes", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "definition", null: false
@@ -64,6 +64,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_08_030338) do
     t.integer "registering_user_id", null: false
     t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
+    t.string "validity_error"
     t.string "version", null: false
     t.index ["handle_id"], name: "index_zones_on_handle_id"
     t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version", unique: true
