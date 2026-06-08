@@ -9,10 +9,13 @@ Rails.application.routes.draw do
 
   get "up" => "rails/health#show", :as => :rails_health_check
 
-  resources :users, only: [:index] do
-    resources :handles, only: [:index, :show, :new, :create], module: :users
+  resources :users, only: [:index]
+
+  namespace :build do
+    resources :handles, only: [:index, :show, :new, :create]
+    resources :zones, only: [:index, :show, :new, :create]
+    resources :character_classes, only: [:index, :show, :new, :create]
   end
-  resources :character_classes, only: [:index, :show, :new, :create], path: "classes"
   resources :instances, only: [:show]
 
   root to: "users#index"
