@@ -6,7 +6,7 @@ FactoryBot.define do
       suffix = +""
       m = n
       while m > 0
-        suffix.prepend((?a.ord + (m - 1) % 26).chr)
+        suffix.prepend(("a".ord + (m - 1) % 26).chr)
         m = (m - 1) / 26
       end
       "zone_#{suffix}"

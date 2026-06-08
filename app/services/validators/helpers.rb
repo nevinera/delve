@@ -89,7 +89,7 @@ module Validators
       require_numeric!(data, "x", path: path)
       require_numeric!(data, "y", path: path)
       angle = require_numeric!(data, "angle", path: path)
-      unless angle >= 0 && angle <= 360
+      unless angle.between?(0, 360)
         raise ValidationError.new("angle must be between 0 and 360", path: child_path(path, "angle"))
       end
     end

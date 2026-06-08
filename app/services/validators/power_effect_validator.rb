@@ -11,10 +11,10 @@ module Validators
       validate_tags!(data, path: path) if data.key?("tags")
 
       case type
-      when "harm"    then validate_harm!(data, path: path)
-      when "heal"    then validate_heal!(data, path: path)
+      when "harm" then validate_harm!(data, path: path)
+      when "heal" then validate_heal!(data, path: path)
       when "resource" then validate_resource!(data, path: path)
-      when "status"  then validate_status!(data, path: path)
+      when "status" then validate_status!(data, path: path)
       end
     end
 
@@ -25,11 +25,12 @@ module Validators
       tags_path = child_path(path, "tags")
       raise ValidationError.new("tags must be an array", path: tags_path) unless tags.is_a?(Array)
       raise ValidationError.new("tags may not exceed 24 items", path: tags_path) if tags.length > 24
-      tags.each_with_index do |tag, i|
-        tag_path = index_path(tags_path, i)
-        raise ValidationError.new("tag must be a string", path: tag_path) unless tag.is_a?(String)
-        raise ValidationError.new("tag must be 16 characters or fewer", path: tag_path) if tag.length > 16
-      end
+      tags.each_with_index { |tag, i| validate_tag!(tag, path: index_path(tags_path, i)) }
+    end
+
+    def validate_tag!(tag, path:)
+      raise ValidationError.new("tag must be a string", path: path) unless tag.is_a?(String)
+      raise ValidationError.new("tag must be 16 characters or fewer", path: path) if tag.length > 16
     end
 
     def validate_harm!(data, path:)
