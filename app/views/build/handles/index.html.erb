@@ -10,11 +10,11 @@
   <tbody>
     <% @handles.each do |handle| %>
       <tr>
-        <td><%= link_to handle.identifier, user_handle_path(@user, handle) %></td>
+        <td><%= link_to handle.identifier, build_handle_path(handle) %></td>
         <td><%= handle.description %></td>
       </tr>
     <% end %>
   </tbody>
 </table>
 
-<%= link_to "New handle", new_user_handle_path(@user) %>
+<%= link_to "New handle", new_build_handle_path %>
