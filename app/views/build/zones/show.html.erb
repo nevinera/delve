@@ -7,5 +7,9 @@
   <p><%= @zone.description %></p>
 <% end %>
 <p><strong>Config URL:</strong> <%= link_to @zone.config_url, @zone.config_url %></p>
+<p><strong>Status:</strong> <%= @zone.state %></p>
+<% if @zone.validity_error.present? %>
+  <p><strong>Validation error:</strong> <%= @zone.validity_error %></p>
+<% end %>
 
 <%= link_to "All zones", build_zones_path %>
