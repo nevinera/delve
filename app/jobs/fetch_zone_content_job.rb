@@ -10,6 +10,7 @@ class FetchZoneContentJob < ApplicationJob
 
     zone.update!(
       content_sha: Digest::SHA1.hexdigest(response.body),
+      file_size: response.body.bytesize,
       state: :fetched
     )
   end

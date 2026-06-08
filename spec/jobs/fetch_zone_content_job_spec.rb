@@ -20,6 +20,11 @@ RSpec.describe FetchZoneContentJob, type: :job do
     expect(zone.reload.content_sha).to eq(Digest::SHA1.hexdigest(content))
   end
 
+  it "stores the byte size of the response body" do
+    described_class.perform_now(zone.id)
+    expect(zone.reload.file_size).to eq(content.bytesize)
+  end
+
   it "raises when the URL returns a non-success response" do
     stub_request(:get, zone.config_url).to_return(status: 404)
     expect { described_class.perform_now(zone.id) }.to raise_error(RuntimeError, /HTTP 404/)
