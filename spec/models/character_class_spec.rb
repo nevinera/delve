@@ -15,12 +15,6 @@ RSpec.describe CharacterClass, type: :model do
       expect(cc.errors[:location]).to be_present
     end
 
-    it "requires a definition" do
-      cc = build(:character_class, user: user, handle: handle, identifier: "puncher", definition: nil)
-      expect(cc).not_to be_valid
-      expect(cc.errors[:definition]).to be_present
-    end
-
     it "requires at least 3 characters in the identifier" do
       cc = build(:character_class, user: user, handle: handle, identifier: "ab")
       expect(cc).not_to be_valid
@@ -55,11 +49,13 @@ RSpec.describe CharacterClass, type: :model do
     end
   end
 
-  describe "definition serialization" do
-    it "round-trips a hash through the database" do
-      defn = {"name" => "Puncher", "abilities" => [{"name" => "Punch"}]}
-      cc = create(:character_class, user: user, handle: handle, identifier: "puncher", definition: defn)
-      expect(cc.reload.definition).to eq(defn)
+  describe "after create" do
+    include ActiveJob::TestHelper
+
+    it "enqueues a FetchCharacterClassContentJob" do
+      expect {
+        create(:character_class, user: user, handle: handle)
+      }.to have_enqueued_job(FetchCharacterClassContentJob)
     end
   end
 end

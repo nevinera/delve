@@ -10,17 +10,21 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_08_032944) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_08_034002) do
   create_table "character_classes", force: :cascade do |t|
+    t.string "content_sha"
     t.datetime "created_at", null: false
-    t.text "definition", null: false
+    t.integer "file_size"
     t.integer "handle_id", null: false
     t.string "identifier", null: false
     t.string "location", null: false
+    t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false
+    t.string "validity_error"
     t.index ["handle_id", "identifier"], name: "index_character_classes_on_handle_id_and_identifier", unique: true
     t.index ["handle_id"], name: "index_character_classes_on_handle_id"
+    t.index ["state"], name: "index_character_classes_on_state"
     t.index ["user_id"], name: "index_character_classes_on_user_id"
   end
 
