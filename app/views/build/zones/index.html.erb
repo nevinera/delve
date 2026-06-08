@@ -1,0 +1,26 @@
+<h1>Zones</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Identifier</th>
+      <th>Version</th>
+      <th>Name</th>
+      <th>Handle</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @zones.each do |zone| %>
+      <tr>
+        <td><%= link_to zone.identifier, build_zone_path(zone) %></td>
+        <td><%= zone.version %></td>
+        <td><%= zone.name %></td>
+        <td><%= zone.handle.identifier %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%== @pagy.series_nav if @pagy.pages > 1 %>
+
+<%= link_to "Register a zone", new_build_zone_path %>

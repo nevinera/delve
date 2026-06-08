@@ -13,6 +13,7 @@ Rails.application.routes.draw do
 
   namespace :build do
     resources :handles, only: [:index, :show, :new, :create]
+    resources :zones, only: [:index, :show, :new, :create]
   end
   resources :character_classes, only: [:index, :show, :new, :create], path: "classes"
   resources :instances, only: [:show]
