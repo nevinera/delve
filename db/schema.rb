@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_30_150046) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_08_024313) do
   create_table "character_classes", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "definition", null: false
@@ -52,7 +52,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_30_150046) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
+  create_table "zones", force: :cascade do |t|
+    t.string "config_url", null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.integer "handle_id", null: false
+    t.string "identifier", null: false
+    t.string "name", null: false
+    t.integer "registering_user_id", null: false
+    t.datetime "updated_at", null: false
+    t.string "version", null: false
+    t.index ["handle_id"], name: "index_zones_on_handle_id"
+    t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version", unique: true
+    t.index ["registering_user_id"], name: "index_zones_on_registering_user_id"
+  end
+
   add_foreign_key "character_classes", "handles"
   add_foreign_key "character_classes", "users"
   add_foreign_key "handles", "users"
+  add_foreign_key "zones", "handles"
+  add_foreign_key "zones", "users", column: "registering_user_id"
 end
