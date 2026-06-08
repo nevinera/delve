@@ -20,7 +20,7 @@ class Build::HandlesController < Build::BaseController
     if @handle.save
       redirect_to build_handle_path(@handle), notice: "Handle created."
     else
-      render :new, status: :unprocessable_entity
+      render :new, status: :unprocessable_content
     end
   end
 

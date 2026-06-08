@@ -23,7 +23,7 @@ class CharacterClassesController < ApplicationController
     if definition_json.nil?
       @character_class.errors.add(:location, "could not be fetched")
       @handles = current_user.handles.order(:identifier)
-      return render :new, status: :unprocessable_entity
+      return render :new, status: :unprocessable_content
     end
 
     @character_class.definition = definition_json
@@ -32,7 +32,7 @@ class CharacterClassesController < ApplicationController
       redirect_to @character_class, notice: "Class registered."
     else
       @handles = current_user.handles.order(:identifier)
-      render :new, status: :unprocessable_entity
+      render :new, status: :unprocessable_content
     end
   end
 

@@ -68,7 +68,7 @@ RSpec.describe "Build::Handles", type: :request do
       context "with an invalid identifier" do
         it "re-renders new with an error" do
           post "/build/handles", params: {handle: {identifier: "bad"}}
-          expect(response).to have_http_status(:unprocessable_entity)
+          expect(response).to have_http_status(:unprocessable_content)
           expect(response.body).to include("at least 6 characters")
         end
       end
@@ -76,7 +76,7 @@ RSpec.describe "Build::Handles", type: :request do
       context "with a duplicate identifier" do
         it "re-renders new with an error" do
           post "/build/handles", params: {handle: {identifier: "nevinera"}}
-          expect(response).to have_http_status(:unprocessable_entity)
+          expect(response).to have_http_status(:unprocessable_content)
           expect(response.body).to include("already been taken")
         end
       end

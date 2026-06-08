@@ -93,7 +93,7 @@ RSpec.describe "CharacterClasses", type: :request do
 
         it "re-renders new with an error" do
           post "/classes", params: {character_class: {identifier: "warbinder", handle_id: handle.id, location: location}}
-          expect(response).to have_http_status(:unprocessable_entity)
+          expect(response).to have_http_status(:unprocessable_content)
           expect(response.body).to include("could not be fetched")
         end
       end
