@@ -95,4 +95,17 @@ RSpec.describe Zone, type: :model do
       end
     end
   end
+
+  describe "after create" do
+    include ActiveJob::TestHelper
+
+    let(:user) { create(:user) }
+    let(:handle) { create(:handle, user: user) }
+
+    it "enqueues a FetchZoneContentJob" do
+      expect {
+        create(:zone, handle: handle, registering_user: user)
+      }.to have_enqueued_job(FetchZoneContentJob)
+    end
+  end
 end
