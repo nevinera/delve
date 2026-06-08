@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_08_024313) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_08_025854) do
   create_table "character_classes", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "definition", null: false
@@ -54,17 +54,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_08_024313) do
 
   create_table "zones", force: :cascade do |t|
     t.string "config_url", null: false
+    t.string "content_sha"
     t.datetime "created_at", null: false
     t.text "description"
     t.integer "handle_id", null: false
     t.string "identifier", null: false
     t.string "name", null: false
     t.integer "registering_user_id", null: false
+    t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
     t.string "version", null: false
     t.index ["handle_id"], name: "index_zones_on_handle_id"
     t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version", unique: true
     t.index ["registering_user_id"], name: "index_zones_on_registering_user_id"
+    t.index ["state"], name: "index_zones_on_state"
   end
 
   add_foreign_key "character_classes", "handles"
