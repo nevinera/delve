@@ -62,11 +62,11 @@ module GameApi
     def validate_attrs(attrs, required: [], supported: [])
       keys = attrs.keys.map(&:to_sym)
       allowed = required + supported
-      problems = attr_problems(keys, required, allowed)
+      problems = attr_problems(keys, required: required, allowed: allowed)
       raise InvalidAttrsError, problems.join("; ") if problems.any?
     end
 
-    def attr_problems(keys, required, allowed)
+    def attr_problems(keys, required:, allowed:)
       problems = []
       missing = required - keys
       problems << "missing required keys: #{missing.join(", ")}" if missing.any?
