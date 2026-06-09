@@ -16,6 +16,10 @@ module ValidatorFixtures
   def cave_entrance_map
     zone_fixture["maps"][0]
   end
+
+  def character_class_fixture
+    @character_class_fixture ||= JSON.parse(File.read(DELVE_CONTENT.join("classes", "puncher.full.json")))
+  end
 end
 
 RSpec.configure do |config|

@@ -4,7 +4,7 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
   let(:user) { create(:user) }
   let(:handle) { create(:handle, user: user) }
   let(:character_class) { create(:character_class, user: user, handle: handle) }
-  let(:content) { '{"name":"Puncher","description":"A punching class"}' }
+  let(:content) { '{"name":"Puncher","colors":{"major":"8B4513","minor":"F4A460"}}' }
 
   before do
     stub_request(:get, character_class.location).to_return(body: content, status: 200)
