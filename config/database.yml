@@ -4,12 +4,22 @@ default: &default
   timeout: 5000
 
 development:
-  <<: *default
-  database: storage/development.sqlite3
+  primary: &primary_development
+    <<: *default
+    database: storage/development.sqlite3
+  queue:
+    <<: *primary_development
+    database: storage/development_queue.sqlite3
+    migrations_paths: db/queue_migrate
 
 test:
-  <<: *default
-  database: storage/test.sqlite3
+  primary: &primary_test
+    <<: *default
+    database: storage/test.sqlite3
+  queue:
+    <<: *primary_test
+    database: storage/test_queue.sqlite3
+    migrations_paths: db/queue_migrate
 
 production:
   primary: &primary_production
