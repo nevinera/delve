@@ -23,5 +23,15 @@ func New(registry *instance.Registry) http.Handler {
 
 	r.Get("/status.json", handler.NewStatus(registry).ServeHTTP)
 
+	instances := handler.NewInstances(registry)
+	r.Route("/instances", func(r chi.Router) {
+		r.Get("/", instances.List)
+		r.Post("/", instances.Create)
+		r.Route("/{instanceID}", func(r chi.Router) {
+			r.Get("/", instances.Show)
+			r.Delete("/", instances.Destroy)
+		})
+	})
+
 	return r
 }

@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"github.com/delve-mmo/game-server/internal/instance"
@@ -32,9 +30,5 @@ func (h *Status) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Version:       version.Current,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		// Headers are already sent at this point, so we can only log.
-		slog.ErrorContext(r.Context(), "failed to encode status response", "err", err)
-	}
+	writeJSON(w, r, http.StatusOK, resp)
 }
