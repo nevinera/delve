@@ -138,6 +138,42 @@ RSpec.describe GameApi::Client do
         }
     end
 
+    context "attr validation" do
+      it "raises InvalidAttrsError when a required key is missing" do
+        expect {
+          client.create_instance(
+            identifier: instance_id,
+            database_id: "db-42",
+            zone_identifier: "test-zone",
+            version: "1.0",
+            source_url: "https://example.com/zone.json"
+            # zone_config intentionally omitted
+          )
+        }.to raise_error(GameApi::InvalidAttrsError, /missing required keys: zone_config/)
+      end
+
+      it "raises InvalidAttrsError when an unsupported key is present" do
+        expect {
+          client.create_instance(
+            identifier: instance_id,
+            database_id: "db-42",
+            zone_identifier: "test-zone",
+            version: "1.0",
+            source_url: "https://example.com/zone.json",
+            zone_config: zone_config,
+            bogus: "nope"
+          )
+        }.to raise_error(GameApi::InvalidAttrsError, /unsupported keys: bogus/)
+      end
+
+      it "does not raise when all required keys are present and no extras" do
+        stub_request(:post, "#{base_url}/instances")
+          .to_return(status: 201, body: created_body, headers: json_headers)
+
+        expect { call_create }.not_to raise_error
+      end
+    end
+
     it "raises UnprocessableError on 422" do
       stub_request(:post, "#{base_url}/instances")
         .to_return(status: 422, body: '{"error":"invalid identifier: must be a valid UUID"}', headers: json_headers)

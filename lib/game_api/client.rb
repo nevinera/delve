@@ -15,6 +15,7 @@ module GameApi
   class AuthError < Error; end
   class NotFoundError < Error; end
   class UnprocessableError < Error; end
+  class InvalidAttrsError < Error; end
 
   class Client
     # base_url and auth_tokens default to env vars so callers in production
@@ -43,8 +44,10 @@ module GameApi
       get("/instances/#{id}")
     end
 
-    # POST /instances. Accepts a hash of instance attributes plus zone_config.
+    # POST /instances.
+    # Required: :identifier, :database_id, :zone_identifier, :version, :source_url, :zone_config
     def create_instance(attrs)
+      validate_attrs(attrs, required: %i[identifier database_id zone_identifier version source_url zone_config])
       post("/instances", attrs)
     end
 
@@ -55,6 +58,22 @@ module GameApi
     end
 
     private
+
+    def validate_attrs(attrs, required: [], supported: [])
+      keys = attrs.keys.map(&:to_sym)
+      allowed = required + supported
+      problems = attr_problems(keys, required, allowed)
+      raise InvalidAttrsError, problems.join("; ") if problems.any?
+    end
+
+    def attr_problems(keys, required, allowed)
+      problems = []
+      missing = required - keys
+      problems << "missing required keys: #{missing.join(", ")}" if missing.any?
+      extra = keys - allowed
+      problems << "unsupported keys: #{extra.join(", ")}" if extra.any?
+      problems
+    end
 
     def get(path)
       request(Net::HTTP::Get, path)
