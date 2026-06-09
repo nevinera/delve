@@ -53,6 +53,7 @@ group :development, :test do
   gem "rspec-rails"
   gem "factory_bot_rails"
   gem "webmock"
+  gem "simplecov", require: false
 
   # Audits gems for known security defects (use config/bundler-audit.yml to ignore issues)
   gem "bundler-audit", require: false
