@@ -112,5 +112,5 @@ func TestAuth_NoTokensConfigured(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer anything")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }

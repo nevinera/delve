@@ -10,9 +10,10 @@ import (
 // request. Tokens are checked against the provided set using a map for O(1)
 // lookup — constant time regardless of how many tokens are configured.
 //
-// If no tokens are configured the middleware rejects all requests with 503
+// If no tokens are configured the middleware rejects all requests with 500
 // rather than 401, so operators can distinguish "caller has no token" from
-// "server was deployed without auth configured."
+// "server was deployed without auth configured." 503 would be misleading here
+// because the server will not become ready without a restart.
 //
 // Endpoints that should be publicly accessible (e.g. /status.json) must be
 // mounted outside the route group this middleware is applied to.
@@ -25,7 +26,7 @@ func TokenAuth(tokens []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if len(allowed) == 0 {
-				writeAuthError(w, http.StatusServiceUnavailable, "server is not configured for authenticated access")
+				writeAuthError(w, http.StatusInternalServerError, "server is not configured for authenticated access")
 				return
 			}
 			token := bearerToken(r)

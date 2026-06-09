@@ -74,13 +74,13 @@ func TestTokenAuth(t *testing.T) {
 			name:       "no tokens configured returns 503",
 			tokens:     []string{},
 			authHeader: "Bearer secret",
-			wantStatus: http.StatusServiceUnavailable,
+			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name:       "nil tokens configured returns 503",
 			tokens:     nil,
 			authHeader: "Bearer secret",
-			wantStatus: http.StatusServiceUnavailable,
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 
