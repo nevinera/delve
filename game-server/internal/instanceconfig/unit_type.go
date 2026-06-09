@@ -1,4 +1,4 @@
-package zoneconfig
+package instanceconfig
 
 // UnitType is a template from which individual units are created.
 // tokenImageUrl is client-only and omitted.

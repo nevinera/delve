@@ -1,11 +1,11 @@
-package zoneconfig_test
+package instanceconfig_test
 
 import (
 	"encoding/json"
 	"os"
 	"testing"
 
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,9 +17,9 @@ func loadFixture(t *testing.T, name string) []byte {
 	return data
 }
 
-func parseZone(t *testing.T, data []byte) zoneconfig.Zone {
+func parseZone(t *testing.T, data []byte) instanceconfig.Zone {
 	t.Helper()
-	var z zoneconfig.Zone
+	var z instanceconfig.Zone
 	require.NoError(t, json.Unmarshal(data, &z))
 	return z
 }
@@ -68,8 +68,8 @@ func TestZone_ValidFull_Barriers(t *testing.T) {
 
 	assert.Equal(t, "wall", b.Type)
 	assert.Len(t, b.Locations, 5)
-	assert.Equal(t, zoneconfig.Location{X: 0.0, Y: 0.0}, b.Locations[0])
-	assert.Equal(t, zoneconfig.Location{X: 30.0, Y: 0.0}, b.Locations[1])
+	assert.Equal(t, instanceconfig.Location{X: 0.0, Y: 0.0}, b.Locations[0])
+	assert.Equal(t, instanceconfig.Location{X: 30.0, Y: 0.0}, b.Locations[1])
 }
 
 func TestZone_ValidFull_Connections(t *testing.T) {
@@ -205,20 +205,20 @@ func TestZone_ValidMinimal(t *testing.T) {
 }
 
 func TestZone_UnknownKeysIgnored(t *testing.T) {
-	var z zoneconfig.Zone
+	var z instanceconfig.Zone
 	err := json.Unmarshal(loadFixture(t, "unknown_keys.json"), &z)
 	assert.NoError(t, err)
 	assert.Equal(t, "Room With Extra Fields", z.Name)
 }
 
 func TestZone_MalformedJSON(t *testing.T) {
-	var z zoneconfig.Zone
+	var z instanceconfig.Zone
 	err := json.Unmarshal(loadFixture(t, "malformed.json"), &z)
 	assert.Error(t, err)
 }
 
 func TestZone_AssetReferenceRejected(t *testing.T) {
-	var z zoneconfig.Zone
+	var z instanceconfig.Zone
 	err := json.Unmarshal(loadFixture(t, "asset_reference.json"), &z)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "$ref")
@@ -243,7 +243,7 @@ func TestValueRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var v zoneconfig.ValueRange
+			var v instanceconfig.ValueRange
 			err := json.Unmarshal([]byte(tt.input), &v)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -273,7 +273,7 @@ func TestZeroBasedValueRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var v zoneconfig.ZeroBasedValueRange
+			var v instanceconfig.ZeroBasedValueRange
 			err := json.Unmarshal([]byte(tt.input), &v)
 			if tt.wantErr {
 				assert.Error(t, err)

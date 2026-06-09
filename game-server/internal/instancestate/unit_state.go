@@ -3,7 +3,7 @@ package instancestate
 import (
 	"github.com/google/uuid"
 
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // UnitStatus is the lifecycle/combat state of a unit.
@@ -41,8 +41,8 @@ type UnitState struct {
 	ZoneUnitIdentifier string              // non-empty: Unit.Identifier from zone config
 	UnitTypeIdentifier string              // key into zone.UnitTypes
 	MapIdentifier      string
-	Position           zoneconfig.Position
-	SpawnPoint         zoneconfig.Position // initial position; used for respawn
+	Position           instanceconfig.Position
+	SpawnPoint         instanceconfig.Position // initial position; used for respawn
 
 	Health      float64
 	MaxHealth   float64 // cached from UnitType.MaxHP at spawn

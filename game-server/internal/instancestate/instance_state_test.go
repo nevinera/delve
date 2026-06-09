@@ -7,35 +7,35 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/instancestate"
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
-var testUnitType = zoneconfig.UnitType{
+var testUnitType = instanceconfig.UnitType{
 	Name:        "Goblin",
 	TokenRadius: 1.0,
 	MaxHP:       100,
-	Resource: zoneconfig.ResourceType{
+	Resource: instanceconfig.ResourceType{
 		Name:         "Energy",
 		Max:          50,
 		DefaultValue: 25,
 	},
-	Targeting: zoneconfig.UnitTargeting{Type: "nearest"},
-	Tactics:   zoneconfig.UnitTactics{Type: "randomAvailable"},
+	Targeting: instanceconfig.UnitTargeting{Type: "nearest"},
+	Tactics:   instanceconfig.UnitTactics{Type: "randomAvailable"},
 }
 
 // zoneWith builds a single-map zone using testUnitType for all units.
-func zoneWith(units ...zoneconfig.Unit) zoneconfig.Zone {
-	return zoneconfig.Zone{
+func zoneWith(units ...instanceconfig.Unit) instanceconfig.Zone {
+	return instanceconfig.Zone{
 		Name:      "Test Zone",
-		Maps:      []zoneconfig.Map{{Identifier: "m1", Name: "Map 1", Units: units}},
-		UnitTypes: map[string]zoneconfig.UnitType{"goblin": testUnitType},
+		Maps:      []instanceconfig.Map{{Identifier: "m1", Name: "Map 1", Units: units}},
+		UnitTypes: map[string]instanceconfig.UnitType{"goblin": testUnitType},
 	}
 }
 
 func TestNewInstanceState(t *testing.T) {
 	tests := []struct {
 		name      string
-		zone      zoneconfig.Zone
+		zone      instanceconfig.Zone
 		wantCount int
 		wantErr   string
 	}{
@@ -46,33 +46,33 @@ func TestNewInstanceState(t *testing.T) {
 		},
 		{
 			name:    "unit missing identifier returns error",
-			zone:    zoneWith(zoneconfig.Unit{UnitType: "goblin"}),
+			zone:    zoneWith(instanceconfig.Unit{UnitType: "goblin"}),
 			wantErr: `unit on map "m1" has no identifier`,
 		},
 		{
 			name:    "unit with unknown unit type returns error",
-			zone:    zoneWith(zoneconfig.Unit{Identifier: "u1", UnitType: "unknown"}),
+			zone:    zoneWith(instanceconfig.Unit{Identifier: "u1", UnitType: "unknown"}),
 			wantErr: `unknown unit type "unknown"`,
 		},
 		{
 			name:      "single valid unit is spawned",
-			zone:      zoneWith(zoneconfig.Unit{Identifier: "u1", UnitType: "goblin"}),
+			zone:      zoneWith(instanceconfig.Unit{Identifier: "u1", UnitType: "goblin"}),
 			wantCount: 1,
 		},
 		{
 			name: "units across multiple maps are all spawned",
-			zone: zoneconfig.Zone{
+			zone: instanceconfig.Zone{
 				Name: "Two-Map Zone",
-				Maps: []zoneconfig.Map{
-					{Identifier: "m1", Name: "Map 1", Units: []zoneconfig.Unit{
+				Maps: []instanceconfig.Map{
+					{Identifier: "m1", Name: "Map 1", Units: []instanceconfig.Unit{
 						{Identifier: "u1", UnitType: "goblin"},
 						{Identifier: "u2", UnitType: "goblin"},
 					}},
-					{Identifier: "m2", Name: "Map 2", Units: []zoneconfig.Unit{
+					{Identifier: "m2", Name: "Map 2", Units: []instanceconfig.Unit{
 						{Identifier: "u3", UnitType: "goblin"},
 					}},
 				},
-				UnitTypes: map[string]zoneconfig.UnitType{"goblin": testUnitType},
+				UnitTypes: map[string]instanceconfig.UnitType{"goblin": testUnitType},
 			},
 			wantCount: 3,
 		},
@@ -93,9 +93,9 @@ func TestNewInstanceState(t *testing.T) {
 }
 
 func TestNewInstanceState_UnitFields(t *testing.T) {
-	pos := zoneconfig.Position{X: 10, Y: 20, Angle: 90}
+	pos := instanceconfig.Position{X: 10, Y: 20, Angle: 90}
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{
+		instanceconfig.Unit{
 			Identifier:        "u1",
 			UnitType:          "goblin",
 			Position:          pos,
@@ -127,7 +127,7 @@ func TestNewInstanceState_UnitFields(t *testing.T) {
 func TestNewInstanceState_DefaultHPFraction(t *testing.T) {
 	// CurrentHPFraction is omitempty; a zero value means "use full health".
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "u1", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "u1", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
 
@@ -142,8 +142,8 @@ func TestNewInstanceState_DefaultHPFraction(t *testing.T) {
 
 func TestNewInstanceState_EachUnitGetsDistinctUUID(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "u1", UnitType: "goblin"},
-		zoneconfig.Unit{Identifier: "u2", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "u1", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "u2", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
 	assert.Len(t, state.Units, 2)

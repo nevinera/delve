@@ -9,8 +9,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/validator"
 )
 
-// Fixtures live in ../zoneconfig/testdata/ relative to this package directory.
-const fixtureDir = "../zoneconfig/testdata/"
+const fixtureDir = "../instanceconfig/testdata/"
 
 func run(args ...string) (stdout, stderr string, code int) {
 	var out, errOut bytes.Buffer

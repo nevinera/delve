@@ -1,4 +1,4 @@
-package zoneconfig
+package instanceconfig
 
 // Power is an active ability a unit can use in combat.
 // graphicEffects and soundEffects are client-only and omitted.

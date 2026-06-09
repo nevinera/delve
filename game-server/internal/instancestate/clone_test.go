@@ -8,12 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/instancestate"
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 func TestClone_EqualToOriginal(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin", Position: zoneconfig.Position{X: 10, Y: 20, Angle: 90}},
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin", Position: instanceconfig.Position{X: 10, Y: 20, Angle: 90}},
 	))
 	require.NoError(t, err)
 
@@ -23,7 +23,7 @@ func TestClone_EqualToOriginal(t *testing.T) {
 
 func TestClone_MutatingPositionDoesNotAffectOriginal(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
 
@@ -39,7 +39,7 @@ func TestClone_MutatingPositionDoesNotAffectOriginal(t *testing.T) {
 
 func TestClone_MutatingHealthDoesNotAffectOriginal(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
 
@@ -55,7 +55,7 @@ func TestClone_MutatingHealthDoesNotAffectOriginal(t *testing.T) {
 
 func TestClone_MutatingEffectsDoesNotAffectOriginal(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
 	for _, u := range state.Units {
@@ -76,7 +76,7 @@ func TestClone_MutatingEffectsDoesNotAffectOriginal(t *testing.T) {
 
 func TestClone_MutatingTargetDoesNotAffectOriginal(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
 	originalTarget := uuid.New()
@@ -98,7 +98,7 @@ func TestClone_MutatingTargetDoesNotAffectOriginal(t *testing.T) {
 
 func TestClone_NilTargetCopiedAsNil(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
-		zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
 

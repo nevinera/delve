@@ -13,7 +13,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/handler"
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/version"
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 func TestStatus(t *testing.T) {
@@ -35,8 +35,8 @@ func TestStatus(t *testing.T) {
 		{
 			name: "reflects live instance count",
 			setup: func(r *instance.Registry) {
-				r.Add(instance.NewInstance(uuid.New(), "db-1", "zone-1", "v1", "http://x", zoneconfig.Zone{}))
-				r.Add(instance.NewInstance(uuid.New(), "db-2", "zone-1", "v1", "http://x", zoneconfig.Zone{}))
+				r.Add(instance.NewInstance(uuid.New(), "db-1", "zone-1", "v1", "http://x", instanceconfig.Zone{}))
+				r.Add(instance.NewInstance(uuid.New(), "db-2", "zone-1", "v1", "http://x", instanceconfig.Zone{}))
 			},
 			wantStatus:        http.StatusOK,
 			wantInstanceCount: 2,

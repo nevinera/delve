@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // InstanceState is the full runtime state of one zone instance.
@@ -18,7 +18,7 @@ type InstanceState struct {
 // unit at its starting position with full health and its resource at DefaultValue.
 // Returns an error if any unit is missing its identifier or references an
 // unknown unit type.
-func NewInstanceState(zone zoneconfig.Zone) (*InstanceState, error) {
+func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 	state := &InstanceState{
 		Units: make(map[uuid.UUID]*UnitState),
 	}

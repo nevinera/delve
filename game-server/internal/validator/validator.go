@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // Run is the entry point for the validate-zone CLI. It accepts args (the
@@ -24,7 +24,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	var zone zoneconfig.Zone
+	var zone instanceconfig.Zone
 	if err := json.Unmarshal(data, &zone); err != nil {
 		fmt.Fprintf(stderr, "error parsing zone config: %v\n", err)
 		return 1

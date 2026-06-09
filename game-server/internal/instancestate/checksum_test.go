@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/delve-mmo/game-server/internal/instancestate"
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
-func stateFromZone(t *testing.T, zone zoneconfig.Zone) *instancestate.InstanceState {
+func stateFromZone(t *testing.T, zone instanceconfig.Zone) *instancestate.InstanceState {
 	t.Helper()
 	state, err := instancestate.NewInstanceState(zone)
 	if err != nil {
@@ -21,10 +21,10 @@ func stateFromZone(t *testing.T, zone zoneconfig.Zone) *instancestate.InstanceSt
 
 func singleUnitState(t *testing.T) *instancestate.InstanceState {
 	t.Helper()
-	return stateFromZone(t, zoneWith(zoneconfig.Unit{
+	return stateFromZone(t, zoneWith(instanceconfig.Unit{
 		Identifier: "goblin_a",
 		UnitType:   "goblin",
-		Position:   zoneconfig.Position{X: 10, Y: 20, Angle: 90},
+		Position:   instanceconfig.Position{X: 10, Y: 20, Angle: 90},
 	}))
 }
 
@@ -44,7 +44,7 @@ func TestChecksum_EmptyState(t *testing.T) {
 }
 
 func TestChecksum_DifferentHealth(t *testing.T) {
-	zone := zoneWith(zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"})
+	zone := zoneWith(instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"})
 	full := stateFromZone(t, zone)
 	damaged := stateFromZone(t, zone)
 	for _, u := range damaged.Units {
@@ -54,7 +54,7 @@ func TestChecksum_DifferentHealth(t *testing.T) {
 }
 
 func TestChecksum_DifferentPosition(t *testing.T) {
-	zone := zoneWith(zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"})
+	zone := zoneWith(instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"})
 	original := stateFromZone(t, zone)
 	moved := stateFromZone(t, zone)
 	for _, u := range moved.Units {
@@ -92,7 +92,7 @@ func TestChecksum_UnitOrderIndependent(t *testing.T) {
 }
 
 func TestChecksum_StatusEffectChangesChecksum(t *testing.T) {
-	zone := zoneWith(zoneconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"})
+	zone := zoneWith(instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"})
 	without := stateFromZone(t, zone)
 	with := stateFromZone(t, zone)
 	for _, u := range with.Units {

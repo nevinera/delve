@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // Status is the lifecycle state of an Instance.
@@ -37,7 +37,7 @@ type Instance struct {
 	SourceURL      string
 	MaxSlots       int
 	Status         Status
-	ZoneConfig     zoneconfig.Zone
+	ZoneConfig     instanceconfig.Zone
 	CreatedAt      time.Time
 
 	Checksum string // SHA256 of canonical state JSON; updated every tick
@@ -55,7 +55,7 @@ func NewInstance(
 	zoneIdentifier string,
 	version string,
 	sourceURL string,
-	zone zoneconfig.Zone,
+	zone instanceconfig.Zone,
 ) *Instance {
 	return &Instance{
 		Identifier:     id,

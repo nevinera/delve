@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/instance"
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // makeInstance creates a minimal valid Instance for use in tests.
@@ -21,7 +21,7 @@ func makeInstance() *instance.Instance {
 		"zone-goblin-cave",
 		"abc123",
 		"https://example.com/zones/goblin-cave.json",
-		zoneconfig.Zone{Name: "Goblin Cave", Private: true},
+		instanceconfig.Zone{Name: "Goblin Cave", Private: true},
 	)
 }
 
@@ -40,7 +40,7 @@ func TestNewInstance_Defaults(t *testing.T) {
 
 func TestNewInstance_Fields(t *testing.T) {
 	id := uuid.New()
-	zone := zoneconfig.Zone{Name: "Test Zone"}
+	zone := instanceconfig.Zone{Name: "Test Zone"}
 
 	inst := instance.NewInstance(id, "db-99", "zone-test", "v2", "https://example.com/zone.json", zone)
 
@@ -88,15 +88,15 @@ func TestInstance_Stop_CompletesWithinTimeout(t *testing.T) {
 }
 
 func TestInstance_Start_InvalidZone_ReturnsError(t *testing.T) {
-	zone := zoneconfig.Zone{
+	zone := instanceconfig.Zone{
 		Name:    "Bad Zone",
 		Private: true,
-		Maps: []zoneconfig.Map{{
+		Maps: []instanceconfig.Map{{
 			Identifier: "m1",
 			Name:       "Map 1",
-			Units:      []zoneconfig.Unit{{UnitType: "goblin"}}, // missing identifier
+			Units:      []instanceconfig.Unit{{UnitType: "goblin"}}, // missing identifier
 		}},
-		UnitTypes: map[string]zoneconfig.UnitType{
+		UnitTypes: map[string]instanceconfig.UnitType{
 			"goblin": {Name: "Goblin", MaxHP: 10, TokenRadius: 1.0},
 		},
 	}

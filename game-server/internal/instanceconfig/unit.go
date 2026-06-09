@@ -1,4 +1,4 @@
-package zoneconfig
+package instanceconfig
 
 // Unit is a placed instance of a UnitType on a map.
 type Unit struct {

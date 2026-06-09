@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instance"
-	"github.com/delve-mmo/game-server/internal/zoneconfig"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // MaxRequestBytes is the maximum accepted size for an instance create request
@@ -34,7 +34,7 @@ type createRequest struct {
 	ZoneIdentifier string         `json:"zone_identifier"` // Required
 	Version        string         `json:"version"`         // Required
 	SourceURL      string         `json:"source_url"`      // Required
-	ZoneConfig     zoneconfig.Zone `json:"zone_config"`    // Required: fully-resolved zone manifest
+	ZoneConfig     instanceconfig.Zone `json:"zone_config"`    // Required: fully-resolved zone manifest
 }
 
 // instanceResponse is the shape returned for a single instance.

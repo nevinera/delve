@@ -1,4 +1,4 @@
-package zoneconfig
+package instanceconfig
 
 import (
 	"encoding/json"
