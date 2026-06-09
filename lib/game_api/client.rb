@@ -22,8 +22,8 @@ module GameApi
     # code need no arguments, while tests can pass explicit values without
     # touching the environment.
     def initialize(
-      base_url: ENV.fetch("GAME_SERVER_URL", "http://localhost:8090"),
-      auth_tokens: ENV.fetch("GAME_SERVER_AUTH_TOKENS", "")
+      base_url: ENV.string("GAME_SERVER_URL", default: "http://localhost:8090"),
+      auth_tokens: ENV.string("GAME_SERVER_AUTH_TOKENS", default: "")
     )
       @base_url = base_url.chomp("/")
       @token = auth_tokens.split(",").map(&:strip).reject(&:empty?).first
