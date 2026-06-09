@@ -53,7 +53,7 @@ The unit moves through an ordered list of positions.
 |---|---|---|---|
 | `position` | Position | yes | Where the unit moves to. |
 | `movementRate` | float | yes | Fraction of the unit's movement speed to use. Range: 0.0-1.0. |
-| `waitTime` | float | yes | Seconds to wait at this position before moving on. Must be non-negative. |
+| `waitTime` | float \| floatRange | yes | Seconds to wait at this position before moving on. Must be non-negative. |
 
 ```json
 {

@@ -33,7 +33,7 @@ type UnitMovement struct {
 
 // MovementStep is one position in a patrol route.
 type MovementStep struct {
-	Position     Position `json:"position"`     // Required
-	MovementRate float64  `json:"movementRate"` // Required: fraction of unit speed, 0.0-1.0
-	WaitTime     float64  `json:"waitTime"`     // Required: seconds to wait at this position
+	Position     Position   `json:"position"`     // Required
+	MovementRate float64    `json:"movementRate"` // Required: fraction of unit speed, 0.0-1.0
+	WaitTime     ValueRange `json:"waitTime"`     // Required: seconds to wait at this position
 }

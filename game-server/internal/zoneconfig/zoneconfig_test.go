@@ -108,6 +108,8 @@ func TestZone_ValidFull_Units(t *testing.T) {
 		assert.Equal(t, "return", u.Movement.Choose)
 		assert.Len(t, u.Movement.Steps, 2)
 		assert.Equal(t, 0.4, u.Movement.Steps[0].MovementRate)
+		assert.Equal(t, 3.0, u.Movement.Steps[0].WaitTime.Min())
+		assert.Equal(t, 3.0, u.Movement.Steps[0].WaitTime.Max())
 	})
 
 	t.Run("wander unit", func(t *testing.T) {
