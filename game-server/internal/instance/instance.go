@@ -40,6 +40,8 @@ type Instance struct {
 	ZoneConfig     zoneconfig.Zone
 	CreatedAt      time.Time
 
+	Checksum string // SHA256 of canonical state JSON; updated every tick
+
 	cancel context.CancelFunc
 	done   chan struct{}
 }

@@ -47,10 +47,12 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			return
 		case <-ticker.C:
 			tickCount++
+			inst.Checksum = state.Checksum()
 			slog.DebugContext(ctx, "tick",
 				"instance", inst.Identifier,
 				"tick", tickCount,
 				"units", len(state.Units),
+				"checksum", inst.Checksum,
 			)
 		}
 	}
