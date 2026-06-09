@@ -52,6 +52,62 @@ func TestNewInstance_Fields(t *testing.T) {
 	assert.Equal(t, "Test Zone", inst.ZoneConfig.Name)
 }
 
+// --- Start / Stop ---
+
+func TestInstance_Start_TransitionsToActive(t *testing.T) {
+	inst := makeInstance()
+	err := inst.Start()
+	require.NoError(t, err)
+	t.Cleanup(inst.Stop)
+
+	assert.Equal(t, instance.StatusActive, inst.Status)
+}
+
+func TestInstance_Stop_TransitionsToStopping(t *testing.T) {
+	inst := makeInstance()
+	require.NoError(t, inst.Start())
+	inst.Stop()
+	assert.Equal(t, instance.StatusStopping, inst.Status)
+}
+
+func TestInstance_Stop_CompletesWithinTimeout(t *testing.T) {
+	inst := makeInstance()
+	require.NoError(t, inst.Start())
+
+	stopped := make(chan struct{})
+	go func() {
+		inst.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Stop() did not return within 500ms")
+	}
+}
+
+func TestInstance_Start_InvalidZone_ReturnsError(t *testing.T) {
+	zone := zoneconfig.Zone{
+		Name:    "Bad Zone",
+		Private: true,
+		Maps: []zoneconfig.Map{{
+			Identifier: "m1",
+			Name:       "Map 1",
+			Units:      []zoneconfig.Unit{{UnitType: "goblin"}}, // missing identifier
+		}},
+		UnitTypes: map[string]zoneconfig.UnitType{
+			"goblin": {Name: "Goblin", MaxHP: 10, TokenRadius: 1.0},
+		},
+	}
+	inst := instance.NewInstance(uuid.New(), "db-1", "zone-test", "v1", "http://example.com", zone)
+
+	err := inst.Start()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "has no identifier")
+	assert.Equal(t, instance.StatusLoading, inst.Status)
+}
+
 // --- Registry ---
 
 func TestRegistry_EmptyCount(t *testing.T) {

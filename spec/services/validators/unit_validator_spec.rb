@@ -18,6 +18,11 @@ RSpec.describe Validators::UnitValidator, type: :validator do
       expect { described_class.validate!(patrol_unit) }.not_to raise_error
     end
 
+    it "raises when identifier is missing" do
+      expect { described_class.validate!(still_unit.except("identifier")) }
+        .to raise_error(Validators::ValidationError, /identifier is required/)
+    end
+
     it "raises when unitType is missing" do
       expect { described_class.validate!(still_unit.except("unitType")) }
         .to raise_error(Validators::ValidationError, /unitType is required/)

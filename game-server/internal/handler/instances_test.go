@@ -17,6 +17,15 @@ import (
 	"github.com/delve-mmo/game-server/internal/instance"
 )
 
+// stopAll stops all running instances in reg. Use as t.Cleanup in tests that
+// call Create, to ensure goroutines exit before the test ends.
+func stopAll(t *testing.T, reg *instance.Registry) {
+	t.Helper()
+	for _, inst := range reg.List() {
+		inst.Stop()
+	}
+}
+
 // mountInstances wires the Instances handler onto a chi router with the same
 // route pattern used in production, so URL parameter extraction works in tests.
 func mountInstances(h *handler.Instances) http.Handler {
@@ -64,6 +73,8 @@ func TestInstances_Create(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
+	t.Cleanup(func() { stopAll(t, reg) })
+
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, 1, reg.Count())
 
@@ -71,7 +82,7 @@ func TestInstances_Create(t *testing.T) {
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
 	assert.Equal(t, id.String(), body["identifier"])
 	assert.Equal(t, "db-1", body["database_id"])
-	assert.Equal(t, "loading", body["status"])
+	assert.Equal(t, "active", body["status"])
 	assert.Equal(t, float64(instance.DefaultMaxSlots), body["max_slots"])
 }
 
@@ -119,6 +130,44 @@ func TestInstances_Create_MalformedJSON(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
+func TestInstances_Create_StartFailure(t *testing.T) {
+	reg := instance.NewRegistry()
+	h := handler.NewInstances(reg)
+	router := mountInstances(h)
+
+	// Zone has a unit with no identifier; NewInstanceState will fail and Start
+	// should return 422 without adding the instance to the registry.
+	body, _ := json.Marshal(map[string]any{
+		"identifier": uuid.New().String(), "database_id": "db-1",
+		"zone_identifier": "z", "version": "v", "source_url": "http://x",
+		"zone_config": map[string]any{
+			"name": "Bad Zone", "private": true,
+			"maps": []map[string]any{{
+				"identifier": "m1", "name": "Map 1",
+				"feetDimensions": map[string]any{"width": 10.0, "height": 10.0},
+				"units": []map[string]any{
+					{"unitType": "goblin", "position": map[string]any{"x": 0, "y": 0, "angle": 0},
+						"hostility": "hostile"},
+				},
+			}},
+			"unitTypes": map[string]any{
+				"goblin": map[string]any{
+					"name": "Goblin", "tokenRadius": 1.0, "maxHP": 10,
+					"resource": map[string]any{"name": "Energy", "max": 10.0, "defaultValue": 10.0, "returnRate": 0.0, "isFluid": true},
+					"targeting": map[string]any{"type": "nearest"},
+					"tactics":   map[string]any{"type": "randomAvailable"},
+				},
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/instances", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, 0, reg.Count())
+}
+
 func TestInstances_Create_AssetReferenceRejected(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
@@ -146,6 +195,7 @@ func TestInstances_Show(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
 	router := mountInstances(h)
+	t.Cleanup(func() { stopAll(t, reg) })
 
 	id := uuid.New()
 	req := httptest.NewRequest(http.MethodPost, "/instances", bytes.NewReader(validCreateBody(id)))
@@ -205,6 +255,17 @@ func TestInstances_Destroy(t *testing.T) {
 	assert.Equal(t, 0, reg.Count())
 }
 
+func TestInstances_Destroy_InvalidUUID(t *testing.T) {
+	reg := instance.NewRegistry()
+	h := handler.NewInstances(reg)
+	router := mountInstances(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/instances/not-a-uuid", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestInstances_Destroy_NotFound(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
@@ -237,6 +298,7 @@ func TestInstances_List_AfterCreate(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
 	router := mountInstances(h)
+	t.Cleanup(func() { stopAll(t, reg) })
 
 	for range 3 {
 		router.ServeHTTP(httptest.NewRecorder(),
@@ -261,6 +323,7 @@ func TestInstances_ResponseExcludesZoneConfig(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
 	router := mountInstances(h)
+	t.Cleanup(func() { stopAll(t, reg) })
 
 	id := uuid.New()
 	router.ServeHTTP(httptest.NewRecorder(),
