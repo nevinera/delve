@@ -15,6 +15,7 @@ module Validators
     private
 
     def validate_core_fields!(data, path:)
+      require_string!(data, "identifier", path: path)
       require_string!(data, "unitType", path: path)
       validate_position!(require_hash!(data, "position", path: path), path: child_path(path, "position"))
       hostility = require_string!(data, "hostility", path: path)
