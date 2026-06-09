@@ -5,10 +5,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/server"
-	"github.com/stretchr/testify/assert"
 )
+
+const testToken = "test-token-abc"
+
+func newServer() http.Handler {
+	return server.New(instance.NewRegistry(), []string{testToken})
+}
 
 func TestRouting(t *testing.T) {
 	tests := []struct {
@@ -39,11 +46,71 @@ func TestRouting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := server.New(instance.NewRegistry())
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, req)
+			newServer().ServeHTTP(rec, req)
 			assert.Equal(t, tt.wantStatus, rec.Code)
 		})
 	}
+}
+
+func TestAuth(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		authHeader string
+		wantStatus int
+	}{
+		{
+			name:       "status is public",
+			path:       "/status.json",
+			authHeader: "",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "instances requires auth",
+			path:       "/instances",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "instances accepts valid token",
+			path:       "/instances",
+			authHeader: "Bearer " + testToken,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "instances rejects wrong token",
+			path:       "/instances",
+			authHeader: "Bearer wrong-token",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "instance show requires auth",
+			path:       "/instances/00000000-0000-0000-0000-000000000001",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			rec := httptest.NewRecorder()
+			newServer().ServeHTTP(rec, req)
+			assert.Equal(t, tt.wantStatus, rec.Code)
+		})
+	}
+}
+
+func TestAuth_NoTokensConfigured(t *testing.T) {
+	h := server.New(instance.NewRegistry(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/instances", nil)
+	req.Header.Set("Authorization", "Bearer anything")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 }
