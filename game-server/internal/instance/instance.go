@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,6 +39,9 @@ type Instance struct {
 	Status         Status
 	ZoneConfig     zoneconfig.Zone
 	CreatedAt      time.Time
+
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 // NewInstance constructs a fully initialized Instance from the fields provided
