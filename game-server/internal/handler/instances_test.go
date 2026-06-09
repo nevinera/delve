@@ -130,6 +130,44 @@ func TestInstances_Create_MalformedJSON(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
+func TestInstances_Create_StartFailure(t *testing.T) {
+	reg := instance.NewRegistry()
+	h := handler.NewInstances(reg)
+	router := mountInstances(h)
+
+	// Zone has a unit with no identifier; NewInstanceState will fail and Start
+	// should return 422 without adding the instance to the registry.
+	body, _ := json.Marshal(map[string]any{
+		"identifier": uuid.New().String(), "database_id": "db-1",
+		"zone_identifier": "z", "version": "v", "source_url": "http://x",
+		"zone_config": map[string]any{
+			"name": "Bad Zone", "private": true,
+			"maps": []map[string]any{{
+				"identifier": "m1", "name": "Map 1",
+				"feetDimensions": map[string]any{"width": 10.0, "height": 10.0},
+				"units": []map[string]any{
+					{"unitType": "goblin", "position": map[string]any{"x": 0, "y": 0, "angle": 0},
+						"hostility": "hostile"},
+				},
+			}},
+			"unitTypes": map[string]any{
+				"goblin": map[string]any{
+					"name": "Goblin", "tokenRadius": 1.0, "maxHP": 10,
+					"resource": map[string]any{"name": "Energy", "max": 10.0, "defaultValue": 10.0, "returnRate": 0.0, "isFluid": true},
+					"targeting": map[string]any{"type": "nearest"},
+					"tactics":   map[string]any{"type": "randomAvailable"},
+				},
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/instances", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+	assert.Equal(t, 0, reg.Count())
+}
+
 func TestInstances_Create_AssetReferenceRejected(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
@@ -215,6 +253,17 @@ func TestInstances_Destroy(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, delRec.Code)
 	assert.Equal(t, 0, reg.Count())
+}
+
+func TestInstances_Destroy_InvalidUUID(t *testing.T) {
+	reg := instance.NewRegistry()
+	h := handler.NewInstances(reg)
+	router := mountInstances(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/instances/not-a-uuid", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestInstances_Destroy_NotFound(t *testing.T) {
