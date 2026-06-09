@@ -37,5 +37,7 @@
 # Game server build artifacts
 /game-server/game-server
 /game-server/validate-zone
+/game-server/coverage.out
+/game-server/coverage.html
 
 /coverage/
