@@ -17,6 +17,15 @@ import (
 	"github.com/delve-mmo/game-server/internal/instance"
 )
 
+// stopAll stops all running instances in reg. Use as t.Cleanup in tests that
+// call Create, to ensure goroutines exit before the test ends.
+func stopAll(t *testing.T, reg *instance.Registry) {
+	t.Helper()
+	for _, inst := range reg.List() {
+		inst.Stop()
+	}
+}
+
 // mountInstances wires the Instances handler onto a chi router with the same
 // route pattern used in production, so URL parameter extraction works in tests.
 func mountInstances(h *handler.Instances) http.Handler {
@@ -64,6 +73,8 @@ func TestInstances_Create(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
+	t.Cleanup(func() { stopAll(t, reg) })
+
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, 1, reg.Count())
 
@@ -71,7 +82,7 @@ func TestInstances_Create(t *testing.T) {
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
 	assert.Equal(t, id.String(), body["identifier"])
 	assert.Equal(t, "db-1", body["database_id"])
-	assert.Equal(t, "loading", body["status"])
+	assert.Equal(t, "active", body["status"])
 	assert.Equal(t, float64(instance.DefaultMaxSlots), body["max_slots"])
 }
 
@@ -146,6 +157,7 @@ func TestInstances_Show(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
 	router := mountInstances(h)
+	t.Cleanup(func() { stopAll(t, reg) })
 
 	id := uuid.New()
 	req := httptest.NewRequest(http.MethodPost, "/instances", bytes.NewReader(validCreateBody(id)))
@@ -237,6 +249,7 @@ func TestInstances_List_AfterCreate(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
 	router := mountInstances(h)
+	t.Cleanup(func() { stopAll(t, reg) })
 
 	for range 3 {
 		router.ServeHTTP(httptest.NewRecorder(),
@@ -261,6 +274,7 @@ func TestInstances_ResponseExcludesZoneConfig(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg)
 	router := mountInstances(h)
+	t.Cleanup(func() { stopAll(t, reg) })
 
 	id := uuid.New()
 	router.ServeHTTP(httptest.NewRecorder(),

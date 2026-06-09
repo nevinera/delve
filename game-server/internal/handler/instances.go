@@ -92,6 +92,10 @@ func (h *Instances) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	inst := instance.NewInstance(id, req.DatabaseID, req.ZoneIdentifier, req.Version, req.SourceURL, req.ZoneConfig)
+	if err := inst.Start(); err != nil {
+		writeError(w, r, http.StatusUnprocessableEntity, "failed to start instance: "+err.Error())
+		return
+	}
 	h.registry.Add(inst)
 
 	writeJSON(w, r, http.StatusCreated, instanceToResponse(inst))
@@ -112,10 +116,12 @@ func (h *Instances) Destroy(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, exists := h.registry.Get(id); !exists {
+	inst, exists := h.registry.Get(id)
+	if !exists {
 		writeError(w, r, http.StatusNotFound, "instance not found")
 		return
 	}
+	inst.Stop()
 	h.registry.Remove(id)
 	w.WriteHeader(http.StatusNoContent)
 }
