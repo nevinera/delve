@@ -43,16 +43,9 @@ module GameApi
       get("/instances/#{id}")
     end
 
-    # POST /instances
-    def create_instance(identifier:, database_id:, zone_identifier:, version:, source_url:, zone_config:)
-      post("/instances", {
-        identifier: identifier,
-        database_id: database_id,
-        zone_identifier: zone_identifier,
-        version: version,
-        source_url: source_url,
-        zone_config: zone_config
-      })
+    # POST /instances. Accepts a hash of instance attributes plus zone_config.
+    def create_instance(attrs)
+      post("/instances", attrs)
     end
 
     # DELETE /instances/:id — returns nil on success.
@@ -87,18 +80,17 @@ module GameApi
       handle_response(res)
     end
 
+    ERROR_CLASSES = {401 => AuthError, 404 => NotFoundError, 422 => UnprocessableError}.freeze
+
     def handle_response(res)
       code = res.code.to_i
       return nil if code == 204
       return JSON.parse(res.body) if [200, 201].include?(code)
+      raise_for(code, error_message(res))
+    end
 
-      msg = error_message(res)
-      case code
-      when 401 then raise AuthError.new(msg, status: code)
-      when 404 then raise NotFoundError.new(msg, status: code)
-      when 422 then raise UnprocessableError.new(msg, status: code)
-      else raise Error.new(msg, status: code)
-      end
+    def raise_for(code, msg)
+      raise ERROR_CLASSES.fetch(code, Error).new(msg, status: code)
     end
 
     def error_message(res)

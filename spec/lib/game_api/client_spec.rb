@@ -115,6 +115,8 @@ RSpec.describe GameApi::Client do
       )
     end
 
+    # create_instance takes a plain hash, so keyword and hash forms are equivalent
+
     it "POSTs to /instances and returns the created instance" do
       stub_request(:post, "#{base_url}/instances")
         .to_return(status: 201, body: created_body, headers: json_headers)
