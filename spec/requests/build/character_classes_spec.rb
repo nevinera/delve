@@ -58,7 +58,7 @@ RSpec.describe "Build::CharacterClasses", type: :request do
 
     describe "POST /build/character_classes" do
       let(:valid_params) do
-        {character_class: {handle_id: handle.id, identifier: "warbinder", location: "https://example.com/warbinder.json"}}
+        {character_class: {handle_id: handle.id, identifier: "warbinder", version: "1.0", location: "https://example.com/warbinder.json"}}
       end
 
       context "with valid params" do
@@ -83,11 +83,19 @@ RSpec.describe "Build::CharacterClasses", type: :request do
         end
       end
 
-      context "with a duplicate identifier" do
+      context "with an invalid version" do
         it "re-renders new with an error" do
-          post "/build/character_classes", params: {character_class: valid_params[:character_class].merge(identifier: "puncher")}
+          post "/build/character_classes", params: {character_class: valid_params[:character_class].merge(version: "1")}
           expect(response).to have_http_status(:unprocessable_content)
-          expect(response.body).to include("already been taken")
+          expect(response.body).to include("two numeric segments")
+        end
+      end
+
+      context "with a duplicate identifier and version" do
+        it "re-renders new with an error" do
+          post "/build/character_classes", params: {character_class: valid_params[:character_class].merge(identifier: "puncher", version: "1.0")}
+          expect(response).to have_http_status(:unprocessable_content)
+          expect(response.body).to include("already registered for this class identifier")
         end
       end
     end

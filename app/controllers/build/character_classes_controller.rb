@@ -30,6 +30,6 @@ class Build::CharacterClassesController < Build::BaseController
   private
 
   def character_class_params
-    params.require(:character_class).permit(:handle_id, :identifier, :location)
+    params.require(:character_class).permit(:handle_id, :identifier, :version, :location)
   end
 end
