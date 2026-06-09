@@ -9,54 +9,28 @@
 #   script/game/instances create <path-or-url> [--zone-id ID] [--database-id ID] [--version VER]
 #   script/game/instances destroy <id>
 #
-# The game server URL defaults to http://localhost:8090 and can be overridden
-# with the GAME_SERVER_URL environment variable.
+# Environment variables:
+#   GAME_SERVER_URL          - base URL (default: http://localhost:8090)
+#   GAME_SERVER_AUTH_TOKENS  - comma-separated token list; the first token is used
 
 require "net/http"
 require "json"
 require "uri"
 require "securerandom"
 require "optparse"
+require_relative "../../lib/game_api/client"
 
-GAME_SERVER_URL = ENV.fetch("GAME_SERVER_URL", "http://localhost:8090").chomp("/")
+CLIENT = GameApi::Client.new
 
-# --- HTTP helpers ---
-
-def game_request(method, path, body: nil)
-  uri = URI("#{GAME_SERVER_URL}#{path}")
-  req_class = {get: Net::HTTP::Get, post: Net::HTTP::Post, delete: Net::HTTP::Delete}.fetch(method)
-  req = req_class.new(uri)
-
-  if body
-    req["Content-Type"] = "application/json"
-    req.body = JSON.generate(body)
-  end
-
-  Net::HTTP.start(uri.host, uri.port) { |http| http.request(req) }
-end
-
-def handle(res, success: [200, 201, 204])
-  code = res.code.to_i
-  unless success.include?(code)
-    warn "Server returned #{code}:"
-    warn pretty_or_raw(res.body)
-    exit 1
-  end
-  res.body unless code == 204
-end
-
-def pretty_or_raw(body)
-  JSON.pretty_generate(JSON.parse(body))
-rescue JSON::ParserError
-  body
+def pretty(obj)
+  JSON.pretty_generate(obj)
 end
 
 # --- Zone loading ---
 
 def load_zone(source)
   if source.match?(%r{\Ahttps?://})
-    uri = URI(source)
-    res = Net::HTTP.get_response(uri)
+    res = Net::HTTP.get_response(URI(source))
     abort "Failed to download zone config (#{res.code})" unless res.is_a?(Net::HTTPSuccess)
     [res.body, source]
   else
@@ -73,19 +47,17 @@ end
 # --- Subcommands ---
 
 def cmd_list
-  body = handle(game_request(:get, "/instances"))
-  puts pretty_or_raw(body)
+  puts pretty(CLIENT.list_instances)
 end
 
 def cmd_show(id)
   abort "Usage: show <id>" unless id
-  body = handle(game_request(:get, "/instances/#{id}"))
-  puts pretty_or_raw(body)
+  puts pretty(CLIENT.show_instance(id))
 end
 
 def cmd_destroy(id)
   abort "Usage: destroy <id>" unless id
-  handle(game_request(:delete, "/instances/#{id}"), success: [204])
+  CLIENT.destroy_instance(id)
   puts "Destroyed #{id}."
 end
 
@@ -93,50 +65,48 @@ def cmd_create(source, opts)
   abort "Usage: create <path-or-url> [options]" unless source
 
   zone_json, source_url = load_zone(source)
-  zone_config = JSON.parse(zone_json)
 
-  payload = {
+  result = CLIENT.create_instance({
     identifier: SecureRandom.uuid,
     database_id: opts[:database_id] || "dev-#{SecureRandom.hex(4)}",
     zone_identifier: opts[:zone_id] || derive_zone_id(source),
     version: opts[:version] || "dev",
     source_url: source_url,
-    zone_config: zone_config
-  }
-
-  body = handle(game_request(:post, "/instances", body: payload), success: [201])
-  puts pretty_or_raw(body)
+    zone_config: JSON.parse(zone_json)
+  })
+  puts pretty(result)
 end
 
 # --- Dispatch ---
 
 subcommand = ARGV.shift
 
-case subcommand
-when "list"
-  cmd_list
-
-when "show"
-  cmd_show(ARGV.shift)
-
-when "destroy"
-  cmd_destroy(ARGV.shift)
-
-when "create"
-  opts = {}
-  OptionParser.new do |o|
-    o.on("--zone-id ID", "Zone identifier (default: derived from filename)") { |v| opts[:zone_id] = v }
-    o.on("--database-id ID", "Database ID (default: dev-<random hex>)") { |v| opts[:database_id] = v }
-    o.on("--version VER", "Version string (default: dev)") { |v| opts[:version] = v }
-  end.parse!(ARGV)
-  cmd_create(ARGV.shift, opts)
-
-else
-  warn "Usage: script/game/instances <list|show|create|destroy> [args]"
-  warn ""
-  warn "  list"
-  warn "  show <id>"
-  warn "  create <path-or-url> [--zone-id ID] [--database-id ID] [--version VER]"
-  warn "  destroy <id>"
+begin
+  case subcommand
+  when "list"
+    cmd_list
+  when "show"
+    cmd_show(ARGV.shift)
+  when "destroy"
+    cmd_destroy(ARGV.shift)
+  when "create"
+    opts = {}
+    OptionParser.new do |o|
+      o.on("--zone-id ID", "Zone identifier (default: derived from filename)") { |v| opts[:zone_id] = v }
+      o.on("--database-id ID", "Database ID (default: dev-<random hex>)") { |v| opts[:database_id] = v }
+      o.on("--version VER", "Version string (default: dev)") { |v| opts[:version] = v }
+    end.parse!(ARGV)
+    cmd_create(ARGV.shift, opts)
+  else
+    warn "Usage: script/game/instances <list|show|create|destroy> [args]"
+    warn ""
+    warn "  list"
+    warn "  show <id>"
+    warn "  create <path-or-url> [--zone-id ID] [--database-id ID] [--version VER]"
+    warn "  destroy <id>"
+    exit 1
+  end
+rescue GameApi::Error => e
+  warn "Error (#{e.status}): #{e.message}"
   exit 1
 end

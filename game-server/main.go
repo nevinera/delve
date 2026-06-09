@@ -21,8 +21,12 @@ func main() {
 		})))
 	}
 
+	if len(cfg.AuthTokens) == 0 {
+		slog.Warn("GAME_SERVER_AUTH_TOKENS is not set; all requests to protected endpoints will be rejected")
+	}
+
 	registry := instance.NewRegistry()
-	handler := server.New(registry)
+	handler := server.New(registry, cfg.AuthTokens)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	slog.Info("starting game server", "addr", addr, "version", version.Current, "debug", cfg.Debug)
