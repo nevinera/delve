@@ -27,17 +27,35 @@ RSpec.describe CharacterClass, type: :model do
       expect(cc.errors[:identifier]).to be_present
     end
 
-    it "enforces uniqueness of identifier scoped to handle" do
-      create(:character_class, user: user, handle: handle, identifier: "puncher")
-      cc = build(:character_class, user: user, handle: handle, identifier: "puncher")
+    it "requires a version" do
+      cc = build(:character_class, user: user, handle: handle, version: nil)
       expect(cc).not_to be_valid
-      expect(cc.errors[:identifier]).to be_present
+      expect(cc.errors[:version]).to be_present
     end
 
-    it "allows the same identifier under different handles" do
+    it "rejects malformed versions" do
+      cc = build(:character_class, user: user, handle: handle, version: "1")
+      expect(cc).not_to be_valid
+      expect(cc.errors[:version]).to be_present
+    end
+
+    it "enforces uniqueness of version scoped to handle and identifier" do
+      create(:character_class, user: user, handle: handle, identifier: "puncher", version: "1.0")
+      cc = build(:character_class, user: user, handle: handle, identifier: "puncher", version: "1.0")
+      expect(cc).not_to be_valid
+      expect(cc.errors[:version]).to be_present
+    end
+
+    it "allows a new version of the same identifier" do
+      create(:character_class, user: user, handle: handle, identifier: "puncher", version: "1.0")
+      cc = build(:character_class, user: user, handle: handle, identifier: "puncher", version: "1.1")
+      expect(cc).to be_valid
+    end
+
+    it "allows the same identifier and version under different handles" do
       other_handle = create(:handle, user: user, identifier: "althandle")
-      create(:character_class, user: user, handle: handle, identifier: "puncher")
-      cc = build(:character_class, user: user, handle: other_handle, identifier: "puncher")
+      create(:character_class, user: user, handle: handle, identifier: "puncher", version: "1.0")
+      cc = build(:character_class, user: user, handle: other_handle, identifier: "puncher", version: "1.0")
       expect(cc).to be_valid
     end
   end

@@ -1,6 +1,7 @@
 <h1><%= @character_class.full_identifier %></h1>
 
 <p><strong>Handle:</strong> <%= @character_class.handle.identifier %></p>
+<p><strong>Version:</strong> <%= @character_class.version %></p>
 <p><strong>Location:</strong> <%= link_to @character_class.location, @character_class.location %></p>
 <p><strong>Status:</strong> <%= @character_class.state %></p>
 <% if @character_class.validity_error.present? %>
