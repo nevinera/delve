@@ -1,0 +1,7 @@
+{
+  "name": "Abstract Zone",
+  "private": true,
+  "maps": [
+    { "$ref": "./maps/some-map.json", "referenceTo": "map" }
+  ]
+}

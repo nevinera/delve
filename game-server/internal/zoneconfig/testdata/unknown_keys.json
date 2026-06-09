@@ -1,0 +1,15 @@
+{
+  "name": "Room With Extra Fields",
+  "private": false,
+  "unknownTopLevelField": "ignored",
+  "maps": [
+    {
+      "identifier": "room",
+      "name": "The Room",
+      "imageUrl": "../../assets/maps/room.png",
+      "pixelDimensions": { "width": 512, "height": 512 },
+      "feetDimensions": { "width": 20.0, "height": 20.0 },
+      "someUnknownMapField": { "nested": true }
+    }
+  ]
+}

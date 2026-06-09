@@ -1,0 +1,13 @@
+{
+  "name": "Empty Room",
+  "private": false,
+  "maps": [
+    {
+      "identifier": "room",
+      "name": "The Room",
+      "imageUrl": "../../assets/maps/room.png",
+      "pixelDimensions": { "width": 512, "height": 512 },
+      "feetDimensions": { "width": 20.0, "height": 20.0 }
+    }
+  ]
+}
