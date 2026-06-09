@@ -18,6 +18,7 @@ require "json"
 require "uri"
 require "securerandom"
 require "optparse"
+require "environment_helpers"
 require_relative "../../lib/game_api/client"
 
 CLIENT = GameApi::Client.new
