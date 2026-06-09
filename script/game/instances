@@ -9,8 +9,9 @@
 #   script/game/instances create <path-or-url> [--zone-id ID] [--database-id ID] [--version VER]
 #   script/game/instances destroy <id>
 #
-# The game server URL defaults to http://localhost:8090 and can be overridden
-# with the GAME_SERVER_URL environment variable.
+# Environment variables:
+#   GAME_SERVER_URL          - base URL (default: http://localhost:8090)
+#   GAME_SERVER_AUTH_TOKENS  - comma-separated token list; the first token is used
 
 require "net/http"
 require "json"
@@ -19,6 +20,7 @@ require "securerandom"
 require "optparse"
 
 GAME_SERVER_URL = ENV.fetch("GAME_SERVER_URL", "http://localhost:8090").chomp("/")
+AUTH_TOKEN = ENV.fetch("GAME_SERVER_AUTH_TOKENS", "").split(",").map(&:strip).reject(&:empty?).first
 
 # --- HTTP helpers ---
 
@@ -26,6 +28,8 @@ def game_request(method, path, body: nil)
   uri = URI("#{GAME_SERVER_URL}#{path}")
   req_class = {get: Net::HTTP::Get, post: Net::HTTP::Post, delete: Net::HTTP::Delete}.fetch(method)
   req = req_class.new(uri)
+
+  req["Authorization"] = "Bearer #{AUTH_TOKEN}" if AUTH_TOKEN
 
   if body
     req["Content-Type"] = "application/json"
