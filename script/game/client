@@ -11,12 +11,12 @@
 #   script/game/client [options]
 #
 # Options:
-#   --instance <uuid>         Existing instance ID
-#   --slot <uuid>             Existing slot ID (requires --token)
-#   --token <uuid>            Slot token (required with --slot)
-#   --zone-config <path>      Zone config JSON (required when creating instance)
-#   --class-config <path>     Character class JSON (required when creating slot)
-#   --character-name <name>   Character name for slot creation (default: Hero)
+#   -i, --instance <uuid>         Existing instance ID
+#   -s, --slot <uuid>             Existing slot ID (requires --token)
+#   -t, --token <uuid>            Slot token (required with --slot)
+#   -z, --zone-config <path>      Zone config JSON (required when creating instance)
+#   -c, --class-config <path>     Character class JSON (required when creating slot)
+#   -n, --character-name <name>   Character name for slot creation (default: Hero)
 #
 # Environment variables:
 #   GAME_SERVER_URL          - base URL (default: http://localhost:8090)
@@ -41,12 +41,12 @@ options = { character_name: "Hero" }
 
 OptionParser.new do |opts|
   opts.banner = "Usage: script/game/client [options]"
-  opts.on("--instance UUID",       "Existing instance ID")              { |v| options[:instance_id] = v }
-  opts.on("--slot UUID",           "Existing slot ID")                  { |v| options[:slot_id] = v }
-  opts.on("--token UUID",          "Slot token (required with --slot)") { |v| options[:token] = v }
-  opts.on("--zone-config PATH",    "Zone config JSON file")             { |v| options[:zone_config] = v }
-  opts.on("--class-config PATH",   "Character class JSON file")        { |v| options[:class_config] = v }
-  opts.on("--character-name NAME", "Character name (default: Hero)")   { |v| options[:character_name] = v }
+  opts.on("-i", "--instance UUID",       "Existing instance ID")              { |v| options[:instance_id] = v }
+  opts.on("-s", "--slot UUID",           "Existing slot ID")                  { |v| options[:slot_id] = v }
+  opts.on("-t", "--token UUID",          "Slot token (required with --slot)") { |v| options[:token] = v }
+  opts.on("-z", "--zone-config PATH",    "Zone config JSON file")             { |v| options[:zone_config] = v }
+  opts.on("-c", "--class-config PATH",   "Character class JSON file")         { |v| options[:class_config] = v }
+  opts.on("-n", "--character-name NAME", "Character name (default: Hero)")    { |v| options[:character_name] = v }
 end.parse!
 
 if options[:slot_id] && !options[:token]
