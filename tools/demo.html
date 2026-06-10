@@ -198,6 +198,9 @@ function createPlayerToken(radius) {
 
 const MOVE_RATE  = 15         // feet/sec
 const TURN_RATE  = 120 * DEG_TO_RAD  // rad/sec
+const ZOOM_RATE  = 0.5
+const ZOOM_MIN   = 0.5
+const ZOOM_MAX   = 1.5
 const CAM_BACK   = 45
 const CAM_HEIGHT = 50
 const CAM_LOOK_AHEAD = 10
@@ -265,7 +268,7 @@ function loadMap(map) {
   const camera = new THREE.PerspectiveCamera(34, aspect, 0.1, 500)
 
   // player state in world coords
-  const player = { x: sx, z: sz, facing: start.angle * DEG_TO_RAD }
+  const player = { x: sx, z: sz, facing: start.angle * DEG_TO_RAD, zoom: 1.0 }
 
   let lastTime = null
 
@@ -273,6 +276,9 @@ function loadMap(map) {
     animFrameId = requestAnimationFrame(animate)
     const elapsed = lastTime === null ? 0 : (time - lastTime) / 1000
     lastTime = time
+
+    if (keys.has('Equal')) player.zoom = Math.max(ZOOM_MIN, player.zoom - ZOOM_RATE * elapsed)
+    if (keys.has('Minus')) player.zoom = Math.min(ZOOM_MAX, player.zoom + ZOOM_RATE * elapsed)
 
     if (keys.has('KeyA')) player.facing -= TURN_RATE * elapsed
     if (keys.has('KeyD')) player.facing += TURN_RATE * elapsed
@@ -292,12 +298,15 @@ function loadMap(map) {
     token.position.set(player.x, 0, player.z)
     token.rotation.y = -player.facing
 
+    const s = player.zoom
     camera.position.set(
-      player.x - CAM_BACK * fwdX,
-      CAM_HEIGHT,
-      player.z - CAM_BACK * fwdZ
+      player.x - s * CAM_BACK * fwdX,
+      s * CAM_HEIGHT,
+      player.z - s * CAM_BACK * fwdZ
     )
-    camera.lookAt(player.x + CAM_LOOK_AHEAD * fwdX, 0, player.z + CAM_LOOK_AHEAD * fwdZ)
+    camera.lookAt(player.x + s * CAM_LOOK_AHEAD * fwdX, 0, player.z + s * CAM_LOOK_AHEAD * fwdZ)
+    scene.fog.near = 60 * s
+    scene.fog.far  = 150 * s
 
     renderer.render(scene, camera)
   }
