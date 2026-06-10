@@ -194,6 +194,49 @@ function createPlayerToken(radius) {
   return group
 }
 
+// --- wall rendering ---
+
+function computeWallPolygon(points, half) {
+  const normals = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i+1][0] - points[i][0], dz = points[i+1][1] - points[i][1]
+    const len = Math.sqrt(dx*dx + dz*dz)
+    normals.push([-dz/len, dx/len])
+  }
+  const offsetAt = (i, side) => {
+    let ox, oz
+    if (i === 0) {
+      ox = normals[0][0] * half; oz = normals[0][1] * half
+    } else if (i === points.length - 1) {
+      ox = normals[i-1][0] * half; oz = normals[i-1][1] * half
+    } else {
+      const [n0x, n0z] = normals[i-1], [n1x, n1z] = normals[i]
+      const mx = n0x+n1x, mz = n0z+n1z, mlen = Math.sqrt(mx*mx + mz*mz)
+      const dot = n0x*mx/mlen + n0z*mz/mlen
+      ox = mx/mlen*half/dot; oz = mz/mlen*half/dot
+    }
+    return [points[i][0] + side*ox, points[i][1] + side*oz]
+  }
+  const result = []
+  for (let i = 0; i < points.length; i++) result.push(offsetAt(i, 1))
+  for (let i = points.length - 1; i >= 0; i--) result.push(offsetAt(i, -1))
+  return result
+}
+
+function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
+  const poly = computeWallPolygon(worldPoints, thickness / 2)
+  const shape = new THREE.Shape()
+  poly.forEach(([x, z], i) => i === 0 ? shape.moveTo(x, -z) : shape.lineTo(x, -z))
+  shape.closePath()
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
+  const group = new THREE.Group()
+  group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity })))
+  group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: opacity * 2 })))
+  group.rotation.x = -Math.PI / 2
+  return group
+}
+
 // --- controls ---
 
 const MOVE_RATE  = 15         // feet/sec
@@ -240,8 +283,8 @@ function loadMap(map) {
   window.addEventListener('resize', fitRenderer)
 
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x87ceeb)
-  scene.fog = new THREE.Fog(0x87ceeb, 60, 150)
+  scene.background = new THREE.Color(0x000000)
+  scene.fog = new THREE.Fog(0x000000, 60, 150)
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.4))
   const sun = new THREE.DirectionalLight(0xffffff, 1.5)
@@ -256,6 +299,12 @@ function loadMap(map) {
     mapPlane.rotation.x = -Math.PI / 2
     scene.add(mapPlane)
   })
+
+  for (const barrier of map.barriers || []) {
+    if (barrier.type !== 'wall') continue
+    const worldPoints = barrier.locations.map(({ x, y }) => mapToWorld(x, y))
+    scene.add(buildWall(worldPoints))
+  }
 
   const start = entryPosition(map)
   const [sx, sz] = mapToWorld(start.x, start.y)
