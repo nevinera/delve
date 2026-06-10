@@ -6,9 +6,6 @@ on:
 jobs:
   rspec:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: delve_web
 
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +14,6 @@ jobs:
         with:
           ruby-version: "3.3.9"
           bundler-cache: true
-          working-directory: delve_web
 
       - name: Set up database
         run: bundle exec rails db:schema:load RAILS_ENV=test
@@ -27,9 +23,6 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: delve_web
 
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +31,6 @@ jobs:
         with:
           ruby-version: "3.3.9"
           bundler-cache: true
-          working-directory: delve_web
 
       - name: Run standardrb
         run: bundle exec standardrb
