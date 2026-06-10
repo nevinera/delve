@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -41,6 +42,12 @@ type InstanceSlot struct {
 	State          SlotState
 	CharacterName  string
 	CharacterClass instanceconfig.CharacterClass
+
+	// Connection fields; protected by the instance's slotsMu.
+	writeCh        chan []byte         // pre-encoded JSON messages from the tick loop
+	connCancel     context.CancelFunc // cancels the active connection's context
+	connDone       chan struct{}       // closed by the handler when its goroutines have all exited
+	needsFullState bool               // true until the tick loop sends the first full-state message
 }
 
 // AddSlot creates a new slot for the named character and adds it to the
@@ -112,6 +119,97 @@ func (inst *Instance) ListSlots() []*InstanceSlot {
 // connected state. Reads atomics - no lock needed.
 func (inst *Instance) SlotCounts() (total, active int) {
 	return int(inst.atomicSlotCount.Load()), int(inst.atomicActiveSlotCount.Load())
+}
+
+// ConnectSlot prepares a slot for a new WebSocket connection. If the slot
+// already has an active connection, its context is cancelled and we wait for
+// the old handler goroutines to exit before returning.
+//
+// Returns (writeCh, ctx, done, true) on success. The caller must run its
+// goroutines using ctx for cancellation and close done exactly once when all
+// goroutines have exited.
+//
+// Returns (nil, nil, nil, false) if the slot does not exist.
+func (inst *Instance) ConnectSlot(id uuid.UUID) (chan []byte, context.Context, chan struct{}, bool) {
+	// Phase 1: snapshot existing connection signals under the lock.
+	inst.slotsMu.Lock()
+	slot, ok := inst.slots[id]
+	if !ok {
+		inst.slotsMu.Unlock()
+		return nil, nil, nil, false
+	}
+	oldCancel := slot.connCancel
+	oldDone := slot.connDone
+	inst.slotsMu.Unlock()
+
+	// Phase 2: cancel and drain the old connection outside the lock so the
+	// old handler goroutine can call DisconnectSlot without deadlocking.
+	if oldCancel != nil {
+		oldCancel()
+		<-oldDone
+	}
+
+	// Phase 3: install the new connection under the lock.
+	ctx, cancel := context.WithCancel(context.Background())
+	writeCh := make(chan []byte, 64)
+	done := make(chan struct{})
+
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot, ok = inst.slots[id]
+	if !ok {
+		// Slot was removed between phase 1 and phase 3.
+		cancel()
+		return nil, nil, nil, false
+	}
+	slot.connCancel = cancel
+	slot.connDone = done
+	slot.writeCh = writeCh
+	slot.needsFullState = true
+	slot.State = SlotStateConnected
+	inst.recomputeSlotCounts()
+	return writeCh, ctx, done, true
+}
+
+// DisconnectSlot transitions the slot to SlotStateWaiting, indicating the
+// client disconnected or its heartbeat timed out. Called by the Connect handler
+// before it closes done.
+func (inst *Instance) DisconnectSlot(id uuid.UUID) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot, ok := inst.slots[id]
+	if !ok {
+		return
+	}
+	if slot.State == SlotStateConnected {
+		slot.State = SlotStateWaiting
+		inst.recomputeSlotCounts()
+	}
+}
+
+// SlotForTick carries the data the tick loop needs for one connected slot.
+type SlotForTick struct {
+	WriteCh        chan []byte
+	NeedsFullState bool
+}
+
+// SlotsForTick returns one SlotForTick per connected slot and atomically
+// clears the needsFullState flag so subsequent ticks produce deltas.
+func (inst *Instance) SlotsForTick() []SlotForTick {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	var result []SlotForTick
+	for _, s := range inst.slots {
+		if s.State != SlotStateConnected {
+			continue
+		}
+		result = append(result, SlotForTick{
+			WriteCh:        s.writeCh,
+			NeedsFullState: s.needsFullState,
+		})
+		s.needsFullState = false
+	}
+	return result
 }
 
 // recomputeSlotCounts recounts all slots and updates the atomics.

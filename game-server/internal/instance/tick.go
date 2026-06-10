@@ -40,19 +40,51 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 	ticker := time.NewTicker(TickInterval)
 	defer ticker.Stop()
 
+	prevState := state.Clone()
 	var tickCount int64
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case now := <-ticker.C:
 			tickCount++
-			inst.Checksum = state.Checksum()
+			checksum := state.Checksum()
+			inst.Checksum = checksum
+
+			if slots := inst.SlotsForTick(); len(slots) > 0 {
+				// Build the delta once; reuse for all slots that don't need full state.
+				var deltaPayload []byte
+				for _, s := range slots {
+					var payload []byte
+					var err error
+					if s.NeedsFullState {
+						payload, err = buildFullStateMsg(state, now, checksum)
+					} else {
+						if deltaPayload == nil {
+							deltaPayload, err = buildDeltaMsg(prevState, state, now, checksum)
+						}
+						payload = deltaPayload
+					}
+					if err != nil {
+						slog.ErrorContext(ctx, "failed to build tick message", "error", err)
+						continue
+					}
+					// Non-blocking: drop the message if the client is behind.
+					select {
+					case s.WriteCh <- payload:
+					default:
+					}
+				}
+			}
+
+			prevState = state.Clone()
+
 			slog.DebugContext(ctx, "tick",
 				"instance", inst.Identifier,
 				"tick", tickCount,
 				"units", len(state.Units),
-				"checksum", inst.Checksum,
+				"checksum", checksum,
 			)
 		}
 	}

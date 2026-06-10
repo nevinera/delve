@@ -1,0 +1,292 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Developer WebSocket client for a game server slot. Connects to the slot,
+# sends heartbeats, maintains local game state via server messages, and
+# verifies checksums against the server.
+#
+# Creates an instance and/or slot automatically if IDs are not supplied.
+#
+# Usage:
+#   script/game/client [options]
+#
+# Options:
+#   -i, --instance <uuid>         Existing instance ID
+#   -s, --slot <uuid>             Existing slot ID (requires --token)
+#   -t, --token <uuid>            Slot token (required with --slot)
+#   -z, --zone-config <path>      Zone config JSON (required when creating instance)
+#   -c, --class-config <path>     Character class JSON (required when creating slot)
+#   -n, --character-name <name>   Character name for slot creation (default: Hero)
+#   -v, --verbose                 Increase verbosity; use twice (-vv) for all deltas
+#
+# Environment variables:
+#   GAME_SERVER_URL          - base URL (default: http://localhost:8090)
+#   GAME_SERVER_AUTH_TOKENS  - comma-separated Bearer tokens for the game API
+
+require "json"
+require "net/http"
+require "optparse"
+require "securerandom"
+require "socket"
+require "uri"
+require "websocket/driver"
+require "environment_helpers"
+require_relative "../../lib/game_api"
+
+# ---------------------------------------------------------------------------
+# Logger
+# ---------------------------------------------------------------------------
+
+class Log
+  DARK_GREY = "\e[90m"
+  RESET = "\e[0m"
+
+  def initialize(verbose: 0)
+    @verbose = verbose
+    @color = $stderr.tty?
+  end
+
+  # Always shown, no coloring - progress and status output.
+  def info(msg) = Kernel.warn(msg)
+  def warn(msg) = Kernel.warn("WARN: #{msg}")
+
+  # -v: non-empty deltas and other opt-in detail (dark grey)
+  def verbose(msg)
+    dim(msg) if @verbose >= 1
+  end
+
+  # -vv: everything including empty deltas (dark grey)
+  def debug(msg)
+    dim(msg) if @verbose >= 2
+  end
+
+  private
+
+  def dim(msg)
+    Kernel.warn(@color ? "#{DARK_GREY}#{msg}#{RESET}" : msg)
+  end
+end
+
+# ---------------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------------
+
+options = {character_name: "Hero", verbose: 0}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: script/game/client [options]"
+  opts.on("-i", "--instance UUID", "Existing instance ID") { |v| options[:instance_id] = v }
+  opts.on("-s", "--slot UUID", "Existing slot ID") { |v| options[:slot_id] = v }
+  opts.on("-t", "--token UUID", "Slot token (required with --slot)") { |v| options[:token] = v }
+  opts.on("-z", "--zone-config PATH", "Zone config JSON file") { |v| options[:zone_config] = v }
+  opts.on("-c", "--class-config PATH", "Character class JSON file") { |v| options[:class_config] = v }
+  opts.on("-n", "--character-name NAME", "Character name (default: Hero)") { |v| options[:character_name] = v }
+  opts.on("-v", "--verbose", "Increase verbosity (-vv logs all deltas)") { options[:verbose] += 1 }
+end.parse!
+
+log = Log.new(verbose: options[:verbose])
+
+if options[:slot_id] && !options[:token]
+  abort "Error: --token is required when --slot is specified"
+end
+
+# ---------------------------------------------------------------------------
+# Resolve / create instance
+# ---------------------------------------------------------------------------
+
+instance_id = options[:instance_id]
+
+if instance_id.nil?
+  zone_path = options[:zone_config] or
+    abort "Error: --zone-config is required when creating a new instance (or use --instance)"
+
+  zone_path = File.expand_path(zone_path)
+  abort "File not found: #{zone_path}" unless File.exist?(zone_path)
+  zone_config = JSON.parse(File.read(zone_path))
+
+  zone_identifier = File.basename(zone_path).sub(/\.full\.json\z/, "").sub(/\.json\z/, "")
+  log.info "--> Creating instance for zone #{zone_identifier}..."
+  result = GameApi.instances.create(
+    identifier: SecureRandom.uuid,
+    database_id: "dev-#{SecureRandom.hex(4)}",
+    zone_identifier: zone_identifier,
+    version: "dev",
+    source_url: "file://#{zone_path}",
+    zone_config: zone_config
+  )
+  instance_id = result.fetch("identifier")
+  log.info "    Instance: #{instance_id}"
+end
+
+# ---------------------------------------------------------------------------
+# Resolve / create slot
+# ---------------------------------------------------------------------------
+
+slot_id = options[:slot_id]
+token = options[:token]
+
+if slot_id.nil?
+  class_path = options[:class_config] or
+    abort "Error: --class-config is required when creating a new slot (or use --slot --token)"
+
+  class_path = File.expand_path(class_path)
+  abort "File not found: #{class_path}" unless File.exist?(class_path)
+  character_class = JSON.parse(File.read(class_path))
+
+  log.info "--> Creating slot for #{options[:character_name]}..."
+  result = GameApi.slots.create(
+    instance_id: instance_id,
+    character_name: options[:character_name],
+    character_class: character_class
+  )
+  slot_id = result.fetch("id")
+  token = result.fetch("token")
+  log.info "    Slot:     #{slot_id}"
+end
+
+# Checksum helpers live in lib/game_api/checksum.rb (shared with tests).
+
+# ---------------------------------------------------------------------------
+# WebSocket setup
+# ---------------------------------------------------------------------------
+
+server_url = ENV.fetch("GAME_SERVER_URL", "http://localhost:8090")
+uri = URI.parse(server_url)
+ws_scheme = (uri.scheme == "https") ? "wss" : "ws"
+ws_path = "/instances/#{instance_id}/slots/#{slot_id}/connect?token=#{token}"
+ws_url = "#{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path}"
+
+log.info "--> Connecting to #{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path.sub(/token=\S+/, "token=<redacted>")}..."
+
+tcp = TCPSocket.new(uri.host, uri.port)
+# websocket-driver reads the URL from the socket object itself
+tcp.define_singleton_method(:url) { ws_url }
+driver = WebSocket::Driver.client(tcp)
+
+# ---------------------------------------------------------------------------
+# State
+# ---------------------------------------------------------------------------
+
+units = {}  # uuid => unit hash; maintained via full-state and delta messages
+checksum = nil
+open = false
+done = false
+
+driver.on(:open) do
+  open = true
+  log.info "    Connected."
+end
+
+driver.on(:message) do |event|
+  msg = begin
+    JSON.parse(event.data)
+  rescue
+    nil
+  end
+  unless msg
+    log.warn "non-JSON message received"
+    next
+  end
+
+  case [msg["direction"], msg["type"]]
+
+  when ["down", "instance-state"]
+    units = msg.fetch("units", {})
+    checksum = msg["checksum"]
+    local = GameApi::Checksum.compute_checksum(units)
+    if local == checksum
+      log.info "[state] Full state: #{units.size} units. Checksum OK."
+    else
+      log.warn "checksum mismatch after full state — server=#{checksum} local=#{local}"
+    end
+
+  when ["down", "delta"]
+    (msg["unit_updates"] || {}).each do |id, patch|
+      units[id] ? units[id].merge!(patch) : units[id] = patch
+    end
+    (msg["unit_removals"] || []).each { |id| units.delete(id) }
+    (msg["effect_adds"] || []).each do |add|
+      next unless (unit = units[add["unit_id"]])
+      effects = unit["active_status_effects"] ||= []
+      effects.reject! { |e| e["status_identifier"] == add["status_identifier"] }
+      effects << {"status_identifier" => add["status_identifier"], "expires_at" => add["expires_at"]}
+    end
+    (msg["effect_removes"] || []).each do |rem|
+      next unless (unit = units[rem["unit_id"]])
+      (unit["active_status_effects"] || []).reject! { |e| e["status_identifier"] == rem["status_identifier"] }
+    end
+
+    checksum = msg["checksum"]
+    local = GameApi::Checksum.compute_checksum(units)
+    if local != checksum
+      log.warn "checksum mismatch after delta — server=#{checksum} local=#{local}"
+      log.warn "Sending full-state request."
+      driver.text(JSON.generate({direction: "up", type: "full-state-request"}))
+    end
+
+    empty = (msg["unit_updates"] || {}).empty? &&
+      (msg["unit_removals"] || []).empty? &&
+      (msg["effect_adds"] || []).empty? &&
+      (msg["effect_removes"] || []).empty?
+
+    if empty
+      log.debug "[delta] (empty) #{event.data}"
+    else
+      log.verbose "[delta] #{event.data}"
+    end
+
+  else
+    log.info "[msg] #{event.data}"
+  end
+end
+
+driver.on(:close) do |event|
+  log.info "    Disconnected (#{event.code}): #{event.reason}"
+  done = true
+end
+
+driver.on(:error) do |event|
+  log.info "WebSocket error: #{event.message}"
+end
+
+driver.start
+
+# ---------------------------------------------------------------------------
+# I/O loop
+# ---------------------------------------------------------------------------
+
+HEARTBEAT_INTERVAL = 0.3  # seconds (~3 game ticks)
+last_heartbeat_at = Time.now - HEARTBEAT_INTERVAL
+
+trap("INT") do
+  log.info "\n--> Interrupted, closing..."
+  done = true
+end
+
+loop do
+  break if done
+
+  ready = IO.select([tcp], nil, nil, 0.05)
+  if ready
+    begin
+      data = tcp.read_nonblock(65_536)
+      driver.parse(data)
+    rescue EOFError, Errno::ECONNRESET
+      log.info "Connection lost."
+      break
+    rescue IO::WaitReadable
+      # nothing to read right now
+    end
+  end
+
+  next unless open  # wait for handshake before sending heartbeats
+  break if done
+
+  if Time.now - last_heartbeat_at >= HEARTBEAT_INTERVAL
+    driver.text(JSON.generate({direction: "up", type: "heartbeat"}))
+    last_heartbeat_at = Time.now
+  end
+end
+
+tcp.close unless tcp.closed?
+log.info "--> Done."

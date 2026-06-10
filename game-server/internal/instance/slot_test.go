@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -142,6 +143,78 @@ func TestSlotCounts_SomeConnected(t *testing.T) {
 	total, active := inst.SlotCounts()
 	assert.Equal(t, 2, total)
 	assert.Equal(t, 1, active)
+}
+
+func TestConnectSlot_UnknownSlot(t *testing.T) {
+	inst := makeInstance()
+	_, _, _, ok := inst.ConnectSlot(uuid.New())
+	assert.False(t, ok)
+}
+
+func TestConnectSlot_SetsStateConnected(t *testing.T) {
+	inst := makeInstance()
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	assert.Equal(t, instance.SlotStateConnected, slot.State)
+}
+
+func TestConnectSlot_ReturnsChannels(t *testing.T) {
+	inst := makeInstance()
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	writeCh, ctx, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	assert.NotNil(t, writeCh)
+	assert.NotNil(t, ctx)
+	assert.NotNil(t, done)
+}
+
+func TestConnectSlot_ReconnectCancelsExistingContext(t *testing.T) {
+	inst := makeInstance()
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	_, ctx1, done1, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+
+	// Simulate the first handler goroutine: close done1 when ctx1 is cancelled.
+	go func() {
+		<-ctx1.Done()
+		close(done1)
+	}()
+
+	_, _, done2, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done2) })
+
+	assert.Equal(t, context.Canceled, ctx1.Err())
+}
+
+func TestDisconnectSlot_SetsStateWaiting(t *testing.T) {
+	inst := makeInstance()
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	_, _, done, _ := inst.ConnectSlot(slot.ID)
+	assert.Equal(t, instance.SlotStateConnected, slot.State)
+
+	inst.DisconnectSlot(slot.ID)
+	close(done)
+
+	assert.Equal(t, instance.SlotStateWaiting, slot.State)
+}
+
+func TestDisconnectSlot_UnknownSlotIsNoOp(t *testing.T) {
+	inst := makeInstance()
+	assert.NotPanics(t, func() { inst.DisconnectSlot(uuid.New()) })
 }
 
 func TestSlots_ConcurrentAccess(t *testing.T) {

@@ -26,9 +26,13 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 	// Public — no auth required.
 	r.Get("/status.json", handler.NewStatus(registry).ServeHTTP)
 
-	// Protected — valid Bearer token required.
 	instances := handler.NewInstances(registry, cfg.MaxSlots)
 	slots := handler.NewSlots(registry)
+
+	// Slot WebSocket — authenticated by slot token query param, not Bearer.
+	r.Get("/instances/{instanceID}/slots/{slotID}/connect", slots.Connect)
+
+	// Protected — valid Bearer token required.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.TokenAuth(cfg.AuthTokens))
 		r.Route("/instances", func(r chi.Router) {

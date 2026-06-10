@@ -1,0 +1,31 @@
+{
+    "expected_checksum": "3fc551fc4e58dd26923449211cf2a8b1fd23f0046774da95c0a9fbb24a3005e5",
+    "units": {
+        "00000000-0000-0000-0000-000000000001": {
+            "zone_unit_identifier": "goblin_a",
+            "map_identifier": "cave_interior",
+            "position": {"x": 111.9, "y": 66.5, "angle": 160},
+            "health": 20,
+            "max_health": 20,
+            "resource": 100,
+            "max_resource": 100,
+            "status": "idle",
+            "target": null,
+            "active_status_effects": [
+                {"status_identifier": "poison", "expires_at": 1800000000000}
+            ]
+        },
+        "00000000-0000-0000-0000-000000000002": {
+            "zone_unit_identifier": "goblin_x",
+            "map_identifier": "cave_entrance",
+            "position": {"x": 35, "y": 45, "angle": 0},
+            "health": 20,
+            "max_health": 20,
+            "resource": 100,
+            "max_resource": 100,
+            "status": "idle",
+            "target": null,
+            "active_status_effects": []
+        }
+    }
+}
