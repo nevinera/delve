@@ -194,7 +194,22 @@ function createPlayerToken(radius) {
   return group
 }
 
+// --- controls ---
+
+const MOVE_RATE  = 15         // feet/sec
+const TURN_RATE  = 120 * DEG_TO_RAD  // rad/sec
+const CAM_BACK   = 45
+const CAM_HEIGHT = 50
+const CAM_LOOK_AHEAD = 10
+
+const keys = new Set()
+window.addEventListener('keydown', e => keys.add(e.code))
+window.addEventListener('keyup',   e => keys.delete(e.code))
+window.addEventListener('blur',    () => keys.clear())
+
 // --- load map ---
+
+let animFrameId = null
 
 loadBtn.addEventListener('click', () => {
   if (!zoneJson) return
@@ -203,6 +218,7 @@ loadBtn.addEventListener('click', () => {
 })
 
 function loadMap(map) {
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null }
   if (renderer) { renderer.dispose(); renderer = null }
   canvasArea.innerHTML = ''
 
@@ -222,19 +238,21 @@ function loadMap(map) {
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87ceeb)
+  scene.fog = new THREE.Fog(0x87ceeb, 60, 150)
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.4))
   const sun = new THREE.DirectionalLight(0xffffff, 1.5)
   sun.position.set(5, 10, 5)
   scene.add(sun)
 
-  const texture = new THREE.TextureLoader().load(mapUrl, () => renderer.render(scene, camera))
-  const mapPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(width, height),
-    new THREE.MeshLambertMaterial({ map: texture })
-  )
-  mapPlane.rotation.x = -Math.PI / 2
-  scene.add(mapPlane)
+  new THREE.TextureLoader().load(mapUrl, texture => {
+    const mapPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshLambertMaterial({ map: texture })
+    )
+    mapPlane.rotation.x = -Math.PI / 2
+    scene.add(mapPlane)
+  })
 
   const start = entryPosition(map)
   const [sx, sz] = mapToWorld(start.x, start.y)
@@ -245,13 +263,46 @@ function loadMap(map) {
 
   const aspect = 16 / 9
   const camera = new THREE.PerspectiveCamera(34, aspect, 0.1, 500)
-  const CAM_BACK = 45, CAM_HEIGHT = 50, CAM_LOOK_AHEAD = 10
-  const facing = start.angle * DEG_TO_RAD
-  const fwdX = Math.sin(facing), fwdZ = -Math.cos(facing)
-  camera.position.set(sx - CAM_BACK * fwdX, CAM_HEIGHT, sz - CAM_BACK * fwdZ)
-  camera.lookAt(new THREE.Vector3(sx + CAM_LOOK_AHEAD * fwdX, 0, sz + CAM_LOOK_AHEAD * fwdZ))
 
-  renderer.render(scene, camera)
+  // player state in world coords
+  const player = { x: sx, z: sz, facing: start.angle * DEG_TO_RAD }
+
+  let lastTime = null
+
+  function animate(time) {
+    animFrameId = requestAnimationFrame(animate)
+    const elapsed = lastTime === null ? 0 : (time - lastTime) / 1000
+    lastTime = time
+
+    if (keys.has('KeyA')) player.facing -= TURN_RATE * elapsed
+    if (keys.has('KeyD')) player.facing += TURN_RATE * elapsed
+
+    const fwdX = Math.sin(player.facing), fwdZ = -Math.cos(player.facing)
+    let dx = 0, dz = 0
+    if (keys.has('KeyW')) { dx += fwdX; dz += fwdZ }
+    if (keys.has('KeyS')) { dx -= fwdX; dz -= fwdZ }
+    if (keys.has('KeyE')) { dx += -fwdZ; dz += fwdX }
+    if (keys.has('KeyQ')) { dx -= -fwdZ; dz -= fwdX }
+    if (dx !== 0 || dz !== 0) {
+      const len = Math.sqrt(dx * dx + dz * dz)
+      player.x += (dx / len) * MOVE_RATE * elapsed
+      player.z += (dz / len) * MOVE_RATE * elapsed
+    }
+
+    token.position.set(player.x, 0, player.z)
+    token.rotation.y = -player.facing
+
+    camera.position.set(
+      player.x - CAM_BACK * fwdX,
+      CAM_HEIGHT,
+      player.z - CAM_BACK * fwdZ
+    )
+    camera.lookAt(player.x + CAM_LOOK_AHEAD * fwdX, 0, player.z + CAM_LOOK_AHEAD * fwdZ)
+
+    renderer.render(scene, camera)
+  }
+
+  requestAnimationFrame(animate)
 }
 
 function fitRenderer() {
