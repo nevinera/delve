@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delve Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #ddd;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #2a2a2a;
+      border-bottom: 1px solid #444;
+      flex-shrink: 0;
+    }
+
+    #controls label { font-size: 13px; color: #aaa; white-space: nowrap; }
+
+    #zone-url {
+      flex: 1;
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 4px 6px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+    }
+
+    #controls select {
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 4px 6px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+    }
+
+    #fetch-btn, #load-btn {
+      background: #446;
+      border: 1px solid #668;
+      color: #cce;
+      padding: 4px 12px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    #fetch-btn:hover, #load-btn:hover { background: #558; }
+    #load-btn:disabled { background: #333; color: #666; cursor: default; border-color: #444; }
+
+    #canvas-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #placeholder {
+      color: #555;
+      font-size: 18px;
+      border: 2px dashed #444;
+      padding: 60px 80px;
+      border-radius: 8px;
+      text-align: center;
+      line-height: 2;
+    }
+  </style>
+</head>
+<body>
+
+<div id="controls">
+  <label>Zone JSON URL:</label>
+  <input type="text" id="zone-url" placeholder="https://raw.githubusercontent.com/…/zones/goblin-cave.full.json">
+  <button id="fetch-btn">Fetch</button>
+  <label>Map: <select id="map-select" disabled><option>—</option></select></label>
+  <button id="load-btn" disabled>Load</button>
+</div>
+
+<div id="canvas-area">
+  <div id="placeholder">Enter a zone JSON URL above and click Fetch.</div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.176.0/build/three.module.js'
+
+const zoneUrlInput = document.getElementById('zone-url')
+const fetchBtn     = document.getElementById('fetch-btn')
+const mapSelect    = document.getElementById('map-select')
+const loadBtn      = document.getElementById('load-btn')
+const canvasArea   = document.getElementById('canvas-area')
+
+let zoneJson = null
+let zoneBaseUrl = null
+let renderer = null
+
+// --- fetch zone JSON ---
+
+fetchBtn.addEventListener('click', fetchZone)
+zoneUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') fetchZone() })
+
+async function fetchZone() {
+  const url = zoneUrlInput.value.trim()
+  if (!url) return
+  fetchBtn.textContent = 'Fetching…'
+  fetchBtn.disabled = true
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    zoneJson = await res.json()
+    zoneBaseUrl = new URL('.', url).href
+    populateMapSelect(zoneJson)
+    loadBtn.disabled = false
+  } catch (e) {
+    alert(`Failed to fetch zone JSON: ${e.message}`)
+  } finally {
+    fetchBtn.textContent = 'Fetch'
+    fetchBtn.disabled = false
+  }
+}
+
+function populateMapSelect(json) {
+  mapSelect.innerHTML = ''
+  for (const map of json.maps || []) {
+    const opt = document.createElement('option')
+    opt.value = map.identifier
+    opt.textContent = map.name || map.identifier
+    mapSelect.appendChild(opt)
+  }
+  mapSelect.disabled = false
+}
+
+// --- load map ---
+
+loadBtn.addEventListener('click', () => {
+  if (!zoneJson) return
+  const map = zoneJson.maps.find(m => m.identifier === mapSelect.value) || zoneJson.maps[0]
+  loadMap(map)
+})
+
+function loadMap(map) {
+  if (renderer) { renderer.dispose(); renderer = null }
+  canvasArea.innerHTML = ''
+
+  const { width, height } = map.feetDimensions
+  const mapUrl = new URL(map.imageUrl, zoneBaseUrl).href
+
+  const canvas = document.createElement('canvas')
+  canvasArea.appendChild(canvas)
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+  renderer.setPixelRatio(window.devicePixelRatio)
+  fitRenderer()
+  window.addEventListener('resize', fitRenderer)
+
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color(0x87ceeb)
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4))
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5)
+  sun.position.set(5, 10, 5)
+  scene.add(sun)
+
+  const texture = new THREE.TextureLoader().load(mapUrl, () => renderer.render(scene, camera))
+  const mapPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshLambertMaterial({ map: texture })
+  )
+  mapPlane.rotation.x = -Math.PI / 2
+  scene.add(mapPlane)
+
+  const aspect = 16 / 9
+  const camera = new THREE.PerspectiveCamera(34, aspect, 0.1, 500)
+  const camBack = Math.max(width, height) * 0.5
+  camera.position.set(0, camBack * 0.9, camBack * 0.6)
+  camera.lookAt(0, 0, 0)
+
+  renderer.render(scene, camera)
+}
+
+function fitRenderer() {
+  if (!renderer) return
+  const aspect = 16 / 9
+  const aw = canvasArea.clientWidth, ah = canvasArea.clientHeight
+  if (aw / ah > aspect) {
+    renderer.setSize(Math.round(ah * aspect), ah)
+  } else {
+    renderer.setSize(aw, Math.round(aw / aspect))
+  }
+}
+</script>
+
+</body>
+</html>
