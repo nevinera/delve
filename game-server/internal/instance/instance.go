@@ -2,6 +2,7 @@ package instance
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,6 +43,9 @@ type Instance struct {
 
 	Checksum string // SHA256 of canonical state JSON; updated every tick
 
+	slots   map[uuid.UUID]*InstanceSlot
+	slotsMu sync.RWMutex
+
 	cancel context.CancelFunc
 	done   chan struct{}
 }
@@ -67,5 +71,6 @@ func NewInstance(
 		Status:         StatusLoading,
 		ZoneConfig:     zone,
 		CreatedAt:      time.Now(),
+		slots:          make(map[uuid.UUID]*InstanceSlot),
 	}
 }
