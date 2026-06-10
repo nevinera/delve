@@ -61,6 +61,7 @@ func (inst *Instance) AddSlot(characterName string, class instanceconfig.Charact
 		CharacterClass: class,
 	}
 	inst.slots[slot.ID] = slot
+	inst.recomputeSlotCounts()
 	return slot, nil
 }
 
@@ -78,7 +79,22 @@ func (inst *Instance) RemoveSlot(id uuid.UUID) bool {
 	defer inst.slotsMu.Unlock()
 	_, ok := inst.slots[id]
 	delete(inst.slots, id)
+	inst.recomputeSlotCounts()
 	return ok
+}
+
+// SetSlotState transitions a slot to a new state. Returns false if the slot
+// does not exist.
+func (inst *Instance) SetSlotState(id uuid.UUID, state SlotState) bool {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot, ok := inst.slots[id]
+	if !ok {
+		return false
+	}
+	slot.State = state
+	inst.recomputeSlotCounts()
+	return true
 }
 
 // ListSlots returns a snapshot of all current slots in unspecified order.
@@ -90,4 +106,24 @@ func (inst *Instance) ListSlots() []*InstanceSlot {
 		result = append(result, s)
 	}
 	return result
+}
+
+// SlotCounts returns the total number of slots and the number in the
+// connected state. Reads atomics - no lock needed.
+func (inst *Instance) SlotCounts() (total, active int) {
+	return int(inst.atomicSlotCount.Load()), int(inst.atomicActiveSlotCount.Load())
+}
+
+// recomputeSlotCounts recounts all slots and updates the atomics.
+// Must be called with slotsMu held for writing.
+func (inst *Instance) recomputeSlotCounts() {
+	var total, active int64
+	for _, s := range inst.slots {
+		total++
+		if s.State == SlotStateConnected {
+			active++
+		}
+	}
+	inst.atomicSlotCount.Store(total)
+	inst.atomicActiveSlotCount.Store(active)
 }

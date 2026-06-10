@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,8 +44,10 @@ type Instance struct {
 
 	Checksum string // SHA256 of canonical state JSON; updated every tick
 
-	slots   map[uuid.UUID]*InstanceSlot
-	slotsMu sync.RWMutex
+	slots                map[uuid.UUID]*InstanceSlot
+	slotsMu              sync.RWMutex
+	atomicSlotCount      atomic.Int64
+	atomicActiveSlotCount atomic.Int64
 
 	cancel context.CancelFunc
 	done   chan struct{}

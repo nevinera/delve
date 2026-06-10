@@ -95,6 +95,55 @@ func TestAddSlot_UniqueIDsAndTokens(t *testing.T) {
 	assert.NotEqual(t, a.Token, b.Token)
 }
 
+func TestSetSlotState_TransitionsState(t *testing.T) {
+	inst := makeInstance()
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+	assert.Equal(t, instance.SlotStatePending, slot.State)
+
+	ok := inst.SetSlotState(slot.ID, instance.SlotStateConnected)
+	assert.True(t, ok)
+	assert.Equal(t, instance.SlotStateConnected, slot.State)
+}
+
+func TestSetSlotState_NotFound(t *testing.T) {
+	inst := makeInstance()
+	assert.False(t, inst.SetSlotState(uuid.New(), instance.SlotStateConnected))
+}
+
+func TestSlotCounts_Empty(t *testing.T) {
+	inst := makeInstance()
+	total, active := inst.SlotCounts()
+	assert.Equal(t, 0, total)
+	assert.Equal(t, 0, active)
+}
+
+func TestSlotCounts_NoConnected(t *testing.T) {
+	inst := makeInstance()
+	_, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+	_, err = inst.AddSlot("Brego", puncherClass)
+	require.NoError(t, err)
+
+	total, active := inst.SlotCounts()
+	assert.Equal(t, 2, total)
+	assert.Equal(t, 0, active)
+}
+
+func TestSlotCounts_SomeConnected(t *testing.T) {
+	inst := makeInstance()
+	a, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+	_, err = inst.AddSlot("Brego", puncherClass)
+	require.NoError(t, err)
+
+	inst.SetSlotState(a.ID, instance.SlotStateConnected)
+
+	total, active := inst.SlotCounts()
+	assert.Equal(t, 2, total)
+	assert.Equal(t, 1, active)
+}
+
 func TestSlots_ConcurrentAccess(t *testing.T) {
 	inst := makeInstance()
 	var wg sync.WaitGroup
