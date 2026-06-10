@@ -1,11 +1,14 @@
 package instancestate_test
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
@@ -133,4 +136,61 @@ func TestChecksum_EffectsOrderIndependent(t *testing.T) {
 		{StatusIdentifier: "poison", ExpiresAt: t1},
 	})
 	assert.Equal(t, ab.Checksum(), ba.Checksum())
+}
+
+// TestChecksumParity loads a shared fixture (also used by the Ruby client spec)
+// and asserts the Go checksum matches the expected value. If both tests pass,
+// both implementations agree on the canonical form.
+func TestChecksumParity(t *testing.T) {
+	raw, err := os.ReadFile("testdata/checksum_parity.json")
+	require.NoError(t, err)
+
+	var fixture struct {
+		ExpectedChecksum string `json:"expected_checksum"`
+		Units            map[string]struct {
+			ZoneUnitIdentifier  string  `json:"zone_unit_identifier"`
+			MapIdentifier       string  `json:"map_identifier"`
+			Position            struct {
+				X     float64 `json:"x"`
+				Y     float64 `json:"y"`
+				Angle float64 `json:"angle"`
+			} `json:"position"`
+			Health              float64 `json:"health"`
+			MaxHealth           float64 `json:"max_health"`
+			Resource            float64 `json:"resource"`
+			MaxResource         float64 `json:"max_resource"`
+			Status              string  `json:"status"`
+			ActiveStatusEffects []struct {
+				StatusIdentifier string `json:"status_identifier"`
+				ExpiresAt        int64  `json:"expires_at"`
+			} `json:"active_status_effects"`
+		} `json:"units"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &fixture))
+
+	state := &instancestate.InstanceState{Units: make(map[uuid.UUID]*instancestate.UnitState)}
+	for idStr, u := range fixture.Units {
+		id, err := uuid.Parse(idStr)
+		require.NoError(t, err)
+		effects := make([]instancestate.ActiveStatusEffect, len(u.ActiveStatusEffects))
+		for i, e := range u.ActiveStatusEffects {
+			effects[i] = instancestate.ActiveStatusEffect{
+				StatusIdentifier: e.StatusIdentifier,
+				ExpiresAt:        time.UnixMilli(e.ExpiresAt),
+			}
+		}
+		state.Units[id] = &instancestate.UnitState{
+			ZoneUnitIdentifier:  u.ZoneUnitIdentifier,
+			MapIdentifier:       u.MapIdentifier,
+			Position:            instanceconfig.Position{X: u.Position.X, Y: u.Position.Y, Angle: u.Position.Angle},
+			Health:              u.Health,
+			MaxHealth:           u.MaxHealth,
+			Resource:            u.Resource,
+			MaxResource:         u.MaxResource,
+			Status:              instancestate.UnitStatus(u.Status),
+			ActiveStatusEffects: effects,
+		}
+	}
+
+	assert.Equal(t, fixture.ExpectedChecksum, state.Checksum())
 }

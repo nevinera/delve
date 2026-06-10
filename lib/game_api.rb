@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "game_api/checksum"
 require_relative "game_api/instances_client"
 require_relative "game_api/slots_client"
 

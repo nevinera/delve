@@ -23,7 +23,6 @@
 #   GAME_SERVER_URL          - base URL (default: http://localhost:8090)
 #   GAME_SERVER_AUTH_TOKENS  - comma-separated Bearer tokens for the game API
 
-require "digest"
 require "json"
 require "net/http"
 require "optparse"
@@ -145,39 +144,7 @@ if slot_id.nil?
   log.info "    Slot:     #{slot_id}"
 end
 
-# ---------------------------------------------------------------------------
-# Checksum verification
-#
-# Mirrors the canonical form produced by instancestate/checksum.go so the
-# client can independently verify the SHA256 the server sends.
-# ---------------------------------------------------------------------------
-
-def canonical_unit(u)
-  effects = (u["active_status_effects"] || []).map { |e|
-    { "id" => e["status_identifier"], "expiresAt" => e["expires_at"] }
-  }.sort_by { |e| e["id"] }
-
-  {
-    "id"          => u["zone_unit_identifier"],
-    "map"         => u["map_identifier"],
-    "x"           => u["position"]["x"],
-    "y"           => u["position"]["y"],
-    "angle"       => u["position"]["angle"],
-    "health"      => u["health"],
-    "maxHealth"   => u["max_health"],
-    "resource"    => u["resource"],
-    "maxResource" => u["max_resource"],
-    "status"      => u["status"],
-    "effects"     => effects
-  }
-end
-
-def compute_checksum(units_by_id)
-  sorted = units_by_id.values
-    .map { |u| canonical_unit(u) }
-    .sort_by { |u| u["id"] }
-  Digest::SHA256.hexdigest(JSON.generate(sorted))
-end
+# Checksum helpers live in lib/game_api/checksum.rb (shared with tests).
 
 # ---------------------------------------------------------------------------
 # WebSocket setup
@@ -222,7 +189,7 @@ driver.on(:message) do |event|
   when ["down", "instance-state"]
     units    = msg.fetch("units", {})
     checksum = msg["checksum"]
-    local    = compute_checksum(units)
+    local    = GameApi::Checksum.compute_checksum(units)
     if local == checksum
       log.info "[state] Full state: #{units.size} units. Checksum OK."
     else
@@ -246,7 +213,7 @@ driver.on(:message) do |event|
     end
 
     checksum = msg["checksum"]
-    local    = compute_checksum(units)
+    local    = GameApi::Checksum.compute_checksum(units)
     if local != checksum
       log.warn "checksum mismatch after delta — server=#{checksum} local=#{local}"
       log.warn "Sending full-state request."
