@@ -306,6 +306,21 @@ function loadMap(map) {
     scene.add(buildWall(worldPoints))
   }
 
+  for (const conn of map.connections || []) {
+    if (conn.type === 'line') {
+      const worldPoints = [conn.start, conn.end].map(({ x, y }) => mapToWorld(x, y))
+      scene.add(buildWall(worldPoints, { color: 0xff00ff, opacity: 0.4 }))
+    } else if (conn.type === 'point') {
+      const [cx, cz] = mapToWorld(conn.position.x, conn.position.y)
+      const marker = new THREE.Mesh(
+        new THREE.CylinderGeometry(conn.fuzzRadius ?? 1, conn.fuzzRadius ?? 1, 0.8, 24),
+        new THREE.MeshLambertMaterial({ color: 0xff00ff, transparent: true, opacity: 0.4 })
+      )
+      marker.position.set(cx, 0, cz)
+      scene.add(marker)
+    }
+  }
+
   const start = entryPosition(map)
   const [sx, sz] = mapToWorld(start.x, start.y)
   const token = createPlayerToken(1.5)
