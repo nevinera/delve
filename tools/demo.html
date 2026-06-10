@@ -194,6 +194,35 @@ function createPlayerToken(radius) {
   return group
 }
 
+// --- collision ---
+
+class CollisionChecker {
+  constructor(segments) { this._segments = segments }
+
+  _closestPoint(px, pz, { x1, z1, x2, z2 }) {
+    const dx = x2 - x1, dz = z2 - z1
+    const lenSq = dx*dx + dz*dz
+    if (lenSq === 0) return { x: x1, z: z1 }
+    const t = Math.max(0, Math.min(1, ((px - x1)*dx + (pz - z1)*dz) / lenSq))
+    return { x: x1 + t*dx, z: z1 + t*dz }
+  }
+
+  pushOut(x, z, radius) {
+    let px = x, pz = z
+    for (const seg of this._segments) {
+      const cp = this._closestPoint(px, pz, seg)
+      const dx = px - cp.x, dz = pz - cp.z
+      const distSq = dx*dx + dz*dz
+      if (distSq > 0 && distSq < radius * radius) {
+        const dist = Math.sqrt(distSq)
+        px += (dx / dist) * (radius - dist)
+        pz += (dz / dist) * (radius - dist)
+      }
+    }
+    return { x: px, z: pz }
+  }
+}
+
 // --- wall rendering ---
 
 function computeWallPolygon(points, half) {
@@ -300,16 +329,25 @@ function loadMap(map) {
     scene.add(mapPlane)
   })
 
+  const wallSegments = []
   for (const barrier of map.barriers || []) {
     if (barrier.type !== 'wall') continue
     const worldPoints = barrier.locations.map(({ x, y }) => mapToWorld(x, y))
     scene.add(buildWall(worldPoints))
+    for (let i = 0; i < worldPoints.length - 1; i++) {
+      const [x1, z1] = worldPoints[i], [x2, z2] = worldPoints[i + 1]
+      wallSegments.push({ x1, z1, x2, z2 })
+    }
   }
+  const collision = new CollisionChecker(wallSegments)
 
+  const connectionSegments = []
   for (const conn of map.connections || []) {
     if (conn.type === 'line') {
       const worldPoints = [conn.start, conn.end].map(({ x, y }) => mapToWorld(x, y))
       scene.add(buildWall(worldPoints, { color: 0xff00ff, opacity: 0.4 }))
+      const [x1, z1] = worldPoints[0], [x2, z2] = worldPoints[1]
+      connectionSegments.push({ x1, z1, x2, z2 })
     } else if (conn.type === 'point') {
       const [cx, cz] = mapToWorld(conn.position.x, conn.position.y)
       const marker = new THREE.Mesh(
@@ -318,8 +356,18 @@ function loadMap(map) {
       )
       marker.position.set(cx, 0, cz)
       scene.add(marker)
+      connectionSegments.push({ x1: cx, z1: cz, x2: cx, z2: cz })
     }
   }
+  // map boundary — world coords: x in [-width/2, width/2], z in [-height/2, height/2]
+  const bx = width / 2, bz = height / 2
+  connectionSegments.push(
+    { x1: -bx, z1: -bz, x2:  bx, z2: -bz },  // north
+    { x1:  bx, z1: -bz, x2:  bx, z2:  bz },  // east
+    { x1:  bx, z1:  bz, x2: -bx, z2:  bz },  // south
+    { x1: -bx, z1:  bz, x2: -bx, z2: -bz }   // west
+  )
+  const connectionCollision = new CollisionChecker(connectionSegments)
 
   const start = entryPosition(map)
   const [sx, sz] = mapToWorld(start.x, start.y)
@@ -357,6 +405,8 @@ function loadMap(map) {
       const len = Math.sqrt(dx * dx + dz * dz)
       player.x += (dx / len) * MOVE_RATE * elapsed
       player.z += (dz / len) * MOVE_RATE * elapsed
+      ;({ x: player.x, z: player.z } = collision.pushOut(player.x, player.z, 1.5))
+      ;({ x: player.x, z: player.z } = connectionCollision.pushOut(player.x, player.z, 0.5))
     }
 
     token.position.set(player.x, 0, player.z)
