@@ -154,7 +154,9 @@ ws_url     = "#{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path}"
 $stderr.puts "--> Connecting to #{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path.sub(/token=\S+/, 'token=<redacted>')}..."
 
 tcp = TCPSocket.new(uri.host, uri.port)
-driver = WebSocket::Driver.client(tcp, url: ws_url)
+# websocket-driver reads the URL from the socket object itself
+tcp.define_singleton_method(:url) { ws_url }
+driver = WebSocket::Driver.client(tcp)
 
 # ---------------------------------------------------------------------------
 # State
