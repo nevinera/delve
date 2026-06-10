@@ -1,8 +1,8 @@
 module ValidatorFixtures
-  DELVE_CONTENT = Rails.root.join("..", "delve-content")
+  FIXTURES = Rails.root.join("spec", "fixtures")
 
   def zone_fixture
-    @zone_fixture ||= JSON.parse(File.read(DELVE_CONTENT.join("zones", "goblin-cave.full.json")))
+    @zone_fixture ||= JSON.parse(File.read(FIXTURES.join("zones", "goblin-cave.full.json")))
   end
 
   def goblin_unit_type
@@ -18,7 +18,7 @@ module ValidatorFixtures
   end
 
   def character_class_fixture
-    @character_class_fixture ||= JSON.parse(File.read(DELVE_CONTENT.join("classes", "puncher.full.json")))
+    @character_class_fixture ||= JSON.parse(File.read(FIXTURES.join("classes", "puncher.full.json")))
   end
 end
 

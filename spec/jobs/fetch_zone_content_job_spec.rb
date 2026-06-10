@@ -4,7 +4,7 @@ RSpec.describe FetchZoneContentJob, type: :job do
   let(:user) { create(:user) }
   let(:handle) { create(:handle, user: user) }
   let(:zone) { create(:zone, handle: handle, registering_user: user) }
-  let(:valid_content) { File.read(Rails.root.join("..", "delve-content", "zones", "goblin-cave.full.json")) }
+  let(:valid_content) { File.read(Rails.root.join("spec", "fixtures", "zones", "goblin-cave.full.json")) }
   let(:invalid_json_content) { "not valid json{{{" }
   let(:invalid_zone_content) { '{"name":"Goblin Cave"}' }
 
