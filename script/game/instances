@@ -19,9 +19,7 @@ require "uri"
 require "securerandom"
 require "optparse"
 require "environment_helpers"
-require_relative "../../lib/game_api/client"
-
-CLIENT = GameApi::Client.new
+require_relative "../../lib/game_api"
 
 def pretty(obj)
   JSON.pretty_generate(obj)
@@ -48,17 +46,17 @@ end
 # --- Subcommands ---
 
 def cmd_list
-  puts pretty(CLIENT.list_instances)
+  puts pretty(GameApi.instances.list)
 end
 
 def cmd_show(id)
   abort "Usage: show <id>" unless id
-  puts pretty(CLIENT.show_instance(id))
+  puts pretty(GameApi.instances.show(id))
 end
 
 def cmd_destroy(id)
   abort "Usage: destroy <id>" unless id
-  CLIENT.destroy_instance(id)
+  GameApi.instances.destroy(id)
   puts "Destroyed #{id}."
 end
 
@@ -67,7 +65,7 @@ def cmd_create(source, opts)
 
   zone_json, source_url = load_zone(source)
 
-  result = CLIENT.create_instance({
+  result = GameApi.instances.create({
     identifier: SecureRandom.uuid,
     database_id: opts[:database_id] || "dev-#{SecureRandom.hex(4)}",
     zone_identifier: opts[:zone_id] || derive_zone_id(source),

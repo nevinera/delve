@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "net/http"
 require "json"
 require "uri"
@@ -17,10 +19,7 @@ module GameApi
   class UnprocessableError < Error; end
   class InvalidAttrsError < Error; end
 
-  class Client
-    # base_url and auth_tokens default to env vars so callers in production
-    # code need no arguments, while tests can pass explicit values without
-    # touching the environment.
+  class BaseClient
     def initialize(
       base_url: ENV.string("GAME_SERVER_URL", default: "http://localhost:8090"),
       auth_tokens: ENV.string("GAME_SERVER_AUTH_TOKENS", default: "")
@@ -29,32 +28,8 @@ module GameApi
       @token = auth_tokens.split(",").map(&:strip).reject(&:empty?).first
     end
 
-    # GET /status.json — public, no auth required.
     def status
       get("/status.json")
-    end
-
-    # GET /instances
-    def list_instances
-      get("/instances")
-    end
-
-    # GET /instances/:id
-    def show_instance(id)
-      get("/instances/#{id}")
-    end
-
-    # POST /instances.
-    # Required: :identifier, :database_id, :zone_identifier, :version, :source_url, :zone_config
-    def create_instance(attrs)
-      validate_attrs(attrs, required: %i[identifier database_id zone_identifier version source_url zone_config])
-      post("/instances", attrs)
-    end
-
-    # DELETE /instances/:id — returns nil on success.
-    def destroy_instance(id)
-      delete("/instances/#{id}")
-      nil
     end
 
     private
@@ -75,17 +50,9 @@ module GameApi
       problems
     end
 
-    def get(path)
-      request(Net::HTTP::Get, path)
-    end
-
-    def post(path, body)
-      request(Net::HTTP::Post, path, body: body)
-    end
-
-    def delete(path)
-      request(Net::HTTP::Delete, path)
-    end
+    def get(path) = request(Net::HTTP::Get, path)
+    def post(path, body) = request(Net::HTTP::Post, path, body: body)
+    def delete(path) = request(Net::HTTP::Delete, path)
 
     def request(req_class, path, body: nil)
       uri = URI("#{@base_url}#{path}")
