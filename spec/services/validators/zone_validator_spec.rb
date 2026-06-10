@@ -88,6 +88,53 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
       end
     end
 
+    context "unit identifier uniqueness across maps" do
+      def zone_with_maps(maps)
+        zone_fixture.merge("maps" => maps)
+      end
+
+      def minimal_map(identifier, unit_identifiers)
+        {
+          "identifier"      => identifier,
+          "name"            => identifier.capitalize,
+          "imageUrl"        => "./bg.webp",
+          "pixelDimensions" => {"width" => 1024, "height" => 768},
+          "feetDimensions"  => {"width" => 100.0, "height" => 75.0},
+          "units"           => unit_identifiers.map { |id|
+            {
+              "identifier" => id,
+              "unitType"   => "goblin",
+              "hostility"  => "hostile",
+              "position"   => {"x" => 10.0, "y" => 10.0, "angle" => 0.0}
+            }
+          }
+        }
+      end
+
+      it "accepts zones where every identifier is unique across maps" do
+        maps = [
+          minimal_map("map_a", ["goblin_1", "goblin_2"]),
+          minimal_map("map_b", ["goblin_3", "goblin_4"])
+        ]
+        expect { described_class.validate!(zone_with_maps(maps)) }.not_to raise_error
+      end
+
+      it "raises when the same identifier appears in two different maps" do
+        maps = [
+          minimal_map("map_a", ["goblin_1", "goblin_2"]),
+          minimal_map("map_b", ["goblin_2", "goblin_3"])
+        ]
+        expect { described_class.validate!(zone_with_maps(maps)) }
+          .to raise_error(Validators::ValidationError, /goblin_2.*already used/)
+      end
+
+      it "raises when the same identifier appears twice within one map" do
+        maps = [minimal_map("map_a", ["goblin_1", "goblin_1"])]
+        expect { described_class.validate!(zone_with_maps(maps)) }
+          .to raise_error(Validators::ValidationError, /goblin_1.*already used/)
+      end
+    end
+
     it "propagates unit type validation errors with path context" do
       bad_goblin = goblin_unit_type.merge("maxHP" => "lots")
       data = zone_fixture.merge("unitTypes" => {"goblin" => bad_goblin})
