@@ -22,6 +22,7 @@ func makeInstance() *instance.Instance {
 		"abc123",
 		"https://example.com/zones/goblin-cave.json",
 		instanceconfig.Zone{Name: "Goblin Cave", Private: true},
+		instance.DefaultMaxSlots,
 	)
 }
 
@@ -42,7 +43,7 @@ func TestNewInstance_Fields(t *testing.T) {
 	id := uuid.New()
 	zone := instanceconfig.Zone{Name: "Test Zone"}
 
-	inst := instance.NewInstance(id, "db-99", "zone-test", "v2", "https://example.com/zone.json", zone)
+	inst := instance.NewInstance(id, "db-99", "zone-test", "v2", "https://example.com/zone.json", zone, instance.DefaultMaxSlots)
 
 	assert.Equal(t, id, inst.Identifier)
 	assert.Equal(t, "db-99", inst.DatabaseID)
@@ -100,7 +101,7 @@ func TestInstance_Start_InvalidZone_ReturnsError(t *testing.T) {
 			"goblin": {Name: "Goblin", MaxHP: 10, TokenRadius: 1.0},
 		},
 	}
-	inst := instance.NewInstance(uuid.New(), "db-1", "zone-test", "v1", "http://example.com", zone)
+	inst := instance.NewInstance(uuid.New(), "db-1", "zone-test", "v1", "http://example.com", zone, instance.DefaultMaxSlots)
 
 	err := inst.Start()
 	require.Error(t, err)

@@ -83,6 +83,7 @@ func TestLoad(t *testing.T) {
 			t.Setenv("PORT", "")
 			t.Setenv("DEBUG", "")
 			t.Setenv("GAME_SERVER_AUTH_TOKENS", "")
+			t.Setenv("GAME_MAX_SLOTS", "")
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
@@ -94,6 +95,28 @@ func TestLoad(t *testing.T) {
 			if tt.wantAuthTokens != nil {
 				assert.Equal(t, tt.wantAuthTokens, cfg.AuthTokens)
 			}
+		})
+	}
+}
+
+func TestLoad_MaxSlots(t *testing.T) {
+	tests := []struct {
+		name     string
+		env      string
+		wantSlots int
+	}{
+		{"default when unset", "", 25},
+		{"custom value", "10", 10},
+		{"invalid string uses default", "banana", 25},
+		{"zero uses default", "0", 25},
+		{"negative uses default", "-5", 25},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GAME_MAX_SLOTS", tt.env)
+			cfg := config.Load()
+			assert.Equal(t, tt.wantSlots, cfg.MaxSlots)
 		})
 	}
 }

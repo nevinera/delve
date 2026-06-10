@@ -64,7 +64,7 @@ func validCreateBody(id uuid.UUID) []byte {
 
 func TestInstances_Create(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	id := uuid.New()
@@ -88,7 +88,7 @@ func TestInstances_Create(t *testing.T) {
 
 func TestInstances_Create_InvalidUUID(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	body, _ := json.Marshal(map[string]any{
@@ -106,7 +106,7 @@ func TestInstances_Create_InvalidUUID(t *testing.T) {
 
 func TestInstances_Create_MissingFields(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	body, _ := json.Marshal(map[string]any{
@@ -121,7 +121,7 @@ func TestInstances_Create_MissingFields(t *testing.T) {
 
 func TestInstances_Create_MalformedJSON(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances", bytes.NewReader([]byte(`{bad json`)))
@@ -132,7 +132,7 @@ func TestInstances_Create_MalformedJSON(t *testing.T) {
 
 func TestInstances_Create_StartFailure(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	// Zone has a unit with no identifier; NewInstanceState will fail and Start
@@ -170,7 +170,7 @@ func TestInstances_Create_StartFailure(t *testing.T) {
 
 func TestInstances_Create_AssetReferenceRejected(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	body, _ := json.Marshal(map[string]any{
@@ -193,7 +193,7 @@ func TestInstances_Create_AssetReferenceRejected(t *testing.T) {
 
 func TestInstances_Show(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 	t.Cleanup(func() { stopAll(t, reg) })
 
@@ -215,7 +215,7 @@ func TestInstances_Show(t *testing.T) {
 
 func TestInstances_Show_NotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/instances/%s", uuid.New()), nil)
@@ -226,7 +226,7 @@ func TestInstances_Show_NotFound(t *testing.T) {
 
 func TestInstances_Show_InvalidUUID(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances/not-a-uuid", nil)
@@ -239,7 +239,7 @@ func TestInstances_Show_InvalidUUID(t *testing.T) {
 
 func TestInstances_Destroy(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	id := uuid.New()
@@ -257,7 +257,7 @@ func TestInstances_Destroy(t *testing.T) {
 
 func TestInstances_Destroy_InvalidUUID(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	req := httptest.NewRequest(http.MethodDelete, "/instances/not-a-uuid", nil)
@@ -268,7 +268,7 @@ func TestInstances_Destroy_InvalidUUID(t *testing.T) {
 
 func TestInstances_Destroy_NotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/instances/%s", uuid.New()), nil)
@@ -281,7 +281,7 @@ func TestInstances_Destroy_NotFound(t *testing.T) {
 
 func TestInstances_List_Empty(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances", nil)
@@ -296,7 +296,7 @@ func TestInstances_List_Empty(t *testing.T) {
 
 func TestInstances_List_AfterCreate(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 	t.Cleanup(func() { stopAll(t, reg) })
 
@@ -321,7 +321,7 @@ func TestInstances_List_AfterCreate(t *testing.T) {
 
 func TestInstances_ResponseExcludesZoneConfig(t *testing.T) {
 	reg := instance.NewRegistry()
-	h := handler.NewInstances(reg)
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
 	router := mountInstances(h)
 	t.Cleanup(func() { stopAll(t, reg) })
 

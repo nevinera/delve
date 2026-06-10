@@ -7,10 +7,13 @@ import (
 	"strings"
 )
 
+const defaultMaxSlots = 25
+
 type Config struct {
 	Port       string
 	Debug      bool
 	AuthTokens []string
+	MaxSlots   int
 }
 
 func Load() *Config {
@@ -18,6 +21,7 @@ func Load() *Config {
 		Port:       port(),
 		Debug:      debug(),
 		AuthTokens: authTokens(),
+		MaxSlots:   maxSlots(),
 	}
 }
 
@@ -42,6 +46,21 @@ func authTokens() []string {
 		}
 	}
 	return tokens
+}
+
+// maxSlots parses GAME_MAX_SLOTS. Defaults to instance.DefaultMaxSlots if
+// unset or unparseable.
+func maxSlots() int {
+	v := os.Getenv("GAME_MAX_SLOTS")
+	if v == "" {
+		return defaultMaxSlots
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		slog.Warn("invalid GAME_MAX_SLOTS value, using default", "value", v, "default", defaultMaxSlots)
+		return defaultMaxSlots
+	}
+	return n
 }
 
 func debug() bool {

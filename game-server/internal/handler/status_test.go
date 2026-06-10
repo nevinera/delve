@@ -35,8 +35,8 @@ func TestStatus(t *testing.T) {
 		{
 			name: "reflects live instance count",
 			setup: func(r *instance.Registry) {
-				r.Add(instance.NewInstance(uuid.New(), "db-1", "zone-1", "v1", "http://x", instanceconfig.Zone{}))
-				r.Add(instance.NewInstance(uuid.New(), "db-2", "zone-1", "v1", "http://x", instanceconfig.Zone{}))
+				r.Add(instance.NewInstance(uuid.New(), "db-1", "zone-1", "v1", "http://x", instanceconfig.Zone{}, instance.DefaultMaxSlots))
+				r.Add(instance.NewInstance(uuid.New(), "db-2", "zone-1", "v1", "http://x", instanceconfig.Zone{}, instance.DefaultMaxSlots))
 			},
 			wantStatus:        http.StatusOK,
 			wantInstanceCount: 2,

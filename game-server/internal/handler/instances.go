@@ -21,10 +21,11 @@ const MaxRequestBytes = 4 * 1024 * 1024
 // Instances handles CRUD operations on running game instances.
 type Instances struct {
 	registry *instance.Registry
+	maxSlots int
 }
 
-func NewInstances(registry *instance.Registry) *Instances {
-	return &Instances{registry: registry}
+func NewInstances(registry *instance.Registry, maxSlots int) *Instances {
+	return &Instances{registry: registry, maxSlots: maxSlots}
 }
 
 // createRequest is the body shape for POST /instances.
@@ -91,7 +92,7 @@ func (h *Instances) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst := instance.NewInstance(id, req.DatabaseID, req.ZoneIdentifier, req.Version, req.SourceURL, req.ZoneConfig)
+	inst := instance.NewInstance(id, req.DatabaseID, req.ZoneIdentifier, req.Version, req.SourceURL, req.ZoneConfig, h.maxSlots)
 	if err := inst.Start(); err != nil {
 		writeError(w, r, http.StatusUnprocessableEntity, "failed to start instance: "+err.Error())
 		return

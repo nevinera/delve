@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/delve-mmo/game-server/internal/config"
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/server"
 )
@@ -14,7 +15,10 @@ import (
 const testToken = "test-token-abc"
 
 func newServer() http.Handler {
-	return server.New(instance.NewRegistry(), []string{testToken})
+	return server.New(instance.NewRegistry(), &config.Config{
+		AuthTokens: []string{testToken},
+		MaxSlots:   25,
+	})
 }
 
 func TestRouting(t *testing.T) {
@@ -107,7 +111,7 @@ func TestAuth(t *testing.T) {
 }
 
 func TestAuth_NoTokensConfigured(t *testing.T) {
-	h := server.New(instance.NewRegistry(), nil)
+	h := server.New(instance.NewRegistry(), &config.Config{MaxSlots: 25})
 	req := httptest.NewRequest(http.MethodGet, "/instances", nil)
 	req.Header.Set("Authorization", "Bearer anything")
 	rec := httptest.NewRecorder()

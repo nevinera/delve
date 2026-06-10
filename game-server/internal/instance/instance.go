@@ -60,6 +60,7 @@ func NewInstance(
 	version string,
 	sourceURL string,
 	zone instanceconfig.Zone,
+	maxSlots int,
 ) *Instance {
 	return &Instance{
 		Identifier:     id,
@@ -67,7 +68,7 @@ func NewInstance(
 		ZoneIdentifier: zoneIdentifier,
 		Version:        version,
 		SourceURL:      sourceURL,
-		MaxSlots:       DefaultMaxSlots,
+		MaxSlots:       maxSlots,
 		Status:         StatusLoading,
 		ZoneConfig:     zone,
 		CreatedAt:      time.Now(),

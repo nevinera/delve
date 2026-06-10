@@ -26,7 +26,7 @@ func main() {
 	}
 
 	registry := instance.NewRegistry()
-	handler := server.New(registry, cfg.AuthTokens)
+	handler := server.New(registry, cfg)
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	slog.Info("starting game server", "addr", addr, "version", version.Current, "debug", cfg.Debug)
