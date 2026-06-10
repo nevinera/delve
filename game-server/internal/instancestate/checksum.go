@@ -8,8 +8,8 @@ import (
 )
 
 type canonicalEffect struct {
-	ID       string  `json:"id"`
-	Duration float64 `json:"duration"`
+	ID        string `json:"id"`
+	ExpiresAt int64  `json:"expiresAt"`
 }
 
 type canonicalUnit struct {
@@ -35,7 +35,7 @@ func (s *InstanceState) Checksum() string {
 	for _, u := range s.Units {
 		effects := make([]canonicalEffect, len(u.ActiveStatusEffects))
 		for i, e := range u.ActiveStatusEffects {
-			effects[i] = canonicalEffect{ID: e.StatusIdentifier, Duration: e.RemainingDuration}
+			effects[i] = canonicalEffect{ID: e.StatusIdentifier, ExpiresAt: e.ExpiresAt.UnixMilli()}
 		}
 		sort.Slice(effects, func(i, j int) bool { return effects[i].ID < effects[j].ID })
 

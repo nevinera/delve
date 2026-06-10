@@ -1,6 +1,8 @@
 package instancestate
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
@@ -17,8 +19,8 @@ const (
 
 // ActiveStatusEffect is a status effect currently applied to a unit.
 type ActiveStatusEffect struct {
-	StatusIdentifier  string
-	RemainingDuration float64 // seconds
+	StatusIdentifier string
+	ExpiresAt        time.Time
 }
 
 // BehaviorState tracks tick-loop progress for a unit's movement and tactics.

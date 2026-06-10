@@ -2,12 +2,13 @@ package instancestate_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/delve-mmo/game-server/internal/instancestate"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
 func stateFromZone(t *testing.T, zone instanceconfig.Zone) *instancestate.InstanceState {
@@ -97,7 +98,7 @@ func TestChecksum_StatusEffectChangesChecksum(t *testing.T) {
 	with := stateFromZone(t, zone)
 	for _, u := range with.Units {
 		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
-			{StatusIdentifier: "poison", RemainingDuration: 3.0},
+			{StatusIdentifier: "poison", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 3, 0, time.UTC)},
 		}
 	}
 	assert.NotEqual(t, without.Checksum(), with.Checksum())
@@ -121,13 +122,15 @@ func TestChecksum_EffectsOrderIndependent(t *testing.T) {
 		}
 	}
 
+	t1 := time.Date(2030, 1, 1, 0, 0, 3, 0, time.UTC)
+	t2 := time.Date(2030, 1, 1, 0, 0, 1, 0, time.UTC)
 	ab := makeStateWithEffects([]instancestate.ActiveStatusEffect{
-		{StatusIdentifier: "poison", RemainingDuration: 3.0},
-		{StatusIdentifier: "slow", RemainingDuration: 1.0},
+		{StatusIdentifier: "poison", ExpiresAt: t1},
+		{StatusIdentifier: "slow", ExpiresAt: t2},
 	})
 	ba := makeStateWithEffects([]instancestate.ActiveStatusEffect{
-		{StatusIdentifier: "slow", RemainingDuration: 1.0},
-		{StatusIdentifier: "poison", RemainingDuration: 3.0},
+		{StatusIdentifier: "slow", ExpiresAt: t2},
+		{StatusIdentifier: "poison", ExpiresAt: t1},
 	})
 	assert.Equal(t, ab.Checksum(), ba.Checksum())
 }

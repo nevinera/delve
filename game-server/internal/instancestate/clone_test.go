@@ -2,13 +2,14 @@ package instancestate_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/delve-mmo/game-server/internal/instancestate"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
 func TestClone_EqualToOriginal(t *testing.T) {
@@ -58,19 +59,20 @@ func TestClone_MutatingEffectsDoesNotAffectOriginal(t *testing.T) {
 		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
 	))
 	require.NoError(t, err)
+	expiresAt := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, u := range state.Units {
 		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
-			{StatusIdentifier: "poison", RemainingDuration: 5.0},
+			{StatusIdentifier: "poison", ExpiresAt: expiresAt},
 		}
 	}
 
 	clone := state.Clone()
 	for _, u := range clone.Units {
-		u.ActiveStatusEffects[0].RemainingDuration = 0
+		u.ActiveStatusEffects[0].ExpiresAt = time.Time{}
 	}
 
 	for _, u := range state.Units {
-		assert.Equal(t, 5.0, u.ActiveStatusEffects[0].RemainingDuration)
+		assert.Equal(t, expiresAt, u.ActiveStatusEffects[0].ExpiresAt)
 	}
 }
 
