@@ -28,6 +28,7 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 
 	// Protected — valid Bearer token required.
 	instances := handler.NewInstances(registry, cfg.MaxSlots)
+	slots := handler.NewSlots(registry)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.TokenAuth(cfg.AuthTokens))
 		r.Route("/instances", func(r chi.Router) {
@@ -36,6 +37,14 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 			r.Route("/{instanceID}", func(r chi.Router) {
 				r.Get("/", instances.Show)
 				r.Delete("/", instances.Destroy)
+				r.Route("/slots", func(r chi.Router) {
+					r.Get("/", slots.List)
+					r.Post("/", slots.Create)
+					r.Route("/{slotID}", func(r chi.Router) {
+						r.Get("/", slots.Show)
+						r.Delete("/", slots.Destroy)
+					})
+				})
 			})
 		})
 	})
