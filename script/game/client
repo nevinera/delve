@@ -162,10 +162,9 @@ driver = WebSocket::Driver.client(tcp)
 # State
 # ---------------------------------------------------------------------------
 
-units      = {}  # uuid => unit hash; maintained via full-state and delta messages
-checksum   = nil
-open       = false
-last_error = nil
+units    = {}  # uuid => unit hash; maintained via full-state and delta messages
+checksum = nil
+open     = false
 
 driver.on(:open) do
   open = true
@@ -227,13 +226,14 @@ driver.on(:message) do |event|
   end
 end
 
+done = false
+
 driver.on(:close) do |event|
   $stderr.puts "    Disconnected (#{event.code}): #{event.reason}"
-  open = false
+  done = true
 end
 
 driver.on(:error) do |event|
-  last_error = event.message
   $stderr.puts "WebSocket error: #{event.message}"
 end
 
@@ -248,10 +248,11 @@ last_heartbeat_at  = Time.now - HEARTBEAT_INTERVAL
 
 trap("INT") do
   $stderr.puts "\n--> Interrupted, closing..."
-  open = false
+  done = true
 end
 
-while open do
+loop do
+  break if done
 
   ready = IO.select([tcp], nil, nil, 0.05)
   if ready
@@ -266,7 +267,8 @@ while open do
     end
   end
 
-  break unless open
+  next unless open  # wait for handshake before sending heartbeats
+  break if done
 
   if Time.now - last_heartbeat_at >= HEARTBEAT_INTERVAL
     driver.text(JSON.generate({ direction: "up", type: "heartbeat" }))
