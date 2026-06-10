@@ -31,20 +31,26 @@ module Validators
 
     def validate_unit_identifier_uniqueness!(maps, path:)
       seen = {}
-      maps.each do |map|
-        map_id = map.is_a?(Hash) ? map["identifier"] : nil
-        Array(map.is_a?(Hash) ? map["units"] : nil).each do |unit|
-          next unless unit.is_a?(Hash) && unit["identifier"].is_a?(String)
-          id = unit["identifier"]
-          if seen.key?(id)
-            raise ValidationError.new(
-              "unit identifier #{id.inspect} is already used in map #{seen[id].inspect}",
-              path: child_path(path, "maps")
-            )
-          end
-          seen[id] = map_id
-        end
+      maps.each { |map| check_map_unit_identifiers!(map, seen, path: path) }
+    end
+
+    def check_map_unit_identifiers!(map, seen, path:)
+      return unless map.is_a?(Hash)
+      map_id = map["identifier"]
+      Array(map["units"]).each do |unit|
+        next unless unit.is_a?(Hash) && unit["identifier"].is_a?(String)
+        register_unit_identifier!(unit["identifier"], map_id, seen, path: path)
       end
+    end
+
+    def register_unit_identifier!(id, map_id, seen, path:)
+      if seen.key?(id)
+        raise ValidationError.new(
+          "unit identifier #{id.inspect} is already used in map #{seen[id].inspect}",
+          path: child_path(path, "maps")
+        )
+      end
+      seen[id] = map_id
     end
 
     def validate_zone_links!(data, path:)

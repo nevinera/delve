@@ -3,11 +3,10 @@
 require "rails_helper"
 
 RSpec.describe GameApi::Checksum do
-  FIXTURE_PATH = Rails.root.join(
-    "game-server", "internal", "instancestate", "testdata", "checksum_parity.json"
-  ).freeze
-
-  let(:fixture) { JSON.parse(File.read(FIXTURE_PATH)) }
+  let(:fixture) do
+    path = Rails.root.join("game-server", "internal", "instancestate", "testdata", "checksum_parity.json")
+    JSON.parse(File.read(path))
+  end
 
   describe ".compute_checksum" do
     it "matches the expected checksum in the shared parity fixture" do
@@ -23,7 +22,7 @@ RSpec.describe GameApi::Checksum do
     end
 
     it "is order-independent — same result regardless of hash insertion order" do
-      forward  = fixture["units"]
+      forward = fixture["units"]
       reversed = fixture["units"].to_a.reverse.to_h
       expect(described_class.compute_checksum(forward))
         .to eq(described_class.compute_checksum(reversed))

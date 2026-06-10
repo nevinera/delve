@@ -39,16 +39,16 @@ require_relative "../../lib/game_api"
 
 class Log
   DARK_GREY = "\e[90m"
-  RESET     = "\e[0m"
+  RESET = "\e[0m"
 
   def initialize(verbose: 0)
     @verbose = verbose
-    @color   = $stderr.tty?
+    @color = $stderr.tty?
   end
 
   # Always shown, no coloring - progress and status output.
-  def info(msg) = $stderr.puts(msg)
-  def warn(msg) = $stderr.puts("WARN: #{msg}")
+  def info(msg) = Kernel.warn(msg)
+  def warn(msg) = Kernel.warn("WARN: #{msg}")
 
   # -v: non-empty deltas and other opt-in detail (dark grey)
   def verbose(msg)
@@ -63,7 +63,7 @@ class Log
   private
 
   def dim(msg)
-    $stderr.puts(@color ? "#{DARK_GREY}#{msg}#{RESET}" : msg)
+    Kernel.warn(@color ? "#{DARK_GREY}#{msg}#{RESET}" : msg)
   end
 end
 
@@ -71,17 +71,17 @@ end
 # Options
 # ---------------------------------------------------------------------------
 
-options = { character_name: "Hero", verbose: 0 }
+options = {character_name: "Hero", verbose: 0}
 
 OptionParser.new do |opts|
   opts.banner = "Usage: script/game/client [options]"
-  opts.on("-i", "--instance UUID",       "Existing instance ID")                         { |v| options[:instance_id] = v }
-  opts.on("-s", "--slot UUID",           "Existing slot ID")                             { |v| options[:slot_id] = v }
-  opts.on("-t", "--token UUID",          "Slot token (required with --slot)")            { |v| options[:token] = v }
-  opts.on("-z", "--zone-config PATH",    "Zone config JSON file")                        { |v| options[:zone_config] = v }
-  opts.on("-c", "--class-config PATH",   "Character class JSON file")                    { |v| options[:class_config] = v }
-  opts.on("-n", "--character-name NAME", "Character name (default: Hero)")               { |v| options[:character_name] = v }
-  opts.on("-v", "--verbose",             "Increase verbosity (-vv logs all deltas)")     { options[:verbose] += 1 }
+  opts.on("-i", "--instance UUID", "Existing instance ID") { |v| options[:instance_id] = v }
+  opts.on("-s", "--slot UUID", "Existing slot ID") { |v| options[:slot_id] = v }
+  opts.on("-t", "--token UUID", "Slot token (required with --slot)") { |v| options[:token] = v }
+  opts.on("-z", "--zone-config PATH", "Zone config JSON file") { |v| options[:zone_config] = v }
+  opts.on("-c", "--class-config PATH", "Character class JSON file") { |v| options[:class_config] = v }
+  opts.on("-n", "--character-name NAME", "Character name (default: Hero)") { |v| options[:character_name] = v }
+  opts.on("-v", "--verbose", "Increase verbosity (-vv logs all deltas)") { options[:verbose] += 1 }
 end.parse!
 
 log = Log.new(verbose: options[:verbose])
@@ -107,12 +107,12 @@ if instance_id.nil?
   zone_identifier = File.basename(zone_path).sub(/\.full\.json\z/, "").sub(/\.json\z/, "")
   log.info "--> Creating instance for zone #{zone_identifier}..."
   result = GameApi.instances.create(
-    identifier:      SecureRandom.uuid,
-    database_id:     "dev-#{SecureRandom.hex(4)}",
+    identifier: SecureRandom.uuid,
+    database_id: "dev-#{SecureRandom.hex(4)}",
     zone_identifier: zone_identifier,
-    version:         "dev",
-    source_url:      "file://#{zone_path}",
-    zone_config:     zone_config
+    version: "dev",
+    source_url: "file://#{zone_path}",
+    zone_config: zone_config
   )
   instance_id = result.fetch("identifier")
   log.info "    Instance: #{instance_id}"
@@ -123,7 +123,7 @@ end
 # ---------------------------------------------------------------------------
 
 slot_id = options[:slot_id]
-token   = options[:token]
+token = options[:token]
 
 if slot_id.nil?
   class_path = options[:class_config] or
@@ -135,12 +135,12 @@ if slot_id.nil?
 
   log.info "--> Creating slot for #{options[:character_name]}..."
   result = GameApi.slots.create(
-    instance_id:     instance_id,
-    character_name:  options[:character_name],
+    instance_id: instance_id,
+    character_name: options[:character_name],
     character_class: character_class
   )
   slot_id = result.fetch("id")
-  token   = result.fetch("token")
+  token = result.fetch("token")
   log.info "    Slot:     #{slot_id}"
 end
 
@@ -151,12 +151,12 @@ end
 # ---------------------------------------------------------------------------
 
 server_url = ENV.fetch("GAME_SERVER_URL", "http://localhost:8090")
-uri        = URI.parse(server_url)
-ws_scheme  = uri.scheme == "https" ? "wss" : "ws"
-ws_path    = "/instances/#{instance_id}/slots/#{slot_id}/connect?token=#{token}"
-ws_url     = "#{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path}"
+uri = URI.parse(server_url)
+ws_scheme = (uri.scheme == "https") ? "wss" : "ws"
+ws_path = "/instances/#{instance_id}/slots/#{slot_id}/connect?token=#{token}"
+ws_url = "#{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path}"
 
-log.info "--> Connecting to #{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path.sub(/token=\S+/, 'token=<redacted>')}..."
+log.info "--> Connecting to #{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path.sub(/token=\S+/, "token=<redacted>")}..."
 
 tcp = TCPSocket.new(uri.host, uri.port)
 # websocket-driver reads the URL from the socket object itself
@@ -167,10 +167,10 @@ driver = WebSocket::Driver.client(tcp)
 # State
 # ---------------------------------------------------------------------------
 
-units    = {}  # uuid => unit hash; maintained via full-state and delta messages
+units = {}  # uuid => unit hash; maintained via full-state and delta messages
 checksum = nil
-open     = false
-done     = false
+open = false
+done = false
 
 driver.on(:open) do
   open = true
@@ -178,7 +178,11 @@ driver.on(:open) do
 end
 
 driver.on(:message) do |event|
-  msg = JSON.parse(event.data) rescue nil
+  msg = begin
+    JSON.parse(event.data)
+  rescue
+    nil
+  end
   unless msg
     log.warn "non-JSON message received"
     next
@@ -187,9 +191,9 @@ driver.on(:message) do |event|
   case [msg["direction"], msg["type"]]
 
   when ["down", "instance-state"]
-    units    = msg.fetch("units", {})
+    units = msg.fetch("units", {})
     checksum = msg["checksum"]
-    local    = GameApi::Checksum.compute_checksum(units)
+    local = GameApi::Checksum.compute_checksum(units)
     if local == checksum
       log.info "[state] Full state: #{units.size} units. Checksum OK."
     else
@@ -205,7 +209,7 @@ driver.on(:message) do |event|
       next unless (unit = units[add["unit_id"]])
       effects = unit["active_status_effects"] ||= []
       effects.reject! { |e| e["status_identifier"] == add["status_identifier"] }
-      effects << { "status_identifier" => add["status_identifier"], "expires_at" => add["expires_at"] }
+      effects << {"status_identifier" => add["status_identifier"], "expires_at" => add["expires_at"]}
     end
     (msg["effect_removes"] || []).each do |rem|
       next unless (unit = units[rem["unit_id"]])
@@ -213,17 +217,17 @@ driver.on(:message) do |event|
     end
 
     checksum = msg["checksum"]
-    local    = GameApi::Checksum.compute_checksum(units)
+    local = GameApi::Checksum.compute_checksum(units)
     if local != checksum
       log.warn "checksum mismatch after delta — server=#{checksum} local=#{local}"
       log.warn "Sending full-state request."
-      driver.text(JSON.generate({ direction: "up", type: "full-state-request" }))
+      driver.text(JSON.generate({direction: "up", type: "full-state-request"}))
     end
 
     empty = (msg["unit_updates"] || {}).empty? &&
-            (msg["unit_removals"] || []).empty? &&
-            (msg["effect_adds"] || []).empty? &&
-            (msg["effect_removes"] || []).empty?
+      (msg["unit_removals"] || []).empty? &&
+      (msg["effect_adds"] || []).empty? &&
+      (msg["effect_removes"] || []).empty?
 
     if empty
       log.debug "[delta] (empty) #{event.data}"
@@ -252,7 +256,7 @@ driver.start
 # ---------------------------------------------------------------------------
 
 HEARTBEAT_INTERVAL = 0.3  # seconds (~3 game ticks)
-last_heartbeat_at  = Time.now - HEARTBEAT_INTERVAL
+last_heartbeat_at = Time.now - HEARTBEAT_INTERVAL
 
 trap("INT") do
   log.info "\n--> Interrupted, closing..."
@@ -279,7 +283,7 @@ loop do
   break if done
 
   if Time.now - last_heartbeat_at >= HEARTBEAT_INTERVAL
-    driver.text(JSON.generate({ direction: "up", type: "heartbeat" }))
+    driver.text(JSON.generate({direction: "up", type: "heartbeat"}))
     last_heartbeat_at = Time.now
   end
 end

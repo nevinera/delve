@@ -95,17 +95,17 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
 
       def minimal_map(identifier, unit_identifiers)
         {
-          "identifier"      => identifier,
-          "name"            => identifier.capitalize,
-          "imageUrl"        => "./bg.webp",
+          "identifier" => identifier,
+          "name" => identifier.capitalize,
+          "imageUrl" => "./bg.webp",
           "pixelDimensions" => {"width" => 1024, "height" => 768},
-          "feetDimensions"  => {"width" => 100.0, "height" => 75.0},
-          "units"           => unit_identifiers.map { |id|
+          "feetDimensions" => {"width" => 100.0, "height" => 75.0},
+          "units" => unit_identifiers.map { |id|
             {
               "identifier" => id,
-              "unitType"   => "goblin",
-              "hostility"  => "hostile",
-              "position"   => {"x" => 10.0, "y" => 10.0, "angle" => 0.0}
+              "unitType" => "goblin",
+              "hostility" => "hostile",
+              "position" => {"x" => 10.0, "y" => 10.0, "angle" => 0.0}
             }
           }
         }
