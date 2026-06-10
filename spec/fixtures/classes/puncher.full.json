@@ -1,0 +1,73 @@
+{
+  "name": "Puncher",
+  "description": "A bare-knuckle brawler who solves every problem with their fists.",
+  "colors": {
+    "major": "8B4513",
+    "minor": "F4A460"
+  },
+  "powers": [
+    {
+      "name": "Punch",
+      "castTime": null,
+      "globalCooldown": 1.5,
+      "graphicEffects": [
+        {
+          "sourceURL": "./graphics/punch-impact.webp",
+          "duration": 0.3,
+          "from": "self",
+          "to": "affected",
+          "when": "impact",
+          "condition": "onHit"
+        }
+      ],
+      "soundEffects": [
+        {
+          "sourceURL": "./sounds/punch.ogg",
+          "duration": 0.12,
+          "location": "affected",
+          "when": "impact",
+          "condition": "onHit"
+        }
+      ],
+      "effects": [
+        {
+          "type": "harm",
+          "affects": "bTarget",
+          "amount": [8.0, 14.0],
+          "range": 5.0,
+          "tags": ["physical", "melee"]
+        }
+      ]
+    },
+    {
+      "name": "Recover",
+      "castTime": null,
+      "globalCooldown": 10.0,
+      "graphicEffects": [
+        {
+          "sourceURL": "./graphics/recover-glow.webp",
+          "duration": 0.8,
+          "from": "self",
+          "when": "immediate",
+          "condition": "always"
+        }
+      ],
+      "soundEffects": [
+        {
+          "sourceURL": "./sounds/recover.ogg",
+          "duration": 0.33,
+          "location": "self",
+          "when": "immediate",
+          "condition": "always"
+        }
+      ],
+      "effects": [
+        {
+          "type": "heal",
+          "affects": "self",
+          "amount": 20.0
+        }
+      ]
+    }
+  ]
+}

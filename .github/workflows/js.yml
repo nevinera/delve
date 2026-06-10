@@ -6,9 +6,6 @@ on:
 jobs:
   vitest:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: delve_web
 
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +14,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: delve_web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - run: npm ci
 
@@ -25,9 +22,6 @@ jobs:
 
   standard:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: delve_web
 
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +30,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: delve_web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - run: npm ci
 
