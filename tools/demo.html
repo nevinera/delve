@@ -145,6 +145,55 @@ function populateMapSelect(json) {
   mapSelect.disabled = false
 }
 
+// --- entry point ---
+
+const DEG_TO_RAD = Math.PI / 180
+
+function entryPosition(map) {
+  const { width, height } = map.feetDimensions
+  const entryKey = Object.keys(zoneJson.entryPoints || {}).find(k => k.startsWith(map.identifier + '/'))
+  if (entryKey) {
+    const connId = entryKey.split('/')[1]
+    const conn = (map.connections || []).find(c => c.identifier === connId)
+    if (conn?.type === 'point') {
+      return { x: conn.position.x, y: conn.position.y, angle: conn.position.angle ?? 0 }
+    }
+    if (conn?.type === 'line') {
+      const mx = (conn.start.x + conn.end.x) / 2
+      const my = (conn.start.y + conn.end.y) / 2
+      // nudge a few feet toward map center so the token starts inside
+      const dx = width / 2 - mx, dy = height / 2 - my
+      const len = Math.sqrt(dx * dx + dy * dy) || 1
+      return { x: mx + (dx / len) * 4, y: my + (dy / len) * 4, angle: 0 }
+    }
+  }
+  return { x: width / 2, y: height / 2, angle: 0 }
+}
+
+// --- player token ---
+
+function createPlayerToken(radius) {
+  const group = new THREE.Group()
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: 0x2e7d32 })
+  )
+  body.position.y = 0.15
+  group.add(body)
+
+  // facing cone - points in -Z (north) by default, matching angle=0
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(radius * 0.25, radius * 0.7, 8),
+    new THREE.MeshLambertMaterial({ color: 0x81c784 })
+  )
+  cone.rotation.x = -Math.PI / 2
+  cone.position.set(0, 0.32, -radius * 0.65)
+  group.add(cone)
+
+  return group
+}
+
 // --- load map ---
 
 loadBtn.addEventListener('click', () => {
@@ -158,6 +207,9 @@ function loadMap(map) {
   canvasArea.innerHTML = ''
 
   const { width, height } = map.feetDimensions
+  const originX = -width / 2, originZ = height / 2
+  const mapToWorld = (x, y) => [x + originX, originZ - y]
+
   const mapUrl = new URL(map.imageUrl, zoneBaseUrl).href
 
   const canvas = document.createElement('canvas')
@@ -184,11 +236,20 @@ function loadMap(map) {
   mapPlane.rotation.x = -Math.PI / 2
   scene.add(mapPlane)
 
+  const start = entryPosition(map)
+  const [sx, sz] = mapToWorld(start.x, start.y)
+  const token = createPlayerToken(1.5)
+  token.position.set(sx, 0, sz)
+  token.rotation.y = -(start.angle * DEG_TO_RAD)
+  scene.add(token)
+
   const aspect = 16 / 9
   const camera = new THREE.PerspectiveCamera(34, aspect, 0.1, 500)
-  const camBack = Math.max(width, height) * 0.5
-  camera.position.set(0, camBack * 0.9, camBack * 0.6)
-  camera.lookAt(0, 0, 0)
+  const CAM_BACK = 45, CAM_HEIGHT = 50, CAM_LOOK_AHEAD = 10
+  const facing = start.angle * DEG_TO_RAD
+  const fwdX = Math.sin(facing), fwdZ = -Math.cos(facing)
+  camera.position.set(sx - CAM_BACK * fwdX, CAM_HEIGHT, sz - CAM_BACK * fwdZ)
+  camera.lookAt(new THREE.Vector3(sx + CAM_LOOK_AHEAD * fwdX, 0, sz + CAM_LOOK_AHEAD * fwdZ))
 
   renderer.render(scene, camera)
 }
