@@ -1,0 +1,58 @@
+name: Deploy Tools to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/**
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate index
+        run: |
+          cat > tools/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <title>Delve Tools</title>
+            <style>
+              body { font-family: monospace; background: #1a1a1a; color: #ddd; padding: 40px; }
+              h1 { margin-bottom: 20px; }
+              ul { list-style: none; padding: 0; }
+              li { margin: 8px 0; }
+              a { color: #99aaff; }
+            </style>
+          </head>
+          <body>
+            <h1>Delve Tools</h1>
+            <ul>
+              <li><a href="demo.html">Demo</a></li>
+              <li><a href="map-coords.html">Map Coords</a></li>
+            </ul>
+          </body>
+          </html>
+          EOF
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tools/
+      - id: deployment
+        uses: actions/deploy-pages@v4
