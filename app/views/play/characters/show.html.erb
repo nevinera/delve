@@ -1,6 +1,6 @@
 <h1><%= @character.name %></h1>
 
-<p>Class: <%= @character.character_class.identifier %></p>
+<p>Class: <%= "#{@character.character_class.full_identifier} #{@character.character_class.version}" %></p>
 <p>Time played: <%= (@character.time_logged / 3600.0).round(1) %> hours</p>
 <p>Last played: <%= @character.last_played_at&.strftime("%Y-%m-%d %H:%M") || "Never" %></p>
 

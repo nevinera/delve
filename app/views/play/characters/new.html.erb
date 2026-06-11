@@ -16,7 +16,7 @@
 
   <div>
     <%= f.label :character_class_id, "Class" %>
-    <%= f.select :character_class_id, @character_classes.map { |cc| [cc.identifier, cc.id] }, {include_blank: "Select a class"} %>
+    <%= f.select :character_class_id, @character_classes.map { |cc| ["#{cc.full_identifier} #{cc.version}", cc.id] }, {include_blank: "Select a class"} %>
   </div>
 
   <%= f.submit "Create" %>

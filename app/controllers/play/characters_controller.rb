@@ -1,6 +1,6 @@
 class Play::CharactersController < Play::BaseController
   def index
-    @characters = current_user.characters.includes(:character_class).order(:name)
+    @characters = current_user.characters.includes(character_class: :handle).order(:name)
     authorize! :read, Character
   end
 
@@ -11,7 +11,7 @@ class Play::CharactersController < Play::BaseController
 
   def new
     @character = current_user.characters.new
-    @character_classes = CharacterClass.where(state: :fetched).order(:identifier)
+    @character_classes = CharacterClass.where(state: :fetched).includes(:handle).order(:identifier)
     authorize! :create, @character
   end
 
@@ -21,7 +21,7 @@ class Play::CharactersController < Play::BaseController
     if @character.save
       redirect_to play_character_path(@character), notice: "Character created."
     else
-      @character_classes = CharacterClass.where(state: :fetched).order(:identifier)
+      @character_classes = CharacterClass.where(state: :fetched).includes(:handle).order(:identifier)
       render :new, status: :unprocessable_content
     end
   end
