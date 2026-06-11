@@ -172,6 +172,26 @@ function entryPosition(map) {
 
 // --- player token ---
 
+function addFacingArrow(group, radius, color) {
+  const hw = (0.3 * radius) / Math.sqrt(3)
+  const y  = 0.31
+  const verts = [
+     0,   y,       -1.4 * radius,
+    -hw,  y,       -1.1 * radius,
+     hw,  y,       -1.1 * radius,
+  ]
+  const fillGeo = new THREE.BufferGeometry()
+  fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+  fillGeo.setIndex([0, 1, 2])
+  fillGeo.computeVertexNormals()
+  group.add(new THREE.Mesh(fillGeo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })))
+
+  const borderVerts = verts.map((v, i) => i % 3 === 1 ? v + 0.005 : v)
+  const borderGeo = new THREE.BufferGeometry()
+  borderGeo.setAttribute('position', new THREE.Float32BufferAttribute(borderVerts, 3))
+  group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })))
+}
+
 function createPlayerToken(radius) {
   const group = new THREE.Group()
 
@@ -182,15 +202,43 @@ function createPlayerToken(radius) {
   body.position.y = 0.15
   group.add(body)
 
-  // facing cone - points in -Z (north) by default, matching angle=0
-  const cone = new THREE.Mesh(
-    new THREE.ConeGeometry(radius * 0.25, radius * 0.7, 8),
-    new THREE.MeshLambertMaterial({ color: 0x81c784 })
-  )
-  cone.rotation.x = -Math.PI / 2
-  cone.position.set(0, 0.32, -radius * 0.65)
-  group.add(cone)
+  addFacingArrow(group, radius, 0x81c784)
+  return group
+}
 
+const HOSTILITY_COLORS = {
+  hostile:  { body: 0xc62828, cone: 0xef9a9a },
+  neutral:  { body: 0xe65100, cone: 0xffcc80 },
+  friendly: { body: 0x1565c0, cone: 0x90caf9 },
+}
+
+function createUnitToken(radius, hostility, tokenImageUrl) {
+  const { body: bodyColor, cone: coneColor } = HOSTILITY_COLORS[hostility] || HOSTILITY_COLORS.hostile
+  const group = new THREE.Group()
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: bodyColor })
+  )
+  body.position.y = 0.15
+  group.add(body)
+
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff })
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat)
+  portrait.rotation.x = -Math.PI / 2
+  portrait.position.y = 0.31
+  group.add(portrait)
+
+  const urls = Array.isArray(tokenImageUrl) ? tokenImageUrl : [tokenImageUrl].filter(Boolean)
+  if (urls.length) {
+    const url = new URL(urls[Math.floor(Math.random() * urls.length)], zoneBaseUrl).href
+    new THREE.TextureLoader().load(url, texture => {
+      portraitMat.map = texture
+      portraitMat.needsUpdate = true
+    })
+  }
+
+  addFacingArrow(group, radius, coneColor)
   return group
 }
 
@@ -420,6 +468,16 @@ function loadMap(map, startOverride = null) {
     { x1: -bx, z1:  bz, x2: -bx, z2: -bz }   // west
   )
   const connectionCollision = new CollisionChecker(connectionSegments)
+
+  for (const unit of map.units || []) {
+    const unitType = (zoneJson.unitTypes || {})[unit.unitType]
+    if (!unitType) continue
+    const [ux, uz] = mapToWorld(unit.position.x, unit.position.y)
+    const unitToken = createUnitToken(unitType.tokenRadius, unit.hostility, unitType.tokenImageUrl)
+    unitToken.position.set(ux, 0, uz)
+    unitToken.rotation.y = -(unit.position.angle * DEG_TO_RAD)
+    scene.add(unitToken)
+  }
 
   const start = startOverride || entryPosition(map)
   const [sx, sz] = mapToWorld(start.x, start.y)
