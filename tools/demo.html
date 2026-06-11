@@ -348,6 +348,104 @@ function distToSegment(px, pz, { x1, z1, x2, z2 }) {
   return Math.sqrt((px-cx)**2 + (pz-cz)**2)
 }
 
+// --- unit movement ---
+
+const BASE_UNIT_SPEED = 10  // ft/sec
+
+function sampleValue(v) {
+  return Array.isArray(v) ? v[0] + Math.random() * (v[1] - v[0]) : v
+}
+
+function lerpAngle(a, b, t) {
+  const diff = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+  return a + diff * t
+}
+
+function facingToward(x1, z1, x2, z2) {
+  return Math.atan2(x2 - x1, -(z2 - z1))
+}
+
+function nextPatrolStep(us) {
+  const n = us.patrolSteps.length
+  if (us.mv.choose === 'loop') return (us.stepIndex + 1) % n
+  if (us.mv.choose === 'return') {
+    let next = us.stepIndex + us.patrolDir
+    if (next >= n) { us.patrolDir = -1; next = n - 2 }
+    else if (next < 0) { us.patrolDir = 1; next = 1 }
+    return Math.max(0, Math.min(n - 1, next))
+  }
+  if (us.mv.choose === 'random') {
+    const choices = Array.from({ length: n }, (_, i) => i).filter(i => i !== us.stepIndex)
+    return choices[Math.floor(Math.random() * choices.length)]
+  }
+  return 0
+}
+
+function updateUnits(elapsed, unitStates) {
+  for (const us of unitStates) {
+    if (us.phase === 'still') continue
+
+    if (us.phase === 'waiting') {
+      us.waitRemaining -= elapsed
+      if (us.waitRemaining > 0) continue
+      if (us.mv.type === 'patrol') {
+        const nextIdx = nextPatrolStep(us)
+        const step = us.patrolSteps[nextIdx]
+        us.turnStartFacing = us.facing
+        us.turnEndFacing = facingToward(us.x, us.z, step.x, step.z)
+        us.pendingStepIdx = nextIdx
+        us.turnFrames = 3
+        us.phase = 'turning'
+      }
+      continue
+    }
+
+    if (us.phase === 'turning') {
+      us.turnFrames--
+      us.facing = lerpAngle(us.turnStartFacing, us.turnEndFacing, (3 - us.turnFrames) / 3)
+      us.token.rotation.y = -us.facing
+      if (us.turnFrames <= 0) {
+        us.facing = us.turnEndFacing
+        us.stepIndex = us.pendingStepIdx
+        const step = us.patrolSteps[us.stepIndex]
+        us.targetX = step.x; us.targetZ = step.z
+        us.moveRate = step.movementRate
+        us.phase = 'moving'
+      }
+      continue
+    }
+
+    if (us.phase === 'moving') {
+      const dx = us.targetX - us.x, dz = us.targetZ - us.z
+      const dist = Math.sqrt(dx * dx + dz * dz)
+      const move = us.baseSpeed * us.moveRate * elapsed
+
+      if (dist <= move || dist < 0.01) {
+        us.x = us.targetX; us.z = us.targetZ
+        if (us.mv.type === 'patrol') {
+          const wait = sampleValue(us.patrolSteps[us.stepIndex].waitTime)
+          if (wait <= 0) {
+            const nextIdx = nextPatrolStep(us)
+            const step = us.patrolSteps[nextIdx]
+            us.facing = facingToward(us.x, us.z, step.x, step.z)
+            us.token.rotation.y = -us.facing
+            us.stepIndex = nextIdx
+            us.targetX = step.x; us.targetZ = step.z
+            us.moveRate = step.movementRate
+          } else {
+            us.waitRemaining = wait
+            us.phase = 'waiting'
+          }
+        }
+      } else {
+        us.x += (dx / dist) * move
+        us.z += (dz / dist) * move
+      }
+      us.token.position.set(us.x, 0, us.z)
+    }
+  }
+}
+
 // --- controls ---
 
 const MOVE_RATE  = 15         // feet/sec
@@ -482,6 +580,7 @@ function loadMap(map, startOverride = null) {
   )
   const connectionCollision = new CollisionChecker(connectionSegments)
 
+  const unitStates = []
   for (const unit of map.units || []) {
     const unitType = (zoneJson.unitTypes || {})[unit.unitType]
     if (!unitType) continue
@@ -490,6 +589,46 @@ function loadMap(map, startOverride = null) {
     unitToken.position.set(ux, 0, uz)
     unitToken.rotation.y = -(unit.position.angle * DEG_TO_RAD)
     scene.add(unitToken)
+
+    const mv = unit.movement || { type: 'still' }
+    const us = {
+      token: unitToken,
+      x: ux, z: uz,
+      facing: unit.position.angle * DEG_TO_RAD,
+      mv,
+      baseSpeed: BASE_UNIT_SPEED * (unitType.speedFactor ?? 1.0),
+      phase: 'still',
+      patrolSteps: [],
+      stepIndex: 0,
+      patrolDir: 1,
+      pendingStepIdx: 0,
+      targetX: 0, targetZ: 0,
+      moveRate: 1.0,
+      waitRemaining: 0,
+      turnFrames: 0,
+      turnStartFacing: 0,
+      turnEndFacing: 0,
+    }
+
+    if (mv.type === 'patrol') {
+      us.patrolSteps = mv.steps.map(s => {
+        const [wx, wz] = mapToWorld(s.position.x, s.position.y)
+        return { x: wx, z: wz, movementRate: s.movementRate, waitTime: s.waitTime }
+      })
+      us.patrolDir = 1
+      us.stepIndex = 0
+      const step0 = us.patrolSteps[0]
+      us.targetX = step0.x; us.targetZ = step0.z
+      us.moveRate = step0.movementRate
+      const d0x = step0.x - ux, d0z = step0.z - uz
+      if (d0x * d0x + d0z * d0z > 0.0001) {
+        us.facing = facingToward(ux, uz, step0.x, step0.z)
+        unitToken.rotation.y = -us.facing
+      }
+      us.phase = 'moving'
+    }
+
+    unitStates.push(us)
   }
 
   const start = startOverride || entryPosition(map)
@@ -538,6 +677,8 @@ function loadMap(map, startOverride = null) {
         }
       }
     }
+
+    updateUnits(elapsed, unitStates)
 
     token.position.set(player.x, 0, player.z)
     token.rotation.y = -player.facing
