@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_09_113429) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_11_123946) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -27,6 +27,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_09_113429) do
     t.index ["handle_id"], name: "index_character_classes_on_handle_id"
     t.index ["state"], name: "index_character_classes_on_state"
     t.index ["user_id"], name: "index_character_classes_on_user_id"
+  end
+
+  create_table "characters", force: :cascade do |t|
+    t.integer "character_class_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "last_played_at"
+    t.string "name", null: false
+    t.integer "time_logged", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.integer "user_id", null: false
+    t.index ["character_class_id"], name: "index_characters_on_character_class_id"
+    t.index ["name"], name: "index_characters_on_name", unique: true
+    t.index ["user_id"], name: "index_characters_on_user_id"
   end
 
   create_table "handles", force: :cascade do |t|
@@ -79,6 +92,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_09_113429) do
 
   add_foreign_key "character_classes", "handles"
   add_foreign_key "character_classes", "users"
+  add_foreign_key "characters", "character_classes"
+  add_foreign_key "characters", "users"
   add_foreign_key "handles", "users"
   add_foreign_key "zones", "handles"
   add_foreign_key "zones", "users", column: "registering_user_id"
