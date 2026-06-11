@@ -192,6 +192,8 @@ function addFacingArrow(group, radius, color) {
   group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })))
 }
 
+const PLAYER_TOKEN_URL = 'https://raw.githubusercontent.com/nevinera/delve-content/refs/heads/main/character-tokens/male-elf-guard.webp'
+
 function createPlayerToken(radius) {
   const group = new THREE.Group()
 
@@ -201,6 +203,17 @@ function createPlayerToken(radius) {
   )
   body.position.y = 0.15
   group.add(body)
+
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff })
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat)
+  portrait.rotation.x = -Math.PI / 2
+  portrait.position.y = 0.31
+  group.add(portrait)
+
+  new THREE.TextureLoader().load(PLAYER_TOKEN_URL, texture => {
+    portraitMat.map = texture
+    portraitMat.needsUpdate = true
+  })
 
   addFacingArrow(group, radius, 0x81c784)
   return group
@@ -481,7 +494,7 @@ function loadMap(map, startOverride = null) {
 
   const start = startOverride || entryPosition(map)
   const [sx, sz] = mapToWorld(start.x, start.y)
-  const token = createPlayerToken(1.5)
+  const token = createPlayerToken(2.2)
   token.position.set(sx, 0, sz)
   token.rotation.y = -(start.angle * DEG_TO_RAD)
   scene.add(token)
