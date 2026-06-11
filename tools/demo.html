@@ -365,6 +365,12 @@ function facingToward(x1, z1, x2, z2) {
   return Math.atan2(x2 - x1, -(z2 - z1))
 }
 
+function randomInCircle(cx, cz, r) {
+  const angle = Math.random() * Math.PI * 2
+  const dist = Math.sqrt(Math.random()) * r
+  return [cx + Math.cos(angle) * dist, cz + Math.sin(angle) * dist]
+}
+
 function nextPatrolStep(us) {
   const n = us.patrolSteps.length
   if (us.mv.choose === 'loop') return (us.stepIndex + 1) % n
@@ -381,6 +387,21 @@ function nextPatrolStep(us) {
   return 0
 }
 
+function beginTurn(us, tx, tz, moveRate, pendingStepIdx = null) {
+  us.targetX = tx; us.targetZ = tz
+  us.moveRate = moveRate
+  us.pendingStepIdx = pendingStepIdx
+  us.turnStartFacing = us.facing
+  us.turnEndFacing = facingToward(us.x, us.z, tx, tz)
+  us.turnFrames = 3
+  us.phase = 'turning'
+}
+
+function pickWanderTarget(us) {
+  const [tx, tz] = randomInCircle(us.wanderCx, us.wanderCz, us.wanderR)
+  return { tx, tz, moveRate: sampleValue(us.mv.speed) }
+}
+
 function updateUnits(elapsed, unitStates) {
   for (const us of unitStates) {
     if (us.phase === 'still') continue
@@ -391,11 +412,10 @@ function updateUnits(elapsed, unitStates) {
       if (us.mv.type === 'patrol') {
         const nextIdx = nextPatrolStep(us)
         const step = us.patrolSteps[nextIdx]
-        us.turnStartFacing = us.facing
-        us.turnEndFacing = facingToward(us.x, us.z, step.x, step.z)
-        us.pendingStepIdx = nextIdx
-        us.turnFrames = 3
-        us.phase = 'turning'
+        beginTurn(us, step.x, step.z, step.movementRate, nextIdx)
+      } else if (us.mv.type === 'wander') {
+        const { tx, tz, moveRate } = pickWanderTarget(us)
+        beginTurn(us, tx, tz, moveRate)
       }
       continue
     }
@@ -406,10 +426,7 @@ function updateUnits(elapsed, unitStates) {
       us.token.rotation.y = -us.facing
       if (us.turnFrames <= 0) {
         us.facing = us.turnEndFacing
-        us.stepIndex = us.pendingStepIdx
-        const step = us.patrolSteps[us.stepIndex]
-        us.targetX = step.x; us.targetZ = step.z
-        us.moveRate = step.movementRate
+        if (us.pendingStepIdx !== null) us.stepIndex = us.pendingStepIdx
         us.phase = 'moving'
       }
       continue
@@ -432,6 +449,18 @@ function updateUnits(elapsed, unitStates) {
             us.stepIndex = nextIdx
             us.targetX = step.x; us.targetZ = step.z
             us.moveRate = step.movementRate
+          } else {
+            us.waitRemaining = wait
+            us.phase = 'waiting'
+          }
+        } else if (us.mv.type === 'wander') {
+          const wait = sampleValue(us.mv.waitTime)
+          if (wait <= 0) {
+            const { tx, tz, moveRate } = pickWanderTarget(us)
+            us.facing = facingToward(us.x, us.z, tx, tz)
+            us.token.rotation.y = -us.facing
+            us.targetX = tx; us.targetZ = tz
+            us.moveRate = moveRate
           } else {
             us.waitRemaining = wait
             us.phase = 'waiting'
@@ -601,9 +630,10 @@ function loadMap(map, startOverride = null) {
       patrolSteps: [],
       stepIndex: 0,
       patrolDir: 1,
-      pendingStepIdx: 0,
+      pendingStepIdx: null,
       targetX: 0, targetZ: 0,
       moveRate: 1.0,
+      wanderCx: 0, wanderCz: 0, wanderR: 0,
       waitRemaining: 0,
       turnFrames: 0,
       turnStartFacing: 0,
@@ -623,6 +653,18 @@ function loadMap(map, startOverride = null) {
       const d0x = step0.x - ux, d0z = step0.z - uz
       if (d0x * d0x + d0z * d0z > 0.0001) {
         us.facing = facingToward(ux, uz, step0.x, step0.z)
+        unitToken.rotation.y = -us.facing
+      }
+      us.phase = 'moving'
+    } else if (mv.type === 'wander') {
+      const [cx, cz] = mapToWorld(mv.location.x, mv.location.y)
+      us.wanderCx = cx; us.wanderCz = cz; us.wanderR = mv.radius
+      const [tx, tz] = randomInCircle(cx, cz, mv.radius)
+      us.targetX = tx; us.targetZ = tz
+      us.moveRate = sampleValue(mv.speed)
+      const d0x = tx - ux, d0z = tz - uz
+      if (d0x * d0x + d0z * d0z > 0.0001) {
+        us.facing = facingToward(ux, uz, tx, tz)
         unitToken.rotation.y = -us.facing
       }
       us.phase = 'moving'
@@ -648,7 +690,7 @@ function loadMap(map, startOverride = null) {
 
   function animate(time) {
     animFrameId = requestAnimationFrame(animate)
-    const elapsed = lastTime === null ? 0 : (time - lastTime) / 1000
+    const elapsed = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.1)
     lastTime = time
 
     if (keys.has('Equal')) player.zoom = Math.max(ZOOM_MIN, player.zoom - ZOOM_RATE * elapsed)
