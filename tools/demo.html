@@ -686,6 +686,11 @@ function loadMap(map, startOverride = null) {
   // player state in world coords
   const player = { x: sx, z: sz, facing: start.angle * DEG_TO_RAD, zoom: 1.0 }
 
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault()
+    player.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, player.zoom + e.deltaY * 0.001))
+  }, { passive: false })
+
   let lastTime = null
 
   function animate(time) {
