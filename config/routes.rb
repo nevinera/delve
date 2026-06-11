@@ -16,7 +16,5 @@ Rails.application.routes.draw do
     resources :zones, only: [:index, :show, :new, :create]
     resources :character_classes, only: [:index, :show, :new, :create]
   end
-  resources :instances, only: [:show]
-
   root to: "users#index"
 end
