@@ -484,7 +484,10 @@ const ZOOM_MIN   = 0.5
 const ZOOM_MAX   = 1.5
 const CAM_BACK   = 45
 const CAM_HEIGHT = 50
+const CAM_RADIUS = Math.sqrt(CAM_BACK * CAM_BACK + CAM_HEIGHT * CAM_HEIGHT)
 const CAM_LOOK_AHEAD = 10
+const PITCH_MIN  = 20 * DEG_TO_RAD
+const PITCH_MAX  = 60 * DEG_TO_RAD
 
 const keys = new Set()
 window.addEventListener('keydown', e => keys.add(e.code))
@@ -684,7 +687,19 @@ function loadMap(map, startOverride = null) {
   const camera = new THREE.PerspectiveCamera(34, aspect, 0.1, 500)
 
   // player state in world coords
-  const player = { x: sx, z: sz, facing: start.angle * DEG_TO_RAD, zoom: 1.0 }
+  const player = { x: sx, z: sz, facing: start.angle * DEG_TO_RAD, zoom: 1.0, pitch: Math.atan2(CAM_HEIGHT, CAM_BACK) }
+
+  canvas.addEventListener('contextmenu', e => e.preventDefault())
+
+  let dragLastX = null, dragLastY = null
+  canvas.addEventListener('mousedown', e => { dragLastX = e.clientX; dragLastY = e.clientY })
+  canvas.addEventListener('mousemove', e => {
+    if (dragLastX === null) return
+    player.facing += (e.clientX - dragLastX) * 0.005
+    player.pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, player.pitch + (e.clientY - dragLastY) * 0.005))
+    dragLastX = e.clientX; dragLastY = e.clientY
+  })
+  window.addEventListener('mouseup', () => { dragLastX = null; dragLastY = null })
 
   canvas.addEventListener('wheel', e => {
     e.preventDefault()
@@ -731,10 +746,12 @@ function loadMap(map, startOverride = null) {
     token.rotation.y = -player.facing
 
     const s = player.zoom
+    const camHoriz = s * CAM_RADIUS * Math.cos(player.pitch)
+    const camVert  = s * CAM_RADIUS * Math.sin(player.pitch)
     camera.position.set(
-      player.x - s * CAM_BACK * fwdX,
-      s * CAM_HEIGHT,
-      player.z - s * CAM_BACK * fwdZ
+      player.x - camHoriz * fwdX,
+      camVert,
+      player.z - camHoriz * fwdZ
     )
     camera.lookAt(player.x + s * CAM_LOOK_AHEAD * fwdX, 0, player.z + s * CAM_LOOK_AHEAD * fwdZ)
     scene.fog.near = 60 * s
