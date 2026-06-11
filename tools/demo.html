@@ -266,6 +266,27 @@ function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x33333
   return group
 }
 
+// --- zone link helpers ---
+
+function findLinkedConnection(mapId, connId) {
+  for (const link of zoneJson.zoneLinks || []) {
+    if (link.connectionA.map === mapId && link.connectionA.connection === connId)
+      return link.connectionB
+    if (!link.oneWay && link.connectionB.map === mapId && link.connectionB.connection === connId)
+      return link.connectionA
+  }
+  return null
+}
+
+function distToSegment(px, pz, { x1, z1, x2, z2 }) {
+  const dx = x2 - x1, dz = z2 - z1
+  const lenSq = dx*dx + dz*dz
+  if (lenSq === 0) { const ex = px-x1, ez = pz-z1; return Math.sqrt(ex*ex + ez*ez) }
+  const t = Math.max(0, Math.min(1, ((px-x1)*dx + (pz-z1)*dz) / lenSq))
+  const cx = x1 + t*dx, cz = z1 + t*dz
+  return Math.sqrt((px-cx)**2 + (pz-cz)**2)
+}
+
 // --- controls ---
 
 const MOVE_RATE  = 15         // feet/sec
@@ -292,7 +313,32 @@ loadBtn.addEventListener('click', () => {
   loadMap(map)
 })
 
-function loadMap(map) {
+function triggerTransition(destMapId, destConnId, facingRad) {
+  const destMap = zoneJson.maps.find(m => m.identifier === destMapId)
+  if (!destMap) return
+  const destConn = (destMap.connections || []).find(c => c.identifier === destConnId)
+  if (!destConn) return
+
+  const { width, height } = destMap.feetDimensions
+  let sx, sy
+  if (destConn.type === 'line') {
+    sx = (destConn.start.x + destConn.end.x) / 2
+    sy = (destConn.start.y + destConn.end.y) / 2
+  } else {
+    sx = destConn.position.x
+    sy = destConn.position.y
+  }
+  // nudge toward map center to clear the 0.5ft collision radius
+  const dx = width / 2 - sx, dy = height / 2 - sy
+  const len = Math.sqrt(dx*dx + dy*dy) || 1
+  sx += (dx / len) * 2
+  sy += (dy / len) * 2
+
+  mapSelect.value = destMapId
+  loadMap(destMap, { x: sx, y: sy, angle: facingRad / DEG_TO_RAD })
+}
+
+function loadMap(map, startOverride = null) {
   if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null }
   if (renderer) { renderer.dispose(); renderer = null }
   canvasArea.innerHTML = ''
@@ -342,12 +388,16 @@ function loadMap(map) {
   const collision = new CollisionChecker(wallSegments)
 
   const connectionSegments = []
+  const linkedConnections = []   // { seg, destMapId, destConnId }
   for (const conn of map.connections || []) {
+    const dest = findLinkedConnection(map.identifier, conn.identifier)
     if (conn.type === 'line') {
       const worldPoints = [conn.start, conn.end].map(({ x, y }) => mapToWorld(x, y))
       scene.add(buildWall(worldPoints, { color: 0xff00ff, opacity: 0.4 }))
       const [x1, z1] = worldPoints[0], [x2, z2] = worldPoints[1]
-      connectionSegments.push({ x1, z1, x2, z2 })
+      const seg = { x1, z1, x2, z2 }
+      connectionSegments.push(seg)
+      if (dest) linkedConnections.push({ seg, destMapId: dest.map, destConnId: dest.connection })
     } else if (conn.type === 'point') {
       const [cx, cz] = mapToWorld(conn.position.x, conn.position.y)
       const marker = new THREE.Mesh(
@@ -356,7 +406,9 @@ function loadMap(map) {
       )
       marker.position.set(cx, 0, cz)
       scene.add(marker)
-      connectionSegments.push({ x1: cx, z1: cz, x2: cx, z2: cz })
+      const seg = { x1: cx, z1: cz, x2: cx, z2: cz }
+      connectionSegments.push(seg)
+      if (dest) linkedConnections.push({ seg, destMapId: dest.map, destConnId: dest.connection })
     }
   }
   // map boundary — world coords: x in [-width/2, width/2], z in [-height/2, height/2]
@@ -369,7 +421,7 @@ function loadMap(map) {
   )
   const connectionCollision = new CollisionChecker(connectionSegments)
 
-  const start = entryPosition(map)
+  const start = startOverride || entryPosition(map)
   const [sx, sz] = mapToWorld(start.x, start.y)
   const token = createPlayerToken(1.5)
   token.position.set(sx, 0, sz)
@@ -407,6 +459,13 @@ function loadMap(map) {
       player.z += (dz / len) * MOVE_RATE * elapsed
       ;({ x: player.x, z: player.z } = collision.pushOut(player.x, player.z, 1.5))
       ;({ x: player.x, z: player.z } = connectionCollision.pushOut(player.x, player.z, 0.5))
+
+      for (const lc of linkedConnections) {
+        if (distToSegment(player.x, player.z, lc.seg) <= 0.55) {
+          triggerTransition(lc.destMapId, lc.destConnId, player.facing)
+          return
+        }
+      }
     }
 
     token.position.set(player.x, 0, player.z)
