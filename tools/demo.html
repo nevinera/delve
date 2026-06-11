@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delve Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #ddd;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #2a2a2a;
+      border-bottom: 1px solid #444;
+      flex-shrink: 0;
+    }
+
+    #controls label { font-size: 13px; color: #aaa; white-space: nowrap; }
+
+    #zone-url {
+      flex: 1;
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 4px 6px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+    }
+
+    #controls select {
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 4px 6px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+    }
+
+    #fetch-btn, #load-btn {
+      background: #446;
+      border: 1px solid #668;
+      color: #cce;
+      padding: 4px 12px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    #fetch-btn:hover, #load-btn:hover { background: #558; }
+    #load-btn:disabled { background: #333; color: #666; cursor: default; border-color: #444; }
+
+    #canvas-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #placeholder {
+      color: #555;
+      font-size: 18px;
+      border: 2px dashed #444;
+      padding: 60px 80px;
+      border-radius: 8px;
+      text-align: center;
+      line-height: 2;
+    }
+  </style>
+</head>
+<body>
+
+<div id="controls">
+  <label>Zone JSON URL:</label>
+  <input type="text" id="zone-url" placeholder="https://raw.githubusercontent.com/…/zones/goblin-cave.full.json">
+  <button id="fetch-btn">Fetch</button>
+  <label>Map: <select id="map-select" disabled><option>—</option></select></label>
+  <button id="load-btn" disabled>Load</button>
+</div>
+
+<div id="canvas-area">
+  <div id="placeholder">Enter a zone JSON URL above and click Fetch.</div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.176.0/build/three.module.js'
+
+const zoneUrlInput = document.getElementById('zone-url')
+const fetchBtn     = document.getElementById('fetch-btn')
+const mapSelect    = document.getElementById('map-select')
+const loadBtn      = document.getElementById('load-btn')
+const canvasArea   = document.getElementById('canvas-area')
+
+let zoneJson = null
+let zoneBaseUrl = null
+let renderer = null
+
+// --- fetch zone JSON ---
+
+fetchBtn.addEventListener('click', fetchZone)
+zoneUrlInput.addEventListener('keydown', e => { if (e.key === 'Enter') fetchZone() })
+
+async function fetchZone() {
+  const url = zoneUrlInput.value.trim()
+  if (!url) return
+  fetchBtn.textContent = 'Fetching…'
+  fetchBtn.disabled = true
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    zoneJson = await res.json()
+    zoneBaseUrl = new URL('.', url).href
+    populateMapSelect(zoneJson)
+    loadBtn.disabled = false
+  } catch (e) {
+    alert(`Failed to fetch zone JSON: ${e.message}`)
+  } finally {
+    fetchBtn.textContent = 'Fetch'
+    fetchBtn.disabled = false
+  }
+}
+
+function populateMapSelect(json) {
+  mapSelect.innerHTML = ''
+  for (const map of json.maps || []) {
+    const opt = document.createElement('option')
+    opt.value = map.identifier
+    opt.textContent = map.name || map.identifier
+    mapSelect.appendChild(opt)
+  }
+  mapSelect.disabled = false
+}
+
+// --- entry point ---
+
+const DEG_TO_RAD = Math.PI / 180
+
+function entryPosition(map) {
+  const { width, height } = map.feetDimensions
+  const entryKey = Object.keys(zoneJson.entryPoints || {}).find(k => k.startsWith(map.identifier + '/'))
+  if (entryKey) {
+    const connId = entryKey.split('/')[1]
+    const conn = (map.connections || []).find(c => c.identifier === connId)
+    if (conn?.type === 'point') {
+      return { x: conn.position.x, y: conn.position.y, angle: conn.position.angle ?? 0 }
+    }
+    if (conn?.type === 'line') {
+      const mx = (conn.start.x + conn.end.x) / 2
+      const my = (conn.start.y + conn.end.y) / 2
+      // nudge a few feet toward map center so the token starts inside
+      const dx = width / 2 - mx, dy = height / 2 - my
+      const len = Math.sqrt(dx * dx + dy * dy) || 1
+      return { x: mx + (dx / len) * 4, y: my + (dy / len) * 4, angle: 0 }
+    }
+  }
+  return { x: width / 2, y: height / 2, angle: 0 }
+}
+
+// --- player token ---
+
+function addFacingArrow(group, radius, color) {
+  const hw = (0.3 * radius) / Math.sqrt(3)
+  const y  = 0.31
+  const verts = [
+     0,   y,       -1.4 * radius,
+    -hw,  y,       -1.1 * radius,
+     hw,  y,       -1.1 * radius,
+  ]
+  const fillGeo = new THREE.BufferGeometry()
+  fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+  fillGeo.setIndex([0, 1, 2])
+  fillGeo.computeVertexNormals()
+  group.add(new THREE.Mesh(fillGeo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })))
+
+  const borderVerts = verts.map((v, i) => i % 3 === 1 ? v + 0.005 : v)
+  const borderGeo = new THREE.BufferGeometry()
+  borderGeo.setAttribute('position', new THREE.Float32BufferAttribute(borderVerts, 3))
+  group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })))
+}
+
+const PLAYER_TOKEN_URL = 'https://raw.githubusercontent.com/nevinera/delve-content/refs/heads/main/character-tokens/male-elf-guard.webp'
+
+function createPlayerToken(radius) {
+  const group = new THREE.Group()
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: 0x2e7d32 })
+  )
+  body.position.y = 0.15
+  group.add(body)
+
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff })
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat)
+  portrait.rotation.x = -Math.PI / 2
+  portrait.position.y = 0.31
+  group.add(portrait)
+
+  new THREE.TextureLoader().load(PLAYER_TOKEN_URL, texture => {
+    portraitMat.map = texture
+    portraitMat.needsUpdate = true
+  })
+
+  addFacingArrow(group, radius, 0x81c784)
+  return group
+}
+
+const HOSTILITY_COLORS = {
+  hostile:  { body: 0xc62828, cone: 0xef9a9a },
+  neutral:  { body: 0xe65100, cone: 0xffcc80 },
+  friendly: { body: 0x1565c0, cone: 0x90caf9 },
+}
+
+function createUnitToken(radius, hostility, tokenImageUrl) {
+  const { body: bodyColor, cone: coneColor } = HOSTILITY_COLORS[hostility] || HOSTILITY_COLORS.hostile
+  const group = new THREE.Group()
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: bodyColor })
+  )
+  body.position.y = 0.15
+  group.add(body)
+
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff })
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat)
+  portrait.rotation.x = -Math.PI / 2
+  portrait.position.y = 0.31
+  group.add(portrait)
+
+  const urls = Array.isArray(tokenImageUrl) ? tokenImageUrl : [tokenImageUrl].filter(Boolean)
+  if (urls.length) {
+    const url = new URL(urls[Math.floor(Math.random() * urls.length)], zoneBaseUrl).href
+    new THREE.TextureLoader().load(url, texture => {
+      portraitMat.map = texture
+      portraitMat.needsUpdate = true
+    })
+  }
+
+  addFacingArrow(group, radius, coneColor)
+  return group
+}
+
+// --- collision ---
+
+class CollisionChecker {
+  constructor(segments) { this._segments = segments }
+
+  _closestPoint(px, pz, { x1, z1, x2, z2 }) {
+    const dx = x2 - x1, dz = z2 - z1
+    const lenSq = dx*dx + dz*dz
+    if (lenSq === 0) return { x: x1, z: z1 }
+    const t = Math.max(0, Math.min(1, ((px - x1)*dx + (pz - z1)*dz) / lenSq))
+    return { x: x1 + t*dx, z: z1 + t*dz }
+  }
+
+  pushOut(x, z, radius) {
+    let px = x, pz = z
+    for (const seg of this._segments) {
+      const cp = this._closestPoint(px, pz, seg)
+      const dx = px - cp.x, dz = pz - cp.z
+      const distSq = dx*dx + dz*dz
+      if (distSq > 0 && distSq < radius * radius) {
+        const dist = Math.sqrt(distSq)
+        px += (dx / dist) * (radius - dist)
+        pz += (dz / dist) * (radius - dist)
+      }
+    }
+    return { x: px, z: pz }
+  }
+}
+
+// --- wall rendering ---
+
+function computeWallPolygon(points, half) {
+  const normals = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i+1][0] - points[i][0], dz = points[i+1][1] - points[i][1]
+    const len = Math.sqrt(dx*dx + dz*dz)
+    normals.push([-dz/len, dx/len])
+  }
+  const offsetAt = (i, side) => {
+    let ox, oz
+    if (i === 0) {
+      ox = normals[0][0] * half; oz = normals[0][1] * half
+    } else if (i === points.length - 1) {
+      ox = normals[i-1][0] * half; oz = normals[i-1][1] * half
+    } else {
+      const [n0x, n0z] = normals[i-1], [n1x, n1z] = normals[i]
+      const mx = n0x+n1x, mz = n0z+n1z, mlen = Math.sqrt(mx*mx + mz*mz)
+      const dot = n0x*mx/mlen + n0z*mz/mlen
+      ox = mx/mlen*half/dot; oz = mz/mlen*half/dot
+    }
+    return [points[i][0] + side*ox, points[i][1] + side*oz]
+  }
+  const result = []
+  for (let i = 0; i < points.length; i++) result.push(offsetAt(i, 1))
+  for (let i = points.length - 1; i >= 0; i--) result.push(offsetAt(i, -1))
+  return result
+}
+
+function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
+  const poly = computeWallPolygon(worldPoints, thickness / 2)
+  const shape = new THREE.Shape()
+  poly.forEach(([x, z], i) => i === 0 ? shape.moveTo(x, -z) : shape.lineTo(x, -z))
+  shape.closePath()
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
+  const group = new THREE.Group()
+  group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity })))
+  group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: opacity * 2 })))
+  group.rotation.x = -Math.PI / 2
+  return group
+}
+
+// --- zone link helpers ---
+
+function findLinkedConnection(mapId, connId) {
+  for (const link of zoneJson.zoneLinks || []) {
+    if (link.connectionA.map === mapId && link.connectionA.connection === connId)
+      return link.connectionB
+    if (!link.oneWay && link.connectionB.map === mapId && link.connectionB.connection === connId)
+      return link.connectionA
+  }
+  return null
+}
+
+function distToSegment(px, pz, { x1, z1, x2, z2 }) {
+  const dx = x2 - x1, dz = z2 - z1
+  const lenSq = dx*dx + dz*dz
+  if (lenSq === 0) { const ex = px-x1, ez = pz-z1; return Math.sqrt(ex*ex + ez*ez) }
+  const t = Math.max(0, Math.min(1, ((px-x1)*dx + (pz-z1)*dz) / lenSq))
+  const cx = x1 + t*dx, cz = z1 + t*dz
+  return Math.sqrt((px-cx)**2 + (pz-cz)**2)
+}
+
+// --- unit movement ---
+
+const BASE_UNIT_SPEED = 10  // ft/sec
+
+function sampleValue(v) {
+  return Array.isArray(v) ? v[0] + Math.random() * (v[1] - v[0]) : v
+}
+
+function lerpAngle(a, b, t) {
+  const diff = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+  return a + diff * t
+}
+
+function facingToward(x1, z1, x2, z2) {
+  return Math.atan2(x2 - x1, -(z2 - z1))
+}
+
+function randomInCircle(cx, cz, r) {
+  const angle = Math.random() * Math.PI * 2
+  const dist = Math.sqrt(Math.random()) * r
+  return [cx + Math.cos(angle) * dist, cz + Math.sin(angle) * dist]
+}
+
+function nextPatrolStep(us) {
+  const n = us.patrolSteps.length
+  if (us.mv.choose === 'loop') return (us.stepIndex + 1) % n
+  if (us.mv.choose === 'return') {
+    let next = us.stepIndex + us.patrolDir
+    if (next >= n) { us.patrolDir = -1; next = n - 2 }
+    else if (next < 0) { us.patrolDir = 1; next = 1 }
+    return Math.max(0, Math.min(n - 1, next))
+  }
+  if (us.mv.choose === 'random') {
+    const choices = Array.from({ length: n }, (_, i) => i).filter(i => i !== us.stepIndex)
+    return choices[Math.floor(Math.random() * choices.length)]
+  }
+  return 0
+}
+
+function beginTurn(us, tx, tz, moveRate, pendingStepIdx = null) {
+  us.targetX = tx; us.targetZ = tz
+  us.moveRate = moveRate
+  us.pendingStepIdx = pendingStepIdx
+  us.turnStartFacing = us.facing
+  us.turnEndFacing = facingToward(us.x, us.z, tx, tz)
+  us.turnFrames = 3
+  us.phase = 'turning'
+}
+
+function pickWanderTarget(us) {
+  const [tx, tz] = randomInCircle(us.wanderCx, us.wanderCz, us.wanderR)
+  return { tx, tz, moveRate: sampleValue(us.mv.speed) }
+}
+
+function updateUnits(elapsed, unitStates) {
+  for (const us of unitStates) {
+    if (us.phase === 'still') continue
+
+    if (us.phase === 'waiting') {
+      us.waitRemaining -= elapsed
+      if (us.waitRemaining > 0) continue
+      if (us.mv.type === 'patrol') {
+        const nextIdx = nextPatrolStep(us)
+        const step = us.patrolSteps[nextIdx]
+        beginTurn(us, step.x, step.z, step.movementRate, nextIdx)
+      } else if (us.mv.type === 'wander') {
+        const { tx, tz, moveRate } = pickWanderTarget(us)
+        beginTurn(us, tx, tz, moveRate)
+      }
+      continue
+    }
+
+    if (us.phase === 'turning') {
+      us.turnFrames--
+      us.facing = lerpAngle(us.turnStartFacing, us.turnEndFacing, (3 - us.turnFrames) / 3)
+      us.token.rotation.y = -us.facing
+      if (us.turnFrames <= 0) {
+        us.facing = us.turnEndFacing
+        if (us.pendingStepIdx !== null) us.stepIndex = us.pendingStepIdx
+        us.phase = 'moving'
+      }
+      continue
+    }
+
+    if (us.phase === 'moving') {
+      const dx = us.targetX - us.x, dz = us.targetZ - us.z
+      const dist = Math.sqrt(dx * dx + dz * dz)
+      const move = us.baseSpeed * us.moveRate * elapsed
+
+      if (dist <= move || dist < 0.01) {
+        us.x = us.targetX; us.z = us.targetZ
+        if (us.mv.type === 'patrol') {
+          const wait = sampleValue(us.patrolSteps[us.stepIndex].waitTime)
+          if (wait <= 0) {
+            const nextIdx = nextPatrolStep(us)
+            const step = us.patrolSteps[nextIdx]
+            us.facing = facingToward(us.x, us.z, step.x, step.z)
+            us.token.rotation.y = -us.facing
+            us.stepIndex = nextIdx
+            us.targetX = step.x; us.targetZ = step.z
+            us.moveRate = step.movementRate
+          } else {
+            us.waitRemaining = wait
+            us.phase = 'waiting'
+          }
+        } else if (us.mv.type === 'wander') {
+          const wait = sampleValue(us.mv.waitTime)
+          if (wait <= 0) {
+            const { tx, tz, moveRate } = pickWanderTarget(us)
+            us.facing = facingToward(us.x, us.z, tx, tz)
+            us.token.rotation.y = -us.facing
+            us.targetX = tx; us.targetZ = tz
+            us.moveRate = moveRate
+          } else {
+            us.waitRemaining = wait
+            us.phase = 'waiting'
+          }
+        }
+      } else {
+        us.x += (dx / dist) * move
+        us.z += (dz / dist) * move
+      }
+      us.token.position.set(us.x, 0, us.z)
+    }
+  }
+}
+
+// --- controls ---
+
+const MOVE_RATE  = 15         // feet/sec
+const TURN_RATE  = 120 * DEG_TO_RAD  // rad/sec
+const ZOOM_RATE  = 0.5
+const ZOOM_MIN   = 0.5
+const ZOOM_MAX   = 1.5
+const CAM_BACK   = 45
+const CAM_HEIGHT = 50
+const CAM_RADIUS = Math.sqrt(CAM_BACK * CAM_BACK + CAM_HEIGHT * CAM_HEIGHT)
+const CAM_LOOK_AHEAD = 10
+const PITCH_MIN  = 20 * DEG_TO_RAD
+const PITCH_MAX  = 60 * DEG_TO_RAD
+
+const keys = new Set()
+window.addEventListener('keydown', e => keys.add(e.code))
+window.addEventListener('keyup',   e => keys.delete(e.code))
+window.addEventListener('blur',    () => keys.clear())
+
+// --- load map ---
+
+let animFrameId = null
+
+loadBtn.addEventListener('click', () => {
+  if (!zoneJson) return
+  const map = zoneJson.maps.find(m => m.identifier === mapSelect.value) || zoneJson.maps[0]
+  loadMap(map)
+})
+
+function triggerTransition(destMapId, destConnId, facingRad) {
+  const destMap = zoneJson.maps.find(m => m.identifier === destMapId)
+  if (!destMap) return
+  const destConn = (destMap.connections || []).find(c => c.identifier === destConnId)
+  if (!destConn) return
+
+  const { width, height } = destMap.feetDimensions
+  let sx, sy
+  if (destConn.type === 'line') {
+    sx = (destConn.start.x + destConn.end.x) / 2
+    sy = (destConn.start.y + destConn.end.y) / 2
+  } else {
+    sx = destConn.position.x
+    sy = destConn.position.y
+  }
+  // nudge toward map center to clear the 0.5ft collision radius
+  const dx = width / 2 - sx, dy = height / 2 - sy
+  const len = Math.sqrt(dx*dx + dy*dy) || 1
+  sx += (dx / len) * 2
+  sy += (dy / len) * 2
+
+  mapSelect.value = destMapId
+  loadMap(destMap, { x: sx, y: sy, angle: facingRad / DEG_TO_RAD })
+}
+
+function loadMap(map, startOverride = null) {
+  if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null }
+  if (renderer) { renderer.dispose(); renderer = null }
+  canvasArea.innerHTML = ''
+
+  const { width, height } = map.feetDimensions
+  const originX = -width / 2, originZ = height / 2
+  const mapToWorld = (x, y) => [x + originX, originZ - y]
+
+  const mapUrl = new URL(map.imageUrl, zoneBaseUrl).href
+
+  const canvas = document.createElement('canvas')
+  canvasArea.appendChild(canvas)
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+  renderer.setPixelRatio(window.devicePixelRatio)
+  fitRenderer()
+  window.addEventListener('resize', fitRenderer)
+
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color(0x000000)
+  scene.fog = new THREE.Fog(0x000000, 60, 150)
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4))
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5)
+  sun.position.set(5, 10, 5)
+  scene.add(sun)
+
+  new THREE.TextureLoader().load(mapUrl, texture => {
+    const mapPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshLambertMaterial({ map: texture })
+    )
+    mapPlane.rotation.x = -Math.PI / 2
+    scene.add(mapPlane)
+  })
+
+  const wallSegments = []
+  for (const barrier of map.barriers || []) {
+    if (barrier.type !== 'wall') continue
+    const worldPoints = barrier.locations.map(({ x, y }) => mapToWorld(x, y))
+    scene.add(buildWall(worldPoints))
+    for (let i = 0; i < worldPoints.length - 1; i++) {
+      const [x1, z1] = worldPoints[i], [x2, z2] = worldPoints[i + 1]
+      wallSegments.push({ x1, z1, x2, z2 })
+    }
+  }
+  const collision = new CollisionChecker(wallSegments)
+
+  const connectionSegments = []
+  const linkedConnections = []   // { seg, destMapId, destConnId }
+  for (const conn of map.connections || []) {
+    const dest = findLinkedConnection(map.identifier, conn.identifier)
+    if (conn.type === 'line') {
+      const worldPoints = [conn.start, conn.end].map(({ x, y }) => mapToWorld(x, y))
+      scene.add(buildWall(worldPoints, { color: 0xff00ff, opacity: 0.4 }))
+      const [x1, z1] = worldPoints[0], [x2, z2] = worldPoints[1]
+      const seg = { x1, z1, x2, z2 }
+      connectionSegments.push(seg)
+      if (dest) linkedConnections.push({ seg, destMapId: dest.map, destConnId: dest.connection })
+    } else if (conn.type === 'point') {
+      const [cx, cz] = mapToWorld(conn.position.x, conn.position.y)
+      const marker = new THREE.Mesh(
+        new THREE.CylinderGeometry(conn.fuzzRadius ?? 1, conn.fuzzRadius ?? 1, 0.8, 24),
+        new THREE.MeshLambertMaterial({ color: 0xff00ff, transparent: true, opacity: 0.4 })
+      )
+      marker.position.set(cx, 0, cz)
+      scene.add(marker)
+      const seg = { x1: cx, z1: cz, x2: cx, z2: cz }
+      connectionSegments.push(seg)
+      if (dest) linkedConnections.push({ seg, destMapId: dest.map, destConnId: dest.connection })
+    }
+  }
+  // map boundary — world coords: x in [-width/2, width/2], z in [-height/2, height/2]
+  const bx = width / 2, bz = height / 2
+  connectionSegments.push(
+    { x1: -bx, z1: -bz, x2:  bx, z2: -bz },  // north
+    { x1:  bx, z1: -bz, x2:  bx, z2:  bz },  // east
+    { x1:  bx, z1:  bz, x2: -bx, z2:  bz },  // south
+    { x1: -bx, z1:  bz, x2: -bx, z2: -bz }   // west
+  )
+  const connectionCollision = new CollisionChecker(connectionSegments)
+
+  const unitStates = []
+  for (const unit of map.units || []) {
+    const unitType = (zoneJson.unitTypes || {})[unit.unitType]
+    if (!unitType) continue
+    const [ux, uz] = mapToWorld(unit.position.x, unit.position.y)
+    const unitToken = createUnitToken(unitType.tokenRadius, unit.hostility, unitType.tokenImageUrl)
+    unitToken.position.set(ux, 0, uz)
+    unitToken.rotation.y = -(unit.position.angle * DEG_TO_RAD)
+    scene.add(unitToken)
+
+    const mv = unit.movement || { type: 'still' }
+    const us = {
+      token: unitToken,
+      x: ux, z: uz,
+      facing: unit.position.angle * DEG_TO_RAD,
+      mv,
+      baseSpeed: BASE_UNIT_SPEED * (unitType.speedFactor ?? 1.0),
+      phase: 'still',
+      patrolSteps: [],
+      stepIndex: 0,
+      patrolDir: 1,
+      pendingStepIdx: null,
+      targetX: 0, targetZ: 0,
+      moveRate: 1.0,
+      wanderCx: 0, wanderCz: 0, wanderR: 0,
+      waitRemaining: 0,
+      turnFrames: 0,
+      turnStartFacing: 0,
+      turnEndFacing: 0,
+    }
+
+    if (mv.type === 'patrol') {
+      us.patrolSteps = mv.steps.map(s => {
+        const [wx, wz] = mapToWorld(s.position.x, s.position.y)
+        return { x: wx, z: wz, movementRate: s.movementRate, waitTime: s.waitTime }
+      })
+      us.patrolDir = 1
+      us.stepIndex = 0
+      const step0 = us.patrolSteps[0]
+      us.targetX = step0.x; us.targetZ = step0.z
+      us.moveRate = step0.movementRate
+      const d0x = step0.x - ux, d0z = step0.z - uz
+      if (d0x * d0x + d0z * d0z > 0.0001) {
+        us.facing = facingToward(ux, uz, step0.x, step0.z)
+        unitToken.rotation.y = -us.facing
+      }
+      us.phase = 'moving'
+    } else if (mv.type === 'wander') {
+      const [cx, cz] = mapToWorld(mv.location.x, mv.location.y)
+      us.wanderCx = cx; us.wanderCz = cz; us.wanderR = mv.radius
+      const [tx, tz] = randomInCircle(cx, cz, mv.radius)
+      us.targetX = tx; us.targetZ = tz
+      us.moveRate = sampleValue(mv.speed)
+      const d0x = tx - ux, d0z = tz - uz
+      if (d0x * d0x + d0z * d0z > 0.0001) {
+        us.facing = facingToward(ux, uz, tx, tz)
+        unitToken.rotation.y = -us.facing
+      }
+      us.phase = 'moving'
+    }
+
+    unitStates.push(us)
+  }
+
+  const start = startOverride || entryPosition(map)
+  const [sx, sz] = mapToWorld(start.x, start.y)
+  const token = createPlayerToken(2.2)
+  token.position.set(sx, 0, sz)
+  token.rotation.y = -(start.angle * DEG_TO_RAD)
+  scene.add(token)
+
+  const aspect = 16 / 9
+  const camera = new THREE.PerspectiveCamera(34, aspect, 0.1, 500)
+
+  // player state in world coords
+  const player = { x: sx, z: sz, facing: start.angle * DEG_TO_RAD, zoom: 1.0, pitch: Math.atan2(CAM_HEIGHT, CAM_BACK) }
+
+  canvas.addEventListener('contextmenu', e => e.preventDefault())
+
+  let dragLastX = null, dragLastY = null
+  canvas.addEventListener('mousedown', e => { dragLastX = e.clientX; dragLastY = e.clientY })
+  canvas.addEventListener('mousemove', e => {
+    if (dragLastX === null) return
+    player.facing += (e.clientX - dragLastX) * 0.005
+    player.pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, player.pitch + (e.clientY - dragLastY) * 0.005))
+    dragLastX = e.clientX; dragLastY = e.clientY
+  })
+  window.addEventListener('mouseup', () => { dragLastX = null; dragLastY = null })
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault()
+    player.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, player.zoom + e.deltaY * 0.001))
+  }, { passive: false })
+
+  let lastTime = null
+
+  function animate(time) {
+    animFrameId = requestAnimationFrame(animate)
+    const elapsed = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.1)
+    lastTime = time
+
+    if (keys.has('Equal')) player.zoom = Math.max(ZOOM_MIN, player.zoom - ZOOM_RATE * elapsed)
+    if (keys.has('Minus')) player.zoom = Math.min(ZOOM_MAX, player.zoom + ZOOM_RATE * elapsed)
+
+    if (keys.has('KeyA')) player.facing -= TURN_RATE * elapsed
+    if (keys.has('KeyD')) player.facing += TURN_RATE * elapsed
+
+    const fwdX = Math.sin(player.facing), fwdZ = -Math.cos(player.facing)
+    let dx = 0, dz = 0
+    if (keys.has('KeyW')) { dx += fwdX; dz += fwdZ }
+    if (keys.has('KeyS')) { dx -= fwdX; dz -= fwdZ }
+    if (keys.has('KeyE')) { dx += -fwdZ; dz += fwdX }
+    if (keys.has('KeyQ')) { dx -= -fwdZ; dz -= fwdX }
+    if (dx !== 0 || dz !== 0) {
+      const len = Math.sqrt(dx * dx + dz * dz)
+      player.x += (dx / len) * MOVE_RATE * elapsed
+      player.z += (dz / len) * MOVE_RATE * elapsed
+      ;({ x: player.x, z: player.z } = collision.pushOut(player.x, player.z, 1.5))
+      ;({ x: player.x, z: player.z } = connectionCollision.pushOut(player.x, player.z, 0.5))
+
+      for (const lc of linkedConnections) {
+        if (distToSegment(player.x, player.z, lc.seg) <= 0.55) {
+          triggerTransition(lc.destMapId, lc.destConnId, player.facing)
+          return
+        }
+      }
+    }
+
+    updateUnits(elapsed, unitStates)
+
+    token.position.set(player.x, 0, player.z)
+    token.rotation.y = -player.facing
+
+    const s = player.zoom
+    const camHoriz = s * CAM_RADIUS * Math.cos(player.pitch)
+    const camVert  = s * CAM_RADIUS * Math.sin(player.pitch)
+    camera.position.set(
+      player.x - camHoriz * fwdX,
+      camVert,
+      player.z - camHoriz * fwdZ
+    )
+    camera.lookAt(player.x + s * CAM_LOOK_AHEAD * fwdX, 0, player.z + s * CAM_LOOK_AHEAD * fwdZ)
+    scene.fog.near = 60 * s
+    scene.fog.far  = 150 * s
+
+    renderer.render(scene, camera)
+  }
+
+  requestAnimationFrame(animate)
+}
+
+function fitRenderer() {
+  if (!renderer) return
+  const aspect = 16 / 9
+  const aw = canvasArea.clientWidth, ah = canvasArea.clientHeight
+  if (aw / ah > aspect) {
+    renderer.setSize(Math.round(ah * aspect), ah)
+  } else {
+    renderer.setSize(aw, Math.round(aw / aspect))
+  }
+}
+</script>
+
+</body>
+</html>
