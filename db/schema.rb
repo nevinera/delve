@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_11_123946) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_13_162242) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -35,6 +35,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_11_123946) do
     t.datetime "last_played_at"
     t.string "name", null: false
     t.integer "time_logged", default: 0, null: false
+    t.string "token_url", null: false
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false
     t.index ["character_class_id"], name: "index_characters_on_character_class_id"
