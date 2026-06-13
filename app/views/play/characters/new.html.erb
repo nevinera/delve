@@ -1,0 +1,30 @@
+<h1>New Character</h1>
+
+<%= form_with model: @character, url: play_characters_path do |f| %>
+  <% if @character.errors.any? %>
+    <ul>
+      <% @character.errors.full_messages.each do |msg| %>
+        <li><%= msg %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <div>
+    <%= f.label :name %>
+    <%= f.text_field :name %>
+  </div>
+
+  <div>
+    <%= f.label :token_url, "Token image URL" %>
+    <%= f.text_field :token_url %>
+  </div>
+
+  <div>
+    <%= f.label :character_class_id, "Class" %>
+    <%= f.select :character_class_id, @character_classes.map { |cc| ["#{cc.full_identifier} #{cc.version}", cc.id] }, {include_blank: "Select a class"} %>
+  </div>
+
+  <%= f.submit "Create" %>
+<% end %>
+
+<%= link_to "Cancel", play_characters_path %>
