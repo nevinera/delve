@@ -51,6 +51,23 @@ RSpec.describe Character, type: :model do
       expect(c.errors[:name]).to be_present
     end
 
+    it "requires a token_url" do
+      c = build(:character, user: user, character_class: character_class, token_url: nil)
+      expect(c).not_to be_valid
+      expect(c.errors[:token_url]).to be_present
+    end
+
+    it "rejects a non-URL token_url" do
+      c = build(:character, user: user, character_class: character_class, token_url: "not-a-url")
+      expect(c).not_to be_valid
+      expect(c.errors[:token_url]).to be_present
+    end
+
+    it "accepts an https token_url" do
+      c = build(:character, user: user, character_class: character_class, token_url: "https://example.com/token.webp")
+      expect(c).to be_valid
+    end
+
     it "requires a user" do
       c = build(:character, character_class: character_class)
       c.user = nil

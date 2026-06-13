@@ -29,6 +29,6 @@ class Play::CharactersController < Play::BaseController
   private
 
   def character_params
-    params.require(:character).permit(:name, :character_class_id)
+    params.require(:character).permit(:name, :character_class_id, :token_url)
   end
 end

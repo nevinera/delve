@@ -60,7 +60,7 @@ RSpec.describe "Play::Characters", type: :request do
       context "with valid params" do
         it "creates a character and redirects to show" do
           expect {
-            post "/play/characters", params: {character: {name: "Briana-BB", character_class_id: character_class.id}}
+            post "/play/characters", params: {character: {name: "Briana-BB", character_class_id: character_class.id, token_url: "https://example.com/token.webp"}}
           }.to change(Character, :count).by(1)
           expect(response).to redirect_to(play_character_path(Character.last))
         end
