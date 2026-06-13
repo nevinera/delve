@@ -18,7 +18,7 @@ Rails.application.routes.draw do
   end
 
   namespace :play do
-    resources :characters, only: [:index, :show, :new, :create]
+    resources :characters, only: [:index, :show, :new, :create, :edit, :update]
   end
   root to: "users#index"
 end

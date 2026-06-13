@@ -1,0 +1,20 @@
+<h1><%= @character.name %></h1>
+
+<%= form_with model: @character, url: play_character_path(@character), method: :patch do |f| %>
+  <% if @character.errors.any? %>
+    <ul>
+      <% @character.errors.full_messages.each do |msg| %>
+        <li><%= msg %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <div>
+    <%= f.label :token_url, "Token image URL" %>
+    <%= f.text_field :token_url %>
+  </div>
+
+  <%= f.submit "Save" %>
+<% end %>
+
+<%= link_to "Cancel", play_character_path(@character) %>

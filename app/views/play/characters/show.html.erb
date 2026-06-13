@@ -5,4 +5,5 @@
 <p>Time played: <%= (@character.time_logged / 3600.0).round(1) %> hours</p>
 <p>Last played: <%= @character.last_played_at&.strftime("%Y-%m-%d %H:%M") || "Never" %></p>
 
+<%= link_to "Edit token", edit_play_character_path(@character) %>
 <%= link_to "All characters", play_characters_path %>

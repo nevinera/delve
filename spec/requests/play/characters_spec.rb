@@ -20,6 +20,11 @@ RSpec.describe "Play::Characters", type: :request do
       get "/play/characters/new"
       expect(response).to redirect_to("/login")
     end
+
+    it "redirects edit to login" do
+      get "/play/characters/#{character.id}/edit"
+      expect(response).to redirect_to("/login")
+    end
   end
 
   context "when logged in" do
@@ -79,6 +84,31 @@ RSpec.describe "Play::Characters", type: :request do
           post "/play/characters", params: {character: {name: "Ariana-AA", character_class_id: character_class.id}}
           expect(response).to have_http_status(:unprocessable_content)
           expect(response.body).to include("already been taken")
+        end
+      end
+    end
+
+    describe "GET /play/characters/:id/edit" do
+      it "returns 200" do
+        get "/play/characters/#{character.id}/edit"
+        expect(response).to have_http_status(:ok)
+      end
+    end
+
+    describe "PATCH /play/characters/:id" do
+      context "with a valid token_url" do
+        it "updates the token and redirects to show" do
+          patch "/play/characters/#{character.id}", params: {character: {token_url: "https://example.com/new-token.webp"}}
+          expect(response).to redirect_to(play_character_path(character))
+          expect(character.reload.token_url).to eq("https://example.com/new-token.webp")
+        end
+      end
+
+      context "with an invalid token_url" do
+        it "re-renders edit with an error" do
+          patch "/play/characters/#{character.id}", params: {character: {token_url: "not-a-url"}}
+          expect(response).to have_http_status(:unprocessable_content)
+          expect(response.body).to include("must be a valid URL")
         end
       end
     end
