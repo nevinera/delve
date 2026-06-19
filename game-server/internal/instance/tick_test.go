@@ -16,6 +16,7 @@ func startedInstance(t *testing.T, reg *instance.Registry) *instance.Instance {
 	t.Helper()
 	inst := makeInstance()
 	inst.EmptyTimeout = shortTimeout
+	inst.SlotWaitTimeout = shortTimeout
 	require.NoError(t, inst.Start(reg))
 	reg.Add(inst)
 	return inst
@@ -56,8 +57,13 @@ func TestInstance_DoesNotAutoStop_WhenSlotPresent(t *testing.T) {
 	inst := startedInstance(t, reg)
 	t.Cleanup(inst.Stop)
 
-	_, err := inst.AddSlot("Aldric", puncherClass)
+	slot, err := inst.AddSlot("Aldric", puncherClass)
 	require.NoError(t, err)
+
+	// Connect the slot so it stays in SlotStateConnected (not prunable).
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
 
 	select {
 	case <-inst.Done():
@@ -65,6 +71,55 @@ func TestInstance_DoesNotAutoStop_WhenSlotPresent(t *testing.T) {
 	case <-time.After(shortTimeout * 3):
 		// still running - correct
 	}
+}
+
+func waitForSlotCount(t *testing.T, inst *instance.Instance, target int) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		total, _ := inst.SlotCounts()
+		if total == target {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("slot count did not reach %d within deadline", target)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func TestInstance_PrunesPendingSlot_AfterTimeout(t *testing.T) {
+	reg := instance.NewRegistry()
+	inst := startedInstance(t, reg)
+	t.Cleanup(inst.Stop)
+
+	_, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	total, _ := inst.SlotCounts()
+	assert.Equal(t, 1, total, "slot should exist immediately after creation")
+
+	waitForSlotCount(t, inst, 0)
+}
+
+func TestInstance_PrunesWaitingSlot_AfterTimeout(t *testing.T) {
+	reg := instance.NewRegistry()
+	inst := startedInstance(t, reg)
+	t.Cleanup(inst.Stop)
+
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	inst.DisconnectSlot(slot.ID)
+	close(done)
+
+	total, _ := inst.SlotCounts()
+	assert.Equal(t, 1, total, "slot should still exist immediately after disconnect")
+
+	waitForSlotCount(t, inst, 0)
 }
 
 func TestInstance_ResetsEmptyTimer_WhenSlotAdded(t *testing.T) {

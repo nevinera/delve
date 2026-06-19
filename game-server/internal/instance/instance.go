@@ -49,6 +49,10 @@ type Instance struct {
 	// Must be set before Start() is called.
 	EmptyTimeout time.Duration
 
+	// SlotWaitTimeout overrides SlotWaitingTimeout when non-zero. Intended for
+	// tests. Must be set before Start() is called.
+	SlotWaitTimeout time.Duration
+
 	slots                 map[uuid.UUID]*InstanceSlot
 	slotsMu               sync.RWMutex
 	atomicSlotCount       atomic.Int64

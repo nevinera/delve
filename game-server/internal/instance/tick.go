@@ -14,6 +14,10 @@ const TickInterval = 100 * time.Millisecond
 // shuts itself down. Override per-instance via Instance.EmptyTimeout for tests.
 const EmptyInstanceTimeout = 60 * time.Second
 
+// SlotWaitingTimeout is how long a slot can remain in SlotStateWaiting before
+// it is removed. Override per-instance via Instance.SlotWaitTimeout for tests.
+const SlotWaitingTimeout = 5 * time.Minute
+
 // Start builds the initial InstanceState from the zone config, transitions the
 // instance to StatusActive, and launches the tick goroutine. Returns an error
 // if the zone config cannot produce a valid initial state (e.g. units with
@@ -99,6 +103,13 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			}
 
 			prevState = state.Clone()
+
+			// Remove slots that have been pending or waiting too long.
+			slotWaitTimeout := inst.SlotWaitTimeout
+			if slotWaitTimeout == 0 {
+				slotWaitTimeout = SlotWaitingTimeout
+			}
+			inst.pruneStaleSlots(now, slotWaitTimeout)
 
 			// Auto-stop when the instance has had no slots for the empty timeout.
 			total, _ := inst.SlotCounts()
