@@ -50,7 +50,7 @@ func addTestInstance(t *testing.T, reg *instance.Registry) *instance.Instance {
 		}}},
 		instance.DefaultMaxSlots,
 	)
-	require.NoError(t, inst.Start())
+	require.NoError(t, inst.Start(nil))
 	t.Cleanup(inst.Stop)
 	reg.Add(inst)
 	return inst

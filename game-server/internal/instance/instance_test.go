@@ -57,7 +57,7 @@ func TestNewInstance_Fields(t *testing.T) {
 
 func TestInstance_Start_TransitionsToActive(t *testing.T) {
 	inst := makeInstance()
-	err := inst.Start()
+	err := inst.Start(nil)
 	require.NoError(t, err)
 	t.Cleanup(inst.Stop)
 
@@ -66,14 +66,14 @@ func TestInstance_Start_TransitionsToActive(t *testing.T) {
 
 func TestInstance_Stop_TransitionsToStopping(t *testing.T) {
 	inst := makeInstance()
-	require.NoError(t, inst.Start())
+	require.NoError(t, inst.Start(nil))
 	inst.Stop()
 	assert.Equal(t, instance.StatusStopping, inst.Status)
 }
 
 func TestInstance_Stop_CompletesWithinTimeout(t *testing.T) {
 	inst := makeInstance()
-	require.NoError(t, inst.Start())
+	require.NoError(t, inst.Start(nil))
 
 	stopped := make(chan struct{})
 	go func() {
@@ -103,7 +103,7 @@ func TestInstance_Start_InvalidZone_ReturnsError(t *testing.T) {
 	}
 	inst := instance.NewInstance(uuid.New(), "db-1", "zone-test", "v1", "http://example.com", zone, instance.DefaultMaxSlots)
 
-	err := inst.Start()
+	err := inst.Start(nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "has no identifier")
 	assert.Equal(t, instance.StatusLoading, inst.Status)
