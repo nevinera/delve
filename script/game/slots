@@ -9,17 +9,41 @@
 #   script/game/slots show <instance-id> <slot-id>
 #   script/game/slots create <instance-id> <character-name> <path-to-class-json>
 #   script/game/slots destroy <instance-id> <slot-id>
+#   script/game/slots request <zone-config-path-or-url> <character-name> <path-to-class-json>
+#                             [--zone-id ID] [--version VER] [--database-id ID] [--instance UUID]
 #
 # Environment variables:
 #   GAME_SERVER_URL          - base URL (default: http://localhost:8090)
 #   GAME_SERVER_AUTH_TOKENS  - comma-separated token list; the first token is used
 
 require "json"
+require "net/http"
+require "optparse"
+require "securerandom"
+require "uri"
 require "environment_helpers"
 require_relative "../../lib/game_api"
 
 def pretty(obj)
   JSON.pretty_generate(obj)
+end
+
+# --- Zone loading (mirrors script/game/instances) ---
+
+def load_zone(source)
+  if source.match?(%r{\Ahttps?://})
+    res = Net::HTTP.get_response(URI(source))
+    abort "Failed to download zone config (#{res.code})" unless res.is_a?(Net::HTTPSuccess)
+    [res.body, source]
+  else
+    path = File.expand_path(source)
+    abort "File not found: #{path}" unless File.exist?(path)
+    [File.read(path), "file://#{path}"]
+  end
+end
+
+def derive_zone_id(source)
+  File.basename(source).sub(/\.full\.json\z/, "").sub(/\.json\z/, "")
 end
 
 # --- Subcommands ---
@@ -42,6 +66,29 @@ def cmd_destroy(instance_id, slot_id)
   abort "Usage: destroy <instance-id> <slot-id>" unless instance_id && slot_id
   GameApi.slots.destroy(instance_id: instance_id, slot_id: slot_id)
   puts "Destroyed slot #{slot_id}."
+end
+
+def cmd_request(source, character_name, class_path, opts)
+  abort "Usage: request <zone-config-path-or-url> <character-name> <path-to-class-json>" unless source && character_name && class_path
+
+  zone_json, source_url = load_zone(source)
+
+  class_file = File.expand_path(class_path)
+  abort "File not found: #{class_file}" unless File.exist?(class_file)
+  character_class = JSON.parse(File.read(class_file))
+
+  attrs = {
+    zone_identifier: opts[:zone_id] || derive_zone_id(source),
+    version: opts[:version] || "dev",
+    database_id: opts[:database_id] || "dev-#{SecureRandom.hex(4)}",
+    source_url: source_url,
+    zone_config: JSON.parse(zone_json),
+    character_name: character_name,
+    character_class: character_class
+  }
+  attrs[:instance_identifier] = opts[:instance] if opts[:instance]
+
+  puts pretty(GameApi.slots.request(attrs))
 end
 
 def cmd_create(instance_id, character_name, class_path)
@@ -67,6 +114,15 @@ begin
   case subcommand
   when "active"
     cmd_active
+  when "request"
+    opts = {}
+    OptionParser.new do |o|
+      o.on("--zone-id ID", "Zone identifier (default: derived from filename)") { |v| opts[:zone_id] = v }
+      o.on("--version VER", "Version string (default: dev)") { |v| opts[:version] = v }
+      o.on("--database-id ID", "Database ID (default: dev-<random hex>)") { |v| opts[:database_id] = v }
+      o.on("--instance UUID", "Join a specific instance (optional)") { |v| opts[:instance] = v }
+    end.parse!(ARGV)
+    cmd_request(ARGV.shift, ARGV.shift, ARGV.shift, opts)
   when "list"
     cmd_list(ARGV.shift)
   when "show"
@@ -76,9 +132,10 @@ begin
   when "create"
     cmd_create(ARGV.shift, ARGV.shift, ARGV.shift)
   else
-    warn "Usage: script/game/slots <active|list|show|create|destroy> [args]"
+    warn "Usage: script/game/slots <active|request|list|show|create|destroy> [args]"
     warn ""
     warn "  active"
+    warn "  request <zone-config-path-or-url> <character-name> <path-to-class-json> [--zone-id ID] [--version VER] [--database-id ID] [--instance UUID]"
     warn "  list <instance-id>"
     warn "  show <instance-id> <slot-id>"
     warn "  create <instance-id> <character-name> <path-to-class-json>"
