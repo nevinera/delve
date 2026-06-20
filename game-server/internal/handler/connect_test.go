@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 // mountConnect builds a router exposing only the connect route.
 func mountConnect(reg *instance.Registry) http.Handler {
 	r := chi.NewRouter()
-	sh := handler.NewSlots(reg)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
 	r.Get("/instances/{instanceID}/slots/{slotID}/connect", sh.Connect)
 	return r
 }

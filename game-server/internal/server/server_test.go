@@ -67,6 +67,7 @@ func TestRouting(t *testing.T) {
 func TestAuth(t *testing.T) {
 	tests := []struct {
 		name       string
+		method     string
 		path       string
 		authHeader string
 		wantStatus int
@@ -76,6 +77,13 @@ func TestAuth(t *testing.T) {
 			path:       "/status.json",
 			authHeader: "",
 			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "slots/request requires auth",
+			method:     http.MethodPost,
+			path:       "/slots/request",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:       "slots/active requires auth",
@@ -123,7 +131,11 @@ func TestAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			method := tt.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			req := httptest.NewRequest(method, tt.path, nil)
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}

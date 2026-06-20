@@ -8,20 +8,23 @@ import (
 )
 
 const defaultMaxSlots = 25
+const defaultMaxInstances = 200
 
 type Config struct {
-	Port       string
-	Debug      bool
-	AuthTokens []string
-	MaxSlots   int
+	Port         string
+	Debug        bool
+	AuthTokens   []string
+	MaxSlots     int
+	MaxInstances int
 }
 
 func Load() *Config {
 	return &Config{
-		Port:       port(),
-		Debug:      debug(),
-		AuthTokens: authTokens(),
-		MaxSlots:   maxSlots(),
+		Port:         port(),
+		Debug:        debug(),
+		AuthTokens:   authTokens(),
+		MaxSlots:     maxSlots(),
+		MaxInstances: maxInstances(),
 	}
 }
 
@@ -59,6 +62,20 @@ func maxSlots() int {
 	if err != nil || n < 1 {
 		slog.Warn("invalid GAME_MAX_SLOTS value, using default", "value", v, "default", defaultMaxSlots)
 		return defaultMaxSlots
+	}
+	return n
+}
+
+// maxInstances parses GAME_MAX_INSTANCES. Defaults to 200 if unset or unparseable.
+func maxInstances() int {
+	v := os.Getenv("GAME_MAX_INSTANCES")
+	if v == "" {
+		return defaultMaxInstances
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		slog.Warn("invalid GAME_MAX_INSTANCES value, using default", "value", v, "default", defaultMaxInstances)
+		return defaultMaxInstances
 	}
 	return n
 }

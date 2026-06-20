@@ -15,11 +15,13 @@ import (
 
 // Slots handles CRUD operations on slots within a running instance.
 type Slots struct {
-	registry *instance.Registry
+	registry     *instance.Registry
+	maxInstances int
+	maxSlots     int
 }
 
-func NewSlots(registry *instance.Registry) *Slots {
-	return &Slots{registry: registry}
+func NewSlots(registry *instance.Registry, maxInstances, maxSlots int) *Slots {
+	return &Slots{registry: registry, maxInstances: maxInstances, maxSlots: maxSlots}
 }
 
 type createSlotRequest struct {
