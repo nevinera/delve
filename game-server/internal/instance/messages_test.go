@@ -239,6 +239,86 @@ func TestDeltaMsg_NewUnit(t *testing.T) {
 	}
 }
 
+func TestFullStateMsg_UnitWithTarget(t *testing.T) {
+	s := stateWithUnit(t)
+	targetID := uuid.New()
+	for _, u := range s.Units {
+		u.Target = &targetID
+	}
+
+	msg := fullState(t, s)
+	units := msg["units"].(map[string]any)
+	for _, u := range units {
+		unit := u.(map[string]any)
+		assert.Equal(t, targetID.String(), unit["target"])
+	}
+}
+
+func TestDeltaMsg_TargetSet(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	targetID := uuid.New()
+	for _, u := range curr.Units {
+		u.Target = &targetID
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Equal(t, targetID.String(), p["target"])
+	}
+}
+
+func TestDeltaMsg_TargetCleared(t *testing.T) {
+	prev := stateWithUnit(t)
+	targetID := uuid.New()
+	for _, u := range prev.Units {
+		u.Target = &targetID
+	}
+	curr := prev.Clone()
+	for _, u := range curr.Units {
+		u.Target = nil
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Nil(t, p["target"])
+	}
+}
+
+func TestDeltaMsg_TargetUnchanged_NotInPatch(t *testing.T) {
+	prev := stateWithUnit(t)
+	targetID := uuid.New()
+	for _, u := range prev.Units {
+		u.Target = &targetID
+	}
+	curr := prev.Clone()
+
+	msg := delta(t, prev, curr)
+	assert.Empty(t, msg["unit_updates"])
+}
+
+func TestDeltaMsg_MapChanged(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	for _, u := range curr.Units {
+		u.MapIdentifier = "m2"
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Equal(t, "m2", p["map_identifier"])
+	}
+}
+
 func TestDeltaMsg_RemovedUnit(t *testing.T) {
 	prev := stateWithUnit(t)
 	curr := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}

@@ -17,6 +17,7 @@ module GameApi
   class AuthError < Error; end
   class NotFoundError < Error; end
   class UnprocessableError < Error; end
+  class CapacityError < Error; end
   class InvalidAttrsError < Error; end
 
   class BaseClient
@@ -50,11 +51,11 @@ module GameApi
       problems
     end
 
-    def get(path) = request(Net::HTTP::Get, path)
-    def post(path, body) = request(Net::HTTP::Post, path, body: body)
-    def delete(path) = request(Net::HTTP::Delete, path)
+    def get(path) = http_request(Net::HTTP::Get, path)
+    def post(path, body) = http_request(Net::HTTP::Post, path, body: body)
+    def delete(path) = http_request(Net::HTTP::Delete, path)
 
-    def request(req_class, path, body: nil)
+    def http_request(req_class, path, body: nil)
       uri = URI("#{@base_url}#{path}")
       req = req_class.new(uri)
       req["Authorization"] = "Bearer #{@token}" if @token
@@ -66,7 +67,7 @@ module GameApi
       handle_response(res)
     end
 
-    ERROR_CLASSES = {401 => AuthError, 404 => NotFoundError, 422 => UnprocessableError}.freeze
+    ERROR_CLASSES = {401 => AuthError, 404 => NotFoundError, 406 => CapacityError, 422 => UnprocessableError}.freeze
 
     def handle_response(res)
       code = res.code.to_i

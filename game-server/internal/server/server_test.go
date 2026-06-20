@@ -35,6 +35,12 @@ func TestRouting(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name:       "POST /slots/active returns 405",
+			method:     http.MethodPost,
+			path:       "/slots/active",
+			wantStatus: http.StatusMethodNotAllowed,
+		},
+		{
 			name:       "unknown route returns 404",
 			method:     http.MethodGet,
 			path:       "/unknown",
@@ -61,6 +67,7 @@ func TestRouting(t *testing.T) {
 func TestAuth(t *testing.T) {
 	tests := []struct {
 		name       string
+		method     string
 		path       string
 		authHeader string
 		wantStatus int
@@ -69,6 +76,25 @@ func TestAuth(t *testing.T) {
 			name:       "status is public",
 			path:       "/status.json",
 			authHeader: "",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "slots/request requires auth",
+			method:     http.MethodPost,
+			path:       "/slots/request",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "slots/active requires auth",
+			path:       "/slots/active",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "slots/active accepts valid token",
+			path:       "/slots/active",
+			authHeader: "Bearer " + testToken,
 			wantStatus: http.StatusOK,
 		},
 		{
@@ -95,11 +121,21 @@ func TestAuth(t *testing.T) {
 			authHeader: "",
 			wantStatus: http.StatusUnauthorized,
 		},
+		{
+			name:       "connect is public but rejects missing token",
+			path:       "/instances/00000000-0000-0000-0000-000000000001/slots/00000000-0000-0000-0000-000000000002/connect",
+			authHeader: "",
+			wantStatus: http.StatusNotFound, // instance not found, but no 401 — auth is via ?token query param
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			method := tt.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			req := httptest.NewRequest(method, tt.path, nil)
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
