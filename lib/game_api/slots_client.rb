@@ -4,6 +4,10 @@ require_relative "base_client"
 
 module GameApi
   class SlotsClient < BaseClient
+    def active
+      get("/slots/active")
+    end
+
     def list(instance_id:)
       get("/instances/#{instance_id}/slots")
     end

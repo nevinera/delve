@@ -17,6 +17,44 @@ RSpec.describe GameApi::SlotsClient do
     {id: slot_id, state: "pending", character_name: "Aldric"}.to_json
   end
 
+  # --- active ---
+
+  describe "#active" do
+    let(:active_slot) do
+      {
+        instance_identifier: "inst-uuid", slot_id: slot_id, token: "tok-uuid",
+        character_name: "Aldric", state: "connected"
+      }.to_json
+    end
+
+    it "returns the active slots list" do
+      stub_request(:get, "#{base_url}/slots/active")
+        .to_return(status: 200, body: %({"slots":[#{active_slot}]}), headers: json_headers)
+
+      result = client.active
+      expect(result["slots"].length).to eq(1)
+      expect(result["slots"].first["token"]).to eq("tok-uuid")
+      expect(result["slots"].first["state"]).to eq("connected")
+    end
+
+    it "sends the Bearer token" do
+      stub_request(:get, "#{base_url}/slots/active")
+        .to_return(status: 200, body: '{"slots":[]}', headers: json_headers)
+
+      client.active
+      expect(WebMock).to have_requested(:get, "#{base_url}/slots/active")
+        .with(headers: {"Authorization" => "Bearer #{token}"})
+    end
+
+    it "returns empty slots when none are active" do
+      stub_request(:get, "#{base_url}/slots/active")
+        .to_return(status: 200, body: '{"slots":[]}', headers: json_headers)
+
+      result = client.active
+      expect(result["slots"]).to eq([])
+    end
+  end
+
   # --- list ---
 
   describe "#list" do
