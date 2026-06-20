@@ -68,15 +68,15 @@ def cmd_destroy(instance_id, slot_id)
   puts "Destroyed slot #{slot_id}."
 end
 
-def cmd_request(source, character_name, class_path, opts)
-  abort "Usage: request <zone-config-path-or-url> <character-name> <path-to-class-json>" unless source && character_name && class_path
+def load_class(class_path)
+  path = File.expand_path(class_path)
+  abort "File not found: #{path}" unless File.exist?(path)
+  JSON.parse(File.read(path))
+end
 
-  zone_json, source_url = load_zone(source)
-
-  class_file = File.expand_path(class_path)
-  abort "File not found: #{class_file}" unless File.exist?(class_file)
-  character_class = JSON.parse(File.read(class_file))
-
+def build_request_attrs(zone_info, character_info, opts)
+  source, zone_json, source_url = zone_info
+  character_name, character_class = character_info
   attrs = {
     zone_identifier: opts[:zone_id] || derive_zone_id(source),
     version: opts[:version] || "dev",
@@ -87,7 +87,13 @@ def cmd_request(source, character_name, class_path, opts)
     character_class: character_class
   }
   attrs[:instance_identifier] = opts[:instance] if opts[:instance]
+  attrs
+end
 
+def cmd_request(source, character_name, class_path, opts)
+  abort "Usage: request <zone-config-path-or-url> <character-name> <path-to-class-json>" unless source && character_name && class_path
+  zone_json, source_url = load_zone(source)
+  attrs = build_request_attrs([source, zone_json, source_url], [character_name, load_class(class_path)], opts)
   puts pretty(GameApi.slots.request(attrs))
 end
 

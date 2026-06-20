@@ -65,12 +65,12 @@ RSpec.describe GameApi::BaseClient do
       end
     end
 
-    it "raises ServiceUnavailableError on 503" do
+    it "raises CapacityError on 406" do
       stub_request(:get, "#{base_url}/status.json")
-        .to_return(status: 503, body: '{"error":"server is at maximum instance capacity"}', headers: json_headers)
+        .to_return(status: 406, body: '{"error":"server is at maximum instance capacity"}', headers: json_headers)
 
-      expect { client.status }.to raise_error(GameApi::ServiceUnavailableError) do |e|
-        expect(e.status).to eq(503)
+      expect { client.status }.to raise_error(GameApi::CapacityError) do |e|
+        expect(e.status).to eq(406)
         expect(e.message).to include("maximum instance capacity")
       end
     end

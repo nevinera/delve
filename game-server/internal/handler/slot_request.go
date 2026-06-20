@@ -85,7 +85,7 @@ func (h *Slots) requestToAnyInstance(w http.ResponseWriter, r *http.Request, req
 	inst := instance.SelectBestInstance(h.registry.List(), req.ZoneIdentifier, req.Version)
 	if inst == nil {
 		if h.registry.Count() >= h.maxInstances {
-			writeError(w, r, http.StatusServiceUnavailable, "server is at maximum instance capacity")
+			writeError(w, r, http.StatusNotAcceptable, "server is at maximum instance capacity")
 			return
 		}
 		var err error

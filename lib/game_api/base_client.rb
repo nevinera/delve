@@ -17,7 +17,7 @@ module GameApi
   class AuthError < Error; end
   class NotFoundError < Error; end
   class UnprocessableError < Error; end
-  class ServiceUnavailableError < Error; end
+  class CapacityError < Error; end
   class InvalidAttrsError < Error; end
 
   class BaseClient
@@ -67,7 +67,7 @@ module GameApi
       handle_response(res)
     end
 
-    ERROR_CLASSES = {401 => AuthError, 404 => NotFoundError, 422 => UnprocessableError, 503 => ServiceUnavailableError}.freeze
+    ERROR_CLASSES = {401 => AuthError, 404 => NotFoundError, 406 => CapacityError, 422 => UnprocessableError}.freeze
 
     def handle_response(res)
       code = res.code.to_i

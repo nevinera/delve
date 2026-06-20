@@ -245,7 +245,7 @@ func TestSlotsRequest_Auto_ServerAtCapacity(t *testing.T) {
 
 	// Second request: existing instance is full and we're at the instance limit.
 	rec2 := postRequest(t, router, validRequestBody(nil))
-	assert.Equal(t, http.StatusServiceUnavailable, rec2.Code)
+	assert.Equal(t, http.StatusNotAcceptable, rec2.Code)
 	body := decodeRequestResponse(t, rec2)
 	assert.Contains(t, body["error"], "maximum instance capacity")
 }

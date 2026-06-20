@@ -241,11 +241,11 @@ RSpec.describe GameApi::SlotsClient do
       end
     end
 
-    it "raises ServiceUnavailableError when server is at capacity" do
+    it "raises CapacityError when server is at capacity" do
       stub_request(:post, "#{base_url}/slots/request")
-        .to_return(status: 503, body: '{"error":"server is at maximum instance capacity"}', headers: json_headers)
+        .to_return(status: 406, body: '{"error":"server is at maximum instance capacity"}', headers: json_headers)
 
-      expect { client.request(valid_attrs) }.to raise_error(GameApi::ServiceUnavailableError)
+      expect { client.request(valid_attrs) }.to raise_error(GameApi::CapacityError)
     end
 
     context "attr validation" do
