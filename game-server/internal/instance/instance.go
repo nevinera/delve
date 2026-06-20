@@ -44,9 +44,18 @@ type Instance struct {
 
 	Checksum string // SHA256 of canonical state JSON; updated every tick
 
-	slots                map[uuid.UUID]*InstanceSlot
-	slotsMu              sync.RWMutex
-	atomicSlotCount      atomic.Int64
+	// EmptyTimeout overrides EmptyInstanceTimeout when non-zero. Intended for
+	// tests that need a shorter idle period without changing the global constant.
+	// Must be set before Start() is called.
+	EmptyTimeout time.Duration
+
+	// SlotWaitTimeout overrides SlotWaitingTimeout when non-zero. Intended for
+	// tests. Must be set before Start() is called.
+	SlotWaitTimeout time.Duration
+
+	slots                 map[uuid.UUID]*InstanceSlot
+	slotsMu               sync.RWMutex
+	atomicSlotCount       atomic.Int64
 	atomicActiveSlotCount atomic.Int64
 
 	cancel context.CancelFunc

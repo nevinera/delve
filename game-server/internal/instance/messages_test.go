@@ -45,7 +45,7 @@ func startedGoblinInstance(t *testing.T) *instance.Instance {
 		goblinZone(),
 		instance.DefaultMaxSlots,
 	)
-	require.NoError(t, inst.Start())
+	require.NoError(t, inst.Start(nil))
 	t.Cleanup(inst.Stop)
 	return inst
 }

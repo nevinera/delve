@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -48,6 +49,7 @@ type InstanceSlot struct {
 	connCancel     context.CancelFunc // cancels the active connection's context
 	connDone       chan struct{}       // closed by the handler when its goroutines have all exited
 	needsFullState bool               // true until the tick loop sends the first full-state message
+	stateEnteredAt time.Time          // when the slot entered its current state
 }
 
 // AddSlot creates a new slot for the named character and adds it to the
@@ -66,6 +68,7 @@ func (inst *Instance) AddSlot(characterName string, class instanceconfig.Charact
 		State:          SlotStatePending,
 		CharacterName:  characterName,
 		CharacterClass: class,
+		stateEnteredAt: time.Now(),
 	}
 	inst.slots[slot.ID] = slot
 	inst.recomputeSlotCounts()
@@ -167,6 +170,7 @@ func (inst *Instance) ConnectSlot(id uuid.UUID) (chan []byte, context.Context, c
 	slot.writeCh = writeCh
 	slot.needsFullState = true
 	slot.State = SlotStateConnected
+	slot.stateEnteredAt = time.Now()
 	inst.recomputeSlotCounts()
 	return writeCh, ctx, done, true
 }
@@ -183,6 +187,7 @@ func (inst *Instance) DisconnectSlot(id uuid.UUID) {
 	}
 	if slot.State == SlotStateConnected {
 		slot.State = SlotStateWaiting
+		slot.stateEnteredAt = time.Now()
 		inst.recomputeSlotCounts()
 	}
 }
@@ -210,6 +215,19 @@ func (inst *Instance) SlotsForTick() []SlotForTick {
 		s.needsFullState = false
 	}
 	return result
+}
+
+// pruneStaleSlots removes slots that have been in an inactive state (pending
+// or waiting) longer than the given timeout. Called from the tick loop.
+func (inst *Instance) pruneStaleSlots(now time.Time, timeout time.Duration) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	for id, s := range inst.slots {
+		if (s.State == SlotStatePending || s.State == SlotStateWaiting) && now.Sub(s.stateEnteredAt) >= timeout {
+			delete(inst.slots, id)
+		}
+	}
+	inst.recomputeSlotCounts()
 }
 
 // recomputeSlotCounts recounts all slots and updates the atomics.

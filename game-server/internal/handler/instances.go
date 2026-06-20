@@ -93,7 +93,7 @@ func (h *Instances) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	inst := instance.NewInstance(id, req.DatabaseID, req.ZoneIdentifier, req.Version, req.SourceURL, req.ZoneConfig, h.maxSlots)
-	if err := inst.Start(); err != nil {
+	if err := inst.Start(h.registry); err != nil {
 		writeError(w, r, http.StatusUnprocessableEntity, "failed to start instance: "+err.Error())
 		return
 	}
