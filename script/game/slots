@@ -4,6 +4,7 @@
 # Developer utility for managing slots within a game server instance.
 #
 # Usage:
+#   script/game/slots active
 #   script/game/slots list <instance-id>
 #   script/game/slots show <instance-id> <slot-id>
 #   script/game/slots create <instance-id> <character-name> <path-to-class-json>
@@ -22,6 +23,10 @@ def pretty(obj)
 end
 
 # --- Subcommands ---
+
+def cmd_active
+  puts pretty(GameApi.slots.active)
+end
 
 def cmd_list(instance_id)
   abort "Usage: list <instance-id>" unless instance_id
@@ -60,6 +65,8 @@ subcommand = ARGV.shift
 
 begin
   case subcommand
+  when "active"
+    cmd_active
   when "list"
     cmd_list(ARGV.shift)
   when "show"
@@ -69,8 +76,9 @@ begin
   when "create"
     cmd_create(ARGV.shift, ARGV.shift, ARGV.shift)
   else
-    warn "Usage: script/game/slots <list|show|create|destroy> [args]"
+    warn "Usage: script/game/slots <active|list|show|create|destroy> [args]"
     warn ""
+    warn "  active"
     warn "  list <instance-id>"
     warn "  show <instance-id> <slot-id>"
     warn "  create <instance-id> <character-name> <path-to-class-json>"
