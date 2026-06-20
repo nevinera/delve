@@ -185,6 +185,86 @@ RSpec.describe GameApi::SlotsClient do
     end
   end
 
+  # --- request ---
+
+  describe "#request" do
+    let(:zone_config) { {"name" => "Goblin Cave", "maps" => []} }
+    let(:valid_attrs) do
+      {
+        zone_identifier: "goblin-cave",
+        version: "v1",
+        database_id: "db-1",
+        source_url: "http://x",
+        zone_config: zone_config,
+        character_name: "Aldric",
+        character_class: puncher_class
+      }
+    end
+    let(:request_response) do
+      {instance_identifier: "inst-uuid", slot_id: slot_id, token: "tok-uuid"}.to_json
+    end
+
+    it "POSTs to /slots/request and returns instance, slot, and token" do
+      stub_request(:post, "#{base_url}/slots/request")
+        .to_return(status: 201, body: request_response, headers: json_headers)
+
+      result = client.request(valid_attrs)
+      expect(result["instance_identifier"]).to eq("inst-uuid")
+      expect(result["slot_id"]).to eq(slot_id)
+      expect(result["token"]).to eq("tok-uuid")
+    end
+
+    it "accepts an optional instance_identifier" do
+      stub_request(:post, "#{base_url}/slots/request")
+        .to_return(status: 201, body: request_response, headers: json_headers)
+
+      expect {
+        client.request(valid_attrs.merge(instance_identifier: "inst-uuid"))
+      }.not_to raise_error
+    end
+
+    it "sends the Bearer token" do
+      stub_request(:post, "#{base_url}/slots/request")
+        .to_return(status: 201, body: request_response, headers: json_headers)
+
+      client.request(valid_attrs)
+      expect(WebMock).to have_requested(:post, "#{base_url}/slots/request")
+        .with(headers: {"Authorization" => "Bearer #{token}"})
+    end
+
+    it "raises UnprocessableError on 422" do
+      stub_request(:post, "#{base_url}/slots/request")
+        .to_return(status: 422, body: '{"error":"instance belongs to a different zone"}', headers: json_headers)
+
+      expect { client.request(valid_attrs) }.to raise_error(GameApi::UnprocessableError) do |e|
+        expect(e.message).to include("different zone")
+      end
+    end
+
+    it "raises ServiceUnavailableError when server is at capacity" do
+      stub_request(:post, "#{base_url}/slots/request")
+        .to_return(status: 503, body: '{"error":"server is at maximum instance capacity"}', headers: json_headers)
+
+      expect { client.request(valid_attrs) }.to raise_error(GameApi::ServiceUnavailableError)
+    end
+
+    context "attr validation" do
+      %i[zone_identifier version database_id source_url zone_config character_name character_class].each do |field|
+        it "raises InvalidAttrsError when #{field} is missing" do
+          expect {
+            client.request(valid_attrs.except(field))
+          }.to raise_error(GameApi::InvalidAttrsError, /missing required keys: #{field}/)
+        end
+      end
+
+      it "raises InvalidAttrsError for unsupported keys" do
+        expect {
+          client.request(valid_attrs.merge(bogus: "nope"))
+        }.to raise_error(GameApi::InvalidAttrsError, /unsupported keys: bogus/)
+      end
+    end
+  end
+
   # --- destroy ---
 
   describe "#destroy" do

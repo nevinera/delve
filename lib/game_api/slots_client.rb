@@ -8,6 +8,20 @@ module GameApi
       get("/slots/active")
     end
 
+    # Required: :zone_identifier, :version, :database_id, :source_url,
+    #           :zone_config, :character_name, :character_class
+    # Optional: :instance_identifier
+    #
+    # Returns {"instance_identifier", "slot_id", "token"} on success.
+    # Raises UnprocessableError on zone mismatch or full instance.
+    # Raises ServiceUnavailableError when the server is at instance capacity.
+    def request(attrs)
+      validate_attrs(attrs,
+        required: %i[zone_identifier version database_id source_url zone_config character_name character_class],
+        supported: %i[instance_identifier])
+      post("/slots/request", attrs)
+    end
+
     def list(instance_id:)
       get("/instances/#{instance_id}/slots")
     end
