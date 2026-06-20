@@ -114,6 +114,24 @@ func TestConnect_WrongToken(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
+func TestConnect_NoUpgradeHeaders(t *testing.T) {
+	reg := instance.NewRegistry()
+	inst := addTestInstance(t, reg)
+	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
+	})
+	require.NoError(t, err)
+	srv := httptest.NewServer(mountConnect(reg))
+	t.Cleanup(srv.Close)
+
+	url := fmt.Sprintf("%s/instances/%s/slots/%s/connect?token=%s",
+		srv.URL, inst.Identifier, slot.ID, slot.Token)
+	resp, err := http.Get(url) //nolint:noctx
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
 // --- Successful connection ---
 
 func TestConnect_SetsStateConnected(t *testing.T) {

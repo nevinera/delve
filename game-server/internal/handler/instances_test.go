@@ -119,6 +119,18 @@ func TestInstances_Create_MissingFields(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
 
+func TestInstances_Create_BodyTooLarge(t *testing.T) {
+	reg := instance.NewRegistry()
+	h := handler.NewInstances(reg, instance.DefaultMaxSlots)
+	router := mountInstances(h)
+
+	huge := make([]byte, handler.MaxRequestBytes+2)
+	req := httptest.NewRequest(http.MethodPost, "/instances", bytes.NewReader(huge))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+}
+
 func TestInstances_Create_MalformedJSON(t *testing.T) {
 	reg := instance.NewRegistry()
 	h := handler.NewInstances(reg, instance.DefaultMaxSlots)

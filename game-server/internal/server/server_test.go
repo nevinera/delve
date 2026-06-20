@@ -113,6 +113,12 @@ func TestAuth(t *testing.T) {
 			authHeader: "",
 			wantStatus: http.StatusUnauthorized,
 		},
+		{
+			name:       "connect is public but rejects missing token",
+			path:       "/instances/00000000-0000-0000-0000-000000000001/slots/00000000-0000-0000-0000-000000000002/connect",
+			authHeader: "",
+			wantStatus: http.StatusNotFound, // instance not found, but no 401 — auth is via ?token query param
+		},
 	}
 
 	for _, tt := range tests {
