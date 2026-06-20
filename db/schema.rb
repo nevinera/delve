@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_13_162242) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_20_123908) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -51,6 +51,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_13_162242) do
     t.integer "user_id", null: false
     t.index ["identifier"], name: "index_handles_on_identifier", unique: true
     t.index ["user_id"], name: "index_handles_on_user_id"
+  end
+
+  create_table "slot_sessions", force: :cascade do |t|
+    t.integer "character_id", null: false
+    t.datetime "created_at", null: false
+    t.string "instance_identifier", null: false
+    t.datetime "last_confirmed_at"
+    t.string "slot_id", null: false
+    t.string "token", null: false
+    t.datetime "updated_at", null: false
+    t.integer "zone_id", null: false
+    t.index ["character_id"], name: "index_slot_sessions_on_character_id", unique: true
+    t.index ["zone_id"], name: "index_slot_sessions_on_zone_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -96,6 +109,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_13_162242) do
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
   add_foreign_key "handles", "users"
+  add_foreign_key "slot_sessions", "characters"
+  add_foreign_key "slot_sessions", "zones"
   add_foreign_key "zones", "handles"
   add_foreign_key "zones", "users", column: "registering_user_id"
 end

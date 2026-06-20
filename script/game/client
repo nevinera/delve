@@ -1,22 +1,17 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Developer WebSocket client for a game server slot. Connects to the slot,
-# sends heartbeats, maintains local game state via server messages, and
-# verifies checksums against the server.
-#
-# Creates an instance and/or slot automatically if IDs are not supplied.
+# Developer WebSocket client for a game server slot. Looks up a character and
+# zone in the Rails database, calls JoinZone to obtain a slot on the game
+# server, then connects via WebSocket.
 #
 # Usage:
-#   script/game/client [options]
+#   script/game/client --character <id|name> --zone <id|identifier> [options]
 #
 # Options:
-#   -i, --instance <uuid>         Existing instance ID
-#   -s, --slot <uuid>             Existing slot ID (requires --token)
-#   -t, --token <uuid>            Slot token (required with --slot)
-#   -z, --zone-config <path>      Zone config JSON (required when creating instance)
-#   -c, --class-config <path>     Character class JSON (required when creating slot)
-#   -n, --character-name <name>   Character name for slot creation (default: Hero)
+#   -C, --character <id|name>     Character ID or name (required)
+#   -Z, --zone <id|identifier>    Zone ID or identifier (required; picks latest version if identifier)
+#   -i, --instance <uuid>         Target a specific game server instance (optional)
 #   -v, --verbose                 Increase verbosity; use twice (-vv) for all deltas
 #
 # Environment variables:
@@ -26,12 +21,10 @@
 require "json"
 require "net/http"
 require "optparse"
-require "securerandom"
 require "socket"
 require "uri"
 require "websocket/driver"
-require "environment_helpers"
-require_relative "../../lib/game_api"
+require_relative "../../config/environment"
 
 # ---------------------------------------------------------------------------
 # Logger
@@ -46,16 +39,13 @@ class Log
     @color = $stderr.tty?
   end
 
-  # Always shown, no coloring - progress and status output.
   def info(msg) = Kernel.warn(msg)
   def warn(msg) = Kernel.warn("WARN: #{msg}")
 
-  # -v: non-empty deltas and other opt-in detail (dark grey)
   def verbose(msg)
     dim(msg) if @verbose >= 1
   end
 
-  # -vv: everything including empty deltas (dark grey)
   def debug(msg)
     dim(msg) if @verbose >= 2
   end
@@ -71,80 +61,58 @@ end
 # Options
 # ---------------------------------------------------------------------------
 
-options = {character_name: "Hero", verbose: 0}
+options = {verbose: 0}
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: script/game/client [options]"
-  opts.on("-i", "--instance UUID", "Existing instance ID") { |v| options[:instance_id] = v }
-  opts.on("-s", "--slot UUID", "Existing slot ID") { |v| options[:slot_id] = v }
-  opts.on("-t", "--token UUID", "Slot token (required with --slot)") { |v| options[:token] = v }
-  opts.on("-z", "--zone-config PATH", "Zone config JSON file") { |v| options[:zone_config] = v }
-  opts.on("-c", "--class-config PATH", "Character class JSON file") { |v| options[:class_config] = v }
-  opts.on("-n", "--character-name NAME", "Character name (default: Hero)") { |v| options[:character_name] = v }
+  opts.banner = "Usage: script/game/client --character <id|name> --zone <id|identifier> [options]"
+  opts.on("-C", "--character ID_OR_NAME", "Character ID or name") { |v| options[:character] = v }
+  opts.on("-Z", "--zone ID_OR_IDENTIFIER", "Zone ID or identifier") { |v| options[:zone] = v }
+  opts.on("-i", "--instance UUID", "Target a specific game server instance") { |v| options[:instance_identifier] = v }
   opts.on("-v", "--verbose", "Increase verbosity (-vv logs all deltas)") { options[:verbose] += 1 }
 end.parse!
 
+abort "Error: --character is required" unless options[:character]
+abort "Error: --zone is required" unless options[:zone]
+
 log = Log.new(verbose: options[:verbose])
 
-if options[:slot_id] && !options[:token]
-  abort "Error: --token is required when --slot is specified"
+# ---------------------------------------------------------------------------
+# Look up character and zone
+# ---------------------------------------------------------------------------
+
+character_key = options[:character]
+character = if /\A\d+\z/.match?(character_key)
+  Character.find_by(id: character_key.to_i)
+else
+  Character.find_by(name: character_key)
 end
+abort "Character not found: #{character_key}" unless character
 
-# ---------------------------------------------------------------------------
-# Resolve / create instance
-# ---------------------------------------------------------------------------
-
-instance_id = options[:instance_id]
-
-if instance_id.nil?
-  zone_path = options[:zone_config] or
-    abort "Error: --zone-config is required when creating a new instance (or use --instance)"
-
-  zone_path = File.expand_path(zone_path)
-  abort "File not found: #{zone_path}" unless File.exist?(zone_path)
-  zone_config = JSON.parse(File.read(zone_path))
-
-  zone_identifier = File.basename(zone_path).sub(/\.full\.json\z/, "").sub(/\.json\z/, "")
-  log.info "--> Creating instance for zone #{zone_identifier}..."
-  result = GameApi.instances.create(
-    identifier: SecureRandom.uuid,
-    database_id: "dev-#{SecureRandom.hex(4)}",
-    zone_identifier: zone_identifier,
-    version: "dev",
-    source_url: "file://#{zone_path}",
-    zone_config: zone_config
-  )
-  instance_id = result.fetch("identifier")
-  log.info "    Instance: #{instance_id}"
+zone_key = options[:zone]
+zone = if /\A\d+\z/.match?(zone_key)
+  Zone.find_by(id: zone_key.to_i)
+else
+  Zone.where(identifier: zone_key).order(created_at: :desc).first
 end
+abort "Zone not found: #{zone_key}" unless zone
 
 # ---------------------------------------------------------------------------
-# Resolve / create slot
+# Join via JoinZone
 # ---------------------------------------------------------------------------
 
-slot_id = options[:slot_id]
-token = options[:token]
+log.info "--> Joining zone #{zone.identifier} (#{zone.version}) as #{character.name}..."
 
-if slot_id.nil?
-  class_path = options[:class_config] or
-    abort "Error: --class-config is required when creating a new slot (or use --slot --token)"
+join_opts = {character: character, zone: zone}
+join_opts[:instance_identifier] = options[:instance_identifier] if options[:instance_identifier]
 
-  class_path = File.expand_path(class_path)
-  abort "File not found: #{class_path}" unless File.exist?(class_path)
-  character_class = JSON.parse(File.read(class_path))
+result = JoinZone.call(**join_opts)
 
-  log.info "--> Creating slot for #{options[:character_name]}..."
-  result = GameApi.slots.create(
-    instance_id: instance_id,
-    character_name: options[:character_name],
-    character_class: character_class
-  )
-  slot_id = result.fetch("id")
-  token = result.fetch("token")
-  log.info "    Slot:     #{slot_id}"
-end
+instance_id = result.instance_identifier
+slot_id = result.slot_id
+token = result.token
 
-# Checksum helpers live in lib/game_api/checksum.rb (shared with tests).
+log.info "    Instance: #{instance_id}"
+log.info "    Slot:     #{slot_id}"
 
 # ---------------------------------------------------------------------------
 # WebSocket setup
@@ -159,7 +127,6 @@ ws_url = "#{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path}"
 log.info "--> Connecting to #{ws_scheme}://#{uri.host}:#{uri.port}#{ws_path.sub(/token=\S+/, "token=<redacted>")}..."
 
 tcp = TCPSocket.new(uri.host, uri.port)
-# websocket-driver reads the URL from the socket object itself
 tcp.define_singleton_method(:url) { ws_url }
 driver = WebSocket::Driver.client(tcp)
 
@@ -167,7 +134,7 @@ driver = WebSocket::Driver.client(tcp)
 # State
 # ---------------------------------------------------------------------------
 
-units = {}  # uuid => unit hash; maintained via full-state and delta messages
+units = {}
 checksum = nil
 open = false
 done = false
@@ -255,7 +222,7 @@ driver.start
 # I/O loop
 # ---------------------------------------------------------------------------
 
-HEARTBEAT_INTERVAL = 0.3  # seconds (~3 game ticks)
+HEARTBEAT_INTERVAL = 0.3
 last_heartbeat_at = Time.now - HEARTBEAT_INTERVAL
 
 trap("INT") do
@@ -279,7 +246,7 @@ loop do
     end
   end
 
-  next unless open  # wait for handshake before sending heartbeats
+  next unless open
   break if done
 
   if Time.now - last_heartbeat_at >= HEARTBEAT_INTERVAL
