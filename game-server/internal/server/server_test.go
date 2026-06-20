@@ -35,6 +35,12 @@ func TestRouting(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name:       "POST /slots/active returns 405",
+			method:     http.MethodPost,
+			path:       "/slots/active",
+			wantStatus: http.StatusMethodNotAllowed,
+		},
+		{
 			name:       "unknown route returns 404",
 			method:     http.MethodGet,
 			path:       "/unknown",
@@ -69,6 +75,18 @@ func TestAuth(t *testing.T) {
 			name:       "status is public",
 			path:       "/status.json",
 			authHeader: "",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "slots/active requires auth",
+			path:       "/slots/active",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "slots/active accepts valid token",
+			path:       "/slots/active",
+			authHeader: "Bearer " + testToken,
 			wantStatus: http.StatusOK,
 		},
 		{

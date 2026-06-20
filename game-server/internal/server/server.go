@@ -35,6 +35,7 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 	// Protected — valid Bearer token required.
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.TokenAuth(cfg.AuthTokens))
+		r.Get("/slots/active", slots.Active)
 		r.Route("/instances", func(r chi.Router) {
 			r.Get("/", instances.List)
 			r.Post("/", instances.Create)

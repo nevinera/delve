@@ -42,6 +42,16 @@ type slotResponse struct {
 	CharacterName string `json:"character_name"`
 }
 
+// activeSlotResponse is one entry in the GET /slots/active response. Includes
+// the token so Rails can match against slot_sessions.token.
+type activeSlotResponse struct {
+	InstanceIdentifier string `json:"instance_identifier"`
+	SlotID             string `json:"slot_id"`
+	Token              string `json:"token"`
+	CharacterName      string `json:"character_name"`
+	State              string `json:"state"`
+}
+
 func slotToCreateResponse(s *instance.InstanceSlot) slotCreateResponse {
 	return slotCreateResponse{
 		ID:            s.ID.String(),
@@ -57,6 +67,27 @@ func slotToResponse(s *instance.InstanceSlot) slotResponse {
 		State:         string(s.State),
 		CharacterName: s.CharacterName,
 	}
+}
+
+// Active handles GET /slots/active. Returns all slots across all instances,
+// regardless of state. The caller (Rails polling job) uses this to confirm
+// which slot sessions are still alive on the go server.
+func (h *Slots) Active(w http.ResponseWriter, r *http.Request) {
+	instances := h.registry.List()
+	result := make([]activeSlotResponse, 0)
+	for _, inst := range instances {
+		id := inst.Identifier.String()
+		for _, s := range inst.ListSlots() {
+			result = append(result, activeSlotResponse{
+				InstanceIdentifier: id,
+				SlotID:             s.ID.String(),
+				Token:              s.Token.String(),
+				CharacterName:      s.CharacterName,
+				State:              string(s.State),
+			})
+		}
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"slots": result})
 }
 
 // Create handles POST /instances/{instanceID}/slots.
