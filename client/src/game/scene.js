@@ -209,16 +209,18 @@ export class SceneManager {
     const baseUrl = new URL(".", url).href;
     this._zoneBaseUrl = baseUrl;
 
-    // Build lookup: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
+    // Build lookup across all maps: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
     const unitTypes = json.unitTypes ?? {};
-    for (const unit of map.units ?? []) {
-      const utype = unitTypes[unit.unitType];
-      if (unit.identifier && utype) {
-        this._unitInfo.set(unit.identifier, {
-          tokenImageUrl: utype.tokenImageUrl,
-          hostility: unit.hostility,
-          tokenRadius: utype.tokenRadius ?? TOKEN_RADIUS,
-        });
+    for (const m of json.maps ?? []) {
+      for (const unit of m.units ?? []) {
+        const utype = unitTypes[unit.unitType];
+        if (unit.identifier && utype) {
+          this._unitInfo.set(unit.identifier, {
+            tokenImageUrl: utype.tokenImageUrl,
+            hostility: unit.hostility,
+            tokenRadius: utype.tokenRadius ?? TOKEN_RADIUS,
+          });
+        }
       }
     }
 
