@@ -116,25 +116,43 @@ function createPlayerToken(radius, tokenUrl) {
   return group;
 }
 
-function createNpcToken(radius) {
+const HOSTILITY_COLORS = {
+  hostile:  { body: 0xc62828, cone: 0xef9a9a },
+  neutral:  { body: 0xe65100, cone: 0xffcc80 },
+  friendly: { body: 0x1565c0, cone: 0x90caf9 },
+};
+
+function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
+  const { body: bodyColor, cone: coneColor } =
+    HOSTILITY_COLORS[hostility] ?? HOSTILITY_COLORS.hostile;
+
   const group = new THREE.Group();
 
   const body = new THREE.Mesh(
     new THREE.CylinderGeometry(radius, radius, 0.3, 32),
-    new THREE.MeshLambertMaterial({ color: 0xc62828 })
+    new THREE.MeshLambertMaterial({ color: bodyColor })
   );
   body.position.y = 0.15;
   group.add(body);
 
-  const top = new THREE.Mesh(
-    new THREE.CircleGeometry(radius * 0.8, 32),
-    new THREE.MeshLambertMaterial({ color: 0xffffff })
-  );
-  top.rotation.x = -Math.PI / 2;
-  top.position.y = 0.31;
-  group.add(top);
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat);
+  portrait.rotation.x = -Math.PI / 2;
+  portrait.position.y = 0.31;
+  group.add(portrait);
 
-  addFacingArrow(group, radius, 0xef9a9a);
+  const urls = Array.isArray(tokenImageUrl)
+    ? tokenImageUrl
+    : [tokenImageUrl].filter(Boolean);
+  if (urls.length && zoneBaseUrl) {
+    const url = new URL(urls[Math.floor(Math.random() * urls.length)], zoneBaseUrl).href;
+    new THREE.TextureLoader().load(url, (texture) => {
+      portraitMat.map = texture;
+      portraitMat.needsUpdate = true;
+    });
+  }
+
+  addFacingArrow(group, radius, coneColor);
   return group;
 }
 
@@ -160,6 +178,8 @@ export class SceneManager {
 
     this._tokenMap = new Map();
     this._mapToWorld = null;
+    this._zoneBaseUrl = null;
+    this._unitInfo = new Map(); // zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
     this._animId = null;
 
     // Camera tracking state
@@ -186,8 +206,23 @@ export class SceneManager {
     const originZ = height / 2;
     this._mapToWorld = (x, y) => [x + originX, originZ - y];
 
+    const baseUrl = new URL(".", url).href;
+    this._zoneBaseUrl = baseUrl;
+
+    // Build lookup: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
+    const unitTypes = json.unitTypes ?? {};
+    for (const unit of map.units ?? []) {
+      const utype = unitTypes[unit.unitType];
+      if (unit.identifier && utype) {
+        this._unitInfo.set(unit.identifier, {
+          tokenImageUrl: utype.tokenImageUrl,
+          hostility: unit.hostility,
+          tokenRadius: utype.tokenRadius ?? TOKEN_RADIUS,
+        });
+      }
+    }
+
     if (map.imageUrl) {
-      const baseUrl = new URL(".", url).href;
       const mapUrl = new URL(map.imageUrl, baseUrl).href;
       new THREE.TextureLoader().load(mapUrl, (texture) => {
         const plane = new THREE.Mesh(
@@ -228,9 +263,11 @@ export class SceneManager {
         group.position.set(wx, 0, wz);
         group.rotation.y = angle;
       } else {
+        const info = this._unitInfo.get(unit.zone_unit_identifier);
+        const radius = info?.tokenRadius ?? TOKEN_RADIUS;
         const group = isSelf
-          ? createPlayerToken(TOKEN_RADIUS, characterTokenUrl)
-          : createNpcToken(TOKEN_RADIUS);
+          ? createPlayerToken(radius, characterTokenUrl)
+          : createNpcToken(radius, info?.hostility, info?.tokenImageUrl, this._zoneBaseUrl);
         group.position.set(wx, 0, wz);
         group.rotation.y = angle;
         this._scene.add(group);
