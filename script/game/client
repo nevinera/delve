@@ -139,6 +139,46 @@ checksum = nil
 open = false
 done = false
 
+# Movement state
+facing = 0.0
+keys = []
+
+send_move = lambda do
+  driver.text(JSON.generate({direction: "up", type: "move", facing: facing, keys: keys}))
+end
+
+handle_stdin = lambda do |line|
+  line = line.chomp.strip
+  case line
+  when "forward", "backward", "left", "right"
+    key = (line == "left") ? "strafe_left" : (line == "right") ? "strafe_right" : line
+    keys.include?(key) ? keys.delete(key) : keys << key
+    send_move.call
+    log.verbose "[move] facing=#{facing} keys=#{keys}"
+  when "stop"
+    keys.clear
+    send_move.call
+    log.verbose "[move] stopped"
+  when /\Aface\s+(-?\d+(?:\.\d+)?)\z/
+    facing = $1.to_f % 360
+    send_move.call
+    log.verbose "[move] facing=#{facing} keys=#{keys}"
+  when /\Aturn\s+(left|right|-?\d+(?:\.\d+)?)\z/
+    delta = case $1
+    when "left"  then -90.0
+    when "right" then  90.0
+    else $1.to_f
+    end
+    facing = (facing + delta) % 360
+    send_move.call
+    log.verbose "[move] facing=#{facing} keys=#{keys}"
+  when ""
+    # ignore blank lines
+  else
+    log.warn "unknown command: #{line.inspect}"
+  end
+end
+
 driver.on(:open) do
   open = true
   log.info "    Connected."
@@ -233,16 +273,27 @@ end
 loop do
   break if done
 
-  ready = IO.select([tcp], nil, nil, 0.05)
+  ready = IO.select([tcp, $stdin], nil, nil, 0.05)
   if ready
-    begin
-      data = tcp.read_nonblock(65_536)
-      driver.parse(data)
-    rescue EOFError, Errno::ECONNRESET
-      log.info "Connection lost."
-      break
-    rescue IO::WaitReadable
-      # nothing to read right now
+    readable = ready[0]
+    if readable.include?($stdin)
+      line = $stdin.gets
+      if line.nil?
+        done = true
+      elsif open
+        handle_stdin.call(line)
+      end
+    end
+    if readable.include?(tcp)
+      begin
+        data = tcp.read_nonblock(65_536)
+        driver.parse(data)
+      rescue EOFError, Errno::ECONNRESET
+        log.info "Connection lost."
+        break
+      rescue IO::WaitReadable
+        # nothing to read right now
+      end
     end
   end
 
