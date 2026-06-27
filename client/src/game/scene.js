@@ -5,8 +5,10 @@ const TOKEN_RADIUS = 2.2;
 const CAM_BACK = 45;
 const CAM_HEIGHT = 50;
 const CAM_RADIUS = Math.sqrt(CAM_BACK ** 2 + CAM_HEIGHT ** 2);
-const CAM_DEFAULT_PITCH = Math.atan2(CAM_HEIGHT, CAM_BACK);
 const CAM_LOOK_AHEAD = 10;
+const TURN_RATE = 120 * DEG; // radians/sec
+const PITCH_MIN = 20 * DEG;
+const PITCH_MAX = 60 * DEG;
 
 // ---------------------------------------------------------------------------
 // Wall building — ported from tools/demo.html
@@ -161,8 +163,11 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas) {
+  constructor(canvas, { turnKeysRef, onFacingChange } = {}) {
     this._canvas = canvas;
+    this._turnKeysRef = turnKeysRef;
+    this._onFacingChange = onFacingChange;
+
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this._renderer.setPixelRatio(window.devicePixelRatio);
 
@@ -179,13 +184,36 @@ export class SceneManager {
     this._tokenMap = new Map();
     this._mapToWorld = null;
     this._zoneBaseUrl = null;
-    this._unitInfo = new Map(); // zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
+    this._unitInfo = new Map();
     this._animId = null;
 
-    // Camera tracking state
+    // Camera state — client-owned; position synced from server, facing/pitch local
     this._camX = 0;
     this._camZ = 0;
-    this._camFacing = 0;
+    this._camFacing = 0; // radians
+    this._camPitch = Math.atan2(CAM_HEIGHT, CAM_BACK); // radians
+
+    this._initMouseDrag();
+  }
+
+  _initMouseDrag() {
+    let lastX = null, lastY = null;
+    this._canvas.addEventListener("mousedown", (e) => {
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+    this._canvas.addEventListener("mousemove", (e) => {
+      if (lastX === null) return;
+      this._camFacing += (e.clientX - lastX) * 0.005;
+      this._camPitch = Math.max(
+        PITCH_MIN,
+        Math.min(PITCH_MAX, this._camPitch + (e.clientY - lastY) * 0.005)
+      );
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+    window.addEventListener("mouseup", () => { lastX = null; lastY = null; });
+    this._canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
   async loadZone(url) {
@@ -285,7 +313,6 @@ export class SceneManager {
       if (isSelf) {
         this._camX = wx;
         this._camZ = wz;
-        this._camFacing = unit.position.angle * DEG;
       }
     }
 
@@ -298,8 +325,20 @@ export class SceneManager {
   }
 
   startLoop() {
-    const tick = () => {
+    let lastTime = null;
+    const tick = (time) => {
       this._animId = requestAnimationFrame(tick);
+      const elapsed = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      const keys = this._turnKeysRef?.current;
+      if (keys) {
+        let turned = false;
+        if (keys.has("turn_left"))  { this._camFacing -= TURN_RATE * elapsed; turned = true; }
+        if (keys.has("turn_right")) { this._camFacing += TURN_RATE * elapsed; turned = true; }
+        if (turned) this._onFacingChange?.(this._camFacing / DEG);
+      }
+
       this._positionCamera();
       this._renderer.render(this._scene, this._camera);
     };
@@ -323,8 +362,8 @@ export class SceneManager {
   _positionCamera() {
     const fwdX = Math.sin(this._camFacing);
     const fwdZ = -Math.cos(this._camFacing);
-    const horiz = CAM_RADIUS * Math.cos(CAM_DEFAULT_PITCH);
-    const vert = CAM_RADIUS * Math.sin(CAM_DEFAULT_PITCH);
+    const horiz = CAM_RADIUS * Math.cos(this._camPitch);
+    const vert = CAM_RADIUS * Math.sin(this._camPitch);
     this._camera.position.set(
       this._camX - horiz * fwdX,
       vert,

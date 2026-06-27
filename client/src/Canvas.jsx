@@ -1,12 +1,19 @@
 import { useEffect, useRef } from "react";
 import { SceneManager } from "./game/scene";
 
-export default function Canvas({ zoneSourceUrl, units, selfIdentifier, characterTokenUrl }) {
+export default function Canvas({
+  zoneSourceUrl,
+  units,
+  selfIdentifier,
+  characterTokenUrl,
+  turnKeysRef,
+  onFacingChange,
+}) {
   const canvasRef = useRef(null);
   const managerRef = useRef(null);
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current);
+    const manager = new SceneManager(canvasRef.current, { turnKeysRef, onFacingChange });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();
