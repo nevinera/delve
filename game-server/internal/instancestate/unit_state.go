@@ -23,6 +23,16 @@ type ActiveStatusEffect struct {
 	ExpiresAt        time.Time
 }
 
+// MovementIntent holds the player-commanded movement keys for a unit.
+// Zero value means not moving. Only meaningful for player character units;
+// NPC movement is driven by BehaviorState instead.
+type MovementIntent struct {
+	Forward     bool
+	Backward    bool
+	StrafeLeft  bool
+	StrafeRight bool
+}
+
 // BehaviorState tracks tick-loop progress for a unit's movement and tactics.
 // Zero value is valid for units with "still" movement and non-phased/scripted tactics.
 type BehaviorState struct {
@@ -55,4 +65,5 @@ type UnitState struct {
 	Target              *uuid.UUID
 	ActiveStatusEffects []ActiveStatusEffect
 	Behavior            BehaviorState
+	MovementIntent      MovementIntent
 }

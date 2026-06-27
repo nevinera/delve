@@ -79,21 +79,23 @@ func NewInstance(
 	zone instanceconfig.Zone,
 	maxSlots int,
 ) *Instance {
-	return &Instance{
-		Identifier:     id,
-		DatabaseID:     databaseID,
-		ZoneIdentifier: zoneIdentifier,
-		Version:        version,
-		SourceURL:      sourceURL,
-		MaxSlots:       maxSlots,
-		Status:         StatusLoading,
-		ZoneConfig:     zone,
-		CreatedAt:      time.Now(),
+	inst := &Instance{
+		Identifier:       id,
+		DatabaseID:       databaseID,
+		ZoneIdentifier:   zoneIdentifier,
+		Version:          version,
+		SourceURL:        sourceURL,
+		MaxSlots:         maxSlots,
+		Status:           StatusLoading,
+		ZoneConfig:       zone,
+		CreatedAt:        time.Now(),
 		slots:            make(map[uuid.UUID]*InstanceSlot),
 		playerSpawnCh:    make(chan playerSpawn, DefaultMaxSlots),
 		commandCh:        make(chan command.Command, DefaultMaxSlots*8),
 		commandProcessor: command.NewCommandProcessor(),
 	}
+	inst.commandProcessor.Register(command.MoveHandler{})
+	return inst
 }
 
 // SendCommand enqueues a command for processing on the next tick.

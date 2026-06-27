@@ -14,23 +14,28 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
+// testPayload is a CommandPayload for a test-only command type.
+type testPayload struct{}
+
+func (testPayload) CommandType() string { return "__test__" }
+
 // countingHandler counts how many times it is called.
 type countingHandler struct {
 	count atomic.Int64
 }
 
-func (h *countingHandler) Type() string      { return "move" }
-func (h *countingHandler) Deduplicate() bool { return true }
+func (h *countingHandler) Type() string      { return "__test__" }
+func (h *countingHandler) Deduplicate() bool { return false }
 func (h *countingHandler) Handle(_ uuid.UUID, _ command.CommandPayload, _ *instancestate.InstanceState) error {
 	h.count.Add(1)
 	return nil
 }
 
-func makeMove(unitID uuid.UUID) command.Command {
+func makeTestCmd(unitID uuid.UUID) command.Command {
 	return command.Command{
 		UnitID:     unitID,
 		ReceivedAt: time.Now(),
-		Payload:    command.MovePayload{Facing: 0, Keys: []command.MoveKey{command.MoveKeyForward}},
+		Payload:    testPayload{},
 	}
 }
 
@@ -40,7 +45,7 @@ func TestSendCommand_NonBlockingWhenFull(t *testing.T) {
 	// Fill the channel beyond its capacity via SendCommand.
 	for range instance.DefaultMaxSlots*8 + 10 {
 		assert.NotPanics(t, func() {
-			inst.SendCommand(makeMove(uuid.New()))
+			inst.SendCommand(makeTestCmd(uuid.New()))
 		})
 	}
 }
@@ -53,7 +58,7 @@ func TestSendCommand_ProcessedOnNextTick(t *testing.T) {
 	h := &countingHandler{}
 	inst.RegisterCommandHandlerForTest(h)
 
-	inst.SendCommand(makeMove(uuid.New()))
+	inst.SendCommand(makeTestCmd(uuid.New()))
 
 	require.Eventually(t, func() bool {
 		return h.count.Load() > 0
@@ -70,7 +75,7 @@ func TestSendCommand_MultipleCommandsAllProcessed(t *testing.T) {
 	inst.RegisterCommandHandlerForTest(h)
 
 	for range 5 {
-		inst.SendCommand(makeMove(uuid.New()))
+		inst.SendCommand(makeTestCmd(uuid.New()))
 	}
 
 	require.Eventually(t, func() bool {
