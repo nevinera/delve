@@ -1,11 +1,16 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+
+	"github.com/delve-mmo/game-server/internal/command"
+	"github.com/delve-mmo/game-server/internal/instance"
 )
 
 // HeartbeatTimeout is the maximum silence between client messages before the
@@ -90,13 +95,39 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 
 	conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
 	for {
-		_, _, err := conn.ReadMessage()
+		_, data, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
 		conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
+		handleClientMessage(data, slot.CharacterUnitID, inst)
 	}
 
 	close(quit)
 	wg.Wait()
+}
+
+type incomingMsg struct {
+	Type   string   `json:"type"`
+	Facing float64  `json:"facing"`
+	Keys   []string `json:"keys"`
+}
+
+func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance) {
+	var msg incomingMsg
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return
+	}
+	switch msg.Type {
+	case "move":
+		keys := make([]command.MoveKey, len(msg.Keys))
+		for i, k := range msg.Keys {
+			keys[i] = command.MoveKey(k)
+		}
+		inst.SendCommand(command.Command{
+			UnitID:     unitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.MovePayload{Facing: msg.Facing, Keys: keys},
+		})
+	}
 }
