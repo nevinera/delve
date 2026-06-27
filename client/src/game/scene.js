@@ -253,8 +253,14 @@ export class SceneManager {
   updateUnits(units, selfIdentifier, characterTokenUrl) {
     if (!this._mapToWorld) return;
 
+    const selfUnit = Object.values(units).find(
+      (u) => u.zone_unit_identifier === selfIdentifier
+    );
+    const currentMap = selfUnit?.map_identifier;
+
     const seen = new Set();
     for (const [id, unit] of Object.entries(units)) {
+      if (unit.map_identifier !== currentMap) continue;
       seen.add(id);
       const isSelf = unit.zone_unit_identifier === selfIdentifier;
       const [wx, wz] = this._mapToWorld(unit.position.x, unit.position.y);
