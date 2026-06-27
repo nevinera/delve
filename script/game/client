@@ -151,7 +151,13 @@ handle_stdin = lambda do |line|
   line = line.chomp.strip
   case line
   when "forward", "backward", "left", "right"
-    key = (line == "left") ? "strafe_left" : (line == "right") ? "strafe_right" : line
+    key = if line == "left"
+      "strafe_left"
+    elsif line == "right"
+      "strafe_right"
+    else
+      line
+    end
     keys.include?(key) ? keys.delete(key) : keys << key
     send_move.call
     log.verbose "[move] facing=#{facing} keys=#{keys}"
@@ -165,8 +171,8 @@ handle_stdin = lambda do |line|
     log.verbose "[move] facing=#{facing} keys=#{keys}"
   when /\Aturn\s+(left|right|-?\d+(?:\.\d+)?)\z/
     delta = case $1
-    when "left"  then -90.0
-    when "right" then  90.0
+    when "left" then -90.0
+    when "right" then 90.0
     else $1.to_f
     end
     facing = (facing + delta) % 360
