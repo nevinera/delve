@@ -38,11 +38,12 @@ const (
 // The Token is a secret issued on creation; the client uses it to authenticate
 // its websocket connection.
 type InstanceSlot struct {
-	ID             uuid.UUID
-	Token          uuid.UUID
-	State          SlotState
-	CharacterName  string
-	CharacterClass instanceconfig.CharacterClass
+	ID              uuid.UUID
+	Token           uuid.UUID
+	CharacterUnitID uuid.UUID
+	State           SlotState
+	CharacterName   string
+	CharacterClass  instanceconfig.CharacterClass
 
 	// Connection fields; protected by the instance's slotsMu.
 	writeCh        chan []byte         // pre-encoded JSON messages from the tick loop
@@ -63,10 +64,11 @@ func (inst *Instance) AddSlot(characterName string, class instanceconfig.Charact
 	}
 
 	slot := &InstanceSlot{
-		ID:             uuid.New(),
-		Token:          uuid.New(),
-		State:          SlotStatePending,
-		CharacterName:  characterName,
+		ID:              uuid.New(),
+		Token:           uuid.New(),
+		CharacterUnitID: uuid.New(),
+		State:           SlotStatePending,
+		CharacterName:   characterName,
 		CharacterClass: class,
 		stateEnteredAt: time.Now(),
 	}
@@ -172,6 +174,14 @@ func (inst *Instance) ConnectSlot(id uuid.UUID) (chan []byte, context.Context, c
 	slot.State = SlotStateConnected
 	slot.stateEnteredAt = time.Now()
 	inst.recomputeSlotCounts()
+	select {
+	case inst.playerSpawnCh <- playerSpawn{
+		unitID:        slot.CharacterUnitID,
+		characterName: slot.CharacterName,
+		class:         slot.CharacterClass,
+	}:
+	default:
+	}
 	return writeCh, ctx, done, true
 }
 

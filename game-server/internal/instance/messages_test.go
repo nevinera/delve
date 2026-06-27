@@ -347,7 +347,7 @@ func TestTick_SendsFullStateOnConnect(t *testing.T) {
 	assert.Equal(t, "instance-state", msg["type"])
 	assert.NotEmpty(t, msg["checksum"])
 	units := msg["units"].(map[string]any)
-	assert.Len(t, units, 1)
+	assert.Len(t, units, 2) // one NPC unit + one player unit
 }
 
 func TestTick_FullStateChecksum_MatchesInstance(t *testing.T) {

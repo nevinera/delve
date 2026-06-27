@@ -58,6 +58,8 @@ type Instance struct {
 	atomicSlotCount       atomic.Int64
 	atomicActiveSlotCount atomic.Int64
 
+	playerSpawnCh chan playerSpawn
+
 	cancel context.CancelFunc
 	done   chan struct{}
 }
@@ -85,5 +87,6 @@ func NewInstance(
 		ZoneConfig:     zone,
 		CreatedAt:      time.Now(),
 		slots:          make(map[uuid.UUID]*InstanceSlot),
+		playerSpawnCh:  make(chan playerSpawn, DefaultMaxSlots),
 	}
 }

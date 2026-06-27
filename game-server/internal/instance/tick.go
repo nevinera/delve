@@ -73,6 +73,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			return
 		case now := <-ticker.C:
 			tickCount++
+			inst.drainPlayerSpawns(state)
 			checksum := state.Checksum()
 			inst.Checksum = checksum
 
