@@ -9,6 +9,8 @@ const CAM_LOOK_AHEAD = 10;
 const TURN_RATE = 120 * DEG; // radians/sec
 const PITCH_MIN = 20 * DEG;
 const PITCH_MAX = 60 * DEG;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 1.5;
 
 // ---------------------------------------------------------------------------
 // Wall building — ported from tools/demo.html
@@ -187,16 +189,17 @@ export class SceneManager {
     this._unitInfo = new Map();
     this._animId = null;
 
-    // Camera state — client-owned; position synced from server, facing/pitch local
+    // Camera state — client-owned; position synced from server, facing/pitch/zoom local
     this._camX = 0;
     this._camZ = 0;
     this._camFacing = 0; // radians
     this._camPitch = Math.atan2(CAM_HEIGHT, CAM_BACK); // radians
+    this._camZoom = 1.0;
 
-    this._initMouseDrag();
+    this._initMouseControls();
   }
 
-  _initMouseDrag() {
+  _initMouseControls() {
     let lastX = null, lastY = null;
     this._canvas.addEventListener("mousedown", (e) => {
       lastX = e.clientX;
@@ -214,6 +217,10 @@ export class SceneManager {
     });
     window.addEventListener("mouseup", () => { lastX = null; lastY = null; });
     this._canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    this._canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      this._camZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._camZoom + e.deltaY * 0.001));
+    }, { passive: false });
   }
 
   async loadZone(url) {
@@ -360,19 +367,20 @@ export class SceneManager {
   }
 
   _positionCamera() {
+    const s = this._camZoom;
     const fwdX = Math.sin(this._camFacing);
     const fwdZ = -Math.cos(this._camFacing);
-    const horiz = CAM_RADIUS * Math.cos(this._camPitch);
-    const vert = CAM_RADIUS * Math.sin(this._camPitch);
+    const horiz = s * CAM_RADIUS * Math.cos(this._camPitch);
+    const vert = s * CAM_RADIUS * Math.sin(this._camPitch);
     this._camera.position.set(
       this._camX - horiz * fwdX,
       vert,
       this._camZ - horiz * fwdZ
     );
     this._camera.lookAt(
-      this._camX + CAM_LOOK_AHEAD * fwdX,
+      this._camX + s * CAM_LOOK_AHEAD * fwdX,
       0,
-      this._camZ + CAM_LOOK_AHEAD * fwdZ
+      this._camZ + s * CAM_LOOK_AHEAD * fwdZ
     );
   }
 }
