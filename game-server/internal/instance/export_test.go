@@ -13,6 +13,10 @@ func (inst *Instance) RegisterCommandHandlerForTest(h command.CommandHandler) {
 	inst.commandProcessor.Register(h)
 }
 
+func ApplyMovementForTest(state *instancestate.InstanceState) {
+	applyMovement(state)
+}
+
 func BuildFullStateMsgForTest(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
 	return buildFullStateMsg(state, now, checksum)
 }

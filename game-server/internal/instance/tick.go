@@ -88,6 +88,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			tickCount++
 			inst.drainPlayerSpawns(ctx, state)
 			inst.commandProcessor.Process(inst.drainCommands(), state)
+			applyMovement(state)
 			checksum := state.Checksum()
 			inst.Checksum = checksum
 
