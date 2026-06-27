@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
@@ -58,7 +59,9 @@ type Instance struct {
 	atomicSlotCount       atomic.Int64
 	atomicActiveSlotCount atomic.Int64
 
-	playerSpawnCh chan playerSpawn
+	playerSpawnCh    chan playerSpawn
+	commandCh        chan command.Command
+	commandProcessor *command.CommandProcessor
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -86,7 +89,18 @@ func NewInstance(
 		Status:         StatusLoading,
 		ZoneConfig:     zone,
 		CreatedAt:      time.Now(),
-		slots:          make(map[uuid.UUID]*InstanceSlot),
-		playerSpawnCh:  make(chan playerSpawn, DefaultMaxSlots),
+		slots:            make(map[uuid.UUID]*InstanceSlot),
+		playerSpawnCh:    make(chan playerSpawn, DefaultMaxSlots),
+		commandCh:        make(chan command.Command, DefaultMaxSlots*8),
+		commandProcessor: command.NewCommandProcessor(),
+	}
+}
+
+// SendCommand enqueues a command for processing on the next tick.
+// Non-blocking: if the channel is full the command is silently dropped.
+func (inst *Instance) SendCommand(cmd command.Command) {
+	select {
+	case inst.commandCh <- cmd:
+	default:
 	}
 }

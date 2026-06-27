@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -57,6 +58,18 @@ func (inst *Instance) Done() <-chan struct{} {
 	return inst.done
 }
 
+func (inst *Instance) drainCommands() []command.Command {
+	var cmds []command.Command
+	for {
+		select {
+		case cmd := <-inst.commandCh:
+			cmds = append(cmds, cmd)
+		default:
+			return cmds
+		}
+	}
+}
+
 func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceState) {
 	defer close(inst.done)
 
@@ -74,6 +87,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 		case now := <-ticker.C:
 			tickCount++
 			inst.drainPlayerSpawns(ctx, state)
+			inst.commandProcessor.Process(inst.drainCommands(), state)
 			checksum := state.Checksum()
 			inst.Checksum = checksum
 
