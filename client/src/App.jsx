@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Canvas from "./Canvas";
 import { GameConnection } from "./game/connection";
 
 const styles = {
@@ -30,12 +31,6 @@ const styles = {
     border: "1px solid #6a2a2a",
     padding: 8,
   },
-  canvas: {
-    flex: 1,
-    display: "block",
-    background: "#ffb6c1",
-    minHeight: 0,
-  },
   log: {
     flexShrink: 0,
     height: 110,
@@ -61,9 +56,10 @@ export default function App({
   gameServerUrl,
   instanceId,
   slotId,
+  zoneSourceUrl,
   characterName,
+  characterTokenUrl,
 }) {
-  const canvasRef = useRef(null);
   const connRef = useRef(null);
   const [units, setUnits] = useState({});
   const [log, setLog] = useState(["Connecting…"]);
@@ -85,8 +81,9 @@ export default function App({
     return () => conn.close();
   }, []);
 
+  const selfIdentifier = `player:${characterName}`;
   const selfUnit = Object.values(units).find(
-    (u) => u.zone_unit_identifier === `player:${characterName}`
+    (u) => u.zone_unit_identifier === selfIdentifier
   );
 
   return (
@@ -103,7 +100,12 @@ export default function App({
         </div>
         <div style={styles.targetFrame}>No target</div>
       </div>
-      <canvas ref={canvasRef} style={styles.canvas} />
+      <Canvas
+        zoneSourceUrl={zoneSourceUrl}
+        units={units}
+        selfIdentifier={selfIdentifier}
+        characterTokenUrl={characterTokenUrl}
+      />
       <div style={styles.log}>
         {log.map((line, i) => (
           <div key={i}>{line}</div>

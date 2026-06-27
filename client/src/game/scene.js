@@ -1,0 +1,294 @@
+import * as THREE from "three";
+
+const DEG = Math.PI / 180;
+const TOKEN_RADIUS = 2.2;
+const CAM_BACK = 45;
+const CAM_HEIGHT = 50;
+const CAM_RADIUS = Math.sqrt(CAM_BACK ** 2 + CAM_HEIGHT ** 2);
+const CAM_DEFAULT_PITCH = Math.atan2(CAM_HEIGHT, CAM_BACK);
+const CAM_LOOK_AHEAD = 10;
+
+// ---------------------------------------------------------------------------
+// Wall building — ported from tools/demo.html
+// ---------------------------------------------------------------------------
+
+function computeWallPolygon(points, half) {
+  const normals = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1][0] - points[i][0];
+    const dz = points[i + 1][1] - points[i][1];
+    const len = Math.sqrt(dx * dx + dz * dz);
+    normals.push([-dz / len, dx / len]);
+  }
+
+  const offsetAt = (i, side) => {
+    let ox, oz;
+    if (i === 0) {
+      ox = normals[0][0] * half;
+      oz = normals[0][1] * half;
+    } else if (i === points.length - 1) {
+      ox = normals[i - 1][0] * half;
+      oz = normals[i - 1][1] * half;
+    } else {
+      const [n0x, n0z] = normals[i - 1];
+      const [n1x, n1z] = normals[i];
+      const mx = n0x + n1x, mz = n0z + n1z;
+      const mlen = Math.sqrt(mx * mx + mz * mz);
+      const dot = (n0x * mx) / mlen + (n0z * mz) / mlen;
+      ox = (mx / mlen) * half / dot;
+      oz = (mz / mlen) * half / dot;
+    }
+    return [points[i][0] + side * ox, points[i][1] + side * oz];
+  };
+
+  const result = [];
+  for (let i = 0; i < points.length; i++) result.push(offsetAt(i, 1));
+  for (let i = points.length - 1; i >= 0; i--) result.push(offsetAt(i, -1));
+  return result;
+}
+
+function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
+  const poly = computeWallPolygon(worldPoints, thickness / 2);
+  const shape = new THREE.Shape();
+  poly.forEach(([x, z], i) => (i === 0 ? shape.moveTo(x, -z) : shape.lineTo(x, -z)));
+  shape.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity })));
+  group.add(
+    new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: opacity * 2 })
+    )
+  );
+  group.rotation.x = -Math.PI / 2;
+  return group;
+}
+
+// ---------------------------------------------------------------------------
+// Token building — ported from tools/demo.html
+// ---------------------------------------------------------------------------
+
+function addFacingArrow(group, radius, color) {
+  const hw = (0.3 * radius) / Math.sqrt(3);
+  const y = 0.31;
+  const verts = [0, y, -1.4 * radius, -hw, y, -1.1 * radius, hw, y, -1.1 * radius];
+
+  const fillGeo = new THREE.BufferGeometry();
+  fillGeo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+  fillGeo.setIndex([0, 1, 2]);
+  fillGeo.computeVertexNormals();
+  group.add(
+    new THREE.Mesh(fillGeo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }))
+  );
+
+  const borderVerts = verts.map((v, i) => (i % 3 === 1 ? v + 0.005 : v));
+  const borderGeo = new THREE.BufferGeometry();
+  borderGeo.setAttribute("position", new THREE.Float32BufferAttribute(borderVerts, 3));
+  group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })));
+}
+
+function createPlayerToken(radius, tokenUrl) {
+  const group = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: 0x2e7d32 })
+  );
+  body.position.y = 0.15;
+  group.add(body);
+
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat);
+  portrait.rotation.x = -Math.PI / 2;
+  portrait.position.y = 0.31;
+  group.add(portrait);
+
+  if (tokenUrl) {
+    new THREE.TextureLoader().load(tokenUrl, (texture) => {
+      portraitMat.map = texture;
+      portraitMat.needsUpdate = true;
+    });
+  }
+
+  addFacingArrow(group, radius, 0x81c784);
+  return group;
+}
+
+function createNpcToken(radius) {
+  const group = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: 0xc62828 })
+  );
+  body.position.y = 0.15;
+  group.add(body);
+
+  const top = new THREE.Mesh(
+    new THREE.CircleGeometry(radius * 0.8, 32),
+    new THREE.MeshLambertMaterial({ color: 0xffffff })
+  );
+  top.rotation.x = -Math.PI / 2;
+  top.position.y = 0.31;
+  group.add(top);
+
+  addFacingArrow(group, radius, 0xef9a9a);
+  return group;
+}
+
+// ---------------------------------------------------------------------------
+// SceneManager
+// ---------------------------------------------------------------------------
+
+export class SceneManager {
+  constructor(canvas) {
+    this._canvas = canvas;
+    this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this._renderer.setPixelRatio(window.devicePixelRatio);
+
+    this._scene = new THREE.Scene();
+    this._scene.background = new THREE.Color(0x000000);
+    this._scene.fog = new THREE.Fog(0x000000, 60, 150);
+    this._scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    sun.position.set(5, 10, 5);
+    this._scene.add(sun);
+
+    this._camera = new THREE.PerspectiveCamera(34, 1, 0.1, 500);
+
+    this._tokenMap = new Map();
+    this._mapToWorld = null;
+    this._animId = null;
+
+    // Camera tracking state
+    this._camX = 0;
+    this._camZ = 0;
+    this._camFacing = 0;
+  }
+
+  async loadZone(url) {
+    let json;
+    try {
+      const res = await fetch(url);
+      json = await res.json();
+    } catch (e) {
+      console.error("Failed to load zone config", e);
+      return;
+    }
+
+    const map = json.maps?.[0];
+    if (!map) return;
+
+    const { width, height } = map.feetDimensions;
+    const originX = -width / 2;
+    const originZ = height / 2;
+    this._mapToWorld = (x, y) => [x + originX, originZ - y];
+
+    if (map.imageUrl) {
+      const baseUrl = new URL(".", url).href;
+      const mapUrl = new URL(map.imageUrl, baseUrl).href;
+      new THREE.TextureLoader().load(mapUrl, (texture) => {
+        const plane = new THREE.Mesh(
+          new THREE.PlaneGeometry(width, height),
+          new THREE.MeshLambertMaterial({ map: texture })
+        );
+        plane.rotation.x = -Math.PI / 2;
+        this._scene.add(plane);
+      });
+    }
+
+    for (const barrier of map.barriers ?? []) {
+      if (barrier.type !== "wall") continue;
+      const pts = barrier.locations.map(({ x, y }) => this._mapToWorld(x, y));
+      this._scene.add(buildWall(pts));
+    }
+
+    for (const conn of map.connections ?? []) {
+      if (conn.type === "line") {
+        const pts = [conn.start, conn.end].map(({ x, y }) => this._mapToWorld(x, y));
+        this._scene.add(buildWall(pts, { color: 0xff00ff, opacity: 0.4 }));
+      }
+    }
+  }
+
+  updateUnits(units, selfIdentifier, characterTokenUrl) {
+    if (!this._mapToWorld) return;
+
+    const seen = new Set();
+    for (const [id, unit] of Object.entries(units)) {
+      seen.add(id);
+      const isSelf = unit.zone_unit_identifier === selfIdentifier;
+      const [wx, wz] = this._mapToWorld(unit.position.x, unit.position.y);
+      const angle = -(unit.position.angle * DEG);
+
+      if (this._tokenMap.has(id)) {
+        const { group } = this._tokenMap.get(id);
+        group.position.set(wx, 0, wz);
+        group.rotation.y = angle;
+      } else {
+        const group = isSelf
+          ? createPlayerToken(TOKEN_RADIUS, characterTokenUrl)
+          : createNpcToken(TOKEN_RADIUS);
+        group.position.set(wx, 0, wz);
+        group.rotation.y = angle;
+        this._scene.add(group);
+        this._tokenMap.set(id, { group, isSelf });
+      }
+
+      if (isSelf) {
+        this._camX = wx;
+        this._camZ = wz;
+        this._camFacing = unit.position.angle * DEG;
+      }
+    }
+
+    for (const [id, { group }] of this._tokenMap) {
+      if (!seen.has(id)) {
+        this._scene.remove(group);
+        this._tokenMap.delete(id);
+      }
+    }
+  }
+
+  startLoop() {
+    const tick = () => {
+      this._animId = requestAnimationFrame(tick);
+      this._positionCamera();
+      this._renderer.render(this._scene, this._camera);
+    };
+    tick();
+  }
+
+  handleResize() {
+    const w = this._canvas.offsetWidth;
+    const h = this._canvas.offsetHeight;
+    if (w === 0 || h === 0) return;
+    this._renderer.setSize(w, h, false);
+    this._camera.aspect = w / h;
+    this._camera.updateProjectionMatrix();
+  }
+
+  dispose() {
+    if (this._animId) cancelAnimationFrame(this._animId);
+    this._renderer.dispose();
+  }
+
+  _positionCamera() {
+    const fwdX = Math.sin(this._camFacing);
+    const fwdZ = -Math.cos(this._camFacing);
+    const horiz = CAM_RADIUS * Math.cos(CAM_DEFAULT_PITCH);
+    const vert = CAM_RADIUS * Math.sin(CAM_DEFAULT_PITCH);
+    this._camera.position.set(
+      this._camX - horiz * fwdX,
+      vert,
+      this._camZ - horiz * fwdZ
+    );
+    this._camera.lookAt(
+      this._camX + CAM_LOOK_AHEAD * fwdX,
+      0,
+      this._camZ + CAM_LOOK_AHEAD * fwdZ
+    );
+  }
+}
