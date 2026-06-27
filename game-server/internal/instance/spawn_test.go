@@ -122,6 +122,96 @@ func TestPlayerSpawn_UsesFirstMapCenter(t *testing.T) {
 	t.Fatal("player unit not found in full state")
 }
 
+func TestPlayerSpawn_UsesEntryPoint_Point(t *testing.T) {
+	reg := instance.NewRegistry()
+	entryKey := "m1/entrance"
+	zone := instanceconfig.Zone{
+		Name:    "Entry Point Zone",
+		Private: true,
+		Maps: []instanceconfig.Map{{
+			Identifier:     "m1",
+			Name:           "Map 1",
+			FeetDimensions: instanceconfig.Dimensions{Width: 100, Height: 80},
+			Connections: []instanceconfig.MapConnection{{
+				Identifier: "entrance",
+				Type:       "point",
+				Position:   &instanceconfig.Position{X: 10, Y: 20, Angle: 90},
+			}},
+		}},
+		EntryPoints: map[string]*string{entryKey: nil},
+	}
+	inst := instance.NewInstance(uuid.New(), "db-1", "zone-test", "v1", "http://example.com", zone, instance.DefaultMaxSlots)
+	inst.EmptyTimeout = shortTimeout
+	inst.SlotWaitTimeout = shortTimeout
+	require.NoError(t, inst.Start(reg))
+	reg.Add(inst)
+	t.Cleanup(inst.Stop)
+
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	units := receiveFullState(t, writeCh)
+	for _, u := range units {
+		if u["zone_unit_identifier"] == "player:Aldric" {
+			pos := u["position"].(map[string]any)
+			assert.Equal(t, 10.0, pos["x"])
+			assert.Equal(t, 20.0, pos["y"])
+			assert.Equal(t, 90.0, pos["angle"])
+			return
+		}
+	}
+	t.Fatal("player unit not found in full state")
+}
+
+func TestPlayerSpawn_UsesEntryPoint_Line(t *testing.T) {
+	reg := instance.NewRegistry()
+	entryKey := "m1/gate"
+	zone := instanceconfig.Zone{
+		Name:    "Line Entry Zone",
+		Private: true,
+		Maps: []instanceconfig.Map{{
+			Identifier:     "m1",
+			Name:           "Map 1",
+			FeetDimensions: instanceconfig.Dimensions{Width: 100, Height: 80},
+			Connections: []instanceconfig.MapConnection{{
+				Identifier: "gate",
+				Type:       "line",
+				Start:      &instanceconfig.Location{X: 0, Y: 0},
+				End:        &instanceconfig.Location{X: 0, Y: 0},
+			}},
+		}},
+		EntryPoints: map[string]*string{entryKey: nil},
+	}
+	inst := instance.NewInstance(uuid.New(), "db-1", "zone-test", "v1", "http://example.com", zone, instance.DefaultMaxSlots)
+	inst.EmptyTimeout = shortTimeout
+	inst.SlotWaitTimeout = shortTimeout
+	require.NoError(t, inst.Start(reg))
+	reg.Add(inst)
+	t.Cleanup(inst.Stop)
+
+	slot, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	units := receiveFullState(t, writeCh)
+	for _, u := range units {
+		if u["zone_unit_identifier"] == "player:Aldric" {
+			pos := u["position"].(map[string]any)
+			// Line midpoint is (0,0); nudged 4 feet toward center (50, 40)
+			// dist = sqrt(50²+40²) ≈ 64.03 → nudge = (4*50/64.03, 4*40/64.03) ≈ (3.12, 2.50)
+			assert.InDelta(t, 3.12, pos["x"].(float64), 0.01)
+			assert.InDelta(t, 2.50, pos["y"].(float64), 0.01)
+			return
+		}
+	}
+	t.Fatal("player unit not found in full state")
+}
+
 func TestPlayerSpawn_ReconnectDoesNotDuplicate(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := startedInstance(t, reg)
