@@ -1,0 +1,9 @@
+<div id="app"
+  data-slot-token="<%= @result.token %>"
+  data-game-server-url="<%= ENV.fetch("GAME_SERVER_URL", "http://localhost:8090") %>"
+  data-instance-id="<%= @result.instance_identifier %>"
+  data-slot-id="<%= @result.slot_id %>"
+  data-zone-source-url="<%= @zone.config_url %>"
+  data-character-name="<%= @character.name %>"
+  data-character-token-url="<%= @character.token_url %>"
+></div>
