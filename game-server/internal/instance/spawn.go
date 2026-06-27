@@ -1,6 +1,9 @@
 package instance
 
 import (
+	"context"
+	"log/slog"
+
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
@@ -21,7 +24,7 @@ type playerSpawn struct {
 
 // drainPlayerSpawns processes all pending player spawn requests. Called at the
 // start of each tick so spawned units are included in that tick's state snapshot.
-func (inst *Instance) drainPlayerSpawns(state *instancestate.InstanceState) {
+func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestate.InstanceState) {
 	for {
 		select {
 		case spawn := <-inst.playerSpawnCh:
@@ -59,6 +62,13 @@ func (inst *Instance) drainPlayerSpawns(state *instancestate.InstanceState) {
 				Status:              instancestate.UnitStatusIdle,
 				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
 			}
+			slog.InfoContext(ctx, "player unit spawned",
+				"unit_id", spawn.unitID,
+				"character", spawn.characterName,
+				"map", mapID,
+				"x", pos.X,
+				"y", pos.Y,
+			)
 		default:
 			return
 		}
