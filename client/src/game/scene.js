@@ -189,9 +189,8 @@ export class SceneManager {
     this._unitInfo = new Map();
     this._animId = null;
 
-    // Camera state — client-owned; position synced from server, facing/pitch/zoom local
-    this._camX = 0;
-    this._camZ = 0;
+    // Camera state — client-owned; facing/pitch/zoom local, position read from selfToken
+    this._selfToken = null; // Three.js Group for the player's token
     this._camFacing = 0; // radians
     this._camPitch = Math.atan2(CAM_HEIGHT, CAM_BACK); // radians
     this._camZoom = 1.0;
@@ -315,11 +314,7 @@ export class SceneManager {
         group.rotation.y = angle;
         this._scene.add(group);
         this._tokenMap.set(id, { group, isSelf });
-      }
-
-      if (isSelf) {
-        this._camX = wx;
-        this._camZ = wz;
+        if (isSelf) this._selfToken = group;
       }
     }
 
@@ -372,15 +367,17 @@ export class SceneManager {
     const fwdZ = -Math.cos(this._camFacing);
     const horiz = s * CAM_RADIUS * Math.cos(this._camPitch);
     const vert = s * CAM_RADIUS * Math.sin(this._camPitch);
+    const cx = this._selfToken?.position.x ?? 0;
+    const cz = this._selfToken?.position.z ?? 0;
     this._camera.position.set(
-      this._camX - horiz * fwdX,
+      cx - horiz * fwdX,
       vert,
-      this._camZ - horiz * fwdZ
+      cz - horiz * fwdZ
     );
     this._camera.lookAt(
-      this._camX + s * CAM_LOOK_AHEAD * fwdX,
+      cx + s * CAM_LOOK_AHEAD * fwdX,
       0,
-      this._camZ + s * CAM_LOOK_AHEAD * fwdZ
+      cz + s * CAM_LOOK_AHEAD * fwdZ
     );
   }
 }
