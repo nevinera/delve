@@ -301,9 +301,10 @@ export class SceneManager {
       const angle = -(unit.position.angle * DEG);
 
       if (this._tokenMap.has(id)) {
-        const { group } = this._tokenMap.get(id);
-        group.position.set(wx, 0, wz);
-        group.rotation.y = angle;
+        const entry = this._tokenMap.get(id);
+        entry.targetX = wx;
+        entry.targetZ = wz;
+        entry.targetRotY = angle;
       } else {
         const info = this._unitInfo.get(unit.zone_unit_identifier);
         const radius = info?.tokenRadius ?? TOKEN_RADIUS;
@@ -313,7 +314,7 @@ export class SceneManager {
         group.position.set(wx, 0, wz);
         group.rotation.y = angle;
         this._scene.add(group);
-        this._tokenMap.set(id, { group, isSelf });
+        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle });
         if (isSelf) this._selfToken = group;
       }
     }
@@ -339,6 +340,22 @@ export class SceneManager {
         if (keys.has("turn_left"))  { this._camFacing -= TURN_RATE * elapsed; turned = true; }
         if (keys.has("turn_right")) { this._camFacing += TURN_RATE * elapsed; turned = true; }
         if (turned) this._onFacingChange?.(this._camFacing / DEG);
+      }
+
+      // Interpolate all tokens toward their server-side target positions.
+      const f = elapsed > 0 ? 1 - Math.exp(-20 * elapsed) : 0;
+      for (const { group, isSelf, targetX, targetZ, targetRotY } of this._tokenMap.values()) {
+        group.position.x += (targetX - group.position.x) * f;
+        group.position.z += (targetZ - group.position.z) * f;
+        if (isSelf) {
+          // Self-token rotation tracks camera facing directly — no round-trip lag.
+          group.rotation.y = -this._camFacing;
+        } else {
+          let dRot = targetRotY - group.rotation.y;
+          if (dRot > Math.PI) dRot -= Math.PI * 2;
+          if (dRot < -Math.PI) dRot += Math.PI * 2;
+          group.rotation.y += dRot * f;
+        }
       }
 
       this._positionCamera();
