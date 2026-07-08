@@ -37,3 +37,15 @@ func PushOutOfCircleForTest(px, py, unitRadius, cx, cy, barrierRadius float64) (
 func ResolveCollisionsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
 	resolveCollisions(state, zone)
 }
+
+func ApplyNPCMovementForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	applyNPCMovement(state, zone, dt)
+}
+
+func FacingTowardDegForTest(x1, y1, x2, y2 float64) float64 {
+	return facingTowardDeg(x1, y1, x2, y2)
+}
+
+func LerpAngleDegForTest(a, b, t float64) float64 {
+	return lerpAngleDeg(a, b, t)
+}
