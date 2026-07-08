@@ -6,6 +6,7 @@ export default function Canvas({
   units,
   selfIdentifier,
   characterTokenUrl,
+  movementKeysRef,
   turnKeysRef,
   onFacingChange,
 }) {
@@ -13,7 +14,7 @@ export default function Canvas({
   const managerRef = useRef(null);
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current, { turnKeysRef, onFacingChange });
+    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();

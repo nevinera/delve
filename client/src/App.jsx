@@ -173,6 +173,7 @@ export default function App({
         units={units}
         selfIdentifier={selfIdentifier}
         characterTokenUrl={characterTokenUrl}
+        movementKeysRef={movementKeysRef}
         turnKeysRef={turnKeysRef}
         onFacingChange={handleFacingChange}
       />

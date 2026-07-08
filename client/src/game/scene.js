@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
 const DEG = Math.PI / 180;
+const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
 const TOKEN_RADIUS = 2.2;
 const CAM_BACK = 45;
 const CAM_HEIGHT = 50;
@@ -165,10 +166,12 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, onFacingChange } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
+    this._movementKeysRef = movementKeysRef;
     this._onFacingChange = onFacingChange;
+
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this._renderer.setPixelRatio(window.devicePixelRatio);
@@ -188,6 +191,14 @@ export class SceneManager {
     this._zoneBaseUrl = null;
     this._unitInfo = new Map();
     this._animId = null;
+
+    // Client-side movement prediction for the self unit
+    this._selfMapX = 0;
+    this._selfMapY = 0;
+    this._selfSpeed = BASE_PLAYER_SPEED; // updated from server unit state
+    this._serverMapX = 0;
+    this._serverMapY = 0;
+    this._selfInitialized = false;
 
     // Camera state — client-owned; facing/pitch/zoom local, position read from selfToken
     this._selfToken = null; // Three.js Group for the player's token
@@ -300,11 +311,24 @@ export class SceneManager {
       const [wx, wz] = this._mapToWorld(unit.position.x, unit.position.y);
       const angle = -(unit.position.angle * DEG);
 
+      if (isSelf) {
+        this._serverMapX = unit.position.x;
+        this._serverMapY = unit.position.y;
+        if (unit.speed) this._selfSpeed = unit.speed;
+        if (!this._selfInitialized) {
+          this._selfMapX = unit.position.x;
+          this._selfMapY = unit.position.y;
+          this._selfInitialized = true;
+        }
+      }
+
       if (this._tokenMap.has(id)) {
         const entry = this._tokenMap.get(id);
-        entry.targetX = wx;
-        entry.targetZ = wz;
-        entry.targetRotY = angle;
+        if (!isSelf) {
+          entry.targetX = wx;
+          entry.targetZ = wz;
+          entry.targetRotY = angle;
+        }
       } else {
         const info = this._unitInfo.get(unit.zone_unit_identifier);
         const radius = info?.tokenRadius ?? TOKEN_RADIUS;
@@ -342,20 +366,47 @@ export class SceneManager {
         if (turned) this._onFacingChange?.(this._camFacing / DEG);
       }
 
-      // Interpolate all tokens toward their server-side target positions.
+      // Self unit: apply local movement prediction each frame.
+      if (this._selfInitialized && this._selfToken) {
+        const mkeys = this._movementKeysRef?.current;
+        let moved = false;
+        if (mkeys && mkeys.size > 0) {
+          const sinA = Math.sin(this._camFacing);
+          const cosA = Math.cos(this._camFacing);
+          let dx = 0, dy = 0;
+          if (mkeys.has("forward"))      { dx += sinA; dy += cosA; }
+          if (mkeys.has("backward"))     { dx -= sinA; dy -= cosA; }
+          if (mkeys.has("strafe_right")) { dx += cosA; dy -= sinA; }
+          if (mkeys.has("strafe_left"))  { dx -= cosA; dy += sinA; }
+          const mag = Math.sqrt(dx * dx + dy * dy);
+          if (mag > 0) {
+            const dist = this._selfSpeed * elapsed / mag;
+            this._selfMapX += dx * dist;
+            this._selfMapY += dy * dist;
+            moved = true;
+          }
+        }
+        if (!moved) {
+          // Stopped: converge quickly to server-confirmed position.
+          const cf = 1 - Math.exp(-10 * elapsed);
+          this._selfMapX += (this._serverMapX - this._selfMapX) * cf;
+          this._selfMapY += (this._serverMapY - this._selfMapY) * cf;
+        }
+        const [sx, sz] = this._mapToWorld(this._selfMapX, this._selfMapY);
+        this._selfToken.position.set(sx, 0, sz);
+        this._selfToken.rotation.y = -this._camFacing;
+      }
+
+      // Interpolate NPC tokens toward their server-side target positions.
       const f = elapsed > 0 ? 1 - Math.exp(-20 * elapsed) : 0;
       for (const { group, isSelf, targetX, targetZ, targetRotY } of this._tokenMap.values()) {
+        if (isSelf) continue;
         group.position.x += (targetX - group.position.x) * f;
         group.position.z += (targetZ - group.position.z) * f;
-        if (isSelf) {
-          // Self-token rotation tracks camera facing directly — no round-trip lag.
-          group.rotation.y = -this._camFacing;
-        } else {
-          let dRot = targetRotY - group.rotation.y;
-          if (dRot > Math.PI) dRot -= Math.PI * 2;
-          if (dRot < -Math.PI) dRot += Math.PI * 2;
-          group.rotation.y += dRot * f;
-        }
+        let dRot = targetRotY - group.rotation.y;
+        if (dRot > Math.PI) dRot -= Math.PI * 2;
+        if (dRot < -Math.PI) dRot += Math.PI * 2;
+        group.rotation.y += dRot * f;
       }
 
       this._positionCamera();
