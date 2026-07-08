@@ -85,6 +85,34 @@ func TestRemoveSlot_MissingReturnsFalse(t *testing.T) {
 	assert.False(t, inst.RemoveSlot(uuid.New()))
 }
 
+func TestAddSlot_SameCharacterReusesSlot(t *testing.T) {
+	inst := makeInstance()
+	first, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+	firstID := first.ID
+	firstUnitID := first.CharacterUnitID
+	firstToken := first.Token
+
+	second, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	assert.Equal(t, firstID, second.ID, "slot ID should be reused")
+	assert.Equal(t, firstUnitID, second.CharacterUnitID, "character unit ID should be preserved")
+	assert.NotEqual(t, firstToken, second.Token, "token should be rotated on reuse")
+	assert.Len(t, inst.ListSlots(), 1, "should not create a second slot")
+}
+
+func TestAddSlot_SameCharacterDoesNotConsumeCapacity(t *testing.T) {
+	inst := makeInstance()
+	inst.MaxSlots = 1
+
+	_, err := inst.AddSlot("Aldric", puncherClass)
+	require.NoError(t, err)
+
+	_, err = inst.AddSlot("Aldric", puncherClass)
+	assert.NoError(t, err, "reusing an existing slot should not hit the capacity limit")
+}
+
 func TestAddSlot_UniqueIDsAndTokens(t *testing.T) {
 	inst := makeInstance()
 	a, err := inst.AddSlot("A", puncherClass)
