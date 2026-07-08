@@ -26,6 +26,7 @@ type unitJSON struct {
 	MaxHealth           float64                  `json:"max_health"`
 	Resource            float64                  `json:"resource"`
 	MaxResource         float64                  `json:"max_resource"`
+	Speed               float64                  `json:"speed"`
 	Status              instancestate.UnitStatus `json:"status"`
 	Target              *string                  `json:"target"`
 	ActiveStatusEffects []effectJSON             `json:"active_status_effects"`
@@ -83,6 +84,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			MaxHealth:           u.MaxHealth,
 			Resource:            u.Resource,
 			MaxResource:         u.MaxResource,
+			Speed:               u.Speed,
 			Status:              u.Status,
 			Target:              target,
 			ActiveStatusEffects: effects,
@@ -132,6 +134,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 				"max_health":           cu.MaxHealth,
 				"resource":             cu.Resource,
 				"max_resource":         cu.MaxResource,
+				"speed":                cu.Speed,
 				"status":               string(cu.Status),
 				"target":               target,
 			}
@@ -164,6 +167,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 		}
 		if cu.MaxResource != pu.MaxResource {
 			patch["max_resource"] = cu.MaxResource
+		}
+		if cu.Speed != pu.Speed {
+			patch["speed"] = cu.Speed
 		}
 		if cu.Status != pu.Status {
 			patch["status"] = string(cu.Status)

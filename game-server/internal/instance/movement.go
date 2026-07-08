@@ -6,7 +6,10 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-const basePlayerSpeed = 20.0 // feet per second; later driven by class stats and buffs
+// BasePlayerSpeed is the default movement speed in feet per second.
+// Exported so spawn.go and tests can reference it without duplication.
+// Will be driven by class stats and buffs in the future.
+const BasePlayerSpeed = 20.0
 
 // applyMovement advances position for all units with an active MovementIntent.
 // Called each tick after commands are processed.
@@ -47,7 +50,11 @@ func applyMovement(state *instancestate.InstanceState) {
 			continue // opposing keys cancelled out
 		}
 
-		dist := basePlayerSpeed * dt / mag
+		speed := unit.Speed
+		if speed == 0 {
+			speed = BasePlayerSpeed
+		}
+		dist := speed * dt / mag
 		unit.Position.X += dx * dist
 		unit.Position.Y += dy * dist
 	}

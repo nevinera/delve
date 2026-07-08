@@ -60,6 +60,7 @@ type UnitState struct {
 	MaxHealth   float64 // cached from UnitType.MaxHP at spawn
 	Resource    float64 // current resource value
 	MaxResource float64 // cached from UnitType.Resource.Max at spawn
+	Speed       float64 // movement speed in feet per second
 
 	Status              UnitStatus
 	Target              *uuid.UUID

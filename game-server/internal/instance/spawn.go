@@ -57,6 +57,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				MaxHealth:           playerBaseMaxHP,
 				Resource:            resource,
 				MaxResource:         maxResource,
+				Speed:               BasePlayerSpeed,
 				Status:              instancestate.UnitStatusIdle,
 				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
 			}
