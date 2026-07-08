@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { resolveBarrierCollisions } from "./collision.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -190,6 +191,7 @@ export class SceneManager {
     this._mapToWorld = null;
     this._zoneBaseUrl = null;
     this._unitInfo = new Map();
+    this._barriersByMap = new Map();
     this._animId = null;
 
     // Client-side movement prediction for the self unit
@@ -199,6 +201,7 @@ export class SceneManager {
     this._serverMapX = 0;
     this._serverMapY = 0;
     this._selfInitialized = false;
+    this._selfMapIdentifier = null;
 
     // Camera state — client-owned; facing/pitch/zoom local, position read from selfToken
     this._selfToken = null; // Three.js Group for the player's token
@@ -253,6 +256,11 @@ export class SceneManager {
 
     const baseUrl = new URL(".", url).href;
     this._zoneBaseUrl = baseUrl;
+
+    // Build barrier lookup by map identifier for client-side collision.
+    for (const m of json.maps ?? []) {
+      this._barriersByMap.set(m.identifier, m.barriers ?? []);
+    }
 
     // Build lookup across all maps: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
     const unitTypes = json.unitTypes ?? {};
@@ -314,6 +322,7 @@ export class SceneManager {
       if (isSelf) {
         this._serverMapX = unit.position.x;
         this._serverMapY = unit.position.y;
+        this._selfMapIdentifier = unit.map_identifier;
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
@@ -392,6 +401,15 @@ export class SceneManager {
           this._selfMapX += (this._serverMapX - this._selfMapX) * cf;
           this._selfMapY += (this._serverMapY - this._selfMapY) * cf;
         }
+
+        // Apply client-side collision so predicted position stays out of walls.
+        const barriers = this._barriersByMap.get(this._selfMapIdentifier) ?? [];
+        if (barriers.length > 0) {
+          [this._selfMapX, this._selfMapY] = resolveBarrierCollisions(
+            this._selfMapX, this._selfMapY, TOKEN_RADIUS, barriers
+          );
+        }
+
         const [sx, sz] = this._mapToWorld(this._selfMapX, this._selfMapY);
         this._selfToken.position.set(sx, 0, sz);
         this._selfToken.rotation.y = -this._camFacing;
