@@ -61,6 +61,7 @@ type UnitState struct {
 	Resource    float64 // current resource value
 	MaxResource float64 // cached from UnitType.Resource.Max at spawn
 	Speed       float64 // movement speed in feet per second
+	Radius      float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
 	Status              UnitStatus
 	Target              *uuid.UUID

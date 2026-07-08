@@ -111,6 +111,8 @@ type incomingMsg struct {
 	Type   string   `json:"type"`
 	Facing float64  `json:"facing"`
 	Keys   []string `json:"keys"`
+	X      *float64 `json:"x"`
+	Y      *float64 `json:"y"`
 }
 
 func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance) {
@@ -127,7 +129,7 @@ func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance)
 		inst.SendCommand(command.Command{
 			UnitID:     unitID,
 			ReceivedAt: time.Now(),
-			Payload:    command.MovePayload{Facing: msg.Facing, Keys: keys},
+			Payload:    command.MovePayload{Facing: msg.Facing, Keys: keys, X: msg.X, Y: msg.Y},
 		})
 	}
 }

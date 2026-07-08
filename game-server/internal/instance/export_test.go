@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/delve-mmo/game-server/internal/command"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -23,4 +24,16 @@ func BuildFullStateMsgForTest(state *instancestate.InstanceState, now time.Time,
 
 func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
 	return buildDeltaMsg(prev, curr, now, checksum)
+}
+
+func PushOutOfSegmentForTest(px, py, r, ax, ay, bx, by float64) (float64, float64) {
+	return pushOutOfSegment(px, py, r, ax, ay, bx, by)
+}
+
+func PushOutOfCircleForTest(px, py, unitRadius, cx, cy, barrierRadius float64) (float64, float64) {
+	return pushOutOfCircle(px, py, unitRadius, cx, cy, barrierRadius)
+}
+
+func ResolveCollisionsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
+	resolveCollisions(state, zone)
 }

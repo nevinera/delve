@@ -11,6 +11,10 @@ import (
 // Will be driven by class stats and buffs in the future.
 const BasePlayerSpeed = 20.0
 
+// BasePlayerRadius is the collision radius for player units in feet.
+// Must match TOKEN_RADIUS in the client's scene.js.
+const BasePlayerRadius = 2.2
+
 // applyMovement advances position for all units with an active MovementIntent.
 // Called each tick after commands are processed.
 func applyMovement(state *instancestate.InstanceState) {

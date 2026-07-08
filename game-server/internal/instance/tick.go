@@ -89,6 +89,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			inst.drainPlayerSpawns(ctx, state)
 			inst.commandProcessor.Process(inst.drainCommands(), state)
 			applyMovement(state)
+			resolveCollisions(state, inst.ZoneConfig)
 			checksum := state.Checksum()
 			inst.Checksum = checksum
 

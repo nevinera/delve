@@ -89,3 +89,56 @@ func TestMoveHandler_MissingUnitIsNoOp(t *testing.T) {
 
 	assert.NoError(t, h.Handle(uuid.New(), command.MovePayload{Facing: 45.0}, state))
 }
+
+func ptr(v float64) *float64 { return &v }
+
+func TestMoveHandler_WithPosition_SetsPosition(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := stateWithUnit(unitID)
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{
+		Facing: 90.0,
+		X:      ptr(15.0),
+		Y:      ptr(25.0),
+	}, state))
+
+	unit := state.Units[unitID]
+	assert.InDelta(t, 15.0, unit.Position.X, 1e-9)
+	assert.InDelta(t, 25.0, unit.Position.Y, 1e-9)
+	assert.InDelta(t, 90.0, unit.Position.Angle, 1e-9)
+}
+
+func TestMoveHandler_WithPosition_ClearsIntent(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := stateWithUnit(unitID)
+	state.Units[unitID].MovementIntent = instancestate.MovementIntent{Forward: true}
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{
+		Facing: 0,
+		Keys:   []command.MoveKey{command.MoveKeyForward},
+		X:      ptr(5.0),
+		Y:      ptr(5.0),
+	}, state))
+
+	assert.Equal(t, instancestate.MovementIntent{}, state.Units[unitID].MovementIntent)
+}
+
+func TestMoveHandler_PartialPosition_FallsBackToKeys(t *testing.T) {
+	// Only X provided (no Y) — should fall back to key-based intent.
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := stateWithUnit(unitID)
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{
+		Facing: 0,
+		Keys:   []command.MoveKey{command.MoveKeyForward},
+		X:      ptr(5.0),
+		// Y intentionally absent
+	}, state))
+
+	assert.True(t, state.Units[unitID].MovementIntent.Forward)
+	// Position should not have been set to 5,0
+	assert.InDelta(t, 0.0, state.Units[unitID].Position.X, 1e-9)
+}

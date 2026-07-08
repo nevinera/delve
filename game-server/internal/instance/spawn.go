@@ -58,6 +58,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				Resource:            resource,
 				MaxResource:         maxResource,
 				Speed:               BasePlayerSpeed,
+				Radius:              BasePlayerRadius,
 				Status:              instancestate.UnitStatusIdle,
 				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
 			}

@@ -22,9 +22,14 @@ const (
 )
 
 // MovePayload carries the client's current facing and active movement keys.
+// X and Y are optional: when present they carry the client-computed position
+// and are used as the authoritative position (server applies collision on top).
+// When absent the server derives movement from Keys each tick.
 type MovePayload struct {
 	Facing float64
 	Keys   []MoveKey
+	X      *float64
+	Y      *float64
 }
 
 func (MovePayload) CommandType() string { return "move" }

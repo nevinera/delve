@@ -22,6 +22,15 @@ func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *instan
 		return nil
 	}
 	unit.Position.Angle = p.Facing
+	if p.X != nil && p.Y != nil {
+		// Client-computed position: accept it directly and clear intent so
+		// applyMovement skips this unit. resolveCollisions still runs after.
+		unit.Position.X = *p.X
+		unit.Position.Y = *p.Y
+		unit.MovementIntent = instancestate.MovementIntent{}
+		return nil
+	}
+	// Fallback (no position from client): derive movement from key intent.
 	unit.MovementIntent = instancestate.MovementIntent{}
 	for _, key := range p.Keys {
 		switch key {
