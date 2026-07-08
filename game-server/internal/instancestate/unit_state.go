@@ -36,9 +36,19 @@ type MovementIntent struct {
 // BehaviorState tracks tick-loop progress for a unit's movement and tactics.
 // Zero value is valid for units with "still" movement and non-phased/scripted tactics.
 type BehaviorState struct {
-	// patrol movement
-	PatrolStepIndex   int
-	PatrolStepElapsed float64 // seconds elapsed waiting at the current step
+	// NPC movement state machine.
+	// MovementPhase == "" means still or not yet initialized.
+	MovementPhase    string  // "", "moving", "waiting", "turning"
+	PatrolStepIndex  int     // current waypoint index for patrol
+	PatrolDir        int     // 1 or -1; direction of travel for "return" patrol mode
+	PendingStepIndex int     // step index to apply when a turn completes (patrol only)
+	TargetX          float64 // map-coord movement target
+	TargetY          float64
+	MoveRate         float64 // fraction of base speed for this leg
+	WaitRemaining    float64 // seconds remaining in a wait
+	TurnElapsed      float64 // seconds elapsed in a turning animation
+	TurnStartAngle   float64 // degrees at turn start
+	TurnEndAngle     float64 // degrees at turn end
 
 	// phased tactics
 	PhaseIndex   int
