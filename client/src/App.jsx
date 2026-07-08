@@ -77,6 +77,7 @@ export default function App({
   const turnKeysRef = useRef(new Set());
   const facingRef = useRef(0); // degrees
   const [units, setUnits] = useState({});
+  const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
@@ -139,8 +140,8 @@ export default function App({
       instanceId,
       slotId,
       slotToken,
-      onOpen: () => addLog("Connected to game server."),
-      onClose: () => addLog("Disconnected."),
+      onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
+      onClose: () => { setDisconnected(true); addLog("Disconnected."); },
       onStateChange: ({ units: u }) => setUnits(u),
     });
     conn.connect();
@@ -180,6 +181,21 @@ export default function App({
           <div key={i}>{line}</div>
         ))}
       </div>
+      {disconnected && (
+        <div style={{
+          position: "fixed", inset: 0, display: "flex",
+          alignItems: "center", justifyContent: "center",
+          pointerEvents: "none",
+        }}>
+          <div style={{
+            color: "#ff2222", fontSize: 48, fontWeight: "bold",
+            textShadow: "0 0 20px #ff0000, 0 2px 4px #000",
+            letterSpacing: 4,
+          }}>
+            DISCONNECTED
+          </div>
+        </div>
+      )}
     </div>
   );
 }
