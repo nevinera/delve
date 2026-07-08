@@ -167,11 +167,13 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
     this._onFacingChange = onFacingChange;
+    this._onSelfPosition = onSelfPosition;
+    this._lastPosSendTime = 0;
 
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -408,6 +410,12 @@ export class SceneManager {
           [this._selfMapX, this._selfMapY] = resolveBarrierCollisions(
             this._selfMapX, this._selfMapY, TOKEN_RADIUS, barriers
           );
+        }
+
+        // Send position to server ~3-4x per server tick (every ~30ms).
+        if (this._onSelfPosition && time - this._lastPosSendTime >= 30) {
+          this._onSelfPosition({ x: this._selfMapX, y: this._selfMapY });
+          this._lastPosSendTime = time;
         }
 
         const [sx, sz] = this._mapToWorld(this._selfMapX, this._selfMapY);

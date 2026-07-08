@@ -9,12 +9,13 @@ export default function Canvas({
   movementKeysRef,
   turnKeysRef,
   onFacingChange,
+  onSelfPosition,
 }) {
   const canvasRef = useRef(null);
   const managerRef = useRef(null);
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange });
+    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange, onSelfPosition });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();
