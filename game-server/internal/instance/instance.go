@@ -95,6 +95,7 @@ func NewInstance(
 		commandProcessor: command.NewCommandProcessor(),
 	}
 	inst.commandProcessor.Register(command.MoveHandler{})
+	inst.commandProcessor.Register(command.TargetHandler{})
 	return inst
 }
 

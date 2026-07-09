@@ -108,11 +108,12 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 }
 
 type incomingMsg struct {
-	Type   string   `json:"type"`
-	Facing float64  `json:"facing"`
-	Keys   []string `json:"keys"`
-	X      *float64 `json:"x"`
-	Y      *float64 `json:"y"`
+	Type     string   `json:"type"`
+	Facing   float64  `json:"facing"`
+	Keys     []string `json:"keys"`
+	X        *float64 `json:"x"`
+	Y        *float64 `json:"y"`
+	TargetID *string  `json:"target_id"`
 }
 
 func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance) {
@@ -130,6 +131,18 @@ func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance)
 			UnitID:     unitID,
 			ReceivedAt: time.Now(),
 			Payload:    command.MovePayload{Facing: msg.Facing, Keys: keys, X: msg.X, Y: msg.Y},
+		})
+	case "target":
+		var targetID *uuid.UUID
+		if msg.TargetID != nil {
+			if id, err := uuid.Parse(*msg.TargetID); err == nil {
+				targetID = &id
+			}
+		}
+		inst.SendCommand(command.Command{
+			UnitID:     unitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.TargetPayload{TargetID: targetID},
 		})
 	}
 }

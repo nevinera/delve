@@ -34,6 +34,14 @@ type MovePayload struct {
 
 func (MovePayload) CommandType() string { return "move" }
 
+// TargetPayload sets (or clears) the player's current target.
+// A nil TargetID clears the target.
+type TargetPayload struct {
+	TargetID *uuid.UUID
+}
+
+func (TargetPayload) CommandType() string { return "target" }
+
 // Command is a single client-initiated action, tagged with the unit it
 // targets and the time it was received by the server.
 type Command struct {
