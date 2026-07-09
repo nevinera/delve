@@ -63,6 +63,15 @@ function UnitBar({ label, current, max }) {
   );
 }
 
+function formatUnitName(zoneUnitIdentifier) {
+  if (!zoneUnitIdentifier) return "Unknown";
+  return zoneUnitIdentifier
+    .replace(/^player:/, "")
+    .split("_")
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export default function App({
   slotToken,
   gameServerUrl,
@@ -207,6 +216,7 @@ export default function App({
   const selfUnit = Object.values(units).find(
     (u) => u.zone_unit_identifier === selfIdentifier
   );
+  const targetUnit = targetId ? units[targetId] : null;
 
   return (
     <div style={styles.root}>
@@ -220,7 +230,16 @@ export default function App({
             </>
           )}
         </div>
-        <div style={styles.targetFrame}>No target</div>
+        <div style={styles.targetFrame}>
+          {targetUnit ? (
+            <>
+              <strong>{formatUnitName(targetUnit.zone_unit_identifier)}</strong>
+              <UnitBar label="HP" current={targetUnit.health} max={targetUnit.max_health} />
+            </>
+          ) : (
+            <span style={{ color: "#666" }}>No target</span>
+          )}
+        </div>
       </div>
       <Canvas
         zoneSourceUrl={zoneSourceUrl}
