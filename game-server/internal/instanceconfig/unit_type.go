@@ -5,8 +5,9 @@ package instanceconfig
 type UnitType struct {
 	Name        string       `json:"name"`        // Required
 	Description string       `json:"description,omitempty"`
-	TokenRadius float64      `json:"tokenRadius"` // Required: collision radius in feet, 1.0-20.0
-	SpeedFactor float64      `json:"speedFactor"` // Default 1.0; movement speed multiplier
+	TokenRadius  float64      `json:"tokenRadius"`  // Required: collision radius in feet, 1.0-20.0
+	SpeedFactor  float64      `json:"speedFactor"`  // Default 1.0; movement speed multiplier
+	AggroRadius  float64      `json:"aggroRadius"`  // Feet; 0 means never aggros proactively
 	MaxHP       int          `json:"maxHP"`       // Required
 	Resource    ResourceType `json:"resource"`    // Required
 	Powers      []Power      `json:"powers,omitempty"`
