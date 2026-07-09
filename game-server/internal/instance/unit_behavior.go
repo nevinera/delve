@@ -77,10 +77,12 @@ func applyUnitBehavior(
 	speed := BaseMobSpeed * sf
 
 	// Proactive aggro: transition idle hostile units when a player enters range.
-	if unit.Status == instancestate.UnitStatusIdle &&
-		e.unit.Hostility == "hostile" &&
-		e.unitType.AggroRadius > 0 {
-		if targetID := nearestPlayerInRadius(unit, playersByMap[unit.MapIdentifier], e.unitType.AggroRadius); targetID != nil {
+	aggroRadius := e.unitType.AggroRadius
+	if aggroRadius == 0 {
+		aggroRadius = 20.0
+	}
+	if unit.Status == instancestate.UnitStatusIdle && e.unit.Hostility == "hostile" {
+		if targetID := nearestPlayerInRadius(unit, playersByMap[unit.MapIdentifier], aggroRadius); targetID != nil {
 			engageUnit(unit, *targetID)
 			for _, link := range e.unit.Links {
 				if linked, ok := stateByZoneID[link]; ok && linked.Status == instancestate.UnitStatusIdle {

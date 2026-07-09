@@ -84,14 +84,15 @@ func TestUnitBehavior_Aggro_PlayerOutOfRange(t *testing.T) {
 	assert.Nil(t, u.Target)
 }
 
-func TestUnitBehavior_Aggro_ZeroRadius_NeverAggros(t *testing.T) {
+func TestUnitBehavior_Aggro_ZeroRadius_DefaultsTo20(t *testing.T) {
+	// aggroRadius: 0 in config means "use default 20ft", not "never aggro".
 	zone := behaviorZone(0.0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
-	addPlayer(s, "map1", 1, 0) // right next to unit
+	addPlayer(s, "map1", 15, 0) // 15ft — inside default 20ft radius
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+	assert.Equal(t, instancestate.UnitStatusEngaged, u.Status)
 }
 
 func TestUnitBehavior_Aggro_DifferentMap_NeverAggros(t *testing.T) {
