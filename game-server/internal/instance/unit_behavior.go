@@ -63,6 +63,8 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		}
 		applyUnitBehavior(unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt)
 	}
+
+	applyNPCSeparation(state, dt)
 }
 
 func applyUnitBehavior(
@@ -182,6 +184,49 @@ func nearestPlayerInRadius(unit *instancestate.UnitState, players []playerRef, r
 		}
 	}
 	return bestID
+}
+
+const (
+	separationRadius   = 5.0  // feet - push begins when two NPCs are closer than this
+	separationStrength = 12.0 // feet/sec of push force at full overlap
+)
+
+// applyNPCSeparation pushes NPC units apart when they crowd each other,
+// preventing clumping when multiple units chase the same target.
+func applyNPCSeparation(state *instancestate.InstanceState, dt float64) {
+	type entry struct {
+		unit *instancestate.UnitState
+		x, y float64
+	}
+	var npcs []entry
+	for _, u := range state.Units {
+		if strings.HasPrefix(u.ZoneUnitIdentifier, "player:") || u.Status == instancestate.UnitStatusDead {
+			continue
+		}
+		npcs = append(npcs, entry{u, u.Position.X, u.Position.Y})
+	}
+
+	for i := range npcs {
+		var fx, fy float64
+		for j := range npcs {
+			if i == j {
+				continue
+			}
+			dx := npcs[i].x - npcs[j].x
+			dy := npcs[i].y - npcs[j].y
+			dist := math.Sqrt(dx*dx + dy*dy)
+			if dist >= separationRadius || dist < 0.001 {
+				continue
+			}
+			mag := (separationRadius - dist) / separationRadius * separationStrength
+			fx += (dx / dist) * mag
+			fy += (dy / dist) * mag
+		}
+		if fx != 0 || fy != 0 {
+			npcs[i].unit.Position.X += fx * dt
+			npcs[i].unit.Position.Y += fy * dt
+		}
+	}
 }
 
 // buildSymmetricLinkGroups returns a map from unit identifier to all units

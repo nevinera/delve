@@ -42,6 +42,10 @@ func ApplyUnitBehaviorsForTest(state *instancestate.InstanceState, zone instance
 	applyUnitBehaviors(state, zone, dt)
 }
 
+func ApplyNPCSeparationForTest(state *instancestate.InstanceState, dt float64) {
+	applyNPCSeparation(state, dt)
+}
+
 func FacingTowardDegForTest(x1, y1, x2, y2 float64) float64 {
 	return facingTowardDeg(x1, y1, x2, y2)
 }
