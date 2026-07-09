@@ -50,6 +50,9 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		}
 	}
 
+	// Build a symmetric link index: if A lists B, both A→B and B→A propagate aggro.
+	linkGroupByID := buildSymmetricLinkGroups(zone)
+
 	for _, unit := range state.Units {
 		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
 			continue
@@ -58,7 +61,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(unit, e, state, playersByMap, stateByZoneID, dt)
+		applyUnitBehavior(unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt)
 	}
 }
 
@@ -68,6 +71,7 @@ func applyUnitBehavior(
 	state *instancestate.InstanceState,
 	playersByMap map[string][]playerRef,
 	stateByZoneID map[string]*instancestate.UnitState,
+	linkGroupByID map[string][]string,
 	dt float64,
 ) {
 	sf := e.unitType.SpeedFactor
@@ -84,7 +88,7 @@ func applyUnitBehavior(
 	if unit.Status == instancestate.UnitStatusIdle && e.unit.Hostility == "hostile" {
 		if targetID := nearestPlayerInRadius(unit, playersByMap[unit.MapIdentifier], aggroRadius); targetID != nil {
 			engageUnit(unit, *targetID)
-			for _, link := range e.unit.Links {
+			for _, link := range linkGroupByID[e.unit.Identifier] {
 				if linked, ok := stateByZoneID[link]; ok && linked.Status == instancestate.UnitStatusIdle {
 					engageUnit(linked, *targetID)
 				}
@@ -178,6 +182,36 @@ func nearestPlayerInRadius(unit *instancestate.UnitState, players []playerRef, r
 		}
 	}
 	return bestID
+}
+
+// buildSymmetricLinkGroups returns a map from unit identifier to all units
+// linked to it, treating links as symmetric: if A lists B, both A→B and B→A
+// are included, so zone configs don't need to define links in both directions.
+func buildSymmetricLinkGroups(zone instanceconfig.Zone) map[string][]string {
+	seen := make(map[string]map[string]struct{})
+	add := func(a, b string) {
+		if seen[a] == nil {
+			seen[a] = make(map[string]struct{})
+		}
+		seen[a][b] = struct{}{}
+	}
+	for _, mp := range zone.Maps {
+		for _, u := range mp.Units {
+			for _, link := range u.Links {
+				add(u.Identifier, link)
+				add(link, u.Identifier)
+			}
+		}
+	}
+	result := make(map[string][]string, len(seen))
+	for id, set := range seen {
+		links := make([]string, 0, len(set))
+		for link := range set {
+			links = append(links, link)
+		}
+		result[id] = links
+	}
+	return result
 }
 
 // buildNPCConfigByID indexes each zone unit by its identifier, paired with

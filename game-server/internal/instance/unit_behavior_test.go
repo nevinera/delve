@@ -143,23 +143,48 @@ func TestUnitBehavior_Aggro_NearestPlayerChosen(t *testing.T) {
 // linked aggro
 // ---------------------------------------------------------------------------
 
-func TestUnitBehavior_Aggro_LinkedUnitAlsoEngages(t *testing.T) {
-	zone := instanceconfig.Zone{
+func linkedAggroZone(g1Links, g2Links []string) instanceconfig.Zone {
+	return instanceconfig.Zone{
 		UnitTypes: map[string]instanceconfig.UnitType{
 			"goblin": {Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, AggroRadius: 20},
 		},
 		Maps: []instanceconfig.Map{{
 			Identifier: "map1",
 			Units: []instanceconfig.Unit{
-				{Identifier: "g1", UnitType: "goblin", Position: pos(0, 0), Hostility: "hostile", Links: []string{"g2"}},
-				{Identifier: "g2", UnitType: "goblin", Position: pos(100, 0), Hostility: "hostile"},
+				{Identifier: "g1", UnitType: "goblin", Position: pos(0, 0), Hostility: "hostile", Links: g1Links},
+				{Identifier: "g2", UnitType: "goblin", Position: pos(100, 0), Hostility: "hostile", Links: g2Links},
 			},
 		}},
 	}
+}
+
+func linkedAggroState() (*instancestate.UnitState, *instancestate.UnitState, *instancestate.InstanceState) {
 	g1 := &instancestate.UnitState{ZoneUnitIdentifier: "g1", MapIdentifier: "map1", Position: pos(0, 0), Status: instancestate.UnitStatusIdle, Health: 10, MaxHealth: 10}
 	g2 := &instancestate.UnitState{ZoneUnitIdentifier: "g2", MapIdentifier: "map1", Position: pos(100, 0), Status: instancestate.UnitStatusIdle, Health: 10, MaxHealth: 10}
 	s := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{uuid.New(): g1, uuid.New(): g2}}
-	playerID, _ := addPlayer(s, "map1", 5, 0) // within g1's range, not g2's
+	return g1, g2, s
+}
+
+func TestUnitBehavior_Aggro_LinkedUnitAlsoEngages_ForwardLink(t *testing.T) {
+	// g1 lists g2 in its links; when g1 aggros, g2 should engage.
+	zone := linkedAggroZone([]string{"g2"}, nil)
+	g1, g2, s := linkedAggroState()
+	playerID, _ := addPlayer(s, "map1", 5, 0) // within g1's range only
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, instancestate.UnitStatusEngaged, g1.Status)
+	assert.Equal(t, instancestate.UnitStatusEngaged, g2.Status)
+	require.NotNil(t, g2.Target)
+	assert.Equal(t, playerID, *g2.Target)
+}
+
+func TestUnitBehavior_Aggro_LinkedUnitAlsoEngages_ReverseLink(t *testing.T) {
+	// g2 lists g1 in its links (not the other way); links are symmetric,
+	// so when g1 aggros the player, g2 should still engage.
+	zone := linkedAggroZone(nil, []string{"g1"})
+	g1, g2, s := linkedAggroState()
+	playerID, _ := addPlayer(s, "map1", 5, 0) // within g1's range only
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
