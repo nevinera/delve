@@ -564,7 +564,7 @@ export class SceneManager {
     body.frustumCulled = false;
 
     // Head: cone pointing in +X (rotated from default +Y).
-    const HEAD_LEN = 0.5, HEAD_R = 0.125;
+    const HEAD_LEN = 0.5, HEAD_R = 0.3;
     const headGeo = new THREE.ConeGeometry(HEAD_R, HEAD_LEN, 10);
     headGeo.rotateZ(-Math.PI / 2); // apex now at +X
     const head = new THREE.Mesh(headGeo, mat);
@@ -603,16 +603,20 @@ export class SceneManager {
         this._npcArrows.set(id, arrow);
       }
 
+      const npcInfo    = this._unitInfo.get(entry.group._zoneUnitIdentifier);
+      const npcRadius  = npcInfo?.tokenRadius ?? TOKEN_RADIUS;
       const targetInfo = this._unitInfo.get(targetEntry.group._zoneUnitIdentifier);
       const targetRadius = targetInfo?.tokenRadius ?? TOKEN_RADIUS;
-      const stopDist = Math.max(0, dist - 1.5 * targetRadius);
-      const bodyLen = Math.max(0, stopDist - arrow._headLen);
+      const startDist = npcRadius;
+      const stopDist  = Math.max(startDist, dist - 1.5 * targetRadius);
+      const bodyLen   = Math.max(0, stopDist - startDist - arrow._headLen);
 
       arrow.visible = true;
       arrow.position.set(npcX, 0.05, npcZ);
       arrow.rotation.y = Math.atan2(-dz, dx);
+      arrow._body.position.x = startDist;
       arrow._body.scale.x = bodyLen > 0 ? bodyLen : 0.001;
-      arrow._head.position.x = bodyLen + arrow._headLen / 2;
+      arrow._head.position.x = startDist + bodyLen + arrow._headLen / 2;
     }
 
     for (const [id, arrow] of this._npcArrows) {
