@@ -202,6 +202,7 @@ export class SceneManager {
     this._targetLine = this._buildTargetLine();
     this._scene.add(this._targetRing);
     this._scene.add(this._targetLine);
+    this._npcArrows = new Map(); // unitId → arrow group
 
     // Client-side movement prediction for the self unit
     this._selfMapX = 0;
@@ -247,7 +248,7 @@ export class SceneManager {
     geo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(MAX_DOTS * 3), 3));
     geo.setDrawRange(0, 0);
     const mat = new THREE.PointsMaterial({
-      color: 0xff4444,
+      color: 0x00ff44,
       size: 1.2,
       sizeAttenuation: true,
       map: tex,
@@ -428,6 +429,7 @@ export class SceneManager {
 
       if (this._tokenMap.has(id)) {
         const entry = this._tokenMap.get(id);
+        entry.targetUnitId = unit.target ?? null;
         if (!isSelf) {
           entry.targetX = wx;
           entry.targetZ = wz;
@@ -443,7 +445,7 @@ export class SceneManager {
         group.rotation.y = angle;
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
-        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle });
+        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null });
         if (isSelf) this._selfToken = group;
       }
     }
@@ -452,6 +454,8 @@ export class SceneManager {
       if (!seen.has(id)) {
         this._scene.remove(group);
         this._tokenMap.delete(id);
+        const arrow = this._npcArrows.get(id);
+        if (arrow) { this._scene.remove(arrow); this._npcArrows.delete(id); }
       }
     }
   }
@@ -550,7 +554,74 @@ export class SceneManager {
     this._renderer.dispose();
   }
 
+  _buildNPCArrow() {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.75, depthTest: false, side: THREE.DoubleSide });
+
+    // Body: 1 unit long on X (scaled at runtime), 0.6ft wide on Z, flat on ground.
+    const bodyGeo = new THREE.BoxGeometry(1, 0.04, 0.6);
+    bodyGeo.translate(0.5, 0, 0); // origin at start so scale.x = length
+    const body = new THREE.Mesh(bodyGeo, mat);
+    body.frustumCulled = false;
+
+    // Head: cone pointing in +X (rotated from default +Y).
+    const HEAD_LEN = 1.5, HEAD_R = 0.5;
+    const headGeo = new THREE.ConeGeometry(HEAD_R, HEAD_LEN, 10);
+    headGeo.rotateZ(-Math.PI / 2); // apex now at +X
+    const head = new THREE.Mesh(headGeo, mat);
+    head.frustumCulled = false;
+
+    const group = new THREE.Group();
+    group.add(body);
+    group.add(head);
+    group._body = body;
+    group._head = head;
+    group._headLen = HEAD_LEN;
+    group.position.y = 0.05;
+    group.visible = false;
+    return group;
+  }
+
+  _updateNPCArrows() {
+    const active = new Set();
+    for (const [id, entry] of this._tokenMap) {
+      if (entry.isSelf || !entry.targetUnitId) continue;
+      const targetEntry = this._tokenMap.get(entry.targetUnitId);
+      if (!targetEntry) continue;
+
+      const npcX = entry.group.position.x, npcZ = entry.group.position.z;
+      const tgX  = targetEntry.group.position.x, tgZ = targetEntry.group.position.z;
+      const dx = tgX - npcX, dz = tgZ - npcZ;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < 0.1) continue;
+
+      active.add(id);
+
+      let arrow = this._npcArrows.get(id);
+      if (!arrow) {
+        arrow = this._buildNPCArrow();
+        this._scene.add(arrow);
+        this._npcArrows.set(id, arrow);
+      }
+
+      const targetInfo = this._unitInfo.get(targetEntry.group._zoneUnitIdentifier);
+      const targetRadius = targetInfo?.tokenRadius ?? TOKEN_RADIUS;
+      const stopDist = Math.max(0, dist - 0.5 * targetRadius);
+      const bodyLen = Math.max(0, stopDist - arrow._headLen);
+
+      arrow.visible = true;
+      arrow.position.set(npcX, 0.05, npcZ);
+      arrow.rotation.y = Math.atan2(-dz, dx);
+      arrow._body.scale.x = bodyLen > 0 ? bodyLen : 0.001;
+      arrow._head.position.x = bodyLen + arrow._headLen / 2;
+    }
+
+    for (const [id, arrow] of this._npcArrows) {
+      if (!active.has(id)) arrow.visible = false;
+    }
+  }
+
   _updateTargetVisuals() {
+    this._updateNPCArrows();
     if (!this._targetId) return;
     const entry = this._tokenMap.get(this._targetId);
     if (!entry) return;
