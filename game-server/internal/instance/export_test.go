@@ -38,8 +38,8 @@ func ResolveCollisionsForTest(state *instancestate.InstanceState, zone instancec
 	resolveCollisions(state, zone)
 }
 
-func ApplyNPCMovementForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
-	applyNPCMovement(state, zone, dt)
+func ApplyUnitBehaviorsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	applyUnitBehaviors(state, zone, dt)
 }
 
 func FacingTowardDegForTest(x1, y1, x2, y2 float64) float64 {

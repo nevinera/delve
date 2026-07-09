@@ -3,7 +3,6 @@ package instance
 import (
 	"math"
 	"math/rand"
-	"strings"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
@@ -19,53 +18,6 @@ const (
 	mobPhaseWaiting = "waiting"
 	mobPhaseTurning = "turning"
 )
-
-// applyNPCMovement drives the movement state machine for all NPC units each tick.
-// Units with "still" or missing movement config are skipped. Units that have
-// not yet been initialized (MovementPhase == "") are initialized on the first call.
-func applyNPCMovement(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
-	type entry struct {
-		unit     instanceconfig.Unit
-		unitType instanceconfig.UnitType
-	}
-	cfgByID := make(map[string]entry)
-	for _, m := range zone.Maps {
-		for _, u := range m.Units {
-			if ut, ok := zone.UnitTypes[u.UnitType]; ok {
-				cfgByID[u.Identifier] = entry{u, ut}
-			}
-		}
-	}
-
-	for _, unit := range state.Units {
-		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
-			continue
-		}
-		e, ok := cfgByID[unit.ZoneUnitIdentifier]
-		if !ok {
-			continue
-		}
-		mv := e.unit.Movement
-		if mv.Type == "" || mv.Type == "still" {
-			continue
-		}
-
-		sf := e.unitType.SpeedFactor
-		if sf == 0 {
-			sf = 1.0
-		}
-		speed := BaseMobSpeed * sf
-
-		if unit.Behavior.MovementPhase == "" {
-			initNPCMovement(unit, mv)
-			if unit.Behavior.MovementPhase == "" {
-				continue // init failed (e.g. empty patrol steps or missing wander location)
-			}
-		}
-
-		tickNPCMovement(unit, mv, speed, dt)
-	}
-}
 
 // initNPCMovement sets the initial movement state for a unit on its first tick.
 func initNPCMovement(unit *instancestate.UnitState, mv instanceconfig.UnitMovement) {

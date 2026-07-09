@@ -49,6 +49,7 @@ func npcState(identifier string, startPos instanceconfig.Position) (*instancesta
 		UnitTypeIdentifier: "goblin",
 		MapIdentifier:      "map1",
 		Position:           startPos,
+		Status:             instancestate.UnitStatusIdle,
 		Health:             10,
 		MaxHealth:          10,
 	}
@@ -101,7 +102,7 @@ func TestLerpAngleDeg_WrapsShortWay(t *testing.T) {
 func TestApplyNPCMovement_StillUnit_DoesNotMove(t *testing.T) {
 	zone := npcZone("g1", pos(5, 5), instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(5, 5))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, 5.0, u.Position.X)
 	assert.Equal(t, 5.0, u.Position.Y)
 }
@@ -109,7 +110,7 @@ func TestApplyNPCMovement_StillUnit_DoesNotMove(t *testing.T) {
 func TestApplyNPCMovement_MissingMovementType_DoesNotMove(t *testing.T) {
 	zone := npcZone("g1", pos(5, 5), instanceconfig.UnitMovement{})
 	u, s := npcState("g1", pos(5, 5))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, 5.0, u.Position.X)
 	assert.Equal(t, 5.0, u.Position.Y)
 }
@@ -137,7 +138,7 @@ func step(x, y, rate float64, waitSec float64) instanceconfig.MovementStep {
 func TestApplyNPCMovement_Patrol_InitializesOnFirstTick(t *testing.T) {
 	zone := patrolZone("loop", step(0, 20, 1.0, 0), step(0, 40, 1.0, 0))
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, "moving", u.Behavior.MovementPhase)
 }
 
@@ -146,7 +147,7 @@ func TestApplyNPCMovement_Patrol_MovesTowardFirstStep(t *testing.T) {
 	// One tick (0.1s) at rate 1.0 → moves 1 foot north.
 	zone := patrolZone("loop", step(0, 20, 1.0, 0), step(0, 40, 1.0, 0))
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
 	assert.InDelta(t, 1.0, u.Position.Y, 1e-9)
 }
@@ -154,7 +155,7 @@ func TestApplyNPCMovement_Patrol_MovesTowardFirstStep(t *testing.T) {
 func TestApplyNPCMovement_Patrol_FacesFirstStep(t *testing.T) {
 	zone := patrolZone("loop", step(0, 20, 1.0, 0), step(20, 20, 1.0, 0))
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.InDelta(t, 0.0, u.Position.Angle, 1e-9) // facing north toward (0,20)
 }
 
@@ -163,7 +164,7 @@ func TestApplyNPCMovement_Patrol_ArrivesAndWaits(t *testing.T) {
 	// Two ticks: first tick moves 1ft but target is only 0.5ft away, so arrives.
 	zone := patrolZone("loop", step(0, 0.5, 1.0, 5.0), step(0, 10, 1.0, 0))
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, "waiting", u.Behavior.MovementPhase)
 	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
 	assert.InDelta(t, 0.5, u.Position.Y, 1e-9)
@@ -173,21 +174,21 @@ func TestApplyNPCMovement_Patrol_WaitExpires_BeginsTurn(t *testing.T) {
 	zone := patrolZone("loop", step(0, 0.5, 1.0, 0.05), step(0, 10, 1.0, 0))
 	u, s := npcState("g1", pos(0, 0))
 	// Tick 1: arrives at step 0, sets wait=0.05s.
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, "waiting", u.Behavior.MovementPhase)
 	// Tick 2: wait 0.05s expires (dt=0.1s > 0.05s), begins turning toward step 1.
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, "turning", u.Behavior.MovementPhase)
 }
 
 func TestApplyNPCMovement_Patrol_TurnCompletes_Moves(t *testing.T) {
 	zone := patrolZone("loop", step(0, 0.5, 1.0, 0.05), step(0, 10, 1.0, 0))
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt) // arrives → waiting
-	instance.ApplyNPCMovementForTest(s, zone, dt) // wait expires → turning
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt) // arrives → waiting
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt) // wait expires → turning
 	// turnDuration=0.3s; 3 more ticks of 0.1s each should complete the turn.
 	for range 3 {
-		instance.ApplyNPCMovementForTest(s, zone, dt)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	}
 	assert.Equal(t, "moving", u.Behavior.MovementPhase)
 	assert.Equal(t, 1, u.Behavior.PatrolStepIndex)
@@ -197,7 +198,7 @@ func TestApplyNPCMovement_Patrol_NoWait_ContinuesStraightThrough(t *testing.T) {
 	// Zero-wait patrol: unit should keep moving without entering waiting/turning.
 	zone := patrolZone("loop", step(0, 0.5, 1.0, 0), step(0, 20, 1.0, 0))
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt) // arrives at step 0 immediately
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt) // arrives at step 0 immediately
 	// Should be moving toward step 1, no waiting or turning.
 	assert.Equal(t, "moving", u.Behavior.MovementPhase)
 	assert.Equal(t, 1, u.Behavior.PatrolStepIndex)
@@ -210,8 +211,8 @@ func TestApplyNPCMovement_Patrol_LoopWraps(t *testing.T) {
 		step(0, 0.2, 1.0, 0),
 	)
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt) // arrives step 0 → moves to step 1
-	instance.ApplyNPCMovementForTest(s, zone, dt) // arrives step 1 → wraps to step 0
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt) // arrives step 0 → moves to step 1
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt) // arrives step 1 → wraps to step 0
 	assert.Equal(t, 0, u.Behavior.PatrolStepIndex)
 	assert.Equal(t, "moving", u.Behavior.MovementPhase)
 }
@@ -225,7 +226,7 @@ func TestApplyNPCMovement_Patrol_ReturnBounces(t *testing.T) {
 	)
 	u, s := npcState("g1", pos(0, 0))
 	for range 3 {
-		instance.ApplyNPCMovementForTest(s, zone, dt)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	}
 	// After arriving at steps 0, 1, 2 in sequence: direction should have reversed.
 	assert.Equal(t, -1, u.Behavior.PatrolDir)
@@ -234,7 +235,7 @@ func TestApplyNPCMovement_Patrol_ReturnBounces(t *testing.T) {
 func TestApplyNPCMovement_Patrol_InsufficientSteps_DoesNotMove(t *testing.T) {
 	zone := patrolZone("loop", step(0, 10, 1.0, 0)) // only 1 step
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, "", u.Behavior.MovementPhase)
 	assert.Equal(t, 0.0, u.Position.X)
 	assert.Equal(t, 0.0, u.Position.Y)
@@ -254,7 +255,7 @@ func TestApplyNPCMovement_Wander_InitializesOnFirstTick(t *testing.T) {
 		WaitTime: vrPtr(0),
 	})
 	u, s := npcState("g1", pos(10, 10))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, "moving", u.Behavior.MovementPhase)
 	// Target should be within 5 feet of center.
 	dx := u.Behavior.TargetX - 10
@@ -272,7 +273,7 @@ func TestApplyNPCMovement_Wander_MovesTowardTarget(t *testing.T) {
 		WaitTime: vrPtr(0),
 	})
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt) // init + first move
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt) // init + first move
 	// After one tick the unit should have moved away from origin.
 	dist := math.Sqrt(u.Position.X*u.Position.X + u.Position.Y*u.Position.Y)
 	assert.Greater(t, dist, 0.0)
@@ -285,7 +286,7 @@ func TestApplyNPCMovement_Wander_MissingLocation_DoesNotMove(t *testing.T) {
 		Speed:  vrPtr(1.0),
 	})
 	u, s := npcState("g1", pos(0, 0))
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, "", u.Behavior.MovementPhase)
 	assert.Equal(t, 0.0, u.Position.X)
 	assert.Equal(t, 0.0, u.Position.Y)
@@ -305,7 +306,7 @@ func TestApplyNPCMovement_PlayerUnit_IsSkipped(t *testing.T) {
 	s := &instancestate.InstanceState{
 		Units: map[uuid.UUID]*instancestate.UnitState{uuid.New(): u},
 	}
-	instance.ApplyNPCMovementForTest(s, zone, dt)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 	assert.Equal(t, 0.0, u.Position.X)
 	assert.Equal(t, 0.0, u.Position.Y)
 }
