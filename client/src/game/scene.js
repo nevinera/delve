@@ -557,14 +557,14 @@ export class SceneManager {
   _buildNPCArrow() {
     const mat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.75, depthTest: false, side: THREE.DoubleSide });
 
-    // Body: 1 unit long on X (scaled at runtime), 0.6ft wide on Z, flat on ground.
-    const bodyGeo = new THREE.BoxGeometry(1, 0.04, 0.6);
+    // Body: 1 unit long on X (scaled at runtime), 0.15ft wide on Z, flat on ground.
+    const bodyGeo = new THREE.BoxGeometry(1, 0.04, 0.15);
     bodyGeo.translate(0.5, 0, 0); // origin at start so scale.x = length
     const body = new THREE.Mesh(bodyGeo, mat);
     body.frustumCulled = false;
 
     // Head: cone pointing in +X (rotated from default +Y).
-    const HEAD_LEN = 1.5, HEAD_R = 0.5;
+    const HEAD_LEN = 0.5, HEAD_R = 0.125;
     const headGeo = new THREE.ConeGeometry(HEAD_R, HEAD_LEN, 10);
     headGeo.rotateZ(-Math.PI / 2); // apex now at +X
     const head = new THREE.Mesh(headGeo, mat);
@@ -605,7 +605,7 @@ export class SceneManager {
 
       const targetInfo = this._unitInfo.get(targetEntry.group._zoneUnitIdentifier);
       const targetRadius = targetInfo?.tokenRadius ?? TOKEN_RADIUS;
-      const stopDist = Math.max(0, dist - 0.5 * targetRadius);
+      const stopDist = Math.max(0, dist - 1.5 * targetRadius);
       const bodyLen = Math.max(0, stopDist - arrow._headLen);
 
       arrow.visible = true;
