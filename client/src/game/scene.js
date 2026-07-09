@@ -232,19 +232,34 @@ export class SceneManager {
   }
 
   _buildTargetLine() {
-    // Two-point line; positions updated each frame when a target is set.
+    // Round dot texture drawn on a canvas.
+    const canvas = document.createElement("canvas");
+    canvas.width = 32; canvas.height = 32;
+    const ctx = canvas.getContext("2d");
+    ctx.beginPath();
+    ctx.arc(16, 16, 14, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    const tex = new THREE.CanvasTexture(canvas);
+
+    const MAX_DOTS = 64;
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
-    const mat = new THREE.LineDashedMaterial({
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(MAX_DOTS * 3), 3));
+    geo.setDrawRange(0, 0);
+    const mat = new THREE.PointsMaterial({
       color: 0xff4444,
-      dashSize: 1.2,
-      gapSize: 0.8,
+      size: 6,
+      sizeAttenuation: false,
+      map: tex,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.85,
+      alphaTest: 0.5,
+      depthTest: false,
     });
-    const line = new THREE.Line(geo, mat);
-    line.visible = false;
-    return line;
+    const points = new THREE.Points(geo, mat);
+    points._maxDots = MAX_DOTS;
+    points.visible = false;
+    return points;
   }
 
   setTarget(id) {
@@ -549,16 +564,21 @@ export class SceneManager {
     this._targetRing.position.set(tx, 0.05, tz);
     this._targetRing.scale.setScalar(radius);
 
-    // Dotted line from self token to target token.
+    // Dotted line: evenly-spaced round dots from self to target at token-center height.
     if (this._selfToken) {
       const sx = this._selfToken.position.x;
       const sz = this._selfToken.position.z;
+      const dx = tx - sx, dz = tz - sz;
+      const totalDist = Math.sqrt(dx * dx + dz * dz);
+      const spacing = 2.0; // feet between dot centers
+      const count = Math.min(Math.floor(totalDist / spacing) + 1, this._targetLine._maxDots);
       const pos = this._targetLine.geometry.attributes.position;
-      pos.setXYZ(0, sx, 0.1, sz);
-      pos.setXYZ(1, tx, 0.1, tz);
+      for (let i = 0; i < count; i++) {
+        const t = count > 1 ? i / (count - 1) : 0;
+        pos.setXYZ(i, sx + dx * t, 0.15, sz + dz * t);
+      }
       pos.needsUpdate = true;
-      this._targetLine.geometry.computeBoundingSphere();
-      this._targetLine.computeLineDistances();
+      this._targetLine.geometry.setDrawRange(0, count);
     }
   }
 
