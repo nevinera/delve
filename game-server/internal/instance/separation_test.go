@@ -91,18 +91,18 @@ func TestNPCSeparation_DeadUnitsSkipped(t *testing.T) {
 }
 
 func TestNPCSeparation_StrongerWhenCloser(t *testing.T) {
-	// Unit at 1ft should push harder than unit at 4ft.
+	// Unit at 0.5ft should push harder than unit at 1.5ft (both inside 2ft radius).
 	a1 := npc(0, 0)
-	b1 := npc(1, 0)
+	b1 := npc(0.5, 0)
 	s1 := separationState(a1, b1)
 	instance.ApplyNPCSeparationForTest(s1, dt)
-	push1 := b1.Position.X - 1.0
+	push1 := b1.Position.X - 0.5
 
 	a2 := npc(0, 0)
-	b2 := npc(4, 0)
+	b2 := npc(1.5, 0)
 	s2 := separationState(a2, b2)
 	instance.ApplyNPCSeparationForTest(s2, dt)
-	push2 := b2.Position.X - 4.0
+	push2 := b2.Position.X - 1.5
 
 	assert.Greater(t, push1, push2)
 }

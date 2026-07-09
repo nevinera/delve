@@ -187,7 +187,7 @@ func nearestPlayerInRadius(unit *instancestate.UnitState, players []playerRef, r
 }
 
 const (
-	separationRadius   = 5.0  // feet - push begins when two NPCs are closer than this
+	separationRadius   = 2.0  // feet - sum of two half-radii; allows substantial overlap
 	separationStrength = 12.0 // feet/sec of push force at full overlap
 )
 
