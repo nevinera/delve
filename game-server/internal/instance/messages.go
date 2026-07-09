@@ -21,6 +21,7 @@ type downBase struct {
 type unitJSON struct {
 	ZoneUnitIdentifier  string                   `json:"zone_unit_identifier"`
 	MapIdentifier       string                   `json:"map_identifier"`
+	Hostility           string                   `json:"hostility,omitempty"`
 	Position            instanceconfig.Position  `json:"position"`
 	Health              float64                  `json:"health"`
 	MaxHealth           float64                  `json:"max_health"`
@@ -79,6 +80,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 		units[id.String()] = unitJSON{
 			ZoneUnitIdentifier:  u.ZoneUnitIdentifier,
 			MapIdentifier:       u.MapIdentifier,
+			Hostility:           u.Hostility,
 			Position:            u.Position,
 			Health:              u.Health,
 			MaxHealth:           u.MaxHealth,
@@ -129,6 +131,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 			msg.UnitUpdates[idStr] = map[string]any{
 				"zone_unit_identifier": cu.ZoneUnitIdentifier,
 				"map_identifier":       cu.MapIdentifier,
+				"hostility":            cu.Hostility,
 				"position":             cu.Position,
 				"health":               cu.Health,
 				"max_health":           cu.MaxHealth,

@@ -79,6 +79,8 @@ export default function App({
   const selfPosRef = useRef(null); // latest client-predicted position {x, y}
   const [units, setUnits] = useState({});
   const [targetId, setTargetId] = useState(null);
+  const unitsRef = useRef({});
+  const targetIdRef = useRef(null);
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
 
@@ -101,6 +103,7 @@ export default function App({
   }, [sendMove]);
 
   const handleTargetUnit = useCallback((id) => {
+    targetIdRef.current = id;
     setTargetId(id);
     connRef.current?.send({
       direction: "up",
@@ -115,9 +118,42 @@ export default function App({
     sendMove();
   }, [sendMove]);
 
+  const handleTabTarget = useCallback((unitsSnapshot, currentTargetId, selfId) => {
+    const selfUnit = Object.values(unitsSnapshot).find(u => u.zone_unit_identifier === selfId);
+    if (!selfUnit) return;
+
+    const hostiles = Object.entries(unitsSnapshot)
+      .filter(([, u]) =>
+        u.hostility === "hostile" &&
+        u.map_identifier === selfUnit.map_identifier &&
+        u.status !== "dead"
+      )
+      .map(([id, u]) => {
+        const dx = u.position.x - selfUnit.position.x;
+        const dy = u.position.y - selfUnit.position.y;
+        return { id, dist: Math.sqrt(dx * dx + dy * dy) };
+      })
+      .sort((a, b) => a.dist - b.dist);
+
+    if (hostiles.length === 0) return;
+    const currentIdx = hostiles.findIndex(h => h.id === currentTargetId);
+    const nextIdx = (currentIdx + 1) % hostiles.length;
+    handleTargetUnit(hostiles[nextIdx].id);
+  }, [handleTargetUnit]);
+
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.repeat) return;
+      if (e.code === "Tab") {
+        e.preventDefault();
+        handleTabTarget(
+          // capture current values via refs to avoid stale closure
+          unitsRef.current,
+          targetIdRef.current,
+          selfIdentifier,
+        );
+        return;
+      }
       const action = KEY_MAP[e.code];
       if (!action) return;
       if (MOVEMENT_KEYS.has(action)) {
@@ -160,7 +196,7 @@ export default function App({
       slotToken,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
       onClose: () => { setDisconnected(true); addLog("Disconnected."); },
-      onStateChange: ({ units: u }) => setUnits(u),
+      onStateChange: ({ units: u }) => { unitsRef.current = u; setUnits(u); },
     });
     conn.connect();
     connRef.current = conn;

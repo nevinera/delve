@@ -63,6 +63,7 @@ type UnitState struct {
 	ZoneUnitIdentifier string              // non-empty: Unit.Identifier from zone config
 	UnitTypeIdentifier string              // key into zone.UnitTypes
 	MapIdentifier      string
+	Hostility          string              // "hostile", "neutral", "friendly", or "" for players
 	Position           instanceconfig.Position
 	SpawnPoint         instanceconfig.Position // initial position; used for respawn
 
