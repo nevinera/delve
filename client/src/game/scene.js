@@ -248,7 +248,7 @@ export class SceneManager {
     geo.setDrawRange(0, 0);
     const mat = new THREE.PointsMaterial({
       color: 0xff4444,
-      size: 0.8,
+      size: 1.2,
       sizeAttenuation: true,
       map: tex,
       transparent: true,
