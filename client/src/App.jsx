@@ -78,6 +78,7 @@ export default function App({
   const facingRef = useRef(0); // degrees
   const selfPosRef = useRef(null); // latest client-predicted position {x, y}
   const [units, setUnits] = useState({});
+  const [targetId, setTargetId] = useState(null);
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
 
@@ -98,6 +99,15 @@ export default function App({
     selfPosRef.current = pos;
     sendMove();
   }, [sendMove]);
+
+  const handleTargetUnit = useCallback((id) => {
+    setTargetId(id);
+    connRef.current?.send({
+      direction: "up",
+      type: "target",
+      target_id: id ?? null,
+    });
+  }, []);
 
   // Called by SceneManager when continuous turning updates the facing angle
   const handleFacingChange = useCallback((degrees) => {
@@ -185,6 +195,7 @@ export default function App({
         turnKeysRef={turnKeysRef}
         onFacingChange={handleFacingChange}
         onSelfPosition={handleSelfPosition}
+        onUnitClick={handleTargetUnit}
       />
       <div style={styles.log}>
         {log.map((line, i) => (

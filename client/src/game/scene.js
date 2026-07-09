@@ -167,14 +167,14 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, onUnitClick } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
     this._onFacingChange = onFacingChange;
     this._onSelfPosition = onSelfPosition;
+    this._onUnitClick = onUnitClick;
     this._lastPosSendTime = 0;
-
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this._renderer.setPixelRatio(window.devicePixelRatio);
@@ -215,8 +215,10 @@ export class SceneManager {
   }
 
   _initMouseControls() {
-    let lastX = null, lastY = null;
+    let downX = null, downY = null, lastX = null, lastY = null;
     this._canvas.addEventListener("mousedown", (e) => {
+      downX = e.clientX;
+      downY = e.clientY;
       lastX = e.clientX;
       lastY = e.clientY;
     });
@@ -230,12 +232,49 @@ export class SceneManager {
       lastX = e.clientX;
       lastY = e.clientY;
     });
-    window.addEventListener("mouseup", () => { lastX = null; lastY = null; });
+    window.addEventListener("mouseup", (e) => {
+      if (downX !== null) {
+        const dx = e.clientX - downX, dy = e.clientY - downY;
+        if (dx * dx + dy * dy < 9) this._handleClick(e);
+      }
+      downX = null; downY = null; lastX = null; lastY = null;
+    });
     this._canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     this._canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
       this._camZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._camZoom + e.deltaY * 0.001));
     }, { passive: false });
+  }
+
+  _handleClick(e) {
+    if (!this._onUnitClick) return;
+    const rect = this._canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, this._camera);
+
+    // Collect all meshes from token groups, mapped back to their unit ID.
+    const meshes = [];
+    const meshToID = new Map();
+    for (const [id, { group, isSelf }] of this._tokenMap) {
+      if (isSelf) continue;
+      group.traverse((obj) => {
+        if (obj.isMesh) {
+          meshes.push(obj);
+          meshToID.set(obj.uuid, id);
+        }
+      });
+    }
+
+    const hits = raycaster.intersectObjects(meshes, false);
+    if (hits.length > 0) {
+      const id = meshToID.get(hits[0].object.uuid);
+      if (id) { this._onUnitClick(id); return; }
+    }
+    this._onUnitClick(null); // clicked empty space - deselect
   }
 
   async loadZone(url) {
