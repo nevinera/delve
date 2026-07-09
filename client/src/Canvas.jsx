@@ -11,6 +11,7 @@ export default function Canvas({
   onFacingChange,
   onSelfPosition,
   onUnitClick,
+  targetId,
 }) {
   const canvasRef = useRef(null);
   const managerRef = useRef(null);
@@ -34,6 +35,10 @@ export default function Canvas({
   useEffect(() => {
     managerRef.current?.updateUnits(units, selfIdentifier, characterTokenUrl);
   }, [units]);
+
+  useEffect(() => {
+    managerRef.current?.setTarget(targetId);
+  }, [targetId]);
 
   return (
     <canvas

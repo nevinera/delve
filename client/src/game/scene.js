@@ -196,6 +196,13 @@ export class SceneManager {
     this._barriersByMap = new Map();
     this._animId = null;
 
+    // Targeting visuals
+    this._targetId = null;
+    this._targetRing = this._buildTargetRing();
+    this._targetLine = this._buildTargetLine();
+    this._scene.add(this._targetRing);
+    this._scene.add(this._targetLine);
+
     // Client-side movement prediction for the self unit
     this._selfMapX = 0;
     this._selfMapY = 0;
@@ -212,6 +219,38 @@ export class SceneManager {
     this._camZoom = 1.0;
 
     this._initMouseControls();
+  }
+
+  _buildTargetRing() {
+    const geo = new THREE.TorusGeometry(1, 0.08, 8, 48);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.85 });
+    const ring = new THREE.Mesh(geo, mat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.05;
+    ring.visible = false;
+    return ring;
+  }
+
+  _buildTargetLine() {
+    // Two-point line; positions updated each frame when a target is set.
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+    const mat = new THREE.LineDashedMaterial({
+      color: 0xff4444,
+      dashSize: 1.2,
+      gapSize: 0.8,
+      transparent: true,
+      opacity: 0.6,
+    });
+    const line = new THREE.Line(geo, mat);
+    line.visible = false;
+    return line;
+  }
+
+  setTarget(id) {
+    this._targetId = id;
+    this._targetRing.visible = !!id;
+    this._targetLine.visible = !!id;
   }
 
   _initMouseControls() {
@@ -387,6 +426,7 @@ export class SceneManager {
           : createNpcToken(radius, info?.hostility, info?.tokenImageUrl, this._zoneBaseUrl);
         group.position.set(wx, 0, wz);
         group.rotation.y = angle;
+        group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
         this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle });
         if (isSelf) this._selfToken = group;
@@ -474,6 +514,7 @@ export class SceneManager {
         group.rotation.y += dRot * f;
       }
 
+      this._updateTargetVisuals();
       this._positionCamera();
       this._renderer.render(this._scene, this._camera);
     };
@@ -492,6 +533,33 @@ export class SceneManager {
   dispose() {
     if (this._animId) cancelAnimationFrame(this._animId);
     this._renderer.dispose();
+  }
+
+  _updateTargetVisuals() {
+    if (!this._targetId) return;
+    const entry = this._tokenMap.get(this._targetId);
+    if (!entry) return;
+
+    const tx = entry.group.position.x;
+    const tz = entry.group.position.z;
+    const info = this._unitInfo.get(entry.group._zoneUnitIdentifier);
+    const radius = info?.tokenRadius ?? TOKEN_RADIUS;
+
+    // Snap ring to target token, scaled to its radius.
+    this._targetRing.position.set(tx, 0.05, tz);
+    this._targetRing.scale.setScalar(radius);
+
+    // Dotted line from self token to target token.
+    if (this._selfToken) {
+      const sx = this._selfToken.position.x;
+      const sz = this._selfToken.position.z;
+      const pos = this._targetLine.geometry.attributes.position;
+      pos.setXYZ(0, sx, 0.1, sz);
+      pos.setXYZ(1, tx, 0.1, tz);
+      pos.needsUpdate = true;
+      this._targetLine.geometry.computeBoundingSphere();
+      this._targetLine.computeLineDistances();
+    }
   }
 
   _positionCamera() {

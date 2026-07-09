@@ -232,6 +232,7 @@ export default function App({
         onFacingChange={handleFacingChange}
         onSelfPosition={handleSelfPosition}
         onUnitClick={handleTargetUnit}
+        targetId={targetId}
       />
       <div style={styles.log}>
         {log.map((line, i) => (
