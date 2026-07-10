@@ -89,7 +89,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			inst.drainPlayerSpawns(ctx, state)
 			inst.commandProcessor.Process(inst.drainCommands(), state)
 			applyMovement(state)
-			applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())
+			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())
 			resolveCollisions(state, inst.ZoneConfig)
 			checksum := state.Checksum()
 			inst.Checksum = checksum
@@ -104,7 +104,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 						payload, err = buildFullStateMsg(state, now, checksum)
 					} else {
 						if deltaPayload == nil {
-							deltaPayload, err = buildDeltaMsg(prevState, state, now, checksum)
+							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, now, checksum)
 						}
 						payload = deltaPayload
 					}

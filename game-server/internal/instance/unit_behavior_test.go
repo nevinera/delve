@@ -2,6 +2,7 @@ package instance_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,8 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
+
+func farFuture() time.Time { return time.Now().Add(time.Hour) }
 
 // ---------------------------------------------------------------------------
 // helpers shared by behavior tests
@@ -257,6 +260,99 @@ func TestUnitBehavior_Chase_DropsAggroOnMissingTarget(t *testing.T) {
 
 	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
 	assert.Nil(t, u.Target)
+}
+
+// ---------------------------------------------------------------------------
+// NPC attacks
+// ---------------------------------------------------------------------------
+
+func stabZone() instanceconfig.Zone {
+	amount := instanceconfig.ValueRange{2.0, 3.0}
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				Powers: []instanceconfig.Power{{
+					Name: "Stab", GlobalCooldown: 1.5,
+					Effects: []instanceconfig.PowerEffect{
+						{Type: "harm", Amount: &amount, Range: &rng},
+					},
+				}},
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_Attack_DamagesPlayerInRange(t *testing.T) {
+	zone := stabZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4) // 4ft away, within effective range (5+2+2.2)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Less(t, p.Health, 100.0)
+}
+
+func TestUnitBehavior_Attack_BlockedByGCD(t *testing.T) {
+	zone := stabZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.GlobalCooldownEndsAt = farFuture()
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_Attack_OutOfRangeIsNoOp(t *testing.T) {
+	zone := stabZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 20) // 20ft away, outside 5+2+2.2 range
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_Attack_SetsGCD(t *testing.T) {
+	zone := stabZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.True(t, u.GlobalCooldownEndsAt.After(time.Now().Add(time.Second)))
+}
+
+func TestUnitBehavior_Attack_KillsSetsDeadAndClearsTarget(t *testing.T) {
+	zone := stabZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	p.Health = 1.0
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, p.Health)
+	assert.Equal(t, instancestate.UnitStatusDead, p.Status)
+	assert.Nil(t, p.Target)
 }
 
 // ---------------------------------------------------------------------------

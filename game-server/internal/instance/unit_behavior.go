@@ -2,7 +2,9 @@ package instance
 
 import (
 	"math"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -26,12 +28,17 @@ type playerRef struct {
 	unit *instancestate.UnitState
 }
 
+// CombatEvent records a power use by an NPC unit against a target.
+type CombatEvent struct {
+	AttackerID string
+	TargetID   string
+	PowerName  string
+}
+
 // applyUnitBehaviors is the NPC brain, called once per tick for every
 // non-player unit. It handles aggro detection, status transitions, and
 // dispatches to the appropriate movement routine.
-//
-// Future home of: aggro retargeting, battle AI (power selection/timing).
-func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) []CombatEvent {
 	cfgByID := buildNPCConfigByID(zone)
 
 	// Index live players by map for O(1) aggro checks.
@@ -53,7 +60,8 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 	// Build a symmetric link index: if A lists B, both A→B and B→A propagate aggro.
 	linkGroupByID := buildSymmetricLinkGroups(zone)
 
-	for _, unit := range state.Units {
+	var events []CombatEvent
+	for id, unit := range state.Units {
 		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
 			continue
 		}
@@ -61,13 +69,15 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt)
+		applyUnitBehavior(id, unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt, &events)
 	}
 
 	applyNPCSeparation(state, dt)
+	return events
 }
 
 func applyUnitBehavior(
+	unitID uuid.UUID,
 	unit *instancestate.UnitState,
 	e npcEntry,
 	state *instancestate.InstanceState,
@@ -75,6 +85,7 @@ func applyUnitBehavior(
 	stateByZoneID map[string]*instancestate.UnitState,
 	linkGroupByID map[string][]string,
 	dt float64,
+	events *[]CombatEvent,
 ) {
 	sf := e.unitType.SpeedFactor
 	if sf == 0 {
@@ -123,10 +134,65 @@ func applyUnitBehavior(
 			return
 		}
 		chaseTarget(unit, target, speed, dt)
+		tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events)
 
 	case instancestate.UnitStatusDead:
 		// Nothing.
 	}
+}
+
+// tryNPCAttack fires a randomly-chosen available harm power at the target if
+// the unit is off GCD and at least one power is in range. Appends a CombatEvent
+// to events if an attack fires.
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, now time.Time, events *[]CombatEvent) {
+	if now.Before(unit.GlobalCooldownEndsAt) {
+		return
+	}
+
+	dx := target.Position.X - unit.Position.X
+	dy := target.Position.Y - unit.Position.Y
+	dist := math.Sqrt(dx*dx + dy*dy)
+
+	type candidate struct {
+		power  instanceconfig.Power
+		effect instanceconfig.PowerEffect
+	}
+	var available []candidate
+	for _, p := range powers {
+		for _, eff := range p.Effects {
+			if eff.Type != "harm" || eff.Amount == nil {
+				continue
+			}
+			maxRange := 5.0
+			if eff.Range != nil {
+				maxRange = eff.Range.Max()
+			}
+			if dist <= maxRange+unit.Radius+target.Radius {
+				available = append(available, candidate{p, eff})
+				break
+			}
+		}
+	}
+	if len(available) == 0 {
+		return
+	}
+
+	c := available[rand.Intn(len(available))]
+	lo, hi := c.effect.Amount.Min(), c.effect.Amount.Max()
+	target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
+	if target.Health < 0 {
+		target.Health = 0
+	}
+	if target.Health == 0 {
+		target.Status = instancestate.UnitStatusDead
+		target.Target = nil
+	}
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(c.power.GlobalCooldown * float64(time.Second)))
+	*events = append(*events, CombatEvent{
+		AttackerID: attackerID.String(),
+		TargetID:   targetID.String(),
+		PowerName:  c.power.Name,
+	})
 }
 
 // chaseTarget moves unit straight toward target, stopping npcMeleeRange feet

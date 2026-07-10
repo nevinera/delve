@@ -23,7 +23,7 @@ func BuildFullStateMsgForTest(state *instancestate.InstanceState, now time.Time,
 }
 
 func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
-	return buildDeltaMsg(prev, curr, now, checksum)
+	return buildDeltaMsg(prev, curr, nil, now, checksum)
 }
 
 func PushOutOfSegmentForTest(px, py, r, ax, ay, bx, by float64) (float64, float64) {
@@ -39,7 +39,7 @@ func ResolveCollisionsForTest(state *instancestate.InstanceState, zone instancec
 }
 
 func ApplyUnitBehaviorsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
-	applyUnitBehaviors(state, zone, dt)
+	applyUnitBehaviors(state, zone, dt) //nolint:errcheck
 }
 
 func ApplyNPCSeparationForTest(state *instancestate.InstanceState, dt float64) {

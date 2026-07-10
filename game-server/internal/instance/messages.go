@@ -56,12 +56,19 @@ type effectRemoveJSON struct {
 	StatusIdentifier string `json:"status_identifier"`
 }
 
+type combatEventJSON struct {
+	AttackerID string `json:"attacker_id"`
+	TargetID   string `json:"target_id"`
+	PowerName  string `json:"power_name"`
+}
+
 type deltaMsg struct {
 	downBase
 	UnitUpdates   map[string]map[string]any `json:"unit_updates"`
 	UnitRemovals  []string                  `json:"unit_removals"`
 	EffectAdds    []effectAddJSON           `json:"effect_adds"`
 	EffectRemoves []effectRemoveJSON        `json:"effect_removes"`
+	CombatEvents  []combatEventJSON         `json:"combat_events,omitempty"`
 }
 
 func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
@@ -112,7 +119,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 	})
 }
 
-func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
+func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, now time.Time, checksum string) ([]byte, error) {
 	msg := deltaMsg{
 		downBase: downBase{
 			Direction: "down",
@@ -235,6 +242,14 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 		if _, ok := curr.Units[id]; !ok {
 			msg.UnitRemovals = append(msg.UnitRemovals, id.String())
 		}
+	}
+
+	for _, ev := range events {
+		msg.CombatEvents = append(msg.CombatEvents, combatEventJSON{
+			AttackerID: ev.AttackerID,
+			TargetID:   ev.TargetID,
+			PowerName:  ev.PowerName,
+		})
 	}
 
 	return json.Marshal(msg)
