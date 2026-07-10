@@ -53,6 +53,7 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 				MaxHealth:           float64(ut.MaxHP),
 				Resource:            ut.Resource.DefaultValue,
 				MaxResource:         ut.Resource.Max,
+				Radius:              ut.TokenRadius,
 				Status:              UnitStatusIdle,
 				Target:              nil,
 				ActiveStatusEffects: []ActiveStatusEffect{},
