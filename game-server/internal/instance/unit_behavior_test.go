@@ -44,6 +44,7 @@ func addPlayer(s *instancestate.InstanceState, mapID string, x, y float64) (uuid
 		Status:             instancestate.UnitStatusIdle,
 		Health:             100,
 		MaxHealth:          100,
+		Radius:             instance.BasePlayerRadius,
 	}
 	id := uuid.New()
 	s.Units[id] = p
@@ -225,7 +226,7 @@ func TestUnitBehavior_Chase_FacesTarget(t *testing.T) {
 func TestUnitBehavior_Chase_StopsAtMeleeRange(t *testing.T) {
 	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
-	playerID, _ := addPlayer(s, "map1", 0, 4) // 4ft away — inside 5ft melee range
+	playerID, _ := addPlayer(s, "map1", 0, 4) // 4ft center-to-center — inside effective stop range (2ft gap + radii)
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)

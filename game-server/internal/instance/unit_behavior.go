@@ -12,7 +12,7 @@ import (
 
 // npcMeleeRange is how close (feet) a chasing NPC stops from its target.
 // Will be derived from power ranges once the combat system is in place.
-const npcMeleeRange = 5.0
+const npcMeleeRange = 2.0
 
 // npcEntry pairs an instance unit config with its resolved unit type.
 type npcEntry struct {
@@ -129,7 +129,8 @@ func applyUnitBehavior(
 	}
 }
 
-// chaseTarget moves unit straight toward target, stopping npcMeleeRange feet away.
+// chaseTarget moves unit straight toward target, stopping npcMeleeRange feet
+// beyond the combined edge-to-edge distance (i.e., adding both token radii).
 func chaseTarget(unit, target *instancestate.UnitState, speed, dt float64) {
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
@@ -139,12 +140,13 @@ func chaseTarget(unit, target *instancestate.UnitState, speed, dt float64) {
 		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 	}
 
-	if dist <= npcMeleeRange {
+	stopDist := npcMeleeRange + unit.Radius + target.Radius
+	if dist <= stopDist {
 		return
 	}
 
 	move := speed * dt
-	stopAt := dist - npcMeleeRange
+	stopAt := dist - stopDist
 	if move > stopAt {
 		move = stopAt
 	}

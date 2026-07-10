@@ -44,6 +44,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 		if effect.Range != nil {
 			maxRange = effect.Range.Max()
 		}
+		maxRange += unit.Radius + target.Radius
 		dx := target.Position.X - unit.Position.X
 		dy := target.Position.Y - unit.Position.Y
 		if math.Sqrt(dx*dx+dy*dy) > maxRange {
