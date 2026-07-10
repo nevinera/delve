@@ -98,6 +98,17 @@ function UnitBar({ label, current, max }) {
   );
 }
 
+// Returns the maximum range in feet for a power, or null for self-only powers.
+// The JSON range field may be a number (e.g. 5.0) or a [min, max] array.
+function powerMaxRange(power) {
+  for (const effect of power.effects ?? []) {
+    const r = effect.range;
+    if (r == null) continue;
+    return Array.isArray(r) ? r[1] : r;
+  }
+  return null;
+}
+
 function formatUnitName(zoneUnitIdentifier) {
   if (!zoneUnitIdentifier) return "Unknown";
   return zoneUnitIdentifier
@@ -312,10 +323,19 @@ export default function App({
           const iconUrl = power?.iconURL
             ? new URL(power.iconURL, classConfigUrl).href
             : null;
+          let inRange = true;
+          if (power && targetUnit && selfUnit) {
+            const range = powerMaxRange(power);
+            if (range != null) {
+              const dx = targetUnit.position.x - selfUnit.position.x;
+              const dy = targetUnit.position.y - selfUnit.position.y;
+              inRange = Math.sqrt(dx * dx + dy * dy) <= range;
+            }
+          }
           return (
             <div
               key={slot}
-              style={{...styles.actionButton, cursor: power ? "pointer" : "default"}}
+              style={{...styles.actionButton, cursor: power ? "pointer" : "default", opacity: inRange ? 1 : 0.3}}
               title={power?.name}
               onClick={power ? () => connRef.current?.send({ direction: "up", type: "use_power", slot: i }) : undefined}
             >
