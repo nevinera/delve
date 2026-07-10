@@ -208,6 +208,12 @@ export default function App({
         );
         return;
       }
+      const slotKey = e.code.match(/^Digit(\d)$/)?.[1];
+      if (slotKey !== undefined) {
+        const slot = slotKey === "0" ? 9 : parseInt(slotKey, 10) - 1;
+        connRef.current?.send({ direction: "up", type: "use_power", slot });
+        return;
+      }
       const action = KEY_MAP[e.code];
       if (!action) return;
       if (MOVEMENT_KEYS.has(action)) {
@@ -307,7 +313,12 @@ export default function App({
             ? new URL(power.iconURL, classConfigUrl).href
             : null;
           return (
-            <div key={slot} style={styles.actionButton} title={power?.name}>
+            <div
+              key={slot}
+              style={{...styles.actionButton, cursor: power ? "pointer" : "default"}}
+              title={power?.name}
+              onClick={power ? () => connRef.current?.send({ direction: "up", type: "use_power", slot: i }) : undefined}
+            >
               {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
               <span style={styles.actionKeybind}>{key}</span>
             </div>

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // CommandPayload is the type-specific content of a Command.
@@ -41,6 +43,15 @@ type TargetPayload struct {
 }
 
 func (TargetPayload) CommandType() string { return "target" }
+
+// UsePowerPayload carries a fully-resolved power for the server to execute.
+// The slot lookup and class config resolution happen in the WebSocket handler
+// before the command is dispatched, so this carries the resolved Power directly.
+type UsePowerPayload struct {
+	Power instanceconfig.Power
+}
+
+func (UsePowerPayload) CommandType() string { return "use_power" }
 
 // Command is a single client-initiated action, tagged with the unit it
 // targets and the time it was received by the server.

@@ -74,9 +74,10 @@ type UnitState struct {
 	Speed       float64 // movement speed in feet per second
 	Radius      float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
-	Status              UnitStatus
-	Target              *uuid.UUID
-	ActiveStatusEffects []ActiveStatusEffect
+	Status                 UnitStatus
+	Target                 *uuid.UUID
+	GlobalCooldownEndsAt   time.Time
+	ActiveStatusEffects    []ActiveStatusEffect
 	Behavior            BehaviorState
 	MovementIntent      MovementIntent
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instance"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 // HeartbeatTimeout is the maximum silence between client messages before the
@@ -51,6 +52,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "slot not found")
 		return
 	}
+	powers := slot.CharacterClass.Powers
 	defer func() {
 		inst.DisconnectSlot(slotID)
 		close(done)
@@ -100,7 +102,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
-		handleClientMessage(data, slot.CharacterUnitID, inst)
+		handleClientMessage(data, slot.CharacterUnitID, inst, powers)
 	}
 
 	close(quit)
@@ -114,9 +116,10 @@ type incomingMsg struct {
 	X        *float64 `json:"x"`
 	Y        *float64 `json:"y"`
 	TargetID *string  `json:"target_id"`
+	Slot     *int     `json:"slot"`
 }
 
-func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance) {
+func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance, powers []instanceconfig.Power) {
 	var msg incomingMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return
@@ -144,5 +147,13 @@ func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance)
 			ReceivedAt: time.Now(),
 			Payload:    command.TargetPayload{TargetID: targetID},
 		})
+	case "use_power":
+		if msg.Slot != nil && *msg.Slot >= 0 && *msg.Slot < len(powers) {
+			inst.SendCommand(command.Command{
+				UnitID:     unitID,
+				ReceivedAt: time.Now(),
+				Payload:    command.UsePowerPayload{Power: powers[*msg.Slot]},
+			})
+		}
 	}
 }
