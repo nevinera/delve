@@ -7,15 +7,22 @@ package instanceconfig
 //   - graphicEffects: visual effects played on cast/impact
 //   - soundEffects:   audio effects played on cast/impact
 type Power struct {
-	Name           string       `json:"name"`                    // Required
-	Description    string       `json:"description,omitempty"`
-	MaxRange       float64      `json:"maxRange,omitempty"`      // Feet to valid target; omit for self/melee
-	CastTime       *float64     `json:"castTime"`                // Required: seconds, or null for instant
-	GlobalCooldown float64      `json:"globalCooldown"`          // Required: seconds
-	Cooldown       float64      `json:"cooldown,omitempty"`      // Per-power cooldown in seconds
-	CostType       string       `json:"costType,omitempty"`      // Resource name required
-	CostAmount     float64      `json:"costAmount,omitempty"`    // Minimum resource required
+	Name           string        `json:"name"`                   // Required
+	Description    string        `json:"description,omitempty"`
+	MaxRange       float64       `json:"maxRange,omitempty"`     // Feet to valid target; omit for self/melee
+	CastTime       *float64      `json:"castTime"`               // Required: seconds, or null for instant
+	GlobalCooldown float64       `json:"globalCooldown"`         // Required: seconds
+	Cooldown       float64       `json:"cooldown,omitempty"`     // Per-power cooldown in seconds
+	Frontal        *bool         `json:"frontal,omitempty"`      // nil/true = 150° arc required; false = any facing
+	CostType       string        `json:"costType,omitempty"`     // Resource name required
+	CostAmount     float64       `json:"costAmount,omitempty"`   // Minimum resource required
 	Effects        []PowerEffect `json:"effects"`                // Required (may be empty)
+}
+
+// IsFrontal returns true when the power requires the caster to face the target
+// within a 150° arc (±75° from straight ahead). Defaults to true when omitted.
+func (p Power) IsFrontal() bool {
+	return p.Frontal == nil || *p.Frontal
 }
 
 // PowerEffect describes one mechanical outcome applied when a power fires.
