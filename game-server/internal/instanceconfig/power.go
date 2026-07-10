@@ -1,7 +1,11 @@
 package instanceconfig
 
 // Power is an active ability a unit can use in combat.
-// graphicEffects and soundEffects are client-only and omitted.
+//
+// Client-only fields (present in JSON, ignored by the server):
+//   - iconURL:        URL of the action bar icon image
+//   - graphicEffects: visual effects played on cast/impact
+//   - soundEffects:   audio effects played on cast/impact
 type Power struct {
 	Name           string       `json:"name"`                    // Required
 	Description    string       `json:"description,omitempty"`

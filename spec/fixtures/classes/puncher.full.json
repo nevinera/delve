@@ -8,6 +8,7 @@
   "powers": [
     {
       "name": "Punch",
+      "iconURL": "./icons/punch.svg",
       "castTime": null,
       "globalCooldown": 1.5,
       "graphicEffects": [
@@ -41,6 +42,7 @@
     },
     {
       "name": "Recover",
+      "iconURL": "./icons/recover.svg",
       "castTime": null,
       "globalCooldown": 10.0,
       "graphicEffects": [
