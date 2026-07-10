@@ -77,17 +77,16 @@ const styles = {
   actionCooldownOverlay: {
     position: "absolute",
     inset: 0,
-    background: "rgba(0, 0, 0, 0.65)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     pointerEvents: "none",
   },
   actionCooldownText: {
-    color: "#ccc",
+    color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
-    textShadow: "0 1px 3px #000",
+    textShadow: "0 0 4px #000, 0 1px 3px #000",
     lineHeight: 1,
   },
   actionKeybind: {
@@ -165,20 +164,21 @@ export default function App({
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
+  const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
 
   const setGcd = useCallback((ms) => {
     gcdEndsAtRef.current = ms;
     setGcdEndsAt(ms);
   }, []);
 
-  // Tick re-renders while GCD is active so the countdown stays live.
+  // Tick re-renders at 50ms while GCD is active for smooth sweep animation.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (gcdEndsAt <= Date.now()) return;
     const id = setInterval(() => {
       setTick(t => t + 1);
       if (Date.now() >= gcdEndsAt) clearInterval(id);
-    }, 100);
+    }, 50);
     return () => clearInterval(id);
   }, [gcdEndsAt]);
 
@@ -209,7 +209,9 @@ export default function App({
         if (Math.sqrt(dx * dx + dy * dy) > range) return;
       }
     }
-    setGcd(Date.now() + power.globalCooldown * 1000);
+    const totalMs = power.globalCooldown * 1000;
+    gcdTotalMsRef.current = totalMs;
+    setGcd(Date.now() + totalMs);
     connRef.current?.send({ direction: "up", type: "use_power", slot });
     setFlashSlot(slot);
     setTimeout(() => setFlashSlot(null), 150);
@@ -410,7 +412,11 @@ export default function App({
           }
           const now = Date.now();
           const onCooldown = power && gcdEndsAt > now;
-          const cdSecs = onCooldown ? Math.ceil((gcdEndsAt - now) / 1000) : 0;
+          const remainingMs = onCooldown ? gcdEndsAt - now : 0;
+          const totalMs = gcdTotalMsRef.current || 1;
+          const fraction = onCooldown ? remainingMs / totalMs : 0;
+          const revealedDeg = (1 - fraction) * 360;
+          const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
           return (
             <div
               key={slot}
@@ -418,8 +424,14 @@ export default function App({
               title={power?.name}
               onClick={power ? () => usePower(i) : undefined}
             >
-              {iconUrl && <img src={iconUrl} alt={power.name} style={{...styles.actionIcon, filter: onCooldown ? "brightness(0.35)" : undefined}}/>}
+              {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
               {onCooldown && (
+                <div style={{
+                  position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
+                  background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
+                }}/>
+              )}
+              {cdSecs && (
                 <div style={styles.actionCooldownOverlay}>
                   <span style={styles.actionCooldownText}>{cdSecs}</span>
                 </div>
