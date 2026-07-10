@@ -36,6 +36,18 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 		return nil
 	}
 
+	if p.Power.IsFrontal() {
+		dx := target.Position.X - unit.Position.X
+		dy := target.Position.Y - unit.Position.Y
+		toTarget := math.Atan2(dx, dy) * 180 / math.Pi
+		diff := toTarget - unit.Position.Angle
+		for diff > 180 { diff -= 360 }
+		for diff < -180 { diff += 360 }
+		if math.Abs(diff) > 75 {
+			return nil
+		}
+	}
+
 	for _, effect := range p.Power.Effects {
 		if effect.Type != "harm" {
 			continue

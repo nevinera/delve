@@ -1,6 +1,7 @@
 package command_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -28,7 +29,8 @@ func punchPower() command.UsePowerPayload {
 
 func stateWithPlayerAndTarget(playerID, targetID uuid.UUID, playerX, playerY, targetX, targetY float64) *instancestate.InstanceState {
 	state := stateWithUnit(playerID)
-	state.Units[playerID].Position = instanceconfig.Position{X: playerX, Y: playerY}
+	facingDeg := math.Atan2(targetX-playerX, targetY-playerY) * 180 / math.Pi
+	state.Units[playerID].Position = instanceconfig.Position{X: playerX, Y: playerY, Angle: facingDeg}
 	targetUUID := targetID
 	state.Units[playerID].Target = &targetUUID
 	state.Units[targetID] = &instancestate.UnitState{
@@ -144,6 +146,45 @@ func TestUsePowerHandler_SetsDeadStatusAtZeroHealth(t *testing.T) {
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
 
 	assert.Equal(t, instancestate.UnitStatusDead, state.Units[targetID].Status)
+}
+
+func TestUsePowerHandler_FrontalBlocksWhenNotFacing(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	// Target is directly north, player facing south (180°) — outside 75° arc.
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 5)
+	state.Units[playerID].Position.Angle = 180
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.Equal(t, before, state.Units[targetID].Health)
+}
+
+func TestUsePowerHandler_FrontalAllowsWhenFacing(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	// Target is directly north, player facing north (0°) — within 75° arc.
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 5)
+	state.Units[playerID].Position.Angle = 0
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.Less(t, state.Units[targetID].Health, before)
+}
+
+func TestUsePowerHandler_NonFrontalIgnoresFacing(t *testing.T) {
+	f := false
+	playerID, targetID := uuid.New(), uuid.New()
+	// Target is directly north, player facing south — but power is non-frontal.
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 5)
+	state.Units[playerID].Position.Angle = 180
+	payload := punchPower()
+	payload.Power.Frontal = &f
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, payload, state))
+
+	assert.Less(t, state.Units[targetID].Health, before)
 }
 
 func TestUsePowerHandler_ClearsTargetOnDeath(t *testing.T) {
