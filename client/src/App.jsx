@@ -129,6 +129,7 @@ export default function App({
   classConfigUrl,
 }) {
   const connRef = useRef(null);
+  const canvasRef = useRef(null);
   const movementKeysRef = useRef(new Set());
   const turnKeysRef = useRef(new Set());
   const facingRef = useRef(0); // degrees
@@ -191,7 +192,8 @@ export default function App({
       .filter(([, u]) =>
         u.hostility === "hostile" &&
         u.map_identifier === selfUnit.map_identifier &&
-        u.status !== "dead"
+        u.status !== "dead" &&
+        (canvasRef.current?.isInView(u.position.x, u.position.y) ?? true)
       )
       .map(([id, u]) => {
         const dx = u.position.x - selfUnit.position.x;
@@ -304,6 +306,7 @@ export default function App({
         </div>
       </div>
       <Canvas
+        ref={canvasRef}
         zoneSourceUrl={zoneSourceUrl}
         units={units}
         selfIdentifier={selfIdentifier}

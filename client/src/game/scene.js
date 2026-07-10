@@ -540,6 +540,19 @@ export class SceneManager {
     tick();
   }
 
+  isInView(mapX, mapY) {
+    if (!this._mapToWorld || !this._camera) return true;
+    const [wx, wz] = this._mapToWorld(mapX, mapY);
+    const frustum = new THREE.Frustum();
+    frustum.setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(
+        this._camera.projectionMatrix,
+        this._camera.matrixWorldInverse
+      )
+    );
+    return frustum.containsPoint(new THREE.Vector3(wx, 0, wz));
+  }
+
   handleResize() {
     const w = this._canvas.offsetWidth;
     const h = this._canvas.offsetHeight;

@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { SceneManager } from "./game/scene";
 
-export default function Canvas({
+const Canvas = forwardRef(function Canvas({
   zoneSourceUrl,
   units,
   selfIdentifier,
@@ -12,9 +12,13 @@ export default function Canvas({
   onSelfPosition,
   onUnitClick,
   targetId,
-}) {
+}, ref) {
   const canvasRef = useRef(null);
   const managerRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    isInView: (mapX, mapY) => managerRef.current?.isInView(mapX, mapY) ?? true,
+  }));
 
   useEffect(() => {
     const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange, onSelfPosition, onUnitClick });
@@ -46,4 +50,6 @@ export default function Canvas({
       style={{ flex: 1, display: "block", minHeight: 0, width: "100%", height: "100%" }}
     />
   );
-}
+});
+
+export default Canvas;
