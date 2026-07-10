@@ -235,6 +235,13 @@ export default function App({
         const dx = target.position.x - self.x;
         const dy = target.position.y - self.y;
         if (Math.sqrt(dx * dx + dy * dy) > range + selfRadius + (target.radius ?? 0)) return;
+        if (power.frontal !== false) {
+          const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
+          let diff = toTarget - facingRef.current;
+          while (diff > 180) diff -= 360;
+          while (diff < -180) diff += 360;
+          if (Math.abs(diff) > 75) return;
+        }
       }
     }
     const totalMs = power.globalCooldown * 1000;
