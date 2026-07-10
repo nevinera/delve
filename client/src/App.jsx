@@ -154,6 +154,8 @@ export default function App({
   const turnKeysRef = useRef(new Set());
   const facingRef = useRef(0); // degrees
   const selfPosRef = useRef(null); // latest client-predicted position {x, y}
+  const selfIdentifierRef = useRef(`player:${characterName}`);
+  selfIdentifierRef.current = `player:${characterName}`;
   const [units, setUnits] = useState({});
   const [targetId, setTargetId] = useState(null);
   const unitsRef = useRef({});
@@ -204,9 +206,10 @@ export default function App({
       if (!target || target.status === "dead") return;
       const self = selfPosRef.current;
       if (self) {
+        const selfRadius = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current)?.radius ?? 0;
         const dx = target.position.x - self.x;
         const dy = target.position.y - self.y;
-        if (Math.sqrt(dx * dx + dy * dy) > range) return;
+        if (Math.sqrt(dx * dx + dy * dy) > range + selfRadius + (target.radius ?? 0)) return;
       }
     }
     const totalMs = power.globalCooldown * 1000;
@@ -415,7 +418,7 @@ export default function App({
             if (range != null) {
               const dx = targetUnit.position.x - selfUnit.position.x;
               const dy = targetUnit.position.y - selfUnit.position.y;
-              inRange = Math.sqrt(dx * dx + dy * dy) <= range;
+              inRange = Math.sqrt(dx * dx + dy * dy) <= range + (selfUnit.radius ?? 0) + (targetUnit.radius ?? 0);
             }
           }
           const now = Date.now();
