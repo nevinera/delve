@@ -69,6 +69,11 @@ const styles = {
     inset: 4,
     objectFit: "contain",
   },
+  actionButtonFlash: {
+    borderColor: "#cc0",
+    boxShadow: "inset 0 0 10px rgba(255, 220, 50, 0.5)",
+    background: "#2a2a0a",
+  },
   actionKeybind: {
     position: "absolute",
     bottom: 2,
@@ -141,6 +146,7 @@ export default function App({
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [powers, setPowers] = useState([]);
+  const [flashSlot, setFlashSlot] = useState(null);
 
   useEffect(() => {
     if (!classConfigUrl) return;
@@ -151,6 +157,12 @@ export default function App({
   }, [classConfigUrl]);
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
+
+  const usePower = useCallback((slot) => {
+    connRef.current?.send({ direction: "up", type: "use_power", slot });
+    setFlashSlot(slot);
+    setTimeout(() => setFlashSlot(null), 150);
+  }, []);
 
   const sendMove = useCallback(() => {
     const pos = selfPosRef.current;
@@ -224,7 +236,7 @@ export default function App({
       const slotKey = e.code.match(/^Digit(\d)$/)?.[1];
       if (slotKey !== undefined) {
         const slot = slotKey === "0" ? 9 : parseInt(slotKey, 10) - 1;
-        connRef.current?.send({ direction: "up", type: "use_power", slot });
+        usePower(slot);
         return;
       }
       const action = KEY_MAP[e.code];
@@ -338,9 +350,9 @@ export default function App({
           return (
             <div
               key={slot}
-              style={{...styles.actionButton, cursor: power ? "pointer" : "default", opacity: inRange ? 1 : 0.3}}
+              style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: inRange ? 1 : 0.3}}
               title={power?.name}
-              onClick={power ? () => connRef.current?.send({ direction: "up", type: "use_power", slot: i }) : undefined}
+              onClick={power ? () => usePower(i) : undefined}
             >
               {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
               <span style={styles.actionKeybind}>{key}</span>
