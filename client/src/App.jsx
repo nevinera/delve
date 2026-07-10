@@ -43,6 +43,35 @@ const styles = {
     border: "1px solid #6a2a2a",
     padding: 8,
   },
+  actionBar: {
+    flexShrink: 0,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+    padding: "4px 8px",
+    background: "#111",
+    borderTop: "1px solid #333",
+  },
+  actionButton: {
+    position: "relative",
+    width: 52,
+    height: 52,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    cursor: "default",
+    flexShrink: 0,
+  },
+  actionKeybind: {
+    position: "absolute",
+    bottom: 2,
+    right: 4,
+    fontSize: 10,
+    color: "#666",
+    lineHeight: 1,
+    pointerEvents: "none",
+  },
   log: {
     flexShrink: 0,
     height: 110,
@@ -253,6 +282,17 @@ export default function App({
         onUnitClick={handleTargetUnit}
         targetId={targetId}
       />
+      <div style={styles.actionBar}>
+        {Array.from({ length: 10 }, (_, i) => {
+          const slot = i + 1;
+          const key = slot === 10 ? "0" : String(slot);
+          return (
+            <div key={slot} style={styles.actionButton}>
+              <span style={styles.actionKeybind}>{key}</span>
+            </div>
+          );
+        })}
+      </div>
       <div style={styles.log}>
         {log.map((line, i) => (
           <div key={i}>{line}</div>
