@@ -56,6 +56,9 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 			if target.Health < 0 {
 				target.Health = 0
 			}
+			if target.Health == 0 {
+				target.Status = instancestate.UnitStatusDead
+			}
 		}
 	}
 
