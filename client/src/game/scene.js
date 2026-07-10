@@ -448,7 +448,10 @@ export class SceneManager {
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
         this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null });
-        if (isSelf) this._selfToken = group;
+        if (isSelf) {
+          this._selfToken = group;
+          this._camFacing = unit.position.angle * DEG;
+        }
       }
     }
 

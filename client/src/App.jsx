@@ -357,6 +357,14 @@ export default function App({
     (u) => u.zone_unit_identifier === selfIdentifier
   );
 
+  const initialFacingSetRef = useRef(false);
+  useEffect(() => {
+    if (selfUnit && !initialFacingSetRef.current) {
+      facingRef.current = ((selfUnit.position.angle % 360) + 360) % 360;
+      initialFacingSetRef.current = true;
+    }
+  }, [selfUnit?.zone_unit_identifier]);
+
   // Reconcile local GCD to the server's authoritative value when a power
   // actually fires. The server's epoch ms is ~100ms later than our optimistic
   // estimate (network latency) so this also corrects the timing slightly.
