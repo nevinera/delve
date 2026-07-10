@@ -13,6 +13,7 @@ createRoot(el).render(
       zoneSourceUrl={el.dataset.zoneSourceUrl}
       characterName={el.dataset.characterName}
       characterTokenUrl={el.dataset.characterTokenUrl}
+      classConfigUrl={el.dataset.classConfigUrl}
     />
   </StrictMode>
 );

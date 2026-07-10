@@ -62,6 +62,12 @@ const styles = {
     borderRadius: 4,
     cursor: "default",
     flexShrink: 0,
+    overflow: "hidden",
+  },
+  actionIcon: {
+    position: "absolute",
+    inset: 4,
+    objectFit: "contain",
   },
   actionKeybind: {
     position: "absolute",
@@ -109,6 +115,7 @@ export default function App({
   zoneSourceUrl,
   characterName,
   characterTokenUrl,
+  classConfigUrl,
 }) {
   const connRef = useRef(null);
   const movementKeysRef = useRef(new Set());
@@ -121,6 +128,15 @@ export default function App({
   const targetIdRef = useRef(null);
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
+  const [powers, setPowers] = useState([]);
+
+  useEffect(() => {
+    if (!classConfigUrl) return;
+    fetch(classConfigUrl)
+      .then(r => r.json())
+      .then(cfg => setPowers(cfg.powers ?? []))
+      .catch(() => {});
+  }, [classConfigUrl]);
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
@@ -286,8 +302,13 @@ export default function App({
         {Array.from({ length: 10 }, (_, i) => {
           const slot = i + 1;
           const key = slot === 10 ? "0" : String(slot);
+          const power = powers[i];
+          const iconUrl = power?.iconURL
+            ? new URL(power.iconURL, classConfigUrl).href
+            : null;
           return (
-            <div key={slot} style={styles.actionButton}>
+            <div key={slot} style={styles.actionButton} title={power?.name}>
+              {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
               <span style={styles.actionKeybind}>{key}</span>
             </div>
           );
