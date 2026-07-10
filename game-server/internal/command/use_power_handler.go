@@ -52,7 +52,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 		}
 		if effect.Amount != nil {
 			lo, hi := effect.Amount.Min(), effect.Amount.Max()
-			target.Health -= lo + rand.Float64()*(hi-lo)
+			target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
 			if target.Health < 0 {
 				target.Health = 0
 			}
