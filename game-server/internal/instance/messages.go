@@ -28,6 +28,7 @@ type unitJSON struct {
 	Resource               float64                  `json:"resource"`
 	MaxResource            float64                  `json:"max_resource"`
 	Speed                  float64                  `json:"speed"`
+	Radius                 float64                  `json:"radius"`
 	Status                 instancestate.UnitStatus `json:"status"`
 	Target                 *string                  `json:"target"`
 	GlobalCooldownEndsAt   *int64                   `json:"global_cooldown_ends_at,omitempty"`
@@ -93,6 +94,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Resource:             u.Resource,
 			MaxResource:          u.MaxResource,
 			Speed:                u.Speed,
+			Radius:               u.Radius,
 			Status:               u.Status,
 			Target:               target,
 			GlobalCooldownEndsAt: gcdMs,
@@ -145,6 +147,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 				"resource":             cu.Resource,
 				"max_resource":         cu.MaxResource,
 				"speed":                cu.Speed,
+				"radius":               cu.Radius,
 				"status":               string(cu.Status),
 				"target":               target,
 			}
