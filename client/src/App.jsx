@@ -215,7 +215,15 @@ export default function App({
     connRef.current?.send({ direction: "up", type: "use_power", slot });
     setFlashSlot(slot);
     setTimeout(() => setFlashSlot(null), 150);
-  }, [powers, setGcd]);
+    if (power.graphicEffects?.length) {
+      const targetUnit = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
+      canvasRef.current?.playGraphicEffects(
+        power.graphicEffects,
+        { self: selfPosRef.current, target: targetUnit?.position },
+        classConfigUrl,
+      );
+    }
+  }, [powers, setGcd, classConfigUrl]);
 
   const sendMove = useCallback(() => {
     const pos = selfPosRef.current;
@@ -324,7 +332,7 @@ export default function App({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [sendMove]);
+  }, [sendMove, usePower, handleTabTarget]);
 
   useEffect(() => {
     const conn = new GameConnection({

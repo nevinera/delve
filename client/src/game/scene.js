@@ -196,6 +196,8 @@ export class SceneManager {
     this._barriersByMap = new Map();
     this._animId = null;
 
+    this._activeEffects = []; // { sprite, mat, startedAt, durationMs, fadeStartMs }
+
     // Targeting visuals
     this._targetId = null;
     this._targetRing = this._buildTargetRing();
@@ -534,10 +536,57 @@ export class SceneManager {
       }
 
       this._updateTargetVisuals();
+      this._updateGraphicEffects(time);
       this._positionCamera();
       this._renderer.render(this._scene, this._camera);
     };
     tick();
+  }
+
+  // effects: array of graphicEffect objects from the power config
+  // positions: { self: {x,y}, target: {x,y} } in map coords
+  // baseUrl: used to resolve relative sourceURLs
+  playGraphicEffects(effects, positions, baseUrl) {
+    if (!this._mapToWorld) return;
+    for (const effect of effects) {
+      const pos = effect.to === "self" ? positions.self : positions.target;
+      if (!pos) continue;
+      const url = new URL(effect.sourceURL, baseUrl).href;
+      const [wx, wz] = this._mapToWorld(pos.x, pos.y);
+      this._spawnGraphicEffect(url, effect.duration, wx, wz);
+    }
+  }
+
+  _spawnGraphicEffect(url, duration, wx, wz) {
+    new THREE.TextureLoader().load(url, (texture) => {
+      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.set(wx, 2.0, wz);
+      sprite.scale.set(4, 4, 1);
+      this._scene.add(sprite);
+      const durationMs = duration * 1000;
+      this._activeEffects.push({
+        sprite, mat,
+        startedAt: performance.now(),
+        durationMs,
+        fadeStartMs: durationMs * 0.6,
+      });
+    });
+  }
+
+  _updateGraphicEffects(now) {
+    this._activeEffects = this._activeEffects.filter(e => {
+      const elapsed = now - e.startedAt;
+      if (elapsed >= e.durationMs) {
+        this._scene.remove(e.sprite);
+        e.mat.dispose();
+        return false;
+      }
+      if (elapsed >= e.fadeStartMs) {
+        e.mat.opacity = 1 - (elapsed - e.fadeStartMs) / (e.durationMs - e.fadeStartMs);
+      }
+      return true;
+    });
   }
 
   isInView(mapX, mapY) {
