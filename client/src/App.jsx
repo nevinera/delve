@@ -453,12 +453,20 @@ export default function App({
             ? new URL(power.iconURL, classConfigUrl).href
             : null;
           let inRange = true;
+          let isFacing = true;
           if (power && targetUnit && selfUnit) {
             const range = powerMaxRange(power);
             if (range != null) {
               const dx = targetUnit.position.x - selfUnit.position.x;
               const dy = targetUnit.position.y - selfUnit.position.y;
               inRange = Math.sqrt(dx * dx + dy * dy) <= range + (selfUnit.radius ?? 0) + (targetUnit.radius ?? 0);
+              if (power.frontal !== false) {
+                const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
+                let diff = toTarget - selfUnit.position.angle;
+                while (diff > 180) diff -= 360;
+                while (diff < -180) diff += 360;
+                isFacing = Math.abs(diff) <= 75;
+              }
             }
           }
           const now = Date.now();
@@ -471,7 +479,7 @@ export default function App({
           return (
             <div
               key={slot}
-              style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: inRange ? 1 : 0.3}}
+              style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
               title={power?.name}
               onClick={power ? () => usePower(i) : undefined}
             >
