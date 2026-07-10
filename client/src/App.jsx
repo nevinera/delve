@@ -33,12 +33,14 @@ const styles = {
   },
   selfFrame: {
     flex: 1,
+    position: "relative",
     background: "#0d2b0d",
     border: "1px solid #2a6a2a",
     padding: 8,
   },
   targetFrame: {
     flex: 1,
+    position: "relative",
     background: "#2b0d0d",
     border: "1px solid #6a2a2a",
     padding: 8,
@@ -114,6 +116,29 @@ function UnitBar({ label, current, max }) {
   return (
     <div style={{ fontSize: 11, marginTop: 4, color: "#aaa" }}>
       {label} {current?.toFixed(0)}/{max?.toFixed(0)} ({pct}%)
+    </div>
+  );
+}
+
+function HealthBar({ current, max }) {
+  const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
+  return (
+    <div style={{
+      position: "absolute",
+      bottom: 6,
+      left: 6,
+      right: 6,
+      height: 9,
+      border: "1px solid #3a8a3a",
+      borderRadius: 2,
+      background: "#5a1010",
+    }}>
+      <div style={{
+        width: `${pct * 100}%`,
+        height: "100%",
+        background: "#2a7a2a",
+        borderRadius: 1,
+      }} />
     </div>
   );
 }
@@ -383,8 +408,8 @@ export default function App({
           <strong>{characterName ?? "—"}</strong>
           {selfUnit && (
             <>
-              <UnitBar label="HP" current={selfUnit.health} max={selfUnit.max_health} />
               <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
+              <HealthBar current={selfUnit.health} max={selfUnit.max_health} />
             </>
           )}
         </div>
@@ -392,7 +417,7 @@ export default function App({
           {targetUnit ? (
             <>
               <strong>{formatUnitName(targetUnit.zone_unit_identifier)}</strong>
-              <UnitBar label="HP" current={targetUnit.health} max={targetUnit.max_health} />
+              <HealthBar current={targetUnit.health} max={targetUnit.max_health} />
             </>
           ) : (
             <span style={{ color: "#666" }}>No target</span>
