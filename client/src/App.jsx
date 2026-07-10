@@ -147,6 +147,7 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [powers, setPowers] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
+  const gcdEndsAtRef = useRef(0); // epoch ms; mirrors server-side GCD
 
   useEffect(() => {
     if (!classConfigUrl) return;
@@ -159,10 +160,27 @@ export default function App({
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
   const usePower = useCallback((slot) => {
+    if (Date.now() < gcdEndsAtRef.current) return;
+    const power = powers[slot];
+    if (!power) return;
+    // Mirror server-side rejection checks so we don't set GCD on commands that
+    // will certainly be rejected (target missing, dead, or out of range).
+    const range = powerMaxRange(power);
+    if (range != null) {
+      const target = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
+      if (!target || target.status === "dead") return;
+      const self = selfPosRef.current;
+      if (self) {
+        const dx = target.position.x - self.x;
+        const dy = target.position.y - self.y;
+        if (Math.sqrt(dx * dx + dy * dy) > range) return;
+      }
+    }
+    gcdEndsAtRef.current = Date.now() + power.globalCooldown * 1000;
     connRef.current?.send({ direction: "up", type: "use_power", slot });
     setFlashSlot(slot);
     setTimeout(() => setFlashSlot(null), 150);
-  }, []);
+  }, [powers]);
 
   const sendMove = useCallback(() => {
     const pos = selfPosRef.current;
@@ -292,6 +310,16 @@ export default function App({
   const selfUnit = Object.values(units).find(
     (u) => u.zone_unit_identifier === selfIdentifier
   );
+
+  // Reconcile local GCD to the server's authoritative value when a power
+  // actually fires. The server's epoch ms is ~100ms later than our optimistic
+  // estimate (network latency) so this also corrects the timing slightly.
+  // If the server rejected the command (no delta update), local GCD expires
+  // naturally — client-side checks in usePower prevent most false-positive sets.
+  useEffect(() => {
+    const serverMs = selfUnit?.global_cooldown_ends_at;
+    if (serverMs) gcdEndsAtRef.current = serverMs;
+  }, [selfUnit?.global_cooldown_ends_at]);
   const targetUnit = targetId ? units[targetId] : null;
 
   return (

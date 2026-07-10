@@ -19,18 +19,19 @@ type downBase struct {
 }
 
 type unitJSON struct {
-	ZoneUnitIdentifier  string                   `json:"zone_unit_identifier"`
-	MapIdentifier       string                   `json:"map_identifier"`
-	Hostility           string                   `json:"hostility,omitempty"`
-	Position            instanceconfig.Position  `json:"position"`
-	Health              float64                  `json:"health"`
-	MaxHealth           float64                  `json:"max_health"`
-	Resource            float64                  `json:"resource"`
-	MaxResource         float64                  `json:"max_resource"`
-	Speed               float64                  `json:"speed"`
-	Status              instancestate.UnitStatus `json:"status"`
-	Target              *string                  `json:"target"`
-	ActiveStatusEffects []effectJSON             `json:"active_status_effects"`
+	ZoneUnitIdentifier     string                   `json:"zone_unit_identifier"`
+	MapIdentifier          string                   `json:"map_identifier"`
+	Hostility              string                   `json:"hostility,omitempty"`
+	Position               instanceconfig.Position  `json:"position"`
+	Health                 float64                  `json:"health"`
+	MaxHealth              float64                  `json:"max_health"`
+	Resource               float64                  `json:"resource"`
+	MaxResource            float64                  `json:"max_resource"`
+	Speed                  float64                  `json:"speed"`
+	Status                 instancestate.UnitStatus `json:"status"`
+	Target                 *string                  `json:"target"`
+	GlobalCooldownEndsAt   *int64                   `json:"global_cooldown_ends_at,omitempty"`
+	ActiveStatusEffects    []effectJSON             `json:"active_status_effects"`
 }
 
 type effectJSON struct {
@@ -77,19 +78,25 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			s := u.Target.String()
 			target = &s
 		}
+		var gcdMs *int64
+		if !u.GlobalCooldownEndsAt.IsZero() {
+			ms := u.GlobalCooldownEndsAt.UnixMilli()
+			gcdMs = &ms
+		}
 		units[id.String()] = unitJSON{
-			ZoneUnitIdentifier:  u.ZoneUnitIdentifier,
-			MapIdentifier:       u.MapIdentifier,
-			Hostility:           u.Hostility,
-			Position:            u.Position,
-			Health:              u.Health,
-			MaxHealth:           u.MaxHealth,
-			Resource:            u.Resource,
-			MaxResource:         u.MaxResource,
-			Speed:               u.Speed,
-			Status:              u.Status,
-			Target:              target,
-			ActiveStatusEffects: effects,
+			ZoneUnitIdentifier:   u.ZoneUnitIdentifier,
+			MapIdentifier:        u.MapIdentifier,
+			Hostility:            u.Hostility,
+			Position:             u.Position,
+			Health:               u.Health,
+			MaxHealth:            u.MaxHealth,
+			Resource:             u.Resource,
+			MaxResource:          u.MaxResource,
+			Speed:                u.Speed,
+			Status:               u.Status,
+			Target:               target,
+			GlobalCooldownEndsAt: gcdMs,
+			ActiveStatusEffects:  effects,
 		}
 	}
 	return json.Marshal(fullStateMsg{
@@ -128,7 +135,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 				s := cu.Target.String()
 				target = &s
 			}
-			msg.UnitUpdates[idStr] = map[string]any{
+			update := map[string]any{
 				"zone_unit_identifier": cu.ZoneUnitIdentifier,
 				"map_identifier":       cu.MapIdentifier,
 				"hostility":            cu.Hostility,
@@ -141,6 +148,10 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 				"status":               string(cu.Status),
 				"target":               target,
 			}
+			if !cu.GlobalCooldownEndsAt.IsZero() {
+				update["global_cooldown_ends_at"] = cu.GlobalCooldownEndsAt.UnixMilli()
+			}
+			msg.UnitUpdates[idStr] = update
 			for _, e := range cu.ActiveStatusEffects {
 				msg.EffectAdds = append(msg.EffectAdds, effectAddJSON{
 					UnitID:           idStr,
@@ -184,6 +195,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, now time.Time, check
 			} else {
 				patch["target"] = nil
 			}
+		}
+		if cu.GlobalCooldownEndsAt != pu.GlobalCooldownEndsAt {
+			patch["global_cooldown_ends_at"] = cu.GlobalCooldownEndsAt.UnixMilli()
 		}
 		if len(patch) > 0 {
 			msg.UnitUpdates[idStr] = patch
