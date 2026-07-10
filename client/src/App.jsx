@@ -74,6 +74,22 @@ const styles = {
     boxShadow: "inset 0 0 10px rgba(255, 220, 50, 0.5)",
     background: "#2a2a0a",
   },
+  actionCooldownOverlay: {
+    position: "absolute",
+    inset: 0,
+    background: "rgba(0, 0, 0, 0.65)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+  },
+  actionCooldownText: {
+    color: "#ccc",
+    fontSize: 16,
+    fontWeight: "bold",
+    textShadow: "0 1px 3px #000",
+    lineHeight: 1,
+  },
   actionKeybind: {
     position: "absolute",
     bottom: 2,
@@ -147,7 +163,24 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [powers, setPowers] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
-  const gcdEndsAtRef = useRef(0); // epoch ms; mirrors server-side GCD
+  const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
+  const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
+
+  const setGcd = useCallback((ms) => {
+    gcdEndsAtRef.current = ms;
+    setGcdEndsAt(ms);
+  }, []);
+
+  // Tick re-renders while GCD is active so the countdown stays live.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (gcdEndsAt <= Date.now()) return;
+    const id = setInterval(() => {
+      setTick(t => t + 1);
+      if (Date.now() >= gcdEndsAt) clearInterval(id);
+    }, 100);
+    return () => clearInterval(id);
+  }, [gcdEndsAt]);
 
   useEffect(() => {
     if (!classConfigUrl) return;
@@ -176,11 +209,11 @@ export default function App({
         if (Math.sqrt(dx * dx + dy * dy) > range) return;
       }
     }
-    gcdEndsAtRef.current = Date.now() + power.globalCooldown * 1000;
+    setGcd(Date.now() + power.globalCooldown * 1000);
     connRef.current?.send({ direction: "up", type: "use_power", slot });
     setFlashSlot(slot);
     setTimeout(() => setFlashSlot(null), 150);
-  }, [powers]);
+  }, [powers, setGcd]);
 
   const sendMove = useCallback(() => {
     const pos = selfPosRef.current;
@@ -318,7 +351,7 @@ export default function App({
   // naturally — client-side checks in usePower prevent most false-positive sets.
   useEffect(() => {
     const serverMs = selfUnit?.global_cooldown_ends_at;
-    if (serverMs) gcdEndsAtRef.current = serverMs;
+    if (serverMs) setGcd(serverMs);
   }, [selfUnit?.global_cooldown_ends_at]);
   const targetUnit = targetId ? units[targetId] : null;
 
@@ -375,6 +408,9 @@ export default function App({
               inRange = Math.sqrt(dx * dx + dy * dy) <= range;
             }
           }
+          const now = Date.now();
+          const onCooldown = power && gcdEndsAt > now;
+          const cdSecs = onCooldown ? Math.ceil((gcdEndsAt - now) / 1000) : 0;
           return (
             <div
               key={slot}
@@ -382,7 +418,12 @@ export default function App({
               title={power?.name}
               onClick={power ? () => usePower(i) : undefined}
             >
-              {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
+              {iconUrl && <img src={iconUrl} alt={power.name} style={{...styles.actionIcon, filter: onCooldown ? "brightness(0.35)" : undefined}}/>}
+              {onCooldown && (
+                <div style={styles.actionCooldownOverlay}>
+                  <span style={styles.actionCooldownText}>{cdSecs}</span>
+                </div>
+              )}
               <span style={styles.actionKeybind}>{key}</span>
             </div>
           );
