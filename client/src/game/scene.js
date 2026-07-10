@@ -162,6 +162,28 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   return group;
 }
 
+function markTokenDead(group, radius) {
+  group.position.y = -0.15; // sink halfway into the floor
+
+  const overlay = new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 32),
+    new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.6 }),
+  );
+  overlay.rotation.x = -Math.PI / 2;
+  overlay.position.y = 0.32;
+  group.add(overlay);
+
+  const mat = new THREE.MeshBasicMaterial({ color: 0xaa1111 });
+  const arm = new THREE.BoxGeometry(radius * 1.5, 0.12, radius * 0.22);
+  const x1 = new THREE.Mesh(arm, mat);
+  x1.position.y = 0.35;
+  x1.rotation.y = Math.PI / 4;
+  const x2 = new THREE.Mesh(arm, mat.clone());
+  x2.position.y = 0.35;
+  x2.rotation.y = -Math.PI / 4;
+  group.add(x1, x2);
+}
+
 // ---------------------------------------------------------------------------
 // SceneManager
 // ---------------------------------------------------------------------------
@@ -437,6 +459,10 @@ export class SceneManager {
           entry.targetZ = wz;
           entry.targetRotY = angle;
         }
+        if (!entry.dead && unit.status === "dead") {
+          markTokenDead(entry.group, entry.radius);
+          entry.dead = true;
+        }
       } else {
         const info = this._unitInfo.get(unit.zone_unit_identifier);
         const radius = info?.tokenRadius ?? TOKEN_RADIUS;
@@ -447,7 +473,9 @@ export class SceneManager {
         group.rotation.y = angle;
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
-        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null });
+        const dead = unit.status === "dead";
+        if (dead) markTokenDead(group, radius);
+        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null, radius, dead });
         if (isSelf) {
           this._selfToken = group;
           this._camFacing = unit.position.angle * DEG;
