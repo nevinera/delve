@@ -203,7 +203,6 @@ export class SceneManager {
 
     this._scene = new THREE.Scene();
     this._scene.background = new THREE.Color(0x000000);
-    this._scene.fog = new THREE.Fog(0x000000, 60, 150);
     this._scene.add(new THREE.AmbientLight(0xffffff, 0.4));
     const sun = new THREE.DirectionalLight(0xffffff, 1.5);
     sun.position.set(5, 10, 5);
