@@ -42,6 +42,10 @@ func ApplyUnitBehaviorsForTest(state *instancestate.InstanceState, zone instance
 	applyUnitBehaviors(state, zone, dt) //nolint:errcheck
 }
 
+func ApplyMapTransitionsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
+	applyMapTransitions(state, zone)
+}
+
 func ApplyNPCSeparationForTest(state *instancestate.InstanceState, dt float64) {
 	applyNPCSeparation(state, dt)
 }
