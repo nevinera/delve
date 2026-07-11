@@ -72,6 +72,7 @@ type UnitState struct {
 	Hostility          string              // "hostile", "neutral", "friendly", or "" for players
 	Position           instanceconfig.Position
 	SpawnPoint         instanceconfig.Position // initial position; used for respawn
+	SpawnMapIdentifier string                  // map the unit spawned into; used for respawn
 
 	Health      float64
 	MaxHealth   float64 // cached from UnitType.MaxHP at spawn

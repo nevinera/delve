@@ -21,7 +21,9 @@ func deadUnitAtSpawn() (*instancestate.UnitState, uuid.UUID, *instancestate.Inst
 		Health:             0,
 		MaxHealth:          100,
 		SpawnPoint:         spawnPos,
+		SpawnMapIdentifier: "town",
 		Position:           instanceconfig.Position{X: 55, Y: 66},
+		MapIdentifier:      "dungeon",
 		Status:             instancestate.UnitStatusDead,
 		Target:             &targetID,
 	}
@@ -46,6 +48,7 @@ func TestRespawnHandler_ResetsDeadUnit(t *testing.T) {
 
 	assert.Equal(t, instancestate.UnitStatusIdle, unit.Status)
 	assert.Equal(t, unit.MaxHealth, unit.Health)
+	assert.Equal(t, "town", unit.MapIdentifier)
 	assert.Equal(t, unit.SpawnPoint.X, unit.Position.X)
 	assert.Equal(t, unit.SpawnPoint.Y, unit.Position.Y)
 	assert.Nil(t, unit.Target)

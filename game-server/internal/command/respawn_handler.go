@@ -18,6 +18,7 @@ func (RespawnHandler) Handle(unitID uuid.UUID, _ CommandPayload, next *instances
 		return nil
 	}
 	unit.Health = unit.MaxHealth
+	unit.MapIdentifier = unit.SpawnMapIdentifier
 	unit.Position = unit.SpawnPoint
 	unit.Target = nil
 	unit.Status = instancestate.UnitStatusIdle

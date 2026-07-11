@@ -53,6 +53,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				MapIdentifier:       mapID,
 				Position:            pos,
 				SpawnPoint:          pos,
+				SpawnMapIdentifier:  mapID,
 				Health:              playerBaseMaxHP,
 				MaxHealth:           playerBaseMaxHP,
 				Resource:            resource,
