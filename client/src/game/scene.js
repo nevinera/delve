@@ -119,6 +119,7 @@ function createPlayerToken(radius, tokenUrl) {
   }
 
   addFacingArrow(group, radius, 0x81c784);
+  attachDeadMarkers(group, radius);
   return group;
 }
 
@@ -159,11 +160,15 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   }
 
   addFacingArrow(group, radius, coneColor);
+  attachDeadMarkers(group, radius);
   return group;
 }
 
-function markTokenDead(group, radius) {
-  group.position.y = -0.15; // sink halfway into the floor
+// Creates the dead-state overlay (gray circle + red X) and attaches it to group,
+// hidden. Toggle group._deadMarkers.visible and group.position.y each tick.
+function attachDeadMarkers(group, radius) {
+  const markers = new THREE.Group();
+  markers.visible = false;
 
   const overlay = new THREE.Mesh(
     new THREE.CircleGeometry(radius, 32),
@@ -171,7 +176,7 @@ function markTokenDead(group, radius) {
   );
   overlay.rotation.x = -Math.PI / 2;
   overlay.position.y = 0.32;
-  group.add(overlay);
+  markers.add(overlay);
 
   const mat = new THREE.MeshBasicMaterial({ color: 0xaa1111 });
   const arm = new THREE.BoxGeometry(radius * 1.5, 0.12, radius * 0.22);
@@ -181,7 +186,15 @@ function markTokenDead(group, radius) {
   const x2 = new THREE.Mesh(arm, mat.clone());
   x2.position.y = 0.35;
   x2.rotation.y = -Math.PI / 4;
-  group.add(x1, x2);
+  markers.add(x1, x2);
+
+  group.add(markers);
+  group._deadMarkers = markers;
+}
+
+function setTokenDead(group, dead) {
+  if (group._deadMarkers) group._deadMarkers.visible = dead;
+  group.position.y = dead ? -0.15 : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -497,10 +510,7 @@ export class SceneManager {
             entry.lastRenderedMap = unit.map_identifier;
           }
         }
-        if (!entry.dead && unit.status === "dead") {
-          markTokenDead(entry.group, entry.radius);
-          entry.dead = true;
-        }
+        setTokenDead(entry.group, unit.status === "dead");
       } else {
         const info = this._unitInfo.get(unit.zone_unit_identifier);
         const radius = info?.tokenRadius ?? TOKEN_RADIUS;
@@ -511,9 +521,8 @@ export class SceneManager {
         group.rotation.y = angle;
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
-        const dead = unit.status === "dead";
-        if (dead) markTokenDead(group, radius);
-        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null, radius, dead, lastRenderedMap: unit.map_identifier });
+        setTokenDead(group, unit.status === "dead");
+        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null, radius, lastRenderedMap: unit.map_identifier });
         if (isSelf) {
           this._selfToken = group;
           this._camFacing = unit.position.angle * DEG;
