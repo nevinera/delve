@@ -469,7 +469,13 @@ export class SceneManager {
       if (isSelf) {
         this._serverMapX = unit.position.x;
         this._serverMapY = unit.position.y;
-        this._selfDead = unit.status === "dead";
+        const nowDead = unit.status === "dead";
+        if (this._selfDead && !nowDead) {
+          // Respawned: snap predicted position to server so there's no slide.
+          this._selfMapX = unit.position.x;
+          this._selfMapY = unit.position.y;
+        }
+        this._selfDead = nowDead;
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
+const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
 import { GameConnection } from "./game/connection";
 
@@ -120,6 +122,43 @@ const styles = {
     overflowY: "auto",
     lineHeight: 1.5,
   },
+  canvasWrapper: {
+    flex: 1,
+    position: "relative",
+    overflow: "hidden",
+  },
+  respawnOverlay: {
+    position: "absolute",
+    top: 12,
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: 10,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 6,
+    background: "rgba(0,0,0,0.7)",
+    border: "1px solid #555",
+    borderRadius: 6,
+    padding: "8px 18px",
+    pointerEvents: "auto",
+  },
+  respawnCountdown: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#cc2222",
+    letterSpacing: 1,
+  },
+  respawnButton: {
+    fontSize: 16,
+    fontWeight: "bold",
+    padding: "6px 20px",
+    background: "#2a5a2a",
+    color: "#cfc",
+    border: "1px solid #4a9a4a",
+    borderRadius: 4,
+    cursor: "pointer",
+  },
 };
 
 function UnitBar({ label, current, max }) {
@@ -172,6 +211,29 @@ function formatUnitName(zoneUnitIdentifier) {
     .split("_")
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+function RespawnOverlay({ deathTime, onRespawn }) {
+  const [remaining, setRemaining] = useState(RESPAWN_DELAY_S);
+
+  useEffect(() => {
+    if (!deathTime) return;
+    const update = () => setRemaining(Math.max(0, RESPAWN_DELAY_S - (Date.now() - deathTime) / 1000));
+    update();
+    const id = setInterval(update, 100);
+    return () => clearInterval(id);
+  }, [deathTime]);
+
+  if (!deathTime) return null;
+
+  return (
+    <div style={styles.respawnOverlay}>
+      {remaining > 0
+        ? <span style={styles.respawnCountdown}>Respawn in {Math.ceil(remaining)}s</span>
+        : <button style={styles.respawnButton} onClick={onRespawn}>Respawn</button>
+      }
+    </div>
+  );
 }
 
 export default function App({
@@ -466,6 +528,20 @@ export default function App({
     const serverMs = selfUnit?.global_cooldown_ends_at;
     if (serverMs) setGcd(serverMs);
   }, [selfUnit?.global_cooldown_ends_at]);
+
+  const [deathTime, setDeathTime] = useState(null);
+  const prevSelfStatusRef = useRef(null);
+  useEffect(() => {
+    const status = selfUnit?.status ?? null;
+    if (status === "dead" && prevSelfStatusRef.current !== "dead") setDeathTime(Date.now());
+    if (status !== "dead" && prevSelfStatusRef.current === "dead") setDeathTime(null);
+    prevSelfStatusRef.current = status;
+  }, [selfUnit?.status]);
+
+  const handleRespawn = useCallback(() => {
+    connRef.current?.send({ type: "respawn" });
+  }, []);
+
   const targetUnit = targetId ? units[targetId] : null;
 
   return (
@@ -493,19 +569,22 @@ export default function App({
           )}
         </div>
       </div>
-      <Canvas
-        ref={canvasRef}
-        zoneSourceUrl={zoneSourceUrl}
-        units={units}
-        selfIdentifier={selfIdentifier}
-        characterTokenUrl={characterTokenUrl}
-        movementKeysRef={movementKeysRef}
-        turnKeysRef={turnKeysRef}
-        onFacingChange={handleFacingChange}
-        onSelfPosition={handleSelfPosition}
-        onUnitClick={handleTargetUnit}
-        targetId={targetId}
-      />
+      <div style={styles.canvasWrapper}>
+        <Canvas
+          ref={canvasRef}
+          zoneSourceUrl={zoneSourceUrl}
+          units={units}
+          selfIdentifier={selfIdentifier}
+          characterTokenUrl={characterTokenUrl}
+          movementKeysRef={movementKeysRef}
+          turnKeysRef={turnKeysRef}
+          onFacingChange={handleFacingChange}
+          onSelfPosition={handleSelfPosition}
+          onUnitClick={handleTargetUnit}
+          targetId={targetId}
+        />
+        <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
+      </div>
       <div style={styles.actionBar}>
         {Array.from({ length: 10 }, (_, i) => {
           const slot = i + 1;
