@@ -2,7 +2,6 @@ package instance
 
 import (
 	"math"
-	"math/rand"
 	"strings"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
@@ -14,11 +13,13 @@ const connectionTriggerDist = 1.5 // feet — how close a unit must be to a line
 // applyMapTransitions checks every non-dead unit against the connections on
 // their current map and teleports them through any ZoneLink they are touching.
 // Called after applyMovement, before resolveCollisions.
-func applyMapTransitions(state *instancestate.InstanceState, zone instanceconfig.Zone) {
+// prevState is the InstanceState from before applyMovement this tick; it is
+// used to determine which side of a connection each unit approached from.
+func applyMapTransitions(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
 	linkIndex := buildLinkIndex(zone)
 	connsByMap := buildConnectionsByMap(zone)
 
-	for _, unit := range state.Units {
+	for unitID, unit := range state.Units {
 		if unit.Status == instancestate.UnitStatusDead {
 			continue
 		}
@@ -36,17 +37,33 @@ func applyMapTransitions(state *instancestate.InstanceState, zone instanceconfig
 			if destConn == nil {
 				continue
 			}
-			traverseConnection(unit, dest.Map, *destConn, state)
+			destMap := findMap(zone, dest.Map)
+			if destMap == nil {
+				continue
+			}
+			var prevX, prevY float64
+			if prevState != nil {
+				if prevUnit, ok := prevState.Units[unitID]; ok {
+					prevX, prevY = prevUnit.Position.X, prevUnit.Position.Y
+				} else {
+					prevX, prevY = unit.Position.X, unit.Position.Y
+				}
+			} else {
+				prevX, prevY = unit.Position.X, unit.Position.Y
+			}
+			traverseConnection(unit, conn, *destMap, *destConn, prevX, prevY, state)
 			break // one transition per tick per unit
 		}
 	}
 }
 
 // traverseConnection moves unit to the destination map and connection.
+// prevX/prevY is the unit's position from the previous tick, used to determine
+// which side of fromConn the unit approached from.
 // Drops aggro on the unit and on any unit that was targeting it.
-func traverseConnection(unit *instancestate.UnitState, destMap string, destConn instanceconfig.MapConnection, state *instancestate.InstanceState) {
-	unit.MapIdentifier = destMap
-	unit.Position = spawnPosition(destConn)
+func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.MapConnection, destMap instanceconfig.Map, destConn instanceconfig.MapConnection, prevX, prevY float64, state *instancestate.InstanceState) {
+	unit.MapIdentifier = destMap.Identifier
+	unit.Position = spawnPosition(fromConn, destConn, prevX, prevY, unit.Position.Angle)
 
 	// Drop the unit's own aggro.
 	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
@@ -76,37 +93,63 @@ func traverseConnection(unit *instancestate.UnitState, destMap string, destConn 
 	}
 }
 
-// spawnPosition returns the position a unit should appear at when arriving
-// through destConn. For line connections it uses the midpoint; for point
-// connections it applies a random fuzz within FuzzRadius and FuzzAngle.
-func spawnPosition(conn instanceconfig.MapConnection) instanceconfig.Position {
-	switch conn.Type {
-	case "line":
-		mx := (conn.Start.X + conn.End.X) / 2
-		my := (conn.Start.Y + conn.End.Y) / 2
-		// Face inward: perpendicular to the line, into the map (positive Y for y=0 lines).
-		dx := conn.End.X - conn.Start.X
-		dy := conn.End.Y - conn.Start.Y
-		angle := math.Atan2(-dx, dy) * 180 / math.Pi
-		return instanceconfig.Position{X: mx, Y: my, Angle: angle}
-	case "point":
-		if conn.Position == nil {
-			return instanceconfig.Position{}
-		}
-		r := rand.Float64() * conn.FuzzRadius
-		a := (rand.Float64()*conn.FuzzAngle - conn.FuzzAngle/2) * math.Pi / 180
-		facing := conn.Position.Angle
-		return instanceconfig.Position{
-			X:     conn.Position.X + r*math.Sin(a),
-			Y:     conn.Position.Y + r*math.Cos(a),
-			Angle: facing,
-		}
-	default:
-		if conn.Position != nil {
-			return *conn.Position
+const spawnNudge = 2.0 // feet past the destination connection
+
+// spawnPosition computes where a unit emerges on destConn given that it was at
+// (prevX, prevY) last tick (before triggering) and is now touching fromConn.
+//
+// The t-position along fromConn is preserved onto destConn (first point of each
+// segment corresponds). The spawn point is then nudged spawnNudge feet to the
+// far side of the connection — opposite the side the unit approached from.
+func spawnPosition(fromConn, destConn instanceconfig.MapConnection, prevX, prevY float64, facingDeg float64) instanceconfig.Position {
+	if fromConn.Start == nil || fromConn.End == nil || destConn.Start == nil || destConn.End == nil {
+		if destConn.Position != nil {
+			return *destConn.Position
 		}
 		return instanceconfig.Position{}
 	}
+
+	// Project previous position onto fromConn to get t ∈ [0,1].
+	fDX := fromConn.End.X - fromConn.Start.X
+	fDY := fromConn.End.Y - fromConn.Start.Y
+	fLenSq := fDX*fDX + fDY*fDY
+	var t float64
+	if fLenSq > 0 {
+		t = ((prevX-fromConn.Start.X)*fDX + (prevY-fromConn.Start.Y)*fDY) / fLenSq
+		t = math.Max(0, math.Min(1, t))
+	}
+
+	// Interpolate the same t onto destConn.
+	dDX := destConn.End.X - destConn.Start.X
+	dDY := destConn.End.Y - destConn.Start.Y
+	sx := destConn.Start.X + t*dDX
+	sy := destConn.Start.Y + t*dDY
+
+	// Use the previous position's signed distance from the fromConn line to
+	// determine which side the unit approached from, then nudge to the FAR side
+	// on destConn (opposite side = past the connection into the destination map).
+	// Left perpendicular of (fDX, fDY) is (-fDY, fDX).
+	fLen := math.Sqrt(fLenSq)
+	var approachFromLeft float64
+	if fLen > 0 {
+		approachFromLeft = ((prevX-fromConn.Start.X)*(-fDY) + (prevY-fromConn.Start.Y)*fDX) / fLen
+	}
+
+	// Left perpendicular of destConn direction: nudge toward the far side.
+	destNudgeX, destNudgeY := -dDY, dDX
+	if dLen := math.Sqrt(destNudgeX*destNudgeX + destNudgeY*destNudgeY); dLen > 0 {
+		destNudgeX /= dLen
+		destNudgeY /= dLen
+	}
+	// Approach from left side → emerged on right side of fromConn → far side on
+	// dest is the right side (negate left perp). Approach from right → left side.
+	if approachFromLeft >= 0 {
+		destNudgeX, destNudgeY = -destNudgeX, -destNudgeY
+	}
+	sx += destNudgeX * spawnNudge
+	sy += destNudgeY * spawnNudge
+
+	return instanceconfig.Position{X: sx, Y: sy, Angle: facingDeg}
 }
 
 // touchingConnection reports whether unit is close enough to conn to trigger it.
@@ -169,6 +212,16 @@ func buildConnectionsByMap(zone instanceconfig.Zone) map[string][]instanceconfig
 		m[mp.Identifier] = mp.Connections
 	}
 	return m
+}
+
+// findMap returns the Map with the given identifier, or nil.
+func findMap(zone instanceconfig.Zone, mapID string) *instanceconfig.Map {
+	for i := range zone.Maps {
+		if zone.Maps[i].Identifier == mapID {
+			return &zone.Maps[i]
+		}
+	}
+	return nil
 }
 
 // findConnection returns the MapConnection with the given identifier on the named map, or nil.

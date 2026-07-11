@@ -89,7 +89,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			inst.drainPlayerSpawns(ctx, state)
 			inst.commandProcessor.Process(inst.drainCommands(), state)
 			applyMovement(state)
-			applyMapTransitions(state, inst.ZoneConfig)
+			applyMapTransitions(state, prevState, inst.ZoneConfig)
 			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())
 			resolveCollisions(state, inst.ZoneConfig)
 			checksum := state.Checksum()
