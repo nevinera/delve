@@ -45,6 +45,17 @@ const styles = {
     border: "1px solid #6a2a2a",
     padding: 8,
   },
+  deadBadge: {
+    position: "absolute",
+    top: 6,
+    right: 8,
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#cc2222",
+    letterSpacing: 2,
+    textShadow: "0 0 6px #000, 0 1px 4px #000",
+    pointerEvents: "none",
+  },
   actionBar: {
     flexShrink: 0,
     display: "flex",
@@ -468,12 +479,14 @@ export default function App({
               <HealthBar current={selfUnit.health} max={selfUnit.max_health} />
             </>
           )}
+          {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
         <div style={styles.targetFrame}>
           {targetUnit ? (
             <>
               <strong>{formatUnitName(targetUnit.zone_unit_identifier)}</strong>
               <HealthBar current={targetUnit.health} max={targetUnit.max_health} />
+              {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
             </>
           ) : (
             <span style={{ color: "#666" }}>No target</span>
