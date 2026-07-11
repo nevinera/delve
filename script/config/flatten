@@ -1,0 +1,50 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Resolves $ref references in a zone JSON file, producing a single self-contained
+# "full" JSON file alongside the input.
+#
+# Usage:
+#   script/config/flatten <zone.json>
+#
+# Output is written to <zone>.full.json in the same directory.
+# $ref values are treated as paths relative to the file containing the reference.
+# Resolution is recursive, so referenced files may themselves contain $ref values.
+
+require "json"
+require "pathname"
+
+def resolve(value, base_dir, output_dir)
+  case value
+  when Hash
+    if value.key?("$ref")
+      ref_path = (base_dir / value["$ref"]).cleanpath
+      abort "#{ref_path}: file not found (referenced from #{base_dir})" unless ref_path.exist?
+      resolve(JSON.parse(File.read(ref_path)), ref_path.dirname, output_dir)
+    else
+      value.transform_values { |v| resolve(v, base_dir, output_dir) }
+    end
+  when Array
+    value.map { |v| resolve(v, base_dir, output_dir) }
+  when String
+    # Rebase relative paths from the file they came from to the output file's dir.
+    if value.start_with?("./", "../")
+      (base_dir / value).cleanpath.relative_path_from(output_dir).to_s
+    else
+      value
+    end
+  else
+    value
+  end
+end
+
+abort "Usage: script/config/flatten <zone.json>" unless ARGV.size == 1
+
+input_path = Pathname.new(ARGV[0]).expand_path
+abort "File not found: #{input_path}" unless input_path.exist?
+
+output_path = input_path.sub_ext(".full.json")
+resolved = resolve(JSON.parse(File.read(input_path)), input_path.dirname, output_path.dirname)
+
+File.write(output_path, JSON.pretty_generate(resolved) + "\n")
+warn "Written to #{output_path}"
