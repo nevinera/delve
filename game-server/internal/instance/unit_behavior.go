@@ -125,12 +125,12 @@ func applyUnitBehavior(
 
 	case instancestate.UnitStatusEngaged:
 		if unit.Target == nil {
-			dropAggro(unit)
+			startLeash(unit)
 			return
 		}
 		target, ok := state.Units[*unit.Target]
 		if !ok || target.Status == instancestate.UnitStatusDead {
-			dropAggro(unit)
+			startLeash(unit)
 			return
 		}
 		if target.MapIdentifier == unit.MapIdentifier {
@@ -143,6 +143,30 @@ func applyUnitBehavior(
 			// we reach the connection and traverse it on a future tick.
 			chaseLastSeen(unit, speed, dt)
 		}
+
+	case instancestate.UnitStatusLeashing:
+		if unit.MapIdentifier != unit.Behavior.LeashMapID {
+			unit.MapIdentifier = unit.Behavior.LeashMapID
+			unit.Position.X = unit.Behavior.LeashX
+			unit.Position.Y = unit.Behavior.LeashY
+			unit.Status = instancestate.UnitStatusIdle
+			unit.Behavior.MovementPhase = ""
+			return
+		}
+		dx := unit.Behavior.LeashX - unit.Position.X
+		dy := unit.Behavior.LeashY - unit.Position.Y
+		dist := math.Sqrt(dx*dx + dy*dy)
+		if dist < 0.5 {
+			unit.Position.X = unit.Behavior.LeashX
+			unit.Position.Y = unit.Behavior.LeashY
+			unit.Status = instancestate.UnitStatusIdle
+			unit.Behavior.MovementPhase = ""
+			return
+		}
+		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, unit.Behavior.LeashX, unit.Behavior.LeashY)
+		move := math.Min(speed*dt, dist)
+		unit.Position.X += (dx / dist) * move
+		unit.Position.Y += (dy / dist) * move
 
 	case instancestate.UnitStatusDead:
 		// Nothing.
@@ -245,18 +269,32 @@ func chaseLastSeen(unit *instancestate.UnitState, speed, dt float64) {
 }
 
 // engageUnit gives unit a target and transitions it to the engaged status.
+// Records the current position as the leash point on first engagement (idle→engaged).
 func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
+	if unit.Status == instancestate.UnitStatusIdle {
+		unit.Behavior.LeashX = unit.Position.X
+		unit.Behavior.LeashY = unit.Position.Y
+		unit.Behavior.LeashMapID = unit.MapIdentifier
+	}
 	id := targetID
 	unit.Target = &id
 	unit.Status = instancestate.UnitStatusEngaged
 }
 
-// dropAggro clears a unit's target, returns it to idle, and resets its
-// movement phase so patrol/wander re-initializes on the next tick.
-func dropAggro(unit *instancestate.UnitState) {
+// startLeash clears a unit's target and begins leashing it back to the position
+// where it engaged. If the unit is on a different map than the leash point, it
+// is snapped back immediately and returned to idle.
+func startLeash(unit *instancestate.UnitState) {
 	unit.Target = nil
-	unit.Status = instancestate.UnitStatusIdle
-	unit.Behavior.MovementPhase = ""
+	if unit.MapIdentifier != unit.Behavior.LeashMapID {
+		unit.MapIdentifier = unit.Behavior.LeashMapID
+		unit.Position.X = unit.Behavior.LeashX
+		unit.Position.Y = unit.Behavior.LeashY
+		unit.Status = instancestate.UnitStatusIdle
+		unit.Behavior.MovementPhase = ""
+		return
+	}
+	unit.Status = instancestate.UnitStatusLeashing
 }
 
 // nearestPlayerInRadius returns the UUID of the closest player within radius

@@ -54,8 +54,12 @@ func addPlayer(s *instancestate.InstanceState, mapID string, x, y float64) (uuid
 	return id, p
 }
 
-// manualEngage puts a unit into the engaged state targeting a given ID.
+// manualEngage puts a unit into the engaged state targeting a given ID,
+// recording the current position as the leash point as engageUnit does.
 func manualEngage(unit *instancestate.UnitState, targetID uuid.UUID) {
+	unit.Behavior.LeashX = unit.Position.X
+	unit.Behavior.LeashY = unit.Position.Y
+	unit.Behavior.LeashMapID = unit.MapIdentifier
 	id := targetID
 	unit.Target = &id
 	unit.Status = instancestate.UnitStatusEngaged
@@ -238,7 +242,7 @@ func TestUnitBehavior_Chase_StopsAtMeleeRange(t *testing.T) {
 	assert.InDelta(t, 0.0, u.Position.Y, 1e-9)
 }
 
-func TestUnitBehavior_Chase_DropsAggroOnDeadTarget(t *testing.T) {
+func TestUnitBehavior_Chase_StartsLeashingOnDeadTarget(t *testing.T) {
 	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
 	playerID, p := addPlayer(s, "map1", 0, 20)
@@ -247,18 +251,18 @@ func TestUnitBehavior_Chase_DropsAggroOnDeadTarget(t *testing.T) {
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
 	assert.Nil(t, u.Target)
 }
 
-func TestUnitBehavior_Chase_DropsAggroOnMissingTarget(t *testing.T) {
+func TestUnitBehavior_Chase_StartsLeashingOnMissingTarget(t *testing.T) {
 	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
 	manualEngage(u, uuid.New()) // target not in state
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
 	assert.Nil(t, u.Target)
 }
 
@@ -437,4 +441,85 @@ func TestUnitBehavior_Chase_ResumesDirectChaseWhenTargetReturns(t *testing.T) {
 	assert.Less(t, u.Position.Y, 8.0)
 	assert.InDelta(t, 3.0, u.Behavior.LastSeenY, 1e-9) // last seen updated to player's current pos
 	_ = p
+}
+
+// ---------------------------------------------------------------------------
+// leash behavior
+// ---------------------------------------------------------------------------
+
+// manualLeash puts a unit into the leashing state with a given leash point.
+func manualLeash(unit *instancestate.UnitState, leashX, leashY float64) {
+	unit.Status = instancestate.UnitStatusLeashing
+	unit.Target = nil
+	unit.Behavior.LeashX = leashX
+	unit.Behavior.LeashY = leashY
+	unit.Behavior.LeashMapID = unit.MapIdentifier
+}
+
+func TestUnitBehavior_Leash_MovesBackToLeashPoint(t *testing.T) {
+	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
+	u, s := npcState("g1", pos(0, 20)) // NPC is 20ft north of home
+	manualLeash(u, 0, 0)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	// Should have moved 1ft south (speed=10, dt=0.1) toward (0,0).
+	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
+	assert.InDelta(t, 19.0, u.Position.Y, 1e-9)
+	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
+}
+
+func TestUnitBehavior_Leash_ArrivesAndGoesIdle(t *testing.T) {
+	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
+	u, s := npcState("g1", pos(0, 0.3)) // close enough to snap (< 0.5ft)
+	manualLeash(u, 0, 0)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
+	assert.InDelta(t, 0.0, u.Position.Y, 1e-9)
+}
+
+func TestUnitBehavior_Leash_DoesNotReaggro(t *testing.T) {
+	// A player within aggro range should not re-engage a leashing unit.
+	zone := behaviorZone(20.0, instanceconfig.UnitMovement{Type: "still"})
+	u, s := npcState("g1", pos(0, 20))
+	manualLeash(u, 0, 0)
+	addPlayer(s, "map1", 0, 22) // within 20ft aggro radius of current position
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
+}
+
+func TestUnitBehavior_Leash_EngageRecordsLeashPoint(t *testing.T) {
+	// engageUnit should record the unit's position as the leash point.
+	zone := behaviorZone(20.0, instanceconfig.UnitMovement{Type: "still"})
+	u, s := npcState("g1", pos(5, 10))
+	addPlayer(s, "map1", 5, 15) // within range
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	require.Equal(t, instancestate.UnitStatusEngaged, u.Status)
+	assert.InDelta(t, 5.0, u.Behavior.LeashX, 1e-9)
+	assert.InDelta(t, 10.0, u.Behavior.LeashY, 1e-9)
+	assert.Equal(t, "map1", u.Behavior.LeashMapID)
+}
+
+func TestUnitBehavior_Leash_CrossMapSnapsBack(t *testing.T) {
+	// A unit that chased a player to another map should snap back immediately.
+	zone := twoMapZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.MapIdentifier = "map2" // NPC got dragged to map2
+	u.Position = pos(50, 50)
+	manualLeash(u, 0, 0)
+	u.Behavior.LeashMapID = "map1" // home is map1
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+	assert.Equal(t, "map1", u.MapIdentifier)
+	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
+	assert.InDelta(t, 0.0, u.Position.Y, 1e-9)
 }

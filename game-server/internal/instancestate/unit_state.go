@@ -14,6 +14,7 @@ type UnitStatus string
 const (
 	UnitStatusIdle     UnitStatus = "idle"
 	UnitStatusEngaged  UnitStatus = "engaged"
+	UnitStatusLeashing UnitStatus = "leashing"
 	UnitStatusDead     UnitStatus = "dead"
 )
 
@@ -55,6 +56,12 @@ type BehaviorState struct {
 	// toward the connection the target crossed when they leave this map.
 	LastSeenX float64
 	LastSeenY float64
+
+	// position and map recorded when the unit first engaged. Used to leash back
+	// after the target dies or disappears.
+	LeashX   float64
+	LeashY   float64
+	LeashMapID string
 
 	// phased tactics
 	PhaseIndex   int
