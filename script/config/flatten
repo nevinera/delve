@@ -14,25 +14,28 @@
 require "json"
 require "pathname"
 
+def resolve_ref(ref_value, base_dir, output_dir)
+  ref_path = (base_dir / ref_value).cleanpath
+  abort "#{ref_path}: file not found (referenced from #{base_dir})" unless ref_path.exist?
+  resolve(JSON.parse(File.read(ref_path)), ref_path.dirname, output_dir)
+end
+
+def rebase_path(value, base_dir, output_dir)
+  return value unless value.start_with?("./", "../")
+
+  (base_dir / value).cleanpath.relative_path_from(output_dir).to_s
+end
+
 def resolve(value, base_dir, output_dir)
   case value
   when Hash
-    if value.key?("$ref")
-      ref_path = (base_dir / value["$ref"]).cleanpath
-      abort "#{ref_path}: file not found (referenced from #{base_dir})" unless ref_path.exist?
-      resolve(JSON.parse(File.read(ref_path)), ref_path.dirname, output_dir)
-    else
-      value.transform_values { |v| resolve(v, base_dir, output_dir) }
-    end
+    return resolve_ref(value["$ref"], base_dir, output_dir) if value.key?("$ref")
+
+    value.transform_values { |v| resolve(v, base_dir, output_dir) }
   when Array
     value.map { |v| resolve(v, base_dir, output_dir) }
   when String
-    # Rebase relative paths from the file they came from to the output file's dir.
-    if value.start_with?("./", "../")
-      (base_dir / value).cleanpath.relative_path_from(output_dir).to_s
-    else
-      value
-    end
+    rebase_path(value, base_dir, output_dir)
   else
     value
   end
