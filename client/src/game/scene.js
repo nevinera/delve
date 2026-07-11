@@ -567,8 +567,8 @@ export class SceneManager {
         }
         const dims = this._dimsByMap.get(this._selfMapIdentifier);
         if (dims) {
-          this._selfMapX = Math.max(TOKEN_RADIUS, Math.min(dims.width - TOKEN_RADIUS, this._selfMapX));
-          this._selfMapY = Math.max(TOKEN_RADIUS, Math.min(dims.height - TOKEN_RADIUS, this._selfMapY));
+          this._selfMapX = Math.max(0, Math.min(dims.width, this._selfMapX));
+          this._selfMapY = Math.max(0, Math.min(dims.height, this._selfMapY));
         }
 
         // Send position to server ~3-4x per server tick (every ~30ms).

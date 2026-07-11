@@ -225,14 +225,14 @@ func boundedZone(width, height float64) instanceconfig.Zone {
 func TestResolveCollisions_MapEdge_ClampsX(t *testing.T) {
 	u, s := unitOnMap(-1, 50, 2.2)
 	instance.ResolveCollisionsForTest(s, boundedZone(100, 100))
-	assert.InDelta(t, 2.2, u.Position.X, 1e-9)
+	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
 	assert.InDelta(t, 50.0, u.Position.Y, 1e-9)
 }
 
 func TestResolveCollisions_MapEdge_ClampsXMax(t *testing.T) {
-	u, s := unitOnMap(99, 50, 2.2)
+	u, s := unitOnMap(101, 50, 2.2)
 	instance.ResolveCollisionsForTest(s, boundedZone(100, 100))
-	assert.InDelta(t, 97.8, u.Position.X, 1e-9)
+	assert.InDelta(t, 100.0, u.Position.X, 1e-9)
 	assert.InDelta(t, 50.0, u.Position.Y, 1e-9)
 }
 
@@ -240,7 +240,7 @@ func TestResolveCollisions_MapEdge_ClampsY(t *testing.T) {
 	u, s := unitOnMap(50, -1, 2.2)
 	instance.ResolveCollisionsForTest(s, boundedZone(100, 100))
 	assert.InDelta(t, 50.0, u.Position.X, 1e-9)
-	assert.InDelta(t, 2.2, u.Position.Y, 1e-9)
+	assert.InDelta(t, 0.0, u.Position.Y, 1e-9)
 }
 
 func TestResolveCollisions_MapEdge_NoBoundsWhenDimsZero(t *testing.T) {

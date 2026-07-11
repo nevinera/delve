@@ -40,9 +40,8 @@ func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Z
 			}
 		}
 		if d := dimsByMap[unit.MapIdentifier]; d.Width > 0 {
-			r := unit.Radius
-			x = math.Max(r, math.Min(d.Width-r, x))
-			y = math.Max(r, math.Min(d.Height-r, y))
+			x = math.Max(0, math.Min(d.Width, x))
+			y = math.Max(0, math.Min(d.Height, y))
 		}
 		unit.Position.X, unit.Position.Y = x, y
 	}
