@@ -155,5 +155,11 @@ func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance,
 				Payload:    command.UsePowerPayload{Power: powers[*msg.Slot]},
 			})
 		}
+	case "respawn":
+		inst.SendCommand(command.Command{
+			UnitID:     unitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.RespawnPayload{},
+		})
 	}
 }

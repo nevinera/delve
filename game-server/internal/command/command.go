@@ -53,6 +53,11 @@ type UsePowerPayload struct {
 
 func (UsePowerPayload) CommandType() string { return "use_power" }
 
+// RespawnPayload requests that the dead player unit be respawned at their spawn point.
+type RespawnPayload struct{}
+
+func (RespawnPayload) CommandType() string { return "respawn" }
+
 // Command is a single client-initiated action, tagged with the unit it
 // targets and the time it was received by the server.
 type Command struct {

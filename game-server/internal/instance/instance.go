@@ -97,6 +97,7 @@ func NewInstance(
 	inst.commandProcessor.Register(command.MoveHandler{})
 	inst.commandProcessor.Register(command.TargetHandler{})
 	inst.commandProcessor.Register(command.UsePowerHandler{})
+	inst.commandProcessor.Register(command.RespawnHandler{})
 	return inst
 }
 
