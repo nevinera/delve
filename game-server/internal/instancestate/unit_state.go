@@ -50,6 +50,12 @@ type BehaviorState struct {
 	TurnStartAngle   float64 // degrees at turn start
 	TurnEndAngle     float64 // degrees at turn end
 
+	// last known position of the chase target, in this unit's map coordinates.
+	// Updated each tick the target is visible (same map). Used to navigate
+	// toward the connection the target crossed when they leave this map.
+	LastSeenX float64
+	LastSeenY float64
+
 	// phased tactics
 	PhaseIndex   int
 	PhaseElapsed float64 // seconds elapsed in the current phase

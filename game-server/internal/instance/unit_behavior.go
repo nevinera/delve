@@ -133,8 +133,16 @@ func applyUnitBehavior(
 			dropAggro(unit)
 			return
 		}
-		chaseTarget(unit, target, speed, dt)
-		tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events)
+		if target.MapIdentifier == unit.MapIdentifier {
+			unit.Behavior.LastSeenX = target.Position.X
+			unit.Behavior.LastSeenY = target.Position.Y
+			chaseTarget(unit, target, speed, dt)
+			tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events)
+		} else {
+			// Target crossed to another map. Move toward last known position so
+			// we reach the connection and traverse it on a future tick.
+			chaseLastSeen(unit, speed, dt)
+		}
 
 	case instancestate.UnitStatusDead:
 		// Nothing.
@@ -220,6 +228,22 @@ func chaseTarget(unit, target *instancestate.UnitState, speed, dt float64) {
 	unit.Position.Y += (dy / dist) * move
 }
 
+// chaseLastSeen moves unit toward the last recorded position of its target.
+// Used when the target has crossed to another map; no stop distance is applied
+// so the unit walks all the way to the connection and triggers a map transition.
+func chaseLastSeen(unit *instancestate.UnitState, speed, dt float64) {
+	dx := unit.Behavior.LastSeenX - unit.Position.X
+	dy := unit.Behavior.LastSeenY - unit.Position.Y
+	dist := math.Sqrt(dx*dx + dy*dy)
+	if dist < 0.01 {
+		return
+	}
+	unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY)
+	move := math.Min(speed*dt, dist)
+	unit.Position.X += (dx / dist) * move
+	unit.Position.Y += (dy / dist) * move
+}
+
 // engageUnit gives unit a target and transitions it to the engaged status.
 func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
 	id := targetID
@@ -263,21 +287,22 @@ const (
 // preventing clumping when multiple units chase the same target.
 func applyNPCSeparation(state *instancestate.InstanceState, dt float64) {
 	type entry struct {
-		unit *instancestate.UnitState
-		x, y float64
+		unit      *instancestate.UnitState
+		x, y      float64
+		mapID     string
 	}
 	var npcs []entry
 	for _, u := range state.Units {
 		if strings.HasPrefix(u.ZoneUnitIdentifier, "player:") || u.Status == instancestate.UnitStatusDead {
 			continue
 		}
-		npcs = append(npcs, entry{u, u.Position.X, u.Position.Y})
+		npcs = append(npcs, entry{u, u.Position.X, u.Position.Y, u.MapIdentifier})
 	}
 
 	for i := range npcs {
 		var fx, fy float64
 		for j := range npcs {
-			if i == j {
+			if i == j || npcs[i].mapID != npcs[j].mapID {
 				continue
 			}
 			dx := npcs[i].x - npcs[j].x

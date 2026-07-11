@@ -65,32 +65,13 @@ func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.M
 	unit.MapIdentifier = destMap.Identifier
 	unit.Position = spawnPosition(fromConn, destConn, prevX, prevY, unit.Position.Angle)
 
-	// Drop the unit's own aggro.
-	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
+	// Reset idle NPCs that wander through a connection; keep engaged NPCs chasing.
+	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") && unit.Status != instancestate.UnitStatusEngaged {
 		unit.Target = nil
 		unit.Status = instancestate.UnitStatusIdle
 		unit.Behavior.MovementPhase = ""
 	}
 
-	// Drop aggro from any NPC that was targeting this unit.
-	for _, other := range state.Units {
-		if strings.HasPrefix(other.ZoneUnitIdentifier, "player:") {
-			continue
-		}
-		if other.Target != nil {
-			for id, u := range state.Units {
-				if u == unit {
-					tid := id
-					if *other.Target == tid {
-						other.Target = nil
-						other.Status = instancestate.UnitStatusIdle
-						other.Behavior.MovementPhase = ""
-					}
-					break
-				}
-			}
-		}
-	}
 }
 
 const spawnNudge = 2.0 // feet past the destination connection

@@ -185,26 +185,53 @@ func TestMapTransition_DeadUnitNotTransitioned(t *testing.T) {
 	assert.Equal(t, "map_a", p.MapIdentifier)
 }
 
-func TestMapTransition_NPCAggroDroppedOnTransition(t *testing.T) {
+func TestMapTransition_EngagedNPCKeepsAggroOnTransition(t *testing.T) {
+	// An NPC that is actively chasing a player should keep its target after
+	// crossing a connection so it can resume chasing on the other side.
 	zone := transitionZone()
 	s := emptyInstanceState()
 	playerID, p := playerOnMap(s, "map_a", 50, 99)
 
-	// NPC on the same map targeting the player.
 	npcID := uuid.New()
 	s.Units[npcID] = &instancestate.UnitState{
 		ZoneUnitIdentifier: "goblin_1",
 		MapIdentifier:      "map_a",
-		Position:           instanceconfig.Position{X: 50, Y: 90},
+		Position:           instanceconfig.Position{X: 50, Y: 99},
 		Status:             instancestate.UnitStatusEngaged,
 		Target:             &playerID,
 	}
-
 	prev := prevStateWithUnit(playerID, "map_a", 50, 97)
 
 	instance.ApplyMapTransitionsForTest(s, prev, zone)
 
 	require.Equal(t, "map_b", p.MapIdentifier)
+	require.Equal(t, "map_b", s.Units[npcID].MapIdentifier)
+	assert.NotNil(t, s.Units[npcID].Target)
+	assert.Equal(t, instancestate.UnitStatusEngaged, s.Units[npcID].Status)
+}
+
+func TestMapTransition_IdleNPCLosesAggroOnTransition(t *testing.T) {
+	// An idle NPC that wanders through a connection should be reset to idle
+	// with no target rather than carrying stale state to the new map.
+	zone := transitionZone()
+	s := emptyInstanceState()
+
+	npcID := uuid.New()
+	targetID := uuid.New()
+	s.Units[npcID] = &instancestate.UnitState{
+		ZoneUnitIdentifier: "goblin_1",
+		MapIdentifier:      "map_a",
+		Position:           instanceconfig.Position{X: 50, Y: 99},
+		Status:             instancestate.UnitStatusIdle,
+		Target:             &targetID,
+	}
+	prev := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{
+		npcID: {MapIdentifier: "map_a", Position: instanceconfig.Position{X: 50, Y: 97}},
+	}}
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	require.Equal(t, "map_b", s.Units[npcID].MapIdentifier)
 	assert.Nil(t, s.Units[npcID].Target)
 	assert.Equal(t, instancestate.UnitStatusIdle, s.Units[npcID].Status)
 }
