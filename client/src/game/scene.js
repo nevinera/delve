@@ -447,6 +447,17 @@ export class SceneManager {
     );
     const currentMap = selfUnit?.map_identifier;
 
+    // Detect map change before the unit loop so _toWorld uses the correct
+    // coordinate transform for every unit on the new map this tick.
+    if (selfUnit && selfUnit.map_identifier !== this._selfMapIdentifier) {
+      for (const [mid, group] of this._mapGroups) {
+        group.visible = mid === selfUnit.map_identifier;
+      }
+      this._selfMapIdentifier = selfUnit.map_identifier;
+      this._selfMapX = selfUnit.position.x;
+      this._selfMapY = selfUnit.position.y;
+    }
+
     const seen = new Set();
     for (const [id, unit] of Object.entries(units)) {
       if (unit.map_identifier !== currentMap) continue;
@@ -458,14 +469,6 @@ export class SceneManager {
       if (isSelf) {
         this._serverMapX = unit.position.x;
         this._serverMapY = unit.position.y;
-        if (unit.map_identifier !== this._selfMapIdentifier) {
-          for (const [mid, group] of this._mapGroups) {
-            group.visible = mid === unit.map_identifier;
-          }
-          this._selfMapIdentifier = unit.map_identifier;
-          this._selfMapX = unit.position.x;
-          this._selfMapY = unit.position.y;
-        }
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
@@ -481,6 +484,11 @@ export class SceneManager {
           entry.targetX = wx;
           entry.targetZ = wz;
           entry.targetRotY = angle;
+          if (entry.lastRenderedMap !== unit.map_identifier) {
+            entry.group.position.set(wx, entry.group.position.y, wz);
+            entry.group.rotation.y = angle;
+            entry.lastRenderedMap = unit.map_identifier;
+          }
         }
         if (!entry.dead && unit.status === "dead") {
           markTokenDead(entry.group, entry.radius);
@@ -498,7 +506,7 @@ export class SceneManager {
         this._scene.add(group);
         const dead = unit.status === "dead";
         if (dead) markTokenDead(group, radius);
-        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null, radius, dead });
+        this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null, radius, dead, lastRenderedMap: unit.map_identifier });
         if (isSelf) {
           this._selfToken = group;
           this._camFacing = unit.position.angle * DEG;
