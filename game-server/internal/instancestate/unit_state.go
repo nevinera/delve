@@ -77,6 +77,7 @@ type UnitState struct {
 	Status                 UnitStatus
 	Target                 *uuid.UUID
 	GlobalCooldownEndsAt   time.Time
+	PowerCooldowns         map[string]time.Time // keyed by power name; zero/missing means ready
 	ActiveStatusEffects    []ActiveStatusEffect
 	Behavior            BehaviorState
 	MovementIntent      MovementIntent

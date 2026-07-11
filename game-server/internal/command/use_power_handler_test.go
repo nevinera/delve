@@ -187,6 +187,100 @@ func TestUsePowerHandler_NonFrontalIgnoresFacing(t *testing.T) {
 	assert.Less(t, state.Units[targetID].Health, before)
 }
 
+func recoverPower() command.UsePowerPayload {
+	amount := instanceconfig.ValueRange{20.0, 20.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			Name:           "Recover",
+			GlobalCooldown: 1.5,
+			Cooldown:       10.0,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "heal", Affects: "self", Amount: &amount},
+			},
+		},
+	}
+}
+
+func stateWithInjuredPlayer(playerID uuid.UUID) *instancestate.InstanceState {
+	state := stateWithUnit(playerID)
+	state.Units[playerID].Health = 40.0
+	state.Units[playerID].MaxHealth = 100.0
+	return state
+}
+
+func TestUsePowerHandler_HealsSelf(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithInjuredPlayer(playerID)
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), state))
+
+	assert.Equal(t, 60.0, state.Units[playerID].Health)
+}
+
+func TestUsePowerHandler_HealDoesNotExceedMaxHealth(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithInjuredPlayer(playerID)
+	state.Units[playerID].Health = 90.0 // 20 heal would overshoot 100
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), state))
+
+	assert.Equal(t, 100.0, state.Units[playerID].Health)
+}
+
+func TestUsePowerHandler_HealWorksWithoutTarget(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithInjuredPlayer(playerID)
+	// No target set — self-heal should still fire.
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), state))
+
+	assert.Greater(t, state.Units[playerID].Health, 40.0)
+}
+
+func TestUsePowerHandler_HealSetsGCD(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithInjuredPlayer(playerID)
+	before := time.Now()
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), state))
+
+	assert.True(t, state.Units[playerID].GlobalCooldownEndsAt.After(before.Add(time.Second)))
+}
+
+func TestUsePowerHandler_HealSetsPowerCooldown(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithInjuredPlayer(playerID)
+	before := time.Now()
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), state))
+
+	cd := state.Units[playerID].PowerCooldowns["Recover"]
+	assert.True(t, cd.After(before.Add(9*time.Second)))
+}
+
+func TestUsePowerHandler_PowerCooldownBlocksRepeatUse(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithInjuredPlayer(playerID)
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), state))
+	// Manually expire GCD so only the per-power cooldown is blocking.
+	state.Units[playerID].GlobalCooldownEndsAt = time.Time{}
+	afterFirst := state.Units[playerID].Health
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), state))
+
+	assert.Equal(t, afterFirst, state.Units[playerID].Health)
+}
+
+func TestUsePowerHandler_NoCooldownFieldDoesNotSetPowerCooldown(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.Empty(t, state.Units[playerID].PowerCooldowns)
+}
+
 func TestUsePowerHandler_ClearsTargetOnDeath(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)

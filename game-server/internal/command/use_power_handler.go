@@ -25,56 +25,93 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 	if !ok {
 		return nil
 	}
-	if time.Now().Before(unit.GlobalCooldownEndsAt) {
+	now := time.Now()
+	if now.Before(unit.GlobalCooldownEndsAt) {
 		return nil
 	}
-	if unit.Target == nil {
-		return nil
-	}
-	target, ok := next.Units[*unit.Target]
-	if !ok || target.Status == instancestate.UnitStatusDead {
-		return nil
+	if p.Power.Cooldown > 0 {
+		if cd, ok := unit.PowerCooldowns[p.Power.Name]; ok && now.Before(cd) {
+			return nil
+		}
 	}
 
-	if p.Power.IsFrontal() {
-		dx := target.Position.X - unit.Position.X
-		dy := target.Position.Y - unit.Position.Y
-		toTarget := math.Atan2(dx, dy) * 180 / math.Pi
-		diff := toTarget - unit.Position.Angle
-		for diff > 180 { diff -= 360 }
-		for diff < -180 { diff += 360 }
-		if math.Abs(diff) > 75 {
+	// Only validate and look up the target when at least one effect needs one.
+	needsTarget := false
+	for _, eff := range p.Power.Effects {
+		if eff.Affects != "self" {
+			needsTarget = true
+			break
+		}
+	}
+
+	var target *instancestate.UnitState
+	if needsTarget {
+		if unit.Target == nil {
 			return nil
+		}
+		t, ok := next.Units[*unit.Target]
+		if !ok || t.Status == instancestate.UnitStatusDead {
+			return nil
+		}
+		target = t
+
+		if p.Power.IsFrontal() {
+			dx := target.Position.X - unit.Position.X
+			dy := target.Position.Y - unit.Position.Y
+			toTarget := math.Atan2(dx, dy) * 180 / math.Pi
+			diff := toTarget - unit.Position.Angle
+			for diff > 180 { diff -= 360 }
+			for diff < -180 { diff += 360 }
+			if math.Abs(diff) > 75 {
+				return nil
+			}
 		}
 	}
 
 	for _, effect := range p.Power.Effects {
-		if effect.Type != "harm" {
-			continue
-		}
-		maxRange := 5.0 // melee default
-		if effect.Range != nil {
-			maxRange = effect.Range.Max()
-		}
-		maxRange += unit.Radius + target.Radius
-		dx := target.Position.X - unit.Position.X
-		dy := target.Position.Y - unit.Position.Y
-		if math.Sqrt(dx*dx+dy*dy) > maxRange {
-			return nil
-		}
-		if effect.Amount != nil {
-			lo, hi := effect.Amount.Min(), effect.Amount.Max()
-			target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
-			if target.Health < 0 {
-				target.Health = 0
+		switch effect.Type {
+		case "harm":
+			if target == nil {
+				continue
 			}
-			if target.Health == 0 {
-				target.Status = instancestate.UnitStatusDead
-				target.Target = nil
+			maxRange := 5.0
+			if effect.Range != nil {
+				maxRange = effect.Range.Max()
+			}
+			maxRange += unit.Radius + target.Radius
+			dx := target.Position.X - unit.Position.X
+			dy := target.Position.Y - unit.Position.Y
+			if math.Sqrt(dx*dx+dy*dy) > maxRange {
+				return nil
+			}
+			if effect.Amount != nil {
+				lo, hi := effect.Amount.Min(), effect.Amount.Max()
+				target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
+				if target.Health < 0 {
+					target.Health = 0
+				}
+				if target.Health == 0 {
+					target.Status = instancestate.UnitStatusDead
+					target.Target = nil
+				}
+			}
+		case "heal":
+			if effect.Affects == "self" && effect.Amount != nil {
+				lo, hi := effect.Amount.Min(), effect.Amount.Max()
+				unit.Health += math.Round(lo + rand.Float64()*(hi-lo))
+				if unit.Health > unit.MaxHealth {
+					unit.Health = unit.MaxHealth
+				}
 			}
 		}
 	}
 
-	unit.GlobalCooldownEndsAt = time.Now().Add(time.Duration(p.Power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(p.Power.GlobalCooldown * float64(time.Second)))
+	if p.Power.Cooldown > 0 {
+		if unit.PowerCooldowns == nil {
+			unit.PowerCooldowns = make(map[string]time.Time)
+		}
+		unit.PowerCooldowns[p.Power.Name] = now.Add(time.Duration(p.Power.Cooldown * float64(time.Second)))
+	}
 	return nil
 }

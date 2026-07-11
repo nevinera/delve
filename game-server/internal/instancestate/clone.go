@@ -2,6 +2,7 @@ package instancestate
 
 import (
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -24,6 +25,12 @@ func (u *UnitState) clone() *UnitState {
 		c.Target = &t
 	}
 	c.ActiveStatusEffects = slices.Clone(u.ActiveStatusEffects)
+	if u.PowerCooldowns != nil {
+		c.PowerCooldowns = make(map[string]time.Time, len(u.PowerCooldowns))
+		for k, v := range u.PowerCooldowns {
+			c.PowerCooldowns[k] = v
+		}
+	}
 
 	return &c
 }

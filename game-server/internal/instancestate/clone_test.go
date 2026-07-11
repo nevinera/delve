@@ -98,6 +98,26 @@ func TestClone_MutatingTargetDoesNotAffectOriginal(t *testing.T) {
 	}
 }
 
+func TestClone_MutatingPowerCooldownsDoesNotAffectOriginal(t *testing.T) {
+	state, err := instancestate.NewInstanceState(zoneWith(
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+	))
+	require.NoError(t, err)
+	exp := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, u := range state.Units {
+		u.PowerCooldowns = map[string]time.Time{"Stab": exp}
+	}
+
+	clone := state.Clone()
+	for _, u := range clone.Units {
+		u.PowerCooldowns["Stab"] = time.Time{}
+	}
+
+	for _, u := range state.Units {
+		assert.Equal(t, exp, u.PowerCooldowns["Stab"])
+	}
+}
+
 func TestClone_NilTargetCopiedAsNil(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
 		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
