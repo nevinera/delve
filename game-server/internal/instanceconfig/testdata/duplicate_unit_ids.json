@@ -1,0 +1,299 @@
+{
+  "name": "Goblin Cave",
+  "description": "A damp cave carved out by generations of goblin raiders.",
+  "private": true,
+  "unitTypes": {
+    "goblin_raider": {
+      "name": "Goblin Raider",
+      "description": "A scrappy goblin that slashes anything within reach.",
+      "tokenImageUrl": [
+        "../../assets/tokens/goblin-green.webp"
+      ],
+      "tokenRadius": 1.5,
+      "speedFactor": 1.2,
+      "maxHP": 20,
+      "resource": {
+        "name": "energy",
+        "color": "AADD00",
+        "max": 100.0,
+        "defaultValue": 100.0,
+        "returnRate": 10.0,
+        "isFluid": true
+      },
+      "targeting": {
+        "type": "nearest"
+      },
+      "tactics": {
+        "type": "rotation",
+        "powers": [
+          "Slash"
+        ]
+      },
+      "powers": [
+        {
+          "name": "Slash",
+          "description": "A quick slash at the target.",
+          "maxRange": 5.0,
+          "castTime": null,
+          "globalCooldown": 1.0,
+          "costType": "energy",
+          "costAmount": 40.0,
+          "graphicEffects": [
+            {
+              "sourceURL": "../../assets/interactions/images/slash.webp",
+              "duration": 0.2,
+              "from": "affected",
+              "when": "immediate",
+              "condition": "onHit"
+            }
+          ],
+          "soundEffects": [
+            {
+              "sourceURL": "../../assets/interactions/sounds/slash.mp3",
+              "duration": 0.2,
+              "location": "self",
+              "when": "immediate",
+              "condition": "always"
+            }
+          ],
+          "effects": [
+            {
+              "type": "harm",
+              "affects": "bTarget",
+              "range": 5.0,
+              "amount": [
+                2.0,
+                4.0
+              ],
+              "tags": [
+                "physical",
+                "melee"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "maps": [
+    {
+      "identifier": "entrance_tunnel",
+      "name": "Entrance Tunnel",
+      "imageUrl": "../../assets/maps/goblin-cave-entrance.png",
+      "pixelDimensions": {
+        "width": 1024,
+        "height": 768
+      },
+      "feetDimensions": {
+        "width": 30.0,
+        "height": 22.5
+      },
+      "barriers": [
+        {
+          "type": "wall",
+          "locations": [
+            {
+              "x": 0.0,
+              "y": 0.0
+            },
+            {
+              "x": 30.0,
+              "y": 0.0
+            },
+            {
+              "x": 30.0,
+              "y": 22.5
+            },
+            {
+              "x": 0.0,
+              "y": 22.5
+            },
+            {
+              "x": 0.0,
+              "y": 0.0
+            }
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "identifier": "cave_mouth",
+          "type": "line",
+          "start": {
+            "x": 8.0,
+            "y": 0.0
+          },
+          "end": {
+            "x": 12.0,
+            "y": 0.0
+          }
+        },
+        {
+          "identifier": "inner_door",
+          "type": "line",
+          "start": {
+            "x": 14.0,
+            "y": 22.5
+          },
+          "end": {
+            "x": 16.0,
+            "y": 22.5
+          }
+        }
+      ],
+      "units": [
+        {
+          "unitType": "goblin_raider",
+          "position": {
+            "x": 15.0,
+            "y": 10.0,
+            "angle": 180.0
+          },
+          "hostility": "hostile",
+          "identifier": "raider_a",
+          "links": [
+            "raider_b"
+          ],
+          "movement": {
+            "type": "patrol",
+            "choose": "return",
+            "steps": [
+              {
+                "position": {
+                  "x": 15.0,
+                  "y": 8.0,
+                  "angle": 180.0
+                },
+                "movementRate": 0.4,
+                "waitTime": 3.0
+              },
+              {
+                "position": {
+                  "x": 15.0,
+                  "y": 18.0,
+                  "angle": 0.0
+                },
+                "movementRate": 0.4,
+                "waitTime": 3.0
+              }
+            ]
+          }
+        },
+        {
+          "unitType": "goblin_raider",
+          "position": {
+            "x": 20.0,
+            "y": 10.0,
+            "angle": 180.0
+          },
+          "hostility": "hostile",
+          "identifier": "raider_b",
+          "links": [
+            "raider_a"
+          ],
+          "movement": {
+            "type": "wander",
+            "location": {
+              "x": 20.0,
+              "y": 10.0
+            },
+            "radius": 5.0,
+            "speed": 0.3,
+            "waitTime": [
+              2.0,
+              5.0
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "identifier": "main_chamber",
+      "name": "Main Chamber",
+      "imageUrl": "../../assets/maps/goblin-cave-main.png",
+      "pixelDimensions": {
+        "width": 2048,
+        "height": 1536
+      },
+      "feetDimensions": {
+        "width": 60.0,
+        "height": 45.0
+      },
+      "barriers": [],
+      "connections": [
+        {
+          "identifier": "inner_door",
+          "type": "line",
+          "start": {
+            "x": 28.0,
+            "y": 0.0
+          },
+          "end": {
+            "x": 32.0,
+            "y": 0.0
+          }
+        },
+        {
+          "identifier": "landing_site",
+          "type": "point",
+          "position": {
+            "x": 30.0,
+            "y": 40.0,
+            "angle": 180.0
+          },
+          "fuzzRadius": 3.0,
+          "fuzzAngle": 60.0
+        }
+      ]
+    },
+    {
+      "identifier": "second_tunnel",
+      "name": "Second Tunnel",
+      "feetDimensions": {
+        "width": 50,
+        "height": 50
+      },
+      "pixelDimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "barriers": [],
+      "connections": [],
+      "units": [
+        {
+          "unitType": "raider",
+          "position": {
+            "x": 10,
+            "y": 10,
+            "angle": 0
+          },
+          "hostility": "hostile",
+          "identifier": "raider_a",
+          "movement": {
+            "type": "still"
+          }
+        }
+      ]
+    }
+  ],
+  "zoneLinks": [
+    {
+      "connectionA": {
+        "map": "entrance_tunnel",
+        "connection": "inner_door"
+      },
+      "connectionB": {
+        "map": "main_chamber",
+        "connection": "inner_door"
+      },
+      "oneWay": false,
+      "requiredKey": null
+    }
+  ],
+  "entryPoints": {
+    "entrance_tunnel/cave_mouth": null
+  },
+  "openConnections": {
+    "main_chamber/landing_site": "cliff_above"
+  }
+}

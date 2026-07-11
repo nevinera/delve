@@ -31,8 +31,28 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	unitCount := 0
+	// identifier → first map it was seen in
+	seen := make(map[string]string)
+	var duplicates []string
 	for _, m := range zone.Maps {
 		unitCount += len(m.Units)
+		for _, u := range m.Units {
+			if u.Identifier == "" {
+				continue
+			}
+			if first, ok := seen[u.Identifier]; ok {
+				duplicates = append(duplicates, fmt.Sprintf("%q (in %s and %s)", u.Identifier, first, m.Identifier))
+			} else {
+				seen[u.Identifier] = m.Identifier
+			}
+		}
+	}
+
+	if len(duplicates) > 0 {
+		for _, d := range duplicates {
+			fmt.Fprintf(stderr, "duplicate unit identifier: %s\n", d)
+		}
+		return 1
 	}
 
 	fmt.Fprintf(stdout, "Zone:         %s\n", zone.Name)

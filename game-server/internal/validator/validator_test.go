@@ -85,6 +85,12 @@ func TestRun(t *testing.T) {
 			wantCode: 1,
 			wantErr:  "error reading file",
 		},
+		{
+			name:     "duplicate unit identifier across maps exits nonzero",
+			args:     []string{fixtureDir + "duplicate_unit_ids.json"},
+			wantCode: 1,
+			wantErr:  "duplicate unit identifier",
+		},
 	}
 
 	for _, tt := range tests {
