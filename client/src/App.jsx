@@ -210,6 +210,7 @@ export default function App({
     return () => clearInterval(id);
   }, [gcdEndsAt]);
 
+
   useEffect(() => {
     if (!classConfigUrl) return;
     fetch(classConfigUrl)
@@ -246,6 +247,11 @@ export default function App({
     if (Date.now() < gcdEndsAtRef.current) return;
     const power = powers[slot];
     if (!power) return;
+    if (power.cooldown > 0) {
+      const selfUnit = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+      const cdEndsAt = selfUnit?.power_cooldowns?.[power.name] ?? 0;
+      if (Date.now() < cdEndsAt) return;
+    }
     // Mirror server-side rejection checks so we don't set GCD on commands that
     // will certainly be rejected (target missing, dead, or out of range).
     const range = powerMaxRange(power);
@@ -510,12 +516,17 @@ export default function App({
             }
           }
           const now = Date.now();
-          const onCooldown = power && gcdEndsAt > now;
-          const remainingMs = onCooldown ? gcdEndsAt - now : 0;
-          const totalMs = gcdTotalMsRef.current || 1;
+          const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
+          // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
+          const cdEndsAt = Math.max(gcdEndsAt, pcEndsAt);
+          const onCooldown = power && cdEndsAt > now;
+          const remainingMs = onCooldown ? cdEndsAt - now : 0;
+          const usingGcd = gcdEndsAt >= pcEndsAt;
+          const totalMs = usingGcd ? (gcdTotalMsRef.current || 1) : (power?.cooldown ?? 1) * 1000;
           const fraction = onCooldown ? remainingMs / totalMs : 0;
           const revealedDeg = (1 - fraction) * 360;
           const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
+
           return (
             <div
               key={slot}
