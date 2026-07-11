@@ -192,6 +192,7 @@ export default function App({
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
+  const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
 
   const setGcd = useCallback((ms) => {
     gcdEndsAtRef.current = ms;
@@ -216,6 +217,28 @@ export default function App({
       .then(cfg => setPowers(cfg.powers ?? []))
       .catch(() => {});
   }, [classConfigUrl]);
+
+  useEffect(() => {
+    if (!zoneSourceUrl) return;
+    fetch(zoneSourceUrl)
+      .then(r => r.json())
+      .then(zone => {
+        const byId = {};
+        for (const map of zone.maps ?? []) {
+          for (const unit of map.units ?? []) {
+            const ut = zone.unitTypes?.[unit.unitType];
+            if (!ut) continue;
+            const byName = {};
+            for (const p of ut.powers ?? []) {
+              byName[p.name] = p;
+            }
+            byId[unit.identifier] = byName;
+          }
+        }
+        npcPowersByZoneIdRef.current = byId;
+      })
+      .catch(() => {});
+  }, [zoneSourceUrl]);
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
@@ -377,7 +400,24 @@ export default function App({
       slotToken,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
       onClose: () => { setDisconnected(true); addLog("Disconnected."); },
-      onStateChange: ({ units: u }) => { unitsRef.current = u; setUnits(u); },
+      onStateChange: ({ units: u, combatEvents = [] }) => {
+        unitsRef.current = u;
+        setUnits(u);
+        for (const ev of combatEvents) {
+          const attacker = u[ev.attacker_id];
+          const target = u[ev.target_id];
+          if (!attacker || !target) continue;
+          const powersByName = npcPowersByZoneIdRef.current[attacker.zone_unit_identifier];
+          if (!powersByName) continue;
+          const power = powersByName[ev.power_name];
+          if (!power?.graphicEffects?.length) continue;
+          canvasRef.current?.playGraphicEffects(
+            power.graphicEffects,
+            { self: attacker.position, target: target.position },
+            zoneSourceUrl,
+          );
+        }
+      },
     });
     conn.connect();
     connRef.current = conn;
