@@ -15,6 +15,10 @@ const BasePlayerSpeed = 20.0
 // Must match TOKEN_RADIUS in the client's scene.js.
 const BasePlayerRadius = 2.2
 
+// BackwardSpeedFactor is the multiplier applied to speed when a unit moves
+// backward without any forward input. Prevents kiting at full speed.
+const BackwardSpeedFactor = 0.6
+
 // applyMovement advances position for all units with an active MovementIntent.
 // Called each tick after commands are processed.
 func applyMovement(state *instancestate.InstanceState) {
@@ -57,6 +61,9 @@ func applyMovement(state *instancestate.InstanceState) {
 		speed := unit.Speed
 		if speed == 0 {
 			speed = BasePlayerSpeed
+		}
+		if intent.Backward && !intent.Forward {
+			speed *= BackwardSpeedFactor
 		}
 		dist := speed * dt / mag
 		unit.Position.X += dx * dist

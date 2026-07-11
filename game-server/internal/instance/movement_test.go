@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	tickSeconds     = 0.1  // TickInterval.Seconds()
-	baseSpeed       = 20.0 // basePlayerSpeed
-	expectedDistPerTick = baseSpeed * tickSeconds
+	tickSeconds              = 0.1  // TickInterval.Seconds()
+	baseSpeed                = 20.0 // basePlayerSpeed
+	expectedDistPerTick      = baseSpeed * tickSeconds
+	expectedBackwardPerTick  = baseSpeed * instance.BackwardSpeedFactor * tickSeconds
 )
 
 func movingUnit(angle float64, intent instancestate.MovementIntent) (*instancestate.UnitState, *instancestate.InstanceState) {
@@ -48,7 +49,7 @@ func TestApplyMovement_BackwardFacingNorth(t *testing.T) {
 	instance.ApplyMovementForTest(s)
 
 	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
-	assert.InDelta(t, -expectedDistPerTick, u.Position.Y, 1e-9)
+	assert.InDelta(t, -expectedBackwardPerTick, u.Position.Y, 1e-9)
 }
 
 func TestApplyMovement_StrafeRightFacingNorth(t *testing.T) {
@@ -76,6 +77,16 @@ func TestApplyMovement_DiagonalSameDistanceAsStraight(t *testing.T) {
 
 	diagDist := math.Sqrt(uDiag.Position.X*uDiag.Position.X + uDiag.Position.Y*uDiag.Position.Y)
 	assert.InDelta(t, expectedDistPerTick, diagDist, 1e-9, "diagonal should cover the same distance as straight")
+}
+
+func TestApplyMovement_BackwardStrafeUsesReducedSpeed(t *testing.T) {
+	// Backward+strafe-right while facing north: still applies the backward
+	// speed penalty because forward is not held.
+	u, s := movingUnit(0, instancestate.MovementIntent{Backward: true, StrafeRight: true})
+	instance.ApplyMovementForTest(s)
+
+	diagDist := math.Sqrt(u.Position.X*u.Position.X + u.Position.Y*u.Position.Y)
+	assert.InDelta(t, expectedBackwardPerTick, diagDist, 1e-9)
 }
 
 func TestApplyMovement_OpposingKeysCancelOut(t *testing.T) {

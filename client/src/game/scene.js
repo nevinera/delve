@@ -553,7 +553,9 @@ export class SceneManager {
           if (mkeys.has("strafe_left"))  { dx -= cosA; dy += sinA; }
           const mag = Math.sqrt(dx * dx + dy * dy);
           if (mag > 0) {
-            const dist = this._selfSpeed * elapsed / mag;
+            const backward = mkeys.has("backward") && !mkeys.has("forward");
+            const speed = backward ? this._selfSpeed * 0.6 : this._selfSpeed;
+            const dist = speed * elapsed / mag;
             this._selfMapX += dx * dist;
             this._selfMapY += dy * dist;
             moved = true;
