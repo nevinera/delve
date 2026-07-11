@@ -211,7 +211,8 @@ export class SceneManager {
     this._camera = new THREE.PerspectiveCamera(34, 1, 0.1, 500);
 
     this._tokenMap = new Map();
-    this._mapToWorld = null;
+    this._mapToWorldByMap = new Map(); // mapId → (x,y)=>[wx,wz]
+    this._mapGroups = new Map();       // mapId → THREE.Group (visibility-toggled on map change)
     this._zoneBaseUrl = null;
     this._unitInfo = new Map();
     this._barriersByMap = new Map();
@@ -365,25 +366,19 @@ export class SceneManager {
       return;
     }
 
-    const map = json.maps?.[0];
-    if (!map) return;
-
-    const { width, height } = map.feetDimensions;
-    const originX = -width / 2;
-    const originZ = height / 2;
-    this._mapToWorld = (x, y) => [x + originX, originZ - y];
+    if (!json.maps?.length) return;
 
     const baseUrl = new URL(".", url).href;
     this._zoneBaseUrl = baseUrl;
 
     // Build barrier lookup by map identifier for client-side collision.
-    for (const m of json.maps ?? []) {
+    for (const m of json.maps) {
       this._barriersByMap.set(m.identifier, m.barriers ?? []);
     }
 
     // Build lookup across all maps: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
     const unitTypes = json.unitTypes ?? {};
-    for (const m of json.maps ?? []) {
+    for (const m of json.maps) {
       for (const unit of m.units ?? []) {
         const utype = unitTypes[unit.unitType];
         if (unit.identifier && utype) {
@@ -396,34 +391,54 @@ export class SceneManager {
       }
     }
 
-    if (map.imageUrl) {
-      const mapUrl = new URL(map.imageUrl, baseUrl).href;
-      new THREE.TextureLoader().load(mapUrl, (texture) => {
-        const plane = new THREE.Mesh(
-          new THREE.PlaneGeometry(width, height),
-          new THREE.MeshLambertMaterial({ map: texture })
-        );
-        plane.rotation.x = -Math.PI / 2;
-        this._scene.add(plane);
-      });
-    }
+    // Build per-map coordinate transforms and scene groups.
+    // Each map's geometry lives in its own Group; only the current map's group is visible.
+    for (const m of json.maps) {
+      const { width, height } = m.feetDimensions;
+      const originX = -width / 2;
+      const originZ = height / 2;
+      const toWorld = (x, y) => [x + originX, originZ - y];
+      this._mapToWorldByMap.set(m.identifier, toWorld);
 
-    for (const barrier of map.barriers ?? []) {
-      if (barrier.type !== "wall") continue;
-      const pts = barrier.locations.map(({ x, y }) => this._mapToWorld(x, y));
-      this._scene.add(buildWall(pts));
-    }
+      const group = new THREE.Group();
+      group.visible = false;
+      this._mapGroups.set(m.identifier, group);
+      this._scene.add(group);
 
-    for (const conn of map.connections ?? []) {
-      if (conn.type === "line") {
-        const pts = [conn.start, conn.end].map(({ x, y }) => this._mapToWorld(x, y));
-        this._scene.add(buildWall(pts, { color: 0xff00ff, opacity: 0.4 }));
+      if (m.imageUrl) {
+        const mapUrl = new URL(m.imageUrl, baseUrl).href;
+        new THREE.TextureLoader().load(mapUrl, (texture) => {
+          const plane = new THREE.Mesh(
+            new THREE.PlaneGeometry(width, height),
+            new THREE.MeshLambertMaterial({ map: texture })
+          );
+          plane.rotation.x = -Math.PI / 2;
+          group.add(plane);
+        });
+      }
+
+      for (const barrier of m.barriers ?? []) {
+        if (barrier.type !== "wall") continue;
+        const pts = barrier.locations.map(({ x, y }) => toWorld(x, y));
+        group.add(buildWall(pts));
+      }
+
+      for (const conn of m.connections ?? []) {
+        if (conn.type === "line") {
+          const pts = [conn.start, conn.end].map(({ x, y }) => toWorld(x, y));
+          group.add(buildWall(pts, { color: 0xff00ff, opacity: 0.4 }));
+        }
       }
     }
   }
 
+  // Converts map coordinates to world coordinates for the player's current map.
+  _toWorld(x, y) {
+    return this._mapToWorldByMap.get(this._selfMapIdentifier)?.(x, y) ?? [0, 0];
+  }
+
   updateUnits(units, selfIdentifier, characterTokenUrl) {
-    if (!this._mapToWorld) return;
+    if (!this._mapToWorldByMap.size) return;
 
     const selfUnit = Object.values(units).find(
       (u) => u.zone_unit_identifier === selfIdentifier
@@ -435,13 +450,20 @@ export class SceneManager {
       if (unit.map_identifier !== currentMap) continue;
       seen.add(id);
       const isSelf = unit.zone_unit_identifier === selfIdentifier;
-      const [wx, wz] = this._mapToWorld(unit.position.x, unit.position.y);
+      const [wx, wz] = this._toWorld(unit.position.x, unit.position.y);
       const angle = -(unit.position.angle * DEG);
 
       if (isSelf) {
         this._serverMapX = unit.position.x;
         this._serverMapY = unit.position.y;
-        this._selfMapIdentifier = unit.map_identifier;
+        if (unit.map_identifier !== this._selfMapIdentifier) {
+          for (const [mid, group] of this._mapGroups) {
+            group.visible = mid === unit.map_identifier;
+          }
+          this._selfMapIdentifier = unit.map_identifier;
+          this._selfMapX = unit.position.x;
+          this._selfMapY = unit.position.y;
+        }
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
@@ -548,7 +570,7 @@ export class SceneManager {
           this._lastPosSendTime = time;
         }
 
-        const [sx, sz] = this._mapToWorld(this._selfMapX, this._selfMapY);
+        const [sx, sz] = this._toWorld(this._selfMapX, this._selfMapY);
         this._selfToken.position.set(sx, 0, sz);
         this._selfToken.rotation.y = -this._camFacing;
       }
@@ -577,12 +599,12 @@ export class SceneManager {
   // positions: { self: {x,y}, target: {x,y} } in map coords
   // baseUrl: used to resolve relative sourceURLs
   playGraphicEffects(effects, positions, baseUrl) {
-    if (!this._mapToWorld) return;
+    if (!this._selfMapIdentifier) return;
     for (const effect of effects) {
       const pos = effect.to === "self" ? positions.self : positions.target;
       if (!pos) continue;
       const url = new URL(effect.sourceURL, baseUrl).href;
-      const [wx, wz] = this._mapToWorld(pos.x, pos.y);
+      const [wx, wz] = this._toWorld(pos.x, pos.y);
       this._spawnGraphicEffect(url, effect.duration, wx, wz);
     }
   }
@@ -620,8 +642,8 @@ export class SceneManager {
   }
 
   isInView(mapX, mapY) {
-    if (!this._mapToWorld || !this._camera) return true;
-    const [wx, wz] = this._mapToWorld(mapX, mapY);
+    if (!this._selfMapIdentifier || !this._camera) return true;
+    const [wx, wz] = this._toWorld(mapX, mapY);
     const frustum = new THREE.Frustum();
     frustum.setFromProjectionMatrix(
       new THREE.Matrix4().multiplyMatrices(
