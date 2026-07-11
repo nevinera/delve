@@ -32,6 +32,7 @@ type unitJSON struct {
 	Status                 instancestate.UnitStatus `json:"status"`
 	Target                 *string                  `json:"target"`
 	GlobalCooldownEndsAt   *int64                   `json:"global_cooldown_ends_at,omitempty"`
+	PowerCooldowns         map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects    []effectJSON             `json:"active_status_effects"`
 }
 
@@ -105,6 +106,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Status:               u.Status,
 			Target:               target,
 			GlobalCooldownEndsAt: gcdMs,
+			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
 			ActiveStatusEffects:  effects,
 		}
 	}
@@ -161,6 +163,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			if !cu.GlobalCooldownEndsAt.IsZero() {
 				update["global_cooldown_ends_at"] = cu.GlobalCooldownEndsAt.UnixMilli()
 			}
+			if pcd := powerCooldownsJSON(cu.PowerCooldowns); pcd != nil {
+				update["power_cooldowns"] = pcd
+			}
 			msg.UnitUpdates[idStr] = update
 			for _, e := range cu.ActiveStatusEffects {
 				msg.EffectAdds = append(msg.EffectAdds, effectAddJSON{
@@ -209,6 +214,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		if cu.GlobalCooldownEndsAt != pu.GlobalCooldownEndsAt {
 			patch["global_cooldown_ends_at"] = cu.GlobalCooldownEndsAt.UnixMilli()
 		}
+		if !powerCooldownsEqual(cu.PowerCooldowns, pu.PowerCooldowns) {
+			patch["power_cooldowns"] = powerCooldownsJSON(cu.PowerCooldowns)
+		}
 		if len(patch) > 0 {
 			msg.UnitUpdates[idStr] = patch
 		}
@@ -253,6 +261,37 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 	}
 
 	return json.Marshal(msg)
+}
+
+// powerCooldownsJSON converts a PowerCooldowns map to epoch-ms int64 values,
+// omitting zero times. Returns nil when the map is empty.
+func powerCooldownsJSON(m map[string]time.Time) map[string]int64 {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]int64, len(m))
+	for k, v := range m {
+		if !v.IsZero() {
+			out[k] = v.UnixMilli()
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// powerCooldownsEqual reports whether two PowerCooldowns maps are identical.
+func powerCooldownsEqual(a, b map[string]time.Time) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, va := range a {
+		if vb, ok := b[k]; !ok || va != vb {
+			return false
+		}
+	}
+	return true
 }
 
 func uuidPtrEqual(a, b *uuid.UUID) bool {
