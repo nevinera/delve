@@ -371,3 +371,70 @@ func TestUnitBehavior_AggroAndChaseInSameTick(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusEngaged, u.Status)
 	assert.Greater(t, u.Position.Y, 0.0)
 }
+
+// ---------------------------------------------------------------------------
+// cross-map chase
+// ---------------------------------------------------------------------------
+
+func twoMapZone() instanceconfig.Zone {
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, AggroRadius: 5.0},
+		},
+		Maps: []instanceconfig.Map{
+			{
+				Identifier: "map1",
+				Units: []instanceconfig.Unit{{
+					Identifier: "g1",
+					UnitType:   "goblin",
+					Position:   pos(0, 0),
+					Hostility:  "hostile",
+				}},
+			},
+			{Identifier: "map2"},
+		},
+	}
+}
+
+func TestUnitBehavior_Chase_UpdatesLastSeenWhenOnSameMap(t *testing.T) {
+	zone := twoMapZone()
+	u, s := npcState("g1", pos(0, 0))
+	playerID, _ := addPlayer(s, "map1", 0, 3)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.InDelta(t, 0.0, u.Behavior.LastSeenX, 1e-9)
+	assert.InDelta(t, 3.0, u.Behavior.LastSeenY, 1e-9)
+}
+
+func TestUnitBehavior_Chase_MovesTowardLastSeenWhenTargetOnDifferentMap(t *testing.T) {
+	zone := twoMapZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Behavior.LastSeenX = 0
+	u.Behavior.LastSeenY = 10
+	playerID, p := addPlayer(s, "map2", 0, 0) // player on different map
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, instancestate.UnitStatusEngaged, u.Status)
+	assert.Equal(t, p.MapIdentifier, "map2") // player unchanged
+	assert.Greater(t, u.Position.Y, 0.0)     // NPC moved toward last seen
+}
+
+func TestUnitBehavior_Chase_ResumesDirectChaseWhenTargetReturns(t *testing.T) {
+	zone := twoMapZone()
+	u, s := npcState("g1", pos(0, 8))
+	u.Behavior.LastSeenX = 0
+	u.Behavior.LastSeenY = 10
+	playerID, p := addPlayer(s, "map1", 0, 3) // player back on same map
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	// NPC should move toward the player at y=3, not the last-seen at y=10.
+	assert.Less(t, u.Position.Y, 8.0)
+	assert.InDelta(t, 3.0, u.Behavior.LastSeenY, 1e-9) // last seen updated to player's current pos
+	_ = p
+}
