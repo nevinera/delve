@@ -22,7 +22,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 		return nil
 	}
 	unit, ok := next.Units[unitID]
-	if !ok {
+	if !ok || unit.Status == instancestate.UnitStatusDead {
 		return nil
 	}
 	now := time.Now()

@@ -83,6 +83,23 @@ func TestMoveHandler_UnknownKeyIsIgnored(t *testing.T) {
 	assert.Equal(t, instancestate.MovementIntent{}, state.Units[unitID].MovementIntent)
 }
 
+func TestMoveHandler_DeadUnitIsNoOp(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := stateWithUnit(unitID)
+	state.Units[unitID].Status = instancestate.UnitStatusDead
+	state.Units[unitID].MovementIntent = instancestate.MovementIntent{Forward: true}
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{
+		Facing: 90.0,
+		Keys:   []command.MoveKey{command.MoveKeyBackward},
+	}, state))
+
+	unit := state.Units[unitID]
+	assert.Equal(t, 0.0, unit.Position.Angle, "facing should not change")
+	assert.True(t, unit.MovementIntent.Forward, "intent should not change")
+}
+
 func TestMoveHandler_MissingUnitIsNoOp(t *testing.T) {
 	h := command.MoveHandler{}
 	state := emptyState()

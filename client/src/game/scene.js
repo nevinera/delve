@@ -469,6 +469,7 @@ export class SceneManager {
       if (isSelf) {
         this._serverMapX = unit.position.x;
         this._serverMapY = unit.position.y;
+        this._selfDead = unit.status === "dead";
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
@@ -540,7 +541,7 @@ export class SceneManager {
       }
 
       // Self unit: apply local movement prediction each frame.
-      if (this._selfInitialized && this._selfToken) {
+      if (this._selfInitialized && this._selfToken && !this._selfDead) {
         const mkeys = this._movementKeysRef?.current;
         let moved = false;
         if (mkeys && mkeys.size > 0) {

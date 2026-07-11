@@ -244,11 +244,12 @@ export default function App({
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
   const usePower = useCallback((slot) => {
+    const selfUnit = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+    if (selfUnit?.status === "dead") return;
     if (Date.now() < gcdEndsAtRef.current) return;
     const power = powers[slot];
     if (!power) return;
     if (power.cooldown > 0) {
-      const selfUnit = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
       const cdEndsAt = selfUnit?.power_cooldowns?.[power.name] ?? 0;
       if (Date.now() < cdEndsAt) return;
     }
@@ -366,6 +367,8 @@ export default function App({
       }
       const action = KEY_MAP[e.code];
       if (!action) return;
+      const selfForInput = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+      if (selfForInput?.status === "dead") return;
       if (MOVEMENT_KEYS.has(action)) {
         movementKeysRef.current.add(action);
         sendMove();

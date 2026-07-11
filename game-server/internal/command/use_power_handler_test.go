@@ -54,6 +54,17 @@ func TestUsePowerHandler_MissingUnitIsNoOp(t *testing.T) {
 	require.NoError(t, command.UsePowerHandler{}.Handle(uuid.New(), punchPower(), emptyState()))
 }
 
+func TestUsePowerHandler_DeadPlayerIsNoOp(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+	state.Units[playerID].Status = instancestate.UnitStatusDead
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.Equal(t, before, state.Units[targetID].Health)
+}
+
 func TestUsePowerHandler_NoTargetIsNoOp(t *testing.T) {
 	unitID := uuid.New()
 	state := stateWithUnit(unitID)
