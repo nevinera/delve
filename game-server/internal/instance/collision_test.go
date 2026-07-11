@@ -206,3 +206,46 @@ func TestResolveCollisions_MultiSegmentWall(t *testing.T) {
 	assert.GreaterOrEqual(t, dist1, 2.4-1e-9, "must be clear of horizontal segment")
 	assert.GreaterOrEqual(t, dist2, 2.4-1e-9, "must be clear of vertical segment")
 }
+
+// ---------------------------------------------------------------------------
+// map edge clamping
+// ---------------------------------------------------------------------------
+
+func boundedZone(width, height float64) instanceconfig.Zone {
+	return instanceconfig.Zone{
+		Maps: []instanceconfig.Map{
+			{
+				Identifier:     "map1",
+				FeetDimensions: instanceconfig.Dimensions{Width: width, Height: height},
+			},
+		},
+	}
+}
+
+func TestResolveCollisions_MapEdge_ClampsX(t *testing.T) {
+	u, s := unitOnMap(-1, 50, 2.2)
+	instance.ResolveCollisionsForTest(s, boundedZone(100, 100))
+	assert.InDelta(t, 2.2, u.Position.X, 1e-9)
+	assert.InDelta(t, 50.0, u.Position.Y, 1e-9)
+}
+
+func TestResolveCollisions_MapEdge_ClampsXMax(t *testing.T) {
+	u, s := unitOnMap(99, 50, 2.2)
+	instance.ResolveCollisionsForTest(s, boundedZone(100, 100))
+	assert.InDelta(t, 97.8, u.Position.X, 1e-9)
+	assert.InDelta(t, 50.0, u.Position.Y, 1e-9)
+}
+
+func TestResolveCollisions_MapEdge_ClampsY(t *testing.T) {
+	u, s := unitOnMap(50, -1, 2.2)
+	instance.ResolveCollisionsForTest(s, boundedZone(100, 100))
+	assert.InDelta(t, 50.0, u.Position.X, 1e-9)
+	assert.InDelta(t, 2.2, u.Position.Y, 1e-9)
+}
+
+func TestResolveCollisions_MapEdge_NoBoundsWhenDimsZero(t *testing.T) {
+	// collisionZone sets no FeetDimensions — clamping must not fire.
+	u, s := unitOnMap(-5, 50, 2.2)
+	instance.ResolveCollisionsForTest(s, collisionZone())
+	assert.InDelta(t, -5.0, u.Position.X, 1e-9)
+}

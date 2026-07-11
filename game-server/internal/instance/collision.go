@@ -13,8 +13,10 @@ const wallHalfThickness = 0.2 // feet; half the rendered wall thickness
 // their current map. Called after applyMovement each tick.
 func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Zone) {
 	barriersByMap := make(map[string][]instanceconfig.Barrier, len(zone.Maps))
+	dimsByMap := make(map[string]instanceconfig.Dimensions, len(zone.Maps))
 	for _, m := range zone.Maps {
 		barriersByMap[m.Identifier] = m.Barriers
+		dimsByMap[m.Identifier] = m.FeetDimensions
 	}
 
 	for _, unit := range state.Units {
@@ -36,6 +38,11 @@ func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Z
 				}
 				x, y = pushOutOfCircle(x, y, unit.Radius, b.Location.X, b.Location.Y, b.Radius)
 			}
+		}
+		if d := dimsByMap[unit.MapIdentifier]; d.Width > 0 {
+			r := unit.Radius
+			x = math.Max(r, math.Min(d.Width-r, x))
+			y = math.Max(r, math.Min(d.Height-r, y))
 		}
 		unit.Position.X, unit.Position.Y = x, y
 	}

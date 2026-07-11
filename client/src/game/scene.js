@@ -216,6 +216,7 @@ export class SceneManager {
     this._zoneBaseUrl = null;
     this._unitInfo = new Map();
     this._barriersByMap = new Map();
+    this._dimsByMap = new Map();   // mapId → { width, height }
     this._animId = null;
 
     this._activeEffects = []; // { sprite, mat, startedAt, durationMs, fadeStartMs }
@@ -374,6 +375,7 @@ export class SceneManager {
     // Build barrier lookup by map identifier for client-side collision.
     for (const m of json.maps) {
       this._barriersByMap.set(m.identifier, m.barriers ?? []);
+      this._dimsByMap.set(m.identifier, m.feetDimensions);
     }
 
     // Build lookup across all maps: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
@@ -562,6 +564,11 @@ export class SceneManager {
           [this._selfMapX, this._selfMapY] = resolveBarrierCollisions(
             this._selfMapX, this._selfMapY, TOKEN_RADIUS, barriers
           );
+        }
+        const dims = this._dimsByMap.get(this._selfMapIdentifier);
+        if (dims) {
+          this._selfMapX = Math.max(TOKEN_RADIUS, Math.min(dims.width - TOKEN_RADIUS, this._selfMapX));
+          this._selfMapY = Math.max(TOKEN_RADIUS, Math.min(dims.height - TOKEN_RADIUS, this._selfMapY));
         }
 
         // Send position to server ~3-4x per server tick (every ~30ms).
