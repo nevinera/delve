@@ -633,20 +633,28 @@ export class SceneManager {
   // baseUrl: used to resolve relative sourceURLs
   playGraphicEffects(effects, positions, baseUrl) {
     if (!this._selfMapIdentifier) return;
+    const resolve = (key) => key === "self" ? positions.self : positions.target;
     for (const effect of effects) {
-      const pos = effect.to === "self" ? positions.self : positions.target;
-      if (!pos) continue;
+      const fromPos = resolve(effect.from ?? "self");
+      const toPos   = resolve(effect.to   ?? "affected");
+      if (!fromPos || !toPos) continue;
       const url = new URL(effect.sourceURL, baseUrl).href;
-      const [wx, wz] = this._toWorld(pos.x, pos.y);
-      this._spawnGraphicEffect(url, effect.duration, wx, wz);
+      const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
+      const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
+      this._spawnGraphicEffect(url, effect.duration, fromX, fromZ, toX, toZ);
     }
   }
 
-  _spawnGraphicEffect(url, duration, wx, wz) {
+  _spawnGraphicEffect(url, duration, fromX, fromZ, toX, toZ) {
     new THREE.TextureLoader().load(url, (texture) => {
       const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      if (this._camera && (fromX !== toX || fromZ !== toZ)) {
+        const fromNDC = new THREE.Vector3(fromX, 2.0, fromZ).project(this._camera);
+        const toNDC   = new THREE.Vector3(toX,   2.0, toZ  ).project(this._camera);
+        mat.rotation = Math.atan2(toNDC.y - fromNDC.y, toNDC.x - fromNDC.x) - Math.PI / 2;
+      }
       const sprite = new THREE.Sprite(mat);
-      sprite.position.set(wx, 2.0, wz);
+      sprite.position.set(fromX, 2.0, fromZ);
       sprite.scale.set(4, 4, 1);
       this._scene.add(sprite);
       const durationMs = duration * 1000;
@@ -655,6 +663,7 @@ export class SceneManager {
         startedAt: performance.now(),
         durationMs,
         fadeStartMs: durationMs * 0.6,
+        fromX, fromZ, toX, toZ,
       });
     });
   }
@@ -667,6 +676,9 @@ export class SceneManager {
         e.mat.dispose();
         return false;
       }
+      const t = elapsed / e.durationMs;
+      e.sprite.position.x = e.fromX + (e.toX - e.fromX) * t;
+      e.sprite.position.z = e.fromZ + (e.toZ - e.fromZ) * t;
       if (elapsed >= e.fadeStartMs) {
         e.mat.opacity = 1 - (elapsed - e.fadeStartMs) / (e.durationMs - e.fadeStartMs);
       }
