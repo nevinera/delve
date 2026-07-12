@@ -47,6 +47,12 @@ const styles = {
     border: "1px solid #6a2a2a",
     padding: 8,
   },
+  targetRange: {
+    fontSize: 11,
+    color: "#999",
+    display: "block",
+    marginTop: 1,
+  },
   deadBadge: {
     position: "absolute",
     top: 6,
@@ -583,6 +589,12 @@ export default function App({
   }, []);
 
   const targetUnit = targetId ? units[targetId] : null;
+  const targetRange = (selfUnit && targetUnit)
+    ? Math.sqrt(
+        (targetUnit.position.x - selfUnit.position.x) ** 2 +
+        (targetUnit.position.y - selfUnit.position.y) ** 2
+      ).toFixed(1)
+    : null;
 
   return (
     <div style={styles.root}>
@@ -601,6 +613,7 @@ export default function App({
           {targetUnit ? (
             <>
               <strong>{formatUnitName(targetUnit.zone_unit_identifier)}</strong>
+              {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
               <HealthBar current={targetUnit.health} max={targetUnit.max_health} />
               {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
             </>
