@@ -380,6 +380,15 @@ export default function App({
   }, [sendMove]);
 
   const handleTargetUnit = useCallback((id) => {
+    if (id != null) {
+      const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+      const tgt = unitsRef.current[id];
+      if (self && tgt) {
+        const dx = tgt.position.x - self.position.x;
+        const dy = tgt.position.y - self.position.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 60) return;
+      }
+    }
     targetIdRef.current = id;
     setTargetId(id);
     connRef.current?.send({
@@ -411,6 +420,7 @@ export default function App({
         const dy = u.position.y - selfUnit.position.y;
         return { id, dist: Math.sqrt(dx * dx + dy * dy) };
       })
+      .filter(h => h.dist <= 60)
       .sort((a, b) => a.dist - b.dist);
 
     if (hostiles.length === 0) return;
@@ -485,6 +495,19 @@ export default function App({
       onStateChange: ({ units: u, combatEvents = [] }) => {
         unitsRef.current = u;
         setUnits(u);
+        const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
+        if (tgt) {
+          const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
+          if (self) {
+            const dx = tgt.position.x - self.position.x;
+            const dy = tgt.position.y - self.position.y;
+            if (Math.sqrt(dx * dx + dy * dy) > 60) {
+              targetIdRef.current = null;
+              setTargetId(null);
+              connRef.current?.send({ direction: "up", type: "target", target_id: null });
+            }
+          }
+        }
         for (const ev of combatEvents) {
           const attacker = u[ev.attacker_id];
           const target = u[ev.target_id];
