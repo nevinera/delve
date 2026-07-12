@@ -18,7 +18,8 @@ class LocalAssetServer < Sinatra::Base
   before do
     headers "Access-Control-Allow-Origin"  => "*",
             "Access-Control-Allow-Methods" => "GET, OPTIONS",
-            "Access-Control-Allow-Headers" => "*"
+            "Access-Control-Allow-Headers" => "*",
+            "Cache-Control"               => "no-store"
   end
 
   options "*" do
