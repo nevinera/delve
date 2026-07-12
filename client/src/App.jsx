@@ -316,6 +316,25 @@ export default function App({
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
+  const handleTargetUnit = useCallback((id) => {
+    if (id != null) {
+      const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+      const tgt = unitsRef.current[id];
+      if (self && tgt) {
+        const dx = tgt.position.x - self.position.x;
+        const dy = tgt.position.y - self.position.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 60) return;
+      }
+    }
+    targetIdRef.current = id;
+    setTargetId(id);
+    connRef.current?.send({
+      direction: "up",
+      type: "target",
+      target_id: id ?? null,
+    });
+  }, []);
+
   const usePower = useCallback((slot) => {
     const selfUnit = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
     if (selfUnit?.status === "dead") return;
@@ -330,8 +349,25 @@ export default function App({
     // will certainly be rejected (target missing, dead, or out of range).
     const range = powerMaxRange(power);
     if (range != null) {
-      const target = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
-      if (!target || target.status === "dead") return;
+      let target = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
+      if (!target || target.status === "dead") {
+        const nearestId = Object.entries(unitsRef.current)
+          .filter(([, u]) =>
+            u.hostility === "hostile" &&
+            u.map_identifier === selfUnit?.map_identifier &&
+            u.status !== "dead"
+          )
+          .map(([id, u]) => {
+            const dx = u.position.x - (selfUnit?.position.x ?? 0);
+            const dy = u.position.y - (selfUnit?.position.y ?? 0);
+            return { id, dist: Math.sqrt(dx * dx + dy * dy) };
+          })
+          .filter(h => h.dist <= 60)
+          .sort((a, b) => a.dist - b.dist)[0]?.id ?? null;
+        if (!nearestId) return;
+        handleTargetUnit(nearestId);
+        target = unitsRef.current[nearestId];
+      }
       const self = selfPosRef.current;
       if (self) {
         const selfRadius = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current)?.radius ?? 0;
@@ -361,7 +397,7 @@ export default function App({
         classConfigUrl,
       );
     }
-  }, [powers, setGcd, classConfigUrl]);
+  }, [powers, setGcd, classConfigUrl, handleTargetUnit]);
 
   const sendMove = useCallback(() => {
     const pos = selfPosRef.current;
@@ -378,25 +414,6 @@ export default function App({
     selfPosRef.current = pos;
     sendMove();
   }, [sendMove]);
-
-  const handleTargetUnit = useCallback((id) => {
-    if (id != null) {
-      const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
-      const tgt = unitsRef.current[id];
-      if (self && tgt) {
-        const dx = tgt.position.x - self.position.x;
-        const dy = tgt.position.y - self.position.y;
-        if (Math.sqrt(dx * dx + dy * dy) > 60) return;
-      }
-    }
-    targetIdRef.current = id;
-    setTargetId(id);
-    connRef.current?.send({
-      direction: "up",
-      type: "target",
-      target_id: id ?? null,
-    });
-  }, []);
 
   // Called by SceneManager when continuous turning updates the facing angle
   const handleFacingChange = useCallback((degrees) => {
