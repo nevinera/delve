@@ -18,7 +18,8 @@
           "from": "self",
           "to": "affected",
           "when": "impact",
-          "condition": "onHit"
+          "condition": "onHit",
+          "color": "#ff0000"
         }
       ],
       "soundEffects": [

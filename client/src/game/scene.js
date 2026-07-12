@@ -641,13 +641,14 @@ export class SceneManager {
       const url = new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
-      this._spawnGraphicEffect(url, effect.duration, fromX, fromZ, toX, toZ);
+      this._spawnGraphicEffect(url, effect.duration, fromX, fromZ, toX, toZ, effect.color);
     }
   }
 
-  _spawnGraphicEffect(url, duration, fromX, fromZ, toX, toZ) {
+  _spawnGraphicEffect(url, duration, fromX, fromZ, toX, toZ, color) {
     new THREE.TextureLoader().load(url, (texture) => {
       const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      if (color) mat.color.set(color);
       if (this._camera && (fromX !== toX || fromZ !== toZ)) {
         const fromNDC = new THREE.Vector3(fromX, 2.0, fromZ).project(this._camera);
         const toNDC   = new THREE.Vector3(toX,   2.0, toZ  ).project(this._camera);
