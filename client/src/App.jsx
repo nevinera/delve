@@ -210,9 +210,10 @@ function powerMaxRange(power) {
   return null;
 }
 
-function formatUnitName(zoneUnitIdentifier) {
-  if (!zoneUnitIdentifier) return "Unknown";
-  return zoneUnitIdentifier
+function formatUnitName(unit) {
+  const raw = unit?.unit_type_identifier || unit?.zone_unit_identifier;
+  if (!raw) return "Unknown";
+  return raw
     .replace(/^player:/, "")
     .split("_")
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
@@ -612,7 +613,7 @@ export default function App({
         <div style={styles.targetFrame}>
           {targetUnit ? (
             <>
-              <strong>{formatUnitName(targetUnit.zone_unit_identifier)}</strong>
+              <strong>{formatUnitName(targetUnit)}</strong>
               {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
               <HealthBar current={targetUnit.health} max={targetUnit.max_health} />
               {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
