@@ -104,20 +104,10 @@ RSpec.describe AwardCharacterItem do
     end
 
     context "when a required field is missing" do
-      it "raises KeyError for missing identifier" do
-        expect { call(source_data.except("identifier")) }.to raise_error(KeyError)
-      end
-
-      it "raises KeyError for missing name" do
-        expect { call(source_data.except("name")) }.to raise_error(KeyError)
-      end
-
-      it "raises KeyError for missing slot" do
-        expect { call(source_data.except("slot")) }.to raise_error(KeyError)
-      end
-
-      it "raises KeyError for missing ilvl" do
-        expect { call(source_data.except("ilvl")) }.to raise_error(KeyError)
+      %w[identifier name slot ilvl].each do |field|
+        it "raises MissingField for missing #{field}" do
+          expect { call(source_data.except(field)) }.to raise_error(AwardCharacterItem::MissingField, /#{field}/)
+        end
       end
     end
   end

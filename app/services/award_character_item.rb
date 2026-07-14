@@ -1,7 +1,9 @@
 class AwardCharacterItem
   include Memery
 
-  ZoneMismatch = Class.new(StandardError)
+  Error = Class.new(StandardError)
+  ZoneMismatch = Class.new(Error)
+  MissingField = Class.new(Error)
 
   STAT_TYPES = CharacterItem::STAT_COLUMNS.map { |c| [c.to_s, :to_i] }.to_h.merge("weapon_dps" => :to_f).freeze
 
@@ -14,7 +16,9 @@ class AwardCharacterItem
 
   def call
     validate!
-    record unless already_held?
+    return nil if already_held?
+
+    record
   end
 
   def validate!
@@ -42,7 +46,7 @@ class AwardCharacterItem
 
   def validate_required_fields!
     %w[identifier name slot ilvl].each do |field|
-      raise KeyError, "Missing required field: #{field}" unless @source_data.key?(field)
+      raise(MissingField, "Require field '#{field}' missing") unless @source_data.key?(field)
     end
   end
 
