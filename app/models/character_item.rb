@@ -1,5 +1,5 @@
 class CharacterItem < ApplicationRecord
-  SLOTS = %w[head neck shoulders back chest wrists hands waist legs feet ring_1 ring_2 trinket_1 trinket_2 main_hand off_hand].freeze
+  SLOTS = %w[head neck shoulders back chest wrists hands waist legs feet ring trinket main_hand off_hand one_hand two_hand].freeze
   STAT_COLUMNS = %i[strength agility intellect stamina crit_rating haste_rating mastery_rating versatility_rating resilience_rating].freeze
 
   belongs_to :character
@@ -8,7 +8,7 @@ class CharacterItem < ApplicationRecord
   validates :source_key, presence: true
   validates :identifier, presence: true
   validates :name, presence: true
-  validates :ilvl, presence: true, numericality: {only_integer: true, greater_than: 0}
+  validates :ilvl, presence: true, numericality: {only_integer: true, greater_than_or_equal_to: 0}
   validates :slot, presence: true, inclusion: {in: SLOTS}
   validates :received_at, presence: true
   validates :source_json, presence: true

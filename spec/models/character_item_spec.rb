@@ -59,9 +59,14 @@ RSpec.describe CharacterItem, type: :model do
       expect(item.errors[:ilvl]).to be_present
     end
 
-    it "requires ilvl to be a positive integer" do
-      item = build(:character_item, character: character, provenance_zone: zone, ilvl: 0)
+    it "requires ilvl to be a non-negative integer" do
+      item = build(:character_item, character: character, provenance_zone: zone, ilvl: -1)
       expect(item).not_to be_valid
+    end
+
+    it "allows ilvl of 0" do
+      item = build(:character_item, character: character, provenance_zone: zone, ilvl: 0)
+      expect(item).to be_valid
     end
 
     it "requires a valid slot" do
