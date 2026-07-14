@@ -52,8 +52,16 @@ A point in map coordinates with a facing direction.
 
 ## floatRange
 
-A two-element array `[min, max]` representing a range of values with two endpoints.
+A two-element array `[min, max]` representing a range of values with two endpoints. A single float is also accepted and treated as `[value, value]` (no variance).
 
 ```json
 [2.0, 4.0]
+```
+
+## rangeFloat
+
+Used specifically for distance/range fields (e.g. `range` on PowerEffect, `radius` on wander movement). Accepts a single float or a `[min, max]` pair, but a single float `x` is treated as `[0, x]` rather than `[x, x]`. This allows the game server to select a random distance from zero up to `x`.
+
+```json
+5.0
 ```
