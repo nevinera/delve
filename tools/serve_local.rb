@@ -16,10 +16,10 @@ abort "Directory not found: #{dir}" unless Dir.exist?(dir)
 
 class LocalAssetServer < Sinatra::Base
   before do
-    headers "Access-Control-Allow-Origin"  => "*",
-            "Access-Control-Allow-Methods" => "GET, OPTIONS",
-            "Access-Control-Allow-Headers" => "*",
-            "Cache-Control"               => "no-store"
+    headers "Access-Control-Allow-Origin" => "*",
+      "Access-Control-Allow-Methods" => "GET, OPTIONS",
+      "Access-Control-Allow-Headers" => "*",
+      "Cache-Control" => "no-store"
   end
 
   options "*" do
