@@ -185,6 +185,42 @@ handle_stdin = lambda do |line|
   end
 end
 
+# ---------------------------------------------------------------------------
+# Checksum diagnostics
+# ---------------------------------------------------------------------------
+
+# Returns a hash of unit_id => canonical_unit for all tracked units.
+def canonical_snapshot(units)
+  units.transform_values { |u| GameApi::Checksum.canonical_unit(u) }
+rescue => e
+  Kernel.warn "WARN: [diag] canonical_snapshot failed: #{e}"
+  {}
+end
+
+# Diffs two canonical snapshots and logs any per-field divergence.
+def diff_snapshots(before, after, log)
+  all_ids = (before.keys | after.keys)
+  all_ids.sort.each do |id|
+    b = before[id]
+    a = after[id]
+    if b.nil?
+      log.warn "  [DIFF] #{id[0..7]} appeared in after but not before"
+      next
+    end
+    if a.nil?
+      log.warn "  [DIFF] #{id[0..7]} disappeared"
+      next
+    end
+    (b.keys | a.keys).each do |field|
+      next if b[field] == a[field]
+      log.warn "  [DIFF] #{b["id"]} .#{field}: before=#{b[field].inspect} after=#{a[field].inspect}"
+    end
+  end
+end
+
+# Snapshot saved at the point of a delta mismatch; compared to the next full state.
+pending_mismatch_snapshot = nil
+
 driver.on(:open) do
   open = true
   log.info "    Connected."
@@ -206,11 +242,22 @@ driver.on(:message) do |event|
   when ["down", "instance-state"]
     units = msg.fetch("units", {})
     checksum = msg["checksum"]
-    local = GameApi::Checksum.compute_checksum(units)
+    sorted_canonical = units.values
+      .map { |u| GameApi::Checksum.canonical_unit(u) }
+      .sort_by { |u| u["id"] }
+    canonical_json = JSON.generate(sorted_canonical)
+    local = Digest::SHA256.hexdigest(canonical_json)
     if local == checksum
       log.info "[state] Full state: #{units.size} units. Checksum OK."
     else
-      log.warn "checksum mismatch after full state — server=#{checksum} local=#{local}"
+      log.warn "[state] checksum mismatch after full state — server=#{checksum} local=#{local}"
+      log.warn "[diag] canonical JSON being hashed: #{canonical_json}"
+    end
+
+    if pending_mismatch_snapshot
+      log.warn "[diag] Comparing mismatch snapshot to correcting full state:"
+      diff_snapshots(pending_mismatch_snapshot, canonical_snapshot(units), log)
+      pending_mismatch_snapshot = nil
     end
 
   when ["down", "delta"]
@@ -232,8 +279,9 @@ driver.on(:message) do |event|
     checksum = msg["checksum"]
     local = GameApi::Checksum.compute_checksum(units)
     if local != checksum
-      log.warn "checksum mismatch after delta — server=#{checksum} local=#{local}"
-      log.warn "Sending full-state request."
+      log.warn "[delta] checksum mismatch — server=#{checksum} local=#{local}"
+      log.warn "[diag] unit_updates keys: #{(msg["unit_updates"] || {}).keys.map { |k| k[0..7] }.inspect}"
+      pending_mismatch_snapshot = canonical_snapshot(units)
       driver.text(JSON.generate({direction: "up", type: "full-state-request"}))
     end
 
