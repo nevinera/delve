@@ -20,6 +20,7 @@ Rails.application.routes.draw do
   namespace :play do
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
       resources :zones, only: [:show]
+      resources :character_items, only: [:index, :show]
     end
   end
   namespace :internal_api do

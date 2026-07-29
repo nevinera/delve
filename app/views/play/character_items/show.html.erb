@@ -1,0 +1,25 @@
+<h1><%= @item.name %></h1>
+
+<p>Slot: <%= @item.slot %></p>
+<p>Item level: <%= @item.ilvl %></p>
+<p>From: <%= @item.provenance_zone.identifier %></p>
+<p>Received: <%= @item.received_at.strftime("%Y-%m-%d %H:%M") %></p>
+
+<% stats = CharacterItem::STAT_COLUMNS.filter_map { |s| [s.to_s.humanize, @item.public_send(s)] if @item.public_send(s) > 0 } %>
+<% if stats.any? %>
+  <ul>
+    <% stats.each do |label, value| %>
+      <li><%= label %>: <%= value %></li>
+    <% end %>
+  </ul>
+<% end %>
+
+<% if @item.weapon_dps %>
+  <p>DPS: <%= @item.weapon_dps %></p>
+<% end %>
+
+<% if @item.description.present? %>
+  <p><em><%= @item.description %></em></p>
+<% end %>
+
+<%= link_to "Back to items", play_character_character_items_path(@character) %>
