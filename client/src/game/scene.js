@@ -161,11 +161,28 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
 
   addFacingArrow(group, radius, coneColor);
   attachDeadMarkers(group, radius);
+  attachLootBeam(group);
   return group;
 }
 
 // Creates the dead-state overlay (gray circle + red X) and attaches it to group,
 // hidden. Toggle group._deadMarkers.visible and group.position.y each tick.
+function attachLootBeam(group) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffd700,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 6, 8), mat);
+  beam.position.y = 3.3;
+  beam.visible = false;
+  group.add(beam);
+  group._lootBeam = beam;
+  group._lootBeamMat = mat;
+}
+
 function attachDeadMarkers(group, radius) {
   const markers = new THREE.Group();
   markers.visible = false;
@@ -202,13 +219,14 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, onUnitClick } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, onUnitClick, onUnitRightClick } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
     this._onFacingChange = onFacingChange;
     this._onSelfPosition = onSelfPosition;
     this._onUnitClick = onUnitClick;
+    this._onUnitRightClick = onUnitRightClick;
     this._lastPosSendTime = 0;
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -307,6 +325,20 @@ export class SceneManager {
     this._targetLine.visible = !!id;
   }
 
+  setLootableUnits(ids) {
+    for (const [id, { group }] of this._tokenMap) {
+      const lootable = ids.has(id);
+      if (group._lootBeam) group._lootBeam.visible = lootable;
+    }
+  }
+
+  _updateLootBeams(time) {
+    const opacity = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(time / 500));
+    for (const { group } of this._tokenMap.values()) {
+      if (group._lootBeam?.visible) group._lootBeamMat.opacity = opacity;
+    }
+  }
+
   _initMouseControls() {
     let downX = null, downY = null, lastX = null, lastY = null;
     this._canvas.addEventListener("mousedown", (e) => {
@@ -332,7 +364,10 @@ export class SceneManager {
       }
       downX = null; downY = null; lastX = null; lastY = null;
     });
-    this._canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    this._canvas.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      this._handleRightClick(e);
+    });
     this._canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
       this._camZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._camZoom + e.deltaY * 0.001));
@@ -341,6 +376,17 @@ export class SceneManager {
 
   _handleClick(e) {
     if (!this._onUnitClick) return;
+    const id = this._unitUnderPointer(e);
+    this._onUnitClick(id ?? null);
+  }
+
+  _handleRightClick(e) {
+    if (!this._onUnitRightClick) return;
+    const id = this._unitUnderPointer(e);
+    if (id) this._onUnitRightClick(id);
+  }
+
+  _unitUnderPointer(e) {
     const rect = this._canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -348,26 +394,16 @@ export class SceneManager {
     );
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(ndc, this._camera);
-
-    // Collect all meshes from token groups, mapped back to their unit ID.
     const meshes = [];
     const meshToID = new Map();
     for (const [id, { group, isSelf }] of this._tokenMap) {
       if (isSelf) continue;
       group.traverse((obj) => {
-        if (obj.isMesh) {
-          meshes.push(obj);
-          meshToID.set(obj.uuid, id);
-        }
+        if (obj.isMesh) { meshes.push(obj); meshToID.set(obj.uuid, id); }
       });
     }
-
     const hits = raycaster.intersectObjects(meshes, false);
-    if (hits.length > 0) {
-      const id = meshToID.get(hits[0].object.uuid);
-      if (id) { this._onUnitClick(id); return; }
-    }
-    this._onUnitClick(null); // clicked empty space - deselect
+    return hits.length > 0 ? (meshToID.get(hits[0].object.uuid) ?? null) : null;
   }
 
   async loadZone(url) {
@@ -622,6 +658,7 @@ export class SceneManager {
 
       this._updateTargetVisuals();
       this._updateGraphicEffects(time);
+      this._updateLootBeams(time);
       this._positionCamera();
       this._renderer.render(this._scene, this._camera);
     };

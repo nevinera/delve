@@ -11,7 +11,9 @@ const Canvas = forwardRef(function Canvas({
   onFacingChange,
   onSelfPosition,
   onUnitClick,
+  onUnitRightClick,
   targetId,
+  lootableUnitIds,
 }, ref) {
   const canvasRef = useRef(null);
   const managerRef = useRef(null);
@@ -23,7 +25,7 @@ const Canvas = forwardRef(function Canvas({
   }));
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange, onSelfPosition, onUnitClick });
+    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange, onSelfPosition, onUnitClick, onUnitRightClick });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();
@@ -45,6 +47,10 @@ const Canvas = forwardRef(function Canvas({
   useEffect(() => {
     managerRef.current?.setTarget(targetId);
   }, [targetId]);
+
+  useEffect(() => {
+    managerRef.current?.setLootableUnits(lootableUnitIds ?? new Set());
+  }, [lootableUnitIds]);
 
   return (
     <canvas
