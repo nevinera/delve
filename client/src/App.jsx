@@ -565,6 +565,10 @@ export default function App({
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.repeat) return;
+      if (e.code === "Escape") {
+        setLootWindowUnitId(null);
+        return;
+      }
       if (e.code === "Tab") {
         e.preventDefault();
         handleTabTarget(
