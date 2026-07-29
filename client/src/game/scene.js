@@ -170,17 +170,16 @@ function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
 function attachLootBeam(group) {
   const mat = new THREE.MeshBasicMaterial({
     color: 0xffd700,
-    transparent: true,
-    opacity: 0.5,
-    depthWrite: false,
     side: THREE.DoubleSide,
+    depthWrite: false,
+    transparent: true,
+    opacity: 0.3,
   });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 6, 8), mat);
+  const beam = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 6), mat);
   beam.position.y = 3.3;
   beam.visible = false;
   group.add(beam);
   group._lootBeam = beam;
-  group._lootBeamMat = mat;
 }
 
 function attachDeadMarkers(group, radius) {
@@ -333,9 +332,10 @@ export class SceneManager {
   }
 
   _updateLootBeams(time) {
-    const opacity = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(time / 500));
+    // 1 rotation per second = 2π radians per 1000 ms
+    const angle = (time / 1000) * Math.PI * 2;
     for (const { group } of this._tokenMap.values()) {
-      if (group._lootBeam?.visible) group._lootBeamMat.opacity = opacity;
+      if (group._lootBeam?.visible) group._lootBeam.rotation.y = angle;
     }
   }
 
