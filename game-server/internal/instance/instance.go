@@ -98,6 +98,7 @@ func NewInstance(
 	inst.commandProcessor.Register(command.TargetHandler{})
 	inst.commandProcessor.Register(command.UsePowerHandler{})
 	inst.commandProcessor.Register(command.RespawnHandler{})
+	inst.commandProcessor.Register(command.LootItemHandler{})
 	return inst
 }
 

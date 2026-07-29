@@ -228,6 +228,16 @@ const styles = {
     fontSize: 11,
     whiteSpace: "nowrap",
   },
+  lootTake: {
+    background: "none",
+    border: "1px solid #7a5a2a",
+    borderRadius: 3,
+    color: "#d4a84b",
+    fontSize: 11,
+    cursor: "pointer",
+    padding: "1px 6px",
+    whiteSpace: "nowrap",
+  },
 };
 
 function UnitBar({ label, current, max }) {
@@ -283,7 +293,7 @@ function formatUnitName(unit) {
     .join(" ");
 }
 
-function LootWindow({ items, onClose }) {
+function LootWindow({ unitId, items, onTake, onClose }) {
   const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
   const elRef = useRef(null);
 
@@ -325,6 +335,7 @@ function LootWindow({ items, onClose }) {
           <li key={i} style={styles.lootItem}>
             <span style={styles.lootItemName}>{item.name}</span>
             <span style={styles.lootItemMeta}>{item.slot} · ilvl {item.ilvl}</span>
+            <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>
           </li>
         ))}
       </ul>
@@ -715,6 +726,10 @@ export default function App({
     }
   }, []);
 
+  const handleTakeItem = useCallback((targetUnitId, itemIndex) => {
+    connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
+  }, []);
+
   const targetUnit = targetId ? units[targetId] : null;
   const targetRange = (selfUnit && targetUnit)
     ? Math.sqrt(
@@ -767,7 +782,9 @@ export default function App({
         />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
         <LootWindow
+          unitId={lootWindowUnitId}
           items={units[lootWindowUnitId]?.loot_items}
+          onTake={handleTakeItem}
           onClose={() => setLootWindowUnitId(null)}
         />
       </div>
