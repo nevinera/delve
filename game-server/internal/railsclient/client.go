@@ -55,9 +55,15 @@ type zoneRef struct {
 	Version    string `json:"version"`
 }
 
-// AwardItem posts a character item award to Rails. Returns nil on success
-// (201 created) or if the item is already held (200 ok, idempotent).
-func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item) error {
+type awardResponse struct {
+	Status string `json:"status"`
+}
+
+// AwardItem posts a character item award to Rails.
+// Returns (true, nil) if the item was newly awarded and should be removed from loot.
+// Returns (false, nil) if the item should stay in loot (already owned this version, or already owned other version).
+// Returns (false, err) on network or server error.
+func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item) (bool, error) {
 	body := awardBody{
 		Zone:        zoneRef{DatabaseID: zoneDatabaseID, Identifier: zoneIdentifier, Version: zoneVersion},
 		Identifier:  item.Identifier,
@@ -69,24 +75,30 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
+		return false, fmt.Errorf("marshal: %w", err)
 	}
 	url := fmt.Sprintf("%s/internal_api/characters/%s/character_items", c.baseURL, characterDatabaseID)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return false, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Token", c.token)
 
 	res, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("http: %w", err)
+		return false, fmt.Errorf("http: %w", err)
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusCreated || res.StatusCode == http.StatusOK {
-		return nil
+	switch res.StatusCode {
+	case http.StatusCreated:
+		var resp awardResponse
+		json.NewDecoder(res.Body).Decode(&resp) //nolint:errcheck
+		return resp.Status != "already_owned_other_version", nil
+	case http.StatusConflict:
+		return false, nil
+	default:
+		return false, fmt.Errorf("rails returned %d", res.StatusCode)
 	}
-	return fmt.Errorf("rails returned %d", res.StatusCode)
 }

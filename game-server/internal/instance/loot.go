@@ -50,7 +50,7 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		pending.Claim.Result <- false
 		return
 	}
-	err := inst.RailsClient.AwardItem(
+	remove, err := inst.RailsClient.AwardItem(
 		slot.CharacterDatabaseID,
 		inst.DatabaseID,
 		inst.ZoneIdentifier,
@@ -62,6 +62,6 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		pending.Claim.Result <- false
 		return
 	}
-	pending.Claim.Result <- true
+	pending.Claim.Result <- remove
 }
 

@@ -16,9 +16,9 @@ class AwardCharacterItem
 
   def call
     validate!
-    return nil if already_held?
+    return :already_owned_this_version if already_held?
 
-    record
+    already_held_other_version? ? [record, :already_owned_other_version] : record
   end
 
   def validate!
@@ -27,6 +27,15 @@ class AwardCharacterItem
   end
 
   memoize def already_held? = existing_record.present?
+
+  memoize def already_held_other_version?
+    @character.character_items
+      .joins(:provenance_zone)
+      .where(identifier:)
+      .where(zones: { identifier: zone_identifier })
+      .where.not(source_key:)
+      .exists?
+  end
 
   private
 

@@ -56,18 +56,42 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
   context "with a duplicate source_key" do
     before { post_item }
 
-    it "returns 200" do
+    it "returns 409" do
       post_item
-      expect(response).to have_http_status(:ok)
+      expect(response).to have_http_status(:conflict)
     end
 
-    it "returns an error message" do
+    it "returns already_owned_this_version status" do
       post_item
-      expect(response.parsed_body["error"]).to eq("Item already held")
+      expect(response.parsed_body["status"]).to eq("already_owned_this_version")
     end
 
     it "does not create a second record" do
       expect { post_item }.not_to change(CharacterItem, :count)
+    end
+  end
+
+  context "when the character owns the same item from a different version of this zone" do
+    let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
+
+    before do
+      create(:character_item, character: character, provenance_zone: other_zone,
+        identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom")
+    end
+
+    it "returns 201" do
+      post_item
+      expect(response).to have_http_status(:created)
+    end
+
+    it "returns already_owned_other_version status with the new item id" do
+      post_item
+      expect(response.parsed_body["status"]).to eq("already_owned_other_version")
+      expect(response.parsed_body["id"]).to eq(CharacterItem.last.id)
+    end
+
+    it "creates a new record for this version" do
+      expect { post_item }.to change(CharacterItem, :count).by(1)
     end
   end
 

@@ -4,11 +4,14 @@ class InternalApi::CharacterItemsController < InternalApi::BaseController
 
   def create
     character = Character.find(params[:character_id])
-    item = AwardCharacterItem.call(character: character, source_data: params.to_unsafe_h)
-    if item
-      render json: {id: item.id}, status: :created
-    else
-      render json: {error: "Item already held"}, status: :ok
+    result = AwardCharacterItem.call(character: character, source_data: params.to_unsafe_h)
+    case result
+    in [CharacterItem => item, :already_owned_other_version]
+      render json: { id: item.id, status: "already_owned_other_version" }, status: :created
+    in CharacterItem => item
+      render json: { id: item.id }, status: :created
+    in :already_owned_this_version
+      render json: { status: "already_owned_this_version" }, status: :conflict
     end
   end
 
