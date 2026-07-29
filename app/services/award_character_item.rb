@@ -32,7 +32,7 @@ class AwardCharacterItem
     @character.character_items
       .joins(:provenance_zone)
       .where(identifier:)
-      .where(zones: { identifier: zone_identifier })
+      .where(zones: {identifier: zone_identifier})
       .where.not(source_key:)
       .exists?
   end

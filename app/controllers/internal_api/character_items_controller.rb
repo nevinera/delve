@@ -7,11 +7,11 @@ class InternalApi::CharacterItemsController < InternalApi::BaseController
     result = AwardCharacterItem.call(character: character, source_data: params.to_unsafe_h)
     case result
     in [CharacterItem => item, :already_owned_other_version]
-      render json: { id: item.id, status: "already_owned_other_version" }, status: :created
+      render json: {id: item.id, status: "already_owned_other_version"}, status: :created
     in CharacterItem => item
-      render json: { id: item.id }, status: :created
+      render json: {id: item.id}, status: :created
     in :already_owned_this_version
-      render json: { status: "already_owned_this_version" }, status: :conflict
+      render json: {status: "already_owned_this_version"}, status: :conflict
     end
   end
 

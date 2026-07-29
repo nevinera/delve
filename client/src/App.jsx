@@ -238,6 +238,11 @@ const styles = {
     padding: "1px 6px",
     whiteSpace: "nowrap",
   },
+  lootOwned: {
+    color: "#888",
+    fontSize: 11,
+    marginLeft: 4,
+  },
 };
 
 function UnitBar({ label, current, max }) {
@@ -293,7 +298,7 @@ function formatUnitName(unit) {
     .join(" ");
 }
 
-function LootWindow({ unitId, items, onTake, onClose }) {
+function LootWindow({ unitId, items, onTake, onClose, ownedZoneItems }) {
   const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
   const elRef = useRef(null);
 
@@ -331,13 +336,17 @@ function LootWindow({ unitId, items, onTake, onClose }) {
         <button style={styles.lootClose} onClick={onClose}>✕</button>
       </div>
       <ul style={styles.lootList}>
-        {items.map((item, i) => (
-          <li key={i} style={styles.lootItem}>
-            <span style={styles.lootItemName}>{item.name}</span>
-            <span style={styles.lootItemMeta}>{item.slot} · ilvl {item.ilvl}</span>
-            <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>
-          </li>
-        ))}
+        {items.map((item, i) => {
+          const owned = ownedZoneItems?.[item.identifier];
+          const ownershipLabel = owned === true ? " (owned)" : owned === false ? " (owned other version)" : null;
+          return (
+            <li key={i} style={styles.lootItem}>
+              <span style={styles.lootItemName}>{item.name}{ownershipLabel && <span style={styles.lootOwned}>{ownershipLabel}</span>}</span>
+              <span style={styles.lootItemMeta}>{item.slot} · ilvl {item.ilvl}</span>
+              {owned !== true && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -375,6 +384,7 @@ export default function App({
   characterName,
   characterTokenUrl,
   classConfigUrl,
+  ownedZoneItems: initialOwnedZoneItems = {},
 }) {
   const connRef = useRef(null);
   const canvasRef = useRef(null);
@@ -397,6 +407,9 @@ export default function App({
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
+  const [ownedZoneItems, setOwnedZoneItems] = useState(initialOwnedZoneItems);
+  const ownedZoneItemsRef = useRef(initialOwnedZoneItems);
+  const pendingOtherVersionRef = useRef(new Map()); // identifier → unitId, for in-flight other-version loots
 
   const setGcd = useCallback((ms) => {
     gcdEndsAtRef.current = ms;
@@ -647,6 +660,20 @@ export default function App({
       onStateChange: ({ units: u, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
         unitsRef.current = u;
         setUnits(u);
+        const pending = pendingOtherVersionRef.current;
+        if (pending.size > 0) {
+          const newlyOwned = {};
+          for (const [identifier, unitId] of pending) {
+            if (!(u[unitId]?.loot_items ?? []).some(i => i.identifier === identifier)) {
+              newlyOwned[identifier] = true;
+              pending.delete(identifier);
+            }
+          }
+          if (Object.keys(newlyOwned).length > 0) {
+            ownedZoneItemsRef.current = { ...ownedZoneItemsRef.current, ...newlyOwned };
+            setOwnedZoneItems(ownedZoneItemsRef.current);
+          }
+        }
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
         if (tgt) {
           const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
@@ -733,6 +760,10 @@ export default function App({
   }, []);
 
   const handleTakeItem = useCallback((targetUnitId, itemIndex) => {
+    const item = unitsRef.current[targetUnitId]?.loot_items?.[itemIndex];
+    if (item && ownedZoneItemsRef.current[item.identifier] === false) {
+      pendingOtherVersionRef.current.set(item.identifier, targetUnitId);
+    }
     connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
   }, []);
 
@@ -783,7 +814,7 @@ export default function App({
           onSelfPosition={handleSelfPosition}
           onUnitClick={handleTargetUnit}
           onUnitRightClick={handleUnitRightClick}
-          lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.length > 0).map(([id]) => id))}
+          lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => ownedZoneItems[i.identifier] !== true)).map(([id]) => id))}
           targetId={targetId}
         />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
@@ -792,6 +823,7 @@ export default function App({
           items={units[lootWindowUnitId]?.loot_items}
           onTake={handleTakeItem}
           onClose={() => setLootWindowUnitId(null)}
+          ownedZoneItems={ownedZoneItems}
         />
       </div>
       <div style={styles.actionBar}>

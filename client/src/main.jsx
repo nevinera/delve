@@ -14,6 +14,7 @@ createRoot(el).render(
       characterName={el.dataset.characterName}
       characterTokenUrl={el.dataset.characterTokenUrl}
       classConfigUrl={el.dataset.classConfigUrl}
+      ownedZoneItems={JSON.parse(el.dataset.ownedZoneItems || "{}")}
     />
   </StrictMode>
 );
