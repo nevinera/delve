@@ -48,7 +48,7 @@ func receiveFullState(t *testing.T, writeCh chan []byte) map[string]map[string]a
 
 func TestAddSlot_AssignsCharacterUnitID(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", puncherClass)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, uuid.Nil, slot.CharacterUnitID)
@@ -58,9 +58,9 @@ func TestAddSlot_AssignsCharacterUnitID(t *testing.T) {
 
 func TestAddSlot_UniqueCharacterUnitIDs(t *testing.T) {
 	inst := makeInstance()
-	a, err := inst.AddSlot("Aldric", puncherClass)
+	a, err := inst.AddSlot("Aldric", "42", puncherClass)
 	require.NoError(t, err)
-	b, err := inst.AddSlot("Brego", puncherClass)
+	b, err := inst.AddSlot("Brego", "42", puncherClass)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, a.CharacterUnitID, b.CharacterUnitID)
@@ -71,7 +71,7 @@ func TestPlayerSpawn_AppearsInFullState(t *testing.T) {
 	inst := startedInstance(t, reg)
 	t.Cleanup(inst.Stop)
 
-	slot, err := inst.AddSlot("Aldric", puncherClass)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass)
 	require.NoError(t, err)
 
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -102,7 +102,7 @@ func TestPlayerSpawn_UsesFirstMapCenter(t *testing.T) {
 	reg.Add(inst)
 	t.Cleanup(inst.Stop)
 
-	slot, err := inst.AddSlot("Aldric", puncherClass)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass)
 	require.NoError(t, err)
 
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -147,7 +147,7 @@ func TestPlayerSpawn_UsesEntryPoint_Point(t *testing.T) {
 	reg.Add(inst)
 	t.Cleanup(inst.Stop)
 
-	slot, err := inst.AddSlot("Aldric", puncherClass)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass)
 	require.NoError(t, err)
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
 	require.True(t, ok)
@@ -192,7 +192,7 @@ func TestPlayerSpawn_UsesEntryPoint_Line(t *testing.T) {
 	reg.Add(inst)
 	t.Cleanup(inst.Stop)
 
-	slot, err := inst.AddSlot("Aldric", puncherClass)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass)
 	require.NoError(t, err)
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
 	require.True(t, ok)
@@ -217,7 +217,7 @@ func TestPlayerSpawn_ReconnectDoesNotDuplicate(t *testing.T) {
 	inst := startedInstance(t, reg)
 	t.Cleanup(inst.Stop)
 
-	slot, err := inst.AddSlot("Aldric", puncherClass)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass)
 	require.NoError(t, err)
 
 	// First connection.

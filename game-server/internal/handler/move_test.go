@@ -45,7 +45,7 @@ func TestConnect_MoveCommand_UpdatesPosition(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	wsBase := startWS(t, mountConnect(reg))
 
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestConnect_UnknownMessageType_DoesNotDisconnect(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	wsBase := startWS(t, mountConnect(reg))
 
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func TestConnect_MalformedJSON_DoesNotDisconnect(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	wsBase := startWS(t, mountConnect(reg))
 
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)

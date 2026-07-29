@@ -46,9 +46,10 @@ func validRequestBody(extras map[string]any) []byte {
 		"zone_identifier": "goblin-cave",
 		"version":         "v1",
 		"database_id":     "db-1",
-		"source_url":      "http://x",
-		"zone_config":     validZoneConfig(),
-		"character_name":  "Aldric",
+		"source_url":            "http://x",
+		"zone_config":           validZoneConfig(),
+		"character_name":        "Aldric",
+		"character_database_id": "42",
 		"character_class": map[string]any{
 			"name":   "Puncher",
 			"colors": map[string]any{"major": "8B4513", "minor": "F4A460"},
@@ -79,7 +80,7 @@ func decodeRequestResponse(t *testing.T, rec *httptest.ResponseRecorder) map[str
 // --- validation ---
 
 func TestSlotsRequest_MissingRequiredFields(t *testing.T) {
-	for _, field := range []string{"zone_identifier", "version", "database_id", "source_url", "character_name"} {
+	for _, field := range []string{"zone_identifier", "version", "database_id", "source_url", "character_name", "character_database_id"} {
 		t.Run("missing_"+field, func(t *testing.T) {
 			reg := instance.NewRegistry()
 			router := mountRequest(newSlotsHandler(reg, 200))
@@ -170,7 +171,7 @@ func TestSlotsRequest_SpecificInstance_Full(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	inst.ZoneIdentifier = "goblin-cave"
 	inst.MaxSlots = 1
-	_, err := inst.AddSlot("Brego", instanceconfig.CharacterClass{Name: "Puncher"})
+	_, err := inst.AddSlot("Brego", "42", instanceconfig.CharacterClass{Name: "Puncher"})
 	require.NoError(t, err)
 	router := mountRequest(newSlotsHandler(reg, 200))
 

@@ -31,6 +31,7 @@ class JoinZone
       source_url: @zone.config_url,
       zone_config: fetch_json(@zone.config_url),
       character_name: @character.name,
+      character_database_id: @character.id.to_s,
       character_class: fetch_json(@character.character_class.location)
     }
     attrs[:instance_identifier] = @instance_identifier if @instance_identifier

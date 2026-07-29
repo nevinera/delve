@@ -59,7 +59,8 @@ func addTestInstance(t *testing.T, reg *instance.Registry) *instance.Instance {
 
 func validCreateSlotBody(name string) []byte {
 	body := map[string]any{
-		"character_name": name,
+		"character_name":        name,
+		"character_database_id": "42",
 		"character_class": map[string]any{
 			"name":   "Puncher",
 			"colors": map[string]any{"major": "8B4513", "minor": "F4A460"},
@@ -236,7 +237,7 @@ func TestSlots_Show(t *testing.T) {
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -379,7 +380,7 @@ func TestSlots_Destroy(t *testing.T) {
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -459,18 +460,18 @@ func TestSlots_Active_ReturnsAllStates(t *testing.T) {
 	}
 
 	// pending slot
-	_, err := inst.AddSlot("Aldric", class)
+	_, err := inst.AddSlot("Aldric", "42", class)
 	require.NoError(t, err)
 
 	// connected slot
-	connected, err := inst.AddSlot("Brego", class)
+	connected, err := inst.AddSlot("Brego", "42", class)
 	require.NoError(t, err)
 	_, _, done, ok := inst.ConnectSlot(connected.ID)
 	require.True(t, ok)
 	t.Cleanup(func() { close(done) })
 
 	// waiting slot
-	waiting, err := inst.AddSlot("Caela", class)
+	waiting, err := inst.AddSlot("Caela", "42", class)
 	require.NoError(t, err)
 	_, _, done2, ok := inst.ConnectSlot(waiting.ID)
 	require.True(t, ok)
@@ -497,7 +498,7 @@ func TestSlots_Active_IncludesTokenAndInstance(t *testing.T) {
 	class := instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	}
-	slot, err := inst.AddSlot("Aldric", class)
+	slot, err := inst.AddSlot("Aldric", "42", class)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/slots/active", nil)
@@ -524,9 +525,9 @@ func TestSlots_Active_AcrossMultipleInstances(t *testing.T) {
 	inst2 := addTestInstance(t, reg)
 	class := instanceconfig.CharacterClass{Name: "Puncher"}
 
-	_, err := inst1.AddSlot("Aldric", class)
+	_, err := inst1.AddSlot("Aldric", "42", class)
 	require.NoError(t, err)
-	_, err = inst2.AddSlot("Brego", class)
+	_, err = inst2.AddSlot("Brego", "42", class)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/slots/active", nil)
