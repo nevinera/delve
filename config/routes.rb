@@ -22,5 +22,11 @@ Rails.application.routes.draw do
       resources :zones, only: [:show]
     end
   end
+  namespace :internal_api do
+    resources :characters, only: [] do
+      resources :character_items, only: [:create]
+    end
+  end
+
   root to: "users#index"
 end
