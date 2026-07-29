@@ -38,12 +38,13 @@ const (
 // The Token is a secret issued on creation; the client uses it to authenticate
 // its websocket connection.
 type InstanceSlot struct {
-	ID              uuid.UUID
-	Token           uuid.UUID
-	CharacterUnitID uuid.UUID
-	State           SlotState
-	CharacterName   string
-	CharacterClass  instanceconfig.CharacterClass
+	ID                  uuid.UUID
+	Token               uuid.UUID
+	CharacterUnitID     uuid.UUID
+	State               SlotState
+	CharacterName       string
+	CharacterDatabaseID string
+	CharacterClass      instanceconfig.CharacterClass
 
 	// Connection fields; protected by the instance's slotsMu.
 	writeCh        chan []byte         // pre-encoded JSON messages from the tick loop
@@ -57,7 +58,7 @@ type InstanceSlot struct {
 // already exists it is reused with a fresh token (invalidating prior credentials).
 // Otherwise a new slot is created. Returns ErrInstanceFull if MaxSlots has been
 // reached and there is no existing slot to reuse.
-func (inst *Instance) AddSlot(characterName string, class instanceconfig.CharacterClass) (*InstanceSlot, error) {
+func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class instanceconfig.CharacterClass) (*InstanceSlot, error) {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
 
@@ -73,13 +74,14 @@ func (inst *Instance) AddSlot(characterName string, class instanceconfig.Charact
 	}
 
 	slot := &InstanceSlot{
-		ID:              uuid.New(),
-		Token:           uuid.New(),
-		CharacterUnitID: uuid.New(),
-		State:           SlotStatePending,
-		CharacterName:   characterName,
-		CharacterClass:  class,
-		stateEnteredAt:  time.Now(),
+		ID:                  uuid.New(),
+		Token:               uuid.New(),
+		CharacterUnitID:     uuid.New(),
+		State:               SlotStatePending,
+		CharacterName:       characterName,
+		CharacterDatabaseID: characterDatabaseID,
+		CharacterClass:      class,
+		stateEnteredAt:      time.Now(),
 	}
 	inst.slots[slot.ID] = slot
 	inst.recomputeSlotCounts()

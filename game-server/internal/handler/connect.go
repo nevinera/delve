@@ -110,13 +110,15 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 }
 
 type incomingMsg struct {
-	Type     string   `json:"type"`
-	Facing   float64  `json:"facing"`
-	Keys     []string `json:"keys"`
-	X        *float64 `json:"x"`
-	Y        *float64 `json:"y"`
-	TargetID *string  `json:"target_id"`
-	Slot     *int     `json:"slot"`
+	Type         string   `json:"type"`
+	Facing       float64  `json:"facing"`
+	Keys         []string `json:"keys"`
+	X            *float64 `json:"x"`
+	Y            *float64 `json:"y"`
+	TargetID     *string  `json:"target_id"`
+	Slot         *int     `json:"slot"`
+	TargetUnitID *string  `json:"target_unit_id"`
+	ItemIndex    *int     `json:"item_index"`
 }
 
 func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance, powers []instanceconfig.Power) {
@@ -161,5 +163,15 @@ func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance,
 			ReceivedAt: time.Now(),
 			Payload:    command.RespawnPayload{},
 		})
+	case "loot_item":
+		if msg.TargetUnitID != nil && msg.ItemIndex != nil {
+			if targetUnitID, err := uuid.Parse(*msg.TargetUnitID); err == nil {
+				inst.SendCommand(command.Command{
+					UnitID:     unitID,
+					ReceivedAt: time.Now(),
+					Payload:    command.LootItemPayload{TargetUnitID: targetUnitID, ItemIndex: *msg.ItemIndex},
+				})
+			}
+		}
 	}
 }

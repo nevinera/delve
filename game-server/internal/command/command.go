@@ -58,6 +58,15 @@ type RespawnPayload struct{}
 
 func (RespawnPayload) CommandType() string { return "respawn" }
 
+// LootItemPayload requests that one item be taken from a lootable unit.
+// TargetUnitID is the unit being looted; ItemIndex is the position in its LootItems slice.
+type LootItemPayload struct {
+	TargetUnitID uuid.UUID
+	ItemIndex    int
+}
+
+func (LootItemPayload) CommandType() string { return "loot_item" }
+
 // Command is a single client-initiated action, tagged with the unit it
 // targets and the time it was received by the server.
 type Command struct {

@@ -14,18 +14,22 @@ func RollAndRecordLoot(unitID uuid.UUID, unit *UnitState, state *InstanceState) 
 	if len(unit.LootTable) == 0 || len(state.Items) == 0 {
 		return
 	}
-	items := rollLoot(unit.LootTable, unit.LootCount, state.Items)
-	if len(items) == 0 {
+	pending := rollLoot(unit.LootTable, unit.LootCount, state.Items)
+	if len(pending) == 0 {
 		return
 	}
-	unit.LootItems = items
+	unit.LootItems = pending
+	rawItems := make([]instanceconfig.Item, len(pending))
+	for i, p := range pending {
+		rawItems[i] = p.Item
+	}
 	state.PendingLootEvents = append(state.PendingLootEvents, LootEvent{
 		UnitID: unitID.String(),
-		Items:  items,
+		Items:  rawItems,
 	})
 }
 
-func rollLoot(table map[string]int, count [2]int, catalog map[string]instanceconfig.Item) []instanceconfig.Item {
+func rollLoot(table map[string]int, count [2]int, catalog map[string]instanceconfig.Item) []PendingLootItem {
 	type entry struct {
 		id    string
 		cumul int
@@ -47,13 +51,16 @@ func rollLoot(table map[string]int, count [2]int, catalog map[string]instancecon
 		n = count[0] + rand.Intn(count[1]-count[0]+1)
 	}
 
-	var result []instanceconfig.Item
+	var result []PendingLootItem
 	for range n {
 		r := rand.Intn(total)
 		for _, e := range entries {
 			if r < e.cumul {
 				if item, ok := catalog[e.id]; ok {
-					result = append(result, item)
+					result = append(result, PendingLootItem{
+						ClaimID: uuid.New(),
+						Item:    item,
+					})
 				}
 				break
 			}

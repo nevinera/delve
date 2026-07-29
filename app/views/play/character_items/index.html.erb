@@ -1,0 +1,32 @@
+<h1><%= @character.name %> - Items</h1>
+
+<% if @items.empty? %>
+  <p>No items yet.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Slot</th>
+        <th>ilvl</th>
+        <th>From</th>
+        <th>Received</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @items.each do |item| %>
+        <tr>
+          <td><%= item.name %></td>
+          <td><%= item.slot %></td>
+          <td><%= item.ilvl %></td>
+          <td><%= item.provenance_zone.identifier %></td>
+          <td><%= item.received_at.strftime("%Y-%m-%d") %></td>
+          <td><%= link_to "View", play_character_character_item_path(@character, item) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<%= link_to "Back to #{@character.name}", play_character_path(@character) %>

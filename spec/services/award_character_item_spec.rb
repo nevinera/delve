@@ -61,21 +61,36 @@ RSpec.describe AwardCharacterItem do
     end
 
     it "persists optional metadata" do
-      call(source_data.merge("description" => "A fine blade", "icon_url" => "https://example.com/icon.png"))
-      item = CharacterItem.last
-      expect(item.description).to eq("A fine blade")
-      expect(item.icon_url).to eq("https://example.com/icon.png")
+      call(source_data.merge("description" => "A fine blade"))
+      expect(CharacterItem.last.description).to eq("A fine blade")
     end
 
     context "when the item already exists for this character and source_key" do
       before { call }
 
-      it "returns nil" do
-        expect(call).to be_nil
+      it "returns :already_owned_this_version" do
+        expect(call).to eq(:already_owned_this_version)
       end
 
       it "does not create a second record" do
         expect { call }.not_to change(CharacterItem, :count)
+      end
+    end
+
+    context "when the character owns the same item from a different version of this zone" do
+      let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
+
+      before { create(:character_item, character: character, provenance_zone: other_zone, identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom") }
+
+      it "returns [CharacterItem, :already_owned_other_version]" do
+        result = call
+        expect(result).to be_a(Array)
+        expect(result[0]).to be_a(CharacterItem).and be_persisted
+        expect(result[1]).to eq(:already_owned_other_version)
+      end
+
+      it "creates a new record for this version" do
+        expect { call }.to change(CharacterItem, :count).by(1)
       end
     end
 

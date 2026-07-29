@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 // mountConnect builds a router exposing only the connect route.
 func mountConnect(reg *instance.Registry) http.Handler {
 	r := chi.NewRouter()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	r.Get("/instances/{instanceID}/slots/{slotID}/connect", sh.Connect)
 	return r
 }
@@ -86,7 +86,7 @@ func TestConnect_SlotNotFound(t *testing.T) {
 func TestConnect_MissingToken(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestConnect_MissingToken(t *testing.T) {
 func TestConnect_WrongToken(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestConnect_WrongToken(t *testing.T) {
 func TestConnect_NoUpgradeHeaders(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestConnect_NoUpgradeHeaders(t *testing.T) {
 func TestConnect_SetsStateConnected(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestConnect_SetsStateConnected(t *testing.T) {
 func TestConnect_CloseTransitionsToWaiting(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestConnect_CloseTransitionsToWaiting(t *testing.T) {
 func TestConnect_HeartbeatTimeoutTransitionsToWaiting(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -193,7 +193,7 @@ func TestConnect_HeartbeatTimeoutTransitionsToWaiting(t *testing.T) {
 func TestConnect_HeartbeatResetsTimeout(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestConnect_HeartbeatResetsTimeout(t *testing.T) {
 func TestConnect_ReconnectKicksOldConnection(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)
-	slot, err := inst.AddSlot("Aldric", instanceconfig.CharacterClass{
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	})
 	require.NoError(t, err)

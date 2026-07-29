@@ -14,12 +14,29 @@ type LootEvent struct {
 	Items  []instanceconfig.Item
 }
 
+// LootFailure records a loot award that the Rails API rejected, so the tick
+// loop can notify the claiming player via the delta message.
+type LootFailure struct {
+	ClaimedBy uuid.UUID
+	Item      instanceconfig.Item
+}
+
+// PendingLootClaim is a newly-claimed item waiting for a goroutine to be
+// fired. Populated by LootItemHandler; drained by the tick loop.
+type PendingLootClaim struct {
+	TargetUnitID uuid.UUID
+	Claim        *LootClaim
+	Item         instanceconfig.Item
+}
+
 // InstanceState is the full runtime state of one zone instance.
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
-	Units             map[uuid.UUID]*UnitState
-	Items             map[string]instanceconfig.Item // identifier → item definition; shared across units
-	PendingLootEvents []LootEvent                   // drained each tick by the tick loop
+	Units               map[uuid.UUID]*UnitState
+	Items               map[string]instanceconfig.Item // identifier → item definition; shared across units
+	PendingLootEvents   []LootEvent                   // drained each tick by the tick loop
+	PendingLootClaims   []PendingLootClaim            // drained each tick; goroutines fired for each
+	PendingLootFailures []LootFailure                 // drained each tick into delta message
 }
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every

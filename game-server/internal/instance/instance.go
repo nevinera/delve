@@ -10,6 +10,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/railsclient"
 )
 
 // Status is the lifecycle state of an Instance.
@@ -53,6 +54,10 @@ type Instance struct {
 	// SlotWaitTimeout overrides SlotWaitingTimeout when non-zero. Intended for
 	// tests. Must be set before Start() is called.
 	SlotWaitTimeout time.Duration
+
+	// RailsClient is used by the tick loop to award looted items. May be nil
+	// (e.g. in tests), in which case loot claims resolve as failures.
+	RailsClient *railsclient.Client
 
 	slots                 map[uuid.UUID]*InstanceSlot
 	slotsMu               sync.RWMutex
@@ -98,7 +103,21 @@ func NewInstance(
 	inst.commandProcessor.Register(command.TargetHandler{})
 	inst.commandProcessor.Register(command.UsePowerHandler{})
 	inst.commandProcessor.Register(command.RespawnHandler{})
+	inst.commandProcessor.Register(command.LootItemHandler{})
 	return inst
+}
+
+// slotByUnitID returns the slot whose CharacterUnitID matches, or nil.
+// Called from the tick goroutine; acquires a read lock.
+func (inst *Instance) slotByUnitID(unitID uuid.UUID) *InstanceSlot {
+	inst.slotsMu.RLock()
+	defer inst.slotsMu.RUnlock()
+	for _, s := range inst.slots {
+		if s.CharacterUnitID == unitID {
+			return s
+		}
+	}
+	return nil
 }
 
 // SendCommand enqueues a command for processing on the next tick.

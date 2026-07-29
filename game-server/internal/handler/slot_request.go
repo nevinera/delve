@@ -13,14 +13,15 @@ import (
 )
 
 type slotRequestBody struct {
-	ZoneIdentifier     string                        `json:"zone_identifier"`
-	Version            string                        `json:"version"`
-	DatabaseID         string                        `json:"database_id"`
-	SourceURL          string                        `json:"source_url"`
-	ZoneConfig         instanceconfig.Zone           `json:"zone_config"`
-	InstanceIdentifier string                        `json:"instance_identifier"` // optional
-	CharacterName      string                        `json:"character_name"`
-	CharacterClass     instanceconfig.CharacterClass `json:"character_class"`
+	ZoneIdentifier      string                        `json:"zone_identifier"`
+	Version             string                        `json:"version"`
+	DatabaseID          string                        `json:"database_id"`
+	SourceURL           string                        `json:"source_url"`
+	ZoneConfig          instanceconfig.Zone           `json:"zone_config"`
+	InstanceIdentifier  string                        `json:"instance_identifier"` // optional
+	CharacterName       string                        `json:"character_name"`
+	CharacterDatabaseID string                        `json:"character_database_id"`
+	CharacterClass      instanceconfig.CharacterClass `json:"character_class"`
 }
 
 type slotRequestResponse struct {
@@ -48,9 +49,9 @@ func (h *Slots) Request(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.ZoneIdentifier == "" || req.Version == "" || req.DatabaseID == "" ||
-		req.SourceURL == "" || req.CharacterName == "" {
+		req.SourceURL == "" || req.CharacterName == "" || req.CharacterDatabaseID == "" {
 		writeError(w, r, http.StatusUnprocessableEntity,
-			"zone_identifier, version, database_id, source_url, and character_name are required")
+			"zone_identifier, version, database_id, source_url, character_name, and character_database_id are required")
 		return
 	}
 
@@ -109,6 +110,7 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 		req.ZoneConfig,
 		h.maxSlots,
 	)
+	inst.RailsClient = h.railsClient
 	if err := inst.Start(h.registry); err != nil {
 		return nil, err
 	}
@@ -117,7 +119,7 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 }
 
 func (h *Slots) addSlotAndRespond(w http.ResponseWriter, r *http.Request, inst *instance.Instance, req slotRequestBody) {
-	slot, err := inst.AddSlot(req.CharacterName, req.CharacterClass)
+	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass)
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {
 			writeError(w, r, http.StatusUnprocessableEntity, err.Error())
