@@ -16,6 +16,7 @@ type Zone struct {
 	Private     bool                `json:"private"` // Required: true = party-instanced, false = shared
 	Maps        []Map               `json:"maps"`    // Required: at least one
 	UnitTypes   map[string]UnitType `json:"unitTypes,omitempty"`
+	Items       map[string]Item     `json:"items,omitempty"`
 	ZoneLinks   []ZoneLink          `json:"zoneLinks,omitempty"`
 	// EntryPoints maps "mapId/connectionId" to an optional required key identifier.
 	EntryPoints map[string]*string `json:"entryPoints,omitempty"`

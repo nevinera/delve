@@ -132,6 +132,10 @@ const styles = {
     flex: 1,
     position: "relative",
     overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#000",
   },
   respawnOverlay: {
     position: "absolute",
@@ -164,6 +168,65 @@ const styles = {
     border: "1px solid #4a9a4a",
     borderRadius: 4,
     cursor: "pointer",
+  },
+  lootWindow: {
+    position: "absolute",
+    zIndex: 20,
+    background: "rgba(20,16,12,0.95)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    minWidth: 260,
+    pointerEvents: "auto",
+  },
+  lootHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    cursor: "move",
+    userSelect: "none",
+  },
+  lootTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: "#d4a84b",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  lootClose: {
+    background: "none",
+    border: "none",
+    color: "#888",
+    fontSize: 16,
+    cursor: "pointer",
+    lineHeight: 1,
+    padding: "0 2px",
+  },
+  lootList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  lootItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 12,
+    padding: "4px 0",
+    borderBottom: "1px solid #333",
+  },
+  lootItemName: {
+    color: "#e8d5a0",
+    fontSize: 13,
+  },
+  lootItemMeta: {
+    color: "#888",
+    fontSize: 11,
+    whiteSpace: "nowrap",
   },
 };
 
@@ -220,6 +283,55 @@ function formatUnitName(unit) {
     .join(" ");
 }
 
+function LootWindow({ items, onClose }) {
+  const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
+  const elRef = useRef(null);
+
+  const handleHeaderMouseDown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const rect = elRef.current.getBoundingClientRect();
+    const parentRect = elRef.current.offsetParent.getBoundingClientRect();
+    const originFx = (rect.left - parentRect.left) / parentRect.width;
+    const originFy = (rect.top - parentRect.top) / parentRect.height;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMouseMove = (mv) => {
+      setPos({
+        fx: originFx + (mv.clientX - startX) / parentRect.width,
+        fy: originFy + (mv.clientY - startY) / parentRect.height,
+      });
+    };
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  if (!items?.length) return null;
+
+  const windowStyle = { ...styles.lootWindow, left: `${pos.fx * 100}%`, top: `${pos.fy * 100}%`, transform: "none" };
+
+  return (
+    <div ref={elRef} style={windowStyle}>
+      <div style={styles.lootHeader} onMouseDown={handleHeaderMouseDown}>
+        <span style={styles.lootTitle}>Loot</span>
+        <button style={styles.lootClose} onClick={onClose}>✕</button>
+      </div>
+      <ul style={styles.lootList}>
+        {items.map((item, i) => (
+          <li key={i} style={styles.lootItem}>
+            <span style={styles.lootItemName}>{item.name}</span>
+            <span style={styles.lootItemMeta}>{item.slot} · ilvl {item.ilvl}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function RespawnOverlay({ deathTime, onRespawn }) {
   const [remaining, setRemaining] = useState(RESPAWN_DELAY_S);
 
@@ -267,6 +379,7 @@ export default function App({
   const targetIdRef = useRef(null);
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
+  const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [powers, setPowers] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
@@ -456,6 +569,10 @@ export default function App({
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.repeat) return;
+      if (e.code === "Escape") {
+        setLootWindowUnitId(null);
+        return;
+      }
       if (e.code === "Tab") {
         e.preventDefault();
         handleTabTarget(
@@ -516,7 +633,7 @@ export default function App({
       slotToken,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
       onClose: () => { setDisconnected(true); addLog("Disconnected."); },
-      onStateChange: ({ units: u, combatEvents = [] }) => {
+      onStateChange: ({ units: u, combatEvents = [], lootEvents = [] }) => {
         unitsRef.current = u;
         setUnits(u);
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
@@ -531,6 +648,9 @@ export default function App({
               connRef.current?.send({ direction: "up", type: "target", target_id: null });
             }
           }
+        }
+        for (const ev of lootEvents) {
+          addLog(`Lootable: ${ev.items.map(i => i.name).join(", ")} — right-click to open`);
         }
         for (const ev of combatEvents) {
           const attacker = u[ev.attacker_id];
@@ -589,6 +709,12 @@ export default function App({
     connRef.current?.send({ type: "respawn" });
   }, []);
 
+  const handleUnitRightClick = useCallback((id) => {
+    if (unitsRef.current[id]?.loot_items?.length > 0) {
+      setLootWindowUnitId(id);
+    }
+  }, []);
+
   const targetUnit = targetId ? units[targetId] : null;
   const targetRange = (selfUnit && targetUnit)
     ? Math.sqrt(
@@ -635,9 +761,15 @@ export default function App({
           onFacingChange={handleFacingChange}
           onSelfPosition={handleSelfPosition}
           onUnitClick={handleTargetUnit}
+          onUnitRightClick={handleUnitRightClick}
+          lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.length > 0).map(([id]) => id))}
           targetId={targetId}
         />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
+        <LootWindow
+          items={units[lootWindowUnitId]?.loot_items}
+          onClose={() => setLootWindowUnitId(null)}
+        />
       </div>
       <div style={styles.actionBar}>
         {Array.from({ length: 10 }, (_, i) => {

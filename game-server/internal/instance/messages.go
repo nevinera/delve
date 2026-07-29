@@ -35,6 +35,7 @@ type unitJSON struct {
 	GlobalCooldownEndsAt   *int64                   `json:"global_cooldown_ends_at,omitempty"`
 	PowerCooldowns         map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects    []effectJSON             `json:"active_status_effects"`
+	LootItems              []lootEventItemJSON      `json:"loot_items,omitempty"`
 }
 
 type effectJSON struct {
@@ -64,6 +65,18 @@ type combatEventJSON struct {
 	PowerName  string `json:"power_name"`
 }
 
+type lootEventItemJSON struct {
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
+	Slot       string `json:"slot"`
+	Ilvl       int    `json:"ilvl"`
+}
+
+type lootEventJSON struct {
+	UnitID string              `json:"unit_id"`
+	Items  []lootEventItemJSON `json:"items"`
+}
+
 type deltaMsg struct {
 	downBase
 	UnitUpdates   map[string]map[string]any `json:"unit_updates"`
@@ -71,6 +84,7 @@ type deltaMsg struct {
 	EffectAdds    []effectAddJSON           `json:"effect_adds"`
 	EffectRemoves []effectRemoveJSON        `json:"effect_removes"`
 	CombatEvents  []combatEventJSON         `json:"combat_events,omitempty"`
+	LootEvents    []lootEventJSON           `json:"loot_events,omitempty"`
 }
 
 func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
@@ -110,6 +124,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			GlobalCooldownEndsAt: gcdMs,
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
 			ActiveStatusEffects:  effects,
+			LootItems:            lootItemsToJSON(u.LootItems),
 		}
 	}
 	return json.Marshal(fullStateMsg{
@@ -123,7 +138,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 	})
 }
 
-func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, now time.Time, checksum string) ([]byte, error) {
+func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, now time.Time, checksum string) ([]byte, error) {
 	msg := deltaMsg{
 		downBase: downBase{
 			Direction: "down",
@@ -168,6 +183,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			}
 			if pcd := powerCooldownsJSON(cu.PowerCooldowns); pcd != nil {
 				update["power_cooldowns"] = pcd
+			}
+			if li := lootItemsToJSON(cu.LootItems); li != nil {
+				update["loot_items"] = li
 			}
 			msg.UnitUpdates[idStr] = update
 			for _, e := range cu.ActiveStatusEffects {
@@ -220,6 +238,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		if !powerCooldownsEqual(cu.PowerCooldowns, pu.PowerCooldowns) {
 			patch["power_cooldowns"] = powerCooldownsJSON(cu.PowerCooldowns)
 		}
+		if len(cu.LootItems) != len(pu.LootItems) {
+			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
+		}
 		if len(patch) > 0 {
 			msg.UnitUpdates[idStr] = patch
 		}
@@ -263,6 +284,22 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		})
 	}
 
+	for _, lev := range lootEvents {
+		items := make([]lootEventItemJSON, len(lev.Items))
+		for i, it := range lev.Items {
+			items[i] = lootEventItemJSON{
+				Identifier: it.Identifier,
+				Name:       it.Name,
+				Slot:       it.Slot,
+				Ilvl:       it.Ilvl,
+			}
+		}
+		msg.LootEvents = append(msg.LootEvents, lootEventJSON{
+			UnitID: lev.UnitID,
+			Items:  items,
+		})
+	}
+
 	return json.Marshal(msg)
 }
 
@@ -295,6 +332,17 @@ func powerCooldownsEqual(a, b map[string]time.Time) bool {
 		}
 	}
 	return true
+}
+
+func lootItemsToJSON(items []instanceconfig.Item) []lootEventItemJSON {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]lootEventItemJSON, len(items))
+	for i, it := range items {
+		out[i] = lootEventItemJSON{Identifier: it.Identifier, Name: it.Name, Slot: it.Slot, Ilvl: it.Ilvl}
+	}
+	return out
 }
 
 func uuidPtrEqual(a, b *uuid.UUID) bool {

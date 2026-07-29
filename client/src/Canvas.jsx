@@ -11,7 +11,9 @@ const Canvas = forwardRef(function Canvas({
   onFacingChange,
   onSelfPosition,
   onUnitClick,
+  onUnitRightClick,
   targetId,
+  lootableUnitIds,
 }, ref) {
   const canvasRef = useRef(null);
   const managerRef = useRef(null);
@@ -23,14 +25,14 @@ const Canvas = forwardRef(function Canvas({
   }));
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange, onSelfPosition, onUnitClick });
+    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange, onSelfPosition, onUnitClick, onUnitRightClick });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();
     manager.loadZone(zoneSourceUrl);
 
     const observer = new ResizeObserver(() => manager.handleResize());
-    observer.observe(canvasRef.current);
+    observer.observe(canvasRef.current.parentElement);
 
     return () => {
       observer.disconnect();
@@ -46,10 +48,14 @@ const Canvas = forwardRef(function Canvas({
     managerRef.current?.setTarget(targetId);
   }, [targetId]);
 
+  useEffect(() => {
+    managerRef.current?.setLootableUnits(lootableUnitIds ?? new Set());
+  }, [lootableUnitIds]);
+
   return (
     <canvas
       ref={canvasRef}
-      style={{ flex: 1, display: "block", minHeight: 0, width: "100%", height: "100%" }}
+      style={{ display: "block" }}
     />
   );
 });

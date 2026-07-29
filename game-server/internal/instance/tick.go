@@ -106,7 +106,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 						payload, err = buildFullStateMsg(state, now, checksum)
 					} else {
 						if deltaPayload == nil {
-							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, now, checksum)
+							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, now, checksum)
 						}
 						payload = deltaPayload
 					}
@@ -122,6 +122,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 				}
 			}
 
+			state.PendingLootEvents = nil
 			prevState = state.Clone()
 
 			// Remove slots that have been pending or waiting too long.

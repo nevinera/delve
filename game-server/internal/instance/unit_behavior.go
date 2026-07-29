@@ -137,7 +137,7 @@ func applyUnitBehavior(
 			unit.Behavior.LastSeenX = target.Position.X
 			unit.Behavior.LastSeenY = target.Position.Y
 			chaseTarget(unit, target, speed, dt)
-			tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events)
+			tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events, state)
 		} else {
 			// Target crossed to another map. Move toward last known position so
 			// we reach the connection and traverse it on a future tick.
@@ -176,7 +176,7 @@ func applyUnitBehavior(
 // tryNPCAttack fires a randomly-chosen available harm power at the target if
 // the unit is off GCD and at least one power is in range. Appends a CombatEvent
 // to events if an attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, now time.Time, events *[]CombatEvent) {
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
 	if now.Before(unit.GlobalCooldownEndsAt) {
 		return
 	}
@@ -218,6 +218,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	if target.Health == 0 {
 		target.Status = instancestate.UnitStatusDead
 		target.Target = nil
+		instancestate.RollAndRecordLoot(targetID, target, state)
 	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(c.power.GlobalCooldown * float64(time.Second)))
 	*events = append(*events, CombatEvent{
@@ -403,3 +404,4 @@ func buildNPCConfigByID(zone instanceconfig.Zone) map[string]npcEntry {
 	}
 	return m
 }
+
