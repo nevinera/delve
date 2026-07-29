@@ -242,16 +242,13 @@ driver.on(:message) do |event|
   when ["down", "instance-state"]
     units = msg.fetch("units", {})
     checksum = msg["checksum"]
-    sorted_canonical = units.values
-      .map { |u| GameApi::Checksum.canonical_unit(u) }
-      .sort_by { |u| u["id"] }
-    canonical_json = JSON.generate(sorted_canonical)
-    local = Digest::SHA256.hexdigest(canonical_json)
+    local = GameApi::Checksum.compute_checksum(units)
     if local == checksum
       log.info "[state] Full state: #{units.size} units. Checksum OK."
     else
       log.warn "[state] checksum mismatch after full state — server=#{checksum} local=#{local}"
-      log.warn "[diag] canonical JSON being hashed: #{canonical_json}"
+      sorted = units.values.map { |u| GameApi::Checksum.canonical_unit(u) }.sort_by { |u| u["id"] }
+      log.warn "[diag] canonical JSON being hashed: #{JSON.generate(sorted)}"
     end
 
     if pending_mismatch_snapshot
@@ -261,6 +258,12 @@ driver.on(:message) do |event|
     end
 
   when ["down", "delta"]
+    # Capture pre-patch canonical forms for any units about to be updated.
+    pre_patch = {}
+    (msg["unit_updates"] || {}).each_key do |id|
+      pre_patch[id] = GameApi::Checksum.canonical_unit(units[id]) if units[id]
+    end
+
     (msg["unit_updates"] || {}).each do |id, patch|
       units[id] ? units[id].merge!(patch) : units[id] = patch
     end
@@ -280,7 +283,30 @@ driver.on(:message) do |event|
     local = GameApi::Checksum.compute_checksum(units)
     if local != checksum
       log.warn "[delta] checksum mismatch — server=#{checksum} local=#{local}"
-      log.warn "[diag] unit_updates keys: #{(msg["unit_updates"] || {}).keys.map { |k| k[0..7] }.inspect}"
+      # Log the canonical JSON being hashed so we can compare with the server's.
+      diag_sorted = units.values
+        .map { |u| GameApi::Checksum.canonical_unit(u) }
+        .sort_by { |u| u["id"] }
+      log.warn "[diag] canonical JSON being hashed: #{JSON.generate(diag_sorted)}"
+      (msg["unit_updates"] || {}).each do |id, patch|
+        next unless units[id]
+        post = GameApi::Checksum.canonical_unit(units[id])
+        log.warn "[diag] unit #{id[0..7]} patch keys: #{patch.keys.inspect}"
+        if (before = pre_patch[id])
+          (before.keys | post.keys).each do |field|
+            next if before[field] == post[field]
+            log.warn "  [diag] .#{field}: #{before[field].inspect} -> #{post[field].inspect}"
+          end
+        else
+          log.warn "  [diag] new unit, canonical: #{post.inspect}"
+        end
+      end
+      (msg["effect_adds"] || []).each do |add|
+        log.warn "[diag] effect_add unit=#{add["unit_id"][0..7]} sid=#{add["status_identifier"]} expires_at=#{add["expires_at"]}"
+      end
+      (msg["effect_removes"] || []).each do |rem|
+        log.warn "[diag] effect_remove unit=#{rem["unit_id"][0..7]} sid=#{rem["status_identifier"]}"
+      end
       pending_mismatch_snapshot = canonical_snapshot(units)
       driver.text(JSON.generate({direction: "up", type: "full-state-request"}))
     end
