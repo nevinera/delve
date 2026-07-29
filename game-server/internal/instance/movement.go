@@ -6,6 +6,20 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
+// roundPositions snaps every unit's position to the nearest thousandth of a
+// foot. Called once per tick after all movement and collision resolution so
+// that position values are short clean decimals — preventing float serialization
+// differences between Go's encoding/json and Ruby's json gem from causing
+// checksum mismatches.
+func roundPositions(state *instancestate.InstanceState) {
+	const factor = 1000
+	for _, u := range state.Units {
+		u.Position.X = math.Round(u.Position.X*factor) / factor
+		u.Position.Y = math.Round(u.Position.Y*factor) / factor
+		u.Position.Angle = math.Round(u.Position.Angle*factor) / factor
+	}
+}
+
 // BasePlayerSpeed is the default movement speed in feet per second.
 // Exported so spawn.go and tests can reference it without duplication.
 // Will be driven by class stats and buffs in the future.
