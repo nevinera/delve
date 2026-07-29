@@ -199,22 +199,21 @@ end
 
 # Diffs two canonical snapshots and logs any per-field divergence.
 def diff_snapshots(before, after, log)
-  all_ids = (before.keys | after.keys)
-  all_ids.sort.each do |id|
-    b = before[id]
-    a = after[id]
-    if b.nil?
-      log.warn "  [DIFF] #{id[0..7]} appeared in after but not before"
-      next
-    end
-    if a.nil?
-      log.warn "  [DIFF] #{id[0..7]} disappeared"
-      next
-    end
-    (b.keys | a.keys).each do |field|
-      next if b[field] == a[field]
-      log.warn "  [DIFF] #{b["id"]} .#{field}: before=#{b[field].inspect} after=#{a[field].inspect}"
-    end
+  (before.keys | after.keys).sort.each do |id|
+    diff_snapshot_unit(before[id], after[id], id, log)
+  end
+end
+
+def diff_snapshot_unit(b, a, id, log)
+  return log.warn "  [DIFF] #{id[0..7]} appeared in after but not before" if b.nil?
+  return log.warn "  [DIFF] #{id[0..7]} disappeared" if a.nil?
+  diff_snapshot_fields(b, a, log)
+end
+
+def diff_snapshot_fields(b, a, log)
+  (b.keys | a.keys).each do |field|
+    next if b[field] == a[field]
+    log.warn "  [DIFF] #{b["id"]} .#{field}: before=#{b[field].inspect} after=#{a[field].inspect}"
   end
 end
 
