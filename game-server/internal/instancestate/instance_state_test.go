@@ -55,6 +55,30 @@ func TestNewInstanceState(t *testing.T) {
 			wantErr: `unknown unit type "unknown"`,
 		},
 		{
+			name: "duplicate identifier on the same map returns error",
+			zone: zoneWith(
+				instanceconfig.Unit{Identifier: "u1", UnitType: "goblin"},
+				instanceconfig.Unit{Identifier: "u1", UnitType: "goblin"},
+			),
+			wantErr: `unit identifier "u1" appears on both map "m1" and map "m1"`,
+		},
+		{
+			name: "duplicate identifier across maps returns error",
+			zone: instanceconfig.Zone{
+				Name: "Two-Map Zone",
+				Maps: []instanceconfig.Map{
+					{Identifier: "m1", Name: "Map 1", Units: []instanceconfig.Unit{
+						{Identifier: "u1", UnitType: "goblin"},
+					}},
+					{Identifier: "m2", Name: "Map 2", Units: []instanceconfig.Unit{
+						{Identifier: "u1", UnitType: "goblin"},
+					}},
+				},
+				UnitTypes: map[string]instanceconfig.UnitType{"goblin": testUnitType},
+			},
+			wantErr: `unit identifier "u1" appears on both map "m1" and map "m2"`,
+		},
+		{
 			name:      "single valid unit is spawned",
 			zone:      zoneWith(instanceconfig.Unit{Identifier: "u1", UnitType: "goblin"}),
 			wantCount: 1,

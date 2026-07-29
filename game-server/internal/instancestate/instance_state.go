@@ -16,12 +16,13 @@ type InstanceState struct {
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every
 // unit at its starting position with full health and its resource at DefaultValue.
-// Returns an error if any unit is missing its identifier or references an
-// unknown unit type.
+// Returns an error if any unit is missing its identifier, reuses an identifier
+// already seen in this zone, or references an unknown unit type.
 func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 	state := &InstanceState{
 		Units: make(map[uuid.UUID]*UnitState),
 	}
+	seen := make(map[string]string) // identifier → map identifier where first seen
 	for _, m := range zone.Maps {
 		for _, u := range m.Units {
 			if u.Identifier == "" {
@@ -30,6 +31,13 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 					m.Identifier,
 				)
 			}
+			if first, dup := seen[u.Identifier]; dup {
+				return nil, fmt.Errorf(
+					"unit identifier %q appears on both map %q and map %q; identifiers must be unique across the zone",
+					u.Identifier, first, m.Identifier,
+				)
+			}
+			seen[u.Identifier] = m.Identifier
 			ut, ok := zone.UnitTypes[u.UnitType]
 			if !ok {
 				return nil, fmt.Errorf(
