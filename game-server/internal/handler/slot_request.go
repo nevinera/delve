@@ -110,6 +110,7 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 		req.ZoneConfig,
 		h.maxSlots,
 	)
+	inst.RailsClient = h.railsClient
 	if err := inst.Start(h.registry); err != nil {
 		return nil, err
 	}

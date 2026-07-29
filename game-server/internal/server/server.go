@@ -10,6 +10,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/handler"
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/middleware"
+	"github.com/delve-mmo/game-server/internal/railsclient"
 )
 
 // New constructs and returns the application's http.Handler. Dependencies are
@@ -27,7 +28,7 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 	r.Get("/status.json", handler.NewStatus(registry).ServeHTTP)
 
 	instances := handler.NewInstances(registry, cfg.MaxSlots)
-	slots := handler.NewSlots(registry, cfg.MaxInstances, cfg.MaxSlots)
+	slots := handler.NewSlots(registry, cfg.MaxInstances, cfg.MaxSlots, railsclient.FromEnv())
 
 	// Slot WebSocket — authenticated by slot token query param, not Bearer.
 	r.Get("/instances/{instanceID}/slots/{slotID}/connect", slots.Connect)

@@ -644,7 +644,7 @@ export default function App({
       slotToken,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
       onClose: () => { setDisconnected(true); addLog("Disconnected."); },
-      onStateChange: ({ units: u, combatEvents = [], lootEvents = [] }) => {
+      onStateChange: ({ units: u, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
         unitsRef.current = u;
         setUnits(u);
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
@@ -662,6 +662,12 @@ export default function App({
         }
         for (const ev of lootEvents) {
           addLog(`Lootable: ${ev.items.map(i => i.name).join(", ")} — right-click to open`);
+        }
+        const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
+        for (const failure of lootFailures) {
+          if (self && failure.claimed_by === self.id) {
+            addLog(`Failed to loot ${failure.item.name} - please try again.`);
+          }
         }
         for (const ev of combatEvents) {
           const attacker = u[ev.attacker_id];

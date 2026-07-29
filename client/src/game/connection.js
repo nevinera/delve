@@ -74,7 +74,7 @@ export class GameConnection {
         console.warn("checksum mismatch after delta", { server: msg.checksum, local });
         this._send({ direction: "up", type: "full-state-request" });
       }
-      this._onStateChange?.({ units: this._units, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [] });
+      this._onStateChange?.({ units: this._units, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
     }
   }
 

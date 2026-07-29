@@ -77,6 +77,11 @@ type lootEventJSON struct {
 	Items  []lootEventItemJSON `json:"items"`
 }
 
+type lootFailureJSON struct {
+	ClaimedBy string           `json:"claimed_by"`
+	Item      lootEventItemJSON `json:"item"`
+}
+
 type deltaMsg struct {
 	downBase
 	UnitUpdates   map[string]map[string]any `json:"unit_updates"`
@@ -85,6 +90,7 @@ type deltaMsg struct {
 	EffectRemoves []effectRemoveJSON        `json:"effect_removes"`
 	CombatEvents  []combatEventJSON         `json:"combat_events,omitempty"`
 	LootEvents    []lootEventJSON           `json:"loot_events,omitempty"`
+	LootFailures  []lootFailureJSON         `json:"loot_failures,omitempty"`
 }
 
 func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
@@ -138,7 +144,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 	})
 }
 
-func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, now time.Time, checksum string) ([]byte, error) {
+func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, lootFailures []instancestate.LootFailure, now time.Time, checksum string) ([]byte, error) {
 	msg := deltaMsg{
 		downBase: downBase{
 			Direction: "down",
@@ -238,7 +244,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		if !powerCooldownsEqual(cu.PowerCooldowns, pu.PowerCooldowns) {
 			patch["power_cooldowns"] = powerCooldownsJSON(cu.PowerCooldowns)
 		}
-		if len(cu.LootItems) != len(pu.LootItems) {
+		if countAvailableLootItems(cu.LootItems) != countAvailableLootItems(pu.LootItems) {
 			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
 		}
 		if len(patch) > 0 {
@@ -300,6 +306,13 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		})
 	}
 
+	for _, lf := range lootFailures {
+		msg.LootFailures = append(msg.LootFailures, lootFailureJSON{
+			ClaimedBy: lf.ClaimedBy.String(),
+			Item:      lootEventItemJSON{Identifier: lf.Item.Identifier, Name: lf.Item.Name, Slot: lf.Item.Slot, Ilvl: lf.Item.Ilvl},
+		})
+	}
+
 	return json.Marshal(msg)
 }
 
@@ -334,15 +347,27 @@ func powerCooldownsEqual(a, b map[string]time.Time) bool {
 	return true
 }
 
-func lootItemsToJSON(items []instanceconfig.Item) []lootEventItemJSON {
-	if len(items) == 0 {
-		return nil
-	}
-	out := make([]lootEventItemJSON, len(items))
-	for i, it := range items {
-		out[i] = lootEventItemJSON{Identifier: it.Identifier, Name: it.Name, Slot: it.Slot, Ilvl: it.Ilvl}
+// lootItemsToJSON serializes available (unclaimed) loot items. Claimed items
+// are omitted - they are in-flight and temporarily invisible to clients.
+func lootItemsToJSON(items []instancestate.PendingLootItem) []lootEventItemJSON {
+	var out []lootEventItemJSON
+	for _, pi := range items {
+		if pi.Claim != nil {
+			continue
+		}
+		out = append(out, lootEventItemJSON{Identifier: pi.Item.Identifier, Name: pi.Item.Name, Slot: pi.Item.Slot, Ilvl: pi.Item.Ilvl})
 	}
 	return out
+}
+
+func countAvailableLootItems(items []instancestate.PendingLootItem) int {
+	n := 0
+	for _, pi := range items {
+		if pi.Claim == nil {
+			n++
+		}
+	}
+	return n
 }
 
 func uuidPtrEqual(a, b *uuid.UUID) bool {

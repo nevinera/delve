@@ -93,6 +93,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())
 			resolveCollisions(state, inst.ZoneConfig)
 			roundPositions(state)
+			sweepLootClaims(state)
 			checksum := state.Checksum()
 			inst.Checksum = checksum
 
@@ -106,7 +107,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 						payload, err = buildFullStateMsg(state, now, checksum)
 					} else {
 						if deltaPayload == nil {
-							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, now, checksum)
+							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum)
 						}
 						payload = deltaPayload
 					}
@@ -122,7 +123,13 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 				}
 			}
 
+			for _, pending := range state.PendingLootClaims {
+				go inst.fireLootAward(ctx, pending)
+			}
+
 			state.PendingLootEvents = nil
+			state.PendingLootClaims = nil
+			state.PendingLootFailures = nil
 			prevState = state.Clone()
 
 			// Remove slots that have been pending or waiting too long.

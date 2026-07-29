@@ -6,8 +6,8 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-// LootItemHandler removes one item from a lootable unit's LootItems slice.
-// The item is not yet awarded to the player - that will come later.
+// LootItemHandler claims one item from a lootable unit, marking it in-flight
+// while the tick loop fires a goroutine to award it via the Rails API.
 type LootItemHandler struct{}
 
 func (LootItemHandler) Type() string      { return "loot_item" }
@@ -25,6 +25,19 @@ func (LootItemHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 	if p.ItemIndex < 0 || p.ItemIndex >= len(target.LootItems) {
 		return nil
 	}
-	target.LootItems = append(target.LootItems[:p.ItemIndex], target.LootItems[p.ItemIndex+1:]...)
+	item := &target.LootItems[p.ItemIndex]
+	if item.Claim != nil {
+		return nil // already claimed by someone
+	}
+	claim := &instancestate.LootClaim{
+		ClaimedBy: unitID,
+		Result:    make(chan bool, 1),
+	}
+	item.Claim = claim
+	next.PendingLootClaims = append(next.PendingLootClaims, instancestate.PendingLootClaim{
+		TargetUnitID: p.TargetUnitID,
+		Claim:        claim,
+		Item:         item.Item,
+	})
 	return nil
 }

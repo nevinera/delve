@@ -26,7 +26,7 @@ func mountRequest(sh *handler.Slots) http.Handler {
 }
 
 func newSlotsHandler(reg *instance.Registry, maxInstances int) *handler.Slots {
-	return handler.NewSlots(reg, maxInstances, instance.DefaultMaxSlots)
+	return handler.NewSlots(reg, maxInstances, instance.DefaultMaxSlots, nil)
 }
 
 // validZoneConfig returns a minimal zone config that can actually start.
@@ -220,7 +220,7 @@ func TestSlotsRequest_Auto_CreatesInstance_WhenNoneExists(t *testing.T) {
 
 func TestSlotsRequest_Auto_CreatesNewInstance_WhenExistingFull(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, 1) // maxSlots=1 so each instance holds one player
+	sh := handler.NewSlots(reg, 200, 1, nil) // maxSlots=1 so each instance holds one player
 	router := mountRequest(sh)
 
 	rec1 := postRequest(t, router, validRequestBody(nil))
@@ -237,7 +237,7 @@ func TestSlotsRequest_Auto_CreatesNewInstance_WhenExistingFull(t *testing.T) {
 
 func TestSlotsRequest_Auto_ServerAtCapacity(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 1, 1) // maxInstances=1, maxSlots=1
+	sh := handler.NewSlots(reg, 1, 1, nil) // maxInstances=1, maxSlots=1
 	router := mountRequest(sh)
 
 	// Fill the one allowed instance.
@@ -297,7 +297,7 @@ func TestSlotsRequest_Auto_InvalidZoneConfig(t *testing.T) {
 func TestSlotsRequest_RouteRegistered(t *testing.T) {
 	reg := instance.NewRegistry()
 	r := chi.NewRouter()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	r.Post("/slots/request", sh.Request)
 
 	req := httptest.NewRequest(http.MethodGet, "/slots/request", nil)

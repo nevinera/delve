@@ -11,6 +11,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/railsclient"
 )
 
 // Slots handles CRUD operations on slots within a running instance.
@@ -18,10 +19,11 @@ type Slots struct {
 	registry     *instance.Registry
 	maxInstances int
 	maxSlots     int
+	railsClient  *railsclient.Client
 }
 
-func NewSlots(registry *instance.Registry, maxInstances, maxSlots int) *Slots {
-	return &Slots{registry: registry, maxInstances: maxInstances, maxSlots: maxSlots}
+func NewSlots(registry *instance.Registry, maxInstances, maxSlots int, railsClient *railsclient.Client) *Slots {
+	return &Slots{registry: registry, maxInstances: maxInstances, maxSlots: maxSlots, railsClient: railsClient}
 }
 
 type createSlotRequest struct {

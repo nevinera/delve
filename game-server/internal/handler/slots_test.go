@@ -75,7 +75,7 @@ func validCreateSlotBody(name string) []byte {
 func TestSlots_Create(t *testing.T) {
 	reg := instance.NewRegistry()
 	ih := handler.NewInstances(reg, instance.DefaultMaxSlots)
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(ih, sh)
 	inst := addTestInstance(t, reg)
 
@@ -99,7 +99,7 @@ func TestSlots_Create(t *testing.T) {
 
 func TestSlots_Create_InstanceNotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 
 	req := httptest.NewRequest(http.MethodPost,
@@ -112,7 +112,7 @@ func TestSlots_Create_InstanceNotFound(t *testing.T) {
 
 func TestSlots_Create_InvalidInstanceUUID(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/not-a-uuid/slots",
@@ -124,7 +124,7 @@ func TestSlots_Create_InvalidInstanceUUID(t *testing.T) {
 
 func TestSlots_Create_MissingCharacterName(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -144,7 +144,7 @@ func TestSlots_Create_MissingCharacterName(t *testing.T) {
 
 func TestSlots_Create_InstanceFull(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, 1), sh)
 	inst := addTestInstance(t, reg)
 	inst.MaxSlots = 1
@@ -170,7 +170,7 @@ func TestSlots_Create_InstanceFull(t *testing.T) {
 
 func TestSlots_Create_BodyTooLarge(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -185,7 +185,7 @@ func TestSlots_Create_BodyTooLarge(t *testing.T) {
 
 func TestSlots_Create_MalformedJSON(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -200,7 +200,7 @@ func TestSlots_Create_MalformedJSON(t *testing.T) {
 func TestSlots_Create_TokenNotReturnedOnSubsequentRequests(t *testing.T) {
 	reg := instance.NewRegistry()
 	ih := handler.NewInstances(reg, instance.DefaultMaxSlots)
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(ih, sh)
 	inst := addTestInstance(t, reg)
 
@@ -233,7 +233,7 @@ func TestSlots_Create_TokenNotReturnedOnSubsequentRequests(t *testing.T) {
 
 func TestSlots_Show(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -257,7 +257,7 @@ func TestSlots_Show(t *testing.T) {
 
 func TestSlots_Show_InstanceNotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 
 	req := httptest.NewRequest(http.MethodGet,
@@ -269,7 +269,7 @@ func TestSlots_Show_InstanceNotFound(t *testing.T) {
 
 func TestSlots_Show_NotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -282,7 +282,7 @@ func TestSlots_Show_NotFound(t *testing.T) {
 
 func TestSlots_Show_InvalidSlotUUID(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -297,7 +297,7 @@ func TestSlots_Show_InvalidSlotUUID(t *testing.T) {
 
 func TestSlots_List_InstanceNotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 
 	req := httptest.NewRequest(http.MethodGet,
@@ -309,7 +309,7 @@ func TestSlots_List_InstanceNotFound(t *testing.T) {
 
 func TestSlots_List_Empty(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -326,7 +326,7 @@ func TestSlots_List_Empty(t *testing.T) {
 
 func TestSlots_List_AfterCreate(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -350,7 +350,7 @@ func TestSlots_List_AfterCreate(t *testing.T) {
 
 func TestSlots_List_NoTokenInResponse(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -376,7 +376,7 @@ func TestSlots_List_NoTokenInResponse(t *testing.T) {
 
 func TestSlots_Destroy(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -396,7 +396,7 @@ func TestSlots_Destroy(t *testing.T) {
 
 func TestSlots_Destroy_InstanceNotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 
 	req := httptest.NewRequest(http.MethodDelete,
@@ -408,7 +408,7 @@ func TestSlots_Destroy_InstanceNotFound(t *testing.T) {
 
 func TestSlots_Destroy_NotFound(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -421,7 +421,7 @@ func TestSlots_Destroy_NotFound(t *testing.T) {
 
 func TestSlots_Destroy_InvalidSlotUUID(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -436,7 +436,7 @@ func TestSlots_Destroy_InvalidSlotUUID(t *testing.T) {
 
 func TestSlots_Active_Empty(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 
 	req := httptest.NewRequest(http.MethodGet, "/slots/active", nil)
@@ -451,7 +451,7 @@ func TestSlots_Active_Empty(t *testing.T) {
 
 func TestSlots_Active_ReturnsAllStates(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -491,7 +491,7 @@ func TestSlots_Active_ReturnsAllStates(t *testing.T) {
 
 func TestSlots_Active_IncludesTokenAndInstance(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 	inst := addTestInstance(t, reg)
 
@@ -518,7 +518,7 @@ func TestSlots_Active_IncludesTokenAndInstance(t *testing.T) {
 
 func TestSlots_Active_AcrossMultipleInstances(t *testing.T) {
 	reg := instance.NewRegistry()
-	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots)
+	sh := handler.NewSlots(reg, 200, instance.DefaultMaxSlots, nil)
 	router := mountSlots(handler.NewInstances(reg, instance.DefaultMaxSlots), sh)
 
 	inst1 := addTestInstance(t, reg)

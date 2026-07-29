@@ -8,6 +8,20 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
+// LootClaim is an in-flight attempt to take one loot item. The goroutine
+// writes true on success or false on failure; the tick loop reads it next tick.
+type LootClaim struct {
+	ClaimedBy uuid.UUID
+	Result    chan bool // buffered(1)
+}
+
+// PendingLootItem is one item in a unit's loot list, optionally in-flight.
+type PendingLootItem struct {
+	ClaimID uuid.UUID
+	Item    instanceconfig.Item
+	Claim   *LootClaim // nil = available for looting
+}
+
 // UnitStatus is the lifecycle/combat state of a unit.
 type UnitStatus string
 
@@ -88,9 +102,9 @@ type UnitState struct {
 	Speed       float64 // movement speed in feet per second
 	Radius      float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
-	LootTable map[string]int         // identifier → weight; nil means no loot
-	LootCount [2]int                 // [min, max] items to award; both 1 when lootCount omitted
-	LootItems []instanceconfig.Item  // rolled at death; nil until the unit dies
+	LootTable map[string]int          // identifier → weight; nil means no loot
+	LootCount [2]int                  // [min, max] items to award; both 1 when lootCount omitted
+	LootItems []PendingLootItem       // rolled at death; nil until the unit dies
 
 	Status               UnitStatus
 	Target               *uuid.UUID
