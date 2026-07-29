@@ -1,0 +1,98 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Developer script to award an item to a character, as if dropped by a zone.
+# Calls AwardCharacterItem directly, bypassing the game server.
+#
+# Usage:
+#   script/award_item -C <character> -Z <zone> -I <identifier> -n <name> -s <slot> -l <ilvl> [options]
+#
+# Required:
+#   -C, --character <id|name>      Character ID or name
+#   -Z, --zone <id|identifier>     Zone ID or identifier (latest version if identifier)
+#   -I, --identifier <string>      Item identifier (e.g. "iron_sword")
+#   -n, --name <string>            Display name (e.g. "Iron Sword")
+#   -s, --slot <string>            Equipment slot (e.g. "main_hand", "head")
+#   -l, --ilvl <integer>           Item level (0+)
+#
+# Optional:
+#   -d, --description <string>     Flavor text
+#       --icon-url <url>           Icon image URL
+#       --weapon-dps <float>       DPS for weapon items
+#       --strength <int>
+#       --agility <int>
+#       --intellect <int>
+#       --stamina <int>
+#       --crit-rating <int>
+#       --haste-rating <int>
+#       --mastery-rating <int>
+#       --versatility-rating <int>
+#       --resilience-rating <int>
+
+require "optparse"
+require_relative "../config/environment"
+
+options = {}
+stats = {}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: script/award_item -C <character> -Z <zone> -I <id> -n <name> -s <slot> -l <ilvl> [options]"
+
+  opts.on("-C", "--character ID_OR_NAME", "Character ID or name") { |v| options[:character] = v }
+  opts.on("-Z", "--zone ID_OR_IDENTIFIER", "Zone ID or identifier") { |v| options[:zone] = v }
+  opts.on("-I", "--identifier STRING", "Item identifier") { |v| options[:identifier] = v }
+  opts.on("-n", "--name STRING", "Display name") { |v| options[:name] = v }
+  opts.on("-s", "--slot STRING", "Equipment slot") { |v| options[:slot] = v }
+  opts.on("-l", "--ilvl INTEGER", Integer, "Item level") { |v| options[:ilvl] = v }
+  opts.on("-d", "--description STRING", "Flavor text") { |v| options[:description] = v }
+  opts.on("--icon-url URL", "Icon image URL") { |v| options[:icon_url] = v }
+  opts.on("--weapon-dps FLOAT", Float, "Weapon DPS") { |v| stats["weapon_dps"] = v }
+  opts.on("--strength INT", Integer) { |v| stats["strength"] = v }
+  opts.on("--agility INT", Integer) { |v| stats["agility"] = v }
+  opts.on("--intellect INT", Integer) { |v| stats["intellect"] = v }
+  opts.on("--stamina INT", Integer) { |v| stats["stamina"] = v }
+  opts.on("--crit-rating INT", Integer) { |v| stats["crit_rating"] = v }
+  opts.on("--haste-rating INT", Integer) { |v| stats["haste_rating"] = v }
+  opts.on("--mastery-rating INT", Integer) { |v| stats["mastery_rating"] = v }
+  opts.on("--versatility-rating INT", Integer) { |v| stats["versatility_rating"] = v }
+  opts.on("--resilience-rating INT", Integer) { |v| stats["resilience_rating"] = v }
+end.parse!
+
+%i[character zone identifier name slot ilvl].each do |field|
+  abort "Error: --#{field.to_s.tr("_", "-")} is required" unless options[field]
+end
+
+character_key = options[:character]
+character = if /\A\d+\z/.match?(character_key)
+  Character.find_by(id: character_key.to_i)
+else
+  Character.find_by(name: character_key)
+end
+abort "Character not found: #{character_key}" unless character
+
+zone_key = options[:zone]
+zone = if /\A\d+\z/.match?(zone_key)
+  Zone.find_by(id: zone_key.to_i)
+else
+  Zone.where(identifier: zone_key).order(created_at: :desc).first
+end
+abort "Zone not found: #{zone_key}" unless zone
+
+source_data = {
+  "zone" => {"database_id" => zone.id.to_s, "identifier" => zone.identifier, "version" => zone.version},
+  "identifier" => options[:identifier],
+  "name" => options[:name],
+  "slot" => options[:slot],
+  "ilvl" => options[:ilvl]
+}
+source_data["description"] = options[:description] if options[:description]
+source_data["icon_url"] = options[:icon_url] if options[:icon_url]
+source_data["stats"] = stats unless stats.empty?
+
+result = AwardCharacterItem.call(character:, source_data:)
+
+if result.nil?
+  warn "Item already held by #{character.name} (source_key=#{zone.identifier}/#{zone.version}/#{options[:identifier]})"
+else
+  warn "Awarded #{result.name} (ilvl #{result.ilvl} #{result.slot}) to #{character.name} [id=#{result.id}]"
+end
