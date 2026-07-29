@@ -35,10 +35,16 @@ type CombatEvent struct {
 	PowerName  string
 }
 
+// LootEvent records items rolled when a unit dies.
+type LootEvent struct {
+	UnitID string
+	Items  []instanceconfig.Item
+}
+
 // applyUnitBehaviors is the NPC brain, called once per tick for every
 // non-player unit. It handles aggro detection, status transitions, and
 // dispatches to the appropriate movement routine.
-func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) []CombatEvent {
+func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) ([]CombatEvent, []LootEvent) {
 	cfgByID := buildNPCConfigByID(zone)
 
 	// Index live players by map for O(1) aggro checks.
@@ -61,6 +67,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 	linkGroupByID := buildSymmetricLinkGroups(zone)
 
 	var events []CombatEvent
+	var lootEvents []LootEvent
 	for id, unit := range state.Units {
 		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
 			continue
@@ -69,11 +76,11 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(id, unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt, &events)
+		applyUnitBehavior(id, unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt, &events, &lootEvents)
 	}
 
 	applyNPCSeparation(state, dt)
-	return events
+	return events, lootEvents
 }
 
 func applyUnitBehavior(
@@ -86,6 +93,7 @@ func applyUnitBehavior(
 	linkGroupByID map[string][]string,
 	dt float64,
 	events *[]CombatEvent,
+	lootEvents *[]LootEvent,
 ) {
 	sf := e.unitType.SpeedFactor
 	if sf == 0 {
@@ -137,7 +145,7 @@ func applyUnitBehavior(
 			unit.Behavior.LastSeenX = target.Position.X
 			unit.Behavior.LastSeenY = target.Position.Y
 			chaseTarget(unit, target, speed, dt)
-			tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events)
+			tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events, lootEvents, state.Items)
 		} else {
 			// Target crossed to another map. Move toward last known position so
 			// we reach the connection and traverse it on a future tick.
@@ -176,7 +184,7 @@ func applyUnitBehavior(
 // tryNPCAttack fires a randomly-chosen available harm power at the target if
 // the unit is off GCD and at least one power is in range. Appends a CombatEvent
 // to events if an attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, now time.Time, events *[]CombatEvent) {
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, now time.Time, events *[]CombatEvent, lootEvents *[]LootEvent, items map[string]instanceconfig.Item) {
 	if now.Before(unit.GlobalCooldownEndsAt) {
 		return
 	}
@@ -218,6 +226,12 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	if target.Health == 0 {
 		target.Status = instancestate.UnitStatusDead
 		target.Target = nil
+		if len(target.LootTable) > 0 {
+			*lootEvents = append(*lootEvents, LootEvent{
+				UnitID: targetID.String(),
+				Items:  rollLoot(target.LootTable, target.LootCount, items),
+			})
+		}
 	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(c.power.GlobalCooldown * float64(time.Second)))
 	*events = append(*events, CombatEvent{
@@ -402,4 +416,49 @@ func buildNPCConfigByID(zone instanceconfig.Zone) map[string]npcEntry {
 		}
 	}
 	return m
+}
+
+// rollLoot samples `count` items from the weighted loot table and returns the
+// corresponding Item definitions. Items with no matching entry in the catalog
+// are silently skipped. The same item may appear more than once.
+func rollLoot(table map[string]int, count [2]int, catalog map[string]instanceconfig.Item) []instanceconfig.Item {
+	if len(table) == 0 || len(catalog) == 0 {
+		return nil
+	}
+
+	// Build a sorted slice of (identifier, cumulative weight) for sampling.
+	type entry struct {
+		id     string
+		cumul  int
+	}
+	entries := make([]entry, 0, len(table))
+	total := 0
+	for id, w := range table {
+		if w > 0 {
+			total += w
+			entries = append(entries, entry{id, total})
+		}
+	}
+	if total == 0 {
+		return nil
+	}
+
+	n := count[0]
+	if count[1] > count[0] {
+		n = count[0] + rand.Intn(count[1]-count[0]+1)
+	}
+
+	var result []instanceconfig.Item
+	for range n {
+		r := rand.Intn(total)
+		for _, e := range entries {
+			if r < e.cumul {
+				if item, ok := catalog[e.id]; ok {
+					result = append(result, item)
+				}
+				break
+			}
+		}
+	}
+	return result
 }

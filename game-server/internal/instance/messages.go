@@ -64,6 +64,18 @@ type combatEventJSON struct {
 	PowerName  string `json:"power_name"`
 }
 
+type lootEventItemJSON struct {
+	Identifier string `json:"identifier"`
+	Name       string `json:"name"`
+	Slot       string `json:"slot"`
+	Ilvl       int    `json:"ilvl"`
+}
+
+type lootEventJSON struct {
+	UnitID string              `json:"unit_id"`
+	Items  []lootEventItemJSON `json:"items"`
+}
+
 type deltaMsg struct {
 	downBase
 	UnitUpdates   map[string]map[string]any `json:"unit_updates"`
@@ -71,6 +83,7 @@ type deltaMsg struct {
 	EffectAdds    []effectAddJSON           `json:"effect_adds"`
 	EffectRemoves []effectRemoveJSON        `json:"effect_removes"`
 	CombatEvents  []combatEventJSON         `json:"combat_events,omitempty"`
+	LootEvents    []lootEventJSON           `json:"loot_events,omitempty"`
 }
 
 func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
@@ -123,7 +136,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 	})
 }
 
-func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, now time.Time, checksum string) ([]byte, error) {
+func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []LootEvent, now time.Time, checksum string) ([]byte, error) {
 	msg := deltaMsg{
 		downBase: downBase{
 			Direction: "down",
@@ -260,6 +273,22 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			AttackerID: ev.AttackerID,
 			TargetID:   ev.TargetID,
 			PowerName:  ev.PowerName,
+		})
+	}
+
+	for _, lev := range lootEvents {
+		items := make([]lootEventItemJSON, len(lev.Items))
+		for i, it := range lev.Items {
+			items[i] = lootEventItemJSON{
+				Identifier: it.Identifier,
+				Name:       it.Name,
+				Slot:       it.Slot,
+				Ilvl:       it.Ilvl,
+			}
+		}
+		msg.LootEvents = append(msg.LootEvents, lootEventJSON{
+			UnitID: lev.UnitID,
+			Items:  items,
 		})
 	}
 

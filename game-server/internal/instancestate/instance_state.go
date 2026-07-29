@@ -12,6 +12,7 @@ import (
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
 	Units map[uuid.UUID]*UnitState
+	Items map[string]instanceconfig.Item // identifier → item definition; shared across units
 }
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every
@@ -21,6 +22,7 @@ type InstanceState struct {
 func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 	state := &InstanceState{
 		Units: make(map[uuid.UUID]*UnitState),
+		Items: zone.Items,
 	}
 	seen := make(map[string]string) // identifier → map identifier where first seen
 	for _, m := range zone.Maps {
@@ -49,6 +51,10 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 			if hpFraction == 0 {
 				hpFraction = 1.0
 			}
+			lootCount := [2]int{1, 1}
+			if u.LootCount != nil {
+				lootCount = [2]int{int(u.LootCount.Min()), int(u.LootCount.Max())}
+			}
 			id := uuid.New()
 			state.Units[id] = &UnitState{
 				ZoneUnitIdentifier:  u.Identifier,
@@ -62,6 +68,8 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 				Resource:            ut.Resource.DefaultValue,
 				MaxResource:         ut.Resource.Max,
 				Radius:              ut.TokenRadius,
+				LootTable:           u.LootTable,
+				LootCount:           lootCount,
 				Status:              UnitStatusIdle,
 				Target:              nil,
 				ActiveStatusEffects: []ActiveStatusEffect{},

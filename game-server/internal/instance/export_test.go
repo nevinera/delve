@@ -23,7 +23,7 @@ func BuildFullStateMsgForTest(state *instancestate.InstanceState, now time.Time,
 }
 
 func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
-	return buildDeltaMsg(prev, curr, nil, now, checksum)
+	return buildDeltaMsg(prev, curr, nil, nil, now, checksum)
 }
 
 func PushOutOfSegmentForTest(px, py, r, ax, ay, bx, by float64) (float64, float64) {
