@@ -197,6 +197,7 @@ RSpec.describe GameApi::SlotsClient do
         source_url: "http://x",
         zone_config: zone_config,
         character_name: "Aldric",
+        character_database_id: "42",
         character_class: puncher_class
       }
     end
@@ -249,7 +250,7 @@ RSpec.describe GameApi::SlotsClient do
     end
 
     context "attr validation" do
-      %i[zone_identifier version database_id source_url zone_config character_name character_class].each do |field|
+      %i[zone_identifier version database_id source_url zone_config character_name character_database_id character_class].each do |field|
         it "raises InvalidAttrsError when #{field} is missing" do
           expect {
             client.request(valid_attrs.except(field))
