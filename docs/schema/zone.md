@@ -4,6 +4,7 @@ A Zone is a discrete location in the world, made up of one or more maps connecte
 
 See [common.md](common.md) for `Location`, `Position`, and `floatRange`.
 See [map.md](map.md) for the `Map` type embedded in `maps`.
+See [item.md](item.md) for the `Item` type embedded in `items`.
 
 ## Fields
 
@@ -14,6 +15,7 @@ See [map.md](map.md) for the `Map` type embedded in `maps`.
 | `private` | boolean | yes | `true` for party-instanced zones (dungeons); `false` for shared zones (questing areas). |
 | `maps` | array of Map \| AssetReference(`referenceTo: "map"`) | yes | At least one. Inline Map objects or references to external map files. A zone containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `unitTypes` | object | no | Maps local string identifiers to UnitType definitions or AssetReferences (`referenceTo: "unit_type"`). Referenced by `unitType` fields on map Units. |
+| `items` | object | no | Maps item identifier strings to Item definitions. Every identifier referenced in a unit's `lootTable` must appear here. |
 | `zoneLinks` | array of ZoneLink | no | Connections between pairs of MapConnections within this zone. |
 | `entryPoints` | object | no | Maps `"mapId/connectionId"` keys to required key strings (or `null`). Players can spawn at these connections directly. |
 | `openConnections` | object | no | Maps `"mapId/connectionId"` keys to zone-level name strings. Exposes connections for other zones to link against. |
@@ -47,6 +49,28 @@ Links two MapConnections within the zone so that traversing one transports a uni
 | `connectionB` | ConnectionIdentifier | yes | |
 | `oneWay` | boolean | yes | If `true`, travel is only permitted from `connectionA` to `connectionB`. |
 | `requiredKey` | string \| null | yes | Identifier of the key item required to traverse. `null` if no key is needed. |
+
+---
+
+## LootTable
+
+A LootTable maps item identifiers to integer weights. When the game server rolls loot, it samples from this table: each roll picks one identifier with probability proportional to its weight, or produces no item if the weights sum to less than 100.
+
+| Constraint | Rule |
+|---|---|
+| Keys | Item identifiers; must be keys in the zone's `items` map. |
+| Values | Positive integers. |
+| Sum | All values combined must be ≤ 100. The remainder is the chance of no drop on that roll. |
+
+```json
+{
+  "sword-of-doom": 30,
+  "iron-shield": 20,
+  "goblin-ear-trinket": 10
+}
+```
+
+In this example: 30% chance of Sword of Doom, 20% chance of Iron Shield, 10% chance of Goblin Ear Trinket, 40% chance of nothing per roll.
 
 ---
 
