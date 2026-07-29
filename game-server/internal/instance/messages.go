@@ -35,6 +35,7 @@ type unitJSON struct {
 	GlobalCooldownEndsAt   *int64                   `json:"global_cooldown_ends_at,omitempty"`
 	PowerCooldowns         map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects    []effectJSON             `json:"active_status_effects"`
+	LootItems              []lootEventItemJSON      `json:"loot_items,omitempty"`
 }
 
 type effectJSON struct {
@@ -123,6 +124,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			GlobalCooldownEndsAt: gcdMs,
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
 			ActiveStatusEffects:  effects,
+			LootItems:            lootItemsToJSON(u.LootItems),
 		}
 	}
 	return json.Marshal(fullStateMsg{
@@ -136,7 +138,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 	})
 }
 
-func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []LootEvent, now time.Time, checksum string) ([]byte, error) {
+func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, now time.Time, checksum string) ([]byte, error) {
 	msg := deltaMsg{
 		downBase: downBase{
 			Direction: "down",
@@ -181,6 +183,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			}
 			if pcd := powerCooldownsJSON(cu.PowerCooldowns); pcd != nil {
 				update["power_cooldowns"] = pcd
+			}
+			if li := lootItemsToJSON(cu.LootItems); li != nil {
+				update["loot_items"] = li
 			}
 			msg.UnitUpdates[idStr] = update
 			for _, e := range cu.ActiveStatusEffects {
@@ -232,6 +237,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		}
 		if !powerCooldownsEqual(cu.PowerCooldowns, pu.PowerCooldowns) {
 			patch["power_cooldowns"] = powerCooldownsJSON(cu.PowerCooldowns)
+		}
+		if len(cu.LootItems) != len(pu.LootItems) {
+			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
 		}
 		if len(patch) > 0 {
 			msg.UnitUpdates[idStr] = patch
@@ -324,6 +332,17 @@ func powerCooldownsEqual(a, b map[string]time.Time) bool {
 		}
 	}
 	return true
+}
+
+func lootItemsToJSON(items []instanceconfig.Item) []lootEventItemJSON {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]lootEventItemJSON, len(items))
+	for i, it := range items {
+		out[i] = lootEventItemJSON{Identifier: it.Identifier, Name: it.Name, Slot: it.Slot, Ilvl: it.Ilvl}
+	}
+	return out
 }
 
 func uuidPtrEqual(a, b *uuid.UUID) bool {

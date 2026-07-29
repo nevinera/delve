@@ -88,8 +88,9 @@ type UnitState struct {
 	Speed       float64 // movement speed in feet per second
 	Radius      float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
-	LootTable map[string]int // identifier → weight; nil means no loot
-	LootCount [2]int        // [min, max] items to award; both 1 when lootCount omitted
+	LootTable map[string]int         // identifier → weight; nil means no loot
+	LootCount [2]int                 // [min, max] items to award; both 1 when lootCount omitted
+	LootItems []instanceconfig.Item  // rolled at death; nil until the unit dies
 
 	Status               UnitStatus
 	Target               *uuid.UUID

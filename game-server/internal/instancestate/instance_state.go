@@ -8,11 +8,18 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
+// LootEvent records items rolled when a unit dies, pending delivery to clients.
+type LootEvent struct {
+	UnitID string
+	Items  []instanceconfig.Item
+}
+
 // InstanceState is the full runtime state of one zone instance.
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
-	Units map[uuid.UUID]*UnitState
-	Items map[string]instanceconfig.Item // identifier → item definition; shared across units
+	Units             map[uuid.UUID]*UnitState
+	Items             map[string]instanceconfig.Item // identifier → item definition; shared across units
+	PendingLootEvents []LootEvent                   // drained each tick by the tick loop
 }
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every
