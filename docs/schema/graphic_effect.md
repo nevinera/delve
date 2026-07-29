@@ -15,6 +15,7 @@ A GraphicEffect describes a visual played when a power fires.
 | `condition` | string | yes | | When to display. `"always"`, `"onHit"`, or `"onMiss"`. |
 | `scale` | float | no | `1.0` | Size multiplier. |
 | `opacity` | float | no | `1.0` | Opacity, from `0.0` (invisible) to `1.0` (fully opaque). |
+| `color` | string | no | | Optional color tint applied to the image, as a 6-digit hex string (no leading `#`). If omitted, no tint is applied. |
 
 ## Examples
 

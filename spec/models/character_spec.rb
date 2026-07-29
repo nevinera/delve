@@ -4,6 +4,14 @@ RSpec.describe Character, type: :model do
   let(:user) { create(:user) }
   let(:character_class) { create(:character_class) }
 
+  describe "associations" do
+    it "destroys character_items when destroyed" do
+      character = create(:character)
+      create(:character_item, character: character)
+      expect { character.destroy }.to change(CharacterItem, :count).by(-1)
+    end
+  end
+
   describe "validations" do
     it "is valid with all required fields" do
       expect(build(:character, user: user, character_class: character_class)).to be_valid

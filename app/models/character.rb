@@ -1,6 +1,7 @@
 class Character < ApplicationRecord
   belongs_to :user
   belongs_to :character_class
+  has_many :character_items, dependent: :destroy
 
   validates :name, presence: true,
     uniqueness: true,

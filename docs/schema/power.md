@@ -12,10 +12,12 @@ A Power is an active ability a unit can use in combat.
 | `castTime` | float \| null | yes | | Cast duration in seconds. `null` means instant. |
 | `globalCooldown` | float | yes | | Seconds before the unit can use any power again after this one. |
 | `cooldown` | float | no | | Per-ability cooldown in seconds. The unit cannot use this specific power again until this duration has elapsed. |
+| `frontal` | boolean | no | `true` | If `true`, the caster must be facing the target within a 150° arc (±75°) to use this power. Set to `false` for powers that work regardless of facing. |
 | `costType` | string | no | | Name of the resource required to use this power. Must match the unit's resource `name`. |
 | `costAmount` | float | no | | Amount of the resource that must be available. The power cannot be used if the unit has less than this. |
-| `graphicEffects` | array of GraphicEffect | no | `[]` | Visual effects played when this power fires. |
-| `soundEffects` | array of SoundEffect | no | `[]` | Audio effects played when this power fires. |
+| `iconURL` | string | no | | URL of the action bar icon image. Client-only; ignored by the game server. |
+| `graphicEffects` | array of GraphicEffect | no | `[]` | Visual effects played when this power fires. Client-only; ignored by the game server. |
+| `soundEffects` | array of SoundEffect | no | `[]` | Audio effects played when this power fires. Client-only; ignored by the game server. |
 | `effects` | array of PowerEffect | yes | | Mechanical effects applied on use. May be empty. |
 
 ## Example

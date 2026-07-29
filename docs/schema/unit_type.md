@@ -11,6 +11,7 @@ A UnitType is a template from which individual units are created in a zone.
 | `tokenImageUrl` | string \| array of strings | yes | | Portrait image URL(s). If an array, one is chosen at random each time a unit is created from this type. |
 | `tokenRadius` | float | yes | | Token radius in feet. Range: 1.0-20.0. |
 | `speedFactor` | float | no | `1.0` | Movement speed multiplier relative to base character speed. Range: 0.0-10.0. |
+| `aggroRadius` | float | no | `20.0` | Distance in feet at which this unit detects and aggros enemies. |
 | `maxHP` | integer | yes | | Maximum hit points. |
 | `resource` | ResourceType | yes | | The resource used to power this unit's abilities. |
 | `powers` | array of Power \| AssetReference(`referenceTo: "power"`) | no | `[]` | Powers available to this unit. Inline Power objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |

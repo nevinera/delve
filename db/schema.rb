@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_20_123908) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_14_161723) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -27,6 +27,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_123908) do
     t.index ["handle_id"], name: "index_character_classes_on_handle_id"
     t.index ["state"], name: "index_character_classes_on_state"
     t.index ["user_id"], name: "index_character_classes_on_user_id"
+  end
+
+  create_table "character_items", force: :cascade do |t|
+    t.integer "agility"
+    t.integer "character_id", null: false
+    t.datetime "created_at", null: false
+    t.integer "crit_rating"
+    t.text "description"
+    t.integer "haste_rating"
+    t.string "icon_url"
+    t.string "identifier", null: false
+    t.integer "ilvl", null: false
+    t.integer "intellect"
+    t.integer "mastery_rating"
+    t.string "name", null: false
+    t.integer "provenance_zone_id", null: false
+    t.datetime "received_at", null: false
+    t.integer "resilience_rating"
+    t.string "slot", null: false
+    t.json "source_json", default: {}, null: false
+    t.string "source_key", null: false
+    t.integer "stamina"
+    t.integer "strength"
+    t.datetime "updated_at", null: false
+    t.integer "versatility_rating"
+    t.decimal "weapon_dps", precision: 6, scale: 2
+    t.index ["character_id", "source_key"], name: "index_character_items_on_character_id_and_source_key", unique: true
+    t.index ["character_id"], name: "index_character_items_on_character_id"
+    t.index ["provenance_zone_id"], name: "index_character_items_on_provenance_zone_id"
   end
 
   create_table "characters", force: :cascade do |t|
@@ -106,6 +135,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_123908) do
 
   add_foreign_key "character_classes", "handles"
   add_foreign_key "character_classes", "users"
+  add_foreign_key "character_items", "characters"
+  add_foreign_key "character_items", "zones", column: "provenance_zone_id"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
   add_foreign_key "handles", "users"

@@ -6,6 +6,8 @@ AllCops:
 
 Metrics/AbcSize:
   Max: 15
+  Exclude:
+    - "db/migrate/**/*"
 Metrics/CyclomaticComplexity:
   Max: 8
 Metrics/PerceivedComplexity:
@@ -17,6 +19,8 @@ Metrics/ClassLength:
 Metrics/MethodLength:
   CountComments: false
   Max: 15
+  Exclude:
+    - "db/migrate/**/*"
 Metrics/ParameterLists:
   Max: 5
   CountKeywordArgs: true
