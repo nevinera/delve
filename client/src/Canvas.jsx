@@ -32,7 +32,7 @@ const Canvas = forwardRef(function Canvas({
     manager.loadZone(zoneSourceUrl);
 
     const observer = new ResizeObserver(() => manager.handleResize());
-    observer.observe(canvasRef.current);
+    observer.observe(canvasRef.current.parentElement);
 
     return () => {
       observer.disconnect();
@@ -55,7 +55,7 @@ const Canvas = forwardRef(function Canvas({
   return (
     <canvas
       ref={canvasRef}
-      style={{ flex: 1, display: "block", minHeight: 0, width: "100%", height: "100%" }}
+      style={{ display: "block" }}
     />
   );
 });

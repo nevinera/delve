@@ -132,6 +132,10 @@ const styles = {
     flex: 1,
     position: "relative",
     overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#000",
   },
   respawnOverlay: {
     position: "absolute",

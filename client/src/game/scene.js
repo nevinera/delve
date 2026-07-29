@@ -738,11 +738,18 @@ export class SceneManager {
   }
 
   handleResize() {
-    const w = this._canvas.offsetWidth;
-    const h = this._canvas.offsetHeight;
-    if (w === 0 || h === 0) return;
+    const parent = this._canvas.parentElement;
+    if (!parent) return;
+    const pw = parent.clientWidth;
+    const ph = parent.clientHeight;
+    if (pw === 0 || ph === 0) return;
+    const w = pw / ph > 4 / 3 ? Math.round(ph * 4 / 3) : pw;
+    const h = pw / ph > 4 / 3 ? ph : Math.round(pw * 3 / 4);
+    this._canvas.style.width = `${w}px`;
+    this._canvas.style.height = `${h}px`;
+    this._renderer.setPixelRatio(window.devicePixelRatio);
     this._renderer.setSize(w, h, false);
-    this._camera.aspect = w / h;
+    this._camera.aspect = 4 / 3;
     this._camera.updateProjectionMatrix();
   }
 
