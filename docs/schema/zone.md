@@ -54,13 +54,12 @@ Links two MapConnections within the zone so that traversing one transports a uni
 
 ## LootTable
 
-A LootTable maps item identifiers to integer weights. When the game server rolls loot, it samples from this table: each roll picks one identifier with probability proportional to its weight, or produces no item if the weights sum to less than 100.
+A LootTable maps item identifiers to integer weights expressing relative drop probability.
 
 | Constraint | Rule |
 |---|---|
 | Keys | Item identifiers; must be keys in the zone's `items` map. |
 | Values | Positive integers. |
-| Sum | All values combined must be ≤ 100. The remainder is the chance of no drop on that roll. |
 
 ```json
 {
@@ -69,8 +68,6 @@ A LootTable maps item identifiers to integer weights. When the game server rolls
   "goblin-ear-trinket": 10
 }
 ```
-
-In this example: 30% chance of Sword of Doom, 20% chance of Iron Shield, 10% chance of Goblin Ear Trinket, 40% chance of nothing per roll.
 
 ---
 

@@ -16,7 +16,7 @@ See [common.md](common.md) for `Location` and `Position`.
 | `identifier` | string | no | | Optional identifier for this unit, used in `links`. |
 | `links` | array of strings | no | `[]` | Identifiers of other units that aggro when this unit aggros. |
 | `lootTable` | LootTable | no | | Items this unit can drop on death. See [zone.md](zone.md) for the LootTable type. All referenced identifiers must be defined in the zone's `items` map. |
-| `lootCount` | integer \| [integer, integer] | no | `1` | How many times to roll on `lootTable` per kill. A range picks uniformly between min and max (inclusive). Ignored if `lootTable` is absent. |
+| `lootCount` | integer \| [integer, integer] | no | `1` | Number of items to award from `lootTable` per kill. A range varies the count between min and max. Ignored if `lootTable` is absent. |
 
 ---
 
