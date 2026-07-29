@@ -7,7 +7,6 @@ type Item struct {
 	Slot        string    `json:"slot"`       // Required: equipment slot (e.g. "chest", "ring")
 	Ilvl        int       `json:"ilvl"`       // Required: item level ≥ 0
 	Description string    `json:"description,omitempty"`
-	IconURL     string    `json:"icon_url,omitempty"`
 	Stats       ItemStats `json:"stats,omitempty"`
 }
 

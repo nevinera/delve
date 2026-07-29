@@ -63,7 +63,6 @@ class AwardCharacterItem
       slot:,
       ilvl:,
       description:,
-      icon_url:,
       received_at: Time.current.utc,
       **stats
     )
@@ -94,6 +93,4 @@ class AwardCharacterItem
   def ilvl = @source_data.fetch("ilvl").to_i
 
   def description = @source_data["description"]&.to_s
-
-  def icon_url = @source_data["icon_url"]&.to_s
 end

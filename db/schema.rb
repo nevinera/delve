@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_14_161723) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_29_181624) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -36,7 +36,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_14_161723) do
     t.integer "crit_rating"
     t.text "description"
     t.integer "haste_rating"
-    t.string "icon_url"
     t.string "identifier", null: false
     t.integer "ilvl", null: false
     t.integer "intellect"
@@ -70,6 +69,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_14_161723) do
     t.index ["character_class_id"], name: "index_characters_on_character_class_id"
     t.index ["name"], name: "index_characters_on_name", unique: true
     t.index ["user_id"], name: "index_characters_on_user_id"
+  end
+
+  create_table "equipped_items", force: :cascade do |t|
+    t.integer "character_id", null: false
+    t.integer "character_item_id", null: false
+    t.datetime "created_at", null: false
+    t.string "equipped_slot", null: false
+    t.datetime "updated_at", null: false
+    t.index ["character_id", "equipped_slot"], name: "index_equipped_items_on_character_id_and_equipped_slot", unique: true
+    t.index ["character_id"], name: "index_equipped_items_on_character_id"
+    t.index ["character_item_id"], name: "index_equipped_items_on_character_item_id", unique: true
   end
 
   create_table "handles", force: :cascade do |t|
@@ -139,6 +149,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_14_161723) do
   add_foreign_key "character_items", "zones", column: "provenance_zone_id"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
+  add_foreign_key "equipped_items", "character_items"
+  add_foreign_key "equipped_items", "characters"
   add_foreign_key "handles", "users"
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"

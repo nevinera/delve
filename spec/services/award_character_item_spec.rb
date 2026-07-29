@@ -61,10 +61,8 @@ RSpec.describe AwardCharacterItem do
     end
 
     it "persists optional metadata" do
-      call(source_data.merge("description" => "A fine blade", "icon_url" => "https://example.com/icon.png"))
-      item = CharacterItem.last
-      expect(item.description).to eq("A fine blade")
-      expect(item.icon_url).to eq("https://example.com/icon.png")
+      call(source_data.merge("description" => "A fine blade"))
+      expect(CharacterItem.last.description).to eq("A fine blade")
     end
 
     context "when the item already exists for this character and source_key" do
