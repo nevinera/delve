@@ -167,9 +167,6 @@ const styles = {
   },
   lootWindow: {
     position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
     zIndex: 20,
     background: "rgba(20,16,12,0.95)",
     border: "1px solid #7a5a2a",
@@ -183,6 +180,8 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
+    cursor: "move",
+    userSelect: "none",
   },
   lootTitle: {
     fontSize: 15,
@@ -281,10 +280,39 @@ function formatUnitName(unit) {
 }
 
 function LootWindow({ items, onClose }) {
+  const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
+  const elRef = useRef(null);
+
+  const handleHeaderMouseDown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const rect = elRef.current.getBoundingClientRect();
+    const parentRect = elRef.current.offsetParent.getBoundingClientRect();
+    const originFx = (rect.left - parentRect.left) / parentRect.width;
+    const originFy = (rect.top - parentRect.top) / parentRect.height;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMouseMove = (mv) => {
+      setPos({
+        fx: originFx + (mv.clientX - startX) / parentRect.width,
+        fy: originFy + (mv.clientY - startY) / parentRect.height,
+      });
+    };
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   if (!items?.length) return null;
+
+  const windowStyle = { ...styles.lootWindow, left: `${pos.fx * 100}%`, top: `${pos.fy * 100}%`, transform: "none" };
+
   return (
-    <div style={styles.lootWindow}>
-      <div style={styles.lootHeader}>
+    <div ref={elRef} style={windowStyle}>
+      <div style={styles.lootHeader} onMouseDown={handleHeaderMouseDown}>
         <span style={styles.lootTitle}>Loot</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
       </div>
