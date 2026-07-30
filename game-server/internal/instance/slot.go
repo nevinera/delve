@@ -45,6 +45,7 @@ type InstanceSlot struct {
 	CharacterName       string
 	CharacterDatabaseID string
 	CharacterClass      instanceconfig.CharacterClass
+	OwnedZoneItems      map[string]bool // identifier → true if owned this version, false if other version; nil if unknown
 
 	// Connection fields; protected by the instance's slotsMu.
 	writeCh        chan []byte         // pre-encoded JSON messages from the tick loop
@@ -58,7 +59,7 @@ type InstanceSlot struct {
 // already exists it is reused with a fresh token (invalidating prior credentials).
 // Otherwise a new slot is created. Returns ErrInstanceFull if MaxSlots has been
 // reached and there is no existing slot to reuse.
-func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class instanceconfig.CharacterClass) (*InstanceSlot, error) {
+func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class instanceconfig.CharacterClass, ownedZoneItems map[string]bool) (*InstanceSlot, error) {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
 
@@ -81,6 +82,7 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 		CharacterName:       characterName,
 		CharacterDatabaseID: characterDatabaseID,
 		CharacterClass:      class,
+		OwnedZoneItems:      ownedZoneItems,
 		stateEnteredAt:      time.Now(),
 	}
 	inst.slots[slot.ID] = slot

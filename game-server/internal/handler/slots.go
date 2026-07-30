@@ -30,6 +30,7 @@ type createSlotRequest struct {
 	CharacterName       string                        `json:"character_name"`
 	CharacterDatabaseID string                        `json:"character_database_id"`
 	CharacterClass      instanceconfig.CharacterClass `json:"character_class"`
+	OwnedZoneItems      map[string]bool               `json:"owned_zone_items"` // optional
 }
 
 // slotCreateResponse includes the token, which is only returned on creation.
@@ -122,7 +123,7 @@ func (h *Slots) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass)
+	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass, req.OwnedZoneItems)
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {
 			writeError(w, r, http.StatusUnprocessableEntity, err.Error())

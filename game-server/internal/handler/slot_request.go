@@ -18,10 +18,11 @@ type slotRequestBody struct {
 	DatabaseID          string                        `json:"database_id"`
 	SourceURL           string                        `json:"source_url"`
 	ZoneConfig          instanceconfig.Zone           `json:"zone_config"`
-	InstanceIdentifier  string                        `json:"instance_identifier"` // optional
+	InstanceIdentifier  string                        `json:"instance_identifier"`  // optional
 	CharacterName       string                        `json:"character_name"`
 	CharacterDatabaseID string                        `json:"character_database_id"`
 	CharacterClass      instanceconfig.CharacterClass `json:"character_class"`
+	OwnedZoneItems      map[string]bool               `json:"owned_zone_items"`     // optional; nil if not provided
 }
 
 type slotRequestResponse struct {
@@ -119,7 +120,7 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 }
 
 func (h *Slots) addSlotAndRespond(w http.ResponseWriter, r *http.Request, inst *instance.Instance, req slotRequestBody) {
-	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass)
+	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass, req.OwnedZoneItems)
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {
 			writeError(w, r, http.StatusUnprocessableEntity, err.Error())

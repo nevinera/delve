@@ -171,7 +171,7 @@ func TestSlotsRequest_SpecificInstance_Full(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	inst.ZoneIdentifier = "goblin-cave"
 	inst.MaxSlots = 1
-	_, err := inst.AddSlot("Brego", "42", instanceconfig.CharacterClass{Name: "Puncher"})
+	_, err := inst.AddSlot("Brego", "42", instanceconfig.CharacterClass{Name: "Puncher"}, nil)
 	require.NoError(t, err)
 	router := mountRequest(newSlotsHandler(reg, 200))
 

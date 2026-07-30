@@ -55,10 +55,10 @@ func TestStatus(t *testing.T) {
 				inst1 := instance.NewInstance(uuid.New(), "db-1", "zone-1", "v1", "http://x", instanceconfig.Zone{}, instance.DefaultMaxSlots)
 				inst2 := instance.NewInstance(uuid.New(), "db-2", "zone-1", "v1", "http://x", instanceconfig.Zone{}, instance.DefaultMaxSlots)
 				class := instanceconfig.CharacterClass{Name: "Puncher"}
-				slot1, _ := inst1.AddSlot("Aldric", "42", class)
+				slot1, _ := inst1.AddSlot("Aldric", "42", class, nil)
 				inst1.SetSlotState(slot1.ID, instance.SlotStateConnected)
-				inst1.AddSlot("Brego", "42", class) // pending
-				inst2.AddSlot("Caela", "42", class) // pending
+				inst1.AddSlot("Brego", "42", class, nil) // pending
+				inst2.AddSlot("Caela", "42", class, nil) // pending
 				r.Add(inst1)
 				r.Add(inst2)
 			},

@@ -88,7 +88,7 @@ func TestConnect_MissingToken(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	wsBase := startWS(t, mountConnect(reg))
 
@@ -105,7 +105,7 @@ func TestConnect_WrongToken(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	wsBase := startWS(t, mountConnect(reg))
 
@@ -119,7 +119,7 @@ func TestConnect_NoUpgradeHeaders(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	srv := httptest.NewServer(mountConnect(reg))
 	t.Cleanup(srv.Close)
@@ -139,7 +139,7 @@ func TestConnect_SetsStateConnected(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	wsBase := startWS(t, mountConnect(reg))
 
@@ -155,7 +155,7 @@ func TestConnect_CloseTransitionsToWaiting(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	wsBase := startWS(t, mountConnect(reg))
 
@@ -173,7 +173,7 @@ func TestConnect_HeartbeatTimeoutTransitionsToWaiting(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	wsBase := startWS(t, mountConnect(reg))
 
@@ -195,7 +195,7 @@ func TestConnect_HeartbeatResetsTimeout(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	wsBase := startWS(t, mountConnect(reg))
 
@@ -223,7 +223,7 @@ func TestConnect_ReconnectKicksOldConnection(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	wsBase := startWS(t, mountConnect(reg))
 
