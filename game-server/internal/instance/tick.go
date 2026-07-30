@@ -127,9 +127,19 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 				go inst.fireLootAward(ctx, pending)
 			}
 
+			for _, update := range state.PendingOwnershipUpdates {
+				if slot := inst.slotByUnitID(update.CharacterUnitID); slot != nil {
+					if slot.OwnedZoneItems == nil {
+						slot.OwnedZoneItems = make(map[string]bool)
+					}
+					slot.OwnedZoneItems[update.ItemIdentifier] = true
+				}
+			}
+
 			state.PendingLootEvents = nil
 			state.PendingLootClaims = nil
 			state.PendingLootFailures = nil
+			state.PendingOwnershipUpdates = nil
 			prevState = state.Clone()
 
 			// Remove slots that have been pending or waiting too long.

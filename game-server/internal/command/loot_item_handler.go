@@ -31,7 +31,7 @@ func (LootItemHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 	}
 	claim := &instancestate.LootClaim{
 		ClaimedBy: unitID,
-		Result:    make(chan bool, 1),
+		Result:    make(chan instancestate.LootResult, 1),
 	}
 	item.Claim = claim
 	next.PendingLootClaims = append(next.PendingLootClaims, instancestate.PendingLootClaim{

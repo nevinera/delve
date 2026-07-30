@@ -60,10 +60,12 @@ type awardResponse struct {
 }
 
 // AwardItem posts a character item award to Rails.
-// Returns (true, nil) if the item was newly awarded and should be removed from loot.
-// Returns (false, nil) if the item should stay in loot (already owned this version, or already owned other version).
-// Returns (false, err) on network or server error.
-func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item) (bool, error) {
+// Returns (remove, confirmedOwned, err).
+// remove=true means the item was newly awarded and should be removed from loot.
+// confirmedOwned=true means Rails confirmed the character owns this zone version of the item
+//   (covers new awards, upgrade awards, and 409 already-held responses).
+// confirmedOwned=false only on network or server errors.
+func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item) (bool, bool, error) {
 	body := awardBody{
 		Zone:        zoneRef{DatabaseID: zoneDatabaseID, Identifier: zoneIdentifier, Version: zoneVersion},
 		Identifier:  item.Identifier,
@@ -75,19 +77,19 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
-		return false, fmt.Errorf("marshal: %w", err)
+		return false, false, fmt.Errorf("marshal: %w", err)
 	}
 	url := fmt.Sprintf("%s/internal_api/characters/%s/character_items", c.baseURL, characterDatabaseID)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		return false, fmt.Errorf("build request: %w", err)
+		return false, false, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Token", c.token)
 
 	res, err := c.http.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("http: %w", err)
+		return false, false, fmt.Errorf("http: %w", err)
 	}
 	defer res.Body.Close()
 
@@ -95,10 +97,10 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 	case http.StatusCreated:
 		var resp awardResponse
 		json.NewDecoder(res.Body).Decode(&resp) //nolint:errcheck
-		return resp.Status != "already_owned_other_version", nil
+		return resp.Status != "already_owned_other_version", true, nil
 	case http.StatusConflict:
-		return false, nil
+		return false, true, nil
 	default:
-		return false, fmt.Errorf("rails returned %d", res.StatusCode)
+		return false, false, fmt.Errorf("rails returned %d", res.StatusCode)
 	}
 }

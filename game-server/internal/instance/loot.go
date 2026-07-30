@@ -20,16 +20,25 @@ func sweepLootClaims(state *instancestate.InstanceState) {
 				continue
 			}
 			select {
-			case ok := <-item.Claim.Result:
-				if !ok {
-					state.PendingLootFailures = append(state.PendingLootFailures, instancestate.LootFailure{
-						ClaimedBy: item.Claim.ClaimedBy,
-						Item:      item.Item,
+			case result := <-item.Claim.Result:
+				if result.ConfirmedOwned {
+					state.PendingOwnershipUpdates = append(state.PendingOwnershipUpdates, instancestate.OwnershipUpdate{
+						CharacterUnitID: item.Claim.ClaimedBy,
+						ItemIdentifier:  item.Item.Identifier,
 					})
+				}
+				if result.Remove {
+					// item consumed, drop from list
+				} else {
+					if !result.ConfirmedOwned {
+						state.PendingLootFailures = append(state.PendingLootFailures, instancestate.LootFailure{
+							ClaimedBy: item.Claim.ClaimedBy,
+							Item:      item.Item,
+						})
+					}
 					item.Claim = nil
 					kept = append(kept, item) // put back as available
 				}
-				// ok == true: item consumed, drop from list
 			default:
 				kept = append(kept, item) // still in flight
 			}
@@ -47,10 +56,10 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		if inst.RailsClient == nil {
 			slog.WarnContext(ctx, "no Rails client configured; loot award skipped", "item", pending.Item.Identifier)
 		}
-		pending.Claim.Result <- false
+		pending.Claim.Result <- instancestate.LootResult{}
 		return
 	}
-	remove, err := inst.RailsClient.AwardItem(
+	remove, confirmedOwned, err := inst.RailsClient.AwardItem(
 		slot.CharacterDatabaseID,
 		inst.DatabaseID,
 		inst.ZoneIdentifier,
@@ -59,9 +68,9 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 	)
 	if err != nil {
 		slog.WarnContext(ctx, "loot award failed", "error", err, "item", pending.Item.Identifier, "character", slot.CharacterDatabaseID)
-		pending.Claim.Result <- false
+		pending.Claim.Result <- instancestate.LootResult{}
 		return
 	}
-	pending.Claim.Result <- remove
+	pending.Claim.Result <- instancestate.LootResult{Remove: remove, ConfirmedOwned: confirmedOwned}
 }
 

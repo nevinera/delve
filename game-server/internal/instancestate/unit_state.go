@@ -8,11 +8,17 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
+// LootResult is the outcome of a loot award goroutine.
+type LootResult struct {
+	Remove         bool // true = item was newly awarded; remove it from loot
+	ConfirmedOwned bool // true = Rails confirmed the character owns this version (includes 409)
+}
+
 // LootClaim is an in-flight attempt to take one loot item. The goroutine
-// writes true on success or false on failure; the tick loop reads it next tick.
+// writes the result once; the tick loop reads it next tick.
 type LootClaim struct {
 	ClaimedBy uuid.UUID
-	Result    chan bool // buffered(1)
+	Result    chan LootResult // buffered(1)
 }
 
 // PendingLootItem is one item in a unit's loot list, optionally in-flight.

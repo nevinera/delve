@@ -55,7 +55,7 @@ func TestLootItemHandler_AppendsToPendingClaims(t *testing.T) {
 
 func TestLootItemHandler_NoopsIfAlreadyClaimed(t *testing.T) {
 	state, playerID, targetID := makeLootState()
-	existing := &instancestate.LootClaim{ClaimedBy: uuid.New(), Result: make(chan bool, 1)}
+	existing := &instancestate.LootClaim{ClaimedBy: uuid.New(), Result: make(chan instancestate.LootResult, 1)}
 	state.Units[targetID].LootItems[0].Claim = existing
 	h := command.LootItemHandler{}
 	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state)

@@ -21,6 +21,13 @@ type LootFailure struct {
 	Item      instanceconfig.Item
 }
 
+// OwnershipUpdate records that a character confirmed as owning an item this
+// zone version, so the tick loop can update the slot's OwnedZoneItems map.
+type OwnershipUpdate struct {
+	CharacterUnitID uuid.UUID
+	ItemIdentifier  string
+}
+
 // PendingLootClaim is a newly-claimed item waiting for a goroutine to be
 // fired. Populated by LootItemHandler; drained by the tick loop.
 type PendingLootClaim struct {
@@ -34,9 +41,10 @@ type PendingLootClaim struct {
 type InstanceState struct {
 	Units               map[uuid.UUID]*UnitState
 	Items               map[string]instanceconfig.Item // identifier → item definition; shared across units
-	PendingLootEvents   []LootEvent                   // drained each tick by the tick loop
-	PendingLootClaims   []PendingLootClaim            // drained each tick; goroutines fired for each
-	PendingLootFailures []LootFailure                 // drained each tick into delta message
+	PendingLootEvents        []LootEvent        // drained each tick by the tick loop
+	PendingLootClaims        []PendingLootClaim // drained each tick; goroutines fired for each
+	PendingLootFailures      []LootFailure      // drained each tick into delta message
+	PendingOwnershipUpdates  []OwnershipUpdate  // drained each tick to update slot OwnedZoneItems
 }
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every
