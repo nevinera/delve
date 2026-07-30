@@ -15,8 +15,8 @@ RSpec.describe AwardCharacterItem do
     }
   end
 
-  def call(data = source_data)
-    described_class.call(character: character, source_data: data)
+  def call(data = source_data, upgrade_only: false)
+    described_class.call(character: character, source_data: data, upgrade_only: upgrade_only)
   end
 
   describe "#call" do
@@ -91,6 +91,29 @@ RSpec.describe AwardCharacterItem do
 
       it "creates a new record for this version" do
         expect { call }.to change(CharacterItem, :count).by(1)
+      end
+    end
+
+    context "with upgrade_only: true" do
+      it "returns :not_an_upgrade when the character has no prior version" do
+        expect(call(upgrade_only: true)).to eq(:not_an_upgrade)
+      end
+
+      it "does not create a record" do
+        expect { call(upgrade_only: true) }.not_to change(CharacterItem, :count)
+      end
+
+      context "when the character owns the same item from a different version" do
+        let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
+
+        before { create(:character_item, character: character, provenance_zone: other_zone, identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom") }
+
+        it "returns [CharacterItem, :already_owned_other_version]" do
+          result = call(upgrade_only: true)
+          expect(result).to be_a(Array)
+          expect(result[0]).to be_a(CharacterItem).and be_persisted
+          expect(result[1]).to eq(:already_owned_other_version)
+        end
       end
     end
 

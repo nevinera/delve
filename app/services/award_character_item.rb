@@ -9,14 +9,16 @@ class AwardCharacterItem
 
   def self.call(...) = new(...).call
 
-  def initialize(character:, source_data:)
+  def initialize(character:, source_data:, upgrade_only: false)
     @character = character
     @source_data = source_data
+    @upgrade_only = upgrade_only
   end
 
   def call
     validate!
     return :already_owned_this_version if already_held?
+    return :not_an_upgrade if @upgrade_only && !already_held_other_version?
 
     already_held_other_version? ? [record, :already_owned_other_version] : record
   end
