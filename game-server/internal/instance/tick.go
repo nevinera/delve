@@ -136,6 +136,23 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 				}
 			}
 
+		drainAutoUpgrades:
+			for {
+				select {
+				case update := <-inst.autoUpgradeResultCh:
+					if slot := inst.slotByUnitID(update.CharacterUnitID); slot != nil {
+						if slot.OwnedZoneItems == nil {
+							slot.OwnedZoneItems = make(map[string]bool)
+						}
+						slot.OwnedZoneItems[update.ItemIdentifier] = true
+					}
+				default:
+					break drainAutoUpgrades
+				}
+			}
+
+			inst.checkAutoUpgrades(ctx, state)
+
 			state.PendingLootEvents = nil
 			state.PendingLootClaims = nil
 			state.PendingLootFailures = nil

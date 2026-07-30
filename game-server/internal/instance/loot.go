@@ -4,6 +4,9 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/google/uuid"
+
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -65,6 +68,7 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		inst.ZoneIdentifier,
 		inst.Version,
 		pending.Item,
+		false,
 	)
 	if err != nil {
 		slog.WarnContext(ctx, "loot award failed", "error", err, "item", pending.Item.Identifier, "character", slot.CharacterDatabaseID)
@@ -74,3 +78,67 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 	pending.Claim.Result <- instancestate.LootResult{Remove: remove, ConfirmedOwned: confirmedOwned}
 }
 
+type autoUpgradeTarget struct {
+	CharacterDatabaseID string
+	CharacterUnitID     uuid.UUID
+}
+
+// checkAutoUpgrades fires goroutines for each (slot, item) pair where the slot
+// has a prior version of the item (OwnedZoneItems[id] == false). Called each
+// tick after PendingLootEvents are populated. No-ops if RailsClient is nil.
+func (inst *Instance) checkAutoUpgrades(ctx context.Context, state *instancestate.InstanceState) {
+	if inst.RailsClient == nil {
+		return
+	}
+	for _, event := range state.PendingLootEvents {
+		for _, item := range event.Items {
+			targets := inst.slotsNeedingUpgrade(item.Identifier)
+			for _, t := range targets {
+				go inst.fireAutoUpgrade(ctx, t, item)
+			}
+		}
+	}
+}
+
+func (inst *Instance) slotsNeedingUpgrade(identifier string) []autoUpgradeTarget {
+	inst.slotsMu.RLock()
+	defer inst.slotsMu.RUnlock()
+	var result []autoUpgradeTarget
+	for _, s := range inst.slots {
+		if owned, ok := s.OwnedZoneItems[identifier]; ok && !owned {
+			result = append(result, autoUpgradeTarget{
+				CharacterDatabaseID: s.CharacterDatabaseID,
+				CharacterUnitID:     s.CharacterUnitID,
+			})
+		}
+	}
+	return result
+}
+
+// fireAutoUpgrade calls AwardItem with upgradeOnly=true. On success it sends
+// an OwnershipUpdate to autoUpgradeResultCh for the tick loop to apply.
+func (inst *Instance) fireAutoUpgrade(ctx context.Context, target autoUpgradeTarget, item instanceconfig.Item) {
+	_, confirmedOwned, err := inst.RailsClient.AwardItem(
+		target.CharacterDatabaseID,
+		inst.DatabaseID,
+		inst.ZoneIdentifier,
+		inst.Version,
+		item,
+		true,
+	)
+	if err != nil {
+		slog.WarnContext(ctx, "auto-upgrade award failed", "error", err, "item", item.Identifier)
+		return
+	}
+	if !confirmedOwned {
+		return
+	}
+	select {
+	case inst.autoUpgradeResultCh <- instancestate.OwnershipUpdate{
+		CharacterUnitID: target.CharacterUnitID,
+		ItemIdentifier:  item.Identifier,
+	}:
+	default:
+		slog.WarnContext(ctx, "auto-upgrade result channel full, ownership update dropped", "item", item.Identifier)
+	}
+}

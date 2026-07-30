@@ -47,6 +47,7 @@ type awardBody struct {
 	Ilvl        int                      `json:"ilvl"`
 	Description string                   `json:"description,omitempty"`
 	Stats       instanceconfig.ItemStats `json:"stats"`
+	UpgradeOnly bool                     `json:"upgrade_only,omitempty"`
 }
 
 type zoneRef struct {
@@ -65,7 +66,7 @@ type awardResponse struct {
 // confirmedOwned=true means Rails confirmed the character owns this zone version of the item
 //   (covers new awards, upgrade awards, and 409 already-held responses).
 // confirmedOwned=false only on network or server errors.
-func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item) (bool, bool, error) {
+func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item, upgradeOnly bool) (bool, bool, error) {
 	body := awardBody{
 		Zone:        zoneRef{DatabaseID: zoneDatabaseID, Identifier: zoneIdentifier, Version: zoneVersion},
 		Identifier:  item.Identifier,
@@ -74,6 +75,7 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 		Ilvl:        item.Ilvl,
 		Description: item.Description,
 		Stats:       item.Stats,
+		UpgradeOnly: upgradeOnly,
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -100,6 +102,8 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 		return resp.Status != "already_owned_other_version", true, nil
 	case http.StatusConflict:
 		return false, true, nil
+	case http.StatusUnprocessableEntity:
+		return false, false, nil // upgrade_only with no prior version - not an error
 	default:
 		return false, false, fmt.Errorf("rails returned %d", res.StatusCode)
 	}

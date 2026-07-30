@@ -10,6 +10,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 	"github.com/delve-mmo/game-server/internal/railsclient"
 )
 
@@ -64,9 +65,10 @@ type Instance struct {
 	atomicSlotCount       atomic.Int64
 	atomicActiveSlotCount atomic.Int64
 
-	playerSpawnCh    chan playerSpawn
-	commandCh        chan command.Command
-	commandProcessor *command.CommandProcessor
+	playerSpawnCh       chan playerSpawn
+	commandCh           chan command.Command
+	commandProcessor    *command.CommandProcessor
+	autoUpgradeResultCh chan instancestate.OwnershipUpdate
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -85,19 +87,20 @@ func NewInstance(
 	maxSlots int,
 ) *Instance {
 	inst := &Instance{
-		Identifier:       id,
-		DatabaseID:       databaseID,
-		ZoneIdentifier:   zoneIdentifier,
-		Version:          version,
-		SourceURL:        sourceURL,
-		MaxSlots:         maxSlots,
-		Status:           StatusLoading,
-		ZoneConfig:       zone,
-		CreatedAt:        time.Now(),
-		slots:            make(map[uuid.UUID]*InstanceSlot),
-		playerSpawnCh:    make(chan playerSpawn, DefaultMaxSlots),
-		commandCh:        make(chan command.Command, DefaultMaxSlots*8),
-		commandProcessor: command.NewCommandProcessor(),
+		Identifier:          id,
+		DatabaseID:          databaseID,
+		ZoneIdentifier:      zoneIdentifier,
+		Version:             version,
+		SourceURL:           sourceURL,
+		MaxSlots:            maxSlots,
+		Status:              StatusLoading,
+		ZoneConfig:          zone,
+		CreatedAt:           time.Now(),
+		slots:               make(map[uuid.UUID]*InstanceSlot),
+		playerSpawnCh:       make(chan playerSpawn, DefaultMaxSlots),
+		commandCh:           make(chan command.Command, DefaultMaxSlots*8),
+		commandProcessor:    command.NewCommandProcessor(),
+		autoUpgradeResultCh: make(chan instancestate.OwnershipUpdate, 256),
 	}
 	inst.commandProcessor.Register(command.MoveHandler{})
 	inst.commandProcessor.Register(command.TargetHandler{})
