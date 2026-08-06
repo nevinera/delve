@@ -34,6 +34,14 @@ func (LootItemHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 		Result:    make(chan instancestate.LootResult, 1),
 	}
 	item.Claim = claim
+	for i := range item.Claims {
+		c := &item.Claims[i]
+		if c.CharacterUnitID == unitID {
+			c.State = instancestate.LootClaimStateLockedForMe
+		} else if c.State == instancestate.LootClaimStateAvailable {
+			c.State = instancestate.LootClaimStateLocked
+		}
+	}
 	next.PendingLootClaims = append(next.PendingLootClaims, instancestate.PendingLootClaim{
 		TargetUnitID: p.TargetUnitID,
 		Claim:        claim,

@@ -13,6 +13,7 @@ import (
 // sweepLootClaims checks every in-flight loot claim for a settled result.
 // On success the item is removed; on failure the claim is cleared so the item
 // becomes available again and a LootFailure is recorded for the delta message.
+// Per-character claim states are updated in-place (safe: runs in tick goroutine).
 // Called once per tick before building the delta.
 func sweepLootClaims(state *instancestate.InstanceState) {
 	for _, unit := range state.Units {
@@ -24,23 +25,43 @@ func sweepLootClaims(state *instancestate.InstanceState) {
 			}
 			select {
 			case result := <-item.Claim.Result:
+				claimedBy := item.Claim.ClaimedBy
 				if result.ConfirmedOwned {
 					state.PendingOwnershipUpdates = append(state.PendingOwnershipUpdates, instancestate.OwnershipUpdate{
-						CharacterUnitID: item.Claim.ClaimedBy,
+						CharacterUnitID: claimedBy,
 						ItemIdentifier:  item.Item.Identifier,
 					})
 				}
+				for i := range item.Claims {
+					c := &item.Claims[i]
+					if c.CharacterUnitID == claimedBy {
+						switch {
+						case result.Remove:
+							c.State = instancestate.LootClaimStateReceived
+						case result.ExactVersion:
+							c.State = instancestate.LootClaimStateOwned
+						case result.ConfirmedOwned:
+							c.State = instancestate.LootClaimStateUpgraded
+						default:
+							c.State = instancestate.LootClaimStateAvailable
+						}
+					} else if result.Remove {
+						c.State = instancestate.LootClaimStateGone
+					} else if c.State == instancestate.LootClaimStateLocked {
+						c.State = instancestate.LootClaimStateAvailable
+					}
+				}
 				if result.Remove {
-					// item consumed, drop from list
+					// item consumed - drop from list
 				} else {
 					if !result.ConfirmedOwned {
 						state.PendingLootFailures = append(state.PendingLootFailures, instancestate.LootFailure{
-							ClaimedBy: item.Claim.ClaimedBy,
+							ClaimedBy: claimedBy,
 							Item:      item.Item,
 						})
 					}
 					item.Claim = nil
-					kept = append(kept, item) // put back as available
+					kept = append(kept, item)
 				}
 			default:
 				kept = append(kept, item) // still in flight
@@ -62,7 +83,7 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		pending.Claim.Result <- instancestate.LootResult{}
 		return
 	}
-	remove, confirmedOwned, err := inst.RailsClient.AwardItem(
+	remove, confirmedOwned, exactVersion, err := inst.RailsClient.AwardItem(
 		slot.CharacterDatabaseID,
 		inst.DatabaseID,
 		inst.ZoneIdentifier,
@@ -75,50 +96,87 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		pending.Claim.Result <- instancestate.LootResult{}
 		return
 	}
-	pending.Claim.Result <- instancestate.LootResult{Remove: remove, ConfirmedOwned: confirmedOwned}
+	pending.Claim.Result <- instancestate.LootResult{Remove: remove, ConfirmedOwned: confirmedOwned, ExactVersion: exactVersion}
 }
 
 type autoUpgradeTarget struct {
 	CharacterDatabaseID string
 	CharacterUnitID     uuid.UUID
+	LootUnitUUID        uuid.UUID
 }
 
-// checkAutoUpgrades fires goroutines for each (slot, item) pair where the slot
-// has a prior version of the item (OwnedZoneItems[id] == false). Called each
-// tick after PendingLootEvents are populated. No-ops if RailsClient is nil.
-func (inst *Instance) checkAutoUpgrades(ctx context.Context, state *instancestate.InstanceState) {
-	if inst.RailsClient == nil {
+type autoUpgradeResult struct {
+	CharacterUnitID uuid.UUID
+	ItemIdentifier  string
+	LootUnitUUID    uuid.UUID
+	Success         bool
+}
+
+// processLootEvents creates per-character loot claims for each newly-rolled
+// item and fires auto-upgrade goroutines for characters who own a prior
+// version. Must be called after PendingLootEvents are populated and before
+// the tick clears them. No-ops when there are no events.
+func (inst *Instance) processLootEvents(ctx context.Context, state *instancestate.InstanceState) {
+	if len(state.PendingLootEvents) == 0 {
 		return
 	}
+
+	type slotSnapshot struct {
+		CharacterUnitID     uuid.UUID
+		CharacterDatabaseID string
+		OwnedZoneItems      map[string]bool
+	}
+	inst.slotsMu.RLock()
+	slots := make([]slotSnapshot, 0, len(inst.slots))
+	for _, s := range inst.slots {
+		slots = append(slots, slotSnapshot{
+			CharacterUnitID:     s.CharacterUnitID,
+			CharacterDatabaseID: s.CharacterDatabaseID,
+			OwnedZoneItems:      s.OwnedZoneItems,
+		})
+	}
+	inst.slotsMu.RUnlock()
+
 	for _, event := range state.PendingLootEvents {
-		for _, item := range event.Items {
-			targets := inst.slotsNeedingUpgrade(item.Identifier)
-			for _, t := range targets {
-				go inst.fireAutoUpgrade(ctx, t, item)
+		unit, ok := state.Units[event.UnitUUID]
+		if !ok {
+			continue
+		}
+		for i := range unit.LootItems {
+			lootItem := &unit.LootItems[i]
+			identifier := lootItem.Item.Identifier
+			for _, s := range slots {
+				var claimState instancestate.LootClaimState
+				if owned, ok := s.OwnedZoneItems[identifier]; ok {
+					if owned {
+						claimState = instancestate.LootClaimStateOwned
+					} else {
+						claimState = instancestate.LootClaimStateUpgrade
+						if inst.RailsClient != nil {
+							go inst.fireAutoUpgrade(ctx, autoUpgradeTarget{
+								CharacterDatabaseID: s.CharacterDatabaseID,
+								CharacterUnitID:     s.CharacterUnitID,
+								LootUnitUUID:        event.UnitUUID,
+							}, lootItem.Item)
+						}
+					}
+				} else {
+					claimState = instancestate.LootClaimStateAvailable
+				}
+				lootItem.Claims = append(lootItem.Claims, instancestate.CharacterLootClaim{
+					CharacterUnitID: s.CharacterUnitID,
+					State:           claimState,
+				})
 			}
 		}
 	}
 }
 
-func (inst *Instance) slotsNeedingUpgrade(identifier string) []autoUpgradeTarget {
-	inst.slotsMu.RLock()
-	defer inst.slotsMu.RUnlock()
-	var result []autoUpgradeTarget
-	for _, s := range inst.slots {
-		if owned, ok := s.OwnedZoneItems[identifier]; ok && !owned {
-			result = append(result, autoUpgradeTarget{
-				CharacterDatabaseID: s.CharacterDatabaseID,
-				CharacterUnitID:     s.CharacterUnitID,
-			})
-		}
-	}
-	return result
-}
-
-// fireAutoUpgrade calls AwardItem with upgradeOnly=true. On success it sends
-// an OwnershipUpdate to autoUpgradeResultCh for the tick loop to apply.
+// fireAutoUpgrade calls AwardItem with upgradeOnly=true. Sends an
+// autoUpgradeResult to autoUpgradeResultCh whether it succeeds or fails,
+// so the tick loop can update the claim state.
 func (inst *Instance) fireAutoUpgrade(ctx context.Context, target autoUpgradeTarget, item instanceconfig.Item) {
-	_, confirmedOwned, err := inst.RailsClient.AwardItem(
+	_, confirmedOwned, _, err := inst.RailsClient.AwardItem(
 		target.CharacterDatabaseID,
 		inst.DatabaseID,
 		inst.ZoneIdentifier,
@@ -128,17 +186,15 @@ func (inst *Instance) fireAutoUpgrade(ctx context.Context, target autoUpgradeTar
 	)
 	if err != nil {
 		slog.WarnContext(ctx, "auto-upgrade award failed", "error", err, "item", item.Identifier)
-		return
-	}
-	if !confirmedOwned {
-		return
 	}
 	select {
-	case inst.autoUpgradeResultCh <- instancestate.OwnershipUpdate{
+	case inst.autoUpgradeResultCh <- autoUpgradeResult{
 		CharacterUnitID: target.CharacterUnitID,
 		ItemIdentifier:  item.Identifier,
+		LootUnitUUID:    target.LootUnitUUID,
+		Success:         err == nil && confirmedOwned,
 	}:
 	default:
-		slog.WarnContext(ctx, "auto-upgrade result channel full, ownership update dropped", "item", item.Identifier)
+		slog.WarnContext(ctx, "auto-upgrade result channel full, result dropped", "item", item.Identifier)
 	}
 }

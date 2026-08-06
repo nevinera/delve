@@ -10,8 +10,9 @@ import (
 
 // LootEvent records items rolled when a unit dies, pending delivery to clients.
 type LootEvent struct {
-	UnitID string
-	Items  []instanceconfig.Item
+	UnitUUID uuid.UUID             // direct key into InstanceState.Units
+	UnitID   string                // zone unit identifier string (sent to client)
+	Items    []instanceconfig.Item
 }
 
 // LootFailure records a loot award that the Rails API rejected, so the tick

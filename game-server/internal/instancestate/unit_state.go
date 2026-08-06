@@ -8,10 +8,31 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
+// LootClaimState is the per-character state of a loot item claim.
+type LootClaimState string
+
+const (
+	LootClaimStateAvailable   LootClaimState = "available"    // character can take this item
+	LootClaimStateUpgrade     LootClaimState = "upgrade"      // auto-upgrade goroutine in flight
+	LootClaimStateUpgraded    LootClaimState = "upgraded"     // auto-upgrade (or other-version manual take) confirmed
+	LootClaimStateLocked      LootClaimState = "locked"       // someone else has it claimed
+	LootClaimStateLockedForMe LootClaimState = "locked_for_me" // this character's manual take is in flight
+	LootClaimStateReceived    LootClaimState = "received"     // this character got it (new award)
+	LootClaimStateGone        LootClaimState = "gone"         // consumed by another character
+	LootClaimStateOwned       LootClaimState = "owned"        // character already owns this exact version
+)
+
+// CharacterLootClaim is one character's relationship to a loot item.
+type CharacterLootClaim struct {
+	CharacterUnitID uuid.UUID
+	State           LootClaimState
+}
+
 // LootResult is the outcome of a loot award goroutine.
 type LootResult struct {
 	Remove         bool // true = item was newly awarded; remove it from loot
-	ConfirmedOwned bool // true = Rails confirmed the character owns this version (includes 409)
+	ConfirmedOwned bool // true = Rails confirmed the character owns this version
+	ExactVersion   bool // true = 409; character already has this exact source_key
 }
 
 // LootClaim is an in-flight attempt to take one loot item. The goroutine
@@ -25,7 +46,8 @@ type LootClaim struct {
 type PendingLootItem struct {
 	ClaimID uuid.UUID
 	Item    instanceconfig.Item
-	Claim   *LootClaim // nil = available for looting
+	Claim   *LootClaim           // nil = no manual take in flight
+	Claims  []CharacterLootClaim // one per character present at loot roll
 }
 
 // UnitStatus is the lifecycle/combat state of a unit.

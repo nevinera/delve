@@ -3,6 +3,7 @@ package instance
 // Exports of internal symbols for use in package-level black-box tests.
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/delve-mmo/game-server/internal/command"
@@ -56,4 +57,17 @@ func FacingTowardDegForTest(x1, y1, x2, y2 float64) float64 {
 
 func LerpAngleDegForTest(a, b, t float64) float64 {
 	return lerpAngleDeg(a, b, t)
+}
+
+func SweepLootClaimsForTest(state *instancestate.InstanceState) {
+	sweepLootClaims(state)
+}
+
+func LootItemsEqualForTest(a, b []instancestate.PendingLootItem) bool {
+	return lootItemsEqual(a, b)
+}
+
+func LootItemsToJSONForTest(items []instancestate.PendingLootItem) []byte {
+	out, _ := json.Marshal(lootItemsToJSON(items))
+	return out
 }

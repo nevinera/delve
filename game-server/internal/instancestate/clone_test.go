@@ -129,3 +129,29 @@ func TestClone_NilTargetCopiedAsNil(t *testing.T) {
 		assert.Nil(t, u.Target)
 	}
 }
+
+func TestClone_MutatingLootClaimsDoesNotAffectOriginal(t *testing.T) {
+	state, err := instancestate.NewInstanceState(zoneWith(
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+	))
+	require.NoError(t, err)
+	charID := uuid.New()
+	for _, u := range state.Units {
+		u.LootItems = []instancestate.PendingLootItem{
+			{
+				ClaimID: uuid.New(),
+				Item:    instanceconfig.Item{Identifier: "sword"},
+				Claims:  []instancestate.CharacterLootClaim{{CharacterUnitID: charID, State: instancestate.LootClaimStateAvailable}},
+			},
+		}
+	}
+
+	clone := state.Clone()
+	for _, u := range clone.Units {
+		u.LootItems[0].Claims[0].State = instancestate.LootClaimStateLocked
+	}
+
+	for _, u := range state.Units {
+		assert.Equal(t, instancestate.LootClaimStateAvailable, u.LootItems[0].Claims[0].State)
+	}
+}

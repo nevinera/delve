@@ -25,7 +25,11 @@ func (u *UnitState) clone() *UnitState {
 		c.Target = &t
 	}
 	c.ActiveStatusEffects = slices.Clone(u.ActiveStatusEffects)
-	c.LootItems = slices.Clone(u.LootItems)
+	c.LootItems = make([]PendingLootItem, len(u.LootItems))
+	for i, item := range u.LootItems {
+		c.LootItems[i] = item
+		c.LootItems[i].Claims = slices.Clone(item.Claims)
+	}
 	if u.PowerCooldowns != nil {
 		c.PowerCooldowns = make(map[string]time.Time, len(u.PowerCooldowns))
 		for k, v := range u.PowerCooldowns {

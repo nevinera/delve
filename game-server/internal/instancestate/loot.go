@@ -24,8 +24,9 @@ func RollAndRecordLoot(unitID uuid.UUID, unit *UnitState, state *InstanceState) 
 		rawItems[i] = p.Item
 	}
 	state.PendingLootEvents = append(state.PendingLootEvents, LootEvent{
-		UnitID: unitID.String(),
-		Items:  rawItems,
+		UnitUUID: unitID,
+		UnitID:   unitID.String(),
+		Items:    rawItems,
 	})
 }
 

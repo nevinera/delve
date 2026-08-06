@@ -94,6 +94,41 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			resolveCollisions(state, inst.ZoneConfig)
 			roundPositions(state)
 			sweepLootClaims(state)
+
+		drainAutoUpgrades:
+			for {
+				select {
+				case result := <-inst.autoUpgradeResultCh:
+					if result.Success {
+						if slot := inst.slotByUnitID(result.CharacterUnitID); slot != nil {
+							if slot.OwnedZoneItems == nil {
+								slot.OwnedZoneItems = make(map[string]bool)
+							}
+							slot.OwnedZoneItems[result.ItemIdentifier] = true
+						}
+					}
+					newState := instancestate.LootClaimStateAvailable
+					if result.Success {
+						newState = instancestate.LootClaimStateUpgraded
+					}
+					if unit, ok := state.Units[result.LootUnitUUID]; ok {
+						for i := range unit.LootItems {
+							if unit.LootItems[i].Item.Identifier == result.ItemIdentifier {
+								for j := range unit.LootItems[i].Claims {
+									if unit.LootItems[i].Claims[j].CharacterUnitID == result.CharacterUnitID {
+										unit.LootItems[i].Claims[j].State = newState
+										break
+									}
+								}
+								break
+							}
+						}
+					}
+				default:
+					break drainAutoUpgrades
+				}
+			}
+
 			checksum := state.Checksum()
 			inst.Checksum = checksum
 
@@ -136,22 +171,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 				}
 			}
 
-		drainAutoUpgrades:
-			for {
-				select {
-				case update := <-inst.autoUpgradeResultCh:
-					if slot := inst.slotByUnitID(update.CharacterUnitID); slot != nil {
-						if slot.OwnedZoneItems == nil {
-							slot.OwnedZoneItems = make(map[string]bool)
-						}
-						slot.OwnedZoneItems[update.ItemIdentifier] = true
-					}
-				default:
-					break drainAutoUpgrades
-				}
-			}
-
-			inst.checkAutoUpgrades(ctx, state)
+			inst.processLootEvents(ctx, state)
 
 			state.PendingLootEvents = nil
 			state.PendingLootClaims = nil

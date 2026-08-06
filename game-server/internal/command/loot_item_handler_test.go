@@ -97,6 +97,46 @@ func TestLootItemHandler_NotDeduped(t *testing.T) {
 	assert.False(t, command.LootItemHandler{}.Deduplicate())
 }
 
+func TestLootItemHandler_SetsLockedForMeOnClaimer(t *testing.T) {
+	state, playerID, targetID := makeLootState()
+	otherID := uuid.New()
+	state.Units[targetID].LootItems[0].Claims = []instancestate.CharacterLootClaim{
+		{CharacterUnitID: playerID, State: instancestate.LootClaimStateAvailable},
+		{CharacterUnitID: otherID, State: instancestate.LootClaimStateAvailable},
+	}
+
+	h := command.LootItemHandler{}
+	require.NoError(t, h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state))
+
+	claims := state.Units[targetID].LootItems[0].Claims
+	for _, c := range claims {
+		if c.CharacterUnitID == playerID {
+			assert.Equal(t, instancestate.LootClaimStateLockedForMe, c.State)
+		} else {
+			assert.Equal(t, instancestate.LootClaimStateLocked, c.State)
+		}
+	}
+}
+
+func TestLootItemHandler_DoesNotLockNonAvailableClaims(t *testing.T) {
+	state, playerID, targetID := makeLootState()
+	upgradeID := uuid.New()
+	state.Units[targetID].LootItems[0].Claims = []instancestate.CharacterLootClaim{
+		{CharacterUnitID: playerID, State: instancestate.LootClaimStateAvailable},
+		{CharacterUnitID: upgradeID, State: instancestate.LootClaimStateUpgrade},
+	}
+
+	h := command.LootItemHandler{}
+	require.NoError(t, h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state))
+
+	claims := state.Units[targetID].LootItems[0].Claims
+	for _, c := range claims {
+		if c.CharacterUnitID == upgradeID {
+			assert.Equal(t, instancestate.LootClaimStateUpgrade, c.State, "non-available claims should not become locked")
+		}
+	}
+}
+
 func TestLootItem_ViaProcessor(t *testing.T) {
 	state, playerID, targetID := makeLootState()
 	p := command.NewCommandProcessor()

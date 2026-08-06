@@ -10,7 +10,6 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
-	"github.com/delve-mmo/game-server/internal/instancestate"
 	"github.com/delve-mmo/game-server/internal/railsclient"
 )
 
@@ -68,7 +67,7 @@ type Instance struct {
 	playerSpawnCh       chan playerSpawn
 	commandCh           chan command.Command
 	commandProcessor    *command.CommandProcessor
-	autoUpgradeResultCh chan instancestate.OwnershipUpdate
+	autoUpgradeResultCh chan autoUpgradeResult
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -100,7 +99,7 @@ func NewInstance(
 		playerSpawnCh:       make(chan playerSpawn, DefaultMaxSlots),
 		commandCh:           make(chan command.Command, DefaultMaxSlots*8),
 		commandProcessor:    command.NewCommandProcessor(),
-		autoUpgradeResultCh: make(chan instancestate.OwnershipUpdate, 256),
+		autoUpgradeResultCh: make(chan autoUpgradeResult, 256),
 	}
 	inst.commandProcessor.Register(command.MoveHandler{})
 	inst.commandProcessor.Register(command.TargetHandler{})

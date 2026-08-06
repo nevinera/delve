@@ -35,7 +35,7 @@ type unitJSON struct {
 	GlobalCooldownEndsAt   *int64                   `json:"global_cooldown_ends_at,omitempty"`
 	PowerCooldowns         map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects    []effectJSON             `json:"active_status_effects"`
-	LootItems              []lootEventItemJSON      `json:"loot_items,omitempty"`
+	LootItems              []lootItemJSON           `json:"loot_items,omitempty"`
 }
 
 type effectJSON struct {
@@ -70,6 +70,19 @@ type lootEventItemJSON struct {
 	Name       string `json:"name"`
 	Slot       string `json:"slot"`
 	Ilvl       int    `json:"ilvl"`
+}
+
+type charClaimJSON struct {
+	CharacterUnitID string                       `json:"character_unit_id"`
+	State           instancestate.LootClaimState `json:"state"`
+}
+
+type lootItemJSON struct {
+	Identifier string          `json:"identifier"`
+	Name       string          `json:"name"`
+	Slot       string          `json:"slot"`
+	Ilvl       int             `json:"ilvl"`
+	Claims     []charClaimJSON `json:"claims"`
 }
 
 type lootEventJSON struct {
@@ -244,7 +257,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		if !powerCooldownsEqual(cu.PowerCooldowns, pu.PowerCooldowns) {
 			patch["power_cooldowns"] = powerCooldownsJSON(cu.PowerCooldowns)
 		}
-		if countAvailableLootItems(cu.LootItems) != countAvailableLootItems(pu.LootItems) {
+		if !lootItemsEqual(cu.LootItems, pu.LootItems) {
 			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
 		}
 		if len(patch) > 0 {
@@ -347,27 +360,55 @@ func powerCooldownsEqual(a, b map[string]time.Time) bool {
 	return true
 }
 
-// lootItemsToJSON serializes available (unclaimed) loot items. Claimed items
-// are omitted - they are in-flight and temporarily invisible to clients.
-func lootItemsToJSON(items []instancestate.PendingLootItem) []lootEventItemJSON {
-	var out []lootEventItemJSON
-	for _, pi := range items {
-		if pi.Claim != nil {
-			continue
+// lootItemsToJSON serializes all loot items with their per-character claim states.
+func lootItemsToJSON(items []instancestate.PendingLootItem) []lootItemJSON {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]lootItemJSON, len(items))
+	for i, pi := range items {
+		claims := make([]charClaimJSON, len(pi.Claims))
+		for j, c := range pi.Claims {
+			claims[j] = charClaimJSON{
+				CharacterUnitID: c.CharacterUnitID.String(),
+				State:           c.State,
+			}
 		}
-		out = append(out, lootEventItemJSON{Identifier: pi.Item.Identifier, Name: pi.Item.Name, Slot: pi.Item.Slot, Ilvl: pi.Item.Ilvl})
+		out[i] = lootItemJSON{
+			Identifier: pi.Item.Identifier,
+			Name:       pi.Item.Name,
+			Slot:       pi.Item.Slot,
+			Ilvl:       pi.Item.Ilvl,
+			Claims:     claims,
+		}
 	}
 	return out
 }
 
-func countAvailableLootItems(items []instancestate.PendingLootItem) int {
-	n := 0
-	for _, pi := range items {
-		if pi.Claim == nil {
-			n++
+// lootItemsEqual reports whether two loot item lists are identical in terms of
+// items present and all per-character claim states.
+func lootItemsEqual(a, b []instancestate.PendingLootItem) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].ClaimID != b[i].ClaimID {
+			return false
+		}
+		if len(a[i].Claims) != len(b[i].Claims) {
+			return false
+		}
+		statesByID := make(map[uuid.UUID]instancestate.LootClaimState, len(a[i].Claims))
+		for _, c := range a[i].Claims {
+			statesByID[c.CharacterUnitID] = c.State
+		}
+		for _, c := range b[i].Claims {
+			if statesByID[c.CharacterUnitID] != c.State {
+				return false
+			}
 		}
 	}
-	return n
+	return true
 }
 
 func uuidPtrEqual(a, b *uuid.UUID) bool {
