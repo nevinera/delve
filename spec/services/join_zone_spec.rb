@@ -77,7 +77,7 @@ RSpec.describe JoinZone do
     end
 
     it "sends owned_zone_items derived from the character's items in this zone" do
-      create(:character_item, character: character, provenance_zone: zone,
+      create(:character_item, character: character, zone_identifier: zone.identifier,
         identifier: "helm", version: zone.version)
       call
 

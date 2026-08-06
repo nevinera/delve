@@ -13,31 +13,23 @@ RSpec.describe Character, type: :model do
     end
 
     it "returns true for an item owned from this exact zone version" do
-      create(:character_item, character: character, provenance_zone: zone,
-        identifier: "sword", version: zone.version)
+      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version, identifier: "sword")
       expect(character.owned_zone_items_for(zone)).to eq({"sword" => true})
     end
 
     it "returns false for an item owned from a different version of this zone" do
-      other_version = create(:zone, identifier: zone.identifier, version: "0.0")
-      create(:character_item, character: character, provenance_zone: other_version,
-        identifier: "sword", version: "0.0")
+      create(:character_item, character: character, zone_identifier: zone.identifier, version: "0.0", identifier: "sword")
       expect(character.owned_zone_items_for(zone)).to eq({"sword" => false})
     end
 
     it "excludes items from zones with a different identifier" do
-      other_zone = create(:zone, identifier: "other_zone")
-      create(:character_item, character: character, provenance_zone: other_zone,
-        identifier: "sword", version: other_zone.version)
+      create(:character_item, character: character, zone_identifier: "other_zone", version: zone.version, identifier: "sword")
       expect(character.owned_zone_items_for(zone)).to eq({})
     end
 
     it "can return multiple items with mixed ownership" do
-      other_version = create(:zone, identifier: zone.identifier, version: "0.0")
-      create(:character_item, character: character, provenance_zone: zone,
-        identifier: "helm", version: zone.version)
-      create(:character_item, character: character, provenance_zone: other_version,
-        identifier: "sword", version: "0.0")
+      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version, identifier: "helm")
+      create(:character_item, character: character, zone_identifier: zone.identifier, version: "0.0", identifier: "sword")
       result = character.owned_zone_items_for(zone)
       expect(result).to eq({"helm" => true, "sword" => false})
     end

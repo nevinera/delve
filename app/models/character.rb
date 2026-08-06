@@ -12,8 +12,7 @@ class Character < ApplicationRecord
 
   def owned_zone_items_for(zone)
     character_items
-      .joins(:provenance_zone)
-      .where(zones: {identifier: zone.identifier})
+      .where(zone_identifier: zone.identifier)
       .each_with_object({}) do |item, hash|
         hash[item.identifier] = item.version == zone.version
       end

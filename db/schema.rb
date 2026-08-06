@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_06_142803) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_06_143311) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -53,6 +53,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_06_142803) do
     t.integer "versatility_rating"
     t.string "version", null: false
     t.decimal "weapon_dps", precision: 6, scale: 2
+    t.string "zone_identifier", null: false
     t.index ["character_id", "source_key"], name: "index_character_items_on_character_id_and_source_key", unique: true
     t.index ["character_id"], name: "index_character_items_on_character_id"
     t.index ["provenance_zone_id"], name: "index_character_items_on_provenance_zone_id"
