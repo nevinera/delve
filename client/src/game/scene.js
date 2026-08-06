@@ -129,18 +129,33 @@ const HOSTILITY_COLORS = {
   friendly: { body: 0x1565c0, cone: 0x90caf9 },
 };
 
-function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
+// Fraction to blend a tagged-by-someone-else token's body color toward grey.
+const TAG_DIM_AMOUNT = 0.6;
+const TAG_DIM_COLOR = 0x808080;
+
+export function setTokenTagDimmed(group, dimmed) {
+  if (!group._bodyMaterial || group._dimmed === dimmed) return;
+  group._dimmed = dimmed;
+  group._bodyMaterial.color.set(group._baseColor);
+  if (dimmed) group._bodyMaterial.color.lerp(new THREE.Color(TAG_DIM_COLOR), TAG_DIM_AMOUNT);
+}
+
+export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   const { body: bodyColor, cone: coneColor } =
     HOSTILITY_COLORS[hostility] ?? HOSTILITY_COLORS.hostile;
 
   const group = new THREE.Group();
 
+  const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
   const body = new THREE.Mesh(
     new THREE.CylinderGeometry(radius, radius, 0.3, 32),
-    new THREE.MeshLambertMaterial({ color: bodyColor })
+    bodyMat
   );
   body.position.y = 0.15;
   group.add(body);
+  group._bodyMaterial = bodyMat;
+  group._baseColor = bodyColor;
+  group._dimmed = false;
 
   const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
   const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat);
@@ -500,9 +515,11 @@ export class SceneManager {
   updateUnits(units, selfIdentifier, characterTokenUrl) {
     if (!this._mapToWorldByMap.size) return;
 
-    const selfUnit = Object.values(units).find(
-      (u) => u.zone_unit_identifier === selfIdentifier
+    const selfEntry = Object.entries(units).find(
+      ([, u]) => u.zone_unit_identifier === selfIdentifier
     );
+    const selfUnit = selfEntry?.[1];
+    const selfUnitId = selfEntry?.[0] ?? null;
     const currentMap = selfUnit?.map_identifier;
 
     // Detect map change before the unit loop so _toWorld uses the correct
@@ -556,6 +573,9 @@ export class SceneManager {
           }
         }
         setTokenDead(entry.group, unit.status === "dead");
+        if (!isSelf) {
+          setTokenTagDimmed(entry.group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
+        }
       } else {
         const info = this._unitInfo.get(unit.zone_unit_identifier);
         const radius = info?.tokenRadius ?? TOKEN_RADIUS;
@@ -567,6 +587,9 @@ export class SceneManager {
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
         setTokenDead(group, unit.status === "dead");
+        if (!isSelf) {
+          setTokenTagDimmed(group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
+        }
         this._tokenMap.set(id, { group, isSelf, targetX: wx, targetZ: wz, targetRotY: angle, targetUnitId: unit.target ?? null, radius, lastRenderedMap: unit.map_identifier });
         if (isSelf) {
           this._selfToken = group;
