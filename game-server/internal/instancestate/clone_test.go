@@ -98,6 +98,28 @@ func TestClone_MutatingTargetDoesNotAffectOriginal(t *testing.T) {
 	}
 }
 
+func TestClone_MutatingTaggedByDoesNotAffectOriginal(t *testing.T) {
+	state, err := instancestate.NewInstanceState(zoneWith(
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+	))
+	require.NoError(t, err)
+	originalTagger := uuid.New()
+	for _, u := range state.Units {
+		t2 := originalTagger
+		u.TaggedBy = &t2
+	}
+
+	clone := state.Clone()
+	newTagger := uuid.New()
+	for _, u := range clone.Units {
+		u.TaggedBy = &newTagger
+	}
+
+	for _, u := range state.Units {
+		assert.Equal(t, originalTagger, *u.TaggedBy)
+	}
+}
+
 func TestClone_MutatingPowerCooldownsDoesNotAffectOriginal(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
 		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
