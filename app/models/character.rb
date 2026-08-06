@@ -9,4 +9,13 @@ class Character < ApplicationRecord
     format: {with: /\A[a-zA-Z-]+\z/, message: "must contain only letters and dashes"}
   validates :token_url, presence: true,
     format: {with: /\Ahttps?:\/\/\S+\z/, message: "must be a valid URL"}
+
+  def owned_zone_items_for(zone)
+    character_items
+      .joins(:provenance_zone)
+      .where(zones: {identifier: zone.identifier})
+      .each_with_object({}) do |item, hash|
+        hash[item.identifier] = item.source_key == "#{zone.identifier}/#{zone.version}/#{item.identifier}"
+      end
+  end
 end

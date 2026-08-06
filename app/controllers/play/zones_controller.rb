@@ -12,11 +12,6 @@ class Play::ZonesController < Play::BaseController
   private
 
   def owned_zone_items_map
-    @character.character_items
-      .joins(:provenance_zone)
-      .where(zones: {identifier: @zone.identifier})
-      .each_with_object({}) do |item, hash|
-        hash[item.identifier] = item.source_key == "#{@zone.identifier}/#{@zone.version}/#{item.identifier}"
-      end
+    @character.owned_zone_items_for(@zone)
   end
 end

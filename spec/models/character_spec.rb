@@ -4,6 +4,45 @@ RSpec.describe Character, type: :model do
   let(:user) { create(:user) }
   let(:character_class) { create(:character_class) }
 
+  describe "#owned_zone_items_for" do
+    let(:zone) { create(:zone) }
+    let(:character) { create(:character) }
+
+    it "returns an empty hash when the character has no items" do
+      expect(character.owned_zone_items_for(zone)).to eq({})
+    end
+
+    it "returns true for an item owned from this exact zone version" do
+      create(:character_item, character: character, provenance_zone: zone,
+        identifier: "sword", source_key: "#{zone.identifier}/#{zone.version}/sword")
+      expect(character.owned_zone_items_for(zone)).to eq({"sword" => true})
+    end
+
+    it "returns false for an item owned from a different version of this zone" do
+      other_version = create(:zone, identifier: zone.identifier, version: "0.0")
+      create(:character_item, character: character, provenance_zone: other_version,
+        identifier: "sword", source_key: "#{zone.identifier}/0.0/sword")
+      expect(character.owned_zone_items_for(zone)).to eq({"sword" => false})
+    end
+
+    it "excludes items from zones with a different identifier" do
+      other_zone = create(:zone, identifier: "other_zone")
+      create(:character_item, character: character, provenance_zone: other_zone,
+        identifier: "sword", source_key: "other_zone/#{other_zone.version}/sword")
+      expect(character.owned_zone_items_for(zone)).to eq({})
+    end
+
+    it "can return multiple items with mixed ownership" do
+      other_version = create(:zone, identifier: zone.identifier, version: "0.0")
+      create(:character_item, character: character, provenance_zone: zone,
+        identifier: "helm", source_key: "#{zone.identifier}/#{zone.version}/helm")
+      create(:character_item, character: character, provenance_zone: other_version,
+        identifier: "sword", source_key: "#{zone.identifier}/0.0/sword")
+      result = character.owned_zone_items_for(zone)
+      expect(result).to eq({"helm" => true, "sword" => false})
+    end
+  end
+
   describe "associations" do
     it "destroys character_items when destroyed" do
       character = create(:character)

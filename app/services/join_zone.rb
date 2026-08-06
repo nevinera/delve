@@ -24,7 +24,13 @@ class JoinZone
   private
 
   def build_attrs
-    attrs = {
+    base_attrs.tap do |attrs|
+      attrs[:instance_identifier] = @instance_identifier if @instance_identifier
+    end
+  end
+
+  def base_attrs
+    {
       zone_identifier: @zone.identifier,
       version: @zone.version,
       database_id: @zone.id.to_s,
@@ -32,10 +38,9 @@ class JoinZone
       zone_config: fetch_json(@zone.config_url),
       character_name: @character.name,
       character_database_id: @character.id.to_s,
-      character_class: fetch_json(@character.character_class.location)
+      character_class: fetch_json(@character.character_class.location),
+      owned_zone_items: @character.owned_zone_items_for(@zone)
     }
-    attrs[:instance_identifier] = @instance_identifier if @instance_identifier
-    attrs
   end
 
   def fetch_json(url)

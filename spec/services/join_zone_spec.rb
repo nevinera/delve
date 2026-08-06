@@ -76,6 +76,24 @@ RSpec.describe JoinZone do
       end
     end
 
+    it "sends owned_zone_items derived from the character's items in this zone" do
+      create(:character_item, character: character, provenance_zone: zone,
+        identifier: "helm", source_key: "#{zone.identifier}/#{zone.version}/helm")
+      call
+
+      expect(slots_client).to have_received(:request) do |attrs|
+        expect(attrs[:owned_zone_items]).to eq({"helm" => true})
+      end
+    end
+
+    it "sends an empty owned_zone_items hash when the character has no items in this zone" do
+      call
+
+      expect(slots_client).to have_received(:request) do |attrs|
+        expect(attrs[:owned_zone_items]).to eq({})
+      end
+    end
+
     it "omits instance_identifier when not provided" do
       call
 
