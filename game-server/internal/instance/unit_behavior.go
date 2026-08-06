@@ -157,6 +157,7 @@ func applyUnitBehavior(
 			unit.Position.Y = unit.Behavior.LeashY
 			unit.Status = instancestate.UnitStatusIdle
 			unit.Behavior.MovementPhase = ""
+			unit.TaggedBy = nil
 			return
 		}
 		dx := unit.Behavior.LeashX - unit.Position.X
@@ -167,6 +168,7 @@ func applyUnitBehavior(
 			unit.Position.Y = unit.Behavior.LeashY
 			unit.Status = instancestate.UnitStatusIdle
 			unit.Behavior.MovementPhase = ""
+			unit.TaggedBy = nil
 			return
 		}
 		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, unit.Behavior.LeashX, unit.Behavior.LeashY)

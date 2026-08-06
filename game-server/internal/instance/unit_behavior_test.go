@@ -504,6 +504,18 @@ func TestUnitBehavior_Leash_HealDoesNotExceedMaxHealth(t *testing.T) {
 	assert.Equal(t, u.MaxHealth, u.Health)
 }
 
+func TestUnitBehavior_Leash_ArrivesAndGoesIdle_ClearsTag(t *testing.T) {
+	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
+	u, s := npcState("g1", pos(0, 0.3)) // close enough to snap (< 0.5ft)
+	manualLeash(u, 0, 0)
+	tagger := uuid.New()
+	u.TaggedBy = &tagger
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Nil(t, u.TaggedBy)
+}
+
 func TestUnitBehavior_Leash_DoesNotReaggro(t *testing.T) {
 	// A player within aggro range should not re-engage a leashing unit.
 	zone := behaviorZone(20.0, instanceconfig.UnitMovement{Type: "still"})
@@ -547,4 +559,18 @@ func TestUnitBehavior_Leash_CrossMapSnapsBack(t *testing.T) {
 	assert.InDelta(t, 0.0, u.Position.Y, 1e-9)
 }
 
+func TestUnitBehavior_Leash_CrossMapSnapsBack_ClearsTag(t *testing.T) {
+	zone := twoMapZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.MapIdentifier = "map2"
+	u.Position = pos(50, 50)
+	manualLeash(u, 0, 0)
+	u.Behavior.LeashMapID = "map1"
+	tagger := uuid.New()
+	u.TaggedBy = &tagger
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Nil(t, u.TaggedBy)
+}
 
