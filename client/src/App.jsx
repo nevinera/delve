@@ -405,7 +405,13 @@ const CLAIM_LABEL = {
   received:       "(received)",
 };
 
-function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
+// unitHasLootClaim reports whether characterUnitId holds any claim entry
+// (of any state) on lootItems — i.e. whether they tagged the unit.
+export function unitHasLootClaim(lootItems, characterUnitId) {
+  return !!lootItems?.some(i => i.claims?.some(c => c.character_unit_id === characterUnitId));
+}
+
+export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
   const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
   const elRef = useRef(null);
 
@@ -850,7 +856,9 @@ export default function App({
   }, []);
 
   const handleUnitRightClick = useCallback((id) => {
-    if (unitsRef.current[id]?.loot_items?.length > 0) {
+    const selfEntry = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
+    const selfId = selfEntry?.[0];
+    if (unitHasLootClaim(unitsRef.current[id]?.loot_items, selfId)) {
       setLootWindowUnitId(id);
     }
   }, []);
