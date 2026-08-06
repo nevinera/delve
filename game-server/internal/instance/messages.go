@@ -32,6 +32,7 @@ type unitJSON struct {
 	Radius               float64                  `json:"radius"`
 	Status               instancestate.UnitStatus `json:"status"`
 	Target               *string                  `json:"target"`
+	TaggedBy             *string                  `json:"tagged_by"`
 	GlobalCooldownEndsAt *int64                   `json:"global_cooldown_ends_at,omitempty"`
 	PowerCooldowns       map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
@@ -123,6 +124,11 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			s := u.Target.String()
 			target = &s
 		}
+		var taggedBy *string
+		if u.TaggedBy != nil {
+			s := u.TaggedBy.String()
+			taggedBy = &s
+		}
 		var gcdMs *int64
 		if !u.GlobalCooldownEndsAt.IsZero() {
 			ms := u.GlobalCooldownEndsAt.UnixMilli()
@@ -142,6 +148,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Radius:               u.Radius,
 			Status:               u.Status,
 			Target:               target,
+			TaggedBy:             taggedBy,
 			GlobalCooldownEndsAt: gcdMs,
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
 			ActiveStatusEffects:  effects,
@@ -184,6 +191,11 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				s := cu.Target.String()
 				target = &s
 			}
+			var taggedBy *string
+			if cu.TaggedBy != nil {
+				s := cu.TaggedBy.String()
+				taggedBy = &s
+			}
 			update := map[string]any{
 				"zone_unit_identifier": cu.ZoneUnitIdentifier,
 				"unit_type_identifier": cu.UnitTypeIdentifier,
@@ -198,6 +210,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				"radius":               cu.Radius,
 				"status":               string(cu.Status),
 				"target":               target,
+				"tagged_by":            taggedBy,
 			}
 			if !cu.GlobalCooldownEndsAt.IsZero() {
 				update["global_cooldown_ends_at"] = cu.GlobalCooldownEndsAt.UnixMilli()
@@ -251,6 +264,14 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				patch["target"] = &s
 			} else {
 				patch["target"] = nil
+			}
+		}
+		if !uuidPtrEqual(cu.TaggedBy, pu.TaggedBy) {
+			if cu.TaggedBy != nil {
+				s := cu.TaggedBy.String()
+				patch["tagged_by"] = &s
+			} else {
+				patch["tagged_by"] = nil
 			}
 		}
 		if cu.GlobalCooldownEndsAt != pu.GlobalCooldownEndsAt {

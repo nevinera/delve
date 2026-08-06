@@ -117,6 +117,7 @@ func TestFullStateMsg_UnitFields(t *testing.T) {
 		assert.Equal(t, float64(100), unit["health"])
 		assert.Equal(t, float64(100), unit["max_health"])
 		assert.Nil(t, unit["target"])
+		assert.Nil(t, unit["tagged_by"])
 		assert.NotNil(t, unit["active_status_effects"])
 	}
 }
@@ -296,6 +297,70 @@ func TestDeltaMsg_TargetUnchanged_NotInPatch(t *testing.T) {
 	targetID := uuid.New()
 	for _, u := range prev.Units {
 		u.Target = &targetID
+	}
+	curr := prev.Clone()
+
+	msg := delta(t, prev, curr)
+	assert.Empty(t, msg["unit_updates"])
+}
+
+func TestFullStateMsg_UnitWithTaggedBy(t *testing.T) {
+	s := stateWithUnit(t)
+	taggerID := uuid.New()
+	for _, u := range s.Units {
+		u.TaggedBy = &taggerID
+	}
+
+	msg := fullState(t, s)
+	units := msg["units"].(map[string]any)
+	for _, u := range units {
+		unit := u.(map[string]any)
+		assert.Equal(t, taggerID.String(), unit["tagged_by"])
+	}
+}
+
+func TestDeltaMsg_TaggedBySet(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	taggerID := uuid.New()
+	for _, u := range curr.Units {
+		u.TaggedBy = &taggerID
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Equal(t, taggerID.String(), p["tagged_by"])
+	}
+}
+
+func TestDeltaMsg_TaggedByCleared(t *testing.T) {
+	prev := stateWithUnit(t)
+	taggerID := uuid.New()
+	for _, u := range prev.Units {
+		u.TaggedBy = &taggerID
+	}
+	curr := prev.Clone()
+	for _, u := range curr.Units {
+		u.TaggedBy = nil
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Nil(t, p["tagged_by"])
+	}
+}
+
+func TestDeltaMsg_TaggedByUnchanged_NotInPatch(t *testing.T) {
+	prev := stateWithUnit(t)
+	taggerID := uuid.New()
+	for _, u := range prev.Units {
+		u.TaggedBy = &taggerID
 	}
 	curr := prev.Clone()
 

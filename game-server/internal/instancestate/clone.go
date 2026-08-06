@@ -24,6 +24,10 @@ func (u *UnitState) clone() *UnitState {
 		t := *u.Target
 		c.Target = &t
 	}
+	if u.TaggedBy != nil {
+		tb := *u.TaggedBy
+		c.TaggedBy = &tb
+	}
 	c.ActiveStatusEffects = slices.Clone(u.ActiveStatusEffects)
 	c.LootItems = make([]PendingLootItem, len(u.LootItems))
 	for i, item := range u.LootItems {
