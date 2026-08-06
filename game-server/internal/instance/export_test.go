@@ -3,6 +3,7 @@ package instance
 // Exports of internal symbols for use in package-level black-box tests.
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -70,4 +71,8 @@ func LootItemsEqualForTest(a, b []instancestate.PendingLootItem) bool {
 func LootItemsToJSONForTest(items []instancestate.PendingLootItem) []byte {
 	out, _ := json.Marshal(lootItemsToJSON(items))
 	return out
+}
+
+func (inst *Instance) ProcessLootEventsForTest(ctx context.Context, state *instancestate.InstanceState) {
+	inst.processLootEvents(ctx, state)
 }
