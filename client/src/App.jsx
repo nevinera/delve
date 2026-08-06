@@ -284,6 +284,33 @@ const styles = {
     fontStyle: "italic",
     marginTop: 6,
   },
+  unitTooltip: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    zIndex: 15,
+    background: "rgba(20,16,12,0.95)",
+    border: "1px solid #555",
+    borderRadius: 6,
+    padding: "8px 12px",
+    minWidth: 160,
+    pointerEvents: "none",
+  },
+  unitTooltipName: {
+    color: "#e8d5a0",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  unitTooltipStatus: {
+    fontSize: 11,
+    color: "#999",
+    marginTop: 4,
+  },
+  unitTooltipTag: {
+    fontSize: 11,
+    color: "#d4a84b",
+    marginTop: 2,
+  },
 };
 
 function UnitBar({ label, current, max }) {
@@ -337,6 +364,36 @@ function formatUnitName(unit) {
     .split("_")
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+const UNIT_STATUS_LABELS = {
+  idle: "Idle",
+  engaged: "Engaged",
+  leashing: "Leashing",
+  dead: "Dead",
+};
+
+// Fixed to the upper-right corner of the canvas region, shown while
+// hovering any token other than the current character.
+export function UnitTooltip({ unit, selfUnitId }) {
+  if (!unit) return null;
+
+  const tagLabel = unit.tagged_by == null
+    ? null
+    : unit.tagged_by === selfUnitId
+      ? "Tagged by you"
+      : "Tagged by another player";
+
+  return (
+    <div style={styles.unitTooltip}>
+      <div style={styles.unitTooltipName}>{formatUnitName(unit)}</div>
+      <UnitBar label="HP" current={unit.health} max={unit.max_health} />
+      <div style={styles.unitTooltipStatus}>
+        {UNIT_STATUS_LABELS[unit.status] || unit.status}
+      </div>
+      {tagLabel && <div style={styles.unitTooltipTag}>{tagLabel}</div>}
+    </div>
+  );
 }
 
 const STAT_LABELS = {
@@ -515,6 +572,7 @@ export default function App({
   selfIdentifierRef.current = `player:${characterName}`;
   const [units, setUnits] = useState({});
   const [targetId, setTargetId] = useState(null);
+  const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
   const [disconnected, setDisconnected] = useState(false);
@@ -914,9 +972,11 @@ export default function App({
           onSelfPosition={handleSelfPosition}
           onUnitClick={handleTargetUnit}
           onUnitRightClick={handleUnitRightClick}
+          onUnitHover={setHoveredUnitId}
           lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => i.claims?.find(c => c.character_unit_id === selfUnitId)?.state === "available")).map(([id]) => id))}
           targetId={targetId}
         />
+        <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
         <LootWindow
           unitId={lootWindowUnitId}

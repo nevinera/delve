@@ -218,7 +218,7 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, onUnitClick, onUnitRightClick } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, onUnitClick, onUnitRightClick, onUnitHover } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
@@ -226,6 +226,7 @@ export class SceneManager {
     this._onSelfPosition = onSelfPosition;
     this._onUnitClick = onUnitClick;
     this._onUnitRightClick = onUnitRightClick;
+    this._onUnitHover = onUnitHover;
     this._lastPosSendTime = 0;
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -368,6 +369,8 @@ export class SceneManager {
       e.preventDefault();
       this._handleRightClick(e);
     });
+    this._canvas.addEventListener("mousemove", (e) => this._handleHover(e));
+    this._canvas.addEventListener("mouseleave", () => this._onUnitHover?.(null));
     this._canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
       this._camZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._camZoom + e.deltaY * 0.001));
@@ -384,6 +387,12 @@ export class SceneManager {
     if (!this._onUnitRightClick) return;
     const id = this._unitUnderPointer(e);
     if (id) this._onUnitRightClick(id);
+  }
+
+  _handleHover(e) {
+    if (!this._onUnitHover) return;
+    const id = this._unitUnderPointer(e);
+    this._onUnitHover(id ?? null);
   }
 
   _unitUnderPointer(e) {
