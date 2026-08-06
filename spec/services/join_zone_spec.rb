@@ -78,7 +78,7 @@ RSpec.describe JoinZone do
 
     it "sends owned_zone_items derived from the character's items in this zone" do
       create(:character_item, character: character, provenance_zone: zone,
-        identifier: "helm", source_key: "#{zone.identifier}/#{zone.version}/helm")
+        identifier: "helm", version: zone.version)
       call
 
       expect(slots_client).to have_received(:request) do |attrs|

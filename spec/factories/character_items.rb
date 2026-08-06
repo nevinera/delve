@@ -4,6 +4,7 @@ FactoryBot.define do
     association :provenance_zone, factory: :zone
 
     sequence(:identifier) { |n| "item-#{n}" }
+    version { "1.0" }
     sequence(:source_key) { |n| "zone_a/1.0/item-#{n}" }
     name { "Iron Sword" }
     ilvl { 584 }

@@ -15,7 +15,7 @@ class Character < ApplicationRecord
       .joins(:provenance_zone)
       .where(zones: {identifier: zone.identifier})
       .each_with_object({}) do |item, hash|
-        hash[item.identifier] = item.source_key == "#{zone.identifier}/#{zone.version}/#{item.identifier}"
+        hash[item.identifier] = item.version == zone.version
       end
   end
 end

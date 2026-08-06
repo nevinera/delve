@@ -70,6 +70,7 @@ class AwardCharacterItem
       source_key:,
       source_json: @source_data,
       identifier:,
+      version: zone_version,
       name:,
       slot:,
       ilvl:,
