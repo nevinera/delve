@@ -243,6 +243,47 @@ const styles = {
     fontSize: 11,
     marginLeft: 4,
   },
+  itemTooltipAnchor: {
+    display: "inline-block",
+    cursor: "default",
+  },
+  itemTooltip: {
+    position: "fixed",
+    zIndex: 100,
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "8px 12px",
+    minWidth: 180,
+    maxWidth: 320,
+    pointerEvents: "none",
+  },
+  itemTooltipName: {
+    color: "#d4a84b",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  itemTooltipMeta: {
+    color: "#999",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  itemTooltipStats: {
+    marginTop: 6,
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+  },
+  itemTooltipStat: {
+    color: "#7fae7f",
+    fontSize: 12,
+  },
+  itemTooltipDescription: {
+    color: "#aaa",
+    fontSize: 12,
+    fontStyle: "italic",
+    marginTop: 6,
+  },
 };
 
 function UnitBar({ label, current, max }) {
@@ -296,6 +337,62 @@ function formatUnitName(unit) {
     .split("_")
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+const STAT_LABELS = {
+  strength: "Strength",
+  agility: "Agility",
+  intellect: "Intellect",
+  stamina: "Stamina",
+  crit_rating: "Crit Rating",
+  haste_rating: "Haste Rating",
+  mastery_rating: "Mastery Rating",
+  versatility_rating: "Versatility Rating",
+  resilience_rating: "Resilience Rating",
+  weapon_dps: "Weapon DPS",
+};
+
+// Wraps its children in a hover target that shows a WoW-style item tooltip
+// near the cursor. `item` should have {name, slot, ilvl, description, stats}.
+function ItemTooltip({ item, children }) {
+  const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
+
+  if (!item) return children;
+
+  const stats = Object.entries(item.stats || {}).filter(([, v]) => v);
+
+  return (
+    <span
+      style={styles.itemTooltipAnchor}
+      onMouseEnter={e => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={e => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && (
+        <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
+          <div style={styles.itemTooltipName}>{item.name}</div>
+          {(item.slot || item.ilvl != null) && (
+            <div style={styles.itemTooltipMeta}>
+              {[item.slot, item.ilvl != null && `ilvl ${item.ilvl}`].filter(Boolean).join(" · ")}
+            </div>
+          )}
+          {stats.length > 0 && (
+            <div style={styles.itemTooltipStats}>
+              {stats.map(([key, value]) => (
+                <div key={key} style={styles.itemTooltipStat}>
+                  +{value} {STAT_LABELS[key] || key}
+                </div>
+              ))}
+            </div>
+          )}
+          {item.description && (
+            <div style={styles.itemTooltipDescription}>{item.description}</div>
+          )}
+        </div>
+      )}
+    </span>
+  );
 }
 
 const CLAIM_LABEL = {
@@ -352,10 +449,12 @@ function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
           const canTake = myState === "available";
           return (
             <li key={i} style={styles.lootItem}>
-              <span style={styles.lootItemName}>
-                {item.name}
-                {label && <span style={styles.lootOwned}> {label}</span>}
-              </span>
+              <ItemTooltip item={item}>
+                <span style={styles.lootItemName}>
+                  {item.name}
+                  {label && <span style={styles.lootOwned}> {label}</span>}
+                </span>
+              </ItemTooltip>
               <span style={styles.lootItemMeta}>{item.slot} · ilvl {item.ilvl}</span>
               {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
             </li>
