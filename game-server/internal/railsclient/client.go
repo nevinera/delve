@@ -93,7 +93,7 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 	if err != nil {
 		return false, false, false, fmt.Errorf("http: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	switch res.StatusCode {
 	case http.StatusCreated:

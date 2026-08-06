@@ -52,7 +52,7 @@ func TestConnect_MoveCommand_UpdatesPosition(t *testing.T) {
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	w := &safeWriter{conn: conn}
 	stopHeartbeats := make(chan struct{})
@@ -60,7 +60,7 @@ func TestConnect_MoveCommand_UpdatesPosition(t *testing.T) {
 	go keepAlive(w, stopHeartbeats)
 
 	// Wait for the full state (confirms player unit is spawned and slot is live).
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	_, fullStateData, err := conn.ReadMessage()
 	require.NoError(t, err)
 	var fullState map[string]any
@@ -74,7 +74,7 @@ func TestConnect_MoveCommand_UpdatesPosition(t *testing.T) {
 	unitIDStr := slot.CharacterUnitID.String()
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			break
@@ -106,7 +106,7 @@ func TestConnect_UnknownMessageType_DoesNotDisconnect(t *testing.T) {
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	waitState(t, inst, slot.ID, instance.SlotStateConnected)
 
@@ -133,7 +133,7 @@ func TestConnect_MalformedJSON_DoesNotDisconnect(t *testing.T) {
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	waitState(t, inst, slot.ID, instance.SlotStateConnected)
 

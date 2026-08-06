@@ -57,8 +57,8 @@ func TestStatus(t *testing.T) {
 				class := instanceconfig.CharacterClass{Name: "Puncher"}
 				slot1, _ := inst1.AddSlot("Aldric", "42", class, nil)
 				inst1.SetSlotState(slot1.ID, instance.SlotStateConnected)
-				inst1.AddSlot("Brego", "42", class, nil) // pending
-				inst2.AddSlot("Caela", "42", class, nil) // pending
+				_, _ = inst1.AddSlot("Brego", "42", class, nil) // pending
+				_, _ = inst2.AddSlot("Caela", "42", class, nil) // pending
 				r.Add(inst1)
 				r.Add(inst2)
 			},

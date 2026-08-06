@@ -298,11 +298,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 	}
 
 	for _, ev := range events {
-		msg.CombatEvents = append(msg.CombatEvents, combatEventJSON{
-			AttackerID: ev.AttackerID,
-			TargetID:   ev.TargetID,
-			PowerName:  ev.PowerName,
-		})
+		msg.CombatEvents = append(msg.CombatEvents, combatEventJSON(ev))
 	}
 
 	for _, lev := range lootEvents {
