@@ -354,7 +354,7 @@ const STAT_LABELS = {
 
 // Wraps its children in a hover target that shows a WoW-style item tooltip
 // near the cursor. `item` should have {name, slot, ilvl, description, stats}.
-function ItemTooltip({ item, children }) {
+export function ItemTooltip({ item, children }) {
   const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
 
   if (!item) return children;
