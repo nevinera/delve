@@ -19,23 +19,23 @@ type downBase struct {
 }
 
 type unitJSON struct {
-	ZoneUnitIdentifier     string                   `json:"zone_unit_identifier"`
-	UnitTypeIdentifier     string                   `json:"unit_type_identifier,omitempty"`
-	MapIdentifier          string                   `json:"map_identifier"`
-	Hostility              string                   `json:"hostility,omitempty"`
-	Position               instanceconfig.Position  `json:"position"`
-	Health                 float64                  `json:"health"`
-	MaxHealth              float64                  `json:"max_health"`
-	Resource               float64                  `json:"resource"`
-	MaxResource            float64                  `json:"max_resource"`
-	Speed                  float64                  `json:"speed"`
-	Radius                 float64                  `json:"radius"`
-	Status                 instancestate.UnitStatus `json:"status"`
-	Target                 *string                  `json:"target"`
-	GlobalCooldownEndsAt   *int64                   `json:"global_cooldown_ends_at,omitempty"`
-	PowerCooldowns         map[string]int64         `json:"power_cooldowns,omitempty"`
-	ActiveStatusEffects    []effectJSON             `json:"active_status_effects"`
-	LootItems              []lootItemJSON           `json:"loot_items,omitempty"`
+	ZoneUnitIdentifier   string                   `json:"zone_unit_identifier"`
+	UnitTypeIdentifier   string                   `json:"unit_type_identifier,omitempty"`
+	MapIdentifier        string                   `json:"map_identifier"`
+	Hostility            string                   `json:"hostility,omitempty"`
+	Position             instanceconfig.Position  `json:"position"`
+	Health               float64                  `json:"health"`
+	MaxHealth            float64                  `json:"max_health"`
+	Resource             float64                  `json:"resource"`
+	MaxResource          float64                  `json:"max_resource"`
+	Speed                float64                  `json:"speed"`
+	Radius               float64                  `json:"radius"`
+	Status               instancestate.UnitStatus `json:"status"`
+	Target               *string                  `json:"target"`
+	GlobalCooldownEndsAt *int64                   `json:"global_cooldown_ends_at,omitempty"`
+	PowerCooldowns       map[string]int64         `json:"power_cooldowns,omitempty"`
+	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
+	LootItems            []lootItemJSON           `json:"loot_items,omitempty"`
 }
 
 type effectJSON struct {
@@ -78,11 +78,13 @@ type charClaimJSON struct {
 }
 
 type lootItemJSON struct {
-	Identifier string          `json:"identifier"`
-	Name       string          `json:"name"`
-	Slot       string          `json:"slot"`
-	Ilvl       int             `json:"ilvl"`
-	Claims     []charClaimJSON `json:"claims"`
+	Identifier  string                   `json:"identifier"`
+	Name        string                   `json:"name"`
+	Slot        string                   `json:"slot"`
+	Ilvl        int                      `json:"ilvl"`
+	Description string                   `json:"description,omitempty"`
+	Stats       instanceconfig.ItemStats `json:"stats,omitempty"`
+	Claims      []charClaimJSON          `json:"claims"`
 }
 
 type lootEventJSON struct {
@@ -91,7 +93,7 @@ type lootEventJSON struct {
 }
 
 type lootFailureJSON struct {
-	ClaimedBy string           `json:"claimed_by"`
+	ClaimedBy string            `json:"claimed_by"`
 	Item      lootEventItemJSON `json:"item"`
 }
 
@@ -375,11 +377,13 @@ func lootItemsToJSON(items []instancestate.PendingLootItem) []lootItemJSON {
 			}
 		}
 		out[i] = lootItemJSON{
-			Identifier: pi.Item.Identifier,
-			Name:       pi.Item.Name,
-			Slot:       pi.Item.Slot,
-			Ilvl:       pi.Item.Ilvl,
-			Claims:     claims,
+			Identifier:  pi.Item.Identifier,
+			Name:        pi.Item.Name,
+			Slot:        pi.Item.Slot,
+			Ilvl:        pi.Item.Ilvl,
+			Description: pi.Item.Description,
+			Stats:       pi.Item.Stats,
+			Claims:      claims,
 		}
 	}
 	return out

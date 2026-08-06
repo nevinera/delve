@@ -258,6 +258,32 @@ func TestLootItemsToJSON_IncludesClaims(t *testing.T) {
 	assert.Equal(t, "available", claim["state"])
 }
 
+func TestLootItemsToJSON_IncludesDescriptionAndStats(t *testing.T) {
+	items := []instancestate.PendingLootItem{
+		{
+			ClaimID: uuid.New(),
+			Item: instanceconfig.Item{
+				Identifier:  "sword",
+				Name:        "sword",
+				Slot:        "head",
+				Ilvl:        100,
+				Description: "A sharp blade.",
+				Stats:       instanceconfig.ItemStats{Strength: 5, CritRating: 3},
+			},
+		},
+	}
+
+	raw := instance.LootItemsToJSONForTest(items)
+	var out []map[string]any
+	require.NoError(t, json.Unmarshal(raw, &out))
+	require.Len(t, out, 1)
+
+	assert.Equal(t, "A sharp blade.", out[0]["description"])
+	stats := out[0]["stats"].(map[string]any)
+	assert.Equal(t, float64(5), stats["strength"])
+	assert.Equal(t, float64(3), stats["crit_rating"])
+}
+
 func TestLootItemsToJSON_EmptyItems(t *testing.T) {
 	raw := instance.LootItemsToJSONForTest(nil)
 	assert.Equal(t, []byte("null"), raw)
