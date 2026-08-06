@@ -128,7 +128,7 @@ func TestConnect_NoUpgradeHeaders(t *testing.T) {
 		srv.URL, inst.Identifier, slot.ID, slot.Token)
 	resp, err := http.Get(url) //nolint:noctx
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
@@ -145,7 +145,7 @@ func TestConnect_SetsStateConnected(t *testing.T) {
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	waitState(t, inst, slot.ID, instance.SlotStateConnected)
 }
@@ -163,7 +163,7 @@ func TestConnect_CloseTransitionsToWaiting(t *testing.T) {
 	require.NoError(t, err)
 
 	waitState(t, inst, slot.ID, instance.SlotStateConnected)
-	conn.Close()
+	_ = conn.Close()
 
 	waitState(t, inst, slot.ID, instance.SlotStateWaiting)
 }
@@ -179,12 +179,12 @@ func TestConnect_HeartbeatTimeoutTransitionsToWaiting(t *testing.T) {
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	waitState(t, inst, slot.ID, instance.SlotStateConnected)
 
 	// Don't send any messages. The server should time out and close the connection.
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	_, _, _ = conn.ReadMessage() // expect close frame or error
 
 	waitState(t, inst, slot.ID, instance.SlotStateWaiting)
@@ -201,7 +201,7 @@ func TestConnect_HeartbeatResetsTimeout(t *testing.T) {
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	waitState(t, inst, slot.ID, instance.SlotStateConnected)
 
@@ -229,17 +229,17 @@ func TestConnect_ReconnectKicksOldConnection(t *testing.T) {
 
 	conn1, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn1.Close()
+	defer func() { _ = conn1.Close() }()
 
 	waitState(t, inst, slot.ID, instance.SlotStateConnected)
 
 	// Second connection should displace the first.
 	conn2, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
 	require.NoError(t, err)
-	defer conn2.Close()
+	defer func() { _ = conn2.Close() }()
 
 	// conn1 should receive a close frame.
-	conn1.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn1.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	_, _, readErr := conn1.ReadMessage()
 	assert.Error(t, readErr, "first connection should be closed by reconnect")
 

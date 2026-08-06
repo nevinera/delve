@@ -40,10 +40,7 @@ func TestInstance_AutoStop_RemovesFromRegistry(t *testing.T) {
 	startedInstance(t, reg)
 
 	deadline := time.After(2 * time.Second)
-	for {
-		if reg.Count() == 0 {
-			break
-		}
+	for reg.Count() != 0 {
 		select {
 		case <-deadline:
 			t.Fatal("instance was not removed from registry within deadline")

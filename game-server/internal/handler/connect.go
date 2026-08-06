@@ -82,12 +82,12 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 				}
 			case <-ctx.Done():
 				// Kicked by a reconnect — send a close frame and stop.
-				conn.WriteControl(
+				_ = conn.WriteControl(
 					websocket.CloseMessage,
 					websocket.FormatCloseMessage(websocket.CloseGoingAway, "reconnected"),
 					time.Now().Add(time.Second),
 				)
-				conn.Close()
+				_ = conn.Close()
 				return
 			case <-quit:
 				return
@@ -95,13 +95,13 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
+	_ = conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
-		conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
+		_ = conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
 		handleClientMessage(data, slot.CharacterUnitID, inst, powers)
 	}
 

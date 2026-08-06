@@ -14,19 +14,19 @@ import (
 // an exit code. Factored out of main so it can be tested without exec.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
-		fmt.Fprintln(stderr, "usage: validate-zone <path>")
+		_, _ = fmt.Fprintln(stderr, "usage: validate-zone <path>")
 		return 1
 	}
 
 	data, err := os.ReadFile(args[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "error reading file: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error reading file: %v\n", err)
 		return 1
 	}
 
 	var zone instanceconfig.Zone
 	if err := json.Unmarshal(data, &zone); err != nil {
-		fmt.Fprintf(stderr, "error parsing zone config: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error parsing zone config: %v\n", err)
 		return 1
 	}
 
@@ -50,17 +50,17 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 	if len(duplicates) > 0 {
 		for _, d := range duplicates {
-			fmt.Fprintf(stderr, "duplicate unit identifier: %s\n", d)
+			_, _ = fmt.Fprintf(stderr, "duplicate unit identifier: %s\n", d)
 		}
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "Zone:         %s\n", zone.Name)
-	fmt.Fprintf(stdout, "  Private:    %v\n", zone.Private)
-	fmt.Fprintf(stdout, "  Maps:       %d\n", len(zone.Maps))
-	fmt.Fprintf(stdout, "  Unit types: %d\n", len(zone.UnitTypes))
-	fmt.Fprintf(stdout, "  Units:      %d\n", unitCount)
-	fmt.Fprintf(stdout, "  Zone links: %d\n", len(zone.ZoneLinks))
-	fmt.Fprintf(stdout, "  Entry points: %d\n", len(zone.EntryPoints))
+	_, _ = fmt.Fprintf(stdout, "Zone:         %s\n", zone.Name)
+	_, _ = fmt.Fprintf(stdout, "  Private:    %v\n", zone.Private)
+	_, _ = fmt.Fprintf(stdout, "  Maps:       %d\n", len(zone.Maps))
+	_, _ = fmt.Fprintf(stdout, "  Unit types: %d\n", len(zone.UnitTypes))
+	_, _ = fmt.Fprintf(stdout, "  Units:      %d\n", unitCount)
+	_, _ = fmt.Fprintf(stdout, "  Zone links: %d\n", len(zone.ZoneLinks))
+	_, _ = fmt.Fprintf(stdout, "  Entry points: %d\n", len(zone.EntryPoints))
 	return 0
 }
