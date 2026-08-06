@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -307,4 +308,54 @@ func TestLootItemsToJSON_MultipleClaimsAndItems(t *testing.T) {
 	require.Len(t, out, 2)
 	assert.Len(t, out[0]["claims"].([]any), 2)
 	assert.Len(t, out[1]["claims"].([]any), 1)
+}
+
+// ---------------------------------------------------------------------------
+// processLootEvents - tag-gated claims
+// ---------------------------------------------------------------------------
+
+func TestProcessLootEvents_OnlyTaggedCharacterGetsClaim(t *testing.T) {
+	inst := makeInstance()
+	tagger, err := inst.AddSlot("Tagger", "1", puncherClass, nil)
+	require.NoError(t, err)
+	_, err = inst.AddSlot("Other", "2", puncherClass, nil)
+	require.NoError(t, err)
+
+	mobID := uuid.New()
+	taggerUnitID := tagger.CharacterUnitID
+	state := &instancestate.InstanceState{
+		Units: map[uuid.UUID]*instancestate.UnitState{
+			mobID: {
+				TaggedBy:  &taggerUnitID,
+				LootItems: []instancestate.PendingLootItem{makeLootItem("sword")},
+			},
+		},
+		PendingLootEvents: []instancestate.LootEvent{{UnitUUID: mobID}},
+	}
+
+	inst.ProcessLootEventsForTest(context.Background(), state)
+
+	claims := state.Units[mobID].LootItems[0].Claims
+	require.Len(t, claims, 1)
+	assert.Equal(t, tagger.CharacterUnitID, claims[0].CharacterUnitID)
+}
+
+func TestProcessLootEvents_UntaggedKill_NoClaims(t *testing.T) {
+	inst := makeInstance()
+	_, err := inst.AddSlot("Aldric", "1", puncherClass, nil)
+	require.NoError(t, err)
+
+	mobID := uuid.New()
+	state := &instancestate.InstanceState{
+		Units: map[uuid.UUID]*instancestate.UnitState{
+			mobID: {
+				LootItems: []instancestate.PendingLootItem{makeLootItem("sword")},
+			},
+		},
+		PendingLootEvents: []instancestate.LootEvent{{UnitUUID: mobID}},
+	}
+
+	inst.ProcessLootEventsForTest(context.Background(), state)
+
+	assert.Empty(t, state.Units[mobID].LootItems[0].Claims)
 }

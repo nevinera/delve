@@ -136,6 +136,7 @@ type UnitState struct {
 
 	Status               UnitStatus
 	Target               *uuid.UUID
+	TaggedBy             *uuid.UUID // first player to damage this unit
 	GlobalCooldownEndsAt time.Time
 	PowerCooldowns         map[string]time.Time // keyed by power name; zero/missing means ready
 	ActiveStatusEffects    []ActiveStatusEffect

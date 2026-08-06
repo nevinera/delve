@@ -142,10 +142,20 @@ func (inst *Instance) processLootEvents(ctx context.Context, state *instancestat
 		if !ok {
 			continue
 		}
+		if unit.TaggedBy == nil {
+			continue // no player contributed to this kill; nothing to claim
+		}
+		var eligibleSlots []slotSnapshot
+		for _, s := range slots {
+			if s.CharacterUnitID == *unit.TaggedBy {
+				eligibleSlots = append(eligibleSlots, s)
+				break
+			}
+		}
 		for i := range unit.LootItems {
 			lootItem := &unit.LootItems[i]
 			identifier := lootItem.Item.Identifier
-			for _, s := range slots {
+			for _, s := range eligibleSlots {
 				var claimState instancestate.LootClaimState
 				if owned, ok := s.OwnedZoneItems[identifier]; ok {
 					if owned {

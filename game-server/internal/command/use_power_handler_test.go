@@ -159,6 +159,38 @@ func TestUsePowerHandler_SetsDeadStatusAtZeroHealth(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusDead, state.Units[targetID].Status)
 }
 
+func TestUsePowerHandler_TagsHostileTargetOnFirstDamage(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Hostility = "hostile"
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	require.NotNil(t, state.Units[targetID].TaggedBy)
+	assert.Equal(t, playerID, *state.Units[targetID].TaggedBy)
+}
+
+func TestUsePowerHandler_DoesNotRetagAlreadyTaggedTarget(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Hostility = "hostile"
+	firstTagger := uuid.New()
+	state.Units[targetID].TaggedBy = &firstTagger
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.Equal(t, firstTagger, *state.Units[targetID].TaggedBy)
+}
+
+func TestUsePowerHandler_DoesNotTagNonHostileTarget(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0) // target Hostility is "" (player)
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.Nil(t, state.Units[targetID].TaggedBy)
+}
+
 func TestUsePowerHandler_FrontalBlocksWhenNotFacing(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	// Target is directly north, player facing south (180°) — outside 75° arc.

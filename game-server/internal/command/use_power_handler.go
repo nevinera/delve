@@ -85,6 +85,9 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 				return nil
 			}
 			if effect.Amount != nil {
+				if target.TaggedBy == nil && target.Hostility != "" {
+					target.TaggedBy = &unitID
+				}
 				lo, hi := effect.Amount.Min(), effect.Amount.Max()
 				target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
 				if target.Health < 0 {
