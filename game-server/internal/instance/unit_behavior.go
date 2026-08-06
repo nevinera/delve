@@ -16,6 +16,10 @@ import (
 // Will be derived from power ranges once the combat system is in place.
 const npcMeleeRange = 2.0
 
+// leashHealPctPerSecond is the fraction of max health a leashing unit
+// regenerates per second while returning to its leash point.
+const leashHealPctPerSecond = 0.20
+
 // npcEntry pairs an instance unit config with its resolved unit type.
 type npcEntry struct {
 	unit     instanceconfig.Unit
@@ -145,6 +149,8 @@ func applyUnitBehavior(
 		}
 
 	case instancestate.UnitStatusLeashing:
+		unit.Health = math.Min(unit.MaxHealth, unit.Health+unit.MaxHealth*leashHealPctPerSecond*dt)
+
 		if unit.MapIdentifier != unit.Behavior.LeashMapID {
 			unit.MapIdentifier = unit.Behavior.LeashMapID
 			unit.Position.X = unit.Behavior.LeashX
