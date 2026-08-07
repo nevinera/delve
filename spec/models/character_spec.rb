@@ -41,6 +41,12 @@ RSpec.describe Character, type: :model do
       create(:character_item, character: character)
       expect { character.destroy }.to change(CharacterItem, :count).by(-1)
     end
+
+    it "destroys equipped_items when destroyed" do
+      character = create(:character)
+      create(:equipped_item, character: character)
+      expect { character.destroy }.to change(EquippedItem, :count).by(-1)
+    end
   end
 
   describe "validations" do

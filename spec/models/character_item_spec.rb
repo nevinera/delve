@@ -4,6 +4,14 @@ RSpec.describe CharacterItem, type: :model do
   let(:character) { create(:character) }
   let(:zone) { create(:zone) }
 
+  describe "associations" do
+    it "destroys its equipped_item when destroyed" do
+      item = create(:character_item, character: character, provenance_zone: zone)
+      create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+      expect { item.destroy }.to change(EquippedItem, :count).by(-1)
+    end
+  end
+
   describe "validations" do
     it "is valid with all required fields" do
       expect(build(:character_item, character: character, provenance_zone: zone)).to be_valid
