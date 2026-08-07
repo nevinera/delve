@@ -1,0 +1,30 @@
+<h1><%= @character.name %> - Equipped Items</h1>
+
+<% if @equipped_items.empty? %>
+  <p>Nothing equipped yet.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>Slot</th>
+        <th>Item</th>
+        <th>ilvl</th>
+        <th>From</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @equipped_items.each do |equipped_item| %>
+        <tr>
+          <td><%= equipped_item.equipped_slot %></td>
+          <td><%= equipped_item.character_item.name %></td>
+          <td><%= equipped_item.character_item.ilvl %></td>
+          <td><%= equipped_item.character_item.provenance_zone.identifier %></td>
+          <td><%= link_to "View item", play_character_character_item_path(@character, equipped_item.character_item) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<%= link_to "Back to #{@character.name}", play_character_path(@character) %>

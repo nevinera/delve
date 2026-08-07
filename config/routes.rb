@@ -21,6 +21,7 @@ Rails.application.routes.draw do
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
       resources :zones, only: [:show]
       resources :character_items, only: [:index, :show]
+      resources :equipped_items, only: [:index]
     end
   end
   namespace :internal_api do

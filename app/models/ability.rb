@@ -10,6 +10,7 @@ class Ability
       can :manage, Zone, handle: {user: user}
       can :manage, Character, user: user
       can :read, CharacterItem, character: {user: user}
+      can :read, EquippedItem, character: {user: user}
       can :read, Handle
       can :read, CharacterClass
       can :read, Zone
