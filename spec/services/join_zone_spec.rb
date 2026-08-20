@@ -94,6 +94,24 @@ RSpec.describe JoinZone do
       end
     end
 
+    it "sends equipped_items from EquippedItems::ForCharacter" do
+      item = create(:character_item, character: character, slot: "head")
+      create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+      call
+
+      expect(slots_client).to have_received(:request) do |attrs|
+        expect(attrs[:equipped_items]).to eq(EquippedItems::ForCharacter.call(character: character))
+      end
+    end
+
+    it "sends an empty equipped_items hash when nothing is equipped" do
+      call
+
+      expect(slots_client).to have_received(:request) do |attrs|
+        expect(attrs[:equipped_items]).to eq({})
+      end
+    end
+
     it "omits instance_identifier when not provided" do
       call
 
