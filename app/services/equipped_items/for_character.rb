@@ -20,12 +20,11 @@ class EquippedItems::ForCharacter
       zone_identifier: item.zone_identifier,
       version: item.version,
       ilvl: item.ilvl,
-      weapon_dps: item.weapon_dps,
       stats: stats(item)
     }
   end
 
   def stats(item)
-    CharacterItem::STAT_COLUMNS.index_with { |stat| item.public_send(stat) }
+    CharacterItem::STAT_COLUMNS.index_with { |stat| item.public_send(stat) }.merge(weapon_dps: item.weapon_dps)
   end
 end

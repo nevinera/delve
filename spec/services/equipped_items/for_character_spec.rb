@@ -21,21 +21,21 @@ RSpec.describe EquippedItems::ForCharacter do
         zone_identifier: "zone_a",
         version: "1.0",
         ilvl: 584,
-        weapon_dps: nil,
         stats: {
           strength: 10, agility: 0, intellect: 0, stamina: 0, crit_rating: 5,
-          haste_rating: 0, mastery_rating: 0, versatility_rating: 0, resilience_rating: 0
+          haste_rating: 0, mastery_rating: 0, versatility_rating: 0, resilience_rating: 0,
+          weapon_dps: nil
         }
       }
     })
   end
 
-  it "includes weapon_dps for weapons" do
+  it "includes weapon_dps in stats for weapons" do
     item = create(:character_item, character: character, slot: "main_hand", weapon_dps: 45.5)
     create(:equipped_item, character: character, character_item: item, equipped_slot: "main_hand")
 
     result = described_class.call(character: character)
-    expect(result["main_hand"][:weapon_dps]).to eq(45.5)
+    expect(result["main_hand"][:stats][:weapon_dps]).to eq(45.5)
   end
 
   it "includes every equipped slot" do
