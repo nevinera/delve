@@ -50,4 +50,37 @@ RSpec.describe "Play::CharacterItems", type: :request do
       end
     end
   end
+
+  describe "GET /play/characters/:character_id/character_items" do
+    let!(:head_item) { create(:character_item, character: character, slot: "head", name: "Helm of Whatever") }
+    let!(:chest_item) { create(:character_item, character: character, slot: "chest", name: "Robe of Whatever") }
+
+    context "without a slot filter" do
+      it "lists every item" do
+        get "/play/characters/#{character.id}/character_items"
+        expect(response.body).to include("Helm of Whatever")
+        expect(response.body).to include("Robe of Whatever")
+      end
+    end
+
+    context "with a single slot filter" do
+      it "only lists items matching that slot" do
+        get "/play/characters/#{character.id}/character_items", params: {slot: "head"}
+        expect(response.body).to include("Helm of Whatever")
+        expect(response.body).not_to include("Robe of Whatever")
+      end
+    end
+
+    context "with multiple slots filtered (e.g. one_hand/two_hand for a weapon slot)" do
+      let!(:one_hand_item) { create(:character_item, character: character, slot: "one_hand", name: "Dagger of Whatever") }
+      let!(:two_hand_item) { create(:character_item, character: character, slot: "two_hand", name: "Greatsword of Whatever") }
+
+      it "lists items matching any of the given slots" do
+        get "/play/characters/#{character.id}/character_items", params: {slot: %w[main_hand one_hand two_hand]}
+        expect(response.body).to include("Dagger of Whatever")
+        expect(response.body).to include("Greatsword of Whatever")
+        expect(response.body).not_to include("Helm of Whatever")
+      end
+    end
+  end
 end

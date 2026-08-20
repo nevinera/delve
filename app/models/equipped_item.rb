@@ -40,6 +40,17 @@ class EquippedItem < ApplicationRecord
     "two_hand" => %w[main_hand]
   }.freeze
 
+  SLOT_TYPES = {
+    "ring_1" => ["ring"],
+    "ring_2" => ["ring"],
+    "trinket_1" => ["trinket"],
+    "trinket_2" => ["trinket"],
+    "main_hand" => %w[main_hand one_hand two_hand],
+    "off_hand" => %w[off_hand one_hand]
+  }.freeze
+
+  def self.item_slots_for(equipped_slot) = SLOT_TYPES.fetch(equipped_slot, [equipped_slot])
+
   belongs_to :character
   belongs_to :character_item
 

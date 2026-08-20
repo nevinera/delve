@@ -1,7 +1,14 @@
 <h1><%= @character.name %> - Items</h1>
 
+<% if @filter_slots.present? %>
+  <p>
+    Filtered to slot<%= "s" if @filter_slots.size > 1 %>: <%= @filter_slots.join(", ") %>
+    (<%= link_to "clear filter", play_character_character_items_path(@character) %>)
+  </p>
+<% end %>
+
 <% if @items.empty? %>
-  <p>No items yet.</p>
+  <p>No items<%= " matching this filter" if @filter_slots.present? %>.</p>
 <% else %>
   <table>
     <thead>

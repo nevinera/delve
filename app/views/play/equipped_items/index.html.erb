@@ -8,6 +8,7 @@
       <th>ilvl</th>
       <th>From</th>
       <th></th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -24,6 +25,7 @@
           <td colspan="3"><em>Empty</em></td>
           <td></td>
         <% end %>
+        <td><%= link_to "Equippable", play_character_character_items_path(@character, slot: EquippedItem.item_slots_for(slot)) %></td>
       </tr>
     <% end %>
   </tbody>

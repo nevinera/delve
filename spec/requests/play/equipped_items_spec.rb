@@ -43,6 +43,13 @@ RSpec.describe "Play::EquippedItems", type: :request do
         get "/play/characters/#{character.id}/equipped_items"
         expect(response.body).to include("Empty")
       end
+
+      it "links each row's Equippable filter to the compatible item slots" do
+        get "/play/characters/#{character.id}/equipped_items"
+        expect(response.body).to include(CGI.escapeHTML(play_character_character_items_path(character, slot: ["head"])))
+        expect(response.body).to include(CGI.escapeHTML(play_character_character_items_path(character, slot: %w[main_hand one_hand two_hand])))
+        expect(response.body).to include(CGI.escapeHTML(play_character_character_items_path(character, slot: ["ring"])))
+      end
     end
 
     context "with a character belonging to another user" do

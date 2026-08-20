@@ -10,16 +10,20 @@ class Play::EquippedItemsController < Play::BaseController
 
   def update
     authorize! :update, EquippedItem
-    if character_item_id.present?
-      item = @character.character_items.find(character_item_id)
-      EquipItem.call(character_item: item, equipped_slot: params[:equipped_slot])
-    else
-      @character.equipped_items.find_by(equipped_slot: params[:equipped_slot])&.destroy!
-    end
+    character_item_id.present? ? equip : unequip
     redirect_to play_character_equipped_items_path(@character), notice: "Updated."
   end
 
   private
+
+  def equip
+    item = @character.character_items.find(character_item_id)
+    EquipItem.call(character_item: item, equipped_slot: params[:equipped_slot])
+  end
+
+  def unequip
+    @character.equipped_items.find_by(equipped_slot: params[:equipped_slot])&.destroy!
+  end
 
   def character_item_id = params[:character_item_id].presence
 

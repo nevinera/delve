@@ -4,6 +4,8 @@ class Play::CharacterItemsController < Play::BaseController
   def index
     authorize! :read, CharacterItem
     @items = @character.character_items.includes(:provenance_zone).order(received_at: :desc)
+    @items = @items.where(slot: filter_slots) if filter_slots.present?
+    @filter_slots = filter_slots
   end
 
   def show
@@ -12,6 +14,8 @@ class Play::CharacterItemsController < Play::BaseController
   end
 
   private
+
+  def filter_slots = Array(params[:slot]).presence
 
   def load_character
     @character = current_user.characters.find(params[:character_id])
