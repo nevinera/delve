@@ -2,6 +2,25 @@ class EquippedItem < ApplicationRecord
   EQUIPPED_SLOTS = %w[head neck shoulders back chest wrists hands waist legs feet
     ring_1 ring_2 trinket_1 trinket_2 main_hand off_hand].freeze
 
+  SLOT_LABELS = {
+    "head" => "Head",
+    "neck" => "Neck",
+    "shoulders" => "Shoulders",
+    "back" => "Back",
+    "chest" => "Chest",
+    "wrists" => "Wrists",
+    "hands" => "Hands",
+    "waist" => "Waist",
+    "legs" => "Legs",
+    "feet" => "Feet",
+    "ring_1" => "Left Ring",
+    "ring_2" => "Right Ring",
+    "trinket_1" => "Left Trinket",
+    "trinket_2" => "Right Trinket",
+    "main_hand" => "Main Hand",
+    "off_hand" => "Off Hand"
+  }.freeze
+
   SLOT_COMPATIBILITY = {
     "head" => %w[head],
     "neck" => %w[neck],
