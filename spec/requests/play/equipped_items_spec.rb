@@ -38,5 +38,57 @@ RSpec.describe "Play::EquippedItems", type: :request do
         expect(response).to have_http_status(:not_found)
       end
     end
+
+    describe "PATCH .../equipped_items/:equipped_slot" do
+      let(:item) { create(:character_item, character: character, slot: "head") }
+
+      it "equips the item into the slot" do
+        patch "/play/characters/#{character.id}/equipped_items/head", params: {character_item_id: item.id}
+        expect(EquippedItem.find_by(character: character, equipped_slot: "head").character_item).to eq(item)
+      end
+
+      it "redirects to the equipped items index" do
+        patch "/play/characters/#{character.id}/equipped_items/head", params: {character_item_id: item.id}
+        expect(response).to redirect_to(play_character_equipped_items_path(character))
+      end
+
+      it "replaces whatever previously occupied the slot" do
+        old_item = create(:character_item, character: character, slot: "head")
+        create(:equipped_item, character: character, character_item: old_item, equipped_slot: "head")
+
+        patch "/play/characters/#{character.id}/equipped_items/head", params: {character_item_id: item.id}
+        expect(EquippedItem.exists?(character_item_id: old_item.id)).to be false
+      end
+
+      it "unequips the slot when character_item_id is blank" do
+        create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+
+        patch "/play/characters/#{character.id}/equipped_items/head", params: {character_item_id: ""}
+        expect(EquippedItem.find_by(character: character, equipped_slot: "head")).to be_nil
+      end
+
+      it "is a no-op when unequipping an already-empty slot" do
+        expect {
+          patch "/play/characters/#{character.id}/equipped_items/head", params: {character_item_id: ""}
+        }.not_to change(EquippedItem, :count)
+        expect(response).to redirect_to(play_character_equipped_items_path(character))
+      end
+
+      it "rejects an incompatible slot" do
+        chest_item = create(:character_item, character: character, slot: "chest")
+        patch "/play/characters/#{character.id}/equipped_items/legs", params: {character_item_id: chest_item.id}
+        expect(response).to redirect_to(play_character_equipped_items_path(character))
+        expect(flash[:alert]).to be_present
+      end
+
+      it "does not equip an item belonging to another character" do
+        other_character = create(:character, user: user)
+        other_item = create(:character_item, character: other_character, slot: "head")
+
+        patch "/play/characters/#{character.id}/equipped_items/head", params: {character_item_id: other_item.id}
+        expect(response).to have_http_status(:not_found)
+        expect(EquippedItem.find_by(character: character, equipped_slot: "head")).to be_nil
+      end
+    end
   end
 end
