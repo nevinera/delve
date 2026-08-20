@@ -28,6 +28,21 @@ RSpec.describe "Play::EquippedItems", type: :request do
         get "/play/characters/#{character.id}/equipped_items"
         expect(response.body).to include(item.name)
       end
+
+      it "shows every slot even when nothing is equipped" do
+        get "/play/characters/#{character.id}/equipped_items"
+        EquippedItem::SLOT_LABELS.each_value do |label|
+          expect(response.body).to include(label)
+        end
+      end
+
+      it "shows empty slots as empty alongside a filled slot" do
+        item = create(:character_item, character: character, slot: "head")
+        create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+
+        get "/play/characters/#{character.id}/equipped_items"
+        expect(response.body).to include("Empty")
+      end
     end
 
     context "with a character belonging to another user" do

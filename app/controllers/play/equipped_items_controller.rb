@@ -5,7 +5,7 @@ class Play::EquippedItemsController < Play::BaseController
 
   def index
     authorize! :read, EquippedItem
-    @equipped_items = @character.equipped_items.includes(character_item: :provenance_zone).order(:equipped_slot)
+    @equipped_items_by_slot = @character.equipped_items.includes(character_item: :provenance_zone).index_by(&:equipped_slot)
   end
 
   def update
