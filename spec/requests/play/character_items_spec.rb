@@ -36,5 +36,18 @@ RSpec.describe "Play::CharacterItems", type: :request do
         expect(response.body).not_to include("Equip as Off Hand")
       end
     end
+
+    context "when the item is already equipped" do
+      let(:item) { create(:character_item, character: character, slot: "ring") }
+
+      before { create(:equipped_item, character: character, character_item: item, equipped_slot: "ring_2") }
+
+      it "offers an unequip button instead of equip buttons" do
+        get "/play/characters/#{character.id}/character_items/#{item.id}"
+        expect(response.body).to include("Unequip from Right Ring")
+        expect(response.body).not_to include("Equip as Left Ring")
+        expect(response.body).not_to include("Equip as Right Ring")
+      end
+    end
   end
 end

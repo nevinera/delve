@@ -22,16 +22,25 @@
   <p><em><%= @item.description %></em></p>
 <% end %>
 
-<% equippable_slots = EquippedItem::SLOT_COMPATIBILITY[@item.slot] || [] %>
-<% if equippable_slots.any? %>
+<% if @item.equipped_item %>
   <p>
-    <% equippable_slots.each do |slot| %>
-      <%= button_to "Equip as #{EquippedItem::SLOT_LABELS[slot]}",
-        play_character_equipped_item_path(@character, slot),
-        method: :patch,
-        params: {character_item_id: @item.id} %>
-    <% end %>
+    <%= button_to "Unequip from #{EquippedItem::SLOT_LABELS[@item.equipped_item.equipped_slot]}",
+      play_character_equipped_item_path(@character, @item.equipped_item.equipped_slot),
+      method: :patch,
+      params: {character_item_id: ""} %>
   </p>
+<% else %>
+  <% equippable_slots = EquippedItem::SLOT_COMPATIBILITY[@item.slot] || [] %>
+  <% if equippable_slots.any? %>
+    <p>
+      <% equippable_slots.each do |slot| %>
+        <%= button_to "Equip as #{EquippedItem::SLOT_LABELS[slot]}",
+          play_character_equipped_item_path(@character, slot),
+          method: :patch,
+          params: {character_item_id: @item.id} %>
+      <% end %>
+    </p>
+  <% end %>
 <% end %>
 
 <%= link_to "Back to items", play_character_character_items_path(@character) %>
