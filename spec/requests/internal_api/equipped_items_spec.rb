@@ -25,22 +25,22 @@ RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type
       expect(response.parsed_body).to eq({})
     end
 
-    it "returns each equipped item's slot and provenance" do
+    it "returns each equipped item's slot, provenance, and stats" do
       item = create(:character_item, character: character, slot: "head",
         identifier: "helm-of-doom", source_key: "zone_a/1.0/helm-of-doom",
-        zone_identifier: "zone_a", version: "1.0", ilvl: 584)
+        zone_identifier: "zone_a", version: "1.0", ilvl: 584, strength: 10)
       create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
 
       get_equipped_items
-      expect(response.parsed_body).to eq({
-        "head" => {
-          "identifier" => "helm-of-doom",
-          "source_key" => "zone_a/1.0/helm-of-doom",
-          "zone_identifier" => "zone_a",
-          "version" => "1.0",
-          "ilvl" => 584
-        }
-      })
+      head = response.parsed_body["head"]
+      expect(head).to include(
+        "identifier" => "helm-of-doom",
+        "source_key" => "zone_a/1.0/helm-of-doom",
+        "zone_identifier" => "zone_a",
+        "version" => "1.0",
+        "ilvl" => 584
+      )
+      expect(head["stats"]).to include("strength" => 10)
     end
 
     it "includes every equipped slot" do
