@@ -67,12 +67,6 @@ describe("CharacterSheet", () => {
     expect(closed).toBe(true);
   });
 
-  it("does not open a candidate pane when clicking an empty slot", () => {
-    render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
-    fireEvent.click(screen.getAllByText("Empty")[0]);
-    expect(screen.queryByText("No items available.")).not.toBeInTheDocument();
-  });
-
   describe("candidate pane", () => {
     afterEach(() => {
       vi.unstubAllGlobals();
@@ -83,6 +77,26 @@ describe("CharacterSheet", () => {
       vi.stubGlobal("fetch", fetchMock);
       return fetchMock;
     }
+
+    it("opens a candidate pane for an empty slot too", async () => {
+      const fetchMock = stubFetch([
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", stats: {} },
+      ]);
+
+      render(
+        <CharacterSheet
+          open
+          equippedItems={{}}
+          characterItemsUrl="/play/characters/1/character_items.json"
+          onClose={() => {}}
+        />
+      );
+
+      fireEvent.click(screen.getAllByText("Empty")[0]);
+
+      expect(fetchMock).toHaveBeenCalledWith("/play/characters/1/character_items.json?slot%5B%5D=head");
+      await waitFor(() => expect(screen.getByText("Novice Boots")).toBeInTheDocument());
+    });
 
     it("fetches and shows candidate items for the clicked slot, excluding already-equipped ones", async () => {
       const fetchMock = stubFetch([
@@ -154,6 +168,56 @@ describe("CharacterSheet", () => {
 
       fireEvent.click(screen.getByText("Iron Helm"));
       expect(screen.queryByText("No items available.")).not.toBeInTheDocument();
+    });
+
+    it("equips a candidate item and closes the pane on success", async () => {
+      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} }]);
+      const equippedItems = {
+        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+      };
+      const onEquip = vi.fn().mockResolvedValue(null);
+
+      render(
+        <CharacterSheet
+          open
+          equippedItems={equippedItems}
+          characterItemsUrl="/play/characters/1/character_items.json"
+          onEquip={onEquip}
+          onClose={() => {}}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Iron Helm"));
+      await waitFor(() => expect(screen.getByText("Worn Helm")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText("Worn Helm"));
+      expect(onEquip).toHaveBeenCalledWith("head", { id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} });
+      await waitFor(() => expect(screen.queryByText("Worn Helm")).not.toBeInTheDocument());
+    });
+
+    it("shows an error and keeps the pane open when equipping fails", async () => {
+      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} }]);
+      const equippedItems = {
+        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+      };
+      const onEquip = vi.fn().mockResolvedValue("cannot equip a chest item into head");
+
+      render(
+        <CharacterSheet
+          open
+          equippedItems={equippedItems}
+          characterItemsUrl="/play/characters/1/character_items.json"
+          onEquip={onEquip}
+          onClose={() => {}}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Iron Helm"));
+      await waitFor(() => expect(screen.getByText("Worn Helm")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText("Worn Helm"));
+      await waitFor(() => expect(screen.getByText("cannot equip a chest item into head")).toBeInTheDocument());
+      expect(screen.getByText("Worn Helm")).toBeInTheDocument();
     });
   });
 });

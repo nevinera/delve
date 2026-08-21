@@ -66,6 +66,11 @@ RSpec.describe "Play::Zones", type: :request do
         get "/play/characters/#{character.id}/zones/#{zone.id}"
         expect(response.body).to include(CGI.escapeHTML(play_character_character_items_path(character, format: :json)))
       end
+
+      it "exposes the equipped items URL as a data attribute" do
+        get "/play/characters/#{character.id}/zones/#{zone.id}"
+        expect(response.body).to include(CGI.escapeHTML(play_character_equipped_items_path(character)))
+      end
     end
 
     context "with a character belonging to another user" do

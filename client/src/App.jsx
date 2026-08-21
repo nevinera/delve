@@ -308,9 +308,17 @@ const styles = {
     padding: "3px 2px",
     borderBottom: "1px solid #333",
   },
+  charSheetCandidateItemClickable: {
+    cursor: "pointer",
+  },
   charSheetCandidateEmpty: {
     fontSize: 12,
     color: "#555",
+  },
+  charSheetCandidateError: {
+    fontSize: 11,
+    color: "#cc6666",
+    marginBottom: 6,
   },
   charSheetEquipRowClickable: {
     cursor: "pointer",
@@ -668,14 +676,15 @@ function netStats(equippedItems) {
 }
 
 // Scrollable list of candidate items for one equipped slot, shown to the
-// left of the character sheet. View-only: clicking an item does not equip it.
-function CandidateItemsPane({ slotLabel, loading, items, onClose }) {
+// left of the character sheet. Clicking an item equips it into that slot.
+function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose }) {
   return (
     <div style={styles.charSheetCandidatePane}>
       <div style={styles.charSheetHeader}>
         <span style={styles.charSheetCandidateTitle}>{slotLabel}</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
       </div>
+      {error && <div style={styles.charSheetCandidateError}>{error}</div>}
       {loading ? (
         <div style={styles.charSheetCandidateEmpty}>Loading…</div>
       ) : items.length === 0 ? (
@@ -683,9 +692,13 @@ function CandidateItemsPane({ slotLabel, loading, items, onClose }) {
       ) : (
         <ul style={styles.charSheetCandidateList}>
           {items.map(item => (
-            <li key={item.id} style={styles.charSheetCandidateItem}>
-              <ItemTooltip item={item}>
-                <span>{item.name}</span>
+            <li
+              key={item.id}
+              style={{ ...styles.charSheetCandidateItem, ...styles.charSheetCandidateItemClickable }}
+              onClick={equippingId ? undefined : () => onSelect(item)}
+            >
+              <ItemTooltip item={item} style={{ cursor: "pointer" }}>
+                <span>{item.name}{equippingId === item.id ? " (equipping…)" : ""}</span>
               </ItemTooltip>
             </li>
           ))}
@@ -695,21 +708,25 @@ function CandidateItemsPane({ slotLabel, loading, items, onClose }) {
   );
 }
 
-// View-only character sheet: equipped items on the left, summed raw stats
-// on the right. Toggled by the "P" hotkey or the action-bar button.
-// Clicking an equipped item opens a candidate-item pane to its left (view
-// only for now — no equipping yet).
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onClose }) {
+// Character sheet: equipped items on the left, summed raw stats on the
+// right. Toggled by the "P" hotkey or the action-bar button. Clicking an
+// equipped item opens a candidate-item pane to its left; clicking a
+// candidate equips it via `onEquip(equippedSlot, item)`, which should
+// return null on success or an error message string on failure.
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
   const [candidateLoading, setCandidateLoading] = useState(false);
+  const [equippingId, setEquippingId] = useState(null);
+  const [equipError, setEquipError] = useState(null);
 
   useEffect(() => {
     if (!open) setExpandedSlot(null);
   }, [open]);
 
   useEffect(() => {
+    setEquipError(null);
     if (!expandedSlot || !characterItemsUrl) return;
     setCandidateLoading(true);
     const params = new URLSearchParams();
@@ -730,6 +747,18 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onClose
     setExpandedSlot(current => (current === slot ? null : slot));
   };
 
+  const handleSelect = async (item) => {
+    setEquippingId(item.id);
+    setEquipError(null);
+    const error = await onEquip(expandedSlot, item);
+    setEquippingId(null);
+    if (error) {
+      setEquipError(error);
+    } else {
+      setExpandedSlot(null);
+    }
+  };
+
   return (
     <div style={styles.charSheetWrapper}>
       {expandedSlot && (
@@ -737,6 +766,9 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onClose
           slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}
           loading={candidateLoading}
           items={candidateItems}
+          equippingId={equippingId}
+          error={equipError}
+          onSelect={handleSelect}
           onClose={() => setExpandedSlot(null)}
         />
       )}
@@ -753,7 +785,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onClose
                 const item = equippedItems?.[slot];
                 const rowStyle = {
                   ...styles.charSheetEquipRow,
-                  ...(item ? styles.charSheetEquipRowClickable : {}),
+                  ...styles.charSheetEquipRowClickable,
                   ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
                   ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
                 };
@@ -761,9 +793,9 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onClose
                   <li
                     key={slot}
                     style={rowStyle}
-                    onClick={item ? () => toggleSlot(slot) : undefined}
-                    onMouseEnter={item ? () => setHoveredSlot(slot) : undefined}
-                    onMouseLeave={item ? () => setHoveredSlot(current => (current === slot ? null : current)) : undefined}
+                    onClick={() => toggleSlot(slot)}
+                    onMouseEnter={() => setHoveredSlot(slot)}
+                    onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
                   >
                     <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
                     {item ? (
@@ -909,8 +941,9 @@ export default function App({
   characterTokenUrl,
   classConfigUrl,
   ownedZoneItems: initialOwnedZoneItems = {},
-  equippedItems = {},
+  equippedItems: initialEquippedItems = {},
   characterItemsUrl,
+  equippedItemsUrl,
 }) {
   const connRef = useRef(null);
   const canvasRef = useRef(null);
@@ -929,6 +962,7 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [charSheetOpen, setCharSheetOpen] = useState(false);
+  const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
@@ -1281,6 +1315,35 @@ export default function App({
     connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
   }, []);
 
+  // Equips characterItem into equippedSlot via the Rails play API, then tells
+  // the game server to refetch equipped items from Rails. Returns null on
+  // success or an error message string on failure.
+  const handleEquipItem = useCallback(async (equippedSlot, characterItem) => {
+    if (!equippedItemsUrl) return "Equip endpoint unavailable.";
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    try {
+      const res = await fetch(`${equippedItemsUrl}/${equippedSlot}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ character_item_id: characterItem.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        return body?.error || "Failed to equip item.";
+      }
+      setEquippedItems(await res.json());
+      connRef.current?.send({ type: "refresh_equipment" });
+      return null;
+    } catch {
+      return "Failed to equip item.";
+    }
+  }, [equippedItemsUrl]);
+
   const targetUnit = targetId ? units[targetId] : null;
   const targetRange = (selfUnit && targetUnit)
     ? Math.sqrt(
@@ -1345,6 +1408,7 @@ export default function App({
           open={charSheetOpen}
           equippedItems={equippedItems}
           characterItemsUrl={characterItemsUrl}
+          onEquip={handleEquipItem}
           onClose={() => setCharSheetOpen(false)}
         />
       </div>
