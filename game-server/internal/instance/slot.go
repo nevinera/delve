@@ -47,6 +47,7 @@ type InstanceSlot struct {
 	CharacterClass      instanceconfig.CharacterClass
 	OwnedZoneItems      map[string]bool                        // identifier → true if owned this version, false if other version; nil if unknown
 	EquippedItems       map[string]instanceconfig.EquippedItem // equipped_slot → item; nil if unknown
+	Stats               instanceconfig.ItemStats               // cached raw sum of EquippedItems' stats; kept in sync by recomputeStats
 
 	// Connection fields; protected by the instance's slotsMu.
 	writeCh        chan []byte        // pre-encoded JSON messages from the tick loop
@@ -54,6 +55,26 @@ type InstanceSlot struct {
 	connDone       chan struct{}      // closed by the handler when its goroutines have all exited
 	needsFullState bool               // true until the tick loop sends the first full-state message
 	stateEnteredAt time.Time          // when the slot entered its current state
+}
+
+// recomputeStats sums the stats of every equipped item into Stats. It does
+// no class- or level-based scaling; it is the raw total of whatever the
+// character has equipped. Must be called whenever EquippedItems changes.
+func (s *InstanceSlot) recomputeStats() {
+	var total instanceconfig.ItemStats
+	for _, item := range s.EquippedItems {
+		total.Strength += item.Stats.Strength
+		total.Agility += item.Stats.Agility
+		total.Intellect += item.Stats.Intellect
+		total.Stamina += item.Stats.Stamina
+		total.CritRating += item.Stats.CritRating
+		total.HasteRating += item.Stats.HasteRating
+		total.MasteryRating += item.Stats.MasteryRating
+		total.VersatilityRating += item.Stats.VersatilityRating
+		total.ResilienceRating += item.Stats.ResilienceRating
+		total.WeaponDPS += item.Stats.WeaponDPS
+	}
+	s.Stats = total
 }
 
 // AddSlot returns a slot for the named character. If a slot for that character
@@ -71,6 +92,7 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 			slot.CharacterClass = class
 			slot.OwnedZoneItems = ownedZoneItems
 			slot.EquippedItems = equippedItems
+			slot.recomputeStats()
 			return slot, nil
 		}
 	}
@@ -91,6 +113,7 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 		EquippedItems:       equippedItems,
 		stateEnteredAt:      time.Now(),
 	}
+	slot.recomputeStats()
 	inst.slots[slot.ID] = slot
 	inst.recomputeSlotCounts()
 	return slot, nil

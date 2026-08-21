@@ -42,6 +42,48 @@ func TestAddSlot_StoresEquippedItems(t *testing.T) {
 	assert.Equal(t, equipped, slot.EquippedItems)
 }
 
+func TestAddSlot_StatsEmptyWhenNoEquippedItems(t *testing.T) {
+	inst := makeInstance()
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, instanceconfig.ItemStats{}, slot.Stats)
+}
+
+func TestAddSlot_StatsSumAcrossEquippedItems(t *testing.T) {
+	inst := makeInstance()
+	equipped := map[string]instanceconfig.EquippedItem{
+		"head":      {Stats: instanceconfig.ItemStats{Strength: 10, CritRating: 5}},
+		"chest":     {Stats: instanceconfig.ItemStats{Strength: 4, Stamina: 20}},
+		"main_hand": {Stats: instanceconfig.ItemStats{WeaponDPS: 45.5}},
+		"off_hand":  {Stats: instanceconfig.ItemStats{WeaponDPS: 30.0}},
+	}
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, equipped)
+	require.NoError(t, err)
+
+	assert.Equal(t, instanceconfig.ItemStats{
+		Strength:   14,
+		Stamina:    20,
+		CritRating: 5,
+		WeaponDPS:  75.5,
+	}, slot.Stats)
+}
+
+func TestAddSlot_ReconnectRecomputesStats(t *testing.T) {
+	inst := makeInstance()
+	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
+		"head": {Stats: instanceconfig.ItemStats{Strength: 10}},
+	})
+	require.NoError(t, err)
+
+	second, err := inst.AddSlot("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
+		"head": {Stats: instanceconfig.ItemStats{Strength: 25}},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, instanceconfig.ItemStats{Strength: 25}, second.Stats)
+}
+
 func TestAddSlot_AppearsInList(t *testing.T) {
 	inst := makeInstance()
 	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
