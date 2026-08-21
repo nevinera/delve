@@ -23,7 +23,7 @@ class InternalApi::CharacterItemsController < InternalApi::BaseController
     in :already_owned_this_version
       render json: {status: "already_owned_this_version"}, status: :conflict
     in :not_an_upgrade
-      render json: {status: "not_an_upgrade"}, status: :unprocessable_entity
+      render json: {status: "not_an_upgrade"}, status: :unprocessable_content
     end
   end
 

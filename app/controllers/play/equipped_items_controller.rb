@@ -37,7 +37,7 @@ class Play::EquippedItemsController < Play::BaseController
   def render_unprocessable(err)
     respond_to do |format|
       format.html { redirect_to play_character_equipped_items_path(@character), alert: err.message }
-      format.json { render json: {error: err.message}, status: :unprocessable_entity }
+      format.json { render json: {error: err.message}, status: :unprocessable_content }
     end
   end
 end

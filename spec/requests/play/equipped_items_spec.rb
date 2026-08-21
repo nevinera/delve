@@ -135,7 +135,7 @@ RSpec.describe "Play::EquippedItems", type: :request do
           chest_item = create(:character_item, character: character, slot: "chest")
           patch "/play/characters/#{character.id}/equipped_items/legs",
             params: {character_item_id: chest_item.id}, as: :json
-          expect(response).to have_http_status(:unprocessable_entity)
+          expect(response).to have_http_status(:unprocessable_content)
           expect(json_response["error"]).to be_present
         end
       end
