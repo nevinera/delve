@@ -82,5 +82,29 @@ RSpec.describe "Play::CharacterItems", type: :request do
         expect(response.body).not_to include("Helm of Whatever")
       end
     end
+
+    context "as JSON" do
+      it "returns every item with identifier, name, slot, ilvl, description, and stats" do
+        get "/play/characters/#{character.id}/character_items", as: :json
+        body = JSON.parse(response.body)
+
+        expect(body.map { |i| i["name"] }).to contain_exactly("Helm of Whatever", "Robe of Whatever")
+        head_json = body.find { |i| i["name"] == "Helm of Whatever" }
+        expect(head_json).to include(
+          "id" => head_item.id,
+          "identifier" => head_item.identifier,
+          "source_key" => head_item.source_key,
+          "slot" => "head",
+          "ilvl" => head_item.ilvl
+        )
+        expect(head_json["stats"]).to eq(head_item.stats_hash.deep_stringify_keys)
+      end
+
+      it "respects the slot filter" do
+        get "/play/characters/#{character.id}/character_items", params: {slot: "head"}, as: :json
+        body = JSON.parse(response.body)
+        expect(body.map { |i| i["name"] }).to eq(["Helm of Whatever"])
+      end
+    end
   end
 end

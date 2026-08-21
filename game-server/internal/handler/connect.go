@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -173,5 +174,7 @@ func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance,
 				})
 			}
 		}
+	case "refresh_equipment":
+		go inst.RefreshEquippedItems(context.Background(), unitID)
 	}
 }

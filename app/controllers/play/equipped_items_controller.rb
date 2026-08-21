@@ -11,7 +11,10 @@ class Play::EquippedItemsController < Play::BaseController
   def update
     authorize! :update, EquippedItem
     character_item_id.present? ? equip : unequip
-    redirect_to play_character_equipped_items_path(@character), notice: "Updated."
+    respond_to do |format|
+      format.html { redirect_to play_character_equipped_items_path(@character), notice: "Updated." }
+      format.json { render json: EquippedItems::ForCharacter.call(character: @character) }
+    end
   end
 
   private
@@ -32,6 +35,9 @@ class Play::EquippedItemsController < Play::BaseController
   end
 
   def render_unprocessable(err)
-    redirect_to play_character_equipped_items_path(@character), alert: err.message
+    respond_to do |format|
+      format.html { redirect_to play_character_equipped_items_path(@character), alert: err.message }
+      format.json { render json: {error: err.message}, status: :unprocessable_content }
+    end
   end
 end

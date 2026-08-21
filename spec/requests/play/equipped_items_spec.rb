@@ -111,6 +111,34 @@ RSpec.describe "Play::EquippedItems", type: :request do
         expect(response).to have_http_status(:not_found)
         expect(EquippedItem.find_by(character: character, equipped_slot: "head")).to be_nil
       end
+
+      context "as JSON" do
+        def json_response = JSON.parse(response.body)
+
+        it "equips the item and returns the character's equipped items" do
+          patch "/play/characters/#{character.id}/equipped_items/head",
+            params: {character_item_id: item.id}, as: :json
+          expect(response).to have_http_status(:ok)
+          expect(json_response).to eq(EquippedItems::ForCharacter.call(character: character).deep_stringify_keys)
+        end
+
+        it "unequips the slot when character_item_id is blank" do
+          create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+
+          patch "/play/characters/#{character.id}/equipped_items/head",
+            params: {character_item_id: ""}, as: :json
+          expect(response).to have_http_status(:ok)
+          expect(EquippedItem.find_by(character: character, equipped_slot: "head")).to be_nil
+        end
+
+        it "rejects an incompatible slot with a 422 and error message" do
+          chest_item = create(:character_item, character: character, slot: "chest")
+          patch "/play/characters/#{character.id}/equipped_items/legs",
+            params: {character_item_id: chest_item.id}, as: :json
+          expect(response).to have_http_status(:unprocessable_content)
+          expect(json_response["error"]).to be_present
+        end
+      end
     end
   end
 end

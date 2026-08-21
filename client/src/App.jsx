@@ -65,6 +65,7 @@ const styles = {
     pointerEvents: "none",
   },
   actionBar: {
+    position: "relative",
     flexShrink: 0,
     display: "flex",
     justifyContent: "center",
@@ -73,6 +74,20 @@ const styles = {
     padding: "4px 8px",
     background: "#111",
     borderTop: "1px solid #333",
+  },
+  charSheetButton: {
+    position: "absolute",
+    left: 8,
+    bottom: 4,
+    width: 52,
+    height: 26,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#999",
+    fontSize: 10,
+    letterSpacing: 0.5,
+    cursor: "pointer",
   },
   actionButton: {
     position: "relative",
@@ -243,6 +258,153 @@ const styles = {
     fontSize: 11,
     marginLeft: 4,
   },
+  charSheetWrapper: {
+    position: "absolute",
+    zIndex: 25,
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  charSheet: {
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    width: 480,
+    pointerEvents: "auto",
+  },
+  charSheetCandidatePane: {
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    width: 220,
+    pointerEvents: "auto",
+  },
+  charSheetCandidateTitle: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#d4a84b",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  charSheetCandidateList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    maxHeight: 320,
+    overflowY: "auto",
+  },
+  charSheetCandidateItem: {
+    fontSize: 12,
+    color: "#e8d5a0",
+    padding: "3px 2px",
+    borderBottom: "1px solid #333",
+  },
+  charSheetCandidateItemClickable: {
+    cursor: "pointer",
+  },
+  charSheetCandidateEmpty: {
+    fontSize: 12,
+    color: "#555",
+  },
+  charSheetCandidateError: {
+    fontSize: 11,
+    color: "#cc6666",
+    marginBottom: 6,
+  },
+  charSheetEquipRowClickable: {
+    cursor: "pointer",
+  },
+  charSheetEquipRowHover: {
+    background: "rgba(212,168,75,0.06)",
+  },
+  charSheetEquipRowExpanded: {
+    background: "rgba(212,168,75,0.12)",
+  },
+  charSheetHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  charSheetTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: "#d4a84b",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  charSheetBody: {
+    display: "flex",
+    gap: 20,
+  },
+  charSheetColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  charSheetColumnTitle: {
+    fontSize: 11,
+    color: "#888",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  charSheetEquipList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  charSheetEquipRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 8,
+    padding: "3px 0",
+    borderBottom: "1px solid #333",
+    fontSize: 12,
+  },
+  charSheetSlotLabel: {
+    color: "#888",
+    whiteSpace: "nowrap",
+  },
+  charSheetEmptySlot: {
+    color: "#555",
+  },
+  charSheetStatGroup: {
+    marginBottom: 10,
+  },
+  charSheetStatGroupTitle: {
+    fontSize: 13,
+    color: "#888",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    paddingTop: 6,
+    marginBottom: 3,
+  },
+  charSheetStatsList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+  },
+  charSheetStatRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: 12,
+    color: "#7fae7f",
+  },
   itemTooltipAnchor: {
     display: "inline-block",
     cursor: "default",
@@ -411,7 +573,7 @@ const STAT_LABELS = {
 
 // Wraps its children in a hover target that shows a WoW-style item tooltip
 // near the cursor. `item` should have {name, slot, ilvl, description, stats}.
-export function ItemTooltip({ item, children }) {
+export function ItemTooltip({ item, children, style }) {
   const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
 
   if (!item) return children;
@@ -420,7 +582,7 @@ export function ItemTooltip({ item, children }) {
 
   return (
     <span
-      style={styles.itemTooltipAnchor}
+      style={{ ...styles.itemTooltipAnchor, ...style }}
       onMouseEnter={e => setPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={e => setPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setPos(null)}
@@ -449,6 +611,224 @@ export function ItemTooltip({ item, children }) {
         </div>
       )}
     </span>
+  );
+}
+
+const EQUIPPED_SLOT_LABELS = {
+  head: "Head",
+  neck: "Neck",
+  shoulders: "Shoulders",
+  back: "Back",
+  chest: "Chest",
+  wrists: "Wrists",
+  hands: "Hands",
+  waist: "Waist",
+  legs: "Legs",
+  feet: "Feet",
+  ring_1: "Left Ring",
+  ring_2: "Right Ring",
+  trinket_1: "Left Trinket",
+  trinket_2: "Right Trinket",
+  main_hand: "Main Hand",
+  off_hand: "Off Hand",
+};
+const EQUIPPED_SLOT_ORDER = Object.keys(EQUIPPED_SLOT_LABELS);
+
+// Mirrors EquippedItem::SLOT_TYPES (app/models/equipped_item.rb) — which
+// CharacterItem#slot values are compatible with a given equipped slot.
+const EQUIPPABLE_ITEM_SLOTS = {
+  ring_1: ["ring"],
+  ring_2: ["ring"],
+  trinket_1: ["trinket"],
+  trinket_2: ["trinket"],
+  main_hand: ["main_hand", "one_hand", "two_hand"],
+  off_hand: ["off_hand", "one_hand"],
+};
+function itemSlotsFor(equippedSlot) {
+  return EQUIPPABLE_ITEM_SLOTS[equippedSlot] || [equippedSlot];
+}
+
+const STAT_GROUPS = [
+  { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "weapon_dps"] },
+  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "resilience_rating"] },
+];
+
+// The equipped-items payload only carries provenance (identifier, source,
+// stats) — no display name — so derive a readable label from the identifier.
+export function formatItemName(identifier) {
+  if (!identifier) return "—";
+  return identifier
+    .replace(/[-_]/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function netStats(equippedItems) {
+  const total = {};
+  for (const item of Object.values(equippedItems || {})) {
+    for (const [key, value] of Object.entries(item.stats || {})) {
+      total[key] = (total[key] || 0) + value;
+    }
+  }
+  return total;
+}
+
+// Scrollable list of candidate items for one equipped slot, shown to the
+// left of the character sheet. Clicking an item equips it into that slot.
+function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose }) {
+  return (
+    <div style={styles.charSheetCandidatePane}>
+      <div style={styles.charSheetHeader}>
+        <span style={styles.charSheetCandidateTitle}>{slotLabel}</span>
+        <button style={styles.lootClose} onClick={onClose}>✕</button>
+      </div>
+      {error && <div style={styles.charSheetCandidateError}>{error}</div>}
+      {loading ? (
+        <div style={styles.charSheetCandidateEmpty}>Loading…</div>
+      ) : items.length === 0 ? (
+        <div style={styles.charSheetCandidateEmpty}>No items available.</div>
+      ) : (
+        <ul style={styles.charSheetCandidateList}>
+          {items.map(item => (
+            <li
+              key={item.id}
+              style={{ ...styles.charSheetCandidateItem, ...styles.charSheetCandidateItemClickable }}
+              onClick={equippingId ? undefined : () => onSelect(item)}
+            >
+              <ItemTooltip item={item} style={{ cursor: "pointer" }}>
+                <span>{item.name}{equippingId === item.id ? " (equipping…)" : ""}</span>
+              </ItemTooltip>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Character sheet: equipped items on the left, summed raw stats on the
+// right. Toggled by the "P" hotkey or the action-bar button. Clicking an
+// equipped item opens a candidate-item pane to its left; clicking a
+// candidate equips it via `onEquip(equippedSlot, item)`, which should
+// return null on success or an error message string on failure.
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose }) {
+  const [expandedSlot, setExpandedSlot] = useState(null);
+  const [hoveredSlot, setHoveredSlot] = useState(null);
+  const [candidateItems, setCandidateItems] = useState([]);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [equippingId, setEquippingId] = useState(null);
+  const [equipError, setEquipError] = useState(null);
+
+  useEffect(() => {
+    if (!open) setExpandedSlot(null);
+  }, [open]);
+
+  useEffect(() => {
+    setEquipError(null);
+    if (!expandedSlot || !characterItemsUrl) return;
+    setCandidateLoading(true);
+    const params = new URLSearchParams();
+    itemSlotsFor(expandedSlot).forEach(s => params.append("slot[]", s));
+    const equippedSourceKeys = new Set(Object.values(equippedItems || {}).map(i => i.source_key));
+    fetch(`${characterItemsUrl}?${params.toString()}`)
+      .then(r => r.json())
+      .then(items => setCandidateItems(items.filter(i => !equippedSourceKeys.has(i.source_key))))
+      .catch(() => setCandidateItems([]))
+      .finally(() => setCandidateLoading(false));
+  }, [expandedSlot, characterItemsUrl, equippedItems]);
+
+  if (!open) return null;
+
+  const stats = netStats(equippedItems);
+
+  const toggleSlot = (slot) => {
+    setExpandedSlot(current => (current === slot ? null : slot));
+  };
+
+  const handleSelect = async (item) => {
+    setEquippingId(item.id);
+    setEquipError(null);
+    const error = await onEquip(expandedSlot, item);
+    setEquippingId(null);
+    if (error) {
+      setEquipError(error);
+    } else {
+      setExpandedSlot(null);
+    }
+  };
+
+  return (
+    <div style={styles.charSheetWrapper}>
+      {expandedSlot && (
+        <CandidateItemsPane
+          slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}
+          loading={candidateLoading}
+          items={candidateItems}
+          equippingId={equippingId}
+          error={equipError}
+          onSelect={handleSelect}
+          onClose={() => setExpandedSlot(null)}
+        />
+      )}
+      <div style={styles.charSheet}>
+        <div style={styles.charSheetHeader}>
+          <span style={styles.charSheetTitle}>Character</span>
+          <button style={styles.lootClose} onClick={onClose}>✕</button>
+        </div>
+        <div style={styles.charSheetBody}>
+          <div style={styles.charSheetColumn}>
+            <div style={styles.charSheetColumnTitle}>Equipment</div>
+            <ul style={styles.charSheetEquipList}>
+              {EQUIPPED_SLOT_ORDER.map(slot => {
+                const item = equippedItems?.[slot];
+                const rowStyle = {
+                  ...styles.charSheetEquipRow,
+                  ...styles.charSheetEquipRowClickable,
+                  ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+                  ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
+                };
+                return (
+                  <li
+                    key={slot}
+                    style={rowStyle}
+                    onClick={() => toggleSlot(slot)}
+                    onMouseEnter={() => setHoveredSlot(slot)}
+                    onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
+                  >
+                    <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
+                    {item ? (
+                      <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }}>
+                        <span style={styles.lootItemName}>{formatItemName(item.identifier)}</span>
+                      </ItemTooltip>
+                    ) : (
+                      <span style={styles.charSheetEmptySlot}>Empty</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div style={styles.charSheetColumn}>
+            <div style={styles.charSheetColumnTitle}>Stats</div>
+            {STAT_GROUPS.map(group => (
+              <div key={group.title} style={styles.charSheetStatGroup}>
+                <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
+                <ul style={styles.charSheetStatsList}>
+                  {group.keys.map(key => (
+                    <li key={key} style={styles.charSheetStatRow}>
+                      <span>{STAT_LABELS[key] || key}</span>
+                      <span>{stats[key] || 0}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -561,6 +941,9 @@ export default function App({
   characterTokenUrl,
   classConfigUrl,
   ownedZoneItems: initialOwnedZoneItems = {},
+  equippedItems: initialEquippedItems = {},
+  characterItemsUrl,
+  equippedItemsUrl,
 }) {
   const connRef = useRef(null);
   const canvasRef = useRef(null);
@@ -578,6 +961,8 @@ export default function App({
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
+  const [charSheetOpen, setCharSheetOpen] = useState(false);
+  const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
@@ -769,6 +1154,11 @@ export default function App({
       if (e.repeat) return;
       if (e.code === "Escape") {
         setLootWindowUnitId(null);
+        setCharSheetOpen(false);
+        return;
+      }
+      if (e.code === "KeyP") {
+        setCharSheetOpen(o => !o);
         return;
       }
       if (e.code === "Tab") {
@@ -925,6 +1315,35 @@ export default function App({
     connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
   }, []);
 
+  // Equips characterItem into equippedSlot via the Rails play API, then tells
+  // the game server to refetch equipped items from Rails. Returns null on
+  // success or an error message string on failure.
+  const handleEquipItem = useCallback(async (equippedSlot, characterItem) => {
+    if (!equippedItemsUrl) return "Equip endpoint unavailable.";
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    try {
+      const res = await fetch(`${equippedItemsUrl}/${equippedSlot}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ character_item_id: characterItem.id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        return body?.error || "Failed to equip item.";
+      }
+      setEquippedItems(await res.json());
+      connRef.current?.send({ type: "refresh_equipment" });
+      return null;
+    } catch {
+      return "Failed to equip item.";
+    }
+  }, [equippedItemsUrl]);
+
   const targetUnit = targetId ? units[targetId] : null;
   const targetRange = (selfUnit && targetUnit)
     ? Math.sqrt(
@@ -985,8 +1404,22 @@ export default function App({
           onTake={handleTakeItem}
           onClose={() => setLootWindowUnitId(null)}
         />
+        <CharacterSheet
+          open={charSheetOpen}
+          equippedItems={equippedItems}
+          characterItemsUrl={characterItemsUrl}
+          onEquip={handleEquipItem}
+          onClose={() => setCharSheetOpen(false)}
+        />
       </div>
       <div style={styles.actionBar}>
+        <button
+          style={styles.charSheetButton}
+          title="Character sheet (P)"
+          onClick={() => setCharSheetOpen(o => !o)}
+        >
+          Char
+        </button>
         {Array.from({ length: 10 }, (_, i) => {
           const slot = i + 1;
           const key = slot === 10 ? "0" : String(slot);
