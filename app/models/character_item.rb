@@ -20,4 +20,8 @@ class CharacterItem < ApplicationRecord
     validates stat, numericality: {only_integer: true, greater_than_or_equal_to: 0}, allow_nil: true
     define_method(stat) { self[stat] || 0 }
   end
+
+  def stats_hash
+    STAT_COLUMNS.index_with { |stat| public_send(stat) }.merge(weapon_dps: weapon_dps)
+  end
 end
