@@ -113,6 +113,25 @@ func TestAddSlot_SameCharacterReusesSlot(t *testing.T) {
 	assert.Len(t, inst.ListSlots(), 1, "should not create a second slot")
 }
 
+func TestAddSlot_ReconnectRefreshesOwnedZoneItemsAndEquippedItems(t *testing.T) {
+	inst := makeInstance()
+	_, err := inst.AddSlot("Aldric", "42", puncherClass, map[string]bool{"helm": true}, map[string]instanceconfig.EquippedItem{
+		"head": {Identifier: "old-helm"},
+	})
+	require.NoError(t, err)
+
+	newOwned := map[string]bool{"helm": false, "sword": true}
+	newEquipped := map[string]instanceconfig.EquippedItem{
+		"head":      {Identifier: "new-helm"},
+		"main_hand": {Identifier: "sword-of-doom"},
+	}
+	second, err := inst.AddSlot("Aldric", "42", puncherClass, newOwned, newEquipped)
+	require.NoError(t, err)
+
+	assert.Equal(t, newOwned, second.OwnedZoneItems)
+	assert.Equal(t, newEquipped, second.EquippedItems)
+}
+
 func TestAddSlot_SameCharacterDoesNotConsumeCapacity(t *testing.T) {
 	inst := makeInstance()
 	inst.MaxSlots = 1

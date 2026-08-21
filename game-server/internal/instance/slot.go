@@ -57,9 +57,10 @@ type InstanceSlot struct {
 }
 
 // AddSlot returns a slot for the named character. If a slot for that character
-// already exists it is reused with a fresh token (invalidating prior credentials).
-// Otherwise a new slot is created. Returns ErrInstanceFull if MaxSlots has been
-// reached and there is no existing slot to reuse.
+// already exists it is reused with a fresh token (invalidating prior credentials)
+// and its CharacterClass, OwnedZoneItems, and EquippedItems are refreshed from
+// the new request. Otherwise a new slot is created. Returns ErrInstanceFull if
+// MaxSlots has been reached and there is no existing slot to reuse.
 func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class instanceconfig.CharacterClass, ownedZoneItems map[string]bool, equippedItems map[string]instanceconfig.EquippedItem) (*InstanceSlot, error) {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
@@ -67,6 +68,9 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 	for _, slot := range inst.slots {
 		if slot.CharacterName == characterName {
 			slot.Token = uuid.New()
+			slot.CharacterClass = class
+			slot.OwnedZoneItems = ownedZoneItems
+			slot.EquippedItems = equippedItems
 			return slot, nil
 		}
 	}
