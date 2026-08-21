@@ -39,7 +39,8 @@ class JoinZone
       character_name: @character.name,
       character_database_id: @character.id.to_s,
       character_class: fetch_json(@character.character_class.location),
-      owned_zone_items: @character.owned_zone_items_for(@zone)
+      owned_zone_items: @character.owned_zone_items_for(@zone),
+      equipped_items: EquippedItems::ForCharacter.call(character: @character)
     }
   end
 

@@ -239,7 +239,7 @@ func TestSlots_Show(t *testing.T) {
 
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet,
@@ -382,7 +382,7 @@ func TestSlots_Destroy(t *testing.T) {
 
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodDelete,
@@ -460,18 +460,18 @@ func TestSlots_Active_ReturnsAllStates(t *testing.T) {
 	}
 
 	// pending slot
-	_, err := inst.AddSlot("Aldric", "42", class, nil)
+	_, err := inst.AddSlot("Aldric", "42", class, nil, nil)
 	require.NoError(t, err)
 
 	// connected slot
-	connected, err := inst.AddSlot("Brego", "42", class, nil)
+	connected, err := inst.AddSlot("Brego", "42", class, nil, nil)
 	require.NoError(t, err)
 	_, _, done, ok := inst.ConnectSlot(connected.ID)
 	require.True(t, ok)
 	t.Cleanup(func() { close(done) })
 
 	// waiting slot
-	waiting, err := inst.AddSlot("Caela", "42", class, nil)
+	waiting, err := inst.AddSlot("Caela", "42", class, nil, nil)
 	require.NoError(t, err)
 	_, _, done2, ok := inst.ConnectSlot(waiting.ID)
 	require.True(t, ok)
@@ -498,7 +498,7 @@ func TestSlots_Active_IncludesTokenAndInstance(t *testing.T) {
 	class := instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
 	}
-	slot, err := inst.AddSlot("Aldric", "42", class, nil)
+	slot, err := inst.AddSlot("Aldric", "42", class, nil, nil)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/slots/active", nil)
@@ -525,9 +525,9 @@ func TestSlots_Active_AcrossMultipleInstances(t *testing.T) {
 	inst2 := addTestInstance(t, reg)
 	class := instanceconfig.CharacterClass{Name: "Puncher"}
 
-	_, err := inst1.AddSlot("Aldric", "42", class, nil)
+	_, err := inst1.AddSlot("Aldric", "42", class, nil, nil)
 	require.NoError(t, err)
-	_, err = inst2.AddSlot("Brego", "42", class, nil)
+	_, err = inst2.AddSlot("Brego", "42", class, nil, nil)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/slots/active", nil)

@@ -10,7 +10,7 @@ module GameApi
 
     # Required: :zone_identifier, :version, :database_id, :source_url,
     #           :zone_config, :character_name, :character_database_id, :character_class
-    # Optional: :instance_identifier
+    # Optional: :instance_identifier, :owned_zone_items, :equipped_items
     #
     # Returns {"instance_identifier", "slot_id", "token"} on success.
     # Raises UnprocessableError on zone mismatch or full instance.
@@ -18,7 +18,7 @@ module GameApi
     def request(attrs)
       validate_attrs(attrs,
         required: %i[zone_identifier version database_id source_url zone_config character_name character_database_id character_class],
-        supported: %i[instance_identifier owned_zone_items])
+        supported: %i[instance_identifier owned_zone_items equipped_items])
       post("/slots/request", attrs)
     end
 

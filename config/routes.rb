@@ -27,6 +27,7 @@ Rails.application.routes.draw do
   namespace :internal_api do
     resources :characters, only: [] do
       resources :character_items, only: [:create]
+      resources :equipped_items, only: [:index]
     end
   end
 

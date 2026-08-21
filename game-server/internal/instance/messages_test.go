@@ -400,7 +400,7 @@ func TestDeltaMsg_RemovedUnit(t *testing.T) {
 
 func TestTick_SendsFullStateOnConnect(t *testing.T) {
 	inst := startedGoblinInstance(t)
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -417,7 +417,7 @@ func TestTick_SendsFullStateOnConnect(t *testing.T) {
 
 func TestTick_FullStateChecksum_MatchesInstance(t *testing.T) {
 	inst := startedGoblinInstance(t)
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -431,7 +431,7 @@ func TestTick_FullStateChecksum_MatchesInstance(t *testing.T) {
 
 func TestTick_SendsDeltaAfterFullState(t *testing.T) {
 	inst := startedGoblinInstance(t)
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -448,7 +448,7 @@ func TestTick_SendsDeltaAfterFullState(t *testing.T) {
 
 func TestTick_Delta_EmptyWhenStateUnchanged(t *testing.T) {
 	inst := startedGoblinInstance(t)
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -469,7 +469,7 @@ func TestTick_Delta_EmptyWhenStateUnchanged(t *testing.T) {
 
 func TestTick_ReconnectGetsFreshFullState(t *testing.T) {
 	inst := startedGoblinInstance(t)
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	// First connection — drain full state and a delta.

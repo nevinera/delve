@@ -224,6 +224,15 @@ RSpec.describe GameApi::SlotsClient do
       }.not_to raise_error
     end
 
+    it "accepts an optional equipped_items" do
+      stub_request(:post, "#{base_url}/slots/request")
+        .to_return(status: 201, body: request_response, headers: json_headers)
+
+      expect {
+        client.request(valid_attrs.merge(equipped_items: {"head" => {identifier: "helm"}}))
+      }.not_to raise_error
+    end
+
     it "sends the Bearer token" do
       stub_request(:post, "#{base_url}/slots/request")
         .to_return(status: 201, body: request_response, headers: json_headers)
