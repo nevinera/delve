@@ -65,6 +65,7 @@ const styles = {
     pointerEvents: "none",
   },
   actionBar: {
+    position: "relative",
     flexShrink: 0,
     display: "flex",
     justifyContent: "center",
@@ -73,6 +74,20 @@ const styles = {
     padding: "4px 8px",
     background: "#111",
     borderTop: "1px solid #333",
+  },
+  charSheetButton: {
+    position: "absolute",
+    left: 8,
+    bottom: 4,
+    width: 52,
+    height: 26,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#999",
+    fontSize: 10,
+    letterSpacing: 0.5,
+    cursor: "pointer",
   },
   actionButton: {
     position: "relative",
@@ -242,6 +257,95 @@ const styles = {
     color: "#888",
     fontSize: 11,
     marginLeft: 4,
+  },
+  charSheet: {
+    position: "absolute",
+    zIndex: 25,
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    width: 480,
+    pointerEvents: "auto",
+  },
+  charSheetHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  charSheetTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: "#d4a84b",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  charSheetBody: {
+    display: "flex",
+    gap: 20,
+  },
+  charSheetColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  charSheetColumnTitle: {
+    fontSize: 11,
+    color: "#888",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  charSheetEquipList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  charSheetEquipRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 8,
+    padding: "3px 0",
+    borderBottom: "1px solid #333",
+    fontSize: 12,
+  },
+  charSheetSlotLabel: {
+    color: "#888",
+    whiteSpace: "nowrap",
+  },
+  charSheetEmptySlot: {
+    color: "#555",
+  },
+  charSheetStatGroup: {
+    marginBottom: 10,
+  },
+  charSheetStatGroupTitle: {
+    fontSize: 13,
+    color: "#888",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    paddingTop: 6,
+    marginBottom: 3,
+  },
+  charSheetStatsList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+  },
+  charSheetStatRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: 12,
+    color: "#7fae7f",
   },
   itemTooltipAnchor: {
     display: "inline-block",
@@ -452,6 +556,108 @@ export function ItemTooltip({ item, children }) {
   );
 }
 
+const EQUIPPED_SLOT_LABELS = {
+  head: "Head",
+  neck: "Neck",
+  shoulders: "Shoulders",
+  back: "Back",
+  chest: "Chest",
+  wrists: "Wrists",
+  hands: "Hands",
+  waist: "Waist",
+  legs: "Legs",
+  feet: "Feet",
+  ring_1: "Left Ring",
+  ring_2: "Right Ring",
+  trinket_1: "Left Trinket",
+  trinket_2: "Right Trinket",
+  main_hand: "Main Hand",
+  off_hand: "Off Hand",
+};
+const EQUIPPED_SLOT_ORDER = Object.keys(EQUIPPED_SLOT_LABELS);
+
+const STAT_GROUPS = [
+  { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "weapon_dps"] },
+  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "resilience_rating"] },
+];
+
+// The equipped-items payload only carries provenance (identifier, source,
+// stats) — no display name — so derive a readable label from the identifier.
+export function formatItemName(identifier) {
+  if (!identifier) return "—";
+  return identifier
+    .replace(/[-_]/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function netStats(equippedItems) {
+  const total = {};
+  for (const item of Object.values(equippedItems || {})) {
+    for (const [key, value] of Object.entries(item.stats || {})) {
+      total[key] = (total[key] || 0) + value;
+    }
+  }
+  return total;
+}
+
+// View-only character sheet: equipped items on the left, summed raw stats
+// on the right. Toggled by the "P" hotkey or the action-bar button.
+export function CharacterSheet({ open, equippedItems, onClose }) {
+  if (!open) return null;
+
+  const stats = netStats(equippedItems);
+
+  return (
+    <div style={styles.charSheet}>
+      <div style={styles.charSheetHeader}>
+        <span style={styles.charSheetTitle}>Character</span>
+        <button style={styles.lootClose} onClick={onClose}>✕</button>
+      </div>
+      <div style={styles.charSheetBody}>
+        <div style={styles.charSheetColumn}>
+          <div style={styles.charSheetColumnTitle}>Equipment</div>
+          <ul style={styles.charSheetEquipList}>
+            {EQUIPPED_SLOT_ORDER.map(slot => {
+              const item = equippedItems?.[slot];
+              return (
+                <li key={slot} style={styles.charSheetEquipRow}>
+                  <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
+                  {item ? (
+                    <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }}>
+                      <span style={styles.lootItemName}>{formatItemName(item.identifier)}</span>
+                    </ItemTooltip>
+                  ) : (
+                    <span style={styles.charSheetEmptySlot}>Empty</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+        <div style={styles.charSheetColumn}>
+          <div style={styles.charSheetColumnTitle}>Stats</div>
+          {STAT_GROUPS.map(group => (
+            <div key={group.title} style={styles.charSheetStatGroup}>
+              <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
+              <ul style={styles.charSheetStatsList}>
+                {group.keys.map(key => (
+                  <li key={key} style={styles.charSheetStatRow}>
+                    <span>{STAT_LABELS[key] || key}</span>
+                    <span>{stats[key] || 0}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const CLAIM_LABEL = {
   owned:          "(owned)",
   upgraded:       "(upgraded)",
@@ -561,6 +767,7 @@ export default function App({
   characterTokenUrl,
   classConfigUrl,
   ownedZoneItems: initialOwnedZoneItems = {},
+  equippedItems = {},
 }) {
   const connRef = useRef(null);
   const canvasRef = useRef(null);
@@ -578,6 +785,7 @@ export default function App({
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
+  const [charSheetOpen, setCharSheetOpen] = useState(false);
   const [powers, setPowers] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
@@ -769,6 +977,11 @@ export default function App({
       if (e.repeat) return;
       if (e.code === "Escape") {
         setLootWindowUnitId(null);
+        setCharSheetOpen(false);
+        return;
+      }
+      if (e.code === "KeyP") {
+        setCharSheetOpen(o => !o);
         return;
       }
       if (e.code === "Tab") {
@@ -985,8 +1198,20 @@ export default function App({
           onTake={handleTakeItem}
           onClose={() => setLootWindowUnitId(null)}
         />
+        <CharacterSheet
+          open={charSheetOpen}
+          equippedItems={equippedItems}
+          onClose={() => setCharSheetOpen(false)}
+        />
       </div>
       <div style={styles.actionBar}>
+        <button
+          style={styles.charSheetButton}
+          title="Character sheet (P)"
+          onClick={() => setCharSheetOpen(o => !o)}
+        >
+          Char
+        </button>
         {Array.from({ length: 10 }, (_, i) => {
           const slot = i + 1;
           const key = slot === 10 ? "0" : String(slot);

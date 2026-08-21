@@ -7,6 +7,7 @@ class Play::ZonesController < Play::BaseController
     @zone = Zone.find(params[:id])
     @result = JoinZone.call(character: @character, zone: @zone)
     @owned_zone_items = owned_zone_items_map
+    @equipped_items = EquippedItems::ForCharacter.call(character: @character)
   end
 
   private

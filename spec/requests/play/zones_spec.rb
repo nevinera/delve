@@ -53,6 +53,14 @@ RSpec.describe "Play::Zones", type: :request do
         get "/play/characters/#{character.id}/zones/#{zone.id}"
         expect(JoinZone).to have_received(:call).with(character: character, zone: zone)
       end
+
+      it "exposes the character's equipped items as a data attribute" do
+        item = create(:character_item, character: character, slot: "head")
+        create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+
+        get "/play/characters/#{character.id}/zones/#{zone.id}"
+        expect(response.body).to include(CGI.escapeHTML(EquippedItems::ForCharacter.call(character: character).to_json))
+      end
     end
 
     context "with a character belonging to another user" do
