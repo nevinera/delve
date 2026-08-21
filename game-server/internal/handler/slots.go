@@ -123,7 +123,7 @@ func (h *Slots) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass, req.OwnedZoneItems)
+	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass, req.OwnedZoneItems, nil)
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {
 			writeError(w, r, http.StatusUnprocessableEntity, err.Error())

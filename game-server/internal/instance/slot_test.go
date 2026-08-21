@@ -20,7 +20,7 @@ var puncherClass = instanceconfig.CharacterClass{
 
 func TestAddSlot_ReturnsSlotWithIDs(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, uuid.Nil, slot.ID)
@@ -31,9 +31,20 @@ func TestAddSlot_ReturnsSlotWithIDs(t *testing.T) {
 	assert.Equal(t, "Puncher", slot.CharacterClass.Name)
 }
 
+func TestAddSlot_StoresEquippedItems(t *testing.T) {
+	inst := makeInstance()
+	equipped := map[string]instanceconfig.EquippedItem{
+		"head": {Identifier: "helm-of-doom", Ilvl: 584, Stats: instanceconfig.ItemStats{Strength: 10}},
+	}
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, equipped)
+	require.NoError(t, err)
+
+	assert.Equal(t, equipped, slot.EquippedItems)
+}
+
 func TestAddSlot_AppearsInList(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	list := inst.ListSlots()
@@ -45,18 +56,18 @@ func TestAddSlot_ErrInstanceFull(t *testing.T) {
 	inst := makeInstance()
 	inst.MaxSlots = 2
 
-	_, err := inst.AddSlot("Char1", "42", puncherClass, nil)
+	_, err := inst.AddSlot("Char1", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
-	_, err = inst.AddSlot("Char2", "42", puncherClass, nil)
+	_, err = inst.AddSlot("Char2", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
-	_, err = inst.AddSlot("Char3", "42", puncherClass, nil)
+	_, err = inst.AddSlot("Char3", "42", puncherClass, nil, nil)
 	assert.ErrorIs(t, err, instance.ErrInstanceFull)
 }
 
 func TestGetSlot_Found(t *testing.T) {
 	inst := makeInstance()
-	added, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	added, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	got, ok := inst.GetSlot(added.ID)
@@ -72,7 +83,7 @@ func TestGetSlot_NotFound(t *testing.T) {
 
 func TestRemoveSlot_RemovesFromList(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	removed := inst.RemoveSlot(slot.ID)
@@ -87,13 +98,13 @@ func TestRemoveSlot_MissingReturnsFalse(t *testing.T) {
 
 func TestAddSlot_SameCharacterReusesSlot(t *testing.T) {
 	inst := makeInstance()
-	first, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	first, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 	firstID := first.ID
 	firstUnitID := first.CharacterUnitID
 	firstToken := first.Token
 
-	second, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	second, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, firstID, second.ID, "slot ID should be reused")
@@ -106,18 +117,18 @@ func TestAddSlot_SameCharacterDoesNotConsumeCapacity(t *testing.T) {
 	inst := makeInstance()
 	inst.MaxSlots = 1
 
-	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
-	_, err = inst.AddSlot("Aldric", "42", puncherClass, nil)
+	_, err = inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	assert.NoError(t, err, "reusing an existing slot should not hit the capacity limit")
 }
 
 func TestAddSlot_UniqueIDsAndTokens(t *testing.T) {
 	inst := makeInstance()
-	a, err := inst.AddSlot("A", "42", puncherClass, nil)
+	a, err := inst.AddSlot("A", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
-	b, err := inst.AddSlot("B", "42", puncherClass, nil)
+	b, err := inst.AddSlot("B", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, a.ID, b.ID)
@@ -126,7 +137,7 @@ func TestAddSlot_UniqueIDsAndTokens(t *testing.T) {
 
 func TestSetSlotState_TransitionsState(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, instance.SlotStatePending, slot.State)
 
@@ -149,9 +160,9 @@ func TestSlotCounts_Empty(t *testing.T) {
 
 func TestSlotCounts_NoConnected(t *testing.T) {
 	inst := makeInstance()
-	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
-	_, err = inst.AddSlot("Brego", "42", puncherClass, nil)
+	_, err = inst.AddSlot("Brego", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	total, active := inst.SlotCounts()
@@ -161,9 +172,9 @@ func TestSlotCounts_NoConnected(t *testing.T) {
 
 func TestSlotCounts_SomeConnected(t *testing.T) {
 	inst := makeInstance()
-	a, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	a, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
-	_, err = inst.AddSlot("Brego", "42", puncherClass, nil)
+	_, err = inst.AddSlot("Brego", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	inst.SetSlotState(a.ID, instance.SlotStateConnected)
@@ -181,7 +192,7 @@ func TestConnectSlot_UnknownSlot(t *testing.T) {
 
 func TestConnectSlot_SetsStateConnected(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	_, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -193,7 +204,7 @@ func TestConnectSlot_SetsStateConnected(t *testing.T) {
 
 func TestConnectSlot_ReturnsChannels(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	writeCh, ctx, done, ok := inst.ConnectSlot(slot.ID)
@@ -207,7 +218,7 @@ func TestConnectSlot_ReturnsChannels(t *testing.T) {
 
 func TestConnectSlot_ReconnectCancelsExistingContext(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	_, ctx1, done1, ok := inst.ConnectSlot(slot.ID)
@@ -228,7 +239,7 @@ func TestConnectSlot_ReconnectCancelsExistingContext(t *testing.T) {
 
 func TestDisconnectSlot_SetsStateWaiting(t *testing.T) {
 	inst := makeInstance()
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	_, _, done, _ := inst.ConnectSlot(slot.ID)
@@ -253,7 +264,7 @@ func TestSlots_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			slot, err := inst.AddSlot("X", "42", puncherClass, nil)
+			slot, err := inst.AddSlot("X", "42", puncherClass, nil, nil)
 			if err != nil {
 				return
 			}

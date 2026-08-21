@@ -31,7 +31,7 @@ func makeSelectableInstance(t *testing.T, zoneID, version string, maxSlots int) 
 func addSlots(t *testing.T, inst *instance.Instance, n int) {
 	t.Helper()
 	for i := range n {
-		_, err := inst.AddSlot(string(rune('A'+i)), "42", instanceconfig.CharacterClass{Name: "Puncher"}, nil)
+		_, err := inst.AddSlot(string(rune('A'+i)), "42", instanceconfig.CharacterClass{Name: "Puncher"}, nil, nil)
 		require.NoError(t, err)
 	}
 }

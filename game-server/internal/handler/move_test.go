@@ -47,7 +47,7 @@ func TestConnect_MoveCommand_UpdatesPosition(t *testing.T) {
 
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
@@ -101,7 +101,7 @@ func TestConnect_UnknownMessageType_DoesNotDisconnect(t *testing.T) {
 
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
@@ -128,7 +128,7 @@ func TestConnect_MalformedJSON_DoesNotDisconnect(t *testing.T) {
 
 	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
 		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())

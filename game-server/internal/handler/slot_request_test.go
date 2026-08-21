@@ -171,7 +171,7 @@ func TestSlotsRequest_SpecificInstance_Full(t *testing.T) {
 	inst := addTestInstance(t, reg)
 	inst.ZoneIdentifier = "goblin-cave"
 	inst.MaxSlots = 1
-	_, err := inst.AddSlot("Brego", "42", instanceconfig.CharacterClass{Name: "Puncher"}, nil)
+	_, err := inst.AddSlot("Brego", "42", instanceconfig.CharacterClass{Name: "Puncher"}, nil, nil)
 	require.NoError(t, err)
 	router := mountRequest(newSlotsHandler(reg, 200))
 
@@ -293,6 +293,31 @@ func TestSlotsRequest_Auto_InvalidZoneConfig(t *testing.T) {
 }
 
 // --- server_test routing/auth coverage ---
+
+func TestSlotsRequest_StoresEquippedItems(t *testing.T) {
+	reg := instance.NewRegistry()
+	router := mountRequest(newSlotsHandler(reg, 200))
+
+	equipped := map[string]any{
+		"head": map[string]any{"identifier": "helm-of-doom", "ilvl": 584, "stats": map[string]any{"strength": 10}},
+	}
+	rec := postRequest(t, router, validRequestBody(map[string]any{"equipped_items": equipped}))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	body := decodeRequestResponse(t, rec)
+	id, err := uuid.Parse(fmt.Sprintf("%v", body["instance_identifier"]))
+	require.NoError(t, err)
+	inst, ok := reg.Get(id)
+	require.True(t, ok)
+
+	slots := inst.ListSlots()
+	require.Len(t, slots, 1)
+	item, ok := slots[0].EquippedItems["head"]
+	require.True(t, ok)
+	assert.Equal(t, "helm-of-doom", item.Identifier)
+	assert.Equal(t, 584, item.Ilvl)
+	assert.Equal(t, 10, item.Stats.Strength)
+}
 
 func TestSlotsRequest_RouteRegistered(t *testing.T) {
 	reg := instance.NewRegistry()

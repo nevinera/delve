@@ -316,9 +316,9 @@ func TestLootItemsToJSON_MultipleClaimsAndItems(t *testing.T) {
 
 func TestProcessLootEvents_OnlyTaggedCharacterGetsClaim(t *testing.T) {
 	inst := makeInstance()
-	tagger, err := inst.AddSlot("Tagger", "1", puncherClass, nil)
+	tagger, err := inst.AddSlot("Tagger", "1", puncherClass, nil, nil)
 	require.NoError(t, err)
-	_, err = inst.AddSlot("Other", "2", puncherClass, nil)
+	_, err = inst.AddSlot("Other", "2", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	mobID := uuid.New()
@@ -342,7 +342,7 @@ func TestProcessLootEvents_OnlyTaggedCharacterGetsClaim(t *testing.T) {
 
 func TestProcessLootEvents_UntaggedKill_NoClaims(t *testing.T) {
 	inst := makeInstance()
-	_, err := inst.AddSlot("Aldric", "1", puncherClass, nil)
+	_, err := inst.AddSlot("Aldric", "1", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	mobID := uuid.New()

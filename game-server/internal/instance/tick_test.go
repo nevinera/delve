@@ -54,7 +54,7 @@ func TestInstance_DoesNotAutoStop_WhenSlotPresent(t *testing.T) {
 	inst := startedInstance(t, reg)
 	t.Cleanup(inst.Stop)
 
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	// Connect the slot so it stays in SlotStateConnected (not prunable).
@@ -91,7 +91,7 @@ func TestInstance_PrunesPendingSlot_AfterTimeout(t *testing.T) {
 	inst := startedInstance(t, reg)
 	t.Cleanup(inst.Stop)
 
-	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	total, _ := inst.SlotCounts()
@@ -105,7 +105,7 @@ func TestInstance_PrunesWaitingSlot_AfterTimeout(t *testing.T) {
 	inst := startedInstance(t, reg)
 	t.Cleanup(inst.Stop)
 
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	_, _, done, ok := inst.ConnectSlot(slot.ID)
@@ -126,7 +126,7 @@ func TestInstance_ResetsEmptyTimer_WhenSlotAdded(t *testing.T) {
 
 	// Let it get partway through the empty timeout, then add a slot.
 	time.Sleep(shortTimeout / 2)
-	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil)
+	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
 	// Should NOT have stopped after the original timeout would have elapsed.
