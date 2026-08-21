@@ -108,3 +108,29 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 		return false, false, false, fmt.Errorf("rails returned %d", res.StatusCode)
 	}
 }
+
+// FetchEquippedItems retrieves a character's currently equipped items from
+// Rails, keyed by equipped slot.
+func (c *Client) FetchEquippedItems(characterDatabaseID string) (map[string]instanceconfig.EquippedItem, error) {
+	url := fmt.Sprintf("%s/internal_api/characters/%s/equipped_items", c.baseURL, characterDatabaseID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	var items map[string]instanceconfig.EquippedItem
+	if err := json.NewDecoder(res.Body).Decode(&items); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	return items, nil
+}
