@@ -16,6 +16,7 @@ createRoot(el).render(
       classConfigUrl={el.dataset.classConfigUrl}
       ownedZoneItems={JSON.parse(el.dataset.ownedZoneItems || "{}")}
       equippedItems={JSON.parse(el.dataset.equippedItems || "{}")}
+      characterItemsUrl={el.dataset.characterItemsUrl}
     />
   </StrictMode>
 );

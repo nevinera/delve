@@ -258,18 +258,68 @@ const styles = {
     fontSize: 11,
     marginLeft: 4,
   },
-  charSheet: {
+  charSheetWrapper: {
     position: "absolute",
     zIndex: 25,
     left: "50%",
     top: "50%",
     transform: "translate(-50%, -50%)",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  charSheet: {
     background: "rgba(20,16,12,0.97)",
     border: "1px solid #7a5a2a",
     borderRadius: 6,
     padding: "10px 16px 14px",
     width: 480,
     pointerEvents: "auto",
+  },
+  charSheetCandidatePane: {
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    width: 220,
+    pointerEvents: "auto",
+  },
+  charSheetCandidateTitle: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#d4a84b",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  charSheetCandidateList: {
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    maxHeight: 320,
+    overflowY: "auto",
+  },
+  charSheetCandidateItem: {
+    fontSize: 12,
+    color: "#e8d5a0",
+    padding: "3px 2px",
+    borderBottom: "1px solid #333",
+  },
+  charSheetCandidateEmpty: {
+    fontSize: 12,
+    color: "#555",
+  },
+  charSheetEquipRowClickable: {
+    cursor: "pointer",
+  },
+  charSheetEquipRowHover: {
+    background: "rgba(212,168,75,0.06)",
+  },
+  charSheetEquipRowExpanded: {
+    background: "rgba(212,168,75,0.12)",
   },
   charSheetHeader: {
     display: "flex",
@@ -515,7 +565,7 @@ const STAT_LABELS = {
 
 // Wraps its children in a hover target that shows a WoW-style item tooltip
 // near the cursor. `item` should have {name, slot, ilvl, description, stats}.
-export function ItemTooltip({ item, children }) {
+export function ItemTooltip({ item, children, style }) {
   const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
 
   if (!item) return children;
@@ -524,7 +574,7 @@ export function ItemTooltip({ item, children }) {
 
   return (
     <span
-      style={styles.itemTooltipAnchor}
+      style={{ ...styles.itemTooltipAnchor, ...style }}
       onMouseEnter={e => setPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={e => setPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setPos(null)}
@@ -576,6 +626,20 @@ const EQUIPPED_SLOT_LABELS = {
 };
 const EQUIPPED_SLOT_ORDER = Object.keys(EQUIPPED_SLOT_LABELS);
 
+// Mirrors EquippedItem::SLOT_TYPES (app/models/equipped_item.rb) — which
+// CharacterItem#slot values are compatible with a given equipped slot.
+const EQUIPPABLE_ITEM_SLOTS = {
+  ring_1: ["ring"],
+  ring_2: ["ring"],
+  trinket_1: ["trinket"],
+  trinket_2: ["trinket"],
+  main_hand: ["main_hand", "one_hand", "two_hand"],
+  off_hand: ["off_hand", "one_hand"],
+};
+function itemSlotsFor(equippedSlot) {
+  return EQUIPPABLE_ITEM_SLOTS[equippedSlot] || [equippedSlot];
+}
+
 const STAT_GROUPS = [
   { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "weapon_dps"] },
   { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "resilience_rating"] },
@@ -603,55 +667,133 @@ function netStats(equippedItems) {
   return total;
 }
 
+// Scrollable list of candidate items for one equipped slot, shown to the
+// left of the character sheet. View-only: clicking an item does not equip it.
+function CandidateItemsPane({ slotLabel, loading, items, onClose }) {
+  return (
+    <div style={styles.charSheetCandidatePane}>
+      <div style={styles.charSheetHeader}>
+        <span style={styles.charSheetCandidateTitle}>{slotLabel}</span>
+        <button style={styles.lootClose} onClick={onClose}>✕</button>
+      </div>
+      {loading ? (
+        <div style={styles.charSheetCandidateEmpty}>Loading…</div>
+      ) : items.length === 0 ? (
+        <div style={styles.charSheetCandidateEmpty}>No items available.</div>
+      ) : (
+        <ul style={styles.charSheetCandidateList}>
+          {items.map(item => (
+            <li key={item.id} style={styles.charSheetCandidateItem}>
+              <ItemTooltip item={item}>
+                <span>{item.name}</span>
+              </ItemTooltip>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // View-only character sheet: equipped items on the left, summed raw stats
 // on the right. Toggled by the "P" hotkey or the action-bar button.
-export function CharacterSheet({ open, equippedItems, onClose }) {
+// Clicking an equipped item opens a candidate-item pane to its left (view
+// only for now — no equipping yet).
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onClose }) {
+  const [expandedSlot, setExpandedSlot] = useState(null);
+  const [hoveredSlot, setHoveredSlot] = useState(null);
+  const [candidateItems, setCandidateItems] = useState([]);
+  const [candidateLoading, setCandidateLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) setExpandedSlot(null);
+  }, [open]);
+
+  useEffect(() => {
+    if (!expandedSlot || !characterItemsUrl) return;
+    setCandidateLoading(true);
+    const params = new URLSearchParams();
+    itemSlotsFor(expandedSlot).forEach(s => params.append("slot[]", s));
+    const equippedSourceKeys = new Set(Object.values(equippedItems || {}).map(i => i.source_key));
+    fetch(`${characterItemsUrl}?${params.toString()}`)
+      .then(r => r.json())
+      .then(items => setCandidateItems(items.filter(i => !equippedSourceKeys.has(i.source_key))))
+      .catch(() => setCandidateItems([]))
+      .finally(() => setCandidateLoading(false));
+  }, [expandedSlot, characterItemsUrl, equippedItems]);
+
   if (!open) return null;
 
   const stats = netStats(equippedItems);
 
+  const toggleSlot = (slot) => {
+    setExpandedSlot(current => (current === slot ? null : slot));
+  };
+
   return (
-    <div style={styles.charSheet}>
-      <div style={styles.charSheetHeader}>
-        <span style={styles.charSheetTitle}>Character</span>
-        <button style={styles.lootClose} onClick={onClose}>✕</button>
-      </div>
-      <div style={styles.charSheetBody}>
-        <div style={styles.charSheetColumn}>
-          <div style={styles.charSheetColumnTitle}>Equipment</div>
-          <ul style={styles.charSheetEquipList}>
-            {EQUIPPED_SLOT_ORDER.map(slot => {
-              const item = equippedItems?.[slot];
-              return (
-                <li key={slot} style={styles.charSheetEquipRow}>
-                  <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
-                  {item ? (
-                    <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }}>
-                      <span style={styles.lootItemName}>{formatItemName(item.identifier)}</span>
-                    </ItemTooltip>
-                  ) : (
-                    <span style={styles.charSheetEmptySlot}>Empty</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+    <div style={styles.charSheetWrapper}>
+      {expandedSlot && (
+        <CandidateItemsPane
+          slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}
+          loading={candidateLoading}
+          items={candidateItems}
+          onClose={() => setExpandedSlot(null)}
+        />
+      )}
+      <div style={styles.charSheet}>
+        <div style={styles.charSheetHeader}>
+          <span style={styles.charSheetTitle}>Character</span>
+          <button style={styles.lootClose} onClick={onClose}>✕</button>
         </div>
-        <div style={styles.charSheetColumn}>
-          <div style={styles.charSheetColumnTitle}>Stats</div>
-          {STAT_GROUPS.map(group => (
-            <div key={group.title} style={styles.charSheetStatGroup}>
-              <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
-              <ul style={styles.charSheetStatsList}>
-                {group.keys.map(key => (
-                  <li key={key} style={styles.charSheetStatRow}>
-                    <span>{STAT_LABELS[key] || key}</span>
-                    <span>{stats[key] || 0}</span>
+        <div style={styles.charSheetBody}>
+          <div style={styles.charSheetColumn}>
+            <div style={styles.charSheetColumnTitle}>Equipment</div>
+            <ul style={styles.charSheetEquipList}>
+              {EQUIPPED_SLOT_ORDER.map(slot => {
+                const item = equippedItems?.[slot];
+                const rowStyle = {
+                  ...styles.charSheetEquipRow,
+                  ...(item ? styles.charSheetEquipRowClickable : {}),
+                  ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+                  ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
+                };
+                return (
+                  <li
+                    key={slot}
+                    style={rowStyle}
+                    onClick={item ? () => toggleSlot(slot) : undefined}
+                    onMouseEnter={item ? () => setHoveredSlot(slot) : undefined}
+                    onMouseLeave={item ? () => setHoveredSlot(current => (current === slot ? null : current)) : undefined}
+                  >
+                    <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
+                    {item ? (
+                      <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }}>
+                        <span style={styles.lootItemName}>{formatItemName(item.identifier)}</span>
+                      </ItemTooltip>
+                    ) : (
+                      <span style={styles.charSheetEmptySlot}>Empty</span>
+                    )}
                   </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                );
+              })}
+            </ul>
+          </div>
+          <div style={styles.charSheetColumn}>
+            <div style={styles.charSheetColumnTitle}>Stats</div>
+            {STAT_GROUPS.map(group => (
+              <div key={group.title} style={styles.charSheetStatGroup}>
+                <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
+                <ul style={styles.charSheetStatsList}>
+                  {group.keys.map(key => (
+                    <li key={key} style={styles.charSheetStatRow}>
+                      <span>{STAT_LABELS[key] || key}</span>
+                      <span>{stats[key] || 0}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -768,6 +910,7 @@ export default function App({
   classConfigUrl,
   ownedZoneItems: initialOwnedZoneItems = {},
   equippedItems = {},
+  characterItemsUrl,
 }) {
   const connRef = useRef(null);
   const canvasRef = useRef(null);
@@ -1201,6 +1344,7 @@ export default function App({
         <CharacterSheet
           open={charSheetOpen}
           equippedItems={equippedItems}
+          characterItemsUrl={characterItemsUrl}
           onClose={() => setCharSheetOpen(false)}
         />
       </div>

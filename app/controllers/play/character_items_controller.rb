@@ -28,6 +28,7 @@ class Play::CharacterItemsController < Play::BaseController
     {
       id: item.id,
       identifier: item.identifier,
+      source_key: item.source_key,
       name: item.name,
       slot: item.slot,
       ilvl: item.ilvl,

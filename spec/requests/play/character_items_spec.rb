@@ -93,6 +93,7 @@ RSpec.describe "Play::CharacterItems", type: :request do
         expect(head_json).to include(
           "id" => head_item.id,
           "identifier" => head_item.identifier,
+          "source_key" => head_item.source_key,
           "slot" => "head",
           "ilvl" => head_item.ilvl
         )
