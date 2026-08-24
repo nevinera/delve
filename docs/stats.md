@@ -125,12 +125,92 @@ Example: a chest piece (primary + 3 secondaries) with no primary and only 2 seco
 each of those secondaries increased by 70% over their base value. With all 3 secondaries listed but
 no primary, each is increased by ~26.7%.
 
+## Strength
+
+There's no separate Attack Power stat. Whichever primary stat a class calls its damage stat (e.g.
+Strength for physical-damage classes) feeds directly into weapon damage:
+
+```
+SwingDamage = BaseWeaponDamage + (Strength / 7) * NominalSwingSpeed
+```
+
+`NominalSwingSpeed` is the weapon's base swing timer - haste changes how often you swing, not this
+per-swing damage calculation. `Strength / 7` is a placeholder conversion, easy to retune later.
+This mirrors modern WoW, where Strength's only effect (for physical classes) is Attack Power - it
+no longer grants block value or anything else.
+
+Strength also grants Parry chance, at half Strength's normal weight - see **Avoidance** below.
+
+## Agility
+
+Agility works like Strength, but at half the damage rate (mirroring WoW, where Strength gives 2 AP
+per point and Agility gives 1):
+
+```
+SwingDamage = BaseWeaponDamage + (Agility / 14) * NominalSwingSpeed
+```
+
+Agility also feeds Crit Rating and Dodge chance directly - it does double (technically triple)
+duty, which is why its damage rate is halved:
+
+```
+EffectivePhysicalCritRating += Agility * 0.6
+```
+
+(Intellect will do the same for magic crit, once we get there.)
+
+## Intellect
+
+Intellect feeds spell damage and magic crit, at the same rates as the other primary stats. It
+doesn't grant any avoidance:
+
+```
+SpellDamage = BaseSpellDamage + (Intellect / 14) * NominalCastTime
+EffectiveMagicCritRating += Intellect * 0.6
+```
+
+Instead, Intellect grows the character's resource pool (mana, energy, etc. - whichever their class
+uses; the mapping from Intellect to that resource is class-specific, not a universal "mana"):
+
+```
+ResourcePool = Intellect * 10
+```
+
+## Avoidance
+
+Agility and Strength each also grant a chance to avoid an attack outright - Dodge for Agility,
+Parry for Strength:
+
+```
+DodgeRate = 0.6 * Agility / (Agility + 250)
+ParryRate = 0.6 * Strength / (Strength + 250)
+```
+
+Both asymptote toward 60% as the stat grows, hit ~26% at "full" investment in that stat (~194
+points, the same order of magnitude a fully-itemized primary stat reaches), and ~13% at half that
+(e.g. the same character at `ee = -10`).
+
+Dodge and Parry don't add together, but stack like independent chances, which is worse
+than dumping the same points into one:
+
+```
+TotalAvoidance = DodgeRate + ParryRate * (1 - DodgeRate)
+```
+
 ## Stamina
 
 Stamina is itemizable as a secondary stat like any other, but most equipped items also grant a
 *base* amount of stamina derived purely from their elvl and slot factor — independent of whatever
 stamina is itemized on them. Rings, Neck, weapons, and off-hands (including shields) don't grant
-this base stamina.
+this base stamina. Stamina doesn't get an inherent bonus for being alive either - a character with
+no gear has 0 Stamina.
+
+Stamina feeds max HP, which does have its own flat base - a character at `ee = -20` (where `em = 0`
+zeroes out all gear-derived Stamina) sits at exactly that base, effectively naked:
+
+```
+MaxHP = 100 + Stamina * 10
+```
 
 ## Defence Rating and damage reduction
 
@@ -156,3 +236,51 @@ secondary stats; the generated gear will have some of each of those, and has an 
 characters of the same class always get the same Trainee Gear. The displays them dimmed out,
 so it's clear to the player that the character isn't wearing a real item. (The initial zones for
 a world should generally be between elevations 0 and 10.)
+
+# Examples
+
+## Adam - Strength DPS with a Two-Hander
+
+Two-handed Strength warrior, 13 equipped slots (`off_hand` is locked by the two-hander). 7 pieces
+are on-level (ee=0, em=1.0), 3 are at ee=-5 (em=0.73), 3 are at ee=-10 (em=0.5). Every item is fully
+itemized (no missing stats, so no redistribution bonus applies). "Raw" is `base x factor`, before
+`em` is applied; "Scaled" is after.
+
+| Slot | ee (em) | Allocation | Raw | Scaled | Base Stamina (raw -> scaled) |
+|---|---|---|---|---|---|
+| Head | 0 (1.0) | Str + Crit + Haste + Stam | Str 22.5, Crit 15, Haste 15, Stam 15 | Str 22.5, Crit 15, Haste 15, Stam 15 | 15 -> 15 |
+| Neck | -10 (0.5) | Crit + Mastery + Vers | Crit 10, Mastery 10, Vers 10 | Crit 5, Mastery 5, Vers 5 | n/a |
+| Shoulders | -5 (0.73) | Str + Haste + Stam | Str 15, Haste 10, Stam 10 | Str 10.95, Haste 7.3, Stam 7.3 | 10 -> 7.3 |
+| Back | -10 (0.5) | Str + Crit + Mastery | Str 15, Crit 10, Mastery 10 | Str 7.5, Crit 5, Mastery 5 | 10 -> 5 |
+| Chest | 0 (1.0) | Str + Crit + Haste + Vers | Str 22.5, Crit 15, Haste 15, Vers 15 | Str 22.5, Crit 15, Haste 15, Vers 15 | 15 -> 15 |
+| Wrists | -5 (0.73) | Str + Haste + Crit | Str 15, Haste 10, Crit 10 | Str 10.95, Haste 7.3, Crit 7.3 | 10 -> 7.3 |
+| Hands | -10 (0.5) | Str + Crit + Stam | Str 15, Crit 10, Stam 10 | Str 7.5, Crit 5, Stam 5 | 10 -> 5 |
+| Waist | 0 (1.0) | Str + Haste + Vers | Str 15, Haste 10, Vers 10 | Str 15, Haste 10, Vers 10 | 10 -> 10 |
+| Legs | 0 (1.0) | Str + Crit + Haste + Stam | Str 22.5, Crit 15, Haste 15, Stam 15 | Str 22.5, Crit 15, Haste 15, Stam 15 | 15 -> 15 |
+| Feet | 0 (1.0) | Str + Haste + Crit | Str 15, Haste 10, Crit 10 | Str 15, Haste 10, Crit 10 | 10 -> 10 |
+| Ring 1 | 0 (1.0) | Crit + Mastery | Crit 10, Mastery 10 | Crit 10, Mastery 10 | n/a |
+| Ring 2 | -5 (0.73) | Haste + Vers | Haste 10, Vers 10 | Haste 7.3, Vers 7.3 | n/a |
+| Main-hand (2h) | 0 (1.0) | Str + Crit + Haste + Stam | Str 60, Crit 40, Haste 40, Stam 40 | Str 60, Crit 40, Haste 40, Stam 40 | n/a |
+
+"Base Stamina" is the automatic per-armor-slot grant described above, on top of whatever's itemized;
+Neck, Rings, and the weapon don't grant it.
+
+### Net stats
+
+None of the primary/stamina stats get an inherent bonus - all four are built entirely from gear.
+Numeric meaning is only shown where we've actually locked in a rating-to-effect formula (currently
+just Defence Rating and MaxHP) - the rest are marked TBD pending the attack-math writeup.
+
+| Stat | Total | Numeric meaning |
+|---|---|---|
+| Strength | 194.4 | +27.8 DPS, 26.25% Parry |
+| Agility | 0 | no gear itemized |
+| Intellect | 0 | no gear itemized |
+| Stamina | 171.9 | 1819 max HP |
+| Crit rating | 127.3 | TBD |
+| Haste rating | 126.9 | TBD |
+| Mastery rating | 20 | TBD |
+| Versatility rating | 37.3 | TBD |
+| Defence rating | 0 | 0% physical DR, 0% magic DR |
+| Recovery rating | 0 | TBD |
+
