@@ -212,6 +212,64 @@ zeroes out all gear-derived Stamina) sits at exactly that base, effectively nake
 MaxHP = 100 + Stamina * 10
 ```
 
+## Crit Rating
+
+Crit Rating (physical or magic, whichever Agility/Intellect fed into it - see above) grants a flat
+chance to critically strike, on top of a 5% base. No asymptote - it's just linear - but the rate is
+chosen so even a maximally crit-stacked character (full Crit Rating itemization plus full primary
+stat contribution) stays well under 100%:
+
+```
+CritChance% = 5 + EffectiveCritRating / 15
+```
+
+## Haste Rating
+
+Haste Rating grants attack/cast speed, applied multiplicatively (not additively) to shrink swing
+timers, cast times, and channel durations, mirroring WoW. Unlike Crit, there's no base amount -
+0 Haste Rating means 0% haste:
+
+```
+Haste% = HasteRating / 11.71
+```
+
+A fully-itemized Haste build (445 Haste Rating) lands at 38% at `ee = 0`, and 19% at `ee = -10`
+(half the secondary pool, so exactly half the Haste%, since this formula has no base to break that
+proportionality).
+
+## Mastery
+
+Mastery Rating converts to a plain **Mastery** value ranging from 10 (0 rating) up to an asymptote
+of 100:
+
+```
+Mastery = 10 + 90 * MasteryRating / (MasteryRating + 556.25)
+```
+
+A fully-itemized Mastery build (445 Mastery Rating, `ee = 0`) lands at 50.
+
+Mastery itself has no effect in isolation - it's meant purely as an input for class-specific
+abilities and passives to scale off of.
+
+## Versatility
+
+Versatility doesn't have its own effect - it adds a fraction of itself to each primary stat and to
+Defence Rating instead, at the same rate for every class:
+
+```
+Strength      += VersatilityRating * 0.2
+Agility       += VersatilityRating * 0.2
+Intellect     += VersatilityRating * 0.2
+DefenceRating += VersatilityRating * 0.2
+```
+
+A fully-itemized Versatility build (445 rating) adds +89 to each of those four - noticeably weaker
+than committing those points directly to any one of them, but it touches damage/healing (via
+whichever primary a class actually uses), Crit/Dodge/Parry (from the off-primaries, which always
+apply regardless of class), and Defence all at once. This is also why tanks have real stat
+contention between Mastery, Defence Rating, and Versatility, rather than being able to itemize
+everything into pure survivability.
+
 ## Defence Rating and damage reduction
 
 There's no separate Armor stat. Instead, **Defence Rating** grants a direct percentage reduction to
@@ -268,19 +326,23 @@ Neck, Rings, and the weapon don't grant it.
 ### Net stats
 
 None of the primary/stamina stats get an inherent bonus - all four are built entirely from gear.
-Numeric meaning is only shown where we've actually locked in a rating-to-effect formula (currently
-just Defence Rating and MaxHP) - the rest are marked TBD pending the attack-math writeup.
+Versatility (37.3) adds 0.2x itself (+7.5) to Strength, Agility, Intellect, and Defence Rating below
+- those totals already include it. Numeric meaning is only shown where we've actually locked in a
+rating-to-effect formula (currently Defence Rating, MaxHP, Crit, Haste, Mastery, and Versatility) -
+the rest are marked TBD pending the attack-math writeup.
 
 | Stat | Total | Numeric meaning |
 |---|---|---|
-| Strength | 194.4 | +27.8 DPS, 26.25% Parry |
-| Agility | 0 | no gear itemized |
-| Intellect | 0 | no gear itemized |
+| Strength | 201.9 | +28.8 DPS, 26.8% Parry |
+| Agility | 7.5 | +4.5 effective Crit Rating, 1.7% Dodge |
+| Intellect | 7.5 | +4.5 effective Magic Crit Rating |
 | Stamina | 171.9 | 1819 max HP |
-| Crit rating | 127.3 | TBD |
-| Haste rating | 126.9 | TBD |
-| Mastery rating | 20 | TBD |
-| Versatility rating | 37.3 | TBD |
-| Defence rating | 0 | 0% physical DR, 0% magic DR |
+| Crit rating | 131.8 effective (127.3 itemized + 4.5 from Agility) | 13.8% physical crit chance |
+| Haste rating | 126.9 | 10.8% haste |
+| Mastery rating | 20 | Mastery 13.1 |
+| Versatility rating | 37.3 | see note above |
+| Defence rating | 7.5 | 6.4% physical DR, 2.5% magic DR |
 | Recovery rating | 0 | TBD |
+
+Combined avoidance (Dodge + Parry, stacking): **28.1%**.
 
