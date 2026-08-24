@@ -11,7 +11,7 @@ Items are defined in the zone config and sent to the Rails app by the game serve
 | `identifier` | string | yes | Slug unique within this zone. Used to deduplicate awards - a character can only hold one item per `identifier` per zone version. |
 | `name` | string | yes | Display name. |
 | `slot` | string | yes | Equipment slot type. See valid values below. |
-| `ilvl` | integer | yes | Item level. Must be at least 0. |
+| `elvl` | integer | yes | Elevation. See [stats.md](../stats.md). Must be at least 0. |
 | `description` | string | no | Flavour text shown in the item tooltip. |
 | `icon_url` | string | no | URL of the item icon image. |
 | `stats` | object | no | Stat bonuses granted by this item. See stat fields below. Omitted stats grant nothing. |
@@ -56,7 +56,7 @@ All stat fields are optional and default to zero when absent. Integer stats must
 | `mastery_rating` | integer | Class-specific mastery bonus. |
 | `versatility_rating` | integer | Damage done and damage taken reduction. |
 | `defence_rating` | integer | Direct percentage reduction to incoming damage (physical more than magic); see [stats.md](../stats.md). |
-| `recovery_rating` | integer | Base mana/health regen; most mana-recovery powers scale off it. Moderately increases healing taken. |
+| `recovery_rating` | integer | Base mana/health regen; most resource-recovery powers scale off it. Moderately increases healing taken. |
 
 ---
 
@@ -67,7 +67,7 @@ All stat fields are optional and default to zero when absent. Integer stats must
   "identifier": "sword-of-doom",
   "name": "Sword of Doom",
   "slot": "main_hand",
-  "ilvl": 584,
+  "elvl": 584,
   "description": "Forged in the fires of an ancient volcano.",
   "icon_url": "../../assets/items/sword-of-doom.webp",
   "stats": {
