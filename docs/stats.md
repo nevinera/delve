@@ -346,3 +346,98 @@ the rest are marked TBD pending the attack-math writeup.
 
 Combined avoidance (Dodge + Parry, stacking): **28.1%**.
 
+### Adam's basic attack
+
+Two-hander, base 10 dmg, nominal 1.9s swing:
+
+| | |
+|---|---|
+| SwingDamage (pre-crit) | `10 + (201.9/7) * 1.9 = 64.8` |
+| Crit chance | 13.8% (131.8 effective physical Crit Rating) |
+| Crit multiplier | 2.0x |
+| Avg damage/swing | `64.8 * (1 + 0.138 * 1.0) = 73.7` |
+| Haste | 10.8% |
+| Avg swing interval | `1.9 / 1.108 = 1.72s` (jittered +/-10% per swing) |
+| Sustained DPS | `73.7 / 1.72 ~= 43.0` |
+
+### Attack against Adam
+
+Example incoming physical hit, 100 raw damage:
+
+| | |
+|---|---|
+| Total avoidance (Dodge + Parry) | 28.1% chance fully avoided |
+| Physical DR | 6.4% |
+| Damage if it lands | `100 * (1 - 0.064) = 93.6` |
+| Expected damage per attack | `(1 - 0.281) * 93.6 ~= 67.3` |
+
+Avoidance is checked first (a full miss); whatever lands is then reduced by DR - the two layers
+don't interact otherwise.
+
+## Bob - Strength Tank with a Shield
+
+One-hand weapon + shield, 14 equipped slots. 7 on-level (ee=0, em=1.0), 4 at ee=-5 (em=0.73), 3 at
+ee=-10 (em=0.5). Every secondary is itemized toward Defence Rating + Stamina (plus Mastery where a
+3rd secondary slot exists) - no Crit, Haste, or Versatility at all.
+
+| Slot | ee (em) | Allocation | Scaled stats |
+|---|---|---|---|
+| Head | 0 (1.0) | Str + Def + Stam + Mastery | Str 22.5, Def 15, Stam 15, Mastery 15 |
+| Neck | -5 (0.73) | Def + Stam + Mastery | Def 7.3, Stam 7.3, Mastery 7.3 |
+| Shoulders | -5 (0.73) | Str + Def + Stam | Str 10.95, Def 7.3, Stam 7.3 |
+| Back | -10 (0.5) | Str + Def + Stam | Str 7.5, Def 5, Stam 5 |
+| Chest | 0 (1.0) | Str + Def + Stam + Mastery | Str 22.5, Def 15, Stam 15, Mastery 15 |
+| Wrists | -5 (0.73) | Str + Def + Stam | Str 10.95, Def 7.3, Stam 7.3 |
+| Hands | -10 (0.5) | Str + Def + Stam | Str 7.5, Def 5, Stam 5 |
+| Waist | 0 (1.0) | Str + Def + Stam | Str 15, Def 10, Stam 10 |
+| Legs | 0 (1.0) | Str + Def + Stam + Mastery | Str 22.5, Def 15, Stam 15, Mastery 15 |
+| Feet | 0 (1.0) | Str + Def + Stam | Str 15, Def 10, Stam 10 |
+| Ring 1 | -5 (0.73) | Def + Stam | Def 7.3, Stam 7.3 |
+| Ring 2 | -10 (0.5) | Def + Stam | Def 5, Stam 5 |
+| Main-hand (1h) | 0 (1.0) | Str + Def + Stam + Mastery | Str 30, Def 20, Stam 20, Mastery 20 |
+| Off-hand (shield) | 0 (1.0) | 2.5x Def (primary slot) + Def + Stam + Mastery | Def 75 + 20, Stam 20, Mastery 20 |
+
+Plus base Stamina (armor-slot grant): **89.6**.
+
+### Net stats
+
+| Stat | Total | Numeric meaning |
+|---|---|---|
+| Strength | 164.4 | +23.5 DPS, 23.8% Parry |
+| Agility | 0 | no gear itemized |
+| Intellect | 0 | no gear itemized |
+| Stamina | 238.8 | 2488 max HP |
+| Crit rating | 0 | 5% physical crit chance (base only) |
+| Haste rating | 0 | 0% haste |
+| Mastery rating | 92.3 | Mastery 22.8 |
+| Versatility rating | 0 | none |
+| Defence rating | 224.2 | 62.6% physical DR, 25.1% magic DR |
+
+### Bob's basic attack
+
+One-hand weapon, base 5 dmg, nominal 1.2s swing:
+
+| | |
+|---|---|
+| SwingDamage (pre-crit) | `5 + (164.4/7) * 1.2 = 33.2` |
+| Crit chance | 5% (no Crit Rating itemized) |
+| Avg damage/swing | `33.2 * 1.05 = 34.8` |
+| Haste | 0% |
+| Avg swing interval | 1.2s (+/-10% jitter) |
+| Sustained DPS | `34.8 / 1.2 ~= 29.0` |
+
+### Attack against Bob
+
+Same example incoming physical hit, 100 raw damage:
+
+| | |
+|---|---|
+| Total avoidance | 23.8% (Parry only, no Dodge) |
+| Physical DR | 62.6% |
+| Damage if it lands | `100 * 0.374 = 37.4` |
+| Expected damage per attack | `0.762 * 37.4 ~= 28.5` |
+
+Bob takes about 42% of what Adam takes from the same hit (28.5 vs 67.3) - plausible as a
+passive-only (no active mitigation cooldowns) baseline, though real tankiness in WoW leans heavily
+on cooldowns stacked on top of this kind of baseline.
+
