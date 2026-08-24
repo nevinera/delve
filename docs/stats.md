@@ -1,385 +1,143 @@
 # Stats and Equipment
 
-Delve uses a stat system modeled on modern World of Warcraft (The War Within, Season 1),
-adapted for a no-level, gear-only progression structure with no equipment-type split.
+## Elevation
 
----
+*Elevation* (`elvl`) is a single scale used for both places (zones/maps) and items. A monster's
+elevation is the elevation of the map it's in. An item's elevation is set when it's authored/dropped.
 
-## Stats
+A zone/map's elevation describes the level of gear that it *rewards*; a zone should generally not be
+attempted unless one has an average gear elevaation within 12 of the zone.
 
-### Primary Stats
-
-Exactly one primary offensive stat is relevant to any given class. All three appear on
-T0 gear (so new players don't need to know their class before equipping starter items).
-
-| Stat | Scales | Used By |
-|---|---|---|
-| **Strength** | Melee physical damage | Warriors, Paladins, brawlers |
-| **Agility** | Ranged/finesse physical damage; also grants bonus crit | Rangers, rogues, shifters |
-| **Intellect** | Spell damage and healing output | Mages, clerics, druids |
-| **Stamina** | Maximum HP (10 HP per point); universal on all gear | Everyone |
-
-### Secondary Stats
-
-Secondary stats come as ratings - you accumulate rating points from gear, and the game
-converts them to percentages. At T2 content (zone_level 0), conversion rates are
-calibrated to match current WoW values. Zone-level scaling modifies these rates at
-higher content tiers (see Zone Level, below).
-
-| Stat | Effect |
+| Zone elvl (relative) | Feel |
 |---|---|
-| **Crit Rating** | Each 1% crit: abilities have a 1% chance to deal/heal double |
-| **Haste Rating** | Each 1% haste: reduces GCD and cast times, increases DoT tick rate, speeds auto-attacks |
-| **Mastery Rating** | Spec-specific bonus; defined per class (see individual class docs) |
-| **Versatility** | Each 1% vers: +1% damage and healing dealt, +0.5% damage taken reduction |
-| **Resilience** | Each 1% resilience: improves armor multiplier (see Armor, below) |
+| -20 | Implausible: bosses one-shot characters, constant deaths/wipes |
+| -10 | Dangerous, but doable: needs careful pulls, CC, some wipes |
+| +0 | Straightforward: can skip CC, smooth runs with chain-pulling, rare wipes |
+| +10 | Easy: multipulls, dungeon sprinting, soloing plausible for some |
+| +20 | Trivial: enemies can barely hurt you, you one-shot many of them |
 
-**Rating to percent formula (at zone_level 0):**
+The intent is an automatically-scaled experience: a zone at (clvl + 10) should feel like
+running an old-school (BC-era WoW) dungeon in quest greens; on-level should feel like heroics in
+heroic gear; +10 should feel like taking raid epics back to do dungeons again.
 
-```
-pct(rating) = rating / C
-```
+### Item coloration
 
-Where `C` is calibrated to current WoW T2-content conversion rates - approximately
-20 rating per 1% at ilvl 610. The exact value should be derived from the live WoW item
-database rather than hardcoded here.
+An item's display color is driven by the player's current (weighted) mean elvl versus the item's
+elvl delta:
 
-At higher zone levels, `C` is multiplied by `r^zone_level` (see Zone Level).
-
-### Derived Stats
-
-| Derived Stat | Formula |
+| Delta | Color |
 |---|---|
-| **Offensive Power** | `primary_stat × 2` (Attack Power for Str/Agi; Spell Power for Int) |
-| **Max HP** | `100 + stamina × 10` |
-| **Crit Chance** | `5% base + crit_rating / (C × r^zone_level)` |
-| **Haste Percent** | `haste_rating / (C × r^zone_level)` |
-| **Versatility Percent** | `versatility_rating / (C × r^zone_level)` |
-| **Effective GCD** | `max(1.0s, 1.5s / (1 + haste_pct))` |
-| **Armor** | `base_armor × armor_multiplier` (see Armor) |
+| up to -15 | Gray |
+| up to -5 | Green |
+| up to +5 | Blue |
+| up to +15 | Purple |
+| above +15 | Orange |
 
----
+## Effective elevation and the elevation multiplier
 
-## Armor
+Every stat an item grants is scaled by how far the item's elvl sits from the elvl it's being used
+at. The input to that scaling is **effective elevation (ee)**: `ee = item elvl - map elvl`. `ee = 0`
+is "on-level", `ee = -10` is "entry-level".
 
-Without equipment-type splits, armor is derived from Resilience rather than being a free
-stat determined by gear class. Every character gets the same base armor from each slot
-(equivalent to WoW cloth baseline), and Resilience scales that up.
-
-**Base armor per slot** scales linearly with ilvl, calibrated to WoW cloth values.
-
-**Armor multiplier formula:**
-```
-R_eff             = resilience + 0.25 × versatility
-armor_multiplier  = 1 + 4 × (R_eff / (R_eff + 5 × mean_gear_ilvl))
-```
-
-Asymptotes to 5× at infinite Resilience. A tank stacking Resilience at their appropriate
-content tier hits approximately 4×.
-
-**Multiplier examples at T2 (mean ilvl ~610):**
-
-| Resilience | Multiplier | Equivalent to |
-|---|---|---|
-| 0 | 1.0× | WoW cloth |
-| ~760 | 2.0× | WoW leather |
-| ~1525 | 3.0× | WoW mail |
-| ~3050 | 3.7× | WoW mail+ |
-| ~4575 | 4.0× | WoW plate |
-
-(These Resilience values scale with `5 × mean_gear_ilvl`, so the same multipliers at T3
-require proportionally more Resilience - a natural tank progression gate.)
-
-The Versatility contribution means even casters who ignore Resilience get marginal armor
-improvement from Versatility accumulated for its damage/healing bonus.
-
----
-
-## Gear Tiers
-
-| Tier | Mean ilvl | Source | Zone level |
-|---|---|---|---|
-| **T0** | ~528 | Trainee gear (starter, class-neutral) | 0 |
-| **T1** | ~584 | Main quest campaign rewards | 0 |
-| **T2** | ~610 | Normal dungeon drops | 0 |
-| **T3** | ~636 | Heroic dungeon drops | 1 |
-| **T4** | ~649-662 | Raid drops | 2 |
-| **T5** | ~675+ | (future) | 3 |
-
-Ilvl values are approximations based on TWW Season 1 and should be confirmed against
-current WoW patch data. The tier-over-tier power growth factor `r` (see Zone Level) is
-derived from the actual ilvl stat budget differences between tiers.
-
-### T0 - Trainee Gear
-
-Starting equipment, identical for all classes:
-- All three primary offensive stats present in equal amounts (class-neutral)
-- Secondary budget heavily weighted toward Versatility
-- Resilience present but low
-
-T0 is intentionally weak - it signals "you should be doing quests now."
-
-### T1 - Quest Greens
-
-Acquired through the main quest line and world content. Introduces class-appropriate
-secondary selection (a tank's T1 items have Resilience; a caster's have Haste/Crit).
-Appropriate for open-world content and its boss encounters.
-
-### T2 - Normal Dungeon Blues
-
-First tier of organized group content. The **base calibration tier** for all combat
-numbers. Enemy and encounter designs use T2-normalized stat values.
-
-### T3+ - Heroic Dungeons, Raids, and Beyond
-
-Zone-level scaling engages starting at T3. See Zone Level below.
-
----
-
-## Zone Level
-
-Zone level is a per-zone configuration value that normalizes combat across content tiers.
-It solves the secondary stat inflation problem (where WoW players accumulate ever-larger
-rating values per expansion) without requiring expansion squishes.
-
-### Schedule
+`ee` is fed through a logistic curve to produce the **elevation multiplier (em)** — an internal-only
+value, never shown to players:
 
 ```
-T0-T2 zones: zone_level = 0   (no scaling; WoW-equivalent behavior)
-T3 zones:    zone_level = 1
-T4 zones:    zone_level = 2
-T5 zones:    zone_level = 3
-...
+em(ee) = f(ee) * m(ee)
+
+f(ee) = 2 / (1 + 3^(-ee/10))
+
+m(ee) = 1                     for |ee| <= 10
+m(ee) = (ee + 20) / 10        for -20 <= ee < -10
+m(ee) = 1 + (ee - 10) / 90    for 10 < ee <= 20
+m(ee) = 0                     for ee < -20
+m(ee) = 10/9                  for ee > 20
 ```
 
-Zone level may be a floating-point value for fine-grained tuning within a tier.
+`f` is the base logistic curve, exactly 0.5/1.0/1.5 at ee = -10/0/10. Outside +/-10, `em` is `f`
+multiplied by a linear taper: on the low side the taper runs from 1 (at ee=-10) to 0 (at ee=-20),
+forcing `em` to exactly 0; on the high side it runs from 1 (at ee=10) up to 10/9 (at ee=20), which
+slightly amplifies `f` so `em` lands exactly on 2 (since `f(20)` alone is only 1.8). Monotonically
+increasing throughout.
 
-### Normalization Factor
+| ee | em |
+|---|---|
+| -20 | 0.0 |
+| -15 | 0.16 |
+| -10 | 0.5 |
+| -5 | 0.73 |
+| 0 | 1.0 |
+| +5 | 1.27 |
+| +10 | 1.5 |
+| +15 | 1.77 |
+| +20 | 2.0 |
 
-```
-normalization = r^zone_level
-```
+At `ee = -20` a character is effectively naked — every attack should take about half their health.
+This is intentionally implausible in real play (see the zone table above), but it does create an
+edge case in a world's starting zones, where characters genuinely are on-level but have no gear yet.
+See **Trainee Gear** below for how that's handled.
 
-Where `r` is the tier-over-tier gear power growth ratio - a server-level constant derived
-from the stat budget difference between adjacent content tiers.
+The character sheet displays stats assuming `ee = 0` by default, with a toggle to preview them
+against the current map's elvl instead. (In the webapp, there's a numeric input where you can
+supply the map's elevation to see what your stats will total to)
 
-### Effect on Gameplay
+## Slots
 
-Inside a zone with zone_level > 0, all player stat contributions are divided by
-`normalization` before any combat calculation:
+| Slot | Shape |
+|---|---|
+| Ring (x2) | 2 secondaries |
+| Neck | 3 secondaries |
+| Shoulders / Back / Waist / Hands / Feet / Wrists | Primary + 2 secondaries |
+| Head / Chest / Legs | Primary + 3 secondaries (1.5x factor) |
+| Main-hand weapon | Primary + 3 secondaries (2x factor) |
+| Two-hand weapon | Primary + 3 secondaries (4x factor) |
+| Off-hand weapon or non-weapon | Primary + 3 secondaries (2x factor) |
+| Off-hand shield | Doubled Resilience (instead of a primary) + 3 secondaries (2x factor) |
 
-- Primary stat (and therefore Offensive Power)
-- All secondary rating effectiveness (via `C × normalization` denominator)
-- Max HP from Stamina
+Rings and Neck have no primary stat and no inherent armor/stamina. Weapons and off-hands (including
+shields) have no inherent stamina either, but shields carry a 4x armor bonus instead.
 
-Enemy and encounter definitions are always written in T2-normalized terms. At runtime,
-enemy HP and damage values are multiplied by `normalization` when instantiated.
+There is one equipment slot for each hand: `main_hand` and `off_hand`. A two-handed weapon occupies
+`main_hand` and locks `off_hand`. `off_hand` can otherwise hold a one-handed weapon (dual wield), an
+off-hand-specific item (tome, totem, etc.), or a shield.
 
-The net effect: a player running T3 content in T2 gear experiences **the same combat
-ratios** as a player running T2 content in T1 gear. The gear delta is what determines
-difficulty, not the absolute numbers.
+Trinkets are removed entirely as itemized equipment. They'll eventually be replaced by a consumable
+equivalent, but that's out of scope here — for now the trinket slots and all trinket items just go
+away.
 
-This means encounter definitions, unit types, and monster powers can be authored once and
-reused at any tier simply by placing them in a zone with the appropriate zone_level.
+## Stat points
 
-### Visual Re-scaling
+At `em = 1.0` (on-level), a primary stat is worth a base **15 points**, and each secondary is worth
+a base **10 points**; the base armor supplied is 25. These bases are then multiplied by the slot's
+factor (1x/1.5x/2x/4x, per the table above) and then by `em`.
 
-After normalization (which has no gameplay effect within a zone), all displayed combat
-numbers are multiplied back up by `normalization`:
+Each slot has a fixed number of stat "shapes" it can roll (e.g. a chest piece rolls a primary and
+three secondaries), but any of those can be left empty. When a stat is omitted, its value doesn't
+just disappear — most of it gets redistributed across the stats that remain, so a more focused item
+has fewer, larger stats rather than strictly less total value:
 
-- HP bars and health values
-- Damage and healing numbers shown to players
+- Omitting a **secondary** redistributes 60% of what it would have granted, split evenly across the
+  remaining stats.
+- Omitting the **primary** redistributes 80% of what it would have granted, split evenly across the
+  remaining stats.
 
-This means numbers still feel larger at higher tiers - a T4 fight shows four-digit HP
-bars and hundreds of damage per hit rather than the T2 equivalents. The visual scale is
-cosmetic: within any zone, the gameplay ratios are T2-equivalent.
+Example: a chest piece (primary + 3 secondaries) with no primary and only 2 secondaries listed has
+each of those secondaries increased by 70% over their base value. With all 3 secondaries listed but
+no primary, each is increased by ~26.7%.
 
----
+## Stamina and armor
 
-## Item Level and Budget
+Stamina is itemizable as a secondary stat like any other, but most equipped items also grant a
+*base* amount of stamina and armor derived purely from their elvl and slot factor — independent of
+whatever stamina is itemized on them. Rings, Neck, weapons, and off-hands (including shields) don't
+grant this base stamina/armor; shields get a 4x armor bonus but no stamina.
 
-Item stat budgets scale with ilvl. At max-level content (T1+), the scaling within a
-content cycle is approximately linear per ilvl point. The exact constants are calibrated
-to WoW's live item data and should be pulled from the WoW item database rather than
-hardcoded.
+## Trainee Gear
 
-### Slot Types
-
-**Primary-stat slots** (head, shoulders, chest, hands, waist, legs, feet, wrists):
-- One primary offensive stat
-- Stamina (~1.5× the primary stat amount)
-- One secondary stat
-
-**Accessory slots** (neck, back, ring ×2):
-- Stamina
-- Two secondary stats (no primary)
-
-**Weapon** (main hand):
-- Primary offensive stat
-- Stamina
-- One secondary stat
-- Weapon damage (separate from stat budget; scales with ilvl)
-
-**Trinket / off-hand**:
-- Two secondary stats (no stamina on trinkets)
-
-### Approximate Stat Totals by Tier
-
-A fully-geared character with appropriate secondary selection (not splitting across
-all five secondaries equally):
-
-| Tier | Mean ilvl | Primary stat | Stamina | Stacked secondary |
-|---|---|---|---|---|
-| T0 | ~528 | - | - | vers-heavy, mixed primaries |
-| T1 | ~584 | ~4,500 | ~6,800 | ~3,000 in one stat |
-| T2 | ~610 | ~5,800 | ~8,700 | ~3,900 in one stat |
-| T3 | ~636 | ~7,200 | ~10,800 | ~4,800 in one stat |
-| T4 | ~655 | ~8,500 | ~12,800 | ~5,700 in one stat |
-
-These are rough estimates; actual values depend on WoW item database. The important
-property is the tier-over-tier ratio, which determines `r`.
-
----
-
-## Ability Mechanics
-
-### Damage Formula
-
-```
-hit_damage  = base_damage × primary_mult × versatility_mult
-crit_damage = hit_damage × 2.0
-expected    = hit_damage × (1 + crit_chance)
-```
-
-Where:
-```
-primary_mult     = 1 + offensive_power / K
-versatility_mult = 1 + versatility_pct
-```
-
-`K` is a global tuning constant (the divisor that controls how much primary stat matters
-relative to base ability damage). Zone-level normalization divides `offensive_power`
-before this formula runs, not `K` itself.
-
-### GCD and Haste
-
-```
-effective_gcd = max(1.0s, 1.5s / (1 + haste_pct))
-```
-
-Haste also scales auto-attack speed and DoT tick frequency identically.
-
-### Ability Types
-
-**Simple melee attack** (e.g., Punch):
-```
-expected_damage = base × primary_mult × versatility_mult × (1 + crit_chance)
-dps_contribution = expected_damage / effective_gcd
-```
-Affected by: Strength/Agility, Crit, Versatility, Haste (via GCD).
-
-**Spell** (e.g., Frostbolt):
-```
-expected_damage = base × primary_mult × versatility_mult × (1 + crit_chance)
-```
-Identical formula; primary stat is Intellect. Haste reduces cast time rather than GCD.
-
-**Damage over time (DoT)**:
-```
-tick_damage   = base_tick × primary_mult × versatility_mult × snapshot_crit_mult
-ticks_per_sec = base_tick_rate × (1 + haste_pct)
-total_dps     = tick_damage × ticks_per_sec
-```
-Crit is snapshotted at application as a flat multiplier on all ticks (avoids
-haste/crit interaction weirdness mid-channel). Affected by: primary stat, Versatility,
-Haste (tick rate). Crit is baked in at application, not per-tick.
-
-**Heal**:
-```
-expected_heal = base × primary_mult × versatility_mult × (1 + crit_chance)
-```
-Healing crits restore double HP. Base heal values are approximately 3× equivalent damage
-ability bases, since heals must offset incoming damage rather than deal it.
-Affected by: Intellect, Crit, Versatility, Haste (via cast time).
-
----
-
-## Worked Examples at T2 (zone_level 0)
-
-T2 is the base calibration tier; zone_level = 0, so no normalization applies.
-
-Assume a fully T2-geared offensive character:
-- Primary stat: 5,800 → Offensive Power: 11,600 → `primary_mult = 1 + 11600/K`
-- Crit: ~22% (including 5% base)
-- Haste: ~10% → effective GCD: 1.36s
-- Versatility: ~8% → `versatility_mult = 1.08`
-
-*(Until `K` is calibrated against playtested base ability damage values, treat `primary_mult`
-as a placeholder. The formulas are correct; the constant needs tuning.)*
-
-**Simple melee attack (base damage B):**
-```
-expected = B × primary_mult × 1.08 × 1.22
-dps      = expected / 1.36
-```
-
-**DoT (base tick T, 1 tick/sec):**
-```
-expected_tick = T × primary_mult × 1.08 × 1.22  (crit snapshotted)
-tick_rate     = 1.0 × 1.10 = 1.10/sec
-dps           = expected_tick × 1.10
-```
-DoT gains more from Haste than a GCD-limited ability, since it increases tick rate
-directly rather than just allowing more casts.
-
-**Heal (base heal H):**
-```
-expected_heal = H × primary_mult × 1.08 × 1.22
-hps           = expected_heal / 1.36
-```
-Base heal H is typically 3× the equivalent damage ability's base.
-
-### Per-Stat Impact at T2
-
-| Stat | +1 rating does | Notes |
-|---|---|---|
-| Primary stat (+1) | +2 Offensive Power, small % damage gain | % gain diminishes as stack grows |
-| Stamina (+1) | +10 Max HP | Linear always |
-| Crit (+1 rating) | +1/C % crit chance | ~0.05% per point at T2 |
-| Haste (+1 rating) | +1/C % haste | Linear; GCD floor at 1.0s |
-| Versatility (+1 rating) | +1/C % damage/healing, +0.5/C % dmg reduction | Never a dump stat |
-| Resilience (+1 rating) | Armor multiplier increases | Essential for tanks; negligible for casters |
-| Mastery (+1 rating) | Spec-dependent | Defined per class |
-
----
-
-## Expected DPS by Tier
-
-These ranges assume an appropriate-ilvl DPS character using a 3-4 ability rotation.
-Numbers are in **zone-display scale** (what the player sees), so they feel larger at
-higher tiers. Underlying gameplay ratios are identical when appropriately geared.
-
-| Gear tier | Content tier | Relative power | Notes |
-|---|---|---|---|
-| T0 | T1 open world | Undergeared | Trainee gear; do quests |
-| T1 | T2 dungeons | Undergeared | Viable with skill; upgrade priority |
-| T2 | T2 dungeons | On-tier | Expected dungeon experience |
-| T2 | T3 heroics | Undergeared | Same ratios as T1 in T2 |
-| T3 | T3 heroics | On-tier | Expected heroic experience |
-| T3 | T4 raids | Undergeared | Same ratios as T2 in T3 |
-| T4 | T4 raids | On-tier | Expected raid experience |
-
-Absolute DPS values depend on calibrated base ability damage; track these as a tuning
-artifact once enemy health pools are established.
-
----
-
-## Mastery
-
-Mastery is the only class-specific stat. It does something different for every spec,
-making two items with identical ilvl have different value depending on who equips them.
-Effects are documented per class, not here.
-
-Constraint: Mastery should affect *how* a spec plays - a multiplier on a specific
-mechanic, resource generation, or cooldown behavior on a signature ability - not just a
-flat damage multiplier. It should create a reason to play differently, not just hit harder.
+Any equipment slot without a real item in it is treated as holding a generated "Trainee Gear" item
+for that slot, rather than being empty. These aren't real items — they're synthesized at runtime
+from the character's class. Each class specifies a primary stat and then a ranked list of five
+secondary stats; the generated gear will have some of each of those, and has an elvl of 0. Two
+characters of the same class always get the same Trainee Gear. The displays them dimmed out,
+so it's clear to the player that the character isn't wearing a real item. (The initial zones for
+a world should generally be between elevations 0 and 10.)
