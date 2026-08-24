@@ -55,7 +55,7 @@ All stat fields are optional and default to zero when absent. Integer stats must
 | `haste_rating` | integer | Attack/cast speed and cooldown reduction. |
 | `mastery_rating` | integer | Class-specific mastery bonus. |
 | `versatility_rating` | integer | Damage done and damage taken reduction. |
-| `resilience_rating` | integer | A curved armor multiplier, plus a flat reduction to all damage taken. |
+| `defence_rating` | integer | Direct percentage reduction to incoming damage (physical more than magic); see [stats.md](../stats.md). |
 | `recovery_rating` | integer | Base mana/health regen; most mana-recovery powers scale off it. Moderately increases healing taken. |
 
 ---

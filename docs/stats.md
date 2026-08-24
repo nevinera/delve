@@ -92,10 +92,10 @@ supply the map's elevation to see what your stats will total to)
 | Main-hand weapon | Primary + 3 secondaries (2x factor) |
 | Two-hand weapon | Primary + 3 secondaries (4x factor) |
 | Off-hand weapon or non-weapon | Primary + 3 secondaries (2x factor) |
-| Off-hand shield | Doubled Resilience (instead of a primary) + 3 secondaries (2x factor) |
+| Off-hand shield | 2.5x Defence Rating (instead of a primary) + 3 secondaries (2x factor) |
 
-Rings and Neck have no primary stat and no inherent armor/stamina. Weapons and off-hands (including
-shields) have no inherent stamina either, but shields carry a 4x armor bonus instead.
+Rings and Neck have no primary stat and no inherent stamina. Weapons and off-hands (including
+shields) have no inherent stamina either.
 
 There is one equipment slot for each hand: `main_hand` and `off_hand`. A two-handed weapon occupies
 `main_hand` and locks `off_hand`. `off_hand` can otherwise hold a one-handed weapon (dual wield), an
@@ -108,8 +108,8 @@ away.
 ## Stat points
 
 At `em = 1.0` (on-level), a primary stat is worth a base **15 points**, and each secondary is worth
-a base **10 points**; the base armor supplied is 25. These bases are then multiplied by the slot's
-factor (1x/1.5x/2x/4x, per the table above) and then by `em`.
+a base **10 points**. These bases are then multiplied by the slot's factor (1x/1.5x/2x/4x, per the
+table above) and then by `em`.
 
 Each slot has a fixed number of stat "shapes" it can roll (e.g. a chest piece rolls a primary and
 three secondaries), but any of those can be left empty. When a stat is omitted, its value doesn't
@@ -125,12 +125,27 @@ Example: a chest piece (primary + 3 secondaries) with no primary and only 2 seco
 each of those secondaries increased by 70% over their base value. With all 3 secondaries listed but
 no primary, each is increased by ~26.7%.
 
-## Stamina and armor
+## Stamina
 
 Stamina is itemizable as a secondary stat like any other, but most equipped items also grant a
-*base* amount of stamina and armor derived purely from their elvl and slot factor — independent of
-whatever stamina is itemized on them. Rings, Neck, weapons, and off-hands (including shields) don't
-grant this base stamina/armor; shields get a 4x armor bonus but no stamina.
+*base* amount of stamina derived purely from their elvl and slot factor — independent of whatever
+stamina is itemized on them. Rings, Neck, weapons, and off-hands (including shields) don't grant
+this base stamina.
+
+## Defence Rating and damage reduction
+
+There's no separate Armor stat. Instead, **Defence Rating** grants a direct percentage reduction to
+incoming damage — a larger reduction against physical damage than against magic:
+
+```
+PhysicalDR(r) = 0.9 * r / (r + 98)
+MagicDR(r)    = 0.4 * PhysicalDR(r) = 0.36 * r / (r + 98)
+```
+
+Where `r` is total Defence Rating. This asymptotes toward 90% physical / 36% magic reduction as `r`
+grows, and gives 0% reduction at `r = 0`. A fully-itemized tank (every eligible secondary slot on
+Defence Rating, wielding a shield) lands around `r = 250`, giving ~65% physical / ~26% magic
+reduction; half that (`r = 125`, e.g. the same tank at `ee = -10`) gives ~50% physical / ~20% magic.
 
 ## Trainee Gear
 
