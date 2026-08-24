@@ -48,15 +48,15 @@ All stat fields are optional and default to zero when absent. Integer stats must
 | Field | Type | Notes |
 |---|---|---|
 | `strength` | integer | Physical damage and melee power. |
-| `agility` | integer | Attack speed and dodge chance. |
+| `agility` | integer | Attack power (for agility specs) and dodge chance. |
 | `intellect` | integer | Spell power and mana. |
-| `stamina` | integer | Maximum HP. |
+| `stamina` | integer | Maximum HP. Also has a base value granted by elvl on most armor slots; see [stats.md](../stats.md). |
 | `crit_rating` | integer | Critical strike chance. |
-| `haste_rating` | integer | Cooldown and cast speed reduction. |
+| `haste_rating` | integer | Attack/cast speed and cooldown reduction. |
 | `mastery_rating` | integer | Class-specific mastery bonus. |
 | `versatility_rating` | integer | Damage done and damage taken reduction. |
-| `resilience_rating` | integer | PvP damage reduction. |
-| `weapon_dps` | float | Weapon damage per second. Only meaningful on `main_hand` and `off_hand` items; must be greater than 0 if present. |
+| `resilience_rating` | integer | A curved armor multiplier, plus a flat reduction to all damage taken. |
+| `recovery_rating` | integer | Base mana/health regen; most mana-recovery powers scale off it. Moderately increases healing taken. |
 
 ---
 
@@ -73,8 +73,7 @@ All stat fields are optional and default to zero when absent. Integer stats must
   "stats": {
     "strength": 120,
     "stamina": 80,
-    "crit_rating": 45,
-    "weapon_dps": 312.50
+    "crit_rating": 45
   }
 }
 ```
