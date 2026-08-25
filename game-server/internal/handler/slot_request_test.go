@@ -299,7 +299,7 @@ func TestSlotsRequest_StoresEquippedItems(t *testing.T) {
 	router := mountRequest(newSlotsHandler(reg, 200))
 
 	equipped := map[string]any{
-		"head": map[string]any{"identifier": "helm-of-doom", "ilvl": 584, "stats": map[string]any{"strength": 10}},
+		"head": map[string]any{"identifier": "helm-of-doom", "slot": "head", "elvl": 584, "primary_stat": "strength", "secondary_stats": []string{"stamina"}},
 	}
 	rec := postRequest(t, router, validRequestBody(map[string]any{"equipped_items": equipped}))
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -315,8 +315,8 @@ func TestSlotsRequest_StoresEquippedItems(t *testing.T) {
 	item, ok := slots[0].EquippedItems["head"]
 	require.True(t, ok)
 	assert.Equal(t, "helm-of-doom", item.Identifier)
-	assert.Equal(t, 584, item.Ilvl)
-	assert.Equal(t, 10, item.Stats.Strength)
+	assert.Equal(t, 584, item.Elvl)
+	assert.Equal(t, "strength", *item.PrimaryStat)
 }
 
 func TestSlotsRequest_RouteRegistered(t *testing.T) {

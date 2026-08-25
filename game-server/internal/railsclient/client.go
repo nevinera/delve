@@ -40,14 +40,16 @@ func FromEnv() *Client {
 }
 
 type awardBody struct {
-	Zone        zoneRef                  `json:"zone"`
-	Identifier  string                   `json:"identifier"`
-	Name        string                   `json:"name"`
-	Slot        string                   `json:"slot"`
-	Ilvl        int                      `json:"ilvl"`
-	Description string                   `json:"description,omitempty"`
-	Stats       instanceconfig.ItemStats `json:"stats"`
-	UpgradeOnly bool                     `json:"upgrade_only,omitempty"`
+	Zone        zoneRef  `json:"zone"`
+	Identifier  string   `json:"identifier"`
+	Name        string   `json:"name"`
+	Slot        string   `json:"slot"`
+	Elvl        int      `json:"elvl"`
+	Shield      bool     `json:"shield,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Primary     *string  `json:"primary,omitempty"`
+	Secondaries []string `json:"secondaries,omitempty"`
+	UpgradeOnly bool     `json:"upgrade_only,omitempty"`
 }
 
 type zoneRef struct {
@@ -72,9 +74,11 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 		Identifier:  item.Identifier,
 		Name:        item.Name,
 		Slot:        item.Slot,
-		Ilvl:        item.Ilvl,
+		Elvl:        item.Elvl,
+		Shield:      item.Shield,
 		Description: item.Description,
-		Stats:       item.Stats,
+		Primary:     item.Primary,
+		Secondaries: item.Secondaries,
 		UpgradeOnly: upgradeOnly,
 	}
 	data, err := json.Marshal(body)

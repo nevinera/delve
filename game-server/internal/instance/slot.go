@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/itemstats"
 )
 
 // ErrInstanceFull is returned by AddSlot when the instance has no remaining
@@ -47,7 +48,7 @@ type InstanceSlot struct {
 	CharacterClass      instanceconfig.CharacterClass
 	OwnedZoneItems      map[string]bool                        // identifier → true if owned this version, false if other version; nil if unknown
 	EquippedItems       map[string]instanceconfig.EquippedItem // equipped_slot → item; nil if unknown
-	Stats               instanceconfig.ItemStats               // cached raw sum of EquippedItems' stats; kept in sync by recomputeStats
+	Stats               map[string]float64                     // cached raw (em=1.0) sum of EquippedItems' stats; kept in sync by recomputeStats
 
 	// Connection fields; protected by the instance's slotsMu.
 	writeCh        chan []byte        // pre-encoded JSON messages from the tick loop
@@ -57,22 +58,22 @@ type InstanceSlot struct {
 	stateEnteredAt time.Time          // when the slot entered its current state
 }
 
-// recomputeStats sums the stats of every equipped item into Stats. It does
-// no class- or level-based scaling; it is the raw total of whatever the
-// character has equipped. Must be called whenever EquippedItems changes.
+// recomputeStats sums the raw (em=1.0) stats of every equipped item into
+// Stats. It does no elevation-based scaling; that's the caller's job (see
+// itemstats.Scaled) once there's a map elvl to scale against. Must be
+// called whenever EquippedItems changes.
 func (s *InstanceSlot) recomputeStats() {
-	var total instanceconfig.ItemStats
+	total := make(map[string]float64)
 	for _, item := range s.EquippedItems {
-		total.Strength += item.Stats.Strength
-		total.Agility += item.Stats.Agility
-		total.Intellect += item.Stats.Intellect
-		total.Stamina += item.Stats.Stamina
-		total.CritRating += item.Stats.CritRating
-		total.HasteRating += item.Stats.HasteRating
-		total.MasteryRating += item.Stats.MasteryRating
-		total.VersatilityRating += item.Stats.VersatilityRating
-		total.ResilienceRating += item.Stats.ResilienceRating
-		total.WeaponDPS += item.Stats.WeaponDPS
+		raw := itemstats.Raw(itemstats.Allocation{
+			Slot:        item.Slot,
+			Shield:      item.Shield,
+			Primary:     item.PrimaryStat,
+			Secondaries: item.SecondaryStats,
+		})
+		for stat, value := range raw {
+			total[stat] += value
+		}
 	}
 	s.Stats = total
 }

@@ -20,11 +20,21 @@ RSpec.describe EquippedItems::ForCharacter do
         source_key: "zone_a/1.0/helm-of-doom",
         zone_identifier: "zone_a",
         version: "1.0",
+        slot: "head",
         elvl: 584,
+        shield: false,
         primary_stat: "strength",
         secondary_stats: ["crit_rating"]
       }
     })
+  end
+
+  it "reports shield: true for a shield item" do
+    item = create(:character_item, character: character, slot: "off_hand",
+      source_json: {"identifier" => "buckler", "name" => "Buckler", "slot" => "off_hand", "shield" => true})
+    create(:equipped_item, character: character, character_item: item, equipped_slot: "off_hand")
+
+    expect(described_class.call(character: character)["off_hand"][:shield]).to eq(true)
   end
 
   it "includes every equipped slot" do

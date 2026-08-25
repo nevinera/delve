@@ -31,7 +31,7 @@ func zoneWithLootableTarget() instanceconfig.Zone {
 			},
 		},
 		Items: map[string]instanceconfig.Item{
-			"test-trinket": {Identifier: "test-trinket", Name: "Test Trinket", Slot: "trinket", Ilvl: 1},
+			"test-trinket": {Identifier: "test-trinket", Name: "Test Trinket", Slot: "off_hand", Elvl: 1},
 		},
 		Maps: []instanceconfig.Map{{
 			Identifier:     "m1",

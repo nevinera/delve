@@ -38,7 +38,9 @@ RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type
         "source_key" => "zone_a/1.0/helm-of-doom",
         "zone_identifier" => "zone_a",
         "version" => "1.0",
+        "slot" => "head",
         "elvl" => 584,
+        "shield" => false,
         "primary_stat" => "strength"
       )
     end

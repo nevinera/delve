@@ -23,8 +23,8 @@ func makeLootState() (*instancestate.InstanceState, uuid.UUID, uuid.UUID) {
 	state.Units[targetID] = &instancestate.UnitState{
 		Status: instancestate.UnitStatusDead,
 		LootItems: []instancestate.PendingLootItem{
-			{ClaimID: uuid.New(), Item: instanceconfig.Item{Identifier: "sword", Name: "Sword", Slot: "main_hand", Ilvl: 100}},
-			{ClaimID: uuid.New(), Item: instanceconfig.Item{Identifier: "helm", Name: "Helm", Slot: "head", Ilvl: 100}},
+			{ClaimID: uuid.New(), Item: instanceconfig.Item{Identifier: "sword", Name: "Sword", Slot: "main_hand", Elvl: 100}},
+			{ClaimID: uuid.New(), Item: instanceconfig.Item{Identifier: "helm", Name: "Helm", Slot: "head", Elvl: 100}},
 		},
 	}
 	return state, playerID, targetID
@@ -75,7 +75,7 @@ func TestLootItemHandler_NoopsOnAliveTarget(t *testing.T) {
 	aliveID := uuid.New()
 	state.Units[aliveID] = &instancestate.UnitState{
 		Status:    instancestate.UnitStatusIdle,
-		LootItems: []instancestate.PendingLootItem{{ClaimID: uuid.New(), Item: instanceconfig.Item{Identifier: "sword", Name: "Sword", Slot: "main_hand", Ilvl: 100}}},
+		LootItems: []instancestate.PendingLootItem{{ClaimID: uuid.New(), Item: instanceconfig.Item{Identifier: "sword", Name: "Sword", Slot: "main_hand", Elvl: 100}}},
 	}
 	h := command.LootItemHandler{}
 	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: aliveID, ItemIndex: 0}, state)

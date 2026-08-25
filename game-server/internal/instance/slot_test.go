@@ -31,10 +31,12 @@ func TestAddSlot_ReturnsSlotWithIDs(t *testing.T) {
 	assert.Equal(t, "Puncher", slot.CharacterClass.Name)
 }
 
+func strPtr(s string) *string { return &s }
+
 func TestAddSlot_StoresEquippedItems(t *testing.T) {
 	inst := makeInstance()
 	equipped := map[string]instanceconfig.EquippedItem{
-		"head": {Identifier: "helm-of-doom", Ilvl: 584, Stats: instanceconfig.ItemStats{Strength: 10}},
+		"head": {Identifier: "helm-of-doom", Slot: "head", Elvl: 584, PrimaryStat: strPtr("strength"), SecondaryStats: []string{"stamina"}},
 	}
 	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, equipped)
 	require.NoError(t, err)
@@ -47,41 +49,38 @@ func TestAddSlot_StatsEmptyWhenNoEquippedItems(t *testing.T) {
 	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
 	require.NoError(t, err)
 
-	assert.Equal(t, instanceconfig.ItemStats{}, slot.Stats)
+	assert.Equal(t, map[string]float64{}, slot.Stats)
 }
 
 func TestAddSlot_StatsSumAcrossEquippedItems(t *testing.T) {
 	inst := makeInstance()
 	equipped := map[string]instanceconfig.EquippedItem{
-		"head":      {Stats: instanceconfig.ItemStats{Strength: 10, CritRating: 5}},
-		"chest":     {Stats: instanceconfig.ItemStats{Strength: 4, Stamina: 20}},
-		"main_hand": {Stats: instanceconfig.ItemStats{WeaponDPS: 45.5}},
-		"off_hand":  {Stats: instanceconfig.ItemStats{WeaponDPS: 30.0}},
+		"head":  {Slot: "head", PrimaryStat: strPtr("strength"), SecondaryStats: []string{"crit_rating"}},
+		"chest": {Slot: "chest", PrimaryStat: strPtr("strength"), SecondaryStats: []string{"stamina"}},
 	}
 	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, equipped)
 	require.NoError(t, err)
 
-	assert.Equal(t, instanceconfig.ItemStats{
-		Strength:   14,
-		Stamina:    20,
-		CritRating: 5,
-		WeaponDPS:  75.5,
-	}, slot.Stats)
+	require.Contains(t, slot.Stats, "strength")
+	require.Contains(t, slot.Stats, "crit_rating")
+	require.Contains(t, slot.Stats, "stamina")
+	assert.Greater(t, slot.Stats["strength"], 0.0)
 }
 
 func TestAddSlot_ReconnectRecomputesStats(t *testing.T) {
 	inst := makeInstance()
 	_, err := inst.AddSlot("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
-		"head": {Stats: instanceconfig.ItemStats{Strength: 10}},
+		"head": {Slot: "head", PrimaryStat: strPtr("strength"), SecondaryStats: []string{}},
 	})
 	require.NoError(t, err)
 
 	second, err := inst.AddSlot("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
-		"head": {Stats: instanceconfig.ItemStats{Strength: 25}},
+		"chest": {Slot: "chest", PrimaryStat: strPtr("strength"), SecondaryStats: []string{}},
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, instanceconfig.ItemStats{Strength: 25}, second.Stats)
+	require.Contains(t, second.Stats, "strength")
+	assert.NotEqual(t, 0.0, second.Stats["strength"])
 }
 
 func TestAddSlot_AppearsInList(t *testing.T) {

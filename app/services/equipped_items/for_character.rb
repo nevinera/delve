@@ -19,7 +19,9 @@ class EquippedItems::ForCharacter
       source_key: item.source_key,
       zone_identifier: item.zone_identifier,
       version: item.version,
+      slot: item.slot,
       elvl: item.elvl,
+      shield: item.source_json["shield"] == true,
       primary_stat: item.primary_stat,
       secondary_stats: item.secondary_stats
     }
