@@ -6,6 +6,7 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
+      validate_elvl!(data, path: path) if data.key?("elvl")
       validate_barriers!(data, path: path) if data.key?("barriers")
       validate_connections!(data, path: path) if data.key?("connections")
       validate_units!(data, path: path) if data.key?("units")
@@ -19,6 +20,11 @@ module Validators
       require_string!(data, "imageUrl", path: path)
       validate_pixel_dimensions!(require_hash!(data, "pixelDimensions", path: path), path: child_path(path, "pixelDimensions"))
       validate_feet_dimensions!(require_hash!(data, "feetDimensions", path: path), path: child_path(path, "feetDimensions"))
+    end
+
+    def validate_elvl!(data, path:)
+      elvl = require_integer!(data, "elvl", path: path)
+      raise ValidationError.new("elvl must be at least 0", path: child_path(path, "elvl")) if elvl < 0
     end
 
     def validate_pixel_dimensions!(data, path:)

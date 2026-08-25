@@ -12,9 +12,16 @@ Items are defined in the zone config and sent to the Rails app by the game serve
 | `name` | string | yes | Display name. |
 | `slot` | string | yes | Equipment slot type. See valid values below. |
 | `elvl` | integer | yes | Elevation. See [stats.md](../stats.md). Must be at least 0. |
+| `shield` | boolean | no | Only meaningful when `slot` is `off_hand`. `true` makes this a shield: its primary slot is fixed to Defence Rating (at 2.5x) instead of a free choice. Defaults to `false`. |
+| `primary` | string \| null | no | Which primary stat this item rolls. One of `strength`, `agility`, `intellect`, or `null` to skip it. Not applicable to `ring`, `neck`, or a `shield` item (always `null` for those - a shield's primary slot is Defence Rating, not a free pick). |
+| `secondaries` | array of string | no | Which secondary stats this item rolls, in any order. Values from the secondary stat list below. Length must not exceed the slot's secondary count (see [stats.md](../stats.md) `## Slots`); fewer than the max is allowed and triggers the redistribution bonus. |
 | `description` | string | no | Flavour text shown in the item tooltip. |
 | `icon_url` | string | no | URL of the item icon image. |
-| `stats` | object | no | Stat bonuses granted by this item. See stat fields below. Omitted stats grant nothing. |
+
+There are no stat *values* on an item - only which stats it rolls. The actual numbers are computed
+at runtime from the item's `elvl`, its slot's factor, and the current effective elevation. See
+[stats.md](../stats.md) for the full formulas (base points, slot factors, the elevation multiplier,
+and the redistribution rule for omitted stats).
 
 ---
 
@@ -33,30 +40,26 @@ Items are defined in the zone config and sent to the Rails app by the game serve
 | `legs` | Legs |
 | `feet` | Boots |
 | `ring` | Either ring slot |
-| `trinket` | Either trinket slot |
 | `main_hand` | Main-hand weapon |
-| `off_hand` | Off-hand weapon or shield |
+| `off_hand` | Off-hand weapon, off-hand non-weapon, or shield (see `shield` field) |
 | `one_hand` | Can go in main-hand or off-hand |
-| `two_hand` | Uses both hands |
+| `two_hand` | Uses both hands, locks `off_hand` |
 
 ---
 
-## Stats Object
+## Secondary Stat Values
 
-All stat fields are optional and default to zero when absent. Integer stats must be non-negative.
+Valid entries for `secondaries`:
 
-| Field | Type | Notes |
-|---|---|---|
-| `strength` | integer | Physical damage and melee power. |
-| `agility` | integer | Attack power (for agility specs) and dodge chance. |
-| `intellect` | integer | Spell power and mana. |
-| `stamina` | integer | Maximum HP. Also has a base value granted by elvl on most armor slots; see [stats.md](../stats.md). |
-| `crit_rating` | integer | Critical strike chance. |
-| `haste_rating` | integer | Attack/cast speed and cooldown reduction. |
-| `mastery_rating` | integer | Class-specific mastery bonus. |
-| `versatility_rating` | integer | Damage done and damage taken reduction. |
-| `defence_rating` | integer | Direct percentage reduction to incoming damage (physical more than magic); see [stats.md](../stats.md). |
-| `recovery_rating` | integer | Base mana/health regen; most resource-recovery powers scale off it. Moderately increases healing taken. |
+| Value | Notes |
+|---|---|
+| `stamina` | Maximum HP. Also has a base value granted by elvl on most armor slots, independent of whether it's itemized here; see [stats.md](../stats.md). |
+| `crit_rating` | Critical strike chance. |
+| `haste_rating` | Attack/cast speed and cooldown reduction. |
+| `mastery_rating` | Class-specific mastery bonus. |
+| `versatility_rating` | Adds a fraction of itself to each primary stat and to Defence Rating. |
+| `defence_rating` | Direct percentage reduction to incoming damage (physical more than magic); see [stats.md](../stats.md). |
+| `recovery_rating` | Base resource regen; most resource-recovery powers scale off it. Moderately increases healing taken. |
 
 ---
 
@@ -70,10 +73,20 @@ All stat fields are optional and default to zero when absent. Integer stats must
   "elvl": 584,
   "description": "Forged in the fires of an ancient volcano.",
   "icon_url": "../../assets/items/sword-of-doom.webp",
-  "stats": {
-    "strength": 120,
-    "stamina": 80,
-    "crit_rating": 45
-  }
+  "primary": "strength",
+  "secondaries": ["stamina", "crit_rating", "haste_rating"]
+}
+```
+
+A shield example - no `primary`, since it's fixed to Defence Rating:
+
+```json
+{
+  "identifier": "bulwark-of-the-warband",
+  "name": "Bulwark of the Warband",
+  "slot": "off_hand",
+  "shield": true,
+  "elvl": 584,
+  "secondaries": ["stamina", "defence_rating", "mastery_rating"]
 }
 ```

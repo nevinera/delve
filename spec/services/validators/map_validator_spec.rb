@@ -37,6 +37,29 @@ RSpec.describe Validators::MapValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /width must be positive/)
     end
 
+    context "elvl" do
+      it "accepts a map without elvl (defaults to the zone's)" do
+        expect { described_class.validate!(cave_entrance_map.except("elvl")) }.not_to raise_error
+      end
+
+      it "accepts a map with a valid elvl" do
+        data = cave_entrance_map.merge("elvl" => 8)
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when elvl is not an integer" do
+        data = cave_entrance_map.merge("elvl" => 8.5)
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be an integer/)
+      end
+
+      it "raises when elvl is negative" do
+        data = cave_entrance_map.merge("elvl" => -1)
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /elvl must be at least 0/)
+      end
+    end
+
     context "barriers" do
       it "raises when barrier type is invalid" do
         data = cave_entrance_map.merge("barriers" => [{"type" => "polygon", "locations" => []}])
