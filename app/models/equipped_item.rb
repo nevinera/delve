@@ -1,6 +1,6 @@
 class EquippedItem < ApplicationRecord
   EQUIPPED_SLOTS = %w[head neck shoulders back chest wrists hands waist legs feet
-    ring_1 ring_2 trinket_1 trinket_2 main_hand off_hand].freeze
+    ring_1 ring_2 main_hand off_hand].freeze
 
   SLOT_LABELS = {
     "head" => "Head",
@@ -15,8 +15,6 @@ class EquippedItem < ApplicationRecord
     "feet" => "Feet",
     "ring_1" => "Left Ring",
     "ring_2" => "Right Ring",
-    "trinket_1" => "Left Trinket",
-    "trinket_2" => "Right Trinket",
     "main_hand" => "Main Hand",
     "off_hand" => "Off Hand"
   }.freeze
@@ -33,7 +31,6 @@ class EquippedItem < ApplicationRecord
     "legs" => %w[legs],
     "feet" => %w[feet],
     "ring" => %w[ring_1 ring_2],
-    "trinket" => %w[trinket_1 trinket_2],
     "main_hand" => %w[main_hand],
     "off_hand" => %w[off_hand],
     "one_hand" => %w[main_hand off_hand],
@@ -43,8 +40,6 @@ class EquippedItem < ApplicationRecord
   SLOT_TYPES = {
     "ring_1" => ["ring"],
     "ring_2" => ["ring"],
-    "trinket_1" => ["trinket"],
-    "trinket_2" => ["trinket"],
     "main_hand" => %w[main_hand one_hand two_hand],
     "off_hand" => %w[off_hand one_hand]
   }.freeze

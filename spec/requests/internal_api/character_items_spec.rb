@@ -11,8 +11,9 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
       identifier: "sword-of-doom",
       name: "Sword of Doom",
       slot: "main_hand",
-      ilvl: 584,
-      stats: {}
+      elvl: 584,
+      primary: nil,
+      secondaries: []
     }
   end
 
@@ -42,14 +43,14 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
       expect(item.source_key).to eq("#{zone.identifier}/#{zone.version}/sword-of-doom")
       expect(item.name).to eq("Sword of Doom")
       expect(item.slot).to eq("main_hand")
-      expect(item.ilvl).to eq(584)
+      expect(item.elvl).to eq(584)
     end
 
-    it "persists stats" do
-      post_item(body: valid_body.merge(stats: {strength: 100, crit_rating: 40}))
+    it "persists primary and secondaries" do
+      post_item(body: valid_body.merge(primary: "strength", secondaries: ["crit_rating"]))
       item = CharacterItem.last
-      expect(item.strength).to eq(100)
-      expect(item.crit_rating).to eq(40)
+      expect(item.primary_stat).to eq("strength")
+      expect(item.secondary_stats).to eq(["crit_rating"])
     end
   end
 
@@ -141,7 +142,7 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
   end
 
   context "with a missing required field" do
-    %w[identifier name slot ilvl].each do |field|
+    %w[identifier name slot elvl].each do |field|
       it "returns 422 when #{field} is absent" do
         post_item(body: valid_body.except(field.to_sym))
         expect(response).to have_http_status(:unprocessable_content)

@@ -19,8 +19,9 @@ class EquippedItems::ForCharacter
       source_key: item.source_key,
       zone_identifier: item.zone_identifier,
       version: item.version,
-      ilvl: item.ilvl,
-      stats: item.stats_hash
+      elvl: item.elvl,
+      primary_stat: item.primary_stat,
+      secondary_stats: item.secondary_stats
     }
   end
 end

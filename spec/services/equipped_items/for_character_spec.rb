@@ -10,8 +10,8 @@ RSpec.describe EquippedItems::ForCharacter do
   it "keys provenance by equipped slot" do
     item = create(:character_item, character: character, slot: "head",
       identifier: "helm-of-doom", source_key: "zone_a/1.0/helm-of-doom",
-      zone_identifier: "zone_a", version: "1.0", ilvl: 584,
-      strength: 10, crit_rating: 5)
+      zone_identifier: "zone_a", version: "1.0", elvl: 584,
+      primary_stat: "strength", secondary_stats: ["crit_rating"])
     create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
 
     expect(described_class.call(character: character)).to eq({
@@ -20,22 +20,11 @@ RSpec.describe EquippedItems::ForCharacter do
         source_key: "zone_a/1.0/helm-of-doom",
         zone_identifier: "zone_a",
         version: "1.0",
-        ilvl: 584,
-        stats: {
-          strength: 10, agility: 0, intellect: 0, stamina: 0, crit_rating: 5,
-          haste_rating: 0, mastery_rating: 0, versatility_rating: 0, resilience_rating: 0,
-          weapon_dps: nil
-        }
+        elvl: 584,
+        primary_stat: "strength",
+        secondary_stats: ["crit_rating"]
       }
     })
-  end
-
-  it "includes weapon_dps in stats for weapons" do
-    item = create(:character_item, character: character, slot: "main_hand", weapon_dps: 45.5)
-    create(:equipped_item, character: character, character_item: item, equipped_slot: "main_hand")
-
-    result = described_class.call(character: character)
-    expect(result["main_hand"][:stats][:weapon_dps]).to eq(45.5)
   end
 
   it "includes every equipped slot" do

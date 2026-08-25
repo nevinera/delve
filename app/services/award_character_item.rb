@@ -5,8 +5,6 @@ class AwardCharacterItem
   ZoneMismatch = Class.new(Error)
   MissingField = Class.new(Error)
 
-  STAT_TYPES = CharacterItem::STAT_COLUMNS.map { |c| [c.to_s, :to_i] }.to_h.merge("weapon_dps" => :to_f).freeze
-
   def self.call(...) = new(...).call
 
   def initialize(character:, source_data:, upgrade_only: false)
@@ -56,15 +54,17 @@ class AwardCharacterItem
   end
 
   def validate_required_fields!
-    %w[identifier name slot ilvl].each do |field|
+    %w[identifier name slot elvl].each do |field|
       raise(MissingField, "Require field '#{field}' missing") unless @source_data.key?(field)
     end
   end
 
   memoize def source_key = "#{zone.identifier}/#{zone.version}/#{identifier}"
 
-  memoize def built_item
-    CharacterItem.new(
+  memoize def built_item = CharacterItem.new(provenance_attributes.merge(item_attributes))
+
+  def provenance_attributes
+    {
       character: @character,
       provenance_zone: zone,
       source_key:,
@@ -72,24 +72,17 @@ class AwardCharacterItem
       identifier:,
       zone_identifier: zone_identifier,
       version: zone_version,
-      name:,
-      slot:,
-      ilvl:,
-      description:,
-      received_at: Time.current.utc,
-      **stats
-    )
+      received_at: Time.current.utc
+    }
   end
 
-  memoize def raw_stats = @source_data["stats"] || {}
-
-  def stat_value(name, raw_value) = raw_value&.public_send(STAT_TYPES[name])
-
-  memoize def stats
-    raw_stats.slice(*STAT_TYPES.keys).to_h do |name, raw_value|
-      [name.to_sym, stat_value(name, raw_value)]
-    end
+  def item_attributes
+    {name:, slot:, elvl:, description:, primary_stat:, secondary_stats:}
   end
+
+  def primary_stat = @source_data["primary"]
+
+  def secondary_stats = Array(@source_data["secondaries"])
 
   def zone_db_id = @source_data.dig("zone", "database_id").to_s
 
@@ -103,7 +96,7 @@ class AwardCharacterItem
 
   def slot = @source_data.fetch("slot").to_s
 
-  def ilvl = @source_data.fetch("ilvl").to_i
+  def elvl = @source_data.fetch("elvl").to_i
 
   def description = @source_data["description"]&.to_s
 end

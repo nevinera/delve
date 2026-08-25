@@ -31,9 +31,10 @@ class Play::CharacterItemsController < Play::BaseController
       source_key: item.source_key,
       name: item.name,
       slot: item.slot,
-      ilvl: item.ilvl,
+      elvl: item.elvl,
       description: item.description,
-      stats: item.stats_hash
+      primary_stat: item.primary_stat,
+      secondary_stats: item.secondary_stats
     }
   end
 
