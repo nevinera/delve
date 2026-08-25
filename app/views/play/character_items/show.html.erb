@@ -5,14 +5,11 @@
 <p>From: <%= @item.provenance_zone.identifier %></p>
 <p>Received: <%= @item.received_at.strftime("%Y-%m-%d %H:%M") %></p>
 
-<% if @item.primary_stat %>
-  <p>Primary: <%= @item.primary_stat.humanize %></p>
-<% end %>
-
-<% if @item.secondary_stats.any? %>
+<% if @raw_stats.any? %>
+  <p>Stats at ee=0 (on-level):</p>
   <ul>
-    <% @item.secondary_stats.each do |stat| %>
-      <li><%= stat.humanize %></li>
+    <% @raw_stats.sort.each do |stat, value| %>
+      <li><%= stat.to_s.humanize %>: <%= value.round(1) %></li>
     <% end %>
   </ul>
 <% end %>

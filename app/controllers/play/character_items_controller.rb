@@ -14,6 +14,7 @@ class Play::CharacterItemsController < Play::BaseController
   def show
     @item = @character.character_items.find(params[:id])
     authorize! :read, @item
+    @raw_stats = ItemStats::Raw.call(character_item: @item)
   end
 
   private
