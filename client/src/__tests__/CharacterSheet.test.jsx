@@ -34,6 +34,15 @@ describe("CharacterSheet", () => {
     expect(screen.getAllByText("Ring")).toHaveLength(2);
   });
 
+  it("colors an equipped item's elvl by delta from localElvl", () => {
+    const equippedItems = {
+      head: { identifier: "helm-of-doom", elvl: 30 },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} localElvl={50} />);
+    // delta -20 -> gray
+    expect(screen.getByText("30")).toHaveStyle({ color: "#9d9d9d" });
+  });
+
   it("sums stats across equipped items", () => {
     const equippedItems = {
       head: { identifier: "helm", stats: { strength: 10, crit_rating: 5 } },

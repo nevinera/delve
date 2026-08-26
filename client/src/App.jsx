@@ -594,6 +594,19 @@ const STAT_LABELS = {
   weapon_dps: "Weapon DPS",
 };
 
+// Mirrors docs/stats.md's "Item coloration" table (delta up to -15/-5/+5/+15
+// -> gray/green/blue/purple, above +15 -> orange), but computed against the
+// player's current local elevation rather than a weighted mean.
+function itemColor(item, localElvl) {
+  if (item?.elvl == null || localElvl == null) return null;
+  const delta = item.elvl - localElvl;
+  if (delta <= -15) return "#9d9d9d";
+  if (delta <= -5) return "#1eff00";
+  if (delta <= 5) return "#0070dd";
+  if (delta <= 15) return "#a335ee";
+  return "#ff8000";
+}
+
 // Mirrors ItemStats::ElevationMultiplier (app/services/item_stats/elevation_multiplier.rb)
 // / itemstats.ElevationMultiplier (game-server/internal/itemstats/elevation_multiplier.go).
 function elevationMultiplier(ee) {
@@ -618,6 +631,7 @@ export function ItemTooltip({ item, children, style, localElvl }) {
   if (!item) return children;
 
   const em = (localElvl != null && item.elvl != null) ? elevationMultiplier(item.elvl - localElvl) : 1;
+  const color = itemColor(item, localElvl);
   const statOrder = STAT_GROUPS.flatMap(g => g.keys);
   const stats = Object.entries(item.stats || {})
     .map(([key, value]) => [key, value * em])
@@ -642,7 +656,9 @@ export function ItemTooltip({ item, children, style, localElvl }) {
           <div style={styles.itemTooltipName}>{item.name}</div>
           {(item.slot || item.elvl != null) && (
             <div style={styles.itemTooltipMeta}>
-              {[item.elvl != null && `e${item.elvl}`, item.slot].filter(Boolean).join(" ")}
+              {item.elvl != null && <span style={color ? { color } : undefined}>e{item.elvl}</span>}
+              {item.elvl != null && item.slot ? " " : ""}
+              {item.slot}
             </div>
           )}
           {stats.length > 0 && (
@@ -902,7 +918,9 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                       onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
                     >
                       <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
-                      <td style={styles.charSheetElvlCell}>{item?.elvl ?? ""}</td>
+                      <td style={{ ...styles.charSheetElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                        {item?.elvl ?? ""}
+                      </td>
                       <td style={styles.charSheetNameCell}>
                         {item ? (
                           <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }} localElvl={localElvl}>
@@ -1021,7 +1039,9 @@ export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClos
                     </span>
                   </ItemTooltip>
                 </td>
-                <td style={styles.lootMetaCell}>e{item.elvl}</td>
+                <td style={{ ...styles.lootMetaCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                  e{item.elvl}
+                </td>
                 <td style={styles.lootMetaCell}>{item.slot}</td>
                 <td style={styles.lootTakeCell}>
                   {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}

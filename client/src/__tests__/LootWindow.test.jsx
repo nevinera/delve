@@ -37,6 +37,14 @@ describe("LootWindow", () => {
     expect(screen.getByText("main_hand")).toBeInTheDocument();
   });
 
+  it("colors the elvl column by delta from localElvl", () => {
+    render(
+      <LootWindow unitId="u1" items={[item({ elvl: 62 })]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} localElvl={50} />
+    );
+    // delta +12 -> purple
+    expect(screen.getByText("e62")).toHaveStyle({ color: "#a335ee" });
+  });
+
   it("shows the plain title when no unitName is given", () => {
     render(
       <LootWindow unitId="u1" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />

@@ -37,7 +37,8 @@ describe("ItemTooltip", () => {
     );
     fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
 
-    expect(screen.getByText("e42 main_hand")).toBeInTheDocument();
+    expect(screen.getByText("e42")).toBeInTheDocument();
+    expect(screen.getByText("main_hand")).toBeInTheDocument();
     expect(screen.getByText("+5.0 Strength")).toBeInTheDocument();
     expect(screen.getByText("+3.0 Crit Rating")).toBeInTheDocument();
     expect(screen.getByText("A blade forged for coverage.")).toBeInTheDocument();
@@ -70,6 +71,37 @@ describe("ItemTooltip", () => {
     );
     fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
     expect(screen.getByText("+5.0 Strength")).toBeInTheDocument();
+  });
+
+  it.each([
+    [-20, "#9d9d9d"], // delta -20 -> gray
+    [-15, "#9d9d9d"], // delta -15 -> gray (boundary)
+    [-10, "#1eff00"], // delta -10 -> green
+    [-5, "#1eff00"],  // delta -5 -> green (boundary)
+    [0, "#0070dd"],   // delta 0 -> blue
+    [5, "#0070dd"],   // delta 5 -> blue (boundary)
+    [10, "#a335ee"],  // delta 10 -> purple
+    [15, "#a335ee"],  // delta 15 -> purple (boundary)
+    [20, "#ff8000"],  // delta 20 -> orange
+  ])("colors the elvl value for a %i elvl delta from local elevation", (delta, expectedColor) => {
+    const item = { name: "Sword of Testing", elvl: 50 + delta };
+    render(
+      <ItemTooltip item={item} localElvl={50}>
+        <span>hover me</span>
+      </ItemTooltip>
+    );
+    fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
+    expect(screen.getByText(`e${50 + delta}`)).toHaveStyle({ color: expectedColor });
+  });
+
+  it("does not color the elvl value when localElvl is unknown", () => {
+    render(
+      <ItemTooltip item={ITEM}>
+        <span>hover me</span>
+      </ItemTooltip>
+    );
+    fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
+    expect(screen.getByText(`e${ITEM.elvl}`).style.color).toBe("");
   });
 
   it("hides the tooltip again on mouse leave", () => {
