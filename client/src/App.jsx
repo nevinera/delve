@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
@@ -613,7 +614,12 @@ export function ItemTooltip({ item, children, style, localElvl }) {
       onMouseLeave={() => setPos(null)}
     >
       {children}
-      {pos && (
+      {pos && createPortal(
+        // Portaled to document.body: charSheetWrapper (an ancestor for the
+        // character sheet / candidate pane) has a CSS transform, which makes
+        // it the containing block for position:fixed descendants - without
+        // the portal, this tooltip's left/top would resolve against that
+        // transformed ancestor instead of the viewport.
         <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
           <div style={styles.itemTooltipName}>{item.name}</div>
           {(item.slot || item.elvl != null) && (
@@ -633,7 +639,8 @@ export function ItemTooltip({ item, children, style, localElvl }) {
           {item.description && (
             <div style={styles.itemTooltipDescription}>{item.description}</div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );
