@@ -362,25 +362,43 @@ const styles = {
     letterSpacing: 1,
     marginBottom: 6,
   },
-  charSheetEquipList: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
+  charSheetEquipTable: {
+    borderCollapse: "collapse",
+    width: "100%",
   },
   charSheetEquipRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 8,
-    padding: "3px 0",
     borderBottom: "1px solid #333",
     fontSize: 12,
   },
-  charSheetSlotLabel: {
+  charSheetSlotCell: {
+    padding: "3px 8px 3px 0",
     color: "#888",
     whiteSpace: "nowrap",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  charSheetElvlCell: {
+    padding: "3px 8px 3px 0",
+    color: "#888",
+    whiteSpace: "nowrap",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  charSheetNameCell: {
+    padding: "3px 0",
+    width: "100%",
+    verticalAlign: "top",
+  },
+  // Reserves two lines of height (fontSize 11 * lineHeight 1.3 * 2 lines =
+  // 28.6px) on every row, filled or empty, so rows stay regularly spaced.
+  charSheetNameBox: {
+    fontSize: 11,
+    lineHeight: 1.3,
+    height: 28.6,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
   },
   charSheetEmptySlot: {
     color: "#555",
@@ -664,6 +682,24 @@ const EQUIPPED_SLOT_LABELS = {
 };
 const EQUIPPED_SLOT_ORDER = Object.keys(EQUIPPED_SLOT_LABELS);
 
+// Four-letter abbreviations for the character sheet's equipment table.
+const EQUIPPED_SLOT_ABBR = {
+  head: "Head",
+  neck: "Neck",
+  shoulders: "Shld",
+  back: "Back",
+  chest: "Chst",
+  wrists: "Wris",
+  hands: "Hand",
+  waist: "Belt",
+  legs: "Legs",
+  feet: "Feet",
+  ring_1: "Ring",
+  ring_2: "Ring",
+  main_hand: "Main",
+  off_hand: "OffH",
+};
+
 // Mirrors EquippedItem::SLOT_TYPES (app/models/equipped_item.rb) — which
 // CharacterItem#slot values are compatible with a given equipped slot.
 const EQUIPPABLE_ITEM_SLOTS = {
@@ -847,35 +883,40 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
         <div style={styles.charSheetBody}>
           <div style={styles.charSheetColumn}>
             <div style={styles.charSheetColumnTitle}>Equipment</div>
-            <ul style={styles.charSheetEquipList}>
-              {EQUIPPED_SLOT_ORDER.map(slot => {
-                const item = equippedItems?.[slot];
-                const rowStyle = {
-                  ...styles.charSheetEquipRow,
-                  ...styles.charSheetEquipRowClickable,
-                  ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
-                  ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
-                };
-                return (
-                  <li
-                    key={slot}
-                    style={rowStyle}
-                    onClick={() => toggleSlot(slot)}
-                    onMouseEnter={() => setHoveredSlot(slot)}
-                    onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
-                  >
-                    <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
-                    {item ? (
-                      <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }} localElvl={localElvl}>
-                        <span style={styles.lootItemName}>{formatItemName(item.identifier)}</span>
-                      </ItemTooltip>
-                    ) : (
-                      <span style={styles.charSheetEmptySlot}>Empty</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <table style={styles.charSheetEquipTable}>
+              <tbody>
+                {EQUIPPED_SLOT_ORDER.map(slot => {
+                  const item = equippedItems?.[slot];
+                  const rowStyle = {
+                    ...styles.charSheetEquipRow,
+                    ...styles.charSheetEquipRowClickable,
+                    ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+                    ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
+                  };
+                  return (
+                    <tr
+                      key={slot}
+                      style={rowStyle}
+                      onClick={() => toggleSlot(slot)}
+                      onMouseEnter={() => setHoveredSlot(slot)}
+                      onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
+                    >
+                      <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
+                      <td style={styles.charSheetElvlCell}>{item?.elvl ?? ""}</td>
+                      <td style={styles.charSheetNameCell}>
+                        {item ? (
+                          <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                            <span style={styles.charSheetNameBox}>{formatItemName(item.identifier)}</span>
+                          </ItemTooltip>
+                        ) : (
+                          <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
           <div style={styles.charSheetColumn}>
             <div style={styles.charSheetColumnTitle}>Stats</div>

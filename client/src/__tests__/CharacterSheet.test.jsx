@@ -29,8 +29,9 @@ describe("CharacterSheet", () => {
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
 
     expect(screen.getByText("Helm Of Doom")).toBeInTheDocument();
+    expect(screen.getByText("584")).toBeInTheDocument();
     expect(screen.getAllByText("Empty").length).toBeGreaterThan(0);
-    expect(screen.getByText("Left Ring")).toBeInTheDocument();
+    expect(screen.getAllByText("Ring")).toHaveLength(2);
   });
 
   it("sums stats across equipped items", () => {
