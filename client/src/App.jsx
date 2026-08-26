@@ -258,6 +258,10 @@ const styles = {
     fontSize: 11,
     marginLeft: 4,
   },
+  lootItemNameOwned: {
+    textDecoration: "line-through",
+    color: "#888",
+  },
   charSheetWrapper: {
     position: "absolute",
     zIndex: 25,
@@ -879,7 +883,6 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
 }
 
 const CLAIM_LABEL = {
-  owned:          "(owned)",
   upgraded:       "(upgraded)",
   upgrade:        "(upgrading...)",
   locked_for_me:  "(taking...)",
@@ -934,12 +937,13 @@ export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
       <ul style={styles.lootList}>
         {items.map((item, i) => {
           const myState = item.claims?.find(c => c.character_unit_id === selfUnitId)?.state;
+          const owned = myState === "owned";
           const label = CLAIM_LABEL[myState];
           const canTake = myState === "available";
           return (
             <li key={i} style={styles.lootItem}>
               <ItemTooltip item={item}>
-                <span style={styles.lootItemName}>
+                <span style={{ ...styles.lootItemName, ...(owned ? styles.lootItemNameOwned : {}) }}>
                   {item.name}
                   {label && <span style={styles.lootOwned}> {label}</span>}
                 </span>

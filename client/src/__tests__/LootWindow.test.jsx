@@ -44,7 +44,6 @@ describe("LootWindow", () => {
   });
 
   it.each([
-    ["owned", "(owned)"],
     ["upgraded", "(upgraded)"],
     ["upgrade", "(upgrading...)"],
     ["locked_for_me", "(taking...)"],
@@ -56,6 +55,14 @@ describe("LootWindow", () => {
     render(<LootWindow unitId="u1" items={items} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />);
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Take" })).not.toBeInTheDocument();
+  });
+
+  it("shows a strikethrough instead of an '(owned)' label for owned items", () => {
+    const items = [item({ claims: [{ character_unit_id: SELF, state: "owned" }] })];
+    render(<LootWindow unitId="u1" items={items} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />);
+    expect(screen.queryByText("(owned)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Take" })).not.toBeInTheDocument();
+    expect(screen.getByText("Sword of Testing")).toHaveStyle({ textDecoration: "line-through" });
   });
 
   it("shows no label and no Take button when self has no claim entry", () => {
