@@ -3,6 +3,9 @@
 <p><strong>Identifier:</strong> <%= @zone.identifier %></p>
 <p><strong>Version:</strong> <%= @zone.version %></p>
 <p><strong>Handle:</strong> <%= @zone.handle.identifier %></p>
+<% if @zone.elvl %>
+  <p><strong>Elevation:</strong> <%= @zone.elvl %></p>
+<% end %>
 <% if @zone.description.present? %>
   <p><%= @zone.description %></p>
 <% end %>

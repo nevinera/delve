@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_06_143311) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_25_172104) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -30,29 +30,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_06_143311) do
   end
 
   create_table "character_items", force: :cascade do |t|
-    t.integer "agility"
     t.integer "character_id", null: false
     t.datetime "created_at", null: false
-    t.integer "crit_rating"
     t.text "description"
-    t.integer "haste_rating"
+    t.integer "elvl", null: false
     t.string "identifier", null: false
-    t.integer "ilvl", null: false
-    t.integer "intellect"
-    t.integer "mastery_rating"
     t.string "name", null: false
+    t.string "primary_stat"
     t.integer "provenance_zone_id", null: false
     t.datetime "received_at", null: false
-    t.integer "resilience_rating"
+    t.json "secondary_stats", default: [], null: false
     t.string "slot", null: false
     t.json "source_json", default: {}, null: false
     t.string "source_key", null: false
-    t.integer "stamina"
-    t.integer "strength"
     t.datetime "updated_at", null: false
-    t.integer "versatility_rating"
     t.string "version", null: false
-    t.decimal "weapon_dps", precision: 6, scale: 2
     t.string "zone_identifier", null: false
     t.index ["character_id", "source_key"], name: "index_character_items_on_character_id_and_source_key", unique: true
     t.index ["character_id"], name: "index_character_items_on_character_id"
@@ -130,6 +122,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_06_143311) do
     t.string "content_sha"
     t.datetime "created_at", null: false
     t.text "description"
+    t.integer "elvl"
     t.integer "file_size"
     t.integer "handle_id", null: false
     t.string "identifier", null: false

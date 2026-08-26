@@ -18,7 +18,7 @@ import (
 func makeLootItem(identifier string, claims ...instancestate.CharacterLootClaim) instancestate.PendingLootItem {
 	return instancestate.PendingLootItem{
 		ClaimID: uuid.New(),
-		Item:    instanceconfig.Item{Identifier: identifier, Name: identifier, Slot: "head", Ilvl: 100},
+		Item:    instanceconfig.Item{Identifier: identifier, Name: identifier, Slot: "head", Elvl: 100},
 		Claims:  claims,
 	}
 }
@@ -267,9 +267,10 @@ func TestLootItemsToJSON_IncludesDescriptionAndStats(t *testing.T) {
 				Identifier:  "sword",
 				Name:        "sword",
 				Slot:        "head",
-				Ilvl:        100,
+				Elvl:        100,
 				Description: "A sharp blade.",
-				Stats:       instanceconfig.ItemStats{Strength: 5, CritRating: 3},
+				Primary:     strPtr("strength"),
+				Secondaries: []string{"crit_rating"},
 			},
 		},
 	}
@@ -281,8 +282,8 @@ func TestLootItemsToJSON_IncludesDescriptionAndStats(t *testing.T) {
 
 	assert.Equal(t, "A sharp blade.", out[0]["description"])
 	stats := out[0]["stats"].(map[string]any)
-	assert.Equal(t, float64(5), stats["strength"])
-	assert.Equal(t, float64(3), stats["crit_rating"])
+	assert.Greater(t, stats["strength"], 0.0)
+	assert.Greater(t, stats["crit_rating"], 0.0)
 }
 
 func TestLootItemsToJSON_EmptyItems(t *testing.T) {

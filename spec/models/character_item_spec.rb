@@ -61,19 +61,19 @@ RSpec.describe CharacterItem, type: :model do
       expect(item.errors[:name]).to be_present
     end
 
-    it "requires ilvl" do
-      item = build(:character_item, character: character, provenance_zone: zone, ilvl: nil)
+    it "requires elvl" do
+      item = build(:character_item, character: character, provenance_zone: zone, elvl: nil)
       expect(item).not_to be_valid
-      expect(item.errors[:ilvl]).to be_present
+      expect(item.errors[:elvl]).to be_present
     end
 
-    it "requires ilvl to be a non-negative integer" do
-      item = build(:character_item, character: character, provenance_zone: zone, ilvl: -1)
+    it "requires elvl to be a non-negative integer" do
+      item = build(:character_item, character: character, provenance_zone: zone, elvl: -1)
       expect(item).not_to be_valid
     end
 
-    it "allows ilvl of 0" do
-      item = build(:character_item, character: character, provenance_zone: zone, ilvl: 0)
+    it "allows elvl of 0" do
+      item = build(:character_item, character: character, provenance_zone: zone, elvl: 0)
       expect(item).to be_valid
     end
 
@@ -102,32 +102,38 @@ RSpec.describe CharacterItem, type: :model do
       expect(item.errors[:source_json]).to be_present
     end
 
-    it "rejects negative stat values" do
-      item = build(:character_item, character: character, provenance_zone: zone, strength: -1)
-      expect(item).not_to be_valid
-      expect(item.errors[:strength]).to be_present
-    end
-
-    it "rejects negative weapon_dps" do
-      item = build(:character_item, character: character, provenance_zone: zone, weapon_dps: -1)
-      expect(item).not_to be_valid
-      expect(item.errors[:weapon_dps]).to be_present
-    end
-
-    it "allows weapon_dps to be nil" do
-      item = build(:character_item, character: character, provenance_zone: zone, weapon_dps: nil)
+    it "allows a nil primary_stat" do
+      item = build(:character_item, character: character, provenance_zone: zone, primary_stat: nil)
       expect(item).to be_valid
     end
 
-    it "is valid with no stats at all" do
-      item = build(:character_item, character: character, provenance_zone: zone,
-        weapon_dps: nil, **CharacterItem::STAT_COLUMNS.index_with(nil))
+    it "accepts all defined primary stats" do
+      CharacterItem::PRIMARY_STATS.each do |stat|
+        item = build(:character_item, character: character, provenance_zone: zone, primary_stat: stat)
+        expect(item).to be_valid, "expected primary_stat '#{stat}' to be valid"
+      end
+    end
+
+    it "rejects an unrecognized primary_stat" do
+      item = build(:character_item, character: character, provenance_zone: zone, primary_stat: "defence_rating")
+      expect(item).not_to be_valid
+      expect(item.errors[:primary_stat]).to be_present
+    end
+
+    it "defaults secondary_stats to an empty array" do
+      item = build(:character_item, character: character, provenance_zone: zone)
+      expect(item.secondary_stats).to eq([])
+    end
+
+    it "accepts all defined secondary stats" do
+      item = build(:character_item, character: character, provenance_zone: zone, secondary_stats: CharacterItem::SECONDARY_STATS)
       expect(item).to be_valid
     end
 
-    it "returns 0 for absent stat columns" do
-      item = build(:character_item, character: character, provenance_zone: zone, strength: nil)
-      expect(item.strength).to eq(0)
+    it "rejects an unrecognized secondary stat" do
+      item = build(:character_item, character: character, provenance_zone: zone, secondary_stats: ["weapon_dps"])
+      expect(item).not_to be_valid
+      expect(item.errors[:secondary_stats]).to be_present
     end
   end
 end

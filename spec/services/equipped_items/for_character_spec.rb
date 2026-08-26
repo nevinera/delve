@@ -9,33 +9,33 @@ RSpec.describe EquippedItems::ForCharacter do
 
   it "keys provenance by equipped slot" do
     item = create(:character_item, character: character, slot: "head",
-      identifier: "helm-of-doom", source_key: "zone_a/1.0/helm-of-doom",
-      zone_identifier: "zone_a", version: "1.0", ilvl: 584,
-      strength: 10, crit_rating: 5)
+      identifier: "helm-of-doom", name: "Helm of Doom", source_key: "zone_a/1.0/helm-of-doom",
+      zone_identifier: "zone_a", version: "1.0", elvl: 584,
+      primary_stat: "strength", secondary_stats: ["crit_rating"])
     create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
 
-    expect(described_class.call(character: character)).to eq({
-      "head" => {
-        identifier: "helm-of-doom",
-        source_key: "zone_a/1.0/helm-of-doom",
-        zone_identifier: "zone_a",
-        version: "1.0",
-        ilvl: 584,
-        stats: {
-          strength: 10, agility: 0, intellect: 0, stamina: 0, crit_rating: 5,
-          haste_rating: 0, mastery_rating: 0, versatility_rating: 0, resilience_rating: 0,
-          weapon_dps: nil
-        }
-      }
-    })
+    result = described_class.call(character: character)["head"]
+    expect(result).to include(
+      identifier: "helm-of-doom",
+      name: "Helm of Doom",
+      source_key: "zone_a/1.0/helm-of-doom",
+      zone_identifier: "zone_a",
+      version: "1.0",
+      slot: "head",
+      elvl: 584,
+      shield: false,
+      primary_stat: "strength",
+      secondary_stats: ["crit_rating"]
+    )
+    expect(result[:stats]).to eq(ItemStats::Raw.call(character_item: item))
   end
 
-  it "includes weapon_dps in stats for weapons" do
-    item = create(:character_item, character: character, slot: "main_hand", weapon_dps: 45.5)
-    create(:equipped_item, character: character, character_item: item, equipped_slot: "main_hand")
+  it "reports shield: true for a shield item" do
+    item = create(:character_item, character: character, slot: "off_hand",
+      source_json: {"identifier" => "buckler", "name" => "Buckler", "slot" => "off_hand", "shield" => true})
+    create(:equipped_item, character: character, character_item: item, equipped_slot: "off_hand")
 
-    result = described_class.call(character: character)
-    expect(result["main_hand"][:stats][:weapon_dps]).to eq(45.5)
+    expect(described_class.call(character: character)["off_hand"][:shield]).to eq(true)
   end
 
   it "includes every equipped slot" do

@@ -5,7 +5,7 @@
     <tr>
       <th>Slot</th>
       <th>Item</th>
-      <th>ilvl</th>
+      <th>elvl</th>
       <th>From</th>
       <th></th>
       <th></th>
@@ -18,7 +18,7 @@
         <td><%= EquippedItem::SLOT_LABELS[slot] %></td>
         <% if equipped_item %>
           <td><%= equipped_item.character_item.name %></td>
-          <td><%= equipped_item.character_item.ilvl %></td>
+          <td><%= equipped_item.character_item.elvl %></td>
           <td><%= equipped_item.character_item.provenance_zone.identifier %></td>
           <td><%= link_to "View item", play_character_character_item_path(@character, equipped_item.character_item) %></td>
         <% else %>

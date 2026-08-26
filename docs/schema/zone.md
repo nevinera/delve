@@ -12,6 +12,7 @@ See [item.md](item.md) for the `Item` type embedded in `items`.
 |---|---|---|---|
 | `name` | string | yes | Display name. |
 | `description` | string | no | Short description shown in UI. |
+| `elvl` | integer | yes | Elevation. See [stats.md](../stats.md). Must be at least 0. |
 | `private` | boolean | yes | `true` for party-instanced zones (dungeons); `false` for shared zones (questing areas). |
 | `maps` | array of Map \| AssetReference(`referenceTo: "map"`) | yes | At least one. Inline Map objects or references to external map files. A zone containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `unitTypes` | object | no | Maps local string identifiers to UnitType definitions or AssetReferences (`referenceTo: "unit_type"`). Referenced by `unitType` fields on map Units. |
@@ -79,6 +80,7 @@ A LootTable maps item identifiers to integer weights expressing relative drop pr
 {
   "name": "Goblin Cave",
   "description": "A damp cave carved out by generations of goblin raiders.",
+  "elvl": 200,
   "private": true,
   "unitTypes": {
     "goblin_raider": { "$ref": "./unit-types/goblin-raider.json", "referenceTo": "unit_type" }
@@ -112,6 +114,7 @@ A LootTable maps item identifiers to integer weights expressing relative drop pr
 {
   "name": "Goblin Cave",
   "description": "A damp cave carved out by generations of goblin raiders.",
+  "elvl": 200,
   "private": true,
   "unitTypes": {
     "goblin_raider": {

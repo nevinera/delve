@@ -84,7 +84,7 @@ RSpec.describe "Play::CharacterItems", type: :request do
     end
 
     context "as JSON" do
-      it "returns every item with identifier, name, slot, ilvl, description, and stats" do
+      it "returns every item with identifier, name, slot, elvl, description, and stats" do
         get "/play/characters/#{character.id}/character_items", as: :json
         body = JSON.parse(response.body)
 
@@ -95,9 +95,11 @@ RSpec.describe "Play::CharacterItems", type: :request do
           "identifier" => head_item.identifier,
           "source_key" => head_item.source_key,
           "slot" => "head",
-          "ilvl" => head_item.ilvl
+          "elvl" => head_item.elvl,
+          "primary_stat" => head_item.primary_stat,
+          "secondary_stats" => head_item.secondary_stats
         )
-        expect(head_json["stats"]).to eq(head_item.stats_hash.deep_stringify_keys)
+        expect(head_json["stats"]).to eq(ItemStats::Raw.call(character_item: head_item).stringify_keys)
       end
 
       it "respects the slot filter" do

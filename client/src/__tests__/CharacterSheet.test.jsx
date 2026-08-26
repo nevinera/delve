@@ -24,13 +24,33 @@ describe("CharacterSheet", () => {
 
   it("shows every equipped slot, filled or empty", () => {
     const equippedItems = {
-      head: { identifier: "helm-of-doom", ilvl: 584, stats: { strength: 10 } },
+      head: { identifier: "helm-of-doom", elvl: 584, stats: { strength: 10 } },
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
 
     expect(screen.getByText("Helm Of Doom")).toBeInTheDocument();
+    expect(screen.getByText("584")).toBeInTheDocument();
     expect(screen.getAllByText("Empty").length).toBeGreaterThan(0);
-    expect(screen.getByText("Left Ring")).toBeInTheDocument();
+    expect(screen.getAllByText("Ring")).toHaveLength(2);
+  });
+
+  it("prefers the item's real name over one derived from its identifier", () => {
+    const equippedItems = {
+      head: { identifier: "warchief-predators-head", name: "Warchief's Predator's Crown", elvl: 584 },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+
+    expect(screen.getByText("Warchief's Predator's Crown")).toBeInTheDocument();
+    expect(screen.queryByText("Warchief Predators Head")).not.toBeInTheDocument();
+  });
+
+  it("colors an equipped item's elvl by delta from localElvl", () => {
+    const equippedItems = {
+      head: { identifier: "helm-of-doom", elvl: 30 },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} localElvl={50} />);
+    // delta -20 -> gray
+    expect(screen.getByText("30")).toHaveStyle({ color: "#9d9d9d" });
   });
 
   it("sums stats across equipped items", () => {
@@ -40,17 +60,17 @@ describe("CharacterSheet", () => {
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("14");
-    expect(screen.getByText("Stamina").nextSibling.textContent).toBe("20");
-    expect(screen.getByText("Crit Rating").nextSibling.textContent).toBe("5");
+    expect(screen.getByText("Strength").nextSibling.textContent).toBe("14.0");
+    expect(screen.getByText("Stamina").nextSibling.textContent).toBe("20.0");
+    expect(screen.getByText("Crit Rating").nextSibling.textContent).toBe("5.0");
   });
 
   it("shows every stat, including zero, when nothing is equipped", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("0");
-    expect(screen.getByText("Weapon DPS").nextSibling.textContent).toBe("0");
-    expect(screen.getByText("Resilience Rating").nextSibling.textContent).toBe("0");
+    expect(screen.getByText("Strength").nextSibling.textContent).toBe("0.0");
+    expect(screen.getByText("Weapon DPS").nextSibling.textContent).toBe("0.0");
+    expect(screen.getByText("Resilience Rating").nextSibling.textContent).toBe("0.0");
   });
 
   it("groups stats under Primary and Secondary headings in order", () => {
@@ -58,6 +78,35 @@ describe("CharacterSheet", () => {
 
     const titles = screen.getAllByText(/Primary|Secondary/).map(el => el.textContent);
     expect(titles).toEqual(["Primary", "Secondary"]);
+  });
+
+  it("shows the local elevation when provided", () => {
+    render(<CharacterSheet open equippedItems={{}} onClose={() => {}} localElvl={8} />);
+    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("8");
+  });
+
+  it("shows an em dash for local elevation when unknown", () => {
+    render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
+    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("—");
+  });
+
+  it("treats empty slots as elvl 0 for gear elevation, not skipped", () => {
+    render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
+    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("0.0");
+  });
+
+  it("weights gear elevation by each item's slot factor, empty slots included at 0", () => {
+    const equippedItems = {
+      // main_hand holds a two_hand item (factor 4) at elvl 10, ring_1 holds
+      // a ring (factor 1) at elvl 2; every other slot is empty (elvl 0, its
+      // own equip-slot's default factor). Total weight across all 14 equip
+      // slots is 19.5 (17.5 baseline, +2 for main_hand's two_hand override);
+      // weighted sum is 10*4 + 2*1 = 42; 42/19.5 ≈ 2.2.
+      main_hand: { identifier: "axe", slot: "two_hand", elvl: 10 },
+      ring_1: { identifier: "band", slot: "ring", elvl: 2 },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("2.2");
   });
 
   it("calls onClose when the close button is clicked", () => {
@@ -123,6 +172,28 @@ describe("CharacterSheet", () => {
       // "Iron Helm" still appears once, in the equipped-items column - it must
       // not also show up in the candidate list since it's already equipped.
       expect(screen.getAllByText("Iron Helm")).toHaveLength(1);
+    });
+
+    it("shows elvl per candidate and sorts by elvl descending", async () => {
+      stubFetch([
+        { id: 1, identifier: "worn-boots", name: "Worn Boots", source_key: "sk-1", elvl: 10, stats: {} },
+        { id: 2, identifier: "master-boots", name: "Master Boots", source_key: "sk-2", elvl: 50, stats: {} },
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", elvl: 30, stats: {} },
+      ]);
+
+      render(
+        <CharacterSheet open equippedItems={{}} characterItemsUrl="/play/characters/1/character_items.json" onClose={() => {}} />
+      );
+
+      fireEvent.click(screen.getAllByText("Empty")[0]);
+      await waitFor(() => expect(screen.getByText("Master Boots")).toBeInTheDocument());
+
+      expect(screen.getByText("10")).toBeInTheDocument();
+      expect(screen.getByText("50")).toBeInTheDocument();
+      expect(screen.getByText("30")).toBeInTheDocument();
+
+      const names = screen.getAllByText(/Boots$/).map(el => el.textContent);
+      expect(names).toEqual(["Master Boots", "Novice Boots", "Worn Boots"]);
     });
 
     it("requests every compatible item slot for a multi-slot equipped slot", async () => {

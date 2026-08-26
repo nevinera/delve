@@ -11,6 +11,16 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /name is required/)
     end
 
+    it "raises when elvl is missing" do
+      expect { described_class.validate!(zone_fixture.except("elvl")) }
+        .to raise_error(Validators::ValidationError, /elvl is required/)
+    end
+
+    it "raises when elvl is negative" do
+      expect { described_class.validate!(zone_fixture.merge("elvl" => -1)) }
+        .to raise_error(Validators::ValidationError, /elvl must be at least 0/)
+    end
+
     it "raises when private is missing" do
       expect { described_class.validate!(zone_fixture.except("private")) }
         .to raise_error(Validators::ValidationError, /private is required/)
@@ -48,6 +58,37 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
     it "raises when unitTypes is not an object" do
       expect { described_class.validate!(zone_fixture.merge("unitTypes" => ["goblin"])) }
         .to raise_error(Validators::ValidationError, /unitTypes must be an object/)
+    end
+
+    context "items" do
+      let(:valid_item) do
+        {
+          "identifier" => "sword-of-doom",
+          "name" => "Sword of Doom",
+          "slot" => "main_hand",
+          "elvl" => 5,
+          "primary" => "strength",
+          "secondaries" => ["stamina", "crit_rating"]
+        }
+      end
+
+      it "accepts a zone with a valid items hash" do
+        data = zone_fixture.merge("items" => {"sword-of-doom" => valid_item})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when items is not an object" do
+        data = zone_fixture.merge("items" => ["sword-of-doom"])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /items must be an object/)
+      end
+
+      it "propagates item validation errors with path context" do
+        bad_item = valid_item.except("elvl")
+        data = zone_fixture.merge("items" => {"sword-of-doom" => bad_item})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to include("items.sword-of-doom") }
+      end
     end
 
     context "zoneLinks" do

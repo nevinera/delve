@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
@@ -218,30 +219,30 @@ const styles = {
     lineHeight: 1,
     padding: "0 2px",
   },
-  lootList: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
+  lootTable: {
+    borderCollapse: "collapse",
   },
-  lootItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    gap: 12,
-    padding: "4px 0",
+  lootRow: {
     borderBottom: "1px solid #333",
+  },
+  lootNameCell: {
+    padding: "4px 12px 4px 0",
+    textAlign: "left",
+  },
+  lootMetaCell: {
+    padding: "4px 12px 4px 0",
+    textAlign: "left",
+    color: "#888",
+    fontSize: 11,
+    whiteSpace: "nowrap",
+  },
+  lootTakeCell: {
+    padding: "4px 0",
+    textAlign: "right",
   },
   lootItemName: {
     color: "#e8d5a0",
     fontSize: 13,
-  },
-  lootItemMeta: {
-    color: "#888",
-    fontSize: 11,
-    whiteSpace: "nowrap",
   },
   lootTake: {
     background: "none",
@@ -258,12 +259,16 @@ const styles = {
     fontSize: 11,
     marginLeft: 4,
   },
+  lootItemNameOwned: {
+    textDecoration: "line-through",
+    color: "#888",
+  },
   charSheetWrapper: {
     position: "absolute",
     zIndex: 25,
-    left: "50%",
+    right: 20,
     top: "50%",
-    transform: "translate(-50%, -50%)",
+    transform: "translateY(-50%)",
     display: "flex",
     alignItems: "flex-start",
     gap: 8,
@@ -281,7 +286,7 @@ const styles = {
     border: "1px solid #7a5a2a",
     borderRadius: 6,
     padding: "10px 16px 14px",
-    width: 220,
+    width: 440,
     pointerEvents: "auto",
   },
   charSheetCandidateTitle: {
@@ -292,24 +297,31 @@ const styles = {
     textTransform: "uppercase",
     marginBottom: 8,
   },
-  charSheetCandidateList: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
+  charSheetCandidateListWrapper: {
     maxHeight: 320,
     overflowY: "auto",
   },
-  charSheetCandidateItem: {
-    fontSize: 12,
-    color: "#e8d5a0",
-    padding: "3px 2px",
-    borderBottom: "1px solid #333",
+  charSheetCandidateTable: {
+    borderCollapse: "collapse",
+    width: "100%",
   },
-  charSheetCandidateItemClickable: {
+  charSheetCandidateRow: {
+    borderBottom: "1px solid #333",
+    fontSize: 12,
     cursor: "pointer",
+  },
+  charSheetCandidateElvlCell: {
+    padding: "3px 8px 3px 0",
+    color: "#888",
+    whiteSpace: "nowrap",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  charSheetCandidateNameCell: {
+    padding: "3px 0",
+    width: "100%",
+    color: "#e8d5a0",
+    verticalAlign: "top",
   },
   charSheetCandidateEmpty: {
     fontSize: 12,
@@ -357,25 +369,43 @@ const styles = {
     letterSpacing: 1,
     marginBottom: 6,
   },
-  charSheetEquipList: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
+  charSheetEquipTable: {
+    borderCollapse: "collapse",
+    width: "100%",
   },
   charSheetEquipRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 8,
-    padding: "3px 0",
     borderBottom: "1px solid #333",
     fontSize: 12,
   },
-  charSheetSlotLabel: {
+  charSheetSlotCell: {
+    padding: "3px 8px 3px 0",
     color: "#888",
     whiteSpace: "nowrap",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  charSheetElvlCell: {
+    padding: "3px 8px 3px 0",
+    color: "#888",
+    whiteSpace: "nowrap",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  charSheetNameCell: {
+    padding: "3px 0",
+    width: "100%",
+    verticalAlign: "top",
+  },
+  // Reserves two lines of height (fontSize 11 * lineHeight 1.3 * 2 lines =
+  // 28.6px) on every row, filled or empty, so rows stay regularly spaced.
+  charSheetNameBox: {
+    fontSize: 11,
+    lineHeight: 1.3,
+    height: 28.6,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
   },
   charSheetEmptySlot: {
     color: "#555",
@@ -571,14 +601,49 @@ const STAT_LABELS = {
   weapon_dps: "Weapon DPS",
 };
 
+// Mirrors docs/stats.md's "Item coloration" table (delta up to -15/-5/+5/+15
+// -> gray/green/blue/purple, above +15 -> orange), but computed against the
+// player's current local elevation rather than a weighted mean.
+function itemColor(item, localElvl) {
+  if (item?.elvl == null || localElvl == null) return null;
+  const delta = item.elvl - localElvl;
+  if (delta <= -15) return "#9d9d9d";
+  if (delta <= -5) return "#1eff00";
+  if (delta <= 5) return "#0070dd";
+  if (delta <= 15) return "#a335ee";
+  return "#ff8000";
+}
+
+// Mirrors ItemStats::ElevationMultiplier (app/services/item_stats/elevation_multiplier.rb)
+// / itemstats.ElevationMultiplier (game-server/internal/itemstats/elevation_multiplier.go).
+function elevationMultiplier(ee) {
+  const base = 2 / (1 + Math.pow(3, -ee / 10));
+  let taper;
+  if (Math.abs(ee) <= 10) taper = 1;
+  else if (ee >= -20 && ee < -10) taper = (ee + 20) / 10;
+  else if (ee > 10 && ee <= 20) taper = 1 + (ee - 10) / 90;
+  else if (ee < -20) taper = 0;
+  else taper = 10 / 9;
+  return base * taper;
+}
+
 // Wraps its children in a hover target that shows a WoW-style item tooltip
-// near the cursor. `item` should have {name, slot, ilvl, description, stats}.
-export function ItemTooltip({ item, children, style }) {
+// near the cursor. `item` should have {name, slot, elvl, description, stats}.
+// `stats` is assumed to be raw (em=1.0, i.e. computed as if the item were
+// exactly on-level with itself) - it's rescaled here against `localElvl`
+// (the elevation of the map the player is currently on), not shown raw.
+export function ItemTooltip({ item, children, style, localElvl }) {
   const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
 
   if (!item) return children;
 
-  const stats = Object.entries(item.stats || {}).filter(([, v]) => v);
+  const em = (localElvl != null && item.elvl != null) ? elevationMultiplier(item.elvl - localElvl) : 1;
+  const color = itemColor(item, localElvl);
+  const statOrder = STAT_GROUPS.flatMap(g => g.keys);
+  const stats = Object.entries(item.stats || {})
+    .map(([key, value]) => [key, value * em])
+    .filter(([, v]) => v)
+    .sort(([a], [b]) => statOrder.indexOf(a) - statOrder.indexOf(b));
 
   return (
     <span
@@ -588,19 +653,26 @@ export function ItemTooltip({ item, children, style }) {
       onMouseLeave={() => setPos(null)}
     >
       {children}
-      {pos && (
+      {pos && createPortal(
+        // Portaled to document.body: charSheetWrapper (an ancestor for the
+        // character sheet / candidate pane) has a CSS transform, which makes
+        // it the containing block for position:fixed descendants - without
+        // the portal, this tooltip's left/top would resolve against that
+        // transformed ancestor instead of the viewport.
         <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
           <div style={styles.itemTooltipName}>{item.name}</div>
-          {(item.slot || item.ilvl != null) && (
+          {(item.slot || item.elvl != null) && (
             <div style={styles.itemTooltipMeta}>
-              {[item.slot, item.ilvl != null && `ilvl ${item.ilvl}`].filter(Boolean).join(" · ")}
+              {item.elvl != null && <span style={color ? { color } : undefined}>e{item.elvl}</span>}
+              {item.elvl != null && item.slot ? " " : ""}
+              {item.slot}
             </div>
           )}
           {stats.length > 0 && (
             <div style={styles.itemTooltipStats}>
               {stats.map(([key, value]) => (
                 <div key={key} style={styles.itemTooltipStat}>
-                  +{value} {STAT_LABELS[key] || key}
+                  +{value.toFixed(1)} {STAT_LABELS[key] || key}
                 </div>
               ))}
             </div>
@@ -608,7 +680,8 @@ export function ItemTooltip({ item, children, style }) {
           {item.description && (
             <div style={styles.itemTooltipDescription}>{item.description}</div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );
@@ -627,20 +700,34 @@ const EQUIPPED_SLOT_LABELS = {
   feet: "Feet",
   ring_1: "Left Ring",
   ring_2: "Right Ring",
-  trinket_1: "Left Trinket",
-  trinket_2: "Right Trinket",
   main_hand: "Main Hand",
   off_hand: "Off Hand",
 };
 const EQUIPPED_SLOT_ORDER = Object.keys(EQUIPPED_SLOT_LABELS);
+
+// Four-letter abbreviations for the character sheet's equipment table.
+const EQUIPPED_SLOT_ABBR = {
+  head: "Head",
+  neck: "Neck",
+  shoulders: "Shld",
+  back: "Back",
+  chest: "Chst",
+  wrists: "Wris",
+  hands: "Hand",
+  waist: "Belt",
+  legs: "Legs",
+  feet: "Feet",
+  ring_1: "Ring",
+  ring_2: "Ring",
+  main_hand: "Main",
+  off_hand: "OffH",
+};
 
 // Mirrors EquippedItem::SLOT_TYPES (app/models/equipped_item.rb) — which
 // CharacterItem#slot values are compatible with a given equipped slot.
 const EQUIPPABLE_ITEM_SLOTS = {
   ring_1: ["ring"],
   ring_2: ["ring"],
-  trinket_1: ["trinket"],
-  trinket_2: ["trinket"],
   main_hand: ["main_hand", "one_hand", "two_hand"],
   off_hand: ["off_hand", "one_hand"],
 };
@@ -653,8 +740,8 @@ const STAT_GROUPS = [
   { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "resilience_rating"] },
 ];
 
-// The equipped-items payload only carries provenance (identifier, source,
-// stats) — no display name — so derive a readable label from the identifier.
+// Fallback label derived from an item's identifier, for the rare case a
+// payload is missing its display name.
 export function formatItemName(identifier) {
   if (!identifier) return "—";
   return identifier
@@ -675,9 +762,46 @@ function netStats(equippedItems) {
   return total;
 }
 
+// Mirrors ItemStats::Raw::SLOT_SHAPES's factor (app/services/item_stats/raw.rb)
+// / itemstats.slotShapes (game-server/internal/itemstats/raw.go), keyed by
+// the item's own `slot` (not the equipped-slot key it's socketed into).
+const SLOT_FACTORS = {
+  head: 1.5, neck: 1, shoulders: 1, back: 1, chest: 1.5, wrists: 1,
+  hands: 1, waist: 1, legs: 1.5, feet: 1, ring: 1,
+  main_hand: 2, off_hand: 2, one_hand: 2, two_hand: 4,
+};
+
+// Same weights as SLOT_FACTORS, but keyed by equipped-slot (used for empty
+// slots, which have no item and thus no item.slot to look up).
+const EQUIPPED_SLOT_FACTORS = {
+  head: 1.5, neck: 1, shoulders: 1, back: 1, chest: 1.5, wrists: 1,
+  hands: 1, waist: 1, legs: 1.5, feet: 1, ring_1: 1, ring_2: 1,
+  main_hand: 2, off_hand: 2,
+};
+
+// Weighted average of every equip slot's elvl, weighted by its stat factor
+// (the same weighting used to scale that slot's stat contribution) - so
+// heavier-weighted slots (e.g. a two-hander) pull the average more. Empty
+// slots count as elvl 0, rather than being skipped; their weight comes from
+// the equipped-slot itself (there's no item.slot to look up when empty) -
+// e.g. an empty main_hand always weighs in at 2x, even though a two-hander
+// equipped there would weigh 4x.
+function gearElevation(equippedItems) {
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const equippedSlot of EQUIPPED_SLOT_ORDER) {
+    const item = equippedItems?.[equippedSlot];
+    const weight = (item?.slot && SLOT_FACTORS[item.slot]) ?? EQUIPPED_SLOT_FACTORS[equippedSlot] ?? 1;
+    const elvl = item?.elvl ?? 0;
+    weightedSum += elvl * weight;
+    totalWeight += weight;
+  }
+  return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
 // Scrollable list of candidate items for one equipped slot, shown to the
 // left of the character sheet. Clicking an item equips it into that slot.
-function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose }) {
+function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl }) {
   return (
     <div style={styles.charSheetCandidatePane}>
       <div style={styles.charSheetHeader}>
@@ -690,19 +814,30 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
       ) : items.length === 0 ? (
         <div style={styles.charSheetCandidateEmpty}>No items available.</div>
       ) : (
-        <ul style={styles.charSheetCandidateList}>
-          {items.map(item => (
-            <li
-              key={item.id}
-              style={{ ...styles.charSheetCandidateItem, ...styles.charSheetCandidateItemClickable }}
-              onClick={equippingId ? undefined : () => onSelect(item)}
-            >
-              <ItemTooltip item={item} style={{ cursor: "pointer" }}>
-                <span>{item.name}{equippingId === item.id ? " (equipping…)" : ""}</span>
-              </ItemTooltip>
-            </li>
-          ))}
-        </ul>
+        <div style={styles.charSheetCandidateListWrapper}>
+          <table style={styles.charSheetCandidateTable}>
+            <tbody>
+              {[...items].sort((a, b) => (b.elvl ?? -Infinity) - (a.elvl ?? -Infinity)).map(item => (
+                <tr
+                  key={item.id}
+                  style={styles.charSheetCandidateRow}
+                  onClick={equippingId ? undefined : () => onSelect(item)}
+                >
+                  <td style={{ ...styles.charSheetCandidateElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                    {item.elvl ?? ""}
+                  </td>
+                  <td style={styles.charSheetCandidateNameCell}>
+                    <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                      <span style={styles.charSheetNameBox}>
+                        {item.name}{equippingId === item.id ? " (equipping…)" : ""}
+                      </span>
+                    </ItemTooltip>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -713,7 +848,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose }) {
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -742,6 +877,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
   if (!open) return null;
 
   const stats = netStats(equippedItems);
+  const gearElvl = gearElevation(equippedItems);
 
   const toggleSlot = (slot) => {
     setExpandedSlot(current => (current === slot ? null : slot));
@@ -770,6 +906,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
           error={equipError}
           onSelect={handleSelect}
           onClose={() => setExpandedSlot(null)}
+          localElvl={localElvl}
         />
       )}
       <div style={styles.charSheet}>
@@ -780,38 +917,57 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
         <div style={styles.charSheetBody}>
           <div style={styles.charSheetColumn}>
             <div style={styles.charSheetColumnTitle}>Equipment</div>
-            <ul style={styles.charSheetEquipList}>
-              {EQUIPPED_SLOT_ORDER.map(slot => {
-                const item = equippedItems?.[slot];
-                const rowStyle = {
-                  ...styles.charSheetEquipRow,
-                  ...styles.charSheetEquipRowClickable,
-                  ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
-                  ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
-                };
-                return (
-                  <li
-                    key={slot}
-                    style={rowStyle}
-                    onClick={() => toggleSlot(slot)}
-                    onMouseEnter={() => setHoveredSlot(slot)}
-                    onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
-                  >
-                    <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
-                    {item ? (
-                      <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }}>
-                        <span style={styles.lootItemName}>{formatItemName(item.identifier)}</span>
-                      </ItemTooltip>
-                    ) : (
-                      <span style={styles.charSheetEmptySlot}>Empty</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            <table style={styles.charSheetEquipTable}>
+              <tbody>
+                {EQUIPPED_SLOT_ORDER.map(slot => {
+                  const item = equippedItems?.[slot];
+                  const rowStyle = {
+                    ...styles.charSheetEquipRow,
+                    ...styles.charSheetEquipRowClickable,
+                    ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+                    ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
+                  };
+                  return (
+                    <tr
+                      key={slot}
+                      style={rowStyle}
+                      onClick={() => toggleSlot(slot)}
+                      onMouseEnter={() => setHoveredSlot(slot)}
+                      onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
+                    >
+                      <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
+                      <td style={{ ...styles.charSheetElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                        {item?.elvl ?? ""}
+                      </td>
+                      <td style={styles.charSheetNameCell}>
+                        {item ? (
+                          <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                            <span style={styles.charSheetNameBox}>{item.name || formatItemName(item.identifier)}</span>
+                          </ItemTooltip>
+                        ) : (
+                          <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
           <div style={styles.charSheetColumn}>
             <div style={styles.charSheetColumnTitle}>Stats</div>
+            <div style={styles.charSheetStatGroup}>
+              <ul style={styles.charSheetStatsList}>
+                <li style={styles.charSheetStatRow}>
+                  <span>Local Elevation</span>
+                  <span>{localElvl ?? "—"}</span>
+                </li>
+                <li style={styles.charSheetStatRow}>
+                  <span>Gear Elevation</span>
+                  <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
+                </li>
+              </ul>
+            </div>
             {STAT_GROUPS.map(group => (
               <div key={group.title} style={styles.charSheetStatGroup}>
                 <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
@@ -819,7 +975,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                   {group.keys.map(key => (
                     <li key={key} style={styles.charSheetStatRow}>
                       <span>{STAT_LABELS[key] || key}</span>
-                      <span>{stats[key] || 0}</span>
+                      <span>{(stats[key] || 0).toFixed(1)}</span>
                     </li>
                   ))}
                 </ul>
@@ -833,7 +989,6 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
 }
 
 const CLAIM_LABEL = {
-  owned:          "(owned)",
   upgraded:       "(upgraded)",
   upgrade:        "(upgrading...)",
   locked_for_me:  "(taking...)",
@@ -848,7 +1003,7 @@ export function unitHasLootClaim(lootItems, characterUnitId) {
   return !!lootItems?.some(i => i.claims?.some(c => c.character_unit_id === characterUnitId));
 }
 
-export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
+export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClose, localElvl }) {
   const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
   const elRef = useRef(null);
 
@@ -882,28 +1037,38 @@ export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
   return (
     <div ref={elRef} style={windowStyle}>
       <div style={styles.lootHeader} onMouseDown={handleHeaderMouseDown}>
-        <span style={styles.lootTitle}>Loot</span>
+        <span style={styles.lootTitle}>Loot{unitName ? `: ${unitName}` : ""}</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
       </div>
-      <ul style={styles.lootList}>
-        {items.map((item, i) => {
-          const myState = item.claims?.find(c => c.character_unit_id === selfUnitId)?.state;
-          const label = CLAIM_LABEL[myState];
-          const canTake = myState === "available";
-          return (
-            <li key={i} style={styles.lootItem}>
-              <ItemTooltip item={item}>
-                <span style={styles.lootItemName}>
-                  {item.name}
-                  {label && <span style={styles.lootOwned}> {label}</span>}
-                </span>
-              </ItemTooltip>
-              <span style={styles.lootItemMeta}>{item.slot} · ilvl {item.ilvl}</span>
-              {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
-            </li>
-          );
-        })}
-      </ul>
+      <table style={styles.lootTable}>
+        <tbody>
+          {items.map((item, i) => {
+            const myState = item.claims?.find(c => c.character_unit_id === selfUnitId)?.state;
+            const owned = myState === "owned";
+            const label = CLAIM_LABEL[myState];
+            const canTake = myState === "available";
+            return (
+              <tr key={i} style={styles.lootRow}>
+                <td style={styles.lootNameCell}>
+                  <ItemTooltip item={item} localElvl={localElvl}>
+                    <span style={{ ...styles.lootItemName, ...(owned ? styles.lootItemNameOwned : {}) }}>
+                      {item.name}
+                      {label && <span style={styles.lootOwned}> {label}</span>}
+                    </span>
+                  </ItemTooltip>
+                </td>
+                <td style={{ ...styles.lootMetaCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                  e{item.elvl}
+                </td>
+                <td style={styles.lootMetaCell}>{item.slot}</td>
+                <td style={styles.lootTakeCell}>
+                  {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -969,6 +1134,7 @@ export default function App({
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
+  const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
 
   const setGcd = useCallback((ms) => {
     gcdEndsAtRef.current = ms;
@@ -1001,6 +1167,7 @@ export default function App({
       .then(r => r.json())
       .then(zone => {
         const byId = {};
+        const elvls = {};
         for (const map of zone.maps ?? []) {
           for (const unit of map.units ?? []) {
             const ut = zone.unitTypes?.[unit.unitType];
@@ -1011,8 +1178,10 @@ export default function App({
             }
             byId[unit.identifier] = byName;
           }
+          elvls[map.identifier] = map.elvl ?? zone.elvl;
         }
         npcPowersByZoneIdRef.current = byId;
+        setMapElvls(elvls);
       })
       .catch(() => {});
   }, [zoneSourceUrl]);
@@ -1271,6 +1440,7 @@ export default function App({
   const selfEntry = Object.entries(units).find(([, u]) => u.zone_unit_identifier === selfIdentifier);
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
+  const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
 
   const initialFacingSetRef = useRef(false);
   useEffect(() => {
@@ -1399,10 +1569,12 @@ export default function App({
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
         <LootWindow
           unitId={lootWindowUnitId}
+          unitName={formatUnitName(units[lootWindowUnitId])}
           items={units[lootWindowUnitId]?.loot_items}
           selfUnitId={selfUnitId}
           onTake={handleTakeItem}
           onClose={() => setLootWindowUnitId(null)}
+          localElvl={localElvl}
         />
         <CharacterSheet
           open={charSheetOpen}
@@ -1410,6 +1582,7 @@ export default function App({
           characterItemsUrl={characterItemsUrl}
           onEquip={handleEquipItem}
           onClose={() => setCharSheetOpen(false)}
+          localElvl={localElvl}
         />
       </div>
       <div style={styles.actionBar}>

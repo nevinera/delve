@@ -1,4 +1,4 @@
-web: bin/rails server -p 8000
+web: INTERNAL_API_TOKENS='dev-local-token' bin/rails server -p 8000
 worker: bin/rails runner "SolidQueue::Supervisor.start"
-game: RAILS_URL='http://localhost:8000' PORT=8090 go -C game-server run .
+game: RAILS_URL='http://localhost:8000' RAILS_INTERNAL_TOKEN='dev-local-token' PORT=8090 go -C game-server run .
 client: npm run build:watch

@@ -94,6 +94,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			resolveCollisions(state, inst.ZoneConfig)
 			roundPositions(state)
 			sweepLootClaims(state)
+			inst.processLootEvents(ctx, state)
 
 		drainAutoUpgrades:
 			for {
@@ -170,8 +171,6 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 					slot.OwnedZoneItems[update.ItemIdentifier] = true
 				}
 			}
-
-			inst.processLootEvents(ctx, state)
 
 			state.PendingLootEvents = nil
 			state.PendingLootClaims = nil

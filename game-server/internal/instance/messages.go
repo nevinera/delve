@@ -8,6 +8,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/itemstats"
 )
 
 // downBase is embedded in every server→client message.
@@ -70,7 +71,7 @@ type lootEventItemJSON struct {
 	Identifier string `json:"identifier"`
 	Name       string `json:"name"`
 	Slot       string `json:"slot"`
-	Ilvl       int    `json:"ilvl"`
+	Elvl       int    `json:"elvl"`
 }
 
 type charClaimJSON struct {
@@ -79,13 +80,13 @@ type charClaimJSON struct {
 }
 
 type lootItemJSON struct {
-	Identifier  string                   `json:"identifier"`
-	Name        string                   `json:"name"`
-	Slot        string                   `json:"slot"`
-	Ilvl        int                      `json:"ilvl"`
-	Description string                   `json:"description,omitempty"`
-	Stats       instanceconfig.ItemStats `json:"stats,omitempty"`
-	Claims      []charClaimJSON          `json:"claims"`
+	Identifier  string             `json:"identifier"`
+	Name        string             `json:"name"`
+	Slot        string             `json:"slot"`
+	Elvl        int                `json:"elvl"`
+	Description string             `json:"description,omitempty"`
+	Stats       map[string]float64 `json:"stats,omitempty"`
+	Claims      []charClaimJSON    `json:"claims"`
 }
 
 type lootEventJSON struct {
@@ -329,7 +330,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				Identifier: it.Identifier,
 				Name:       it.Name,
 				Slot:       it.Slot,
-				Ilvl:       it.Ilvl,
+				Elvl:       it.Elvl,
 			}
 		}
 		msg.LootEvents = append(msg.LootEvents, lootEventJSON{
@@ -341,7 +342,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 	for _, lf := range lootFailures {
 		msg.LootFailures = append(msg.LootFailures, lootFailureJSON{
 			ClaimedBy: lf.ClaimedBy.String(),
-			Item:      lootEventItemJSON{Identifier: lf.Item.Identifier, Name: lf.Item.Name, Slot: lf.Item.Slot, Ilvl: lf.Item.Ilvl},
+			Item:      lootEventItemJSON{Identifier: lf.Item.Identifier, Name: lf.Item.Name, Slot: lf.Item.Slot, Elvl: lf.Item.Elvl},
 		})
 	}
 
@@ -397,10 +398,15 @@ func lootItemsToJSON(items []instancestate.PendingLootItem) []lootItemJSON {
 			Identifier:  pi.Item.Identifier,
 			Name:        pi.Item.Name,
 			Slot:        pi.Item.Slot,
-			Ilvl:        pi.Item.Ilvl,
+			Elvl:        pi.Item.Elvl,
 			Description: pi.Item.Description,
-			Stats:       pi.Item.Stats,
-			Claims:      claims,
+			Stats: itemstats.Raw(itemstats.Allocation{
+				Slot:        pi.Item.Slot,
+				Shield:      pi.Item.Shield,
+				Primary:     pi.Item.Primary,
+				Secondaries: pi.Item.Secondaries,
+			}),
+			Claims: claims,
 		}
 	}
 	return out

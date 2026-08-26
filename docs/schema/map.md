@@ -10,6 +10,7 @@ See [common.md](common.md) for `Location`, `Position`, and `floatRange`.
 |---|---|---|---|
 | `identifier` | string | yes | Slug used to reference this map within the zone (e.g. `"ground_floor"`). |
 | `name` | string | yes | Display name (e.g. `"Ground Floor"`). |
+| `elvl` | integer | no | Elevation of this map, if different from the enclosing zone's. See [stats.md](../stats.md). Defaults to the zone's `elvl` when omitted. |
 | `imageUrl` | string | yes | URL of the map background image. |
 | `pixelDimensions` | object | yes | Image dimensions in pixels: `{ "width": int, "height": int }`. |
 | `feetDimensions` | object | yes | Map dimensions in feet: `{ "width": float, "height": float }`. Used to convert pixel coordinates to world coordinates. |

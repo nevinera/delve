@@ -6,6 +6,7 @@
       <th>Identifier</th>
       <th>Version</th>
       <th>Name</th>
+      <th>Elevation</th>
       <th>Handle</th>
     </tr>
   </thead>
@@ -15,6 +16,7 @@
         <td><%= link_to zone.identifier, build_zone_path(zone) %></td>
         <td><%= zone.version %></td>
         <td><%= zone.name %></td>
+        <td><%= zone.elvl %></td>
         <td><%= zone.handle.identifier %></td>
       </tr>
     <% end %>

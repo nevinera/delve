@@ -10,8 +10,9 @@ RSpec.describe AwardCharacterItem do
       "identifier" => "sword-of-doom",
       "name" => "Sword of Doom",
       "slot" => "main_hand",
-      "ilvl" => 584,
-      "stats" => {}
+      "elvl" => 584,
+      "primary" => nil,
+      "secondaries" => []
     }
   end
 
@@ -34,7 +35,7 @@ RSpec.describe AwardCharacterItem do
       expect(item.source_key).to eq("#{zone.identifier}/#{zone.version}/sword-of-doom")
       expect(item.name).to eq("Sword of Doom")
       expect(item.slot).to eq("main_hand")
-      expect(item.ilvl).to eq(584)
+      expect(item.elvl).to eq(584)
     end
 
     it "stores the full source_data as source_json" do
@@ -47,17 +48,16 @@ RSpec.describe AwardCharacterItem do
       expect(CharacterItem.last.received_at).to be_within(2.seconds).of(Time.current)
     end
 
-    it "persists stats from the stats hash" do
-      call(source_data.merge("stats" => {"strength" => 100, "crit_rating" => 40}))
+    it "persists primary and secondaries" do
+      call(source_data.merge("primary" => "strength", "secondaries" => ["stamina", "crit_rating"]))
       item = CharacterItem.last
-      expect(item.strength).to eq(100)
-      expect(item.crit_rating).to eq(40)
-      expect(item.agility).to eq(0)
+      expect(item.primary_stat).to eq("strength")
+      expect(item.secondary_stats).to eq(["stamina", "crit_rating"])
     end
 
-    it "ignores unknown stat keys" do
-      call(source_data.merge("stats" => {"strength" => 50, "unknown_stat" => 99}))
-      expect(CharacterItem.last.strength).to eq(50)
+    it "defaults secondaries to an empty array when absent" do
+      call(source_data.except("secondaries"))
+      expect(CharacterItem.last.secondary_stats).to eq([])
     end
 
     it "persists optional metadata" do
@@ -142,7 +142,7 @@ RSpec.describe AwardCharacterItem do
     end
 
     context "when a required field is missing" do
-      %w[identifier name slot ilvl].each do |field|
+      %w[identifier name slot elvl].each do |field|
         it "raises MissingField for missing #{field}" do
           expect { call(source_data.except(field)) }.to raise_error(AwardCharacterItem::MissingField, /#{field}/)
         end

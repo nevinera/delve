@@ -8,7 +8,7 @@ FactoryBot.define do
     version { "1.0" }
     sequence(:source_key) { |n| "zone_a/1.0/item-#{n}" }
     name { "Iron Sword" }
-    ilvl { 584 }
+    elvl { 584 }
     slot { "head" }
     received_at { Time.current }
     source_json { {"identifier" => identifier, "name" => name, "slot" => slot} }

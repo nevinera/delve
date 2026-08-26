@@ -2,16 +2,39 @@ module Validators
   class ZoneValidator < Base
     def validate!(data, path: "$")
       require_object!(data, path: path)
+      validate_fixed_fields!(data, path: path)
+      validate_optional_sections!(data, path: path)
+    end
+
+    private
+
+    def validate_fixed_fields!(data, path:)
       require_string!(data, "name", path: path)
+      validate_elvl!(data, path: path)
       require_boolean!(data, "private", path: path)
-      validate_unit_types!(data, path: path) if data.key?("unitTypes")
       validate_maps!(data, path: path)
+    end
+
+    def validate_optional_sections!(data, path:)
+      validate_unit_types!(data, path: path) if data.key?("unitTypes")
+      validate_items!(data, path: path) if data.key?("items")
       validate_zone_links!(data, path: path) if data.key?("zoneLinks")
       validate_entry_points!(data, path: path) if data.key?("entryPoints")
       validate_open_connections!(data, path: path) if data.key?("openConnections")
     end
 
-    private
+    def validate_elvl!(data, path:)
+      elvl = require_integer!(data, "elvl", path: path)
+      raise ValidationError.new("elvl must be at least 0", path: child_path(path, "elvl")) if elvl < 0
+    end
+
+    def validate_items!(data, path:)
+      items = data["items"]
+      raise ValidationError.new("items must be an object", path: child_path(path, "items")) unless items.is_a?(Hash)
+      items.each do |key, item|
+        ItemValidator.validate!(item, path: child_path(child_path(path, "items"), key))
+      end
+    end
 
     def validate_unit_types!(data, path:)
       unit_types = data["unitTypes"]

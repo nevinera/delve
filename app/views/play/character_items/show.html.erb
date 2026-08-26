@@ -1,21 +1,17 @@
 <h1><%= @item.name %></h1>
 
 <p>Slot: <%= @item.slot %></p>
-<p>Item level: <%= @item.ilvl %></p>
+<p>Elevation: <%= @item.elvl %></p>
 <p>From: <%= @item.provenance_zone.identifier %></p>
 <p>Received: <%= @item.received_at.strftime("%Y-%m-%d %H:%M") %></p>
 
-<% stats = CharacterItem::STAT_COLUMNS.filter_map { |s| [s.to_s.humanize, @item.public_send(s)] if @item.public_send(s) > 0 } %>
-<% if stats.any? %>
+<% if @raw_stats.any? %>
+  <p>Stats at ee=0 (on-level):</p>
   <ul>
-    <% stats.each do |label, value| %>
-      <li><%= label %>: <%= value %></li>
+    <% @raw_stats.sort.each do |stat, value| %>
+      <li><%= stat.to_s.humanize %>: <%= value.round(1) %></li>
     <% end %>
   </ul>
-<% end %>
-
-<% if @item.weapon_dps %>
-  <p>DPS: <%= @item.weapon_dps %></p>
 <% end %>
 
 <% if @item.description.present? %>

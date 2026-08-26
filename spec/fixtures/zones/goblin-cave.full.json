@@ -1,6 +1,7 @@
 {
     "name": "Goblin Cave",
     "description": "A damp cave carved out by generations of goblin raiders.",
+    "elvl": 1,
     "private": true,
     "unitTypes": {
         "goblin": {

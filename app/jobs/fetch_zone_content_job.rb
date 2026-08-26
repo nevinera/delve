@@ -8,7 +8,7 @@ class FetchZoneContentJob < ApplicationJob
     body = fetch_body!(zone)
     data = JSON.parse(body)
     Validators::ZoneValidator.validate!(data)
-    zone.update!(content_sha: Digest::SHA1.hexdigest(body), file_size: body.bytesize, state: :fetched)
+    zone.update!(content_sha: Digest::SHA1.hexdigest(body), file_size: body.bytesize, elvl: data["elvl"], state: :fetched)
   rescue JSON::ParserError => e
     zone.update!(state: :validation_failed, validity_error: "invalid JSON: #{e.message}")
   rescue Validators::ValidationError => e

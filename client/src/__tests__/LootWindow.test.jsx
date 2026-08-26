@@ -9,7 +9,7 @@ function item(overrides = {}) {
   return {
     name: "Sword of Testing",
     slot: "main_hand",
-    ilvl: 42,
+    elvl: 42,
     claims: [],
     ...overrides,
   };
@@ -33,7 +33,30 @@ describe("LootWindow", () => {
       <LootWindow unitId="u1" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />
     );
     expect(screen.getByText("Sword of Testing")).toBeInTheDocument();
-    expect(screen.getByText("main_hand · ilvl 42")).toBeInTheDocument();
+    expect(screen.getByText("e42")).toBeInTheDocument();
+    expect(screen.getByText("main_hand")).toBeInTheDocument();
+  });
+
+  it("colors the elvl column by delta from localElvl", () => {
+    render(
+      <LootWindow unitId="u1" items={[item({ elvl: 62 })]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} localElvl={50} />
+    );
+    // delta +12 -> purple
+    expect(screen.getByText("e62")).toHaveStyle({ color: "#a335ee" });
+  });
+
+  it("shows the plain title when no unitName is given", () => {
+    render(
+      <LootWindow unitId="u1" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />
+    );
+    expect(screen.getByText("Loot")).toBeInTheDocument();
+  });
+
+  it("identifies who/what is being looted when unitName is given", () => {
+    render(
+      <LootWindow unitId="u1" unitName="Goblin" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />
+    );
+    expect(screen.getByText("Loot: Goblin")).toBeInTheDocument();
   });
 
   it("shows a Take button and no label when self's claim is available", () => {
@@ -44,7 +67,6 @@ describe("LootWindow", () => {
   });
 
   it.each([
-    ["owned", "(owned)"],
     ["upgraded", "(upgraded)"],
     ["upgrade", "(upgrading...)"],
     ["locked_for_me", "(taking...)"],
@@ -56,6 +78,14 @@ describe("LootWindow", () => {
     render(<LootWindow unitId="u1" items={items} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />);
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Take" })).not.toBeInTheDocument();
+  });
+
+  it("shows a strikethrough instead of an '(owned)' label for owned items", () => {
+    const items = [item({ claims: [{ character_unit_id: SELF, state: "owned" }] })];
+    render(<LootWindow unitId="u1" items={items} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />);
+    expect(screen.queryByText("(owned)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Take" })).not.toBeInTheDocument();
+    expect(screen.getByText("Sword of Testing")).toHaveStyle({ textDecoration: "line-through" });
   });
 
   it("shows no label and no Take button when self has no claim entry", () => {

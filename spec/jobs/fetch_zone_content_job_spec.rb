@@ -27,6 +27,11 @@ RSpec.describe FetchZoneContentJob, type: :job do
     expect(zone.reload.file_size).to eq(valid_content.bytesize)
   end
 
+  it "stores elvl from the fetched content" do
+    described_class.perform_now(zone.id)
+    expect(zone.reload.elvl).to eq(1)
+  end
+
   it "raises when the URL returns a non-success response" do
     stub_request(:get, zone.config_url).to_return(status: 404)
     expect { described_class.perform_now(zone.id) }.to raise_error(RuntimeError, /HTTP 404/)
