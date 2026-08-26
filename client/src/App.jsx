@@ -846,16 +846,18 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
           </div>
           <div style={styles.charSheetColumn}>
             <div style={styles.charSheetColumnTitle}>Stats</div>
-            <ul style={styles.charSheetStatsList}>
-              <li style={styles.charSheetStatRow}>
-                <span>Local Elevation</span>
-                <span>{localElvl ?? "—"}</span>
-              </li>
-              <li style={styles.charSheetStatRow}>
-                <span>Gear Elevation</span>
-                <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
-              </li>
-            </ul>
+            <div style={styles.charSheetStatGroup}>
+              <ul style={styles.charSheetStatsList}>
+                <li style={styles.charSheetStatRow}>
+                  <span>Local Elevation</span>
+                  <span>{localElvl ?? "—"}</span>
+                </li>
+                <li style={styles.charSheetStatRow}>
+                  <span>Gear Elevation</span>
+                  <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
+                </li>
+              </ul>
+            </div>
             {STAT_GROUPS.map(group => (
               <div key={group.title} style={styles.charSheetStatGroup}>
                 <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
