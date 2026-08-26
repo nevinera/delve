@@ -75,7 +75,8 @@ increasing throughout.
 At `ee = -20` a character is effectively naked — every attack should take about half their health.
 This is intentionally implausible in real play (see the zone table above), but it does create an
 edge case in a world's starting zones, where characters genuinely are on-level but have no gear yet.
-See **Trainee Gear** below for how that's handled.
+See **Trainee Gear** below for how that's handled. This will also be used in cases where _some_ of
+a character's gear isn't supported by the Zone (once provenance restrictions are implemented)
 
 The character sheet displays stats assuming `ee = 0` by default, with a toggle to preview them
 against the current map's elvl instead. (In the webapp, there's a numeric input where you can

@@ -14,6 +14,8 @@ See [power.md](power.md) for the `Power` type embedded in `powers`.
 | `colors` | Colors | yes | Two display colors used for this class's tokens and UI elements. |
 | `resources` | array of ResourceType | no | Resources available to this class. Most classes have one; some may have multiple. |
 | `powers` | array of Power \| AssetReference(`referenceTo: "power"`) | no | Powers available to this class. Inline Power objects or references to external power files. A class containing any AssetReferences is abstract (see [common.md](common.md)). |
+| `primaryStats` | array of string | yes | One or more of `strength`, `agility`, `intellect`, no duplicates. Hybrid classes may list more than one. Used to synthesize Trainee Gear (see [stats.md](../stats.md)) for this class's empty equipment slots. |
+| `secondaryStats` | array of string | yes | Exactly 5 secondary stats, ranked highest to lowest priority, no duplicates. Each must be one of `stamina`, `crit_rating`, `haste_rating`, `mastery_rating`, `versatility_rating`, `defence_rating`, `recovery_rating`. Used alongside `primaryStat` to synthesize Trainee Gear. |
 
 ---
 
@@ -39,6 +41,8 @@ Two display colors for this class, used for token rendering and UI theming.
   "name": "Warrior",
   "description": "A heavily armored melee fighter.",
   "colors": { "major": "AA2200", "minor": "FFCC88" },
+  "primaryStats": ["strength"],
+  "secondaryStats": ["mastery_rating", "haste_rating", "crit_rating", "versatility_rating", "stamina"],
   "resources": [
     {
       "name": "rage",
