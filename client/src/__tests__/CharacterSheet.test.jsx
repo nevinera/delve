@@ -40,17 +40,17 @@ describe("CharacterSheet", () => {
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("14");
-    expect(screen.getByText("Stamina").nextSibling.textContent).toBe("20");
-    expect(screen.getByText("Crit Rating").nextSibling.textContent).toBe("5");
+    expect(screen.getByText("Strength").nextSibling.textContent).toBe("14.0");
+    expect(screen.getByText("Stamina").nextSibling.textContent).toBe("20.0");
+    expect(screen.getByText("Crit Rating").nextSibling.textContent).toBe("5.0");
   });
 
   it("shows every stat, including zero, when nothing is equipped", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("0");
-    expect(screen.getByText("Weapon DPS").nextSibling.textContent).toBe("0");
-    expect(screen.getByText("Resilience Rating").nextSibling.textContent).toBe("0");
+    expect(screen.getByText("Strength").nextSibling.textContent).toBe("0.0");
+    expect(screen.getByText("Weapon DPS").nextSibling.textContent).toBe("0.0");
+    expect(screen.getByText("Resilience Rating").nextSibling.textContent).toBe("0.0");
   });
 
   it("groups stats under Primary and Secondary headings in order", () => {

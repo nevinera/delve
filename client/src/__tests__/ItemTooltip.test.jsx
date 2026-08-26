@@ -38,8 +38,8 @@ describe("ItemTooltip", () => {
     fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
 
     expect(screen.getByText("e42 main_hand")).toBeInTheDocument();
-    expect(screen.getByText("+5 Strength")).toBeInTheDocument();
-    expect(screen.getByText("+3 Crit Rating")).toBeInTheDocument();
+    expect(screen.getByText("+5.0 Strength")).toBeInTheDocument();
+    expect(screen.getByText("+3.0 Crit Rating")).toBeInTheDocument();
     expect(screen.getByText("A blade forged for coverage.")).toBeInTheDocument();
     expect(screen.queryByText(/Agility/)).not.toBeInTheDocument();
   });
@@ -57,7 +57,19 @@ describe("ItemTooltip", () => {
     fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
 
     const labels = screen.getAllByText(/^\+/).map(el => el.textContent);
-    expect(labels).toEqual(["+5 Strength", "+2 Stamina", "+3 Crit Rating", "+1 Versatility Rating"]);
+    expect(labels).toEqual(["+5.0 Strength", "+2.0 Stamina", "+3.0 Crit Rating", "+1.0 Versatility Rating"]);
+  });
+
+  it("scales stats by the elevation multiplier between the item and the local map", () => {
+    // ee = item.elvl(42) - localElvl(52) = -10 -> em = 0.5
+    const item = { name: "Sword of Testing", elvl: 42, stats: { strength: 10 } };
+    render(
+      <ItemTooltip item={item} localElvl={52}>
+        <span>hover me</span>
+      </ItemTooltip>
+    );
+    fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
+    expect(screen.getByText("+5.0 Strength")).toBeInTheDocument();
   });
 
   it("hides the tooltip again on mouse leave", () => {

@@ -575,15 +575,33 @@ const STAT_LABELS = {
   weapon_dps: "Weapon DPS",
 };
 
+// Mirrors ItemStats::ElevationMultiplier (app/services/item_stats/elevation_multiplier.rb)
+// / itemstats.ElevationMultiplier (game-server/internal/itemstats/elevation_multiplier.go).
+function elevationMultiplier(ee) {
+  const base = 2 / (1 + Math.pow(3, -ee / 10));
+  let taper;
+  if (Math.abs(ee) <= 10) taper = 1;
+  else if (ee >= -20 && ee < -10) taper = (ee + 20) / 10;
+  else if (ee > 10 && ee <= 20) taper = 1 + (ee - 10) / 90;
+  else if (ee < -20) taper = 0;
+  else taper = 10 / 9;
+  return base * taper;
+}
+
 // Wraps its children in a hover target that shows a WoW-style item tooltip
 // near the cursor. `item` should have {name, slot, elvl, description, stats}.
-export function ItemTooltip({ item, children, style }) {
+// `stats` is assumed to be raw (em=1.0, i.e. computed as if the item were
+// exactly on-level with itself) - it's rescaled here against `localElvl`
+// (the elevation of the map the player is currently on), not shown raw.
+export function ItemTooltip({ item, children, style, localElvl }) {
   const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
 
   if (!item) return children;
 
+  const em = (localElvl != null && item.elvl != null) ? elevationMultiplier(item.elvl - localElvl) : 1;
   const statOrder = STAT_GROUPS.flatMap(g => g.keys);
   const stats = Object.entries(item.stats || {})
+    .map(([key, value]) => [key, value * em])
     .filter(([, v]) => v)
     .sort(([a], [b]) => statOrder.indexOf(a) - statOrder.indexOf(b));
 
@@ -607,7 +625,7 @@ export function ItemTooltip({ item, children, style }) {
             <div style={styles.itemTooltipStats}>
               {stats.map(([key, value]) => (
                 <div key={key} style={styles.itemTooltipStat}>
-                  +{value} {STAT_LABELS[key] || key}
+                  +{value.toFixed(1)} {STAT_LABELS[key] || key}
                 </div>
               ))}
             </div>
@@ -717,7 +735,7 @@ function gearElevation(equippedItems) {
 
 // Scrollable list of candidate items for one equipped slot, shown to the
 // left of the character sheet. Clicking an item equips it into that slot.
-function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose }) {
+function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl }) {
   return (
     <div style={styles.charSheetCandidatePane}>
       <div style={styles.charSheetHeader}>
@@ -737,7 +755,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
               style={{ ...styles.charSheetCandidateItem, ...styles.charSheetCandidateItemClickable }}
               onClick={equippingId ? undefined : () => onSelect(item)}
             >
-              <ItemTooltip item={item} style={{ cursor: "pointer" }}>
+              <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
                 <span>{item.name}{equippingId === item.id ? " (equipping…)" : ""}</span>
               </ItemTooltip>
             </li>
@@ -811,6 +829,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
           error={equipError}
           onSelect={handleSelect}
           onClose={() => setExpandedSlot(null)}
+          localElvl={localElvl}
         />
       )}
       <div style={styles.charSheet}>
@@ -840,7 +859,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                   >
                     <span style={styles.charSheetSlotLabel}>{EQUIPPED_SLOT_LABELS[slot]}</span>
                     {item ? (
-                      <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }}>
+                      <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }} localElvl={localElvl}>
                         <span style={styles.lootItemName}>{formatItemName(item.identifier)}</span>
                       </ItemTooltip>
                     ) : (
@@ -872,7 +891,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                   {group.keys.map(key => (
                     <li key={key} style={styles.charSheetStatRow}>
                       <span>{STAT_LABELS[key] || key}</span>
-                      <span>{stats[key] || 0}</span>
+                      <span>{(stats[key] || 0).toFixed(1)}</span>
                     </li>
                   ))}
                 </ul>
@@ -900,7 +919,7 @@ export function unitHasLootClaim(lootItems, characterUnitId) {
   return !!lootItems?.some(i => i.claims?.some(c => c.character_unit_id === characterUnitId));
 }
 
-export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClose }) {
+export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClose, localElvl }) {
   const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
   const elRef = useRef(null);
 
@@ -947,7 +966,7 @@ export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClos
             return (
               <tr key={i} style={styles.lootRow}>
                 <td style={styles.lootNameCell}>
-                  <ItemTooltip item={item}>
+                  <ItemTooltip item={item} localElvl={localElvl}>
                     <span style={{ ...styles.lootItemName, ...(owned ? styles.lootItemNameOwned : {}) }}>
                       {item.name}
                       {label && <span style={styles.lootOwned}> {label}</span>}
@@ -1469,6 +1488,7 @@ export default function App({
           selfUnitId={selfUnitId}
           onTake={handleTakeItem}
           onClose={() => setLootWindowUnitId(null)}
+          localElvl={localElvl}
         />
         <CharacterSheet
           open={charSheetOpen}
