@@ -60,6 +60,35 @@ describe("CharacterSheet", () => {
     expect(titles).toEqual(["Primary", "Secondary"]);
   });
 
+  it("shows the local elevation when provided", () => {
+    render(<CharacterSheet open equippedItems={{}} onClose={() => {}} localElvl={8} />);
+    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("8");
+  });
+
+  it("shows an em dash for local elevation when unknown", () => {
+    render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
+    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("—");
+  });
+
+  it("treats empty slots as elvl 0 for gear elevation, not skipped", () => {
+    render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
+    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("0.0");
+  });
+
+  it("weights gear elevation by each item's slot factor, empty slots included at 0", () => {
+    const equippedItems = {
+      // main_hand holds a two_hand item (factor 4) at elvl 10, ring_1 holds
+      // a ring (factor 1) at elvl 2; every other slot is empty (elvl 0, its
+      // own equip-slot's default factor). Total weight across all 14 equip
+      // slots is 19.5 (17.5 baseline, +2 for main_hand's two_hand override);
+      // weighted sum is 10*4 + 2*1 = 42; 42/19.5 ≈ 2.2.
+      main_hand: { identifier: "axe", slot: "two_hand", elvl: 10 },
+      ring_1: { identifier: "band", slot: "ring", elvl: 2 },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("2.2");
+  });
+
   it("calls onClose when the close button is clicked", () => {
     let closed = false;
     render(<CharacterSheet open equippedItems={{}} onClose={() => { closed = true; }} />);

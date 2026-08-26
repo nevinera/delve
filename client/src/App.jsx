@@ -627,8 +627,6 @@ const EQUIPPED_SLOT_LABELS = {
   feet: "Feet",
   ring_1: "Left Ring",
   ring_2: "Right Ring",
-  trinket_1: "Left Trinket",
-  trinket_2: "Right Trinket",
   main_hand: "Main Hand",
   off_hand: "Off Hand",
 };
@@ -639,8 +637,6 @@ const EQUIPPED_SLOT_ORDER = Object.keys(EQUIPPED_SLOT_LABELS);
 const EQUIPPABLE_ITEM_SLOTS = {
   ring_1: ["ring"],
   ring_2: ["ring"],
-  trinket_1: ["trinket"],
-  trinket_2: ["trinket"],
   main_hand: ["main_hand", "one_hand", "two_hand"],
   off_hand: ["off_hand", "one_hand"],
 };
@@ -673,6 +669,43 @@ function netStats(equippedItems) {
     }
   }
   return total;
+}
+
+// Mirrors ItemStats::Raw::SLOT_SHAPES's factor (app/services/item_stats/raw.rb)
+// / itemstats.slotShapes (game-server/internal/itemstats/raw.go), keyed by
+// the item's own `slot` (not the equipped-slot key it's socketed into).
+const SLOT_FACTORS = {
+  head: 1.5, neck: 1, shoulders: 1, back: 1, chest: 1.5, wrists: 1,
+  hands: 1, waist: 1, legs: 1.5, feet: 1, ring: 1,
+  main_hand: 2, off_hand: 2, one_hand: 2, two_hand: 4,
+};
+
+// Same weights as SLOT_FACTORS, but keyed by equipped-slot (used for empty
+// slots, which have no item and thus no item.slot to look up).
+const EQUIPPED_SLOT_FACTORS = {
+  head: 1.5, neck: 1, shoulders: 1, back: 1, chest: 1.5, wrists: 1,
+  hands: 1, waist: 1, legs: 1.5, feet: 1, ring_1: 1, ring_2: 1,
+  main_hand: 2, off_hand: 2,
+};
+
+// Weighted average of every equip slot's elvl, weighted by its stat factor
+// (the same weighting used to scale that slot's stat contribution) - so
+// heavier-weighted slots (e.g. a two-hander) pull the average more. Empty
+// slots count as elvl 0, rather than being skipped; their weight comes from
+// the equipped-slot itself (there's no item.slot to look up when empty) -
+// e.g. an empty main_hand always weighs in at 2x, even though a two-hander
+// equipped there would weigh 4x.
+function gearElevation(equippedItems) {
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const equippedSlot of EQUIPPED_SLOT_ORDER) {
+    const item = equippedItems?.[equippedSlot];
+    const weight = (item?.slot && SLOT_FACTORS[item.slot]) ?? EQUIPPED_SLOT_FACTORS[equippedSlot] ?? 1;
+    const elvl = item?.elvl ?? 0;
+    weightedSum += elvl * weight;
+    totalWeight += weight;
+  }
+  return totalWeight > 0 ? weightedSum / totalWeight : null;
 }
 
 // Scrollable list of candidate items for one equipped slot, shown to the
@@ -713,7 +746,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose }) {
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -742,6 +775,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
   if (!open) return null;
 
   const stats = netStats(equippedItems);
+  const gearElvl = gearElevation(equippedItems);
 
   const toggleSlot = (slot) => {
     setExpandedSlot(current => (current === slot ? null : slot));
@@ -812,6 +846,16 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
           </div>
           <div style={styles.charSheetColumn}>
             <div style={styles.charSheetColumnTitle}>Stats</div>
+            <ul style={styles.charSheetStatsList}>
+              <li style={styles.charSheetStatRow}>
+                <span>Local Elevation</span>
+                <span>{localElvl ?? "—"}</span>
+              </li>
+              <li style={styles.charSheetStatRow}>
+                <span>Gear Elevation</span>
+                <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
+              </li>
+            </ul>
             {STAT_GROUPS.map(group => (
               <div key={group.title} style={styles.charSheetStatGroup}>
                 <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
@@ -969,6 +1013,7 @@ export default function App({
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
+  const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
 
   const setGcd = useCallback((ms) => {
     gcdEndsAtRef.current = ms;
@@ -1001,6 +1046,7 @@ export default function App({
       .then(r => r.json())
       .then(zone => {
         const byId = {};
+        const elvls = {};
         for (const map of zone.maps ?? []) {
           for (const unit of map.units ?? []) {
             const ut = zone.unitTypes?.[unit.unitType];
@@ -1011,8 +1057,10 @@ export default function App({
             }
             byId[unit.identifier] = byName;
           }
+          elvls[map.identifier] = map.elvl ?? zone.elvl;
         }
         npcPowersByZoneIdRef.current = byId;
+        setMapElvls(elvls);
       })
       .catch(() => {});
   }, [zoneSourceUrl]);
@@ -1271,6 +1319,7 @@ export default function App({
   const selfEntry = Object.entries(units).find(([, u]) => u.zone_unit_identifier === selfIdentifier);
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
+  const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
 
   const initialFacingSetRef = useRef(false);
   useEffect(() => {
@@ -1410,6 +1459,7 @@ export default function App({
           characterItemsUrl={characterItemsUrl}
           onEquip={handleEquipItem}
           onClose={() => setCharSheetOpen(false)}
+          localElvl={localElvl}
         />
       </div>
       <div style={styles.actionBar}>
