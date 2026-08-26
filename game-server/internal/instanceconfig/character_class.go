@@ -11,11 +11,13 @@ import (
 // must be inlined before delivery. graphicEffects and soundEffects on powers
 // are client-only and omitted.
 type CharacterClass struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Colors      Colors         `json:"colors"`
-	Resources   []ResourceType `json:"resources,omitempty"`
-	Powers      []Power        `json:"powers,omitempty"`
+	Name           string         `json:"name"`
+	Description    string         `json:"description,omitempty"`
+	Colors         Colors         `json:"colors"`
+	Resources      []ResourceType `json:"resources,omitempty"`
+	Powers         []Power        `json:"powers,omitempty"`
+	PrimaryStats   []string       `json:"primaryStats"`
+	SecondaryStats []string       `json:"secondaryStats"`
 }
 
 func (c *CharacterClass) UnmarshalJSON(data []byte) error {
