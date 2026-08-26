@@ -37,11 +37,27 @@ describe("ItemTooltip", () => {
     );
     fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
 
-    expect(screen.getByText("main_hand · e42")).toBeInTheDocument();
+    expect(screen.getByText("e42 main_hand")).toBeInTheDocument();
     expect(screen.getByText("+5 Strength")).toBeInTheDocument();
     expect(screen.getByText("+3 Crit Rating")).toBeInTheDocument();
     expect(screen.getByText("A blade forged for coverage.")).toBeInTheDocument();
     expect(screen.queryByText(/Agility/)).not.toBeInTheDocument();
+  });
+
+  it("lists stats in the same Primary-then-Secondary order as the character screen", () => {
+    const item = {
+      name: "Sword of Testing",
+      stats: { crit_rating: 3, versatility_rating: 1, strength: 5, stamina: 2 },
+    };
+    render(
+      <ItemTooltip item={item}>
+        <span>hover me</span>
+      </ItemTooltip>
+    );
+    fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
+
+    const labels = screen.getAllByText(/^\+/).map(el => el.textContent);
+    expect(labels).toEqual(["+5 Strength", "+2 Stamina", "+3 Crit Rating", "+1 Versatility Rating"]);
   });
 
   it("hides the tooltip again on mouse leave", () => {

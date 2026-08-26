@@ -582,7 +582,10 @@ export function ItemTooltip({ item, children, style }) {
 
   if (!item) return children;
 
-  const stats = Object.entries(item.stats || {}).filter(([, v]) => v);
+  const statOrder = STAT_GROUPS.flatMap(g => g.keys);
+  const stats = Object.entries(item.stats || {})
+    .filter(([, v]) => v)
+    .sort(([a], [b]) => statOrder.indexOf(a) - statOrder.indexOf(b));
 
   return (
     <span
@@ -597,7 +600,7 @@ export function ItemTooltip({ item, children, style }) {
           <div style={styles.itemTooltipName}>{item.name}</div>
           {(item.slot || item.elvl != null) && (
             <div style={styles.itemTooltipMeta}>
-              {[item.slot, item.elvl != null && `e${item.elvl}`].filter(Boolean).join(" · ")}
+              {[item.elvl != null && `e${item.elvl}`, item.slot].filter(Boolean).join(" ")}
             </div>
           )}
           {stats.length > 0 && (
