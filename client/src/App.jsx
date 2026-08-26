@@ -572,7 +572,7 @@ const STAT_LABELS = {
 };
 
 // Wraps its children in a hover target that shows a WoW-style item tooltip
-// near the cursor. `item` should have {name, slot, ilvl, description, stats}.
+// near the cursor. `item` should have {name, slot, elvl, description, stats}.
 export function ItemTooltip({ item, children, style }) {
   const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
 
@@ -591,9 +591,9 @@ export function ItemTooltip({ item, children, style }) {
       {pos && (
         <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
           <div style={styles.itemTooltipName}>{item.name}</div>
-          {(item.slot || item.ilvl != null) && (
+          {(item.slot || item.elvl != null) && (
             <div style={styles.itemTooltipMeta}>
-              {[item.slot, item.ilvl != null && `ilvl ${item.ilvl}`].filter(Boolean).join(" · ")}
+              {[item.slot, item.elvl != null && `e${item.elvl}`].filter(Boolean).join(" · ")}
             </div>
           )}
           {stats.length > 0 && (
@@ -944,7 +944,7 @@ export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
                   {label && <span style={styles.lootOwned}> {label}</span>}
                 </span>
               </ItemTooltip>
-              <span style={styles.lootItemMeta}>{item.slot} · ilvl {item.ilvl}</span>
+              <span style={styles.lootItemMeta}>{item.slot} · e{item.elvl}</span>
               {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
             </li>
           );

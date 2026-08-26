@@ -9,7 +9,7 @@ function item(overrides = {}) {
   return {
     name: "Sword of Testing",
     slot: "main_hand",
-    ilvl: 42,
+    elvl: 42,
     claims: [],
     ...overrides,
   };
@@ -33,7 +33,7 @@ describe("LootWindow", () => {
       <LootWindow unitId="u1" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />
     );
     expect(screen.getByText("Sword of Testing")).toBeInTheDocument();
-    expect(screen.getByText("main_hand · ilvl 42")).toBeInTheDocument();
+    expect(screen.getByText("main_hand · e42")).toBeInTheDocument();
   });
 
   it("shows a Take button and no label when self's claim is available", () => {

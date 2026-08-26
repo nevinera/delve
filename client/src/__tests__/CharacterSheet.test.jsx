@@ -24,7 +24,7 @@ describe("CharacterSheet", () => {
 
   it("shows every equipped slot, filled or empty", () => {
     const equippedItems = {
-      head: { identifier: "helm-of-doom", ilvl: 584, stats: { strength: 10 } },
+      head: { identifier: "helm-of-doom", elvl: 584, stats: { strength: 10 } },
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
 

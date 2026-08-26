@@ -5,7 +5,7 @@ import { ItemTooltip } from "../App";
 const ITEM = {
   name: "Sword of Testing",
   slot: "main_hand",
-  ilvl: 42,
+  elvl: 42,
   description: "A blade forged for coverage.",
   stats: { strength: 5, crit_rating: 3, agility: 0 },
 };
@@ -37,7 +37,7 @@ describe("ItemTooltip", () => {
     );
     fireEvent.mouseEnter(screen.getByText("hover me"), { clientX: 100, clientY: 100 });
 
-    expect(screen.getByText("main_hand · ilvl 42")).toBeInTheDocument();
+    expect(screen.getByText("main_hand · e42")).toBeInTheDocument();
     expect(screen.getByText("+5 Strength")).toBeInTheDocument();
     expect(screen.getByText("+3 Crit Rating")).toBeInTheDocument();
     expect(screen.getByText("A blade forged for coverage.")).toBeInTheDocument();
