@@ -37,6 +37,20 @@ describe("LootWindow", () => {
     expect(screen.getByText("main_hand")).toBeInTheDocument();
   });
 
+  it("shows the plain title when no unitName is given", () => {
+    render(
+      <LootWindow unitId="u1" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />
+    );
+    expect(screen.getByText("Loot")).toBeInTheDocument();
+  });
+
+  it("identifies who/what is being looted when unitName is given", () => {
+    render(
+      <LootWindow unitId="u1" unitName="Goblin" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />
+    );
+    expect(screen.getByText("Loot: Goblin")).toBeInTheDocument();
+  });
+
   it("shows a Take button and no label when self's claim is available", () => {
     const items = [item({ claims: [{ character_unit_id: SELF, state: "available" }] })];
     render(<LootWindow unitId="u1" items={items} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />);

@@ -897,7 +897,7 @@ export function unitHasLootClaim(lootItems, characterUnitId) {
   return !!lootItems?.some(i => i.claims?.some(c => c.character_unit_id === characterUnitId));
 }
 
-export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
+export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClose }) {
   const [pos, setPos] = useState({ fx: 0.0, fy: 0.5 }); // {fx, fy} fractional coords of upper-left within canvasWrapper
   const elRef = useRef(null);
 
@@ -931,7 +931,7 @@ export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
   return (
     <div ref={elRef} style={windowStyle}>
       <div style={styles.lootHeader} onMouseDown={handleHeaderMouseDown}>
-        <span style={styles.lootTitle}>Loot</span>
+        <span style={styles.lootTitle}>Loot{unitName ? `: ${unitName}` : ""}</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
       </div>
       <table style={styles.lootTable}>
@@ -1461,6 +1461,7 @@ export default function App({
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
         <LootWindow
           unitId={lootWindowUnitId}
+          unitName={formatUnitName(units[lootWindowUnitId])}
           items={units[lootWindowUnitId]?.loot_items}
           selfUnitId={selfUnitId}
           onTake={handleTakeItem}
