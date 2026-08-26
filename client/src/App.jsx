@@ -705,6 +705,9 @@ const EQUIPPED_SLOT_LABELS = {
 };
 const EQUIPPED_SLOT_ORDER = Object.keys(EQUIPPED_SLOT_LABELS);
 
+// Sentinel id for the "Nothing" candidate row, which unequips the slot.
+const UNEQUIP_ID = "__unequip__";
+
 // Four-letter abbreviations for the character sheet's equipment table.
 const EQUIPPED_SLOT_ABBR = {
   head: "Head",
@@ -811,8 +814,6 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
       {error && <div style={styles.charSheetCandidateError}>{error}</div>}
       {loading ? (
         <div style={styles.charSheetCandidateEmpty}>Loading…</div>
-      ) : items.length === 0 ? (
-        <div style={styles.charSheetCandidateEmpty}>No items available.</div>
       ) : (
         <div style={styles.charSheetCandidateListWrapper}>
           <table style={styles.charSheetCandidateTable}>
@@ -835,6 +836,18 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
                   </td>
                 </tr>
               ))}
+              <tr
+                key={UNEQUIP_ID}
+                style={styles.charSheetCandidateRow}
+                onClick={equippingId ? undefined : () => onSelect(null)}
+              >
+                <td style={styles.charSheetCandidateElvlCell}></td>
+                <td style={styles.charSheetCandidateNameCell}>
+                  <span style={styles.charSheetNameBox}>
+                    Nothing{equippingId === UNEQUIP_ID ? " (equipping…)" : ""}
+                  </span>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -884,7 +897,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
   };
 
   const handleSelect = async (item) => {
-    setEquippingId(item.id);
+    setEquippingId(item?.id ?? UNEQUIP_ID);
     setEquipError(null);
     const error = await onEquip(expandedSlot, item);
     setEquippingId(null);
@@ -1500,7 +1513,7 @@ export default function App({
           ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
         },
         credentials: "same-origin",
-        body: JSON.stringify({ character_item_id: characterItem.id }),
+        body: JSON.stringify({ character_item_id: characterItem?.id ?? "" }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);

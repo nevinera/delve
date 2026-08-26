@@ -216,7 +216,7 @@ describe("CharacterSheet", () => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/play/characters/1/character_items.json?slot%5B%5D=main_hand&slot%5B%5D=one_hand&slot%5B%5D=two_hand"
       );
-      await waitFor(() => expect(screen.getByText("No items available.")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText("Nothing")).toBeInTheDocument());
     });
 
     it("closes the candidate pane when clicking the same slot again", async () => {
@@ -235,10 +235,35 @@ describe("CharacterSheet", () => {
       );
 
       fireEvent.click(screen.getByText("Iron Helm"));
-      await waitFor(() => expect(screen.getByText("No items available.")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText("Nothing")).toBeInTheDocument());
 
       fireEvent.click(screen.getByText("Iron Helm"));
-      expect(screen.queryByText("No items available.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Nothing")).not.toBeInTheDocument();
+    });
+
+    it("shows a 'Nothing' row that unequips the slot", async () => {
+      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} }]);
+      const equippedItems = {
+        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+      };
+      const onEquip = vi.fn().mockResolvedValue(null);
+
+      render(
+        <CharacterSheet
+          open
+          equippedItems={equippedItems}
+          characterItemsUrl="/play/characters/1/character_items.json"
+          onEquip={onEquip}
+          onClose={() => {}}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Iron Helm"));
+      await waitFor(() => expect(screen.getByText("Nothing")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText("Nothing"));
+      expect(onEquip).toHaveBeenCalledWith("head", null);
+      await waitFor(() => expect(screen.queryByText("Nothing")).not.toBeInTheDocument());
     });
 
     it("equips a candidate item and closes the pane on success", async () => {
