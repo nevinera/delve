@@ -33,9 +33,11 @@ class Play::CharacterItemsController < Play::BaseController
       name: item.name,
       slot: item.slot,
       elvl: item.elvl,
+      shield: item.source_json["shield"] == true,
       description: item.description,
       primary_stat: item.primary_stat,
-      secondary_stats: item.secondary_stats
+      secondary_stats: item.secondary_stats,
+      stats: ItemStats::Raw.call(character_item: item)
     }
   end
 

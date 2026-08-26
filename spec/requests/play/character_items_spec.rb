@@ -99,6 +99,7 @@ RSpec.describe "Play::CharacterItems", type: :request do
           "primary_stat" => head_item.primary_stat,
           "secondary_stats" => head_item.secondary_stats
         )
+        expect(head_json["stats"]).to eq(ItemStats::Raw.call(character_item: head_item).stringify_keys)
       end
 
       it "respects the slot filter" do

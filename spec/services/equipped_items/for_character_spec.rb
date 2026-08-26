@@ -14,19 +14,19 @@ RSpec.describe EquippedItems::ForCharacter do
       primary_stat: "strength", secondary_stats: ["crit_rating"])
     create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
 
-    expect(described_class.call(character: character)).to eq({
-      "head" => {
-        identifier: "helm-of-doom",
-        source_key: "zone_a/1.0/helm-of-doom",
-        zone_identifier: "zone_a",
-        version: "1.0",
-        slot: "head",
-        elvl: 584,
-        shield: false,
-        primary_stat: "strength",
-        secondary_stats: ["crit_rating"]
-      }
-    })
+    result = described_class.call(character: character)["head"]
+    expect(result).to include(
+      identifier: "helm-of-doom",
+      source_key: "zone_a/1.0/helm-of-doom",
+      zone_identifier: "zone_a",
+      version: "1.0",
+      slot: "head",
+      elvl: 584,
+      shield: false,
+      primary_stat: "strength",
+      secondary_stats: ["crit_rating"]
+    )
+    expect(result[:stats]).to eq(ItemStats::Raw.call(character_item: item))
   end
 
   it "reports shield: true for a shield item" do

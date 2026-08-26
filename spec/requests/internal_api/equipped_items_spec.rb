@@ -43,6 +43,7 @@ RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type
         "shield" => false,
         "primary_stat" => "strength"
       )
+      expect(head["stats"]["strength"]).to be > 0
     end
 
     it "includes every equipped slot" do
