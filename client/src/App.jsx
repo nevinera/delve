@@ -218,30 +218,30 @@ const styles = {
     lineHeight: 1,
     padding: "0 2px",
   },
-  lootList: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
+  lootTable: {
+    borderCollapse: "collapse",
   },
-  lootItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    gap: 12,
-    padding: "4px 0",
+  lootRow: {
     borderBottom: "1px solid #333",
+  },
+  lootNameCell: {
+    padding: "4px 12px 4px 0",
+    textAlign: "left",
+  },
+  lootMetaCell: {
+    padding: "4px 12px 4px 0",
+    textAlign: "left",
+    color: "#888",
+    fontSize: 11,
+    whiteSpace: "nowrap",
+  },
+  lootTakeCell: {
+    padding: "4px 0",
+    textAlign: "right",
   },
   lootItemName: {
     color: "#e8d5a0",
     fontSize: 13,
-  },
-  lootItemMeta: {
-    color: "#888",
-    fontSize: 11,
-    whiteSpace: "nowrap",
   },
   lootTake: {
     background: "none",
@@ -934,26 +934,33 @@ export function LootWindow({ unitId, items, selfUnitId, onTake, onClose }) {
         <span style={styles.lootTitle}>Loot</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
       </div>
-      <ul style={styles.lootList}>
-        {items.map((item, i) => {
-          const myState = item.claims?.find(c => c.character_unit_id === selfUnitId)?.state;
-          const owned = myState === "owned";
-          const label = CLAIM_LABEL[myState];
-          const canTake = myState === "available";
-          return (
-            <li key={i} style={styles.lootItem}>
-              <ItemTooltip item={item}>
-                <span style={{ ...styles.lootItemName, ...(owned ? styles.lootItemNameOwned : {}) }}>
-                  {item.name}
-                  {label && <span style={styles.lootOwned}> {label}</span>}
-                </span>
-              </ItemTooltip>
-              <span style={styles.lootItemMeta}>{item.slot} · e{item.elvl}</span>
-              {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
-            </li>
-          );
-        })}
-      </ul>
+      <table style={styles.lootTable}>
+        <tbody>
+          {items.map((item, i) => {
+            const myState = item.claims?.find(c => c.character_unit_id === selfUnitId)?.state;
+            const owned = myState === "owned";
+            const label = CLAIM_LABEL[myState];
+            const canTake = myState === "available";
+            return (
+              <tr key={i} style={styles.lootRow}>
+                <td style={styles.lootNameCell}>
+                  <ItemTooltip item={item}>
+                    <span style={{ ...styles.lootItemName, ...(owned ? styles.lootItemNameOwned : {}) }}>
+                      {item.name}
+                      {label && <span style={styles.lootOwned}> {label}</span>}
+                    </span>
+                  </ItemTooltip>
+                </td>
+                <td style={styles.lootMetaCell}>e{item.elvl}</td>
+                <td style={styles.lootMetaCell}>{item.slot}</td>
+                <td style={styles.lootTakeCell}>
+                  {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

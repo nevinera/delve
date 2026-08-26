@@ -33,7 +33,8 @@ describe("LootWindow", () => {
       <LootWindow unitId="u1" items={[item()]} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />
     );
     expect(screen.getByText("Sword of Testing")).toBeInTheDocument();
-    expect(screen.getByText("main_hand · e42")).toBeInTheDocument();
+    expect(screen.getByText("e42")).toBeInTheDocument();
+    expect(screen.getByText("main_hand")).toBeInTheDocument();
   });
 
   it("shows a Take button and no label when self's claim is available", () => {
