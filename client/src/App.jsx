@@ -266,9 +266,9 @@ const styles = {
   charSheetWrapper: {
     position: "absolute",
     zIndex: 25,
-    left: "50%",
+    right: 20,
     top: "50%",
-    transform: "translate(-50%, -50%)",
+    transform: "translateY(-50%)",
     display: "flex",
     alignItems: "flex-start",
     gap: 8,
@@ -286,7 +286,7 @@ const styles = {
     border: "1px solid #7a5a2a",
     borderRadius: 6,
     padding: "10px 16px 14px",
-    width: 220,
+    width: 440,
     pointerEvents: "auto",
   },
   charSheetCandidateTitle: {
@@ -297,24 +297,31 @@ const styles = {
     textTransform: "uppercase",
     marginBottom: 8,
   },
-  charSheetCandidateList: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
+  charSheetCandidateListWrapper: {
     maxHeight: 320,
     overflowY: "auto",
   },
-  charSheetCandidateItem: {
-    fontSize: 12,
-    color: "#e8d5a0",
-    padding: "3px 2px",
-    borderBottom: "1px solid #333",
+  charSheetCandidateTable: {
+    borderCollapse: "collapse",
+    width: "100%",
   },
-  charSheetCandidateItemClickable: {
+  charSheetCandidateRow: {
+    borderBottom: "1px solid #333",
+    fontSize: 12,
     cursor: "pointer",
+  },
+  charSheetCandidateElvlCell: {
+    padding: "3px 8px 3px 0",
+    color: "#888",
+    whiteSpace: "nowrap",
+    textAlign: "left",
+    verticalAlign: "top",
+  },
+  charSheetCandidateNameCell: {
+    padding: "3px 0",
+    width: "100%",
+    color: "#e8d5a0",
+    verticalAlign: "top",
   },
   charSheetCandidateEmpty: {
     fontSize: 12,
@@ -733,8 +740,8 @@ const STAT_GROUPS = [
   { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "resilience_rating"] },
 ];
 
-// The equipped-items payload only carries provenance (identifier, source,
-// stats) — no display name — so derive a readable label from the identifier.
+// Fallback label derived from an item's identifier, for the rare case a
+// payload is missing its display name.
 export function formatItemName(identifier) {
   if (!identifier) return "—";
   return identifier
@@ -807,19 +814,30 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
       ) : items.length === 0 ? (
         <div style={styles.charSheetCandidateEmpty}>No items available.</div>
       ) : (
-        <ul style={styles.charSheetCandidateList}>
-          {items.map(item => (
-            <li
-              key={item.id}
-              style={{ ...styles.charSheetCandidateItem, ...styles.charSheetCandidateItemClickable }}
-              onClick={equippingId ? undefined : () => onSelect(item)}
-            >
-              <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
-                <span>{item.name}{equippingId === item.id ? " (equipping…)" : ""}</span>
-              </ItemTooltip>
-            </li>
-          ))}
-        </ul>
+        <div style={styles.charSheetCandidateListWrapper}>
+          <table style={styles.charSheetCandidateTable}>
+            <tbody>
+              {[...items].sort((a, b) => (b.elvl ?? -Infinity) - (a.elvl ?? -Infinity)).map(item => (
+                <tr
+                  key={item.id}
+                  style={styles.charSheetCandidateRow}
+                  onClick={equippingId ? undefined : () => onSelect(item)}
+                >
+                  <td style={{ ...styles.charSheetCandidateElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                    {item.elvl ?? ""}
+                  </td>
+                  <td style={styles.charSheetCandidateNameCell}>
+                    <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                      <span style={styles.charSheetNameBox}>
+                        {item.name}{equippingId === item.id ? " (equipping…)" : ""}
+                      </span>
+                    </ItemTooltip>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -923,8 +941,8 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                       </td>
                       <td style={styles.charSheetNameCell}>
                         {item ? (
-                          <ItemTooltip item={{ ...item, name: formatItemName(item.identifier) }} style={{ cursor: "pointer" }} localElvl={localElvl}>
-                            <span style={styles.charSheetNameBox}>{formatItemName(item.identifier)}</span>
+                          <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                            <span style={styles.charSheetNameBox}>{item.name || formatItemName(item.identifier)}</span>
                           </ItemTooltip>
                         ) : (
                           <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>

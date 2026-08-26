@@ -34,6 +34,16 @@ describe("CharacterSheet", () => {
     expect(screen.getAllByText("Ring")).toHaveLength(2);
   });
 
+  it("prefers the item's real name over one derived from its identifier", () => {
+    const equippedItems = {
+      head: { identifier: "warchief-predators-head", name: "Warchief's Predator's Crown", elvl: 584 },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+
+    expect(screen.getByText("Warchief's Predator's Crown")).toBeInTheDocument();
+    expect(screen.queryByText("Warchief Predators Head")).not.toBeInTheDocument();
+  });
+
   it("colors an equipped item's elvl by delta from localElvl", () => {
     const equippedItems = {
       head: { identifier: "helm-of-doom", elvl: 30 },
@@ -162,6 +172,28 @@ describe("CharacterSheet", () => {
       // "Iron Helm" still appears once, in the equipped-items column - it must
       // not also show up in the candidate list since it's already equipped.
       expect(screen.getAllByText("Iron Helm")).toHaveLength(1);
+    });
+
+    it("shows elvl per candidate and sorts by elvl descending", async () => {
+      stubFetch([
+        { id: 1, identifier: "worn-boots", name: "Worn Boots", source_key: "sk-1", elvl: 10, stats: {} },
+        { id: 2, identifier: "master-boots", name: "Master Boots", source_key: "sk-2", elvl: 50, stats: {} },
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", elvl: 30, stats: {} },
+      ]);
+
+      render(
+        <CharacterSheet open equippedItems={{}} characterItemsUrl="/play/characters/1/character_items.json" onClose={() => {}} />
+      );
+
+      fireEvent.click(screen.getAllByText("Empty")[0]);
+      await waitFor(() => expect(screen.getByText("Master Boots")).toBeInTheDocument());
+
+      expect(screen.getByText("10")).toBeInTheDocument();
+      expect(screen.getByText("50")).toBeInTheDocument();
+      expect(screen.getByText("30")).toBeInTheDocument();
+
+      const names = screen.getAllByText(/Boots$/).map(el => el.textContent);
+      expect(names).toEqual(["Master Boots", "Novice Boots", "Worn Boots"]);
     });
 
     it("requests every compatible item slot for a multi-slot equipped slot", async () => {
