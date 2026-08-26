@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_25_172104) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_26_170010) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -18,6 +18,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_25_172104) do
     t.integer "handle_id", null: false
     t.string "identifier", null: false
     t.string "location", null: false
+    t.json "primary_stats", default: [], null: false
+    t.json "secondary_stats", default: [], null: false
     t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false

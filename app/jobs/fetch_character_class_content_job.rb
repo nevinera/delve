@@ -8,7 +8,13 @@ class FetchCharacterClassContentJob < ApplicationJob
     body = fetch_body!(character_class)
     data = JSON.parse(body)
     Validators::CharacterClassValidator.validate!(data)
-    character_class.update!(content_sha: Digest::SHA1.hexdigest(body), file_size: body.bytesize, state: :fetched)
+    character_class.update!(
+      content_sha: Digest::SHA1.hexdigest(body),
+      file_size: body.bytesize,
+      primary_stats: data["primaryStats"],
+      secondary_stats: data["secondaryStats"],
+      state: :fetched
+    )
   rescue JSON::ParserError => e
     character_class.update!(state: :validation_failed, validity_error: "invalid JSON: #{e.message}")
   rescue Validators::ValidationError => e

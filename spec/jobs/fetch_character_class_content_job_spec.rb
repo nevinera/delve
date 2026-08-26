@@ -28,6 +28,13 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
     expect(character_class.reload.file_size).to eq(content.bytesize)
   end
 
+  it "stores primary_stats and secondary_stats from the fetched content" do
+    described_class.perform_now(character_class.id)
+    character_class.reload
+    expect(character_class.primary_stats).to eq(["strength"])
+    expect(character_class.secondary_stats).to eq(%w[stamina crit_rating haste_rating mastery_rating versatility_rating])
+  end
+
   it "raises when the URL returns a non-success response" do
     stub_request(:get, character_class.location).to_return(status: 404)
     expect { described_class.perform_now(character_class.id) }.to raise_error(RuntimeError, /HTTP 404/)

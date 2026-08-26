@@ -58,6 +58,19 @@ RSpec.describe CharacterClass, type: :model do
       cc = build(:character_class, user: user, handle: other_handle, identifier: "puncher", version: "1.0")
       expect(cc).to be_valid
     end
+
+    it "defaults primary_stats and secondary_stats to empty arrays at the database level" do
+      expect(CharacterClass.new.primary_stats).to eq([])
+      expect(CharacterClass.new.secondary_stats).to eq([])
+    end
+
+    it "does not validate primary_stats/secondary_stats shape at the model level" do
+      # These fields are populated asynchronously by FetchCharacterClassContentJob, well
+      # after the record is first created, so the model can't require valid content up
+      # front the way the JSON content validator does (same reasoning as Zone#elvl).
+      cc = build(:character_class, user: user, handle: handle, primary_stats: [], secondary_stats: [])
+      expect(cc).to be_valid
+    end
   end
 
   describe "#full_identifier" do
