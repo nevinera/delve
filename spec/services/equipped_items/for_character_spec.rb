@@ -9,7 +9,7 @@ RSpec.describe EquippedItems::ForCharacter do
 
   it "keys provenance by equipped slot" do
     item = create(:character_item, character: character, slot: "head",
-      identifier: "helm-of-doom", source_key: "zone_a/1.0/helm-of-doom",
+      identifier: "helm-of-doom", name: "Helm of Doom", source_key: "zone_a/1.0/helm-of-doom",
       zone_identifier: "zone_a", version: "1.0", elvl: 584,
       primary_stat: "strength", secondary_stats: ["crit_rating"])
     create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
@@ -17,6 +17,7 @@ RSpec.describe EquippedItems::ForCharacter do
     result = described_class.call(character: character)["head"]
     expect(result).to include(
       identifier: "helm-of-doom",
+      name: "Helm of Doom",
       source_key: "zone_a/1.0/helm-of-doom",
       zone_identifier: "zone_a",
       version: "1.0",
