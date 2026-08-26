@@ -6,6 +6,7 @@
       <th>Identifier</th>
       <th>Owner</th>
       <th>Location</th>
+      <th>Primary</th>
       <th>Status</th>
     </tr>
   </thead>
@@ -15,6 +16,7 @@
         <td><%= link_to cc.full_identifier, build_character_class_path(cc) %></td>
         <td><%= cc.handle.identifier %></td>
         <td><%= link_to cc.location, cc.location %></td>
+        <td><%= cc.primary_stats.join(", ") %></td>
         <td><%= cc.state %></td>
       </tr>
     <% end %>
