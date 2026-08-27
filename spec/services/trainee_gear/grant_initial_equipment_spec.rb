@@ -21,7 +21,7 @@ RSpec.describe TraineeGear::GrantInitialEquipment do
 
     equipped = character.equipped_items.includes(:character_item).index_by(&:equipped_slot)
     expect(equipped.keys).to contain_exactly(*EquippedItem::EQUIPPED_SLOTS)
-    expect(equipped["head"].character_item.name).to eq("Trainee Head")
+    expect(equipped["head"].character_item.name).to eq("Trainee Helm")
   end
 
   context "with a two-handed weapon (single wield entry)" do

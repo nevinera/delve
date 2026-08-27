@@ -69,6 +69,21 @@ module TraineeGear
 
     ITEM_SLOTS = {"ring_1" => "ring", "ring_2" => "ring"}.freeze
 
+    NAMES = {
+      "head" => "Trainee Helm",
+      "neck" => "Trainee Chain",
+      "shoulders" => "Trainee Spaulders",
+      "back" => "Trainee Cloak",
+      "chest" => "Trainee Chestguard",
+      "wrists" => "Trainee Bracers",
+      "hands" => "Trainee Gloves",
+      "waist" => "Trainee Belt",
+      "legs" => "Trainee Pants",
+      "feet" => "Trainee Boots",
+      "ring_1" => "Trainee Ring of Preparedness",
+      "ring_2" => "Trainee Ring of Possibility"
+    }.freeze
+
     def self.call(...) = new(...).call
 
     def initialize(primary_stats:, secondary_stats:, wields:)
@@ -110,7 +125,7 @@ module TraineeGear
       Item.new(
         equipped_slot: equipped_slot,
         slot: weapon_slot_for(equipped_slot),
-        name: name_for(equipped_slot),
+        name: "Trainee #{wield.capitalize}",
         primary_stat: shield ? nil : primary_stat_for(equipped_slot),
         secondary_stats: secondary_stats_for(equipped_slot),
         shield: shield,
@@ -133,8 +148,6 @@ module TraineeGear
       SECONDARY_RANKS.fetch(equipped_slot).map { |rank| @secondary_stats[rank] }
     end
 
-    def name_for(equipped_slot)
-      "Trainee #{EquippedItem::SLOT_LABELS.fetch(equipped_slot)}"
-    end
+    def name_for(equipped_slot) = NAMES.fetch(equipped_slot)
   end
 end

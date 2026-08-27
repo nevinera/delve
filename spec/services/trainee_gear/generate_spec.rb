@@ -107,12 +107,29 @@ RSpec.describe TraineeGear::Generate do
       expect(result["off_hand"].primary_stat).to be_nil
       expect(result["main_hand"].shield).to be false
     end
+
+    it "names weapon items after the wielded type, not the equip slot" do
+      result = described_class.call(
+        primary_stats: ["strength"], secondary_stats: secondary_stats, wields: %w[sword shield]
+      )
+
+      expect(result["main_hand"].name).to eq("Trainee Sword")
+      expect(result["off_hand"].name).to eq("Trainee Shield")
+    end
   end
 
   it "returns an Item struct with a name for every slot" do
     result = described_class.call(primary_stats: ["strength"], secondary_stats: secondary_stats, wields: ["staff"])
 
-    expect(result["head"].name).to eq("Trainee Head")
+    expect(result["head"].name).to eq("Trainee Helm")
     expect(result.keys).to contain_exactly(*(EquippedItem::EQUIPPED_SLOTS - ["off_hand"]))
+  end
+
+  it "gives the two rings distinct flavor names" do
+    result = described_class.call(primary_stats: ["strength"], secondary_stats: secondary_stats, wields: ["staff"])
+
+    expect(result["ring_1"].name).to eq("Trainee Ring of Preparedness")
+    expect(result["ring_2"].name).to eq("Trainee Ring of Possibility")
+    expect(result["neck"].name).to eq("Trainee Chain")
   end
 end
