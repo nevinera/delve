@@ -5,6 +5,12 @@ module Validators
       ring main_hand off_hand one_hand two_hand
     ].freeze
 
+    WEAPON_SLOTS = %w[main_hand off_hand one_hand two_hand].freeze
+
+    WEAPON_TYPES = %w[
+      axe sword mace dagger fist_weapon polearm staff bow crossbow gun wand thrown
+    ].freeze
+
     PRIMARY_VALUES = %w[strength agility intellect].freeze
 
     SECONDARY_VALUES = %w[
@@ -23,6 +29,7 @@ module Validators
       slot = validate_slot!(data, path: path)
       validate_elvl!(data, path: path)
       shield = validate_shield!(data, slot, path: path)
+      validate_weapon_type!(data, slot, shield, path: path)
       validate_primary!(data, slot, shield, path: path)
       validate_secondaries!(data, slot, path: path) if data.key?("secondaries")
       validate_optional_strings!(data, path: path)
@@ -56,6 +63,25 @@ module Validators
         raise ValidationError.new("shield is only valid when slot is off_hand", path: child_path(path, "shield"))
       end
       shield
+    end
+
+    def validate_weapon_type!(data, slot, shield, path:)
+      weapon_type_path = child_path(path, "weaponType")
+      value = data["weaponType"]
+      return validate_weapon_type_forbidden!(value, path: weapon_type_path) unless WEAPON_SLOTS.include?(slot) && !shield
+      return validate_weapon_type_value!(value, path: weapon_type_path) unless value.nil?
+      return if slot == "off_hand"
+      raise ValidationError.new("weaponType is required for slot #{slot.inspect}", path: weapon_type_path)
+    end
+
+    def validate_weapon_type_forbidden!(value, path:)
+      return if value.nil?
+      raise ValidationError.new("weaponType must be null for this slot", path: path)
+    end
+
+    def validate_weapon_type_value!(value, path:)
+      return if WEAPON_TYPES.include?(value)
+      raise ValidationError.new("weaponType must be one of: #{WEAPON_TYPES.join(", ")}", path: path)
     end
 
     def validate_primary!(data, slot, shield, path:)
