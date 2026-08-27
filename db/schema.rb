@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_25_172104) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_27_143106) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -18,11 +18,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_25_172104) do
     t.integer "handle_id", null: false
     t.string "identifier", null: false
     t.string "location", null: false
+    t.json "primary_stats", default: [], null: false
+    t.json "secondary_stats", default: [], null: false
     t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false
     t.string "validity_error"
     t.string "version", null: false
+    t.json "wields", default: [], null: false
     t.index ["handle_id", "identifier", "version"], name: "idx_on_handle_id_identifier_version_b6e2d417bf", unique: true
     t.index ["handle_id"], name: "index_character_classes_on_handle_id"
     t.index ["state"], name: "index_character_classes_on_state"
@@ -37,7 +40,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_25_172104) do
     t.string "identifier", null: false
     t.string "name", null: false
     t.string "primary_stat"
-    t.integer "provenance_zone_id", null: false
+    t.integer "provenance_zone_id"
     t.datetime "received_at", null: false
     t.json "secondary_stats", default: [], null: false
     t.string "slot", null: false

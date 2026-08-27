@@ -26,6 +26,9 @@ func TestCharacterClass_ValidFull(t *testing.T) {
 	assert.Equal(t, "F4A460", c.Colors.Minor)
 	assert.Len(t, c.Powers, 2)
 	assert.Empty(t, c.Resources)
+	assert.Equal(t, []string{"strength"}, c.PrimaryStats)
+	assert.Equal(t, []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"}, c.SecondaryStats)
+	assert.Equal(t, []string{"dagger", "dagger"}, c.Wields)
 }
 
 func TestCharacterClass_Powers(t *testing.T) {

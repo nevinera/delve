@@ -1,4 +1,6 @@
 class CharacterClass < ApplicationRecord
+  WIELD_TYPES = %w[axe sword staff wand dagger shield totem book spear bow crossbow gun orb].freeze
+
   belongs_to :user
   belongs_to :handle
 

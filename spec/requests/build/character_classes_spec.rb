@@ -35,6 +35,12 @@ RSpec.describe "Build::CharacterClasses", type: :request do
         get "/build/character_classes"
         expect(response.body).to include("#{handle.identifier}/puncher")
       end
+
+      it "lists each class's primary stats" do
+        create(:character_class, :hybrid, user: user, handle: handle, identifier: "hybridclass")
+        get "/build/character_classes"
+        expect(response.body).to include("strength, intellect")
+      end
     end
 
     describe "GET /build/character_classes/:id" do

@@ -93,5 +93,109 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
     it "accepts a class with no description" do
       expect { described_class.validate!(character_class_fixture.except("description")) }.not_to raise_error
     end
+
+    it "raises when primaryStats is missing" do
+      expect { described_class.validate!(character_class_fixture.except("primaryStats")) }
+        .to raise_error(Validators::ValidationError, /primaryStats must be an array/)
+    end
+
+    it "raises when primaryStats is not an array" do
+      data = character_class_fixture.merge("primaryStats" => "strength")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /primaryStats must be an array/)
+    end
+
+    it "raises when primaryStats is empty" do
+      data = character_class_fixture.merge("primaryStats" => [])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /must contain at least 1 entry/)
+    end
+
+    it "raises when primaryStats contains duplicates" do
+      data = character_class_fixture.merge("primaryStats" => ["strength", "strength"])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /must not contain duplicates/)
+    end
+
+    it "raises when primaryStats contains an unrecognized value" do
+      data = character_class_fixture.merge("primaryStats" => ["strength", "wisdom"])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /unrecognized values: wisdom/)
+    end
+
+    it "accepts a hybrid class with multiple primary stats" do
+      data = character_class_fixture.merge("primaryStats" => ["strength", "intellect"])
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when secondaryStats is missing" do
+      expect { described_class.validate!(character_class_fixture.except("secondaryStats")) }
+        .to raise_error(Validators::ValidationError, /secondaryStats must be an array/)
+    end
+
+    it "raises when secondaryStats is not an array" do
+      data = character_class_fixture.merge("secondaryStats" => "stamina")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /secondaryStats must be an array/)
+    end
+
+    it "raises when secondaryStats does not have exactly 5 entries" do
+      data = character_class_fixture.merge("secondaryStats" => ["stamina", "crit_rating"])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /exactly 5 entries/)
+    end
+
+    it "raises when secondaryStats contains duplicates" do
+      data = character_class_fixture.merge("secondaryStats" => ["stamina"] * 5)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /must not contain duplicates/)
+    end
+
+    it "raises when secondaryStats contains an unrecognized value" do
+      data = character_class_fixture.merge(
+        "secondaryStats" => ["stamina", "crit_rating", "haste_rating", "mastery_rating", "wisdom"]
+      )
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /unrecognized values: wisdom/)
+    end
+
+    it "raises when wields is missing" do
+      expect { described_class.validate!(character_class_fixture.except("wields")) }
+        .to raise_error(Validators::ValidationError, /wields must be an array/)
+    end
+
+    it "raises when wields is not an array" do
+      data = character_class_fixture.merge("wields" => "sword")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /wields must be an array/)
+    end
+
+    it "raises when wields is empty" do
+      data = character_class_fixture.merge("wields" => [])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /wields must contain 1-2 entries/)
+    end
+
+    it "raises when wields has more than 2 entries" do
+      data = character_class_fixture.merge("wields" => %w[sword shield dagger])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /wields must contain 1-2 entries/)
+    end
+
+    it "raises when wields contains an unrecognized value" do
+      data = character_class_fixture.merge("wields" => ["polearm"])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /unrecognized values: polearm/)
+    end
+
+    it "accepts a single two-handed wield entry" do
+      data = character_class_fixture.merge("wields" => ["staff"])
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "accepts a main-hand/off-hand pair, including matching duplicates" do
+      data = character_class_fixture.merge("wields" => %w[dagger dagger])
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
   end
 end

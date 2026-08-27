@@ -4,7 +4,11 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
   let(:user) { create(:user) }
   let(:handle) { create(:handle, user: user) }
   let(:character_class) { create(:character_class, user: user, handle: handle) }
-  let(:content) { '{"name":"Puncher","colors":{"major":"8B4513","minor":"F4A460"}}' }
+  let(:content) do
+    '{"name":"Puncher","colors":{"major":"8B4513","minor":"F4A460"},' \
+      '"primaryStats":["strength"],"secondaryStats":["stamina","crit_rating","haste_rating","mastery_rating","versatility_rating"],' \
+      '"wields":["dagger","dagger"]}'
+  end
 
   before do
     stub_request(:get, character_class.location).to_return(body: content, status: 200)
@@ -23,6 +27,18 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
   it "stores the byte size of the response body" do
     described_class.perform_now(character_class.id)
     expect(character_class.reload.file_size).to eq(content.bytesize)
+  end
+
+  it "stores primary_stats and secondary_stats from the fetched content" do
+    described_class.perform_now(character_class.id)
+    character_class.reload
+    expect(character_class.primary_stats).to eq(["strength"])
+    expect(character_class.secondary_stats).to eq(%w[stamina crit_rating haste_rating mastery_rating versatility_rating])
+  end
+
+  it "stores wields from the fetched content" do
+    described_class.perform_now(character_class.id)
+    expect(character_class.reload.wields).to eq(%w[dagger dagger])
   end
 
   it "raises when the URL returns a non-success response" do

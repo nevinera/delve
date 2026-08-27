@@ -11,11 +11,19 @@ class Character < ApplicationRecord
   validates :token_url, presence: true,
     format: {with: /\Ahttps?:\/\/\S+\z/, message: "must be a valid URL"}
 
+  after_commit :enqueue_grant_trainee_gear, on: :create
+
   def owned_zone_items_for(zone)
     character_items
       .where(zone_identifier: zone.identifier)
       .each_with_object({}) do |item, hash|
         hash[item.identifier] = item.version == zone.version
       end
+  end
+
+  private
+
+  def enqueue_grant_trainee_gear
+    GrantTraineeGearJob.perform_later(id)
   end
 end

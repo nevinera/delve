@@ -75,7 +75,8 @@ increasing throughout.
 At `ee = -20` a character is effectively naked — every attack should take about half their health.
 This is intentionally implausible in real play (see the zone table above), but it does create an
 edge case in a world's starting zones, where characters genuinely are on-level but have no gear yet.
-See **Trainee Gear** below for how that's handled.
+See **Trainee Gear** below for how that's handled. This will also be used in cases where _some_ of
+a character's gear isn't supported by the Zone (once provenance restrictions are implemented)
 
 The character sheet displays stats assuming `ee = 0` by default, with a toggle to preview them
 against the current map's elvl instead. (In the webapp, there's a numeric input where you can
@@ -289,11 +290,33 @@ reduction; half that (`r = 125`, e.g. the same tank at `ee = -10`) gives ~50% ph
 
 Any equipment slot without a real item in it is treated as holding a generated "Trainee Gear" item
 for that slot, rather than being empty. These aren't real items — they're synthesized at runtime
-from the character's class. Each class specifies a primary stat and then a ranked list of five
-secondary stats; the generated gear will have some of each of those, and has an elvl of 0. Two
-characters of the same class always get the same Trainee Gear. The displays them dimmed out,
-so it's clear to the player that the character isn't wearing a real item. (The initial zones for
-a world should generally be between elevations 0 and 10.)
+from the character's class. Each class specifies a ranked list of `primaryStats` (usually one, but
+hybrid classes may list more) and a ranked list of exactly five `secondaryStats`; the generated
+gear is itemized from those lists, and has an elvl of 0. Two characters of the same class always
+get the same Trainee Gear. The client displays them dimmed out, so it's clear to the player that
+the character isn't wearing a real item. (The initial zones for a world should generally be
+between elevations 0 and 10.)
+
+### Stat allocation
+
+A class can list 1-3 primary stats, and _must_ list 5 secondary stats, each in a ranking order -
+the trainee gear obeys that order, biasing its items toward the earlier listed stats in each case.
+
+| Slot (weight) | 1 primary | 2 primaries | 3 primaries | Secondary stats |
+|---|---|---|---|---|
+| `main_hand` + `off_hand` (4.0) | A | A | A | v, w, x |
+| Head (1.5) | A | A | B | v, w, x |
+| Neck (1.0) | - | - | - | v, w, x |
+| Shoulders (1.0) | A | B | B | w, y |
+| Back (1.0) | A | A | A | v, w |
+| Chest (1.5) | A | B | C | v, w, x |
+| Wrists (1.0) | A | A | B | v, y |
+| Hands (1.0) | A | B | A | v, z |
+| Ring 1 (1.0) | - | - | - | v, x |
+| Ring 2 (1.0) | - | - | - | w, y |
+| Waist (1.0) | A | A | B | v, y |
+| Legs (1.5) | A | B | A | v, w, x |
+| Feet (1.0) | A | A | C | v, z |
 
 # Examples
 

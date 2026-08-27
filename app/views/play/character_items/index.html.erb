@@ -27,7 +27,7 @@
           <td><%= item.name %></td>
           <td><%= item.slot %></td>
           <td><%= item.elvl %></td>
-          <td><%= item.provenance_zone.identifier %></td>
+          <td><%= item.provenance_zone&.identifier %></td>
           <td><%= item.received_at.strftime("%Y-%m-%d") %></td>
           <td><%= link_to "View", play_character_character_item_path(@character, item) %></td>
         </tr>

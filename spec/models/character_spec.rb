@@ -125,4 +125,14 @@ RSpec.describe Character, type: :model do
       expect(c).not_to be_valid
     end
   end
+
+  describe "after create" do
+    include ActiveJob::TestHelper
+
+    it "enqueues a GrantTraineeGearJob" do
+      expect {
+        create(:character, user: user, character_class: character_class)
+      }.to have_enqueued_job(GrantTraineeGearJob)
+    end
+  end
 end
