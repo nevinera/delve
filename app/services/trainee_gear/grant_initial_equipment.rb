@@ -66,7 +66,7 @@ module TraineeGear
         elvl: 0,
         primary_stat: item.primary_stat,
         secondary_stats: item.secondary_stats,
-        source_json: {"shield" => item.shield}
+        source_json: {"shield" => item.shield, "weaponType" => item.weapon_type}
       }.merge(timestamps(now, received_at: true))
     end
 
