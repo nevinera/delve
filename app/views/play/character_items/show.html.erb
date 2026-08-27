@@ -2,7 +2,7 @@
 
 <p>Slot: <%= @item.slot %></p>
 <p>Elevation: <%= @item.elvl %></p>
-<p>From: <%= @item.provenance_zone.identifier %></p>
+<p>From: <%= @item.provenance_zone&.identifier %></p>
 <p>Received: <%= @item.received_at.strftime("%Y-%m-%d %H:%M") %></p>
 
 <% if @raw_stats.any? %>

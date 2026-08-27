@@ -23,10 +23,10 @@ RSpec.describe CharacterItem, type: :model do
       expect(item).not_to be_valid
     end
 
-    it "requires a provenance_zone" do
+    it "allows a nil provenance_zone, for Trainee Gear which comes from no zone" do
       item = build(:character_item, character: character)
       item.provenance_zone = nil
-      expect(item).not_to be_valid
+      expect(item).to be_valid
     end
 
     it "requires source_key" do

@@ -4,7 +4,7 @@ class CharacterItem < ApplicationRecord
   SECONDARY_STATS = %w[stamina crit_rating haste_rating mastery_rating versatility_rating defence_rating recovery_rating].freeze
 
   belongs_to :character
-  belongs_to :provenance_zone, class_name: "Zone"
+  belongs_to :provenance_zone, class_name: "Zone", optional: true
   has_one :equipped_item, dependent: :destroy
 
   validates :source_key, presence: true

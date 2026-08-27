@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_27_124243) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_27_143106) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -40,7 +40,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_27_124243) do
     t.string "identifier", null: false
     t.string "name", null: false
     t.string "primary_stat"
-    t.integer "provenance_zone_id", null: false
+    t.integer "provenance_zone_id"
     t.datetime "received_at", null: false
     t.json "secondary_stats", default: [], null: false
     t.string "slot", null: false
