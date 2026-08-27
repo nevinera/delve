@@ -7,6 +7,7 @@ FactoryBot.define do
     location { "https://github.com/example/delve/blob/main/docs/examples/classes/puncher.json" }
     primary_stats { ["strength"] }
     secondary_stats { %w[stamina crit_rating haste_rating mastery_rating versatility_rating] }
+    wields { %w[dagger dagger] }
 
     trait :hybrid do
       primary_stats { %w[strength intellect] }

@@ -8,13 +8,7 @@ class FetchCharacterClassContentJob < ApplicationJob
     body = fetch_body!(character_class)
     data = JSON.parse(body)
     Validators::CharacterClassValidator.validate!(data)
-    character_class.update!(
-      content_sha: Digest::SHA1.hexdigest(body),
-      file_size: body.bytesize,
-      primary_stats: data["primaryStats"],
-      secondary_stats: data["secondaryStats"],
-      state: :fetched
-    )
+    character_class.update!(fetched_attrs(body, data))
   rescue JSON::ParserError => e
     character_class.update!(state: :validation_failed, validity_error: "invalid JSON: #{e.message}")
   rescue Validators::ValidationError => e
@@ -22,6 +16,17 @@ class FetchCharacterClassContentJob < ApplicationJob
   end
 
   private
+
+  def fetched_attrs(body, data)
+    {
+      content_sha: Digest::SHA1.hexdigest(body),
+      file_size: body.bytesize,
+      primary_stats: data["primaryStats"],
+      secondary_stats: data["secondaryStats"],
+      wields: data["wields"],
+      state: :fetched
+    }
+  end
 
   def fetch_body!(character_class)
     response = Net::HTTP.get_response(URI.parse(character_class.location))

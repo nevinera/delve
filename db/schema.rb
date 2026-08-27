@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_26_170010) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_27_124243) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -25,6 +25,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_26_170010) do
     t.integer "user_id", null: false
     t.string "validity_error"
     t.string "version", null: false
+    t.json "wields", default: [], null: false
     t.index ["handle_id", "identifier", "version"], name: "idx_on_handle_id_identifier_version_b6e2d417bf", unique: true
     t.index ["handle_id"], name: "index_character_classes_on_handle_id"
     t.index ["state"], name: "index_character_classes_on_state"
