@@ -1,7 +1,8 @@
-# Persists and equips a full set of Trainee Gear CharacterItems for a
-# character, from their class's primaryStats/secondaryStats/wields. See
-# docs/stats.md ("Trainee Gear"). Meant to run once, at character creation;
-# uses batch inserts since it's on the request path.
+# Persists and equips Trainee Gear CharacterItems for every equip slot a
+# character doesn't already occupy (real or Trainee), from their class's
+# primaryStats/secondaryStats/wields. See docs/stats.md ("Trainee Gear").
+# Safe to call on a character with existing gear - already-occupied slots
+# are left untouched. Uses batch inserts since it's on the request path.
 module TraineeGear
   class GrantInitialEquipment
     include Memery
@@ -18,6 +19,8 @@ module TraineeGear
     end
 
     def call
+      return if items.empty?
+
       result = CharacterItem.insert_all!(character_item_attrs, returning: %w[id source_key])
       ids_by_source_key = result.rows.to_h { |id, source_key| [source_key, id] }
       EquippedItem.insert_all!(equipped_item_attrs(ids_by_source_key))
@@ -31,8 +34,10 @@ module TraineeGear
         primary_stats: character_class.primary_stats,
         secondary_stats: character_class.secondary_stats,
         wields: character_class.wields
-      )
+      ).except(*occupied_slots)
     end
+
+    def occupied_slots = @character.equipped_items.pluck(:equipped_slot)
 
     def raise_unless_class_content_ready!
       return unless [character_class.primary_stats, character_class.secondary_stats, character_class.wields].any?(&:blank?)

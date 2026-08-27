@@ -64,6 +64,28 @@ RSpec.describe TraineeGear::GrantInitialEquipment do
     character.equipped_items.reload.each { |equipped_item| expect(equipped_item).to be_valid }
   end
 
+  it "skips slots the character already has equipped, real or Trainee" do
+    real_item = create(:character_item, character: character, slot: "head")
+    create(:equipped_item, character: character, character_item: real_item, equipped_slot: "head")
+
+    expect { described_class.call(character: character) }
+      .to change(character.character_items, :count).from(1).to(14)
+
+    expect(character.equipped_items.find_by(equipped_slot: "head").character_item).to eq(real_item)
+    expect(character.character_items.find_by(identifier: "trainee-head")).to be_nil
+  end
+
+  it "is a no-op when every fillable slot is already occupied" do
+    EquippedItem::EQUIPPED_SLOTS.each do |equipped_slot|
+      item_slot = EquippedItem.item_slots_for(equipped_slot).first
+      item = create(:character_item, character: character, slot: item_slot)
+      create(:equipped_item, character: character, character_item: item, equipped_slot: equipped_slot)
+    end
+
+    expect { described_class.call(character: character) }
+      .not_to change(character.character_items, :count)
+  end
+
   it "raises ClassContentNotReady when the character's class hasn't finished fetching content" do
     unfetched_class = create(:character_class, user: user, handle: handle, primary_stats: [], secondary_stats: [], wields: [])
     other_character = create(:character, user: user, character_class: unfetched_class)
