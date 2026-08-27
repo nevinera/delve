@@ -125,7 +125,10 @@
     <label>Power JSON (see docs/schema/power.md)</label>
     <textarea id="power-json" spellcheck="false"></textarea>
   </div>
-  <button id="load-btn">Load Power</button>
+  <div class="row">
+    <button id="fetch-btn">Fetch Power</button>
+    <button id="load-btn">Load Power</button>
+  </div>
   <div id="load-error"></div>
   <div id="power-summary"></div>
 
@@ -153,6 +156,7 @@ const targetTokenInput = document.getElementById('target-token-url')
 const applyTokensBtn  = document.getElementById('apply-tokens-btn')
 const assetBaseInput  = document.getElementById('asset-base-url')
 const powerJsonInput  = document.getElementById('power-json')
+const fetchBtn         = document.getElementById('fetch-btn')
 const loadBtn         = document.getElementById('load-btn')
 const loadError       = document.getElementById('load-error')
 const powerSummary    = document.getElementById('power-summary')
@@ -182,7 +186,8 @@ powerJsonInput.value = JSON.stringify({
       duration: 0.12,
       location: "affected",
       when: "impact",
-      condition: "onHit"
+      condition: "onHit",
+      volumeScale: 0.5
     }
   ],
   effects: [
@@ -369,7 +374,28 @@ let assetBaseUrl = null
 
 const REQUIRED_FIELDS = ['name', 'castTime', 'globalCooldown', 'effects']
 
+fetchBtn.addEventListener('click', fetchPower)
 loadBtn.addEventListener('click', loadPower)
+
+async function fetchPower() {
+  const url = assetBaseInput.value.trim()
+  if (!url) return
+  loadError.textContent = ''
+  fetchBtn.textContent = 'Fetching…'
+  fetchBtn.disabled = true
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json()
+    powerJsonInput.value = JSON.stringify(json, null, 2)
+    logMsg(`Fetched power JSON from ${url}.`)
+  } catch (e) {
+    loadError.textContent = `Failed to fetch power JSON: ${e.message}`
+  } finally {
+    fetchBtn.textContent = 'Fetch Power'
+    fetchBtn.disabled = false
+  }
+}
 
 function loadPower() {
   loadError.textContent = ''
@@ -473,17 +499,33 @@ function playGraphicEffects(effects) {
   }
 }
 
+// Facing convention shared with tokens: angle 0 = -Z ("north"); rotation.y = -angle.
+function facingToward(x1, z1, x2, z2) {
+  return Math.atan2(x2 - x1, -(z2 - z1))
+}
+
+const EFFECT_HEIGHT = 0.4 // just above the tokens' top surface (y ~0.31)
+
 function spawnGraphicEffect(url, duration, fromPos, toPos, color, scale, opacity) {
   new THREE.TextureLoader().load(url, texture => {
-    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, opacity })
+    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity })
     if (color) mat.color.set(`#${color.replace(/^#/, '')}`)
-    const sprite = new THREE.Sprite(mat)
-    sprite.position.set(fromPos.x, 2.0, fromPos.z)
-    sprite.scale.set(4 * scale, 4 * scale, 1)
-    scene.add(sprite)
+
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(4 * scale, 4 * scale), mat)
+    plane.rotation.x = -Math.PI / 2 // lie flat, image "up" faces -Z before the group rotates it
+
+    const traveling = fromPos.x !== toPos.x || fromPos.z !== toPos.z
+    const angle = traveling ? facingToward(fromPos.x, fromPos.z, toPos.x, toPos.z) : 0
+
+    const group = new THREE.Group()
+    group.add(plane)
+    group.rotation.y = -angle
+    group.position.set(fromPos.x, EFFECT_HEIGHT, fromPos.z)
+    scene.add(group)
+
     const durationMs = duration * 1000
     activeEffects.push({
-      sprite, mat, opacity,
+      group, mat, opacity,
       startedAt: performance.now(),
       durationMs,
       fadeStartMs: durationMs * 0.6,
@@ -497,14 +539,14 @@ function updateGraphicEffects(now) {
     const e = activeEffects[i]
     const elapsed = now - e.startedAt
     if (elapsed >= e.durationMs) {
-      scene.remove(e.sprite)
+      scene.remove(e.group)
       e.mat.dispose()
       activeEffects.splice(i, 1)
       continue
     }
     const t = elapsed / e.durationMs
-    e.sprite.position.x = e.fromX + (e.toX - e.fromX) * t
-    e.sprite.position.z = e.fromZ + (e.toZ - e.fromZ) * t
+    e.group.position.x = e.fromX + (e.toX - e.fromX) * t
+    e.group.position.z = e.fromZ + (e.toZ - e.fromZ) * t
     if (elapsed >= e.fadeStartMs) {
       e.mat.opacity = e.opacity * (1 - (elapsed - e.fadeStartMs) / (e.durationMs - e.fadeStartMs))
     }
