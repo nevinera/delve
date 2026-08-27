@@ -108,6 +108,21 @@ RSpec.describe TraineeGear::Generate do
       expect(result["main_hand"].shield).to be false
     end
 
+    it "gives a weaponType to true weapons, and nil to non-weapon wields (shields, relics)" do
+      result = described_class.call(
+        primary_stats: ["strength"], secondary_stats: secondary_stats, wields: %w[sword shield]
+      )
+
+      expect(result["main_hand"].weapon_type).to eq("sword")
+      expect(result["off_hand"].weapon_type).to be_nil
+    end
+
+    it "gives armor slots a nil weaponType" do
+      result = described_class.call(primary_stats: ["strength"], secondary_stats: secondary_stats, wields: ["staff"])
+
+      expect(result["head"].weapon_type).to be_nil
+    end
+
     it "names weapon items after the wielded type, not the equip slot" do
       result = described_class.call(
         primary_stats: ["strength"], secondary_stats: secondary_stats, wields: %w[sword shield]

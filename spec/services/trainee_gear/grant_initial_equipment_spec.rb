@@ -53,8 +53,16 @@ RSpec.describe TraineeGear::GrantInitialEquipment do
 
     off_hand = character.character_items.find_by(identifier: "trainee-off_hand")
     expect(off_hand.source_json["shield"]).to eq(true)
+    expect(off_hand.source_json["weaponType"]).to be_nil
     expect(off_hand.primary_stat).to be_nil
     expect(off_hand.slot).to eq("off_hand")
+  end
+
+  it "gives the main-hand weapon item a weaponType matching its wield" do
+    described_class.call(character: character)
+
+    main_hand = character.character_items.find_by(identifier: "trainee-main_hand")
+    expect(main_hand.source_json["weaponType"]).to eq("sword")
   end
 
   it "creates valid, persisted records (insert_all bypasses model validations)" do

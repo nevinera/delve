@@ -3,7 +3,10 @@
 # Deterministic - the same class inputs always produce the same gear.
 module TraineeGear
   class Generate
-    Item = Data.define(:equipped_slot, :slot, :name, :primary_stat, :secondary_stats, :shield, :wield)
+    Item = Data.define(:equipped_slot, :slot, :name, :primary_stat, :secondary_stats, :shield, :wield, :weapon_type)
+
+    # wields values that aren't actual weapons - no basic attack, no weaponType.
+    NON_WEAPON_WIELDS = %w[shield totem book orb].freeze
 
     # Which rank (0-indexed into primary_stats) each primary-bearing equip
     # slot uses, keyed by how many primary stats the class has.
@@ -115,7 +118,8 @@ module TraineeGear
         primary_stat: primary_stat_for(equipped_slot),
         secondary_stats: secondary_stats_for(equipped_slot),
         shield: false,
-        wield: nil
+        wield: nil,
+        weapon_type: nil
       )
     end
 
@@ -129,9 +133,12 @@ module TraineeGear
         primary_stat: shield ? nil : primary_stat_for(equipped_slot),
         secondary_stats: secondary_stats_for(equipped_slot),
         shield: shield,
-        wield: wield
+        wield: wield,
+        weapon_type: weapon_type_for(wield)
       )
     end
+
+    def weapon_type_for(wield) = NON_WEAPON_WIELDS.include?(wield) ? nil : wield
 
     def weapon_slot_for(equipped_slot)
       return "two_hand" if equipped_slot == "main_hand" && two_handed?

@@ -183,9 +183,9 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
     end
 
     it "raises when wields contains an unrecognized value" do
-      data = character_class_fixture.merge("wields" => ["polearm"])
+      data = character_class_fixture.merge("wields" => ["trident"])
       expect { described_class.validate!(data) }
-        .to raise_error(Validators::ValidationError, /unrecognized values: polearm/)
+        .to raise_error(Validators::ValidationError, /unrecognized values: trident/)
     end
 
     it "accepts a single two-handed wield entry" do

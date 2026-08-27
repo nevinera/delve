@@ -15,8 +15,10 @@ import (
 
 func TestFetchEquippedItems_Success(t *testing.T) {
 	primary := "strength"
+	weaponType := "sword"
 	items := map[string]instanceconfig.EquippedItem{
-		"head": {Identifier: "helm-of-doom", Slot: "head", Elvl: 584, PrimaryStat: &primary, SecondaryStats: []string{"stamina"}},
+		"head":      {Identifier: "helm-of-doom", Slot: "head", Elvl: 584, PrimaryStat: &primary, SecondaryStats: []string{"stamina"}},
+		"main_hand": {Identifier: "sword-of-doom", Slot: "main_hand", Elvl: 584, WeaponType: &weaponType},
 	}
 
 	var gotPath, gotToken string

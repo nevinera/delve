@@ -7,6 +7,7 @@ RSpec.describe Validators::ItemValidator, type: :validator do
         "identifier" => "sword-of-doom",
         "name" => "Sword of Doom",
         "slot" => "main_hand",
+        "weaponType" => "sword",
         "elvl" => 584,
         "primary" => "strength",
         "secondaries" => ["stamina", "crit_rating", "haste_rating"]
@@ -51,7 +52,7 @@ RSpec.describe Validators::ItemValidator, type: :validator do
 
     context "shield" do
       it "accepts shield: true on an off_hand item" do
-        data = valid_item.merge("slot" => "off_hand", "shield" => true, "primary" => nil)
+        data = valid_item.except("weaponType").merge("slot" => "off_hand", "shield" => true, "primary" => nil)
         expect { described_class.validate!(data) }.not_to raise_error
       end
 
@@ -68,9 +69,55 @@ RSpec.describe Validators::ItemValidator, type: :validator do
       end
 
       it "raises when a shield item has a primary" do
-        data = valid_item.merge("slot" => "off_hand", "shield" => true)
+        data = valid_item.except("weaponType").merge("slot" => "off_hand", "shield" => true)
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /primary must be null for this slot/)
+      end
+    end
+
+    context "weaponType" do
+      it "raises when weaponType is missing on a main_hand item" do
+        data = valid_item.except("weaponType")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /weaponType is required for slot "main_hand"/)
+      end
+
+      it "raises for an unrecognized weaponType value" do
+        data = valid_item.merge("weaponType" => "trinket")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /weaponType must be one of/)
+      end
+
+      it "raises when weaponType is set on a non-weapon slot" do
+        data = valid_item.merge("slot" => "head", "weaponType" => "sword", "primary" => "strength")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /weaponType must be null for this slot/)
+      end
+
+      it "raises when weaponType is set on a shield" do
+        data = valid_item.merge("slot" => "off_hand", "shield" => true, "primary" => nil, "weaponType" => "sword")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /weaponType must be null for this slot/)
+      end
+
+      it "accepts a null weaponType on a non-shield off_hand item (relic)" do
+        data = valid_item.merge("slot" => "off_hand", "weaponType" => nil, "primary" => nil)
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "accepts a real weaponType on a non-shield off_hand item" do
+        data = valid_item.merge("slot" => "off_hand", "weaponType" => "dagger")
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "accepts weaponType on a one_hand item" do
+        data = valid_item.merge("slot" => "one_hand", "weaponType" => "axe")
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "accepts weaponType on a two_hand item" do
+        data = valid_item.merge("slot" => "two_hand", "weaponType" => "staff")
+        expect { described_class.validate!(data) }.not_to raise_error
       end
     end
 
@@ -87,19 +134,19 @@ RSpec.describe Validators::ItemValidator, type: :validator do
       end
 
       it "raises when a ring item has a non-null primary" do
-        data = valid_item.merge("slot" => "ring", "primary" => "strength")
+        data = valid_item.except("weaponType").merge("slot" => "ring", "primary" => "strength")
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /primary must be null for this slot/)
       end
 
       it "raises when a neck item has a non-null primary" do
-        data = valid_item.merge("slot" => "neck", "primary" => "strength")
+        data = valid_item.except("weaponType").merge("slot" => "neck", "primary" => "strength")
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /primary must be null for this slot/)
       end
 
       it "accepts a ring item with a null primary" do
-        data = valid_item.merge("slot" => "ring", "primary" => nil, "secondaries" => ["stamina"])
+        data = valid_item.except("weaponType").merge("slot" => "ring", "primary" => nil, "secondaries" => ["stamina"])
         expect { described_class.validate!(data) }.not_to raise_error
       end
     end
@@ -118,13 +165,13 @@ RSpec.describe Validators::ItemValidator, type: :validator do
       end
 
       it "raises when secondaries exceeds the slot's max (2-secondary slot)" do
-        data = valid_item.merge("slot" => "waist", "secondaries" => ["stamina", "crit_rating", "haste_rating"])
+        data = valid_item.except("weaponType").merge("slot" => "waist", "secondaries" => ["stamina", "crit_rating", "haste_rating"])
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /has at most 2 entries for slot "waist"/)
       end
 
       it "accepts exactly the max secondaries for a 3-secondary slot" do
-        data = valid_item.merge("slot" => "chest", "secondaries" => ["stamina", "crit_rating", "haste_rating"])
+        data = valid_item.except("weaponType").merge("slot" => "chest", "secondaries" => ["stamina", "crit_rating", "haste_rating"])
         expect { described_class.validate!(data) }.not_to raise_error
       end
 

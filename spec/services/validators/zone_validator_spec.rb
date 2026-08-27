@@ -66,6 +66,7 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
           "identifier" => "sword-of-doom",
           "name" => "Sword of Doom",
           "slot" => "main_hand",
+          "weaponType" => "sword",
           "elvl" => 5,
           "primary" => "strength",
           "secondaries" => ["stamina", "crit_rating"]
