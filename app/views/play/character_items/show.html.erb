@@ -1,6 +1,9 @@
 <h1><%= @item.name %></h1>
 
 <p>Slot: <%= @item.slot %></p>
+<% if @item.source_json["weaponType"].present? %>
+  <p>Weapon Type: <%= @item.source_json["weaponType"] %></p>
+<% end %>
 <p>Elevation: <%= @item.elvl %></p>
 <p>From: <%= @item.provenance_zone&.identifier %></p>
 <p>Received: <%= @item.received_at.strftime("%Y-%m-%d %H:%M") %></p>

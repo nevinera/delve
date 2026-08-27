@@ -49,6 +49,27 @@ RSpec.describe "Play::CharacterItems", type: :request do
         expect(response.body).not_to include("Equip as Right Ring")
       end
     end
+
+    context "when the item has a weaponType" do
+      let(:item) do
+        create(:character_item, character: character, slot: "main_hand",
+          source_json: {"weaponType" => "sword"})
+      end
+
+      it "shows the weapon type" do
+        get "/play/characters/#{character.id}/character_items/#{item.id}"
+        expect(response.body).to include("Weapon Type: sword")
+      end
+    end
+
+    context "when the item has no weaponType" do
+      let(:item) { create(:character_item, character: character, slot: "head") }
+
+      it "does not show a weapon type" do
+        get "/play/characters/#{character.id}/character_items/#{item.id}"
+        expect(response.body).not_to include("Weapon Type:")
+      end
+    end
   end
 
   describe "GET /play/characters/:character_id/character_items" do
