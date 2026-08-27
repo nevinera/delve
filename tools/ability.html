@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Delve Ability Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #ddd;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #controls {
+      width: 420px;
+      flex-shrink: 0;
+      background: #2a2a2a;
+      border-left: 1px solid #444;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #controls h2 { font-size: 14px; color: #ccc; }
+
+    #controls label { font-size: 12px; color: #aaa; display: block; margin-bottom: 3px; }
+
+    #controls input[type=text], #controls textarea {
+      width: 100%;
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 5px 6px;
+      font-family: monospace;
+      font-size: 12px;
+      border-radius: 3px;
+    }
+
+    #power-json { height: 260px; resize: vertical; }
+
+    .field { display: flex; flex-direction: column; }
+
+    .row { display: flex; gap: 10px; }
+    .row > .field { flex: 1; }
+
+    button {
+      background: #446;
+      border: 1px solid #668;
+      color: #cce;
+      padding: 6px 12px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #558; }
+    button:disabled { background: #333; color: #666; cursor: default; border-color: #444; }
+
+    #load-error { color: #e57373; font-size: 12px; white-space: pre-wrap; }
+
+    #power-summary { font-size: 12px; color: #bbb; line-height: 1.5; }
+    #power-summary .name { color: #eee; font-weight: bold; font-size: 14px; }
+
+    #range-row { display: flex; align-items: center; gap: 10px; }
+    #range-row input[type=range] { flex: 1; }
+    #range-label { width: 60px; text-align: right; font-size: 12px; color: #aaa; }
+
+    #use-btn { font-size: 15px; padding: 10px; }
+
+    #log {
+      flex: 1;
+      min-height: 100px;
+      background: #111;
+      border: 1px solid #444;
+      border-radius: 3px;
+      padding: 6px 8px;
+      font-size: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+    #log div { color: #999; padding: 1px 0; }
+    #log div.error { color: #e57373; }
+  </style>
+</head>
+<body>
+
+<div id="canvas-area"></div>
+
+<div id="controls">
+  <h2>Tokens</h2>
+  <div class="row">
+    <div class="field">
+      <label>Character token URL</label>
+      <input type="text" id="char-token-url" value="http://localhost:8001/character-tokens/male-elf-guard.webp">
+    </div>
+    <div class="field">
+      <label>Target token URL</label>
+      <input type="text" id="target-token-url" value="http://localhost:8001/unit_types/tokens/goblin-1.webp">
+    </div>
+  </div>
+  <button id="apply-tokens-btn">Apply Tokens</button>
+
+  <h2>Power</h2>
+  <div class="field">
+    <label>Asset base URL (relative sourceURLs resolve against this)</label>
+    <input type="text" id="asset-base-url" value="http://localhost:8001/classes/powers/punch.json">
+  </div>
+  <div class="field">
+    <label>Power JSON (see docs/schema/power.md)</label>
+    <textarea id="power-json" spellcheck="false"></textarea>
+  </div>
+  <button id="load-btn">Load Power</button>
+  <div id="load-error"></div>
+  <div id="power-summary"></div>
+
+  <h2>Target Distance</h2>
+  <div id="range-row">
+    <input type="range" id="range-slider" min="0" max="10" step="0.5" value="5">
+    <div id="range-label">5.0 ft</div>
+  </div>
+
+  <button id="use-btn" disabled>Use Power</button>
+
+  <h2>Log</h2>
+  <div id="log"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.176.0/build/three.module.js'
+
+const DEG_TO_RAD = Math.PI / 180
+const DEFAULT_MAX_RANGE = 10 // fallback slider max for melee/self-only powers (no maxRange)
+
+const canvasArea      = document.getElementById('canvas-area')
+const charTokenInput  = document.getElementById('char-token-url')
+const targetTokenInput = document.getElementById('target-token-url')
+const applyTokensBtn  = document.getElementById('apply-tokens-btn')
+const assetBaseInput  = document.getElementById('asset-base-url')
+const powerJsonInput  = document.getElementById('power-json')
+const loadBtn         = document.getElementById('load-btn')
+const loadError       = document.getElementById('load-error')
+const powerSummary    = document.getElementById('power-summary')
+const rangeSlider     = document.getElementById('range-slider')
+const rangeLabel      = document.getElementById('range-label')
+const useBtn          = document.getElementById('use-btn')
+const log             = document.getElementById('log')
+
+powerJsonInput.value = JSON.stringify({
+  name: "Punch",
+  castTime: null,
+  globalCooldown: 0.5,
+  graphicEffects: [
+    {
+      sourceURL: "../graphics/punch-impact.webp",
+      duration: 0.3,
+      from: "self",
+      to: "affected",
+      when: "impact",
+      condition: "onHit",
+      color: "#ff0000"
+    }
+  ],
+  soundEffects: [
+    {
+      sourceURL: "../sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit"
+    }
+  ],
+  effects: [
+    {
+      type: "harm",
+      affects: "bTarget",
+      amount: [89.0, 140.0],
+      range: 5.0,
+      tags: ["physical", "melee"]
+    }
+  ]
+}, null, 2)
+
+function logMsg(text, isError = false) {
+  const div = document.createElement('div')
+  if (isError) div.className = 'error'
+  const time = new Date().toLocaleTimeString()
+  div.textContent = `[${time}] ${text}`
+  log.prepend(div)
+}
+
+// --- scene setup (static — no map, just a ground plane and two tokens) ---
+
+const canvas = document.createElement('canvas')
+canvasArea.appendChild(canvas)
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+renderer.setPixelRatio(window.devicePixelRatio)
+
+const scene = new THREE.Scene()
+scene.background = new THREE.Color(0x14181c)
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.7))
+const sun = new THREE.DirectionalLight(0xffffff, 1.4)
+sun.position.set(5, 10, 5)
+scene.add(sun)
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(200, 200),
+  new THREE.MeshLambertMaterial({ color: 0x4d6b4d })
+)
+ground.rotation.x = -Math.PI / 2
+scene.add(ground)
+
+const grid = new THREE.GridHelper(200, 40, 0x8a8a8a, 0x5a5a5a)
+scene.add(grid)
+
+const camera = new THREE.PerspectiveCamera(40, 4 / 3, 0.1, 1000)
+
+function fitRenderer() {
+  const aspect = 4 / 3
+  const aw = canvasArea.clientWidth, ah = canvasArea.clientHeight
+  const w = aw / ah > aspect ? Math.round(ah * aspect) : aw
+  const h = aw / ah > aspect ? ah : Math.round(aw / aspect)
+  renderer.setSize(w, h)
+  camera.aspect = aspect
+  camera.updateProjectionMatrix()
+}
+window.addEventListener('resize', fitRenderer)
+fitRenderer()
+
+// --- token construction (ported from tools/demo.html) ---
+
+function addFacingArrow(group, radius, color) {
+  const hw = (0.3 * radius) / Math.sqrt(3)
+  const y  = 0.31
+  const verts = [
+     0,   y,       -1.4 * radius,
+    -hw,  y,       -1.1 * radius,
+     hw,  y,       -1.1 * radius,
+  ]
+  const fillGeo = new THREE.BufferGeometry()
+  fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+  fillGeo.setIndex([0, 1, 2])
+  fillGeo.computeVertexNormals()
+  group.add(new THREE.Mesh(fillGeo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })))
+
+  const borderVerts = verts.map((v, i) => i % 3 === 1 ? v + 0.005 : v)
+  const borderGeo = new THREE.BufferGeometry()
+  borderGeo.setAttribute('position', new THREE.Float32BufferAttribute(borderVerts, 3))
+  group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })))
+}
+
+function createToken(radius, bodyColor, arrowColor, tokenUrl) {
+  const group = new THREE.Group()
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: bodyColor })
+  )
+  body.position.y = 0.15
+  group.add(body)
+
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff })
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat)
+  portrait.rotation.x = -Math.PI / 2
+  portrait.position.y = 0.31
+  group.add(portrait)
+
+  group._portraitMat = portraitMat
+  if (tokenUrl) loadTokenTexture(group, tokenUrl)
+
+  addFacingArrow(group, radius, arrowColor)
+  return group
+}
+
+function loadTokenTexture(group, url) {
+  new THREE.TextureLoader().load(url, texture => {
+    group._portraitMat.map = texture
+    group._portraitMat.needsUpdate = true
+  }, undefined, () => logMsg(`Failed to load token image: ${url}`, true))
+}
+
+const charToken = createToken(2.2, 0x2e7d32, 0x81c784, charTokenInput.value.trim())
+charToken.position.set(0, 0, 0)
+charToken.rotation.y = 0 // faces -Z
+scene.add(charToken)
+
+const targetToken = createToken(2.0, 0xc62828, 0xef9a9a, targetTokenInput.value.trim())
+targetToken.rotation.y = Math.PI // faces +Z, toward the character
+scene.add(targetToken)
+
+applyTokensBtn.addEventListener('click', () => {
+  loadTokenTexture(charToken, charTokenInput.value.trim())
+  loadTokenTexture(targetToken, targetTokenInput.value.trim())
+  logMsg('Token images updated.')
+})
+
+// --- target distance ---
+
+function positionTarget(distanceFt) {
+  targetToken.position.set(0, 0, -distanceFt)
+}
+positionTarget(parseFloat(rangeSlider.value))
+
+// --- camera orbit (drag to rotate around the character token) ---
+// Radius/pitch mirror tools/demo.html's CAM_BACK/CAM_HEIGHT/pitch clamp.
+
+const CAM_BACK   = 45 * 0.7
+const CAM_HEIGHT = 50 * 0.7
+const CAM_RADIUS = Math.sqrt(CAM_BACK * CAM_BACK + CAM_HEIGHT * CAM_HEIGHT)
+const PITCH_MIN  = 20 * DEG_TO_RAD
+const PITCH_MAX  = 60 * DEG_TO_RAD
+
+const orbit = { azimuth: 0, pitch: Math.atan2(CAM_HEIGHT, CAM_BACK) }
+
+function positionCamera(distanceFt) {
+  const radius = CAM_RADIUS + distanceFt * 0.6
+  const horiz = radius * Math.cos(orbit.pitch)
+  const height = radius * Math.sin(orbit.pitch)
+  camera.position.set(
+    Math.sin(orbit.azimuth) * horiz,
+    height,
+    Math.cos(orbit.azimuth) * horiz
+  )
+  camera.lookAt(0, 1.5, 0)
+}
+positionCamera(parseFloat(rangeSlider.value))
+
+rangeSlider.addEventListener('input', () => {
+  const d = parseFloat(rangeSlider.value)
+  rangeLabel.textContent = `${d.toFixed(1)} ft`
+  positionTarget(d)
+  positionCamera(d)
+})
+
+canvas.addEventListener('contextmenu', e => e.preventDefault())
+
+let dragLastX = null, dragLastY = null
+canvas.addEventListener('mousedown', e => { dragLastX = e.clientX; dragLastY = e.clientY })
+window.addEventListener('mousemove', e => {
+  if (dragLastX === null) return
+  orbit.azimuth -= (e.clientX - dragLastX) * 0.008
+  orbit.pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, orbit.pitch + (e.clientY - dragLastY) * 0.008))
+  dragLastX = e.clientX; dragLastY = e.clientY
+  positionCamera(parseFloat(rangeSlider.value))
+})
+window.addEventListener('mouseup', () => { dragLastX = null; dragLastY = null })
+
+// --- power loading ---
+
+let power = null
+let assetBaseUrl = null
+
+const REQUIRED_FIELDS = ['name', 'castTime', 'globalCooldown', 'effects']
+
+loadBtn.addEventListener('click', loadPower)
+
+function loadPower() {
+  loadError.textContent = ''
+  let parsed
+  try {
+    parsed = JSON.parse(powerJsonInput.value)
+  } catch (e) {
+    loadError.textContent = `Invalid JSON: ${e.message}`
+    return
+  }
+  const missing = REQUIRED_FIELDS.filter(f => !(f in parsed))
+  if (missing.length) {
+    loadError.textContent = `Missing required field(s): ${missing.join(', ')}`
+    return
+  }
+
+  power = parsed
+  try {
+    assetBaseUrl = new URL('.', assetBaseInput.value.trim()).href
+  } catch {
+    assetBaseUrl = null
+  }
+
+  const maxRange = power.maxRange ?? DEFAULT_MAX_RANGE
+  rangeSlider.max = String(maxRange)
+  rangeSlider.value = String(maxRange)
+  rangeLabel.textContent = `${maxRange.toFixed(1)} ft`
+  positionTarget(parseFloat(rangeSlider.value))
+  positionCamera(parseFloat(rangeSlider.value))
+
+  renderSummary()
+  useBtn.disabled = false
+  logMsg(`Loaded power "${power.name}".`)
+}
+
+function renderSummary() {
+  const parts = [`<div class="name">${escapeHtml(power.name)}</div>`]
+  if (power.description) parts.push(escapeHtml(power.description))
+  const meta = []
+  meta.push(`castTime: ${power.castTime ?? 'instant'}`)
+  meta.push(`GCD: ${power.globalCooldown}s`)
+  if (power.cooldown) meta.push(`cooldown: ${power.cooldown}s`)
+  if (power.maxRange != null) meta.push(`maxRange: ${power.maxRange}ft`)
+  if (power.frontal === false) meta.push('frontal: no')
+  if (power.costType) meta.push(`cost: ${power.costAmount ?? '?'} ${power.costType}`)
+  parts.push(meta.join(' &middot; '))
+  parts.push(`effects: ${(power.effects || []).map(e => e.type).join(', ') || '(none)'}`)
+  powerSummary.innerHTML = parts.join('<br>')
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+
+// --- casting / effect playback ---
+// Mirrors the real client's App.jsx#handleUsePower + SceneManager#playGraphicEffects:
+// all graphicEffects/soundEffects fire together on resolution, regardless of
+// their `when`/`condition` (the real client doesn't currently distinguish
+// those either — hit/miss resolution is server-authoritative).
+
+const activeEffects = []
+
+useBtn.addEventListener('click', () => {
+  if (!power) return
+  useBtn.disabled = true
+
+  const castTime = power.castTime
+  if (castTime) {
+    logMsg(`Casting "${power.name}" (${castTime}s)...`)
+    setTimeout(() => resolvePower(), castTime * 1000)
+  } else {
+    resolvePower()
+  }
+})
+
+function resolvePower() {
+  logMsg(`"${power.name}" fired!`)
+  playGraphicEffects(power.graphicEffects || [])
+  playSoundEffects(power.soundEffects || [])
+  // Cooldown/globalCooldown are ignored here - this tool is for previewing
+  // effects repeatedly, not for testing pacing.
+  useBtn.disabled = false
+}
+
+function resolveEffectUrl(sourceURL) {
+  if (!assetBaseUrl) return sourceURL
+  try {
+    return new URL(sourceURL, assetBaseUrl).href
+  } catch {
+    return sourceURL
+  }
+}
+
+function playGraphicEffects(effects) {
+  const positions = { self: charToken.position, affected: targetToken.position }
+  for (const effect of effects) {
+    const fromPos = positions[effect.from] ?? positions.self
+    const toPos   = positions[effect.to]   ?? fromPos
+    const url = resolveEffectUrl(effect.sourceURL)
+    spawnGraphicEffect(url, effect.duration, fromPos, toPos, effect.color, effect.scale ?? 1.0, effect.opacity ?? 1.0)
+  }
+}
+
+function spawnGraphicEffect(url, duration, fromPos, toPos, color, scale, opacity) {
+  new THREE.TextureLoader().load(url, texture => {
+    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, opacity })
+    if (color) mat.color.set(`#${color.replace(/^#/, '')}`)
+    const sprite = new THREE.Sprite(mat)
+    sprite.position.set(fromPos.x, 2.0, fromPos.z)
+    sprite.scale.set(4 * scale, 4 * scale, 1)
+    scene.add(sprite)
+    const durationMs = duration * 1000
+    activeEffects.push({
+      sprite, mat, opacity,
+      startedAt: performance.now(),
+      durationMs,
+      fadeStartMs: durationMs * 0.6,
+      fromX: fromPos.x, fromZ: fromPos.z, toX: toPos.x, toZ: toPos.z,
+    })
+  }, undefined, () => logMsg(`Failed to load graphic effect: ${url}`, true))
+}
+
+function updateGraphicEffects(now) {
+  for (let i = activeEffects.length - 1; i >= 0; i--) {
+    const e = activeEffects[i]
+    const elapsed = now - e.startedAt
+    if (elapsed >= e.durationMs) {
+      scene.remove(e.sprite)
+      e.mat.dispose()
+      activeEffects.splice(i, 1)
+      continue
+    }
+    const t = elapsed / e.durationMs
+    e.sprite.position.x = e.fromX + (e.toX - e.fromX) * t
+    e.sprite.position.z = e.fromZ + (e.toZ - e.fromZ) * t
+    if (elapsed >= e.fadeStartMs) {
+      e.mat.opacity = e.opacity * (1 - (elapsed - e.fadeStartMs) / (e.durationMs - e.fadeStartMs))
+    }
+  }
+}
+
+function playSoundEffects(effects) {
+  for (const effect of effects) {
+    const url = resolveEffectUrl(effect.sourceURL)
+    const audio = new Audio(url)
+    audio.volume = Math.max(0, Math.min(1, effect.volumeScale ?? 1.0))
+    audio.playbackRate = effect.pitchScale ?? 1.0
+    audio.play().catch(e => logMsg(`Failed to play sound effect: ${e.message}`, true))
+  }
+}
+
+loadPower() // load the prefilled example so the slider/target start in sync
+
+// --- render loop ---
+
+function animate(time) {
+  requestAnimationFrame(animate)
+  updateGraphicEffects(time)
+  renderer.render(scene, camera)
+}
+requestAnimationFrame(animate)
+</script>
+
+</body>
+</html>
