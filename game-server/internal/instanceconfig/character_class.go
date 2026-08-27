@@ -18,6 +18,7 @@ type CharacterClass struct {
 	Powers         []Power        `json:"powers,omitempty"`
 	PrimaryStats   []string       `json:"primaryStats"`
 	SecondaryStats []string       `json:"secondaryStats"`
+	Wields         []string       `json:"wields"`
 }
 
 func (c *CharacterClass) UnmarshalJSON(data []byte) error {

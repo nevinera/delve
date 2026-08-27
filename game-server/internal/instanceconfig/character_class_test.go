@@ -28,6 +28,7 @@ func TestCharacterClass_ValidFull(t *testing.T) {
 	assert.Empty(t, c.Resources)
 	assert.Equal(t, []string{"strength"}, c.PrimaryStats)
 	assert.Equal(t, []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"}, c.SecondaryStats)
+	assert.Equal(t, []string{"dagger", "dagger"}, c.Wields)
 }
 
 func TestCharacterClass_Powers(t *testing.T) {
