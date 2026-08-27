@@ -148,9 +148,9 @@ func TestChecksumParity(t *testing.T) {
 	var fixture struct {
 		ExpectedChecksum string `json:"expected_checksum"`
 		Units            map[string]struct {
-			ZoneUnitIdentifier  string  `json:"zone_unit_identifier"`
-			MapIdentifier       string  `json:"map_identifier"`
-			Position            struct {
+			ZoneUnitIdentifier string `json:"zone_unit_identifier"`
+			MapIdentifier      string `json:"map_identifier"`
+			Position           struct {
 				X     float64 `json:"x"`
 				Y     float64 `json:"y"`
 				Angle float64 `json:"angle"`

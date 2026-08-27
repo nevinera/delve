@@ -7,16 +7,16 @@ package instanceconfig
 //   - graphicEffects: visual effects played on cast/impact
 //   - soundEffects:   audio effects played on cast/impact
 type Power struct {
-	Name           string        `json:"name"`                   // Required
+	Name           string        `json:"name"` // Required
 	Description    string        `json:"description,omitempty"`
-	MaxRange       float64       `json:"maxRange,omitempty"`     // Feet to valid target; omit for self/melee
-	CastTime       *float64      `json:"castTime"`               // Required: seconds, or null for instant
-	GlobalCooldown float64       `json:"globalCooldown"`         // Required: seconds
-	Cooldown       float64       `json:"cooldown,omitempty"`     // Per-power cooldown in seconds
-	Frontal        *bool         `json:"frontal,omitempty"`      // nil/true = 150° arc required; false = any facing
-	CostType       string        `json:"costType,omitempty"`     // Resource name required
-	CostAmount     float64       `json:"costAmount,omitempty"`   // Minimum resource required
-	Effects        []PowerEffect `json:"effects"`                // Required (may be empty)
+	MaxRange       float64       `json:"maxRange,omitempty"`   // Feet to valid target; omit for self/melee
+	CastTime       *float64      `json:"castTime"`             // Required: seconds, or null for instant
+	GlobalCooldown float64       `json:"globalCooldown"`       // Required: seconds
+	Cooldown       float64       `json:"cooldown,omitempty"`   // Per-power cooldown in seconds
+	Frontal        *bool         `json:"frontal,omitempty"`    // nil/true = 150° arc required; false = any facing
+	CostType       string        `json:"costType,omitempty"`   // Resource name required
+	CostAmount     float64       `json:"costAmount,omitempty"` // Minimum resource required
+	Effects        []PowerEffect `json:"effects"`              // Required (may be empty)
 }
 
 // IsFrontal returns true when the power requires the caster to face the target
@@ -56,11 +56,11 @@ type PowerEffect struct {
 
 // Status is a named effect applied to a unit for a fixed duration.
 type Status struct {
-	Name      string         `json:"name"`      // Required
-	TreatAs   string         `json:"treatAs"`   // Required: "buff", "debuff", or "inherent"
-	Stacking  string         `json:"stacking"`  // Required: "extend", "replace", or "stack"
+	Name      string         `json:"name"`                // Required
+	TreatAs   string         `json:"treatAs"`             // Required: "buff", "debuff", or "inherent"
+	Stacking  string         `json:"stacking"`            // Required: "extend", "replace", or "stack"
 	MaxStacks int            `json:"maxStacks,omitempty"` // Only meaningful when stacking is "stack"
-	Effects   []StatusEffect `json:"effects"`   // Required (may be empty)
+	Effects   []StatusEffect `json:"effects"`             // Required (may be empty)
 }
 
 // StatusEffect describes one mechanical outcome of a status being active.

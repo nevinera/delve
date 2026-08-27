@@ -43,9 +43,9 @@ func validZoneConfig() instanceconfig.Zone {
 
 func validRequestBody(extras map[string]any) []byte {
 	base := map[string]any{
-		"zone_identifier": "goblin-cave",
-		"version":         "v1",
-		"database_id":     "db-1",
+		"zone_identifier":       "goblin-cave",
+		"version":               "v1",
+		"database_id":           "db-1",
 		"source_url":            "http://x",
 		"zone_config":           validZoneConfig(),
 		"character_name":        "Aldric",

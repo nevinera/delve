@@ -334,9 +334,9 @@ const (
 // preventing clumping when multiple units chase the same target.
 func applyNPCSeparation(state *instancestate.InstanceState, dt float64) {
 	type entry struct {
-		unit      *instancestate.UnitState
-		x, y      float64
-		mapID     string
+		unit  *instancestate.UnitState
+		x, y  float64
+		mapID string
 	}
 	var npcs []entry
 	for _, u := range state.Units {
@@ -412,4 +412,3 @@ func buildNPCConfigByID(zone instanceconfig.Zone) map[string]npcEntry {
 	}
 	return m
 }
-

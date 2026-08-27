@@ -19,11 +19,11 @@ func run(args ...string) (stdout, stderr string, code int) {
 
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name       string
-		args       []string
-		wantCode   int
-		wantOut    string
-		wantErr    string
+		name     string
+		args     []string
+		wantCode int
+		wantOut  string
+		wantErr  string
 	}{
 		{
 			name:     "no arguments",

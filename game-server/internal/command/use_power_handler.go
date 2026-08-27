@@ -60,8 +60,12 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 			dy := target.Position.Y - unit.Position.Y
 			toTarget := math.Atan2(dx, dy) * 180 / math.Pi
 			diff := toTarget - unit.Position.Angle
-			for diff > 180 { diff -= 360 }
-			for diff < -180 { diff += 360 }
+			for diff > 180 {
+				diff -= 360
+			}
+			for diff < -180 {
+				diff += 360
+			}
 			if math.Abs(diff) > 75 {
 				return nil
 			}

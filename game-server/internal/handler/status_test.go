@@ -12,8 +12,8 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/handler"
 	"github.com/delve-mmo/game-server/internal/instance"
-	"github.com/delve-mmo/game-server/internal/version"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/version"
 )
 
 func TestStatus(t *testing.T) {

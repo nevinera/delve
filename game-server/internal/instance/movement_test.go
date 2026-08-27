@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	tickSeconds              = 0.1  // TickInterval.Seconds()
-	baseSpeed                = 20.0 // basePlayerSpeed
-	expectedDistPerTick      = baseSpeed * tickSeconds
-	expectedBackwardPerTick  = baseSpeed * instance.BackwardSpeedFactor * tickSeconds
+	tickSeconds             = 0.1  // TickInterval.Seconds()
+	baseSpeed               = 20.0 // basePlayerSpeed
+	expectedDistPerTick     = baseSpeed * tickSeconds
+	expectedBackwardPerTick = baseSpeed * instance.BackwardSpeedFactor * tickSeconds
 )
 
 func movingUnit(angle float64, intent instancestate.MovementIntent) (*instancestate.UnitState, *instancestate.InstanceState) {

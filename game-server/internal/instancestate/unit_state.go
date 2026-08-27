@@ -12,14 +12,14 @@ import (
 type LootClaimState string
 
 const (
-	LootClaimStateAvailable   LootClaimState = "available"    // character can take this item
-	LootClaimStateUpgrade     LootClaimState = "upgrade"      // auto-upgrade goroutine in flight
-	LootClaimStateUpgraded    LootClaimState = "upgraded"     // auto-upgrade (or other-version manual take) confirmed
-	LootClaimStateLocked      LootClaimState = "locked"       // someone else has it claimed
+	LootClaimStateAvailable   LootClaimState = "available"     // character can take this item
+	LootClaimStateUpgrade     LootClaimState = "upgrade"       // auto-upgrade goroutine in flight
+	LootClaimStateUpgraded    LootClaimState = "upgraded"      // auto-upgrade (or other-version manual take) confirmed
+	LootClaimStateLocked      LootClaimState = "locked"        // someone else has it claimed
 	LootClaimStateLockedForMe LootClaimState = "locked_for_me" // this character's manual take is in flight
-	LootClaimStateReceived    LootClaimState = "received"     // this character got it (new award)
-	LootClaimStateGone        LootClaimState = "gone"         // consumed by another character
-	LootClaimStateOwned       LootClaimState = "owned"        // character already owns this exact version
+	LootClaimStateReceived    LootClaimState = "received"      // this character got it (new award)
+	LootClaimStateGone        LootClaimState = "gone"          // consumed by another character
+	LootClaimStateOwned       LootClaimState = "owned"         // character already owns this exact version
 )
 
 // CharacterLootClaim is one character's relationship to a loot item.
@@ -101,8 +101,8 @@ type BehaviorState struct {
 
 	// position and map recorded when the unit first engaged. Used to leash back
 	// after the target dies or disappears.
-	LeashX   float64
-	LeashY   float64
+	LeashX     float64
+	LeashY     float64
 	LeashMapID string
 
 	// phased tactics
@@ -115,10 +115,10 @@ type BehaviorState struct {
 
 // UnitState is the full runtime state of one unit instance.
 type UnitState struct {
-	ZoneUnitIdentifier string              // non-empty: Unit.Identifier from zone config
-	UnitTypeIdentifier string              // key into zone.UnitTypes
+	ZoneUnitIdentifier string // non-empty: Unit.Identifier from zone config
+	UnitTypeIdentifier string // key into zone.UnitTypes
 	MapIdentifier      string
-	Hostility          string              // "hostile", "neutral", "friendly", or "" for players
+	Hostility          string // "hostile", "neutral", "friendly", or "" for players
 	Position           instanceconfig.Position
 	SpawnPoint         instanceconfig.Position // initial position; used for respawn
 	SpawnMapIdentifier string                  // map the unit spawned into; used for respawn
@@ -130,16 +130,16 @@ type UnitState struct {
 	Speed       float64 // movement speed in feet per second
 	Radius      float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
-	LootTable map[string]int          // identifier → weight; nil means no loot
-	LootCount [2]int                  // [min, max] items to award; both 1 when lootCount omitted
-	LootItems []PendingLootItem       // rolled at death; nil until the unit dies
+	LootTable map[string]int    // identifier → weight; nil means no loot
+	LootCount [2]int            // [min, max] items to award; both 1 when lootCount omitted
+	LootItems []PendingLootItem // rolled at death; nil until the unit dies
 
 	Status               UnitStatus
 	Target               *uuid.UUID
 	TaggedBy             *uuid.UUID // first player to damage this unit
 	GlobalCooldownEndsAt time.Time
-	PowerCooldowns         map[string]time.Time // keyed by power name; zero/missing means ready
-	ActiveStatusEffects    []ActiveStatusEffect
-	Behavior            BehaviorState
-	MovementIntent      MovementIntent
+	PowerCooldowns       map[string]time.Time // keyed by power name; zero/missing means ready
+	ActiveStatusEffects  []ActiveStatusEffect
+	Behavior             BehaviorState
+	MovementIntent       MovementIntent
 }

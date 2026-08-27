@@ -2,15 +2,15 @@ package instanceconfig
 
 // Unit is a placed instance of a UnitType on a map.
 type Unit struct {
-	UnitType         string       `json:"unitType"`         // Required: key into zone's UnitTypes map
-	Position         Position     `json:"position"`         // Required: initial placement and facing
-	Hostility        string       `json:"hostility"`        // Required: "hostile", "neutral", or "friendly"
-	CurrentHPFraction float64     `json:"currentHpFraction,omitempty"` // Default 1.0
-	Movement         UnitMovement `json:"movement,omitempty"`
-	Identifier       string         `json:"identifier,omitempty"`
-	Links            []string       `json:"links,omitempty"`       // Identifiers of units that aggro together
-	LootTable        map[string]int `json:"lootTable,omitempty"`   // identifier → weight
-	LootCount        *ValueRange    `json:"lootCount,omitempty"`   // items to award per kill; default 1
+	UnitType          string         `json:"unitType"`                    // Required: key into zone's UnitTypes map
+	Position          Position       `json:"position"`                    // Required: initial placement and facing
+	Hostility         string         `json:"hostility"`                   // Required: "hostile", "neutral", or "friendly"
+	CurrentHPFraction float64        `json:"currentHpFraction,omitempty"` // Default 1.0
+	Movement          UnitMovement   `json:"movement,omitempty"`
+	Identifier        string         `json:"identifier,omitempty"`
+	Links             []string       `json:"links,omitempty"`     // Identifiers of units that aggro together
+	LootTable         map[string]int `json:"lootTable,omitempty"` // identifier → weight
+	LootCount         *ValueRange    `json:"lootCount,omitempty"` // items to award per kill; default 1
 }
 
 // UnitMovement defines how an un-aggro'd unit moves.

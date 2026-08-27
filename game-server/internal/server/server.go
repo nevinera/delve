@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/delve-mmo/game-server/internal/config"
 	"github.com/delve-mmo/game-server/internal/handler"

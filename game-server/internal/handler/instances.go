@@ -30,12 +30,12 @@ func NewInstances(registry *instance.Registry, maxSlots int) *Instances {
 
 // createRequest is the body shape for POST /instances.
 type createRequest struct {
-	Identifier     string         `json:"identifier"`      // Required: UUID string
-	DatabaseID     string         `json:"database_id"`     // Required
-	ZoneIdentifier string         `json:"zone_identifier"` // Required
-	Version        string         `json:"version"`         // Required
-	SourceURL      string         `json:"source_url"`      // Required
-	ZoneConfig     instanceconfig.Zone `json:"zone_config"`    // Required: fully-resolved zone manifest
+	Identifier     string              `json:"identifier"`      // Required: UUID string
+	DatabaseID     string              `json:"database_id"`     // Required
+	ZoneIdentifier string              `json:"zone_identifier"` // Required
+	Version        string              `json:"version"`         // Required
+	SourceURL      string              `json:"source_url"`      // Required
+	ZoneConfig     instanceconfig.Zone `json:"zone_config"`     // Required: fully-resolved zone manifest
 }
 
 // instanceResponse is the shape returned for a single instance.

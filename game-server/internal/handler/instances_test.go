@@ -49,9 +49,9 @@ func validCreateBody(id uuid.UUID) []byte {
 			"private": true,
 			"maps": []map[string]any{
 				{
-					"identifier":      "room",
-					"name":            "Room",
-					"feetDimensions":  map[string]any{"width": 20.0, "height": 20.0},
+					"identifier":     "room",
+					"name":           "Room",
+					"feetDimensions": map[string]any{"width": 20.0, "height": 20.0},
 				},
 			},
 		},
@@ -165,7 +165,7 @@ func TestInstances_Create_StartFailure(t *testing.T) {
 			"unitTypes": map[string]any{
 				"goblin": map[string]any{
 					"name": "Goblin", "tokenRadius": 1.0, "maxHP": 10,
-					"resource": map[string]any{"name": "Energy", "max": 10.0, "defaultValue": 10.0, "returnRate": 0.0, "isFluid": true},
+					"resource":  map[string]any{"name": "Energy", "max": 10.0, "defaultValue": 10.0, "returnRate": 0.0, "isFluid": true},
 					"targeting": map[string]any{"type": "nearest"},
 					"tactics":   map[string]any{"type": "randomAvailable"},
 				},

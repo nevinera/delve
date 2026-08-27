@@ -102,8 +102,8 @@ func TestLoad(t *testing.T) {
 
 func TestLoad_MaxSlots(t *testing.T) {
 	tests := []struct {
-		name     string
-		env      string
+		name      string
+		env       string
 		wantSlots int
 	}{
 		{"default when unset", "", 25},
@@ -124,8 +124,8 @@ func TestLoad_MaxSlots(t *testing.T) {
 
 func TestLoad_MaxInstances(t *testing.T) {
 	tests := []struct {
-		name         string
-		env          string
+		name          string
+		env           string
 		wantInstances int
 	}{
 		{"default when unset", "", 200},

@@ -11,7 +11,7 @@ import (
 // all AssetReferences must be inlined before delivery. If a $ref key is
 // encountered during parsing, Unmarshal returns a clear error.
 type Zone struct {
-	Name        string              `json:"name"`    // Required: display name
+	Name        string              `json:"name"` // Required: display name
 	Description string              `json:"description,omitempty"`
 	Private     bool                `json:"private"` // Required: true = party-instanced, false = shared
 	Maps        []Map               `json:"maps"`    // Required: at least one

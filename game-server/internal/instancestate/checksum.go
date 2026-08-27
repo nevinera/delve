@@ -13,16 +13,16 @@ type canonicalEffect struct {
 }
 
 type canonicalUnit struct {
-	ID          string           `json:"id"`
-	Map         string           `json:"map"`
-	X           float64          `json:"x"`
-	Y           float64          `json:"y"`
-	Angle       float64          `json:"angle"`
-	Health      float64          `json:"health"`
-	MaxHealth   float64          `json:"maxHealth"`
-	Resource    float64          `json:"resource"`
-	MaxResource float64          `json:"maxResource"`
-	Status      UnitStatus       `json:"status"`
+	ID          string            `json:"id"`
+	Map         string            `json:"map"`
+	X           float64           `json:"x"`
+	Y           float64           `json:"y"`
+	Angle       float64           `json:"angle"`
+	Health      float64           `json:"health"`
+	MaxHealth   float64           `json:"maxHealth"`
+	Resource    float64           `json:"resource"`
+	MaxResource float64           `json:"maxResource"`
+	Status      UnitStatus        `json:"status"`
 	Effects     []canonicalEffect `json:"effects"`
 }
 

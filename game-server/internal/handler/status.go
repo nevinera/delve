@@ -8,11 +8,11 @@ import (
 )
 
 type statusResponse struct {
-	Status             string `json:"status"`
-	InstanceCount      int    `json:"instance_count"`
-	TotalPlayerCount   int    `json:"total_player_count"`
-	ActivePlayerCount  int    `json:"active_player_count"`
-	Version            string `json:"version"`
+	Status            string `json:"status"`
+	InstanceCount     int    `json:"instance_count"`
+	TotalPlayerCount  int    `json:"total_player_count"`
+	ActivePlayerCount int    `json:"active_player_count"`
+	Version           string `json:"version"`
 }
 
 // Status handles GET /status.json. It holds a reference to the registry so

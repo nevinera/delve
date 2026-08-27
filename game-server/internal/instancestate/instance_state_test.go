@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/delve-mmo/game-server/internal/instancestate"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
 var testUnitType = instanceconfig.UnitType{
@@ -139,9 +139,9 @@ func TestNewInstanceState_UnitFields(t *testing.T) {
 	assert.Equal(t, "m1", u.MapIdentifier)
 	assert.Equal(t, pos, u.Position)
 	assert.Equal(t, pos, u.SpawnPoint)
-	assert.Equal(t, 50.0, u.Health)    // 100 * 0.5
+	assert.Equal(t, 50.0, u.Health) // 100 * 0.5
 	assert.Equal(t, 100.0, u.MaxHealth)
-	assert.Equal(t, 25.0, u.Resource)  // Resource.DefaultValue
+	assert.Equal(t, 25.0, u.Resource) // Resource.DefaultValue
 	assert.Equal(t, 50.0, u.MaxResource)
 	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
 	assert.Nil(t, u.Target)

@@ -10,8 +10,8 @@ import (
 
 // LootEvent records items rolled when a unit dies, pending delivery to clients.
 type LootEvent struct {
-	UnitUUID uuid.UUID             // direct key into InstanceState.Units
-	UnitID   string                // zone unit identifier string (sent to client)
+	UnitUUID uuid.UUID // direct key into InstanceState.Units
+	UnitID   string    // zone unit identifier string (sent to client)
 	Items    []instanceconfig.Item
 }
 
@@ -40,12 +40,12 @@ type PendingLootClaim struct {
 // InstanceState is the full runtime state of one zone instance.
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
-	Units               map[uuid.UUID]*UnitState
-	Items               map[string]instanceconfig.Item // identifier → item definition; shared across units
-	PendingLootEvents        []LootEvent        // drained each tick by the tick loop
-	PendingLootClaims        []PendingLootClaim // drained each tick; goroutines fired for each
-	PendingLootFailures      []LootFailure      // drained each tick into delta message
-	PendingOwnershipUpdates  []OwnershipUpdate  // drained each tick to update slot OwnedZoneItems
+	Units                   map[uuid.UUID]*UnitState
+	Items                   map[string]instanceconfig.Item // identifier → item definition; shared across units
+	PendingLootEvents       []LootEvent                    // drained each tick by the tick loop
+	PendingLootClaims       []PendingLootClaim             // drained each tick; goroutines fired for each
+	PendingLootFailures     []LootFailure                  // drained each tick into delta message
+	PendingOwnershipUpdates []OwnershipUpdate              // drained each tick to update slot OwnedZoneItems
 }
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every

@@ -138,7 +138,7 @@ func TestUnitBehavior_Aggro_NeutralHostility_NeverAggros(t *testing.T) {
 func TestUnitBehavior_Aggro_NearestPlayerChosen(t *testing.T) {
 	zone := behaviorZone(50.0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
-	addPlayer(s, "map1", 30, 0) // farther
+	addPlayer(s, "map1", 30, 0)              // farther
 	nearID, _ := addPlayer(s, "map1", 10, 0) // nearer
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
@@ -573,4 +573,3 @@ func TestUnitBehavior_Leash_CrossMapSnapsBack_ClearsTag(t *testing.T) {
 
 	assert.Nil(t, u.TaggedBy)
 }
-

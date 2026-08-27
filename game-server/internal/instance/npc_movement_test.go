@@ -16,12 +16,12 @@ import (
 // helpers
 // ---------------------------------------------------------------------------
 
-func pos(x, y float64) instanceconfig.Position { return instanceconfig.Position{X: x, Y: y} }
-func loc(x, y float64) instanceconfig.Location { return instanceconfig.Location{X: x, Y: y} }
+func pos(x, y float64) instanceconfig.Position     { return instanceconfig.Position{X: x, Y: y} }
+func loc(x, y float64) instanceconfig.Location     { return instanceconfig.Location{X: x, Y: y} }
 func locPtr(x, y float64) *instanceconfig.Location { l := loc(x, y); return &l }
 
-func vr(v float64) instanceconfig.ValueRange        { return instanceconfig.ValueRange{v, v} }
-func vrPtr(v float64) *instanceconfig.ValueRange    { r := vr(v); return &r }
+func vr(v float64) instanceconfig.ValueRange     { return instanceconfig.ValueRange{v, v} }
+func vrPtr(v float64) *instanceconfig.ValueRange { r := vr(v); return &r }
 
 // npcZone builds a minimal zone with one map and one NPC unit.
 func npcZone(identifier string, startPos instanceconfig.Position, mv instanceconfig.UnitMovement) instanceconfig.Zone {
