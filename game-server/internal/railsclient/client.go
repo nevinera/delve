@@ -46,6 +46,7 @@ type awardBody struct {
 	Slot        string   `json:"slot"`
 	Elvl        int      `json:"elvl"`
 	Shield      bool     `json:"shield,omitempty"`
+	WeaponType  *string  `json:"weaponType,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Primary     *string  `json:"primary,omitempty"`
 	Secondaries []string `json:"secondaries,omitempty"`
@@ -76,6 +77,7 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 		Slot:        item.Slot,
 		Elvl:        item.Elvl,
 		Shield:      item.Shield,
+		WeaponType:  item.WeaponType,
 		Description: item.Description,
 		Primary:     item.Primary,
 		Secondaries: item.Secondaries,
