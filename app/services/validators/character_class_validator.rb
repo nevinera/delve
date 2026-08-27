@@ -11,6 +11,7 @@ module Validators
       validate_powers!(data, path: path) if data.key?("powers")
       validate_primary_stats!(data, path: path)
       validate_secondary_stats!(data, path: path)
+      validate_wields!(data, path: path)
     end
 
     private
@@ -88,6 +89,23 @@ module Validators
       invalid = stats - CharacterItem::SECONDARY_STATS
       if invalid.any?
         raise ValidationError.new("secondaryStats contains unrecognized values: #{invalid.join(", ")}", path: path)
+      end
+    end
+
+    def validate_wields!(data, path:)
+      wields_path = child_path(path, "wields")
+      wields = data["wields"]
+      raise ValidationError.new("wields must be an array", path: wields_path) unless wields.is_a?(Array)
+      validate_wields_content!(wields, path: wields_path)
+    end
+
+    def validate_wields_content!(wields, path:)
+      unless (1..2).cover?(wields.length)
+        raise ValidationError.new("wields must contain 1-2 entries", path: path)
+      end
+      invalid = wields - CharacterClass::WIELD_TYPES
+      if invalid.any?
+        raise ValidationError.new("wields contains unrecognized values: #{invalid.join(", ")}", path: path)
       end
     end
   end

@@ -158,5 +158,44 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /unrecognized values: wisdom/)
     end
+
+    it "raises when wields is missing" do
+      expect { described_class.validate!(character_class_fixture.except("wields")) }
+        .to raise_error(Validators::ValidationError, /wields must be an array/)
+    end
+
+    it "raises when wields is not an array" do
+      data = character_class_fixture.merge("wields" => "sword")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /wields must be an array/)
+    end
+
+    it "raises when wields is empty" do
+      data = character_class_fixture.merge("wields" => [])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /wields must contain 1-2 entries/)
+    end
+
+    it "raises when wields has more than 2 entries" do
+      data = character_class_fixture.merge("wields" => %w[sword shield dagger])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /wields must contain 1-2 entries/)
+    end
+
+    it "raises when wields contains an unrecognized value" do
+      data = character_class_fixture.merge("wields" => ["polearm"])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /unrecognized values: polearm/)
+    end
+
+    it "accepts a single two-handed wield entry" do
+      data = character_class_fixture.merge("wields" => ["staff"])
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "accepts a main-hand/off-hand pair, including matching duplicates" do
+      data = character_class_fixture.merge("wields" => %w[dagger dagger])
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
   end
 end

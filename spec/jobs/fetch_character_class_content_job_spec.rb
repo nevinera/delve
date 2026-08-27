@@ -6,7 +6,8 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
   let(:character_class) { create(:character_class, user: user, handle: handle) }
   let(:content) do
     '{"name":"Puncher","colors":{"major":"8B4513","minor":"F4A460"},' \
-      '"primaryStats":["strength"],"secondaryStats":["stamina","crit_rating","haste_rating","mastery_rating","versatility_rating"]}'
+      '"primaryStats":["strength"],"secondaryStats":["stamina","crit_rating","haste_rating","mastery_rating","versatility_rating"],' \
+      '"wields":["dagger","dagger"]}'
   end
 
   before do
