@@ -4,13 +4,10 @@ namespace :dev do
     user = seed_user
     handle = seed_handle(user)
     character_class = seed_character_class(user, handle)
-    small_cave = seed_zone(user, handle,
-      identifier: "small_cave", version: "0.1", name: "Small Cave", description: "Just one goblin",
-      config_url: "http://localhost:8001/zones/small-cave.full.json")
-    goblin_cave = seed_zone(user, handle,
-      identifier: "goblin_cave", version: "0.1", name: "Goblin Cave",
-      description: "A damp cave carved out by generations of goblin raiders.",
-      config_url: "http://localhost:8001/zones/goblin-cave.full.json")
+    small_cave = seed_zone(user, handle, identifier: "small_cave", version: "0.1", name: "Small Cave",
+      description: "Just one goblin", config_url: "http://localhost:8001/zones/small-cave.full.json")
+    goblin_cave = seed_zone(user, handle, identifier: "goblin_cave", version: "0.1", name: "Goblin Cave",
+      description: "A damp cave carved out by generations of goblin raiders.", config_url: "http://localhost:8001/zones/goblin-cave.full.json")
     seed_character(user, character_class, name: "Trainee-Adam",
       token_url: "http://localhost:8001/character-tokens/male-elf-guard.webp")
     seed_character(user, character_class, name: "Trainee-Bob",
@@ -41,12 +38,12 @@ def seed_character_class(user, handle)
   character_class
 end
 
-def seed_zone(user, handle, identifier:, version:, name:, description:, config_url:)
-  zone = Zone.find_or_create_by!(handle: handle, identifier: identifier, version: version) do |z|
+def seed_zone(user, handle, attrs)
+  zone = Zone.find_or_create_by!(handle: handle, identifier: attrs.fetch(:identifier), version: attrs.fetch(:version)) do |z|
     z.registering_user = user
-    z.name = name
-    z.description = description
-    z.config_url = config_url
+    z.name = attrs.fetch(:name)
+    z.description = attrs.fetch(:description)
+    z.config_url = attrs.fetch(:config_url)
   end
   fetch_and_verify!(FetchZoneContentJob, zone)
   zone
