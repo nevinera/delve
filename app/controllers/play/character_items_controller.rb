@@ -34,6 +34,7 @@ class Play::CharacterItemsController < Play::BaseController
       slot: item.slot,
       elvl: item.elvl,
       shield: item.source_json["shield"] == true,
+      weapon_type: item.source_json["weaponType"],
       description: item.description,
       primary_stat: item.primary_stat,
       secondary_stats: item.secondary_stats,

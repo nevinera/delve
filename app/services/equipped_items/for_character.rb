@@ -23,6 +23,7 @@ class EquippedItems::ForCharacter
       slot: item.slot,
       elvl: item.elvl,
       shield: item.source_json["shield"] == true,
+      weapon_type: item.source_json["weaponType"],
       primary_stat: item.primary_stat,
       secondary_stats: item.secondary_stats,
       stats: ItemStats::Raw.call(character_item: item)

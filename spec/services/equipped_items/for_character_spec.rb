@@ -38,6 +38,21 @@ RSpec.describe EquippedItems::ForCharacter do
     expect(described_class.call(character: character)["off_hand"][:shield]).to eq(true)
   end
 
+  it "reports weapon_type for a weapon item" do
+    item = create(:character_item, character: character, slot: "main_hand",
+      source_json: {"identifier" => "sword-of-doom", "name" => "Sword of Doom", "slot" => "main_hand", "weaponType" => "sword"})
+    create(:equipped_item, character: character, character_item: item, equipped_slot: "main_hand")
+
+    expect(described_class.call(character: character)["main_hand"][:weapon_type]).to eq("sword")
+  end
+
+  it "reports weapon_type: nil for a non-weapon item" do
+    item = create(:character_item, character: character, slot: "head")
+    create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+
+    expect(described_class.call(character: character)["head"][:weapon_type]).to be_nil
+  end
+
   it "includes every equipped slot" do
     head_item = create(:character_item, character: character, slot: "head")
     chest_item = create(:character_item, character: character, slot: "chest")

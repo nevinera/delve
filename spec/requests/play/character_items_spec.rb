@@ -121,6 +121,16 @@ RSpec.describe "Play::CharacterItems", type: :request do
           "secondary_stats" => head_item.secondary_stats
         )
         expect(head_json["stats"]).to eq(ItemStats::Raw.call(character_item: head_item).stringify_keys)
+        expect(head_json["weapon_type"]).to be_nil
+      end
+
+      it "includes weapon_type for a weapon item" do
+        create(:character_item, character: character, slot: "main_hand", name: "Sword of Whatever",
+          source_json: {"weaponType" => "sword"})
+        get "/play/characters/#{character.id}/character_items", as: :json
+        body = JSON.parse(response.body)
+        sword_json = body.find { |i| i["name"] == "Sword of Whatever" }
+        expect(sword_json["weapon_type"]).to eq("sword")
       end
 
       it "respects the slot filter" do
