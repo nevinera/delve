@@ -13,6 +13,13 @@ const PITCH_MIN = 20 * DEG;
 const PITCH_MAX = 60 * DEG;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 1.5;
+const EFFECT_HEIGHT = 0.4; // graphic effects float just above the tokens' top surface (y ~0.31)
+const DEFAULT_SPRITE_FRAME_RATE = 8; // fps, used when spriteFrameRate is omitted
+
+// Facing convention shared with tokens: angle 0 = -Z ("north"); rotation.y = -angle.
+function facingToward(x1, z1, x2, z2) {
+  return Math.atan2(x2 - x1, -(z2 - z1));
+}
 
 // ---------------------------------------------------------------------------
 // Wall building — ported from tools/demo.html
@@ -700,7 +707,10 @@ export class SceneManager {
   // effects: array of graphicEffect objects from the power config
   // positions: { self: {x,y}, target: {x,y} } in map coords
   // baseUrl: used to resolve relative sourceURLs
-  playGraphicEffects(effects, positions, baseUrl) {
+  // travelOverrideMs: when the power has a `speed`, this is the computed
+  // distance/speed travel time - it overrides a traveling effect's own
+  // `duration` so its visual flight matches when it's actually due to arrive.
+  playGraphicEffects(effects, positions, baseUrl, travelOverrideMs = 0) {
     if (!this._selfMapIdentifier) return;
     const resolve = (key) => key === "self" ? positions.self : positions.target;
     for (const effect of effects) {
@@ -710,30 +720,50 @@ export class SceneManager {
       const url = new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
-      this._spawnGraphicEffect(url, effect.duration, fromX, fromZ, toX, toZ, effect.color);
+      this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs);
     }
   }
 
-  _spawnGraphicEffect(url, duration, fromX, fromZ, toX, toZ, color) {
+  // Sprite-sheet playback (spriteColumns/spriteRows/spriteFrameCount/spriteFrameRate)
+  // runs at spriteFrameRate (fps, independent of `duration`) and loops for as long
+  // as the effect is alive.
+  _spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs = 0) {
+    const { duration, color, scale = 1.0, opacity = 1.0, spriteColumns, spriteRows } = effect;
+    const isSpriteSheet = spriteColumns > 0 && spriteRows > 0;
+    const frameCount = effect.spriteFrameCount ?? (spriteColumns * spriteRows);
+    const frameRate = effect.spriteFrameRate ?? DEFAULT_SPRITE_FRAME_RATE;
+
     new THREE.TextureLoader().load(url, (texture) => {
-      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-      if (color) mat.color.set(color);
-      if (this._camera && (fromX !== toX || fromZ !== toZ)) {
-        const fromNDC = new THREE.Vector3(fromX, 2.0, fromZ).project(this._camera);
-        const toNDC   = new THREE.Vector3(toX,   2.0, toZ  ).project(this._camera);
-        mat.rotation = Math.atan2(toNDC.y - fromNDC.y, toNDC.x - fromNDC.x) - Math.PI / 2;
+      if (isSpriteSheet) {
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        texture.repeat.set(1 / spriteColumns, 1 / spriteRows);
+        texture.offset.set(0, 1 - 1 / spriteRows);
       }
-      const sprite = new THREE.Sprite(mat);
-      sprite.position.set(fromX, 2.0, fromZ);
-      sprite.scale.set(4, 4, 1);
-      this._scene.add(sprite);
-      const durationMs = duration * 1000;
+
+      const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity });
+      if (color) mat.color.set(`#${color.replace(/^#/, "")}`);
+
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(4 * scale, 4 * scale), mat);
+      plane.rotation.x = -Math.PI / 2; // lie flat; image "up" faces -Z before the group rotates it
+
+      const traveling = fromX !== toX || fromZ !== toZ;
+      const angle = traveling ? facingToward(fromX, fromZ, toX, toZ) : 0;
+
+      const group = new THREE.Group();
+      group.add(plane);
+      group.rotation.y = -angle;
+      group.position.set(fromX, EFFECT_HEIGHT, fromZ);
+      this._scene.add(group);
+
+      const durationMs = (traveling && travelOverrideMs > 0) ? travelOverrideMs : duration * 1000;
       this._activeEffects.push({
-        sprite, mat,
+        group, mat, texture, opacity,
         startedAt: performance.now(),
         durationMs,
         fadeStartMs: durationMs * 0.6,
         fromX, fromZ, toX, toZ,
+        isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
       });
     });
   }
@@ -742,15 +772,22 @@ export class SceneManager {
     this._activeEffects = this._activeEffects.filter(e => {
       const elapsed = now - e.startedAt;
       if (elapsed >= e.durationMs) {
-        this._scene.remove(e.sprite);
+        this._scene.remove(e.group);
         e.mat.dispose();
+        e.texture?.dispose();
         return false;
       }
       const t = elapsed / e.durationMs;
-      e.sprite.position.x = e.fromX + (e.toX - e.fromX) * t;
-      e.sprite.position.z = e.fromZ + (e.toZ - e.fromZ) * t;
+      e.group.position.x = e.fromX + (e.toX - e.fromX) * t;
+      e.group.position.z = e.fromZ + (e.toZ - e.fromZ) * t;
+      if (e.isSpriteSheet) {
+        const frame = Math.floor((elapsed / 1000) * e.frameRate) % e.frameCount;
+        const col = frame % e.spriteColumns;
+        const row = Math.floor(frame / e.spriteColumns);
+        e.texture.offset.set(col / e.spriteColumns, 1 - (row + 1) / e.spriteRows);
+      }
       if (elapsed >= e.fadeStartMs) {
-        e.mat.opacity = 1 - (elapsed - e.fadeStartMs) / (e.durationMs - e.fadeStartMs);
+        e.mat.opacity = e.opacity * (1 - (elapsed - e.fadeStartMs) / (e.durationMs - e.fadeStartMs));
       }
       return true;
     });

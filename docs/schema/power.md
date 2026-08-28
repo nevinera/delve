@@ -9,6 +9,7 @@ A Power is an active ability a unit can use in combat.
 | `name` | string | yes | | Display name. |
 | `description` | string | no | | Short description shown in UI. |
 | `maxRange` | float | no | | Maximum range in feet to a valid target. Omit for self-only or melee powers. |
+| `speed` | float | no | | Projectile travel speed in feet/sec. When present, `when: "impact"` effects are delayed until the projectile reaches the target (`distance / speed`), and a traveling (`from` != `to`) `when: "immediate"` graphic's `duration` is overridden to match that arrival time. Omit for instant-hit powers. Client-only; ignored by the game server. |
 | `castTime` | float \| null | yes | | Cast duration in seconds. `null` means instant. |
 | `globalCooldown` | float | yes | | Seconds before the unit can use any power again after this one. |
 | `cooldown` | float | no | | Per-ability cooldown in seconds. The unit cannot use this specific power again until this duration has elapsed. |

@@ -54,5 +54,14 @@ RSpec.describe Validators::PowerValidator, type: :validator do
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/effects\[0\]/) }
     end
+
+    it "accepts an optional speed" do
+      expect { described_class.validate!(stab_power.merge("speed" => 40.0)) }.not_to raise_error
+    end
+
+    it "raises when speed is not numeric" do
+      expect { described_class.validate!(stab_power.merge("speed" => "fast")) }
+        .to raise_error(Validators::ValidationError, /speed must be a number/)
+    end
   end
 end

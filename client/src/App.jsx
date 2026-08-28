@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
 import { GameConnection } from "./game/connection";
+import { firePowerEffects } from "./game/effectPlayback";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -1274,13 +1275,13 @@ export default function App({
     connRef.current?.send({ direction: "up", type: "use_power", slot });
     setFlashSlot(slot);
     setTimeout(() => setFlashSlot(null), 150);
-    if (power.graphicEffects?.length) {
+    if (power.graphicEffects?.length || power.soundEffects?.length) {
       const targetUnit = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
-      canvasRef.current?.playGraphicEffects(
-        power.graphicEffects,
-        { self: selfPosRef.current, target: targetUnit?.position },
-        classConfigUrl,
-      );
+      firePowerEffects(power, {
+        positions: { self: selfPosRef.current, target: targetUnit?.position },
+        baseUrl: classConfigUrl,
+        sceneManager: canvasRef.current,
+      });
     }
   }, [powers, setGcd, classConfigUrl, handleTargetUnit]);
 
@@ -1435,12 +1436,12 @@ export default function App({
           const powersByName = npcPowersByZoneIdRef.current[attacker.zone_unit_identifier];
           if (!powersByName) continue;
           const power = powersByName[ev.power_name];
-          if (!power?.graphicEffects?.length) continue;
-          canvasRef.current?.playGraphicEffects(
-            power.graphicEffects,
-            { self: attacker.position, target: target.position },
-            zoneSourceUrl,
-          );
+          if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
+          firePowerEffects(power, {
+            positions: { self: attacker.position, target: target.position },
+            baseUrl: zoneSourceUrl,
+            sceneManager: canvasRef.current,
+          });
         }
       },
     });

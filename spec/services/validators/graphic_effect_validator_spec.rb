@@ -44,5 +44,31 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
       expect { described_class.validate!(valid_graphic.merge("condition" => "sometimes")) }
         .to raise_error(Validators::ValidationError, /must be one of/)
     end
+
+    it "accepts spriteColumns and spriteRows together" do
+      data = valid_graphic.merge("spriteColumns" => 3, "spriteRows" => 3)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "accepts optional spriteFrameCount and spriteFrameRate alongside a sprite sheet" do
+      data = valid_graphic.merge("spriteColumns" => 3, "spriteRows" => 3, "spriteFrameCount" => 7, "spriteFrameRate" => 12)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when spriteColumns is given without spriteRows" do
+      expect { described_class.validate!(valid_graphic.merge("spriteColumns" => 3)) }
+        .to raise_error(Validators::ValidationError, /spriteColumns and spriteRows must be given together/)
+    end
+
+    it "raises when spriteRows is given without spriteColumns" do
+      expect { described_class.validate!(valid_graphic.merge("spriteRows" => 3)) }
+        .to raise_error(Validators::ValidationError, /spriteColumns and spriteRows must be given together/)
+    end
+
+    it "raises when spriteColumns is not an integer" do
+      data = valid_graphic.merge("spriteColumns" => 3.5, "spriteRows" => 3)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /spriteColumns must be an integer/)
+    end
   end
 end
