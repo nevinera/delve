@@ -16,6 +16,7 @@
     }
 
     #canvas-area {
+      position: relative;
       flex: 1;
       display: flex;
       align-items: center;
@@ -23,6 +24,23 @@
       background: #000;
       overflow: hidden;
     }
+
+    #ability-icon {
+      display: none;
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 56px;
+      height: 56px;
+      background: #111;
+      border: 2px solid #668;
+      border-radius: 6px;
+      object-fit: cover;
+      cursor: pointer;
+    }
+    #ability-icon:hover { border-color: #9ac; }
+    #ability-icon.disabled { cursor: default; opacity: 0.5; border-color: #444; }
 
     #controls {
       width: 420px;
@@ -100,7 +118,9 @@
 </head>
 <body>
 
-<div id="canvas-area"></div>
+<div id="canvas-area">
+  <img id="ability-icon" alt="ability icon" title="Use Power (space)">
+</div>
 
 <div id="controls">
   <h2>Tokens</h2>
@@ -163,6 +183,7 @@ const powerSummary    = document.getElementById('power-summary')
 const rangeSlider     = document.getElementById('range-slider')
 const rangeLabel      = document.getElementById('range-label')
 const useBtn          = document.getElementById('use-btn')
+const abilityIcon     = document.getElementById('ability-icon')
 const log             = document.getElementById('log')
 
 powerJsonInput.value = JSON.stringify({
@@ -171,13 +192,14 @@ powerJsonInput.value = JSON.stringify({
   globalCooldown: 0.5,
   graphicEffects: [
     {
-      sourceURL: "../graphics/punch-impact.webp",
-      duration: 0.3,
+      sourceURL: "../graphics/swing-line.sprites3x3.png",
+      duration: 0.6,
       from: "self",
       to: "affected",
       when: "impact",
       condition: "onHit",
-      color: "#ff0000"
+      spriteColumns: 3,
+      spriteRows: 3
     }
   ],
   soundEffects: [
@@ -332,7 +354,10 @@ const CAM_RADIUS = Math.sqrt(CAM_BACK * CAM_BACK + CAM_HEIGHT * CAM_HEIGHT)
 const PITCH_MIN  = 20 * DEG_TO_RAD
 const PITCH_MAX  = 60 * DEG_TO_RAD
 
-const orbit = { azimuth: 0, pitch: Math.atan2(CAM_HEIGHT, CAM_BACK) }
+// azimuth starts off-axis (not directly behind the character) so range changes
+// - which move the target straight along -Z - are visible as screen-space
+// separation instead of pure depth/foreshortening.
+const orbit = { azimuth: Math.PI / 4, pitch: Math.atan2(CAM_HEIGHT, CAM_BACK) }
 
 function positionCamera(distanceFt) {
   const radius = CAM_RADIUS + distanceFt * 0.6
@@ -373,6 +398,16 @@ let power = null
 let assetBaseUrl = null
 
 const REQUIRED_FIELDS = ['name', 'castTime', 'globalCooldown', 'effects']
+
+// power.maxRange is often omitted for melee powers - fall back to the largest
+// `range` (rangeFloat: a number, or a [min, max] pair) found across its effects.
+function maxEffectRange(effects) {
+  const ranges = (effects || [])
+    .map(e => e.range)
+    .filter(r => r != null)
+    .map(r => Array.isArray(r) ? r[1] : r)
+  return ranges.length ? Math.max(...ranges) : null
+}
 
 fetchBtn.addEventListener('click', fetchPower)
 loadBtn.addEventListener('click', loadPower)
@@ -419,7 +454,7 @@ function loadPower() {
     assetBaseUrl = null
   }
 
-  const maxRange = power.maxRange ?? DEFAULT_MAX_RANGE
+  const maxRange = power.maxRange ?? maxEffectRange(power.effects) ?? DEFAULT_MAX_RANGE
   rangeSlider.max = String(maxRange)
   rangeSlider.value = String(maxRange)
   rangeLabel.textContent = `${maxRange.toFixed(1)} ft`
@@ -428,6 +463,7 @@ function loadPower() {
 
   renderSummary()
   useBtn.disabled = false
+  updateAbilityIcon()
   logMsg(`Loaded power "${power.name}".`)
 }
 
@@ -439,6 +475,7 @@ function renderSummary() {
   meta.push(`GCD: ${power.globalCooldown}s`)
   if (power.cooldown) meta.push(`cooldown: ${power.cooldown}s`)
   if (power.maxRange != null) meta.push(`maxRange: ${power.maxRange}ft`)
+  if (power.speed) meta.push(`speed: ${power.speed}ft/s`)
   if (power.frontal === false) meta.push('frontal: no')
   if (power.costType) meta.push(`cost: ${power.costAmount ?? '?'} ${power.costType}`)
   parts.push(meta.join(' &middot; '))
@@ -446,21 +483,37 @@ function renderSummary() {
   powerSummary.innerHTML = parts.join('<br>')
 }
 
+function updateAbilityIcon() {
+  if (power.iconURL) {
+    abilityIcon.src = resolveEffectUrl(power.iconURL)
+    abilityIcon.style.display = 'block'
+  } else {
+    abilityIcon.removeAttribute('src')
+    abilityIcon.style.display = 'none'
+  }
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
 // --- casting / effect playback ---
-// Mirrors the real client's App.jsx#handleUsePower + SceneManager#playGraphicEffects:
-// all graphicEffects/soundEffects fire together on resolution, regardless of
-// their `when`/`condition` (the real client doesn't currently distinguish
-// those either — hit/miss resolution is server-authoritative).
+// Loosely mirrors the real client's App.jsx#handleUsePower + SceneManager#playGraphicEffects,
+// with tool-only extensions (not part of docs/schema/power.md or the real client yet):
+// - a top-level `speed` field (feet/sec) for projectile powers. When present, travel time
+//   is computed from the current target distance, `when: "impact"` effects are delayed
+//   until arrival, and a traveling (from!==to) `when: "immediate"` effect's own `duration`
+//   is overridden so its flight matches that same arrival time. Without `speed`, everything
+//   fires together immediately, same as before.
+// - `impactTiming` on a `when: "impact"` soundEffect (see scheduleImpactSound below).
+// Condition (onHit/onMiss) is still ignored - hit/miss resolution is server-authoritative.
 
 const activeEffects = []
 
-useBtn.addEventListener('click', () => {
-  if (!power) return
+function useAbility() {
+  if (!power || useBtn.disabled) return
   useBtn.disabled = true
+  abilityIcon.classList.add('disabled')
 
   const castTime = power.castTime
   if (castTime) {
@@ -469,15 +522,54 @@ useBtn.addEventListener('click', () => {
   } else {
     resolvePower()
   }
+}
+
+useBtn.addEventListener('click', useAbility)
+abilityIcon.addEventListener('click', useAbility)
+window.addEventListener('keydown', e => {
+  if (e.code !== 'Space') return
+  const tag = document.activeElement?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return
+  e.preventDefault()
+  useAbility()
 })
 
 function resolvePower() {
   logMsg(`"${power.name}" fired!`)
-  playGraphicEffects(power.graphicEffects || [])
-  playSoundEffects(power.soundEffects || [])
+
+  const distanceFt = parseFloat(rangeSlider.value)
+  const travelMs = power.speed ? (distanceFt / power.speed) * 1000 : 0
+
+  const graphicEffects = power.graphicEffects || []
+  const soundEffects = power.soundEffects || []
+  const immediateGraphics = graphicEffects.filter(e => e.when !== 'impact')
+  const impactGraphics = graphicEffects.filter(e => e.when === 'impact')
+  const immediateSounds = soundEffects.filter(e => e.when !== 'impact')
+  const impactSounds = soundEffects.filter(e => e.when === 'impact')
+
+  playGraphicEffects(immediateGraphics, travelMs)
+  playSoundEffects(immediateSounds)
+  impactSounds.forEach(effect => scheduleImpactSound(effect, travelMs))
+
+  const fireImpact = () => {
+    logMsg(`"${power.name}" impact!`)
+    playGraphicEffects(impactGraphics)
+  }
+  if (impactGraphics.length) {
+    if (travelMs > 0) {
+      logMsg(`"${power.name}" travelling (${(travelMs / 1000).toFixed(2)}s)...`)
+      setTimeout(fireImpact, travelMs)
+    } else {
+      fireImpact()
+    }
+  } else if (impactSounds.length && travelMs > 0) {
+    logMsg(`"${power.name}" travelling (${(travelMs / 1000).toFixed(2)}s)...`)
+  }
+
   // Cooldown/globalCooldown are ignored here - this tool is for previewing
   // effects repeatedly, not for testing pacing.
   useBtn.disabled = false
+  abilityIcon.classList.remove('disabled')
 }
 
 function resolveEffectUrl(sourceURL) {
@@ -489,13 +581,16 @@ function resolveEffectUrl(sourceURL) {
   }
 }
 
-function playGraphicEffects(effects) {
+// travelOverrideMs: when the power has a `speed`, this is the computed
+// distance/speed travel time - it overrides a traveling effect's own
+// `duration` so its visual flight matches when it's actually due to arrive.
+function playGraphicEffects(effects, travelOverrideMs = 0) {
   const positions = { self: charToken.position, affected: targetToken.position }
   for (const effect of effects) {
     const fromPos = positions[effect.from] ?? positions.self
     const toPos   = positions[effect.to]   ?? fromPos
     const url = resolveEffectUrl(effect.sourceURL)
-    spawnGraphicEffect(url, effect.duration, fromPos, toPos, effect.color, effect.scale ?? 1.0, effect.opacity ?? 1.0)
+    spawnGraphicEffect(url, effect, fromPos, toPos, travelOverrideMs)
   }
 }
 
@@ -506,8 +601,27 @@ function facingToward(x1, z1, x2, z2) {
 
 const EFFECT_HEIGHT = 0.4 // just above the tokens' top surface (y ~0.31)
 
-function spawnGraphicEffect(url, duration, fromPos, toPos, color, scale, opacity) {
+const DEFAULT_SPRITE_FRAME_RATE = 8 // fps, used when spriteFrameRate is omitted
+
+// Sprite-sheet support is a tool-only extension (not part of docs/schema/graphic_effect.md
+// or the real client yet) - recognized via optional spriteColumns/spriteRows/spriteFrameCount/
+// spriteFrameRate fields on a graphicEffect. spriteFrameCount defaults to columns*rows.
+// Playback runs at spriteFrameRate (fps, independent of `duration`) and loops for as long as
+// the effect is alive.
+function spawnGraphicEffect(url, effect, fromPos, toPos, travelOverrideMs = 0) {
+  const { duration, color, scale = 1.0, opacity = 1.0, spriteColumns, spriteRows } = effect
+  const isSpriteSheet = spriteColumns > 0 && spriteRows > 0
+  const frameCount = effect.spriteFrameCount ?? (spriteColumns * spriteRows)
+  const frameRate = effect.spriteFrameRate ?? DEFAULT_SPRITE_FRAME_RATE
+
   new THREE.TextureLoader().load(url, texture => {
+    if (isSpriteSheet) {
+      texture.magFilter = THREE.NearestFilter
+      texture.generateMipmaps = false
+      texture.repeat.set(1 / spriteColumns, 1 / spriteRows)
+      texture.offset.set(0, 1 - 1 / spriteRows)
+    }
+
     const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity })
     if (color) mat.color.set(`#${color.replace(/^#/, '')}`)
 
@@ -523,13 +637,14 @@ function spawnGraphicEffect(url, duration, fromPos, toPos, color, scale, opacity
     group.position.set(fromPos.x, EFFECT_HEIGHT, fromPos.z)
     scene.add(group)
 
-    const durationMs = duration * 1000
+    const durationMs = (traveling && travelOverrideMs > 0) ? travelOverrideMs : duration * 1000
     activeEffects.push({
-      group, mat, opacity,
+      group, mat, texture, opacity,
       startedAt: performance.now(),
       durationMs,
       fadeStartMs: durationMs * 0.6,
       fromX: fromPos.x, fromZ: fromPos.z, toX: toPos.x, toZ: toPos.z,
+      isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
     })
   }, undefined, () => logMsg(`Failed to load graphic effect: ${url}`, true))
 }
@@ -541,16 +656,39 @@ function updateGraphicEffects(now) {
     if (elapsed >= e.durationMs) {
       scene.remove(e.group)
       e.mat.dispose()
+      e.texture.dispose()
       activeEffects.splice(i, 1)
       continue
     }
     const t = elapsed / e.durationMs
     e.group.position.x = e.fromX + (e.toX - e.fromX) * t
     e.group.position.z = e.fromZ + (e.toZ - e.fromZ) * t
+    if (e.isSpriteSheet) {
+      const frame = Math.floor((elapsed / 1000) * e.frameRate) % e.frameCount
+      const col = frame % e.spriteColumns
+      const row = Math.floor(frame / e.spriteColumns)
+      e.texture.offset.set(col / e.spriteColumns, 1 - (row + 1) / e.spriteRows)
+    }
     if (elapsed >= e.fadeStartMs) {
       e.mat.opacity = e.opacity * (1 - (elapsed - e.fadeStartMs) / (e.durationMs - e.fadeStartMs))
     }
   }
+}
+
+// Tool-only extension: `impactTiming` on a `when: "impact"` soundEffect controls when
+// playback starts relative to impact, based on the sound's own `duration` - "after"
+// (default) starts at impact time; "before" schedules playback to *end* at impact time
+// (starts immediately if travel time is shorter than the sound); "centered" lines up
+// the sound's midpoint with impact time. Not part of docs/schema/sound_effect.md.
+function scheduleImpactSound(effect, travelMs) {
+  const durMs = (effect.duration ?? 0) * 1000
+  const timing = effect.impactTiming ?? 'after'
+  let atMs
+  if (timing === 'before') atMs = Math.max(0, travelMs - durMs)
+  else if (timing === 'centered') atMs = Math.max(0, travelMs - durMs / 2)
+  else atMs = travelMs
+  if (atMs <= 0) playSoundEffects([effect])
+  else setTimeout(() => playSoundEffects([effect]), atMs)
 }
 
 function playSoundEffects(effects) {
