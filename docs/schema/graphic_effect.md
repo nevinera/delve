@@ -16,6 +16,10 @@ A GraphicEffect describes a visual played when a power fires.
 | `scale` | float | no | `1.0` | Size multiplier. |
 | `opacity` | float | no | `1.0` | Opacity, from `0.0` (invisible) to `1.0` (fully opaque). |
 | `color` | string | no | | Optional color tint applied to the image, as a 6-digit hex string (no leading `#`). If omitted, no tint is applied. |
+| `spriteColumns` | integer | no | | Number of columns in a sprite-sheet grid. Required together with `spriteRows` to enable sprite-sheet animation. |
+| `spriteRows` | integer | no | | Number of rows in a sprite-sheet grid. Required together with `spriteColumns` to enable sprite-sheet animation. |
+| `spriteFrameCount` | integer | no | `spriteColumns * spriteRows` | Number of frames to play, in case the grid has trailing unused cells. Only meaningful with `spriteColumns`/`spriteRows`. |
+| `spriteFrameRate` | float | no | `8` | Sprite-sheet playback rate, in frames per second. Runs independently of `duration` and loops for as long as the effect is displayed. Only meaningful with `spriteColumns`/`spriteRows`. |
 
 ## Examples
 

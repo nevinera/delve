@@ -49,5 +49,16 @@ RSpec.describe Validators::SoundEffectValidator, type: :validator do
       expect { described_class.validate!(valid_sound.merge("condition" => "sometimes")) }
         .to raise_error(Validators::ValidationError, /must be one of/)
     end
+
+    it "accepts a valid impactTiming" do
+      data = valid_sound.merge("when" => "impact", "impactTiming" => "centered")
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when impactTiming is invalid" do
+      data = valid_sound.merge("when" => "impact", "impactTiming" => "eventually")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /must be one of/)
+    end
   end
 end

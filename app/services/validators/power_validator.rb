@@ -5,6 +5,7 @@ module Validators
       require_string!(data, "name", path: path)
       validate_cast_time!(data, path: path)
       require_numeric!(data, "globalCooldown", path: path)
+      validate_speed!(data, path: path) if data.key?("speed")
       validate_graphic_effects!(data, path: path) if data.key?("graphicEffects")
       validate_sound_effects!(data, path: path) if data.key?("soundEffects")
       validate_effects!(data, path: path)
@@ -16,6 +17,10 @@ module Validators
       cast_time = require_key!(data, "castTime", path: path)
       return if cast_time.nil? || cast_time.is_a?(Numeric)
       raise ValidationError.new("castTime must be a number or null", path: child_path(path, "castTime"))
+    end
+
+    def validate_speed!(data, path:)
+      require_numeric!(data, "speed", path: path)
     end
 
     def validate_graphic_effects!(data, path:)
