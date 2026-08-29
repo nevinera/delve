@@ -102,6 +102,8 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 					target.Status = instancestate.UnitStatusDead
 					target.Target = nil
 					instancestate.RollAndRecordLoot(*unit.Target, target, next)
+					unit.Target = nil
+					unit.Attacking = false
 				}
 			}
 		case "heal":

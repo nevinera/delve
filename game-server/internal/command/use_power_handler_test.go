@@ -353,3 +353,15 @@ func TestUsePowerHandler_ClearsTargetOnDeath(t *testing.T) {
 
 	assert.Nil(t, state.Units[targetID].Target)
 }
+
+func TestUsePowerHandler_ClearsAttackerTargetAndAttackingOnKill(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Health = 1.0
+	state.Units[playerID].Attacking = true
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.Nil(t, state.Units[playerID].Target)
+	assert.False(t, state.Units[playerID].Attacking)
+}

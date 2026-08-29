@@ -1206,6 +1206,7 @@ export default function App({
     if (id != null) {
       const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
       const tgt = unitsRef.current[id];
+      if (tgt?.status === "dead") return;
       if (self && tgt) {
         const dx = tgt.position.x - self.position.x;
         const dy = tgt.position.y - self.position.y;
@@ -1410,14 +1411,13 @@ export default function App({
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
         if (tgt) {
           const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
-          if (self) {
-            const dx = tgt.position.x - self.position.x;
-            const dy = tgt.position.y - self.position.y;
-            if (Math.sqrt(dx * dx + dy * dy) > 60) {
-              targetIdRef.current = null;
-              setTargetId(null);
-              connRef.current?.send({ direction: "up", type: "target", target_id: null });
-            }
+          const dx = self ? tgt.position.x - self.position.x : 0;
+          const dy = self ? tgt.position.y - self.position.y : 0;
+          const outOfRange = self && Math.sqrt(dx * dx + dy * dy) > 60;
+          if (outOfRange || tgt.status === "dead") {
+            targetIdRef.current = null;
+            setTargetId(null);
+            connRef.current?.send({ direction: "up", type: "target", target_id: null });
           }
         }
         for (const ev of lootEvents) {

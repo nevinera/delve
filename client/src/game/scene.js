@@ -280,6 +280,7 @@ export class SceneManager {
     this._targetLine = this._buildTargetLine();
     this._scene.add(this._targetRing);
     this._scene.add(this._targetLine);
+    this._selfAttacking = false;
     this._npcArrows = new Map(); // unitId → arrow group
 
     // Client-side movement prediction for the self unit
@@ -558,6 +559,10 @@ export class SceneManager {
           this._selfMapY = unit.position.y;
         }
         this._selfDead = nowDead;
+        if (this._selfAttacking !== !!unit.attacking) {
+          this._selfAttacking = !!unit.attacking;
+          this._targetLine.material.color.set(this._selfAttacking ? 0xff8c1a : 0x00ff44);
+        }
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
