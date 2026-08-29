@@ -9,6 +9,8 @@ type UnitType struct {
 	SpeedFactor float64       `json:"speedFactor"` // Default 1.0; movement speed multiplier
 	AggroRadius float64       `json:"aggroRadius"` // Feet; omitted/0 defaults to 20ft
 	MaxHP       int           `json:"maxHP"`       // Required
+	DPS         float64       `json:"dps"`         // Required: basic-attack damage per second
+	AttackSpeed float64       `json:"attackSpeed"` // Required: basic-attack rate, attacks per second
 	Resource    ResourceType  `json:"resource"`    // Required
 	Powers      []Power       `json:"powers,omitempty"`
 	Targeting   UnitTargeting `json:"targeting,omitempty"`

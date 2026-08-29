@@ -20,7 +20,15 @@ module Validators
       validate_token_image_url!(data, path: path)
       validate_token_radius!(data, path: path)
       require_integer!(data, "maxHP", path: path)
+      validate_positive_numeric!(data, "dps", path: path)
+      validate_positive_numeric!(data, "attackSpeed", path: path)
       ResourceTypeValidator.validate!(require_hash!(data, "resource", path: path), path: child_path(path, "resource"))
+    end
+
+    def validate_positive_numeric!(data, key, path:)
+      value = require_numeric!(data, key, path: path)
+      return if value.positive?
+      raise ValidationError.new("#{key} must be greater than 0", path: child_path(path, key))
     end
 
     def valid_token_image_url?(value)
