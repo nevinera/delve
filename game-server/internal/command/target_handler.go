@@ -22,5 +22,8 @@ func (TargetHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *inst
 		return nil
 	}
 	unit.Target = p.TargetID
+	if p.TargetID == nil {
+		unit.Attacking = false
+	}
 	return nil
 }

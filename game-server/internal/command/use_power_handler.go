@@ -88,6 +88,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 			if math.Sqrt(dx*dx+dy*dy) > maxRange {
 				return nil
 			}
+			unit.Attacking = true
 			if effect.Amount != nil {
 				if target.TaggedBy == nil && target.Hostility != "" {
 					target.TaggedBy = &unitID

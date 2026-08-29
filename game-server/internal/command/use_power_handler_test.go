@@ -103,6 +103,24 @@ func TestUsePowerHandler_DamagesTargetInRange(t *testing.T) {
 	assert.Less(t, state.Units[targetID].Health, before)
 }
 
+func TestUsePowerHandler_SetsAttackingOnHarmInRange(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0) // 4ft away, within 5ft range
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.True(t, state.Units[playerID].Attacking)
+}
+
+func TestUsePowerHandler_OutOfRangeDoesNotSetAttacking(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 10, 0) // 10ft away, range is 5ft
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), state))
+
+	assert.False(t, state.Units[playerID].Attacking)
+}
+
 func TestUsePowerHandler_DamageWithinPowerAmountRange(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)

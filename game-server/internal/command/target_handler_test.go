@@ -42,6 +42,30 @@ func TestTargetHandler_ClearsTarget(t *testing.T) {
 	assert.Nil(t, state.Units[unitID].Target)
 }
 
+func TestTargetHandler_ClearingTargetStopsAttacking(t *testing.T) {
+	h := command.TargetHandler{}
+	unitID := uuid.New()
+	existing := uuid.New()
+	state := stateWithUnit(unitID)
+	state.Units[unitID].Target = &existing
+	state.Units[unitID].Attacking = true
+
+	require.NoError(t, h.Handle(unitID, command.TargetPayload{TargetID: nil}, state))
+
+	assert.False(t, state.Units[unitID].Attacking)
+}
+
+func TestTargetHandler_SettingTargetDoesNotAffectAttacking(t *testing.T) {
+	h := command.TargetHandler{}
+	unitID := uuid.New()
+	targetID := uuid.New()
+	state := stateWithUnit(unitID)
+
+	require.NoError(t, h.Handle(unitID, command.TargetPayload{TargetID: &targetID}, state))
+
+	assert.False(t, state.Units[unitID].Attacking)
+}
+
 func TestTargetHandler_MissingUnitIsNoOp(t *testing.T) {
 	h := command.TargetHandler{}
 	targetID := uuid.New()

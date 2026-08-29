@@ -33,6 +33,7 @@ type unitJSON struct {
 	Radius               float64                  `json:"radius"`
 	Status               instancestate.UnitStatus `json:"status"`
 	Target               *string                  `json:"target"`
+	Attacking            bool                     `json:"attacking"`
 	TaggedBy             *string                  `json:"tagged_by"`
 	GlobalCooldownEndsAt *int64                   `json:"global_cooldown_ends_at,omitempty"`
 	PowerCooldowns       map[string]int64         `json:"power_cooldowns,omitempty"`
@@ -149,6 +150,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Radius:               u.Radius,
 			Status:               u.Status,
 			Target:               target,
+			Attacking:            u.Attacking,
 			TaggedBy:             taggedBy,
 			GlobalCooldownEndsAt: gcdMs,
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
@@ -211,6 +213,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				"radius":               cu.Radius,
 				"status":               string(cu.Status),
 				"target":               target,
+				"attacking":            cu.Attacking,
 				"tagged_by":            taggedBy,
 			}
 			if !cu.GlobalCooldownEndsAt.IsZero() {
@@ -266,6 +269,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			} else {
 				patch["target"] = nil
 			}
+		}
+		if cu.Attacking != pu.Attacking {
+			patch["attacking"] = cu.Attacking
 		}
 		if !uuidPtrEqual(cu.TaggedBy, pu.TaggedBy) {
 			if cu.TaggedBy != nil {
