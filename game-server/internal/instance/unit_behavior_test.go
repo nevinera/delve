@@ -62,6 +62,7 @@ func manualEngage(unit *instancestate.UnitState, targetID uuid.UUID) {
 	unit.Behavior.LeashMapID = unit.MapIdentifier
 	id := targetID
 	unit.Target = &id
+	unit.Attacking = true
 	unit.Status = instancestate.UnitStatusEngaged
 }
 
@@ -79,6 +80,7 @@ func TestUnitBehavior_Aggro_PlayerInRange(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusEngaged, u.Status)
 	require.NotNil(t, u.Target)
 	assert.Equal(t, playerID, *u.Target)
+	assert.True(t, u.Attacking)
 }
 
 func TestUnitBehavior_Aggro_PlayerOutOfRange(t *testing.T) {
@@ -253,6 +255,7 @@ func TestUnitBehavior_Chase_StartsLeashingOnDeadTarget(t *testing.T) {
 
 	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
 	assert.Nil(t, u.Target)
+	assert.False(t, u.Attacking)
 }
 
 func TestUnitBehavior_Chase_StartsLeashingOnMissingTarget(t *testing.T) {
@@ -346,6 +349,107 @@ func TestUnitBehavior_Attack_SetsGCD(t *testing.T) {
 
 func TestUnitBehavior_Attack_KillsSetsDeadAndClearsTarget(t *testing.T) {
 	zone := stabZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	p.Health = 1.0
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, p.Health)
+	assert.Equal(t, instancestate.UnitStatusDead, p.Status)
+	assert.Nil(t, p.Target)
+}
+
+// ---------------------------------------------------------------------------
+// NPC basic attacks
+// ---------------------------------------------------------------------------
+
+func basicAttackZone(dps, attackSpeed float64) instanceconfig.Zone {
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				DPS: dps, AttackSpeed: attackSpeed,
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_BasicAttack_DamagesPlayerInRange(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4) // 4ft away, within effective range (5+2+2.2)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Less(t, p.Health, 100.0)
+}
+
+func TestUnitBehavior_BasicAttack_NotAttackingIsNoOp(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	u.Attacking = false
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_BasicAttack_BlockedBySwingTimer(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.NextBasicAttackAt = farFuture()
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_BasicAttack_OutOfRangeIsNoOp(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 20) // 20ft away, outside 5+2+2.2 range
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_BasicAttack_SetsSwingTimer(t *testing.T) {
+	zone := basicAttackZone(4.0, 2.0) // attackSpeed 2.0 -> 0.5s between swings
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	before := time.Now()
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.True(t, u.NextBasicAttackAt.After(before.Add(400*time.Millisecond)))
+	assert.True(t, u.NextBasicAttackAt.Before(before.Add(600*time.Millisecond)))
+}
+
+func TestUnitBehavior_BasicAttack_KillsSetsDeadAndClearsTarget(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
 	u, s := npcState("g1", pos(0, 0))
 	u.Radius = 2.0
 	playerID, p := addPlayer(s, "map1", 0, 4)
