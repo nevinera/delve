@@ -44,6 +44,17 @@ type TargetPayload struct {
 
 func (TargetPayload) CommandType() string { return "target" }
 
+// StartAttackingPayload requests that the unit begin auto-attacking its
+// current target. A no-op if the unit has no target.
+type StartAttackingPayload struct{}
+
+func (StartAttackingPayload) CommandType() string { return "start_attacking" }
+
+// StopAttackingPayload requests that the unit stop auto-attacking.
+type StopAttackingPayload struct{}
+
+func (StopAttackingPayload) CommandType() string { return "stop_attacking" }
+
 // UsePowerPayload carries a fully-resolved power for the server to execute.
 // The slot lookup and class config resolution happen in the WebSocket handler
 // before the command is dispatched, so this carries the resolved Power directly.

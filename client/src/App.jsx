@@ -1203,6 +1203,14 @@ export default function App({
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
+  const handleStartAttacking = useCallback(() => {
+    connRef.current?.send({ direction: "up", type: "start_attacking" });
+  }, []);
+
+  const handleStopAttacking = useCallback(() => {
+    connRef.current?.send({ direction: "up", type: "stop_attacking" });
+  }, []);
+
   const handleTargetUnit = useCallback((id) => {
     if (id != null) {
       const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
@@ -1341,6 +1349,10 @@ export default function App({
         setCharSheetOpen(o => !o);
         return;
       }
+      if (e.code === "KeyT") {
+        if (e.shiftKey) handleStopAttacking(); else handleStartAttacking();
+        return;
+      }
       if (e.code === "Tab") {
         e.preventDefault();
         handleTabTarget(
@@ -1391,7 +1403,7 @@ export default function App({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [sendMove, usePower, handleTabTarget]);
+  }, [sendMove, usePower, handleTabTarget, handleStartAttacking, handleStopAttacking]);
 
   useEffect(() => {
     const conn = new GameConnection({
