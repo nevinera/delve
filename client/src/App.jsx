@@ -1495,10 +1495,16 @@ export default function App({
   const handleUnitRightClick = useCallback((id) => {
     const selfEntry = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
     const selfId = selfEntry?.[0];
-    if (unitHasLootClaim(unitsRef.current[id]?.loot_items, selfId)) {
+    const unit = unitsRef.current[id];
+    if (unitHasLootClaim(unit?.loot_items, selfId)) {
       setLootWindowUnitId(id);
+      return;
     }
-  }, []);
+    if (unit?.hostility === "hostile" && canTargetUnit(selfEntry?.[1], unit)) {
+      handleTargetUnit(id);
+      handleStartAttacking();
+    }
+  }, [handleTargetUnit, handleStartAttacking]);
 
   const handleTakeItem = useCallback((targetUnitId, itemIndex) => {
     connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
