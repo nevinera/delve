@@ -147,6 +147,27 @@ export function setTokenTagDimmed(group, dimmed) {
   if (dimmed) group._bodyMaterial.color.lerp(new THREE.Color(TAG_DIM_COLOR), TAG_DIM_AMOUNT);
 }
 
+const TARGET_LINE_COLOR = 0x00ff44;
+const TARGET_LINE_ATTACKING_COLOR = 0xff8c1a;
+
+export function targetLineColor(attacking) {
+  return attacking ? TARGET_LINE_ATTACKING_COLOR : TARGET_LINE_COLOR;
+}
+
+// Evenly-spaced [x, z] points from (sx, sz) to (tx, tz), one per `spacing`
+// feet of travel, capped at maxDots.
+export function computeTargetLineDots(sx, sz, tx, tz, spacing, maxDots) {
+  const dx = tx - sx, dz = tz - sz;
+  const totalDist = Math.sqrt(dx * dx + dz * dz);
+  const count = Math.min(Math.floor(totalDist / spacing) + 1, maxDots);
+  const points = [];
+  for (let i = 0; i < count; i++) {
+    const t = count > 1 ? i / (count - 1) : 0;
+    points.push([sx + dx * t, sz + dz * t]);
+  }
+  return points;
+}
+
 export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   const { body: bodyColor, cone: coneColor } =
     HOSTILITY_COLORS[hostility] ?? HOSTILITY_COLORS.hostile;
@@ -561,7 +582,7 @@ export class SceneManager {
         this._selfDead = nowDead;
         if (this._selfAttacking !== !!unit.attacking) {
           this._selfAttacking = !!unit.attacking;
-          this._targetLine.material.color.set(this._selfAttacking ? 0xff8c1a : 0x00ff44);
+          this._targetLine.material.color.set(targetLineColor(this._selfAttacking));
         }
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
@@ -921,17 +942,11 @@ export class SceneManager {
     if (this._selfToken) {
       const sx = this._selfToken.position.x;
       const sz = this._selfToken.position.z;
-      const dx = tx - sx, dz = tz - sz;
-      const totalDist = Math.sqrt(dx * dx + dz * dz);
-      const spacing = 2.0; // feet between dot centers
-      const count = Math.min(Math.floor(totalDist / spacing) + 1, this._targetLine._maxDots);
+      const dots = computeTargetLineDots(sx, sz, tx, tz, 2.0, this._targetLine._maxDots);
       const pos = this._targetLine.geometry.attributes.position;
-      for (let i = 0; i < count; i++) {
-        const t = count > 1 ? i / (count - 1) : 0;
-        pos.setXYZ(i, sx + dx * t, 0.15, sz + dz * t);
-      }
+      dots.forEach(([x, z], i) => pos.setXYZ(i, x, 0.15, z));
       pos.needsUpdate = true;
-      this._targetLine.geometry.setDrawRange(0, count);
+      this._targetLine.geometry.setDrawRange(0, dots.length);
     }
   }
 

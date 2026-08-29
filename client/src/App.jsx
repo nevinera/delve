@@ -5,6 +5,7 @@ const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
+import { canTargetUnit } from "./game/state";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -1206,12 +1207,7 @@ export default function App({
     if (id != null) {
       const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
       const tgt = unitsRef.current[id];
-      if (tgt?.status === "dead") return;
-      if (self && tgt) {
-        const dx = tgt.position.x - self.position.x;
-        const dy = tgt.position.y - self.position.y;
-        if (Math.sqrt(dx * dx + dy * dy) > 60) return;
-      }
+      if (!canTargetUnit(self, tgt)) return;
     }
     targetIdRef.current = id;
     setTargetId(id);
@@ -1411,10 +1407,7 @@ export default function App({
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
         if (tgt) {
           const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
-          const dx = self ? tgt.position.x - self.position.x : 0;
-          const dy = self ? tgt.position.y - self.position.y : 0;
-          const outOfRange = self && Math.sqrt(dx * dx + dy * dy) > 60;
-          if (outOfRange || tgt.status === "dead") {
+          if (!canTargetUnit(self, tgt)) {
             targetIdRef.current = null;
             setTargetId(null);
             connRef.current?.send({ direction: "up", type: "target", target_id: null });

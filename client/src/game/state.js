@@ -1,3 +1,16 @@
+// Whether `tgt` is a valid attack target for `self`: not dead, and (when
+// self is known) within maxRange feet.
+export function canTargetUnit(self, tgt, maxRange = 60) {
+  if (!tgt) return false;
+  if (tgt.status === "dead") return false;
+  if (self) {
+    const dx = tgt.position.x - self.position.x;
+    const dy = tgt.position.y - self.position.y;
+    if (Math.sqrt(dx * dx + dy * dy) > maxRange) return false;
+  }
+  return true;
+}
+
 export function applyFullState(msg) {
   return { ...msg.units };
 }
