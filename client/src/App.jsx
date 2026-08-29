@@ -1135,6 +1135,7 @@ export default function App({
   selfIdentifierRef.current = `player:${characterName}`;
   const [units, setUnits] = useState({});
   const [targetId, setTargetId] = useState(null);
+  const [attacking, setAttacking] = useState(false);
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
@@ -1205,10 +1206,13 @@ export default function App({
 
   const handleStartAttacking = useCallback(() => {
     connRef.current?.send({ direction: "up", type: "start_attacking" });
+    // Optimistic: avoids a visible flash while waiting for server confirmation.
+    if (targetIdRef.current) setAttacking(true);
   }, []);
 
   const handleStopAttacking = useCallback(() => {
     connRef.current?.send({ direction: "up", type: "stop_attacking" });
+    setAttacking(false);
   }, []);
 
   const handleTargetUnit = useCallback((id) => {
@@ -1219,6 +1223,7 @@ export default function App({
     }
     targetIdRef.current = id;
     setTargetId(id);
+    if (id == null) setAttacking(false);
     connRef.current?.send({
       direction: "up",
       type: "target",
@@ -1461,6 +1466,10 @@ export default function App({
   const selfUnitId = selfEntry?.[0];
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
 
+  useEffect(() => {
+    setAttacking(!!selfUnit?.attacking);
+  }, [selfUnit?.attacking]);
+
   const initialFacingSetRef = useRef(false);
   useEffect(() => {
     if (selfUnit && !initialFacingSetRef.current) {
@@ -1589,6 +1598,7 @@ export default function App({
           onUnitHover={setHoveredUnitId}
           lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => i.claims?.find(c => c.character_unit_id === selfUnitId)?.state === "available")).map(([id]) => id))}
           targetId={targetId}
+          attacking={attacking}
         />
         <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />

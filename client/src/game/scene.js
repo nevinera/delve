@@ -363,6 +363,13 @@ export class SceneManager {
     return points;
   }
 
+  setAttacking(attacking) {
+    const next = !!attacking;
+    if (this._selfAttacking === next) return;
+    this._selfAttacking = next;
+    this._targetLine.material.color.set(targetLineColor(next));
+  }
+
   setTarget(id) {
     this._targetId = id;
     this._targetRing.visible = !!id;
@@ -580,10 +587,7 @@ export class SceneManager {
           this._selfMapY = unit.position.y;
         }
         this._selfDead = nowDead;
-        if (this._selfAttacking !== !!unit.attacking) {
-          this._selfAttacking = !!unit.attacking;
-          this._targetLine.material.color.set(targetLineColor(this._selfAttacking));
-        }
+        this.setAttacking(unit.attacking);
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;

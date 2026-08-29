@@ -14,6 +14,7 @@ const Canvas = forwardRef(function Canvas({
   onUnitRightClick,
   onUnitHover,
   targetId,
+  attacking,
   lootableUnitIds,
 }, ref) {
   const canvasRef = useRef(null);
@@ -48,6 +49,10 @@ const Canvas = forwardRef(function Canvas({
   useEffect(() => {
     managerRef.current?.setTarget(targetId);
   }, [targetId]);
+
+  useEffect(() => {
+    managerRef.current?.setAttacking(attacking);
+  }, [attacking]);
 
   useEffect(() => {
     managerRef.current?.setLootableUnits(lootableUnitIds ?? new Set());
