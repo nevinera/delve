@@ -24,6 +24,35 @@ const TURN_KEYS = new Set(["turn_left", "turn_right"]);
 const BASIC_ATTACK_RANGE = 5.0;
 const BASIC_ATTACK_INTERVAL_MS = 2000;
 
+// Built-in graphic/sound for any unit's basic attack ("power_name": "Basic Attack"
+// on a combat event). Served by the Rails app itself, not content-authored, so it
+// has no associated zone/class - sourceURLs are resolved against this app's own
+// origin rather than a zone's or class's config_url.
+const BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/punch-impact.webp",
+      duration: 0.2,
+      from: "self",
+      to: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.02,
+    },
+  ],
+};
+
 const styles = {
   root: {
     display: "flex",
@@ -1451,13 +1480,14 @@ export default function App({
           const attacker = u[ev.attacker_id];
           const target = u[ev.target_id];
           if (!attacker || !target) continue;
-          const powersByName = npcPowersByZoneIdRef.current[attacker.zone_unit_identifier];
-          if (!powersByName) continue;
-          const power = powersByName[ev.power_name];
+          const isBasicAttack = ev.power_name === "Basic Attack";
+          const power = isBasicAttack
+            ? BASIC_ATTACK_POWER
+            : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
           if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
           firePowerEffects(power, {
             positions: { self: attacker.position, target: target.position },
-            baseUrl: zoneSourceUrl,
+            baseUrl: isBasicAttack ? window.location.origin : zoneSourceUrl,
             sceneManager: canvasRef.current,
           });
         }
