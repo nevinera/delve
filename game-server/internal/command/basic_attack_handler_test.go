@@ -154,3 +154,33 @@ func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {
 	assert.Nil(t, state.Units[playerID].Target)
 	assert.False(t, state.Units[playerID].Attacking)
 }
+
+func TestBasicAttackHandler_KillAggroesLinkedIdleUnitEvenIfItNeverAggroedItself(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+	state.Units[targetID].Health = 1
+	state.Units[targetID].Hostility = "hostile"
+	// One-shot: goblin_1 dies without ever transitioning out of idle itself.
+	linkedID := uuid.New()
+	state.Units[linkedID] = &instancestate.UnitState{
+		ZoneUnitIdentifier: "goblin_2",
+		Position:           instanceconfig.Position{X: 50, Y: 50},
+		Health:             10,
+		Status:             instancestate.UnitStatusIdle,
+	}
+	zone := instanceconfig.Zone{
+		Maps: []instanceconfig.Map{{
+			Units: []instanceconfig.Unit{
+				{Identifier: "goblin_1", Links: []string{"goblin_2"}},
+				{Identifier: "goblin_2"},
+			},
+		}},
+	}
+
+	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
+
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[linkedID].Status)
+	require.NotNil(t, state.Units[linkedID].Target)
+	assert.Equal(t, playerID, *state.Units[linkedID].Target)
+	assert.True(t, state.Units[linkedID].Attacking)
+}

@@ -387,3 +387,30 @@ func TestUsePowerHandler_ClearsAttackerTargetAndAttackingOnKill(t *testing.T) {
 	assert.Nil(t, state.Units[playerID].Target)
 	assert.False(t, state.Units[playerID].Attacking)
 }
+
+func TestUsePowerHandler_KillAggroesLinkedIdleUnit(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Health = 1.0
+	linkedID := uuid.New()
+	state.Units[linkedID] = &instancestate.UnitState{
+		ZoneUnitIdentifier: "goblin_2",
+		Position:           instanceconfig.Position{X: 50, Y: 50},
+		Health:             10,
+		Status:             instancestate.UnitStatusIdle,
+	}
+	zone := instanceconfig.Zone{
+		Maps: []instanceconfig.Map{{
+			Units: []instanceconfig.Unit{
+				{Identifier: "goblin_1", Links: []string{"goblin_2"}},
+				{Identifier: "goblin_2"},
+			},
+		}},
+	}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), zone, state))
+
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[linkedID].Status)
+	require.NotNil(t, state.Units[linkedID].Target)
+	assert.Equal(t, playerID, *state.Units[linkedID].Target)
+}

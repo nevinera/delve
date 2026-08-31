@@ -78,6 +78,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 		target.Status = instancestate.UnitStatusDead
 		target.Target = nil
 		instancestate.RollAndRecordLoot(*unit.Target, target, next)
+		aggroLinkedGroupOnKill(target.ZoneUnitIdentifier, unitID, zone, next)
 		unit.Target = nil
 		unit.Attacking = false
 	}
