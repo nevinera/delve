@@ -781,12 +781,7 @@ export class SceneManager {
       const url = new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
-      const [fromBaseX, fromBaseZ] = this._toWorld(fromRaw.x, fromRaw.y);
-      const [toBaseX,   toBaseZ]   = this._toWorld(toRaw.x,   toRaw.y);
-      const track = {
-        fromId: resolveId(fromKey), fromOffsetX: fromX - fromBaseX, fromOffsetZ: fromZ - fromBaseZ,
-        toId: resolveId(toKey), toOffsetX: toX - toBaseX, toOffsetZ: toZ - toBaseZ,
-      };
+      const track = { fromId: resolveId(fromKey), toId: resolveId(toKey) };
       this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs, facingHint, track);
     }
   }
@@ -831,8 +826,7 @@ export class SceneManager {
         fadeStartMs: durationMs * 0.6,
         fromX, fromZ, toX, toZ,
         traveling,
-        fromId: track?.fromId ?? null, fromOffsetX: track?.fromOffsetX ?? 0, fromOffsetZ: track?.fromOffsetZ ?? 0,
-        toId: track?.toId ?? null, toOffsetX: track?.toOffsetX ?? 0, toOffsetZ: track?.toOffsetZ ?? 0,
+        fromId: track?.fromId ?? null, toId: track?.toId ?? null,
         isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
       });
     });
@@ -847,21 +841,26 @@ export class SceneManager {
         e.texture?.dispose();
         return false;
       }
-      // Re-aim at each tracked endpoint's live position (its token may have
+      // Re-aim at each tracked endpoint's live center (its token may have
       // moved since this effect fired) instead of a point frozen at spawn
       // time, so a travelling effect "homes in" rather than visibly missing.
+      // The spawn-time edge anchor is deliberately dropped here: it was a
+      // fixed offset pointing toward wherever the other party stood at
+      // spawn, and dragging that stale direction along as the target moves
+      // makes the effect look like it's swerving toward an arbitrary point
+      // near the token's edge rather than tracking the target itself.
       if (e.traveling && e.fromId) {
         const entry = this._tokenMap.get(e.fromId);
         if (entry) {
-          e.fromX = entry.group.position.x + e.fromOffsetX;
-          e.fromZ = entry.group.position.z + e.fromOffsetZ;
+          e.fromX = entry.group.position.x;
+          e.fromZ = entry.group.position.z;
         }
       }
       if (e.traveling && e.toId) {
         const entry = this._tokenMap.get(e.toId);
         if (entry) {
-          e.toX = entry.group.position.x + e.toOffsetX;
-          e.toZ = entry.group.position.z + e.toOffsetZ;
+          e.toX = entry.group.position.x;
+          e.toZ = entry.group.position.z;
         }
       }
       const t = elapsed / e.durationMs;
