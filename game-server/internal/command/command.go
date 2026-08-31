@@ -64,6 +64,14 @@ type UsePowerPayload struct {
 
 func (UsePowerPayload) CommandType() string { return "use_power" }
 
+// BasicAttackPayload requests one swing of the unit's weapon-less basic
+// attack against its current target. The client sends this each time its
+// local swing timer says the unit is ready; the server independently
+// enforces the swing timer via UnitState.NextBasicAttackAt.
+type BasicAttackPayload struct{}
+
+func (BasicAttackPayload) CommandType() string { return "basic_attack" }
+
 // RespawnPayload requests that the dead player unit be respawned at their spawn point.
 type RespawnPayload struct{}
 

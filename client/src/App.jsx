@@ -19,6 +19,11 @@ const KEY_MAP = {
 const MOVEMENT_KEYS = new Set(["forward", "backward", "strafe_left", "strafe_right"]);
 const TURN_KEYS = new Set(["turn_left", "turn_right"]);
 
+// Flat placeholder basic-attack values; must match command.characterBasicAttackRange
+// and command.characterBasicAttackInterval in the game server.
+const BASIC_ATTACK_RANGE = 5.0;
+const BASIC_ATTACK_INTERVAL_MS = 2000;
+
 const styles = {
   root: {
     display: "flex",
@@ -1150,6 +1155,7 @@ export default function App({
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
+  const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
 
   const setGcd = useCallback((ms) => {
@@ -1208,6 +1214,8 @@ export default function App({
     connRef.current?.send({ direction: "up", type: "start_attacking" });
     // Optimistic: avoids a visible flash while waiting for server confirmation.
     if (targetIdRef.current) setAttacking(true);
+    // Allow the first swing immediately rather than waiting out a stale timer.
+    nextBasicAttackAtRef.current = 0;
   }, []);
 
   const handleStopAttacking = useCallback(() => {
@@ -1487,6 +1495,37 @@ export default function App({
     const serverMs = selfUnit?.global_cooldown_ends_at;
     if (serverMs) setGcd(serverMs);
   }, [selfUnit?.global_cooldown_ends_at]);
+
+  // Reconcile the local basic-attack swing timer to the server's authoritative
+  // value once it confirms a swing landed.
+  useEffect(() => {
+    const serverMs = selfUnit?.next_basic_attack_at;
+    if (serverMs) nextBasicAttackAtRef.current = serverMs;
+  }, [selfUnit?.next_basic_attack_at]);
+
+  // Client-driven basic-attack swing loop: while attacking, poll on a short
+  // interval and fire once the local swing timer is up and the target is
+  // alive and in range. The server independently enforces the swing timer
+  // and range, so an early or out-of-range send is simply dropped.
+  useEffect(() => {
+    if (!attacking) return;
+    const id = setInterval(() => {
+      if (Date.now() < nextBasicAttackAtRef.current) return;
+      const tId = targetIdRef.current;
+      const target = tId ? unitsRef.current[tId] : null;
+      if (!target || target.status === "dead") return;
+      const self = selfPosRef.current;
+      if (self) {
+        const selfRadius = selfUnit?.radius ?? 0;
+        const dx = target.position.x - self.x;
+        const dy = target.position.y - self.y;
+        if (Math.sqrt(dx * dx + dy * dy) > BASIC_ATTACK_RANGE + selfRadius + (target.radius ?? 0)) return;
+      }
+      connRef.current?.send({ direction: "up", type: "basic_attack" });
+      nextBasicAttackAtRef.current = Date.now() + BASIC_ATTACK_INTERVAL_MS;
+    }, 150);
+    return () => clearInterval(id);
+  }, [attacking, selfUnit?.radius]);
 
   const [deathTime, setDeathTime] = useState(null);
   const prevSelfStatusRef = useRef(null);

@@ -36,6 +36,7 @@ type unitJSON struct {
 	Attacking            bool                     `json:"attacking"`
 	TaggedBy             *string                  `json:"tagged_by"`
 	GlobalCooldownEndsAt *int64                   `json:"global_cooldown_ends_at,omitempty"`
+	NextBasicAttackAt    *int64                   `json:"next_basic_attack_at,omitempty"`
 	PowerCooldowns       map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
 	LootItems            []lootItemJSON           `json:"loot_items,omitempty"`
@@ -136,6 +137,11 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			ms := u.GlobalCooldownEndsAt.UnixMilli()
 			gcdMs = &ms
 		}
+		var nextBasicAttackMs *int64
+		if !u.NextBasicAttackAt.IsZero() {
+			ms := u.NextBasicAttackAt.UnixMilli()
+			nextBasicAttackMs = &ms
+		}
 		units[id.String()] = unitJSON{
 			ZoneUnitIdentifier:   u.ZoneUnitIdentifier,
 			UnitTypeIdentifier:   u.UnitTypeIdentifier,
@@ -153,6 +159,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Attacking:            u.Attacking,
 			TaggedBy:             taggedBy,
 			GlobalCooldownEndsAt: gcdMs,
+			NextBasicAttackAt:    nextBasicAttackMs,
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
 			ActiveStatusEffects:  effects,
 			LootItems:            lootItemsToJSON(u.LootItems),
@@ -219,6 +226,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			if !cu.GlobalCooldownEndsAt.IsZero() {
 				update["global_cooldown_ends_at"] = cu.GlobalCooldownEndsAt.UnixMilli()
 			}
+			if !cu.NextBasicAttackAt.IsZero() {
+				update["next_basic_attack_at"] = cu.NextBasicAttackAt.UnixMilli()
+			}
 			if pcd := powerCooldownsJSON(cu.PowerCooldowns); pcd != nil {
 				update["power_cooldowns"] = pcd
 			}
@@ -283,6 +293,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		}
 		if cu.GlobalCooldownEndsAt != pu.GlobalCooldownEndsAt {
 			patch["global_cooldown_ends_at"] = cu.GlobalCooldownEndsAt.UnixMilli()
+		}
+		if cu.NextBasicAttackAt != pu.NextBasicAttackAt {
+			patch["next_basic_attack_at"] = cu.NextBasicAttackAt.UnixMilli()
 		}
 		if !powerCooldownsEqual(cu.PowerCooldowns, pu.PowerCooldowns) {
 			patch["power_cooldowns"] = powerCooldownsJSON(cu.PowerCooldowns)
