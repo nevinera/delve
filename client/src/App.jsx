@@ -6,6 +6,7 @@ import Canvas from "./Canvas";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
+import { hasLineOfSight } from "./game/collision";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -1247,6 +1248,7 @@ export default function App({
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
   const npcBasicAttackRangeByZoneIdRef = useRef({}); // { [zoneUnitId]: basicAttackRange }
+  const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
 
@@ -1282,6 +1284,7 @@ export default function App({
       .then(zone => {
         const byId = {};
         const basicAttackRangeById = {};
+        const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
           for (const unit of map.units ?? []) {
@@ -1294,10 +1297,12 @@ export default function App({
             byId[unit.identifier] = byName;
             basicAttackRangeById[unit.identifier] = ut.basicAttackRange ?? BASIC_ATTACK_RANGE;
           }
+          barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
         }
         npcPowersByZoneIdRef.current = byId;
         npcBasicAttackRangeByZoneIdRef.current = basicAttackRangeById;
+        mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
       })
       .catch(() => {});
@@ -1608,8 +1613,9 @@ export default function App({
 
   // Client-driven basic-attack swing loop: while attacking, poll on a short
   // interval and fire once the local swing timer is up and the target is
-  // alive and in range. The server independently enforces the swing timer
-  // and range, so an early or out-of-range send is simply dropped.
+  // alive, in range, and in line of sight. The server independently enforces
+  // all of these, so a send that fails one of them is simply dropped - this
+  // mirror just avoids playing the graphic/sound for a swing that won't land.
   useEffect(() => {
     if (!attacking) return;
     const id = setInterval(() => {
@@ -1623,6 +1629,8 @@ export default function App({
         const dx = target.position.x - self.x;
         const dy = target.position.y - self.y;
         if (Math.sqrt(dx * dx + dy * dy) > BASIC_ATTACK_RANGE + selfRadius + (target.radius ?? 0)) return;
+        const barriers = mapBarriersByIdRef.current[selfUnit?.map_identifier] ?? [];
+        if (!hasLineOfSight(self.x, self.y, target.position.x, target.position.y, barriers)) return;
       }
       connRef.current?.send({ direction: "up", type: "basic_attack" });
       nextBasicAttackAtRef.current = Date.now() + BASIC_ATTACK_INTERVAL_MS;
