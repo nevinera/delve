@@ -746,7 +746,11 @@ export class SceneManager {
   }
 
   // effects: array of graphicEffect objects from the power config
-  // positions: { self: {x,y}, target: {x,y} } in map coords
+  // positions: { self: {x,y}, target: {x,y}, selfId, targetId } in map coords.
+  // selfId/targetId are server unit IDs - when present, a travelling effect
+  // re-aims at that unit's live position every frame (see _updateGraphicEffects)
+  // instead of the point it was at when the effect fired, so it doesn't visibly
+  // whiff against a moving target.
   // baseUrl: used to resolve relative sourceURLs
   // travelOverrideMs: when the power has a `speed`, this is the computed
   // distance/speed travel time - it overrides a traveling effect's own
@@ -754,6 +758,7 @@ export class SceneManager {
   playGraphicEffects(effects, positions, baseUrl, travelOverrideMs = 0) {
     if (!this._selfMapIdentifier) return;
     const resolve = (key) => key === "self" ? positions.self : positions.target;
+    const resolveId = (key) => key === "self" ? positions.selfId : positions.targetId;
     // A stationary (non-travelling) effect still faces self→target, so an
     // impact graphic points at whoever it's landing on rather than defaulting
     // to "north". Only meaningful when both parties are known.
@@ -776,14 +781,20 @@ export class SceneManager {
       const url = new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
-      this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs, facingHint);
+      const [fromBaseX, fromBaseZ] = this._toWorld(fromRaw.x, fromRaw.y);
+      const [toBaseX,   toBaseZ]   = this._toWorld(toRaw.x,   toRaw.y);
+      const track = {
+        fromId: resolveId(fromKey), fromOffsetX: fromX - fromBaseX, fromOffsetZ: fromZ - fromBaseZ,
+        toId: resolveId(toKey), toOffsetX: toX - toBaseX, toOffsetZ: toZ - toBaseZ,
+      };
+      this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs, facingHint, track);
     }
   }
 
   // Sprite-sheet playback (spriteColumns/spriteRows/spriteFrameCount/spriteFrameRate)
   // runs at spriteFrameRate (fps, independent of `duration`) and loops for as long
   // as the effect is alive.
-  _spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs = 0, facingHint = null) {
+  _spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs = 0, facingHint = null, track = null) {
     const { duration, color, scale = 1.0, opacity = 1.0, spriteColumns, spriteRows } = effect;
     const isSpriteSheet = spriteColumns > 0 && spriteRows > 0;
     const frameCount = effect.spriteFrameCount ?? (spriteColumns * spriteRows);
@@ -819,6 +830,9 @@ export class SceneManager {
         durationMs,
         fadeStartMs: durationMs * 0.6,
         fromX, fromZ, toX, toZ,
+        traveling,
+        fromId: track?.fromId ?? null, fromOffsetX: track?.fromOffsetX ?? 0, fromOffsetZ: track?.fromOffsetZ ?? 0,
+        toId: track?.toId ?? null, toOffsetX: track?.toOffsetX ?? 0, toOffsetZ: track?.toOffsetZ ?? 0,
         isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
       });
     });
@@ -833,9 +847,29 @@ export class SceneManager {
         e.texture?.dispose();
         return false;
       }
+      // Re-aim at each tracked endpoint's live position (its token may have
+      // moved since this effect fired) instead of a point frozen at spawn
+      // time, so a travelling effect "homes in" rather than visibly missing.
+      if (e.traveling && e.fromId) {
+        const entry = this._tokenMap.get(e.fromId);
+        if (entry) {
+          e.fromX = entry.group.position.x + e.fromOffsetX;
+          e.fromZ = entry.group.position.z + e.fromOffsetZ;
+        }
+      }
+      if (e.traveling && e.toId) {
+        const entry = this._tokenMap.get(e.toId);
+        if (entry) {
+          e.toX = entry.group.position.x + e.toOffsetX;
+          e.toZ = entry.group.position.z + e.toOffsetZ;
+        }
+      }
       const t = elapsed / e.durationMs;
       e.group.position.x = e.fromX + (e.toX - e.fromX) * t;
       e.group.position.z = e.fromZ + (e.toZ - e.fromZ) * t;
+      if (e.traveling && (e.fromId || e.toId)) {
+        e.group.rotation.y = -facingToward(e.fromX, e.fromZ, e.toX, e.toZ);
+      }
       if (e.isSpriteSheet) {
         const frame = Math.floor((elapsed / 1000) * e.frameRate) % e.frameCount;
         const col = frame % e.spriteColumns;

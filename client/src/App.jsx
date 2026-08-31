@@ -1373,7 +1373,9 @@ export default function App({
   }, []);
 
   const usePower = useCallback((slot) => {
-    const selfUnit = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+    const selfEntryForPower = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
+    const selfUnitIdForPower = selfEntryForPower?.[0];
+    const selfUnit = selfEntryForPower?.[1];
     if (selfUnit?.status === "dead") return;
     if (Date.now() < gcdEndsAtRef.current) return;
     const power = powers[slot];
@@ -1431,7 +1433,7 @@ export default function App({
     if (power.graphicEffects?.length || power.soundEffects?.length) {
       const targetUnit = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
       firePowerEffects(power, {
-        positions: { self: selfPosRef.current, target: targetUnit?.position },
+        positions: { self: selfPosRef.current, target: targetUnit?.position, selfId: selfUnitIdForPower, targetId: targetIdRef.current },
         baseUrl: classConfigUrl,
         sceneManager: canvasRef.current,
       });
@@ -1602,8 +1604,8 @@ export default function App({
           if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
           firePowerEffects(power, {
             positions: isBasicAttack
-              ? { self: { ...attacker.position, radius: attacker.radius }, target: { ...target.position, radius: target.radius } }
-              : { self: attacker.position, target: target.position },
+              ? { self: { ...attacker.position, radius: attacker.radius }, target: { ...target.position, radius: target.radius }, selfId: ev.attacker_id, targetId: ev.target_id }
+              : { self: attacker.position, target: target.position, selfId: ev.attacker_id, targetId: ev.target_id },
             baseUrl: isBasicAttack ? window.location.origin : zoneSourceUrl,
             sceneManager: canvasRef.current,
           });
@@ -1676,7 +1678,7 @@ export default function App({
       // Play immediately rather than waiting for the server's combat event a
       // tick or two later.
       firePowerEffects(CHARACTER_BASIC_ATTACK_POWER, {
-        positions: { self: { ...self, radius: selfRadius }, target: { ...target.position, radius: target.radius } },
+        positions: { self: { ...self, radius: selfRadius }, target: { ...target.position, radius: target.radius }, selfId: selfUnitId, targetId: tId },
         baseUrl: window.location.origin,
         sceneManager: canvasRef.current,
       });
