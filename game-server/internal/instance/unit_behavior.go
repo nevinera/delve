@@ -12,9 +12,26 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-// npcMeleeRange is how close (feet) a chasing NPC stops from its target.
-// Will be derived from power ranges once the combat system is in place.
-const npcMeleeRange = 2.0
+// npcChaseStopBuffer is how far short (feet) of its basic-attack range a
+// chasing NPC stops, so it isn't sitting exactly on the edge of range.
+const npcChaseStopBuffer = 1.0
+
+// basicAttackRange is the default (melee) reach (feet) of an NPC's basic
+// attack, used when its UnitType doesn't set BasicAttackRange.
+const basicAttackRange = 5.0
+
+// effectiveBasicAttackRange returns unitType's basic-attack range, falling
+// back to the melee default when unset.
+func effectiveBasicAttackRange(unitType instanceconfig.UnitType) float64 {
+	if unitType.BasicAttackRange > 0 {
+		return unitType.BasicAttackRange
+	}
+	return basicAttackRange
+}
+
+// basicAttackVariance is the +/- fraction applied to a basic attack's mean
+// damage (UnitType.DPS / UnitType.AttackSpeed) to avoid flat, unvarying hits.
+const basicAttackVariance = 0.15
 
 // leashHealPctPerSecond is the fraction of max health a leashing unit
 // regenerates per second while returning to its leash point.
@@ -32,12 +49,11 @@ type playerRef struct {
 	unit *instancestate.UnitState
 }
 
-// CombatEvent records a power use by an NPC unit against a target.
-type CombatEvent struct {
-	AttackerID string
-	TargetID   string
-	PowerName  string
-}
+// CombatEvent records a power use (including a basic-attack swing) by one
+// unit against another. Defined in instancestate so command handlers, which
+// can't import this package, can also append to it via
+// InstanceState.PendingCombatEvents.
+type CombatEvent = instancestate.CombatEvent
 
 // applyUnitBehaviors is the NPC brain, called once per tick for every
 // non-player unit. It handles aggro detection, status transitions, and
@@ -62,7 +78,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 	}
 
 	// Build a symmetric link index: if A lists B, both A→B and B→A propagate aggro.
-	linkGroupByID := buildSymmetricLinkGroups(zone)
+	linkGroupByID := instanceconfig.SymmetricLinkGroups(zone)
 
 	var events []CombatEvent
 	for id, unit := range state.Units {
@@ -73,7 +89,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(id, unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt, &events)
+		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, linkGroupByID, dt, &events)
 	}
 
 	applyNPCSeparation(state, dt)
@@ -85,6 +101,7 @@ func applyUnitBehavior(
 	unit *instancestate.UnitState,
 	e npcEntry,
 	state *instancestate.InstanceState,
+	zone instanceconfig.Zone,
 	playersByMap map[string][]playerRef,
 	stateByZoneID map[string]*instancestate.UnitState,
 	linkGroupByID map[string][]string,
@@ -140,8 +157,21 @@ func applyUnitBehavior(
 		if target.MapIdentifier == unit.MapIdentifier {
 			unit.Behavior.LastSeenX = target.Position.X
 			unit.Behavior.LastSeenY = target.Position.Y
-			chaseTarget(unit, target, speed, dt)
-			tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, time.Now(), events, state)
+			losClear := instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
+			chaseRange := effectiveBasicAttackRange(e.unitType)
+			if !losClear {
+				// Can't see the target from here (e.g. around a corner) - keep
+				// closing in rather than sitting at max range doing nothing.
+				chaseRange = 0
+			}
+			chaseTarget(unit, target, speed, dt, chaseRange)
+			now := time.Now()
+			if losClear {
+				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, now, events, state)
+				if target.Status != instancestate.UnitStatusDead {
+					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, now, events, state)
+				}
+			}
 		} else {
 			// Target crossed to another map. Move toward last known position so
 			// we reach the connection and traverse it on a future tick.
@@ -236,9 +266,49 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	})
 }
 
-// chaseTarget moves unit straight toward target, stopping npcMeleeRange feet
-// beyond the combined edge-to-edge distance (i.e., adding both token radii).
-func chaseTarget(unit, target *instancestate.UnitState, speed, dt float64) {
+// tryNPCBasicAttack fires unit's weapon-less basic attack at target if the
+// unit is auto-attacking, its swing timer is up, and the target is in range.
+// Damage per hit is UnitType.DPS/AttackSpeed, +/- basicAttackVariance.
+func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+	if !unit.Attacking || unitType.AttackSpeed <= 0 {
+		return
+	}
+	if now.Before(unit.NextBasicAttackAt) {
+		return
+	}
+
+	attackRange := effectiveBasicAttackRange(unitType)
+	dx := target.Position.X - unit.Position.X
+	dy := target.Position.Y - unit.Position.Y
+	dist := math.Sqrt(dx*dx + dy*dy)
+	if dist > attackRange+unit.Radius+target.Radius {
+		return
+	}
+
+	unit.NextBasicAttackAt = now.Add(time.Duration(float64(time.Second) / unitType.AttackSpeed))
+
+	mean := unitType.DPS / unitType.AttackSpeed
+	lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
+	target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
+	if target.Health < 0 {
+		target.Health = 0
+	}
+	if target.Health == 0 {
+		target.Status = instancestate.UnitStatusDead
+		target.Target = nil
+		instancestate.RollAndRecordLoot(targetID, target, state)
+	}
+	*events = append(*events, CombatEvent{
+		AttackerID: attackerID.String(),
+		TargetID:   targetID.String(),
+		PowerName:  "Basic Attack",
+	})
+}
+
+// chaseTarget moves unit straight toward target, stopping npcChaseStopBuffer
+// feet short of attackRange beyond the combined edge-to-edge distance (i.e.,
+// adding both token radii).
+func chaseTarget(unit, target *instancestate.UnitState, speed, dt, attackRange float64) {
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
@@ -247,7 +317,7 @@ func chaseTarget(unit, target *instancestate.UnitState, speed, dt float64) {
 		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 	}
 
-	stopDist := npcMeleeRange + unit.Radius + target.Radius
+	stopDist := math.Max(0, attackRange-npcChaseStopBuffer) + unit.Radius + target.Radius
 	if dist <= stopDist {
 		return
 	}
@@ -287,6 +357,7 @@ func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
 	}
 	id := targetID
 	unit.Target = &id
+	unit.Attacking = true
 	unit.Status = instancestate.UnitStatusEngaged
 }
 
@@ -295,6 +366,7 @@ func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
 // is snapped back immediately and returned to idle.
 func startLeash(unit *instancestate.UnitState) {
 	unit.Target = nil
+	unit.Attacking = false
 	if unit.MapIdentifier != unit.Behavior.LeashMapID {
 		unit.MapIdentifier = unit.Behavior.LeashMapID
 		unit.Position.X = unit.Behavior.LeashX
@@ -367,36 +439,6 @@ func applyNPCSeparation(state *instancestate.InstanceState, dt float64) {
 			npcs[i].unit.Position.Y += fy * dt
 		}
 	}
-}
-
-// buildSymmetricLinkGroups returns a map from unit identifier to all units
-// linked to it, treating links as symmetric: if A lists B, both A→B and B→A
-// are included, so zone configs don't need to define links in both directions.
-func buildSymmetricLinkGroups(zone instanceconfig.Zone) map[string][]string {
-	seen := make(map[string]map[string]struct{})
-	add := func(a, b string) {
-		if seen[a] == nil {
-			seen[a] = make(map[string]struct{})
-		}
-		seen[a][b] = struct{}{}
-	}
-	for _, mp := range zone.Maps {
-		for _, u := range mp.Units {
-			for _, link := range u.Links {
-				add(u.Identifier, link)
-				add(link, u.Identifier)
-			}
-		}
-	}
-	result := make(map[string][]string, len(seen))
-	for id, set := range seen {
-		links := make([]string, 0, len(set))
-		for link := range set {
-			links = append(links, link)
-		}
-		result[id] = links
-	}
-	return result
 }
 
 // buildNPCConfigByID indexes each zone unit by its identifier, paired with

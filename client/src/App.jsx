@@ -5,6 +5,8 @@ const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
+import { canTargetUnit } from "./game/state";
+import { hasLineOfSight } from "./game/collision";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -17,6 +19,131 @@ const KEY_MAP = {
 };
 const MOVEMENT_KEYS = new Set(["forward", "backward", "strafe_left", "strafe_right"]);
 const TURN_KEYS = new Set(["turn_left", "turn_right"]);
+
+// Flat placeholder basic-attack values; must match command.characterBasicAttackRange
+// and command.characterBasicAttackInterval in the game server.
+const BASIC_ATTACK_RANGE = 5.0;
+const BASIC_ATTACK_INTERVAL_MS = 2000;
+
+// Built-in graphics/sounds for a unit's basic attack ("power_name": "Basic Attack"
+// on a combat event). Served by the Rails app itself, not content-authored, so
+// they have no associated zone/class - sourceURLs are resolved against this
+// app's own origin rather than a zone's or class's config_url. NPCs get a red
+// tint; characters get orange and a 20% larger graphic.
+const NPC_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/sword-swing.sprites3x3.png",
+      duration: 0.75,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.02,
+    },
+  ],
+};
+
+const NPC_RANGED_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/spinning-arrow.sprites2x4.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+      spriteColumns: 2,
+      spriteRows: 4,
+      spriteFrameRate: 12,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.02,
+    },
+  ],
+};
+
+const NPC_MAGIC_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/magic-ball.sprites3x3.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff4500",
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/firespell1.ogg",
+      duration: 1.8,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.05,
+    },
+  ],
+};
+
+const CHARACTER_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/sword-swing.sprites3x3.png",
+      duration: 0.75,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff8c1a",
+      scale: 1.2,
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.02,
+    },
+  ],
+};
 
 const styles = {
   root: {
@@ -1134,6 +1261,7 @@ export default function App({
   selfIdentifierRef.current = `player:${characterName}`;
   const [units, setUnits] = useState({});
   const [targetId, setTargetId] = useState(null);
+  const [attacking, setAttacking] = useState(false);
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
@@ -1148,6 +1276,10 @@ export default function App({
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
+  const npcBasicAttackRangeByZoneIdRef = useRef({}); // { [zoneUnitId]: basicAttackRange }
+  const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
+  const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
+  const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
 
   const setGcd = useCallback((ms) => {
@@ -1181,6 +1313,9 @@ export default function App({
       .then(r => r.json())
       .then(zone => {
         const byId = {};
+        const basicAttackRangeById = {};
+        const basicAttackSchoolById = {};
+        const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
           for (const unit of map.units ?? []) {
@@ -1191,10 +1326,16 @@ export default function App({
               byName[p.name] = p;
             }
             byId[unit.identifier] = byName;
+            basicAttackRangeById[unit.identifier] = ut.basicAttackRange ?? BASIC_ATTACK_RANGE;
+            basicAttackSchoolById[unit.identifier] = ut.basicAttackSchool ?? "physical";
           }
+          barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
         }
         npcPowersByZoneIdRef.current = byId;
+        npcBasicAttackRangeByZoneIdRef.current = basicAttackRangeById;
+        npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
+        mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
       })
       .catch(() => {});
@@ -1202,18 +1343,28 @@ export default function App({
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
+  const handleStartAttacking = useCallback(() => {
+    connRef.current?.send({ direction: "up", type: "start_attacking" });
+    // Optimistic: avoids a visible flash while waiting for server confirmation.
+    if (targetIdRef.current) setAttacking(true);
+    // Allow the first swing immediately rather than waiting out a stale timer.
+    nextBasicAttackAtRef.current = 0;
+  }, []);
+
+  const handleStopAttacking = useCallback(() => {
+    connRef.current?.send({ direction: "up", type: "stop_attacking" });
+    setAttacking(false);
+  }, []);
+
   const handleTargetUnit = useCallback((id) => {
     if (id != null) {
       const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
       const tgt = unitsRef.current[id];
-      if (self && tgt) {
-        const dx = tgt.position.x - self.position.x;
-        const dy = tgt.position.y - self.position.y;
-        if (Math.sqrt(dx * dx + dy * dy) > 60) return;
-      }
+      if (!canTargetUnit(self, tgt)) return;
     }
     targetIdRef.current = id;
     setTargetId(id);
+    if (id == null) setAttacking(false);
     connRef.current?.send({
       direction: "up",
       type: "target",
@@ -1222,7 +1373,9 @@ export default function App({
   }, []);
 
   const usePower = useCallback((slot) => {
-    const selfUnit = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+    const selfEntryForPower = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
+    const selfUnitIdForPower = selfEntryForPower?.[0];
+    const selfUnit = selfEntryForPower?.[1];
     if (selfUnit?.status === "dead") return;
     if (Date.now() < gcdEndsAtRef.current) return;
     const power = powers[slot];
@@ -1260,6 +1413,8 @@ export default function App({
         const dx = target.position.x - self.x;
         const dy = target.position.y - self.y;
         if (Math.sqrt(dx * dx + dy * dy) > range + selfRadius + (target.radius ?? 0)) return;
+        const barriers = mapBarriersByIdRef.current[selfUnit?.map_identifier] ?? [];
+        if (!hasLineOfSight(self.x, self.y, target.position.x, target.position.y, barriers)) return;
         if (power.frontal !== false) {
           const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
           let diff = toTarget - facingRef.current;
@@ -1278,7 +1433,7 @@ export default function App({
     if (power.graphicEffects?.length || power.soundEffects?.length) {
       const targetUnit = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
       firePowerEffects(power, {
-        positions: { self: selfPosRef.current, target: targetUnit?.position },
+        positions: { self: selfPosRef.current, target: targetUnit?.position, selfId: selfUnitIdForPower, targetId: targetIdRef.current },
         baseUrl: classConfigUrl,
         sceneManager: canvasRef.current,
       });
@@ -1344,6 +1499,10 @@ export default function App({
         setCharSheetOpen(o => !o);
         return;
       }
+      if (e.code === "KeyT") {
+        if (e.shiftKey) handleStopAttacking(); else handleStartAttacking();
+        return;
+      }
       if (e.code === "Tab") {
         e.preventDefault();
         handleTabTarget(
@@ -1394,7 +1553,7 @@ export default function App({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [sendMove, usePower, handleTabTarget]);
+  }, [sendMove, usePower, handleTabTarget, handleStartAttacking, handleStopAttacking]);
 
   useEffect(() => {
     const conn = new GameConnection({
@@ -1410,14 +1569,10 @@ export default function App({
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
         if (tgt) {
           const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
-          if (self) {
-            const dx = tgt.position.x - self.position.x;
-            const dy = tgt.position.y - self.position.y;
-            if (Math.sqrt(dx * dx + dy * dy) > 60) {
-              targetIdRef.current = null;
-              setTargetId(null);
-              connRef.current?.send({ direction: "up", type: "target", target_id: null });
-            }
+          if (!canTargetUnit(self, tgt)) {
+            targetIdRef.current = null;
+            setTargetId(null);
+            connRef.current?.send({ direction: "up", type: "target", target_id: null });
           }
         }
         for (const ev of lootEvents) {
@@ -1433,13 +1588,25 @@ export default function App({
           const attacker = u[ev.attacker_id];
           const target = u[ev.target_id];
           if (!attacker || !target) continue;
-          const powersByName = npcPowersByZoneIdRef.current[attacker.zone_unit_identifier];
-          if (!powersByName) continue;
-          const power = powersByName[ev.power_name];
+          const isBasicAttack = ev.power_name === "Basic Attack";
+          // Our own basic attacks are already played optimistically by the
+          // swing loop when we send the command - don't replay them a tick
+          // or two later once the server confirms.
+          if (isBasicAttack && attacker.zone_unit_identifier === selfIdentifierRef.current) continue;
+          const attackerIsRanged = (npcBasicAttackRangeByZoneIdRef.current[attacker.zone_unit_identifier] ?? BASIC_ATTACK_RANGE) > BASIC_ATTACK_RANGE;
+          const attackerIsMagic = npcBasicAttackSchoolByZoneIdRef.current[attacker.zone_unit_identifier] === "magic";
+          const npcBasicAttackPower = attackerIsMagic
+            ? NPC_MAGIC_BASIC_ATTACK_POWER
+            : (attackerIsRanged ? NPC_RANGED_BASIC_ATTACK_POWER : NPC_BASIC_ATTACK_POWER);
+          const power = isBasicAttack
+            ? (attacker.hostility ? npcBasicAttackPower : CHARACTER_BASIC_ATTACK_POWER)
+            : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
           if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
           firePowerEffects(power, {
-            positions: { self: attacker.position, target: target.position },
-            baseUrl: zoneSourceUrl,
+            positions: isBasicAttack
+              ? { self: { ...attacker.position, radius: attacker.radius }, target: { ...target.position, radius: target.radius }, selfId: ev.attacker_id, targetId: ev.target_id }
+              : { self: attacker.position, target: target.position, selfId: ev.attacker_id, targetId: ev.target_id },
+            baseUrl: isBasicAttack ? window.location.origin : zoneSourceUrl,
             sceneManager: canvasRef.current,
           });
         }
@@ -1455,6 +1622,10 @@ export default function App({
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
+
+  useEffect(() => {
+    setAttacking(!!selfUnit?.attacking);
+  }, [selfUnit?.attacking]);
 
   const initialFacingSetRef = useRef(false);
   useEffect(() => {
@@ -1474,6 +1645,47 @@ export default function App({
     if (serverMs) setGcd(serverMs);
   }, [selfUnit?.global_cooldown_ends_at]);
 
+  // Reconcile the local basic-attack swing timer to the server's authoritative
+  // value once it confirms a swing landed.
+  useEffect(() => {
+    const serverMs = selfUnit?.next_basic_attack_at;
+    if (serverMs) nextBasicAttackAtRef.current = serverMs;
+  }, [selfUnit?.next_basic_attack_at]);
+
+  // Client-driven basic-attack swing loop: while attacking, poll on a short
+  // interval and fire once the local swing timer is up and the target is
+  // alive, in range, and in line of sight. The server independently enforces
+  // all of these, so a send that fails one of them is simply dropped - this
+  // mirror just avoids playing the graphic/sound for a swing that won't land.
+  useEffect(() => {
+    if (!attacking) return;
+    const id = setInterval(() => {
+      if (Date.now() < nextBasicAttackAtRef.current) return;
+      const tId = targetIdRef.current;
+      const target = tId ? unitsRef.current[tId] : null;
+      if (!target || target.status === "dead") return;
+      const self = selfPosRef.current;
+      const selfRadius = selfUnit?.radius ?? 0;
+      if (self) {
+        const dx = target.position.x - self.x;
+        const dy = target.position.y - self.y;
+        if (Math.sqrt(dx * dx + dy * dy) > BASIC_ATTACK_RANGE + selfRadius + (target.radius ?? 0)) return;
+        const barriers = mapBarriersByIdRef.current[selfUnit?.map_identifier] ?? [];
+        if (!hasLineOfSight(self.x, self.y, target.position.x, target.position.y, barriers)) return;
+      }
+      connRef.current?.send({ direction: "up", type: "basic_attack" });
+      nextBasicAttackAtRef.current = Date.now() + BASIC_ATTACK_INTERVAL_MS;
+      // Play immediately rather than waiting for the server's combat event a
+      // tick or two later.
+      firePowerEffects(CHARACTER_BASIC_ATTACK_POWER, {
+        positions: { self: { ...self, radius: selfRadius }, target: { ...target.position, radius: target.radius }, selfId: selfUnitId, targetId: tId },
+        baseUrl: window.location.origin,
+        sceneManager: canvasRef.current,
+      });
+    }, 150);
+    return () => clearInterval(id);
+  }, [attacking, selfUnit?.radius]);
+
   const [deathTime, setDeathTime] = useState(null);
   const prevSelfStatusRef = useRef(null);
   useEffect(() => {
@@ -1490,10 +1702,16 @@ export default function App({
   const handleUnitRightClick = useCallback((id) => {
     const selfEntry = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
     const selfId = selfEntry?.[0];
-    if (unitHasLootClaim(unitsRef.current[id]?.loot_items, selfId)) {
+    const unit = unitsRef.current[id];
+    if (unitHasLootClaim(unit?.loot_items, selfId)) {
       setLootWindowUnitId(id);
+      return;
     }
-  }, []);
+    if (unit?.hostility === "hostile" && canTargetUnit(selfEntry?.[1], unit)) {
+      handleTargetUnit(id);
+      handleStartAttacking();
+    }
+  }, [handleTargetUnit, handleStartAttacking]);
 
   const handleTakeItem = useCallback((targetUnitId, itemIndex) => {
     connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
@@ -1578,6 +1796,7 @@ export default function App({
           onUnitHover={setHoveredUnitId}
           lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => i.claims?.find(c => c.character_unit_id === selfUnitId)?.state === "available")).map(([id]) => id))}
           targetId={targetId}
+          attacking={attacking}
         />
         <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />

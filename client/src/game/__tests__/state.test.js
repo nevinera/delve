@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyFullState, applyDelta } from "../state";
+import { applyFullState, applyDelta, canTargetUnit } from "../state";
 
 const unitA = {
   zone_unit_identifier: "goblin_a",
@@ -23,6 +23,37 @@ describe("applyFullState", () => {
   it("replaces existing units entirely", () => {
     const result = applyFullState({ units: {} });
     expect(result).toEqual({});
+  });
+});
+
+describe("canTargetUnit", () => {
+  const self = { position: { x: 0, y: 0 } };
+  const near = { position: { x: 10, y: 0 }, status: "idle" };
+  const far = { position: { x: 100, y: 0 }, status: "idle" };
+  const dead = { position: { x: 10, y: 0 }, status: "dead" };
+
+  it("rejects a null target", () => {
+    expect(canTargetUnit(self, null)).toBe(false);
+  });
+
+  it("rejects a dead target regardless of range", () => {
+    expect(canTargetUnit(self, dead)).toBe(false);
+  });
+
+  it("rejects a target beyond maxRange", () => {
+    expect(canTargetUnit(self, far, 60)).toBe(false);
+  });
+
+  it("accepts a living target within range", () => {
+    expect(canTargetUnit(self, near, 60)).toBe(true);
+  });
+
+  it("accepts a living target when self is unknown", () => {
+    expect(canTargetUnit(null, far)).toBe(true);
+  });
+
+  it("still rejects a dead target when self is unknown", () => {
+    expect(canTargetUnit(null, dead)).toBe(false);
   });
 });
 

@@ -147,6 +147,38 @@ export function setTokenTagDimmed(group, dimmed) {
   if (dimmed) group._bodyMaterial.color.lerp(new THREE.Color(TAG_DIM_COLOR), TAG_DIM_AMOUNT);
 }
 
+const TARGET_LINE_COLOR = 0x00ff44;
+const TARGET_LINE_ATTACKING_COLOR = 0xff8c1a;
+
+export function targetLineColor(attacking) {
+  return attacking ? TARGET_LINE_ATTACKING_COLOR : TARGET_LINE_COLOR;
+}
+
+// Evenly-spaced [x, z] points from (sx, sz) to (tx, tz), one per `spacing`
+// feet of travel, capped at maxDots.
+export function computeTargetLineDots(sx, sz, tx, tz, spacing, maxDots) {
+  const dx = tx - sx, dz = tz - sz;
+  const totalDist = Math.sqrt(dx * dx + dz * dz);
+  const count = Math.min(Math.floor(totalDist / spacing) + 1, maxDots);
+  const points = [];
+  for (let i = 0; i < count; i++) {
+    const t = count > 1 ? i / (count - 1) : 0;
+    points.push([sx + dx * t, sz + dz * t]);
+  }
+  return points;
+}
+
+// Offsets `pos` toward `other` by pos.radius, landing on the edge of pos's
+// token nearest `other` instead of its center. Returns pos unchanged if
+// either point or pos.radius is missing, or the two coincide.
+export function edgeTowards(pos, other) {
+  if (!pos || !other || !pos.radius) return pos;
+  const dx = other.x - pos.x, dy = other.y - pos.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 1e-6) return pos;
+  return { x: pos.x + (dx / dist) * pos.radius, y: pos.y + (dy / dist) * pos.radius };
+}
+
 export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   const { body: bodyColor, cone: coneColor } =
     HOSTILITY_COLORS[hostility] ?? HOSTILITY_COLORS.hostile;
@@ -280,6 +312,7 @@ export class SceneManager {
     this._targetLine = this._buildTargetLine();
     this._scene.add(this._targetRing);
     this._scene.add(this._targetLine);
+    this._selfAttacking = false;
     this._npcArrows = new Map(); // unitId → arrow group
 
     // Client-side movement prediction for the self unit
@@ -339,6 +372,13 @@ export class SceneManager {
     points._maxDots = MAX_DOTS;
     points.visible = false;
     return points;
+  }
+
+  setAttacking(attacking) {
+    const next = !!attacking;
+    if (this._selfAttacking === next) return;
+    this._selfAttacking = next;
+    this._targetLine.material.color.set(targetLineColor(next));
   }
 
   setTarget(id) {
@@ -558,6 +598,7 @@ export class SceneManager {
           this._selfMapY = unit.position.y;
         }
         this._selfDead = nowDead;
+        this.setAttacking(unit.attacking);
         if (unit.speed) this._selfSpeed = unit.speed;
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
@@ -705,7 +746,11 @@ export class SceneManager {
   }
 
   // effects: array of graphicEffect objects from the power config
-  // positions: { self: {x,y}, target: {x,y} } in map coords
+  // positions: { self: {x,y}, target: {x,y}, selfId, targetId } in map coords.
+  // selfId/targetId are server unit IDs - when present, a travelling effect
+  // re-aims at that unit's live position every frame (see _updateGraphicEffects)
+  // instead of the point it was at when the effect fired, so it doesn't visibly
+  // whiff against a moving target.
   // baseUrl: used to resolve relative sourceURLs
   // travelOverrideMs: when the power has a `speed`, this is the computed
   // distance/speed travel time - it overrides a traveling effect's own
@@ -713,21 +758,38 @@ export class SceneManager {
   playGraphicEffects(effects, positions, baseUrl, travelOverrideMs = 0) {
     if (!this._selfMapIdentifier) return;
     const resolve = (key) => key === "self" ? positions.self : positions.target;
+    const resolveId = (key) => key === "self" ? positions.selfId : positions.targetId;
+    // A stationary (non-travelling) effect still faces self→target, so an
+    // impact graphic points at whoever it's landing on rather than defaulting
+    // to "north". Only meaningful when both parties are known.
+    let facingHint = null;
+    if (positions.self && positions.target) {
+      const [sx, sz] = this._toWorld(positions.self.x, positions.self.y);
+      const [tx, tz] = this._toWorld(positions.target.x, positions.target.y);
+      facingHint = facingToward(sx, sz, tx, tz);
+    }
     for (const effect of effects) {
-      const fromPos = resolve(effect.from ?? "self");
-      const toPos   = resolve(effect.to   ?? "affected");
-      if (!fromPos || !toPos) continue;
+      const fromKey = effect.from ?? "self";
+      const toKey   = effect.to   ?? "affected";
+      const fromRaw = resolve(fromKey);
+      const toRaw   = resolve(toKey);
+      if (!fromRaw || !toRaw) continue;
+      // Anchor each endpoint at the edge of its own token nearest the other
+      // party, rather than dead center, when we know that token's radius.
+      const fromPos = edgeTowards(fromRaw, resolve(fromKey === "self" ? "affected" : "self"));
+      const toPos   = edgeTowards(toRaw, resolve(toKey === "self" ? "affected" : "self"));
       const url = new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
-      this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs);
+      const track = { fromId: resolveId(fromKey), toId: resolveId(toKey) };
+      this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs, facingHint, track);
     }
   }
 
   // Sprite-sheet playback (spriteColumns/spriteRows/spriteFrameCount/spriteFrameRate)
   // runs at spriteFrameRate (fps, independent of `duration`) and loops for as long
   // as the effect is alive.
-  _spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs = 0) {
+  _spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs = 0, facingHint = null, track = null) {
     const { duration, color, scale = 1.0, opacity = 1.0, spriteColumns, spriteRows } = effect;
     const isSpriteSheet = spriteColumns > 0 && spriteRows > 0;
     const frameCount = effect.spriteFrameCount ?? (spriteColumns * spriteRows);
@@ -748,7 +810,7 @@ export class SceneManager {
       plane.rotation.x = -Math.PI / 2; // lie flat; image "up" faces -Z before the group rotates it
 
       const traveling = fromX !== toX || fromZ !== toZ;
-      const angle = traveling ? facingToward(fromX, fromZ, toX, toZ) : 0;
+      const angle = traveling ? facingToward(fromX, fromZ, toX, toZ) : (facingHint ?? 0);
 
       const group = new THREE.Group();
       group.add(plane);
@@ -763,6 +825,8 @@ export class SceneManager {
         durationMs,
         fadeStartMs: durationMs * 0.6,
         fromX, fromZ, toX, toZ,
+        traveling,
+        fromId: track?.fromId ?? null, toId: track?.toId ?? null,
         isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
       });
     });
@@ -777,9 +841,34 @@ export class SceneManager {
         e.texture?.dispose();
         return false;
       }
+      // Re-aim at each tracked endpoint's live center (its token may have
+      // moved since this effect fired) instead of a point frozen at spawn
+      // time, so a travelling effect "homes in" rather than visibly missing.
+      // The spawn-time edge anchor is deliberately dropped here: it was a
+      // fixed offset pointing toward wherever the other party stood at
+      // spawn, and dragging that stale direction along as the target moves
+      // makes the effect look like it's swerving toward an arbitrary point
+      // near the token's edge rather than tracking the target itself.
+      if (e.traveling && e.fromId) {
+        const entry = this._tokenMap.get(e.fromId);
+        if (entry) {
+          e.fromX = entry.group.position.x;
+          e.fromZ = entry.group.position.z;
+        }
+      }
+      if (e.traveling && e.toId) {
+        const entry = this._tokenMap.get(e.toId);
+        if (entry) {
+          e.toX = entry.group.position.x;
+          e.toZ = entry.group.position.z;
+        }
+      }
       const t = elapsed / e.durationMs;
       e.group.position.x = e.fromX + (e.toX - e.fromX) * t;
       e.group.position.z = e.fromZ + (e.toZ - e.fromZ) * t;
+      if (e.traveling && (e.fromId || e.toId)) {
+        e.group.rotation.y = -facingToward(e.fromX, e.fromZ, e.toX, e.toZ);
+      }
       if (e.isSpriteSheet) {
         const frame = Math.floor((elapsed / 1000) * e.frameRate) % e.frameCount;
         const col = frame % e.spriteColumns;
@@ -916,17 +1005,11 @@ export class SceneManager {
     if (this._selfToken) {
       const sx = this._selfToken.position.x;
       const sz = this._selfToken.position.z;
-      const dx = tx - sx, dz = tz - sz;
-      const totalDist = Math.sqrt(dx * dx + dz * dz);
-      const spacing = 2.0; // feet between dot centers
-      const count = Math.min(Math.floor(totalDist / spacing) + 1, this._targetLine._maxDots);
+      const dots = computeTargetLineDots(sx, sz, tx, tz, 2.0, this._targetLine._maxDots);
       const pos = this._targetLine.geometry.attributes.position;
-      for (let i = 0; i < count; i++) {
-        const t = count > 1 ? i / (count - 1) : 0;
-        pos.setXYZ(i, sx + dx * t, 0.15, sz + dz * t);
-      }
+      dots.forEach(([x, z], i) => pos.setXYZ(i, x, 0.15, z));
       pos.needsUpdate = true;
-      this._targetLine.geometry.setDrawRange(0, count);
+      this._targetLine.geometry.setDrawRange(0, dots.length);
     }
   }
 

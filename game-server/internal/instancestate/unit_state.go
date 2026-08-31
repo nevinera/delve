@@ -136,6 +136,8 @@ type UnitState struct {
 
 	Status               UnitStatus
 	Target               *uuid.UUID
+	Attacking            bool       // true while auto-attacking Target; always false when Target is nil
+	NextBasicAttackAt    time.Time  // swing timer: basic attacks rejected before this time
 	TaggedBy             *uuid.UUID // first player to damage this unit
 	GlobalCooldownEndsAt time.Time
 	PowerCooldowns       map[string]time.Time // keyed by power name; zero/missing means ready

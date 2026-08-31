@@ -3,6 +3,7 @@ package command
 import (
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -12,7 +13,7 @@ type MoveHandler struct{}
 func (MoveHandler) Type() string      { return "move" }
 func (MoveHandler) Deduplicate() bool { return true }
 
-func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *instancestate.InstanceState) error {
+func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ instanceconfig.Zone, next *instancestate.InstanceState) error {
 	p, ok := payload.(MovePayload)
 	if !ok {
 		return nil

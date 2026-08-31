@@ -3,6 +3,7 @@ package command
 import (
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -10,7 +11,7 @@ import (
 type CommandHandler interface {
 	Type() string
 	Deduplicate() bool
-	Handle(unitID uuid.UUID, payload CommandPayload, next *instancestate.InstanceState) error
+	Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error
 }
 
 // CommandProcessor dispatches a batch of Commands to registered handlers,
@@ -34,7 +35,7 @@ func (p *CommandProcessor) Register(h CommandHandler) {
 // Process applies commands to next, de-duplicating per (unit, type) for handlers
 // that request it. Commands are assumed to be in received order; de-dup keeps
 // the last command per unit per type.
-func (p *CommandProcessor) Process(commands []Command, next *instancestate.InstanceState) {
+func (p *CommandProcessor) Process(commands []Command, zone instanceconfig.Zone, next *instancestate.InstanceState) {
 	type dedupKey struct {
 		unitID uuid.UUID
 		typ    string
@@ -62,6 +63,6 @@ func (p *CommandProcessor) Process(commands []Command, next *instancestate.Insta
 		}
 		// Errors are silently discarded; handlers are expected to be robust
 		// (e.g. no-op when the target unit does not exist).
-		_ = h.Handle(cmd.UnitID, cmd.Payload, next)
+		_ = h.Handle(cmd.UnitID, cmd.Payload, zone, next)
 	}
 }

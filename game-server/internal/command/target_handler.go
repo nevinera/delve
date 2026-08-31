@@ -3,6 +3,7 @@ package command
 import (
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -12,7 +13,7 @@ type TargetHandler struct{}
 func (TargetHandler) Type() string      { return "target" }
 func (TargetHandler) Deduplicate() bool { return true }
 
-func (TargetHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *instancestate.InstanceState) error {
+func (TargetHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ instanceconfig.Zone, next *instancestate.InstanceState) error {
 	p, ok := payload.(TargetPayload)
 	if !ok {
 		return nil
@@ -22,5 +23,8 @@ func (TargetHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *inst
 		return nil
 	}
 	unit.Target = p.TargetID
+	if p.TargetID == nil {
+		unit.Attacking = false
+	}
 	return nil
 }

@@ -3,16 +3,20 @@ package instanceconfig
 // UnitType is a template from which individual units are created.
 // tokenImageUrl is client-only and omitted.
 type UnitType struct {
-	Name        string        `json:"name"` // Required
-	Description string        `json:"description,omitempty"`
-	TokenRadius float64       `json:"tokenRadius"` // Required: collision radius in feet, 1.0-20.0
-	SpeedFactor float64       `json:"speedFactor"` // Default 1.0; movement speed multiplier
-	AggroRadius float64       `json:"aggroRadius"` // Feet; omitted/0 defaults to 20ft
-	MaxHP       int           `json:"maxHP"`       // Required
-	Resource    ResourceType  `json:"resource"`    // Required
-	Powers      []Power       `json:"powers,omitempty"`
-	Targeting   UnitTargeting `json:"targeting,omitempty"`
-	Tactics     UnitTactics   `json:"tactics,omitempty"`
+	Name              string        `json:"name"` // Required
+	Description       string        `json:"description,omitempty"`
+	TokenRadius       float64       `json:"tokenRadius"`                 // Required: collision radius in feet, 1.0-20.0
+	SpeedFactor       float64       `json:"speedFactor"`                 // Default 1.0; movement speed multiplier
+	AggroRadius       float64       `json:"aggroRadius"`                 // Feet; omitted/0 defaults to 20ft
+	MaxHP             int           `json:"maxHP"`                       // Required
+	DPS               float64       `json:"dps"`                         // Required: basic-attack damage per second
+	AttackSpeed       float64       `json:"attackSpeed"`                 // Required: basic-attack rate, attacks per second
+	BasicAttackRange  float64       `json:"basicAttackRange,omitempty"`  // Feet; omitted/0 defaults to 5.0 (melee)
+	BasicAttackSchool string        `json:"basicAttackSchool,omitempty"` // "physical" (default) or "magic"; client-only, affects basic-attack visuals only
+	Resource          ResourceType  `json:"resource"`                    // Required
+	Powers            []Power       `json:"powers,omitempty"`
+	Targeting         UnitTargeting `json:"targeting,omitempty"`
+	Tactics           UnitTactics   `json:"tactics,omitempty"`
 }
 
 // ResourceType defines the resource used to power a unit's abilities.

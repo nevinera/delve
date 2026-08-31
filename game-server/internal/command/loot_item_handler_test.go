@@ -33,7 +33,7 @@ func makeLootState() (*instancestate.InstanceState, uuid.UUID, uuid.UUID) {
 func TestLootItemHandler_MarksItemClaimed(t *testing.T) {
 	state, playerID, targetID := makeLootState()
 	h := command.LootItemHandler{}
-	err := h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state)
+	err := h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, instanceconfig.Zone{}, state)
 	require.NoError(t, err)
 	item := state.Units[targetID].LootItems[0]
 	require.NotNil(t, item.Claim)
@@ -44,7 +44,7 @@ func TestLootItemHandler_MarksItemClaimed(t *testing.T) {
 func TestLootItemHandler_AppendsToPendingClaims(t *testing.T) {
 	state, playerID, targetID := makeLootState()
 	h := command.LootItemHandler{}
-	err := h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state)
+	err := h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, instanceconfig.Zone{}, state)
 	require.NoError(t, err)
 	require.Len(t, state.PendingLootClaims, 1)
 	claim := state.PendingLootClaims[0]
@@ -58,7 +58,7 @@ func TestLootItemHandler_NoopsIfAlreadyClaimed(t *testing.T) {
 	existing := &instancestate.LootClaim{ClaimedBy: uuid.New(), Result: make(chan instancestate.LootResult, 1)}
 	state.Units[targetID].LootItems[0].Claim = existing
 	h := command.LootItemHandler{}
-	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state)
+	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, instanceconfig.Zone{}, state)
 	assert.Empty(t, state.PendingLootClaims)
 	assert.Equal(t, existing, state.Units[targetID].LootItems[0].Claim)
 }
@@ -66,7 +66,7 @@ func TestLootItemHandler_NoopsIfAlreadyClaimed(t *testing.T) {
 func TestLootItemHandler_NoopsOnOutOfBoundsIndex(t *testing.T) {
 	state, playerID, targetID := makeLootState()
 	h := command.LootItemHandler{}
-	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 5}, state)
+	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 5}, instanceconfig.Zone{}, state)
 	assert.Empty(t, state.PendingLootClaims)
 }
 
@@ -78,14 +78,14 @@ func TestLootItemHandler_NoopsOnAliveTarget(t *testing.T) {
 		LootItems: []instancestate.PendingLootItem{{ClaimID: uuid.New(), Item: instanceconfig.Item{Identifier: "sword", Name: "Sword", Slot: "main_hand", Elvl: 100}}},
 	}
 	h := command.LootItemHandler{}
-	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: aliveID, ItemIndex: 0}, state)
+	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: aliveID, ItemIndex: 0}, instanceconfig.Zone{}, state)
 	assert.Nil(t, state.Units[aliveID].LootItems[0].Claim)
 }
 
 func TestLootItemHandler_NoopsOnMissingTarget(t *testing.T) {
 	state, playerID, _ := makeLootState()
 	h := command.LootItemHandler{}
-	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: uuid.New(), ItemIndex: 0}, state)
+	_ = h.Handle(playerID, command.LootItemPayload{TargetUnitID: uuid.New(), ItemIndex: 0}, instanceconfig.Zone{}, state)
 	assert.Empty(t, state.PendingLootClaims)
 }
 
@@ -106,7 +106,7 @@ func TestLootItemHandler_SetsLockedForMeOnClaimer(t *testing.T) {
 	}
 
 	h := command.LootItemHandler{}
-	require.NoError(t, h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state))
+	require.NoError(t, h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, instanceconfig.Zone{}, state))
 
 	claims := state.Units[targetID].LootItems[0].Claims
 	for _, c := range claims {
@@ -127,7 +127,7 @@ func TestLootItemHandler_DoesNotLockNonAvailableClaims(t *testing.T) {
 	}
 
 	h := command.LootItemHandler{}
-	require.NoError(t, h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, state))
+	require.NoError(t, h.Handle(playerID, command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}, instanceconfig.Zone{}, state))
 
 	claims := state.Units[targetID].LootItems[0].Claims
 	for _, c := range claims {
@@ -143,7 +143,7 @@ func TestLootItem_ViaProcessor(t *testing.T) {
 	p.Register(command.LootItemHandler{})
 	p.Process([]command.Command{
 		{UnitID: playerID, ReceivedAt: time.Now(), Payload: command.LootItemPayload{TargetUnitID: targetID, ItemIndex: 0}},
-	}, state)
+	}, instanceconfig.Zone{}, state)
 	require.Len(t, state.PendingLootClaims, 1)
 	assert.NotNil(t, state.Units[targetID].LootItems[0].Claim)
 }

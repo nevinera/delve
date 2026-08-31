@@ -37,6 +37,15 @@ type PendingLootClaim struct {
 	Item         instanceconfig.Item
 }
 
+// CombatEvent records a power use (including a basic-attack swing) by one
+// unit against another, for client-side visual/audio playback. Not derived
+// from a state diff, so it's carried separately in the delta message.
+type CombatEvent struct {
+	AttackerID string
+	TargetID   string
+	PowerName  string
+}
+
 // InstanceState is the full runtime state of one zone instance.
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
@@ -46,6 +55,7 @@ type InstanceState struct {
 	PendingLootClaims       []PendingLootClaim             // drained each tick; goroutines fired for each
 	PendingLootFailures     []LootFailure                  // drained each tick into delta message
 	PendingOwnershipUpdates []OwnershipUpdate              // drained each tick to update slot OwnedZoneItems
+	PendingCombatEvents     []CombatEvent                  // drained each tick into delta message; appended by command handlers
 }
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every

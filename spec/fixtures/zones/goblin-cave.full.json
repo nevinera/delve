@@ -15,6 +15,8 @@
             "tokenRadius": 2.0,
             "speedFactor": 1.0,
             "maxHP": 20,
+            "dps": 4.0,
+            "attackSpeed": 1.0,
             "resource": {
                 "name": "energy",
                 "color": "AADD00",
@@ -137,6 +139,8 @@
             "tokenRadius": 3.0,
             "speedFactor": 0.9,
             "maxHP": 80,
+            "dps": 8.0,
+            "attackSpeed": 0.8,
             "resource": {
                 "name": "energy",
                 "color": "AADD00",

@@ -50,6 +50,58 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /maxHP must be an integer/)
     end
 
+    it "raises when dps is missing" do
+      expect { described_class.validate!(goblin_unit_type.except("dps")) }
+        .to raise_error(Validators::ValidationError, /dps is required/)
+    end
+
+    it "raises when dps is not a number" do
+      expect { described_class.validate!(goblin_unit_type.merge("dps" => "fast")) }
+        .to raise_error(Validators::ValidationError, /dps must be a number/)
+    end
+
+    it "raises when dps is not positive" do
+      expect { described_class.validate!(goblin_unit_type.merge("dps" => 0)) }
+        .to raise_error(Validators::ValidationError, /dps must be greater than 0/)
+    end
+
+    it "raises when attackSpeed is missing" do
+      expect { described_class.validate!(goblin_unit_type.except("attackSpeed")) }
+        .to raise_error(Validators::ValidationError, /attackSpeed is required/)
+    end
+
+    it "raises when attackSpeed is not positive" do
+      expect { described_class.validate!(goblin_unit_type.merge("attackSpeed" => -1.0)) }
+        .to raise_error(Validators::ValidationError, /attackSpeed must be greater than 0/)
+    end
+
+    it "allows basicAttackRange to be omitted" do
+      expect { described_class.validate!(goblin_unit_type.except("basicAttackRange")) }.not_to raise_error
+    end
+
+    it "raises when basicAttackRange is not a number" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackRange" => "far")) }
+        .to raise_error(Validators::ValidationError, /basicAttackRange must be a number/)
+    end
+
+    it "raises when basicAttackRange is not positive" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackRange" => 0)) }
+        .to raise_error(Validators::ValidationError, /basicAttackRange must be greater than 0/)
+    end
+
+    it "allows basicAttackSchool to be omitted" do
+      expect { described_class.validate!(goblin_unit_type.except("basicAttackSchool")) }.not_to raise_error
+    end
+
+    it "allows basicAttackSchool magic" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackSchool" => "magic")) }.not_to raise_error
+    end
+
+    it "raises when basicAttackSchool is not a recognized value" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackSchool" => "fire")) }
+        .to raise_error(Validators::ValidationError, /must be one of/)
+    end
+
     it "raises when resource is an AssetReference" do
       data = goblin_unit_type.merge("resource" => {"$ref" => "resources/energy.json", "referenceTo" => "resource_type"})
       expect { described_class.validate!(data) }

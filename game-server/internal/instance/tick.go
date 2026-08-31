@@ -87,10 +87,11 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 		case now := <-ticker.C:
 			tickCount++
 			inst.drainPlayerSpawns(ctx, state)
-			inst.commandProcessor.Process(inst.drainCommands(), state)
+			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
 			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())
+			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			resolveCollisions(state, inst.ZoneConfig)
 			roundPositions(state)
 			sweepLootClaims(state)
@@ -176,6 +177,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			state.PendingLootClaims = nil
 			state.PendingLootFailures = nil
 			state.PendingOwnershipUpdates = nil
+			state.PendingCombatEvents = nil
 			prevState = state.Clone()
 
 			// Remove slots that have been pending or waiting too long.

@@ -62,6 +62,7 @@ func manualEngage(unit *instancestate.UnitState, targetID uuid.UUID) {
 	unit.Behavior.LeashMapID = unit.MapIdentifier
 	id := targetID
 	unit.Target = &id
+	unit.Attacking = true
 	unit.Status = instancestate.UnitStatusEngaged
 }
 
@@ -79,6 +80,7 @@ func TestUnitBehavior_Aggro_PlayerInRange(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusEngaged, u.Status)
 	require.NotNil(t, u.Target)
 	assert.Equal(t, playerID, *u.Target)
+	assert.True(t, u.Attacking)
 }
 
 func TestUnitBehavior_Aggro_PlayerOutOfRange(t *testing.T) {
@@ -233,7 +235,7 @@ func TestUnitBehavior_Chase_FacesTarget(t *testing.T) {
 func TestUnitBehavior_Chase_StopsAtMeleeRange(t *testing.T) {
 	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
-	playerID, _ := addPlayer(s, "map1", 0, 4) // 4ft center-to-center — inside effective stop range (2ft gap + radii)
+	playerID, _ := addPlayer(s, "map1", 0, 4) // 4ft center-to-center — inside effective stop range (default basicAttackRange 5.0 - 1ft buffer + radii)
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
@@ -253,6 +255,7 @@ func TestUnitBehavior_Chase_StartsLeashingOnDeadTarget(t *testing.T) {
 
 	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
 	assert.Nil(t, u.Target)
+	assert.False(t, u.Attacking)
 }
 
 func TestUnitBehavior_Chase_StartsLeashingOnMissingTarget(t *testing.T) {
@@ -360,6 +363,220 @@ func TestUnitBehavior_Attack_KillsSetsDeadAndClearsTarget(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// NPC basic attacks
+// ---------------------------------------------------------------------------
+
+func basicAttackZone(dps, attackSpeed float64) instanceconfig.Zone {
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				DPS: dps, AttackSpeed: attackSpeed,
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func rangedBasicAttackZone(dps, attackSpeed, attackRange float64) instanceconfig.Zone {
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				DPS: dps, AttackSpeed: attackSpeed, BasicAttackRange: attackRange,
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+// withWallAt adds a wall barrier to zone's first (only) map, running the full
+// width of the map at the given y - splitting the origin from anything
+// beyond it in y.
+func withWallAt(zone instanceconfig.Zone, wallY float64) instanceconfig.Zone {
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -100, Y: wallY}, {X: 100, Y: wallY},
+		},
+	}}
+	return zone
+}
+
+func TestUnitBehavior_BasicAttack_BlockedByWallIsNoOp(t *testing.T) {
+	zone := withWallAt(basicAttackZone(4.0, 1.0), 2)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4) // in range, but wall at y=2 is between them
+	manualEngage(u, playerID)
+	before := p.Health
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, before, p.Health)
+}
+
+func TestUnitBehavior_Aggro_BlockedByWallDoesNotBlockAttackElsewhere(t *testing.T) {
+	zone := withWallAt(basicAttackZone(4.0, 1.0), 200) // far outside either unit's path
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	before := p.Health
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Less(t, p.Health, before)
+}
+
+func TestUnitBehavior_Chase_ContinuesClosingWhenLOSBlocked(t *testing.T) {
+	zone := withWallAt(rangedBasicAttackZone(2.0, 1.0, 30.0), 10)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	// Well within the 30ft ranged stop distance, so a normal ranged mob would
+	// hold position here - but the wall at y=10 blocks the shot, so it should
+	// keep closing in instead of standing still doing nothing.
+	playerID, _ := addPlayer(s, "map1", 0, 20)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Greater(t, u.Position.Y, 0.0)
+}
+
+func TestUnitBehavior_Chase_StopsShortOfBasicAttackRange(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0) // default (melee) basicAttackRange = 5.0
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	// stopDist = (5 - 1 buffer) + 2.0 + 2.2 = 8.2ft; 6ft is inside that, so the
+	// NPC should already consider itself in range and not close in further,
+	// even though 6ft is well beyond the old fixed 2ft melee stop distance.
+	playerID, _ := addPlayer(s, "map1", 0, 6)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, u.Position.Y)
+}
+
+func TestUnitBehavior_Chase_RangedStopsFartherThanMelee(t *testing.T) {
+	zone := rangedBasicAttackZone(2.0, 1.0, 30.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	// Well outside melee's stop distance but inside the archer's ranged one
+	// (stopDist = (30 - 1) + 2.0 + 2.2 = 33.2ft).
+	playerID, _ := addPlayer(s, "map1", 0, 20)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, u.Position.Y)
+}
+
+func TestUnitBehavior_BasicAttack_UsesUnitTypeRangeOverride(t *testing.T) {
+	zone := rangedBasicAttackZone(2.0, 1.0, 30.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 20) // out of default 5ft range, within the 30ft override
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Less(t, p.Health, 100.0)
+}
+
+func TestUnitBehavior_BasicAttack_DamagesPlayerInRange(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4) // 4ft away, within effective range (5+2+2.2)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Less(t, p.Health, 100.0)
+}
+
+func TestUnitBehavior_BasicAttack_NotAttackingIsNoOp(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	u.Attacking = false
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_BasicAttack_BlockedBySwingTimer(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.NextBasicAttackAt = farFuture()
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_BasicAttack_OutOfRangeIsNoOp(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 20) // 20ft away, outside 5+2+2.2 range
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_BasicAttack_SetsSwingTimer(t *testing.T) {
+	zone := basicAttackZone(4.0, 2.0) // attackSpeed 2.0 -> 0.5s between swings
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	before := time.Now()
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.True(t, u.NextBasicAttackAt.After(before.Add(400*time.Millisecond)))
+	assert.True(t, u.NextBasicAttackAt.Before(before.Add(600*time.Millisecond)))
+}
+
+func TestUnitBehavior_BasicAttack_KillsSetsDeadAndClearsTarget(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	p.Health = 1.0
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, p.Health)
+	assert.Equal(t, instancestate.UnitStatusDead, p.Status)
+	assert.Nil(t, p.Target)
+}
+
+// ---------------------------------------------------------------------------
 // aggro-then-chase same tick
 // ---------------------------------------------------------------------------
 
@@ -431,15 +648,15 @@ func TestUnitBehavior_Chase_ResumesDirectChaseWhenTargetReturns(t *testing.T) {
 	zone := twoMapZone()
 	u, s := npcState("g1", pos(0, 8))
 	u.Behavior.LastSeenX = 0
-	u.Behavior.LastSeenY = 10
-	playerID, p := addPlayer(s, "map1", 0, 3) // player back on same map
+	u.Behavior.LastSeenY = 10                  // "last seen" is in the opposite direction (up) from the actual player (down)
+	playerID, p := addPlayer(s, "map1", 0, -5) // player back on same map, well outside chase stop range
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	// NPC should move toward the player at y=3, not the last-seen at y=10.
+	// NPC should move toward the player at y=-5, not the last-seen at y=10.
 	assert.Less(t, u.Position.Y, 8.0)
-	assert.InDelta(t, 3.0, u.Behavior.LastSeenY, 1e-9) // last seen updated to player's current pos
+	assert.InDelta(t, -5.0, u.Behavior.LastSeenY, 1e-9) // last seen updated to player's current pos
 	_ = p
 }
 

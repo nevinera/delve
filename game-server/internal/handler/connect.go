@@ -150,6 +150,24 @@ func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance,
 			ReceivedAt: time.Now(),
 			Payload:    command.TargetPayload{TargetID: targetID},
 		})
+	case "start_attacking":
+		inst.SendCommand(command.Command{
+			UnitID:     unitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.StartAttackingPayload{},
+		})
+	case "stop_attacking":
+		inst.SendCommand(command.Command{
+			UnitID:     unitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.StopAttackingPayload{},
+		})
+	case "basic_attack":
+		inst.SendCommand(command.Command{
+			UnitID:     unitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.BasicAttackPayload{},
+		})
 	case "use_power":
 		if msg.Slot != nil && *msg.Slot >= 0 && *msg.Slot < len(powers) {
 			inst.SendCommand(command.Command{

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -16,7 +17,7 @@ type UsePowerHandler struct{}
 func (UsePowerHandler) Type() string      { return "use_power" }
 func (UsePowerHandler) Deduplicate() bool { return false }
 
-func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *instancestate.InstanceState) error {
+func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error {
 	p, ok := payload.(UsePowerPayload)
 	if !ok {
 		return nil
@@ -88,6 +89,10 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 			if math.Sqrt(dx*dx+dy*dy) > maxRange {
 				return nil
 			}
+			if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y) {
+				return nil
+			}
+			unit.Attacking = true
 			if effect.Amount != nil {
 				if target.TaggedBy == nil && target.Hostility != "" {
 					target.TaggedBy = &unitID
@@ -101,6 +106,9 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *in
 					target.Status = instancestate.UnitStatusDead
 					target.Target = nil
 					instancestate.RollAndRecordLoot(*unit.Target, target, next)
+					aggroLinkedGroupOnKill(target.ZoneUnitIdentifier, unitID, zone, next)
+					unit.Target = nil
+					unit.Attacking = false
 				}
 			}
 		case "heal":
