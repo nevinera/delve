@@ -98,7 +98,7 @@ const NPC_MAGIC_BASIC_ATTACK_POWER = {
       when: "immediate",
       condition: "onHit",
       opacity: 0.5,
-      color: "ff0000",
+      color: "ff4500",
       spriteColumns: 3,
       spriteRows: 3,
       spriteFrameRate: 12,
@@ -106,12 +106,12 @@ const NPC_MAGIC_BASIC_ATTACK_POWER = {
   ],
   soundEffects: [
     {
-      sourceURL: "/abilities/sounds/punch.ogg",
-      duration: 0.12,
+      sourceURL: "/abilities/sounds/firespell1.ogg",
+      duration: 1.8,
       location: "affected",
       when: "impact",
       condition: "onHit",
-      volumeScale: 0.02,
+      volumeScale: 0.05,
     },
   ],
 };
