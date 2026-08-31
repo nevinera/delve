@@ -33,14 +33,16 @@ const NPC_BASIC_ATTACK_POWER = {
   name: "Basic Attack",
   graphicEffects: [
     {
-      sourceURL: "/abilities/graphics/arc.webp",
-      duration: 0.2,
-      from: "self",
-      to: "affected",
+      sourceURL: "/abilities/graphics/sword-swing.sprites3x3.png",
+      duration: 0.75,
+      from: "affected",
       when: "impact",
       condition: "onHit",
       opacity: 0.5,
       color: "ff0000",
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
     },
   ],
   soundEffects: [
@@ -59,15 +61,17 @@ const CHARACTER_BASIC_ATTACK_POWER = {
   name: "Basic Attack",
   graphicEffects: [
     {
-      sourceURL: "/abilities/graphics/arc.webp",
-      duration: 0.2,
-      from: "self",
-      to: "affected",
+      sourceURL: "/abilities/graphics/sword-swing.sprites3x3.png",
+      duration: 0.75,
+      from: "affected",
       when: "impact",
       condition: "onHit",
       opacity: 0.5,
       color: "ff8c1a",
       scale: 1.2,
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
     },
   ],
   soundEffects: [
