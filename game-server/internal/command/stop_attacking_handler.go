@@ -3,6 +3,7 @@ package command
 import (
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -12,7 +13,7 @@ type StopAttackingHandler struct{}
 func (StopAttackingHandler) Type() string      { return "stop_attacking" }
 func (StopAttackingHandler) Deduplicate() bool { return true }
 
-func (StopAttackingHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *instancestate.InstanceState) error {
+func (StopAttackingHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ instanceconfig.Zone, next *instancestate.InstanceState) error {
 	if _, ok := payload.(StopAttackingPayload); !ok {
 		return nil
 	}

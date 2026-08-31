@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/command"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 func TestStopAttackingHandler_Type(t *testing.T) {
@@ -26,7 +27,7 @@ func TestStopAttackingHandler_ClearsAttacking(t *testing.T) {
 	state.Units[unitID].Target = &targetID
 	state.Units[unitID].Attacking = true
 
-	require.NoError(t, h.Handle(unitID, command.StopAttackingPayload{}, state))
+	require.NoError(t, h.Handle(unitID, command.StopAttackingPayload{}, instanceconfig.Zone{}, state))
 
 	assert.False(t, state.Units[unitID].Attacking)
 }
@@ -39,7 +40,7 @@ func TestStopAttackingHandler_LeavesTargetAlone(t *testing.T) {
 	state.Units[unitID].Target = &targetID
 	state.Units[unitID].Attacking = true
 
-	require.NoError(t, h.Handle(unitID, command.StopAttackingPayload{}, state))
+	require.NoError(t, h.Handle(unitID, command.StopAttackingPayload{}, instanceconfig.Zone{}, state))
 
 	require.NotNil(t, state.Units[unitID].Target)
 	assert.Equal(t, targetID, *state.Units[unitID].Target)
@@ -47,5 +48,5 @@ func TestStopAttackingHandler_LeavesTargetAlone(t *testing.T) {
 
 func TestStopAttackingHandler_MissingUnitIsNoOp(t *testing.T) {
 	h := command.StopAttackingHandler{}
-	assert.NoError(t, h.Handle(uuid.New(), command.StopAttackingPayload{}, emptyState()))
+	assert.NoError(t, h.Handle(uuid.New(), command.StopAttackingPayload{}, instanceconfig.Zone{}, emptyState()))
 }

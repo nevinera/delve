@@ -11,6 +11,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instance"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -26,7 +27,7 @@ type countingHandler struct {
 
 func (h *countingHandler) Type() string      { return "__test__" }
 func (h *countingHandler) Deduplicate() bool { return false }
-func (h *countingHandler) Handle(_ uuid.UUID, _ command.CommandPayload, _ *instancestate.InstanceState) error {
+func (h *countingHandler) Handle(_ uuid.UUID, _ command.CommandPayload, _ instanceconfig.Zone, _ *instancestate.InstanceState) error {
 	h.count.Add(1)
 	return nil
 }

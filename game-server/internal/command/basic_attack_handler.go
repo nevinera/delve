@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -28,7 +29,7 @@ type BasicAttackHandler struct{}
 func (BasicAttackHandler) Type() string      { return "basic_attack" }
 func (BasicAttackHandler) Deduplicate() bool { return false }
 
-func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, next *instancestate.InstanceState) error {
+func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error {
 	if _, ok := payload.(BasicAttackPayload); !ok {
 		return nil
 	}
@@ -52,6 +53,9 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, next 
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
 	if math.Sqrt(dx*dx+dy*dy) > characterBasicAttackRange+unit.Radius+target.Radius {
+		return nil
+	}
+	if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y) {
 		return nil
 	}
 

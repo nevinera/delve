@@ -87,7 +87,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 		case now := <-ticker.C:
 			tickCount++
 			inst.drainPlayerSpawns(ctx, state)
-			inst.commandProcessor.Process(inst.drainCommands(), state)
+			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
 			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())

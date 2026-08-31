@@ -36,7 +36,7 @@ func TestMoveHandler_UpdatesFacing(t *testing.T) {
 	unitID := uuid.New()
 	state := stateWithUnit(unitID)
 
-	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 180.0}, state))
+	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 180.0}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 180.0, state.Units[unitID].Position.Angle)
 }
@@ -49,7 +49,7 @@ func TestMoveHandler_SetsActiveKeys(t *testing.T) {
 	require.NoError(t, h.Handle(unitID, command.MovePayload{
 		Facing: 90.0,
 		Keys:   []command.MoveKey{command.MoveKeyForward, command.MoveKeyStrafeRight},
-	}, state))
+	}, instanceconfig.Zone{}, state))
 
 	intent := state.Units[unitID].MovementIntent
 	assert.True(t, intent.Forward)
@@ -66,7 +66,7 @@ func TestMoveHandler_EmptyKeysClearsIntent(t *testing.T) {
 		Forward: true, StrafeLeft: true,
 	}
 
-	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 0, Keys: nil}, state))
+	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 0, Keys: nil}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, instancestate.MovementIntent{}, state.Units[unitID].MovementIntent)
 }
@@ -78,7 +78,7 @@ func TestMoveHandler_UnknownKeyIsIgnored(t *testing.T) {
 
 	require.NoError(t, h.Handle(unitID, command.MovePayload{
 		Keys: []command.MoveKey{"turbo_boost"},
-	}, state))
+	}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, instancestate.MovementIntent{}, state.Units[unitID].MovementIntent)
 }
@@ -93,7 +93,7 @@ func TestMoveHandler_DeadUnitIsNoOp(t *testing.T) {
 	require.NoError(t, h.Handle(unitID, command.MovePayload{
 		Facing: 90.0,
 		Keys:   []command.MoveKey{command.MoveKeyBackward},
-	}, state))
+	}, instanceconfig.Zone{}, state))
 
 	unit := state.Units[unitID]
 	assert.Equal(t, 0.0, unit.Position.Angle, "facing should not change")
@@ -104,7 +104,7 @@ func TestMoveHandler_MissingUnitIsNoOp(t *testing.T) {
 	h := command.MoveHandler{}
 	state := emptyState()
 
-	assert.NoError(t, h.Handle(uuid.New(), command.MovePayload{Facing: 45.0}, state))
+	assert.NoError(t, h.Handle(uuid.New(), command.MovePayload{Facing: 45.0}, instanceconfig.Zone{}, state))
 }
 
 func ptr(v float64) *float64 { return &v }
@@ -118,7 +118,7 @@ func TestMoveHandler_WithPosition_SetsPosition(t *testing.T) {
 		Facing: 90.0,
 		X:      ptr(15.0),
 		Y:      ptr(25.0),
-	}, state))
+	}, instanceconfig.Zone{}, state))
 
 	unit := state.Units[unitID]
 	assert.InDelta(t, 15.0, unit.Position.X, 1e-9)
@@ -137,7 +137,7 @@ func TestMoveHandler_WithPosition_ClearsIntent(t *testing.T) {
 		Keys:   []command.MoveKey{command.MoveKeyForward},
 		X:      ptr(5.0),
 		Y:      ptr(5.0),
-	}, state))
+	}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, instancestate.MovementIntent{}, state.Units[unitID].MovementIntent)
 }
@@ -153,7 +153,7 @@ func TestMoveHandler_PartialPosition_FallsBackToKeys(t *testing.T) {
 		Keys:   []command.MoveKey{command.MoveKeyForward},
 		X:      ptr(5.0),
 		// Y intentionally absent
-	}, state))
+	}, instanceconfig.Zone{}, state))
 
 	assert.True(t, state.Units[unitID].MovementIntent.Forward)
 	// Position should not have been set to 5,0

@@ -44,7 +44,7 @@ func TestRespawnHandler_Deduplicates(t *testing.T) {
 func TestRespawnHandler_ResetsDeadUnit(t *testing.T) {
 	unit, id, state := deadUnitAtSpawn()
 
-	require.NoError(t, command.RespawnHandler{}.Handle(id, command.RespawnPayload{}, state))
+	require.NoError(t, command.RespawnHandler{}.Handle(id, command.RespawnPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, instancestate.UnitStatusIdle, unit.Status)
 	assert.Equal(t, unit.MaxHealth, unit.Health)
@@ -59,11 +59,11 @@ func TestRespawnHandler_AliveUnitIsNoOp(t *testing.T) {
 	unit.Status = instancestate.UnitStatusIdle
 	unit.Health = 42
 
-	require.NoError(t, command.RespawnHandler{}.Handle(id, command.RespawnPayload{}, state))
+	require.NoError(t, command.RespawnHandler{}.Handle(id, command.RespawnPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 42.0, unit.Health, "alive unit should not be touched")
 }
 
 func TestRespawnHandler_MissingUnitIsNoOp(t *testing.T) {
-	assert.NoError(t, command.RespawnHandler{}.Handle(uuid.New(), command.RespawnPayload{}, emptyState()))
+	assert.NoError(t, command.RespawnHandler{}.Handle(uuid.New(), command.RespawnPayload{}, instanceconfig.Zone{}, emptyState()))
 }

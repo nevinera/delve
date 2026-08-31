@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/delve-mmo/game-server/internal/command"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -30,7 +31,7 @@ type stubCall struct {
 
 func (h *stubHandler) Type() string      { return h.typ }
 func (h *stubHandler) Deduplicate() bool { return h.deduplicate }
-func (h *stubHandler) Handle(unitID uuid.UUID, payload command.CommandPayload, _ *instancestate.InstanceState) error {
+func (h *stubHandler) Handle(unitID uuid.UUID, payload command.CommandPayload, _ instanceconfig.Zone, _ *instancestate.InstanceState) error {
 	h.calls = append(h.calls, stubCall{unitID, payload})
 	return nil
 }
@@ -51,7 +52,7 @@ func TestProcessor_DelegatesToHandler(t *testing.T) {
 	p.Register(h)
 
 	unitID := uuid.New()
-	p.Process([]command.Command{cmd(unitID, "foo", time.Now())}, emptyState())
+	p.Process([]command.Command{cmd(unitID, "foo", time.Now())}, instanceconfig.Zone{}, emptyState())
 
 	assert.Len(t, h.calls, 1)
 	assert.Equal(t, unitID, h.calls[0].unitID)
@@ -60,7 +61,7 @@ func TestProcessor_DelegatesToHandler(t *testing.T) {
 func TestProcessor_UnknownTypeIsIgnored(t *testing.T) {
 	p := command.NewCommandProcessor()
 	assert.NotPanics(t, func() {
-		p.Process([]command.Command{cmd(uuid.New(), "unknown", time.Now())}, emptyState())
+		p.Process([]command.Command{cmd(uuid.New(), "unknown", time.Now())}, instanceconfig.Zone{}, emptyState())
 	})
 }
 
@@ -85,7 +86,7 @@ func TestProcessor_Dedup_KeepsLastPerUnitPerType(t *testing.T) {
 		cmd(unitID, "foo", t0.Add(2*time.Millisecond)),
 	}
 
-	p.Process(cmds, emptyState())
+	p.Process(cmds, instanceconfig.Zone{}, emptyState())
 
 	assert.Len(t, h.calls, 1)
 	assert.Equal(t, cmds[2].Payload, h.calls[0].payload)
@@ -101,7 +102,7 @@ func TestProcessor_NoDedup_ProcessesAll(t *testing.T) {
 	p.Process([]command.Command{
 		cmd(unitID, "foo", t0),
 		cmd(unitID, "foo", t0.Add(time.Millisecond)),
-	}, emptyState())
+	}, instanceconfig.Zone{}, emptyState())
 
 	assert.Len(t, h.calls, 2)
 }
@@ -116,7 +117,7 @@ func TestProcessor_Dedup_IsPerUnit(t *testing.T) {
 	p.Process([]command.Command{
 		cmd(unitA, "foo", t0),
 		cmd(unitB, "foo", t0.Add(time.Millisecond)),
-	}, emptyState())
+	}, instanceconfig.Zone{}, emptyState())
 
 	assert.Len(t, h.calls, 2) // one surviving command per unit
 }
@@ -133,7 +134,7 @@ func TestProcessor_Dedup_IsPerType(t *testing.T) {
 	p.Process([]command.Command{
 		cmd(unitID, "foo", t0),
 		cmd(unitID, "bar", t0.Add(time.Millisecond)),
-	}, emptyState())
+	}, instanceconfig.Zone{}, emptyState())
 
 	assert.Len(t, hFoo.calls, 1)
 	assert.Len(t, hBar.calls, 1)
