@@ -754,6 +754,15 @@ export class SceneManager {
   playGraphicEffects(effects, positions, baseUrl, travelOverrideMs = 0) {
     if (!this._selfMapIdentifier) return;
     const resolve = (key) => key === "self" ? positions.self : positions.target;
+    // A stationary (non-travelling) effect still faces self→target, so an
+    // impact graphic points at whoever it's landing on rather than defaulting
+    // to "north". Only meaningful when both parties are known.
+    let facingHint = null;
+    if (positions.self && positions.target) {
+      const [sx, sz] = this._toWorld(positions.self.x, positions.self.y);
+      const [tx, tz] = this._toWorld(positions.target.x, positions.target.y);
+      facingHint = facingToward(sx, sz, tx, tz);
+    }
     for (const effect of effects) {
       const fromKey = effect.from ?? "self";
       const toKey   = effect.to   ?? "affected";
@@ -767,14 +776,14 @@ export class SceneManager {
       const url = new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
-      this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs);
+      this._spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs, facingHint);
     }
   }
 
   // Sprite-sheet playback (spriteColumns/spriteRows/spriteFrameCount/spriteFrameRate)
   // runs at spriteFrameRate (fps, independent of `duration`) and loops for as long
   // as the effect is alive.
-  _spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs = 0) {
+  _spawnGraphicEffect(url, effect, fromX, fromZ, toX, toZ, travelOverrideMs = 0, facingHint = null) {
     const { duration, color, scale = 1.0, opacity = 1.0, spriteColumns, spriteRows } = effect;
     const isSpriteSheet = spriteColumns > 0 && spriteRows > 0;
     const frameCount = effect.spriteFrameCount ?? (spriteColumns * spriteRows);
@@ -795,7 +804,7 @@ export class SceneManager {
       plane.rotation.x = -Math.PI / 2; // lie flat; image "up" faces -Z before the group rotates it
 
       const traveling = fromX !== toX || fromZ !== toZ;
-      const angle = traveling ? facingToward(fromX, fromZ, toX, toZ) : 0;
+      const angle = traveling ? facingToward(fromX, fromZ, toX, toZ) : (facingHint ?? 0);
 
       const group = new THREE.Group();
       group.add(plane);
