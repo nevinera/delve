@@ -257,10 +257,14 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 		return
 	}
 
+	attackRange := unitType.BasicAttackRange
+	if attackRange <= 0 {
+		attackRange = basicAttackRange
+	}
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
-	if dist > basicAttackRange+unit.Radius+target.Radius {
+	if dist > attackRange+unit.Radius+target.Radius {
 		return
 	}
 

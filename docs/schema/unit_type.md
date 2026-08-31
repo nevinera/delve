@@ -15,6 +15,7 @@ A UnitType is a template from which individual units are created in a zone.
 | `maxHP` | integer | yes | | Maximum hit points. |
 | `dps` | float | yes | | Basic-attack damage per second. Damage per swing is `dps / attackSpeed`. |
 | `attackSpeed` | float | yes | | Basic-attack rate, in attacks per second. Time between basic attacks is `1 / attackSpeed` seconds. |
+| `basicAttackRange` | float | no | `5.0` | Basic-attack range in feet. Leave at the default for melee; set higher (e.g. `30.0`) for a ranged basic attack. |
 | `resource` | ResourceType | yes | | The resource used to power this unit's abilities. |
 | `powers` | array of Power \| AssetReference(`referenceTo: "power"`) | no | `[]` | Powers available to this unit. Inline Power objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `targeting` | UnitTargeting | no | `{ "type": "aggroTable" }` | How this unit selects its target when aggro'd. |

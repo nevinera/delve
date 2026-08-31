@@ -75,6 +75,20 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /attackSpeed must be greater than 0/)
     end
 
+    it "allows basicAttackRange to be omitted" do
+      expect { described_class.validate!(goblin_unit_type.except("basicAttackRange")) }.not_to raise_error
+    end
+
+    it "raises when basicAttackRange is not a number" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackRange" => "far")) }
+        .to raise_error(Validators::ValidationError, /basicAttackRange must be a number/)
+    end
+
+    it "raises when basicAttackRange is not positive" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackRange" => 0)) }
+        .to raise_error(Validators::ValidationError, /basicAttackRange must be greater than 0/)
+    end
+
     it "raises when resource is an AssetReference" do
       data = goblin_unit_type.merge("resource" => {"$ref" => "resources/energy.json", "referenceTo" => "resource_type"})
       expect { described_class.validate!(data) }

@@ -8,6 +8,7 @@ module Validators
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
       validate_speed_factor!(data, path: path) if data.key?("speedFactor")
+      validate_positive_numeric!(data, "basicAttackRange", path: path) if data.key?("basicAttackRange")
       validate_powers!(data, path: path) if data.key?("powers")
       validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if data.key?("targeting")
       validate_tactics!(data["tactics"], path: child_path(path, "tactics")) if data.key?("tactics")

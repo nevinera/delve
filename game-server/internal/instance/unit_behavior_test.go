@@ -384,6 +384,36 @@ func basicAttackZone(dps, attackSpeed float64) instanceconfig.Zone {
 	}
 }
 
+func rangedBasicAttackZone(dps, attackSpeed, attackRange float64) instanceconfig.Zone {
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				DPS: dps, AttackSpeed: attackSpeed, BasicAttackRange: attackRange,
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_BasicAttack_UsesUnitTypeRangeOverride(t *testing.T) {
+	zone := rangedBasicAttackZone(2.0, 1.0, 30.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 20) // out of default 5ft range, within the 30ft override
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Less(t, p.Health, 100.0)
+}
+
 func TestUnitBehavior_BasicAttack_DamagesPlayerInRange(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0)
 	u, s := npcState("g1", pos(0, 0))
