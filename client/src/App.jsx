@@ -57,6 +57,35 @@ const NPC_BASIC_ATTACK_POWER = {
   ],
 };
 
+const NPC_RANGED_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/spinning-arrow.sprites2x4.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+      spriteColumns: 2,
+      spriteRows: 4,
+      spriteFrameRate: 12,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.02,
+    },
+  ],
+};
+
 const CHARACTER_BASIC_ATTACK_POWER = {
   name: "Basic Attack",
   graphicEffects: [
@@ -1217,6 +1246,7 @@ export default function App({
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
+  const npcBasicAttackRangeByZoneIdRef = useRef({}); // { [zoneUnitId]: basicAttackRange }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
 
@@ -1251,6 +1281,7 @@ export default function App({
       .then(r => r.json())
       .then(zone => {
         const byId = {};
+        const basicAttackRangeById = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
           for (const unit of map.units ?? []) {
@@ -1261,10 +1292,12 @@ export default function App({
               byName[p.name] = p;
             }
             byId[unit.identifier] = byName;
+            basicAttackRangeById[unit.identifier] = ut.basicAttackRange ?? BASIC_ATTACK_RANGE;
           }
           elvls[map.identifier] = map.elvl ?? zone.elvl;
         }
         npcPowersByZoneIdRef.current = byId;
+        npcBasicAttackRangeByZoneIdRef.current = basicAttackRangeById;
         setMapElvls(elvls);
       })
       .catch(() => {});
@@ -1518,8 +1551,9 @@ export default function App({
           // swing loop when we send the command - don't replay them a tick
           // or two later once the server confirms.
           if (isBasicAttack && attacker.zone_unit_identifier === selfIdentifierRef.current) continue;
+          const attackerIsRanged = (npcBasicAttackRangeByZoneIdRef.current[attacker.zone_unit_identifier] ?? BASIC_ATTACK_RANGE) > BASIC_ATTACK_RANGE;
           const power = isBasicAttack
-            ? (attacker.hostility ? NPC_BASIC_ATTACK_POWER : CHARACTER_BASIC_ATTACK_POWER)
+            ? (attacker.hostility ? (attackerIsRanged ? NPC_RANGED_BASIC_ATTACK_POWER : NPC_BASIC_ATTACK_POWER) : CHARACTER_BASIC_ATTACK_POWER)
             : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
           if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
           firePowerEffects(power, {
