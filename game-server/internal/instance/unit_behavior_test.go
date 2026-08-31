@@ -235,7 +235,7 @@ func TestUnitBehavior_Chase_FacesTarget(t *testing.T) {
 func TestUnitBehavior_Chase_StopsAtMeleeRange(t *testing.T) {
 	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
-	playerID, _ := addPlayer(s, "map1", 0, 4) // 4ft center-to-center — inside effective stop range (2ft gap + radii)
+	playerID, _ := addPlayer(s, "map1", 0, 4) // 4ft center-to-center — inside effective stop range (default basicAttackRange 5.0 - 1ft buffer + radii)
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
@@ -402,6 +402,35 @@ func rangedBasicAttackZone(dps, attackSpeed, attackRange float64) instanceconfig
 	}
 }
 
+func TestUnitBehavior_Chase_StopsShortOfBasicAttackRange(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0) // default (melee) basicAttackRange = 5.0
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	// stopDist = (5 - 1 buffer) + 2.0 + 2.2 = 8.2ft; 6ft is inside that, so the
+	// NPC should already consider itself in range and not close in further,
+	// even though 6ft is well beyond the old fixed 2ft melee stop distance.
+	playerID, _ := addPlayer(s, "map1", 0, 6)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, u.Position.Y)
+}
+
+func TestUnitBehavior_Chase_RangedStopsFartherThanMelee(t *testing.T) {
+	zone := rangedBasicAttackZone(2.0, 1.0, 30.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	// Well outside melee's stop distance but inside the archer's ranged one
+	// (stopDist = (30 - 1) + 2.0 + 2.2 = 33.2ft).
+	playerID, _ := addPlayer(s, "map1", 0, 20)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, u.Position.Y)
+}
+
 func TestUnitBehavior_BasicAttack_UsesUnitTypeRangeOverride(t *testing.T) {
 	zone := rangedBasicAttackZone(2.0, 1.0, 30.0)
 	u, s := npcState("g1", pos(0, 0))
@@ -565,15 +594,15 @@ func TestUnitBehavior_Chase_ResumesDirectChaseWhenTargetReturns(t *testing.T) {
 	zone := twoMapZone()
 	u, s := npcState("g1", pos(0, 8))
 	u.Behavior.LastSeenX = 0
-	u.Behavior.LastSeenY = 10
-	playerID, p := addPlayer(s, "map1", 0, 3) // player back on same map
+	u.Behavior.LastSeenY = 10                  // "last seen" is in the opposite direction (up) from the actual player (down)
+	playerID, p := addPlayer(s, "map1", 0, -5) // player back on same map, well outside chase stop range
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	// NPC should move toward the player at y=3, not the last-seen at y=10.
+	// NPC should move toward the player at y=-5, not the last-seen at y=10.
 	assert.Less(t, u.Position.Y, 8.0)
-	assert.InDelta(t, 3.0, u.Behavior.LastSeenY, 1e-9) // last seen updated to player's current pos
+	assert.InDelta(t, -5.0, u.Behavior.LastSeenY, 1e-9) // last seen updated to player's current pos
 	_ = p
 }
 

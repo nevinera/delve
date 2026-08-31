@@ -12,12 +12,22 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-// npcMeleeRange is how close (feet) a chasing NPC stops from its target.
-// Will be derived from power ranges once the combat system is in place.
-const npcMeleeRange = 2.0
+// npcChaseStopBuffer is how far short (feet) of its basic-attack range a
+// chasing NPC stops, so it isn't sitting exactly on the edge of range.
+const npcChaseStopBuffer = 1.0
 
-// basicAttackRange is the melee reach (feet) of an NPC's basic attack.
+// basicAttackRange is the default (melee) reach (feet) of an NPC's basic
+// attack, used when its UnitType doesn't set BasicAttackRange.
 const basicAttackRange = 5.0
+
+// effectiveBasicAttackRange returns unitType's basic-attack range, falling
+// back to the melee default when unset.
+func effectiveBasicAttackRange(unitType instanceconfig.UnitType) float64 {
+	if unitType.BasicAttackRange > 0 {
+		return unitType.BasicAttackRange
+	}
+	return basicAttackRange
+}
 
 // basicAttackVariance is the +/- fraction applied to a basic attack's mean
 // damage (UnitType.DPS / UnitType.AttackSpeed) to avoid flat, unvarying hits.
@@ -146,7 +156,7 @@ func applyUnitBehavior(
 		if target.MapIdentifier == unit.MapIdentifier {
 			unit.Behavior.LastSeenX = target.Position.X
 			unit.Behavior.LastSeenY = target.Position.Y
-			chaseTarget(unit, target, speed, dt)
+			chaseTarget(unit, target, speed, dt, effectiveBasicAttackRange(e.unitType))
 			now := time.Now()
 			tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, now, events, state)
 			if target.Status != instancestate.UnitStatusDead {
@@ -257,10 +267,7 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 		return
 	}
 
-	attackRange := unitType.BasicAttackRange
-	if attackRange <= 0 {
-		attackRange = basicAttackRange
-	}
+	attackRange := effectiveBasicAttackRange(unitType)
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
@@ -288,9 +295,10 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 	})
 }
 
-// chaseTarget moves unit straight toward target, stopping npcMeleeRange feet
-// beyond the combined edge-to-edge distance (i.e., adding both token radii).
-func chaseTarget(unit, target *instancestate.UnitState, speed, dt float64) {
+// chaseTarget moves unit straight toward target, stopping npcChaseStopBuffer
+// feet short of attackRange beyond the combined edge-to-edge distance (i.e.,
+// adding both token radii).
+func chaseTarget(unit, target *instancestate.UnitState, speed, dt, attackRange float64) {
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
@@ -299,7 +307,7 @@ func chaseTarget(unit, target *instancestate.UnitState, speed, dt float64) {
 		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 	}
 
-	stopDist := npcMeleeRange + unit.Radius + target.Radius
+	stopDist := math.Max(0, attackRange-npcChaseStopBuffer) + unit.Radius + target.Radius
 	if dist <= stopDist {
 		return
 	}
