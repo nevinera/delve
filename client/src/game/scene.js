@@ -168,6 +168,17 @@ export function computeTargetLineDots(sx, sz, tx, tz, spacing, maxDots) {
   return points;
 }
 
+// Offsets `pos` toward `other` by pos.radius, landing on the edge of pos's
+// token nearest `other` instead of its center. Returns pos unchanged if
+// either point or pos.radius is missing, or the two coincide.
+export function edgeTowards(pos, other) {
+  if (!pos || !other || !pos.radius) return pos;
+  const dx = other.x - pos.x, dy = other.y - pos.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 1e-6) return pos;
+  return { x: pos.x + (dx / dist) * pos.radius, y: pos.y + (dy / dist) * pos.radius };
+}
+
 export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   const { body: bodyColor, cone: coneColor } =
     HOSTILITY_COLORS[hostility] ?? HOSTILITY_COLORS.hostile;
@@ -744,9 +755,15 @@ export class SceneManager {
     if (!this._selfMapIdentifier) return;
     const resolve = (key) => key === "self" ? positions.self : positions.target;
     for (const effect of effects) {
-      const fromPos = resolve(effect.from ?? "self");
-      const toPos   = resolve(effect.to   ?? "affected");
-      if (!fromPos || !toPos) continue;
+      const fromKey = effect.from ?? "self";
+      const toKey   = effect.to   ?? "affected";
+      const fromRaw = resolve(fromKey);
+      const toRaw   = resolve(toKey);
+      if (!fromRaw || !toRaw) continue;
+      // Anchor each endpoint at the edge of its own token nearest the other
+      // party, rather than dead center, when we know that token's radius.
+      const fromPos = edgeTowards(fromRaw, resolve(fromKey === "self" ? "affected" : "self"));
+      const toPos   = edgeTowards(toRaw, resolve(toKey === "self" ? "affected" : "self"));
       const url = new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { createNpcToken, setTokenTagDimmed, computeTargetLineDots, targetLineColor } from "../scene";
+import { createNpcToken, setTokenTagDimmed, computeTargetLineDots, targetLineColor, edgeTowards } from "../scene";
 
 describe("createNpcToken", () => {
   it("stores the hostility body color for later dimming", () => {
@@ -23,6 +23,28 @@ describe("targetLineColor", () => {
 
   it("returns green while not attacking", () => {
     expect(targetLineColor(false)).toBe(0x00ff44);
+  });
+});
+
+describe("edgeTowards", () => {
+  it("offsets toward the other point by the radius", () => {
+    expect(edgeTowards({ x: 0, y: 0, radius: 2 }, { x: 10, y: 0 })).toEqual({ x: 2, y: 0 });
+  });
+
+  it("returns the position unchanged when it has no radius", () => {
+    const pos = { x: 0, y: 0 };
+    expect(edgeTowards(pos, { x: 10, y: 0 })).toBe(pos);
+  });
+
+  it("returns the position unchanged when it coincides with the other point", () => {
+    const pos = { x: 5, y: 5, radius: 2 };
+    expect(edgeTowards(pos, { x: 5, y: 5 })).toBe(pos);
+  });
+
+  it("returns the position unchanged when either point is missing", () => {
+    const pos = { x: 0, y: 0, radius: 2 };
+    expect(edgeTowards(pos, null)).toBe(pos);
+    expect(edgeTowards(null, { x: 10, y: 0 })).toBe(null);
   });
 });
 

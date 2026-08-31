@@ -1523,7 +1523,9 @@ export default function App({
             : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
           if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
           firePowerEffects(power, {
-            positions: { self: attacker.position, target: target.position },
+            positions: isBasicAttack
+              ? { self: { ...attacker.position, radius: attacker.radius }, target: { ...target.position, radius: target.radius } }
+              : { self: attacker.position, target: target.position },
             baseUrl: isBasicAttack ? window.location.origin : zoneSourceUrl,
             sceneManager: canvasRef.current,
           });
@@ -1582,8 +1584,8 @@ export default function App({
       const target = tId ? unitsRef.current[tId] : null;
       if (!target || target.status === "dead") return;
       const self = selfPosRef.current;
+      const selfRadius = selfUnit?.radius ?? 0;
       if (self) {
-        const selfRadius = selfUnit?.radius ?? 0;
         const dx = target.position.x - self.x;
         const dy = target.position.y - self.y;
         if (Math.sqrt(dx * dx + dy * dy) > BASIC_ATTACK_RANGE + selfRadius + (target.radius ?? 0)) return;
@@ -1593,7 +1595,7 @@ export default function App({
       // Play immediately rather than waiting for the server's combat event a
       // tick or two later.
       firePowerEffects(CHARACTER_BASIC_ATTACK_POWER, {
-        positions: { self, target: target.position },
+        positions: { self: { ...self, radius: selfRadius }, target: { ...target.position, radius: target.radius } },
         baseUrl: window.location.origin,
         sceneManager: canvasRef.current,
       });
