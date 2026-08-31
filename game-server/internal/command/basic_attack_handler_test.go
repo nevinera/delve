@@ -101,6 +101,11 @@ func TestBasicAttackHandler_DamagesTargetAndSetsSwingTimer(t *testing.T) {
 
 	assert.Less(t, state.Units[targetID].Health, before)
 	assert.True(t, state.Units[playerID].NextBasicAttackAt.After(time.Now()))
+
+	require.Len(t, state.PendingCombatEvents, 1)
+	assert.Equal(t, playerID.String(), state.PendingCombatEvents[0].AttackerID)
+	assert.Equal(t, targetID.String(), state.PendingCombatEvents[0].TargetID)
+	assert.Equal(t, "Basic Attack", state.PendingCombatEvents[0].PowerName)
 }
 
 func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {

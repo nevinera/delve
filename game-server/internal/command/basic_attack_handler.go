@@ -56,6 +56,11 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, next 
 	}
 
 	unit.NextBasicAttackAt = now.Add(characterBasicAttackInterval)
+	next.PendingCombatEvents = append(next.PendingCombatEvents, instancestate.CombatEvent{
+		AttackerID: unitID.String(),
+		TargetID:   unit.Target.String(),
+		PowerName:  "Basic Attack",
+	})
 
 	if target.TaggedBy == nil && target.Hostility != "" {
 		target.TaggedBy = &unitID

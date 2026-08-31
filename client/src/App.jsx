@@ -24,15 +24,16 @@ const TURN_KEYS = new Set(["turn_left", "turn_right"]);
 const BASIC_ATTACK_RANGE = 5.0;
 const BASIC_ATTACK_INTERVAL_MS = 2000;
 
-// Built-in graphic/sound for any unit's basic attack ("power_name": "Basic Attack"
-// on a combat event). Served by the Rails app itself, not content-authored, so it
-// has no associated zone/class - sourceURLs are resolved against this app's own
-// origin rather than a zone's or class's config_url.
-const BASIC_ATTACK_POWER = {
+// Built-in graphics/sounds for a unit's basic attack ("power_name": "Basic Attack"
+// on a combat event). Served by the Rails app itself, not content-authored, so
+// they have no associated zone/class - sourceURLs are resolved against this
+// app's own origin rather than a zone's or class's config_url. NPCs get a red
+// tint; characters get orange and a 20% larger graphic.
+const NPC_BASIC_ATTACK_POWER = {
   name: "Basic Attack",
   graphicEffects: [
     {
-      sourceURL: "/abilities/graphics/punch-impact.webp",
+      sourceURL: "/abilities/graphics/arc.webp",
       duration: 0.2,
       from: "self",
       to: "affected",
@@ -40,6 +41,33 @@ const BASIC_ATTACK_POWER = {
       condition: "onHit",
       opacity: 0.5,
       color: "ff0000",
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.02,
+    },
+  ],
+};
+
+const CHARACTER_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/arc.webp",
+      duration: 0.2,
+      from: "self",
+      to: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff8c1a",
+      scale: 1.2,
     },
   ],
   soundEffects: [
@@ -1482,8 +1510,12 @@ export default function App({
           const target = u[ev.target_id];
           if (!attacker || !target) continue;
           const isBasicAttack = ev.power_name === "Basic Attack";
+          // Our own basic attacks are already played optimistically by the
+          // swing loop when we send the command - don't replay them a tick
+          // or two later once the server confirms.
+          if (isBasicAttack && attacker.zone_unit_identifier === selfIdentifierRef.current) continue;
           const power = isBasicAttack
-            ? BASIC_ATTACK_POWER
+            ? (attacker.hostility ? NPC_BASIC_ATTACK_POWER : CHARACTER_BASIC_ATTACK_POWER)
             : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
           if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
           firePowerEffects(power, {
@@ -1554,6 +1586,13 @@ export default function App({
       }
       connRef.current?.send({ direction: "up", type: "basic_attack" });
       nextBasicAttackAtRef.current = Date.now() + BASIC_ATTACK_INTERVAL_MS;
+      // Play immediately rather than waiting for the server's combat event a
+      // tick or two later.
+      firePowerEffects(CHARACTER_BASIC_ATTACK_POWER, {
+        positions: { self, target: target.position },
+        baseUrl: window.location.origin,
+        sceneManager: canvasRef.current,
+      });
     }, 150);
     return () => clearInterval(id);
   }, [attacking, selfUnit?.radius]);

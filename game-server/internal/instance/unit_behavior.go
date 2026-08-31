@@ -39,12 +39,11 @@ type playerRef struct {
 	unit *instancestate.UnitState
 }
 
-// CombatEvent records a power use by an NPC unit against a target.
-type CombatEvent struct {
-	AttackerID string
-	TargetID   string
-	PowerName  string
-}
+// CombatEvent records a power use (including a basic-attack swing) by one
+// unit against another. Defined in instancestate so command handlers, which
+// can't import this package, can also append to it via
+// InstanceState.PendingCombatEvents.
+type CombatEvent = instancestate.CombatEvent
 
 // applyUnitBehaviors is the NPC brain, called once per tick for every
 // non-player unit. It handles aggro detection, status transitions, and
