@@ -39,6 +39,7 @@ const BASIC_ATTACK_POWER = {
       when: "impact",
       condition: "onHit",
       opacity: 0.5,
+      color: "ff0000",
     },
   ],
   soundEffects: [
