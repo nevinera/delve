@@ -402,6 +402,60 @@ func rangedBasicAttackZone(dps, attackSpeed, attackRange float64) instanceconfig
 	}
 }
 
+// withWallAt adds a wall barrier to zone's first (only) map, running the full
+// width of the map at the given y - splitting the origin from anything
+// beyond it in y.
+func withWallAt(zone instanceconfig.Zone, wallY float64) instanceconfig.Zone {
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -100, Y: wallY}, {X: 100, Y: wallY},
+		},
+	}}
+	return zone
+}
+
+func TestUnitBehavior_BasicAttack_BlockedByWallIsNoOp(t *testing.T) {
+	zone := withWallAt(basicAttackZone(4.0, 1.0), 2)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4) // in range, but wall at y=2 is between them
+	manualEngage(u, playerID)
+	before := p.Health
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, before, p.Health)
+}
+
+func TestUnitBehavior_Aggro_BlockedByWallDoesNotBlockAttackElsewhere(t *testing.T) {
+	zone := withWallAt(basicAttackZone(4.0, 1.0), 200) // far outside either unit's path
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	before := p.Health
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Less(t, p.Health, before)
+}
+
+func TestUnitBehavior_Chase_ContinuesClosingWhenLOSBlocked(t *testing.T) {
+	zone := withWallAt(rangedBasicAttackZone(2.0, 1.0, 30.0), 10)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	// Well within the 30ft ranged stop distance, so a normal ranged mob would
+	// hold position here - but the wall at y=10 blocks the shot, so it should
+	// keep closing in instead of standing still doing nothing.
+	playerID, _ := addPlayer(s, "map1", 0, 20)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Greater(t, u.Position.Y, 0.0)
+}
+
 func TestUnitBehavior_Chase_StopsShortOfBasicAttackRange(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0) // default (melee) basicAttackRange = 5.0
 	u, s := npcState("g1", pos(0, 0))

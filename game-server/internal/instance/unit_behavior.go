@@ -89,7 +89,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(id, unit, e, state, playersByMap, stateByZoneID, linkGroupByID, dt, &events)
+		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, linkGroupByID, dt, &events)
 	}
 
 	applyNPCSeparation(state, dt)
@@ -101,6 +101,7 @@ func applyUnitBehavior(
 	unit *instancestate.UnitState,
 	e npcEntry,
 	state *instancestate.InstanceState,
+	zone instanceconfig.Zone,
 	playersByMap map[string][]playerRef,
 	stateByZoneID map[string]*instancestate.UnitState,
 	linkGroupByID map[string][]string,
@@ -156,11 +157,20 @@ func applyUnitBehavior(
 		if target.MapIdentifier == unit.MapIdentifier {
 			unit.Behavior.LastSeenX = target.Position.X
 			unit.Behavior.LastSeenY = target.Position.Y
-			chaseTarget(unit, target, speed, dt, effectiveBasicAttackRange(e.unitType))
+			losClear := instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
+			chaseRange := effectiveBasicAttackRange(e.unitType)
+			if !losClear {
+				// Can't see the target from here (e.g. around a corner) - keep
+				// closing in rather than sitting at max range doing nothing.
+				chaseRange = 0
+			}
+			chaseTarget(unit, target, speed, dt, chaseRange)
 			now := time.Now()
-			tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, now, events, state)
-			if target.Status != instancestate.UnitStatusDead {
-				tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, now, events, state)
+			if losClear {
+				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, now, events, state)
+				if target.Status != instancestate.UnitStatusDead {
+					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, now, events, state)
+				}
 			}
 		} else {
 			// Target crossed to another map. Move toward last known position so
