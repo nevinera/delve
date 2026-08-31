@@ -3,12 +3,14 @@ module Validators
     TARGETING_TYPES = %w[aggroTable nearest healerAggro].freeze
     TACTICS_TYPES = %w[randomAvailable rotation priorityRotation scripted phased].freeze
     PATROL_TACTICS_TYPES = (TACTICS_TYPES - ["phased"]).freeze
+    BASIC_ATTACK_SCHOOLS = %w[physical magic].freeze
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
       validate_speed_factor!(data, path: path) if data.key?("speedFactor")
       validate_positive_numeric!(data, "basicAttackRange", path: path) if data.key?("basicAttackRange")
+      validate_basic_attack_school!(data, path: path) if data.key?("basicAttackSchool")
       validate_powers!(data, path: path) if data.key?("powers")
       validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if data.key?("targeting")
       validate_tactics!(data["tactics"], path: child_path(path, "tactics")) if data.key?("tactics")
@@ -24,6 +26,11 @@ module Validators
       validate_positive_numeric!(data, "dps", path: path)
       validate_positive_numeric!(data, "attackSpeed", path: path)
       ResourceTypeValidator.validate!(require_hash!(data, "resource", path: path), path: child_path(path, "resource"))
+    end
+
+    def validate_basic_attack_school!(data, path:)
+      school = require_string!(data, "basicAttackSchool", path: path)
+      require_one_of!(school, BASIC_ATTACK_SCHOOLS, path: child_path(path, "basicAttackSchool"))
     end
 
     def validate_positive_numeric!(data, key, path:)

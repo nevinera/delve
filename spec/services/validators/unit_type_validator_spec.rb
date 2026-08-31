@@ -89,6 +89,19 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /basicAttackRange must be greater than 0/)
     end
 
+    it "allows basicAttackSchool to be omitted" do
+      expect { described_class.validate!(goblin_unit_type.except("basicAttackSchool")) }.not_to raise_error
+    end
+
+    it "allows basicAttackSchool magic" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackSchool" => "magic")) }.not_to raise_error
+    end
+
+    it "raises when basicAttackSchool is not a recognized value" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackSchool" => "fire")) }
+        .to raise_error(Validators::ValidationError, /must be one of/)
+    end
+
     it "raises when resource is an AssetReference" do
       data = goblin_unit_type.merge("resource" => {"$ref" => "resources/energy.json", "referenceTo" => "resource_type"})
       expect { described_class.validate!(data) }

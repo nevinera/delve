@@ -87,6 +87,35 @@ const NPC_RANGED_BASIC_ATTACK_POWER = {
   ],
 };
 
+const NPC_MAGIC_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/magic-ball.sprites3x3.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/punch.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.02,
+    },
+  ],
+};
+
 const CHARACTER_BASIC_ATTACK_POWER = {
   name: "Basic Attack",
   graphicEffects: [
@@ -1248,6 +1277,7 @@ export default function App({
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
   const npcBasicAttackRangeByZoneIdRef = useRef({}); // { [zoneUnitId]: basicAttackRange }
+  const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
@@ -1284,6 +1314,7 @@ export default function App({
       .then(zone => {
         const byId = {};
         const basicAttackRangeById = {};
+        const basicAttackSchoolById = {};
         const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
@@ -1296,12 +1327,14 @@ export default function App({
             }
             byId[unit.identifier] = byName;
             basicAttackRangeById[unit.identifier] = ut.basicAttackRange ?? BASIC_ATTACK_RANGE;
+            basicAttackSchoolById[unit.identifier] = ut.basicAttackSchool ?? "physical";
           }
           barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
         }
         npcPowersByZoneIdRef.current = byId;
         npcBasicAttackRangeByZoneIdRef.current = basicAttackRangeById;
+        npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
       })
@@ -1559,8 +1592,12 @@ export default function App({
           // or two later once the server confirms.
           if (isBasicAttack && attacker.zone_unit_identifier === selfIdentifierRef.current) continue;
           const attackerIsRanged = (npcBasicAttackRangeByZoneIdRef.current[attacker.zone_unit_identifier] ?? BASIC_ATTACK_RANGE) > BASIC_ATTACK_RANGE;
+          const attackerIsMagic = npcBasicAttackSchoolByZoneIdRef.current[attacker.zone_unit_identifier] === "magic";
+          const npcBasicAttackPower = attackerIsMagic
+            ? NPC_MAGIC_BASIC_ATTACK_POWER
+            : (attackerIsRanged ? NPC_RANGED_BASIC_ATTACK_POWER : NPC_BASIC_ATTACK_POWER);
           const power = isBasicAttack
-            ? (attacker.hostility ? (attackerIsRanged ? NPC_RANGED_BASIC_ATTACK_POWER : NPC_BASIC_ATTACK_POWER) : CHARACTER_BASIC_ATTACK_POWER)
+            ? (attacker.hostility ? npcBasicAttackPower : CHARACTER_BASIC_ATTACK_POWER)
             : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
           if (!power || (!power.graphicEffects?.length && !power.soundEffects?.length)) continue;
           firePowerEffects(power, {
