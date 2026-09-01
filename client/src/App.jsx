@@ -48,7 +48,7 @@ const NPC_BASIC_ATTACK_POWER = {
   ],
   soundEffects: [
     {
-      sourceURL: "/abilities/sounds/punch.ogg",
+      sourceURL: "/abilities/sounds/thud.ogg",
       duration: 0.12,
       location: "affected",
       when: "impact",
@@ -77,7 +77,7 @@ const NPC_RANGED_BASIC_ATTACK_POWER = {
   ],
   soundEffects: [
     {
-      sourceURL: "/abilities/sounds/punch.ogg",
+      sourceURL: "/abilities/sounds/thud.ogg",
       duration: 0.12,
       location: "affected",
       when: "impact",
@@ -106,7 +106,7 @@ const NPC_MAGIC_BASIC_ATTACK_POWER = {
   ],
   soundEffects: [
     {
-      sourceURL: "/abilities/sounds/firespell1.ogg",
+      sourceURL: "/abilities/sounds/whoomph.ogg",
       duration: 1.8,
       location: "affected",
       when: "impact",
@@ -135,7 +135,7 @@ const CHARACTER_BASIC_ATTACK_POWER = {
   ],
   soundEffects: [
     {
-      sourceURL: "/abilities/sounds/punch.ogg",
+      sourceURL: "/abilities/sounds/thud.ogg",
       duration: 0.12,
       location: "affected",
       when: "impact",
