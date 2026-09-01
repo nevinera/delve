@@ -37,6 +37,9 @@
       <% if notice %>
         <article role="alert"><%= notice %></article>
       <% end %>
+      <% if alert %>
+        <article role="alert" class="pico-color-red-500"><%= alert %></article>
+      <% end %>
       <%= yield %>
     </main>
 

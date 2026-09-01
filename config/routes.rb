@@ -11,6 +11,13 @@ Rails.application.routes.draw do
 
   resources :users, only: [:index]
 
+  namespace :github do
+    get "connect", to: "connections#connect"
+    get "reauth", to: "connections#reauth"
+    get "callback", to: "connections#callback"
+    get "token", to: "connections#token"
+  end
+
   namespace :build do
     root to: "dashboard#index"
     resources :handles, only: [:index, :show, :new, :create]

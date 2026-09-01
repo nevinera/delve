@@ -1,0 +1,16 @@
+<h1>Connect GitHub</h1>
+
+<% if @installation %>
+  <p>Currently connected to <strong><%= @installation.repo_full_name %></strong>.</p>
+<% end %>
+
+<ol>
+  <li>
+    <%= link_to "Create your content repository", @template_url, target: "_blank", rel: "noopener" %>
+    &mdash; opens GitHub, click "Create repository" there.
+  </li>
+  <li>
+    <%= link_to "Install the Delve app on it", @install_url %>
+    &mdash; choose "Only select repositories" and pick the repository you just created.
+  </li>
+</ol>

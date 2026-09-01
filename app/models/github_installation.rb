@@ -16,4 +16,13 @@ class GithubInstallation < ApplicationRecord
   def refresh_token_expired?
     refresh_token_expires_at <= Time.current
   end
+
+  def update_tokens!(access_token:, refresh_token:, expires_in:, refresh_token_expires_in:)
+    update!(
+      access_token: access_token,
+      refresh_token: refresh_token,
+      access_token_expires_at: Time.current + expires_in.seconds,
+      refresh_token_expires_at: Time.current + refresh_token_expires_in.seconds
+    )
+  end
 end

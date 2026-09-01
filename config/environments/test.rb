@@ -3,6 +3,11 @@
 # your test database is "scratch space" for the test suite and is wiped
 # and recreated between test runs. Don't rely on the data there!
 
+# Fixed, non-secret values so specs don't depend on real GitHub App credentials being sourced.
+ENV["DELVE_GITHUB_CLIENT_ID"] ||= "test_github_client_id"
+ENV["DELVE_GITHUB_CLIENT_SECRET"] ||= "test_github_client_secret"
+ENV["DELVE_GITHUB_PUBLIC_LINK"] ||= "https://github.com/apps/delve-content-editor-test"
+
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
