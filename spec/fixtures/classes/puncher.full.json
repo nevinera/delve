@@ -11,12 +11,12 @@
   "powers": [
     {
       "name": "Punch",
-      "iconURL": "./icons/punch.svg",
+      "iconURL": "../graphics/icons/punch.svg",
       "castTime": null,
       "globalCooldown": 1.5,
       "graphicEffects": [
         {
-          "sourceURL": "./graphics/punch-impact.webp",
+          "sourceURL": "../graphics/effects/punch-impact.webp",
           "duration": 0.3,
           "from": "self",
           "to": "affected",
@@ -27,7 +27,7 @@
       ],
       "soundEffects": [
         {
-          "sourceURL": "./sounds/punch.ogg",
+          "sourceURL": "../audio/punch.ogg",
           "duration": 0.12,
           "location": "affected",
           "when": "impact",
@@ -46,12 +46,12 @@
     },
     {
       "name": "Recover",
-      "iconURL": "./icons/recover.svg",
+      "iconURL": "../graphics/icons/recover.svg",
       "castTime": null,
       "globalCooldown": 10.0,
       "graphicEffects": [
         {
-          "sourceURL": "./graphics/recover-glow.webp",
+          "sourceURL": "../graphics/effects/recover-glow.webp",
           "duration": 0.8,
           "from": "self",
           "when": "immediate",
@@ -60,7 +60,7 @@
       ],
       "soundEffects": [
         {
-          "sourceURL": "./sounds/recover.ogg",
+          "sourceURL": "../audio/recover.ogg",
           "duration": 0.33,
           "location": "self",
           "when": "immediate",
