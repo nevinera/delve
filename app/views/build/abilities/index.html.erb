@@ -1,5 +1,7 @@
 <h1>Abilities</h1>
 
+<p><%= link_to "New Ability", new_build_ability_path %></p>
+
 <ul>
   <% @abilities.each do |entry| %>
     <% identifier = entry["name"].sub(/\.json\z/, "") %>

@@ -16,6 +16,7 @@ function AddEntryWrapper() {
 
 const ability = {
   name: "Firebolt",
+  description: "A bolt of fire.",
   iconURL: "../graphics/icons/firebolt.svg",
   castTime: null,
   globalCooldown: 1.0,
@@ -26,23 +27,26 @@ const ability = {
 };
 
 describe("AbilityFieldsPanel", () => {
-  it("renders name as read-only plain text, not an input", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
-    expect(screen.getByText("Firebolt")).toBeInTheDocument();
-    expect(screen.queryByDisplayValue("Firebolt")).not.toBeInTheDocument();
-  });
-
   it("renders every recognized field even when the ability lacks it, e.g. cooldown", () => {
     render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     expect(screen.getByText("Cooldown")).toBeInTheDocument();
   });
 
-  it("renders iconURL/castTime/globalCooldown/cooldown/maxRange/speed as editable inputs", () => {
+  it("renders name/description/iconURL/castTime/globalCooldown/cooldown/maxRange/speed as editable inputs", () => {
     render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    expect(screen.getByDisplayValue("Firebolt")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("A bolt of fire.")).toBeInTheDocument();
     expect(screen.getByDisplayValue("../graphics/icons/firebolt.svg")).toBeInTheDocument();
     expect(screen.getByDisplayValue("1")).toBeInTheDocument(); // globalCooldown
     expect(screen.getByDisplayValue("60")).toBeInTheDocument(); // speed
     expect(screen.getByDisplayValue("40")).toBeInTheDocument(); // maxRange
+  });
+
+  it("dispatches SET_FIELD with a string when the name field changes", () => {
+    const dispatch = vi.fn();
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    fireEvent.change(screen.getByDisplayValue("Firebolt"), {target: {value: "Frostbolt"}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "name", value: "Frostbolt"});
   });
 
   it("dispatches SET_FIELD with a string when an editable text field changes", () => {

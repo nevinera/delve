@@ -54,6 +54,69 @@ RSpec.describe "Build::Abilities", type: :request do
       end
     end
 
+    describe "GET /build/abilities/new" do
+      context "without a github installation" do
+        it "redirects to the github connect page" do
+          get "/build/abilities/new"
+          expect(response).to redirect_to(github_connect_path)
+        end
+      end
+
+      context "with a connected repository" do
+        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+        it "renders a form asking only for a key" do
+          get "/build/abilities/new"
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include('name="key"')
+        end
+      end
+    end
+
+    describe "POST /build/abilities" do
+      before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+      def stub_existing_abilities(names)
+        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
+          .to_return(
+            status: 200,
+            headers: {"Content-Type" => "application/json"},
+            body: names.map { |n| {name: "#{n}.json", path: "abilities/#{n}.json", type: "file"} }.to_json
+          )
+      end
+
+      it "redirects to the edit page for an available key" do
+        stub_existing_abilities(["punch"])
+
+        post "/build/abilities", params: {key: "firebolt"}
+
+        expect(response).to redirect_to(edit_build_ability_path(id: "firebolt"))
+      end
+
+      it "rejects a blank key" do
+        post "/build/abilities", params: {key: "  "}
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(response.body).to include("Key is required")
+      end
+
+      it "rejects a key with characters outside letters/numbers/underscore/hyphen" do
+        post "/build/abilities", params: {key: "../../etc/passwd"}
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(response.body).to include("letters, numbers, underscores, and hyphens")
+      end
+
+      it "rejects a key that's already taken in the repo's abilities directory" do
+        stub_existing_abilities(["punch", "firebolt"])
+
+        post "/build/abilities", params: {key: "firebolt"}
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(response.body).to include("already taken")
+      end
+    end
+
     describe "GET /build/abilities/:id/edit" do
       context "without a github installation" do
         it "redirects to the github connect page" do
@@ -74,6 +137,24 @@ RSpec.describe "Build::Abilities", type: :request do
 
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+        it "bootstraps a blank ability when the key doesn't exist yet in the repo" do
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/fire_bolt.json")
+            .to_return(
+              status: 404,
+              headers: {"Content-Type" => "application/json"},
+              body: {message: "Not Found"}.to_json
+            )
+
+          get "/build/abilities/fire_bolt/edit"
+
+          expect(response).to have_http_status(:ok)
+          blank_ability = {
+            "name" => "Fire Bolt", "description" => "", "castTime" => nil, "globalCooldown" => 1.0,
+            "graphicEffects" => [], "soundEffects" => [], "effects" => []
+          }
+          expect(response.body).to include(CGI.escapeHTML(blank_ability.to_json))
+        end
 
         it "renders the JS editor shell, bootstrapping the ability and asset map as data attributes" do
           content = {

@@ -12,7 +12,9 @@ module Github
     end
 
     def file_content(path)
-      Base64.decode64(contents(path)["content"])
+      data = contents(path)
+      raise NotFoundError, "#{path} not found in #{@installation.repo_full_name}" unless data.is_a?(Hash) && data["content"]
+      Base64.decode64(data["content"])
     end
 
     private

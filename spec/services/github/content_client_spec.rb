@@ -90,5 +90,16 @@ RSpec.describe Github::ContentClient do
       result = described_class.new(user).file_content("abilities/punch.json")
       expect(result).to eq('{"name":"Punch"}')
     end
+
+    it "raises NotFoundError when GitHub returns a 404 for the path" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/missing.json")
+        .to_return(
+          status: 404,
+          headers: {"Content-Type" => "application/json"},
+          body: {message: "Not Found", documentation_url: "https://docs.github.com/rest"}.to_json
+        )
+
+      expect { described_class.new(user).file_content("abilities/missing.json") }.to raise_error(Github::NotFoundError)
+    end
   end
 end

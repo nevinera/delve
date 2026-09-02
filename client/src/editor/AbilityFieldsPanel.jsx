@@ -9,9 +9,10 @@ const EFFECT_SECTIONS = ["graphicEffects", "soundEffects", "effects"];
 // The recognized top-level scalar fields (see Content::Ability / PowerValidator),
 // shown regardless of whether the loaded ability happens to have them set, so a
 // field can be added to an ability that never had it (e.g. giving a melee
-// ability a cooldown). "name" is intentionally left out of edit mode for now.
+// ability a cooldown).
 const TOP_LEVEL_FIELDS = [
-  {key: "name", type: "text", editable: false},
+  {key: "name", type: "text", editable: true},
+  {key: "description", type: "text", editable: true},
   {key: "iconURL", type: "text", editable: true, upload: true},
   {key: "castTime", type: "number", editable: true},
   {key: "globalCooldown", type: "number", editable: true},
