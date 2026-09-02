@@ -90,6 +90,57 @@ describe("AbilityFieldsPanel", () => {
     expect(screen.getByText("Graphic effects (1)")).toBeInTheDocument();
     expect(screen.getByText("Effects (1)")).toBeInTheDocument();
     expect(screen.getByText("1. harm")).toBeInTheDocument();
-    expect(screen.getByText("magic, ranged")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("magic, ranged")).toBeInTheDocument();
+  });
+
+  describe("entry fields", () => {
+    it("renders enum fields (when) as a select with the current value chosen", () => {
+      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      expect(screen.getByDisplayValue("immediate").tagName).toEqual("SELECT");
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELD when a select (when) changes", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      fireEvent.change(screen.getByDisplayValue("immediate"), {target: {value: "impact"}});
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "when", value: "impact"});
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELD with a collapsed scalar when both range endpoints match", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      fireEvent.change(screen.getByDisplayValue("140"), {target: {value: "89"}});
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "amount", value: 89});
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELD with an array when range endpoints differ", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      fireEvent.change(screen.getByDisplayValue("89"), {target: {value: "50"}});
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "amount", value: [50, 140]});
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELD with a parsed tag array when tags changes", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      fireEvent.change(screen.getByDisplayValue("magic, ranged"), {target: {value: "magic, ranged, aoe"}});
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "tags", value: ["magic", "ranged", "aoe"]});
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELD when a plain numeric entry field changes", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      fireEvent.change(screen.getByDisplayValue("0.5"), {target: {value: "0.8"}});
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "duration", value: 0.8});
+    });
+
+    it("renders the nested status object read-only, not as an input", () => {
+      const withStatus = {
+        ...ability,
+        effects: [{type: "status", affects: "self", duration: 5.0, status: {name: "Focused", treatAs: "buff"}}],
+      };
+      render(<AbilityFieldsPanel ability={withStatus} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      expect(screen.getByText("Name: Focused; Treat as: buff")).toBeInTheDocument();
+    });
   });
 });

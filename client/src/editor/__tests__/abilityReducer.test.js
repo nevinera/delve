@@ -17,4 +17,29 @@ describe("abilityReducer", () => {
   it("returns the state unchanged for an unknown action type", () => {
     expect(abilityReducer(baseState, {type: "BOGUS"})).toBe(baseState);
   });
+
+  describe("UPDATE_ENTRY_FIELD", () => {
+    const stateWithEffects = {
+      name: "Firebolt",
+      graphicEffects: [
+        {sourceURL: "a.png", when: "immediate"},
+        {sourceURL: "b.png", when: "impact"},
+      ],
+    };
+
+    it("updates the named field on the entry at the given index only", () => {
+      const result = abilityReducer(stateWithEffects, {
+        type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 1, field: "when", value: "always",
+      });
+      expect(result.graphicEffects[0]).toEqual({sourceURL: "a.png", when: "immediate"});
+      expect(result.graphicEffects[1]).toEqual({sourceURL: "b.png", when: "always"});
+    });
+
+    it("does not mutate the original state", () => {
+      abilityReducer(stateWithEffects, {
+        type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "when", value: "impact",
+      });
+      expect(stateWithEffects.graphicEffects[0].when).toEqual("immediate");
+    });
+  });
 });

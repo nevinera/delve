@@ -1,5 +1,6 @@
 import {useState} from "react";
 import {entrySummary, formatValue, humanize, listFields} from "./abilityFormatting";
+import {selectOptions, widgetFor} from "./entryFieldSchema";
 
 // The recognized top-level scalar fields (see Content::Ability / PowerValidator),
 // shown regardless of whether the loaded ability happens to have them set, so a
@@ -14,21 +15,6 @@ const TOP_LEVEL_FIELDS = [
   {key: "maxRange", type: "number", editable: true},
   {key: "speed", type: "number", editable: true},
 ];
-
-function EntryFieldsTable({entry}) {
-  return (
-    <table>
-      <tbody>
-        {Object.entries(entry).map(([key, value]) => (
-          <tr key={key}>
-            <th>{humanize(key)}</th>
-            <td>{formatValue(value)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
 
 function EditableField({field, type, value, dispatch}) {
   return (
@@ -79,6 +65,104 @@ function AssetUploadField({field, hasOverride, onUploadAsset, onClearAsset}) {
   );
 }
 
+function SelectField({field, value, onChange}) {
+  return (
+    <select value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}>
+      {selectOptions(field).map((option) => (
+        <option key={option || "(none)"} value={option}>{option === "" ? "—" : option}</option>
+      ))}
+    </select>
+  );
+}
+
+// amount/range may be a single number or a [min, max] pair - edited as two
+// number inputs, collapsing back to a scalar when they're equal (same
+// approach as Content::FloatOrRange server-side).
+function RangeField({value, onChange}) {
+  const min = Array.isArray(value) ? value[0] : value;
+  const max = Array.isArray(value) ? value[1] : value;
+
+  function update(newMin, newMax) {
+    if (newMin == null || newMax == null) {
+      onChange(newMin ?? newMax ?? null);
+      return;
+    }
+    onChange(newMin === newMax ? newMin : [newMin, newMax]);
+  }
+
+  return (
+    <span className="range-field">
+      <input
+        type="number" step="any" value={min ?? ""}
+        onChange={(e) => update(e.target.value === "" ? null : parseFloat(e.target.value), max)}
+      />
+      <span className="range-sep">–</span>
+      <input
+        type="number" step="any" value={max ?? ""}
+        onChange={(e) => update(min, e.target.value === "" ? null : parseFloat(e.target.value))}
+      />
+    </span>
+  );
+}
+
+function TagsField({value, onChange}) {
+  return (
+    <input
+      type="text"
+      value={(value ?? []).join(", ")}
+      onChange={(e) => onChange(e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))}
+    />
+  );
+}
+
+function EntryField({field, value, onChange}) {
+  switch (widgetFor(field)) {
+    case "select":
+      return <SelectField field={field} value={value} onChange={onChange} />;
+    case "range":
+      return <RangeField value={value} onChange={onChange} />;
+    case "tags":
+      return <TagsField value={value} onChange={onChange} />;
+    case "number":
+      return (
+        <input
+          type="number" step="any" value={value ?? ""}
+          onChange={(e) => onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+        />
+      );
+    case "readonly":
+      return formatValue(value);
+    default:
+      return (
+        <input
+          type="text" value={value ?? ""}
+          onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
+        />
+      );
+  }
+}
+
+function EntryFieldsTable({section, index, entry, dispatch}) {
+  return (
+    <table>
+      <tbody>
+        {Object.entries(entry).map(([field, value]) => (
+          <tr key={field}>
+            <th>{humanize(field)}</th>
+            <td>
+              <EntryField
+                field={field}
+                value={value}
+                onChange={(newValue) => dispatch({type: "UPDATE_ENTRY_FIELD", section, index, field, value: newValue})}
+              />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, onUploadAsset, onClearAsset}) {
   return (
     <div className="fields-panel">
@@ -105,13 +189,13 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
         </tbody>
       </table>
 
-      {listFields(ability).map(([key, entries]) => (
-        <details key={key}>
-          <summary>{humanize(key)} ({entries.length})</summary>
+      {listFields(ability).map(([section, entries]) => (
+        <details key={section}>
+          <summary>{humanize(section)} ({entries.length})</summary>
           {entries.map((entry, index) => (
             <details key={index}>
               <summary>{entrySummary(entry, index)}</summary>
-              <EntryFieldsTable entry={entry} />
+              <EntryFieldsTable section={section} index={index} entry={entry} dispatch={dispatch} />
             </details>
           ))}
         </details>
