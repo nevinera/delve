@@ -40,3 +40,22 @@ export function widgetFor(field) {
 export function selectOptions(field) {
   return SELECT_OPTIONS[field] ?? [];
 }
+
+// Recognized field order per section (mirrors Content::GraphicEffect /
+// Content::SoundEffect server-side), shown regardless of whether the loaded
+// entry happens to have them set - otherwise there'd be no way to e.g. add
+// spriteColumns/spriteRows to a graphicEffect that was previously a plain,
+// non-animated image. "effects" is polymorphic on "type" (harm/heal/
+// resource/status each have a different field set) and isn't covered yet,
+// so it stays purely data-driven.
+const ENTRY_FIELDS = {
+  graphicEffects: [
+    "sourceURL", "duration", "from", "to", "when", "condition",
+    "color", "scale", "spriteColumns", "spriteRows", "spriteFrameCount", "spriteFrameRate",
+  ],
+  soundEffects: ["sourceURL", "duration", "location", "when", "condition", "impactTiming", "volumeScale"],
+};
+
+export function entryFieldsFor(section, entry) {
+  return ENTRY_FIELDS[section] ?? Object.keys(entry);
+}

@@ -134,6 +134,78 @@ describe("AbilityFieldsPanel", () => {
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "duration", value: 0.8});
     });
 
+    it("renders an image-accepting upload for a graphicEffects sourceURL and calls onUploadAsset with a scoped key", () => {
+      const onUploadAsset = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} />);
+      // index 1: index 0 is the top-level iconURL upload, also accept="image/*"
+      const fileInput = document.querySelectorAll('input[type="file"][accept="image/*"]')[1];
+      const file = new File(["fake-bytes"], "new-effect.png", {type: "image/png"});
+
+      fireEvent.change(fileInput, {target: {files: [file]}});
+
+      expect(onUploadAsset).toHaveBeenCalledWith("graphicEffects[0].sourceURL", file);
+    });
+
+    it("renders an audio-accepting upload for a soundEffects sourceURL", () => {
+      const abilityWithSound = {...ability, soundEffects: [{sourceURL: "../audio/firespell1.ogg", duration: 1.8, when: "immediate"}]};
+      const onUploadAsset = vi.fn();
+      render(<AbilityFieldsPanel ability={abilityWithSound} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} />);
+      const fileInput = document.querySelector('input[type="file"][accept="audio/*"]');
+      const file = new File(["fake-bytes"], "new-sound.ogg", {type: "audio/ogg"});
+
+      fireEvent.change(fileInput, {target: {files: [file]}});
+
+      expect(onUploadAsset).toHaveBeenCalledWith("soundEffects[0].sourceURL", file);
+    });
+
+    it("shows a per-entry Restore button only for the overridden entry", () => {
+      const twoEffects = {
+        ...ability,
+        graphicEffects: [
+          {sourceURL: "a.png", duration: 0.1, when: "immediate"},
+          {sourceURL: "b.png", duration: 0.2, when: "immediate"},
+        ],
+      };
+      const onClearAsset = vi.fn();
+      render(
+        <AbilityFieldsPanel
+          ability={twoEffects}
+          dispatch={() => {}}
+          assetOverrides={{"graphicEffects[1].sourceURL": "blob:local-b"}}
+          onUploadAsset={() => {}}
+          onClearAsset={onClearAsset}
+        />
+      );
+
+      expect(screen.getAllByRole("button", {name: "Restore"})).toHaveLength(1);
+      fireEvent.click(screen.getByRole("button", {name: "Restore"}));
+      expect(onClearAsset).toHaveBeenCalledWith("graphicEffects[1].sourceURL");
+    });
+
+    it("shows spriteColumns/spriteRows as editable fields even on a graphicEffect that never had them", () => {
+      // e.g. the ability's original effect was a plain image, and the user
+      // uploaded an animated sprite sheet to replace it - there needs to be
+      // somewhere to declare the new grid dimensions.
+      const plainImageAbility = {...ability, graphicEffects: [{sourceURL: "punch-impact.webp", duration: 0.3}]};
+      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+
+      expect(screen.getByText("Sprite columns")).toBeInTheDocument();
+      expect(screen.getByText("Sprite rows")).toBeInTheDocument();
+      expect(screen.getByText("Sprite frame rate")).toBeInTheDocument();
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELD when a previously-unset spriteColumns field is filled in", () => {
+      const dispatch = vi.fn();
+      const plainImageAbility = {...ability, graphicEffects: [{sourceURL: "punch-impact.webp", duration: 0.3}]};
+      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+
+      const row = screen.getByText("Sprite columns").closest("tr");
+      const input = row.querySelector("input");
+      fireEvent.change(input, {target: {value: "3"}});
+
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "spriteColumns", value: 3});
+    });
+
     it("renders the nested status object read-only, not as an input", () => {
       const withStatus = {
         ...ability,

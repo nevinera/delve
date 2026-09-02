@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {widgetFor, selectOptions} from "../entryFieldSchema";
+import {widgetFor, selectOptions, entryFieldsFor} from "../entryFieldSchema";
 
 describe("widgetFor", () => {
   it("recognizes the enum fields as selects", () => {
@@ -47,5 +47,28 @@ describe("selectOptions", () => {
 
   it("returns an empty array for a non-select field", () => {
     expect(selectOptions("duration")).toEqual([]);
+  });
+});
+
+describe("entryFieldsFor", () => {
+  it("returns the full recognized graphicEffects field list, including ones absent from a plain-image entry", () => {
+    const plainImageEntry = {sourceURL: "punch-impact.webp", duration: 0.3, when: "impact"};
+    const fields = entryFieldsFor("graphicEffects", plainImageEntry);
+    expect(fields).toContain("spriteColumns");
+    expect(fields).toContain("spriteRows");
+    expect(fields).toContain("spriteFrameCount");
+    expect(fields).toContain("spriteFrameRate");
+  });
+
+  it("returns the full recognized soundEffects field list, including ones absent from a bare entry", () => {
+    const bareEntry = {sourceURL: "punch.ogg", duration: 0.1, location: "affected", when: "impact", condition: "onHit"};
+    const fields = entryFieldsFor("soundEffects", bareEntry);
+    expect(fields).toContain("impactTiming");
+    expect(fields).toContain("volumeScale");
+  });
+
+  it("falls back to the entry's own keys for a section with no recognized list (effects)", () => {
+    const entry = {type: "harm", affects: "bTarget", amount: 10.0};
+    expect(entryFieldsFor("effects", entry)).toEqual(["type", "affects", "amount"]);
   });
 });

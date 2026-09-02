@@ -1,6 +1,7 @@
 import {useState} from "react";
 import {entrySummary, formatValue, humanize, listFields} from "./abilityFormatting";
-import {selectOptions, widgetFor} from "./entryFieldSchema";
+import {entryFieldsFor, selectOptions, widgetFor} from "./entryFieldSchema";
+import {assetOverrideKey} from "./resolveAbilityForPlayback";
 
 // The recognized top-level scalar fields (see Content::Ability / PowerValidator),
 // shown regardless of whether the loaded ability happens to have them set, so a
@@ -36,7 +37,7 @@ function EditableField({field, type, value, dispatch}) {
 // real upload back to the content repo isn't built yet. The file input is
 // remounted (via `resetKey`) on clear, since its displayed filename can't
 // be reset programmatically any other way.
-function AssetUploadField({field, hasOverride, onUploadAsset, onClearAsset}) {
+function AssetUploadField({field, accept = "image/*", hasOverride, onUploadAsset, onClearAsset}) {
   const [resetKey, setResetKey] = useState(0);
 
   return (
@@ -44,7 +45,7 @@ function AssetUploadField({field, hasOverride, onUploadAsset, onClearAsset}) {
       <input
         key={resetKey}
         type="file"
-        accept="image/*"
+        accept={accept}
         onChange={(e) => {
           const file = e.target.files[0];
           if (file) onUploadAsset(field, file);
@@ -142,22 +143,35 @@ function EntryField({field, value, onChange}) {
   }
 }
 
-function EntryFieldsTable({section, index, entry, dispatch}) {
+function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUploadAsset, onClearAsset}) {
   return (
     <table>
       <tbody>
-        {Object.entries(entry).map(([field, value]) => (
-          <tr key={field}>
-            <th>{humanize(field)}</th>
-            <td>
-              <EntryField
-                field={field}
-                value={value}
-                onChange={(newValue) => dispatch({type: "UPDATE_ENTRY_FIELD", section, index, field, value: newValue})}
-              />
-            </td>
-          </tr>
-        ))}
+        {entryFieldsFor(section, entry).map((field) => {
+          const value = entry[field];
+          const uploadKey = field === "sourceURL" ? assetOverrideKey(section, index, field) : null;
+          return (
+            <tr key={field}>
+              <th>{humanize(field)}</th>
+              <td>
+                <EntryField
+                  field={field}
+                  value={value}
+                  onChange={(newValue) => dispatch({type: "UPDATE_ENTRY_FIELD", section, index, field, value: newValue})}
+                />
+                {uploadKey && (
+                  <AssetUploadField
+                    field={uploadKey}
+                    accept={section === "soundEffects" ? "audio/*" : "image/*"}
+                    hasOverride={Boolean(assetOverrides[uploadKey])}
+                    onUploadAsset={onUploadAsset}
+                    onClearAsset={onClearAsset}
+                  />
+                )}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -195,7 +209,15 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
           {entries.map((entry, index) => (
             <details key={index}>
               <summary>{entrySummary(entry, index)}</summary>
-              <EntryFieldsTable section={section} index={index} entry={entry} dispatch={dispatch} />
+              <EntryFieldsTable
+                section={section}
+                index={index}
+                entry={entry}
+                dispatch={dispatch}
+                assetOverrides={assetOverrides}
+                onUploadAsset={onUploadAsset}
+                onClearAsset={onClearAsset}
+              />
             </details>
           ))}
         </details>
