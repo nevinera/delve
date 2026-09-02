@@ -7,6 +7,10 @@
     You have connected GitHub repository
     "<%= link_to @installation.repo_full_name, "https://github.com/#{@installation.repo_full_name}" %>".
   </p>
+
+  <ul>
+    <li><%= link_to "Abilities", build_abilities_path %></li>
+  </ul>
 <% end %>
 
 <p><%= link_to "Manage GitHub connection", github_manage_path, style: "font-size: 0.8em;" %></p>

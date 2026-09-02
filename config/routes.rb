@@ -22,6 +22,7 @@ Rails.application.routes.draw do
 
   namespace :build do
     root to: "dashboard#index"
+    resources :abilities, only: [:index, :show]
     resources :handles, only: [:index, :show, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
     resources :character_classes, only: [:index, :show, :new, :create]

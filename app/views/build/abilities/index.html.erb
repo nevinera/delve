@@ -1,0 +1,10 @@
+<h1>Abilities</h1>
+
+<ul>
+  <% @abilities.each do |entry| %>
+    <% identifier = entry["name"].sub(/\.json\z/, "") %>
+    <li><%= link_to identifier, build_ability_path(id: identifier) %></li>
+  <% end %>
+</ul>
+
+<%= link_to "Back to Build", build_root_path %>

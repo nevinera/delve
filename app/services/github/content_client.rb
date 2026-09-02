@@ -1,3 +1,5 @@
+require "base64"
+
 module Github
   class ContentClient
     def initialize(user)
@@ -6,11 +8,19 @@ module Github
     end
 
     def list_directory(path)
-      ensure_fresh_token!
-      Github::ApiClient.new(@installation.access_token).repository_contents(@installation.repo_full_name, path)
+      contents(path)
+    end
+
+    def file_content(path)
+      Base64.decode64(contents(path)["content"])
     end
 
     private
+
+    def contents(path)
+      ensure_fresh_token!
+      Github::ApiClient.new(@installation.access_token).repository_contents(@installation.repo_full_name, path)
+    end
 
     def ensure_fresh_token!
       raise ReauthRequiredError, "GitHub authorization has expired" if @installation.refresh_token_expired?

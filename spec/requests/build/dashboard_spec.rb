@@ -48,6 +48,11 @@ RSpec.describe "Build::Dashboard", type: :request do
           get "/build"
           expect(response.body).to include(github_manage_path)
         end
+
+        it "links to the abilities listing" do
+          get "/build"
+          expect(response.body).to include(build_abilities_path)
+        end
       end
     end
   end

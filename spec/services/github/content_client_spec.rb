@@ -71,4 +71,24 @@ RSpec.describe Github::ContentClient do
       end
     end
   end
+
+  describe "#file_content" do
+    let!(:installation) do
+      create(:github_installation, user: user, repo_full_name: "nevinera/delve-content",
+        access_token: "gho_fresh", access_token_expires_at: 1.hour.from_now)
+    end
+
+    it "decodes and returns the base64-encoded file content" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/punch.json")
+        .with(headers: {"Authorization" => "Bearer gho_fresh"})
+        .to_return(
+          status: 200,
+          headers: {"Content-Type" => "application/json"},
+          body: {content: Base64.encode64('{"name":"Punch"}'), encoding: "base64"}.to_json
+        )
+
+      result = described_class.new(user).file_content("abilities/punch.json")
+      expect(result).to eq('{"name":"Punch"}')
+    end
+  end
 end
