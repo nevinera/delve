@@ -15,18 +15,18 @@ const ability = {
 
 describe("AbilityFieldsPanel", () => {
   it("renders name as read-only plain text, not an input", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     expect(screen.getByText("Firebolt")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("Firebolt")).not.toBeInTheDocument();
   });
 
   it("renders every recognized field even when the ability lacks it, e.g. cooldown", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     expect(screen.getByText("Cooldown")).toBeInTheDocument();
   });
 
   it("renders iconURL/castTime/globalCooldown/cooldown/maxRange/speed as editable inputs", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     expect(screen.getByDisplayValue("../graphics/icons/firebolt.svg")).toBeInTheDocument();
     expect(screen.getByDisplayValue("1")).toBeInTheDocument(); // globalCooldown
     expect(screen.getByDisplayValue("60")).toBeInTheDocument(); // speed
@@ -35,28 +35,28 @@ describe("AbilityFieldsPanel", () => {
 
   it("dispatches SET_FIELD with a string when an editable text field changes", () => {
     const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     fireEvent.change(screen.getByDisplayValue("../graphics/icons/firebolt.svg"), {target: {value: "../graphics/icons/new.svg"}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "iconURL", value: "../graphics/icons/new.svg"});
   });
 
   it("dispatches SET_FIELD with a parsed number when an editable number field changes", () => {
     const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     fireEvent.change(screen.getByDisplayValue("60"), {target: {value: "75"}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "speed", value: 75});
   });
 
   it("dispatches SET_FIELD with null when a number field is cleared", () => {
     const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     fireEvent.change(screen.getByDisplayValue("40"), {target: {value: ""}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "maxRange", value: null});
   });
 
   it("renders a file upload input for iconURL and calls onUploadAsset with the chosen file", () => {
     const onUploadAsset = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     const file = new File(["fake-bytes"], "new-icon.png", {type: "image/png"});
     const fileInput = document.querySelector('input[type="file"]');
 
@@ -66,7 +66,7 @@ describe("AbilityFieldsPanel", () => {
   });
 
   it("does not show a Restore button when there is no override for the field", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     expect(screen.queryByRole("button", {name: "Restore"})).not.toBeInTheDocument();
   });
 
@@ -79,6 +79,7 @@ describe("AbilityFieldsPanel", () => {
         assetOverrides={{iconURL: "blob:fake-url"}}
         onUploadAsset={() => {}}
         onClearAsset={onClearAsset}
+        onRemoveEntry={() => {}}
       />
     );
     fireEvent.click(screen.getByRole("button", {name: "Restore"}));
@@ -86,7 +87,7 @@ describe("AbilityFieldsPanel", () => {
   });
 
   it("renders collapsible sections for each array field with per-entry summaries", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     expect(screen.getByText("Graphic effects (1)")).toBeInTheDocument();
     expect(screen.getByText("Effects (1)")).toBeInTheDocument();
     expect(screen.getByText("1. harm")).toBeInTheDocument();
@@ -95,48 +96,48 @@ describe("AbilityFieldsPanel", () => {
 
   describe("entry fields", () => {
     it("renders enum fields (when) as a select with the current value chosen", () => {
-      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       expect(screen.getByDisplayValue("immediate").tagName).toEqual("SELECT");
     });
 
     it("dispatches UPDATE_ENTRY_FIELD when a select (when) changes", () => {
       const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       fireEvent.change(screen.getByDisplayValue("immediate"), {target: {value: "impact"}});
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "when", value: "impact"});
     });
 
     it("dispatches UPDATE_ENTRY_FIELD with a collapsed scalar when both range endpoints match", () => {
       const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       fireEvent.change(screen.getByDisplayValue("140"), {target: {value: "89"}});
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "amount", value: 89});
     });
 
     it("dispatches UPDATE_ENTRY_FIELD with an array when range endpoints differ", () => {
       const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       fireEvent.change(screen.getByDisplayValue("89"), {target: {value: "50"}});
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "amount", value: [50, 140]});
     });
 
     it("dispatches UPDATE_ENTRY_FIELD with a parsed tag array when tags changes", () => {
       const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       fireEvent.change(screen.getByDisplayValue("magic, ranged"), {target: {value: "magic, ranged, aoe"}});
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "tags", value: ["magic", "ranged", "aoe"]});
     });
 
     it("dispatches UPDATE_ENTRY_FIELD when a plain numeric entry field changes", () => {
       const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       fireEvent.change(screen.getByDisplayValue("0.5"), {target: {value: "0.8"}});
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "duration", value: 0.8});
     });
 
     it("renders an image-accepting upload for a graphicEffects sourceURL and calls onUploadAsset with a scoped key", () => {
       const onUploadAsset = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       // index 1: index 0 is the top-level iconURL upload, also accept="image/*"
       const fileInput = document.querySelectorAll('input[type="file"][accept="image/*"]')[1];
       const file = new File(["fake-bytes"], "new-effect.png", {type: "image/png"});
@@ -149,7 +150,7 @@ describe("AbilityFieldsPanel", () => {
     it("renders an audio-accepting upload for a soundEffects sourceURL", () => {
       const abilityWithSound = {...ability, soundEffects: [{sourceURL: "../audio/firespell1.ogg", duration: 1.8, when: "immediate"}]};
       const onUploadAsset = vi.fn();
-      render(<AbilityFieldsPanel ability={abilityWithSound} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={abilityWithSound} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       const fileInput = document.querySelector('input[type="file"][accept="audio/*"]');
       const file = new File(["fake-bytes"], "new-sound.ogg", {type: "audio/ogg"});
 
@@ -174,6 +175,7 @@ describe("AbilityFieldsPanel", () => {
           assetOverrides={{"graphicEffects[1].sourceURL": "blob:local-b"}}
           onUploadAsset={() => {}}
           onClearAsset={onClearAsset}
+          onRemoveEntry={() => {}}
         />
       );
 
@@ -187,7 +189,7 @@ describe("AbilityFieldsPanel", () => {
       // uploaded an animated sprite sheet to replace it - there needs to be
       // somewhere to declare the new grid dimensions.
       const plainImageAbility = {...ability, graphicEffects: [{sourceURL: "punch-impact.webp", duration: 0.3}]};
-      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
 
       expect(screen.getByText("Sprite columns")).toBeInTheDocument();
       expect(screen.getByText("Sprite rows")).toBeInTheDocument();
@@ -197,7 +199,7 @@ describe("AbilityFieldsPanel", () => {
     it("dispatches UPDATE_ENTRY_FIELD when a previously-unset spriteColumns field is filled in", () => {
       const dispatch = vi.fn();
       const plainImageAbility = {...ability, graphicEffects: [{sourceURL: "punch-impact.webp", duration: 0.3}]};
-      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
 
       const row = screen.getByText("Sprite columns").closest("tr");
       const input = row.querySelector("input");
@@ -211,8 +213,69 @@ describe("AbilityFieldsPanel", () => {
         ...ability,
         effects: [{type: "status", affects: "self", duration: 5.0, status: {name: "Focused", treatAs: "buff"}}],
       };
-      render(<AbilityFieldsPanel ability={withStatus} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+      render(<AbilityFieldsPanel ability={withStatus} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
       expect(screen.getByText("Name: Focused; Treat as: buff")).toBeInTheDocument();
+    });
+  });
+
+  describe("adding and removing entries", () => {
+    it("always shows all three sections, even ones the ability has none of yet", () => {
+      const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
+      render(<AbilityFieldsPanel ability={bare} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      expect(screen.getByText("Graphic effects (0)")).toBeInTheDocument();
+      expect(screen.getByText("Sound effects (0)")).toBeInTheDocument();
+      expect(screen.getByText("Effects (0)")).toBeInTheDocument();
+    });
+
+    it("dispatches ADD_ENTRY with a placeholder graphicEffects entry when Add Graphic effect is clicked", () => {
+      const dispatch = vi.fn();
+      const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
+      render(<AbilityFieldsPanel ability={bare} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Graphic effect"}));
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY",
+        section: "graphicEffects",
+        entry: {sourceURL: "", duration: 0.3, from: "self", when: "immediate", condition: "always"},
+      });
+    });
+
+    it("dispatches ADD_ENTRY with a placeholder harm effect when Add Effect is clicked", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Effect"}));
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY",
+        section: "effects",
+        entry: {type: "harm", affects: "bTarget", amount: 10.0, range: 5.0},
+      });
+    });
+
+    it("renders only the newest (last) entry in a section open by default, so adding one is visible", () => {
+      const twoEffects = {
+        ...ability,
+        graphicEffects: [
+          {sourceURL: "a.png", duration: 0.1, when: "immediate"},
+          {sourceURL: "b.png", duration: 0.2, when: "immediate"},
+        ],
+      };
+      render(<AbilityFieldsPanel ability={twoEffects} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+
+      const entryDetails = screen.getAllByText(/^\d+\. immediate$/).map((summary) => summary.closest("details"));
+      expect(entryDetails[0].open).toBe(false);
+      expect(entryDetails[1].open).toBe(true);
+    });
+
+    it("calls onRemoveEntry with the section and index when Remove is clicked", () => {
+      const onRemoveEntry = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={onRemoveEntry} />);
+
+      fireEvent.click(screen.getAllByRole("button", {name: "Remove"})[0]);
+
+      expect(onRemoveEntry).toHaveBeenCalledWith("graphicEffects", 0);
     });
   });
 });

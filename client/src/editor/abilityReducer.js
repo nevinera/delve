@@ -1,6 +1,4 @@
-// Reducer for the in-browser ability draft. ADD_ENTRY/REMOVE_ENTRY for the
-// graphicEffects/soundEffects/effects arrays aren't built yet - only editing
-// fields on entries that already exist.
+// Reducer for the in-browser ability draft.
 export function abilityReducer(state, action) {
   switch (action.type) {
     case "SET_FIELD":
@@ -10,6 +8,16 @@ export function abilityReducer(state, action) {
       const {section, index, field, value} = action;
       const entries = state[section].map((entry, i) => (i === index ? {...entry, [field]: value} : entry));
       return {...state, [section]: entries};
+    }
+
+    case "ADD_ENTRY": {
+      const {section, entry} = action;
+      return {...state, [section]: [...(state[section] ?? []), entry]};
+    }
+
+    case "REMOVE_ENTRY": {
+      const {section, index} = action;
+      return {...state, [section]: state[section].filter((_, i) => i !== index)};
     }
 
     default:

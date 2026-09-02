@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {humanize, listFields, entrySummary, formatValue} from "../abilityFormatting";
+import {humanize, entrySummary, formatValue} from "../abilityFormatting";
 
 describe("humanize", () => {
   it("humanizes a camelCase key", () => {
@@ -8,13 +8,6 @@ describe("humanize", () => {
 
   it("humanizes an acronym-ish key", () => {
     expect(humanize("iconURL")).toEqual("Icon url");
-  });
-});
-
-describe("listFields", () => {
-  it("keeps only array values", () => {
-    const ability = {name: "Punch", castTime: null, graphicEffects: [{a: 1}], soundEffects: []};
-    expect(listFields(ability)).toEqual([["graphicEffects", [{a: 1}]], ["soundEffects", []]]);
   });
 });
 

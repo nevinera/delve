@@ -59,3 +59,16 @@ const ENTRY_FIELDS = {
 export function entryFieldsFor(section, entry) {
   return ENTRY_FIELDS[section] ?? Object.keys(entry);
 }
+
+// Starter values for a newly-added entry - the minimum each type needs to
+// already be valid per the validators (e.g. harm requires affects/amount/
+// range), so the new entry isn't obviously broken before it's edited.
+const PLACEHOLDER_ENTRIES = {
+  graphicEffects: {sourceURL: "", duration: 0.3, from: "self", when: "immediate", condition: "always"},
+  soundEffects: {sourceURL: "", duration: 0.3, location: "affected", when: "immediate", condition: "always"},
+  effects: {type: "harm", affects: "bTarget", amount: 10.0, range: 5.0},
+};
+
+export function placeholderEntry(section) {
+  return {...PLACEHOLDER_ENTRIES[section]};
+}

@@ -6,10 +6,6 @@ export function humanize(key) {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
-export function listFields(ability) {
-  return Object.entries(ability).filter(([, value]) => Array.isArray(value));
-}
-
 export function entrySummary(entry, index) {
   const hint = entry.type ?? entry.when;
   return hint ? `${index + 1}. ${hint}` : `${index + 1}`;

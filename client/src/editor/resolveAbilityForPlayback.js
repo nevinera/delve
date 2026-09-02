@@ -18,9 +18,10 @@ function resolveUrl(value, assetMap) {
 }
 
 function resolveEffect(effect, section, index, assetMap, assetOverrides) {
-  if (!effect.sourceURL) return effect;
   const override = assetOverrides[assetOverrideKey(section, index, "sourceURL")];
-  return {...effect, sourceURL: override ?? resolveUrl(effect.sourceURL, assetMap)};
+  if (override) return {...effect, sourceURL: override};
+  if (!effect.sourceURL) return effect;
+  return {...effect, sourceURL: resolveUrl(effect.sourceURL, assetMap)};
 }
 
 export function resolveAbilityForPlayback(ability, assetMap, assetOverrides = {}) {

@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {widgetFor, selectOptions, entryFieldsFor} from "../entryFieldSchema";
+import {widgetFor, selectOptions, entryFieldsFor, placeholderEntry} from "../entryFieldSchema";
 
 describe("widgetFor", () => {
   it("recognizes the enum fields as selects", () => {
@@ -70,5 +70,29 @@ describe("entryFieldsFor", () => {
   it("falls back to the entry's own keys for a section with no recognized list (effects)", () => {
     const entry = {type: "harm", affects: "bTarget", amount: 10.0};
     expect(entryFieldsFor("effects", entry)).toEqual(["type", "affects", "amount"]);
+  });
+});
+
+describe("placeholderEntry", () => {
+  it("gives graphicEffects a minimal already-valid starter entry", () => {
+    expect(placeholderEntry("graphicEffects")).toEqual({
+      sourceURL: "", duration: 0.3, from: "self", when: "immediate", condition: "always",
+    });
+  });
+
+  it("gives soundEffects a minimal already-valid starter entry", () => {
+    expect(placeholderEntry("soundEffects")).toEqual({
+      sourceURL: "", duration: 0.3, location: "affected", when: "immediate", condition: "always",
+    });
+  });
+
+  it("gives effects a minimal already-valid harm entry", () => {
+    expect(placeholderEntry("effects")).toEqual({type: "harm", affects: "bTarget", amount: 10.0, range: 5.0});
+  });
+
+  it("returns a fresh object each call, not a shared reference", () => {
+    const a = placeholderEntry("effects");
+    const b = placeholderEntry("effects");
+    expect(a).not.toBe(b);
   });
 });

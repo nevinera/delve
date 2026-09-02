@@ -55,6 +55,16 @@ describe("resolveAbilityForPlayback", () => {
     expect(resolved.soundEffects[0].sourceURL).toEqual("data:audio/ogg;base64,SOUND");
   });
 
+  it("uses a per-entry sourceURL override even when the entry's own sourceURL is still empty", () => {
+    // e.g. a freshly-added graphicEffect entry (placeholder sourceURL: "")
+    // that the user has since uploaded a file into but not yet typed a path
+    // for - the upload must still win, not silently fall through.
+    const freshEntryAbility = {...ability, graphicEffects: [{sourceURL: "", duration: 0.3}]};
+    const overrides = {[assetOverrideKey("graphicEffects", 0, "sourceURL")]: "blob:local-upload"};
+    const resolved = resolveAbilityForPlayback(freshEntryAbility, assetMap, overrides);
+    expect(resolved.graphicEffects[0].sourceURL).toEqual("blob:local-upload");
+  });
+
   it("only applies an override to the entry at the matching index", () => {
     const twoEffectAbility = {
       ...ability,

@@ -42,4 +42,41 @@ describe("abilityReducer", () => {
       expect(stateWithEffects.graphicEffects[0].when).toEqual("immediate");
     });
   });
+
+  describe("ADD_ENTRY", () => {
+    it("appends the new entry to the end of the section's array", () => {
+      const state = {name: "Firebolt", graphicEffects: [{sourceURL: "a.png"}]};
+      const result = abilityReducer(state, {type: "ADD_ENTRY", section: "graphicEffects", entry: {sourceURL: "b.png"}});
+      expect(result.graphicEffects).toEqual([{sourceURL: "a.png"}, {sourceURL: "b.png"}]);
+    });
+
+    it("creates the section array when it doesn't exist yet", () => {
+      const state = {name: "Firebolt"};
+      const result = abilityReducer(state, {type: "ADD_ENTRY", section: "effects", entry: {type: "harm"}});
+      expect(result.effects).toEqual([{type: "harm"}]);
+    });
+
+    it("does not mutate the original state", () => {
+      const state = {name: "Firebolt", graphicEffects: [{sourceURL: "a.png"}]};
+      abilityReducer(state, {type: "ADD_ENTRY", section: "graphicEffects", entry: {sourceURL: "b.png"}});
+      expect(state.graphicEffects).toEqual([{sourceURL: "a.png"}]);
+    });
+  });
+
+  describe("REMOVE_ENTRY", () => {
+    const stateWithThree = {
+      name: "Firebolt",
+      effects: [{type: "harm"}, {type: "heal"}, {type: "resource"}],
+    };
+
+    it("removes only the entry at the given index", () => {
+      const result = abilityReducer(stateWithThree, {type: "REMOVE_ENTRY", section: "effects", index: 1});
+      expect(result.effects).toEqual([{type: "harm"}, {type: "resource"}]);
+    });
+
+    it("does not mutate the original state", () => {
+      abilityReducer(stateWithThree, {type: "REMOVE_ENTRY", section: "effects", index: 0});
+      expect(stateWithThree.effects).toHaveLength(3);
+    });
+  });
 });

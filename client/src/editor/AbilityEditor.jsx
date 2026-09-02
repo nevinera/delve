@@ -2,6 +2,7 @@ import {useReducer, useRef, useState} from "react";
 import {abilityReducer} from "./abilityReducer";
 import AbilityPreviewPane from "./AbilityPreviewPane";
 import AbilityFieldsPanel from "./AbilityFieldsPanel";
+import {assetOverrideKey} from "./resolveAbilityForPlayback";
 
 export default function AbilityEditor({initialAbility, assetMap}) {
   const [ability, dispatch] = useReducer(abilityReducer, initialAbility);
@@ -34,6 +35,38 @@ export default function AbilityEditor({initialAbility, assetMap}) {
     });
   }
 
+  // Removing an entry shifts every later entry's index down by one, so any
+  // asset override keyed by section+index (see assetOverrideKey) needs to
+  // move with it - otherwise an upload could end up silently attached to
+  // the wrong entry after a removal.
+  function removeEntry(section, index) {
+    dispatch({type: "REMOVE_ENTRY", section, index});
+
+    const prefix = `${section}[`;
+    setAssetOverrides((current) => {
+      const next = {};
+      const nextUrls = {};
+      for (const [key, url] of Object.entries(current)) {
+        if (!key.startsWith(prefix)) {
+          next[key] = url;
+          nextUrls[key] = url;
+          continue;
+        }
+        const [, entryIndex, field] = key.match(/^(?:.+)\[(\d+)\]\.(.+)$/);
+        const i = Number(entryIndex);
+        if (i === index) {
+          URL.revokeObjectURL(url);
+          continue;
+        }
+        const newKey = assetOverrideKey(section, i > index ? i - 1 : i, field);
+        next[newKey] = url;
+        nextUrls[newKey] = url;
+      }
+      overrideUrlsRef.current = nextUrls;
+      return next;
+    });
+  }
+
   return (
     <div className="ability-editor">
       <div className="ability-editor-preview">
@@ -46,6 +79,7 @@ export default function AbilityEditor({initialAbility, assetMap}) {
           assetOverrides={assetOverrides}
           onUploadAsset={uploadAsset}
           onClearAsset={clearAssetOverride}
+          onRemoveEntry={removeEntry}
         />
       </div>
     </div>
