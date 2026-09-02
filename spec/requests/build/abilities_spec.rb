@@ -113,6 +113,7 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include("Punch")
           expect(response.body).to include("Global cooldown")
+          expect(response.body).to include(edit_build_ability_path("punch"))
           expect(response.body).to include("<details")
           expect(response.body).to include("Graphic effects (1)")
           expect(response.body).to include("Sound effects (1)")
@@ -152,6 +153,60 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response.body).to include("@keyframes")
           expect(response.body).to include("steps(1) infinite")
           expect(response.body).to include("background-size: 200% 200%")
+        end
+      end
+    end
+
+    describe "GET /build/abilities/:id/edit" do
+      context "without a github installation" do
+        it "redirects to the github connect page" do
+          get "/build/abilities/punch/edit"
+          expect(response).to redirect_to(github_connect_path)
+        end
+      end
+
+      context "with an expired refresh token" do
+        before { create(:github_installation, user: user, refresh_token_expires_at: 1.day.ago) }
+
+        it "redirects to reauth with an alert" do
+          get "/build/abilities/punch/edit"
+          expect(response).to redirect_to(github_reauth_path)
+          expect(flash[:alert]).to include("GitHub authorization has expired")
+        end
+      end
+
+      context "with a connected repository" do
+        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+        it "renders the JS editor shell, bootstrapping the ability and asset map as data attributes" do
+          content = {
+            "name" => "Punch",
+            "castTime" => nil,
+            "globalCooldown" => 0.5,
+            "speed" => 60.0,
+            "graphicEffects" => [
+              {"sourceURL" => "../graphics/effects/punch-impact.webp", "duration" => 0.3, "when" => "impact"}
+            ]
+          }
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/punch.json")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/graphics/effects/punch-impact.webp")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64("fake-webp-bytes"), encoding: "base64"}.to_json
+            )
+
+          get "/build/abilities/punch/edit"
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include('<div id="editor-root"')
+          expect(response.body).to include('src="/client/editor.js"')
+          expect(response.body).to include(CGI.escapeHTML(content.to_json))
+          expect(response.body).to include(CGI.escapeHTML({"../graphics/effects/punch-impact.webp" => "data:image/webp;base64,#{Base64.strict_encode64("fake-webp-bytes")}"}.to_json))
         end
       end
     end

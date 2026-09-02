@@ -1,5 +1,6 @@
 class Build::AbilitiesController < Build::BaseController
-  skip_authorization_check only: [:index, :show]
+  skip_authorization_check only: [:index, :show, :edit]
+  layout "build_client", only: :edit
 
   MIME_TYPES = {
     ".svg" => "image/svg+xml", ".png" => "image/png", ".webp" => "image/webp",
@@ -12,12 +13,20 @@ class Build::AbilitiesController < Build::BaseController
   end
 
   def show
+    load_ability
+  end
+
+  def edit
+    load_ability
+  end
+
+  private
+
+  def load_ability
     content = Github::ContentClient.new(current_user).file_content("abilities/#{params[:id]}.json")
     @ability = JSON.parse(content)
     @asset_thumbnails = fetch_asset_thumbnails(@ability)
   end
-
-  private
 
   def fetch_asset_thumbnails(data)
     client = Github::ContentClient.new(current_user)

@@ -1,0 +1,40 @@
+import { describe, it, expect } from "vitest";
+import { resolveAbilityForPlayback } from "../resolveAbilityForPlayback";
+
+describe("resolveAbilityForPlayback", () => {
+  const assetMap = {
+    "../graphics/icons/firebolt.svg": "data:image/svg+xml;base64,ICON",
+    "../graphics/animations/firebolt.sprites2x2.png": "data:image/png;base64,ANIM",
+    "../audio/firespell1.ogg": "data:audio/ogg;base64,SOUND",
+  };
+
+  const ability = {
+    name: "Firebolt",
+    iconURL: "../graphics/icons/firebolt.svg",
+    graphicEffects: [{sourceURL: "../graphics/animations/firebolt.sprites2x2.png", duration: 0.5}],
+    soundEffects: [{sourceURL: "../audio/firespell1.ogg", duration: 1.8}],
+  };
+
+  it("swaps iconURL and every effect sourceURL for their resolved asset", () => {
+    const resolved = resolveAbilityForPlayback(ability, assetMap);
+    expect(resolved.iconURL).toEqual("data:image/svg+xml;base64,ICON");
+    expect(resolved.graphicEffects[0].sourceURL).toEqual("data:image/png;base64,ANIM");
+    expect(resolved.soundEffects[0].sourceURL).toEqual("data:audio/ogg;base64,SOUND");
+  });
+
+  it("leaves other effect fields untouched", () => {
+    const resolved = resolveAbilityForPlayback(ability, assetMap);
+    expect(resolved.graphicEffects[0].duration).toEqual(0.5);
+  });
+
+  it("falls back to the original url when no asset was resolved server-side", () => {
+    const resolved = resolveAbilityForPlayback(ability, {});
+    expect(resolved.iconURL).toEqual("../graphics/icons/firebolt.svg");
+    expect(resolved.graphicEffects[0].sourceURL).toEqual("../graphics/animations/firebolt.sprites2x2.png");
+  });
+
+  it("does not mutate the original ability", () => {
+    resolveAbilityForPlayback(ability, assetMap);
+    expect(ability.iconURL).toEqual("../graphics/icons/firebolt.svg");
+  });
+});

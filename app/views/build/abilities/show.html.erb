@@ -1,5 +1,7 @@
 <h1><%= params[:id] %></h1>
 
+<p><%= link_to "Edit", edit_build_ability_path(params[:id]) %></p>
+
 <%= render "fields_table", fields: scalar_fields(@ability), thumbnails: @asset_thumbnails %>
 
 <% list_fields(@ability).each do |key, entries| %>
