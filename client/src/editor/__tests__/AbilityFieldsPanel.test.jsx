@@ -15,18 +15,18 @@ const ability = {
 
 describe("AbilityFieldsPanel", () => {
   it("renders name as read-only plain text, not an input", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
     expect(screen.getByText("Firebolt")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("Firebolt")).not.toBeInTheDocument();
   });
 
   it("renders every recognized field even when the ability lacks it, e.g. cooldown", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
     expect(screen.getByText("Cooldown")).toBeInTheDocument();
   });
 
   it("renders iconURL/castTime/globalCooldown/cooldown/maxRange/speed as editable inputs", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
     expect(screen.getByDisplayValue("../graphics/icons/firebolt.svg")).toBeInTheDocument();
     expect(screen.getByDisplayValue("1")).toBeInTheDocument(); // globalCooldown
     expect(screen.getByDisplayValue("60")).toBeInTheDocument(); // speed
@@ -35,27 +35,58 @@ describe("AbilityFieldsPanel", () => {
 
   it("dispatches SET_FIELD with a string when an editable text field changes", () => {
     const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
     fireEvent.change(screen.getByDisplayValue("../graphics/icons/firebolt.svg"), {target: {value: "../graphics/icons/new.svg"}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "iconURL", value: "../graphics/icons/new.svg"});
   });
 
   it("dispatches SET_FIELD with a parsed number when an editable number field changes", () => {
     const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
     fireEvent.change(screen.getByDisplayValue("60"), {target: {value: "75"}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "speed", value: 75});
   });
 
   it("dispatches SET_FIELD with null when a number field is cleared", () => {
     const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
     fireEvent.change(screen.getByDisplayValue("40"), {target: {value: ""}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "maxRange", value: null});
   });
 
+  it("renders a file upload input for iconURL and calls onUploadAsset with the chosen file", () => {
+    const onUploadAsset = vi.fn();
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} />);
+    const file = new File(["fake-bytes"], "new-icon.png", {type: "image/png"});
+    const fileInput = document.querySelector('input[type="file"]');
+
+    fireEvent.change(fileInput, {target: {files: [file]}});
+
+    expect(onUploadAsset).toHaveBeenCalledWith("iconURL", file);
+  });
+
+  it("does not show a Restore button when there is no override for the field", () => {
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
+    expect(screen.queryByRole("button", {name: "Restore"})).not.toBeInTheDocument();
+  });
+
+  it("shows a Restore button when an override is active and calls onClearAsset when clicked", () => {
+    const onClearAsset = vi.fn();
+    render(
+      <AbilityFieldsPanel
+        ability={ability}
+        dispatch={() => {}}
+        assetOverrides={{iconURL: "blob:fake-url"}}
+        onUploadAsset={() => {}}
+        onClearAsset={onClearAsset}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", {name: "Restore"}));
+    expect(onClearAsset).toHaveBeenCalledWith("iconURL");
+  });
+
   it("renders collapsible sections for each array field with per-entry summaries", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} />);
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} />);
     expect(screen.getByText("Graphic effects (1)")).toBeInTheDocument();
     expect(screen.getByText("Effects (1)")).toBeInTheDocument();
     expect(screen.getByText("1. harm")).toBeInTheDocument();

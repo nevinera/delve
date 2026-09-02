@@ -37,4 +37,14 @@ describe("resolveAbilityForPlayback", () => {
     resolveAbilityForPlayback(ability, assetMap);
     expect(ability.iconURL).toEqual("../graphics/icons/firebolt.svg");
   });
+
+  it("prefers an iconURL override over the resolved assetMap value", () => {
+    const resolved = resolveAbilityForPlayback(ability, assetMap, {iconURL: "blob:local-upload"});
+    expect(resolved.iconURL).toEqual("blob:local-upload");
+  });
+
+  it("uses an iconURL override even when the ability has no iconURL at all", () => {
+    const resolved = resolveAbilityForPlayback({...ability, iconURL: undefined}, assetMap, {iconURL: "blob:local-upload"});
+    expect(resolved.iconURL).toEqual("blob:local-upload");
+  });
 });

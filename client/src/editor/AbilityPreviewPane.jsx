@@ -18,7 +18,7 @@ function maxEffectRange(effects) {
   return ranges.length ? Math.max(...ranges) : null;
 }
 
-export default function AbilityPreviewPane({ability, assetMap}) {
+export default function AbilityPreviewPane({ability, assetMap, assetOverrides}) {
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
@@ -31,7 +31,10 @@ export default function AbilityPreviewPane({ability, assetMap}) {
     setTargetDistanceFt((current) => Math.min(current, maxRange));
   }, [maxRange]);
 
-  const resolvedAbility = useMemo(() => resolveAbilityForPlayback(ability, assetMap), [ability, assetMap]);
+  const resolvedAbility = useMemo(
+    () => resolveAbilityForPlayback(ability, assetMap, assetOverrides),
+    [ability, assetMap, assetOverrides]
+  );
 
   function play() {
     if (firing) return;
@@ -64,6 +67,15 @@ export default function AbilityPreviewPane({ability, assetMap}) {
           targetTokenUrl={DEFAULT_TARGET_TOKEN_URL}
           targetDistanceFt={targetDistanceFt}
         />
+        {resolvedAbility.iconURL && (
+          <img
+            src={resolvedAbility.iconURL}
+            alt="ability icon"
+            title="Use Ability (space)"
+            className={`ability-icon-button${firing ? " disabled" : ""}`}
+            onClick={play}
+          />
+        )}
       </div>
       <div className="preview-controls">
         <label>

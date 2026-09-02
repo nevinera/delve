@@ -18,9 +18,31 @@
       .ability-editor-fields th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
       .ability-editor-fields td { padding: 4px 0; word-break: break-word; }
       .ability-editor-fields input[type=number] { width: 100px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .ability-editor-fields input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .ability-editor-fields .asset-upload { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+      .ability-editor-fields input[type=file] { font-size: 11px; color: #9ab; max-width: 100%; }
+      .ability-editor-fields .asset-upload button { background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .ability-editor-fields .asset-upload button:hover { background: #444; }
       .ability-editor-fields details { margin-bottom: 8px; }
       .ability-editor-fields details details { margin: 6px 0 6px 16px; }
       .ability-editor-fields summary { cursor: pointer; color: #cce; padding: 4px 0; }
+
+      .ability-icon-button {
+        display: block;
+        position: absolute;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 56px;
+        height: 56px;
+        background: #111;
+        border: 2px solid #668;
+        border-radius: 6px;
+        object-fit: cover;
+        cursor: pointer;
+      }
+      .ability-icon-button:hover { border-color: #9ac; }
+      .ability-icon-button.disabled { cursor: default; opacity: 0.5; border-color: #444; }
 
       .preview-controls { background: #1c2126; border-top: 1px solid #333; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
       .preview-controls > label { flex: 1; font-size: 12px; color: #aaa; display: flex; flex-direction: column; gap: 3px; }
