@@ -1,8 +1,18 @@
-import {entrySummary, formatValue, humanize, listFields, scalarFields} from "./abilityFormatting";
+import {entrySummary, formatValue, humanize, listFields} from "./abilityFormatting";
 
-// Fields with real editing UX wired up so far. Everything else renders
-// read-only, same as the show page, until we build the rest.
-const EDITABLE_NUMBER_FIELDS = new Set(["speed", "maxRange"]);
+// The recognized top-level scalar fields (see Content::Ability / PowerValidator),
+// shown regardless of whether the loaded ability happens to have them set, so a
+// field can be added to an ability that never had it (e.g. giving a melee
+// ability a cooldown). "name" is intentionally left out of edit mode for now.
+const TOP_LEVEL_FIELDS = [
+  {key: "name", type: "text", editable: false},
+  {key: "iconURL", type: "text", editable: true},
+  {key: "castTime", type: "number", editable: true},
+  {key: "globalCooldown", type: "number", editable: true},
+  {key: "cooldown", type: "number", editable: true},
+  {key: "maxRange", type: "number", editable: true},
+  {key: "speed", type: "number", editable: true},
+];
 
 function EntryFieldsTable({entry}) {
   return (
@@ -19,15 +29,16 @@ function EntryFieldsTable({entry}) {
   );
 }
 
-function EditableNumberField({field, value, dispatch}) {
+function EditableField({field, type, value, dispatch}) {
   return (
     <input
-      type="number"
-      step="any"
+      type={type}
+      step={type === "number" ? "any" : undefined}
       value={value ?? ""}
       onChange={(e) => {
         const raw = e.target.value;
-        dispatch({type: "SET_FIELD", field, value: raw === "" ? null : parseFloat(raw)});
+        const parsed = raw === "" ? null : (type === "number" ? parseFloat(raw) : raw);
+        dispatch({type: "SET_FIELD", field, value: parsed});
       }}
     />
   );
@@ -38,13 +49,13 @@ export default function AbilityFieldsPanel({ability, dispatch}) {
     <div className="fields-panel">
       <table>
         <tbody>
-          {scalarFields(ability).map(([key, value]) => (
+          {TOP_LEVEL_FIELDS.map(({key, type, editable}) => (
             <tr key={key}>
               <th>{humanize(key)}</th>
               <td>
-                {EDITABLE_NUMBER_FIELDS.has(key)
-                  ? <EditableNumberField field={key} value={value} dispatch={dispatch} />
-                  : formatValue(value)}
+                {editable
+                  ? <EditableField field={key} type={type} value={ability[key]} dispatch={dispatch} />
+                  : formatValue(ability[key])}
               </td>
             </tr>
           ))}

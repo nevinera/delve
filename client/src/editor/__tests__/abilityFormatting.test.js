@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {humanize, scalarFields, listFields, entrySummary, formatValue} from "../abilityFormatting";
+import {humanize, listFields, entrySummary, formatValue} from "../abilityFormatting";
 
 describe("humanize", () => {
   it("humanizes a camelCase key", () => {
@@ -11,14 +11,9 @@ describe("humanize", () => {
   });
 });
 
-describe("scalarFields / listFields", () => {
-  const ability = {name: "Punch", castTime: null, graphicEffects: [{a: 1}], soundEffects: []};
-
-  it("scalarFields keeps only non-array values", () => {
-    expect(scalarFields(ability)).toEqual([["name", "Punch"], ["castTime", null]]);
-  });
-
-  it("listFields keeps only array values", () => {
+describe("listFields", () => {
+  it("keeps only array values", () => {
+    const ability = {name: "Punch", castTime: null, graphicEffects: [{a: 1}], soundEffects: []};
     expect(listFields(ability)).toEqual([["graphicEffects", [{a: 1}]], ["soundEffects", []]]);
   });
 });
