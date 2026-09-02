@@ -55,3 +55,13 @@ header nav strong {
 header nav form {
   margin: 0;
 }
+
+/* nested collapsible sections (e.g. ability effect entries) */
+details details {
+  margin: 0.5rem 0 0.5rem 1.25rem;
+}
+
+/* key/value field tables shouldn't force horizontal scrolling on narrow screens */
+table th, table td {
+  word-break: break-word;
+}

@@ -1,0 +1,10 @@
+<table>
+  <tbody>
+    <% fields.each do |key, value| %>
+      <tr>
+        <th><%= field_label(key) %></th>
+        <td><%= format_value(value) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
