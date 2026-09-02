@@ -34,6 +34,23 @@ class Github::ConnectionsController < ApplicationController
     render json: token_payload(installation)
   end
 
+  def manage
+    @installation = current_user.github_installation
+    return redirect_to github_connect_path unless @installation
+
+    session[:github_oauth_state] = SecureRandom.hex(24)
+    @install_url = "#{ENV.string("DELVE_GITHUB_PUBLIC_LINK", default: nil)}/installations/new?state=#{session[:github_oauth_state]}"
+  end
+
+  def disconnect
+    installation = current_user.github_installation
+    if installation
+      revoke_grant(installation.access_token)
+      installation.destroy
+    end
+    redirect_to github_connect_path, notice: "Disconnected from GitHub."
+  end
+
   private
 
   def authorize_url
@@ -62,14 +79,15 @@ class Github::ConnectionsController < ApplicationController
   end
 
   def new_installation(tokens)
-    repo = fetch_repo(tokens)
-    return "No repository selected during installation." if repo.nil?
+    repos = fetch_repos(tokens)
+    return "No repository was selected. Make sure you create your content repository from the template first, then install the app onto it." if repos.blank?
+    return "You selected more than one repository. Please reinstall and choose \"Only select repositories\", picking just your delve content repository." if repos.size > 1
 
-    assign_new_installation(repo)
+    assign_new_installation(repos.first)
   end
 
-  def fetch_repo(tokens)
-    Github::ApiClient.new(tokens["access_token"]).installation_repositories(params[:installation_id])&.first
+  def fetch_repos(tokens)
+    Github::ApiClient.new(tokens["access_token"]).installation_repositories(params[:installation_id])
   end
 
   def assign_new_installation(repo)
@@ -81,6 +99,12 @@ class Github::ConnectionsController < ApplicationController
 
   def existing_installation
     current_user.github_installation || "No existing GitHub connection to reauthorize."
+  end
+
+  def revoke_grant(access_token)
+    Github::OauthClient.revoke(access_token)
+  rescue => e
+    Rails.logger.warn("GitHub grant revocation failed: #{e.message}")
   end
 
   def apply_tokens!(installation, tokens)

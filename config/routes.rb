@@ -16,6 +16,8 @@ Rails.application.routes.draw do
     get "reauth", to: "connections#reauth"
     get "callback", to: "connections#callback"
     get "token", to: "connections#token"
+    get "manage", to: "connections#manage"
+    delete "disconnect", to: "connections#disconnect"
   end
 
   namespace :build do

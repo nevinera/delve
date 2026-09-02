@@ -14,16 +14,40 @@ RSpec.describe "Build::Dashboard", type: :request do
     before { sign_in user }
 
     describe "GET /build" do
-      it "returns 200" do
-        get "/build"
-        expect(response).to have_http_status(:ok)
+      context "without a github installation" do
+        it "redirects to the github connect page" do
+          get "/build"
+          expect(response).to redirect_to(github_connect_path)
+        end
       end
 
-      it "links to the handles, zones, and character classes listings" do
-        get "/build"
-        expect(response.body).to include(build_handles_path)
-        expect(response.body).to include(build_zones_path)
-        expect(response.body).to include(build_character_classes_path)
+      context "with a github installation but no repo selected" do
+        before do
+          installation = create(:github_installation, user: user)
+          installation.update_column(:repo_full_name, "")
+        end
+
+        it "returns 200 and prompts for a repository" do
+          get "/build"
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include("don't have a repository selected")
+        end
+      end
+
+      context "with a fully connected github installation" do
+        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+        it "returns 200 and links to the connected repository" do
+          get "/build"
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include("nevinera/delve-content")
+          expect(response.body).to include("https://github.com/nevinera/delve-content")
+        end
+
+        it "links to the manage GitHub connection page" do
+          get "/build"
+          expect(response.body).to include(github_manage_path)
+        end
       end
     end
   end

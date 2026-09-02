@@ -28,6 +28,15 @@ RSpec.describe "Github::Connections", type: :request do
       )
   end
 
+  def stub_installation_repositories_multiple(installation_id, repo_full_names:)
+    stub_request(:get, "https://api.github.com/user/installations/#{installation_id}/repositories")
+      .to_return(
+        status: 200,
+        headers: {"Content-Type" => "application/json"},
+        body: {repositories: repo_full_names.map { |name| {full_name: name} }}.to_json
+      )
+  end
+
   context "when not logged in" do
     it "redirects connect to login" do
       get "/github/connect"
@@ -87,6 +96,43 @@ RSpec.describe "Github::Connections", type: :request do
         end
       end
 
+      context "on a fresh install with no repositories selected" do
+        it "does not persist an installation and tells them to create the repo from the template first" do
+          get "/github/connect"
+          state = session[:github_oauth_state]
+
+          stub_token_exchange(grant_type: "authorization_code")
+          stub_installation_repositories_multiple("555", repo_full_names: [])
+
+          expect {
+            get "/github/callback", params: {code: "abc", state: state, installation_id: "555"}
+          }.not_to change(GithubInstallation, :count)
+
+          expect(response).to redirect_to(github_connect_path)
+          follow_redirect!
+          expect(response.body).to include("create your content repository from the template first")
+        end
+      end
+
+      context "on a fresh install with more than one repository selected" do
+        it "does not persist an installation and redirects to connect with an alert" do
+          get "/github/connect"
+          state = session[:github_oauth_state]
+
+          stub_token_exchange(grant_type: "authorization_code")
+          stub_installation_repositories_multiple("555", repo_full_names: ["nevinera/delve-content", "nevinera/other-repo"])
+
+          expect {
+            get "/github/callback", params: {code: "abc", state: state, installation_id: "555"}
+          }.not_to change(GithubInstallation, :count)
+
+          expect(response).to redirect_to(github_connect_path)
+          follow_redirect!
+          expect(response.body).to include("more than one repository")
+          expect(user.reload.github_installation).to be_nil
+        end
+      end
+
       context "on a reauth (no installation_id, existing connection)" do
         let!(:installation) { create(:github_installation, user: user, access_token: "gho_stale") }
 
@@ -116,6 +162,55 @@ RSpec.describe "Github::Connections", type: :request do
           expect(response).to redirect_to(github_connect_path)
           follow_redirect!
           expect(response.body).to include("No existing GitHub connection")
+        end
+      end
+    end
+
+    describe "GET /github/manage" do
+      context "with no existing connection" do
+        it "redirects to connect" do
+          get "/github/manage"
+          expect(response).to redirect_to(github_connect_path)
+        end
+      end
+
+      context "with an existing connection" do
+        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+        it "returns 200 and explains changing the repo, uninstalling, and disconnecting" do
+          get "/github/manage"
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include("nevinera/delve-content")
+          expect(response.body).to include("installations/new?state=")
+          expect(response.body).to include("github.com/settings/installations")
+          expect(response.body).to include(github_disconnect_path)
+        end
+      end
+    end
+
+    describe "DELETE /github/disconnect" do
+      context "with an existing connection" do
+        let!(:installation) { create(:github_installation, user: user, access_token: "gho_current") }
+
+        it "revokes the grant, destroys the installation, and redirects to connect" do
+          revoke_stub = stub_request(:delete, "https://api.github.com/applications/test_github_client_id/grant")
+            .with(body: {access_token: "gho_current"}.to_json)
+            .to_return(status: 204)
+
+          expect {
+            delete "/github/disconnect"
+          }.to change(GithubInstallation, :count).by(-1)
+
+          expect(revoke_stub).to have_been_requested
+          expect(response).to redirect_to(github_connect_path)
+          expect(user.reload.github_installation).to be_nil
+        end
+      end
+
+      context "with no existing connection" do
+        it "redirects to connect without error" do
+          delete "/github/disconnect"
+          expect(response).to redirect_to(github_connect_path)
         end
       end
     end

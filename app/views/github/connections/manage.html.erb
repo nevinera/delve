@@ -1,0 +1,32 @@
+<h1>Manage GitHub Connection</h1>
+
+<p>Currently connected to <strong><%= @installation.repo_full_name %></strong>.</p>
+
+<h2>Change the selected repository</h2>
+<p>
+  Updating an existing github installation in place is not supported (GitHub won't tell
+  Delve that the selected repository/permissions have changed). To work from a different
+  repository, or change the granted permissions, you need to uninstall and reinstall the
+  GitHub app.
+</p>
+<ol>
+  <li>
+    Uninstall the app from
+    <%= link_to "your GitHub app settings", "https://github.com/settings/installations", target: "_blank", rel: "noopener" %>.
+  </li>
+  <li>Disconnect below, so Delve stops holding onto a token GitHub has already revoked.</li>
+  <li><%= link_to "Reinstall it", @install_url %>, picking the repository you want this time.</li>
+</ol>
+
+<h2>Uninstall the app entirely</h2>
+<p>
+  If you'd rather remove Delve's access to GitHub completely, just do step 1 above
+  (<%= link_to "your GitHub app settings", "https://github.com/settings/installations", target: "_blank", rel: "noopener" %>)
+  and then disconnect below.
+</p>
+
+<h2>Danger zone</h2>
+<p>Disconnecting removes Delve's stored GitHub token. You'll need to reconnect before you can resume editing content.</p>
+<%= button_to "Disconnect GitHub", github_disconnect_path, method: :delete, class: "contrast", data: {confirm: "Disconnect GitHub? You will need to reconnect to keep editing content."} %>
+
+<p><%= link_to "Back to Build", build_root_path %></p>

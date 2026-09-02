@@ -43,4 +43,18 @@ RSpec.describe Github::OauthClient do
       expect(result["access_token"]).to eq("gho_new")
     end
   end
+
+  describe ".revoke" do
+    it "sends a DELETE to the applications grant endpoint with basic auth and the token" do
+      stub = stub_request(:delete, "https://api.github.com/applications/test_github_client_id/grant")
+        .with(
+          headers: {"Authorization" => "Basic #{Base64.strict_encode64("test_github_client_id:test_github_client_secret")}"},
+          body: {access_token: "gho_x"}.to_json
+        )
+        .to_return(status: 204)
+
+      described_class.revoke("gho_x")
+      expect(stub).to have_been_requested
+    end
+  end
 end

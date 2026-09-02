@@ -10,6 +10,19 @@ module Github
       new.post(grant_type: "refresh_token", refresh_token: refresh_token)
     end
 
+    def self.revoke(access_token)
+      new.delete_grant(access_token)
+    end
+
+    def delete_grant(access_token)
+      uri = URI("https://api.github.com/applications/#{client_id}/grant")
+      request = Net::HTTP::Delete.new(uri)
+      request.basic_auth(client_id, client_secret)
+      request["Accept"] = "application/vnd.github+json"
+      request.body = {access_token: access_token}.to_json
+      Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(request) }
+    end
+
     def post(params)
       body = JSON.parse(Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(build_request(params)) }.body)
       raise Github::OauthError, (body["error_description"] || body["error"]) if body["error"]
