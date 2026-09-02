@@ -44,7 +44,12 @@
       .ability-editor-fields .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
       .ability-editor-fields button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
       .ability-editor-fields button.add-entry:hover { background: #345; }
-      .ability-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid #2a2f35; }
+      .ability-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid #2a2f35; border-radius: 4px; transition: background-color 0.4s ease-out; }
+      .ability-editor-fields .entry-block-highlight { animation: entry-flash 1.5s ease-out; }
+      @keyframes entry-flash {
+        0%, 15% { background-color: rgba(196, 154, 42, 0.35); }
+        100% { background-color: transparent; }
+      }
       .ability-editor-fields .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
       .ability-editor-fields .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
       .ability-editor-fields button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }

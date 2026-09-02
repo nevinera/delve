@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityFormatting";
 import {entryFieldsFor, placeholderEntry, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
@@ -180,16 +180,11 @@ function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUp
   );
 }
 
-function AddButtonsRow({dispatch}) {
+function AddButtonsRow({onAdd}) {
   return (
     <div className="add-buttons-row">
       {EFFECT_SECTIONS.map((section) => (
-        <button
-          key={section}
-          type="button"
-          className="add-entry"
-          onClick={() => dispatch({type: "ADD_ENTRY", section, entry: placeholderEntry(section)})}
-        >
+        <button key={section} type="button" className="add-entry" onClick={() => onAdd(section)}>
           + Add {entryTypeLabel(section)}
         </button>
       ))}
@@ -197,10 +192,35 @@ function AddButtonsRow({dispatch}) {
   );
 }
 
+const HIGHLIGHT_MS = 1500;
+
 export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry}) {
+  // Scrolls the fields panel to a newly-added entry, and briefly highlights
+  // it, since it's appended at the end of a (possibly long) list and might
+  // otherwise be easy to miss.
+  const [justAddedKey, setJustAddedKey] = useState(null);
+  const [highlightedKey, setHighlightedKey] = useState(null);
+  const newestEntryRef = useRef(null);
+
+  useEffect(() => {
+    if (justAddedKey && newestEntryRef.current) {
+      newestEntryRef.current.scrollIntoView({behavior: "smooth", block: "start"});
+      setJustAddedKey(null);
+    }
+  }, [justAddedKey]);
+
+  function handleAdd(section) {
+    const index = (ability[section] ?? []).length;
+    dispatch({type: "ADD_ENTRY", section, entry: placeholderEntry(section)});
+    const key = `${section}-${index}`;
+    setJustAddedKey(key);
+    setHighlightedKey(key);
+    setTimeout(() => setHighlightedKey((current) => (current === key ? null : current)), HIGHLIGHT_MS);
+  }
+
   return (
     <div className="fields-panel">
-      <AddButtonsRow dispatch={dispatch} />
+      <AddButtonsRow onAdd={handleAdd} />
 
       <table>
         <tbody>
@@ -226,25 +246,29 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
       </table>
 
       {EFFECT_SECTIONS.flatMap((section) =>
-        (ability[section] ?? []).map((entry, index) => (
-          <div className="entry-block" key={`${section}-${index}`}>
-            <div className="entry-heading-row">
-              <h3>{entryHeading(section, index, entry)}</h3>
-              <button type="button" className="remove-entry" onClick={() => onRemoveEntry(section, index)}>
-                Remove
-              </button>
+        (ability[section] ?? []).map((entry, index) => {
+          const key = `${section}-${index}`;
+          const className = `entry-block${key === highlightedKey ? " entry-block-highlight" : ""}`;
+          return (
+            <div className={className} key={key} ref={key === justAddedKey ? newestEntryRef : null}>
+              <div className="entry-heading-row">
+                <h3>{entryHeading(section, index, entry)}</h3>
+                <button type="button" className="remove-entry" onClick={() => onRemoveEntry(section, index)}>
+                  Remove
+                </button>
+              </div>
+              <EntryFieldsTable
+                section={section}
+                index={index}
+                entry={entry}
+                dispatch={dispatch}
+                assetOverrides={assetOverrides}
+                onUploadAsset={onUploadAsset}
+                onClearAsset={onClearAsset}
+              />
             </div>
-            <EntryFieldsTable
-              section={section}
-              index={index}
-              entry={entry}
-              dispatch={dispatch}
-              assetOverrides={assetOverrides}
-              onUploadAsset={onUploadAsset}
-              onClearAsset={onClearAsset}
-            />
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );

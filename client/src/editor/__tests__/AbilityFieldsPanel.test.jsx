@@ -1,6 +1,18 @@
+import {useState} from "react";
 import {describe, it, expect, vi} from "vitest";
-import {render, screen, fireEvent} from "@testing-library/react";
+import {render, screen, fireEvent, act} from "@testing-library/react";
 import AbilityFieldsPanel from "../AbilityFieldsPanel";
+
+function AddEntryWrapper() {
+  // Stands in for AbilityEditor, which is what actually re-renders
+  // AbilityFieldsPanel with the post-dispatch ability - AbilityFieldsPanel
+  // alone has no way to update `ability`.
+  const [state, setState] = useState({name: "Bare Ability", castTime: null, globalCooldown: 1.0, effects: []});
+  function dispatch(action) {
+    setState((s) => (action.type === "ADD_ENTRY" ? {...s, [action.section]: [...(s[action.section] ?? []), action.entry]} : s));
+  }
+  return <AbilityFieldsPanel ability={state} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />;
+}
 
 const ability = {
   name: "Firebolt",
@@ -265,6 +277,38 @@ describe("AbilityFieldsPanel", () => {
 
       expect(screen.getByRole("heading", {name: "Effect 1: harm"})).toBeInTheDocument();
       expect(screen.getByDisplayValue("bTarget")).toBeInTheDocument();
+    });
+
+    it("scrolls the newly-added entry into view once it renders", () => {
+      const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+      render(<AddEntryWrapper />);
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Effect"}));
+
+      const heading = screen.getByRole("heading", {name: "Effect 1: harm"});
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView.mock.instances[0]).toBe(heading.closest(".entry-block"));
+
+      scrollIntoView.mockRestore();
+    });
+
+    it("highlights the newly-added entry, then removes the highlight after a delay", () => {
+      vi.useFakeTimers();
+      render(<AddEntryWrapper />);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", {name: "+ Add Effect"}));
+      });
+
+      const block = screen.getByRole("heading", {name: "Effect 1: harm"}).closest(".entry-block");
+      expect(block).toHaveClass("entry-block-highlight");
+
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+      expect(block).not.toHaveClass("entry-block-highlight");
+
+      vi.useRealTimers();
     });
 
     it("calls onRemoveEntry with the section and index when Remove is clicked", () => {
