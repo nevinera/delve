@@ -39,6 +39,62 @@ RSpec.describe Build::AbilitiesHelper, type: :helper do
     end
   end
 
+  describe "#asset_media_kind" do
+    it "returns :image when the key ends with URL and an image data uri is available" do
+      thumbnails = {"../graphics/icons/punch.svg" => "data:image/svg+xml;base64,abc"}
+      expect(helper.asset_media_kind("iconURL", "../graphics/icons/punch.svg", thumbnails)).to eq(:image)
+    end
+
+    it "returns :audio when the data uri is an audio type" do
+      thumbnails = {"../audio/punch.ogg" => "data:audio/ogg;base64,abc"}
+      expect(helper.asset_media_kind("sourceURL", "../audio/punch.ogg", thumbnails)).to eq(:audio)
+    end
+
+    it "returns nil when the key doesn't end with URL" do
+      thumbnails = {"../audio/punch.ogg" => "data:audio/ogg;base64,abc"}
+      expect(helper.asset_media_kind("duration", "../audio/punch.ogg", thumbnails)).to be_nil
+    end
+
+    it "returns nil when there's no thumbnail for the value" do
+      expect(helper.asset_media_kind("sourceURL", "../audio/punch.ogg", {})).to be_nil
+    end
+
+    it "returns :sprite for a sourceURL entry with sprite dimensions" do
+      thumbnails = {"../graphics/animations/firebolt.sprites2x2.png" => "data:image/png;base64,abc"}
+      entry = {"sourceURL" => "../graphics/animations/firebolt.sprites2x2.png", "spriteColumns" => 2, "spriteRows" => 2}
+      expect(helper.asset_media_kind("sourceURL", entry["sourceURL"], thumbnails, entry)).to eq(:sprite)
+    end
+
+    it "returns :image (not :sprite) for iconURL even if sibling sprite fields are present" do
+      thumbnails = {"../graphics/icons/firebolt.svg" => "data:image/svg+xml;base64,abc"}
+      entry = {"iconURL" => "../graphics/icons/firebolt.svg", "spriteColumns" => 2, "spriteRows" => 2}
+      expect(helper.asset_media_kind("iconURL", entry["iconURL"], thumbnails, entry)).to eq(:image)
+    end
+  end
+
+  describe "#sprite_preview_tag" do
+    it "renders a keyframe animation stepping through every frame of the grid" do
+      entry = {"spriteColumns" => 2, "spriteRows" => 2, "spriteFrameRate" => 8}
+      html = helper.sprite_preview_tag("data:image/png;base64,abc", entry)
+
+      expect(html).to include("<style>")
+      expect(html).to include("@keyframes")
+      expect(html).to include("background-position: 0.0% 0.0%")
+      expect(html).to include("background-position: 100.0% 0.0%")
+      expect(html).to include("background-position: 0.0% 100.0%")
+      expect(html).to include("background-position: 100.0% 100.0%")
+      expect(html).to include("background-size: 200% 200%")
+      expect(html).to include("background-image: url('data:image/png;base64,abc')")
+      expect(html).to include('<div class="asset-thumbnail sprite-')
+    end
+
+    it "derives a frame rate from frameCount/duration when spriteFrameRate is absent" do
+      entry = {"spriteColumns" => 2, "spriteRows" => 1, "duration" => 0.5}
+      html = helper.sprite_preview_tag("data:image/png;base64,abc", entry)
+      expect(html).to include("0.5s steps(1) infinite")
+    end
+  end
+
   describe "#format_value" do
     it "renders nil as an em dash" do
       expect(helper.format_value(nil)).to eq("—")

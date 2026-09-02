@@ -1,6 +1,6 @@
 <h1><%= params[:id] %></h1>
 
-<%= render "fields_table", fields: scalar_fields(@ability) %>
+<%= render "fields_table", fields: scalar_fields(@ability), thumbnails: @asset_thumbnails %>
 
 <% list_fields(@ability).each do |key, entries| %>
   <details>
@@ -8,7 +8,7 @@
     <% entries.each_with_index do |entry, index| %>
       <details>
         <summary><%= entry_summary(entry, index) %></summary>
-        <%= render "fields_table", fields: entry %>
+        <%= render "fields_table", fields: entry, thumbnails: @asset_thumbnails %>
       </details>
     <% end %>
   </details>

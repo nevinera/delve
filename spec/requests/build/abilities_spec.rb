@@ -96,6 +96,18 @@ RSpec.describe "Build::Abilities", type: :request do
               headers: {"Content-Type" => "application/json"},
               body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json
             )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/graphics/effects/punch-impact.webp")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64("fake-webp-bytes"), encoding: "base64"}.to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/audio/punch.ogg")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64("fake-ogg-bytes"), encoding: "base64"}.to_json
+            )
 
           get "/build/abilities/punch"
           expect(response).to have_http_status(:ok)
@@ -108,6 +120,38 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response.body).to include("1. harm")
           expect(response.body).to include("physical, melee")
           expect(response.body).not_to include("{&quot;")
+          expect(response.body).to include(%(<img src="data:image/webp;base64,#{Base64.strict_encode64("fake-webp-bytes")}"))
+          expect(response.body).to include(%(<audio controls src="data:audio/ogg;base64,#{Base64.strict_encode64("fake-ogg-bytes")}"))
+        end
+
+        it "renders a sprite-sheet graphic effect as an animated preview instead of the raw grid" do
+          content = {
+            "name" => "Firebolt",
+            "castTime" => nil,
+            "globalCooldown" => 1.0,
+            "graphicEffects" => [
+              {"sourceURL" => "../graphics/animations/firebolt.sprites2x2.png", "duration" => 0.5, "spriteColumns" => 2, "spriteRows" => 2, "spriteFrameRate" => 8}
+            ]
+          }
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/firebolt.json")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/graphics/animations/firebolt.sprites2x2.png")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64("fake-png-bytes"), encoding: "base64"}.to_json
+            )
+
+          get "/build/abilities/firebolt"
+          expect(response).to have_http_status(:ok)
+          expect(response.body).not_to include("<img")
+          expect(response.body).to include("@keyframes")
+          expect(response.body).to include("steps(1) infinite")
+          expect(response.body).to include("background-size: 200% 200%")
         end
       end
     end

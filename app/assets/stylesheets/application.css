@@ -65,3 +65,32 @@ details details {
 table th, table td {
   word-break: break-word;
 }
+
+/* asset previews in field tables - thumbnails only, not full-size art */
+.asset-thumbnail {
+  display: block;
+  max-width: 48px;
+  max-height: 48px;
+  object-fit: contain;
+  background: var(--pico-code-background-color);
+  border-radius: 4px;
+}
+
+/* sprite-sheet animation preview: a fixed-size box, since it's a
+   background-image (not an <img>) and has no intrinsic size of its own */
+div.asset-thumbnail {
+  width: 48px;
+  height: 48px;
+}
+
+.asset-audio {
+  display: block;
+  height: 2rem;
+  max-width: 240px;
+}
+
+.asset-url {
+  font-size: 0.75em;
+  color: var(--pico-muted-color);
+  margin-top: 0.25rem;
+}
