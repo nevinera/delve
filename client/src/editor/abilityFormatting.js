@@ -6,9 +6,16 @@ export function humanize(key) {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
-export function entrySummary(entry, index) {
+// Singular label for a section, used both on its "Add" button and on each
+// of its entries' headings ("graphicEffects" -> "Graphic effect").
+export function entryTypeLabel(section) {
+  return humanize(section).replace(/s$/, "");
+}
+
+export function entryHeading(section, index, entry) {
+  const label = entryTypeLabel(section);
   const hint = entry.type ?? entry.when;
-  return hint ? `${index + 1}. ${hint}` : `${index + 1}`;
+  return hint ? `${label} ${index + 1}: ${hint}` : `${label} ${index + 1}`;
 }
 
 export function formatValue(value) {

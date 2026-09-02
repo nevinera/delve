@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {humanize, entrySummary, formatValue} from "../abilityFormatting";
+import {humanize, entryTypeLabel, entryHeading, formatValue} from "../abilityFormatting";
 
 describe("humanize", () => {
   it("humanizes a camelCase key", () => {
@@ -11,17 +11,25 @@ describe("humanize", () => {
   });
 });
 
-describe("entrySummary", () => {
+describe("entryTypeLabel", () => {
+  it("singularizes a section name", () => {
+    expect(entryTypeLabel("graphicEffects")).toEqual("Graphic effect");
+    expect(entryTypeLabel("soundEffects")).toEqual("Sound effect");
+    expect(entryTypeLabel("effects")).toEqual("Effect");
+  });
+});
+
+describe("entryHeading", () => {
   it("prefers type as a hint", () => {
-    expect(entrySummary({type: "harm"}, 0)).toEqual("1. harm");
+    expect(entryHeading("effects", 0, {type: "harm"})).toEqual("Effect 1: harm");
   });
 
   it("falls back to when", () => {
-    expect(entrySummary({when: "impact"}, 2)).toEqual("3. impact");
+    expect(entryHeading("graphicEffects", 2, {when: "impact"})).toEqual("Graphic effect 3: impact");
   });
 
-  it("falls back to a bare index", () => {
-    expect(entrySummary({}, 4)).toEqual("5");
+  it("falls back to just the label and index with no hint", () => {
+    expect(entryHeading("soundEffects", 4, {})).toEqual("Sound effect 5");
   });
 });
 

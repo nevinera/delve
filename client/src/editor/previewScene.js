@@ -78,10 +78,22 @@ export class PreviewSceneManager {
     sun.position.set(5, 10, 5);
     this.scene.add(sun);
 
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshLambertMaterial({color: 0x4d6b4d}));
+    // demo-background.jpg represents an ~80ft x 80ft floor - mapped once,
+    // not tiled, so it stays at that real-world scale relative to the
+    // (~4ft-diameter) tokens.
+    const GROUND_SIZE_FT = 80;
+    // Shifted toward the target (-Z) so the interesting part of the image
+    // sits under where the action happens, not centered on the self token.
+    const GROUND_OFFSET_FT = -GROUND_SIZE_FT * 0.4;
+    const groundTexture = new THREE.TextureLoader().load("/editors/demo-background.jpg");
+    groundTexture.colorSpace = THREE.SRGBColorSpace;
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(GROUND_SIZE_FT, GROUND_SIZE_FT), new THREE.MeshLambertMaterial({map: groundTexture}));
     ground.rotation.x = -Math.PI / 2;
+    ground.position.z = GROUND_OFFSET_FT;
     this.scene.add(ground);
-    this.scene.add(new THREE.GridHelper(200, 40, 0x8a8a8a, 0x5a5a5a));
+    const grid = new THREE.GridHelper(GROUND_SIZE_FT, GROUND_SIZE_FT / 5, 0x8a8a8a, 0x5a5a5a);
+    grid.position.z = GROUND_OFFSET_FT;
+    this.scene.add(grid);
 
     this.camera = new THREE.PerspectiveCamera(40, 4 / 3, 0.1, 1000);
 

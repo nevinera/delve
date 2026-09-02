@@ -60,7 +60,7 @@ export default function AbilityPreviewPane({ability, assetMap, assetOverrides}) 
 
   return (
     <div style={{display: "flex", flexDirection: "column", height: "100%"}}>
-      <div style={{flex: 1, position: "relative"}}>
+      <div className="ability-preview-canvas-area">
         <AbilityPreviewCanvas
           ref={canvasRef}
           selfTokenUrl={DEFAULT_SELF_TOKEN_URL}
@@ -89,9 +89,6 @@ export default function AbilityPreviewPane({ability, assetMap, assetOverrides}) 
             onChange={(e) => setTargetDistanceFt(parseFloat(e.target.value))}
           />
         </label>
-        <button type="button" onClick={play} disabled={firing}>
-          Use Ability (space)
-        </button>
         <div className="preview-status">{status}</div>
       </div>
     </div>

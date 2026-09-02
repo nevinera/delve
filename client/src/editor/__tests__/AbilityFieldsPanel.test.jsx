@@ -86,12 +86,20 @@ describe("AbilityFieldsPanel", () => {
     expect(onClearAsset).toHaveBeenCalledWith("iconURL");
   });
 
-  it("renders collapsible sections for each array field with per-entry summaries", () => {
+  it("renders a heading for each entry, sorted graphic/sound/effect, with no folding", () => {
     render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
-    expect(screen.getByText("Graphic effects (1)")).toBeInTheDocument();
-    expect(screen.getByText("Effects (1)")).toBeInTheDocument();
-    expect(screen.getByText("1. harm")).toBeInTheDocument();
+    expect(screen.getByRole("heading", {name: "Graphic effect 1: immediate"})).toBeInTheDocument();
+    expect(screen.getByRole("heading", {name: "Effect 1: harm"})).toBeInTheDocument();
+    expect(document.querySelector("details")).not.toBeInTheDocument();
     expect(screen.getByDisplayValue("magic, ranged")).toBeInTheDocument();
+  });
+
+  it("always shows all three Add buttons, even for an ability with no effects at all", () => {
+    const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
+    render(<AbilityFieldsPanel ability={bare} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    expect(screen.getByRole("button", {name: "+ Add Graphic effect"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "+ Add Sound effect"})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "+ Add Effect"})).toBeInTheDocument();
   });
 
   describe("entry fields", () => {
@@ -219,14 +227,6 @@ describe("AbilityFieldsPanel", () => {
   });
 
   describe("adding and removing entries", () => {
-    it("always shows all three sections, even ones the ability has none of yet", () => {
-      const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
-      render(<AbilityFieldsPanel ability={bare} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
-      expect(screen.getByText("Graphic effects (0)")).toBeInTheDocument();
-      expect(screen.getByText("Sound effects (0)")).toBeInTheDocument();
-      expect(screen.getByText("Effects (0)")).toBeInTheDocument();
-    });
-
     it("dispatches ADD_ENTRY with a placeholder graphicEffects entry when Add Graphic effect is clicked", () => {
       const dispatch = vi.fn();
       const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
@@ -254,19 +254,17 @@ describe("AbilityFieldsPanel", () => {
       });
     });
 
-    it("renders only the newest (last) entry in a section open by default, so adding one is visible", () => {
-      const twoEffects = {
-        ...ability,
-        graphicEffects: [
-          {sourceURL: "a.png", duration: 0.1, when: "immediate"},
-          {sourceURL: "b.png", duration: 0.2, when: "immediate"},
-        ],
-      };
-      render(<AbilityFieldsPanel ability={twoEffects} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    it("renders a newly-added entry's fields immediately, with no expand step needed", () => {
+      const dispatch = vi.fn();
+      const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
+      const {rerender} = render(<AbilityFieldsPanel ability={bare} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
 
-      const entryDetails = screen.getAllByText(/^\d+\. immediate$/).map((summary) => summary.closest("details"));
-      expect(entryDetails[0].open).toBe(false);
-      expect(entryDetails[1].open).toBe(true);
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Effect"}));
+      const addedEntry = dispatch.mock.calls[0][0].entry;
+      rerender(<AbilityFieldsPanel ability={{...bare, effects: [addedEntry]}} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+
+      expect(screen.getByRole("heading", {name: "Effect 1: harm"})).toBeInTheDocument();
+      expect(screen.getByDisplayValue("bTarget")).toBeInTheDocument();
     });
 
     it("calls onRemoveEntry with the section and index when Remove is clicked", () => {

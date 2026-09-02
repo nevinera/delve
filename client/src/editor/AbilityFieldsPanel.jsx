@@ -1,10 +1,9 @@
 import {useState} from "react";
-import {entrySummary, formatValue, humanize} from "./abilityFormatting";
+import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityFormatting";
 import {entryFieldsFor, placeholderEntry, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
 
-// Always shown, even when the ability has none of a given type yet, so
-// there's somewhere to click "Add" from a clean slate.
+// Order entries are added/listed in - graphic, then sound, then effect.
 const EFFECT_SECTIONS = ["graphicEffects", "soundEffects", "effects"];
 
 // The recognized top-level scalar fields (see Content::Ability / PowerValidator),
@@ -181,9 +180,28 @@ function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUp
   );
 }
 
+function AddButtonsRow({dispatch}) {
+  return (
+    <div className="add-buttons-row">
+      {EFFECT_SECTIONS.map((section) => (
+        <button
+          key={section}
+          type="button"
+          className="add-entry"
+          onClick={() => dispatch({type: "ADD_ENTRY", section, entry: placeholderEntry(section)})}
+        >
+          + Add {entryTypeLabel(section)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry}) {
   return (
     <div className="fields-panel">
+      <AddButtonsRow dispatch={dispatch} />
+
       <table>
         <tbody>
           {TOP_LEVEL_FIELDS.map(({key, type, editable, upload}) => (
@@ -207,41 +225,27 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
         </tbody>
       </table>
 
-      {EFFECT_SECTIONS.map((section) => {
-        const entries = ability[section] ?? [];
-        return (
-          <details key={section}>
-            <summary>{humanize(section)} ({entries.length})</summary>
-            {entries.map((entry, index) => (
-              // The newest entry (always the last one - Add appends) opens
-              // by default, so adding one is visibly obvious rather than
-              // just bumping the section's count while staying collapsed.
-              <details key={index} open={index === entries.length - 1 || undefined}>
-                <summary>{entrySummary(entry, index)}</summary>
-                <button type="button" className="remove-entry" onClick={() => onRemoveEntry(section, index)}>
-                  Remove
-                </button>
-                <EntryFieldsTable
-                  section={section}
-                  index={index}
-                  entry={entry}
-                  dispatch={dispatch}
-                  assetOverrides={assetOverrides}
-                  onUploadAsset={onUploadAsset}
-                  onClearAsset={onClearAsset}
-                />
-              </details>
-            ))}
-            <button
-              type="button"
-              className="add-entry"
-              onClick={() => dispatch({type: "ADD_ENTRY", section, entry: placeholderEntry(section)})}
-            >
-              + Add {humanize(section).replace(/s$/, "")}
-            </button>
-          </details>
-        );
-      })}
+      {EFFECT_SECTIONS.flatMap((section) =>
+        (ability[section] ?? []).map((entry, index) => (
+          <div className="entry-block" key={`${section}-${index}`}>
+            <div className="entry-heading-row">
+              <h3>{entryHeading(section, index, entry)}</h3>
+              <button type="button" className="remove-entry" onClick={() => onRemoveEntry(section, index)}>
+                Remove
+              </button>
+            </div>
+            <EntryFieldsTable
+              section={section}
+              index={index}
+              entry={entry}
+              dispatch={dispatch}
+              assetOverrides={assetOverrides}
+              onUploadAsset={onUploadAsset}
+              onClearAsset={onClearAsset}
+            />
+          </div>
+        ))
+      )}
     </div>
   );
 }
