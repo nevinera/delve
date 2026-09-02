@@ -3,7 +3,7 @@
 <ul>
   <% @abilities.each do |entry| %>
     <% identifier = entry["name"].sub(/\.json\z/, "") %>
-    <li><%= link_to identifier, build_ability_path(id: identifier) %></li>
+    <li><%= link_to identifier, edit_build_ability_path(id: identifier) %></li>
   <% end %>
 </ul>
 
