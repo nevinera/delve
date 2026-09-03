@@ -78,6 +78,19 @@ module Validators
       end
     end
 
+    def validate_tags!(data, path:)
+      tags = data["tags"]
+      tags_path = child_path(path, "tags")
+      raise ValidationError.new("tags must be an array", path: tags_path) unless tags.is_a?(Array)
+      raise ValidationError.new("tags may not exceed 24 items", path: tags_path) if tags.length > 24
+      tags.each_with_index { |tag, i| validate_tag!(tag, path: index_path(tags_path, i)) }
+    end
+
+    def validate_tag!(tag, path:)
+      raise ValidationError.new("tag must be a string", path: path) unless tag.is_a?(String)
+      raise ValidationError.new("tag must be 16 characters or fewer", path: path) if tag.length > 16
+    end
+
     def validate_location!(data, path:)
       require_object!(data, path: path)
       require_numeric!(data, "x", path: path)

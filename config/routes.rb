@@ -11,7 +11,18 @@ Rails.application.routes.draw do
 
   resources :users, only: [:index]
 
+  namespace :github do
+    get "connect", to: "connections#connect"
+    get "reauth", to: "connections#reauth"
+    get "callback", to: "connections#callback"
+    get "token", to: "connections#token"
+    get "manage", to: "connections#manage"
+    delete "disconnect", to: "connections#disconnect"
+  end
+
   namespace :build do
+    root to: "dashboard#index"
+    resources :abilities, only: [:index, :new, :create, :edit]
     resources :handles, only: [:index, :show, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
     resources :character_classes, only: [:index, :show, :new, :create]

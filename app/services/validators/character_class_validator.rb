@@ -48,7 +48,7 @@ module Validators
         raise ValidationError.new("powers may not exceed 12 entries", path: child_path(path, "powers"))
       end
       powers.each_with_index do |power, i|
-        PowerValidator.validate!(power, path: index_path(child_path(path, "powers"), i))
+        AbilityValidator.validate!(power, path: index_path(child_path(path, "powers"), i))
       end
     end
 

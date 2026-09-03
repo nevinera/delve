@@ -3,7 +3,7 @@
 A CharacterClass defines the abilities, resources, and appearance of a player character archetype.
 
 See [resource_type.md](resource_type.md) for the `ResourceType` type embedded in `resources`.
-See [power.md](power.md) for the `Power` type embedded in `powers`.
+See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 
 ## Fields
 
@@ -13,7 +13,7 @@ See [power.md](power.md) for the `Power` type embedded in `powers`.
 | `description` | string | no | Short description shown in UI. |
 | `colors` | Colors | yes | Two display colors used for this class's tokens and UI elements. |
 | `resources` | array of ResourceType | no | Resources available to this class. Most classes have one; some may have multiple. |
-| `powers` | array of Power \| AssetReference(`referenceTo: "power"`) | no | Powers available to this class. Inline Power objects or references to external power files. A class containing any AssetReferences is abstract (see [common.md](common.md)). |
+| `powers` | array of Ability \| AssetReference(`referenceTo: "power"`) | no | Abilities available to this class. Inline Ability objects or references to external power files. A class containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `primaryStats` | array of string | yes | One or more of `strength`, `agility`, `intellect`, no duplicates. Hybrid classes may list more than one. Used to synthesize Trainee Gear (see [stats.md](../stats.md)) for this class's empty equipment slots. |
 | `secondaryStats` | array of string | yes | Exactly 5 secondary stats, ranked highest to lowest priority, no duplicates. Each must be one of `stamina`, `crit_rating`, `haste_rating`, `mastery_rating`, `versatility_rating`, `defence_rating`, `recovery_rating`. Used alongside `primaryStat` to synthesize Trainee Gear. |
 | `wields` | array of string | yes | 1-2 entries, each one of `axe`, `sword`, `staff`, `wand`, `dagger`, `shield`, `totem`, `book`, `spear`, `bow`, `crossbow`, `gun`, `orb`. A single entry is two-handed. Two entries put the first in `main_hand` and the second in `off_hand`. Only used to pick weapon types for Trainee Gear (see [stats.md](../stats.md)) — weapon-type restrictions on real items aren't implemented yet. |

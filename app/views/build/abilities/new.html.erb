@@ -1,0 +1,12 @@
+<h1>New Ability</h1>
+
+<%= form_with url: build_abilities_path, method: :post do %>
+  <div>
+    <label for="key">Key</label>
+    <%= text_field_tag :key, @key %>
+  </div>
+
+  <%= submit_tag "Create" %>
+<% end %>
+
+<%= link_to "Cancel", build_abilities_path %>

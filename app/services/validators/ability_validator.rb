@@ -1,10 +1,16 @@
 module Validators
-  class PowerValidator < Base
+  # Shared schema for both a unit's powers and a class's abilities - see
+  # docs/schema/ability.md. iconURL is only meaningful when the ability is
+  # used by a class (unit powers don't have an action bar), but the schema
+  # doesn't distinguish the two: whether a given Ability is a "power" or an
+  # "ability" is purely a function of where it's referenced from.
+  class AbilityValidator < Base
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
       validate_cast_time!(data, path: path)
       require_numeric!(data, "globalCooldown", path: path)
+      validate_tags!(data, path: path) if data.key?("tags")
       validate_speed!(data, path: path) if data.key?("speed")
       validate_graphic_effects!(data, path: path) if data.key?("graphicEffects")
       validate_sound_effects!(data, path: path) if data.key?("soundEffects")

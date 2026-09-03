@@ -11,9 +11,12 @@ export default defineConfig({
     outDir: "../public/client",
     emptyOutDir: true,
     rollupOptions: {
-      input: resolve(__dirname, "client/src/main.jsx"),
+      input: {
+        main: resolve(__dirname, "client/src/main.jsx"),
+        editor: resolve(__dirname, "client/src/editor/main.jsx"),
+      },
       output: {
-        entryFileNames: "main.js",
+        entryFileNames: "[name].js",
         chunkFileNames: "[name].js",
         assetFileNames: "[name][extname]",
       },

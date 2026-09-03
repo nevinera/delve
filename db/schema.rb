@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_27_143106) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_01_205842) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -77,6 +77,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_27_143106) do
     t.index ["character_id", "equipped_slot"], name: "index_equipped_items_on_character_id_and_equipped_slot", unique: true
     t.index ["character_id"], name: "index_equipped_items_on_character_id"
     t.index ["character_item_id"], name: "index_equipped_items_on_character_item_id", unique: true
+  end
+
+  create_table "github_installations", force: :cascade do |t|
+    t.text "access_token", null: false
+    t.datetime "access_token_expires_at", null: false
+    t.datetime "created_at", null: false
+    t.bigint "installation_id", null: false
+    t.text "refresh_token", null: false
+    t.datetime "refresh_token_expires_at", null: false
+    t.string "repo_full_name", null: false
+    t.datetime "updated_at", null: false
+    t.integer "user_id", null: false
+    t.index ["installation_id"], name: "index_github_installations_on_installation_id", unique: true
+    t.index ["user_id"], name: "index_github_installations_on_user_id", unique: true
   end
 
   create_table "handles", force: :cascade do |t|
@@ -149,6 +163,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_27_143106) do
   add_foreign_key "characters", "users"
   add_foreign_key "equipped_items", "character_items"
   add_foreign_key "equipped_items", "characters"
+  add_foreign_key "github_installations", "users"
   add_foreign_key "handles", "users"
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"

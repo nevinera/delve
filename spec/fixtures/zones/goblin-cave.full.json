@@ -8,9 +8,9 @@
             "name": "Goblin",
             "description": "A scrappy goblin that stabs anything within reach.",
             "tokenImageUrl": [
-                "../unit_types/tokens/goblin-1.webp",
-                "../unit_types/tokens/goblin-2.webp",
-                "../unit_types/tokens/goblin-3.webp"
+                "../../tokens/unit/goblin-1.webp",
+                "../../tokens/unit/goblin-2.webp",
+                "../../tokens/unit/goblin-3.webp"
             ],
             "tokenRadius": 2.0,
             "speedFactor": 1.0,
@@ -40,7 +40,7 @@
                     "globalCooldown": 1.5,
                     "graphicEffects": [
                         {
-                            "sourceURL": "../unit_types/graphics/stab-impact.webp",
+                            "sourceURL": "../../graphics/effects/stab-impact.webp",
                             "duration": 0.3,
                             "from": "affected",
                             "when": "impact",
@@ -49,7 +49,7 @@
                     ],
                     "soundEffects": [
                         {
-                            "sourceURL": "../unit_types/sounds/stab.ogg",
+                            "sourceURL": "../../audio/stab.ogg",
                             "duration": 0.17,
                             "location": "affected",
                             "when": "impact",
@@ -80,7 +80,7 @@
                     "cooldown": 10.0,
                     "graphicEffects": [
                         {
-                            "sourceURL": "../unit_types/graphics/enrage-burst.webp",
+                            "sourceURL": "../../graphics/effects/enrage-burst.webp",
                             "duration": 0.5,
                             "from": "self",
                             "when": "immediate",
@@ -89,7 +89,7 @@
                     ],
                     "soundEffects": [
                         {
-                            "sourceURL": "../unit_types/sounds/enrage.ogg",
+                            "sourceURL": "../../audio/enrage.ogg",
                             "duration": 0.65,
                             "location": "self",
                             "when": "immediate",
@@ -132,9 +132,9 @@
             "name": "Goblin Boss",
             "description": "A hulking goblin chieftain - dangerous and hard to put down.",
             "tokenImageUrl": [
-                "../unit_types/tokens/goblin-boss-1.webp",
-                "../unit_types/tokens/goblin-boss-2.webp",
-                "../unit_types/tokens/goblin-boss-3.webp"
+                "../../tokens/unit/goblin-boss-1.webp",
+                "../../tokens/unit/goblin-boss-2.webp",
+                "../../tokens/unit/goblin-boss-3.webp"
             ],
             "tokenRadius": 3.0,
             "speedFactor": 0.9,
@@ -169,7 +169,7 @@
                     "globalCooldown": 1.5,
                     "graphicEffects": [
                         {
-                            "sourceURL": "../unit_types/graphics/stab-impact.webp",
+                            "sourceURL": "../../graphics/effects/stab-impact.webp",
                             "duration": 0.3,
                             "from": "affected",
                             "when": "impact",
@@ -178,7 +178,7 @@
                     ],
                     "soundEffects": [
                         {
-                            "sourceURL": "../unit_types/sounds/stab.ogg",
+                            "sourceURL": "../../audio/stab.ogg",
                             "duration": 0.17,
                             "location": "affected",
                             "when": "impact",
@@ -209,7 +209,7 @@
                     "cooldown": 10.0,
                     "graphicEffects": [
                         {
-                            "sourceURL": "../unit_types/graphics/enrage-burst.webp",
+                            "sourceURL": "../../graphics/effects/enrage-burst.webp",
                             "duration": 0.5,
                             "from": "self",
                             "when": "immediate",
@@ -218,7 +218,7 @@
                     ],
                     "soundEffects": [
                         {
-                            "sourceURL": "../unit_types/sounds/enrage.ogg",
+                            "sourceURL": "../../audio/enrage.ogg",
                             "duration": 0.65,
                             "location": "self",
                             "when": "immediate",
@@ -264,14 +264,14 @@
                     "cooldown": 4.5,
                     "graphicEffects": [
                         {
-                            "sourceURL": "../unit_types/graphics/pound-impact.webp",
+                            "sourceURL": "../../graphics/effects/pound-impact.webp",
                             "duration": 0.4,
                             "from": "affected",
                             "when": "impact",
                             "condition": "onHit"
                         },
                         {
-                            "sourceURL": "../unit_types/graphics/dazed-debuff.webp",
+                            "sourceURL": "../../graphics/effects/dazed-debuff.webp",
                             "duration": 0.6,
                             "from": "affected",
                             "when": "impact",
@@ -280,7 +280,7 @@
                     ],
                     "soundEffects": [
                         {
-                            "sourceURL": "../unit_types/sounds/pound.ogg",
+                            "sourceURL": "../../audio/pound.ogg",
                             "duration": 0.08,
                             "location": "affected",
                             "when": "impact",
@@ -338,7 +338,7 @@
         {
             "identifier": "cave_entrance",
             "name": "Cave Entrance",
-            "imageUrl": "./backgrounds/gc1-goblin-cave-entrance.webp",
+            "imageUrl": "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.webp",
             "pixelDimensions": {
                 "width": 2048,
                 "height": 1536
@@ -713,7 +713,7 @@
         {
             "identifier": "cave_interior",
             "name": "Cave Interior",
-            "imageUrl": "./backgrounds/gc2-goblin-cave-interior.webp",
+            "imageUrl": "./gc2-goblin-cave-interior/gc2-goblin-cave-interior.webp",
             "pixelDimensions": {
                 "width": 1536,
                 "height": 2048

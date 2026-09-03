@@ -17,6 +17,7 @@
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
   </head>
 
   <body>
@@ -36,6 +37,9 @@
     <main class="container">
       <% if notice %>
         <article role="alert"><%= notice %></article>
+      <% end %>
+      <% if alert %>
+        <article role="alert" class="pico-color-red-500"><%= alert %></article>
       <% end %>
       <%= yield %>
     </main>

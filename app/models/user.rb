@@ -5,6 +5,7 @@ class User < ApplicationRecord
   has_many :character_classes, dependent: :destroy
   has_many :characters, dependent: :destroy
   has_many :handles, dependent: :destroy
+  has_one :github_installation, dependent: :destroy
 
   def self.from_omniauth(auth)
     find_or_create_by(provider: auth.provider, uid: auth.uid) do |user|

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Delve - Ability Editor</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #editor-root { width: 100%; height: 100%; }
+      body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; overflow: hidden; }
+
+      .ability-editor { display: flex; height: 100%; }
+      .ability-editor-preview { flex: 2; min-width: 0; display: flex; flex-direction: column; }
+      .ability-editor-fields { flex: 1; min-width: 0; overflow-y: auto; padding: 14px; background: #1c2126; border-left: 1px solid #333; }
+
+      /* the canvas keeps a fixed 4:3 aspect ratio and often doesn't fill this
+         area exactly - center it (both axes) so any leftover space splits
+         evenly instead of the canvas sticking to the top/left corner. */
+      .ability-preview-canvas-area { flex: 1; min-height: 0; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+
+      /* stack canvas above the (scrolling) form on small screens, rather
+         than side-by-side; the canvas keeps a fixed height and stays put
+         while the form scrolls beneath it. */
+      @media (max-width: 700px) {
+        .ability-editor { flex-direction: column; }
+        .ability-editor-preview { flex: none; height: 38vh; }
+        .ability-editor-fields { flex: 1; width: 100%; border-left: none; border-top: 1px solid #333; }
+      }
+
+      .ability-editor-fields table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+      .ability-editor-fields th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
+      .ability-editor-fields td { padding: 4px 0; word-break: break-word; }
+      .ability-editor-fields input[type=number] { width: 100px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .ability-editor-fields input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .ability-editor-fields select { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .ability-editor-fields .range-field { display: inline-flex; align-items: center; gap: 6px; }
+      .ability-editor-fields .range-field input[type=number] { width: 70px; }
+      .ability-editor-fields .range-sep { color: #667; }
+      .ability-editor-fields .asset-upload { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+      .ability-editor-fields input[type=file] { font-size: 11px; color: #9ab; max-width: 100%; }
+      .ability-editor-fields .asset-upload button { background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .ability-editor-fields .asset-upload button:hover { background: #444; }
+      .save-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .save-button:hover:not(:disabled) { background: #3b5; }
+      .save-bar .save-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-message { font-size: 12px; }
+      .save-bar .save-success { color: #7c7; }
+      .save-bar .save-error { color: #e79; }
+
+      .ability-editor-fields .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
+      .ability-editor-fields button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      .ability-editor-fields button.add-entry:hover { background: #345; }
+      .ability-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid #2a2f35; border-radius: 4px; transition: background-color 0.4s ease-out; }
+      .ability-editor-fields .entry-block-highlight { animation: entry-flash 1.5s ease-out; }
+      @keyframes entry-flash {
+        0%, 15% { background-color: rgba(196, 154, 42, 0.35); }
+        100% { background-color: transparent; }
+      }
+      .ability-editor-fields .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+      .ability-editor-fields .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
+      .ability-editor-fields button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .ability-editor-fields button.remove-entry:hover { background: #533; }
+
+      .ability-icon-button {
+        display: block;
+        position: absolute;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 56px;
+        height: 56px;
+        background: #111;
+        border: 2px solid #668;
+        border-radius: 6px;
+        object-fit: cover;
+        cursor: pointer;
+      }
+      .ability-icon-button:hover { border-color: #9ac; }
+      .ability-icon-button.disabled { cursor: default; opacity: 0.5; border-color: #444; }
+
+      .preview-controls { background: #1c2126; border-top: 1px solid #333; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+      .preview-controls > label { flex: 1; font-size: 12px; color: #aaa; display: flex; flex-direction: column; gap: 3px; }
+      .preview-status { font-size: 12px; color: #999; min-height: 1.2em; }
+
+      a.back-link { position: absolute; top: 10px; left: 10px; color: #9ab; font-size: 13px; z-index: 1; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 3px; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <%= yield %>
+    <script type="module" src="/client/editor.js"></script>
+  </body>
+</html>
