@@ -170,9 +170,54 @@ describe("CharacterSheet", () => {
       expect(screen.queryByText("7.0% crit chance")).not.toBeInTheDocument();
     });
 
-    it("does not wrap a primary stat's label in a hover target", () => {
+    it("does not wrap weapon dps's label in a hover target, since it has no formula", () => {
       render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
-      expect(screen.getByText("Strength")).not.toHaveStyle({cursor: "help"});
+      expect(screen.getByText("Weapon DPS")).not.toHaveStyle({cursor: "help"});
+    });
+  });
+
+  describe("primary stat effect tooltips", () => {
+    function hover(label, equippedItems, primaryStats) {
+      render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} primaryStats={primaryStats} />);
+      const labelEl = screen.getByText(label);
+      fireEvent.mouseEnter(labelEl, {clientX: 10, clientY: 10});
+      return labelEl;
+    }
+
+    it("shows strength's parry chance, but not DPS, when strength isn't the class's damage stat", () => {
+      hover("Strength", {head: {identifier: "h", stats: {strength: 250}}}, []);
+      expect(screen.getByText("30.0% Parry chance")).toBeInTheDocument();
+      expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
+    });
+
+    it("also shows strength's DPS contribution when strength is a class primary stat", () => {
+      hover("Strength", {head: {identifier: "h", stats: {strength: 70}}}, ["strength"]);
+      expect(screen.getByText("+10.0 DPS")).toBeInTheDocument();
+      expect(screen.getByText("13.1% Parry chance")).toBeInTheDocument();
+    });
+
+    it("shows agility's effective crit rating and dodge chance always, DPS only when it's a class primary", () => {
+      hover("Agility", {head: {identifier: "h", stats: {agility: 250}}}, []);
+      expect(screen.getByText("+150.0 effective Crit Rating")).toBeInTheDocument();
+      expect(screen.getByText("30.0% Dodge chance")).toBeInTheDocument();
+      expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
+    });
+
+    it("shows intellect's magic crit always, spell damage and resource pool only when it's a class primary", () => {
+      hover("Intellect", {head: {identifier: "h", stats: {intellect: 140}}}, []);
+      expect(screen.getByText("+84.0 effective Magic Crit Rating")).toBeInTheDocument();
+      expect(screen.queryByText(/Spell Damage|Resource Pool/)).not.toBeInTheDocument();
+    });
+
+    it("also shows spell damage and resource pool when intellect is a class primary stat", () => {
+      hover("Intellect", {head: {identifier: "h", stats: {intellect: 140}}}, ["intellect"]);
+      expect(screen.getByText("+10.0 Spell Damage")).toBeInTheDocument();
+      expect(screen.getByText("+1400 Resource Pool")).toBeInTheDocument();
+    });
+
+    it("shows stamina's max HP, always", () => {
+      hover("Stamina", {head: {identifier: "h", stats: {stamina: 50}}}, []);
+      expect(screen.getByText("600 Max HP")).toBeInTheDocument();
     });
   });
 

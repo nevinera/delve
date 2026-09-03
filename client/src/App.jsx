@@ -903,6 +903,48 @@ function secondaryStatEffectLines(key, value) {
   }
 }
 
+// Effect lines for a primary stat's current total, per docs/stats.md.
+// Avoidance (Parry/Dodge) and the off-primaries' effective crit contribution
+// always apply regardless of class (see the Versatility section), but the
+// actual damage/resource numbers (SwingDamage, SpellDamage, ResourcePool)
+// only apply for the primary stat(s) a class actually calls its damage/
+// caster stat, so those lines are gated on `primaryStats` (from the class
+// config). The DPS/SpellDamage numbers are base-weapon-damage- and
+// cast-time-independent: e.g. SwingDamage's Strength term is
+// (Strength/7)*NominalSwingSpeed, and dividing by the actual swing interval
+// (NominalSwingSpeed/(1+Haste)) leaves just Strength/7 - the weapon-specific
+// terms cancel out, which is also why docs/stats.md's own worked examples
+// show it that way (Strength 201.9 -> "+28.8 DPS" = 201.9/7).
+function primaryStatEffectLines(key, value, primaryStats) {
+  switch (key) {
+    case "strength": {
+      const lines = [`${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Parry chance`];
+      if (primaryStats.includes("strength")) lines.unshift(`+${(value / 7).toFixed(1)} DPS`);
+      return lines;
+    }
+    case "agility": {
+      const lines = [
+        `+${(value * 0.6).toFixed(1)} effective Crit Rating`,
+        `${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Dodge chance`,
+      ];
+      if (primaryStats.includes("agility")) lines.unshift(`+${(value / 14).toFixed(1)} DPS`);
+      return lines;
+    }
+    case "intellect": {
+      const lines = [`+${(value * 0.6).toFixed(1)} effective Magic Crit Rating`];
+      if (primaryStats.includes("intellect")) {
+        lines.push(`+${(value / 14).toFixed(1)} Spell Damage`);
+        lines.push(`+${(value * 10).toFixed(0)} Resource Pool`);
+      }
+      return lines;
+    }
+    case "stamina":
+      return [`${(100 + value * 10).toFixed(0)} Max HP`];
+    default:
+      return [];
+  }
+}
+
 // Wraps a stat label in a hover target that shows its computed effect near
 // the cursor - same mouse-tracked portal approach as ItemTooltip, shown
 // immediately (no delay) since it's a small, deliberately-targeted label
@@ -1063,7 +1105,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl }) {
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [] }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -1189,7 +1231,9 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                 <ul style={styles.charSheetStatsList}>
                   {group.keys.map(key => {
                     const value = stats[key] || 0;
-                    const lines = group.title === "Secondary" ? secondaryStatEffectLines(key, value) : [];
+                    const lines = group.title === "Secondary"
+                      ? secondaryStatEffectLines(key, value)
+                      : primaryStatEffectLines(key, value, primaryStats);
                     return (
                       <li key={key} style={styles.charSheetStatRow}>
                         <StatEffectTooltip lines={lines}>
@@ -1354,6 +1398,7 @@ export default function App({
   const [charSheetOpen, setCharSheetOpen] = useState(false);
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
+  const [primaryStats, setPrimaryStats] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
@@ -1386,7 +1431,10 @@ export default function App({
     if (!classConfigUrl) return;
     fetch(classConfigUrl)
       .then(r => r.json())
-      .then(cfg => setPowers(cfg.powers ?? []))
+      .then(cfg => {
+        setPowers(cfg.powers ?? []);
+        setPrimaryStats(cfg.primaryStats ?? []);
+      })
       .catch(() => {});
   }, [classConfigUrl]);
 
@@ -1902,6 +1950,7 @@ export default function App({
           onEquip={handleEquipItem}
           onClose={() => setCharSheetOpen(false)}
           localElvl={localElvl}
+          primaryStats={primaryStats}
         />
       </div>
       <div style={styles.actionBar}>
