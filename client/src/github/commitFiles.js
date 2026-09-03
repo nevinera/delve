@@ -32,8 +32,15 @@ async function fetchToken() {
 }
 
 async function githubRequest(token, path, options = {}) {
+  // no-store: GitHub's API sends Cache-Control: private, max-age=60 on
+  // several of these GET endpoints (notably git/ref/heads/*) - the browser's
+  // default fetch caching would happily serve a same-URL GET from cache
+  // within that window, which for the ref lookup means building a new
+  // commit on a stale parent and then failing the ref update as "not a
+  // fast forward" on a second save shortly after the first.
   const res = await fetch(`${GITHUB_API}${path}`, {
     ...options,
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",

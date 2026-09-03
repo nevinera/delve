@@ -154,6 +154,15 @@ describe("commitFiles", () => {
     expect(JSON.parse(refCall.options.body)).toEqual({sha: "new-commit-sha"});
   });
 
+  it("bypasses the browser's HTTP cache on every GitHub API request, so a second save can't read a stale ref", async () => {
+    const {calls} = stubGithubApi();
+    await commitFiles({"abilities/a.json": {a: 1}}, {message: "m"});
+
+    const githubCalls = calls.filter((c) => c.url.startsWith("https://api.github.com"));
+    expect(githubCalls.length).toBeGreaterThan(0);
+    expect(githubCalls.every((c) => c.options.cache === "no-store")).toBe(true);
+  });
+
   it("throws a descriptive error when a GitHub API call fails", async () => {
     vi.stubGlobal("fetch", vi.fn((url) => {
       if (url === "/github/token") {
