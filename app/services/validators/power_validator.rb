@@ -5,6 +5,7 @@ module Validators
       require_string!(data, "name", path: path)
       validate_cast_time!(data, path: path)
       require_numeric!(data, "globalCooldown", path: path)
+      validate_tags!(data, path: path) if data.key?("tags")
       validate_speed!(data, path: path) if data.key?("speed")
       validate_graphic_effects!(data, path: path) if data.key?("graphicEffects")
       validate_sound_effects!(data, path: path) if data.key?("soundEffects")

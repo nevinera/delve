@@ -22,6 +22,7 @@ const ability = {
   globalCooldown: 1.0,
   speed: 60.0,
   maxRange: 40.0,
+  tags: ["harmful", "class_druid"],
   graphicEffects: [{sourceURL: "../graphics/animations/firebolt.sprites2x2.png", duration: 0.5, when: "immediate"}],
   effects: [{type: "harm", affects: "bTarget", amount: [89.0, 140.0], tags: ["magic", "ranged"]}],
 };
@@ -68,6 +69,18 @@ describe("AbilityFieldsPanel", () => {
     render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
     fireEvent.change(screen.getByDisplayValue("40"), {target: {value: ""}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "maxRange", value: null});
+  });
+
+  it("renders top-level tags as a comma-joined editable field", () => {
+    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    expect(screen.getByDisplayValue("harmful, class_druid")).toBeInTheDocument();
+  });
+
+  it("dispatches SET_FIELD with a parsed tag array when the top-level tags field changes", () => {
+    const dispatch = vi.fn();
+    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    fireEvent.change(screen.getByDisplayValue("harmful, class_druid"), {target: {value: "harmful, class_druid, aoe"}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "tags", value: ["harmful", "class_druid", "aoe"]});
   });
 
   it("renders a file upload input for iconURL and calls onUploadAsset with the chosen file", () => {

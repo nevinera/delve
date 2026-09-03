@@ -19,9 +19,14 @@ const TOP_LEVEL_FIELDS = [
   {key: "cooldown", type: "number", editable: true},
   {key: "maxRange", type: "number", editable: true},
   {key: "speed", type: "number", editable: true},
+  {key: "tags", type: "tags", editable: true},
 ];
 
 function EditableField({field, type, value, dispatch}) {
+  if (type === "tags") {
+    return <TagsField value={value} onChange={(newValue) => dispatch({type: "SET_FIELD", field, value: newValue})} />;
+  }
+
   return (
     <input
       type={type}

@@ -150,7 +150,7 @@ RSpec.describe "Build::Abilities", type: :request do
 
           expect(response).to have_http_status(:ok)
           blank_ability = {
-            "name" => "Fire Bolt", "description" => "", "castTime" => nil, "globalCooldown" => 1.0,
+            "name" => "Fire Bolt", "description" => "", "castTime" => nil, "globalCooldown" => 1.0, "tags" => [],
             "graphicEffects" => [], "soundEffects" => [], "effects" => []
           }
           expect(response.body).to include(CGI.escapeHTML(blank_ability.to_json))

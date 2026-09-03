@@ -10,6 +10,7 @@ module Content
     attribute :cooldown, :float
     attribute :max_range, :float
     attribute :speed, :float
+    attribute :tags, default: -> { [] }
     attribute :graphic_effects, default: -> { [] }
     attribute :sound_effects, default: -> { [] }
     attribute :effects, default: -> { [] }
@@ -26,6 +27,7 @@ module Content
         cooldown: hash["cooldown"],
         max_range: hash["maxRange"],
         speed: hash["speed"],
+        tags: hash["tags"] || [],
         graphic_effects: build_all(GraphicEffect, hash["graphicEffects"]),
         sound_effects: build_all(SoundEffect, hash["soundEffects"]),
         effects: build_all(Effect, hash["effects"])
@@ -52,7 +54,7 @@ module Content
     private
 
     def optional_fields
-      {"cooldown" => cooldown, "maxRange" => max_range, "speed" => speed}.compact
+      {"cooldown" => cooldown, "maxRange" => max_range, "speed" => speed, "tags" => tags.presence}.compact
     end
   end
 end

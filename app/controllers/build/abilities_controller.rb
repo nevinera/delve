@@ -58,6 +58,7 @@ class Build::AbilitiesController < Build::BaseController
       "description" => "",
       "castTime" => nil,
       "globalCooldown" => 1.0,
+      "tags" => [],
       "graphicEffects" => [],
       "soundEffects" => [],
       "effects" => []

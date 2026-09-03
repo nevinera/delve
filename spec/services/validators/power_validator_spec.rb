@@ -63,5 +63,19 @@ RSpec.describe Validators::PowerValidator, type: :validator do
       expect { described_class.validate!(stab_power.merge("speed" => "fast")) }
         .to raise_error(Validators::ValidationError, /speed must be a number/)
     end
+
+    it "accepts optional top-level tags" do
+      expect { described_class.validate!(stab_power.merge("tags" => ["harmful"])) }.not_to raise_error
+    end
+
+    it "raises when a top-level tag exceeds 16 characters" do
+      expect { described_class.validate!(stab_power.merge("tags" => ["a" * 17])) }
+        .to raise_error(Validators::ValidationError, /16 characters or fewer/)
+    end
+
+    it "raises when there are more than 24 top-level tags" do
+      expect { described_class.validate!(stab_power.merge("tags" => Array.new(25, "tag"))) }
+        .to raise_error(Validators::ValidationError, /may not exceed 24/)
+    end
   end
 end
