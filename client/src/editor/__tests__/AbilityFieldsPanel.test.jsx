@@ -165,6 +165,15 @@ describe("AbilityFieldsPanel", () => {
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "tags", value: ["magic", "ranged", "aoe"]});
     });
 
+    it("keeps a trailing comma and space visible while typing a new tag, rather than stripping it immediately", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      const input = screen.getByDisplayValue("magic, ranged");
+      fireEvent.change(input, {target: {value: "magic, ranged, "}});
+      expect(input).toHaveValue("magic, ranged, ");
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "tags", value: ["magic", "ranged"]});
+    });
+
     it("dispatches UPDATE_ENTRY_FIELD when a plain numeric entry field changes", () => {
       const dispatch = vi.fn();
       render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);

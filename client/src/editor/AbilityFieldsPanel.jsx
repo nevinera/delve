@@ -115,14 +115,34 @@ function RangeField({value, onChange}) {
   );
 }
 
+// Displays the raw text being typed rather than value.join(", ") - if it
+// re-derived from the parsed array on every keystroke, a trailing comma or
+// space (typed to start the next tag) would immediately be stripped back
+// out, making it look like commas/spaces do nothing. `value` is only a
+// ref-equal echo of what this field itself last emitted (see
+// abilityReducer's SET_FIELD/UPDATE_ENTRY_FIELD, which assign it verbatim),
+// so lastValueRef lets us tell "value changed under us" (e.g. switching to
+// a different entry) from "value changed because we changed it".
 function TagsField({value, onChange}) {
-  return (
-    <input
-      type="text"
-      value={(value ?? []).join(", ")}
-      onChange={(e) => onChange(e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))}
-    />
-  );
+  const [text, setText] = useState((value ?? []).join(", "));
+  const lastValueRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastValueRef.current) {
+      lastValueRef.current = value;
+      setText((value ?? []).join(", "));
+    }
+  }, [value]);
+
+  function handleChange(e) {
+    const raw = e.target.value;
+    setText(raw);
+    const parsed = raw.split(",").map((tag) => tag.trim()).filter(Boolean);
+    lastValueRef.current = parsed;
+    onChange(parsed);
+  }
+
+  return <input type="text" value={text} onChange={handleChange} />;
 }
 
 function EntryField({field, value, onChange}) {
