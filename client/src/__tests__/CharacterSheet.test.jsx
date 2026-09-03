@@ -90,7 +90,6 @@ describe("CharacterSheet", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
 
     expect(statValue("Strength")).toBe("0.0");
-    expect(statValue("Weapon DPS")).toBe("0.0");
     expect(statValue("Defence Rating")).toBe("0.0");
   });
 
@@ -170,10 +169,6 @@ describe("CharacterSheet", () => {
       expect(screen.queryByText("7.0% crit chance")).not.toBeInTheDocument();
     });
 
-    it("does not wrap weapon dps's label in a hover target, since it has no formula", () => {
-      render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
-      expect(screen.getByText("Weapon DPS")).not.toHaveStyle({cursor: "help"});
-    });
   });
 
   describe("primary stat effect tooltips", () => {
@@ -218,6 +213,33 @@ describe("CharacterSheet", () => {
     it("shows stamina's max HP, always", () => {
       hover("Stamina", {head: {identifier: "h", stats: {stamina: 50}}}, []);
       expect(screen.getByText("600 Max HP")).toBeInTheDocument();
+    });
+
+    it("computes basic attack dps as ~1.0 for a fully naked character", () => {
+      hover("Basic Attack DPS", {}, []);
+      expect(statValue("Basic Attack DPS")).toBe("1.0");
+      expect(screen.getByText("1.0 base")).toBeInTheDocument();
+      expect(screen.getByText("+0.0% haste")).toBeInTheDocument();
+      expect(screen.getByText("5.0% crit chance")).toBeInTheDocument();
+      expect(screen.getByText("5.0% miss chance")).toBeInTheDocument();
+    });
+
+    it("adds the class damage stat's contribution to basic attack dps", () => {
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 70}}}, ["strength"]);
+      expect(statValue("Basic Attack DPS")).toBe("11.0");
+      expect(screen.getByText("+10.0 from Strength")).toBeInTheDocument();
+    });
+
+    it("does not add a damage stat contribution when strength/agility aren't a class primary", () => {
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 70}}}, []);
+      expect(statValue("Basic Attack DPS")).toBe("1.0");
+      expect(screen.queryByText(/from Strength/)).not.toBeInTheDocument();
+    });
+
+    it("scales basic attack dps by haste and crit rating", () => {
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {haste_rating: 117.1}}}, []);
+      expect(screen.getByText("+10.0% haste")).toBeInTheDocument();
+      expect(statValue("Basic Attack DPS")).toBe("1.1");
     });
   });
 

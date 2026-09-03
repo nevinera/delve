@@ -736,7 +736,7 @@ const STAT_LABELS = {
   mastery_rating: "Mastery Rating",
   versatility_rating: "Versatility Rating",
   defence_rating: "Defence Rating",
-  weapon_dps: "Weapon DPS",
+  basic_attack_dps: "Basic Attack DPS",
 };
 
 // Mirrors docs/stats.md's "Item coloration" table (delta up to -15/-5/+5/+15
@@ -971,8 +971,43 @@ function StatEffectTooltip({ lines, children }) {
   );
 }
 
+// Constants for basicAttackDps - see docs/stats.md's "Basic Attack DPS"
+// section. BASE_DPS is a completely naked character's own attack rate (no
+// gear, not even Trainee Gear) - matches the game server's current flat
+// placeholder basic attack (1-3 dmg every 2s, ~1 DPS average). Everything
+// else scales it in aggregate, not per-swing.
+const BASIC_ATTACK_BASE_DPS = 1;
+const BASIC_ATTACK_MISS_CHANCE = 0.05;
+const BASIC_ATTACK_CRIT_MULTIPLIER = 2.0;
+
+// Computed (not itemized) Basic Attack DPS, plus a breakdown of how it was
+// built. Basic attacks are physical, so only Strength/Agility (whichever is
+// the class's damage stat) and physical crit (itemized crit_rating +
+// Agility's always-on contribution) feed in - Intellect/magic don't apply.
+function basicAttackDps(stats, primaryStats) {
+  const damageStatKey = primaryStats.find((s) => s === "strength" || s === "agility");
+  const damageStatValue = damageStatKey ? (stats[damageStatKey] || 0) : 0;
+  const statDps = damageStatKey === "strength" ? damageStatValue / 7 : damageStatKey === "agility" ? damageStatValue / 14 : 0;
+
+  const hastePct = (stats.haste_rating || 0) / 11.71;
+  const effectiveCritRating = (stats.crit_rating || 0) + (stats.agility || 0) * 0.6;
+  const critChancePct = 5 + effectiveCritRating / 15;
+
+  const value =
+    (BASIC_ATTACK_BASE_DPS + statDps) *
+    (1 + hastePct / 100) *
+    (1 + (critChancePct / 100) * (BASIC_ATTACK_CRIT_MULTIPLIER - 1)) *
+    (1 - BASIC_ATTACK_MISS_CHANCE);
+
+  const lines = [`${BASIC_ATTACK_BASE_DPS.toFixed(1)} base`];
+  if (damageStatKey) lines.push(`+${statDps.toFixed(1)} from ${STAT_LABELS[damageStatKey]}`);
+  lines.push(`+${hastePct.toFixed(1)}% haste`, `${critChancePct.toFixed(1)}% crit chance`, `${(BASIC_ATTACK_MISS_CHANCE * 100).toFixed(1)}% miss chance`);
+
+  return {value, lines};
+}
+
 const STAT_GROUPS = [
-  { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "weapon_dps"] },
+  { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "basic_attack_dps"] },
   { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "defence_rating"] },
 ];
 
@@ -1230,6 +1265,17 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                 <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
                 <ul style={styles.charSheetStatsList}>
                   {group.keys.map(key => {
+                    if (key === "basic_attack_dps") {
+                      const {value, lines} = basicAttackDps(stats, primaryStats);
+                      return (
+                        <li key={key} style={styles.charSheetStatRow}>
+                          <StatEffectTooltip lines={lines}>
+                            <span style={styles.charSheetStatLabelHoverable}>{STAT_LABELS[key]}</span>
+                          </StatEffectTooltip>
+                          <span>{value.toFixed(1)}</span>
+                        </li>
+                      );
+                    }
                     const value = stats[key] || 0;
                     const lines = group.title === "Secondary"
                       ? secondaryStatEffectLines(key, value)

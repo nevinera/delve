@@ -286,6 +286,35 @@ grows, and gives 0% reduction at `r = 0`. A fully-itemized tank (every eligible 
 Defence Rating, wielding a shield) lands around `r = 250`, giving ~65% physical / ~26% magic
 reduction; half that (`r = 125`, e.g. the same tank at `ee = -10`) gives ~50% physical / ~20% magic.
 
+## Miss Chance
+
+Every attack and spell has a flat **5% chance to miss**, independent of and applied before any of
+the target's own avoidance (Dodge/Parry) or Defence Rating - a separate roll, not affected by any
+stat.
+
+## Basic Attack DPS
+
+A character's basic attack has no weapon-specific base damage or swing timer to derive from - items
+don't carry stat *values*, only which stats they roll (see [item.md](schema/item.md)). Instead, a
+completely naked character (no gear, not even Trainee Gear) has a flat **base DPS of 1** - matching
+the game server's current placeholder basic attack (1-3 dmg every 2s) - modified by stats in
+aggregate (not per-swing). At that baseline, the 5% base crit chance and 5% miss chance roughly
+cancel out (monsters have no damage reduction), leaving net DPS close to the base:
+
+```
+DamageStat = whichever of Strength/Agility is the class's primaryStats damage stat (0 if neither)
+StatDPS    = DamageStat / 7    (if Strength)
+           = DamageStat / 14   (if Agility)
+           = 0                 (otherwise)
+
+RawDPS = 1 + StatDPS
+BasicAttackDPS = RawDPS * (1 + Haste%/100) * (1 + CritChance%/100 * (2.0 - 1)) * (1 - 0.05)
+```
+
+`CritChance%` here is physical crit (`5 + EffectiveCritRating/15`, itemized `crit_rating` plus
+Agility's always-on `Agility * 0.6` contribution regardless of class - see **Agility** above), and
+`2.0` is the crit multiplier used throughout these docs' examples. `0.05` is the miss chance above.
+
 ## Trainee Gear
 
 Any equipment slot without a real item in it is treated as holding a generated "Trainee Gear" item
