@@ -20,6 +20,16 @@ module Content
 
     def self.from_h(hash)
       new(
+        scalar_attributes_from_h(hash).merge(
+          graphic_effects: build_all(GraphicEffect, hash["graphicEffects"]),
+          sound_effects: build_all(SoundEffect, hash["soundEffects"]),
+          effects: build_all(Effect, hash["effects"])
+        )
+      )
+    end
+
+    def self.scalar_attributes_from_h(hash)
+      {
         name: hash["name"],
         icon_url: hash["iconURL"],
         cast_time: hash["castTime"],
@@ -27,11 +37,8 @@ module Content
         cooldown: hash["cooldown"],
         max_range: hash["maxRange"],
         speed: hash["speed"],
-        tags: hash["tags"] || [],
-        graphic_effects: build_all(GraphicEffect, hash["graphicEffects"]),
-        sound_effects: build_all(SoundEffect, hash["soundEffects"]),
-        effects: build_all(Effect, hash["effects"])
-      )
+        tags: hash["tags"] || []
+      }
     end
 
     def self.build_all(klass, entries)
