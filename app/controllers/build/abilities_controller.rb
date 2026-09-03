@@ -74,12 +74,19 @@ class Build::AbilitiesController < Build::BaseController
   def collect_asset_urls(data)
     case data
     when Hash
-      data.flat_map { |key, value| (key.end_with?("URL") && value.is_a?(String)) ? [value] : collect_asset_urls(value) }
+      data.flat_map { |key, value| (key.end_with?("URL") && value.is_a?(String) && !stock_reference?(value)) ? [value] : collect_asset_urls(value) }
     when Array
       data.flat_map { |value| collect_asset_urls(value) }
     else
       []
     end
+  end
+
+  # A ":name:" stock asset (see docs/schema/common.md#stock-asset-reference)
+  # is server-hosted, not in the user's repo - it needs no GitHub fetch/
+  # base64 embedding for the preview, unlike everything else this collects.
+  def stock_reference?(value)
+    value.start_with?(":") && value.end_with?(":")
   end
 
   def asset_data_uri(client, relative_url)

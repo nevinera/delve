@@ -94,7 +94,7 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap, sto
   return (
     <div className="ability-editor">
       <div className="ability-editor-preview">
-        <AbilityPreviewPane ability={ability} assetMap={assetMap} assetOverrides={assetOverrides} />
+        <AbilityPreviewPane ability={ability} assetMap={assetMap} assetOverrides={assetOverrides} stockAssets={stockAssets} />
       </div>
       <div className="ability-editor-fields">
         <div className="save-bar">
