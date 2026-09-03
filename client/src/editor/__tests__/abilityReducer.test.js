@@ -43,6 +43,32 @@ describe("abilityReducer", () => {
     });
   });
 
+  describe("UPDATE_ENTRY_FIELDS", () => {
+    const stateWithEffects = {
+      name: "Firebolt",
+      graphicEffects: [
+        {sourceURL: "a.png", spriteColumns: 2, spriteRows: 2},
+        {sourceURL: "b.png", when: "impact"},
+      ],
+    };
+
+    it("merges every given field onto the entry at the given index only", () => {
+      const result = abilityReducer(stateWithEffects, {
+        type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0,
+        fields: {sourceURL: ":arc:", spriteColumns: null, spriteRows: null},
+      });
+      expect(result.graphicEffects[0]).toEqual({sourceURL: ":arc:", spriteColumns: null, spriteRows: null});
+      expect(result.graphicEffects[1]).toEqual({sourceURL: "b.png", when: "impact"});
+    });
+
+    it("does not mutate the original state", () => {
+      abilityReducer(stateWithEffects, {
+        type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0, fields: {sourceURL: ":arc:"},
+      });
+      expect(stateWithEffects.graphicEffects[0].sourceURL).toEqual("a.png");
+    });
+  });
+
   describe("ADD_ENTRY", () => {
     it("appends the new entry to the end of the section's array", () => {
       const state = {name: "Firebolt", graphicEffects: [{sourceURL: "a.png"}]};

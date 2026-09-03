@@ -30,7 +30,7 @@ function reindexBySection(map, section, removedIndex, onRemoved) {
   return next;
 }
 
-export default function AbilityEditor({abilityKey, initialAbility, assetMap}) {
+export default function AbilityEditor({abilityKey, initialAbility, assetMap, stockAssets}) {
   const [ability, dispatch] = useReducer(abilityReducer, initialAbility);
   const [assetOverrides, setAssetOverrides] = useState({});
   const overrideUrlsRef = useRef({});
@@ -111,6 +111,7 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap}) {
           onUploadAsset={uploadAsset}
           onClearAsset={clearAssetOverride}
           onRemoveEntry={removeEntry}
+          stockAssets={stockAssets}
         />
       </div>
     </div>

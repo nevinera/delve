@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from "react";
 import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityFormatting";
 import {entryFieldsFor, placeholderEntry, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
+import {graphicFieldsFor, soundFieldsFor} from "./stockAssetFields";
 
 // Order entries are added/listed in - graphic, then sound, then effect.
 const EFFECT_SECTIONS = ["graphicEffects", "soundEffects", "effects"];
@@ -72,6 +73,29 @@ function AssetUploadField({field, accept = "image/*", hasOverride, onUploadAsset
         </button>
       )}
     </div>
+  );
+}
+
+// Lists the recognized `:name:` stock assets for one kind (icons/graphics/
+// sounds - see Content::StockAssets). Always resets to the placeholder after
+// a pick, since the picked value lives in sourceURL/iconURL itself, not in
+// this dropdown's own selection.
+function StockAssetPicker({options, onPick}) {
+  return (
+    <select
+      value=""
+      onChange={(e) => {
+        if (e.target.value) onPick(e.target.value);
+        e.target.value = "";
+      }}
+    >
+      <option value="">— stock asset —</option>
+      {Object.keys(options)
+        .sort()
+        .map((name) => (
+          <option key={name} value={name}>{name}</option>
+        ))}
+    </select>
   );
 }
 
@@ -172,7 +196,16 @@ function EntryField({field, value, onChange}) {
   }
 }
 
-function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUploadAsset, onClearAsset}) {
+function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUploadAsset, onClearAsset, stockAssets}) {
+  const stockOptions = section === "soundEffects" ? stockAssets.sounds : stockAssets.graphics;
+
+  function pickStockAsset(name) {
+    const fields = section === "soundEffects"
+      ? soundFieldsFor(name, stockOptions[name])
+      : graphicFieldsFor(name, stockOptions[name]);
+    dispatch({type: "UPDATE_ENTRY_FIELDS", section, index, fields});
+  }
+
   return (
     <table>
       <tbody>
@@ -197,6 +230,7 @@ function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUp
                     onClearAsset={onClearAsset}
                   />
                 )}
+                {field === "sourceURL" && <StockAssetPicker options={stockOptions} onPick={pickStockAsset} />}
               </td>
             </tr>
           );
@@ -220,7 +254,9 @@ function AddButtonsRow({onAdd}) {
 
 const HIGHLIGHT_MS = 1500;
 
-export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry}) {
+const EMPTY_STOCK_ASSETS = {icons: {}, graphics: {}, sounds: {}};
+
+export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry, stockAssets = EMPTY_STOCK_ASSETS}) {
   // Scrolls the fields panel to a newly-added entry, and briefly highlights
   // it, since it's appended at the end of a (possibly long) list and might
   // otherwise be easy to miss.
@@ -265,6 +301,12 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
                     onClearAsset={onClearAsset}
                   />
                 )}
+                {key === "iconURL" && (
+                  <StockAssetPicker
+                    options={stockAssets.icons}
+                    onPick={(name) => dispatch({type: "SET_FIELD", field: "iconURL", value: `:${name}:`})}
+                  />
+                )}
               </td>
             </tr>
           ))}
@@ -291,6 +333,7 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
                 assetOverrides={assetOverrides}
                 onUploadAsset={onUploadAsset}
                 onClearAsset={onClearAsset}
+                stockAssets={stockAssets}
               />
             </div>
           );
