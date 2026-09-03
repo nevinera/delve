@@ -71,6 +71,11 @@ RSpec.describe "Play::Zones", type: :request do
         get "/play/characters/#{character.id}/zones/#{zone.id}"
         expect(response.body).to include(CGI.escapeHTML(play_character_equipped_items_path(character)))
       end
+
+      it "exposes the stock asset list as a data attribute" do
+        get "/play/characters/#{character.id}/zones/#{zone.id}"
+        expect(response.body).to include(CGI.escapeHTML({"duration" => 0.12, "url" => "/abilities/sounds/twang.ogg"}.to_json))
+      end
     end
 
     context "with a character belonging to another user" do

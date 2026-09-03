@@ -7,6 +7,7 @@ import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
+import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -1250,6 +1251,7 @@ export default function App({
   equippedItems: initialEquippedItems = {},
   characterItemsUrl,
   equippedItemsUrl,
+  stockAssets,
 }) {
   const connRef = useRef(null);
   const canvasRef = useRef(null);
@@ -1436,9 +1438,10 @@ export default function App({
         positions: { self: selfPosRef.current, target: targetUnit?.position, selfId: selfUnitIdForPower, targetId: targetIdRef.current },
         baseUrl: classConfigUrl,
         sceneManager: canvasRef.current,
+        stockAssets,
       });
     }
-  }, [powers, setGcd, classConfigUrl, handleTargetUnit]);
+  }, [powers, setGcd, classConfigUrl, handleTargetUnit, stockAssets]);
 
   const sendMove = useCallback(() => {
     const pos = selfPosRef.current;
@@ -1608,6 +1611,7 @@ export default function App({
               : { self: attacker.position, target: target.position, selfId: ev.attacker_id, targetId: ev.target_id },
             baseUrl: isBasicAttack ? window.location.origin : zoneSourceUrl,
             sceneManager: canvasRef.current,
+            stockAssets,
           });
         }
       },
@@ -1681,6 +1685,7 @@ export default function App({
         positions: { self: { ...self, radius: selfRadius }, target: { ...target.position, radius: target.radius }, selfId: selfUnitId, targetId: tId },
         baseUrl: window.location.origin,
         sceneManager: canvasRef.current,
+        stockAssets,
       });
     }, 150);
     return () => clearInterval(id);
@@ -1831,7 +1836,7 @@ export default function App({
           const key = slot === 10 ? "0" : String(slot);
           const power = powers[i];
           const iconUrl = power?.iconURL
-            ? new URL(power.iconURL, classConfigUrl).href
+            ? (resolveStockAssetUrl(power.iconURL, "icons", stockAssets) ?? new URL(power.iconURL, classConfigUrl).href)
             : null;
           let inRange = true;
           let isFacing = true;

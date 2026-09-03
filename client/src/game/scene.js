@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { resolveBarrierCollisions } from "./collision.js";
+import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -755,7 +756,9 @@ export class SceneManager {
   // travelOverrideMs: when the power has a `speed`, this is the computed
   // distance/speed travel time - it overrides a traveling effect's own
   // `duration` so its visual flight matches when it's actually due to arrive.
-  playGraphicEffects(effects, positions, baseUrl, travelOverrideMs = 0) {
+  // stockAssets: the {icons, graphics, sounds} shape from Content::StockAssets.client_json -
+  // a ":name:" sourceURL resolves against this app's own origin instead of baseUrl.
+  playGraphicEffects(effects, positions, baseUrl, travelOverrideMs = 0, stockAssets) {
     if (!this._selfMapIdentifier) return;
     const resolve = (key) => key === "self" ? positions.self : positions.target;
     const resolveId = (key) => key === "self" ? positions.selfId : positions.targetId;
@@ -778,7 +781,7 @@ export class SceneManager {
       // party, rather than dead center, when we know that token's radius.
       const fromPos = edgeTowards(fromRaw, resolve(fromKey === "self" ? "affected" : "self"));
       const toPos   = edgeTowards(toRaw, resolve(toKey === "self" ? "affected" : "self"));
-      const url = new URL(effect.sourceURL, baseUrl).href;
+      const url = resolveStockAssetUrl(effect.sourceURL, "graphics", stockAssets) ?? new URL(effect.sourceURL, baseUrl).href;
       const [fromX, fromZ] = this._toWorld(fromPos.x, fromPos.y);
       const [toX,   toZ  ] = this._toWorld(toPos.x,   toPos.y);
       const track = { fromId: resolveId(fromKey), toId: resolveId(toKey) };
