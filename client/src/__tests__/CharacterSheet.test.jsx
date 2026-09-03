@@ -14,6 +14,13 @@ describe("formatItemName", () => {
   });
 });
 
+// Reads a stat row's displayed value by label - robust to whether the label
+// is wrapped in a StatEffectTooltip anchor (secondary stats) or bare
+// (everything else), since either way it's the <li>'s last child.
+function statValue(label) {
+  return screen.getByText(label).closest("li").lastChild.textContent;
+}
+
 describe("CharacterSheet", () => {
   it("renders nothing when closed", () => {
     const { container } = render(
@@ -60,17 +67,17 @@ describe("CharacterSheet", () => {
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("14.0");
-    expect(screen.getByText("Stamina").nextSibling.textContent).toBe("20.0");
-    expect(screen.getByText("Crit Rating").nextSibling.textContent).toBe("5.0");
+    expect(statValue("Strength")).toBe("14.0");
+    expect(statValue("Stamina")).toBe("20.0");
+    expect(statValue("Crit Rating")).toBe("5.0");
   });
 
   it("shows every stat, including zero, when nothing is equipped", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("0.0");
-    expect(screen.getByText("Weapon DPS").nextSibling.textContent).toBe("0.0");
-    expect(screen.getByText("Resilience Rating").nextSibling.textContent).toBe("0.0");
+    expect(statValue("Strength")).toBe("0.0");
+    expect(statValue("Weapon DPS")).toBe("0.0");
+    expect(statValue("Defence Rating")).toBe("0.0");
   });
 
   it("groups stats under Primary and Secondary headings in order", () => {
@@ -82,17 +89,17 @@ describe("CharacterSheet", () => {
 
   it("shows the local elevation when provided", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} localElvl={8} />);
-    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("8");
+    expect(statValue("Local Elevation")).toBe("8");
   });
 
   it("shows an em dash for local elevation when unknown", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
-    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("—");
+    expect(statValue("Local Elevation")).toBe("—");
   });
 
   it("treats empty slots as elvl 0 for gear elevation, not skipped", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
-    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("0.0");
+    expect(statValue("Gear Elevation")).toBe("0.0");
   });
 
   it("weights gear elevation by each item's slot factor, empty slots included at 0", () => {
@@ -106,7 +113,53 @@ describe("CharacterSheet", () => {
       ring_1: { identifier: "band", slot: "ring", elvl: 2 },
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
-    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("2.2");
+    expect(statValue("Gear Elevation")).toBe("2.2");
+  });
+
+  describe("secondary stat effect tooltips", () => {
+    function effectLines(label, equippedItems) {
+      render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+      const labelEl = screen.getByText(label);
+      fireEvent.mouseEnter(labelEl, {clientX: 10, clientY: 10});
+      return labelEl;
+    }
+
+    it("shows crit rating's marginal crit chance", () => {
+      effectLines("Crit Rating", {head: {identifier: "h", stats: {crit_rating: 30}}});
+      expect(screen.getByText("+2.0% crit chance")).toBeInTheDocument();
+    });
+
+    it("shows haste rating's haste percentage", () => {
+      effectLines("Haste Rating", {head: {identifier: "h", stats: {haste_rating: 117.1}}});
+      expect(screen.getByText("+10.0% haste")).toBeInTheDocument();
+    });
+
+    it("shows mastery rating's converted mastery value", () => {
+      effectLines("Mastery Rating", {head: {identifier: "h", stats: {mastery_rating: 0}}});
+      expect(screen.getByText("Mastery 10.0")).toBeInTheDocument();
+    });
+
+    it("shows versatility rating's spread bonus", () => {
+      effectLines("Versatility Rating", {head: {identifier: "h", stats: {versatility_rating: 50}}});
+      expect(screen.getByText("+10.0 Strength, Agility, Intellect, and Defence Rating")).toBeInTheDocument();
+    });
+
+    it("shows defence rating's physical and magic damage reduction", () => {
+      effectLines("Defence Rating", {head: {identifier: "h", stats: {defence_rating: 98}}});
+      expect(screen.getByText("45.0% physical damage reduction")).toBeInTheDocument();
+      expect(screen.getByText("18.0% magic damage reduction")).toBeInTheDocument();
+    });
+
+    it("hides the tooltip again on mouse leave", () => {
+      const labelEl = effectLines("Crit Rating", {head: {identifier: "h", stats: {crit_rating: 30}}});
+      fireEvent.mouseLeave(labelEl);
+      expect(screen.queryByText("+2.0% crit chance")).not.toBeInTheDocument();
+    });
+
+    it("does not wrap a primary stat's label in a hover target", () => {
+      render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
+      expect(screen.getByText("Strength")).not.toHaveStyle({cursor: "help"});
+    });
   });
 
   it("calls onClose when the close button is clicked", () => {

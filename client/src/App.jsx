@@ -606,6 +606,14 @@ const styles = {
     fontStyle: "italic",
     marginTop: 6,
   },
+  statTooltipLine: {
+    color: "#7fae7f",
+    fontSize: 12,
+  },
+  charSheetStatLabelHoverable: {
+    cursor: "help",
+    borderBottom: "1px dotted #667",
+  },
   unitTooltip: {
     position: "absolute",
     top: 8,
@@ -727,7 +735,7 @@ const STAT_LABELS = {
   haste_rating: "Haste Rating",
   mastery_rating: "Mastery Rating",
   versatility_rating: "Versatility Rating",
-  resilience_rating: "Resilience Rating",
+  defence_rating: "Defence Rating",
   weapon_dps: "Weapon DPS",
 };
 
@@ -868,9 +876,59 @@ function itemSlotsFor(equippedSlot) {
   return EQUIPPABLE_ITEM_SLOTS[equippedSlot] || [equippedSlot];
 }
 
+// Effect lines for a secondary stat's current total, per docs/stats.md. Crit
+// and Haste are shown as their own marginal contribution (not combined with
+// the 5% base crit or other stats' contributions); Mastery is shown as its
+// full (non-linear) converted value rather than a marginal delta.
+function secondaryStatEffectLines(key, value) {
+  switch (key) {
+    case "crit_rating":
+      return [`+${(value / 15).toFixed(1)}% crit chance`];
+    case "haste_rating":
+      return [`+${(value / 11.71).toFixed(1)}% haste`];
+    case "mastery_rating":
+      return [`Mastery ${(10 + (90 * value) / (value + 556.25)).toFixed(1)}`];
+    case "versatility_rating":
+      return [`+${(value * 0.2).toFixed(1)} Strength, Agility, Intellect, and Defence Rating`];
+    case "defence_rating":
+      return [
+        `${((0.9 * value / (value + 98)) * 100).toFixed(1)}% physical damage reduction`,
+        `${((0.36 * value / (value + 98)) * 100).toFixed(1)}% magic damage reduction`,
+      ];
+    default:
+      return [];
+  }
+}
+
+// Wraps a stat label in a hover target that shows its computed effect near
+// the cursor - same mouse-tracked portal approach as ItemTooltip, shown
+// immediately (no delay) since it's a small, deliberately-targeted label
+// rather than something the cursor skates across.
+function StatEffectTooltip({ lines, children }) {
+  const [pos, setPos] = useState(null);
+  if (!lines || lines.length === 0) return children;
+
+  return (
+    <span
+      style={styles.itemTooltipAnchor}
+      onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && createPortal(
+        <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
+          {lines.map((line, i) => <div key={i} style={styles.statTooltipLine}>{line}</div>)}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
 const STAT_GROUPS = [
   { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "weapon_dps"] },
-  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "resilience_rating"] },
+  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "defence_rating"] },
 ];
 
 // Fallback label derived from an item's identifier, for the rare case a
@@ -1115,12 +1173,20 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
               <div key={group.title} style={styles.charSheetStatGroup}>
                 <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
                 <ul style={styles.charSheetStatsList}>
-                  {group.keys.map(key => (
-                    <li key={key} style={styles.charSheetStatRow}>
-                      <span>{STAT_LABELS[key] || key}</span>
-                      <span>{(stats[key] || 0).toFixed(1)}</span>
-                    </li>
-                  ))}
+                  {group.keys.map(key => {
+                    const value = stats[key] || 0;
+                    const lines = group.title === "Secondary" ? secondaryStatEffectLines(key, value) : [];
+                    return (
+                      <li key={key} style={styles.charSheetStatRow}>
+                        <StatEffectTooltip lines={lines}>
+                          <span style={lines.length > 0 ? styles.charSheetStatLabelHoverable : undefined}>
+                            {STAT_LABELS[key] || key}
+                          </span>
+                        </StatEffectTooltip>
+                        <span>{value.toFixed(1)}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
