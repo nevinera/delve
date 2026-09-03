@@ -159,6 +159,7 @@ func TestZone_ValidFull_Power(t *testing.T) {
 	assert.Equal(t, 1.0, p.GlobalCooldown)
 	assert.Equal(t, "energy", p.CostType)
 	assert.Equal(t, 40.0, p.CostAmount)
+	assert.Equal(t, []string{"harmful", "physical"}, p.Tags)
 	assert.Len(t, p.Effects, 1)
 }
 

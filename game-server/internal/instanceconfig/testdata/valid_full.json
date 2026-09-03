@@ -29,6 +29,7 @@
           "globalCooldown": 1.0,
           "costType": "energy",
           "costAmount": 40.0,
+          "tags": ["harmful", "physical"],
           "graphicEffects": [
             {
               "sourceURL": "../../assets/interactions/images/slash.webp",

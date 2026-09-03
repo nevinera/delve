@@ -6,6 +6,8 @@ package instanceconfig
 //   - iconURL:        URL of the action bar icon image
 //   - graphicEffects: visual effects played on cast/impact
 //   - soundEffects:   audio effects played on cast/impact
+//
+// Tags is parsed but not currently used by any server-side logic.
 type Power struct {
 	Name           string        `json:"name"` // Required
 	Description    string        `json:"description,omitempty"`
@@ -16,6 +18,7 @@ type Power struct {
 	Frontal        *bool         `json:"frontal,omitempty"`    // nil/true = 150° arc required; false = any facing
 	CostType       string        `json:"costType,omitempty"`   // Resource name required
 	CostAmount     float64       `json:"costAmount,omitempty"` // Minimum resource required
+	Tags           []string      `json:"tags,omitempty"`       // Free-form labels, e.g. "harmful", "class_druid"
 	Effects        []PowerEffect `json:"effects"`              // Required (may be empty)
 }
 
