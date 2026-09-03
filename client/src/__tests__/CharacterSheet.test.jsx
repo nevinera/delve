@@ -72,6 +72,20 @@ describe("CharacterSheet", () => {
     expect(statValue("Crit Rating")).toBe("5.0");
   });
 
+  it("spreads versatility rating's 0.2x bonus into strength/agility/intellect/defence rating", () => {
+    const equippedItems = {
+      head: { identifier: "helm", stats: { strength: 10, agility: 3, intellect: 2, defence_rating: 1, versatility_rating: 50 } },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+
+    // versatility_rating 50 * 0.2 = +10 to each
+    expect(statValue("Strength")).toBe("20.0");
+    expect(statValue("Agility")).toBe("13.0");
+    expect(statValue("Intellect")).toBe("12.0");
+    expect(statValue("Defence Rating")).toBe("11.0");
+    expect(statValue("Versatility Rating")).toBe("50.0");
+  });
+
   it("shows every stat, including zero, when nothing is equipped", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
 

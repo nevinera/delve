@@ -943,11 +943,22 @@ export function formatItemName(identifier) {
     .join(" ");
 }
 
+// Stats Versatility Rating grants a flat 0.2x share of itself into - see
+// docs/stats.md's Versatility section.
+const VERSATILITY_SPREAD_KEYS = ["strength", "agility", "intellect", "defence_rating"];
+const VERSATILITY_SPREAD_RATE = 0.2;
+
 function netStats(equippedItems) {
   const total = {};
   for (const item of Object.values(equippedItems || {})) {
     for (const [key, value] of Object.entries(item.stats || {})) {
       total[key] = (total[key] || 0) + value;
+    }
+  }
+  const versatility = total.versatility_rating || 0;
+  if (versatility) {
+    for (const key of VERSATILITY_SPREAD_KEYS) {
+      total[key] = (total[key] || 0) + versatility * VERSATILITY_SPREAD_RATE;
     }
   }
   return total;
