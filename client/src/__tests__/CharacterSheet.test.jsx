@@ -138,9 +138,9 @@ describe("CharacterSheet", () => {
       return labelEl;
     }
 
-    it("shows crit rating's marginal crit chance", () => {
+    it("shows crit rating's actual crit chance, including the 5% base", () => {
       effectLines("Crit Rating", {head: {identifier: "h", stats: {crit_rating: 30}}});
-      expect(screen.getByText("+2.0% crit chance")).toBeInTheDocument();
+      expect(screen.getByText("7.0% crit chance")).toBeInTheDocument();
     });
 
     it("shows haste rating's haste percentage", () => {
@@ -167,7 +167,7 @@ describe("CharacterSheet", () => {
     it("hides the tooltip again on mouse leave", () => {
       const labelEl = effectLines("Crit Rating", {head: {identifier: "h", stats: {crit_rating: 30}}});
       fireEvent.mouseLeave(labelEl);
-      expect(screen.queryByText("+2.0% crit chance")).not.toBeInTheDocument();
+      expect(screen.queryByText("7.0% crit chance")).not.toBeInTheDocument();
     });
 
     it("does not wrap a primary stat's label in a hover target", () => {

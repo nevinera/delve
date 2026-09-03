@@ -878,12 +878,15 @@ function itemSlotsFor(equippedSlot) {
 
 // Effect lines for a secondary stat's current total, per docs/stats.md. Crit
 // and Haste are shown as their own marginal contribution (not combined with
-// the 5% base crit or other stats' contributions); Mastery is shown as its
-// full (non-linear) converted value rather than a marginal delta.
+// other stats' contributions); Mastery is shown as its full (non-linear)
+// converted value rather than a marginal delta. Crit is the exception - its
+// formula has a flat 5% base (docs/stats.md), so it's shown as the actual
+// total crit chance from this rating rather than just the rating's share of
+// it.
 function secondaryStatEffectLines(key, value) {
   switch (key) {
     case "crit_rating":
-      return [`+${(value / 15).toFixed(1)}% crit chance`];
+      return [`${(5 + value / 15).toFixed(1)}% crit chance`];
     case "haste_rating":
       return [`+${(value / 11.71).toFixed(1)}% haste`];
     case "mastery_rating":
