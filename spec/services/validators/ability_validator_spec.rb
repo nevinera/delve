@@ -64,6 +64,15 @@ RSpec.describe Validators::AbilityValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /speed must be a number/)
     end
 
+    it "accepts an optional description" do
+      expect { described_class.validate!(stab_power.merge("description" => "Hurts.")) }.not_to raise_error
+    end
+
+    it "raises when description is not a string" do
+      expect { described_class.validate!(stab_power.merge("description" => 5)) }
+        .to raise_error(Validators::ValidationError, /description must be a string/)
+    end
+
     it "accepts optional top-level tags" do
       expect { described_class.validate!(stab_power.merge("tags" => ["harmful"])) }.not_to raise_error
     end

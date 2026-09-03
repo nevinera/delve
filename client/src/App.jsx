@@ -8,6 +8,7 @@ import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
+import { AbilityTooltip } from "./AbilityTooltip";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -1868,26 +1869,26 @@ export default function App({
           const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
 
           return (
-            <div
-              key={slot}
-              style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
-              title={power?.name}
-              onClick={power ? () => usePower(i) : undefined}
-            >
-              {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
-              {onCooldown && (
-                <div style={{
-                  position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
-                  background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
-                }}/>
-              )}
-              {cdSecs && (
-                <div style={styles.actionCooldownOverlay}>
-                  <span style={styles.actionCooldownText}>{cdSecs}</span>
-                </div>
-              )}
-              <span style={styles.actionKeybind}>{key}</span>
-            </div>
+            <AbilityTooltip key={slot} ability={power}>
+              <div
+                style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
+                onClick={power ? () => usePower(i) : undefined}
+              >
+                {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
+                {onCooldown && (
+                  <div style={{
+                    position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
+                    background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
+                  }}/>
+                )}
+                {cdSecs && (
+                  <div style={styles.actionCooldownOverlay}>
+                    <span style={styles.actionCooldownText}>{cdSecs}</span>
+                  </div>
+                )}
+                <span style={styles.actionKeybind}>{key}</span>
+              </div>
+            </AbilityTooltip>
           );
         })}
       </div>
