@@ -2,12 +2,15 @@
 
 A GraphicEffect describes a visual played when a power fires.
 
+See [common.md](common.md#stock-asset-reference) for the `:name:` stock
+asset syntax accepted by `sourceURL`.
+
 ## Fields
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `name` | string | no | | Optional label for editor display. |
-| `sourceURL` | string | yes | | URL of the image or animation file. |
+| `sourceURL` | string | yes | | URL of the image or animation file, or a stock asset reference (see above). |
 | `duration` | float | yes | | Display duration in seconds. |
 | `from` | string | yes | | Origin location. `"self"` or `"affected"`. |
 | `to` | string | no | | Destination location. `"self"` or `"affected"`. If present, the graphic travels from `from` to `to`. |

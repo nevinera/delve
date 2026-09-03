@@ -2,12 +2,15 @@
 
 A SoundEffect describes an audio clip played when a power fires.
 
+See [common.md](common.md#stock-asset-reference) for the `:name:` stock
+asset syntax accepted by `sourceURL`.
+
 ## Fields
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `name` | string | no | | Optional label for editor display. |
-| `sourceURL` | string | yes | | URL of the audio file. |
+| `sourceURL` | string | yes | | URL of the audio file, or a stock asset reference (see above). |
 | `duration` | float | yes | | Clip duration in seconds. |
 | `location` | string | yes | | Where the sound plays. `"self"` or `"affected"`. |
 | `when` | string | yes | | Playback trigger. `"immediate"` or `"impact"`. |

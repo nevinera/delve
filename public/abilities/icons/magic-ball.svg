@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g fill="white">
+    <!-- Fireball head -->
+    <circle cx="45" cy="19" r="12"/>
+    <!-- Flame tail, tapering to a point at bottom-left, with a flickering top edge -->
+    <path d="M53,15
+             C56,22 52,28 44,31
+             C50,26 48,21 42,22
+             C46,28 42,32 34,36
+             C39,31 36,27 30,29
+             C33,34 28,38 20,43
+             C15,47 10,52 6,58
+             C10,49 15,41 21,34
+             C28,26 38,17 53,15 Z"/>
+  </g>
+</svg>

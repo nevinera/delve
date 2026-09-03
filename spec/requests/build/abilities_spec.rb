@@ -186,6 +186,7 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response.body).to include(CGI.escapeHTML(content.to_json))
           expect(response.body).to include(CGI.escapeHTML({"../graphics/effects/punch-impact.webp" => "data:image/webp;base64,#{Base64.strict_encode64("fake-webp-bytes")}"}.to_json))
           expect(response.body).to include(build_abilities_path)
+          expect(response.body).to include(CGI.escapeHTML({"duration" => 0.12, "url" => "/abilities/sounds/twang.ogg"}.to_json))
         end
       end
     end

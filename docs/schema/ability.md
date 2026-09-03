@@ -6,6 +6,9 @@ same Ability type - a unit "power" and a class "ability" are the same
 schema, just referenced from different places (see [unit_type.md](unit_type.md)
 and [character_class.md](character_class.md)).
 
+See [common.md](common.md#stock-asset-reference) for the `:name:` stock
+asset syntax accepted by `iconURL`.
+
 ## Fields
 
 | Field | Type | Required | Default | Notes |
@@ -20,7 +23,7 @@ and [character_class.md](character_class.md)).
 | `frontal` | boolean | no | `true` | If `true`, the caster must be facing the target within a 150° arc (±75°) to use this ability. Set to `false` for abilities that work regardless of facing. |
 | `costType` | string | no | | Name of the resource required to use this ability. Must match the unit's resource `name`. |
 | `costAmount` | float | no | | Amount of the resource that must be available. The ability cannot be used if the unit has less than this. |
-| `iconURL` | string | no | | URL of the action bar icon image. **Only meaningful when the ability is used by a class** - units don't have an action bar, so `iconURL` on a unit's power is stored but never displayed. Client-only; ignored by the game server. |
+| `iconURL` | string | no | | URL of the action bar icon image, or a stock asset reference (see above). **Only meaningful when the ability is used by a class** - units don't have an action bar, so `iconURL` on a unit's power is stored but never displayed. Client-only; ignored by the game server. |
 | `tags` | array of string | no | | Free-form labels (max 24, each ≤16 characters) for categorizing the ability, e.g. `"harmful"`, `"beneficial"`, `"class_druid"`. |
 | `graphicEffects` | array of GraphicEffect | no | `[]` | Visual effects played when this ability fires. Client-only; ignored by the game server. |
 | `soundEffects` | array of SoundEffect | no | `[]` | Audio effects played when this ability fires. Client-only; ignored by the game server. |

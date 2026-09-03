@@ -10,19 +10,30 @@ module Validators
       require_string!(data, "name", path: path)
       validate_cast_time!(data, path: path)
       require_numeric!(data, "globalCooldown", path: path)
-      validate_tags!(data, path: path) if data.key?("tags")
-      validate_speed!(data, path: path) if data.key?("speed")
-      validate_graphic_effects!(data, path: path) if data.key?("graphicEffects")
-      validate_sound_effects!(data, path: path) if data.key?("soundEffects")
+      validate_optional_fields!(data, path: path)
       validate_effects!(data, path: path)
     end
 
     private
 
+    def validate_optional_fields!(data, path:)
+      validate_tags!(data, path: path) if data.key?("tags")
+      validate_icon_url!(data, path: path) if data.key?("iconURL")
+      validate_speed!(data, path: path) if data.key?("speed")
+      validate_graphic_effects!(data, path: path) if data.key?("graphicEffects")
+      validate_sound_effects!(data, path: path) if data.key?("soundEffects")
+    end
+
     def validate_cast_time!(data, path:)
       cast_time = require_key!(data, "castTime", path: path)
       return if cast_time.nil? || cast_time.is_a?(Numeric)
       raise ValidationError.new("castTime must be a number or null", path: child_path(path, "castTime"))
+    end
+
+    def validate_icon_url!(data, path:)
+      url = require_string!(data, "iconURL", path: path)
+      return unless stock_reference?(url)
+      validate_stock_reference!(url, Content::StockAssets::ICONS.keys, path: child_path(path, "iconURL"))
     end
 
     def validate_speed!(data, path:)

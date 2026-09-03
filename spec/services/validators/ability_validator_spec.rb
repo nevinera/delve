@@ -82,5 +82,16 @@ RSpec.describe Validators::AbilityValidator, type: :validator do
       class_ability = stab_power.merge("iconURL" => "../graphics/icons/stab.svg", "maxRange" => 5.0)
       expect { described_class.validate!(class_ability) }.not_to raise_error
     end
+
+    context "stock icon references" do
+      it "accepts a recognized stock icon" do
+        expect { described_class.validate!(stab_power.merge("iconURL" => ":heal:")) }.not_to raise_error
+      end
+
+      it "raises when the stock icon name isn't recognized" do
+        expect { described_class.validate!(stab_power.merge("iconURL" => ":not-a-real-icon:")) }
+          .to raise_error(Validators::ValidationError, /not a recognized stock asset/)
+      end
+    end
   end
 end

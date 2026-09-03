@@ -30,6 +30,7 @@ class Build::AbilitiesController < Build::BaseController
 
   def edit
     load_ability
+    @stock_assets = Content::StockAssets.client_json
   end
 
   private
