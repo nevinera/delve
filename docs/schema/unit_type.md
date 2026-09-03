@@ -2,6 +2,8 @@
 
 A UnitType is a template from which individual units are created in a zone.
 
+See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
+
 ## Fields
 
 | Field | Type | Required | Default | Notes |
@@ -18,7 +20,7 @@ A UnitType is a template from which individual units are created in a zone.
 | `basicAttackRange` | float | no | `5.0` | Basic-attack range in feet. Leave at the default for melee; set higher (e.g. `30.0`) for a ranged basic attack. |
 | `basicAttackSchool` | string | no | `"physical"` | `"physical"` or `"magic"`. Purely cosmetic - picks the basic-attack visual/sound; has no mechanical effect. |
 | `resource` | ResourceType | yes | | The resource used to power this unit's abilities. |
-| `powers` | array of Power \| AssetReference(`referenceTo: "power"`) | no | `[]` | Powers available to this unit. Inline Power objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
+| `powers` | array of Ability \| AssetReference(`referenceTo: "power"`) | no | `[]` | Abilities available to this unit. Inline Ability objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `targeting` | UnitTargeting | no | `{ "type": "aggroTable" }` | How this unit selects its target when aggro'd. |
 | `tactics` | UnitTactics | no | `{ "type": "randomAvailable" }` | How this unit decides which power to use. |
 

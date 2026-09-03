@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe Validators::PowerValidator, type: :validator do
+RSpec.describe Validators::AbilityValidator, type: :validator do
   let(:stab_power) { zone_fixture["unitTypes"]["goblin"]["powers"][0] }
   let(:enrage_power) { zone_fixture["unitTypes"]["goblin"]["powers"][1] }
 
@@ -76,6 +76,11 @@ RSpec.describe Validators::PowerValidator, type: :validator do
     it "raises when there are more than 24 top-level tags" do
       expect { described_class.validate!(stab_power.merge("tags" => Array.new(25, "tag"))) }
         .to raise_error(Validators::ValidationError, /may not exceed 24/)
+    end
+
+    it "accepts a class ability's iconURL and maxRange, since the schema is shared" do
+      class_ability = stab_power.merge("iconURL" => "../graphics/icons/stab.svg", "maxRange" => 5.0)
+      expect { described_class.validate!(class_ability) }.not_to raise_error
     end
   end
 end

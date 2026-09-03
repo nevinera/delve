@@ -70,7 +70,7 @@ module Validators
       powers = data["powers"]
       raise ValidationError.new("powers must be an array", path: child_path(path, "powers")) unless powers.is_a?(Array)
       powers.each_with_index do |power, i|
-        PowerValidator.validate!(power, path: index_path(child_path(path, "powers"), i))
+        AbilityValidator.validate!(power, path: index_path(child_path(path, "powers"), i))
       end
     end
 
