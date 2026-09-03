@@ -186,6 +186,29 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response.body).to include(CGI.escapeHTML(content.to_json))
           expect(response.body).to include(CGI.escapeHTML({"../graphics/effects/punch-impact.webp" => "data:image/webp;base64,#{Base64.strict_encode64("fake-webp-bytes")}"}.to_json))
           expect(response.body).to include(build_abilities_path)
+          expect(response.body).to include(CGI.escapeHTML({"duration" => 0.12, "url" => "/abilities/sounds/twang.ogg"}.to_json))
+        end
+
+        it "doesn't fetch a stock asset reference from GitHub, or include it in the asset map" do
+          content = {
+            "name" => "Punch",
+            "iconURL" => ":heal:",
+            "castTime" => nil,
+            "globalCooldown" => 0.5,
+            "graphicEffects" => [{"sourceURL" => ":arc:", "duration" => 0.3, "when" => "impact"}]
+          }
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/punch.json")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json
+            )
+
+          get "/build/abilities/punch/edit"
+
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include('data-asset-map="{}"')
+          expect(WebMock).not_to have_requested(:get, %r{api\.github\.com/repos/nevinera/delve-content/contents/(icons|arc)})
         end
       end
     end

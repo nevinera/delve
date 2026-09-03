@@ -78,6 +78,19 @@ module Validators
       end
     end
 
+    # A stock asset reference (see docs/schema/common.md#stock-asset-reference)
+    # is any string wrapped in colons, e.g. ":arc:" - checked against an
+    # allow-list rather than resolved as a relative path.
+    def stock_reference?(value)
+      value.is_a?(String) && value.start_with?(":") && value.end_with?(":")
+    end
+
+    def validate_stock_reference!(value, known_names, path:)
+      name = value[1..-2]
+      return if known_names.include?(name)
+      raise ValidationError.new("#{value.inspect} is not a recognized stock asset", path: path)
+    end
+
     def validate_tags!(data, path:)
       tags = data["tags"]
       tags_path = child_path(path, "tags")

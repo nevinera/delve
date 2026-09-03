@@ -78,6 +78,36 @@ describe("resolveAbilityForPlayback", () => {
     expect(resolved.graphicEffects[0].sourceURL).toEqual("a.png");
     expect(resolved.graphicEffects[1].sourceURL).toEqual("blob:local-b");
   });
+
+  describe("stock asset references", () => {
+    const stockAssets = {
+      icons: {heal: {url: "/abilities/icons/heal.svg"}},
+      graphics: {arc: {url: "/abilities/graphics/arc.webp"}},
+      sounds: {twang: {url: "/abilities/sounds/twang.ogg"}},
+    };
+
+    it("resolves a stock iconURL against this app's own origin, not assetMap", () => {
+      const resolved = resolveAbilityForPlayback({...ability, iconURL: ":heal:"}, assetMap, {}, stockAssets);
+      expect(resolved.iconURL).toEqual(`${window.location.origin}/abilities/icons/heal.svg`);
+    });
+
+    it("resolves a stock graphicEffects sourceURL against this app's own origin", () => {
+      const stockAbility = {...ability, graphicEffects: [{sourceURL: ":arc:", duration: 0.3}]};
+      const resolved = resolveAbilityForPlayback(stockAbility, assetMap, {}, stockAssets);
+      expect(resolved.graphicEffects[0].sourceURL).toEqual(`${window.location.origin}/abilities/graphics/arc.webp`);
+    });
+
+    it("resolves a stock soundEffects sourceURL against this app's own origin", () => {
+      const stockAbility = {...ability, soundEffects: [{sourceURL: ":twang:", duration: 0.12}]};
+      const resolved = resolveAbilityForPlayback(stockAbility, assetMap, {}, stockAssets);
+      expect(resolved.soundEffects[0].sourceURL).toEqual(`${window.location.origin}/abilities/sounds/twang.ogg`);
+    });
+
+    it("lets an upload override win over a stock reference, same as it does over assetMap", () => {
+      const resolved = resolveAbilityForPlayback({...ability, iconURL: ":heal:"}, assetMap, {iconURL: "blob:local-upload"}, stockAssets);
+      expect(resolved.iconURL).toEqual("blob:local-upload");
+    });
+  });
 });
 
 describe("currentFieldValue", () => {

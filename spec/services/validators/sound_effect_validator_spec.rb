@@ -60,5 +60,16 @@ RSpec.describe Validators::SoundEffectValidator, type: :validator do
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /must be one of/)
     end
+
+    context "stock asset references" do
+      it "accepts a recognized stock sound" do
+        expect { described_class.validate!(valid_sound.merge("sourceURL" => ":twang:")) }.not_to raise_error
+      end
+
+      it "raises when the stock sound name isn't recognized" do
+        expect { described_class.validate!(valid_sound.merge("sourceURL" => ":not-a-real-sound:")) }
+          .to raise_error(Validators::ValidationError, /not a recognized stock asset/)
+      end
+    end
   end
 end

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Heart -->
+  <path fill="white" d="M32,18 C32,12 22,6 14,6 C6,6 4,16 4,24 C4,40 18,48 32,54 C46,48 60,40 60,24 C60,16 58,6 50,6 C42,6 32,12 32,18 Z"/>
+  <!-- Cross cut into the heart -->
+  <rect x="29" y="22" width="6" height="22" rx="2" fill="#1c1c1c"/>
+  <rect x="21" y="30" width="22" height="6" rx="2" fill="#1c1c1c"/>
+</svg>

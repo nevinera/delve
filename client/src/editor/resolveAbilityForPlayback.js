@@ -1,8 +1,10 @@
+import {resolveStockAssetUrl} from "../resolveStockAssetUrl";
+
 // Builds a preview-only copy of the ability with iconURL/sourceURL fields
-// swapped for their resolved (data: or blob:) URLs from assetMap, so the
+// swapped for their resolved (data:, blob:, or stock-asset) URLs, so the
 // preview pane can play it without ever touching GitHub. The canonical draft
-// state (what would eventually get saved) keeps the original relative-path
-// strings untouched - this is a derived view, not a mutation.
+// state (what would eventually get saved) keeps the original relative-path/
+// ":name:" strings untouched - this is a derived view, not a mutation.
 //
 // assetOverrides holds locally-"uploaded" replacements. Top-level fields are
 // keyed by field name ("iconURL"); entry fields are keyed by
@@ -23,22 +25,22 @@ export function currentFieldValue(ability, overrideKey) {
   return ability[section]?.[Number(indexStr)]?.[field];
 }
 
-function resolveUrl(value, assetMap) {
-  return assetMap[value] ?? value;
+function resolveUrl(value, kind, assetMap, stockAssets) {
+  return resolveStockAssetUrl(value, kind, stockAssets) ?? assetMap[value] ?? value;
 }
 
-function resolveEffect(effect, section, index, assetMap, assetOverrides) {
+function resolveEffect(effect, section, index, kind, assetMap, assetOverrides, stockAssets) {
   const override = assetOverrides[assetOverrideKey(section, index, "sourceURL")];
   if (override) return {...effect, sourceURL: override};
   if (!effect.sourceURL) return effect;
-  return {...effect, sourceURL: resolveUrl(effect.sourceURL, assetMap)};
+  return {...effect, sourceURL: resolveUrl(effect.sourceURL, kind, assetMap, stockAssets)};
 }
 
-export function resolveAbilityForPlayback(ability, assetMap, assetOverrides = {}) {
+export function resolveAbilityForPlayback(ability, assetMap, assetOverrides = {}, stockAssets = {}) {
   return {
     ...ability,
-    iconURL: assetOverrides.iconURL ?? (ability.iconURL ? resolveUrl(ability.iconURL, assetMap) : ability.iconURL),
-    graphicEffects: (ability.graphicEffects ?? []).map((e, i) => resolveEffect(e, "graphicEffects", i, assetMap, assetOverrides)),
-    soundEffects: (ability.soundEffects ?? []).map((e, i) => resolveEffect(e, "soundEffects", i, assetMap, assetOverrides)),
+    iconURL: assetOverrides.iconURL ?? (ability.iconURL ? resolveUrl(ability.iconURL, "icons", assetMap, stockAssets) : ability.iconURL),
+    graphicEffects: (ability.graphicEffects ?? []).map((e, i) => resolveEffect(e, "graphicEffects", i, "graphics", assetMap, assetOverrides, stockAssets)),
+    soundEffects: (ability.soundEffects ?? []).map((e, i) => resolveEffect(e, "soundEffects", i, "sounds", assetMap, assetOverrides, stockAssets)),
   };
 }

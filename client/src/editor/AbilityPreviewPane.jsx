@@ -18,7 +18,7 @@ function maxEffectRange(effects) {
   return ranges.length ? Math.max(...ranges) : null;
 }
 
-export default function AbilityPreviewPane({ability, assetMap, assetOverrides}) {
+export default function AbilityPreviewPane({ability, assetMap, assetOverrides, stockAssets}) {
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
@@ -32,8 +32,8 @@ export default function AbilityPreviewPane({ability, assetMap, assetOverrides}) 
   }, [maxRange]);
 
   const resolvedAbility = useMemo(
-    () => resolveAbilityForPlayback(ability, assetMap, assetOverrides),
-    [ability, assetMap, assetOverrides]
+    () => resolveAbilityForPlayback(ability, assetMap, assetOverrides, stockAssets),
+    [ability, assetMap, assetOverrides, stockAssets]
   );
 
   function play() {

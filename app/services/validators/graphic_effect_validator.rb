@@ -6,7 +6,7 @@ module Validators
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
-      require_string!(data, "sourceURL", path: path)
+      validate_source_url!(data, path: path)
       require_numeric!(data, "duration", path: path)
       validate_from_field!(data, path: path)
       validate_to_field!(data, path: path) if data.key?("to")
@@ -16,6 +16,12 @@ module Validators
     end
 
     private
+
+    def validate_source_url!(data, path:)
+      url = require_string!(data, "sourceURL", path: path)
+      return unless stock_reference?(url)
+      validate_stock_reference!(url, Content::StockAssets::GRAPHICS.keys, path: child_path(path, "sourceURL"))
+    end
 
     def validate_from_field!(data, path:)
       from = require_string!(data, "from", path: path)

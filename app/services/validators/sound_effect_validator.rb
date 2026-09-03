@@ -7,7 +7,7 @@ module Validators
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
-      require_string!(data, "sourceURL", path: path)
+      validate_source_url!(data, path: path)
       require_numeric!(data, "duration", path: path)
       location = require_string!(data, "location", path: path)
       require_one_of!(location, LOCATION_OPTIONS, path: child_path(path, "location"))
@@ -19,6 +19,12 @@ module Validators
     end
 
     private
+
+    def validate_source_url!(data, path:)
+      url = require_string!(data, "sourceURL", path: path)
+      return unless stock_reference?(url)
+      validate_stock_reference!(url, Content::StockAssets::SOUNDS.keys, path: child_path(path, "sourceURL"))
+    end
 
     def validate_impact_timing!(data, path:)
       timing = require_string!(data, "impactTiming", path: path)

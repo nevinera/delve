@@ -70,5 +70,16 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /spriteColumns must be an integer/)
     end
+
+    context "stock asset references" do
+      it "accepts a recognized stock graphic" do
+        expect { described_class.validate!(valid_graphic.merge("sourceURL" => ":arc:")) }.not_to raise_error
+      end
+
+      it "raises when the stock graphic name isn't recognized" do
+        expect { described_class.validate!(valid_graphic.merge("sourceURL" => ":not-a-real-graphic:")) }
+          .to raise_error(Validators::ValidationError, /not a recognized stock asset/)
+      end
+    end
   end
 end

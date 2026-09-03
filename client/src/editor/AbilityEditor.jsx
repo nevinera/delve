@@ -30,7 +30,7 @@ function reindexBySection(map, section, removedIndex, onRemoved) {
   return next;
 }
 
-export default function AbilityEditor({abilityKey, initialAbility, assetMap}) {
+export default function AbilityEditor({abilityKey, initialAbility, assetMap, stockAssets}) {
   const [ability, dispatch] = useReducer(abilityReducer, initialAbility);
   const [assetOverrides, setAssetOverrides] = useState({});
   const overrideUrlsRef = useRef({});
@@ -94,7 +94,7 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap}) {
   return (
     <div className="ability-editor">
       <div className="ability-editor-preview">
-        <AbilityPreviewPane ability={ability} assetMap={assetMap} assetOverrides={assetOverrides} />
+        <AbilityPreviewPane ability={ability} assetMap={assetMap} assetOverrides={assetOverrides} stockAssets={stockAssets} />
       </div>
       <div className="ability-editor-fields">
         <div className="save-bar">
@@ -111,6 +111,7 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap}) {
           onUploadAsset={uploadAsset}
           onClearAsset={clearAssetOverride}
           onRemoveEntry={removeEntry}
+          stockAssets={stockAssets}
         />
       </div>
     </div>

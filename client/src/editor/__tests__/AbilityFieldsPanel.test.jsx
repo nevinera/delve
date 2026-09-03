@@ -23,8 +23,18 @@ const ability = {
   speed: 60.0,
   maxRange: 40.0,
   tags: ["harmful", "class_druid"],
-  graphicEffects: [{sourceURL: "../graphics/animations/firebolt.sprites2x2.png", duration: 0.5, when: "immediate"}],
+  graphicEffects: [{sourceURL: "../graphics/animations/firebolt.sprites2x2.png", duration: 0.5, when: "immediate", spriteColumns: 2, spriteRows: 2}],
+  soundEffects: [{sourceURL: "../audio/firespell1.ogg", duration: 1.8, location: "self", when: "impact", condition: "always"}],
   effects: [{type: "harm", affects: "bTarget", amount: [89.0, 140.0], tags: ["magic", "ranged"]}],
+};
+
+const stockAssets = {
+  icons: {heal: {url: "/abilities/icons/heal.svg"}},
+  graphics: {
+    arc: {url: "/abilities/graphics/arc.webp"},
+    "magic-ball": {url: "/abilities/graphics/magic-ball.sprites3x3.png", spriteColumns: 3, spriteRows: 3, spriteFrameRate: 12},
+  },
+  sounds: {twang: {url: "/abilities/sounds/twang.ogg", duration: 0.12}},
 };
 
 describe("AbilityFieldsPanel", () => {
@@ -113,6 +123,65 @@ describe("AbilityFieldsPanel", () => {
     );
     fireEvent.click(screen.getByRole("button", {name: "Restore"}));
     expect(onClearAsset).toHaveBeenCalledWith("iconURL");
+  });
+
+  describe("stock asset pickers", () => {
+    it("lists the recognized stock icons and dispatches SET_FIELD with the colon-wrapped name when one is picked", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+      const [iconPicker] = screen.getAllByDisplayValue("— stock asset —");
+
+      fireEvent.change(iconPicker, {target: {value: "heal"}});
+
+      expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "iconURL", value: ":heal:"});
+    });
+
+    it("resets to the placeholder after a pick, rather than keeping the picked name selected", () => {
+      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+      const [iconPicker] = screen.getAllByDisplayValue("— stock asset —");
+
+      fireEvent.change(iconPicker, {target: {value: "heal"}});
+
+      expect(iconPicker).toHaveValue("");
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELDS with sourceURL and sprite fields when a stock graphic is picked, nulling out fields the new pick doesn't have", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+      const graphicPicker = screen.getAllByDisplayValue("— stock asset —")[1];
+
+      fireEvent.change(graphicPicker, {target: {value: "arc"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0,
+        fields: {sourceURL: ":arc:", spriteColumns: null, spriteRows: null, spriteFrameCount: null, spriteFrameRate: null},
+      });
+    });
+
+    it("carries a stock graphic's sprite grid and frame rate along with sourceURL", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+      const graphicPicker = screen.getAllByDisplayValue("— stock asset —")[1];
+
+      fireEvent.change(graphicPicker, {target: {value: "magic-ball"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0,
+        fields: {sourceURL: ":magic-ball:", spriteColumns: 3, spriteRows: 3, spriteFrameCount: null, spriteFrameRate: 12},
+      });
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELDS with sourceURL and duration when a stock sound is picked", () => {
+      const dispatch = vi.fn();
+      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+      const soundPicker = screen.getAllByDisplayValue("— stock asset —")[2];
+
+      fireEvent.change(soundPicker, {target: {value: "twang"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELDS", section: "soundEffects", index: 0, fields: {sourceURL: ":twang:", duration: 0.12},
+      });
+    });
   });
 
   it("renders a heading for each entry, sorted graphic/sound/effect, with no folding", () => {
