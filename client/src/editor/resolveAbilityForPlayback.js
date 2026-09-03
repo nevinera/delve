@@ -13,6 +13,16 @@ export function assetOverrideKey(section, index, field) {
   return `${section}[${index}].${field}`;
 }
 
+// Looks up an override key's live value on the ability draft - the inverse
+// of assetOverrideKey. Used at save time to find the real destination path
+// (the field's current relative-path string) for each uploaded file.
+export function currentFieldValue(ability, overrideKey) {
+  const match = overrideKey.match(/^(.+)\[(\d+)\]\.(.+)$/);
+  if (!match) return ability[overrideKey];
+  const [, section, indexStr, field] = match;
+  return ability[section]?.[Number(indexStr)]?.[field];
+}
+
 function resolveUrl(value, assetMap) {
   return assetMap[value] ?? value;
 }

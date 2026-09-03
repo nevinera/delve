@@ -1,6 +1,12 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
-import {render, screen, fireEvent} from "@testing-library/react";
+import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import AbilityEditor from "../AbilityEditor";
+import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+
+vi.mock("../../github/commitFiles", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {...actual, commitFiles: vi.fn()};
+});
 
 // AbilityPreviewPane mounts a real Three.js WebGLRenderer, which jsdom can't
 // back - stub it so this test can exercise the reducer/upload wiring in isolation.
@@ -130,6 +136,64 @@ describe("AbilityEditor", () => {
         expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:fake-url-0");
         expect(JSON.parse(screen.getByTestId("preview-overrides").textContent)).toEqual({});
       });
+    });
+  });
+
+  describe("saving", () => {
+    beforeEach(() => {
+      commitFiles.mockReset();
+    });
+
+    it("commits the ability under abilities/<key>.json and shows a success message", async () => {
+      commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+      expect(commitFiles).toHaveBeenCalledWith(
+        {"abilities/firebolt.json": initialAbility},
+        {message: "Update Firebolt"}
+      );
+    });
+
+    it("disables the button and shows a saving indicator while the commit is in flight", async () => {
+      let resolveCommit;
+      commitFiles.mockReturnValue(new Promise((resolve) => {
+        resolveCommit = resolve;
+      }));
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      expect(screen.getByRole("button", {name: "Saving…"})).toBeDisabled();
+
+      resolveCommit({commitSha: "x", branch: "main"});
+      await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+    });
+
+    it("shows an error message when the commit fails", async () => {
+      commitFiles.mockRejectedValue(new Error("network exploded"));
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(screen.getByText("network exploded")).toBeInTheDocument());
+      expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled();
+    });
+
+    it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
+      commitFiles.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+      const originalLocation = window.location;
+      delete window.location;
+      window.location = {href: ""};
+
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(window.location.href).toEqual("/github/reauth"));
+
+      window.location = originalLocation;
     });
   });
 });

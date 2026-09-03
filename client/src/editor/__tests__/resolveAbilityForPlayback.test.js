@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveAbilityForPlayback, assetOverrideKey } from "../resolveAbilityForPlayback";
+import { resolveAbilityForPlayback, assetOverrideKey, currentFieldValue } from "../resolveAbilityForPlayback";
 
 describe("resolveAbilityForPlayback", () => {
   const assetMap = {
@@ -77,5 +77,27 @@ describe("resolveAbilityForPlayback", () => {
     const resolved = resolveAbilityForPlayback(twoEffectAbility, {}, overrides);
     expect(resolved.graphicEffects[0].sourceURL).toEqual("a.png");
     expect(resolved.graphicEffects[1].sourceURL).toEqual("blob:local-b");
+  });
+});
+
+describe("currentFieldValue", () => {
+  const ability = {
+    name: "Firebolt",
+    iconURL: "../graphics/icons/firebolt.svg",
+    graphicEffects: [{sourceURL: "../graphics/animations/firebolt.sprites2x2.png", duration: 0.5}],
+  };
+
+  it("resolves a top-level field", () => {
+    expect(currentFieldValue(ability, "iconURL")).toEqual("../graphics/icons/firebolt.svg");
+  });
+
+  it("resolves a per-entry field", () => {
+    const key = assetOverrideKey("graphicEffects", 0, "sourceURL");
+    expect(currentFieldValue(ability, key)).toEqual("../graphics/animations/firebolt.sprites2x2.png");
+  });
+
+  it("returns undefined for an out-of-range entry index", () => {
+    const key = assetOverrideKey("graphicEffects", 5, "sourceURL");
+    expect(currentFieldValue(ability, key)).toBeUndefined();
   });
 });
