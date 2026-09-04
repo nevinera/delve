@@ -110,12 +110,23 @@ So a G1 mob has 200 HP, a G25 raid boss has 5000.
    both implemented in isolation (docs/stats.md) but haven't been combined into a target EHP number,
    or budgeted between "gear" and "class/spec passives." Per your last note, this is deliberately
    deferred until outgoing damage (enemy DPS) is worked out first.
+   Answer: Yes - we want the gear to make a substantial portion of the difference (we want tanks to
+   _want_ to wear tank gear). We'll probably just see the difference on gear alone between tank and dps,
+   then either update the gear scaling, or decree another target for the mitigation _from passives/talents_
+   that class definitions can aim for.
 2. **Per-hit damage cap (<100).** `Enemy_DPS(n)` is a rate, not a per-swing number - translating it
    to "<100 per hit" needs the enemy's attack interval, which you've since pinned to **0.5s-2.5s,
    mostly**. Still need to decide how interval varies by group size (do bigger/tougher intended
    enemies swing slower with bigger hits, or faster?) before checking the cap.
+   Answer: no actual damage cap - this is intended to be a guideline, so that the numbers flashing on
+   the screen are usually 1-2 digits, and thus more readable.
 3. **Elevation (-5e, -10e, -20e).** Deferred per your instruction - once outgoing damage is pinned
    at e=0, the elevation multiplier curve (`em(ee)`, see stats.md) will need to reshape *both* sides
    (player output/EHP via gear scaling, which already uses `em`, and enemy HP/damage, which doesn't
    vary by elevation today - "since we don't specify different monster damage/hp based on the
    relative elevations") to hit the -5e/-10e/-20e example targets you gave.
+   Answer: we'll need to see what effect the _existing_ elevation calculation has, and how close it
+   is. If it's way off we may need to adjust strategies, but we'll try tweaking the curve first. In
+   particular, we don't want the _relative incremental value_ of the various stats to change drastically
+   from -10e to 0e - the gear you want to acquire going into a raid-level should be similar to the
+   gear you want to own at the end of it.

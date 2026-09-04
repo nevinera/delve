@@ -883,6 +883,10 @@ function itemSlotsFor(equippedSlot) {
 // formula has a flat 5% base (docs/stats.md), so it's shown as the actual
 // total crit chance from this rating rather than just the rating's share of
 // it.
+// crit_rating/haste_rating are shown here as their itemized-only baseline -
+// Strength/Agility/Intellect's own incremental contribution to a specific
+// attack type (physical or magic) is shown on those primary stats' own
+// tooltips instead (primaryStatEffectLines below), not folded in here.
 function secondaryStatEffectLines(key, value) {
   switch (key) {
     case "crit_rating":
