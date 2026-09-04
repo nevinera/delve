@@ -179,9 +179,9 @@ describe("CharacterSheet", () => {
       return labelEl;
     }
 
-    it("shows strength's parry chance, but not DPS, when strength isn't the class's damage stat", () => {
+    it("shows strength's physical avoidance chance, but not DPS, when strength isn't the class's damage stat", () => {
       hover("Strength", {head: {identifier: "h", stats: {strength: 250}}}, []);
-      expect(screen.getByText("30.0% Parry chance")).toBeInTheDocument();
+      expect(screen.getByText("30.0% physical avoidance chance")).toBeInTheDocument();
       expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
     });
 
@@ -189,20 +189,25 @@ describe("CharacterSheet", () => {
       hover("Strength", {head: {identifier: "h", stats: {strength: 900}}}, ["strength"]);
       expect(screen.getByText("+10.0 DPS")).toBeInTheDocument();
       expect(screen.getByText("+540.0 effective physical Crit Rating")).toBeInTheDocument();
-      expect(screen.getByText("47.0% Parry chance")).toBeInTheDocument();
+      expect(screen.getByText("47.0% physical avoidance chance")).toBeInTheDocument();
     });
 
-    it("shows agility's effective physical haste and dodge chance always, DPS only when it's a class primary", () => {
+    it("shows agility's effective physical haste and its split physical/magic avoidance always, DPS only when it's a class primary", () => {
       hover("Agility", {head: {identifier: "h", stats: {agility: 250}}}, []);
       expect(screen.getByText("+150.0 effective physical Haste Rating")).toBeInTheDocument();
-      expect(screen.getByText("30.0% Dodge chance")).toBeInTheDocument();
+      // effective physical avoidance stat = 0 + 250*0.66 = 165 -> 0.6*165/415
+      expect(screen.getByText("23.9% physical avoidance chance")).toBeInTheDocument();
+      // effective magic avoidance stat = 0 + 250*0.33 = 82.5 -> 0.6*82.5/332.5
+      expect(screen.getByText("14.9% magic avoidance chance")).toBeInTheDocument();
       expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
     });
 
-    it("shows intellect's magic crit and haste always, spell damage and resource pool only when it's a class primary", () => {
+    it("shows intellect's magic crit, haste, and avoidance always, spell damage and resource pool only when it's a class primary", () => {
       hover("Intellect", {head: {identifier: "h", stats: {intellect: 140}}}, []);
       expect(screen.getByText("+42.0 effective magic Crit Rating")).toBeInTheDocument();
       expect(screen.getByText("+42.0 effective magic Haste Rating")).toBeInTheDocument();
+      // effective magic avoidance stat = 140 + 0*0.33 = 140 -> 0.6*140/390
+      expect(screen.getByText("21.5% magic avoidance chance")).toBeInTheDocument();
       expect(screen.queryByText(/Spell Damage|Resource Pool/)).not.toBeInTheDocument();
     });
 

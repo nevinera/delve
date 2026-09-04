@@ -908,23 +908,20 @@ function secondaryStatEffectLines(key, value) {
 }
 
 // Effect lines for a primary stat's current total, per docs/stats.md.
-// Avoidance (Parry/Dodge) and the off-primaries' effective crit contribution
-// always apply regardless of class (see the Versatility section), but the
-// actual damage/resource numbers (SwingDamage, SpellDamage, ResourcePool)
-// only apply for the primary stat(s) a class actually calls its damage/
-// caster stat, so those lines are gated on `primaryStats` (from the class
-// config). The DPS/SpellDamage numbers are base-weapon-damage- and
-// cast-time-independent: e.g. SwingDamage's Strength term is
-// (Strength/7)*NominalSwingSpeed, and dividing by the actual swing interval
-// (NominalSwingSpeed/(1+Haste)) leaves just Strength/7 - the weapon-specific
-// terms cancel out, which is also why docs/stats.md's own worked examples
-// show it that way (Strength 201.9 -> "+28.8 DPS" = 201.9/7).
-function primaryStatEffectLines(key, value, primaryStats) {
+// Avoidance and the off-primaries' effective Crit/Haste contribution always
+// apply regardless of class (see the Versatility section) - Avoidance needs
+// `stats` too since Agility always feeds a weaker split of both Physical and
+// Magic Avoidance (see docs/stats.md's Avoidance section), not just its own
+// type. The actual damage/resource numbers (SwingDamage, SpellDamage,
+// ResourcePool) only apply for the primary stat(s) a class actually calls
+// its damage/caster stat, so those lines are gated on `primaryStats` (from
+// the class config).
+function primaryStatEffectLines(key, value, primaryStats, stats) {
   switch (key) {
     case "strength": {
       const lines = [
         `+${(value * PHYSICAL_CRIT_RATING_PER_STRENGTH).toFixed(1)} effective physical Crit Rating`,
-        `${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Parry chance`,
+        `${avoidancePct(value, stats.agility, AGILITY_PHYSICAL_AVOIDANCE_WEIGHT).toFixed(1)}% physical avoidance chance`,
       ];
       if (primaryStats.includes("strength")) lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
       return lines;
@@ -932,7 +929,8 @@ function primaryStatEffectLines(key, value, primaryStats) {
     case "agility": {
       const lines = [
         `+${(value * PHYSICAL_HASTE_RATING_PER_AGILITY).toFixed(1)} effective physical Haste Rating`,
-        `${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Dodge chance`,
+        `${avoidancePct(stats.strength, value, AGILITY_PHYSICAL_AVOIDANCE_WEIGHT).toFixed(1)}% physical avoidance chance`,
+        `${avoidancePct(stats.intellect, value, AGILITY_MAGIC_AVOIDANCE_WEIGHT).toFixed(1)}% magic avoidance chance`,
       ];
       if (primaryStats.includes("agility")) lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
       return lines;
@@ -941,6 +939,7 @@ function primaryStatEffectLines(key, value, primaryStats) {
       const lines = [
         `+${(value * MAGIC_CRIT_RATING_PER_INTELLECT).toFixed(1)} effective magic Crit Rating`,
         `+${(value * MAGIC_HASTE_RATING_PER_INTELLECT).toFixed(1)} effective magic Haste Rating`,
+        `${avoidancePct(value, stats.agility, AGILITY_MAGIC_AVOIDANCE_WEIGHT).toFixed(1)}% magic avoidance chance`,
       ];
       if (primaryStats.includes("intellect")) {
         lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
@@ -999,6 +998,17 @@ const PHYSICAL_CRIT_RATING_PER_STRENGTH = 0.6;
 const PHYSICAL_HASTE_RATING_PER_AGILITY = 0.6;
 const MAGIC_CRIT_RATING_PER_INTELLECT = 0.3;
 const MAGIC_HASTE_RATING_PER_INTELLECT = 0.3;
+
+// Avoidance - see docs/stats.md's Avoidance section. Strength/Intellect each
+// grant a pure Physical/Magic Avoidance chance at the same 0.6-asymptote
+// rate; Agility splits a weaker version of both instead of granting either
+// at full rate.
+const AGILITY_PHYSICAL_AVOIDANCE_WEIGHT = 0.66;
+const AGILITY_MAGIC_AVOIDANCE_WEIGHT = 0.33;
+function avoidancePct(primaryValue, agility, agilityWeight) {
+  const effective = (primaryValue || 0) + (agility || 0) * agilityWeight;
+  return (0.6 * effective / (effective + 250)) * 100;
+}
 
 // Computed (not itemized) Basic Attack DPS, plus a breakdown of how it was
 // built. Strength/Agility drive a physical basic attack (Strength feeds
@@ -1305,7 +1315,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
                     const value = stats[key] || 0;
                     const lines = group.title === "Secondary"
                       ? secondaryStatEffectLines(key, value)
-                      : primaryStatEffectLines(key, value, primaryStats);
+                      : primaryStatEffectLines(key, value, primaryStats, stats);
                     return (
                       <li key={key} style={styles.charSheetStatRow}>
                         <StatEffectTooltip lines={lines}>
