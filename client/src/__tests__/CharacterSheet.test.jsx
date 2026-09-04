@@ -159,8 +159,8 @@ describe("CharacterSheet", () => {
 
     it("shows defence rating's physical and magic damage reduction", () => {
       effectLines("Defence Rating", {head: {identifier: "h", stats: {defence_rating: 98}}});
-      expect(screen.getByText("45.0% physical damage reduction")).toBeInTheDocument();
-      expect(screen.getByText("18.0% magic damage reduction")).toBeInTheDocument();
+      expect(screen.getByText("30.0% physical damage reduction")).toBeInTheDocument();
+      expect(screen.getByText("12.0% magic damage reduction")).toBeInTheDocument();
     });
 
     it("hides the tooltip again on mouse leave", () => {

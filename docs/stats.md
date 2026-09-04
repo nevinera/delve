@@ -285,14 +285,23 @@ There's no separate Armor stat. Instead, **Defence Rating** grants a direct perc
 incoming damage — a larger reduction against physical damage than against magic:
 
 ```
-PhysicalDR(r) = 0.9 * r / (r + 98)
-MagicDR(r)    = 0.4 * PhysicalDR(r) = 0.36 * r / (r + 98)
+PhysicalDR(r) = 0.6 * r / (r + 98)
+MagicDR(r)    = 0.4 * PhysicalDR(r) = 0.24 * r / (r + 98)
 ```
 
-Where `r` is total Defence Rating. This asymptotes toward 90% physical / 36% magic reduction as `r`
+Where `r` is total Defence Rating (itemized `defence_rating` plus Versatility's 0.2x spread into
+it - see **Versatility** above). This asymptotes toward 60% physical / 24% magic reduction as `r`
 grows, and gives 0% reduction at `r = 0`. A fully-itemized tank (every eligible secondary slot on
-Defence Rating, wielding a shield) lands around `r = 250`, giving ~65% physical / ~26% magic
-reduction; half that (`r = 125`, e.g. the same tank at `ee = -10`) gives ~50% physical / ~20% magic.
+Defence Rating, wielding a shield - `r ~= 520` at `ee = 0`) lands around **50.5% physical / 20.2%
+magic** reduction; half that (`r ~= 260`) gives ~40.0% physical / ~16.0% magic.
+
+**Design history:** originally `0.9`/`0.36` asymptotes. Avoidance barely differs between a tank and
+a Strength DPS build (see **Avoidance** above) - almost the entire tank/DPS mitigation gap was
+coming from Defence Rating alone, giving a fully-itemized tank ~76% physical DR, a 4.1x damage
+multiplier by itself. Pulled down to land a fully-itemized tank near 50% physical DR instead (~2x
+multiplier from DR), leaving the rest of the intended tank/DPS gap (see
+[combat_balance.md](combat_balance.md)'s `EHP_tank = 3x EHP_dps` target) to come from Avoidance and
+future passives/talents rather than gear alone.
 
 ## Miss Chance
 

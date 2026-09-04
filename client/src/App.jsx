@@ -887,6 +887,14 @@ function itemSlotsFor(equippedSlot) {
 // Strength/Agility/Intellect's own incremental contribution to a specific
 // attack type (physical or magic) is shown on those primary stats' own
 // tooltips instead (primaryStatEffectLines below), not folded in here.
+// Defence Rating's damage-reduction asymptote - see docs/stats.md's
+// "Defence Rating and damage reduction" section. Pulled down from 0.9/0.36
+// (a fully-itemized tank's ~76% physical DR was, by itself, most of the
+// tank/DPS mitigation gap - Avoidance barely differed between them) so a
+// fully-itemized tank (r~520) now lands near 50% physical DR instead.
+const PHYSICAL_DR_ASYMPTOTE = 0.6;
+const MAGIC_DR_ASYMPTOTE = 0.4 * PHYSICAL_DR_ASYMPTOTE;
+
 function secondaryStatEffectLines(key, value) {
   switch (key) {
     case "crit_rating":
@@ -899,8 +907,8 @@ function secondaryStatEffectLines(key, value) {
       return [`+${(value * 0.2).toFixed(1)} Strength, Agility, Intellect, and Defence Rating`];
     case "defence_rating":
       return [
-        `${((0.9 * value / (value + 98)) * 100).toFixed(1)}% physical damage reduction`,
-        `${((0.36 * value / (value + 98)) * 100).toFixed(1)}% magic damage reduction`,
+        `${(PHYSICAL_DR_ASYMPTOTE * 100 * value / (value + 98)).toFixed(1)}% physical damage reduction`,
+        `${(MAGIC_DR_ASYMPTOTE * 100 * value / (value + 98)).toFixed(1)}% magic damage reduction`,
       ];
     default:
       return [];
