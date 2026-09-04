@@ -919,7 +919,7 @@ function primaryStatEffectLines(key, value, primaryStats) {
   switch (key) {
     case "strength": {
       const lines = [`${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Parry chance`];
-      if (primaryStats.includes("strength")) lines.unshift(`+${(value / 7).toFixed(1)} DPS`);
+      if (primaryStats.includes("strength")) lines.unshift(`+${(value / STRENGTH_DPS_DIVISOR).toFixed(1)} DPS`);
       return lines;
     }
     case "agility": {
@@ -927,13 +927,13 @@ function primaryStatEffectLines(key, value, primaryStats) {
         `+${(value * 0.6).toFixed(1)} effective Crit Rating`,
         `${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Dodge chance`,
       ];
-      if (primaryStats.includes("agility")) lines.unshift(`+${(value / 14).toFixed(1)} DPS`);
+      if (primaryStats.includes("agility")) lines.unshift(`+${(value / AGILITY_DPS_DIVISOR).toFixed(1)} DPS`);
       return lines;
     }
     case "intellect": {
       const lines = [`+${(value * 0.6).toFixed(1)} effective Magic Crit Rating`];
       if (primaryStats.includes("intellect")) {
-        lines.push(`+${(value / 14).toFixed(1)} Spell Damage`);
+        lines.push(`+${(value / AGILITY_DPS_DIVISOR).toFixed(1)} Spell Damage`);
         lines.push(`+${(value * 10).toFixed(0)} Resource Pool`);
       }
       return lines;
@@ -973,12 +973,17 @@ function StatEffectTooltip({ lines, children }) {
 
 // Constants for basicAttackDps - see docs/stats.md's "Basic Attack DPS"
 // section. BASE_DPS is a completely naked character's own attack rate (no
-// gear, not even Trainee Gear) - matches the game server's current flat
-// placeholder basic attack (1-3 dmg every 2s, ~1 DPS average). Everything
-// else scales it in aggregate, not per-swing.
+// gear, not even Trainee Gear) - matches the game server's basic attack
+// formula (game-server/internal/command/basic_attack_handler.go). Everything
+// else scales it in aggregate, not per-swing. STRENGTH/AGILITY_DPS_DIVISOR
+// are 10x docs/stats.md's general /7, /14 - rebalanced down after
+// level-appropriate gear was found to multiply DPS ~40x over baseline,
+// versus a target of roughly 3-4x.
 const BASIC_ATTACK_BASE_DPS = 1;
 const BASIC_ATTACK_MISS_CHANCE = 0.05;
 const BASIC_ATTACK_CRIT_MULTIPLIER = 2.0;
+const STRENGTH_DPS_DIVISOR = 70;
+const AGILITY_DPS_DIVISOR = 140;
 
 // Computed (not itemized) Basic Attack DPS, plus a breakdown of how it was
 // built. Basic attacks are physical, so only Strength/Agility (whichever is
@@ -987,7 +992,7 @@ const BASIC_ATTACK_CRIT_MULTIPLIER = 2.0;
 function basicAttackDps(stats, primaryStats) {
   const damageStatKey = primaryStats.find((s) => s === "strength" || s === "agility");
   const damageStatValue = damageStatKey ? (stats[damageStatKey] || 0) : 0;
-  const statDps = damageStatKey === "strength" ? damageStatValue / 7 : damageStatKey === "agility" ? damageStatValue / 14 : 0;
+  const statDps = damageStatKey === "strength" ? damageStatValue / STRENGTH_DPS_DIVISOR : damageStatKey === "agility" ? damageStatValue / AGILITY_DPS_DIVISOR : 0;
 
   const hastePct = (stats.haste_rating || 0) / 11.71;
   const effectiveCritRating = (stats.crit_rating || 0) + (stats.agility || 0) * 0.6;

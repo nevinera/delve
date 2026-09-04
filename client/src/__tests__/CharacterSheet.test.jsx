@@ -186,9 +186,9 @@ describe("CharacterSheet", () => {
     });
 
     it("also shows strength's DPS contribution when strength is a class primary stat", () => {
-      hover("Strength", {head: {identifier: "h", stats: {strength: 70}}}, ["strength"]);
+      hover("Strength", {head: {identifier: "h", stats: {strength: 700}}}, ["strength"]);
       expect(screen.getByText("+10.0 DPS")).toBeInTheDocument();
-      expect(screen.getByText("13.1% Parry chance")).toBeInTheDocument();
+      expect(screen.getByText("44.2% Parry chance")).toBeInTheDocument();
     });
 
     it("shows agility's effective crit rating and dodge chance always, DPS only when it's a class primary", () => {
@@ -205,9 +205,9 @@ describe("CharacterSheet", () => {
     });
 
     it("also shows spell damage and resource pool when intellect is a class primary stat", () => {
-      hover("Intellect", {head: {identifier: "h", stats: {intellect: 140}}}, ["intellect"]);
+      hover("Intellect", {head: {identifier: "h", stats: {intellect: 1400}}}, ["intellect"]);
       expect(screen.getByText("+10.0 Spell Damage")).toBeInTheDocument();
-      expect(screen.getByText("+1400 Resource Pool")).toBeInTheDocument();
+      expect(screen.getByText("+14000 Resource Pool")).toBeInTheDocument();
     });
 
     it("shows stamina's max HP, always", () => {
@@ -225,7 +225,7 @@ describe("CharacterSheet", () => {
     });
 
     it("adds the class damage stat's contribution to basic attack dps", () => {
-      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 70}}}, ["strength"]);
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 700}}}, ["strength"]);
       expect(statValue("Basic Attack DPS")).toBe("11.0");
       expect(screen.getByText("+10.0 from Strength")).toBeInTheDocument();
     });

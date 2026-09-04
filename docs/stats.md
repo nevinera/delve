@@ -132,13 +132,15 @@ There's no separate Attack Power stat. Whichever primary stat a class calls its 
 Strength for physical-damage classes) feeds directly into weapon damage:
 
 ```
-SwingDamage = BaseWeaponDamage + (Strength / 7) * NominalSwingSpeed
+SwingDamage = BaseWeaponDamage + (Strength / 70) * NominalSwingSpeed
 ```
 
 `NominalSwingSpeed` is the weapon's base swing timer - haste changes how often you swing, not this
-per-swing damage calculation. `Strength / 7` is a placeholder conversion, easy to retune later.
-This mirrors modern WoW, where Strength's only effect (for physical classes) is Attack Power - it
-no longer grants block value or anything else.
+per-swing damage calculation. `Strength / 70` is a placeholder conversion, easy to retune later
+(originally `/7` - found to multiply DPS ~40x over baseline for level-appropriate gear once basic
+attacks actually used it; rebalanced down 10x to land closer to a 3-4x multiplier). This mirrors
+modern WoW, where Strength's only effect (for physical classes) is Attack Power - it no longer
+grants block value or anything else.
 
 Strength also grants Parry chance, at half Strength's normal weight - see **Avoidance** below.
 
@@ -148,7 +150,7 @@ Agility works like Strength, but at half the damage rate (mirroring WoW, where S
 per point and Agility gives 1):
 
 ```
-SwingDamage = BaseWeaponDamage + (Agility / 14) * NominalSwingSpeed
+SwingDamage = BaseWeaponDamage + (Agility / 140) * NominalSwingSpeed
 ```
 
 Agility also feeds Crit Rating and Dodge chance directly - it does double (technically triple)
@@ -304,8 +306,8 @@ DPS close to the base:
 
 ```
 DamageStat = whichever of Strength/Agility is the class's primaryStats damage stat (0 if neither)
-StatDPS    = DamageStat / 7    (if Strength)
-           = DamageStat / 14   (if Agility)
+StatDPS    = DamageStat / 70   (if Strength)
+           = DamageStat / 140  (if Agility)
            = 0                 (otherwise)
 
 RawDPS = 1 + StatDPS
@@ -405,6 +407,12 @@ the rest are marked TBD pending the attack-math writeup.
 Combined avoidance (Dodge + Parry, stacking): **28.1%**.
 
 ### Adam's basic attack
+
+**Note:** this worked example (and Bob's below) predates the Strength/Agility rebalance above -
+its `/7` division is now `/70`. The numbers here haven't been recomputed; treat them as stale/
+illustrative of the calculation shape, not current values. See "Basic Attack DPS" above for the
+formula actually implemented (which also has no `BaseWeaponDamage`/`NominalSwingSpeed` to plug in -
+those don't exist anywhere in the item schema).
 
 Two-hander, base 10 dmg, nominal 1.9s swing:
 

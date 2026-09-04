@@ -44,7 +44,7 @@ func TestUnitCombatStats_StrengthFeedsStatDPSOnlyWhenItIsTheDamageStat(t *testin
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
 	_, _, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
-	assert.InDelta(t, 30.0/7, statDPS, 0.001)
+	assert.InDelta(t, 30.0/70, statDPS, 0.001)
 
 	unit.DamageStatKey = "agility"
 	_, _, statDPS = unitCombatStats(unit, instanceconfig.Zone{})
@@ -61,7 +61,7 @@ func TestUnitCombatStats_VersatilitySpreadsIntoTheDamageStat(t *testing.T) {
 	_, _, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
 	// ring factor 1.0, both secondary slots filled -> raw versatility_rating
 	// 20; 0.2x of that spreads +4 into strength.
-	assert.InDelta(t, 4.0/7, statDPS, 0.001)
+	assert.InDelta(t, 4.0/70, statDPS, 0.001)
 }
 
 func TestUnitCombatStats_AgilityAlwaysFeedsCritRegardlessOfDamageStat(t *testing.T) {
@@ -110,7 +110,7 @@ func TestUnitCombatStats_MapElvlOverrideIsUsedOverZoneElvl(t *testing.T) {
 
 	_, _, statDPS := unitCombatStats(unit, zone)
 	// item elvl 0 vs the map's overridden elvl -20 -> ee = 20 -> em = 2.0
-	assert.InDelta(t, (30.0*2.0)/7, statDPS, 0.001)
+	assert.InDelta(t, (30.0*2.0)/70, statDPS, 0.001)
 }
 
 func TestBasicAttackDamage_NeverNegative(t *testing.T) {

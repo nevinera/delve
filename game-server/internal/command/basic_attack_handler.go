@@ -23,6 +23,15 @@ const (
 	characterBasicAttackMissChance      = 0.05
 	characterBasicAttackCritMultiplier  = 2.0
 	characterBasicAttackVariance        = 0.1 // each swing's damage is uniform within +/-10% of nominal
+
+	// strengthDPSDivisor/agilityDPSDivisor - see docs/stats.md's Strength/
+	// Agility sections. Rebalanced 10x weaker than the original /7, /14:
+	// level-appropriate gear was multiplying DPS ~40x over a naked
+	// character's baseline, versus a target of roughly 3-4x (mirroring the
+	// pace of a WoW-style basic-attack fight, not this game's original,
+	// much punchier scaling).
+	strengthDPSDivisor = 70.0
+	agilityDPSDivisor  = 140.0
 )
 
 // BasicAttackHandler executes one swing of a player unit's basic attack
@@ -120,9 +129,9 @@ func unitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (h
 
 	switch unit.DamageStatKey {
 	case "strength":
-		statDPS = strength / 7
+		statDPS = strength / strengthDPSDivisor
 	case "agility":
-		statDPS = agility / 14
+		statDPS = agility / agilityDPSDivisor
 	}
 	return hastePct, critChancePct, statDPS
 }
