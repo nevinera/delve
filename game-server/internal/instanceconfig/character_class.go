@@ -32,13 +32,14 @@ func (c *CharacterClass) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*plain)(c))
 }
 
-// DamageStatKey returns whichever of "strength"/"agility" is this class's
-// designated basic-attack damage stat - the first one listed in PrimaryStats
-// (docs/stats.md: "whichever primary stat a class calls its damage stat").
-// Returns "" for a class with neither (e.g. a pure caster).
+// DamageStatKey returns whichever of "strength"/"agility"/"intellect" is
+// this class's designated basic-attack damage stat - the first one listed in
+// PrimaryStats (docs/stats.md: "whichever primary stat a class calls its
+// damage stat"). Strength/Agility drive a physical basic attack, Intellect a
+// magic one. Returns "" for a class with none of the three.
 func (c CharacterClass) DamageStatKey() string {
 	for _, s := range c.PrimaryStats {
-		if s == "strength" || s == "agility" {
+		if s == "strength" || s == "agility" || s == "intellect" {
 			return s
 		}
 	}

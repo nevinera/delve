@@ -24,14 +24,25 @@ const (
 	characterBasicAttackCritMultiplier  = 2.0
 	characterBasicAttackVariance        = 0.1 // each swing's damage is uniform within +/-10% of nominal
 
-	// strengthDPSDivisor/agilityDPSDivisor - see docs/stats.md's Strength/
-	// Agility sections. Rebalanced 10x weaker than the original /7, /14:
-	// level-appropriate gear was multiplying DPS ~40x over a naked
-	// character's baseline, versus a target of roughly 3-4x (mirroring the
-	// pace of a WoW-style basic-attack fight, not this game's original,
-	// much punchier scaling).
-	strengthDPSDivisor = 70.0
-	agilityDPSDivisor  = 140.0
+	// basicAttackStatDPSDivisor - see docs/stats.md's Strength/Agility/
+	// Intellect sections. Solved backward from a design target (a fully-
+	// itemized, on-level DPS build - primary maxed on the damage stat,
+	// secondaries split evenly Crit/Haste - should net 5 basic-attack DPS
+	// regardless of which of the three stats it's built around); Strength,
+	// Agility, and Intellect solve to ~89/~92/~91 respectively under that
+	// target, close enough to collapse into one shared divisor.
+	basicAttackStatDPSDivisor = 90.0
+
+	// physicalCritRatingPerStrength/physicalHasteRatingPerAgility - Strength
+	// and Agility each always grant one physical secondary, regardless of
+	// class (docs/stats.md's Crit Rating/Haste Rating sections).
+	physicalCritRatingPerStrength = 0.6
+	physicalHasteRatingPerAgility = 0.6
+	// magicCritRatingPerIntellect/magicHasteRatingPerIntellect - Intellect
+	// splits the equivalent budget across both magic secondaries instead of
+	// concentrating it in one.
+	magicCritRatingPerIntellect  = 0.3
+	magicHasteRatingPerIntellect = 0.3
 )
 
 // BasicAttackHandler executes one swing of a player unit's basic attack
@@ -99,10 +110,12 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 }
 
 // unitCombatStats scales the unit's equipped items against its current map's
-// elevation (see instanceconfig.Zone.MapElvl) and derives the totals basic
-// attacks need: Haste%, physical Crit Chance%, and the class damage stat's
-// DPS contribution (0 for NPCs and for a class with neither Strength nor
-// Agility as a damage stat). See docs/stats.md.
+// elevation (see instanceconfig.Zone.MapElvl) and derives the totals its
+// basic attack needs: Haste%, Crit Chance%, and the class damage stat's DPS
+// contribution (0 for NPCs and for a class with none of Strength/Agility/
+// Intellect as a damage stat). A physical basic attack (Strength/Agility)
+// and a magic one (Intellect) draw from separate Crit/Haste pools - see
+// docs/stats.md.
 func unitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
 	allocations := make([]itemstats.Allocation, 0, len(unit.EquippedItems))
 	for _, item := range unit.EquippedItems {
@@ -116,22 +129,32 @@ func unitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (h
 	}
 	stats := itemstats.ScaledSum(allocations, zone.MapElvl(unit.MapIdentifier))
 
-	// Versatility Rating spreads 0.2x itself into Strength/Agility (among
-	// other stats not relevant to a basic attack) - see docs/stats.md.
+	// Versatility Rating spreads 0.2x itself into Strength/Agility/Intellect
+	// (among other stats not relevant to a basic attack) - see docs/stats.md.
 	versatility := stats["versatility_rating"]
 	strength := stats["strength"] + versatility*0.2
 	agility := stats["agility"] + versatility*0.2
-
-	hastePct = stats["haste_rating"] / 11.71
-	// Agility always grants physical crit, regardless of class - see docs/stats.md.
-	effectiveCritRating := stats["crit_rating"] + agility*0.6
-	critChancePct = 5 + effectiveCritRating/15
+	intellect := stats["intellect"] + versatility*0.2
 
 	switch unit.DamageStatKey {
-	case "strength":
-		statDPS = strength / strengthDPSDivisor
-	case "agility":
-		statDPS = agility / agilityDPSDivisor
+	case "strength", "agility":
+		// Strength always grants physical Crit, Agility always grants
+		// physical Haste, regardless of which of the two is the class's
+		// damage stat - see docs/stats.md's Crit Rating/Haste Rating.
+		hastePct = (stats["haste_rating"] + agility*physicalHasteRatingPerAgility) / 11.71
+		critChancePct = 5 + (stats["crit_rating"]+strength*physicalCritRatingPerStrength)/15
+		if unit.DamageStatKey == "strength" {
+			statDPS = strength / basicAttackStatDPSDivisor
+		} else {
+			statDPS = agility / basicAttackStatDPSDivisor
+		}
+	case "intellect":
+		hastePct = (stats["haste_rating"] + intellect*magicHasteRatingPerIntellect) / 11.71
+		critChancePct = 5 + (stats["crit_rating"]+intellect*magicCritRatingPerIntellect)/15
+		statDPS = intellect / basicAttackStatDPSDivisor
+	default:
+		hastePct = stats["haste_rating"] / 11.71
+		critChancePct = 5 + stats["crit_rating"]/15
 	}
 	return hastePct, critChancePct, statDPS
 }

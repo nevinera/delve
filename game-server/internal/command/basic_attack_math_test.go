@@ -44,7 +44,7 @@ func TestUnitCombatStats_StrengthFeedsStatDPSOnlyWhenItIsTheDamageStat(t *testin
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
 	_, _, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
-	assert.InDelta(t, 30.0/70, statDPS, 0.001)
+	assert.InDelta(t, 30.0/90, statDPS, 0.001)
 
 	unit.DamageStatKey = "agility"
 	_, _, statDPS = unitCombatStats(unit, instanceconfig.Zone{})
@@ -61,19 +61,55 @@ func TestUnitCombatStats_VersatilitySpreadsIntoTheDamageStat(t *testing.T) {
 	_, _, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
 	// ring factor 1.0, both secondary slots filled -> raw versatility_rating
 	// 20; 0.2x of that spreads +4 into strength.
-	assert.InDelta(t, 4.0/70, statDPS, 0.001)
+	assert.InDelta(t, 4.0/90, statDPS, 0.001)
 }
 
-func TestUnitCombatStats_AgilityAlwaysFeedsCritRegardlessOfDamageStat(t *testing.T) {
+func TestUnitCombatStats_StrengthAlwaysFeedsPhysicalCritRegardlessOfDamageStat(t *testing.T) {
 	unit := &instancestate.UnitState{
-		DamageStatKey: "strength", // not agility - crit still gets agility's contribution
-		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("agility", 0)},
+		DamageStatKey: "agility", // not strength - crit still gets strength's contribution
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
 	_, critChancePct, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
-	assert.Equal(t, 0.0, statDPS, "agility isn't the damage stat here")
-	// raw agility 30 -> +18 effective crit rating; raw crit_rating 20 itemized
+	assert.Equal(t, 0.0, statDPS, "strength isn't the damage stat here")
+	// raw strength 30 -> +18 effective crit rating; raw crit_rating 20 itemized
 	// directly too -> effectiveCritRating 38 -> 5 + 38/15
 	assert.InDelta(t, 5+38.0/15, critChancePct, 0.001)
+}
+
+func TestUnitCombatStats_AgilityAlwaysFeedsPhysicalHasteRegardlessOfDamageStat(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey: "strength", // not agility - haste still gets agility's contribution
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("agility", 0)},
+	}
+	hastePct, _, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
+	assert.Equal(t, 0.0, statDPS, "agility isn't the damage stat here")
+	// raw agility 30 -> +18 effective haste rating; raw haste_rating 20
+	// itemized directly too -> effectiveHasteRating 38 -> 38/11.71
+	assert.InDelta(t, 38.0/11.71, hastePct, 0.001)
+}
+
+func TestUnitCombatStats_IntellectFeedsStatDPSAndItsOwnMagicCritAndHaste(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey: "intellect",
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("intellect", 0)},
+	}
+	hastePct, critChancePct, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
+	// raw intellect 30 -> +9 magic crit, +9 magic haste (0.3x each); raw
+	// crit_rating/haste_rating 20 itemized directly too.
+	assert.InDelta(t, 30.0/90, statDPS, 0.001)
+	assert.InDelta(t, 5+29.0/15, critChancePct, 0.001)
+	assert.InDelta(t, 29.0/11.71, hastePct, 0.001)
+}
+
+func TestUnitCombatStats_StrengthDoesNotFeedMagicCritForAnIntellectCharacter(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey: "intellect",
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
+	}
+	_, critChancePct, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
+	assert.Equal(t, 0.0, statDPS)
+	// only itemized crit_rating (20) applies - strength's physical bonus doesn't.
+	assert.InDelta(t, 5+20.0/15, critChancePct, 0.001)
 }
 
 func TestUnitCombatStats_HasteRatingIncreasesHastePct(t *testing.T) {
@@ -110,7 +146,7 @@ func TestUnitCombatStats_MapElvlOverrideIsUsedOverZoneElvl(t *testing.T) {
 
 	_, _, statDPS := unitCombatStats(unit, zone)
 	// item elvl 0 vs the map's overridden elvl -20 -> ee = 20 -> em = 2.0
-	assert.InDelta(t, (30.0*2.0)/70, statDPS, 0.001)
+	assert.InDelta(t, (30.0*2.0)/90, statDPS, 0.001)
 }
 
 func TestBasicAttackDamage_NeverNegative(t *testing.T) {

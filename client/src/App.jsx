@@ -918,22 +918,29 @@ function secondaryStatEffectLines(key, value) {
 function primaryStatEffectLines(key, value, primaryStats) {
   switch (key) {
     case "strength": {
-      const lines = [`${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Parry chance`];
-      if (primaryStats.includes("strength")) lines.unshift(`+${(value / STRENGTH_DPS_DIVISOR).toFixed(1)} DPS`);
+      const lines = [
+        `+${(value * PHYSICAL_CRIT_RATING_PER_STRENGTH).toFixed(1)} effective physical Crit Rating`,
+        `${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Parry chance`,
+      ];
+      if (primaryStats.includes("strength")) lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
       return lines;
     }
     case "agility": {
       const lines = [
-        `+${(value * 0.6).toFixed(1)} effective Crit Rating`,
+        `+${(value * PHYSICAL_HASTE_RATING_PER_AGILITY).toFixed(1)} effective physical Haste Rating`,
         `${((0.6 * value / (value + 250)) * 100).toFixed(1)}% Dodge chance`,
       ];
-      if (primaryStats.includes("agility")) lines.unshift(`+${(value / AGILITY_DPS_DIVISOR).toFixed(1)} DPS`);
+      if (primaryStats.includes("agility")) lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
       return lines;
     }
     case "intellect": {
-      const lines = [`+${(value * 0.6).toFixed(1)} effective Magic Crit Rating`];
+      const lines = [
+        `+${(value * MAGIC_CRIT_RATING_PER_INTELLECT).toFixed(1)} effective magic Crit Rating`,
+        `+${(value * MAGIC_HASTE_RATING_PER_INTELLECT).toFixed(1)} effective magic Haste Rating`,
+      ];
       if (primaryStats.includes("intellect")) {
-        lines.push(`+${(value / AGILITY_DPS_DIVISOR).toFixed(1)} Spell Damage`);
+        lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
+        lines.push(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} Spell Damage`);
         lines.push(`+${(value * 10).toFixed(0)} Resource Pool`);
       }
       return lines;
@@ -974,28 +981,38 @@ function StatEffectTooltip({ lines, children }) {
 // Constants for basicAttackDps - see docs/stats.md's "Basic Attack DPS"
 // section. BASE_DPS is a completely naked character's own attack rate (no
 // gear, not even Trainee Gear) - matches the game server's basic attack
-// formula (game-server/internal/command/basic_attack_handler.go). Everything
-// else scales it in aggregate, not per-swing. STRENGTH/AGILITY_DPS_DIVISOR
-// are 10x docs/stats.md's general /7, /14 - rebalanced down after
-// level-appropriate gear was found to multiply DPS ~40x over baseline,
-// versus a target of roughly 3-4x.
+// formula (game-server/internal/command/basic_attack_handler.go).
+// BASIC_ATTACK_STAT_DIVISOR was solved backward from a design target (a
+// fully-itemized on-level DPS build should net 5 basic-attack DPS,
+// regardless of which of Strength/Agility/Intellect it's built around) -
+// Strength/Agility/Intellect solve to ~89/~92/~91 under that target, close
+// enough to collapse into one shared divisor.
 const BASIC_ATTACK_BASE_DPS = 1;
 const BASIC_ATTACK_MISS_CHANCE = 0.05;
 const BASIC_ATTACK_CRIT_MULTIPLIER = 2.0;
-const STRENGTH_DPS_DIVISOR = 70;
-const AGILITY_DPS_DIVISOR = 140;
+const BASIC_ATTACK_STAT_DIVISOR = 90;
+const PHYSICAL_CRIT_RATING_PER_STRENGTH = 0.6;
+const PHYSICAL_HASTE_RATING_PER_AGILITY = 0.6;
+const MAGIC_CRIT_RATING_PER_INTELLECT = 0.3;
+const MAGIC_HASTE_RATING_PER_INTELLECT = 0.3;
 
 // Computed (not itemized) Basic Attack DPS, plus a breakdown of how it was
-// built. Basic attacks are physical, so only Strength/Agility (whichever is
-// the class's damage stat) and physical crit (itemized crit_rating +
-// Agility's always-on contribution) feed in - Intellect/magic don't apply.
+// built. Strength/Agility drive a physical basic attack (Strength feeds
+// physical Crit, Agility feeds physical Haste, always - see docs/stats.md);
+// Intellect drives a magic one, splitting its bonus across both magic
+// secondaries instead.
 function basicAttackDps(stats, primaryStats) {
-  const damageStatKey = primaryStats.find((s) => s === "strength" || s === "agility");
+  const damageStatKey = primaryStats.find((s) => s === "strength" || s === "agility" || s === "intellect");
   const damageStatValue = damageStatKey ? (stats[damageStatKey] || 0) : 0;
-  const statDps = damageStatKey === "strength" ? damageStatValue / STRENGTH_DPS_DIVISOR : damageStatKey === "agility" ? damageStatValue / AGILITY_DPS_DIVISOR : 0;
+  const statDps = damageStatKey ? damageStatValue / BASIC_ATTACK_STAT_DIVISOR : 0;
 
-  const hastePct = (stats.haste_rating || 0) / 11.71;
-  const effectiveCritRating = (stats.crit_rating || 0) + (stats.agility || 0) * 0.6;
+  const isMagic = damageStatKey === "intellect";
+  const hastePct = isMagic
+    ? ((stats.haste_rating || 0) + (stats.intellect || 0) * MAGIC_HASTE_RATING_PER_INTELLECT) / 11.71
+    : ((stats.haste_rating || 0) + (stats.agility || 0) * PHYSICAL_HASTE_RATING_PER_AGILITY) / 11.71;
+  const effectiveCritRating = isMagic
+    ? (stats.crit_rating || 0) + (stats.intellect || 0) * MAGIC_CRIT_RATING_PER_INTELLECT
+    : (stats.crit_rating || 0) + (stats.strength || 0) * PHYSICAL_CRIT_RATING_PER_STRENGTH;
   const critChancePct = 5 + effectiveCritRating / 15;
 
   const value =

@@ -185,29 +185,31 @@ describe("CharacterSheet", () => {
       expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
     });
 
-    it("also shows strength's DPS contribution when strength is a class primary stat", () => {
-      hover("Strength", {head: {identifier: "h", stats: {strength: 700}}}, ["strength"]);
+    it("also shows strength's DPS and physical crit contribution when strength is a class primary stat", () => {
+      hover("Strength", {head: {identifier: "h", stats: {strength: 900}}}, ["strength"]);
       expect(screen.getByText("+10.0 DPS")).toBeInTheDocument();
-      expect(screen.getByText("44.2% Parry chance")).toBeInTheDocument();
+      expect(screen.getByText("+540.0 effective physical Crit Rating")).toBeInTheDocument();
+      expect(screen.getByText("47.0% Parry chance")).toBeInTheDocument();
     });
 
-    it("shows agility's effective crit rating and dodge chance always, DPS only when it's a class primary", () => {
+    it("shows agility's effective physical haste and dodge chance always, DPS only when it's a class primary", () => {
       hover("Agility", {head: {identifier: "h", stats: {agility: 250}}}, []);
-      expect(screen.getByText("+150.0 effective Crit Rating")).toBeInTheDocument();
+      expect(screen.getByText("+150.0 effective physical Haste Rating")).toBeInTheDocument();
       expect(screen.getByText("30.0% Dodge chance")).toBeInTheDocument();
       expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
     });
 
-    it("shows intellect's magic crit always, spell damage and resource pool only when it's a class primary", () => {
+    it("shows intellect's magic crit and haste always, spell damage and resource pool only when it's a class primary", () => {
       hover("Intellect", {head: {identifier: "h", stats: {intellect: 140}}}, []);
-      expect(screen.getByText("+84.0 effective Magic Crit Rating")).toBeInTheDocument();
+      expect(screen.getByText("+42.0 effective magic Crit Rating")).toBeInTheDocument();
+      expect(screen.getByText("+42.0 effective magic Haste Rating")).toBeInTheDocument();
       expect(screen.queryByText(/Spell Damage|Resource Pool/)).not.toBeInTheDocument();
     });
 
     it("also shows spell damage and resource pool when intellect is a class primary stat", () => {
-      hover("Intellect", {head: {identifier: "h", stats: {intellect: 1400}}}, ["intellect"]);
+      hover("Intellect", {head: {identifier: "h", stats: {intellect: 900}}}, ["intellect"]);
       expect(screen.getByText("+10.0 Spell Damage")).toBeInTheDocument();
-      expect(screen.getByText("+14000 Resource Pool")).toBeInTheDocument();
+      expect(screen.getByText("+9000 Resource Pool")).toBeInTheDocument();
     });
 
     it("shows stamina's max HP, always", () => {
@@ -225,8 +227,10 @@ describe("CharacterSheet", () => {
     });
 
     it("adds the class damage stat's contribution to basic attack dps", () => {
-      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 700}}}, ["strength"]);
-      expect(statValue("Basic Attack DPS")).toBe("11.0");
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 900}}}, ["strength"]);
+      // statDps = 900/90 = 10.0; Strength also feeds physical crit now
+      // (900*0.6=540 -> 5+540/15=41% crit), so RawDPS 11 * (1.41*0.95) = 14.7.
+      expect(statValue("Basic Attack DPS")).toBe("14.7");
       expect(screen.getByText("+10.0 from Strength")).toBeInTheDocument();
     });
 
