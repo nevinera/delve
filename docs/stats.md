@@ -297,9 +297,10 @@ stat.
 A character's basic attack has no weapon-specific base damage or swing timer to derive from - items
 don't carry stat *values*, only which stats they roll (see [item.md](schema/item.md)). Instead, a
 completely naked character (no gear, not even Trainee Gear) has a flat **base DPS of 1** - matching
-the game server's current placeholder basic attack (1-3 dmg every 2s) - modified by stats in
-aggregate (not per-swing). At that baseline, the 5% base crit chance and 5% miss chance roughly
-cancel out (monsters have no damage reduction), leaving net DPS close to the base:
+the game server's original flat-placeholder basic attack (1-3 dmg every 2s), before it was replaced
+with this formula - modified by stats in aggregate (not per-swing). At that baseline, the 5% base
+crit chance and 5% miss chance roughly cancel out (monsters have no damage reduction), leaving net
+DPS close to the base:
 
 ```
 DamageStat = whichever of Strength/Agility is the class's primaryStats damage stat (0 if neither)
@@ -314,6 +315,11 @@ BasicAttackDPS = RawDPS * (1 + Haste%/100) * (1 + CritChance%/100 * (2.0 - 1)) *
 `CritChance%` here is physical crit (`5 + EffectiveCritRating/15`, itemized `crit_rating` plus
 Agility's always-on `Agility * 0.6` contribution regardless of class - see **Agility** above), and
 `2.0` is the crit multiplier used throughout these docs' examples. `0.05` is the miss chance above.
+
+`BasicAttackDPS` above is the *expected* value used for display (the character sheet tooltip). Each
+individual swing that lands varies around its own nominal (pre-crit) damage: a flat/uniform
+distribution within +/-10%, independently of the crit roll - so even non-crit swings aren't all
+identical.
 
 ## Trainee Gear
 

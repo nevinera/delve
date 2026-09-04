@@ -22,6 +22,7 @@ const (
 	characterBasicAttackBaseDPS         = 1.0 // a fully naked character's own DPS
 	characterBasicAttackMissChance      = 0.05
 	characterBasicAttackCritMultiplier  = 2.0
+	characterBasicAttackVariance        = 0.1 // each swing's damage is uniform within +/-10% of nominal
 )
 
 // BasicAttackHandler executes one swing of a player unit's basic attack
@@ -129,15 +130,18 @@ func unitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (h
 // basicAttackDamage rolls one swing's outcome - miss, normal hit, or crit -
 // and returns the damage dealt (0 on a miss). See docs/stats.md's "Basic
 // Attack DPS" section: nominalSwingDamage is what DPS*nominalInterval would
-// deal every swing before the miss/crit rolls are applied.
+// deal every swing before the miss/crit/variance rolls are applied. A
+// landed hit varies uniformly within +/-10% of that nominal value, so
+// swings aren't all identical even absent a crit.
 func basicAttackDamage(critChancePct, statDPS float64) float64 {
 	if rand.Float64() < characterBasicAttackMissChance {
 		return 0
 	}
 	nominalSwingDamage := (characterBasicAttackBaseDPS + statDPS) * characterBasicAttackNominalInterval.Seconds()
+	variance := 1 + (rand.Float64()*2-1)*characterBasicAttackVariance
 	multiplier := 1.0
 	if rand.Float64() < critChancePct/100 {
 		multiplier = characterBasicAttackCritMultiplier
 	}
-	return math.Round(nominalSwingDamage * multiplier)
+	return math.Round(nominalSwingDamage * variance * multiplier)
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
@@ -116,6 +117,25 @@ func TestBasicAttackDamage_NeverNegative(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		assert.GreaterOrEqual(t, basicAttackDamage(50, 10), 0.0)
 	}
+}
+
+func TestBasicAttackDamage_NonCritHitsVaryWithinPlusOrMinus10PercentOfNominal(t *testing.T) {
+	// 0 crit chance and 0 statDPS isolates the variance roll: nominal
+	// pre-crit damage is (1 + 0) * 2s = 2, so every landed swing should fall
+	// in round([1.8, 2.2]) = {2}... use a larger statDPS so the +/-10% band
+	// is wide enough to actually observe more than one rounded value.
+	const statDPS = 40.0 // nominal = (1+40)*2 = 82, +/-10% = [73.8, 90.2]
+	seen := map[float64]bool{}
+	for i := 0; i < 2000; i++ {
+		d := basicAttackDamage(0, statDPS)
+		if d == 0 {
+			continue // miss
+		}
+		require.GreaterOrEqual(t, d, 73.0)
+		require.LessOrEqual(t, d, 91.0)
+		seen[d] = true
+	}
+	assert.Greater(t, len(seen), 5, "expected a spread of distinct damage values from the +/-10% variance roll")
 }
 
 func TestBasicAttackDamage_MissesAtTheDocumentedRateAndAveragesToTheExpectedDPS(t *testing.T) {
