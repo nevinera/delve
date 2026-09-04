@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
 // makeZoneWithMap returns a minimal zone whose first map has the given dimensions.
@@ -210,6 +212,28 @@ func TestPlayerSpawn_UsesEntryPoint_Line(t *testing.T) {
 		}
 	}
 	t.Fatal("player unit not found in full state")
+}
+
+func TestPlayerSpawn_CachesEquippedItemsAndDamageStatKeyForCombatMath(t *testing.T) {
+	inst := makeInstance()
+	class := instanceconfig.CharacterClass{Name: "Puncher", PrimaryStats: []string{"strength"}}
+	equipped := map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "main_hand", Elvl: 50, PrimaryStat: strPtr("strength")},
+	}
+	slot, err := inst.AddSlot("Aldric", "42", class, nil, equipped)
+	require.NoError(t, err)
+
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	inst.DrainPlayerSpawnsForTest(context.Background(), state)
+
+	unit := state.Units[slot.CharacterUnitID]
+	require.NotNil(t, unit)
+	assert.Equal(t, equipped, unit.EquippedItems)
+	assert.Equal(t, "strength", unit.DamageStatKey)
 }
 
 func TestPlayerSpawn_ReconnectDoesNotDuplicate(t *testing.T) {

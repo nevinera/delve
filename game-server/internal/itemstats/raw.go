@@ -43,6 +43,7 @@ type Allocation struct {
 	Shield      bool
 	Primary     *string
 	Secondaries []string
+	Elvl        int // this item's own elevation - used by ScaledSum, ignored by Raw
 }
 
 // Raw computes an item's stat grants at em = 1.0 (ee = 0) - i.e. before any

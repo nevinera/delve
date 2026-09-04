@@ -1,0 +1,143 @@
+package command
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
+)
+
+// Internal-package tests for unitCombatStats and basicAttackDamage - the
+// pure (non-random) combat math, and the miss/crit roll that sits on top of
+// it. Kept separate from basic_attack_handler_test.go (package
+// command_test) since these exercise unexported helpers directly.
+
+func strPtr(s string) *string { return &s }
+
+// fullyItemizedMainHand returns a main_hand item (factor 2.0) with the given
+// primary and every secondary slot filled (so no missing-secondary
+// redistribution bonus applies) - raw primary 30, raw stamina/crit_rating/
+// haste_rating 20 each. See itemstats.Raw and docs/stats.md's "Slots" table.
+func fullyItemizedMainHand(primary string, elvl int) instanceconfig.EquippedItem {
+	return instanceconfig.EquippedItem{
+		Slot:           "main_hand",
+		Elvl:           elvl,
+		PrimaryStat:    strPtr(primary),
+		SecondaryStats: []string{"stamina", "crit_rating", "haste_rating"},
+	}
+}
+
+func TestUnitCombatStats_NakedUnitHasBaseCritOnlyAndNoStatDPS(t *testing.T) {
+	unit := &instancestate.UnitState{}
+	hastePct, critChancePct, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
+	assert.Equal(t, 0.0, hastePct)
+	assert.Equal(t, 5.0, critChancePct)
+	assert.Equal(t, 0.0, statDPS)
+}
+
+func TestUnitCombatStats_StrengthFeedsStatDPSOnlyWhenItIsTheDamageStat(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey: "strength",
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
+	}
+	_, _, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
+	assert.InDelta(t, 30.0/7, statDPS, 0.001)
+
+	unit.DamageStatKey = "agility"
+	_, _, statDPS = unitCombatStats(unit, instanceconfig.Zone{})
+	assert.Equal(t, 0.0, statDPS, "strength is itemized, but agility is this class's damage stat")
+}
+
+func TestUnitCombatStats_VersatilitySpreadsIntoTheDamageStat(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey: "strength",
+		EquippedItems: map[string]instanceconfig.EquippedItem{
+			"ring_1": {Slot: "ring", SecondaryStats: []string{"versatility_rating", "versatility_rating"}},
+		},
+	}
+	_, _, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
+	// ring factor 1.0, both secondary slots filled -> raw versatility_rating
+	// 20; 0.2x of that spreads +4 into strength.
+	assert.InDelta(t, 4.0/7, statDPS, 0.001)
+}
+
+func TestUnitCombatStats_AgilityAlwaysFeedsCritRegardlessOfDamageStat(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey: "strength", // not agility - crit still gets agility's contribution
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("agility", 0)},
+	}
+	_, critChancePct, statDPS := unitCombatStats(unit, instanceconfig.Zone{})
+	assert.Equal(t, 0.0, statDPS, "agility isn't the damage stat here")
+	// raw agility 30 -> +18 effective crit rating; raw crit_rating 20 itemized
+	// directly too -> effectiveCritRating 38 -> 5 + 38/15
+	assert.InDelta(t, 5+38.0/15, critChancePct, 0.001)
+}
+
+func TestUnitCombatStats_HasteRatingIncreasesHastePct(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
+	}
+	hastePct, _, _ := unitCombatStats(unit, instanceconfig.Zone{})
+	assert.InDelta(t, 20.0/11.71, hastePct, 0.001)
+}
+
+func TestUnitCombatStats_ElevationScalesEachItemAgainstTheCurrentMap(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey: "strength",
+		MapIdentifier: "m",
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", -20)},
+	}
+	zone := instanceconfig.Zone{Elvl: 0, Maps: []instanceconfig.Map{{Identifier: "m"}}}
+
+	hastePct, critChancePct, statDPS := unitCombatStats(unit, zone)
+	// ee = -20 - 0 = -20 -> em = 0, zeroing every stat this item grants
+	assert.Equal(t, 0.0, hastePct)
+	assert.Equal(t, 5.0, critChancePct)
+	assert.Equal(t, 0.0, statDPS)
+}
+
+func TestUnitCombatStats_MapElvlOverrideIsUsedOverZoneElvl(t *testing.T) {
+	mapElvl := -20
+	unit := &instancestate.UnitState{
+		DamageStatKey: "strength",
+		MapIdentifier: "m",
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
+	}
+	zone := instanceconfig.Zone{Elvl: 0, Maps: []instanceconfig.Map{{Identifier: "m", Elvl: &mapElvl}}}
+
+	_, _, statDPS := unitCombatStats(unit, zone)
+	// item elvl 0 vs the map's overridden elvl -20 -> ee = 20 -> em = 2.0
+	assert.InDelta(t, (30.0*2.0)/7, statDPS, 0.001)
+}
+
+func TestBasicAttackDamage_NeverNegative(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		assert.GreaterOrEqual(t, basicAttackDamage(50, 10), 0.0)
+	}
+}
+
+func TestBasicAttackDamage_MissesAtTheDocumentedRateAndAveragesToTheExpectedDPS(t *testing.T) {
+	const trials = 20000
+	const statDPS = 4.0
+	const critChancePct = 10.0
+
+	var total float64
+	var missCount int
+	for i := 0; i < trials; i++ {
+		d := basicAttackDamage(critChancePct, statDPS)
+		if d == 0 {
+			missCount++
+		}
+		total += d
+	}
+
+	missRate := float64(missCount) / trials
+	assert.InDelta(t, characterBasicAttackMissChance, missRate, 0.02)
+
+	nominalSwingDamage := (characterBasicAttackBaseDPS + statDPS) * characterBasicAttackNominalInterval.Seconds()
+	expectedAvg := nominalSwingDamage * (1 - characterBasicAttackMissChance) * (1 + critChancePct/100*(characterBasicAttackCritMultiplier-1))
+	observedAvg := total / trials
+	assert.InDelta(t, expectedAvg, observedAvg, expectedAvg*0.05)
+}

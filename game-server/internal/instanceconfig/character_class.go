@@ -32,6 +32,19 @@ func (c *CharacterClass) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*plain)(c))
 }
 
+// DamageStatKey returns whichever of "strength"/"agility" is this class's
+// designated basic-attack damage stat - the first one listed in PrimaryStats
+// (docs/stats.md: "whichever primary stat a class calls its damage stat").
+// Returns "" for a class with neither (e.g. a pure caster).
+func (c CharacterClass) DamageStatKey() string {
+	for _, s := range c.PrimaryStats {
+		if s == "strength" || s == "agility" {
+			return s
+		}
+	}
+	return ""
+}
+
 // Colors holds the two display colors for a character class.
 // Values are 6-digit hex strings without a leading '#'.
 type Colors struct {

@@ -22,6 +22,7 @@ type playerSpawn struct {
 	unitID        uuid.UUID
 	characterName string
 	class         instanceconfig.CharacterClass
+	equippedItems map[string]instanceconfig.EquippedItem
 }
 
 // drainPlayerSpawns processes all pending player spawn requests. Called at the
@@ -62,6 +63,8 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				Radius:              BasePlayerRadius,
 				Status:              instancestate.UnitStatusIdle,
 				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
+				EquippedItems:       spawn.equippedItems,
+				DamageStatKey:       spawn.class.DamageStatKey(),
 			}
 			slog.InfoContext(ctx, "player unit spawned",
 				"unit_id", spawn.unitID,

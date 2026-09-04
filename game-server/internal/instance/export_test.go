@@ -76,3 +76,7 @@ func LootItemsToJSONForTest(items []instancestate.PendingLootItem) []byte {
 func (inst *Instance) ProcessLootEventsForTest(ctx context.Context, state *instancestate.InstanceState) {
 	inst.processLootEvents(ctx, state)
 }
+
+func (inst *Instance) DrainPlayerSpawnsForTest(ctx context.Context, state *instancestate.InstanceState) {
+	inst.drainPlayerSpawns(ctx, state)
+}

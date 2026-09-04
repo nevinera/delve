@@ -29,6 +29,23 @@ func wallZone(a, b instanceconfig.Location) instanceconfig.Zone {
 	}
 }
 
+// retryUntilHit rebuilds and re-attacks (via build, a fresh-state factory)
+// until a swing actually lands, so tests that need a hit aren't flaky over
+// the 5% miss chance - P(200 consecutive misses) is astronomically small.
+func retryUntilHit(t *testing.T, playerID, targetID uuid.UUID, zone instanceconfig.Zone, build func() *instancestate.InstanceState) *instancestate.InstanceState {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		state := build()
+		before := state.Units[targetID].Health
+		require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
+		if state.Units[targetID].Health < before {
+			return state
+		}
+	}
+	t.Fatal("basic attack missed 200 times in a row - miss chance may be miscalibrated")
+	return nil
+}
+
 func TestBasicAttackHandler_Type(t *testing.T) {
 	assert.Equal(t, "basic_attack", command.BasicAttackHandler{}.Type())
 }
@@ -106,13 +123,11 @@ func TestBasicAttackHandler_WallBetweenAttackerAndTargetIsNoOp(t *testing.T) {
 
 func TestBasicAttackHandler_WallElsewhereDoesNotBlock(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	zone := wallZone(instanceconfig.Location{X: 20, Y: -5}, instanceconfig.Location{X: 20, Y: 5})
-	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
-
-	assert.Less(t, state.Units[targetID].Health, before)
+	retryUntilHit(t, playerID, targetID, zone, func() *instancestate.InstanceState {
+		return attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+	})
 }
 
 func TestBasicAttackHandler_BlockedBySwingTimer(t *testing.T) {
@@ -128,12 +143,11 @@ func TestBasicAttackHandler_BlockedBySwingTimer(t *testing.T) {
 
 func TestBasicAttackHandler_DamagesTargetAndSetsSwingTimer(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
-	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		return attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+	})
 
-	assert.Less(t, state.Units[targetID].Health, before)
 	assert.True(t, state.Units[playerID].NextBasicAttackAt.After(time.Now()))
 
 	require.Len(t, state.PendingCombatEvents, 1)
@@ -142,13 +156,26 @@ func TestBasicAttackHandler_DamagesTargetAndSetsSwingTimer(t *testing.T) {
 	assert.Equal(t, "Basic Attack", state.PendingCombatEvents[0].PowerName)
 }
 
-func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {
+func TestBasicAttackHandler_SwingTimerIsConsumedEvenOnAMiss(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
-	state.Units[targetID].Health = 1
-	state.Units[targetID].Hostility = "hostile"
 
 	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+
+	// Whether this particular swing hit or missed, the swing timer always
+	// advances - a miss is still a swing, just one that doesn't land.
+	assert.True(t, state.Units[playerID].NextBasicAttackAt.After(time.Now()))
+}
+
+func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		state.Units[targetID].Health = 1
+		state.Units[targetID].Hostility = "hostile"
+		return state
+	})
 
 	assert.Equal(t, instancestate.UnitStatusDead, state.Units[targetID].Status)
 	assert.Nil(t, state.Units[playerID].Target)
@@ -157,17 +184,7 @@ func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {
 
 func TestBasicAttackHandler_KillAggroesLinkedIdleUnitEvenIfItNeverAggroedItself(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
-	state.Units[targetID].Health = 1
-	state.Units[targetID].Hostility = "hostile"
-	// One-shot: goblin_1 dies without ever transitioning out of idle itself.
 	linkedID := uuid.New()
-	state.Units[linkedID] = &instancestate.UnitState{
-		ZoneUnitIdentifier: "goblin_2",
-		Position:           instanceconfig.Position{X: 50, Y: 50},
-		Health:             10,
-		Status:             instancestate.UnitStatusIdle,
-	}
 	zone := instanceconfig.Zone{
 		Maps: []instanceconfig.Map{{
 			Units: []instanceconfig.Unit{
@@ -177,7 +194,19 @@ func TestBasicAttackHandler_KillAggroesLinkedIdleUnitEvenIfItNeverAggroedItself(
 		}},
 	}
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
+	state := retryUntilHit(t, playerID, targetID, zone, func() *instancestate.InstanceState {
+		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		state.Units[targetID].Health = 1
+		state.Units[targetID].Hostility = "hostile"
+		// One-shot: goblin_1 dies without ever transitioning out of idle itself.
+		state.Units[linkedID] = &instancestate.UnitState{
+			ZoneUnitIdentifier: "goblin_2",
+			Position:           instanceconfig.Position{X: 50, Y: 50},
+			Health:             10,
+			Status:             instancestate.UnitStatusIdle,
+		}
+		return state
+	})
 
 	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[linkedID].Status)
 	require.NotNil(t, state.Units[linkedID].Target)

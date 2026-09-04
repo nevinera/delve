@@ -130,6 +130,13 @@ type UnitState struct {
 	Speed       float64 // movement speed in feet per second
 	Radius      float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
+	// Player-only combat inputs, cached from the InstanceSlot at spawn; nil/""
+	// for NPCs. EquippedItems carries each item's own elvl so combat math can
+	// scale it against the unit's *current* map (see instanceconfig.Zone.MapElvl)
+	// rather than a value fixed at spawn - see docs/stats.md.
+	EquippedItems map[string]instanceconfig.EquippedItem
+	DamageStatKey string // "strength", "agility", or "" - see CharacterClass.DamageStatKey
+
 	LootTable map[string]int    // identifier → weight; nil means no loot
 	LootCount [2]int            // [min, max] items to award; both 1 when lootCount omitted
 	LootItems []PendingLootItem // rolled at death; nil until the unit dies

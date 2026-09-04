@@ -32,6 +32,7 @@ func TestZone_ValidFull(t *testing.T) {
 	assert.Equal(t, "Goblin Cave", z.Name)
 	assert.Equal(t, "A damp cave carved out by generations of goblin raiders.", z.Description)
 	assert.True(t, z.Private)
+	assert.Equal(t, 200, z.Elvl)
 	assert.Len(t, z.Maps, 2)
 	assert.Len(t, z.UnitTypes, 1)
 	assert.Len(t, z.ZoneLinks, 1)
@@ -60,6 +61,17 @@ func TestZone_ValidFull_Maps(t *testing.T) {
 	assert.Len(t, m.Barriers, 1)
 	assert.Len(t, m.Connections, 2)
 	assert.Len(t, m.Units, 2)
+	assert.Nil(t, m.Elvl, "entrance_tunnel has no override, defaults to the zone's elvl")
+
+	assert.Equal(t, 220, *z.Maps[1].Elvl, "main_chamber overrides the zone's elvl")
+}
+
+func TestZone_MapElvl(t *testing.T) {
+	z := parseZone(t, loadFixture(t, "valid_full.json"))
+
+	assert.Equal(t, 200.0, z.MapElvl("entrance_tunnel"), "no map-level override -> falls back to the zone's elvl")
+	assert.Equal(t, 220.0, z.MapElvl("main_chamber"), "map-level override wins")
+	assert.Equal(t, 200.0, z.MapElvl("no-such-map"), "unknown map -> falls back to the zone's elvl")
 }
 
 func TestZone_ValidFull_Barriers(t *testing.T) {
