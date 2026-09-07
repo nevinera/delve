@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
@@ -167,7 +168,7 @@ func applyUnitBehavior(
 			chaseTarget(unit, target, speed, dt, chaseRange)
 			now := time.Now()
 			if losClear {
-				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, now, events, state)
+				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
 				if target.Status != instancestate.UnitStatusDead {
 					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, now, events, state)
 				}
@@ -268,8 +269,11 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 
 // tryNPCBasicAttack fires unit's weapon-less basic attack at target if the
 // unit is auto-attacking, its swing timer is up, and the target is in range.
-// Damage per hit is UnitType.DPS/AttackSpeed, +/- basicAttackVariance.
-func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+// Damage per hit is UnitType.DPS/AttackSpeed, +/- basicAttackVariance, then
+// reduced by target's Avoidance/Defence Rating per UnitType.BasicAttackSchool
+// (see command.IncomingDamage) - a nonzero reduction only when target is a
+// player, since NPCs carry no itemized stats of their own.
+func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
 	if !unit.Attacking || unitType.AttackSpeed <= 0 {
 		return
 	}
@@ -289,7 +293,8 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 
 	mean := unitType.DPS / unitType.AttackSpeed
 	lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
-	target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
+	raw := math.Round(lo + rand.Float64()*(hi-lo))
+	target.Health -= command.IncomingDamage(target, zone, raw, unitType.BasicAttackSchool != "magic")
 	if target.Health < 0 {
 		target.Health = 0
 	}

@@ -509,6 +509,24 @@ func TestUnitBehavior_BasicAttack_DamagesPlayerInRange(t *testing.T) {
 	assert.Less(t, p.Health, 100.0)
 }
 
+func TestUnitBehavior_BasicAttack_DefenceRatingReducesDamageToPlayer(t *testing.T) {
+	zone := basicAttackZone(100.0, 1.0) // high flat DPS so DR's reduction is unmistakable
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	p.EquippedItems = map[string]instanceconfig.EquippedItem{
+		"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+	}
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	// unmitigated hits land in [85,115] (100 +/- 15% variance); 30 raw Defence
+	// Rating's ~14% physical DR should pull that down to roughly [73,99].
+	assert.GreaterOrEqual(t, p.Health, 0.0)
+	assert.Less(t, p.Health, 40.0, "expected the player's Defence Rating to meaningfully reduce the 100-dps hit")
+}
+
 func TestUnitBehavior_BasicAttack_NotAttackingIsNoOp(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0)
 	u, s := npcState("g1", pos(0, 0))

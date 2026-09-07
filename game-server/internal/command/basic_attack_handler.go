@@ -43,6 +43,26 @@ const (
 	// concentrating it in one.
 	magicCritRatingPerIntellect  = 0.3
 	magicHasteRatingPerIntellect = 0.3
+
+	// versatilityStatWeight - Versatility spreads this fraction of itself into
+	// Strength, Agility, Intellect, and Defence Rating alike (docs/stats.md's
+	// "Versatility" section).
+	versatilityStatWeight = 0.2
+
+	// agilityPhysicalAvoidanceWeight/agilityMagicAvoidanceWeight -
+	// Strength/Intellect each grant a pure Avoidance chance for their own
+	// attack type, and Agility splits a weaker share of both (docs/stats.md's
+	// "Avoidance" section).
+	agilityPhysicalAvoidanceWeight = 0.66
+	agilityMagicAvoidanceWeight    = 0.33
+	avoidanceAsymptote             = 0.6
+	avoidanceHalfPoint             = 250.0
+
+	// physicalDRAsymptote/magicDRAsymptote - see docs/stats.md's "Defence
+	// Rating and damage reduction".
+	physicalDRAsymptote    = 0.6
+	magicDRAsymptote       = 0.4 * physicalDRAsymptote
+	defenceRatingHalfPoint = 98.0
 )
 
 // BasicAttackHandler executes one swing of a player unit's basic attack
@@ -94,7 +114,8 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	if target.TaggedBy == nil && target.Hostility != "" {
 		target.TaggedBy = &unitID
 	}
-	target.Health -= basicAttackDamage(critChancePct, statDPS)
+	raw := basicAttackDamage(critChancePct, statDPS)
+	target.Health -= IncomingDamage(target, zone, raw, unit.DamageStatKey != "intellect")
 	if target.Health < 0 {
 		target.Health = 0
 	}
@@ -117,24 +138,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 // and a magic one (Intellect) draw from separate Crit/Haste pools - see
 // docs/stats.md.
 func unitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
-	allocations := make([]itemstats.Allocation, 0, len(unit.EquippedItems))
-	for _, item := range unit.EquippedItems {
-		allocations = append(allocations, itemstats.Allocation{
-			Slot:        item.Slot,
-			Shield:      item.Shield,
-			Primary:     item.PrimaryStat,
-			Secondaries: item.SecondaryStats,
-			Elvl:        item.Elvl,
-		})
-	}
-	stats := itemstats.ScaledSum(allocations, zone.MapElvl(unit.MapIdentifier))
-
-	// Versatility Rating spreads 0.2x itself into Strength/Agility/Intellect
-	// (among other stats not relevant to a basic attack) - see docs/stats.md.
-	versatility := stats["versatility_rating"]
-	strength := stats["strength"] + versatility*0.2
-	agility := stats["agility"] + versatility*0.2
-	intellect := stats["intellect"] + versatility*0.2
+	strength, agility, intellect, _, stats := unitEffectiveStats(unit, zone)
 
 	switch unit.DamageStatKey {
 	case "strength", "agility":
@@ -157,6 +161,60 @@ func unitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (h
 		critChancePct = 5 + stats["crit_rating"]/15
 	}
 	return hastePct, critChancePct, statDPS
+}
+
+// unitEffectiveStats scales unit's equipped items against its current map's
+// elevation and spreads Versatility Rating's 0.2x share into Strength,
+// Agility, Intellect, and Defence Rating (docs/stats.md's "Versatility").
+// NPCs have no EquippedItems, so every return value is 0 for them.
+func unitEffectiveStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (strength, agility, intellect, defenceRating float64, stats map[string]float64) {
+	allocations := make([]itemstats.Allocation, 0, len(unit.EquippedItems))
+	for _, item := range unit.EquippedItems {
+		allocations = append(allocations, itemstats.Allocation{
+			Slot:        item.Slot,
+			Shield:      item.Shield,
+			Primary:     item.PrimaryStat,
+			Secondaries: item.SecondaryStats,
+			Elvl:        item.Elvl,
+		})
+	}
+	stats = itemstats.ScaledSum(allocations, zone.MapElvl(unit.MapIdentifier))
+
+	versatility := stats["versatility_rating"]
+	strength = stats["strength"] + versatility*versatilityStatWeight
+	agility = stats["agility"] + versatility*versatilityStatWeight
+	intellect = stats["intellect"] + versatility*versatilityStatWeight
+	defenceRating = stats["defence_rating"] + versatility*versatilityStatWeight
+	return strength, agility, intellect, defenceRating, stats
+}
+
+// IncomingDamage rolls target's Avoidance for an attack of the given school,
+// then applies target's Defence Rating reduction to whatever isn't avoided.
+// Returns the actual damage to subtract from target's health (0 if avoided).
+// Avoidance is checked first, then DR reduces what lands - the two layers
+// aren't applied to the same portion of damage twice (docs/stats.md's
+// "Miss Chance" section). NPCs have no EquippedItems, so both are 0 for them
+// - only players currently have any incoming-damage mitigation.
+func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, rawDamage float64, physical bool) float64 {
+	strength, agility, intellect, defenceRating, _ := unitEffectiveStats(target, zone)
+
+	var effectiveAvoidanceStat float64
+	if physical {
+		effectiveAvoidanceStat = strength + agility*agilityPhysicalAvoidanceWeight
+	} else {
+		effectiveAvoidanceStat = intellect + agility*agilityMagicAvoidanceWeight
+	}
+	avoidance := avoidanceAsymptote * effectiveAvoidanceStat / (effectiveAvoidanceStat + avoidanceHalfPoint)
+	if rand.Float64() < avoidance {
+		return 0
+	}
+
+	drAsymptote := physicalDRAsymptote
+	if !physical {
+		drAsymptote = magicDRAsymptote
+	}
+	dr := drAsymptote * defenceRating / (defenceRating + defenceRatingHalfPoint)
+	return rawDamage * (1 - dr)
 }
 
 // basicAttackDamage rolls one swing's outcome - miss, normal hit, or crit -

@@ -149,6 +149,48 @@ func TestUnitCombatStats_MapElvlOverrideIsUsedOverZoneElvl(t *testing.T) {
 	assert.InDelta(t, (30.0*2.0)/90, statDPS, 0.001)
 }
 
+func TestIncomingDamage_NakedTargetTakesFullDamage(t *testing.T) {
+	target := &instancestate.UnitState{}
+	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true))
+	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false))
+}
+
+func TestIncomingDamage_DefenceRatingReducesWhatAvoidanceDoesNotFullyAvoid(t *testing.T) {
+	// Defence Rating alone (no Strength/Agility/Intellect), so Avoidance is 0
+	// and every trial lands - only DR's reduction is exercised.
+	target := &instancestate.UnitState{
+		EquippedItems: map[string]instanceconfig.EquippedItem{
+			"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+		},
+	}
+	// neck has no primary slot and all 3 secondary slots filled (factor 1.0),
+	// so no missing-secondary bonus applies: raw defence_rating = 3*10 = 30.
+	const r = 30.0
+	expectedPhysical := 100 * (1 - physicalDRAsymptote*r/(r+defenceRatingHalfPoint))
+	expectedMagic := 100 * (1 - magicDRAsymptote*r/(r+defenceRatingHalfPoint))
+	assert.InDelta(t, expectedPhysical, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
+	assert.InDelta(t, expectedMagic, IncomingDamage(target, instanceconfig.Zone{}, 100, false), 0.001)
+}
+
+func TestIncomingDamage_StrengthGrantsOnlyPhysicalAvoidance(t *testing.T) {
+	target := &instancestate.UnitState{EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)}}
+	// raw strength 30 -> avoidance stat 30 -> avoidance = 0.6*30/280 ~= 6.4%,
+	// high enough that a few hundred trials reliably see at least one avoid,
+	// and low enough that magic (0 avoidance, no DR either since no
+	// defence_rating itemized) should never be avoided.
+	var physicalAvoided, magicAvoided int
+	for i := 0; i < 500; i++ {
+		if IncomingDamage(target, instanceconfig.Zone{}, 100, true) == 0 {
+			physicalAvoided++
+		}
+		if IncomingDamage(target, instanceconfig.Zone{}, 100, false) == 0 {
+			magicAvoided++
+		}
+	}
+	assert.Greater(t, physicalAvoided, 0, "strength should grant some physical avoidance")
+	assert.Equal(t, 0, magicAvoided, "strength grants no magic avoidance")
+}
+
 func TestBasicAttackDamage_NeverNegative(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		assert.GreaterOrEqual(t, basicAttackDamage(50, 10), 0.0)
