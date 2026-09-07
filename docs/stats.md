@@ -204,11 +204,12 @@ to both pools regardless of which is the class's actual damage stat.
 There's no longer a separate Dodge-vs-Parry roll to stack - Physical Avoidance and Magic Avoidance
 are each a single combined rate now, not two independent named mechanics.
 
-**Implementation:** wired into basic attacks server-side (`command.IncomingDamage`) - a defender's
-Avoidance is rolled first, then whatever lands is reduced by their Defence Rating (see below). This
-applies whenever the *target* is a player; NPCs carry no `EquippedItems` so both are always 0 for
-them, meaning a monster's basic attack currently has no incoming mitigation to reduce. Powers/spells
-aren't wired to this yet - only basic attacks are.
+**Implementation:** wired server-side (`command.IncomingDamage`) into basic attacks and every
+power's `harm` effects (see [power_effect.md](schema/power_effect.md)'s `school` field) - a
+defender's Avoidance is rolled first, then whatever lands is reduced by their Defence Rating (see
+below). This applies whenever the *target* is a player; NPCs carry no `EquippedItems` so both are
+always 0 for them, meaning a monster's basic attack or power currently has no incoming mitigation
+to reduce.
 
 ## Stamina
 
@@ -309,9 +310,8 @@ multiplier from DR), leaving the rest of the intended tank/DPS gap (see
 [combat_balance.md](combat_balance.md)'s `EHP_tank = 3x EHP_dps` target) to come from Avoidance and
 future passives/talents rather than gear alone.
 
-**Implementation:** same as Avoidance above - wired into basic attacks server-side, applied after
-the Avoidance roll, only reduces damage landing on a player target, and doesn't yet apply to
-powers/spells.
+**Implementation:** same as Avoidance above - wired server-side into basic attacks and powers,
+applied after the Avoidance roll, only reduces damage landing on a player target.
 
 ## Miss Chance
 

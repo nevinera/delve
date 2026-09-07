@@ -99,7 +99,8 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 				}
 				engageOnAttack(target, unitID, zone, next)
 				lo, hi := effect.Amount.Min(), effect.Amount.Max()
-				target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
+				raw := math.Round(lo + rand.Float64()*(hi-lo))
+				target.Health -= IncomingDamage(target, zone, raw, effect.School != "magic")
 				if target.Health < 0 {
 					target.Health = 0
 				}

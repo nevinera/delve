@@ -31,7 +31,7 @@ func (p Power) IsFrontal() bool {
 // PowerEffect describes one mechanical outcome applied when a power fires.
 // Type discriminator: "harm", "heal", "resource", or "status".
 //
-// harm fields:     Affects, Range, Amount, Tags
+// harm fields:     Affects, Range, Amount, School, Tags
 // heal fields:     Affects, Range (unless self), Amount, Tags
 // resource fields: Affects, ResourceName, Delta, Range (unless self), Tags
 // status fields:   Affects, Duration, Status, Range (unless self), Tags
@@ -44,6 +44,11 @@ type PowerEffect struct {
 
 	// harm, heal
 	Amount *ValueRange `json:"amount,omitempty"` // Required for harm/heal
+
+	// harm only: "physical" (default) or "magic" - picks which of the
+	// target's Avoidance/Defence Rating pools mitigates it, same as
+	// UnitType.BasicAttackSchool does for a basic attack. See docs/stats.md.
+	School string `json:"school,omitempty"`
 
 	// harm, heal, resource, status (omitted when affects is "self")
 	Range *ZeroBasedValueRange `json:"range,omitempty"`

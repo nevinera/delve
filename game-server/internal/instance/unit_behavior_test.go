@@ -298,6 +298,49 @@ func stabZone() instanceconfig.Zone {
 	}
 }
 
+// fixedStabZone is stabZone with a fixed (non-random) amount and the given
+// school, so mitigation math is deterministic to test.
+func fixedStabZone(amount float64, school string) instanceconfig.Zone {
+	amountRange := instanceconfig.ValueRange{amount, amount}
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				Powers: []instanceconfig.Power{{
+					Name: "Stab", GlobalCooldown: 1.5,
+					Effects: []instanceconfig.PowerEffect{
+						{Type: "harm", Amount: &amountRange, Range: &rng, School: school},
+					},
+				}},
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_Attack_AppliesPlayerTargetsDefenceRating(t *testing.T) {
+	zone := fixedStabZone(20.0, "physical")
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	p.EquippedItems = map[string]instanceconfig.EquippedItem{
+		"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+	}
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	// r=30 -> physicalDR = 0.6*30/128 = 0.140625 -> 20*(1-0.140625) = 17.1875 dmg.
+	assert.InDelta(t, 100.0-17.1875, p.Health, 0.01)
+}
+
 func TestUnitBehavior_Attack_DamagesPlayerInRange(t *testing.T) {
 	zone := stabZone()
 	u, s := npcState("g1", pos(0, 0))

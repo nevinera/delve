@@ -170,7 +170,7 @@ func applyUnitBehavior(
 			if losClear {
 				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
 				if target.Status != instancestate.UnitStatusDead {
-					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, now, events, state)
+					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, zone, now, events, state)
 				}
 			}
 		} else {
@@ -215,7 +215,7 @@ func applyUnitBehavior(
 // tryNPCAttack fires a randomly-chosen available harm power at the target if
 // the unit is off GCD and at least one power is in range. Appends a CombatEvent
 // to events if an attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
 	if now.Before(unit.GlobalCooldownEndsAt) {
 		return
 	}
@@ -250,7 +250,8 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 
 	c := available[rand.Intn(len(available))]
 	lo, hi := c.effect.Amount.Min(), c.effect.Amount.Max()
-	target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
+	raw := math.Round(lo + rand.Float64()*(hi-lo))
+	target.Health -= command.IncomingDamage(target, zone, raw, c.effect.School != "magic")
 	if target.Health < 0 {
 		target.Health = 0
 	}

@@ -388,6 +388,62 @@ func TestUsePowerHandler_ClearsAttackerTargetAndAttackingOnKill(t *testing.T) {
 	assert.False(t, state.Units[playerID].Attacking)
 }
 
+// harmPower builds a single-harm-effect power with a fixed (non-random)
+// amount and the given school, so mitigation math is deterministic to test.
+func harmPower(amount float64, school string) command.UsePowerPayload {
+	amountRange := instanceconfig.ValueRange{amount, amount}
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Affects: "bTarget", Amount: &amountRange, Range: &rng, School: school},
+			},
+		},
+	}
+}
+
+func defendedTarget() map[string]instanceconfig.EquippedItem {
+	// neck has no primary slot and all 3 secondary slots filled (factor 1.0),
+	// so no missing-secondary bonus applies: raw defence_rating = 3*10 = 30.
+	return map[string]instanceconfig.EquippedItem{
+		"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+	}
+}
+
+func TestUsePowerHandler_HarmEffectAppliesTargetsPhysicalDefenceRating(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].EquippedItems = defendedTarget()
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, harmPower(20.0, "physical"), instanceconfig.Zone{}, state))
+
+	// r=30 -> physicalDR = 0.6*30/128 = 0.140625 -> 20*(1-0.140625) = 17.1875 dmg.
+	assert.InDelta(t, 50.0-17.1875, state.Units[targetID].Health, 0.01)
+}
+
+func TestUsePowerHandler_HarmEffectAppliesTargetsMagicDefenceRatingForAMagicSchool(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].EquippedItems = defendedTarget()
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, harmPower(20.0, "magic"), instanceconfig.Zone{}, state))
+
+	// r=30 -> magicDR = 0.24*30/128 = 0.05625 -> 20*(1-0.05625) = 18.875 dmg -
+	// less mitigation than the same raw amount would get against physical.
+	assert.InDelta(t, 50.0-18.875, state.Units[targetID].Health, 0.01)
+}
+
+func TestUsePowerHandler_HarmEffectDefaultsToPhysicalSchool(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].EquippedItems = defendedTarget()
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, harmPower(20.0, ""), instanceconfig.Zone{}, state))
+
+	assert.InDelta(t, 50.0-17.1875, state.Units[targetID].Health, 0.01)
+}
+
 func TestUsePowerHandler_EngagesIdleHostileTargetOnHit(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)

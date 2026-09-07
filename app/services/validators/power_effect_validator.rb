@@ -3,6 +3,7 @@ module Validators
     TYPE_OPTIONS = %w[harm heal resource status].freeze
     AFFECTS_OPTIONS = %w[bTarget gTarget bAll gAll self].freeze
     HARM_AFFECTS_OPTIONS = %w[bTarget gTarget bAll gAll].freeze
+    DAMAGE_SCHOOLS = %w[physical magic].freeze
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
@@ -27,6 +28,12 @@ module Validators
       validate_float_or_range!(amount, path: child_path(path, "amount"))
       range_val = require_key!(data, "range", path: path)
       validate_float_or_range!(range_val, path: child_path(path, "range"))
+      validate_school!(data, path: path) if data.key?("school")
+    end
+
+    def validate_school!(data, path:)
+      school = require_string!(data, "school", path: path)
+      require_one_of!(school, DAMAGE_SCHOOLS, path: child_path(path, "school"))
     end
 
     def validate_heal!(data, path:)
