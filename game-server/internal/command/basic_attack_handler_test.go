@@ -46,6 +46,23 @@ func retryUntilHit(t *testing.T, playerID, targetID uuid.UUID, zone instanceconf
 	return nil
 }
 
+// retryUntilMiss is retryUntilHit's mirror: rebuilds and re-attacks until a
+// swing actually misses (health unchanged), so a test asserting behavior on
+// a miss isn't flaky over the 95% hit chance.
+func retryUntilMiss(t *testing.T, playerID, targetID uuid.UUID, zone instanceconfig.Zone, build func() *instancestate.InstanceState) *instancestate.InstanceState {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		state := build()
+		before := state.Units[targetID].Health
+		require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
+		if state.Units[targetID].Health == before {
+			return state
+		}
+	}
+	t.Fatal("basic attack hit 200 times in a row - miss chance may be miscalibrated")
+	return nil
+}
+
 func TestBasicAttackHandler_Type(t *testing.T) {
 	assert.Equal(t, "basic_attack", command.BasicAttackHandler{}.Type())
 }
@@ -180,6 +197,54 @@ func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusDead, state.Units[targetID].Status)
 	assert.Nil(t, state.Units[playerID].Target)
 	assert.False(t, state.Units[playerID].Attacking)
+}
+
+func TestBasicAttackHandler_EngagesIdleHostileTargetOnHit(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		state.Units[targetID].Hostility = "hostile"
+		return state
+	})
+
+	// The target should notice and fight back immediately, even though it
+	// was never within its own aggro radius of the player - that's the point
+	// of this test (no aggro radius is modeled here at all).
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[targetID].Status)
+	require.NotNil(t, state.Units[targetID].Target)
+	assert.Equal(t, playerID, *state.Units[targetID].Target)
+	assert.True(t, state.Units[targetID].Attacking)
+}
+
+func TestBasicAttackHandler_EngagesIdleHostileTargetEvenOnAMiss(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	state := retryUntilMiss(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		state.Units[targetID].Hostility = "hostile"
+		return state
+	})
+
+	// Swinging and missing still counts as an attack - the target notices it
+	// was attacked, not that it was hit.
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[targetID].Status)
+	require.NotNil(t, state.Units[targetID].Target)
+	assert.Equal(t, playerID, *state.Units[targetID].Target)
+	assert.True(t, state.Units[targetID].Attacking)
+}
+
+func TestBasicAttackHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		state.Units[targetID].Hostility = "neutral"
+		return state
+	})
+
+	assert.Equal(t, instancestate.UnitStatusIdle, state.Units[targetID].Status)
+	assert.Nil(t, state.Units[targetID].Target)
 }
 
 func TestBasicAttackHandler_KillAggroesLinkedIdleUnitEvenIfItNeverAggroedItself(t *testing.T) {

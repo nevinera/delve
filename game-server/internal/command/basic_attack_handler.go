@@ -114,6 +114,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	if target.TaggedBy == nil && target.Hostility != "" {
 		target.TaggedBy = &unitID
 	}
+	engageOnAttack(target, unitID, zone, next)
 	raw := basicAttackDamage(critChancePct, statDPS)
 	target.Health -= IncomingDamage(target, zone, raw, unit.DamageStatKey != "intellect")
 	if target.Health < 0 {
@@ -123,7 +124,6 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 		target.Status = instancestate.UnitStatusDead
 		target.Target = nil
 		instancestate.RollAndRecordLoot(*unit.Target, target, next)
-		aggroLinkedGroupOnKill(target.ZoneUnitIdentifier, unitID, zone, next)
 		unit.Target = nil
 		unit.Attacking = false
 	}

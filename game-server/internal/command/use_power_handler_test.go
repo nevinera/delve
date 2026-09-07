@@ -388,6 +388,32 @@ func TestUsePowerHandler_ClearsAttackerTargetAndAttackingOnKill(t *testing.T) {
 	assert.False(t, state.Units[playerID].Attacking)
 }
 
+func TestUsePowerHandler_EngagesIdleHostileTargetOnHit(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Hostility = "hostile"
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+
+	// The target should notice and fight back immediately, even though it
+	// was never within its own aggro radius of the player.
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[targetID].Status)
+	require.NotNil(t, state.Units[targetID].Target)
+	assert.Equal(t, playerID, *state.Units[targetID].Target)
+	assert.True(t, state.Units[targetID].Attacking)
+}
+
+func TestUsePowerHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Hostility = "neutral"
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, instancestate.UnitStatusIdle, state.Units[targetID].Status)
+	assert.Nil(t, state.Units[targetID].Target)
+}
+
 func TestUsePowerHandler_KillAggroesLinkedIdleUnit(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)

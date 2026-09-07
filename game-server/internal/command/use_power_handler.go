@@ -97,6 +97,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 				if target.TaggedBy == nil && target.Hostility != "" {
 					target.TaggedBy = &unitID
 				}
+				engageOnAttack(target, unitID, zone, next)
 				lo, hi := effect.Amount.Min(), effect.Amount.Max()
 				target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
 				if target.Health < 0 {
@@ -106,7 +107,6 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 					target.Status = instancestate.UnitStatusDead
 					target.Target = nil
 					instancestate.RollAndRecordLoot(*unit.Target, target, next)
-					aggroLinkedGroupOnKill(target.ZoneUnitIdentifier, unitID, zone, next)
 					unit.Target = nil
 					unit.Attacking = false
 				}
