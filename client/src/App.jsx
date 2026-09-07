@@ -31,7 +31,14 @@ const BASIC_ATTACK_INTERVAL_MS = 2000;
 // on a combat event). Served by the Rails app itself, not content-authored, so
 // they have no associated zone/class - sourceURLs are resolved against this
 // app's own origin rather than a zone's or class's config_url. NPCs get a red
-// tint; characters get orange and a 20% larger graphic.
+// (or style-appropriate) tint; characters get orange and a 20% larger graphic.
+//
+// NPC_BASIC_ATTACK_STYLE_POWERS is keyed by UnitType.basicAttackStyle (see
+// docs/schema/unit_type.md) - one entry per value in
+// instanceconfig.BasicAttackStyles. A unit_type that omits basicAttackStyle
+// falls back to "sword"/"arrow"/"arcane" by basicAttackSchool/basicAttackRange
+// (see the lookup at its use site below), so existing content keeps its exact
+// prior visual/audio without opting in.
 const NPC_BASIC_ATTACK_POWER = {
   name: "Basic Attack",
   graphicEffects: [
@@ -79,6 +86,14 @@ const NPC_RANGED_BASIC_ATTACK_POWER = {
   ],
   soundEffects: [
     {
+      sourceURL: "/abilities/sounds/twang.ogg",
+      duration: 0.3,
+      location: "self",
+      when: "immediate",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+    {
       sourceURL: "/abilities/sounds/thud.ogg",
       duration: 0.12,
       location: "affected",
@@ -116,6 +131,201 @@ const NPC_MAGIC_BASIC_ATTACK_POWER = {
       volumeScale: 0.05,
     },
   ],
+};
+
+// claw: a short slash placed directly on the target, no travel time.
+const NPC_CLAW_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/claw-slash.png",
+      duration: 0.4,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "ff0000",
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/slash.ogg",
+      duration: 0.2,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// axe: the sword-swing sprite at a heavier scale, with a chopping thud.
+const NPC_AXE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/sword-swing.sprites3x3.png",
+      duration: 0.85,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+      scale: 1.3,
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 9,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/crunch.ogg",
+      duration: 0.25,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// club: a blunt splat placed on the target rather than a bladed swing.
+const NPC_CLUB_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/splat.png",
+      duration: 0.5,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/thud.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.04,
+    },
+  ],
+};
+
+// ice: a shard that travels from attacker to target, cracking on impact.
+const NPC_ICE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/shards.sprites7x1.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "66ccff",
+      spriteColumns: 7,
+      spriteRows: 1,
+      spriteFrameRate: 14,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/crack.ogg",
+      duration: 0.3,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// nature: tendrils erupting at the target's feet, with an organic squelch.
+const NPC_NATURE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/tendrils.sprites5x1.png",
+      duration: 0.6,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "66cc33",
+      spriteColumns: 5,
+      spriteRows: 1,
+      spriteFrameRate: 10,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/squelch.ogg",
+      duration: 0.25,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// fire: an orange-red fireball that travels from attacker to target, then
+// bursts on impact - unlike arcane's blue-white magic-ball, this one visibly
+// travels the distance rather than resolving instantly on the target.
+const NPC_FIRE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/magic-ball.sprites3x3.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.7,
+      color: "ff3300",
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
+    },
+    {
+      sourceURL: "/abilities/graphics/radial-burst.png",
+      duration: 0.4,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "ff6600",
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/boom.ogg",
+      duration: 0.4,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.04,
+    },
+  ],
+};
+
+// Keyed by UnitType.basicAttackStyle - see instanceconfig.BasicAttackStyles.
+const NPC_BASIC_ATTACK_STYLE_POWERS = {
+  claw: NPC_CLAW_BASIC_ATTACK_POWER,
+  sword: NPC_BASIC_ATTACK_POWER,
+  axe: NPC_AXE_BASIC_ATTACK_POWER,
+  club: NPC_CLUB_BASIC_ATTACK_POWER,
+  arrow: NPC_RANGED_BASIC_ATTACK_POWER,
+  arcane: NPC_MAGIC_BASIC_ATTACK_POWER,
+  ice: NPC_ICE_BASIC_ATTACK_POWER,
+  nature: NPC_NATURE_BASIC_ATTACK_POWER,
+  fire: NPC_FIRE_BASIC_ATTACK_POWER,
 };
 
 const CHARACTER_BASIC_ATTACK_POWER = {
@@ -1496,6 +1706,7 @@ export default function App({
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
   const npcBasicAttackRangeByZoneIdRef = useRef({}); // { [zoneUnitId]: basicAttackRange }
   const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
+  const npcBasicAttackStyleByZoneIdRef = useRef({});  // { [zoneUnitId]: basicAttackStyle | undefined }
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
@@ -1536,6 +1747,7 @@ export default function App({
         const byId = {};
         const basicAttackRangeById = {};
         const basicAttackSchoolById = {};
+        const basicAttackStyleById = {};
         const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
@@ -1549,6 +1761,7 @@ export default function App({
             byId[unit.identifier] = byName;
             basicAttackRangeById[unit.identifier] = ut.basicAttackRange ?? BASIC_ATTACK_RANGE;
             basicAttackSchoolById[unit.identifier] = ut.basicAttackSchool ?? "physical";
+            basicAttackStyleById[unit.identifier] = ut.basicAttackStyle;
           }
           barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
@@ -1556,6 +1769,7 @@ export default function App({
         npcPowersByZoneIdRef.current = byId;
         npcBasicAttackRangeByZoneIdRef.current = basicAttackRangeById;
         npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
+        npcBasicAttackStyleByZoneIdRef.current = basicAttackStyleById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
       })
@@ -1817,9 +2031,12 @@ export default function App({
           if (isBasicAttack && attacker.zone_unit_identifier === selfIdentifierRef.current) continue;
           const attackerIsRanged = (npcBasicAttackRangeByZoneIdRef.current[attacker.zone_unit_identifier] ?? BASIC_ATTACK_RANGE) > BASIC_ATTACK_RANGE;
           const attackerIsMagic = npcBasicAttackSchoolByZoneIdRef.current[attacker.zone_unit_identifier] === "magic";
-          const npcBasicAttackPower = attackerIsMagic
-            ? NPC_MAGIC_BASIC_ATTACK_POWER
-            : (attackerIsRanged ? NPC_RANGED_BASIC_ATTACK_POWER : NPC_BASIC_ATTACK_POWER);
+          // basicAttackStyle is opt-in per unit_type; unset falls back to the
+          // same physical-melee/physical-ranged/magic split used before it
+          // existed, so existing content's visuals/audio don't change.
+          const attackerStyle = npcBasicAttackStyleByZoneIdRef.current[attacker.zone_unit_identifier]
+            ?? (attackerIsMagic ? "arcane" : (attackerIsRanged ? "arrow" : "sword"));
+          const npcBasicAttackPower = NPC_BASIC_ATTACK_STYLE_POWERS[attackerStyle] ?? NPC_BASIC_ATTACK_POWER;
           const power = isBasicAttack
             ? (attacker.hostility ? npcBasicAttackPower : CHARACTER_BASIC_ATTACK_POWER)
             : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
