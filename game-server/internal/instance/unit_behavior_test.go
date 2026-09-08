@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -327,30 +328,48 @@ func fixedStabZone(amount float64, school string) instanceconfig.Zone {
 
 func TestUnitBehavior_Attack_AppliesPlayerTargetsDefenceRating(t *testing.T) {
 	zone := fixedStabZone(20.0, "physical")
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 4)
-	p.EquippedItems = map[string]instanceconfig.EquippedItem{
-		"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+
+	// r=30 -> physicalDR = 0.6*30/128 = 0.140625 -> 20*(1-0.140625) = 17.1875
+	// dmg on a non-crit; the NPC caster has a 5% base crit chance (no
+	// itemized stats to raise it), so retry past an occasional crit roll to
+	// keep this deterministic.
+	const wantHealth = 100.0 - 17.1875
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		p.EquippedItems = map[string]instanceconfig.EquippedItem{
+			"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+		}
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if math.Abs(p.Health-wantHealth) < 0.01 {
+			return
+		}
 	}
-	manualEngage(u, playerID)
-
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
-
-	// r=30 -> physicalDR = 0.6*30/128 = 0.140625 -> 20*(1-0.140625) = 17.1875 dmg.
-	assert.InDelta(t, 100.0-17.1875, p.Health, 0.01)
+	t.Fatal("stab crit 200 times in a row - crit chance may be miscalibrated")
 }
 
 func TestUnitBehavior_Attack_DamagesPlayerInRange(t *testing.T) {
 	zone := stabZone()
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 4) // 4ft away, within effective range (5+2+2.2)
-	manualEngage(u, playerID)
 
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	// NPC power harm effects roll the universal 5% miss chance now - retry
+	// past an occasional miss to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4) // 4ft away, within effective range (5+2+2.2)
+		manualEngage(u, playerID)
 
-	assert.Less(t, p.Health, 100.0)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			return
+		}
+	}
+	t.Fatal("NPC power missed 200 times in a row - miss chance may be miscalibrated")
 }
 
 func TestUnitBehavior_Attack_BlockedByGCD(t *testing.T) {
@@ -392,17 +411,26 @@ func TestUnitBehavior_Attack_SetsGCD(t *testing.T) {
 
 func TestUnitBehavior_Attack_KillsSetsDeadAndClearsTarget(t *testing.T) {
 	zone := stabZone()
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 4)
-	p.Health = 1.0
-	manualEngage(u, playerID)
 
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	// NPC power harm effects roll the universal 5% miss chance now - retry
+	// past an occasional miss to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		p.Health = 1.0
+		manualEngage(u, playerID)
 
-	assert.Equal(t, 0.0, p.Health)
-	assert.Equal(t, instancestate.UnitStatusDead, p.Status)
-	assert.Nil(t, p.Target)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health != 1.0 {
+			assert.Equal(t, 0.0, p.Health)
+			assert.Equal(t, instancestate.UnitStatusDead, p.Status)
+			assert.Nil(t, p.Target)
+			return
+		}
+	}
+	t.Fatal("NPC power missed 200 times in a row - miss chance may be miscalibrated")
 }
 
 // ---------------------------------------------------------------------------
@@ -473,15 +501,23 @@ func TestUnitBehavior_BasicAttack_BlockedByWallIsNoOp(t *testing.T) {
 
 func TestUnitBehavior_Aggro_BlockedByWallDoesNotBlockAttackElsewhere(t *testing.T) {
 	zone := withWallAt(basicAttackZone(4.0, 1.0), 200) // far outside either unit's path
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 4)
-	manualEngage(u, playerID)
-	before := p.Health
 
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	// NPC basic attacks roll the universal 5% miss chance now - retry past
+	// an occasional miss to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+		before := p.Health
 
-	assert.Less(t, p.Health, before)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < before {
+			return
+		}
+	}
+	t.Fatal("NPC attack missed 200 times in a row - miss chance may be miscalibrated")
 }
 
 func TestUnitBehavior_Chase_ContinuesClosingWhenLOSBlocked(t *testing.T) {
@@ -530,44 +566,72 @@ func TestUnitBehavior_Chase_RangedStopsFartherThanMelee(t *testing.T) {
 
 func TestUnitBehavior_BasicAttack_UsesUnitTypeRangeOverride(t *testing.T) {
 	zone := rangedBasicAttackZone(2.0, 1.0, 30.0)
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 20) // out of default 5ft range, within the 30ft override
-	manualEngage(u, playerID)
 
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	// NPC basic attacks roll the universal 5% miss chance now - retry past
+	// an occasional miss to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 20) // out of default 5ft range, within the 30ft override
+		manualEngage(u, playerID)
 
-	assert.Less(t, p.Health, 100.0)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			return
+		}
+	}
+	t.Fatal("NPC attack missed 200 times in a row - miss chance may be miscalibrated")
 }
 
 func TestUnitBehavior_BasicAttack_DamagesPlayerInRange(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0)
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 4) // 4ft away, within effective range (5+2+2.2)
-	manualEngage(u, playerID)
 
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	// NPC basic attacks roll the universal 5% miss chance now - retry past
+	// an occasional miss to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4) // 4ft away, within effective range (5+2+2.2)
+		manualEngage(u, playerID)
 
-	assert.Less(t, p.Health, 100.0)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			return
+		}
+	}
+	t.Fatal("NPC attack missed 200 times in a row - miss chance may be miscalibrated")
 }
 
 func TestUnitBehavior_BasicAttack_DefenceRatingReducesDamageToPlayer(t *testing.T) {
 	zone := basicAttackZone(100.0, 1.0) // high flat DPS so DR's reduction is unmistakable
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 4)
-	p.EquippedItems = map[string]instanceconfig.EquippedItem{
-		"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+
+	// NPC basic attacks roll the universal 5% miss chance now - retry past
+	// an occasional miss (which would leave p.Health at 100, failing the
+	// "meaningfully reduced" assertion below for the wrong reason).
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		p.EquippedItems = map[string]instanceconfig.EquippedItem{
+			"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+		}
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health == 100.0 {
+			continue // missed - retry
+		}
+		// unmitigated hits land in [85,115] (100 +/- 15% variance); 30 raw
+		// Defence Rating's ~14% physical DR should pull that down to
+		// roughly [73,99].
+		assert.GreaterOrEqual(t, p.Health, 0.0)
+		assert.Less(t, p.Health, 40.0, "expected the player's Defence Rating to meaningfully reduce the 100-dps hit")
+		return
 	}
-	manualEngage(u, playerID)
-
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
-
-	// unmitigated hits land in [85,115] (100 +/- 15% variance); 30 raw Defence
-	// Rating's ~14% physical DR should pull that down to roughly [73,99].
-	assert.GreaterOrEqual(t, p.Health, 0.0)
-	assert.Less(t, p.Health, 40.0, "expected the player's Defence Rating to meaningfully reduce the 100-dps hit")
+	t.Fatal("NPC attack missed 200 times in a row - miss chance may be miscalibrated")
 }
 
 func TestUnitBehavior_BasicAttack_NotAttackingIsNoOp(t *testing.T) {
@@ -624,17 +688,26 @@ func TestUnitBehavior_BasicAttack_SetsSwingTimer(t *testing.T) {
 
 func TestUnitBehavior_BasicAttack_KillsSetsDeadAndClearsTarget(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0)
-	u, s := npcState("g1", pos(0, 0))
-	u.Radius = 2.0
-	playerID, p := addPlayer(s, "map1", 0, 4)
-	p.Health = 1.0
-	manualEngage(u, playerID)
 
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	// NPC basic attacks roll the universal 5% miss chance now - retry past
+	// an occasional miss to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		p.Health = 1.0
+		manualEngage(u, playerID)
 
-	assert.Equal(t, 0.0, p.Health)
-	assert.Equal(t, instancestate.UnitStatusDead, p.Status)
-	assert.Nil(t, p.Target)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health != 1.0 {
+			assert.Equal(t, 0.0, p.Health)
+			assert.Equal(t, instancestate.UnitStatusDead, p.Status)
+			assert.Nil(t, p.Target)
+			return
+		}
+	}
+	t.Fatal("NPC attack missed 200 times in a row - miss chance may be miscalibrated")
 }
 
 // ---------------------------------------------------------------------------

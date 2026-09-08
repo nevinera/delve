@@ -2,7 +2,6 @@ package command
 
 import (
 	"math"
-	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -73,23 +72,14 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 		}
 	}
 
+	timeBudget := PowerEffectTimeBudget(p.Power)
 	for _, effect := range p.Power.Effects {
 		switch effect.Type {
 		case "harm":
 			if target == nil {
 				continue
 			}
-			maxRange := 5.0
-			if effect.Range != nil {
-				maxRange = effect.Range.Max()
-			}
-			maxRange += unit.Radius + target.Radius
-			dx := target.Position.X - unit.Position.X
-			dy := target.Position.Y - unit.Position.Y
-			if math.Sqrt(dx*dx+dy*dy) > maxRange {
-				return nil
-			}
-			if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y) {
+			if !inRangeAndLOS(unit, target, zone, effect.Range) {
 				return nil
 			}
 			unit.Attacking = true
@@ -98,8 +88,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 					target.TaggedBy = &unitID
 				}
 				engageOnAttack(target, unitID, zone, next)
-				lo, hi := effect.Amount.Min(), effect.Amount.Max()
-				raw := math.Round(lo + rand.Float64()*(hi-lo))
+				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false)
 				target.Health -= IncomingDamage(target, zone, raw, effect.School != "magic")
 				if target.Health < 0 {
 					target.Health = 0
@@ -113,12 +102,22 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 				}
 			}
 		case "heal":
-			if effect.Affects == "self" && effect.Amount != nil {
-				lo, hi := effect.Amount.Min(), effect.Amount.Max()
-				unit.Health += math.Round(lo + rand.Float64()*(hi-lo))
-				if unit.Health > unit.MaxHealth {
-					unit.Health = unit.MaxHealth
+			if effect.Amount == nil {
+				continue
+			}
+			recipient := unit
+			if effect.Affects != "self" {
+				if target == nil {
+					continue
 				}
+				if !inRangeAndLOS(unit, target, zone, effect.Range) {
+					return nil
+				}
+				recipient = target
+			}
+			recipient.Health += PowerEffectAmount(unit, zone, effect, timeBudget, true, false)
+			if recipient.Health > recipient.MaxHealth {
+				recipient.Health = recipient.MaxHealth
 			}
 		}
 	}

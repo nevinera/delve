@@ -20,9 +20,16 @@ const (
 	characterBasicAttackRange           = 5.0
 	characterBasicAttackNominalInterval = 2 * time.Second
 	characterBasicAttackBaseDPS         = 1.0 // a fully naked character's own DPS
-	characterBasicAttackMissChance      = 0.05
-	characterBasicAttackCritMultiplier  = 2.0
 	characterBasicAttackVariance        = 0.1 // each swing's damage is uniform within +/-10% of nominal
+
+	// baseMissChance/baseCritMultiplier are universal, not basic-attack-
+	// specific: every basic attack (player or NPC) and every harmful power
+	// effect rolls the same flat 5% chance to miss (a spell's miss is
+	// narratively a "resist") and the same crit multiplier on the
+	// per-effect critChancePct from UnitCombatStats/effectSchoolStats - see
+	// docs/stats.md's "Miss Chance" and tmp/plan.md.
+	baseMissChance     = 0.05
+	baseCritMultiplier = 2.0
 
 	// basicAttackStatDPSDivisor - see docs/stats.md's Strength/Agility/
 	// Intellect sections. Solved backward from a design target (a fully-
@@ -102,7 +109,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 		return nil
 	}
 
-	hastePct, critChancePct, statDPS := unitCombatStats(unit, zone)
+	hastePct, critChancePct, statDPS := UnitCombatStats(unit, zone)
 	interval := time.Duration(float64(characterBasicAttackNominalInterval) / (1 + hastePct/100))
 	unit.NextBasicAttackAt = now.Add(interval)
 	next.PendingCombatEvents = append(next.PendingCombatEvents, instancestate.CombatEvent{
@@ -130,14 +137,14 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	return nil
 }
 
-// unitCombatStats scales the unit's equipped items against its current map's
+// UnitCombatStats scales the unit's equipped items against its current map's
 // elevation (see instanceconfig.Zone.MapElvl) and derives the totals its
 // basic attack needs: Haste%, Crit Chance%, and the class damage stat's DPS
 // contribution (0 for NPCs and for a class with none of Strength/Agility/
 // Intellect as a damage stat). A physical basic attack (Strength/Agility)
 // and a magic one (Intellect) draw from separate Crit/Haste pools - see
 // docs/stats.md.
-func unitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
+func UnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
 	strength, agility, intellect, _, stats := unitEffectiveStats(unit, zone)
 
 	switch unit.DamageStatKey {
@@ -217,6 +224,20 @@ func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, r
 	return rawDamage * (1 - dr)
 }
 
+// RollAttackOutcome applies the universal miss/crit roll shared by every
+// basic attack (player or NPC) and harmful power effect: baseMissChance to
+// miss outright (missed=true, multiplier meaningless), else a
+// critChancePct-based roll between 1.0 and baseCritMultiplier.
+func RollAttackOutcome(critChancePct float64) (missed bool, multiplier float64) {
+	if rand.Float64() < baseMissChance {
+		return true, 0
+	}
+	if rand.Float64() < critChancePct/100 {
+		return false, baseCritMultiplier
+	}
+	return false, 1.0
+}
+
 // basicAttackDamage rolls one swing's outcome - miss, normal hit, or crit -
 // and returns the damage dealt (0 on a miss). See docs/stats.md's "Basic
 // Attack DPS" section: nominalSwingDamage is what DPS*nominalInterval would
@@ -224,14 +245,11 @@ func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, r
 // landed hit varies uniformly within +/-10% of that nominal value, so
 // swings aren't all identical even absent a crit.
 func basicAttackDamage(critChancePct, statDPS float64) float64 {
-	if rand.Float64() < characterBasicAttackMissChance {
+	missed, multiplier := RollAttackOutcome(critChancePct)
+	if missed {
 		return 0
 	}
 	nominalSwingDamage := (characterBasicAttackBaseDPS + statDPS) * characterBasicAttackNominalInterval.Seconds()
 	variance := 1 + (rand.Float64()*2-1)*characterBasicAttackVariance
-	multiplier := 1.0
-	if rand.Float64() < critChancePct/100 {
-		multiplier = characterBasicAttackCritMultiplier
-	}
 	return math.Round(nominalSwingDamage * variance * multiplier)
 }

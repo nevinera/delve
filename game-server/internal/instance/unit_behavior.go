@@ -249,8 +249,8 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	}
 
 	c := available[rand.Intn(len(available))]
-	lo, hi := c.effect.Amount.Min(), c.effect.Amount.Max()
-	raw := math.Round(lo + rand.Float64()*(hi-lo))
+	timeBudget := command.PowerEffectTimeBudget(c.power)
+	raw := command.PowerEffectAmount(unit, zone, c.effect, timeBudget, false, false)
 	target.Health -= command.IncomingDamage(target, zone, raw, c.effect.School != "magic")
 	if target.Health < 0 {
 		target.Health = 0
@@ -292,17 +292,23 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 
 	unit.NextBasicAttackAt = now.Add(time.Duration(float64(time.Second) / unitType.AttackSpeed))
 
-	mean := unitType.DPS / unitType.AttackSpeed
-	lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
-	raw := math.Round(lo + rand.Float64()*(hi-lo))
-	target.Health -= command.IncomingDamage(target, zone, raw, unitType.BasicAttackSchool != "magic")
-	if target.Health < 0 {
-		target.Health = 0
-	}
-	if target.Health == 0 {
-		target.Status = instancestate.UnitStatusDead
-		target.Target = nil
-		instancestate.RollAndRecordLoot(targetID, target, state)
+	// Same universal miss/crit roll a player's basic attack gets - see
+	// command.RollAttackOutcome. A miss still swings (the event still
+	// fires) but deals no damage, same as a player's missed swing.
+	_, critChancePct, _ := command.UnitCombatStats(unit, zone)
+	if missed, multiplier := command.RollAttackOutcome(critChancePct); !missed {
+		mean := unitType.DPS / unitType.AttackSpeed
+		lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
+		raw := math.Round((lo + rand.Float64()*(hi-lo)) * multiplier)
+		target.Health -= command.IncomingDamage(target, zone, raw, unitType.BasicAttackSchool != "magic")
+		if target.Health < 0 {
+			target.Health = 0
+		}
+		if target.Health == 0 {
+			target.Status = instancestate.UnitStatusDead
+			target.Target = nil
+			instancestate.RollAndRecordLoot(targetID, target, state)
+		}
 	}
 	*events = append(*events, CombatEvent{
 		AttackerID: attackerID.String(),
