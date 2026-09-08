@@ -8,7 +8,8 @@ import (
 )
 
 type canonicalEffect struct {
-	ID        string `json:"id"`
+	ID        string `json:"id"` // Status.Name + ":" + ApplierID - unique per (name, applier)
+	Stacks    int    `json:"stacks"`
 	ExpiresAt int64  `json:"expiresAt"`
 }
 
@@ -28,14 +29,18 @@ type canonicalUnit struct {
 
 // Checksum returns a SHA256 hex digest of the instance state in a canonical
 // JSON form. Units are sorted by ZoneUnitIdentifier; effects within each unit
-// are sorted by StatusIdentifier. JS clients reproduce this identically;
+// are sorted by (Status.Name, ApplierID). JS clients reproduce this identically;
 // Ruby clients need to drop trailing ".0" from whole-number floats before hashing.
 func (s *InstanceState) Checksum() string {
 	units := make([]canonicalUnit, 0, len(s.Units))
 	for _, u := range s.Units {
 		effects := make([]canonicalEffect, len(u.ActiveStatusEffects))
 		for i, e := range u.ActiveStatusEffects {
-			effects[i] = canonicalEffect{ID: e.StatusIdentifier, ExpiresAt: e.ExpiresAt.UnixMilli()}
+			effects[i] = canonicalEffect{
+				ID:        e.Status.Name + ":" + e.ApplierID.String(),
+				Stacks:    e.Stacks,
+				ExpiresAt: e.ExpiresAt.UnixMilli(),
+			}
 		}
 		sort.Slice(effects, func(i, j int) bool { return effects[i].ID < effects[j].ID })
 

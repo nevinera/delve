@@ -92,6 +92,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
 			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
+			expireStatusEffects(state, now)
 			resolveCollisions(state, inst.ZoneConfig)
 			roundPositions(state)
 			sweepLootClaims(state)

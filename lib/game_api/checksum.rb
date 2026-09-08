@@ -22,7 +22,7 @@ module GameApi
 
     def canonical_effects(u)
       (u["active_status_effects"] || [])
-        .map { |e| {"id" => e["status_identifier"], "expiresAt" => e["expires_at"]} }
+        .map { |e| {"id" => "#{e["status_name"]}:#{e["applier_id"]}", "stacks" => e["stacks"], "expiresAt" => e["expires_at"]} }
         .sort_by { |e| e["id"] }
     end
 

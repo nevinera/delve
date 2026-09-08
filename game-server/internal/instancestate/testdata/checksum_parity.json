@@ -1,5 +1,5 @@
 {
-    "expected_checksum": "3fc551fc4e58dd26923449211cf2a8b1fd23f0046774da95c0a9fbb24a3005e5",
+    "expected_checksum": "0ce5b46d994b057cb8c9e6c81c2ac1f8dfd04eacd86080fa5d5e9c524aa20f93",
     "units": {
         "00000000-0000-0000-0000-000000000001": {
             "zone_unit_identifier": "goblin_a",
@@ -12,7 +12,7 @@
             "status": "idle",
             "target": null,
             "active_status_effects": [
-                {"status_identifier": "poison", "expires_at": 1800000000000}
+                {"status_name": "poison", "applier_id": "00000000-0000-0000-0000-000000000099", "stacks": 2, "expires_at": 1800000000000}
             ]
         },
         "00000000-0000-0000-0000-000000000002": {

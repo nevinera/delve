@@ -60,10 +60,33 @@ const (
 	UnitStatusDead     UnitStatus = "dead"
 )
 
-// ActiveStatusEffect is a status effect currently applied to a unit.
+// ActiveStatusEffect is one status currently applied to a unit, identified
+// by (Status.Name, ApplierID) - different appliers' copies of the
+// same-named status are tracked independently, so e.g. two casters' DoTs on
+// the same target don't stomp each other. The Status definition is
+// snapshotted at apply time (not just its name) so later processing doesn't
+// need to re-resolve which power granted it. See docs/schema/status.md and
+// command.ApplyStatus.
 type ActiveStatusEffect struct {
-	StatusIdentifier string
-	ExpiresAt        time.Time
+	Status    instanceconfig.Status
+	ApplierID uuid.UUID
+
+	// ExpiresAt is the sole duration clock - "duration-remaining" is always
+	// derived as ExpiresAt.Sub(now). Every stack of a "stack"-stacking
+	// status shares this one timer (docs/schema/status.md): a new
+	// application refreshes it to the full duration rather than each stack
+	// having its own independent expiry.
+	ExpiresAt time.Time
+
+	// Stacks is meaningful only when Status.Stacking == "stack"; 1 for
+	// "extend"/"replace".
+	Stacks int
+
+	// TimeUntilNextTick is parallel to Status.Effects: for each "recurring"
+	// entry, seconds remaining until its next tick (haste-scaled live each
+	// server tick, not snapshotted - see docs/stats.md's Haste and
+	// tmp/plan.md). Unused (0) for non-recurring entries.
+	TimeUntilNextTick []float64
 }
 
 // MovementIntent holds the player-commanded movement keys for a unit.

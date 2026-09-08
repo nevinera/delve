@@ -43,8 +43,10 @@ type unitJSON struct {
 }
 
 type effectJSON struct {
-	StatusIdentifier string `json:"status_identifier"`
-	ExpiresAt        int64  `json:"expires_at"`
+	StatusName string `json:"status_name"`
+	ApplierID  string `json:"applier_id"`
+	Stacks     int    `json:"stacks"`
+	ExpiresAt  int64  `json:"expires_at"`
 }
 
 type fullStateMsg struct {
@@ -53,14 +55,34 @@ type fullStateMsg struct {
 }
 
 type effectAddJSON struct {
-	UnitID           string `json:"unit_id"`
-	StatusIdentifier string `json:"status_identifier"`
-	ExpiresAt        int64  `json:"expires_at"`
+	UnitID     string `json:"unit_id"`
+	StatusName string `json:"status_name"`
+	ApplierID  string `json:"applier_id"`
+	Stacks     int    `json:"stacks"`
+	ExpiresAt  int64  `json:"expires_at"`
 }
 
 type effectRemoveJSON struct {
-	UnitID           string `json:"unit_id"`
-	StatusIdentifier string `json:"status_identifier"`
+	UnitID     string `json:"unit_id"`
+	StatusName string `json:"status_name"`
+	ApplierID  string `json:"applier_id"`
+}
+
+// effectKey identifies one ActiveStatusEffect for add/remove diffing -
+// (Status.Name, ApplierID), see instancestate.ActiveStatusEffect.
+type effectKey struct {
+	name      string
+	applierID string
+}
+
+func effectAddFromActive(unitID string, e instancestate.ActiveStatusEffect) effectAddJSON {
+	return effectAddJSON{
+		UnitID:     unitID,
+		StatusName: e.Status.Name,
+		ApplierID:  e.ApplierID.String(),
+		Stacks:     e.Stacks,
+		ExpiresAt:  e.ExpiresAt.UnixMilli(),
+	}
 }
 
 type combatEventJSON struct {
@@ -118,8 +140,10 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 		effects := make([]effectJSON, len(u.ActiveStatusEffects))
 		for i, e := range u.ActiveStatusEffects {
 			effects[i] = effectJSON{
-				StatusIdentifier: e.StatusIdentifier,
-				ExpiresAt:        e.ExpiresAt.UnixMilli(),
+				StatusName: e.Status.Name,
+				ApplierID:  e.ApplierID.String(),
+				Stacks:     e.Stacks,
+				ExpiresAt:  e.ExpiresAt.UnixMilli(),
 			}
 		}
 		var target *string
@@ -237,11 +261,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			}
 			msg.UnitUpdates[idStr] = update
 			for _, e := range cu.ActiveStatusEffects {
-				msg.EffectAdds = append(msg.EffectAdds, effectAddJSON{
-					UnitID:           idStr,
-					StatusIdentifier: e.StatusIdentifier,
-					ExpiresAt:        e.ExpiresAt.UnixMilli(),
-				})
+				msg.EffectAdds = append(msg.EffectAdds, effectAddFromActive(idStr, e))
 			}
 			continue
 		}
@@ -307,26 +327,27 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			msg.UnitUpdates[idStr] = patch
 		}
 
-		// Effects: add/remove by StatusIdentifier.
-		prevFX := make(map[string]instancestate.ActiveStatusEffect, len(pu.ActiveStatusEffects))
+		// Effects: add/remove by (Status.Name, ApplierID). An add is also
+		// resent when an already-present key's value changed (e.g. a
+		// re-application extended ExpiresAt or added a stack) - the client
+		// treats effect_adds as an upsert by key, not just a new entry.
+		prevFX := make(map[effectKey]instancestate.ActiveStatusEffect, len(pu.ActiveStatusEffects))
 		for _, e := range pu.ActiveStatusEffects {
-			prevFX[e.StatusIdentifier] = e
+			prevFX[effectKey{e.Status.Name, e.ApplierID.String()}] = e
 		}
-		currFX := make(map[string]instancestate.ActiveStatusEffect, len(cu.ActiveStatusEffects))
+		currFX := make(map[effectKey]instancestate.ActiveStatusEffect, len(cu.ActiveStatusEffects))
 		for _, e := range cu.ActiveStatusEffects {
-			currFX[e.StatusIdentifier] = e
+			currFX[effectKey{e.Status.Name, e.ApplierID.String()}] = e
 		}
-		for sid, ce := range currFX {
-			if _, had := prevFX[sid]; !had {
-				msg.EffectAdds = append(msg.EffectAdds, effectAddJSON{
-					UnitID: idStr, StatusIdentifier: sid, ExpiresAt: ce.ExpiresAt.UnixMilli(),
-				})
+		for key, ce := range currFX {
+			if pe, had := prevFX[key]; !had || pe.ExpiresAt != ce.ExpiresAt || pe.Stacks != ce.Stacks {
+				msg.EffectAdds = append(msg.EffectAdds, effectAddFromActive(idStr, ce))
 			}
 		}
-		for sid := range prevFX {
-			if _, has := currFX[sid]; !has {
+		for key := range prevFX {
+			if _, has := currFX[key]; !has {
 				msg.EffectRemoves = append(msg.EffectRemoves, effectRemoveJSON{
-					UnitID: idStr, StatusIdentifier: sid,
+					UnitID: idStr, StatusName: key.name, ApplierID: key.applierID,
 				})
 			}
 		}

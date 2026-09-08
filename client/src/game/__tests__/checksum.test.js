@@ -13,7 +13,12 @@ const parityUnits = {
     status: "idle",
     target: null,
     active_status_effects: [
-      { status_identifier: "poison", expires_at: 1800000000000 },
+      {
+        status_name: "poison",
+        applier_id: "00000000-0000-0000-0000-000000000099",
+        stacks: 2,
+        expires_at: 1800000000000,
+      },
     ],
   },
   "00000000-0000-0000-0000-000000000002": {
@@ -31,7 +36,7 @@ const parityUnits = {
 };
 
 const PARITY_CHECKSUM =
-  "3fc551fc4e58dd26923449211cf2a8b1fd23f0046774da95c0a9fbb24a3005e5";
+  "0ce5b46d994b057cb8c9e6c81c2ac1f8dfd04eacd86080fa5d5e9c524aa20f93";
 
 describe("computeChecksum", () => {
   it("matches the parity fixture shared with Go and Ruby", async () => {
@@ -58,15 +63,15 @@ describe("computeChecksum", () => {
 });
 
 describe("canonicalUnit", () => {
-  it("sorts effects by status_identifier", () => {
+  it("sorts effects by status_name:applier_id", () => {
     const unit = {
       ...parityUnits["00000000-0000-0000-0000-000000000001"],
       active_status_effects: [
-        { status_identifier: "slow", expires_at: 1000 },
-        { status_identifier: "burn", expires_at: 2000 },
+        { status_name: "slow", applier_id: "a", stacks: 1, expires_at: 1000 },
+        { status_name: "burn", applier_id: "a", stacks: 1, expires_at: 2000 },
       ],
     };
     const result = canonicalUnit(unit);
-    expect(result.effects.map((e) => e.id)).toEqual(["burn", "slow"]);
+    expect(result.effects.map((e) => e.id)).toEqual(["burn:a", "slow:a"]);
   });
 });

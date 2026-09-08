@@ -101,7 +101,7 @@ func TestChecksum_StatusEffectChangesChecksum(t *testing.T) {
 	with := stateFromZone(t, zone)
 	for _, u := range with.Units {
 		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
-			{StatusIdentifier: "poison", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 3, 0, time.UTC)},
+			{Status: instanceconfig.Status{Name: "poison"}, ExpiresAt: time.Date(2030, 1, 1, 0, 0, 3, 0, time.UTC)},
 		}
 	}
 	assert.NotEqual(t, without.Checksum(), with.Checksum())
@@ -128,12 +128,12 @@ func TestChecksum_EffectsOrderIndependent(t *testing.T) {
 	t1 := time.Date(2030, 1, 1, 0, 0, 3, 0, time.UTC)
 	t2 := time.Date(2030, 1, 1, 0, 0, 1, 0, time.UTC)
 	ab := makeStateWithEffects([]instancestate.ActiveStatusEffect{
-		{StatusIdentifier: "poison", ExpiresAt: t1},
-		{StatusIdentifier: "slow", ExpiresAt: t2},
+		{Status: instanceconfig.Status{Name: "poison"}, ExpiresAt: t1},
+		{Status: instanceconfig.Status{Name: "slow"}, ExpiresAt: t2},
 	})
 	ba := makeStateWithEffects([]instancestate.ActiveStatusEffect{
-		{StatusIdentifier: "slow", ExpiresAt: t2},
-		{StatusIdentifier: "poison", ExpiresAt: t1},
+		{Status: instanceconfig.Status{Name: "slow"}, ExpiresAt: t2},
+		{Status: instanceconfig.Status{Name: "poison"}, ExpiresAt: t1},
 	})
 	assert.Equal(t, ab.Checksum(), ba.Checksum())
 }
@@ -161,8 +161,10 @@ func TestChecksumParity(t *testing.T) {
 			MaxResource         float64 `json:"max_resource"`
 			Status              string  `json:"status"`
 			ActiveStatusEffects []struct {
-				StatusIdentifier string `json:"status_identifier"`
-				ExpiresAt        int64  `json:"expires_at"`
+				StatusName string `json:"status_name"`
+				ApplierID  string `json:"applier_id"`
+				Stacks     int    `json:"stacks"`
+				ExpiresAt  int64  `json:"expires_at"`
 			} `json:"active_status_effects"`
 		} `json:"units"`
 	}
@@ -174,9 +176,13 @@ func TestChecksumParity(t *testing.T) {
 		require.NoError(t, err)
 		effects := make([]instancestate.ActiveStatusEffect, len(u.ActiveStatusEffects))
 		for i, e := range u.ActiveStatusEffects {
+			applierID, err := uuid.Parse(e.ApplierID)
+			require.NoError(t, err)
 			effects[i] = instancestate.ActiveStatusEffect{
-				StatusIdentifier: e.StatusIdentifier,
-				ExpiresAt:        time.UnixMilli(e.ExpiresAt),
+				Status:    instanceconfig.Status{Name: e.StatusName},
+				ApplierID: applierID,
+				Stacks:    e.Stacks,
+				ExpiresAt: time.UnixMilli(e.ExpiresAt),
 			}
 		}
 		state.Units[id] = &instancestate.UnitState{
