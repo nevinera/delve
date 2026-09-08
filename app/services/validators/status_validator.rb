@@ -9,15 +9,28 @@ module Validators
       require_string!(data, "name", path: path)
       require_string!(data, "description", path: path) if data.key?("description")
       validate_short_name!(data, path: path)
-      treat_as = require_string!(data, "treatAs", path: path)
-      require_one_of!(treat_as, TREAT_AS_OPTIONS, path: child_path(path, "treatAs"))
-      stacking = require_string!(data, "stacking", path: path)
-      require_one_of!(stacking, STACKING_OPTIONS, path: child_path(path, "stacking"))
+      validate_treat_as!(data, path: path)
+      validate_stacking!(data, path: path)
       validate_max_stacks!(data, path: path) if data.key?("maxStacks")
+      validate_aura_effect!(data, path: path) if data.key?("auraEffect")
       validate_effects!(data, path: path)
     end
 
     private
+
+    def validate_treat_as!(data, path:)
+      treat_as = require_string!(data, "treatAs", path: path)
+      require_one_of!(treat_as, TREAT_AS_OPTIONS, path: child_path(path, "treatAs"))
+    end
+
+    def validate_stacking!(data, path:)
+      stacking = require_string!(data, "stacking", path: path)
+      require_one_of!(stacking, STACKING_OPTIONS, path: child_path(path, "stacking"))
+    end
+
+    def validate_aura_effect!(data, path:)
+      AuraEffectValidator.validate!(data["auraEffect"], path: child_path(path, "auraEffect"))
+    end
 
     def validate_short_name!(data, path:)
       short_name = require_string!(data, "shortName", path: path)

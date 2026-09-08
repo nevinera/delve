@@ -73,6 +73,21 @@ RSpec.describe Validators::StatusValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /maxStacks must be an integer >= 1/)
     end
 
+    it "allows auraEffect to be omitted" do
+      expect { described_class.validate!(minimal_status.except("auraEffect")) }.not_to raise_error
+    end
+
+    it "accepts an auraEffect" do
+      data = minimal_status.merge("auraEffect" => {"sourceURL" => "https://example.com/fx/aura.webp"})
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "propagates errors from an invalid auraEffect with path context" do
+      data = minimal_status.merge("auraEffect" => {})
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/auraEffect/) }
+    end
+
     it "raises when effects is missing" do
       expect { described_class.validate!(minimal_status.except("effects")) }
         .to raise_error(Validators::ValidationError, /effects is required/)

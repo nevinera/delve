@@ -91,6 +91,26 @@ module Validators
       raise ValidationError.new("#{value.inspect} is not a recognized stock asset", path: path)
     end
 
+    def validate_graphic_source_url!(data, path:)
+      url = require_string!(data, "sourceURL", path: path)
+      return unless stock_reference?(url)
+      validate_stock_reference!(url, Content::StockAssets::GRAPHICS.keys, path: child_path(path, "sourceURL"))
+    end
+
+    def validate_graphic_sprite_sheet!(data, path:)
+      has_columns = data.key?("spriteColumns")
+      has_rows = data.key?("spriteRows")
+      unless has_columns == has_rows
+        raise ValidationError.new("spriteColumns and spriteRows must be given together", path: path)
+      end
+      return unless has_columns
+
+      require_integer!(data, "spriteColumns", path: path)
+      require_integer!(data, "spriteRows", path: path)
+      require_integer!(data, "spriteFrameCount", path: path) if data.key?("spriteFrameCount")
+      require_numeric!(data, "spriteFrameRate", path: path) if data.key?("spriteFrameRate")
+    end
+
     def validate_tags!(data, path:)
       tags = data["tags"]
       tags_path = child_path(path, "tags")
