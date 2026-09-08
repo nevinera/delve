@@ -323,13 +323,30 @@ describe("AbilityFieldsPanel", () => {
       expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "spriteColumns", value: 3});
     });
 
-    it("renders the nested status object read-only, not as an input", () => {
+    it("renders the nested status object as an editable name field, not read-only text", () => {
       const withStatus = {
         ...ability,
-        effects: [{type: "status", affects: "self", duration: 5.0, status: {name: "Focused", treatAs: "buff"}}],
+        effects: [{type: "status", affects: "self", duration: 5.0, status: {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []}}],
       };
       render(<AbilityFieldsPanel ability={withStatus} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
-      expect(screen.getByText("Name: Focused; Treat as: buff")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Focused")).toBeInTheDocument();
+      expect(screen.queryByText("Name: Focused; Treat as: buff")).not.toBeInTheDocument();
+    });
+
+    it("dispatches UPDATE_ENTRY_FIELD with a merged status object when a nested status field changes", () => {
+      const dispatch = vi.fn();
+      const withStatus = {
+        ...ability,
+        effects: [{type: "status", affects: "self", duration: 5.0, status: {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []}}],
+      };
+      render(<AbilityFieldsPanel ability={withStatus} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+
+      fireEvent.change(screen.getByDisplayValue("Focused"), {target: {value: "Focused II"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "status",
+        value: {name: "Focused II", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []},
+      });
     });
   });
 

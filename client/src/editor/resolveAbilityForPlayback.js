@@ -36,11 +36,28 @@ function resolveEffect(effect, section, index, kind, assetMap, assetOverrides, s
   return {...effect, sourceURL: resolveUrl(effect.sourceURL, kind, assetMap, stockAssets)};
 }
 
+// A status-type effect's auraEffect.sourceURL gets the same relative-path/
+// ":name:" resolution as graphicEffects/soundEffects, so the preview can
+// display it - no upload-override support for it, since that's not exposed
+// anywhere in the editor for aura effects.
+function resolvePowerEffect(effect, assetMap, stockAssets) {
+  const auraSourceURL = effect.status?.auraEffect?.sourceURL;
+  if (effect.type !== "status" || !auraSourceURL) return effect;
+  return {
+    ...effect,
+    status: {
+      ...effect.status,
+      auraEffect: {...effect.status.auraEffect, sourceURL: resolveUrl(auraSourceURL, "graphics", assetMap, stockAssets)},
+    },
+  };
+}
+
 export function resolveAbilityForPlayback(ability, assetMap, assetOverrides = {}, stockAssets = {}) {
   return {
     ...ability,
     iconURL: assetOverrides.iconURL ?? (ability.iconURL ? resolveUrl(ability.iconURL, "icons", assetMap, stockAssets) : ability.iconURL),
     graphicEffects: (ability.graphicEffects ?? []).map((e, i) => resolveEffect(e, "graphicEffects", i, "graphics", assetMap, assetOverrides, stockAssets)),
     soundEffects: (ability.soundEffects ?? []).map((e, i) => resolveEffect(e, "soundEffects", i, "sounds", assetMap, assetOverrides, stockAssets)),
+    effects: (ability.effects ?? []).map((e) => resolvePowerEffect(e, assetMap, stockAssets)),
   };
 }

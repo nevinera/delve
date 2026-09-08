@@ -3,6 +3,7 @@ import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityForm
 import {entryFieldsFor, placeholderEntry, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
 import {graphicFieldsFor, soundFieldsFor} from "./stockAssetFields";
+import StatusEditor from "./StatusEditor";
 
 // Order entries are added/listed in - graphic, then sound, then effect.
 const EFFECT_SECTIONS = ["graphicEffects", "soundEffects", "effects"];
@@ -80,7 +81,7 @@ function AssetUploadField({field, accept = "image/*", hasOverride, onUploadAsset
 // sounds - see Content::StockAssets). Always resets to the placeholder after
 // a pick, since the picked value lives in sourceURL/iconURL itself, not in
 // this dropdown's own selection.
-function StockAssetPicker({options, onPick}) {
+export function StockAssetPicker({options, onPick}) {
   return (
     <select
       value=""
@@ -169,7 +170,7 @@ function TagsField({value, onChange}) {
   return <input type="text" value={text} onChange={handleChange} />;
 }
 
-function EntryField({field, value, onChange}) {
+function EntryField({field, value, onChange, stockAssets}) {
   switch (widgetFor(field)) {
     case "select":
       return <SelectField field={field} value={value} onChange={onChange} />;
@@ -184,6 +185,8 @@ function EntryField({field, value, onChange}) {
           onChange={(e) => onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
         />
       );
+    case "status":
+      return <StatusEditor value={value} onChange={onChange} stockAssets={stockAssets} />;
     case "readonly":
       return formatValue(value);
     default:
@@ -220,6 +223,7 @@ function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUp
                   field={field}
                   value={value}
                   onChange={(newValue) => dispatch({type: "UPDATE_ENTRY_FIELD", section, index, field, value: newValue})}
+                  stockAssets={stockAssets}
                 />
                 {uploadKey && (
                   <AssetUploadField

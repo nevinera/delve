@@ -23,8 +23,8 @@ describe("widgetFor", () => {
     }
   });
 
-  it("treats status as readonly", () => {
-    expect(widgetFor("status")).toEqual("readonly");
+  it("treats status as its own nested-editor widget", () => {
+    expect(widgetFor("status")).toEqual("status");
   });
 
   it("falls back to text for everything else", () => {
@@ -38,6 +38,11 @@ describe("widgetFor", () => {
 describe("selectOptions", () => {
   it("returns the options for a known select field", () => {
     expect(selectOptions("when")).toEqual(["immediate", "impact"]);
+  });
+
+  it("recognizes school as a select field", () => {
+    expect(widgetFor("school")).toEqual("select");
+    expect(selectOptions("school")).toEqual(["", "physical", "magic"]);
   });
 
   it("includes an empty option for nullable enum fields", () => {
@@ -70,6 +75,20 @@ describe("entryFieldsFor", () => {
   it("falls back to the entry's own keys for a section with no recognized list (effects)", () => {
     const entry = {type: "harm", affects: "bTarget", amount: 10.0};
     expect(entryFieldsFor("effects", entry)).toEqual(["type", "affects", "amount"]);
+  });
+
+  it("forces status and duration into a fresh status-type effect's field list", () => {
+    const entry = {type: "status", affects: "self"};
+    const fields = entryFieldsFor("effects", entry);
+    expect(fields).toContain("status");
+    expect(fields).toContain("duration");
+  });
+
+  it("doesn't duplicate status/duration when a status-type effect already has them", () => {
+    const entry = {type: "status", affects: "self", duration: 8.0, status: {name: "Second Wind"}};
+    const fields = entryFieldsFor("effects", entry);
+    expect(fields.filter((f) => f === "status")).toEqual(["status"]);
+    expect(fields.filter((f) => f === "duration")).toEqual(["duration"]);
   });
 });
 
