@@ -119,6 +119,7 @@ Applies a Status to one or more targets for a fixed duration. See [status.md](st
   "duration": 10.0,
   "status": {
     "name": "Enrage",
+    "shortName": "Enrage",
     "treatAs": "buff",
     "stacking": "replace",
     "effects": [

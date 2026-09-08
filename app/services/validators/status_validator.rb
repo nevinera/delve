@@ -2,10 +2,13 @@ module Validators
   class StatusValidator < Base
     TREAT_AS_OPTIONS = %w[buff debuff inherent].freeze
     STACKING_OPTIONS = %w[extend replace stack].freeze
+    SHORT_NAME_MAX_LENGTH = 6
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
+      require_string!(data, "description", path: path) if data.key?("description")
+      validate_short_name!(data, path: path)
       treat_as = require_string!(data, "treatAs", path: path)
       require_one_of!(treat_as, TREAT_AS_OPTIONS, path: child_path(path, "treatAs"))
       stacking = require_string!(data, "stacking", path: path)
@@ -15,6 +18,12 @@ module Validators
     end
 
     private
+
+    def validate_short_name!(data, path:)
+      short_name = require_string!(data, "shortName", path: path)
+      return if short_name.length <= SHORT_NAME_MAX_LENGTH
+      raise ValidationError.new("shortName must be #{SHORT_NAME_MAX_LENGTH} characters or fewer", path: child_path(path, "shortName"))
+    end
 
     def validate_max_stacks!(data, path:)
       max_stacks = data["maxStacks"]

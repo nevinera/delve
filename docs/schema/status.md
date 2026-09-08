@@ -7,6 +7,8 @@ A Status is a named effect applied to a unit for a fixed duration.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `name` | string | yes | Identifier used for stacking checks and display. |
+| `description` | string | no | Short description shown in UI. |
+| `shortName` | string | yes | At most 6 characters. Compact text badge shown wherever this status is displayed - there are no status icons, so this is the only way it renders. |
 | `treatAs` | string | yes | `"buff"`, `"debuff"`, or `"inherent"`. Affects UI display and certain game mechanics. |
 | `stacking` | string | yes | `"extend"`, `"replace"`, or `"stack"`. How a second application behaves when the status is already active on the target. |
 | `maxStacks` | integer | no | Maximum number of stacks. Only meaningful when `stacking` is `"stack"`. Must be 1 or greater. |
@@ -91,6 +93,7 @@ Applies a heal or harm tick at a regular interval while the status is active.
 ```json
 {
   "name": "Enrage",
+  "shortName": "Enrage",
   "treatAs": "buff",
   "stacking": "replace",
   "effects": [

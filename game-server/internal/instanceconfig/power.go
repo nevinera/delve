@@ -64,11 +64,13 @@ type PowerEffect struct {
 
 // Status is a named effect applied to a unit for a fixed duration.
 type Status struct {
-	Name      string         `json:"name"`                // Required
-	TreatAs   string         `json:"treatAs"`             // Required: "buff", "debuff", or "inherent"
-	Stacking  string         `json:"stacking"`            // Required: "extend", "replace", or "stack"
-	MaxStacks int            `json:"maxStacks,omitempty"` // Only meaningful when stacking is "stack"
-	Effects   []StatusEffect `json:"effects"`             // Required (may be empty)
+	Name        string         `json:"name"`                  // Required
+	Description string         `json:"description,omitempty"` // Short description shown in UI.
+	ShortName   string         `json:"shortName"`             // Required: <=6 chars, compact UI badge (no status icons yet)
+	TreatAs     string         `json:"treatAs"`               // Required: "buff", "debuff", or "inherent"
+	Stacking    string         `json:"stacking"`              // Required: "extend", "replace", or "stack"
+	MaxStacks   int            `json:"maxStacks,omitempty"`   // Only meaningful when stacking is "stack"
+	Effects     []StatusEffect `json:"effects"`               // Required (may be empty)
 }
 
 // StatusEffect describes one mechanical outcome of a status being active.

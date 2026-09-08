@@ -4,7 +4,7 @@ RSpec.describe Validators::StatusValidator, type: :validator do
   let(:enraged_status) { zone_fixture["unitTypes"]["goblin"]["powers"][1]["effects"][0]["status"] }
 
   let(:minimal_status) do
-    {"name" => "Stunned", "treatAs" => "debuff", "stacking" => "replace", "effects" => []}
+    {"name" => "Stunned", "shortName" => "Stun", "treatAs" => "debuff", "stacking" => "replace", "effects" => []}
   end
 
   describe ".validate!" do
@@ -24,6 +24,31 @@ RSpec.describe Validators::StatusValidator, type: :validator do
     it "raises when name is missing" do
       expect { described_class.validate!(minimal_status.except("name")) }
         .to raise_error(Validators::ValidationError, /name is required/)
+    end
+
+    it "allows description to be omitted" do
+      expect { described_class.validate!(minimal_status.except("description")) }.not_to raise_error
+    end
+
+    it "accepts a description" do
+      data = minimal_status.merge("description" => "Unable to act.")
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when shortName is missing" do
+      expect { described_class.validate!(minimal_status.except("shortName")) }
+        .to raise_error(Validators::ValidationError, /shortName is required/)
+    end
+
+    it "accepts a shortName at exactly the 6 character limit" do
+      data = minimal_status.merge("shortName" => "Six6ch")
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when shortName exceeds 6 characters" do
+      data = minimal_status.merge("shortName" => "TooLong")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /shortName must be 6 characters or fewer/)
     end
 
     it "raises when treatAs is invalid" do
