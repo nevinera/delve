@@ -562,6 +562,18 @@ func targetStatusPower(status instanceconfig.Status) command.UsePowerPayload {
 	}
 }
 
+func friendlyTargetStatusPower(status instanceconfig.Status) command.UsePowerPayload {
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Affects: "gTarget", Range: &rng, Duration: 10.0, Status: &status},
+			},
+		},
+	}
+}
+
 func TestUsePowerHandler_AppliesSelfStatus(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
@@ -578,16 +590,25 @@ func TestUsePowerHandler_AppliesSelfStatus(t *testing.T) {
 
 func TestUsePowerHandler_AppliesStatusToTarget(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0) // 3ft away, within 5ft range
 	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+	// A harmful (debuff) status rolls the same resist chance harm does -
+	// retry past an occasional resist to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0) // 3ft away, within 5ft range
 
-	require.Len(t, state.Units[targetID].ActiveStatusEffects, 1)
-	e := state.Units[targetID].ActiveStatusEffects[0]
-	assert.Equal(t, "Dazed", e.Status.Name)
-	assert.Equal(t, playerID, e.ApplierID)
-	assert.Empty(t, state.Units[playerID].ActiveStatusEffects)
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
+			continue // resisted
+		}
+		e := state.Units[targetID].ActiveStatusEffects[0]
+		assert.Equal(t, "Dazed", e.Status.Name)
+		assert.Equal(t, playerID, e.ApplierID)
+		assert.Empty(t, state.Units[playerID].ActiveStatusEffects)
+		return
+	}
+	t.Fatal("Dazed resisted 200 times in a row - resist chance may be miscalibrated")
 }
 
 func TestUsePowerHandler_TargetStatusOutOfRangeIsNoOp(t *testing.T) {
@@ -598,4 +619,80 @@ func TestUsePowerHandler_TargetStatusOutOfRangeIsNoOp(t *testing.T) {
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
 
 	assert.Empty(t, state.Units[targetID].ActiveStatusEffects)
+}
+
+func TestUsePowerHandler_DebuffStatusCanBeResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
+			return // resisted
+		}
+	}
+	t.Fatal("Dazed landed 200 times in a row - resist chance may be miscalibrated")
+}
+
+func TestUsePowerHandler_EngagesIdleHostileTargetOnDebuffStatusEvenWithNoHarm(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+	state.Units[targetID].Hostility = "hostile"
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+	// Aggro fires before the resist roll, so this is deterministic even
+	// though the debuff itself might have been resisted.
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[targetID].Status)
+}
+
+func TestUsePowerHandler_BuffStatusNeverResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	status := instanceconfig.Status{Name: "Enraged", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
+
+	for i := 0; i < 20; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfStatusPower(status), instanceconfig.Zone{}, state))
+		require.Len(t, state.Units[playerID].ActiveStatusEffects, 1, "a self buff should never be resisted")
+	}
+}
+
+// Resistibility is a property of the cast (who it's aimed at via Affects),
+// not of the Status's own display-only TreatAs - so these two intentionally
+// invert TreatAs relative to Affects to prove the two are decoupled.
+
+func TestUsePowerHandler_BuffStatusCastAtAHostileTargetCanBeResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	// TreatAs "buff" despite being cast at a hostile bTarget - e.g. a status
+	// that's flavored as beneficial but forced onto an enemy.
+	status := instanceconfig.Status{Name: "Marked", ShortName: "Marked", TreatAs: "buff", Stacking: "replace"}
+
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
+			return // resisted
+		}
+	}
+	t.Fatal("Marked landed 200 times in a row - resist chance may be miscalibrated")
+}
+
+func TestUsePowerHandler_DebuffStatusCastAtAFriendlyTargetIsNeverResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	// TreatAs "debuff" despite being cast at a friendly gTarget.
+	status := instanceconfig.Status{Name: "Weakened", ShortName: "Weak", TreatAs: "debuff", Stacking: "replace"}
+
+	for i := 0; i < 20; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, friendlyTargetStatusPower(status), instanceconfig.Zone{}, state))
+
+		require.Len(t, state.Units[targetID].ActiveStatusEffects, 1, "a friendly-targeted status should never be resisted")
+	}
 }

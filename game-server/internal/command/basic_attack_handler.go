@@ -121,7 +121,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	if target.TaggedBy == nil && target.Hostility != "" {
 		target.TaggedBy = &unitID
 	}
-	engageOnAttack(target, unitID, zone, next)
+	EngageOnAttack(target, unitID, zone, next)
 	raw := basicAttackDamage(critChancePct, statDPS)
 	target.Health -= IncomingDamage(target, zone, raw, unit.DamageStatKey != "intellect")
 	if target.Health < 0 {

@@ -224,71 +224,94 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	type candidate struct {
-		power  instanceconfig.Power
-		effect instanceconfig.PowerEffect
-	}
-	var available []candidate
+	// A power is a candidate if at least one of its effects is currently
+	// usable (right type, right shape, in range if not self-affecting) -
+	// once chosen, every one of its usable effects fires together (see
+	// npcEffectInRange/firing loop below), not just the one that made it
+	// eligible. This matches UsePowerHandler, which already applies every
+	// effect of the power a player casts.
+	var available []instanceconfig.Power
 	for _, p := range powers {
 		for _, eff := range p.Effects {
-			switch eff.Type {
-			case "harm":
-				if eff.Amount == nil {
-					continue
-				}
-			case "status":
-				if eff.Status == nil {
-					continue
-				}
-			default:
-				continue
+			if npcEffectUsable(eff) && npcEffectInRange(eff, dist, unit, target) {
+				available = append(available, p)
+				break
 			}
-			// A self-targeted effect (e.g. a self-buff status) needs no
-			// range check against the current target.
-			if eff.Affects != "self" {
-				maxRange := 5.0
-				if eff.Range != nil {
-					maxRange = eff.Range.Max()
-				}
-				if dist > maxRange+unit.Radius+target.Radius {
-					continue
-				}
-			}
-			available = append(available, candidate{p, eff})
-			break
 		}
 	}
 	if len(available) == 0 {
 		return
 	}
 
-	c := available[rand.Intn(len(available))]
-	switch c.effect.Type {
-	case "status":
-		recipient := target
-		if c.effect.Affects == "self" {
-			recipient = unit
+	power := available[rand.Intn(len(available))]
+	for _, eff := range power.Effects {
+		if !npcEffectUsable(eff) || !npcEffectInRange(eff, dist, unit, target) {
+			continue
 		}
-		command.ApplyStatus(recipient, attackerID, *c.effect.Status, c.effect.Duration, now)
-	case "harm":
-		timeBudget := command.PowerEffectTimeBudget(c.power)
-		raw := command.PowerEffectAmount(unit, zone, c.effect, timeBudget, false, false)
-		target.Health -= command.IncomingDamage(target, zone, raw, c.effect.School != "magic")
-		if target.Health < 0 {
-			target.Health = 0
-		}
-		if target.Health == 0 {
-			target.Status = instancestate.UnitStatusDead
-			target.Target = nil
-			instancestate.RollAndRecordLoot(targetID, target, state)
+		switch eff.Type {
+		case "status":
+			recipient := target
+			if eff.Affects == "self" {
+				recipient = unit
+			} else {
+				// Casting at a hostile target is an attack too - it aggros
+				// an idle hostile target and can be resisted, same as harm.
+				// Resistibility is a property of this cast (who it's aimed
+				// at), not of the Status itself - see command.IsHostileAffects.
+				command.EngageOnAttack(target, attackerID, zone, state)
+				if command.IsHostileAffects(eff.Affects) {
+					if missed, _ := command.RollAttackOutcome(0); missed {
+						continue // resisted
+					}
+				}
+			}
+			command.ApplyStatus(recipient, attackerID, *eff.Status, eff.Duration, now)
+		case "harm":
+			timeBudget := command.PowerEffectTimeBudget(power)
+			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false)
+			target.Health -= command.IncomingDamage(target, zone, raw, eff.School != "magic")
+			if target.Health < 0 {
+				target.Health = 0
+			}
+			if target.Health == 0 {
+				target.Status = instancestate.UnitStatusDead
+				target.Target = nil
+				instancestate.RollAndRecordLoot(targetID, target, state)
+			}
 		}
 	}
-	unit.GlobalCooldownEndsAt = now.Add(time.Duration(c.power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
 	*events = append(*events, CombatEvent{
 		AttackerID: attackerID.String(),
 		TargetID:   targetID.String(),
-		PowerName:  c.power.Name,
+		PowerName:  power.Name,
 	})
+}
+
+// npcEffectUsable reports whether eff is a type/shape tryNPCAttack knows how
+// to fire at all (a harm with an amount, or a status with a status).
+func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
+	switch eff.Type {
+	case "harm":
+		return eff.Amount != nil
+	case "status":
+		return eff.Status != nil
+	default:
+		return false
+	}
+}
+
+// npcEffectInRange reports whether eff can currently reach its recipient -
+// always true for a self-affecting effect (no target distance to check).
+func npcEffectInRange(eff instanceconfig.PowerEffect, dist float64, unit, target *instancestate.UnitState) bool {
+	if eff.Affects == "self" {
+		return true
+	}
+	maxRange := 5.0
+	if eff.Range != nil {
+		maxRange = eff.Range.Max()
+	}
+	return dist <= maxRange+unit.Radius+target.Radius
 }
 
 // tryNPCBasicAttack fires unit's weapon-less basic attack at target if the

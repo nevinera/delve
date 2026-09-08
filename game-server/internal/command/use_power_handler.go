@@ -2,6 +2,7 @@ package command
 
 import (
 	"math"
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -87,7 +88,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 				if target.TaggedBy == nil && target.Hostility != "" {
 					target.TaggedBy = &unitID
 				}
-				engageOnAttack(target, unitID, zone, next)
+				EngageOnAttack(target, unitID, zone, next)
 				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false)
 				target.Health -= IncomingDamage(target, zone, raw, effect.School != "magic")
 				if target.Health < 0 {
@@ -114,6 +115,14 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 					return nil
 				}
 				recipient = target
+				// Casting at a hostile target is an attack too - it aggros
+				// an idle hostile target and can be resisted, same as harm.
+				// Resistibility is a property of this cast (who it's aimed
+				// at), not of the Status itself - see IsHostileAffects.
+				EngageOnAttack(target, unitID, zone, next)
+				if IsHostileAffects(effect.Affects) && rand.Float64() < baseMissChance {
+					continue // resisted
+				}
 			}
 			ApplyStatus(recipient, unitID, *effect.Status, effect.Duration, now)
 		case "heal":

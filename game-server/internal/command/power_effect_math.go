@@ -42,6 +42,16 @@ func effectSchoolStats(unit *instancestate.UnitState, zone instanceconfig.Zone, 
 	return hastePct, critChancePct, statContribution
 }
 
+// IsHostileAffects reports whether a PowerEffect.Affects value targets a
+// hostile unit ("bTarget"/"bAll") - the property of the *cast*, not of any
+// Status it might apply, that determines whether it can be resisted. A
+// Status's own TreatAs is purely a display flavor (buff/debuff/inherent)
+// and says nothing about who it's being cast at - the same status could in
+// principle be granted to an ally or forced onto an enemy.
+func IsHostileAffects(affects string) bool {
+	return affects == "bTarget" || affects == "bAll"
+}
+
 // inRangeAndLOS reports whether target is within effRange (defaulting to
 // 5ft melee when nil, plus both units' radii) of unit and has a clear line
 // of sight, shared by harm and target-heal effects.

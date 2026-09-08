@@ -7,7 +7,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-// engageOnAttack reacts to unitID attacking target: an idle hostile target
+// EngageOnAttack reacts to unitID attacking target: an idle hostile target
 // immediately notices and engages attackerID, regardless of whether
 // attackerID is within its own aggro radius - and regardless of whether the
 // attack actually lands, since noticing you swung at it doesn't require the
@@ -15,7 +15,7 @@ import (
 // after, so a miss still aggros (some units may later get exceptions to
 // this). Also pulls in any idle units linked to target, same as a kill
 // would, in case this attack is the killing blow.
-func engageOnAttack(target *instancestate.UnitState, attackerID uuid.UUID, zone instanceconfig.Zone, next *instancestate.InstanceState) {
+func EngageOnAttack(target *instancestate.UnitState, attackerID uuid.UUID, zone instanceconfig.Zone, next *instancestate.InstanceState) {
 	if target.Status == instancestate.UnitStatusIdle && target.Hostility == "hostile" {
 		engageIdleUnit(target, attackerID)
 	}
