@@ -231,17 +231,31 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	var available []candidate
 	for _, p := range powers {
 		for _, eff := range p.Effects {
-			if eff.Type != "harm" || eff.Amount == nil {
+			switch eff.Type {
+			case "harm":
+				if eff.Amount == nil {
+					continue
+				}
+			case "status":
+				if eff.Status == nil {
+					continue
+				}
+			default:
 				continue
 			}
-			maxRange := 5.0
-			if eff.Range != nil {
-				maxRange = eff.Range.Max()
+			// A self-targeted effect (e.g. a self-buff status) needs no
+			// range check against the current target.
+			if eff.Affects != "self" {
+				maxRange := 5.0
+				if eff.Range != nil {
+					maxRange = eff.Range.Max()
+				}
+				if dist > maxRange+unit.Radius+target.Radius {
+					continue
+				}
 			}
-			if dist <= maxRange+unit.Radius+target.Radius {
-				available = append(available, candidate{p, eff})
-				break
-			}
+			available = append(available, candidate{p, eff})
+			break
 		}
 	}
 	if len(available) == 0 {
@@ -249,16 +263,25 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	}
 
 	c := available[rand.Intn(len(available))]
-	timeBudget := command.PowerEffectTimeBudget(c.power)
-	raw := command.PowerEffectAmount(unit, zone, c.effect, timeBudget, false, false)
-	target.Health -= command.IncomingDamage(target, zone, raw, c.effect.School != "magic")
-	if target.Health < 0 {
-		target.Health = 0
-	}
-	if target.Health == 0 {
-		target.Status = instancestate.UnitStatusDead
-		target.Target = nil
-		instancestate.RollAndRecordLoot(targetID, target, state)
+	switch c.effect.Type {
+	case "status":
+		recipient := target
+		if c.effect.Affects == "self" {
+			recipient = unit
+		}
+		command.ApplyStatus(recipient, attackerID, *c.effect.Status, c.effect.Duration, now)
+	case "harm":
+		timeBudget := command.PowerEffectTimeBudget(c.power)
+		raw := command.PowerEffectAmount(unit, zone, c.effect, timeBudget, false, false)
+		target.Health -= command.IncomingDamage(target, zone, raw, c.effect.School != "magic")
+		if target.Health < 0 {
+			target.Health = 0
+		}
+		if target.Health == 0 {
+			target.Status = instancestate.UnitStatusDead
+			target.Target = nil
+			instancestate.RollAndRecordLoot(targetID, target, state)
+		}
 	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(c.power.GlobalCooldown * float64(time.Second)))
 	*events = append(*events, CombatEvent{

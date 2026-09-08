@@ -538,3 +538,64 @@ func TestUsePowerHandler_KillAggroesLinkedIdleUnit(t *testing.T) {
 	require.NotNil(t, state.Units[linkedID].Target)
 	assert.Equal(t, playerID, *state.Units[linkedID].Target)
 }
+
+func selfStatusPower(status instanceconfig.Status) command.UsePowerPayload {
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Affects: "self", Duration: 10.0, Status: &status},
+			},
+		},
+	}
+}
+
+func targetStatusPower(status instanceconfig.Status) command.UsePowerPayload {
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Affects: "bTarget", Range: &rng, Duration: 10.0, Status: &status},
+			},
+		},
+	}
+}
+
+func TestUsePowerHandler_AppliesSelfStatus(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	status := instanceconfig.Status{Name: "Enraged", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfStatusPower(status), instanceconfig.Zone{}, state))
+
+	require.Len(t, state.Units[playerID].ActiveStatusEffects, 1)
+	e := state.Units[playerID].ActiveStatusEffects[0]
+	assert.Equal(t, "Enraged", e.Status.Name)
+	assert.Equal(t, playerID, e.ApplierID)
+	assert.Empty(t, state.Units[targetID].ActiveStatusEffects, "a self-affecting status shouldn't touch the target")
+}
+
+func TestUsePowerHandler_AppliesStatusToTarget(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0) // 3ft away, within 5ft range
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+	require.Len(t, state.Units[targetID].ActiveStatusEffects, 1)
+	e := state.Units[targetID].ActiveStatusEffects[0]
+	assert.Equal(t, "Dazed", e.Status.Name)
+	assert.Equal(t, playerID, e.ApplierID)
+	assert.Empty(t, state.Units[playerID].ActiveStatusEffects)
+}
+
+func TestUsePowerHandler_TargetStatusOutOfRangeIsNoOp(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 10, 0) // 10ft away, range is 5ft
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+	assert.Empty(t, state.Units[targetID].ActiveStatusEffects)
+}

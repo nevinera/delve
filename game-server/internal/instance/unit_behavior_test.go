@@ -326,6 +326,93 @@ func fixedStabZone(amount float64, school string) instanceconfig.Zone {
 	}
 }
 
+// selfStatusZone builds a zone with a single hostile goblin whose only power
+// applies a status to itself.
+func selfStatusZone(status instanceconfig.Status) instanceconfig.Zone {
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				Powers: []instanceconfig.Power{{
+					Name: "Enrage", GlobalCooldown: 1.5,
+					Effects: []instanceconfig.PowerEffect{
+						{Type: "status", Affects: "self", Duration: 10.0, Status: &status},
+					},
+				}},
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+// targetStatusZone builds a zone with a single hostile goblin whose only
+// power applies a status to its target.
+func targetStatusZone(status instanceconfig.Status) instanceconfig.Zone {
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				Powers: []instanceconfig.Power{{
+					Name: "Daze", GlobalCooldown: 1.5,
+					Effects: []instanceconfig.PowerEffect{
+						{Type: "status", Affects: "bTarget", Range: &rng, Duration: 10.0, Status: &status},
+					},
+				}},
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_Attack_AppliesSelfStatus(t *testing.T) {
+	zone := selfStatusZone(instanceconfig.Status{Name: "Enraged", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"})
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	require.Len(t, u.ActiveStatusEffects, 1)
+	assert.Equal(t, "Enraged", u.ActiveStatusEffects[0].Status.Name)
+	assert.Empty(t, p.ActiveStatusEffects, "a self-affecting status shouldn't touch the target")
+}
+
+func TestUnitBehavior_Attack_AppliesStatusToTarget(t *testing.T) {
+	zone := targetStatusZone(instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"})
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	require.Len(t, p.ActiveStatusEffects, 1)
+	e := p.ActiveStatusEffects[0]
+	assert.Equal(t, "Dazed", e.Status.Name)
+	var goblinID uuid.UUID
+	for id, unit := range s.Units {
+		if unit == u {
+			goblinID = id
+		}
+	}
+	assert.Equal(t, goblinID, e.ApplierID)
+	assert.Empty(t, u.ActiveStatusEffects)
+}
+
 func TestUnitBehavior_Attack_AppliesPlayerTargetsDefenceRating(t *testing.T) {
 	zone := fixedStabZone(20.0, "physical")
 

@@ -101,6 +101,21 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 					unit.Attacking = false
 				}
 			}
+		case "status":
+			if effect.Status == nil {
+				continue
+			}
+			recipient := unit
+			if effect.Affects != "self" {
+				if target == nil {
+					continue
+				}
+				if !inRangeAndLOS(unit, target, zone, effect.Range) {
+					return nil
+				}
+				recipient = target
+			}
+			ApplyStatus(recipient, unitID, *effect.Status, effect.Duration, now)
 		case "heal":
 			if effect.Amount == nil {
 				continue
