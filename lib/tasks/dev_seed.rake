@@ -18,33 +18,47 @@ namespace :dev do
   end
 end
 
+# Prefer whatever real (non-seed) user already exists - typically the
+# developer's own Google account, once they've logged in at least once -
+# so seeded characters/zones/etc. end up owned by the account you're
+# actually signed in as, rather than an unreachable placeholder you can
+# never log into. Falls back to a placeholder local_dev user only when no
+# real user has ever signed in yet (e.g. a completely fresh database).
 def seed_user
-  User.find_or_create_by!(provider: "local_dev", uid: "local_dev") do |u|
-    u.email = "dev@localhost"
-    u.name = "Local Dev"
-  end
+  User.where.not(provider: "local_dev").order(:created_at).first ||
+    User.find_or_create_by!(provider: "local_dev", uid: "local_dev") do |u|
+      u.email = "dev@localhost"
+      u.name = "Local Dev"
+    end
 end
 
 def seed_handle(user)
-  Handle.find_or_create_by!(user: user, identifier: "local_dev")
+  # identifier is globally unique, not scoped to user - look it up by
+  # identifier alone (not user:) and reassign ownership, so re-running this
+  # task under a different (now-real) user reclaims the same handle instead
+  # of colliding with the one a prior run already created.
+  handle = Handle.find_or_initialize_by(identifier: "local_dev")
+  handle.user = user
+  handle.save!
+  handle
 end
 
 def seed_character_class(user, handle)
-  character_class = CharacterClass.find_or_create_by!(handle: handle, identifier: "puncher_local", version: "0.1") do |cc|
-    cc.user = user
-    cc.location = "http://localhost:8001/classes/puncher.full.json"
-  end
+  character_class = CharacterClass.find_or_initialize_by(handle: handle, identifier: "puncher_local", version: "0.1")
+  character_class.user = user
+  character_class.location = "http://localhost:8001/classes/puncher.full.json"
+  character_class.save!
   fetch_and_verify!(FetchCharacterClassContentJob, character_class)
   character_class
 end
 
 def seed_zone(user, handle, attrs)
-  zone = Zone.find_or_create_by!(handle: handle, identifier: attrs.fetch(:identifier), version: attrs.fetch(:version)) do |z|
-    z.registering_user = user
-    z.name = attrs.fetch(:name)
-    z.description = attrs.fetch(:description)
-    z.config_url = attrs.fetch(:config_url)
-  end
+  zone = Zone.find_or_initialize_by(handle: handle, identifier: attrs.fetch(:identifier), version: attrs.fetch(:version))
+  zone.registering_user = user
+  zone.name = attrs.fetch(:name)
+  zone.description = attrs.fetch(:description)
+  zone.config_url = attrs.fetch(:config_url)
+  zone.save!
   fetch_and_verify!(FetchZoneContentJob, zone)
   zone
 end
