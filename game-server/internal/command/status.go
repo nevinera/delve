@@ -9,14 +9,19 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-// ApplyStatus applies status (sourced from applierID, e.g. a power's
+// ApplyStatus applies status (cast by applier/applierID, e.g. a power's
 // "status" effect) to target, honoring its stacking rule against any
 // existing application from the SAME applier - different appliers' copies
 // of the same-named status are tracked independently (see
 // docs/schema/status.md). duration is the applying effect's own duration
 // (PowerEffect.Duration for a power's status effect) - not part of Status
 // itself. now is the current tick's timestamp.
-func ApplyStatus(target *instancestate.UnitState, applierID uuid.UUID, status instanceconfig.Status, duration float64, now time.Time) {
+//
+// applier/zone are needed to compute the applier's current Haste, which
+// scales the interval to a recurring effect's first tick just as much as
+// every later one - applying a status is itself the first "scheduling"
+// event, not an unhasted special case (see RecurringTickInterval).
+func ApplyStatus(target, applier *instancestate.UnitState, applierID uuid.UUID, status instanceconfig.Status, duration float64, zone instanceconfig.Zone, now time.Time) {
 	expiresAt := now.Add(time.Duration(duration * float64(time.Second)))
 
 	for i := range target.ActiveStatusEffects {
@@ -29,7 +34,7 @@ func ApplyStatus(target *instancestate.UnitState, applierID uuid.UUID, status in
 		switch status.Stacking {
 		case "replace":
 			e.Stacks = 1
-			e.TimeUntilNextTick = initialTickTimers(status)
+			e.TimeUntilNextTick = initialTickTimers(applier, zone, status)
 		case "stack":
 			e.Stacks++
 			if status.MaxStacks > 0 && e.Stacks > status.MaxStacks {
@@ -47,19 +52,20 @@ func ApplyStatus(target *instancestate.UnitState, applierID uuid.UUID, status in
 		ApplierID:         applierID,
 		ExpiresAt:         expiresAt,
 		Stacks:            1,
-		TimeUntilNextTick: initialTickTimers(status),
+		TimeUntilNextTick: initialTickTimers(applier, zone, status),
 	})
 }
 
 // initialTickTimers seeds TimeUntilNextTick for a freshly (re)applied
-// status: each "recurring" effect starts counting down from its own base
-// tickRate - haste-scaled live scheduling is applied per-tick, not here
-// (see docs/stats.md's Haste and tmp/plan.md).
-func initialTickTimers(status instanceconfig.Status) []float64 {
+// status: each "recurring" effect starts counting down from an interval
+// computed from the applier's Haste right now (see RecurringTickInterval) -
+// same as every later reschedule, just evaluated at application instead of
+// at a tick firing.
+func initialTickTimers(applier *instancestate.UnitState, zone instanceconfig.Zone, status instanceconfig.Status) []float64 {
 	timers := make([]float64, len(status.Effects))
 	for i, effect := range status.Effects {
 		if effect.Type == "recurring" {
-			timers[i] = effect.TickRate
+			timers[i] = RecurringTickInterval(applier, zone, effect)
 		}
 	}
 	return timers

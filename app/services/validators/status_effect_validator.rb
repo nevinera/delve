@@ -53,6 +53,12 @@ module Validators
       on_tick = require_string!(data, "onTick", path: path)
       require_one_of!(on_tick, %w[heal harm], path: child_path(path, "onTick"))
       require_numeric!(data, "amount", path: path)
+      validate_school!(data, path: path) if data.key?("school")
+    end
+
+    def validate_school!(data, path:)
+      school = require_string!(data, "school", path: path)
+      require_one_of!(school, PowerEffectValidator::DAMAGE_SCHOOLS, path: child_path(path, "school"))
     end
   end
 end

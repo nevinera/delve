@@ -84,3 +84,7 @@ func (inst *Instance) DrainPlayerSpawnsForTest(ctx context.Context, state *insta
 func ExpireStatusEffectsForTest(state *instancestate.InstanceState, now time.Time) {
 	expireStatusEffects(state, now)
 }
+
+func TickStatusEffectsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	tickStatusEffects(state, zone, dt)
+}

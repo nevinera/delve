@@ -124,7 +124,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 					continue // resisted
 				}
 			}
-			ApplyStatus(recipient, unitID, *effect.Status, effect.Duration, now)
+			ApplyStatus(recipient, unit, unitID, *effect.Status, effect.Duration, zone, now)
 		case "heal":
 			if effect.Amount == nil {
 				continue

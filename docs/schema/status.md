@@ -98,12 +98,13 @@ Applies a heal or harm tick at a regular interval while the status is active.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `tickRate` | float | yes | Seconds between ticks. |
+| `tickRate` | float | yes | Seconds between ticks, before Haste. Haste never shortens the status's own duration - only how often it ticks within that duration. The interval to the *next* tick is decided fresh from the applier's Haste each time a tick is scheduled - at application, and again each time a tick subsequently fires - rather than being fixed once for the whole status or continuously re-evaluated in between. Application counts as the first such scheduling event, so even the first tick's interval is Haste-scaled. A Haste change takes effect starting with whichever tick is scheduled next; if the resulting interval is short enough, an extra tick can fit in before the status expires. |
 | `onTick` | string | yes | `"heal"` or `"harm"`. |
-| `amount` | float | yes | HP healed or damage dealt per tick. |
+| `amount` | float | yes | HP healed or damage dealt per tick, before stat scaling (see [power_effect.md](power_effect.md)'s `harm`/`heal` scaling - the same math applies here). |
+| `school` | string | no, default `"physical"` | `"physical"` or `"magic"`. Picks which Haste pool scales the tick interval, and (for `onTick: "harm"`) which of the target's Avoidance/Defence Rating pools mitigates each tick - same as [PowerEffect](power_effect.md)'s `school`. Ignored (always magic) for `onTick: "heal"`, same as a `heal` PowerEffect. |
 
 ```json
-{ "type": "recurring", "tickRate": 2.0, "onTick": "harm", "amount": 5.0 }
+{ "type": "recurring", "tickRate": 2.0, "onTick": "harm", "amount": 5.0, "school": "magic" }
 ```
 
 ---

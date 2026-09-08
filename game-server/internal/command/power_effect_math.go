@@ -93,7 +93,61 @@ func PowerEffectTimeBudget(power instanceconfig.Power) float64 {
 // as basicAttackDamage. heal effects aren't attacks, so they only roll
 // crit, never miss.
 func PowerEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, effect instanceconfig.PowerEffect, timeBudget float64, isHeal bool, isRecurring bool) float64 {
-	school := effect.School
+	lo, hi := effect.Amount.Min(), effect.Amount.Max()
+	rolled := lo + rand.Float64()*(hi-lo)
+	return effectAmount(unit, zone, effect.School, rolled, timeBudget, isHeal, isRecurring)
+}
+
+// StatusTickAmount rolls one recurring StatusEffect's tick amount - the same
+// stat-scaling/crit/miss math as PowerEffectAmount, but the base amount is
+// the tick's own fixed Amount (not a rolled range) and isRecurring is always
+// true. timeBudget should be the effect's own (unhasted) TickRate - Haste
+// speeds up how *often* a tick fires (see EffectHastePct/tmp/plan.md step 6),
+// not the per-tick amount, so it isn't double-counted here.
+func StatusTickAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, effect instanceconfig.StatusEffect, timeBudget float64, isHeal bool) float64 {
+	return effectAmount(unit, zone, effect.School, effect.Amount, timeBudget, isHeal, true)
+}
+
+// EffectHastePct returns the Haste% that should scale a recurring status
+// tick's interval, for the tick's own school - the applier's *current*
+// stats, recomputed fresh every call (never snapshotted at apply time), so
+// a mid-duration Haste change speeds up the very next tick. Returns 0 if
+// applier is nil (e.g. they've left the instance since applying it).
+func EffectHastePct(applier *instancestate.UnitState, zone instanceconfig.Zone, school string) float64 {
+	if applier == nil {
+		return 0
+	}
+	hastePct, _, _ := effectSchoolStats(applier, zone, school)
+	return hastePct
+}
+
+// RecurringTickInterval is the seconds until a recurring StatusEffect's next
+// tick, given applier's Haste *as of right now* - this is computed once
+// each time a tick is scheduled (when the status is applied, and again each
+// time a tick subsequently fires - see instancestate.ActiveStatusEffect.
+// TimeUntilNextTick), not continuously re-evaluated in between.
+func RecurringTickInterval(applier *instancestate.UnitState, zone instanceconfig.Zone, effect instanceconfig.StatusEffect) float64 {
+	interval := effect.TickRate / (1 + EffectHastePct(applier, zone, effect.School)/100)
+	if interval <= 0 {
+		return effect.TickRate
+	}
+	return interval
+}
+
+// effectAmount is the shared stat-scaling/crit/miss math behind
+// PowerEffectAmount and StatusTickAmount: rolled is the base amount before
+// any bonus (an authored-range roll for a harm/heal effect, or a status
+// tick's own fixed Amount). Healing is always treated as magic (Intellect,
+// magic Crit) and its bonus is doubled relative to the same-shaped harm
+// bonus; a recurring (status tick) effect's bonus gets a further 2x
+// premium. See tmp/plan.md's status-implementation step 0 for the full
+// derivation.
+//
+// Non-heal effects also roll RollAttackOutcome's universal miss chance (a
+// spell's miss is narratively a "resist") - a miss returns 0 outright, same
+// as basicAttackDamage. heal effects aren't attacks, so they only roll
+// crit, never miss.
+func effectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, school string, rolled float64, timeBudget float64, isHeal bool, isRecurring bool) float64 {
 	if isHeal {
 		school = "magic"
 	}
@@ -112,9 +166,6 @@ func PowerEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, 
 		}
 		multiplier = m
 	}
-
-	lo, hi := effect.Amount.Min(), effect.Amount.Max()
-	rolled := lo + rand.Float64()*(hi-lo)
 
 	k := statContribution / basicAttackStatDPSDivisor
 	bonus := k * timeBudget

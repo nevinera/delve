@@ -93,6 +93,19 @@ RSpec.describe Validators::StatusEffectValidator, type: :validator do
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /must be one of/)
       end
+
+      it "allows school to be omitted" do
+        expect { described_class.validate!(recurring_effect.except("school")) }.not_to raise_error
+      end
+
+      it "allows school magic" do
+        expect { described_class.validate!(recurring_effect.merge("school" => "magic")) }.not_to raise_error
+      end
+
+      it "raises when school is not a recognized value" do
+        expect { described_class.validate!(recurring_effect.merge("school" => "fire")) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
     end
 
     context "when data is an AssetReference" do

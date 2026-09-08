@@ -83,9 +83,14 @@ type ActiveStatusEffect struct {
 	Stacks int
 
 	// TimeUntilNextTick is parallel to Status.Effects: for each "recurring"
-	// entry, seconds remaining until its next tick (haste-scaled live each
-	// server tick, not snapshotted - see docs/stats.md's Haste and
-	// tmp/plan.md). Unused (0) for non-recurring entries.
+	// entry, seconds remaining until its next tick. Counts down by dt every
+	// server tick; when it fires, the interval for the *following* tick is
+	// recomputed from the applier's Haste as of that moment (see
+	// command.RecurringTickInterval) - not continuously re-evaluated
+	// between ticks, and not snapshotted once at apply time either, so a
+	// Haste change takes effect starting with whichever tick fires next
+	// (see docs/stats.md's Haste and tmp/plan.md). Unused (0) for
+	// non-recurring entries.
 	TimeUntilNextTick []float64
 }
 

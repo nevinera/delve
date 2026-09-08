@@ -265,7 +265,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 					}
 				}
 			}
-			command.ApplyStatus(recipient, attackerID, *eff.Status, eff.Duration, now)
+			command.ApplyStatus(recipient, unit, attackerID, *eff.Status, eff.Duration, zone, now)
 		case "harm":
 			timeBudget := command.PowerEffectTimeBudget(power)
 			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false)

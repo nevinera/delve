@@ -78,7 +78,7 @@ type Status struct {
 //
 // none fields:      (none)
 // stat fields:      StatName, ModifierType, Amount
-// recurring fields: TickRate, OnTick, Amount
+// recurring fields: TickRate, OnTick, Amount, School
 type StatusEffect struct {
 	Type string `json:"type"` // Required
 
@@ -90,4 +90,11 @@ type StatusEffect struct {
 	// recurring
 	TickRate float64 `json:"tickRate,omitempty"` // Required for recurring: seconds between ticks
 	OnTick   string  `json:"onTick,omitempty"`   // Required for recurring: "heal" or "harm"
+
+	// recurring only: "physical" (default) or "magic" - same as
+	// PowerEffect.School. Picks which haste pool scales the tick interval,
+	// and (for onTick: "harm") which of the target's Avoidance/Defence
+	// Rating pools mitigates each tick. Ignored (always magic) for
+	// onTick: "heal", same as a heal PowerEffect.
+	School string `json:"school,omitempty"`
 }
