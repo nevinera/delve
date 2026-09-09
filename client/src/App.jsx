@@ -377,17 +377,34 @@ const styles = {
   },
   selfFrame: {
     flex: 1,
-    position: "relative",
+    display: "flex",
+    alignItems: "stretch",
+    gap: 8,
     background: "#0d2b0d",
     border: "1px solid #2a6a2a",
     padding: 8,
   },
   targetFrame: {
     flex: 1,
-    position: "relative",
+    display: "flex",
+    flexDirection: "row-reverse",
+    alignItems: "stretch",
+    gap: 8,
     background: "#2b0d0d",
     border: "1px solid #6a2a2a",
     padding: 8,
+  },
+  frameImage: {
+    height: "100%",
+    width: "auto",
+    objectFit: "cover",
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  frameInfo: {
+    position: "relative",
+    flex: 1,
+    minWidth: 0,
   },
   targetRange: {
     fontSize: 11,
@@ -1004,7 +1021,12 @@ function UnitBar({ label, current, max }) {
   );
 }
 
-function HealthBar({ current, max }) {
+// numbersAlign positions the "current/max" label directly above one end of
+// the bar - "end" (self's frame) sits above its right end, "start"
+// (target's frame) above its left end, so on-screen both labels land near
+// the center of the frames row, next to each other. Omitted entirely
+// (rather than defaulting to a side) when the caller doesn't want it shown.
+function HealthBar({ current, max, numbersAlign }) {
   const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
   return (
     <div style={{
@@ -1017,6 +1039,20 @@ function HealthBar({ current, max }) {
       borderRadius: 2,
       background: "#5a1010",
     }}>
+      {numbersAlign && current != null && max != null && (
+        <div style={{
+          position: "absolute",
+          bottom: "100%",
+          marginBottom: 2,
+          [numbersAlign === "start" ? "left" : "right"]: 0,
+          fontSize: 11,
+          color: "#ccc",
+          whiteSpace: "nowrap",
+          textShadow: "0 1px 2px #000",
+        }}>
+          {Math.round(current)}/{Math.round(max)}
+        </div>
+      )}
       <div style={{
         width: `${pct * 100}%`,
         height: "100%",
@@ -1849,6 +1885,7 @@ export default function App({
   const npcBasicAttackRangeByZoneIdRef = useRef({}); // { [zoneUnitId]: basicAttackRange }
   const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
   const npcBasicAttackStyleByZoneIdRef = useRef({});  // { [zoneUnitId]: basicAttackStyle | undefined }
+  const npcTokenUrlByZoneIdRef = useRef({});          // { [zoneUnitId]: resolved absolute tokenImageUrl }
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
@@ -1891,6 +1928,7 @@ export default function App({
         const basicAttackRangeById = {};
         const basicAttackSchoolById = {};
         const basicAttackStyleById = {};
+        const tokenUrlById = {};
         const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
@@ -1905,6 +1943,12 @@ export default function App({
             basicAttackRangeById[unit.identifier] = ut.basicAttackRange ?? BASIC_ATTACK_RANGE;
             basicAttackSchoolById[unit.identifier] = ut.basicAttackSchool ?? "physical";
             basicAttackStyleById[unit.identifier] = ut.basicAttackStyle;
+            // tokenImageUrl may be a single string or an array of variants
+            // (the 3D scene picks one at random per spawn - here we just
+            // always show the first, since there's nowhere in this 2D frame
+            // to track which variant a given spawn actually rendered with).
+            const rawTokenUrl = Array.isArray(ut.tokenImageUrl) ? ut.tokenImageUrl[0] : ut.tokenImageUrl;
+            tokenUrlById[unit.identifier] = rawTokenUrl ? new URL(rawTokenUrl, zoneSourceUrl).href : null;
           }
           barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
@@ -1913,6 +1957,7 @@ export default function App({
         npcBasicAttackRangeByZoneIdRef.current = basicAttackRangeById;
         npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
         npcBasicAttackStyleByZoneIdRef.current = basicAttackStyleById;
+        npcTokenUrlByZoneIdRef.current = tokenUrlById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
         // Every unit type's powers, not just spawned units' - a status
@@ -2378,27 +2423,43 @@ export default function App({
         (targetUnit.position.y - selfUnit.position.y) ** 2
       ).toFixed(1)
     : null;
+  // Only resolvable for self (characterTokenUrl, a prop) and NPC targets
+  // (npcTokenUrlByZoneIdRef, built from the zone config) - another
+  // player's token art isn't known client-side at all (same gap as
+  // statusCatalog not covering other players' powers), so their frame
+  // just shows no image rather than guessing.
+  const targetTokenUrl = targetUnit
+    ? (targetUnit.zone_unit_identifier === selfIdentifier
+        ? characterTokenUrl
+        : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
+    : null;
 
   return (
     <div style={styles.root}>
       <div style={styles.frames}>
         <div style={styles.selfFrame}>
-          <strong>{characterName ?? "—"}</strong>
-          {selfUnit && (
-            <>
-              <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
-              <HealthBar current={selfUnit.health} max={selfUnit.max_health} />
-            </>
-          )}
-          {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
+          <div style={styles.frameInfo}>
+            <strong>{characterName ?? "—"}</strong>
+            {selfUnit && (
+              <>
+                <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
+                <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
+              </>
+            )}
+            {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          </div>
         </div>
         <div style={styles.targetFrame}>
           {targetUnit ? (
             <>
-              <strong>{formatUnitName(targetUnit)}</strong>
-              {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-              <HealthBar current={targetUnit.health} max={targetUnit.max_health} />
-              {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+              {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
+              <div style={styles.frameInfo}>
+                <strong>{formatUnitName(targetUnit)}</strong>
+                {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
+                <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+                {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+              </div>
             </>
           ) : (
             <span style={{ color: "#666" }}>No target</span>
