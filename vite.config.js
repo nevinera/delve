@@ -14,6 +14,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "client/src/main.jsx"),
         editor: resolve(__dirname, "client/src/editor/main.jsx"),
+        classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
       },
       output: {
         entryFileNames: "[name].js",
