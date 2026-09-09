@@ -2,7 +2,10 @@ class Build::AbilitiesController < Build::BaseController
   skip_authorization_check only: [:index, :new, :create, :edit]
   layout "build_client", only: :edit
 
-  KEY_FORMAT = /\A[a-zA-Z0-9_-]+\z/
+  # Each "/"-separated segment is a directory (e.g. "classes/druid/wildshape"
+  # → abilities/classes/druid/wildshape.json) - lets abilities be organized
+  # into subdirectories instead of all living flat in abilities/.
+  KEY_FORMAT = %r{\A[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*\z}
 
   MIME_TYPES = {
     ".svg" => "image/svg+xml", ".png" => "image/png", ".webp" => "image/webp",
@@ -11,7 +14,8 @@ class Build::AbilitiesController < Build::BaseController
   }.freeze
 
   def index
-    @abilities = Github::ContentClient.new(current_user).list_directory("abilities")
+    entries = Github::ContentClient.new(current_user).list_directory_recursive("abilities")
+    @abilities = entries.select { |entry| entry["name"].end_with?(".json") }.sort_by { |entry| entry["path"] }
   end
 
   def new
@@ -22,7 +26,7 @@ class Build::AbilitiesController < Build::BaseController
   def create
     @key = params[:key].to_s.strip
     return render_new_with_error("Key is required.") if @key.blank?
-    return render_new_with_error("Key must contain only letters, numbers, underscores, and hyphens.") unless @key.match?(KEY_FORMAT)
+    return render_new_with_error("Key must contain only letters, numbers, underscores, hyphens, and \"/\" to place it in a subdirectory.") unless @key.match?(KEY_FORMAT)
     return render_new_with_error("\"#{@key}\" is already taken.") if ability_key_taken?(@key)
 
     redirect_to edit_build_ability_path(id: @key)
@@ -41,7 +45,7 @@ class Build::AbilitiesController < Build::BaseController
   end
 
   def ability_key_taken?(key)
-    Github::ContentClient.new(current_user).list_directory("abilities").any? { |entry| entry["name"] == "#{key}.json" }
+    Github::ContentClient.new(current_user).list_directory_recursive("abilities").any? { |entry| entry["path"] == "abilities/#{key}.json" }
   end
 
   def load_ability
@@ -82,6 +86,15 @@ class Build::AbilitiesController < Build::BaseController
     end
   end
 
+  # The directory a relative asset URL (e.g. "../graphics/icons/x.svg")
+  # resolves against - abilities/<key>.json's own directory, same as
+  # client/src/editor/saveAbility.js's resolveRepoPath. A flat key (no "/")
+  # gives File.dirname(key) == "." which Pathname#cleanpath drops, so this
+  # still resolves to plain "abilities" for existing non-nested content.
+  def ability_base_dir
+    Pathname.new("abilities").join(File.dirname(params[:id]))
+  end
+
   # A ":name:" stock asset (see docs/schema/common.md#stock-asset-reference)
   # is server-hosted, not in the user's repo - it needs no GitHub fetch/
   # base64 embedding for the preview, unlike everything else this collects.
@@ -93,7 +106,7 @@ class Build::AbilitiesController < Build::BaseController
     mime_type = MIME_TYPES[File.extname(relative_url).downcase]
     return nil unless mime_type
 
-    resolved_path = Pathname.new("abilities").join(relative_url).cleanpath.to_s
+    resolved_path = ability_base_dir.join(relative_url).cleanpath.to_s
     "data:#{mime_type};base64,#{Base64.strict_encode64(client.file_content(resolved_path))}"
   rescue Github::ReauthRequiredError
     raise

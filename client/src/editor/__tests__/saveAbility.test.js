@@ -69,6 +69,19 @@ describe("saveAbility", () => {
     expect(filesByPath).toHaveProperty("abilities/icons/firebolt.svg", file);
   });
 
+  it("commits a nested key's JSON at abilities/<key>.json and resolves its assets relative to its own subdirectory", async () => {
+    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+    const ability = {name: "Wildshape", iconURL: "../graphics/icons/wildshape.svg"};
+    const file = new File(["x"], "icon.svg");
+
+    await saveAbility("classes/druid/wildshape", ability, {iconURL: file});
+
+    expect(commitFiles).toHaveBeenCalledWith(
+      {"abilities/classes/druid/wildshape.json": ability, "abilities/classes/graphics/icons/wildshape.svg": file},
+      {message: "Update Wildshape"}
+    );
+  });
+
   it("throws, without calling commitFiles, when a pending upload's field is still blank", async () => {
     const ability = {name: "Firebolt", iconURL: ""};
     const file = new File(["x"], "icon.svg");

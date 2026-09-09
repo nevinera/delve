@@ -11,6 +11,17 @@ module Github
       contents(path)
     end
 
+    # Walks every subdirectory too, returning a flat array of file entries
+    # only (directory entries themselves are expanded, not included) - lets
+    # content be organized into subdirectories (e.g. abilities/classes/druid/,
+    # abilities/units/) without the caller needing to know that structure
+    # ahead of time.
+    def list_directory_recursive(path)
+      entries = contents(path)
+      return [] unless entries.is_a?(Array)
+      entries.flat_map { |entry| (entry["type"] == "dir") ? list_directory_recursive(entry["path"]) : [entry] }
+    end
+
     def file_content(path)
       data = contents(path)
       raise NotFoundError, "#{path} not found in #{@installation.repo_full_name}" unless data.is_a?(Hash) && data["content"]

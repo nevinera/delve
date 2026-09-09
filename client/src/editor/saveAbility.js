@@ -5,9 +5,11 @@ import {currentFieldValue} from "./resolveAbilityForPlayback";
 // "../graphics/icons/x.svg") against the ability's own location in the
 // repo, the same way the server resolves it when fetching (see
 // Build::AbilitiesController#asset_data_uri) - abilities/<key>.json is the
-// base, so "../graphics/..." lands at "graphics/...".
-function resolveRepoPath(relativePath) {
-  const url = new URL(relativePath, "https://_/abilities/ability.json");
+// base (key may itself contain "/"s, placing the ability in a subdirectory,
+// e.g. "classes/druid/wildshape"), so "../graphics/..." lands wherever it
+// would relative to that file's own directory.
+function resolveRepoPath(key, relativePath) {
+  const url = new URL(relativePath, `https://_/abilities/${key}.json`);
   return url.pathname.replace(/^\//, "");
 }
 
@@ -28,7 +30,7 @@ export async function saveAbility(key, ability, pendingFiles) {
       missingPaths.push(overrideKey);
       continue;
     }
-    filesByPath[resolveRepoPath(relativePath)] = file;
+    filesByPath[resolveRepoPath(key, relativePath)] = file;
   }
 
   if (missingPaths.length > 0) {
