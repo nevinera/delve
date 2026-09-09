@@ -1,5 +1,11 @@
 class Play::ZonesController < Play::BaseController
-  layout "game_client"
+  layout "game_client", except: :index
+
+  def index
+    @character = current_user.characters.find(params[:character_id])
+    authorize! :read, @character
+    @zones = Zone.where(state: :fetched).order(:identifier, :version)
+  end
 
   def show
     @character = current_user.characters.find(params[:character_id])

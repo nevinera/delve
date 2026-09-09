@@ -22,6 +22,46 @@ RSpec.describe "Play::Zones", type: :request do
     end
   end
 
+  describe "GET /play/characters/:character_id/zones" do
+    let!(:validation_failed_zone) { create(:zone, state: :validation_failed) }
+
+    context "when not logged in" do
+      it "redirects to login" do
+        get "/play/characters/#{character.id}/zones"
+        expect(response).to redirect_to("/login")
+      end
+    end
+
+    context "when logged in" do
+      before { sign_in user }
+
+      it "returns 200 and links to the fetched zone" do
+        get "/play/characters/#{character.id}/zones"
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include(play_character_zone_path(character, zone))
+      end
+
+      it "does not link to a zone that hasn't fetched successfully" do
+        get "/play/characters/#{character.id}/zones"
+        expect(response.body).not_to include(play_character_zone_path(character, validation_failed_zone))
+      end
+
+      it "renders the normal layout (with nav)" do
+        get "/play/characters/#{character.id}/zones"
+        expect(response.body).to include("<nav>")
+      end
+
+      context "with a character belonging to another user" do
+        let!(:other_character) { create(:character, user: other_user, character_class: character_class) }
+
+        it "returns 404" do
+          get "/play/characters/#{other_character.id}/zones"
+          expect(response).to have_http_status(:not_found)
+        end
+      end
+    end
+  end
+
   context "when logged in" do
     before { sign_in user }
 

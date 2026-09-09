@@ -52,6 +52,11 @@ RSpec.describe "Play::Characters", type: :request do
         get "/play/characters/#{character.id}"
         expect(response.body).to include("Ariana-AA")
       end
+
+      it "links to the zones listing" do
+        get "/play/characters/#{character.id}"
+        expect(response.body).to include(play_character_zones_path(character))
+      end
     end
 
     describe "GET /play/characters/new" do

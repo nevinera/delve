@@ -49,7 +49,7 @@ Rails.application.routes.draw do
   namespace :play do
     root to: "dashboard#index"
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
-      resources :zones, only: [:show]
+      resources :zones, only: [:index, :show]
       resources :character_items, only: [:index, :show]
       resources :equipped_items, only: [:index, :update], param: :equipped_slot
     end

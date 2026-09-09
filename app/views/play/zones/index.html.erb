@@ -1,0 +1,9 @@
+<h1>Zones</h1>
+
+<p>Pick a zone to enter with <%= @character.name %>.</p>
+
+<ul>
+  <% @zones.each do |zone| %>
+    <li><%= link_to "#{zone.name} (#{zone.version})", play_character_zone_path(@character, zone) %></li>
+  <% end %>
+</ul>
