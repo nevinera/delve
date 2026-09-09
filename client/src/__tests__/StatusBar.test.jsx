@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { StatusBar, formatRemaining } from "../App";
 
 describe("formatRemaining", () => {
@@ -87,5 +87,56 @@ describe("StatusBar", () => {
   it("anchors to the right edge when side is 'right'", () => {
     render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} side="right" />);
     expect(screen.getByText(/Buffed/).closest("[style*='position: absolute']")).toHaveStyle({ right: "8px" });
+  });
+
+  describe("hover tooltip", () => {
+    const status = {
+      key: "a",
+      shortName: "2ndWnd",
+      treatAs: "buff",
+      expiresAt: NOW + 65_000,
+      name: "Second Wind",
+      description: "A burst of energy from catching your breath.",
+      appliedByName: "Bob",
+    };
+
+    it("shows nothing before hovering", () => {
+      render(<StatusBar statuses={[status]} now={NOW} />);
+      expect(screen.queryByText("Second Wind")).not.toBeInTheDocument();
+    });
+
+    it("shows the full name, description, and applier on hover", () => {
+      render(<StatusBar statuses={[status]} now={NOW} />);
+      fireEvent.mouseEnter(screen.getByText("1:05 2ndWnd"));
+
+      expect(screen.getByText("Second Wind")).toBeInTheDocument();
+      expect(screen.getByText("A burst of energy from catching your breath.")).toBeInTheDocument();
+      expect(screen.getByText("Applied by Bob")).toBeInTheDocument();
+    });
+
+    it("hides the tooltip again on mouse leave", () => {
+      render(<StatusBar statuses={[status]} now={NOW} />);
+      const row = screen.getByText("1:05 2ndWnd");
+      fireEvent.mouseEnter(row);
+      fireEvent.mouseLeave(row);
+
+      expect(screen.queryByText("Second Wind")).not.toBeInTheDocument();
+    });
+
+    it("omits the description line when the status has none", () => {
+      render(<StatusBar statuses={[{ ...status, description: undefined }]} now={NOW} />);
+      fireEvent.mouseEnter(screen.getByText("1:05 2ndWnd"));
+
+      expect(screen.getByText("Second Wind")).toBeInTheDocument();
+      expect(screen.queryByText("A burst of energy from catching your breath.")).not.toBeInTheDocument();
+    });
+
+    it("omits the applied-by line when the applier can't be resolved", () => {
+      render(<StatusBar statuses={[{ ...status, appliedByName: null }]} now={NOW} />);
+      fireEvent.mouseEnter(screen.getByText("1:05 2ndWnd"));
+
+      expect(screen.getByText("Second Wind")).toBeInTheDocument();
+      expect(screen.queryByText(/Applied by/)).not.toBeInTheDocument();
+    });
   });
 });

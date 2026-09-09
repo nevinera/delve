@@ -883,6 +883,40 @@ const styles = {
     color: "#d4a84b",
     marginTop: 2,
   },
+  statusTooltipAnchor: {
+    display: "inline-block",
+    // The status bars themselves are pointerEvents: "none" (so they never
+    // block clicks/targeting on the 3D scene underneath) - this re-enables
+    // hover just for each individual row.
+    pointerEvents: "auto",
+    cursor: "default",
+  },
+  statusTooltip: {
+    position: "fixed",
+    zIndex: 100,
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #556",
+    borderRadius: 6,
+    padding: "8px 12px",
+    minWidth: 140,
+    maxWidth: 280,
+    pointerEvents: "none",
+  },
+  statusTooltipName: {
+    color: "#cce",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  statusTooltipDescription: {
+    color: "#aaa",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  statusTooltipAppliedBy: {
+    color: "#667",
+    fontSize: 11,
+    marginTop: 6,
+  },
 };
 
 // "3:05", "0:08" - minutes unpadded, seconds zero-padded. Rounds up so a
@@ -894,13 +928,43 @@ export function formatRemaining(ms) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Mouse-tracked portal tooltip for one status row - mirrors StatEffectTooltip/
+// AbilityTooltip's approach. Shown on hover, name+description+applier;
+// description is optional (Status.description), and the applier line is
+// omitted entirely when it can't be resolved (e.g. they've since left the
+// instance) rather than showing a hollow "Applied by Unknown".
+function StatusTooltip({ name, description, appliedByName, children }) {
+  const [pos, setPos] = useState(null);
+
+  return (
+    <span
+      style={styles.statusTooltipAnchor}
+      onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && createPortal(
+        <div style={{ ...styles.statusTooltip, left: pos.x + 16, top: pos.y + 16 }}>
+          <div style={styles.statusTooltipName}>{name}</div>
+          {description && <div style={styles.statusTooltipDescription}>{description}</div>}
+          {appliedByName && <div style={styles.statusTooltipAppliedBy}>Applied by {appliedByName}</div>}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
 function StatusColumn({ entries, color }) {
   return (
     <div style={styles.statusColumn}>
-      {entries.map(({ key, shortName, remainingMs }) => (
-        <div key={key} style={{ ...styles.statusRow, color }}>
-          {formatRemaining(remainingMs)} {shortName}
-        </div>
+      {entries.map(({ key, shortName, remainingMs, name, description, appliedByName }) => (
+        <StatusTooltip key={key} name={name} description={description} appliedByName={appliedByName}>
+          <div style={{ ...styles.statusRow, color }}>
+            {formatRemaining(remainingMs)} {shortName}
+          </div>
+        </StatusTooltip>
       ))}
     </div>
   );
@@ -2158,7 +2222,16 @@ export default function App({
       .map((e) => {
         const status = statusCatalog[e.status_name]?.status;
         if (status?.treatAs !== "buff" && status?.treatAs !== "debuff") return null;
-        return { key: `${e.status_name}:${e.applier_id}`, shortName: status.shortName, treatAs: status.treatAs, expiresAt: e.expires_at };
+        const applier = units[e.applier_id];
+        return {
+          key: `${e.status_name}:${e.applier_id}`,
+          shortName: status.shortName,
+          treatAs: status.treatAs,
+          expiresAt: e.expires_at,
+          name: status.name,
+          description: status.description,
+          appliedByName: applier ? formatUnitName(applier) : null,
+        };
       })
       .filter(Boolean);
   }
