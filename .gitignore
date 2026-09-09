@@ -36,6 +36,9 @@
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
+# Local-only allow-list restricting Google login (see config/allow_only.yml.example).
+/config/allow_only.yml
+
 # Game server build artifacts
 /game-server/game-server
 /game-server/validate-zone

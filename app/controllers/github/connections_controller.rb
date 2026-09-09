@@ -71,11 +71,18 @@ class Github::ConnectionsController < ApplicationController
 
   def connect_installation
     tokens = Github::OauthClient.exchange_code(params[:code])
+    return "This GitHub account is not permitted." unless github_user_allowed?(tokens)
+
     installation = params[:installation_id].present? ? new_installation(tokens) : existing_installation
     return installation if installation.is_a?(String)
 
     apply_tokens!(installation, tokens)
     installation
+  end
+
+  def github_user_allowed?(tokens)
+    username = Github::ApiClient.new(tokens["access_token"]).user["login"]
+    AllowOnlyList.allows?("github", username)
   end
 
   def new_installation(tokens)
