@@ -58,5 +58,5 @@ Rails.application.routes.draw do
     end
   end
 
-  root to: "users#index"
+  root to: "home#index"
 end
