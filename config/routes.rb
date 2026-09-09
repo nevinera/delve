@@ -47,6 +47,7 @@ Rails.application.routes.draw do
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
 
   namespace :play do
+    root to: "dashboard#index"
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
       resources :zones, only: [:show]
       resources :character_items, only: [:index, :show]
