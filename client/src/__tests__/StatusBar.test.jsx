@@ -78,4 +78,14 @@ describe("StatusBar", () => {
     render(<StatusBar statuses={[{ key: "gone", shortName: "Gone", treatAs: "buff", expiresAt: NOW - 1000 }]} now={NOW} />);
     expect(screen.queryByText(/Gone/)).not.toBeInTheDocument();
   });
+
+  it("anchors to the left edge by default", () => {
+    render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} />);
+    expect(screen.getByText(/Buffed/).closest("[style*='position: absolute']")).toHaveStyle({ left: "8px" });
+  });
+
+  it("anchors to the right edge when side is 'right'", () => {
+    render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} side="right" />);
+    expect(screen.getByText(/Buffed/).closest("[style*='position: absolute']")).toHaveStyle({ right: "8px" });
+  });
 });

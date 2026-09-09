@@ -825,9 +825,19 @@ const styles = {
     cursor: "help",
     borderBottom: "1px dotted #667",
   },
-  statusBar: {
+  statusBarLeft: {
     position: "absolute",
     left: 8,
+    bottom: 8,
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+    pointerEvents: "none",
+  },
+  statusBarRight: {
+    position: "absolute",
+    right: 8,
     bottom: 8,
     display: "flex",
     flexDirection: "row",
@@ -899,9 +909,12 @@ function StatusColumn({ entries, color }) {
 // Buffs and debuffs (only - "inherent" statuses have no meaningful
 // countdown to show) sorted ascending by time remaining, so the row with
 // the most time left ends up at the bottom - combined with bottom-anchored
-// positioning (see styles.statusBar), the whole thing visually grows
-// upward as more statuses land, rather than pushing existing rows down.
-export function StatusBar({ statuses, now }) {
+// positioning (see styles.statusBarLeft/statusBarRight), the whole thing
+// visually grows upward as more statuses land, rather than pushing
+// existing rows down. `side` only picks which edge of the screen it's
+// anchored to (self: left, target: right) - the buff/debuff column order
+// (buffs, then debuffs) stays the same either way.
+export function StatusBar({ statuses, now, side = "left" }) {
   const withRemaining = statuses
     .map((s) => ({ ...s, remainingMs: s.expiresAt - now }))
     .filter((s) => s.remainingMs > 0)
@@ -911,7 +924,7 @@ export function StatusBar({ statuses, now }) {
   if (!buffs.length && !debuffs.length) return null;
 
   return (
-    <div style={styles.statusBar}>
+    <div style={side === "right" ? styles.statusBarRight : styles.statusBarLeft}>
       <StatusColumn entries={buffs} color="#5ec95e" />
       <StatusColumn entries={debuffs} color="#ff5c5c" />
     </div>
@@ -2138,24 +2151,29 @@ export default function App({
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
+  const targetUnit = targetId ? units[targetId] : null;
 
-  const selfStatuses = (selfUnit?.active_status_effects ?? [])
-    .map((e) => {
-      const status = statusCatalog[e.status_name]?.status;
-      if (status?.treatAs !== "buff" && status?.treatAs !== "debuff") return null;
-      return { key: `${e.status_name}:${e.applier_id}`, shortName: status.shortName, treatAs: status.treatAs, expiresAt: e.expires_at };
-    })
-    .filter(Boolean);
+  function activeStatusesFor(unit) {
+    return (unit?.active_status_effects ?? [])
+      .map((e) => {
+        const status = statusCatalog[e.status_name]?.status;
+        if (status?.treatAs !== "buff" && status?.treatAs !== "debuff") return null;
+        return { key: `${e.status_name}:${e.applier_id}`, shortName: status.shortName, treatAs: status.treatAs, expiresAt: e.expires_at };
+      })
+      .filter(Boolean);
+  }
+  const selfStatuses = activeStatusesFor(selfUnit);
+  const targetStatuses = activeStatusesFor(targetUnit);
 
   // Ticks re-renders once a second (only while there's something to count
-  // down) so the status bar's MM:SS stays live between server updates.
+  // down) so the status bars' MM:SS stays live between server updates.
   const [, setStatusTick] = useState(0);
-  const hasSelfStatuses = selfStatuses.length > 0;
+  const hasActiveStatuses = selfStatuses.length > 0 || targetStatuses.length > 0;
   useEffect(() => {
-    if (!hasSelfStatuses) return;
+    if (!hasActiveStatuses) return;
     const id = setInterval(() => setStatusTick(t => t + 1), 1000);
     return () => clearInterval(id);
-  }, [hasSelfStatuses]);
+  }, [hasActiveStatuses]);
 
   useEffect(() => {
     setAttacking(!!selfUnit?.attacking);
@@ -2281,7 +2299,6 @@ export default function App({
     }
   }, [equippedItemsUrl]);
 
-  const targetUnit = targetId ? units[targetId] : null;
   const targetRange = (selfUnit && targetUnit)
     ? Math.sqrt(
         (targetUnit.position.x - selfUnit.position.x) ** 2 +
@@ -2335,7 +2352,8 @@ export default function App({
           statusCatalog={statusCatalog}
           stockAssets={stockAssets}
         />
-        <StatusBar statuses={selfStatuses} now={Date.now()} />
+        <StatusBar statuses={selfStatuses} now={Date.now()} side="left" />
+        <StatusBar statuses={targetStatuses} now={Date.now()} side="right" />
         <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
         <LootWindow
