@@ -825,6 +825,27 @@ const styles = {
     cursor: "help",
     borderBottom: "1px dotted #667",
   },
+  statusBar: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+    pointerEvents: "none",
+  },
+  statusColumn: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+  },
+  statusRow: {
+    fontSize: 11,
+    lineHeight: 1.3,
+    whiteSpace: "nowrap",
+    textShadow: "0 1px 3px #000",
+  },
   unitTooltip: {
     position: "absolute",
     top: 8,
@@ -853,6 +874,49 @@ const styles = {
     marginTop: 2,
   },
 };
+
+// "3:05", "0:08" - minutes unpadded, seconds zero-padded. Rounds up so a
+// status showing "0:01" is still actually active, not already expired.
+export function formatRemaining(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function StatusColumn({ entries, color }) {
+  return (
+    <div style={styles.statusColumn}>
+      {entries.map(({ key, shortName, remainingMs }) => (
+        <div key={key} style={{ ...styles.statusRow, color }}>
+          {formatRemaining(remainingMs)} {shortName}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Buffs and debuffs (only - "inherent" statuses have no meaningful
+// countdown to show) sorted ascending by time remaining, so the row with
+// the most time left ends up at the bottom - combined with bottom-anchored
+// positioning (see styles.statusBar), the whole thing visually grows
+// upward as more statuses land, rather than pushing existing rows down.
+export function StatusBar({ statuses, now }) {
+  const withRemaining = statuses
+    .map((s) => ({ ...s, remainingMs: s.expiresAt - now }))
+    .filter((s) => s.remainingMs > 0)
+    .sort((a, b) => a.remainingMs - b.remainingMs);
+  const buffs = withRemaining.filter((s) => s.treatAs === "buff");
+  const debuffs = withRemaining.filter((s) => s.treatAs === "debuff");
+  if (!buffs.length && !debuffs.length) return null;
+
+  return (
+    <div style={styles.statusBar}>
+      <StatusColumn entries={buffs} color="#5ec95e" />
+      <StatusColumn entries={debuffs} color="#ff5c5c" />
+    </div>
+  );
+}
 
 function UnitBar({ label, current, max }) {
   const pct = max > 0 ? Math.round((current / max) * 100) : 0;
@@ -2075,6 +2139,24 @@ export default function App({
   const selfUnitId = selfEntry?.[0];
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
 
+  const selfStatuses = (selfUnit?.active_status_effects ?? [])
+    .map((e) => {
+      const status = statusCatalog[e.status_name]?.status;
+      if (status?.treatAs !== "buff" && status?.treatAs !== "debuff") return null;
+      return { key: `${e.status_name}:${e.applier_id}`, shortName: status.shortName, treatAs: status.treatAs, expiresAt: e.expires_at };
+    })
+    .filter(Boolean);
+
+  // Ticks re-renders once a second (only while there's something to count
+  // down) so the status bar's MM:SS stays live between server updates.
+  const [, setStatusTick] = useState(0);
+  const hasSelfStatuses = selfStatuses.length > 0;
+  useEffect(() => {
+    if (!hasSelfStatuses) return;
+    const id = setInterval(() => setStatusTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [hasSelfStatuses]);
+
   useEffect(() => {
     setAttacking(!!selfUnit?.attacking);
   }, [selfUnit?.attacking]);
@@ -2253,6 +2335,7 @@ export default function App({
           statusCatalog={statusCatalog}
           stockAssets={stockAssets}
         />
+        <StatusBar statuses={selfStatuses} now={Date.now()} />
         <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
         <LootWindow
