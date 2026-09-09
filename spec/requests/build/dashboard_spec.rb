@@ -53,6 +53,21 @@ RSpec.describe "Build::Dashboard", type: :request do
           get "/build"
           expect(response.body).to include(build_abilities_path)
         end
+
+        it "links to the zones listing" do
+          get "/build"
+          expect(response.body).to include(build_zones_path)
+        end
+
+        it "links to the character classes listing" do
+          get "/build"
+          expect(response.body).to include(build_character_classes_path)
+        end
+
+        it "links to the handles listing" do
+          get "/build"
+          expect(response.body).to include(build_handles_path)
+        end
       end
     end
   end
