@@ -9,10 +9,21 @@ RSpec.describe "Admin::Users", type: :request do
       end
     end
 
-    context "when logged in" do
+    context "when logged in as a non-admin" do
+      before { sign_in create(:user) }
+
+      it "redirects to root with an alert" do
+        get "/admin/users"
+        expect(response).to redirect_to(root_path)
+        follow_redirect!
+        expect(response.body).to include("not permitted")
+      end
+    end
+
+    context "when logged in as an admin" do
       let!(:users) { create_list(:user, 3) }
 
-      before { sign_in users.first }
+      before { sign_in create(:user, :admin) }
 
       it "returns 200" do
         get "/admin/users"

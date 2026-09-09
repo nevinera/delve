@@ -4,5 +4,9 @@ FactoryBot.define do
     sequence(:uid) { |n| "google_uid_#{n}" }
     provider { "google_oauth2" }
     name { "Test User" }
+
+    trait :admin do
+      admin { true }
+    end
   end
 end
