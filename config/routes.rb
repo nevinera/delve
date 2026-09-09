@@ -11,7 +11,9 @@ Rails.application.routes.draw do
 
   get "home", to: "home#index"
 
-  resources :users, only: [:index]
+  namespace :admin do
+    resources :users, only: [:index]
+  end
 
   namespace :github do
     get "connect", to: "connections#connect"

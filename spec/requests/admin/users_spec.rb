@@ -1,10 +1,10 @@
 require "rails_helper"
 
-RSpec.describe "Users", type: :request do
-  describe "GET /users" do
+RSpec.describe "Admin::Users", type: :request do
+  describe "GET /admin/users" do
     context "when not logged in" do
       it "redirects to login" do
-        get "/users"
+        get "/admin/users"
         expect(response).to redirect_to("/login")
       end
     end
@@ -15,17 +15,17 @@ RSpec.describe "Users", type: :request do
       before { sign_in users.first }
 
       it "returns 200" do
-        get "/users"
+        get "/admin/users"
         expect(response).to have_http_status(:ok)
       end
 
       it "lists all users" do
-        get "/users"
+        get "/admin/users"
         users.each { |u| expect(response.body).to include(u.email) }
       end
 
       it "renders users in id order" do
-        get "/users"
+        get "/admin/users"
         positions = users.sort_by(&:id).map { |u| response.body.index(u.email) }
         expect(positions).to eq(positions.sort)
       end
