@@ -20,4 +20,14 @@ RSpec.describe "Home", type: :request do
       expect(response.body).to include("/build")
     end
   end
+
+  describe "GET /" do
+    it "routes to the same place as /home" do
+      sign_in user
+      get "/"
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("/play")
+      expect(response.body).to include("/build")
+    end
+  end
 end
