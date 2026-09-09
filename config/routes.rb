@@ -29,7 +29,6 @@ Rails.application.routes.draw do
     resources :abilities, only: [:index, :new, :create]
     resources :handles, only: [:index, :show, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
-    resources :character_classes, only: [:index, :show, :new, :create]
   end
 
   # A glob segment, not a plain :id + regex constraint (and defined outside
