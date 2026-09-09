@@ -5,15 +5,20 @@ describe("graphicFieldsFor", () => {
   it("sets sourceURL to the colon-wrapped name and copies sprite fields when present", () => {
     const fields = graphicFieldsFor("magic-ball", {spriteColumns: 3, spriteRows: 3, spriteFrameRate: 12});
     expect(fields).toEqual({
-      sourceURL: ":magic-ball:", spriteColumns: 3, spriteRows: 3, spriteFrameCount: null, spriteFrameRate: 12,
+      sourceURL: ":magic-ball:", spriteColumns: 3, spriteRows: 3, spriteFrameCount: undefined, spriteFrameRate: 12,
     });
   });
 
-  it("nulls out every sprite field for a static (non-animated) pick", () => {
+  // undefined, not null: the server-side validators require an absent key,
+  // not merely a null value, for an unset sprite field (see
+  // Validators::Helpers#validate_graphic_sprite_sheet!) - JSON.stringify
+  // drops an undefined-valued key entirely, clearing any stale value.
+  it("clears every sprite field (as undefined) for a static (non-animated) pick", () => {
     const fields = graphicFieldsFor("glow", {});
     expect(fields).toEqual({
-      sourceURL: ":glow:", spriteColumns: null, spriteRows: null, spriteFrameCount: null, spriteFrameRate: null,
+      sourceURL: ":glow:", spriteColumns: undefined, spriteRows: undefined, spriteFrameCount: undefined, spriteFrameRate: undefined,
     });
+    expect(JSON.stringify(fields)).toEqual(JSON.stringify({sourceURL: ":glow:"}));
   });
 });
 

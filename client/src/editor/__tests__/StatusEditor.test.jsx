@@ -76,7 +76,7 @@ describe("StatusEditor", () => {
       expect(onChange).toHaveBeenCalledWith(withoutAura);
     });
 
-    it("picking a stock graphic sets sourceURL and sprite fields, nulling out unset ones", () => {
+    it("picking a stock graphic sets sourceURL and sprite fields, clearing unset ones", () => {
       const withAura = {...status, auraEffect: {sourceURL: "../graphics/effects/glow.webp"}};
       const onChange = vi.fn();
       render(<StatusEditor value={withAura} onChange={onChange} stockAssets={stockAssets} />);
@@ -87,7 +87,7 @@ describe("StatusEditor", () => {
         ...status,
         auraEffect: {
           sourceURL: ":glow:",
-          spriteColumns: null, spriteRows: null, spriteFrameCount: null, spriteFrameRate: null,
+          spriteColumns: undefined, spriteRows: undefined, spriteFrameCount: undefined, spriteFrameRate: undefined,
         },
       });
     });

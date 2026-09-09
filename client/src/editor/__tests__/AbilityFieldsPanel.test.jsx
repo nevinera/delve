@@ -145,7 +145,7 @@ describe("AbilityFieldsPanel", () => {
       expect(iconPicker).toHaveValue("");
     });
 
-    it("dispatches UPDATE_ENTRY_FIELDS with sourceURL and sprite fields when a stock graphic is picked, nulling out fields the new pick doesn't have", () => {
+    it("dispatches UPDATE_ENTRY_FIELDS with sourceURL and sprite fields when a stock graphic is picked, clearing fields the new pick doesn't have", () => {
       const dispatch = vi.fn();
       render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
       const graphicPicker = screen.getAllByDisplayValue("— stock asset —")[1];
@@ -154,7 +154,7 @@ describe("AbilityFieldsPanel", () => {
 
       expect(dispatch).toHaveBeenCalledWith({
         type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0,
-        fields: {sourceURL: ":arc:", spriteColumns: null, spriteRows: null, spriteFrameCount: null, spriteFrameRate: null},
+        fields: {sourceURL: ":arc:", spriteColumns: undefined, spriteRows: undefined, spriteFrameCount: undefined, spriteFrameRate: undefined},
       });
     });
 
@@ -167,7 +167,7 @@ describe("AbilityFieldsPanel", () => {
 
       expect(dispatch).toHaveBeenCalledWith({
         type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0,
-        fields: {sourceURL: ":magic-ball:", spriteColumns: 3, spriteRows: 3, spriteFrameCount: null, spriteFrameRate: 12},
+        fields: {sourceURL: ":magic-ball:", spriteColumns: 3, spriteRows: 3, spriteFrameCount: undefined, spriteFrameRate: 12},
       });
     });
 
