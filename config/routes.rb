@@ -22,11 +22,25 @@ Rails.application.routes.draw do
 
   namespace :build do
     root to: "dashboard#index"
-    resources :abilities, only: [:index, :new, :create, :edit]
+    resources :abilities, only: [:index, :new, :create]
     resources :handles, only: [:index, :show, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
     resources :character_classes, only: [:index, :show, :new, :create]
   end
+
+  # A glob segment, not a plain :id + regex constraint (and defined outside
+  # `namespace :build` so its `as:` isn't auto-prefixed with "build_" again,
+  # which would otherwise double up into build_edit_build_ability_path): an
+  # ability's key may itself contain "/"s (organizing it into a
+  # subdirectory, e.g. "classes/druid/wildshape"). A :id + constraint
+  # recognizes that fine on the way in, but Rails percent-encodes embedded
+  # "/"s (as %2F) when *generating* a URL from a plain dynamic segment -
+  # functionally still correct (the router decodes it back before
+  # matching), but produces an ugly, unreadable link. A glob segment
+  # carries literal "/"s through both directions natively, so
+  # edit_build_ability_path(id: "a/b") comes out as a clean
+  # "/build/abilities/a/b/edit" with no encoding involved.
+  get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
 
   namespace :play do
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do

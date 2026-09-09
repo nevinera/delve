@@ -60,10 +60,38 @@ const (
 	UnitStatusDead     UnitStatus = "dead"
 )
 
-// ActiveStatusEffect is a status effect currently applied to a unit.
+// ActiveStatusEffect is one status currently applied to a unit, identified
+// by (Status.Name, ApplierID) - different appliers' copies of the
+// same-named status are tracked independently, so e.g. two casters' DoTs on
+// the same target don't stomp each other. The Status definition is
+// snapshotted at apply time (not just its name) so later processing doesn't
+// need to re-resolve which power granted it. See docs/schema/status.md and
+// command.ApplyStatus.
 type ActiveStatusEffect struct {
-	StatusIdentifier string
-	ExpiresAt        time.Time
+	Status    instanceconfig.Status
+	ApplierID uuid.UUID
+
+	// ExpiresAt is the sole duration clock - "duration-remaining" is always
+	// derived as ExpiresAt.Sub(now). Every stack of a "stack"-stacking
+	// status shares this one timer (docs/schema/status.md): a new
+	// application refreshes it to the full duration rather than each stack
+	// having its own independent expiry.
+	ExpiresAt time.Time
+
+	// Stacks is meaningful only when Status.Stacking == "stack"; 1 for
+	// "extend"/"replace".
+	Stacks int
+
+	// TimeUntilNextTick is parallel to Status.Effects: for each "recurring"
+	// entry, seconds remaining until its next tick. Counts down by dt every
+	// server tick; when it fires, the interval for the *following* tick is
+	// recomputed from the applier's Haste as of that moment (see
+	// command.RecurringTickInterval) - not continuously re-evaluated
+	// between ticks, and not snapshotted once at apply time either, so a
+	// Haste change takes effect starting with whichever tick fires next
+	// (see docs/stats.md's Haste and tmp/plan.md). Unused (0) for
+	// non-recurring entries.
+	TimeUntilNextTick []float64
 }
 
 // MovementIntent holds the player-commanded movement keys for a unit.
@@ -129,6 +157,13 @@ type UnitState struct {
 	MaxResource float64 // cached from UnitType.Resource.Max at spawn
 	Speed       float64 // movement speed in feet per second
 	Radius      float64 // collision radius in feet; 0 means no collision (NPCs for now)
+
+	// Player-only combat inputs, cached from the InstanceSlot at spawn; nil/""
+	// for NPCs. EquippedItems carries each item's own elvl so combat math can
+	// scale it against the unit's *current* map (see instanceconfig.Zone.MapElvl)
+	// rather than a value fixed at spawn - see docs/stats.md.
+	EquippedItems map[string]instanceconfig.EquippedItem
+	DamageStatKey string // "strength", "agility", or "" - see CharacterClass.DamageStatKey
 
 	LootTable map[string]int    // identifier → weight; nil means no loot
 	LootCount [2]int            // [min, max] items to award; both 1 when lootCount omitted

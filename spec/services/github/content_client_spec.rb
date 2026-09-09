@@ -72,6 +72,49 @@ RSpec.describe Github::ContentClient do
     end
   end
 
+  describe "#list_directory_recursive" do
+    let!(:installation) do
+      create(:github_installation, user: user, repo_full_name: "nevinera/delve-content",
+        access_token: "gho_fresh", access_token_expires_at: 1.hour.from_now)
+    end
+
+    it "recurses into subdirectories, returning only file entries" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
+        .to_return(
+          status: 200,
+          headers: {"Content-Type" => "application/json"},
+          body: [
+            {name: "punch.json", path: "abilities/punch.json", type: "file"},
+            {name: "classes", path: "abilities/classes", type: "dir"}
+          ].to_json
+        )
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes")
+        .to_return(
+          status: 200,
+          headers: {"Content-Type" => "application/json"},
+          body: [{name: "druid", path: "abilities/classes/druid", type: "dir"}].to_json
+        )
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/druid")
+        .to_return(
+          status: 200,
+          headers: {"Content-Type" => "application/json"},
+          body: [{name: "wildshape.json", path: "abilities/classes/druid/wildshape.json", type: "file"}].to_json
+        )
+
+      result = described_class.new(user).list_directory_recursive("abilities")
+      expect(result.map { |e| e["path"] }).to contain_exactly(
+        "abilities/punch.json", "abilities/classes/druid/wildshape.json"
+      )
+    end
+
+    it "returns an empty array for an empty directory" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: [].to_json)
+
+      expect(described_class.new(user).list_directory_recursive("abilities")).to eq([])
+    end
+  end
+
   describe "#file_content" do
     let!(:installation) do
       create(:github_installation, user: user, repo_full_name: "nevinera/delve-content",

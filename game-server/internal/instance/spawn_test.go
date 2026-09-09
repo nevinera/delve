@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
 // makeZoneWithMap returns a minimal zone whose first map has the given dimensions.
@@ -87,6 +89,39 @@ func TestPlayerSpawn_AppearsInFullState(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "player unit should appear in full state message")
+}
+
+// TestPlayerSpawn_MaxHealthReflectsEquippedStamina guards against the bug
+// where a player's MaxHealth was a flat 100 regardless of equipped Stamina
+// (see docs/stats.md's "Stamina" section: MaxHP = 100 + Stamina * 10) -
+// spawn.go now computes it from EquippedItems, and health should start full
+// against that real cap, not the flat base.
+func TestPlayerSpawn_MaxHealthReflectsEquippedStamina(t *testing.T) {
+	reg := instance.NewRegistry()
+	inst := startedInstance(t, reg)
+	t.Cleanup(inst.Stop)
+
+	stamina := "stamina"
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "main_hand", SecondaryStats: []string{stamina, stamina, stamina}},
+	})
+	require.NoError(t, err)
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	units := receiveFullState(t, writeCh)
+
+	for _, u := range units {
+		if u["zone_unit_identifier"] == "player:Aldric" {
+			maxHealth := u["max_health"].(float64)
+			assert.Greater(t, maxHealth, 100.0, "equipped Stamina should raise MaxHealth above the flat base")
+			assert.Equal(t, maxHealth, u["health"], "should spawn at full health against the real cap")
+			return
+		}
+	}
+	t.Fatal("player unit not found in full state")
 }
 
 func TestPlayerSpawn_UsesFirstMapCenter(t *testing.T) {
@@ -210,6 +245,28 @@ func TestPlayerSpawn_UsesEntryPoint_Line(t *testing.T) {
 		}
 	}
 	t.Fatal("player unit not found in full state")
+}
+
+func TestPlayerSpawn_CachesEquippedItemsAndDamageStatKeyForCombatMath(t *testing.T) {
+	inst := makeInstance()
+	class := instanceconfig.CharacterClass{Name: "Puncher", PrimaryStats: []string{"strength"}}
+	equipped := map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "main_hand", Elvl: 50, PrimaryStat: strPtr("strength")},
+	}
+	slot, err := inst.AddSlot("Aldric", "42", class, nil, equipped)
+	require.NoError(t, err)
+
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	inst.DrainPlayerSpawnsForTest(context.Background(), state)
+
+	unit := state.Units[slot.CharacterUnitID]
+	require.NotNil(t, unit)
+	assert.Equal(t, equipped, unit.EquippedItems)
+	assert.Equal(t, "strength", unit.DamageStatKey)
 }
 
 func TestPlayerSpawn_ReconnectDoesNotDuplicate(t *testing.T) {

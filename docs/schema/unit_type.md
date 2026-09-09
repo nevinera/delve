@@ -13,12 +13,13 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 | `tokenImageUrl` | string \| array of strings | yes | | Portrait image URL(s). If an array, one is chosen at random each time a unit is created from this type. |
 | `tokenRadius` | float | yes | | Token radius in feet. Range: 1.0-20.0. |
 | `speedFactor` | float | no | `1.0` | Movement speed multiplier relative to base character speed. Range: 0.0-10.0. |
-| `aggroRadius` | float | no | `20.0` | Distance in feet at which this unit detects and aggros enemies. |
+| `aggroRadius` | float | no | `20.0` | Distance in feet at which this unit proactively notices and aggros enemies. Landing a hit on it (basic attack or any power) always aggros it immediately regardless of this radius. |
 | `maxHP` | integer | yes | | Maximum hit points. |
 | `dps` | float | yes | | Basic-attack damage per second. Damage per swing is `dps / attackSpeed`. |
 | `attackSpeed` | float | yes | | Basic-attack rate, in attacks per second. Time between basic attacks is `1 / attackSpeed` seconds. |
 | `basicAttackRange` | float | no | `5.0` | Basic-attack range in feet. Leave at the default for melee; set higher (e.g. `30.0`) for a ranged basic attack. |
-| `basicAttackSchool` | string | no | `"physical"` | `"physical"` or `"magic"`. Purely cosmetic - picks the basic-attack visual/sound; has no mechanical effect. |
+| `basicAttackSchool` | string | no | `"physical"` | `"physical"` or `"magic"`. Picks the basic-attack visual/sound and which of the target's Avoidance/Defence Rating pools mitigates it - see [stats.md](../stats.md). |
+| `basicAttackStyle` | string | no | derived from `basicAttackSchool`/`basicAttackRange` | One of `claw`, `sword`, `axe`, `club`, `arrow`, `arcane`, `ice`, `nature`, `fire`. Purely cosmetic - picks the basic-attack graphic/sound; has no mechanical effect. When omitted, the client falls back to `arcane`/`arrow`/`sword` based on `basicAttackSchool`/`basicAttackRange`. |
 | `resource` | ResourceType | yes | | The resource used to power this unit's abilities. |
 | `powers` | array of Ability \| AssetReference(`referenceTo: "power"`) | no | `[]` | Abilities available to this unit. Inline Ability objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `targeting` | UnitTargeting | no | `{ "type": "aggroTable" }` | How this unit selects its target when aggro'd. |

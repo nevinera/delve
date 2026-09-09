@@ -4,6 +4,7 @@ module Validators
     TACTICS_TYPES = %w[randomAvailable rotation priorityRotation scripted phased].freeze
     PATROL_TACTICS_TYPES = (TACTICS_TYPES - ["phased"]).freeze
     BASIC_ATTACK_SCHOOLS = %w[physical magic].freeze
+    BASIC_ATTACK_STYLES = %w[claw sword axe club arrow arcane ice nature fire].freeze
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
@@ -20,6 +21,7 @@ module Validators
       validate_speed_factor!(data, path: path) if data.key?("speedFactor")
       validate_positive_numeric!(data, "basicAttackRange", path: path) if data.key?("basicAttackRange")
       validate_basic_attack_school!(data, path: path) if data.key?("basicAttackSchool")
+      validate_basic_attack_style!(data, path: path) if data.key?("basicAttackStyle")
     end
 
     def validate_fixed_fields!(data, path:)
@@ -35,6 +37,11 @@ module Validators
     def validate_basic_attack_school!(data, path:)
       school = require_string!(data, "basicAttackSchool", path: path)
       require_one_of!(school, BASIC_ATTACK_SCHOOLS, path: child_path(path, "basicAttackSchool"))
+    end
+
+    def validate_basic_attack_style!(data, path:)
+      style = require_string!(data, "basicAttackStyle", path: path)
+      require_one_of!(style, BASIC_ATTACK_STYLES, path: child_path(path, "basicAttackStyle"))
     end
 
     def validate_positive_numeric!(data, key, path:)

@@ -51,6 +51,37 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response.body).to include(edit_build_ability_path(id: "punch"))
           expect(response.body).not_to include("github.com/nevinera/delve-content/blob")
         end
+
+        it "recurses into subdirectories, showing each ability's full repo-relative path" do
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [
+                {name: "punch.json", path: "abilities/punch.json", type: "file"},
+                {name: "classes", path: "abilities/classes", type: "dir"}
+              ].to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [{name: "druid", path: "abilities/classes/druid", type: "dir"}].to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/druid")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [{name: "wildshape.json", path: "abilities/classes/druid/wildshape.json", type: "file"}].to_json
+            )
+
+          get "/build/abilities"
+
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include(">punch<")
+          expect(response.body).to include(">classes/druid/wildshape<")
+          expect(response.body).to include(edit_build_ability_path(id: "classes/druid/wildshape"))
+        end
       end
     end
 
@@ -100,11 +131,11 @@ RSpec.describe "Build::Abilities", type: :request do
         expect(response.body).to include("Key is required")
       end
 
-      it "rejects a key with characters outside letters/numbers/underscore/hyphen" do
+      it "rejects a key with characters outside letters/numbers/underscore/hyphen/slash" do
         post "/build/abilities", params: {key: "../../etc/passwd"}
 
         expect(response).to have_http_status(:unprocessable_content)
-        expect(response.body).to include("letters, numbers, underscores, and hyphens")
+        expect(response.body).to include("letters, numbers, underscores, hyphens")
       end
 
       it "rejects a key that's already taken in the repo's abilities directory" do
@@ -114,6 +145,14 @@ RSpec.describe "Build::Abilities", type: :request do
 
         expect(response).to have_http_status(:unprocessable_content)
         expect(response.body).to include("already taken")
+      end
+
+      it "accepts a key placing the ability in a subdirectory" do
+        stub_existing_abilities(["punch"])
+
+        post "/build/abilities", params: {key: "classes/druid/wildshape"}
+
+        expect(response).to redirect_to(edit_build_ability_path(id: "classes/druid/wildshape"))
       end
     end
 
@@ -187,6 +226,32 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response.body).to include(CGI.escapeHTML({"../graphics/effects/punch-impact.webp" => "data:image/webp;base64,#{Base64.strict_encode64("fake-webp-bytes")}"}.to_json))
           expect(response.body).to include(build_abilities_path)
           expect(response.body).to include(CGI.escapeHTML({"duration" => 0.12, "url" => "/abilities/sounds/twang.ogg"}.to_json))
+        end
+
+        it "resolves a nested key's relative asset URLs against its own subdirectory, not abilities/" do
+          content = {
+            "name" => "Wildshape",
+            "castTime" => nil,
+            "globalCooldown" => 1.0,
+            "iconURL" => "../graphics/icons/wildshape.svg"
+          }
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/druid/wildshape.json")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/graphics/icons/wildshape.svg")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: {content: Base64.encode64("fake-svg-bytes"), encoding: "base64"}.to_json
+            )
+
+          get "/build/abilities/classes/druid/wildshape/edit"
+
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include(CGI.escapeHTML({"../graphics/icons/wildshape.svg" => "data:image/svg+xml;base64,#{Base64.strict_encode64("fake-svg-bytes")}"}.to_json))
         end
 
         it "doesn't fetch a stock asset reference from GitHub, or include it in the asset map" do

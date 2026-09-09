@@ -6,6 +6,7 @@ package instanceconfig
 type Map struct {
 	Identifier     string          `json:"identifier"`     // Required
 	Name           string          `json:"name"`           // Required
+	Elvl           *int            `json:"elvl,omitempty"` // Optional: overrides the zone's elvl for this map - see docs/stats.md
 	FeetDimensions Dimensions      `json:"feetDimensions"` // Required: world bounds in feet
 	Barriers       []Barrier       `json:"barriers,omitempty"`
 	Connections    []MapConnection `json:"connections,omitempty"`

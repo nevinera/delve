@@ -37,6 +37,19 @@ export function firePowerEffects(power, { positions, baseUrl, sceneManager, stoc
     if (travelMs > 0) setTimeout(fire, travelMs);
     else fire();
   }
+
+  // A status effect's auraEffect (if it has one) is shown on whichever token
+  // the status lands on, for the status's duration - no broader status
+  // tracking (stacking, expiry stacking, etc.) is modeled here. Guarded with
+  // `?.playAuraEffect?.` since only the ability-editor's PreviewSceneManager
+  // implements it so far - the real game client's SceneManager doesn't yet
+  // (that's the separate, not-yet-built in-game status UI).
+  for (const effect of power.effects ?? []) {
+    const auraEffect = effect.type === "status" ? effect.status?.auraEffect : null;
+    if (!auraEffect) continue;
+    const tokenKey = effect.affects === "self" ? "self" : "affected";
+    sceneManager?.playAuraEffect?.(auraEffect, tokenKey, effect.duration ?? 0, baseUrl, stockAssets);
+  }
 }
 
 // impactTiming controls when a `when: "impact"` sound starts relative to impact,

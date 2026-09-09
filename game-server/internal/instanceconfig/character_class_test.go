@@ -31,6 +31,15 @@ func TestCharacterClass_ValidFull(t *testing.T) {
 	assert.Equal(t, []string{"dagger", "dagger"}, c.Wields)
 }
 
+func TestCharacterClass_DamageStatKey(t *testing.T) {
+	assert.Equal(t, "strength", instanceconfig.CharacterClass{PrimaryStats: []string{"strength"}}.DamageStatKey())
+	assert.Equal(t, "agility", instanceconfig.CharacterClass{PrimaryStats: []string{"agility"}}.DamageStatKey())
+	assert.Equal(t, "intellect", instanceconfig.CharacterClass{PrimaryStats: []string{"intellect"}}.DamageStatKey())
+	assert.Equal(t, "", instanceconfig.CharacterClass{}.DamageStatKey())
+	// first strength/agility/intellect entry wins, in listed order
+	assert.Equal(t, "intellect", instanceconfig.CharacterClass{PrimaryStats: []string{"intellect", "agility"}}.DamageStatKey())
+}
+
 func TestCharacterClass_Powers(t *testing.T) {
 	c := parseCharacterClass(t, loadFixture(t, "valid_character_class.json"))
 

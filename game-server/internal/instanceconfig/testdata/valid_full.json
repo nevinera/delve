@@ -2,6 +2,7 @@
   "name": "Goblin Cave",
   "description": "A damp cave carved out by generations of goblin raiders.",
   "private": true,
+  "elvl": 200,
   "unitTypes": {
     "goblin_raider": {
       "name": "Goblin Raider",
@@ -127,6 +128,7 @@
     {
       "identifier": "main_chamber",
       "name": "Main Chamber",
+      "elvl": 220,
       "imageUrl": "../../assets/maps/goblin-cave-main.png",
       "pixelDimensions": { "width": 2048, "height": 1536 },
       "feetDimensions": { "width": 60.0, "height": 45.0 },

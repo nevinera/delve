@@ -14,6 +14,13 @@ describe("formatItemName", () => {
   });
 });
 
+// Reads a stat row's displayed value by label - robust to whether the label
+// is wrapped in a StatEffectTooltip anchor (secondary stats) or bare
+// (everything else), since either way it's the <li>'s last child.
+function statValue(label) {
+  return screen.getByText(label).closest("li").lastChild.textContent;
+}
+
 describe("CharacterSheet", () => {
   it("renders nothing when closed", () => {
     const { container } = render(
@@ -60,17 +67,30 @@ describe("CharacterSheet", () => {
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("14.0");
-    expect(screen.getByText("Stamina").nextSibling.textContent).toBe("20.0");
-    expect(screen.getByText("Crit Rating").nextSibling.textContent).toBe("5.0");
+    expect(statValue("Strength")).toBe("14.0");
+    expect(statValue("Stamina")).toBe("20.0");
+    expect(statValue("Crit Rating")).toBe("5.0");
+  });
+
+  it("spreads versatility rating's 0.2x bonus into strength/agility/intellect/defence rating", () => {
+    const equippedItems = {
+      head: { identifier: "helm", stats: { strength: 10, agility: 3, intellect: 2, defence_rating: 1, versatility_rating: 50 } },
+    };
+    render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+
+    // versatility_rating 50 * 0.2 = +10 to each
+    expect(statValue("Strength")).toBe("20.0");
+    expect(statValue("Agility")).toBe("13.0");
+    expect(statValue("Intellect")).toBe("12.0");
+    expect(statValue("Defence Rating")).toBe("11.0");
+    expect(statValue("Versatility Rating")).toBe("50.0");
   });
 
   it("shows every stat, including zero, when nothing is equipped", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
 
-    expect(screen.getByText("Strength").nextSibling.textContent).toBe("0.0");
-    expect(screen.getByText("Weapon DPS").nextSibling.textContent).toBe("0.0");
-    expect(screen.getByText("Resilience Rating").nextSibling.textContent).toBe("0.0");
+    expect(statValue("Strength")).toBe("0.0");
+    expect(statValue("Defence Rating")).toBe("0.0");
   });
 
   it("groups stats under Primary and Secondary headings in order", () => {
@@ -82,17 +102,17 @@ describe("CharacterSheet", () => {
 
   it("shows the local elevation when provided", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} localElvl={8} />);
-    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("8");
+    expect(statValue("Local Elevation")).toBe("8");
   });
 
   it("shows an em dash for local elevation when unknown", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
-    expect(screen.getByText("Local Elevation").nextSibling.textContent).toBe("—");
+    expect(statValue("Local Elevation")).toBe("—");
   });
 
   it("treats empty slots as elvl 0 for gear elevation, not skipped", () => {
     render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
-    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("0.0");
+    expect(statValue("Gear Elevation")).toBe("0.0");
   });
 
   it("weights gear elevation by each item's slot factor, empty slots included at 0", () => {
@@ -106,7 +126,130 @@ describe("CharacterSheet", () => {
       ring_1: { identifier: "band", slot: "ring", elvl: 2 },
     };
     render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
-    expect(screen.getByText("Gear Elevation").nextSibling.textContent).toBe("2.2");
+    expect(statValue("Gear Elevation")).toBe("2.2");
+  });
+
+  describe("secondary stat effect tooltips", () => {
+    function effectLines(label, equippedItems) {
+      render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} />);
+      const labelEl = screen.getByText(label);
+      fireEvent.mouseEnter(labelEl, {clientX: 10, clientY: 10});
+      return labelEl;
+    }
+
+    it("shows crit rating's actual crit chance, including the 5% base", () => {
+      effectLines("Crit Rating", {head: {identifier: "h", stats: {crit_rating: 30}}});
+      expect(screen.getByText("7.0% crit chance")).toBeInTheDocument();
+    });
+
+    it("shows haste rating's haste percentage", () => {
+      effectLines("Haste Rating", {head: {identifier: "h", stats: {haste_rating: 117.1}}});
+      expect(screen.getByText("+10.0% haste")).toBeInTheDocument();
+    });
+
+    it("shows mastery rating's converted mastery value", () => {
+      effectLines("Mastery Rating", {head: {identifier: "h", stats: {mastery_rating: 0}}});
+      expect(screen.getByText("Mastery 10.0")).toBeInTheDocument();
+    });
+
+    it("shows versatility rating's spread bonus", () => {
+      effectLines("Versatility Rating", {head: {identifier: "h", stats: {versatility_rating: 50}}});
+      expect(screen.getByText("+10.0 Strength, Agility, Intellect, and Defence Rating")).toBeInTheDocument();
+    });
+
+    it("shows defence rating's physical and magic damage reduction", () => {
+      effectLines("Defence Rating", {head: {identifier: "h", stats: {defence_rating: 98}}});
+      expect(screen.getByText("30.0% physical damage reduction")).toBeInTheDocument();
+      expect(screen.getByText("12.0% magic damage reduction")).toBeInTheDocument();
+    });
+
+    it("hides the tooltip again on mouse leave", () => {
+      const labelEl = effectLines("Crit Rating", {head: {identifier: "h", stats: {crit_rating: 30}}});
+      fireEvent.mouseLeave(labelEl);
+      expect(screen.queryByText("7.0% crit chance")).not.toBeInTheDocument();
+    });
+
+  });
+
+  describe("primary stat effect tooltips", () => {
+    function hover(label, equippedItems, primaryStats) {
+      render(<CharacterSheet open equippedItems={equippedItems} onClose={() => {}} primaryStats={primaryStats} />);
+      const labelEl = screen.getByText(label);
+      fireEvent.mouseEnter(labelEl, {clientX: 10, clientY: 10});
+      return labelEl;
+    }
+
+    it("shows strength's physical avoidance chance, but not DPS, when strength isn't the class's damage stat", () => {
+      hover("Strength", {head: {identifier: "h", stats: {strength: 250}}}, []);
+      expect(screen.getByText("30.0% physical avoidance chance")).toBeInTheDocument();
+      expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
+    });
+
+    it("also shows strength's DPS and physical crit contribution when strength is a class primary stat", () => {
+      hover("Strength", {head: {identifier: "h", stats: {strength: 900}}}, ["strength"]);
+      expect(screen.getByText("+10.0 DPS")).toBeInTheDocument();
+      expect(screen.getByText("+540.0 effective physical Crit Rating")).toBeInTheDocument();
+      expect(screen.getByText("47.0% physical avoidance chance")).toBeInTheDocument();
+    });
+
+    it("shows agility's effective physical haste and its split physical/magic avoidance always, DPS only when it's a class primary", () => {
+      hover("Agility", {head: {identifier: "h", stats: {agility: 250}}}, []);
+      expect(screen.getByText("+150.0 effective physical Haste Rating")).toBeInTheDocument();
+      // effective physical avoidance stat = 0 + 250*0.66 = 165 -> 0.6*165/415
+      expect(screen.getByText("23.9% physical avoidance chance")).toBeInTheDocument();
+      // effective magic avoidance stat = 0 + 250*0.33 = 82.5 -> 0.6*82.5/332.5
+      expect(screen.getByText("14.9% magic avoidance chance")).toBeInTheDocument();
+      expect(screen.queryByText(/^\+[\d.]+ DPS$/)).not.toBeInTheDocument();
+    });
+
+    it("shows intellect's magic crit, haste, and avoidance always, spell damage and resource pool only when it's a class primary", () => {
+      hover("Intellect", {head: {identifier: "h", stats: {intellect: 140}}}, []);
+      expect(screen.getByText("+42.0 effective magic Crit Rating")).toBeInTheDocument();
+      expect(screen.getByText("+42.0 effective magic Haste Rating")).toBeInTheDocument();
+      // effective magic avoidance stat = 140 + 0*0.33 = 140 -> 0.6*140/390
+      expect(screen.getByText("21.5% magic avoidance chance")).toBeInTheDocument();
+      expect(screen.queryByText(/Spell Damage|Resource Pool/)).not.toBeInTheDocument();
+    });
+
+    it("also shows spell damage and resource pool when intellect is a class primary stat", () => {
+      hover("Intellect", {head: {identifier: "h", stats: {intellect: 900}}}, ["intellect"]);
+      expect(screen.getByText("+10.0 Spell Damage")).toBeInTheDocument();
+      expect(screen.getByText("+9000 Resource Pool")).toBeInTheDocument();
+    });
+
+    it("shows stamina's max HP, always", () => {
+      hover("Stamina", {head: {identifier: "h", stats: {stamina: 50}}}, []);
+      expect(screen.getByText("600 Max HP")).toBeInTheDocument();
+    });
+
+    it("computes basic attack dps as ~1.0 for a fully naked character", () => {
+      hover("Basic Attack DPS", {}, []);
+      expect(statValue("Basic Attack DPS")).toBe("1.0");
+      expect(screen.getByText("1.0 base")).toBeInTheDocument();
+      expect(screen.getByText("+0.0% haste")).toBeInTheDocument();
+      expect(screen.getByText("5.0% crit chance")).toBeInTheDocument();
+      expect(screen.getByText("5.0% miss chance")).toBeInTheDocument();
+    });
+
+    it("adds the class damage stat's contribution to basic attack dps", () => {
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 900}}}, ["strength"]);
+      // statDps = 900/90 = 10.0; Strength also feeds physical crit now
+      // (900*0.6=540 -> 5+540/15=41% crit), so RawDPS 11 * (1.41*0.95) = 14.7.
+      expect(statValue("Basic Attack DPS")).toBe("14.7");
+      expect(screen.getByText("+10.0 from Strength")).toBeInTheDocument();
+    });
+
+    it("does not add a damage stat contribution when strength/agility aren't a class primary", () => {
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {strength: 70}}}, []);
+      expect(statValue("Basic Attack DPS")).toBe("1.0");
+      expect(screen.queryByText(/from Strength/)).not.toBeInTheDocument();
+    });
+
+    it("scales basic attack dps by haste and crit rating", () => {
+      hover("Basic Attack DPS", {head: {identifier: "h", stats: {haste_rating: 117.1}}}, []);
+      expect(screen.getByText("+10.0% haste")).toBeInTheDocument();
+      expect(statValue("Basic Attack DPS")).toBe("1.1");
+    });
   });
 
   it("calls onClose when the close button is clicked", () => {

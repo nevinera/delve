@@ -148,16 +148,26 @@ func TestKillDelivery_LootClaimsArrivePromptly(t *testing.T) {
 		ReceivedAt: time.Now(),
 		Payload:    command.TargetPayload{TargetID: &targetUUID},
 	})
-	inst.SendCommand(command.Command{
-		UnitID:     slot.CharacterUnitID,
-		ReceivedAt: time.Now(),
-		Payload:    command.UsePowerPayload{Power: lethalPower()},
-	})
+	sendLethalPower := func() {
+		inst.SendCommand(command.Command{
+			UnitID:     slot.CharacterUnitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.UsePowerPayload{Power: lethalPower()},
+		})
+	}
+	sendLethalPower()
 
+	// lethalPower now rolls the universal 5% miss chance like any other
+	// harm effect - resend it on its own (0.1s) GlobalCooldown until it
+	// lands, rather than relying on a single cast always killing.
 	selfUnitID := slot.CharacterUnitID.String()
 	deadline := time.After(2 * time.Second)
+	resend := time.NewTicker(150 * time.Millisecond)
+	defer resend.Stop()
 	for {
 		select {
+		case <-resend.C:
+			sendLethalPower()
 		case msg := <-writeCh:
 			claims, found := findClaims(t, msg, targetID)
 			if !found {

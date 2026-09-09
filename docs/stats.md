@@ -126,77 +126,90 @@ Example: a chest piece (primary + 3 secondaries) with no primary and only 2 seco
 each of those secondaries increased by 70% over their base value. With all 3 secondaries listed but
 no primary, each is increased by ~26.7%.
 
-## Strength
+## Strength, Agility, and Intellect
 
-There's no separate Attack Power stat. Whichever primary stat a class calls its damage stat (e.g.
-Strength for physical-damage classes) feeds directly into weapon damage:
-
-```
-SwingDamage = BaseWeaponDamage + (Strength / 7) * NominalSwingSpeed
-```
-
-`NominalSwingSpeed` is the weapon's base swing timer - haste changes how often you swing, not this
-per-swing damage calculation. `Strength / 7` is a placeholder conversion, easy to retune later.
-This mirrors modern WoW, where Strength's only effect (for physical classes) is Attack Power - it
-no longer grants block value or anything else.
-
-Strength also grants Parry chance, at half Strength's normal weight - see **Avoidance** below.
-
-## Agility
-
-Agility works like Strength, but at half the damage rate (mirroring WoW, where Strength gives 2 AP
-per point and Agility gives 1):
+There's no separate Attack Power stat. Whichever primary stat a class calls its damage stat feeds
+directly into weapon/spell damage, at the same rate for all three:
 
 ```
-SwingDamage = BaseWeaponDamage + (Agility / 14) * NominalSwingSpeed
+SwingDamage = BaseWeaponDamage + (Strength / 90) * NominalSwingSpeed    -- physical (melee/1h)
+SwingDamage = BaseWeaponDamage + (Agility / 90) * NominalSwingSpeed     -- physical (ranged/dex)
+SpellDamage = BaseSpellDamage  + (Intellect / 90) * NominalCastTime     -- magic
 ```
 
-Agility also feeds Crit Rating and Dodge chance directly - it does double (technically triple)
-duty, which is why its damage rate is halved:
+`NominalSwingSpeed`/`NominalCastTime` is the weapon/spell's base timer - Haste changes how often
+you swing/cast, not this per-hit damage calculation. `/90` was solved backward from a design
+target (see **Basic Attack DPS** below), not chosen directly - it happens to land close enough for
+all three stats that they share one divisor.
+
+Each of the three also grants exactly one more secondary effect, always active regardless of which
+stat is the class's actual damage stat (so a Strength class still benefits from Agility's Haste,
+etc.) - **except** Intellect's two magic bonuses, which only ever apply against magic attacks, and
+Strength/Agility's physical bonuses, which only ever apply against physical attacks:
 
 ```
-EffectivePhysicalCritRating += Agility * 0.6
+EffectivePhysicalCritRating  += Strength  * 0.6
+EffectivePhysicalHasteRating += Agility   * 0.6
+EffectiveMagicCritRating     += Intellect * 0.3
+EffectiveMagicHasteRating    += Intellect * 0.3
 ```
 
-(Intellect will do the same for magic crit, once we get there.)
+Intellect splits its bonus across both magic secondaries (0.3 each) rather than concentrating it in
+one, mirroring Agility splitting its Avoidance contribution across both types instead of one - see
+**Avoidance** below. Physical and magic Crit/Haste are otherwise independent pools; a character
+only ever cares about whichever type matches their own attacks, but both pools use the same
+itemized `crit_rating`/`haste_rating` stats as their base.
 
-## Intellect
+Strength and Intellect also each grant a pure Avoidance chance for their own attack type - Physical
+for Strength, Magic for Intellect - and Agility grants a weaker split of both. See **Avoidance**
+below.
 
-Intellect feeds spell damage and magic crit, at the same rates as the other primary stats. It
-doesn't grant any avoidance:
-
-```
-SpellDamage = BaseSpellDamage + (Intellect / 14) * NominalCastTime
-EffectiveMagicCritRating += Intellect * 0.6
-```
-
-Instead, Intellect grows the character's resource pool (mana, energy, etc. - whichever their class
-uses; the mapping from Intellect to that resource is class-specific, not a universal "mana"):
+Intellect additionally grows the character's resource pool (mana, energy, etc. - whichever their
+class uses; the mapping from Intellect to that resource is class-specific, not a universal "mana"):
 
 ```
 ResourcePool = Intellect * 10
 ```
 
+**Design history:** Strength/Agility originally used `/7`/`/14` (Agility at half Strength's rate,
+mirroring old WoW's 2 AP/1 AP split) with Agility solely feeding physical Crit. That was rebalanced
+down 10x (to `/70`/`/140`) once basic attacks actually used the formula and it was multiplying DPS
+~40x over baseline. Solving backward from an explicit DPS target (below) then showed the "Agility
+at half rate" premise didn't hold once precisely worked out - Agility's Dodge doesn't feed DPS at
+all, so its double-duty was worth much less than assumed - which is what motivated collapsing to a
+single shared `/90` divisor and splitting Crit/Haste one-per-stat instead.
+
 ## Avoidance
 
-Agility and Strength each also grant a chance to avoid an attack outright - Dodge for Agility,
-Parry for Strength:
+Strength and Intellect each grant a pure chance to avoid an attack outright, for their own attack
+type - Physical for Strength, Magic for Intellect - using identical numerics. Agility instead
+splits a weaker version of both: 66% of Strength's rate toward Physical Avoidance, and 33% of
+Intellect's rate toward Magic Avoidance.
 
 ```
-DodgeRate = 0.6 * Agility / (Agility + 250)
-ParryRate = 0.6 * Strength / (Strength + 250)
+EffectivePhysicalAvoidanceStat = Strength + Agility * 0.66
+EffectiveMagicAvoidanceStat    = Intellect + Agility * 0.33
+
+PhysicalAvoidance = 0.6 * EffectivePhysicalAvoidanceStat / (EffectivePhysicalAvoidanceStat + 250)
+MagicAvoidance    = 0.6 * EffectiveMagicAvoidanceStat / (EffectiveMagicAvoidanceStat + 250)
 ```
 
-Both asymptote toward 60% as the stat grows, hit ~26% at "full" investment in that stat (~194
-points, the same order of magnitude a fully-itemized primary stat reaches), and ~13% at half that
-(e.g. the same character at `ee = -10`).
+Both asymptote toward 60% as their effective stat grows, hit ~26% at "full" investment in that stat
+(~194 points, the same order of magnitude a fully-itemized primary stat reaches), and ~13% at half
+that (e.g. the same character at `ee = -10`). Unlike Crit/Haste, this isn't a same-attack-type-only
+split - a character with both Strength and Agility (or Intellect and Agility) itemized gets a real,
+if partial, Avoidance chance against the *other* attack type too, since Agility always contributes
+to both pools regardless of which is the class's actual damage stat.
 
-Dodge and Parry don't add together, but stack like independent chances, which is worse
-than dumping the same points into one:
+There's no longer a separate Dodge-vs-Parry roll to stack - Physical Avoidance and Magic Avoidance
+are each a single combined rate now, not two independent named mechanics.
 
-```
-TotalAvoidance = DodgeRate + ParryRate * (1 - DodgeRate)
-```
+**Implementation:** wired server-side (`command.IncomingDamage`) into basic attacks and every
+power's `harm` effects (see [power_effect.md](schema/power_effect.md)'s `school` field) - a
+defender's Avoidance is rolled first, then whatever lands is reduced by their Defence Rating (see
+below). This applies whenever the *target* is a player; NPCs carry no `EquippedItems` so both are
+always 0 for them, meaning a monster's basic attack or power currently has no incoming mitigation
+to reduce.
 
 ## Stamina
 
@@ -215,10 +228,11 @@ MaxHP = 100 + Stamina * 10
 
 ## Crit Rating
 
-Crit Rating (physical or magic, whichever Agility/Intellect fed into it - see above) grants a flat
-chance to critically strike, on top of a 5% base. No asymptote - it's just linear - but the rate is
-chosen so even a maximally crit-stacked character (full Crit Rating itemization plus full primary
-stat contribution) stays well under 100%:
+Crit Rating grants a flat chance to critically strike, on top of a 5% base - separately for
+physical (`crit_rating` + Strength's contribution) and magic (`crit_rating` + Intellect's
+contribution) attacks, see **Strength, Agility, and Intellect** above. No asymptote - it's just
+linear - but the rate is chosen so even a maximally crit-stacked character (full Crit Rating
+itemization plus full primary stat contribution) stays well under 100%:
 
 ```
 CritChance% = 5 + EffectiveCritRating / 15
@@ -227,16 +241,17 @@ CritChance% = 5 + EffectiveCritRating / 15
 ## Haste Rating
 
 Haste Rating grants attack/cast speed, applied multiplicatively (not additively) to shrink swing
-timers, cast times, and channel durations, mirroring WoW. Unlike Crit, there's no base amount -
-0 Haste Rating means 0% haste:
+timers, cast times, and channel durations, mirroring WoW - separately for physical (`haste_rating`
++ Agility's contribution) and magic (`haste_rating` + Intellect's contribution), see **Strength,
+Agility, and Intellect** above. Unlike Crit, there's no base amount - 0 Haste Rating means 0% haste:
 
 ```
-Haste% = HasteRating / 11.71
+Haste% = EffectiveHasteRating / 11.71
 ```
 
-A fully-itemized Haste build (445 Haste Rating) lands at 38% at `ee = 0`, and 19% at `ee = -10`
-(half the secondary pool, so exactly half the Haste%, since this formula has no base to break that
-proportionality).
+A fully-itemized Haste build (445 Haste Rating, no primary-stat contribution) lands at 38% at
+`ee = 0`, and 19% at `ee = -10` (half the secondary pool, so exactly half the Haste%, since this
+formula has no base to break that proportionality).
 
 ## Mastery
 
@@ -266,8 +281,8 @@ DefenceRating += VersatilityRating * 0.2
 
 A fully-itemized Versatility build (445 rating) adds +89 to each of those four - noticeably weaker
 than committing those points directly to any one of them, but it touches damage/healing (via
-whichever primary a class actually uses), Crit/Dodge/Parry (from the off-primaries, which always
-apply regardless of class), and Defence all at once. This is also why tanks have real stat
+whichever primary a class actually uses), Crit/Haste/Avoidance (from the off-primaries, which
+always apply regardless of class), and Defence all at once. This is also why tanks have real stat
 contention between Mastery, Defence Rating, and Versatility, rather than being able to itemize
 everything into pure survivability.
 
@@ -277,14 +292,68 @@ There's no separate Armor stat. Instead, **Defence Rating** grants a direct perc
 incoming damage — a larger reduction against physical damage than against magic:
 
 ```
-PhysicalDR(r) = 0.9 * r / (r + 98)
-MagicDR(r)    = 0.4 * PhysicalDR(r) = 0.36 * r / (r + 98)
+PhysicalDR(r) = 0.6 * r / (r + 98)
+MagicDR(r)    = 0.4 * PhysicalDR(r) = 0.24 * r / (r + 98)
 ```
 
-Where `r` is total Defence Rating. This asymptotes toward 90% physical / 36% magic reduction as `r`
+Where `r` is total Defence Rating (itemized `defence_rating` plus Versatility's 0.2x spread into
+it - see **Versatility** above). This asymptotes toward 60% physical / 24% magic reduction as `r`
 grows, and gives 0% reduction at `r = 0`. A fully-itemized tank (every eligible secondary slot on
-Defence Rating, wielding a shield) lands around `r = 250`, giving ~65% physical / ~26% magic
-reduction; half that (`r = 125`, e.g. the same tank at `ee = -10`) gives ~50% physical / ~20% magic.
+Defence Rating, wielding a shield - `r ~= 520` at `ee = 0`) lands around **50.5% physical / 20.2%
+magic** reduction; half that (`r ~= 260`) gives ~40.0% physical / ~16.0% magic.
+
+**Design history:** originally `0.9`/`0.36` asymptotes. Avoidance barely differs between a tank and
+a Strength DPS build (see **Avoidance** above) - almost the entire tank/DPS mitigation gap was
+coming from Defence Rating alone, giving a fully-itemized tank ~76% physical DR, a 4.1x damage
+multiplier by itself. Pulled down to land a fully-itemized tank near 50% physical DR instead (~2x
+multiplier from DR), leaving the rest of the intended tank/DPS gap (see
+[combat_balance.md](combat_balance.md)'s `EHP_tank = 3x EHP_dps` target) to come from Avoidance and
+future passives/talents rather than gear alone.
+
+**Implementation:** same as Avoidance above - wired server-side into basic attacks and powers,
+applied after the Avoidance roll, only reduces damage landing on a player target.
+
+## Miss Chance
+
+Every attack and spell has a flat **5% chance to miss**, independent of and applied before any of
+the target's own Avoidance or Defence Rating - a separate roll, not affected by any stat.
+
+## Basic Attack DPS
+
+A character's basic attack has no weapon-specific base damage or swing timer to derive from - items
+don't carry stat *values*, only which stats they roll (see [item.md](schema/item.md)). Instead, a
+completely naked character (no gear, not even Trainee Gear) has a flat **base DPS of 1** - matching
+the game server's original flat-placeholder basic attack (1-3 dmg every 2s), before it was replaced
+with this formula - modified by stats in aggregate (not per-swing). Strength/Agility drive a
+physical basic attack; Intellect drives a magic one (a caster's basic "wand"/cantrip). At the naked
+baseline, the 5% base crit chance and 5% miss chance roughly cancel out (monsters have no damage
+reduction), leaving net DPS close to the base:
+
+```
+DamageStat = whichever of Strength/Agility/Intellect is the class's primaryStats damage stat (0 if none)
+StatDPS    = DamageStat / 90
+
+RawDPS = 1 + StatDPS
+BasicAttackDPS = RawDPS * (1 + Haste%/100) * (1 + CritChance%/100 * (2.0 - 1)) * (1 - 0.05)
+```
+
+`Haste%`/`CritChance%` are the physical pair for a Strength/Agility character, or the magic pair
+for an Intellect character - see **Crit Rating**/**Haste Rating** above. `2.0` is the crit
+multiplier used throughout these docs' examples; `0.05` is the miss chance above.
+
+**Why `/90`:** this was solved backward from a design target, not chosen directly - a fully-
+itemized, on-level DPS build (primary maxed on the damage stat, secondaries split evenly across
+that damage type's Crit/Haste) should net **5 basic attack DPS**, the same for a Strength, Agility,
+or Intellect build, so a full "DPS-geared, going full out" character nets ~25 total DPS across all
+their abilities (basic attack is meant to be ~1/5 of full output - see
+[combat_balance.md](combat_balance.md)). Solving that target independently for each stat (raw
+primary 217.5, raw secondaries 222.5/222.5 at `ee=0`, all fully itemized) gives divisors of ~89
+(Strength), ~92 (Agility), ~91 (Intellect) - close enough to collapse into one shared `/90`.
+
+`BasicAttackDPS` above is the *expected* value used for display (the character sheet tooltip). Each
+individual swing that lands varies around its own nominal (pre-crit) damage: a flat/uniform
+distribution within +/-10%, independently of the crit roll - so even non-crit swings aren't all
+identical.
 
 ## Trainee Gear
 
@@ -347,6 +416,15 @@ itemized (no missing stats, so no redistribution bonus applies). "Raw" is `base 
 Neck, Rings, and the weapon don't grant it.
 
 ### Net stats
+
+**Note:** this worked example (and Bob's below), including the Net Stats table, predates the
+Strength/Agility divisor rebalance, the later Crit/Haste stat swap, and the Avoidance rework above
+- its `/7` division is now `/90`, Crit Rating here would now come from Strength (not Agility)
+directly, and Parry/Dodge no longer exist as separate stacking rolls (see **Avoidance**). The
+numbers below haven't been recomputed; treat them as stale/illustrative of the calculation shape,
+not current values. See "Basic Attack DPS" above for the formula actually implemented (which also
+has no `BaseWeaponDamage`/`NominalSwingSpeed` to plug in - those don't exist anywhere in the item
+schema).
 
 None of the primary/stamina stats get an inherent bonus - all four are built entirely from gear.
 Versatility (37.3) adds 0.2x itself (+7.5) to Strength, Agility, Intellect, and Defence Rating below

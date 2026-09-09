@@ -14,6 +14,7 @@ type Zone struct {
 	Name        string              `json:"name"` // Required: display name
 	Description string              `json:"description,omitempty"`
 	Private     bool                `json:"private"` // Required: true = party-instanced, false = shared
+	Elvl        int                 `json:"elvl"`    // Required: elevation - see docs/stats.md
 	Maps        []Map               `json:"maps"`    // Required: at least one
 	UnitTypes   map[string]UnitType `json:"unitTypes,omitempty"`
 	Items       map[string]Item     `json:"items,omitempty"`
@@ -37,6 +38,21 @@ func (z *Zone) UnmarshalJSON(data []byte) error {
 	// Use a type alias to call the default unmarshaler without infinite recursion.
 	type plain Zone
 	return json.Unmarshal(data, (*plain)(z))
+}
+
+// MapElvl returns the effective elevation (docs/stats.md) of the named map:
+// the map's own Elvl override if set, otherwise the zone's Elvl. Returns the
+// zone's Elvl if no map with that identifier is found.
+func (z *Zone) MapElvl(mapIdentifier string) float64 {
+	for _, m := range z.Maps {
+		if m.Identifier == mapIdentifier {
+			if m.Elvl != nil {
+				return float64(*m.Elvl)
+			}
+			break
+		}
+	}
+	return float64(z.Elvl)
 }
 
 // ZoneLink connects two MapConnections so that traversing one transports a

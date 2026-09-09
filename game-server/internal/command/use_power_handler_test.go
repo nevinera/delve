@@ -42,6 +42,27 @@ func stateWithPlayerAndTarget(playerID, targetID uuid.UUID, playerX, playerY, ta
 	return state
 }
 
+// retryUntilPowerLands rebuilds fresh state via build, casts payload against
+// targetID, and retries (up to 200x) until the target's health actually
+// changes - harm effects roll the universal 5% miss chance now, and these
+// tests want to observe a landed hit specifically. Returns the post-cast
+// state on the landed attempt.
+func retryUntilPowerLands(t *testing.T, playerID, targetID uuid.UUID, zone instanceconfig.Zone, payload command.UsePowerPayload, build func() *instancestate.InstanceState) *instancestate.InstanceState {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		state := build()
+		before := state.Units[targetID].Health
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, payload, zone, state))
+
+		if state.Units[targetID].Health != before {
+			return state
+		}
+	}
+	t.Fatal("power missed 200 times in a row - miss chance may be miscalibrated")
+	return nil
+}
+
 func TestUsePowerHandler_Type(t *testing.T) {
 	assert.Equal(t, "use_power", command.UsePowerHandler{}.Type())
 }
@@ -106,23 +127,19 @@ func TestUsePowerHandler_WallBetweenAttackerAndTargetIsNoOp(t *testing.T) {
 
 func TestUsePowerHandler_WallElsewhereDoesNotBlock(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0) // 4ft away, within 5ft range
 	zone := wallZone(instanceconfig.Location{X: 20, Y: -5}, instanceconfig.Location{X: 20, Y: 5})
-	before := state.Units[targetID].Health
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), zone, state))
-
-	assert.Less(t, state.Units[targetID].Health, before)
+	retryUntilPowerLands(t, playerID, targetID, zone, punchPower(), func() *instancestate.InstanceState {
+		return stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0) // 4ft away, within 5ft range
+	})
 }
 
 func TestUsePowerHandler_DamagesTargetInRange(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0) // 4ft away, within 5ft range
-	before := state.Units[targetID].Health
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
-
-	assert.Less(t, state.Units[targetID].Health, before)
+	retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, punchPower(), func() *instancestate.InstanceState {
+		return stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0) // 4ft away, within 5ft range
+	})
 }
 
 func TestUsePowerHandler_SetsAttackingOnHarmInRange(t *testing.T) {
@@ -145,14 +162,24 @@ func TestUsePowerHandler_OutOfRangeDoesNotSetAttacking(t *testing.T) {
 
 func TestUsePowerHandler_DamageWithinPowerAmountRange(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
-	before := state.Units[targetID].Health
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+	// The caster has no itemized stats, so the bonus from PowerEffectAmount
+	// is 0 and the roll should land exactly in [8,14] - except a landed miss
+	// (damage 0) or crit (double) skews that, so retry past either to keep
+	// this a check of the plain landed-non-crit base roll range.
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+		before := state.Units[targetID].Health
 
-	damage := before - state.Units[targetID].Health
-	assert.GreaterOrEqual(t, damage, 8.0)
-	assert.LessOrEqual(t, damage, 14.0)
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+
+		damage := before - state.Units[targetID].Health
+		if damage > 0 && damage <= 14.0 {
+			assert.GreaterOrEqual(t, damage, 8.0)
+			return
+		}
+	}
+	t.Fatal("punch missed or crit 200 times in a row - miss/crit chance may be miscalibrated")
 }
 
 func TestUsePowerHandler_SetsGlobalCooldown(t *testing.T) {
@@ -179,22 +206,26 @@ func TestUsePowerHandler_GCDBlocksRepeatUse(t *testing.T) {
 	assert.Equal(t, afterFirst, state.Units[targetID].Health)
 }
 
+func lowHealthPlayerAndTarget(playerID, targetID uuid.UUID) func() *instancestate.InstanceState {
+	return func() *instancestate.InstanceState {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+		state.Units[targetID].Health = 1.0
+		return state
+	}
+}
+
 func TestUsePowerHandler_HealthDoesNotGoBelowZero(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
-	state.Units[targetID].Health = 1.0
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+	state := retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, punchPower(), lowHealthPlayerAndTarget(playerID, targetID))
 
 	assert.Equal(t, 0.0, state.Units[targetID].Health)
 }
 
 func TestUsePowerHandler_SetsDeadStatusAtZeroHealth(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
-	state.Units[targetID].Health = 1.0
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+	state := retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, punchPower(), lowHealthPlayerAndTarget(playerID, targetID))
 
 	assert.Equal(t, instancestate.UnitStatusDead, state.Units[targetID].Status)
 }
@@ -245,29 +276,27 @@ func TestUsePowerHandler_FrontalBlocksWhenNotFacing(t *testing.T) {
 
 func TestUsePowerHandler_FrontalAllowsWhenFacing(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	// Target is directly north, player facing north (0°) — within 75° arc.
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 5)
-	state.Units[playerID].Position.Angle = 0
-	before := state.Units[targetID].Health
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
-
-	assert.Less(t, state.Units[targetID].Health, before)
+	retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, punchPower(), func() *instancestate.InstanceState {
+		// Target is directly north, player facing north (0°) — within 75° arc.
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 5)
+		state.Units[playerID].Position.Angle = 0
+		return state
+	})
 }
 
 func TestUsePowerHandler_NonFrontalIgnoresFacing(t *testing.T) {
 	f := false
 	playerID, targetID := uuid.New(), uuid.New()
-	// Target is directly north, player facing south — but power is non-frontal.
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 5)
-	state.Units[playerID].Position.Angle = 180
 	payload := punchPower()
 	payload.Power.Frontal = &f
-	before := state.Units[targetID].Health
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, payload, instanceconfig.Zone{}, state))
-
-	assert.Less(t, state.Units[targetID].Health, before)
+	retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, payload, func() *instancestate.InstanceState {
+		// Target is directly north, player facing south — but power is non-frontal.
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 5)
+		state.Units[playerID].Position.Angle = 180
+		return state
+	})
 }
 
 func recoverPower() command.UsePowerPayload {
@@ -292,12 +321,21 @@ func stateWithInjuredPlayer(playerID uuid.UUID) *instancestate.InstanceState {
 }
 
 func TestUsePowerHandler_HealsSelf(t *testing.T) {
+	// The caster has no itemized stats, so the bonus from PowerEffectAmount
+	// is 0 and the heal should land exactly at +20 - except a landed crit
+	// (5% base chance, no stats to raise it) doubles it, so retry past that
+	// to keep this a check of the un-crit base roll.
 	playerID := uuid.New()
-	state := stateWithInjuredPlayer(playerID)
+	for i := 0; i < 200; i++ {
+		state := stateWithInjuredPlayer(playerID)
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
-	assert.Equal(t, 60.0, state.Units[playerID].Health)
+		if state.Units[playerID].Health == 60.0 {
+			return
+		}
+	}
+	t.Fatal("recover crit 200 times in a row - crit chance may be miscalibrated")
 }
 
 func TestUsePowerHandler_HealDoesNotExceedMaxHealth(t *testing.T) {
@@ -366,26 +404,112 @@ func TestUsePowerHandler_NoCooldownFieldDoesNotSetPowerCooldown(t *testing.T) {
 
 func TestUsePowerHandler_ClearsTargetOnDeath(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
-	state.Units[targetID].Health = 1.0
-	// Give the target its own target to simulate a goblin that had aggro
-	state.Units[targetID].Target = &playerID
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+	state := retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, punchPower(), func() *instancestate.InstanceState {
+		state := lowHealthPlayerAndTarget(playerID, targetID)()
+		// Give the target its own target to simulate a goblin that had aggro
+		state.Units[targetID].Target = &playerID
+		return state
+	})
 
 	assert.Nil(t, state.Units[targetID].Target)
 }
 
 func TestUsePowerHandler_ClearsAttackerTargetAndAttackingOnKill(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
-	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
-	state.Units[targetID].Health = 1.0
-	state.Units[playerID].Attacking = true
 
-	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+	state := retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, punchPower(), func() *instancestate.InstanceState {
+		state := lowHealthPlayerAndTarget(playerID, targetID)()
+		state.Units[playerID].Attacking = true
+		return state
+	})
 
 	assert.Nil(t, state.Units[playerID].Target)
 	assert.False(t, state.Units[playerID].Attacking)
+}
+
+// harmPower builds a single-harm-effect power with a fixed (non-random)
+// amount and the given school, so mitigation math is deterministic to test.
+func harmPower(amount float64, school string) command.UsePowerPayload {
+	amountRange := instanceconfig.ValueRange{amount, amount}
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Affects: "bTarget", Amount: &amountRange, Range: &rng, School: school},
+			},
+		},
+	}
+}
+
+func defendedTarget() map[string]instanceconfig.EquippedItem {
+	// neck has no primary slot and all 3 secondary slots filled (factor 1.0),
+	// so no missing-secondary bonus applies: raw defence_rating = 3*10 = 30.
+	return map[string]instanceconfig.EquippedItem{
+		"neck": {Slot: "neck", SecondaryStats: []string{"defence_rating", "defence_rating", "defence_rating"}},
+	}
+}
+
+// retryUntilHarmHealth rebuilds and re-casts harmPower(20.0, school) until
+// the target's resulting health matches wantHealth, so the caster's 5% base
+// crit chance (no itemized stats to raise it) doesn't make these deterministic
+// mitigation-math assertions flaky.
+func retryUntilHarmHealth(t *testing.T, school string, wantHealth float64) {
+	t.Helper()
+	playerID, targetID := uuid.New(), uuid.New()
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+		state.Units[targetID].EquippedItems = defendedTarget()
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, harmPower(20.0, school), instanceconfig.Zone{}, state))
+
+		if math.Abs(state.Units[targetID].Health-wantHealth) < 0.01 {
+			return
+		}
+	}
+	t.Fatal("harm effect crit 200 times in a row - crit chance may be miscalibrated")
+}
+
+func TestUsePowerHandler_HarmEffectAppliesTargetsPhysicalDefenceRating(t *testing.T) {
+	// r=30 -> physicalDR = 0.6*30/128 = 0.140625 -> 20*(1-0.140625) = 17.1875 dmg.
+	retryUntilHarmHealth(t, "physical", 50.0-17.1875)
+}
+
+func TestUsePowerHandler_HarmEffectAppliesTargetsMagicDefenceRatingForAMagicSchool(t *testing.T) {
+	// r=30 -> magicDR = 0.24*30/128 = 0.05625 -> 20*(1-0.05625) = 18.875 dmg -
+	// less mitigation than the same raw amount would get against physical.
+	retryUntilHarmHealth(t, "magic", 50.0-18.875)
+}
+
+func TestUsePowerHandler_HarmEffectDefaultsToPhysicalSchool(t *testing.T) {
+	retryUntilHarmHealth(t, "", 50.0-17.1875)
+}
+
+func TestUsePowerHandler_EngagesIdleHostileTargetOnHit(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Hostility = "hostile"
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+
+	// The target should notice and fight back immediately, even though it
+	// was never within its own aggro radius of the player.
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[targetID].Status)
+	require.NotNil(t, state.Units[targetID].Target)
+	assert.Equal(t, playerID, *state.Units[targetID].Target)
+	assert.True(t, state.Units[targetID].Attacking)
+}
+
+func TestUsePowerHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Hostility = "neutral"
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, instancestate.UnitStatusIdle, state.Units[targetID].Status)
+	assert.Nil(t, state.Units[targetID].Target)
 }
 
 func TestUsePowerHandler_KillAggroesLinkedIdleUnit(t *testing.T) {
@@ -413,4 +537,162 @@ func TestUsePowerHandler_KillAggroesLinkedIdleUnit(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[linkedID].Status)
 	require.NotNil(t, state.Units[linkedID].Target)
 	assert.Equal(t, playerID, *state.Units[linkedID].Target)
+}
+
+func selfStatusPower(status instanceconfig.Status) command.UsePowerPayload {
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Affects: "self", Duration: 10.0, Status: &status},
+			},
+		},
+	}
+}
+
+func targetStatusPower(status instanceconfig.Status) command.UsePowerPayload {
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Affects: "bTarget", Range: &rng, Duration: 10.0, Status: &status},
+			},
+		},
+	}
+}
+
+func friendlyTargetStatusPower(status instanceconfig.Status) command.UsePowerPayload {
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Affects: "gTarget", Range: &rng, Duration: 10.0, Status: &status},
+			},
+		},
+	}
+}
+
+func TestUsePowerHandler_AppliesSelfStatus(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	status := instanceconfig.Status{Name: "Enraged", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfStatusPower(status), instanceconfig.Zone{}, state))
+
+	require.Len(t, state.Units[playerID].ActiveStatusEffects, 1)
+	e := state.Units[playerID].ActiveStatusEffects[0]
+	assert.Equal(t, "Enraged", e.Status.Name)
+	assert.Equal(t, playerID, e.ApplierID)
+	assert.Empty(t, state.Units[targetID].ActiveStatusEffects, "a self-affecting status shouldn't touch the target")
+}
+
+func TestUsePowerHandler_AppliesStatusToTarget(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	// A harmful (debuff) status rolls the same resist chance harm does -
+	// retry past an occasional resist to keep this deterministic.
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0) // 3ft away, within 5ft range
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
+			continue // resisted
+		}
+		e := state.Units[targetID].ActiveStatusEffects[0]
+		assert.Equal(t, "Dazed", e.Status.Name)
+		assert.Equal(t, playerID, e.ApplierID)
+		assert.Empty(t, state.Units[playerID].ActiveStatusEffects)
+		return
+	}
+	t.Fatal("Dazed resisted 200 times in a row - resist chance may be miscalibrated")
+}
+
+func TestUsePowerHandler_TargetStatusOutOfRangeIsNoOp(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 10, 0) // 10ft away, range is 5ft
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+	assert.Empty(t, state.Units[targetID].ActiveStatusEffects)
+}
+
+func TestUsePowerHandler_DebuffStatusCanBeResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
+			return // resisted
+		}
+	}
+	t.Fatal("Dazed landed 200 times in a row - resist chance may be miscalibrated")
+}
+
+func TestUsePowerHandler_EngagesIdleHostileTargetOnDebuffStatusEvenWithNoHarm(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+	state.Units[targetID].Hostility = "hostile"
+	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+	// Aggro fires before the resist roll, so this is deterministic even
+	// though the debuff itself might have been resisted.
+	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[targetID].Status)
+}
+
+func TestUsePowerHandler_BuffStatusNeverResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	status := instanceconfig.Status{Name: "Enraged", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
+
+	for i := 0; i < 20; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfStatusPower(status), instanceconfig.Zone{}, state))
+		require.Len(t, state.Units[playerID].ActiveStatusEffects, 1, "a self buff should never be resisted")
+	}
+}
+
+// Resistibility is a property of the cast (who it's aimed at via Affects),
+// not of the Status's own display-only TreatAs - so these two intentionally
+// invert TreatAs relative to Affects to prove the two are decoupled.
+
+func TestUsePowerHandler_BuffStatusCastAtAHostileTargetCanBeResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	// TreatAs "buff" despite being cast at a hostile bTarget - e.g. a status
+	// that's flavored as beneficial but forced onto an enemy.
+	status := instanceconfig.Status{Name: "Marked", ShortName: "Marked", TreatAs: "buff", Stacking: "replace"}
+
+	for i := 0; i < 200; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
+
+		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
+			return // resisted
+		}
+	}
+	t.Fatal("Marked landed 200 times in a row - resist chance may be miscalibrated")
+}
+
+func TestUsePowerHandler_DebuffStatusCastAtAFriendlyTargetIsNeverResisted(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	// TreatAs "debuff" despite being cast at a friendly gTarget.
+	status := instanceconfig.Status{Name: "Weakened", ShortName: "Weak", TreatAs: "debuff", Stacking: "replace"}
+
+	for i := 0; i < 20; i++ {
+		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, friendlyTargetStatusPower(status), instanceconfig.Zone{}, state))
+
+		require.Len(t, state.Units[targetID].ActiveStatusEffects, 1, "a friendly-targeted status should never be resisted")
+	}
 }

@@ -62,7 +62,7 @@ func TestClone_MutatingEffectsDoesNotAffectOriginal(t *testing.T) {
 	expiresAt := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, u := range state.Units {
 		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
-			{StatusIdentifier: "poison", ExpiresAt: expiresAt},
+			{Status: instanceconfig.Status{Name: "poison"}, ExpiresAt: expiresAt},
 		}
 	}
 

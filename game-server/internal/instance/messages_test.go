@@ -191,9 +191,10 @@ func TestDeltaMsg_EffectAdded(t *testing.T) {
 	prev := stateWithUnit(t)
 	curr := prev.Clone()
 	expires := time.Date(2030, 1, 1, 0, 0, 5, 0, time.UTC)
+	applierID := uuid.New()
 	for _, u := range curr.Units {
 		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
-			{StatusIdentifier: "poison", ExpiresAt: expires},
+			{Status: instanceconfig.Status{Name: "poison"}, ApplierID: applierID, Stacks: 1, ExpiresAt: expires},
 		}
 	}
 
@@ -201,7 +202,9 @@ func TestDeltaMsg_EffectAdded(t *testing.T) {
 	adds := msg["effect_adds"].([]any)
 	require.Len(t, adds, 1)
 	add := adds[0].(map[string]any)
-	assert.Equal(t, "poison", add["status_identifier"])
+	assert.Equal(t, "poison", add["status_name"])
+	assert.Equal(t, applierID.String(), add["applier_id"])
+	assert.Equal(t, float64(1), add["stacks"])
 	assert.Equal(t, float64(expires.UnixMilli()), add["expires_at"])
 	assert.Empty(t, msg["effect_removes"])
 }
@@ -209,9 +212,10 @@ func TestDeltaMsg_EffectAdded(t *testing.T) {
 func TestDeltaMsg_EffectRemoved(t *testing.T) {
 	prev := stateWithUnit(t)
 	expires := time.Date(2030, 1, 1, 0, 0, 5, 0, time.UTC)
+	applierID := uuid.New()
 	for _, u := range prev.Units {
 		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
-			{StatusIdentifier: "slow", ExpiresAt: expires},
+			{Status: instanceconfig.Status{Name: "slow"}, ApplierID: applierID, ExpiresAt: expires},
 		}
 	}
 	curr := prev.Clone()
@@ -223,8 +227,38 @@ func TestDeltaMsg_EffectRemoved(t *testing.T) {
 	removes := msg["effect_removes"].([]any)
 	require.Len(t, removes, 1)
 	rem := removes[0].(map[string]any)
-	assert.Equal(t, "slow", rem["status_identifier"])
+	assert.Equal(t, "slow", rem["status_name"])
+	assert.Equal(t, applierID.String(), rem["applier_id"])
 	assert.Empty(t, msg["effect_adds"])
+}
+
+func TestDeltaMsg_EffectValueChangeResendsAdd(t *testing.T) {
+	applierID := uuid.New()
+	prev := stateWithUnit(t)
+	expires1 := time.Date(2030, 1, 1, 0, 0, 5, 0, time.UTC)
+	for _, u := range prev.Units {
+		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
+			{Status: instanceconfig.Status{Name: "poison"}, ApplierID: applierID, Stacks: 1, ExpiresAt: expires1},
+		}
+	}
+	curr := prev.Clone()
+	expires2 := expires1.Add(5 * time.Second)
+	for _, u := range curr.Units {
+		// Same (name, applier) key, but a re-application extended ExpiresAt
+		// and added a stack - the client treats effect_adds as an upsert by
+		// key, so this must resend as an add, not be treated as unchanged.
+		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
+			{Status: instanceconfig.Status{Name: "poison"}, ApplierID: applierID, Stacks: 2, ExpiresAt: expires2},
+		}
+	}
+
+	msg := delta(t, prev, curr)
+	adds := msg["effect_adds"].([]any)
+	require.Len(t, adds, 1)
+	add := adds[0].(map[string]any)
+	assert.Equal(t, float64(2), add["stacks"])
+	assert.Equal(t, float64(expires2.UnixMilli()), add["expires_at"])
+	assert.Empty(t, msg["effect_removes"])
 }
 
 func TestDeltaMsg_NewUnit(t *testing.T) {

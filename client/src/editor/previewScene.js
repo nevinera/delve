@@ -64,6 +64,7 @@ export class PreviewSceneManager {
   constructor(canvas) {
     this.canvas = canvas;
     this.activeEffects = [];
+    this.activeAuras = [];
     this.orbit = {azimuth: Math.PI / 4, pitch: Math.atan2(CAM_HEIGHT, CAM_BACK)};
     this.zoom = 1.0;
     this.targetDistanceFt = 5;
@@ -186,6 +187,7 @@ export class PreviewSceneManager {
     const animate = (time) => {
       this._frame = requestAnimationFrame(animate);
       this._updateGraphicEffects(time);
+      this._updateAuraEffects(time);
       this.renderer.render(this.scene, this.camera);
     };
     this._frame = requestAnimationFrame(animate);
@@ -199,6 +201,12 @@ export class PreviewSceneManager {
     this.canvas.removeEventListener("mousedown", this._onMouseDown);
     this.canvas.removeEventListener("contextmenu", this._onContextMenu);
     this.canvas.removeEventListener("wheel", this._onWheel);
+    for (const a of this.activeAuras) {
+      a.plane.removeFromParent();
+      a.mat.dispose();
+      a.texture.dispose();
+    }
+    this.activeAuras = [];
     this.renderer.dispose();
   }
 
@@ -256,6 +264,68 @@ export class PreviewSceneManager {
         isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
       });
     });
+  }
+
+  // Matches the (auraEffect, tokenKey, durationSec, baseUrl, stockAssets)
+  // signature effectPlayback.js calls with. Unlike a graphicEffect, an
+  // AuraEffect has no from/to/when/condition - it's simply parented to
+  // whichever token the status landed on (self/affected) for the status's
+  // duration, so it moves with the token and needs no travel handling.
+  playAuraEffect(auraEffect, tokenKey, durationSec, baseUrl) {
+    const tokenGroup = tokenKey === "self" ? this.selfToken : this.targetToken;
+    const url = new URL(auraEffect.sourceURL, baseUrl).href;
+    this._spawnAuraEffect(url, auraEffect, tokenGroup, durationSec);
+  }
+
+  _spawnAuraEffect(url, auraEffect, tokenGroup, durationSec) {
+    const {color, scale = 1.0, opacity = 1.0, spriteColumns, spriteRows} = auraEffect;
+    const isSpriteSheet = spriteColumns > 0 && spriteRows > 0;
+    const frameCount = auraEffect.spriteFrameCount ?? (spriteColumns * spriteRows);
+    const frameRate = auraEffect.spriteFrameRate ?? DEFAULT_SPRITE_FRAME_RATE;
+
+    new THREE.TextureLoader().load(url, (texture) => {
+      if (isSpriteSheet) {
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        texture.repeat.set(1 / spriteColumns, 1 / spriteRows);
+        texture.offset.set(0, 1 - 1 / spriteRows);
+      }
+
+      const mat = new THREE.MeshBasicMaterial({map: texture, transparent: true, depthWrite: false, opacity});
+      if (color) mat.color.set(`#${color.replace(/^#/, "")}`);
+
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(4 * scale, 4 * scale), mat);
+      plane.rotation.x = -Math.PI / 2;
+      plane.position.y = EFFECT_HEIGHT;
+      tokenGroup.add(plane);
+
+      this.activeAuras.push({
+        plane, mat, texture,
+        startedAt: performance.now(),
+        durationMs: durationSec * 1000,
+        isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
+      });
+    });
+  }
+
+  _updateAuraEffects(now) {
+    for (let i = this.activeAuras.length - 1; i >= 0; i--) {
+      const a = this.activeAuras[i];
+      const elapsed = now - a.startedAt;
+      if (elapsed >= a.durationMs) {
+        a.plane.removeFromParent();
+        a.mat.dispose();
+        a.texture.dispose();
+        this.activeAuras.splice(i, 1);
+        continue;
+      }
+      if (a.isSpriteSheet) {
+        const frame = Math.floor((elapsed / 1000) * a.frameRate) % a.frameCount;
+        const col = frame % a.spriteColumns;
+        const row = Math.floor(frame / a.spriteColumns);
+        a.texture.offset.set(col / a.spriteColumns, 1 - (row + 1) / a.spriteRows);
+      }
+    }
   }
 
   _updateGraphicEffects(now) {

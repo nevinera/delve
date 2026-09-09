@@ -62,7 +62,8 @@ asset syntax accepted by `iconURL`.
       "affects": "bTarget",
       "range": 5.0,
       "amount": [2.0, 4.0],
-      "tags": ["physical", "melee"]
+      "school": "physical",
+      "tags": ["melee"]
     }
   ]
 }

@@ -30,10 +30,12 @@ export function applyDelta(units, msg) {
     const unit = next[add.unit_id];
     if (!unit) continue;
     const effects = (unit.active_status_effects ?? []).filter(
-      (e) => e.status_identifier !== add.status_identifier
+      (e) => !(e.status_name === add.status_name && e.applier_id === add.applier_id)
     );
     effects.push({
-      status_identifier: add.status_identifier,
+      status_name: add.status_name,
+      applier_id: add.applier_id,
+      stacks: add.stacks,
       expires_at: add.expires_at,
     });
     next[add.unit_id] = { ...unit, active_status_effects: effects };
@@ -45,7 +47,7 @@ export function applyDelta(units, msg) {
     next[rem.unit_id] = {
       ...unit,
       active_status_effects: (unit.active_status_effects ?? []).filter(
-        (e) => e.status_identifier !== rem.status_identifier
+        (e) => !(e.status_name === rem.status_name && e.applier_id === rem.applier_id)
       ),
     };
   }

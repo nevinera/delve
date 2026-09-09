@@ -8,6 +8,8 @@ const AbilityPreviewCanvas = forwardRef(function AbilityPreviewCanvas({selfToken
   useImperativeHandle(ref, () => ({
     playGraphicEffects: (effects, positions, baseUrl, travelOverrideMs) =>
       managerRef.current?.playGraphicEffects(effects, positions, baseUrl, travelOverrideMs),
+    playAuraEffect: (auraEffect, tokenKey, durationSec, baseUrl) =>
+      managerRef.current?.playAuraEffect(auraEffect, tokenKey, durationSec, baseUrl),
     positions: () => managerRef.current?.positions(),
   }));
 

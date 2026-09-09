@@ -13,6 +13,11 @@ const SELECT_OPTIONS = {
   impactTiming: ["", "after", "before", "centered"],
   type: ["harm", "heal", "resource", "status"],
   affects: ["bTarget", "gTarget", "bAll", "gAll", "self"],
+  // "physical" (default) or "magic" - see Validators::PowerEffectValidator::
+  // DAMAGE_SCHOOLS. Used both by a top-level harm/heal effect's own
+  // `school` field and (locally, in StatusEditor) a recurring
+  // StatusEffect's `school`.
+  school: ["", "physical", "magic"],
 };
 
 // amount/range may be a single number or a [min, max] pair (see
@@ -25,15 +30,12 @@ const NUMBER_FIELDS = new Set([
   "spriteFrameRate", "volumeScale", "delta",
 ]);
 
-// The nested "status" object isn't editable yet (see Content::Effect::Status).
-const READONLY_FIELDS = new Set(["status"]);
-
 export function widgetFor(field) {
+  if (field === "status") return "status";
   if (SELECT_OPTIONS[field]) return "select";
   if (RANGE_FIELDS.has(field)) return "range";
   if (field === "tags") return "tags";
   if (NUMBER_FIELDS.has(field)) return "number";
-  if (READONLY_FIELDS.has(field)) return "readonly";
   return "text";
 }
 
@@ -46,8 +48,9 @@ export function selectOptions(field) {
 // entry happens to have them set - otherwise there'd be no way to e.g. add
 // spriteColumns/spriteRows to a graphicEffect that was previously a plain,
 // non-animated image. "effects" is polymorphic on "type" (harm/heal/
-// resource/status each have a different field set) and isn't covered yet,
-// so it stays purely data-driven.
+// resource/status each have a different field set) and isn't covered yet
+// except for status (forced below), so it otherwise stays purely
+// data-driven.
 const ENTRY_FIELDS = {
   graphicEffects: [
     "sourceURL", "duration", "from", "to", "when", "condition",
@@ -57,6 +60,12 @@ const ENTRY_FIELDS = {
 };
 
 export function entryFieldsFor(section, entry) {
+  if (section === "effects" && entry.type === "status") {
+    const fields = Object.keys(entry);
+    if (!fields.includes("status")) fields.push("status");
+    if (!fields.includes("duration")) fields.push("duration");
+    return fields;
+  }
   return ENTRY_FIELDS[section] ?? Object.keys(entry);
 }
 

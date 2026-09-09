@@ -34,12 +34,18 @@ RSpec.describe Content::Ability do
     expect(ability.to_h["castTime"]).to be_nil
   end
 
-  it "omits cooldown/maxRange/speed/tags when absent from the source" do
+  it "omits cooldown/maxRange/speed/tags/description when absent from the source" do
     ability = described_class.from_h(punch_hash)
     expect(ability.to_h).not_to have_key("cooldown")
     expect(ability.to_h).not_to have_key("maxRange")
     expect(ability.to_h).not_to have_key("speed")
     expect(ability.to_h).not_to have_key("tags")
+    expect(ability.to_h).not_to have_key("description")
+  end
+
+  it "round-trips a description" do
+    ability = described_class.from_h(punch_hash.merge("description" => "Hurts the target."))
+    expect(ability.to_h["description"]).to eq("Hurts the target.")
   end
 
   it "round-trips top-level tags" do

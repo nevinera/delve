@@ -13,11 +13,18 @@ type UnitType struct {
 	AttackSpeed       float64       `json:"attackSpeed"`                 // Required: basic-attack rate, attacks per second
 	BasicAttackRange  float64       `json:"basicAttackRange,omitempty"`  // Feet; omitted/0 defaults to 5.0 (melee)
 	BasicAttackSchool string        `json:"basicAttackSchool,omitempty"` // "physical" (default) or "magic"; client-only, affects basic-attack visuals only
+	BasicAttackStyle  string        `json:"basicAttackStyle,omitempty"`  // one of BasicAttackStyles; client-only, picks the basic-attack graphic/sound
 	Resource          ResourceType  `json:"resource"`                    // Required
 	Powers            []Power       `json:"powers,omitempty"`
 	Targeting         UnitTargeting `json:"targeting,omitempty"`
 	Tactics           UnitTactics   `json:"tactics,omitempty"`
 }
+
+// BasicAttackStyles are the valid values for UnitType.BasicAttackStyle - each
+// picks a specific built-in basic-attack graphic/sound on the client. Purely
+// cosmetic; has no effect on BasicAttackSchool's physical/magic mitigation
+// split.
+var BasicAttackStyles = []string{"claw", "sword", "axe", "club", "arrow", "arcane", "ice", "nature", "fire"}
 
 // ResourceType defines the resource used to power a unit's abilities.
 // color is client-only and omitted.

@@ -16,6 +16,8 @@ const Canvas = forwardRef(function Canvas({
   targetId,
   attacking,
   lootableUnitIds,
+  statusCatalog,
+  stockAssets,
 }, ref) {
   const canvasRef = useRef(null);
   const managerRef = useRef(null);
@@ -44,7 +46,8 @@ const Canvas = forwardRef(function Canvas({
 
   useEffect(() => {
     managerRef.current?.updateUnits(units, selfIdentifier, characterTokenUrl);
-  }, [units]);
+    managerRef.current?.syncStatusAuras(units, statusCatalog ?? {}, stockAssets);
+  }, [units, statusCatalog, stockAssets]);
 
   useEffect(() => {
     managerRef.current?.setTarget(targetId);

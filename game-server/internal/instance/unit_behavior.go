@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
@@ -167,9 +168,9 @@ func applyUnitBehavior(
 			chaseTarget(unit, target, speed, dt, chaseRange)
 			now := time.Now()
 			if losClear {
-				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, now, events, state)
+				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
 				if target.Status != instancestate.UnitStatusDead {
-					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, now, events, state)
+					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, zone, now, events, state)
 				}
 			}
 		} else {
@@ -214,7 +215,7 @@ func applyUnitBehavior(
 // tryNPCAttack fires a randomly-chosen available harm power at the target if
 // the unit is off GCD and at least one power is in range. Appends a CombatEvent
 // to events if an attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
 	if now.Before(unit.GlobalCooldownEndsAt) {
 		return
 	}
@@ -223,22 +224,17 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	type candidate struct {
-		power  instanceconfig.Power
-		effect instanceconfig.PowerEffect
-	}
-	var available []candidate
+	// A power is a candidate if at least one of its effects is currently
+	// usable (right type, right shape, in range if not self-affecting) -
+	// once chosen, every one of its usable effects fires together (see
+	// npcEffectInRange/firing loop below), not just the one that made it
+	// eligible. This matches UsePowerHandler, which already applies every
+	// effect of the power a player casts.
+	var available []instanceconfig.Power
 	for _, p := range powers {
 		for _, eff := range p.Effects {
-			if eff.Type != "harm" || eff.Amount == nil {
-				continue
-			}
-			maxRange := 5.0
-			if eff.Range != nil {
-				maxRange = eff.Range.Max()
-			}
-			if dist <= maxRange+unit.Radius+target.Radius {
-				available = append(available, candidate{p, eff})
+			if npcEffectUsable(eff) && npcEffectInRange(eff, dist, unit, target) {
+				available = append(available, p)
 				break
 			}
 		}
@@ -247,29 +243,84 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		return
 	}
 
-	c := available[rand.Intn(len(available))]
-	lo, hi := c.effect.Amount.Min(), c.effect.Amount.Max()
-	target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
-	if target.Health < 0 {
-		target.Health = 0
+	power := available[rand.Intn(len(available))]
+	for _, eff := range power.Effects {
+		if !npcEffectUsable(eff) || !npcEffectInRange(eff, dist, unit, target) {
+			continue
+		}
+		switch eff.Type {
+		case "status":
+			recipient := target
+			if eff.Affects == "self" {
+				recipient = unit
+			} else {
+				// Casting at a hostile target is an attack too - it aggros
+				// an idle hostile target and can be resisted, same as harm.
+				// Resistibility is a property of this cast (who it's aimed
+				// at), not of the Status itself - see command.IsHostileAffects.
+				command.EngageOnAttack(target, attackerID, zone, state)
+				if command.IsHostileAffects(eff.Affects) {
+					if missed, _ := command.RollAttackOutcome(0); missed {
+						continue // resisted
+					}
+				}
+			}
+			command.ApplyStatus(recipient, unit, attackerID, *eff.Status, eff.Duration, zone, now)
+		case "harm":
+			timeBudget := command.PowerEffectTimeBudget(power)
+			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false)
+			target.Health -= command.IncomingDamage(target, zone, raw, eff.School != "magic")
+			if target.Health < 0 {
+				target.Health = 0
+			}
+			if target.Health == 0 {
+				target.Status = instancestate.UnitStatusDead
+				target.Target = nil
+				instancestate.RollAndRecordLoot(targetID, target, state)
+			}
+		}
 	}
-	if target.Health == 0 {
-		target.Status = instancestate.UnitStatusDead
-		target.Target = nil
-		instancestate.RollAndRecordLoot(targetID, target, state)
-	}
-	unit.GlobalCooldownEndsAt = now.Add(time.Duration(c.power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
 	*events = append(*events, CombatEvent{
 		AttackerID: attackerID.String(),
 		TargetID:   targetID.String(),
-		PowerName:  c.power.Name,
+		PowerName:  power.Name,
 	})
+}
+
+// npcEffectUsable reports whether eff is a type/shape tryNPCAttack knows how
+// to fire at all (a harm with an amount, or a status with a status).
+func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
+	switch eff.Type {
+	case "harm":
+		return eff.Amount != nil
+	case "status":
+		return eff.Status != nil
+	default:
+		return false
+	}
+}
+
+// npcEffectInRange reports whether eff can currently reach its recipient -
+// always true for a self-affecting effect (no target distance to check).
+func npcEffectInRange(eff instanceconfig.PowerEffect, dist float64, unit, target *instancestate.UnitState) bool {
+	if eff.Affects == "self" {
+		return true
+	}
+	maxRange := 5.0
+	if eff.Range != nil {
+		maxRange = eff.Range.Max()
+	}
+	return dist <= maxRange+unit.Radius+target.Radius
 }
 
 // tryNPCBasicAttack fires unit's weapon-less basic attack at target if the
 // unit is auto-attacking, its swing timer is up, and the target is in range.
-// Damage per hit is UnitType.DPS/AttackSpeed, +/- basicAttackVariance.
-func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+// Damage per hit is UnitType.DPS/AttackSpeed, +/- basicAttackVariance, then
+// reduced by target's Avoidance/Defence Rating per UnitType.BasicAttackSchool
+// (see command.IncomingDamage) - a nonzero reduction only when target is a
+// player, since NPCs carry no itemized stats of their own.
+func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
 	if !unit.Attacking || unitType.AttackSpeed <= 0 {
 		return
 	}
@@ -287,16 +338,23 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 
 	unit.NextBasicAttackAt = now.Add(time.Duration(float64(time.Second) / unitType.AttackSpeed))
 
-	mean := unitType.DPS / unitType.AttackSpeed
-	lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
-	target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
-	if target.Health < 0 {
-		target.Health = 0
-	}
-	if target.Health == 0 {
-		target.Status = instancestate.UnitStatusDead
-		target.Target = nil
-		instancestate.RollAndRecordLoot(targetID, target, state)
+	// Same universal miss/crit roll a player's basic attack gets - see
+	// command.RollAttackOutcome. A miss still swings (the event still
+	// fires) but deals no damage, same as a player's missed swing.
+	_, critChancePct, _ := command.UnitCombatStats(unit, zone)
+	if missed, multiplier := command.RollAttackOutcome(critChancePct); !missed {
+		mean := unitType.DPS / unitType.AttackSpeed
+		lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
+		raw := math.Round((lo + rand.Float64()*(hi-lo)) * multiplier)
+		target.Health -= command.IncomingDamage(target, zone, raw, unitType.BasicAttackSchool != "magic")
+		if target.Health < 0 {
+			target.Health = 0
+		}
+		if target.Health == 0 {
+			target.Status = instancestate.UnitStatusDead
+			target.Target = nil
+			instancestate.RollAndRecordLoot(targetID, target, state)
+		}
 	}
 	*events = append(*events, CombatEvent{
 		AttackerID: attackerID.String(),

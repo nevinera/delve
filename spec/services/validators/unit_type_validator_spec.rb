@@ -102,6 +102,23 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /must be one of/)
     end
 
+    it "allows basicAttackStyle to be omitted" do
+      expect { described_class.validate!(goblin_unit_type.except("basicAttackStyle")) }.not_to raise_error
+    end
+
+    it "allows basicAttackStyle claw" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackStyle" => "claw")) }.not_to raise_error
+    end
+
+    it "allows basicAttackStyle fire" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackStyle" => "fire")) }.not_to raise_error
+    end
+
+    it "raises when basicAttackStyle is not a recognized value" do
+      expect { described_class.validate!(goblin_unit_type.merge("basicAttackStyle" => "dagger")) }
+        .to raise_error(Validators::ValidationError, /must be one of/)
+    end
+
     it "raises when resource is an AssetReference" do
       data = goblin_unit_type.merge("resource" => {"$ref" => "resources/energy.json", "referenceTo" => "resource_type"})
       expect { described_class.validate!(data) }

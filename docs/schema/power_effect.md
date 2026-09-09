@@ -34,6 +34,7 @@ Deals damage to one or more targets.
 | `affects` | string | yes | Must not be `"self"`. |
 | `amount` | float \| floatRange | yes | Damage dealt. |
 | `range` | rangeFloat | yes | Distance in feet to a valid target. |
+| `school` | string | no, default `"physical"` | `"physical"` or `"magic"`. Picks which of the target's Avoidance/Defence Rating pools mitigates this effect - see [stats.md](../stats.md). Not the same as `tags` (which is free-form and has no mechanical effect). |
 
 ### Example
 
@@ -43,7 +44,8 @@ Deals damage to one or more targets.
   "affects": "bTarget",
   "range": 5.0,
   "amount": [2.0, 4.0],
-  "tags": ["physical", "melee"]
+  "school": "physical",
+  "tags": ["melee"]
 }
 ```
 
@@ -117,6 +119,7 @@ Applies a Status to one or more targets for a fixed duration. See [status.md](st
   "duration": 10.0,
   "status": {
     "name": "Enrage",
+    "shortName": "Enrage",
     "treatAs": "buff",
     "stacking": "replace",
     "effects": [

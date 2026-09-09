@@ -48,4 +48,44 @@ describe("firePowerEffects", () => {
       power.graphicEffects, expect.anything(), "https://example.com/", 0, stockAssets
     );
   });
+
+  describe("status effect auras", () => {
+    it("calls playAuraEffect for a status effect that has an auraEffect", () => {
+      const sceneManager = {playAuraEffect: vi.fn()};
+      const auraEffect = {sourceURL: "../graphics/effects/glow.webp"};
+      const power = {effects: [{type: "status", affects: "self", duration: 8.0, status: {name: "Second Wind", auraEffect}}]};
+
+      firePowerEffects(power, {positions: {self: {x: 0, y: 0}, target: {x: 1, y: 0}}, baseUrl: "https://example.com/", sceneManager, stockAssets});
+
+      expect(sceneManager.playAuraEffect).toHaveBeenCalledWith(auraEffect, "self", 8.0, "https://example.com/", stockAssets);
+    });
+
+    it("targets the affected token for a non-self status effect", () => {
+      const sceneManager = {playAuraEffect: vi.fn()};
+      const auraEffect = {sourceURL: "../graphics/effects/glow.webp"};
+      const power = {effects: [{type: "status", affects: "bTarget", duration: 8.0, status: {name: "Weakened", auraEffect}}]};
+
+      firePowerEffects(power, {positions: {self: {x: 0, y: 0}, target: {x: 1, y: 0}}, baseUrl: "https://example.com/", sceneManager, stockAssets});
+
+      expect(sceneManager.playAuraEffect).toHaveBeenCalledWith(auraEffect, "affected", 8.0, "https://example.com/", stockAssets);
+    });
+
+    it("doesn't call playAuraEffect for a status effect with no auraEffect", () => {
+      const sceneManager = {playAuraEffect: vi.fn()};
+      const power = {effects: [{type: "status", affects: "self", duration: 8.0, status: {name: "Winded"}}]};
+
+      firePowerEffects(power, {positions: {self: {x: 0, y: 0}, target: {x: 1, y: 0}}, baseUrl: "https://example.com/", sceneManager, stockAssets});
+
+      expect(sceneManager.playAuraEffect).not.toHaveBeenCalled();
+    });
+
+    it("doesn't throw when the sceneManager doesn't implement playAuraEffect", () => {
+      const sceneManager = {playGraphicEffects: vi.fn()};
+      const power = {effects: [{type: "status", affects: "self", duration: 8.0, status: {name: "Second Wind", auraEffect: {sourceURL: "x.webp"}}}]};
+
+      expect(() =>
+        firePowerEffects(power, {positions: {self: {x: 0, y: 0}, target: {x: 1, y: 0}}, baseUrl: "https://example.com/", sceneManager, stockAssets})
+      ).not.toThrow();
+    });
+  });
 });

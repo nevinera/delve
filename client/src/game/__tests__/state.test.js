@@ -98,21 +98,21 @@ describe("applyDelta", () => {
       unit_updates: {},
       unit_removals: [],
       effect_adds: [
-        { unit_id: "id-1", status_identifier: "poison", expires_at: 9000 },
+        { unit_id: "id-1", status_name: "poison", applier_id: "applier-1", stacks: 1, expires_at: 9000 },
       ],
       effect_removes: [],
     });
     expect(result["id-1"].active_status_effects).toEqual([
-      { status_identifier: "poison", expires_at: 9000 },
+      { status_name: "poison", applier_id: "applier-1", stacks: 1, expires_at: 9000 },
     ]);
   });
 
-  it("deduplicates effect_adds by status_identifier", () => {
+  it("deduplicates effect_adds by (status_name, applier_id)", () => {
     const withEffect = {
       "id-1": {
         ...unitA,
         active_status_effects: [
-          { status_identifier: "poison", expires_at: 1000 },
+          { status_name: "poison", applier_id: "applier-1", stacks: 1, expires_at: 1000 },
         ],
       },
     };
@@ -120,13 +120,34 @@ describe("applyDelta", () => {
       unit_updates: {},
       unit_removals: [],
       effect_adds: [
-        { unit_id: "id-1", status_identifier: "poison", expires_at: 9000 },
+        { unit_id: "id-1", status_name: "poison", applier_id: "applier-1", stacks: 2, expires_at: 9000 },
       ],
       effect_removes: [],
     });
     const effects = result["id-1"].active_status_effects;
     expect(effects).toHaveLength(1);
     expect(effects[0].expires_at).toBe(9000);
+    expect(effects[0].stacks).toBe(2);
+  });
+
+  it("tracks the same status from different appliers independently", () => {
+    const withEffect = {
+      "id-1": {
+        ...unitA,
+        active_status_effects: [
+          { status_name: "poison", applier_id: "applier-1", stacks: 1, expires_at: 1000 },
+        ],
+      },
+    };
+    const result = applyDelta(withEffect, {
+      unit_updates: {},
+      unit_removals: [],
+      effect_adds: [
+        { unit_id: "id-1", status_name: "poison", applier_id: "applier-2", stacks: 1, expires_at: 2000 },
+      ],
+      effect_removes: [],
+    });
+    expect(result["id-1"].active_status_effects).toHaveLength(2);
   });
 
   it("removes status effects via effect_removes", () => {
@@ -134,7 +155,7 @@ describe("applyDelta", () => {
       "id-1": {
         ...unitA,
         active_status_effects: [
-          { status_identifier: "poison", expires_at: 9000 },
+          { status_name: "poison", applier_id: "applier-1", stacks: 1, expires_at: 9000 },
         ],
       },
     };
@@ -142,7 +163,7 @@ describe("applyDelta", () => {
       unit_updates: {},
       unit_removals: [],
       effect_adds: [],
-      effect_removes: [{ unit_id: "id-1", status_identifier: "poison" }],
+      effect_removes: [{ unit_id: "id-1", status_name: "poison", applier_id: "applier-1" }],
     });
     expect(result["id-1"].active_status_effects).toEqual([]);
   });

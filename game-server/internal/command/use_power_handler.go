@@ -73,23 +73,14 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 		}
 	}
 
+	timeBudget := PowerEffectTimeBudget(p.Power)
 	for _, effect := range p.Power.Effects {
 		switch effect.Type {
 		case "harm":
 			if target == nil {
 				continue
 			}
-			maxRange := 5.0
-			if effect.Range != nil {
-				maxRange = effect.Range.Max()
-			}
-			maxRange += unit.Radius + target.Radius
-			dx := target.Position.X - unit.Position.X
-			dy := target.Position.Y - unit.Position.Y
-			if math.Sqrt(dx*dx+dy*dy) > maxRange {
-				return nil
-			}
-			if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y) {
+			if !inRangeAndLOS(unit, target, zone, effect.Range) {
 				return nil
 			}
 			unit.Attacking = true
@@ -97,8 +88,9 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 				if target.TaggedBy == nil && target.Hostility != "" {
 					target.TaggedBy = &unitID
 				}
-				lo, hi := effect.Amount.Min(), effect.Amount.Max()
-				target.Health -= math.Round(lo + rand.Float64()*(hi-lo))
+				EngageOnAttack(target, unitID, zone, next)
+				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false)
+				target.Health -= IncomingDamage(target, zone, raw, effect.School != "magic")
 				if target.Health < 0 {
 					target.Health = 0
 				}
@@ -106,18 +98,50 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 					target.Status = instancestate.UnitStatusDead
 					target.Target = nil
 					instancestate.RollAndRecordLoot(*unit.Target, target, next)
-					aggroLinkedGroupOnKill(target.ZoneUnitIdentifier, unitID, zone, next)
 					unit.Target = nil
 					unit.Attacking = false
 				}
 			}
-		case "heal":
-			if effect.Affects == "self" && effect.Amount != nil {
-				lo, hi := effect.Amount.Min(), effect.Amount.Max()
-				unit.Health += math.Round(lo + rand.Float64()*(hi-lo))
-				if unit.Health > unit.MaxHealth {
-					unit.Health = unit.MaxHealth
+		case "status":
+			if effect.Status == nil {
+				continue
+			}
+			recipient := unit
+			if effect.Affects != "self" {
+				if target == nil {
+					continue
 				}
+				if !inRangeAndLOS(unit, target, zone, effect.Range) {
+					return nil
+				}
+				recipient = target
+				// Casting at a hostile target is an attack too - it aggros
+				// an idle hostile target and can be resisted, same as harm.
+				// Resistibility is a property of this cast (who it's aimed
+				// at), not of the Status itself - see IsHostileAffects.
+				EngageOnAttack(target, unitID, zone, next)
+				if IsHostileAffects(effect.Affects) && rand.Float64() < baseMissChance {
+					continue // resisted
+				}
+			}
+			ApplyStatus(recipient, unit, unitID, *effect.Status, effect.Duration, zone, now)
+		case "heal":
+			if effect.Amount == nil {
+				continue
+			}
+			recipient := unit
+			if effect.Affects != "self" {
+				if target == nil {
+					continue
+				}
+				if !inRangeAndLOS(unit, target, zone, effect.Range) {
+					return nil
+				}
+				recipient = target
+			}
+			recipient.Health += PowerEffectAmount(unit, zone, effect, timeBudget, true, false)
+			if recipient.Health > recipient.MaxHealth {
+				recipient.Health = recipient.MaxHealth
 			}
 		}
 	}

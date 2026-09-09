@@ -4,6 +4,7 @@ module Content
     include ActiveModel::Attributes
 
     attribute :name, :string
+    attribute :description, :string
     attribute :icon_url, :string
     attribute :cast_time, :float
     attribute :global_cooldown, :float
@@ -31,6 +32,7 @@ module Content
     def self.scalar_attributes_from_h(hash)
       {
         name: hash["name"],
+        description: hash["description"],
         icon_url: hash["iconURL"],
         cast_time: hash["castTime"],
         global_cooldown: hash["globalCooldown"],
@@ -61,7 +63,7 @@ module Content
     private
 
     def optional_fields
-      {"cooldown" => cooldown, "maxRange" => max_range, "speed" => speed, "tags" => tags.presence}.compact
+      {"description" => description, "cooldown" => cooldown, "maxRange" => max_range, "speed" => speed, "tags" => tags.presence}.compact
     end
   end
 end

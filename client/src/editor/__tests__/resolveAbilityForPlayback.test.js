@@ -107,6 +107,30 @@ describe("resolveAbilityForPlayback", () => {
       const resolved = resolveAbilityForPlayback({...ability, iconURL: ":heal:"}, assetMap, {iconURL: "blob:local-upload"}, stockAssets);
       expect(resolved.iconURL).toEqual("blob:local-upload");
     });
+
+    it("resolves a status effect's auraEffect sourceURL against this app's own origin when it's a stock reference", () => {
+      const statusAbility = {
+        ...ability,
+        effects: [{type: "status", affects: "self", duration: 8.0, status: {name: "Second Wind", auraEffect: {sourceURL: ":arc:"}}}],
+      };
+      const resolved = resolveAbilityForPlayback(statusAbility, assetMap, {}, stockAssets);
+      expect(resolved.effects[0].status.auraEffect.sourceURL).toEqual(`${window.location.origin}/abilities/graphics/arc.webp`);
+    });
+  });
+
+  it("leaves a status effect without an auraEffect untouched", () => {
+    const statusAbility = {
+      ...ability,
+      effects: [{type: "status", affects: "self", duration: 8.0, status: {name: "Winded"}}],
+    };
+    const resolved = resolveAbilityForPlayback(statusAbility, assetMap);
+    expect(resolved.effects[0]).toEqual(statusAbility.effects[0]);
+  });
+
+  it("leaves a non-status effect untouched", () => {
+    const harmAbility = {...ability, effects: [{type: "harm", affects: "bTarget", amount: 10.0}]};
+    const resolved = resolveAbilityForPlayback(harmAbility, assetMap);
+    expect(resolved.effects[0]).toEqual(harmAbility.effects[0]);
   });
 });
 

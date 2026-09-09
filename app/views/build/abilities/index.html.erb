@@ -2,11 +2,18 @@
 
 <p><%= link_to "New Ability", new_build_ability_path %></p>
 
-<ul>
-  <% @abilities.each do |entry| %>
-    <% identifier = entry["name"].sub(/\.json\z/, "") %>
-    <li><%= link_to identifier, edit_build_ability_path(id: identifier) %></li>
-  <% end %>
-</ul>
+<table>
+  <thead>
+    <tr><th>Path</th></tr>
+  </thead>
+  <tbody>
+    <% @abilities.each do |entry| %>
+      <% identifier = entry["path"].delete_prefix("abilities/").delete_suffix(".json") %>
+      <tr>
+        <td><%= link_to identifier, edit_build_ability_path(id: identifier) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
 
 <%= link_to "Back to Build", build_root_path %>

@@ -76,3 +76,15 @@ func LootItemsToJSONForTest(items []instancestate.PendingLootItem) []byte {
 func (inst *Instance) ProcessLootEventsForTest(ctx context.Context, state *instancestate.InstanceState) {
 	inst.processLootEvents(ctx, state)
 }
+
+func (inst *Instance) DrainPlayerSpawnsForTest(ctx context.Context, state *instancestate.InstanceState) {
+	inst.drainPlayerSpawns(ctx, state)
+}
+
+func ExpireStatusEffectsForTest(state *instancestate.InstanceState, now time.Time) {
+	expireStatusEffects(state, now)
+}
+
+func TickStatusEffectsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	tickStatusEffects(state, zone, dt)
+}

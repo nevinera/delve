@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const RESPAWN_DELAY_S = 10;
@@ -7,7 +7,9 @@ import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
+import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
+import { AbilityTooltip } from "./AbilityTooltip";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -30,7 +32,14 @@ const BASIC_ATTACK_INTERVAL_MS = 2000;
 // on a combat event). Served by the Rails app itself, not content-authored, so
 // they have no associated zone/class - sourceURLs are resolved against this
 // app's own origin rather than a zone's or class's config_url. NPCs get a red
-// tint; characters get orange and a 20% larger graphic.
+// (or style-appropriate) tint; characters get orange and a 20% larger graphic.
+//
+// NPC_BASIC_ATTACK_STYLE_POWERS is keyed by UnitType.basicAttackStyle (see
+// docs/schema/unit_type.md) - one entry per value in
+// instanceconfig.BasicAttackStyles. A unit_type that omits basicAttackStyle
+// falls back to "sword"/"arrow"/"arcane" by basicAttackSchool/basicAttackRange
+// (see the lookup at its use site below), so existing content keeps its exact
+// prior visual/audio without opting in.
 const NPC_BASIC_ATTACK_POWER = {
   name: "Basic Attack",
   graphicEffects: [
@@ -78,6 +87,14 @@ const NPC_RANGED_BASIC_ATTACK_POWER = {
   ],
   soundEffects: [
     {
+      sourceURL: "/abilities/sounds/twang.ogg",
+      duration: 0.3,
+      location: "self",
+      when: "immediate",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+    {
       sourceURL: "/abilities/sounds/thud.ogg",
       duration: 0.12,
       location: "affected",
@@ -115,6 +132,201 @@ const NPC_MAGIC_BASIC_ATTACK_POWER = {
       volumeScale: 0.05,
     },
   ],
+};
+
+// claw: a short slash placed directly on the target, no travel time.
+const NPC_CLAW_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/claw-slash.png",
+      duration: 0.4,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "ff0000",
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/slash.ogg",
+      duration: 0.2,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// axe: the sword-swing sprite at a heavier scale, with a chopping thud.
+const NPC_AXE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/sword-swing.sprites3x3.png",
+      duration: 0.85,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+      scale: 1.3,
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 9,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/crunch.ogg",
+      duration: 0.25,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// club: a blunt splat placed on the target rather than a bladed swing.
+const NPC_CLUB_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/splat.png",
+      duration: 0.5,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.5,
+      color: "ff0000",
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/thud.ogg",
+      duration: 0.12,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.04,
+    },
+  ],
+};
+
+// ice: a shard that travels from attacker to target, cracking on impact.
+const NPC_ICE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/shards.sprites7x1.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "66ccff",
+      spriteColumns: 7,
+      spriteRows: 1,
+      spriteFrameRate: 14,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/crack.ogg",
+      duration: 0.3,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// nature: tendrils erupting at the target's feet, with an organic squelch.
+const NPC_NATURE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/tendrils.sprites5x1.png",
+      duration: 0.6,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "66cc33",
+      spriteColumns: 5,
+      spriteRows: 1,
+      spriteFrameRate: 10,
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/squelch.ogg",
+      duration: 0.25,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.03,
+    },
+  ],
+};
+
+// fire: an orange-red fireball that travels from attacker to target, then
+// bursts on impact - unlike arcane's blue-white magic-ball, this one visibly
+// travels the distance rather than resolving instantly on the target.
+const NPC_FIRE_BASIC_ATTACK_POWER = {
+  name: "Basic Attack",
+  graphicEffects: [
+    {
+      sourceURL: "/abilities/graphics/magic-ball.sprites3x3.png",
+      duration: 0.4,
+      from: "self",
+      to: "affected",
+      when: "immediate",
+      condition: "onHit",
+      opacity: 0.7,
+      color: "ff3300",
+      spriteColumns: 3,
+      spriteRows: 3,
+      spriteFrameRate: 12,
+    },
+    {
+      sourceURL: "/abilities/graphics/radial-burst.png",
+      duration: 0.4,
+      from: "affected",
+      when: "impact",
+      condition: "onHit",
+      opacity: 0.6,
+      color: "ff6600",
+    },
+  ],
+  soundEffects: [
+    {
+      sourceURL: "/abilities/sounds/boom.ogg",
+      duration: 0.4,
+      location: "affected",
+      when: "impact",
+      condition: "onHit",
+      volumeScale: 0.04,
+    },
+  ],
+};
+
+// Keyed by UnitType.basicAttackStyle - see instanceconfig.BasicAttackStyles.
+const NPC_BASIC_ATTACK_STYLE_POWERS = {
+  claw: NPC_CLAW_BASIC_ATTACK_POWER,
+  sword: NPC_BASIC_ATTACK_POWER,
+  axe: NPC_AXE_BASIC_ATTACK_POWER,
+  club: NPC_CLUB_BASIC_ATTACK_POWER,
+  arrow: NPC_RANGED_BASIC_ATTACK_POWER,
+  arcane: NPC_MAGIC_BASIC_ATTACK_POWER,
+  ice: NPC_ICE_BASIC_ATTACK_POWER,
+  nature: NPC_NATURE_BASIC_ATTACK_POWER,
+  fire: NPC_FIRE_BASIC_ATTACK_POWER,
 };
 
 const CHARACTER_BASIC_ATTACK_POWER = {
@@ -165,17 +377,34 @@ const styles = {
   },
   selfFrame: {
     flex: 1,
-    position: "relative",
+    display: "flex",
+    alignItems: "stretch",
+    gap: 8,
     background: "#0d2b0d",
     border: "1px solid #2a6a2a",
     padding: 8,
   },
   targetFrame: {
     flex: 1,
-    position: "relative",
+    display: "flex",
+    flexDirection: "row-reverse",
+    alignItems: "stretch",
+    gap: 8,
     background: "#2b0d0d",
     border: "1px solid #6a2a2a",
     padding: 8,
+  },
+  frameImage: {
+    height: "100%",
+    width: "auto",
+    objectFit: "cover",
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  frameInfo: {
+    position: "relative",
+    flex: 1,
+    minWidth: 0,
   },
   targetRange: {
     fontSize: 11,
@@ -605,6 +834,45 @@ const styles = {
     fontStyle: "italic",
     marginTop: 6,
   },
+  statTooltipLine: {
+    color: "#7fae7f",
+    fontSize: 12,
+  },
+  charSheetStatLabelHoverable: {
+    cursor: "help",
+    borderBottom: "1px dotted #667",
+  },
+  statusBarLeft: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+    pointerEvents: "none",
+  },
+  statusBarRight: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
+    pointerEvents: "none",
+  },
+  statusColumn: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+  },
+  statusRow: {
+    fontSize: 11,
+    lineHeight: 1.3,
+    whiteSpace: "nowrap",
+    textShadow: "0 1px 3px #000",
+  },
   unitTooltip: {
     position: "absolute",
     top: 8,
@@ -632,7 +900,117 @@ const styles = {
     color: "#d4a84b",
     marginTop: 2,
   },
+  statusTooltipAnchor: {
+    display: "inline-block",
+    // The status bars themselves are pointerEvents: "none" (so they never
+    // block clicks/targeting on the 3D scene underneath) - this re-enables
+    // hover just for each individual row.
+    pointerEvents: "auto",
+    cursor: "default",
+  },
+  statusTooltip: {
+    position: "fixed",
+    zIndex: 100,
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #556",
+    borderRadius: 6,
+    padding: "8px 12px",
+    minWidth: 140,
+    maxWidth: 280,
+    pointerEvents: "none",
+  },
+  statusTooltipName: {
+    color: "#cce",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  statusTooltipDescription: {
+    color: "#aaa",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  statusTooltipAppliedBy: {
+    color: "#667",
+    fontSize: 11,
+    marginTop: 6,
+  },
 };
+
+// "3:05", "0:08" - minutes unpadded, seconds zero-padded. Rounds up so a
+// status showing "0:01" is still actually active, not already expired.
+export function formatRemaining(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// Mouse-tracked portal tooltip for one status row - mirrors StatEffectTooltip/
+// AbilityTooltip's approach. Shown on hover, name+description+applier;
+// description is optional (Status.description), and the applier line is
+// omitted entirely when it can't be resolved (e.g. they've since left the
+// instance) rather than showing a hollow "Applied by Unknown".
+function StatusTooltip({ name, description, appliedByName, children }) {
+  const [pos, setPos] = useState(null);
+
+  return (
+    <span
+      style={styles.statusTooltipAnchor}
+      onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && createPortal(
+        <div style={{ ...styles.statusTooltip, left: pos.x + 16, top: pos.y + 16 }}>
+          <div style={styles.statusTooltipName}>{name}</div>
+          {description && <div style={styles.statusTooltipDescription}>{description}</div>}
+          {appliedByName && <div style={styles.statusTooltipAppliedBy}>Applied by {appliedByName}</div>}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
+function StatusColumn({ entries, color }) {
+  return (
+    <div style={styles.statusColumn}>
+      {entries.map(({ key, shortName, remainingMs, name, description, appliedByName }) => (
+        <StatusTooltip key={key} name={name} description={description} appliedByName={appliedByName}>
+          <div style={{ ...styles.statusRow, color }}>
+            {formatRemaining(remainingMs)} {shortName}
+          </div>
+        </StatusTooltip>
+      ))}
+    </div>
+  );
+}
+
+// Buffs and debuffs (only - "inherent" statuses have no meaningful
+// countdown to show) sorted ascending by time remaining, so the row with
+// the most time left ends up at the bottom - combined with bottom-anchored
+// positioning (see styles.statusBarLeft/statusBarRight), the whole thing
+// visually grows upward as more statuses land, rather than pushing
+// existing rows down. `side` only picks which edge of the screen it's
+// anchored to (self: left, target: right) - the buff/debuff column order
+// (buffs, then debuffs) stays the same either way.
+export function StatusBar({ statuses, now, side = "left" }) {
+  const withRemaining = statuses
+    .map((s) => ({ ...s, remainingMs: s.expiresAt - now }))
+    .filter((s) => s.remainingMs > 0)
+    .sort((a, b) => a.remainingMs - b.remainingMs);
+  const buffs = withRemaining.filter((s) => s.treatAs === "buff");
+  const debuffs = withRemaining.filter((s) => s.treatAs === "debuff");
+  if (!buffs.length && !debuffs.length) return null;
+
+  return (
+    <div style={side === "right" ? styles.statusBarRight : styles.statusBarLeft}>
+      <StatusColumn entries={buffs} color="#5ec95e" />
+      <StatusColumn entries={debuffs} color="#ff5c5c" />
+    </div>
+  );
+}
 
 function UnitBar({ label, current, max }) {
   const pct = max > 0 ? Math.round((current / max) * 100) : 0;
@@ -643,7 +1021,12 @@ function UnitBar({ label, current, max }) {
   );
 }
 
-function HealthBar({ current, max }) {
+// numbersAlign positions the "current/max" label directly above one end of
+// the bar - "end" (self's frame) sits above its right end, "start"
+// (target's frame) above its left end, so on-screen both labels land near
+// the center of the frames row, next to each other. Omitted entirely
+// (rather than defaulting to a side) when the caller doesn't want it shown.
+function HealthBar({ current, max, numbersAlign }) {
   const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
   return (
     <div style={{
@@ -656,6 +1039,20 @@ function HealthBar({ current, max }) {
       borderRadius: 2,
       background: "#5a1010",
     }}>
+      {numbersAlign && current != null && max != null && (
+        <div style={{
+          position: "absolute",
+          bottom: "100%",
+          marginBottom: 2,
+          [numbersAlign === "start" ? "left" : "right"]: 0,
+          fontSize: 11,
+          color: "#ccc",
+          whiteSpace: "nowrap",
+          textShadow: "0 1px 2px #000",
+        }}>
+          {Math.round(current)}/{Math.round(max)}
+        </div>
+      )}
       <div style={{
         width: `${pct * 100}%`,
         height: "100%",
@@ -726,8 +1123,8 @@ const STAT_LABELS = {
   haste_rating: "Haste Rating",
   mastery_rating: "Mastery Rating",
   versatility_rating: "Versatility Rating",
-  resilience_rating: "Resilience Rating",
-  weapon_dps: "Weapon DPS",
+  defence_rating: "Defence Rating",
+  basic_attack_dps: "Basic Attack DPS",
 };
 
 // Mirrors docs/stats.md's "Item coloration" table (delta up to -15/-5/+5/+15
@@ -867,9 +1264,183 @@ function itemSlotsFor(equippedSlot) {
   return EQUIPPABLE_ITEM_SLOTS[equippedSlot] || [equippedSlot];
 }
 
+// Effect lines for a secondary stat's current total, per docs/stats.md. Crit
+// and Haste are shown as their own marginal contribution (not combined with
+// other stats' contributions); Mastery is shown as its full (non-linear)
+// converted value rather than a marginal delta. Crit is the exception - its
+// formula has a flat 5% base (docs/stats.md), so it's shown as the actual
+// total crit chance from this rating rather than just the rating's share of
+// it.
+// crit_rating/haste_rating are shown here as their itemized-only baseline -
+// Strength/Agility/Intellect's own incremental contribution to a specific
+// attack type (physical or magic) is shown on those primary stats' own
+// tooltips instead (primaryStatEffectLines below), not folded in here.
+// Defence Rating's damage-reduction asymptote - see docs/stats.md's
+// "Defence Rating and damage reduction" section. Pulled down from 0.9/0.36
+// (a fully-itemized tank's ~76% physical DR was, by itself, most of the
+// tank/DPS mitigation gap - Avoidance barely differed between them) so a
+// fully-itemized tank (r~520) now lands near 50% physical DR instead.
+const PHYSICAL_DR_ASYMPTOTE = 0.6;
+const MAGIC_DR_ASYMPTOTE = 0.4 * PHYSICAL_DR_ASYMPTOTE;
+
+function secondaryStatEffectLines(key, value) {
+  switch (key) {
+    case "crit_rating":
+      return [`${(5 + value / 15).toFixed(1)}% crit chance`];
+    case "haste_rating":
+      return [`+${(value / 11.71).toFixed(1)}% haste`];
+    case "mastery_rating":
+      return [`Mastery ${(10 + (90 * value) / (value + 556.25)).toFixed(1)}`];
+    case "versatility_rating":
+      return [`+${(value * 0.2).toFixed(1)} Strength, Agility, Intellect, and Defence Rating`];
+    case "defence_rating":
+      return [
+        `${(PHYSICAL_DR_ASYMPTOTE * 100 * value / (value + 98)).toFixed(1)}% physical damage reduction`,
+        `${(MAGIC_DR_ASYMPTOTE * 100 * value / (value + 98)).toFixed(1)}% magic damage reduction`,
+      ];
+    default:
+      return [];
+  }
+}
+
+// Effect lines for a primary stat's current total, per docs/stats.md.
+// Avoidance and the off-primaries' effective Crit/Haste contribution always
+// apply regardless of class (see the Versatility section) - Avoidance needs
+// `stats` too since Agility always feeds a weaker split of both Physical and
+// Magic Avoidance (see docs/stats.md's Avoidance section), not just its own
+// type. The actual damage/resource numbers (SwingDamage, SpellDamage,
+// ResourcePool) only apply for the primary stat(s) a class actually calls
+// its damage/caster stat, so those lines are gated on `primaryStats` (from
+// the class config).
+function primaryStatEffectLines(key, value, primaryStats, stats) {
+  switch (key) {
+    case "strength": {
+      const lines = [
+        `+${(value * PHYSICAL_CRIT_RATING_PER_STRENGTH).toFixed(1)} effective physical Crit Rating`,
+        `${avoidancePct(value, stats.agility, AGILITY_PHYSICAL_AVOIDANCE_WEIGHT).toFixed(1)}% physical avoidance chance`,
+      ];
+      if (primaryStats.includes("strength")) lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
+      return lines;
+    }
+    case "agility": {
+      const lines = [
+        `+${(value * PHYSICAL_HASTE_RATING_PER_AGILITY).toFixed(1)} effective physical Haste Rating`,
+        `${avoidancePct(stats.strength, value, AGILITY_PHYSICAL_AVOIDANCE_WEIGHT).toFixed(1)}% physical avoidance chance`,
+        `${avoidancePct(stats.intellect, value, AGILITY_MAGIC_AVOIDANCE_WEIGHT).toFixed(1)}% magic avoidance chance`,
+      ];
+      if (primaryStats.includes("agility")) lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
+      return lines;
+    }
+    case "intellect": {
+      const lines = [
+        `+${(value * MAGIC_CRIT_RATING_PER_INTELLECT).toFixed(1)} effective magic Crit Rating`,
+        `+${(value * MAGIC_HASTE_RATING_PER_INTELLECT).toFixed(1)} effective magic Haste Rating`,
+        `${avoidancePct(value, stats.agility, AGILITY_MAGIC_AVOIDANCE_WEIGHT).toFixed(1)}% magic avoidance chance`,
+      ];
+      if (primaryStats.includes("intellect")) {
+        lines.unshift(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} DPS`);
+        lines.push(`+${(value / BASIC_ATTACK_STAT_DIVISOR).toFixed(1)} Spell Damage`);
+        lines.push(`+${(value * 10).toFixed(0)} Resource Pool`);
+      }
+      return lines;
+    }
+    case "stamina":
+      return [`${(100 + value * 10).toFixed(0)} Max HP`];
+    default:
+      return [];
+  }
+}
+
+// Wraps a stat label in a hover target that shows its computed effect near
+// the cursor - same mouse-tracked portal approach as ItemTooltip, shown
+// immediately (no delay) since it's a small, deliberately-targeted label
+// rather than something the cursor skates across.
+function StatEffectTooltip({ lines, children }) {
+  const [pos, setPos] = useState(null);
+  if (!lines || lines.length === 0) return children;
+
+  return (
+    <span
+      style={styles.itemTooltipAnchor}
+      onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && createPortal(
+        <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
+          {lines.map((line, i) => <div key={i} style={styles.statTooltipLine}>{line}</div>)}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
+// Constants for basicAttackDps - see docs/stats.md's "Basic Attack DPS"
+// section. BASE_DPS is a completely naked character's own attack rate (no
+// gear, not even Trainee Gear) - matches the game server's basic attack
+// formula (game-server/internal/command/basic_attack_handler.go).
+// BASIC_ATTACK_STAT_DIVISOR was solved backward from a design target (a
+// fully-itemized on-level DPS build should net 5 basic-attack DPS,
+// regardless of which of Strength/Agility/Intellect it's built around) -
+// Strength/Agility/Intellect solve to ~89/~92/~91 under that target, close
+// enough to collapse into one shared divisor.
+const BASIC_ATTACK_BASE_DPS = 1;
+const BASIC_ATTACK_MISS_CHANCE = 0.05;
+const BASIC_ATTACK_CRIT_MULTIPLIER = 2.0;
+const BASIC_ATTACK_STAT_DIVISOR = 90;
+const PHYSICAL_CRIT_RATING_PER_STRENGTH = 0.6;
+const PHYSICAL_HASTE_RATING_PER_AGILITY = 0.6;
+const MAGIC_CRIT_RATING_PER_INTELLECT = 0.3;
+const MAGIC_HASTE_RATING_PER_INTELLECT = 0.3;
+
+// Avoidance - see docs/stats.md's Avoidance section. Strength/Intellect each
+// grant a pure Physical/Magic Avoidance chance at the same 0.6-asymptote
+// rate; Agility splits a weaker version of both instead of granting either
+// at full rate.
+const AGILITY_PHYSICAL_AVOIDANCE_WEIGHT = 0.66;
+const AGILITY_MAGIC_AVOIDANCE_WEIGHT = 0.33;
+function avoidancePct(primaryValue, agility, agilityWeight) {
+  const effective = (primaryValue || 0) + (agility || 0) * agilityWeight;
+  return (0.6 * effective / (effective + 250)) * 100;
+}
+
+// Computed (not itemized) Basic Attack DPS, plus a breakdown of how it was
+// built. Strength/Agility drive a physical basic attack (Strength feeds
+// physical Crit, Agility feeds physical Haste, always - see docs/stats.md);
+// Intellect drives a magic one, splitting its bonus across both magic
+// secondaries instead.
+function basicAttackDps(stats, primaryStats) {
+  const damageStatKey = primaryStats.find((s) => s === "strength" || s === "agility" || s === "intellect");
+  const damageStatValue = damageStatKey ? (stats[damageStatKey] || 0) : 0;
+  const statDps = damageStatKey ? damageStatValue / BASIC_ATTACK_STAT_DIVISOR : 0;
+
+  const isMagic = damageStatKey === "intellect";
+  const hastePct = isMagic
+    ? ((stats.haste_rating || 0) + (stats.intellect || 0) * MAGIC_HASTE_RATING_PER_INTELLECT) / 11.71
+    : ((stats.haste_rating || 0) + (stats.agility || 0) * PHYSICAL_HASTE_RATING_PER_AGILITY) / 11.71;
+  const effectiveCritRating = isMagic
+    ? (stats.crit_rating || 0) + (stats.intellect || 0) * MAGIC_CRIT_RATING_PER_INTELLECT
+    : (stats.crit_rating || 0) + (stats.strength || 0) * PHYSICAL_CRIT_RATING_PER_STRENGTH;
+  const critChancePct = 5 + effectiveCritRating / 15;
+
+  const value =
+    (BASIC_ATTACK_BASE_DPS + statDps) *
+    (1 + hastePct / 100) *
+    (1 + (critChancePct / 100) * (BASIC_ATTACK_CRIT_MULTIPLIER - 1)) *
+    (1 - BASIC_ATTACK_MISS_CHANCE);
+
+  const lines = [`${BASIC_ATTACK_BASE_DPS.toFixed(1)} base`];
+  if (damageStatKey) lines.push(`+${statDps.toFixed(1)} from ${STAT_LABELS[damageStatKey]}`);
+  lines.push(`+${hastePct.toFixed(1)}% haste`, `${critChancePct.toFixed(1)}% crit chance`, `${(BASIC_ATTACK_MISS_CHANCE * 100).toFixed(1)}% miss chance`);
+
+  return {value, lines};
+}
+
 const STAT_GROUPS = [
-  { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "weapon_dps"] },
-  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "resilience_rating"] },
+  { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "basic_attack_dps"] },
+  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "defence_rating"] },
 ];
 
 // Fallback label derived from an item's identifier, for the rare case a
@@ -884,11 +1455,22 @@ export function formatItemName(identifier) {
     .join(" ");
 }
 
+// Stats Versatility Rating grants a flat 0.2x share of itself into - see
+// docs/stats.md's Versatility section.
+const VERSATILITY_SPREAD_KEYS = ["strength", "agility", "intellect", "defence_rating"];
+const VERSATILITY_SPREAD_RATE = 0.2;
+
 function netStats(equippedItems) {
   const total = {};
   for (const item of Object.values(equippedItems || {})) {
     for (const [key, value] of Object.entries(item.stats || {})) {
       total[key] = (total[key] || 0) + value;
+    }
+  }
+  const versatility = total.versatility_rating || 0;
+  if (versatility) {
+    for (const key of VERSATILITY_SPREAD_KEYS) {
+      total[key] = (total[key] || 0) + versatility * VERSATILITY_SPREAD_RATE;
     }
   }
   return total;
@@ -990,7 +1572,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl }) {
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [] }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -1114,12 +1696,33 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
               <div key={group.title} style={styles.charSheetStatGroup}>
                 <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
                 <ul style={styles.charSheetStatsList}>
-                  {group.keys.map(key => (
-                    <li key={key} style={styles.charSheetStatRow}>
-                      <span>{STAT_LABELS[key] || key}</span>
-                      <span>{(stats[key] || 0).toFixed(1)}</span>
-                    </li>
-                  ))}
+                  {group.keys.map(key => {
+                    if (key === "basic_attack_dps") {
+                      const {value, lines} = basicAttackDps(stats, primaryStats);
+                      return (
+                        <li key={key} style={styles.charSheetStatRow}>
+                          <StatEffectTooltip lines={lines}>
+                            <span style={styles.charSheetStatLabelHoverable}>{STAT_LABELS[key]}</span>
+                          </StatEffectTooltip>
+                          <span>{value.toFixed(1)}</span>
+                        </li>
+                      );
+                    }
+                    const value = stats[key] || 0;
+                    const lines = group.title === "Secondary"
+                      ? secondaryStatEffectLines(key, value)
+                      : primaryStatEffectLines(key, value, primaryStats, stats);
+                    return (
+                      <li key={key} style={styles.charSheetStatRow}>
+                        <StatEffectTooltip lines={lines}>
+                          <span style={lines.length > 0 ? styles.charSheetStatLabelHoverable : undefined}>
+                            {STAT_LABELS[key] || key}
+                          </span>
+                        </StatEffectTooltip>
+                        <span>{value.toFixed(1)}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -1273,6 +1876,7 @@ export default function App({
   const [charSheetOpen, setCharSheetOpen] = useState(false);
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
+  const [primaryStats, setPrimaryStats] = useState([]);
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
@@ -1280,9 +1884,12 @@ export default function App({
   const npcPowersByZoneIdRef = useRef({});          // { [zoneUnitId]: { [powerName]: power } }
   const npcBasicAttackRangeByZoneIdRef = useRef({}); // { [zoneUnitId]: basicAttackRange }
   const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
+  const npcBasicAttackStyleByZoneIdRef = useRef({});  // { [zoneUnitId]: basicAttackStyle | undefined }
+  const npcTokenUrlByZoneIdRef = useRef({});          // { [zoneUnitId]: resolved absolute tokenImageUrl }
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
+  const [npcStatusCatalog, setNpcStatusCatalog] = useState({}); // name → { status, baseUrl } across every zone unit type's powers
 
   const setGcd = useCallback((ms) => {
     gcdEndsAtRef.current = ms;
@@ -1305,7 +1912,10 @@ export default function App({
     if (!classConfigUrl) return;
     fetch(classConfigUrl)
       .then(r => r.json())
-      .then(cfg => setPowers(cfg.powers ?? []))
+      .then(cfg => {
+        setPowers(cfg.powers ?? []);
+        setPrimaryStats(cfg.primaryStats ?? []);
+      })
       .catch(() => {});
   }, [classConfigUrl]);
 
@@ -1317,6 +1927,8 @@ export default function App({
         const byId = {};
         const basicAttackRangeById = {};
         const basicAttackSchoolById = {};
+        const basicAttackStyleById = {};
+        const tokenUrlById = {};
         const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
@@ -1330,6 +1942,13 @@ export default function App({
             byId[unit.identifier] = byName;
             basicAttackRangeById[unit.identifier] = ut.basicAttackRange ?? BASIC_ATTACK_RANGE;
             basicAttackSchoolById[unit.identifier] = ut.basicAttackSchool ?? "physical";
+            basicAttackStyleById[unit.identifier] = ut.basicAttackStyle;
+            // tokenImageUrl may be a single string or an array of variants
+            // (the 3D scene picks one at random per spawn - here we just
+            // always show the first, since there's nowhere in this 2D frame
+            // to track which variant a given spawn actually rendered with).
+            const rawTokenUrl = Array.isArray(ut.tokenImageUrl) ? ut.tokenImageUrl[0] : ut.tokenImageUrl;
+            tokenUrlById[unit.identifier] = rawTokenUrl ? new URL(rawTokenUrl, zoneSourceUrl).href : null;
           }
           barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
@@ -1337,8 +1956,15 @@ export default function App({
         npcPowersByZoneIdRef.current = byId;
         npcBasicAttackRangeByZoneIdRef.current = basicAttackRangeById;
         npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
+        npcBasicAttackStyleByZoneIdRef.current = basicAttackStyleById;
+        npcTokenUrlByZoneIdRef.current = tokenUrlById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
+        // Every unit type's powers, not just spawned units' - a status
+        // applied by a unit type nobody's spawned yet at load time would
+        // otherwise never resolve.
+        const allNpcPowers = Object.values(zone.unitTypes ?? {}).flatMap(ut => ut.powers ?? []);
+        setNpcStatusCatalog(buildStatusCatalog(allNpcPowers, zoneSourceUrl));
       })
       .catch(() => {});
   }, [zoneSourceUrl]);
@@ -1598,9 +2224,12 @@ export default function App({
           if (isBasicAttack && attacker.zone_unit_identifier === selfIdentifierRef.current) continue;
           const attackerIsRanged = (npcBasicAttackRangeByZoneIdRef.current[attacker.zone_unit_identifier] ?? BASIC_ATTACK_RANGE) > BASIC_ATTACK_RANGE;
           const attackerIsMagic = npcBasicAttackSchoolByZoneIdRef.current[attacker.zone_unit_identifier] === "magic";
-          const npcBasicAttackPower = attackerIsMagic
-            ? NPC_MAGIC_BASIC_ATTACK_POWER
-            : (attackerIsRanged ? NPC_RANGED_BASIC_ATTACK_POWER : NPC_BASIC_ATTACK_POWER);
+          // basicAttackStyle is opt-in per unit_type; unset falls back to the
+          // same physical-melee/physical-ranged/magic split used before it
+          // existed, so existing content's visuals/audio don't change.
+          const attackerStyle = npcBasicAttackStyleByZoneIdRef.current[attacker.zone_unit_identifier]
+            ?? (attackerIsMagic ? "arcane" : (attackerIsRanged ? "arrow" : "sword"));
+          const npcBasicAttackPower = NPC_BASIC_ATTACK_STYLE_POWERS[attackerStyle] ?? NPC_BASIC_ATTACK_POWER;
           const power = isBasicAttack
             ? (attacker.hostility ? npcBasicAttackPower : CHARACTER_BASIC_ATTACK_POWER)
             : npcPowersByZoneIdRef.current[attacker.zone_unit_identifier]?.[ev.power_name];
@@ -1621,11 +2250,48 @@ export default function App({
     return () => conn.close();
   }, []);
 
+  const statusCatalog = useMemo(
+    () => mergeStatusCatalogs(npcStatusCatalog, buildStatusCatalog(powers, classConfigUrl)),
+    [npcStatusCatalog, powers, classConfigUrl]
+  );
+
   const selfIdentifier = `player:${characterName}`;
   const selfEntry = Object.entries(units).find(([, u]) => u.zone_unit_identifier === selfIdentifier);
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
+  const targetUnit = targetId ? units[targetId] : null;
+
+  function activeStatusesFor(unit) {
+    return (unit?.active_status_effects ?? [])
+      .map((e) => {
+        const status = statusCatalog[e.status_name]?.status;
+        if (status?.treatAs !== "buff" && status?.treatAs !== "debuff") return null;
+        const applier = units[e.applier_id];
+        return {
+          key: `${e.status_name}:${e.applier_id}`,
+          shortName: status.shortName,
+          treatAs: status.treatAs,
+          expiresAt: e.expires_at,
+          name: status.name,
+          description: status.description,
+          appliedByName: applier ? formatUnitName(applier) : null,
+        };
+      })
+      .filter(Boolean);
+  }
+  const selfStatuses = activeStatusesFor(selfUnit);
+  const targetStatuses = activeStatusesFor(targetUnit);
+
+  // Ticks re-renders once a second (only while there's something to count
+  // down) so the status bars' MM:SS stays live between server updates.
+  const [, setStatusTick] = useState(0);
+  const hasActiveStatuses = selfStatuses.length > 0 || targetStatuses.length > 0;
+  useEffect(() => {
+    if (!hasActiveStatuses) return;
+    const id = setInterval(() => setStatusTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [hasActiveStatuses]);
 
   useEffect(() => {
     setAttacking(!!selfUnit?.attacking);
@@ -1751,34 +2417,49 @@ export default function App({
     }
   }, [equippedItemsUrl]);
 
-  const targetUnit = targetId ? units[targetId] : null;
   const targetRange = (selfUnit && targetUnit)
     ? Math.sqrt(
         (targetUnit.position.x - selfUnit.position.x) ** 2 +
         (targetUnit.position.y - selfUnit.position.y) ** 2
       ).toFixed(1)
     : null;
+  // Only resolvable for self (characterTokenUrl, a prop) and NPC targets
+  // (npcTokenUrlByZoneIdRef, built from the zone config) - another
+  // player's token art isn't known client-side at all (same gap as
+  // statusCatalog not covering other players' powers), so their frame
+  // just shows no image rather than guessing.
+  const targetTokenUrl = targetUnit
+    ? (targetUnit.zone_unit_identifier === selfIdentifier
+        ? characterTokenUrl
+        : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
+    : null;
 
   return (
     <div style={styles.root}>
       <div style={styles.frames}>
         <div style={styles.selfFrame}>
-          <strong>{characterName ?? "—"}</strong>
-          {selfUnit && (
-            <>
-              <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
-              <HealthBar current={selfUnit.health} max={selfUnit.max_health} />
-            </>
-          )}
-          {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
+          <div style={styles.frameInfo}>
+            <strong>{characterName ?? "—"}</strong>
+            {selfUnit && (
+              <>
+                <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
+                <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
+              </>
+            )}
+            {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          </div>
         </div>
         <div style={styles.targetFrame}>
           {targetUnit ? (
             <>
-              <strong>{formatUnitName(targetUnit)}</strong>
-              {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-              <HealthBar current={targetUnit.health} max={targetUnit.max_health} />
-              {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+              {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
+              <div style={styles.frameInfo}>
+                <strong>{formatUnitName(targetUnit)}</strong>
+                {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
+                <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+                {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+              </div>
             </>
           ) : (
             <span style={{ color: "#666" }}>No target</span>
@@ -1802,7 +2483,11 @@ export default function App({
           lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => i.claims?.find(c => c.character_unit_id === selfUnitId)?.state === "available")).map(([id]) => id))}
           targetId={targetId}
           attacking={attacking}
+          statusCatalog={statusCatalog}
+          stockAssets={stockAssets}
         />
+        <StatusBar statuses={selfStatuses} now={Date.now()} side="left" />
+        <StatusBar statuses={targetStatuses} now={Date.now()} side="right" />
         <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
         <LootWindow
@@ -1821,6 +2506,7 @@ export default function App({
           onEquip={handleEquipItem}
           onClose={() => setCharSheetOpen(false)}
           localElvl={localElvl}
+          primaryStats={primaryStats}
         />
       </div>
       <div style={styles.actionBar}>
@@ -1868,26 +2554,26 @@ export default function App({
           const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
 
           return (
-            <div
-              key={slot}
-              style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
-              title={power?.name}
-              onClick={power ? () => usePower(i) : undefined}
-            >
-              {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
-              {onCooldown && (
-                <div style={{
-                  position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
-                  background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
-                }}/>
-              )}
-              {cdSecs && (
-                <div style={styles.actionCooldownOverlay}>
-                  <span style={styles.actionCooldownText}>{cdSecs}</span>
-                </div>
-              )}
-              <span style={styles.actionKeybind}>{key}</span>
-            </div>
+            <AbilityTooltip key={slot} ability={power}>
+              <div
+                style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
+                onClick={power ? () => usePower(i) : undefined}
+              >
+                {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
+                {onCooldown && (
+                  <div style={{
+                    position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
+                    background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
+                  }}/>
+                )}
+                {cdSecs && (
+                  <div style={styles.actionCooldownOverlay}>
+                    <span style={styles.actionCooldownText}>{cdSecs}</span>
+                  </div>
+                )}
+                <span style={styles.actionKeybind}>{key}</span>
+              </div>
+            </AbilityTooltip>
           );
         })}
       </div>

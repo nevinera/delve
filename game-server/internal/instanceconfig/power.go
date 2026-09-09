@@ -31,7 +31,7 @@ func (p Power) IsFrontal() bool {
 // PowerEffect describes one mechanical outcome applied when a power fires.
 // Type discriminator: "harm", "heal", "resource", or "status".
 //
-// harm fields:     Affects, Range, Amount, Tags
+// harm fields:     Affects, Range, Amount, School, Tags
 // heal fields:     Affects, Range (unless self), Amount, Tags
 // resource fields: Affects, ResourceName, Delta, Range (unless self), Tags
 // status fields:   Affects, Duration, Status, Range (unless self), Tags
@@ -44,6 +44,11 @@ type PowerEffect struct {
 
 	// harm, heal
 	Amount *ValueRange `json:"amount,omitempty"` // Required for harm/heal
+
+	// harm only: "physical" (default) or "magic" - picks which of the
+	// target's Avoidance/Defence Rating pools mitigates it, same as
+	// UnitType.BasicAttackSchool does for a basic attack. See docs/stats.md.
+	School string `json:"school,omitempty"`
 
 	// harm, heal, resource, status (omitted when affects is "self")
 	Range *ZeroBasedValueRange `json:"range,omitempty"`
@@ -59,11 +64,13 @@ type PowerEffect struct {
 
 // Status is a named effect applied to a unit for a fixed duration.
 type Status struct {
-	Name      string         `json:"name"`                // Required
-	TreatAs   string         `json:"treatAs"`             // Required: "buff", "debuff", or "inherent"
-	Stacking  string         `json:"stacking"`            // Required: "extend", "replace", or "stack"
-	MaxStacks int            `json:"maxStacks,omitempty"` // Only meaningful when stacking is "stack"
-	Effects   []StatusEffect `json:"effects"`             // Required (may be empty)
+	Name        string         `json:"name"`                  // Required
+	Description string         `json:"description,omitempty"` // Short description shown in UI.
+	ShortName   string         `json:"shortName"`             // Required: <=6 chars, compact UI badge (no status icons yet)
+	TreatAs     string         `json:"treatAs"`               // Required: "buff", "debuff", or "inherent"
+	Stacking    string         `json:"stacking"`              // Required: "extend", "replace", or "stack"
+	MaxStacks   int            `json:"maxStacks,omitempty"`   // Only meaningful when stacking is "stack"
+	Effects     []StatusEffect `json:"effects"`               // Required (may be empty)
 }
 
 // StatusEffect describes one mechanical outcome of a status being active.
@@ -71,7 +78,7 @@ type Status struct {
 //
 // none fields:      (none)
 // stat fields:      StatName, ModifierType, Amount
-// recurring fields: TickRate, OnTick, Amount
+// recurring fields: TickRate, OnTick, Amount, School
 type StatusEffect struct {
 	Type string `json:"type"` // Required
 
@@ -83,4 +90,11 @@ type StatusEffect struct {
 	// recurring
 	TickRate float64 `json:"tickRate,omitempty"` // Required for recurring: seconds between ticks
 	OnTick   string  `json:"onTick,omitempty"`   // Required for recurring: "heal" or "harm"
+
+	// recurring only: "physical" (default) or "magic" - same as
+	// PowerEffect.School. Picks which haste pool scales the tick interval,
+	// and (for onTick: "harm") which of the target's Avoidance/Defence
+	// Rating pools mitigates each tick. Ignored (always magic) for
+	// onTick: "heal", same as a heal PowerEffect.
+	School string `json:"school,omitempty"`
 }

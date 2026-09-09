@@ -17,6 +17,7 @@ module Validators
     private
 
     def validate_optional_fields!(data, path:)
+      require_string!(data, "description", path: path) if data.key?("description")
       validate_tags!(data, path: path) if data.key?("tags")
       validate_icon_url!(data, path: path) if data.key?("iconURL")
       validate_speed!(data, path: path) if data.key?("speed")

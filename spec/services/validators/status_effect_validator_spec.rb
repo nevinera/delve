@@ -48,6 +48,26 @@ RSpec.describe Validators::StatusEffectValidator, type: :validator do
           .to raise_error(Validators::ValidationError, /statName is required/)
       end
 
+      it "raises when statName is not a recognized value" do
+        data = stat_effect.merge("statName" => "sneakiness")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "accepts every Tier 1 (input) stat name" do
+        Validators::StatusEffectValidator::INPUT_STAT_NAMES.each do |name|
+          data = stat_effect.merge("statName" => name)
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+      end
+
+      it "accepts every Tier 2 (output) stat name" do
+        Validators::StatusEffectValidator::OUTPUT_STAT_NAMES.each do |name|
+          data = stat_effect.merge("statName" => name)
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+      end
+
       it "raises when modifierType is invalid" do
         data = stat_effect.merge("modifierType" => "scale")
         expect { described_class.validate!(data) }
@@ -71,6 +91,19 @@ RSpec.describe Validators::StatusEffectValidator, type: :validator do
       it "raises when onTick is invalid" do
         data = recurring_effect.merge("onTick" => "shock")
         expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "allows school to be omitted" do
+        expect { described_class.validate!(recurring_effect.except("school")) }.not_to raise_error
+      end
+
+      it "allows school magic" do
+        expect { described_class.validate!(recurring_effect.merge("school" => "magic")) }.not_to raise_error
+      end
+
+      it "raises when school is not a recognized value" do
+        expect { described_class.validate!(recurring_effect.merge("school" => "fire")) }
           .to raise_error(Validators::ValidationError, /must be one of/)
       end
     end
