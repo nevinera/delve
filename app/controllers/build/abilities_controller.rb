@@ -20,7 +20,7 @@ class Build::AbilitiesController < Build::BaseController
 
   def new
     Github::ContentClient.new(current_user) # raises (and BaseController redirects) if there's no repo connected yet
-    @key = ""
+    @key = params[:key].to_s
   end
 
   def create

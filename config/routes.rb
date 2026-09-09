@@ -27,6 +27,7 @@ Rails.application.routes.draw do
   namespace :build do
     root to: "dashboard#index"
     resources :abilities, only: [:index, :new, :create]
+    resources :classes, only: [:index, :new, :create]
     resources :handles, only: [:index, :show, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
   end
@@ -44,6 +45,7 @@ Rails.application.routes.draw do
   # edit_build_ability_path(id: "a/b") comes out as a clean
   # "/build/abilities/a/b/edit" with no encoding involved.
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
+  get "build/classes/*id/edit", to: "build/classes#edit", as: "edit_build_class"
 
   namespace :play do
     root to: "dashboard#index"

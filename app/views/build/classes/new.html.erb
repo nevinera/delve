@@ -1,0 +1,13 @@
+<h1>New Class</h1>
+
+<%= form_with url: build_classes_path, method: :post do %>
+  <div>
+    <label for="key">Key</label>
+    <%= text_field_tag :key, @key, placeholder: "druid" %>
+  </div>
+  <p style="font-size: 0.85em; color: #666;">Use "/" to place it in a subdirectory, e.g. "hybrid/druid".</p>
+
+  <%= submit_tag "Create" %>
+<% end %>
+
+<%= link_to "Cancel", build_classes_path %>

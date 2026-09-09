@@ -1,0 +1,19 @@
+<h1>Classes</h1>
+
+<p><%= link_to "New Class", new_build_class_path %></p>
+
+<table>
+  <thead>
+    <tr><th>Key</th></tr>
+  </thead>
+  <tbody>
+    <% @classes.each do |entry| %>
+      <% identifier = entry["path"].delete_prefix("classes/").delete_suffix(".json") %>
+      <tr>
+        <td><%= link_to identifier, edit_build_class_path(id: identifier) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to Build", build_root_path %>
