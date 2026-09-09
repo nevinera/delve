@@ -4,9 +4,11 @@
 # and recreated between test runs. Don't rely on the data there!
 
 # Fixed, non-secret values so specs don't depend on real GitHub App credentials being sourced.
-ENV["DELVE_GITHUB_CLIENT_ID"] ||= "test_github_client_id"
-ENV["DELVE_GITHUB_CLIENT_SECRET"] ||= "test_github_client_secret"
-ENV["DELVE_GITHUB_PUBLIC_LINK"] ||= "https://github.com/apps/delve-content-editor-test"
+# Force-assigned (not ||=): a real value exported in the shell (e.g. for running the app
+# locally) must not leak into the test suite and break specs that hardcode these values.
+ENV["DELVE_GITHUB_CLIENT_ID"] = "test_github_client_id"
+ENV["DELVE_GITHUB_CLIENT_SECRET"] = "test_github_client_secret"
+ENV["DELVE_GITHUB_PUBLIC_LINK"] = "https://github.com/apps/delve-content-editor-test"
 
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.

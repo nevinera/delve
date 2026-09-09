@@ -19,6 +19,20 @@ RSpec.describe "Github::Connections", type: :request do
       )
   end
 
+  def stub_github_user(login: "octocat")
+    stub_request(:get, "https://api.github.com/user")
+      .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {login: login}.to_json)
+  end
+
+  def stub_installations(installation_ids)
+    stub_request(:get, "https://api.github.com/user/installations")
+      .to_return(
+        status: 200,
+        headers: {"Content-Type" => "application/json"},
+        body: {installations: installation_ids.map { |id| {id: id} }}.to_json
+      )
+  end
+
   def stub_installation_repositories(installation_id, repo_full_name: "nevinera/delve-content")
     stub_request(:get, "https://api.github.com/user/installations/#{installation_id}/repositories")
       .to_return(
@@ -48,11 +62,12 @@ RSpec.describe "Github::Connections", type: :request do
     before { sign_in user }
 
     describe "GET /github/connect" do
-      it "returns 200 with the create-template and install links" do
+      it "returns 200 with the create-template, install, and authorize links" do
         get "/github/connect"
         expect(response).to have_http_status(:ok)
         expect(response.body).to include("github.com/new?template_owner=nevinera&amp;template_name=delve-content-template")
         expect(response.body).to include("installations/new?state=")
+        expect(response.body).to include("github.com/login/oauth/authorize")
       end
     end
 
@@ -69,23 +84,45 @@ RSpec.describe "Github::Connections", type: :request do
       context "with a mismatched state" do
         it "redirects to connect with an alert" do
           get "/github/connect"
-          get "/github/callback", params: {code: "abc", state: "wrong", installation_id: "555"}
+          get "/github/callback", params: {code: "abc", state: "wrong"}
           expect(response).to redirect_to(github_connect_path)
           follow_redirect!
           expect(response.body).to include("invalid state")
         end
       end
 
-      context "on a fresh install (installation_id present)" do
+      context "when the account is not on the github allow-list" do
+        before do
+          get "/github/connect"
+          @state = session[:github_oauth_state]
+          stub_token_exchange(grant_type: "authorization_code")
+          stub_github_user(login: "blocked-user")
+          allow(AllowOnlyList).to receive(:allows?).with("github", "blocked-user").and_return(false)
+        end
+
+        it "does not persist an installation and redirects to connect with an alert" do
+          expect {
+            get "/github/callback", params: {code: "abc", state: @state}
+          }.not_to change(GithubInstallation, :count)
+
+          expect(response).to redirect_to(github_connect_path)
+          follow_redirect!
+          expect(response.body).to include("not permitted")
+        end
+      end
+
+      context "when the account has exactly one installation" do
         it "creates a GithubInstallation and redirects to the build dashboard" do
           get "/github/connect"
           state = session[:github_oauth_state]
 
           stub_token_exchange(grant_type: "authorization_code")
-          stub_installation_repositories("555")
+          stub_github_user
+          stub_installations([555])
+          stub_installation_repositories(555)
 
           expect {
-            get "/github/callback", params: {code: "abc", state: state, installation_id: "555"}
+            get "/github/callback", params: {code: "abc", state: state}
           }.to change(GithubInstallation, :count).by(1)
 
           expect(response).to redirect_to(build_root_path)
@@ -96,16 +133,18 @@ RSpec.describe "Github::Connections", type: :request do
         end
       end
 
-      context "on a fresh install with no repositories selected" do
+      context "when the installation has no repositories selected" do
         it "does not persist an installation and tells them to create the repo from the template first" do
           get "/github/connect"
           state = session[:github_oauth_state]
 
           stub_token_exchange(grant_type: "authorization_code")
-          stub_installation_repositories_multiple("555", repo_full_names: [])
+          stub_github_user
+          stub_installations([555])
+          stub_installation_repositories_multiple(555, repo_full_names: [])
 
           expect {
-            get "/github/callback", params: {code: "abc", state: state, installation_id: "555"}
+            get "/github/callback", params: {code: "abc", state: state}
           }.not_to change(GithubInstallation, :count)
 
           expect(response).to redirect_to(github_connect_path)
@@ -114,16 +153,18 @@ RSpec.describe "Github::Connections", type: :request do
         end
       end
 
-      context "on a fresh install with more than one repository selected" do
+      context "when the installation has more than one repository selected" do
         it "does not persist an installation and redirects to connect with an alert" do
           get "/github/connect"
           state = session[:github_oauth_state]
 
           stub_token_exchange(grant_type: "authorization_code")
-          stub_installation_repositories_multiple("555", repo_full_names: ["nevinera/delve-content", "nevinera/other-repo"])
+          stub_github_user
+          stub_installations([555])
+          stub_installation_repositories_multiple(555, repo_full_names: ["nevinera/delve-content", "nevinera/other-repo"])
 
           expect {
-            get "/github/callback", params: {code: "abc", state: state, installation_id: "555"}
+            get "/github/callback", params: {code: "abc", state: state}
           }.not_to change(GithubInstallation, :count)
 
           expect(response).to redirect_to(github_connect_path)
@@ -133,35 +174,62 @@ RSpec.describe "Github::Connections", type: :request do
         end
       end
 
-      context "on a reauth (no installation_id, existing connection)" do
-        let!(:installation) { create(:github_installation, user: user, access_token: "gho_stale") }
+      context "when the account has no installation" do
+        it "does not persist an installation and tells them to install the app first" do
+          get "/github/connect"
+          state = session[:github_oauth_state]
 
-        it "updates the existing installation's tokens without changing the repo" do
+          stub_token_exchange(grant_type: "authorization_code")
+          stub_github_user
+          stub_installations([])
+
+          expect {
+            get "/github/callback", params: {code: "abc", state: state}
+          }.not_to change(GithubInstallation, :count)
+
+          expect(response).to redirect_to(github_connect_path)
+          follow_redirect!
+          expect(response.body).to include("Install the app on your content repo first")
+        end
+      end
+
+      context "when the account has more than one installation" do
+        it "does not persist an installation and tells them to remove the extras" do
+          get "/github/connect"
+          state = session[:github_oauth_state]
+
+          stub_token_exchange(grant_type: "authorization_code")
+          stub_github_user
+          stub_installations([555, 556])
+
+          expect {
+            get "/github/callback", params: {code: "abc", state: state}
+          }.not_to change(GithubInstallation, :count)
+
+          expect(response).to redirect_to(github_connect_path)
+          follow_redirect!
+          expect(response.body).to include("more than one repository - remove the extra installation(s)")
+        end
+      end
+
+      context "when reauthorizing an existing connection" do
+        let!(:installation) { create(:github_installation, user: user, installation_id: 555, access_token: "gho_stale") }
+
+        it "updates the existing installation's tokens without changing the installation" do
           get "/github/connect"
           state = session[:github_oauth_state]
 
           stub_token_exchange(grant_type: "authorization_code", access_token: "gho_refreshed")
+          stub_github_user
+          stub_installations([555])
+          stub_installation_repositories(555)
 
           get "/github/callback", params: {code: "abc", state: state}
 
           expect(response).to redirect_to(build_root_path)
           expect(installation.reload.access_token).to eq("gho_refreshed")
+          expect(installation.installation_id).to eq(555)
           expect(installation.repo_full_name).to eq("nevinera/delve-content")
-        end
-      end
-
-      context "on a reauth with no existing connection" do
-        it "redirects to connect with an alert" do
-          get "/github/connect"
-          state = session[:github_oauth_state]
-
-          stub_token_exchange(grant_type: "authorization_code")
-
-          get "/github/callback", params: {code: "abc", state: state}
-
-          expect(response).to redirect_to(github_connect_path)
-          follow_redirect!
-          expect(response.body).to include("No existing GitHub connection")
         end
       end
     end

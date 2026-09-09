@@ -7,6 +7,7 @@ class Github::ConnectionsController < ApplicationController
     session[:github_oauth_state] = SecureRandom.hex(24)
     @template_url = "https://github.com/new?template_owner=#{TEMPLATE_OWNER}&template_name=#{TEMPLATE_REPO}&name=delve-content"
     @install_url = "#{ENV.string("DELVE_GITHUB_PUBLIC_LINK", default: nil)}/installations/new?state=#{session[:github_oauth_state]}"
+    @authorize_url = authorize_url
   end
 
   def reauth
@@ -69,43 +70,44 @@ class Github::ConnectionsController < ApplicationController
     redirect_to github_connect_path, alert: "GitHub authorization failed: invalid state."
   end
 
+  # Always resolve the installation via the GitHub API rather than trusting
+  # params[:installation_id] - that param is only present when GitHub just
+  # walked the user through "Install app", which fails if the account already
+  # has the app installed elsewhere. Looking it up instead means the same
+  # authorize flow works both for a brand new install and for connecting a
+  # second delve setup (e.g. local + production) to an install that already
+  # exists.
   def connect_installation
     tokens = Github::OauthClient.exchange_code(params[:code])
-    return "This GitHub account is not permitted." unless github_user_allowed?(tokens)
+    client = Github::ApiClient.new(tokens["access_token"])
 
-    installation = params[:installation_id].present? ? new_installation(tokens) : existing_installation
+    return "This GitHub account is not permitted." unless AllowOnlyList.allows?("github", client.user["login"])
+
+    installation = resolve_installation(client)
     return installation if installation.is_a?(String)
 
     apply_tokens!(installation, tokens)
     installation
   end
 
-  def github_user_allowed?(tokens)
-    username = Github::ApiClient.new(tokens["access_token"]).user["login"]
-    AllowOnlyList.allows?("github", username)
-  end
+  def resolve_installation(client)
+    installations = client.installations
+    return "No delve-content-editor installation found. Install the app on your content repo first." if installations.blank?
+    return "This GitHub account has the app installed on more than one repository - remove the extra installation(s) from GitHub before connecting." if installations.size > 1
 
-  def new_installation(tokens)
-    repos = fetch_repos(tokens)
+    installation_id = installations.first["id"]
+    repos = client.installation_repositories(installation_id)
     return "No repository was selected. Make sure you create your content repository from the template first, then install the app onto it." if repos.blank?
     return "You selected more than one repository. Please reinstall and choose \"Only select repositories\", picking just your delve content repository." if repos.size > 1
 
-    assign_new_installation(repos.first)
+    assign_installation(installation_id, repos.first)
   end
 
-  def fetch_repos(tokens)
-    Github::ApiClient.new(tokens["access_token"]).installation_repositories(params[:installation_id])
-  end
-
-  def assign_new_installation(repo)
+  def assign_installation(installation_id, repo)
     installation = current_user.github_installation || current_user.build_github_installation
-    installation.installation_id = params[:installation_id]
+    installation.installation_id = installation_id
     installation.repo_full_name = repo["full_name"]
     installation
-  end
-
-  def existing_installation
-    current_user.github_installation || "No existing GitHub connection to reauthorize."
   end
 
   def revoke_grant(access_token)

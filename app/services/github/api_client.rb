@@ -14,6 +14,10 @@ module Github
       get("/user")
     end
 
+    def installations
+      get("/user/installations")["installations"]
+    end
+
     def repository_contents(repo, path)
       get("/repos/#{repo}/contents/#{path}")
     end

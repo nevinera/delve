@@ -29,5 +29,22 @@ RSpec.describe "OmniAuth Google OAuth2 callback", type: :request do
         expect(response).to be_redirect
       end
     end
+
+    context "when the email is not on the google allow-list" do
+      before do
+        set_google_auth(uid: "new_uid", email: "blocked@example.com")
+        allow(AllowOnlyList).to receive(:allows?).with("google", "blocked@example.com").and_return(false)
+      end
+
+      it "does not create a user" do
+        expect { get "/users/auth/google_oauth2/callback" }.not_to change(User, :count)
+      end
+
+      it "redirects with an alert instead of signing in" do
+        get "/users/auth/google_oauth2/callback"
+        expect(response).to redirect_to(root_path)
+        expect(flash[:alert]).to match(/not permitted/)
+      end
+    end
   end
 end

@@ -12,5 +12,12 @@
   <li>
     <%= link_to "Install the Delve app on it", @install_url %>
     &mdash; choose "Only select repositories" and pick the repository you just created.
+    Only do this once per repository.
   </li>
 </ol>
+
+<p>
+  Already installed the app on your content repo from another delve setup (e.g. local vs
+  production)? <%= link_to "Connect this one to the same repository", @authorize_url %> instead
+  of reinstalling.
+</p>
