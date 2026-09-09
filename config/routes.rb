@@ -9,7 +9,11 @@ Rails.application.routes.draw do
 
   get "up" => "rails/health#show", :as => :rails_health_check
 
-  resources :users, only: [:index]
+  get "home", to: "home#index"
+
+  namespace :admin do
+    resources :users, only: [:index]
+  end
 
   namespace :github do
     get "connect", to: "connections#connect"
@@ -43,6 +47,7 @@ Rails.application.routes.draw do
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
 
   namespace :play do
+    root to: "dashboard#index"
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
       resources :zones, only: [:show]
       resources :character_items, only: [:index, :show]
@@ -56,5 +61,5 @@ Rails.application.routes.draw do
     end
   end
 
-  root to: "users#index"
+  root to: "home#index"
 end
