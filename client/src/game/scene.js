@@ -306,6 +306,7 @@ export class SceneManager {
     this._animId = null;
 
     this._activeEffects = []; // { sprite, mat, startedAt, durationMs, fadeStartMs }
+    this._statusAuras = new Map(); // `${unitId}:${statusName}:${applierId}` → { plane, mat, texture, ... } (or a pending placeholder while its texture loads)
 
     // Targeting visuals
     this._targetId = null;
@@ -657,6 +658,101 @@ export class SceneManager {
     }
   }
 
+  // Reconciles the persistent aura visuals against every unit's live
+  // active_status_effects (see game/state.js) - unlike playGraphicEffects
+  // (a one-shot cast visual with a client-picked duration), a status aura is
+  // authoritative-state-driven: it appears/disappears exactly when the
+  // matching entry appears/disappears from the unit's status list, however
+  // long that turns out to be (stacking/extension included), not a fixed
+  // client-side timer.
+  // statusCatalog: { [statusName]: { status, baseUrl } } - see App.jsx's
+  // buildStatusCatalog. baseUrl travels with each entry (rather than being a
+  // single argument here) since a status's defining power may have come from
+  // the player's own class config or from a zone unit type's powers - two
+  // different base URLs for resolving a relative auraEffect.sourceURL against.
+  // Silently skips any status not in the catalog (unknown to this client -
+  // e.g. applied by another player's class we haven't fetched powers for)
+  // rather than guessing at its auraEffect.
+  syncStatusAuras(units, statusCatalog, stockAssets) {
+    const active = new Set();
+    for (const [unitId, unit] of Object.entries(units)) {
+      const entry = this._tokenMap.get(unitId);
+      if (!entry) continue;
+      for (const eff of unit.active_status_effects ?? []) {
+        const catalogEntry = statusCatalog[eff.status_name];
+        const auraEffect = catalogEntry?.status?.auraEffect;
+        if (!auraEffect) continue;
+        const key = `${unitId}:${eff.status_name}:${eff.applier_id}`;
+        active.add(key);
+        if (!this._statusAuras.has(key)) {
+          this._spawnStatusAura(key, auraEffect, entry.group, catalogEntry.baseUrl, stockAssets);
+        }
+      }
+    }
+
+    for (const [key, aura] of this._statusAuras) {
+      if (active.has(key)) continue;
+      if (aura.plane) {
+        aura.plane.removeFromParent();
+        aura.mat.dispose();
+        aura.texture?.dispose();
+      }
+      this._statusAuras.delete(key);
+    }
+  }
+
+  _spawnStatusAura(key, auraEffect, tokenGroup, baseUrl, stockAssets) {
+    // Registered synchronously (as a pending placeholder, no `plane` yet) so
+    // a status that expires again before its texture finishes loading is
+    // detected below rather than spawning a plane nobody wants anymore.
+    const pending = { pending: true };
+    this._statusAuras.set(key, pending);
+
+    const url = resolveStockAssetUrl(auraEffect.sourceURL, "graphics", stockAssets) ?? new URL(auraEffect.sourceURL, baseUrl).href;
+    const { color, scale = 1.0, opacity = 1.0, spriteColumns, spriteRows } = auraEffect;
+    const isSpriteSheet = spriteColumns > 0 && spriteRows > 0;
+    const frameCount = auraEffect.spriteFrameCount ?? (spriteColumns * spriteRows);
+    const frameRate = auraEffect.spriteFrameRate ?? DEFAULT_SPRITE_FRAME_RATE;
+
+    new THREE.TextureLoader().load(url, (texture) => {
+      if (this._statusAuras.get(key) !== pending) {
+        texture.dispose();
+        return;
+      }
+      if (isSpriteSheet) {
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        texture.repeat.set(1 / spriteColumns, 1 / spriteRows);
+        texture.offset.set(0, 1 - 1 / spriteRows);
+      }
+
+      const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity });
+      if (color) mat.color.set(`#${color.replace(/^#/, "")}`);
+
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(4 * scale, 4 * scale), mat);
+      plane.rotation.x = -Math.PI / 2;
+      plane.position.y = EFFECT_HEIGHT;
+      tokenGroup.add(plane);
+
+      this._statusAuras.set(key, {
+        plane, mat, texture,
+        startedAt: performance.now(),
+        isSpriteSheet, spriteColumns, spriteRows, frameCount, frameRate,
+      });
+    });
+  }
+
+  _updateStatusAuras(now) {
+    for (const aura of this._statusAuras.values()) {
+      if (!aura.isSpriteSheet) continue;
+      const elapsed = now - aura.startedAt;
+      const frame = Math.floor((elapsed / 1000) * aura.frameRate) % aura.frameCount;
+      const col = frame % aura.spriteColumns;
+      const row = Math.floor(frame / aura.spriteColumns);
+      aura.texture.offset.set(col / aura.spriteColumns, 1 - (row + 1) / aura.spriteRows);
+    }
+  }
+
   startLoop() {
     let lastTime = null;
     const tick = (time) => {
@@ -739,6 +835,7 @@ export class SceneManager {
 
       this._updateTargetVisuals();
       this._updateGraphicEffects(time);
+      this._updateStatusAuras(time);
       this._updateLootBeams(time);
       this._positionCamera();
       this._renderer.render(this._scene, this._camera);
@@ -916,6 +1013,14 @@ export class SceneManager {
 
   dispose() {
     if (this._animId) cancelAnimationFrame(this._animId);
+    for (const aura of this._statusAuras.values()) {
+      if (aura.plane) {
+        aura.plane.removeFromParent();
+        aura.mat.dispose();
+        aura.texture?.dispose();
+      }
+    }
+    this._statusAuras.clear();
     this._renderer.dispose();
   }
 

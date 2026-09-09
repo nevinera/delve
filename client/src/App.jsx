@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const RESPAWN_DELAY_S = 10;
@@ -7,6 +7,7 @@ import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
+import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { AbilityTooltip } from "./AbilityTooltip";
 
@@ -1710,6 +1711,7 @@ export default function App({
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
+  const [npcStatusCatalog, setNpcStatusCatalog] = useState({}); // name → { status, baseUrl } across every zone unit type's powers
 
   const setGcd = useCallback((ms) => {
     gcdEndsAtRef.current = ms;
@@ -1772,6 +1774,11 @@ export default function App({
         npcBasicAttackStyleByZoneIdRef.current = basicAttackStyleById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
+        // Every unit type's powers, not just spawned units' - a status
+        // applied by a unit type nobody's spawned yet at load time would
+        // otherwise never resolve.
+        const allNpcPowers = Object.values(zone.unitTypes ?? {}).flatMap(ut => ut.powers ?? []);
+        setNpcStatusCatalog(buildStatusCatalog(allNpcPowers, zoneSourceUrl));
       })
       .catch(() => {});
   }, [zoneSourceUrl]);
@@ -2057,6 +2064,11 @@ export default function App({
     return () => conn.close();
   }, []);
 
+  const statusCatalog = useMemo(
+    () => mergeStatusCatalogs(npcStatusCatalog, buildStatusCatalog(powers, classConfigUrl)),
+    [npcStatusCatalog, powers, classConfigUrl]
+  );
+
   const selfIdentifier = `player:${characterName}`;
   const selfEntry = Object.entries(units).find(([, u]) => u.zone_unit_identifier === selfIdentifier);
   const selfUnit = selfEntry?.[1];
@@ -2238,6 +2250,8 @@ export default function App({
           lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => i.claims?.find(c => c.character_unit_id === selfUnitId)?.state === "available")).map(([id]) => id))}
           targetId={targetId}
           attacking={attacking}
+          statusCatalog={statusCatalog}
+          stockAssets={stockAssets}
         />
         <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
         <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
