@@ -91,6 +91,39 @@ func TestPlayerSpawn_AppearsInFullState(t *testing.T) {
 	assert.True(t, found, "player unit should appear in full state message")
 }
 
+// TestPlayerSpawn_MaxHealthReflectsEquippedStamina guards against the bug
+// where a player's MaxHealth was a flat 100 regardless of equipped Stamina
+// (see docs/stats.md's "Stamina" section: MaxHP = 100 + Stamina * 10) -
+// spawn.go now computes it from EquippedItems, and health should start full
+// against that real cap, not the flat base.
+func TestPlayerSpawn_MaxHealthReflectsEquippedStamina(t *testing.T) {
+	reg := instance.NewRegistry()
+	inst := startedInstance(t, reg)
+	t.Cleanup(inst.Stop)
+
+	stamina := "stamina"
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "main_hand", SecondaryStats: []string{stamina, stamina, stamina}},
+	})
+	require.NoError(t, err)
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	units := receiveFullState(t, writeCh)
+
+	for _, u := range units {
+		if u["zone_unit_identifier"] == "player:Aldric" {
+			maxHealth := u["max_health"].(float64)
+			assert.Greater(t, maxHealth, 100.0, "equipped Stamina should raise MaxHealth above the flat base")
+			assert.Equal(t, maxHealth, u["health"], "should spawn at full health against the real cap")
+			return
+		}
+	}
+	t.Fatal("player unit not found in full state")
+}
+
 func TestPlayerSpawn_UsesFirstMapCenter(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := instance.NewInstance(

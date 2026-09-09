@@ -30,6 +30,36 @@ func fullyItemizedMainHand(primary string, elvl int) instanceconfig.EquippedItem
 	}
 }
 
+func TestPlayerMaxHealth_NakedUnitHasBaseOnly(t *testing.T) {
+	unit := &instancestate.UnitState{}
+	assert.Equal(t, 100.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+}
+
+func TestPlayerMaxHealth_StaminaAddsToBase(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
+	}
+	// raw stamina 20 (main_hand doesn't grant base stamina - see
+	// itemstats.Raw) -> 100 + 20*10.
+	assert.InDelta(t, 300.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
+}
+
+func TestPlayerMaxHealth_ArmorSlotGrantsBaseStaminaEvenWithNoneItemized(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems: map[string]instanceconfig.EquippedItem{"chest": {Slot: "chest"}},
+	}
+	assert.Greater(t, PlayerMaxHealth(unit, instanceconfig.Zone{}), 100.0, "chest grants base stamina even with nothing itemized on it")
+}
+
+func TestPlayerMaxHealth_VersatilityDoesNotFeedStamina(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems: map[string]instanceconfig.EquippedItem{
+			"ring_1": {Slot: "ring", SecondaryStats: []string{"versatility_rating", "versatility_rating"}},
+		},
+	}
+	assert.Equal(t, 100.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), "versatility spreads into Strength/Agility/Intellect/Defence Rating only, not Stamina")
+}
+
 func TestUnitCombatStats_NakedUnitHasBaseCritOnlyAndNoStatDPS(t *testing.T) {
 	unit := &instancestate.UnitState{}
 	hastePct, critChancePct, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})

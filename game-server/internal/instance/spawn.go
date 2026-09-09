@@ -8,12 +8,12 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
 const (
-	playerBaseMaxHP       = 100.0
 	playerBaseMaxResource = 100.0
 	playerBaseResource    = 0.0
 )
@@ -48,15 +48,13 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				maxResource = r.Max
 				resource = r.DefaultValue
 			}
-			state.Units[spawn.unitID] = &instancestate.UnitState{
+			unit := &instancestate.UnitState{
 				ZoneUnitIdentifier:  "player:" + spawn.characterName,
 				UnitTypeIdentifier:  "",
 				MapIdentifier:       mapID,
 				Position:            pos,
 				SpawnPoint:          pos,
 				SpawnMapIdentifier:  mapID,
-				Health:              playerBaseMaxHP,
-				MaxHealth:           playerBaseMaxHP,
 				Resource:            resource,
 				MaxResource:         maxResource,
 				Speed:               BasePlayerSpeed,
@@ -66,6 +64,13 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				EquippedItems:       spawn.equippedItems,
 				DamageStatKey:       spawn.class.DamageStatKey(),
 			}
+			// Spawn at full health against the real (Stamina-scaled) cap,
+			// not a flat placeholder - updatePlayerMaxHealth keeps this in
+			// sync every tick from here on, but a fresh spawn needs it set
+			// once up front so it doesn't start under-capped.
+			unit.MaxHealth = command.PlayerMaxHealth(unit, inst.ZoneConfig)
+			unit.Health = unit.MaxHealth
+			state.Units[spawn.unitID] = unit
 			slog.InfoContext(ctx, "player unit spawned",
 				"unit_id", spawn.unitID,
 				"character", spawn.characterName,

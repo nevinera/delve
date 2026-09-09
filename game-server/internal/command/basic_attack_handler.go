@@ -70,6 +70,11 @@ const (
 	physicalDRAsymptote    = 0.6
 	magicDRAsymptote       = 0.4 * physicalDRAsymptote
 	defenceRatingHalfPoint = 98.0
+
+	// playerBaseMaxHealth/maxHealthPerStamina - see docs/stats.md's
+	// "Stamina" section: MaxHP = 100 + Stamina * 10.
+	playerBaseMaxHealth = 100.0
+	maxHealthPerStamina = 10.0
 )
 
 // BasicAttackHandler executes one swing of a player unit's basic attack
@@ -193,6 +198,18 @@ func unitEffectiveStats(unit *instancestate.UnitState, zone instanceconfig.Zone)
 	intellect = stats["intellect"] + versatility*versatilityStatWeight
 	defenceRating = stats["defence_rating"] + versatility*versatilityStatWeight
 	return strength, agility, intellect, defenceRating, stats
+}
+
+// PlayerMaxHealth computes a player's MaxHealth from their currently
+// equipped Stamina - see docs/stats.md's "Stamina" section. Unlike
+// Strength/Agility/Intellect/Defence Rating, Stamina gets no Versatility
+// spread (see "Versatility"), so it's read straight off unitEffectiveStats'
+// stats map. Elvl-scaled the same way every other gear-derived stat is
+// (via unitEffectiveStats/itemstats.ScaledSum), so this needs recomputing
+// whenever gear or map elevation changes - it's not a one-time spawn value.
+func PlayerMaxHealth(unit *instancestate.UnitState, zone instanceconfig.Zone) float64 {
+	_, _, _, _, stats := unitEffectiveStats(unit, zone)
+	return playerBaseMaxHealth + stats["stamina"]*maxHealthPerStamina
 }
 
 // IncomingDamage rolls target's Avoidance for an attack of the given school,
