@@ -62,11 +62,11 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /powers must be an array/)
     end
 
-    it "raises when powers exceeds 12 entries" do
+    it "raises when powers exceeds 10 entries" do
       power = character_class_fixture["powers"][0]
-      data = character_class_fixture.merge("powers" => Array.new(13, power))
+      data = character_class_fixture.merge("powers" => Array.new(11, power))
       expect { described_class.validate!(data) }
-        .to raise_error(Validators::ValidationError, /may not exceed 12/)
+        .to raise_error(Validators::ValidationError, /may not exceed 10/)
     end
 
     it "propagates power validation errors with path context" do

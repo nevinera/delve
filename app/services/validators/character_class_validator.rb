@@ -44,8 +44,8 @@ module Validators
     def validate_powers!(data, path:)
       powers = data["powers"]
       raise ValidationError.new("powers must be an array", path: child_path(path, "powers")) unless powers.is_a?(Array)
-      if powers.length > 12
-        raise ValidationError.new("powers may not exceed 12 entries", path: child_path(path, "powers"))
+      if powers.length > 10
+        raise ValidationError.new("powers may not exceed 10 entries", path: child_path(path, "powers"))
       end
       powers.each_with_index do |power, i|
         AbilityValidator.validate!(power, path: index_path(child_path(path, "powers"), i))
