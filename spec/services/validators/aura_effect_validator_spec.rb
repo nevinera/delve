@@ -29,6 +29,28 @@ RSpec.describe Validators::AuraEffectValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /spriteColumns and spriteRows must be given together/)
     end
 
+    it "accepts an optional color tint" do
+      expect { described_class.validate!(valid_aura.merge("color" => "ff0000")) }.not_to raise_error
+    end
+
+    it "accepts a color tint led by a # prefix" do
+      expect { described_class.validate!(valid_aura.merge("color" => "#ff0000")) }.not_to raise_error
+    end
+
+    it "raises when the color tint is not a valid hex string" do
+      expect { described_class.validate!(valid_aura.merge("color" => "red")) }
+        .to raise_error(Validators::ValidationError, /color must be a 6-digit hex string/)
+    end
+
+    it "accepts color explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(valid_aura.merge("color" => nil)) }.not_to raise_error
+    end
+
+    it "accepts spriteColumns/spriteRows explicitly null" do
+      data = valid_aura.merge("spriteColumns" => nil, "spriteRows" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
     context "stock asset references" do
       it "accepts a recognized stock graphic" do
         expect { described_class.validate!(valid_aura.merge("sourceURL" => ":arc:")) }.not_to raise_error

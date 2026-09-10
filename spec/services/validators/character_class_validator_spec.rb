@@ -34,7 +34,7 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
     end
 
     it "raises when major color is not a valid hex string" do
-      data = character_class_fixture.merge("colors" => {"major" => "#8B4513", "minor" => "F4A460"})
+      data = character_class_fixture.merge("colors" => {"major" => "8B451", "minor" => "F4A460"})
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /major must be a 6-digit hex string/)
     end
@@ -43,6 +43,11 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       data = character_class_fixture.merge("colors" => {"major" => "8B4513", "minor" => "gg0000"})
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /minor must be a 6-digit hex string/)
+    end
+
+    it "accepts a color led by a # prefix" do
+      data = character_class_fixture.merge("colors" => {"major" => "#8B4513", "minor" => "F4A460"})
+      expect { described_class.validate!(data) }.not_to raise_error
     end
 
     it "raises when resources is not an array" do
@@ -62,11 +67,11 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /powers must be an array/)
     end
 
-    it "raises when powers exceeds 12 entries" do
+    it "raises when powers exceeds 10 entries" do
       power = character_class_fixture["powers"][0]
-      data = character_class_fixture.merge("powers" => Array.new(13, power))
+      data = character_class_fixture.merge("powers" => Array.new(11, power))
       expect { described_class.validate!(data) }
-        .to raise_error(Validators::ValidationError, /may not exceed 12/)
+        .to raise_error(Validators::ValidationError, /may not exceed 10/)
     end
 
     it "propagates power validation errors with path context" do
@@ -90,8 +95,17 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       expect { described_class.validate!(character_class_fixture.except("resources")) }.not_to raise_error
     end
 
+    it "accepts resources and powers explicitly null, same as omitted" do
+      data = character_class_fixture.merge("resources" => nil, "powers" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
     it "accepts a class with no description" do
       expect { described_class.validate!(character_class_fixture.except("description")) }.not_to raise_error
+    end
+
+    it "accepts description explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(character_class_fixture.merge("description" => nil)) }.not_to raise_error
     end
 
     it "raises when primaryStats is missing" do

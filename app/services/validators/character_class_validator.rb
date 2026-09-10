@@ -1,14 +1,12 @@
 module Validators
   class CharacterClassValidator < Base
-    HEX_COLOR_RE = /\A[0-9a-fA-F]{6}\z/
-
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
-      validate_description!(data, path: path) if data.key?("description")
+      validate_description!(data, path: path) if given?(data, "description")
       validate_colors!(require_hash!(data, "colors", path: path), path: child_path(path, "colors"))
-      validate_resources!(data, path: path) if data.key?("resources")
-      validate_powers!(data, path: path) if data.key?("powers")
+      validate_resources!(data, path: path) if given?(data, "resources")
+      validate_powers!(data, path: path) if given?(data, "powers")
       validate_primary_stats!(data, path: path)
       validate_secondary_stats!(data, path: path)
       validate_wields!(data, path: path)
@@ -23,14 +21,8 @@ module Validators
 
     def validate_colors!(data, path:)
       require_object!(data, path: path)
-      validate_color!(data, "major", path: path)
-      validate_color!(data, "minor", path: path)
-    end
-
-    def validate_color!(data, key, path:)
-      color = require_string!(data, key, path: path)
-      return if HEX_COLOR_RE.match?(color)
-      raise ValidationError.new("#{key} must be a 6-digit hex string without #", path: child_path(path, key))
+      validate_hex_color!(data, "major", path: path)
+      validate_hex_color!(data, "minor", path: path)
     end
 
     def validate_resources!(data, path:)
@@ -44,8 +36,8 @@ module Validators
     def validate_powers!(data, path:)
       powers = data["powers"]
       raise ValidationError.new("powers must be an array", path: child_path(path, "powers")) unless powers.is_a?(Array)
-      if powers.length > 12
-        raise ValidationError.new("powers may not exceed 12 entries", path: child_path(path, "powers"))
+      if powers.length > 10
+        raise ValidationError.new("powers may not exceed 10 entries", path: child_path(path, "powers"))
       end
       powers.each_with_index do |power, i|
         AbilityValidator.validate!(power, path: index_path(child_path(path, "powers"), i))

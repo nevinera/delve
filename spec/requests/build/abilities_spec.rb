@@ -101,6 +101,11 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('name="key"')
         end
+
+        it "pre-fills the key from a ?key= param" do
+          get "/build/abilities/new", params: {key: "classes/druid/"}
+          expect(response.body).to include('value="classes/druid/"')
+        end
       end
     end
 

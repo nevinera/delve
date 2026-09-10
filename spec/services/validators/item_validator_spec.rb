@@ -192,6 +192,11 @@ RSpec.describe Validators::ItemValidator, type: :validator do
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /description must be a string/)
       end
+
+      it "accepts description, icon_url, shield, and secondaries explicitly null, same as omitted" do
+        data = valid_item.merge("description" => nil, "icon_url" => nil, "shield" => nil, "secondaries" => nil)
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
     end
   end
 end

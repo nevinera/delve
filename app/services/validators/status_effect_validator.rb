@@ -53,7 +53,7 @@ module Validators
       on_tick = require_string!(data, "onTick", path: path)
       require_one_of!(on_tick, %w[heal harm], path: child_path(path, "onTick"))
       require_numeric!(data, "amount", path: path)
-      validate_school!(data, path: path) if data.key?("school")
+      validate_school!(data, path: path) if given?(data, "school")
     end
 
     def validate_school!(data, path:)

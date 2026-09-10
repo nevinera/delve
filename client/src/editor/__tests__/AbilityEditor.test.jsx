@@ -2,11 +2,16 @@ import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import AbilityEditor from "../AbilityEditor";
 import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+import {validateAbility} from "../../validators/validateContent";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
   return {...actual, commitFiles: vi.fn()};
 });
+
+vi.mock("../../validators/validateContent", () => ({
+  validateAbility: vi.fn(),
+}));
 
 // AbilityPreviewPane mounts a real Three.js WebGLRenderer, which jsdom can't
 // back - stub it so this test can exercise the reducer/upload wiring in isolation.
@@ -139,14 +144,50 @@ describe("AbilityEditor", () => {
     });
   });
 
-  describe("saving", () => {
+  describe("validate then save", () => {
     beforeEach(() => {
       commitFiles.mockReset();
+      validateAbility.mockReset();
+    });
+
+    it("disables Save until Validate passes", async () => {
+      validateAbility.mockResolvedValue({valid: true});
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+      expect(validateAbility).toHaveBeenCalledWith(initialAbility);
+    });
+
+    it("shows the validation error and keeps Save disabled when the draft is invalid", async () => {
+      validateAbility.mockResolvedValue({valid: false, error: {message: "castTime must be a number or null (at $.castTime)", path: "$.castTime"}});
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+
+      await waitFor(() => expect(screen.getByText("castTime must be a number or null (at $.castTime)")).toBeInTheDocument());
+      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+    });
+
+    it("disables Save again after an edit, even though the draft was previously validated", async () => {
+      validateAbility.mockResolvedValue({valid: true});
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+
+      fireEvent.change(screen.getByDisplayValue("60"), {target: {value: "99"}});
+
+      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     });
 
     it("commits the ability under abilities/<key>.json and shows a success message", async () => {
+      validateAbility.mockResolvedValue({valid: true});
       commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
       render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
@@ -158,11 +199,14 @@ describe("AbilityEditor", () => {
     });
 
     it("disables the button and shows a saving indicator while the commit is in flight", async () => {
+      validateAbility.mockResolvedValue({valid: true});
       let resolveCommit;
       commitFiles.mockReturnValue(new Promise((resolve) => {
         resolveCommit = resolve;
       }));
       render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
@@ -172,9 +216,12 @@ describe("AbilityEditor", () => {
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
     });
 
-    it("shows an error message when the commit fails", async () => {
+    it("shows an error message when the commit fails, without requiring revalidation to retry", async () => {
+      validateAbility.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new Error("network exploded"));
       render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
@@ -183,12 +230,15 @@ describe("AbilityEditor", () => {
     });
 
     it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
+      validateAbility.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
       const originalLocation = window.location;
       delete window.location;
       window.location = {href: ""};
 
       render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
       await waitFor(() => expect(window.location.href).toEqual("/github/reauth"));

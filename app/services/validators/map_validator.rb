@@ -6,10 +6,10 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
-      validate_elvl!(data, path: path) if data.key?("elvl")
-      validate_barriers!(data, path: path) if data.key?("barriers")
-      validate_connections!(data, path: path) if data.key?("connections")
-      validate_units!(data, path: path) if data.key?("units")
+      validate_elvl!(data, path: path) if given?(data, "elvl")
+      validate_barriers!(data, path: path) if given?(data, "barriers")
+      validate_connections!(data, path: path) if given?(data, "connections")
+      validate_units!(data, path: path) if given?(data, "units")
     end
 
     private

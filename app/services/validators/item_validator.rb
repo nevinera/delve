@@ -31,7 +31,7 @@ module Validators
       shield = validate_shield!(data, slot, path: path)
       validate_weapon_type!(data, slot, shield, path: path)
       validate_primary!(data, slot, shield, path: path)
-      validate_secondaries!(data, slot, path: path) if data.key?("secondaries")
+      validate_secondaries!(data, slot, path: path) if given?(data, "secondaries")
       validate_optional_strings!(data, path: path)
     end
 
@@ -44,8 +44,8 @@ module Validators
     end
 
     def validate_optional_strings!(data, path:)
-      require_string!(data, "description", path: path) if data.key?("description")
-      require_string!(data, "icon_url", path: path) if data.key?("icon_url")
+      require_string!(data, "description", path: path) if given?(data, "description")
+      require_string!(data, "icon_url", path: path) if given?(data, "icon_url")
     end
 
     def validate_elvl!(data, path:)
@@ -54,7 +54,7 @@ module Validators
     end
 
     def validate_shield!(data, slot, path:)
-      return false unless data.key?("shield")
+      return false unless given?(data, "shield")
       shield = data["shield"]
       unless shield == true || shield == false
         raise ValidationError.new("shield must be a boolean", path: child_path(path, "shield"))
@@ -85,7 +85,7 @@ module Validators
     end
 
     def validate_primary!(data, slot, shield, path:)
-      return unless data.key?("primary")
+      return unless given?(data, "primary")
       primary = data["primary"]
       return validate_no_primary!(primary, path: path) if slot == "ring" || slot == "neck" || shield
       return if primary.nil?

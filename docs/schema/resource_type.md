@@ -7,7 +7,7 @@ A ResourceType defines the class or unit-type specific resource used to power ab
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `name` | string | yes | | Display name shown in UI (e.g. `"mana"`, `"rage"`, `"souls"`). |
-| `color` | string | yes | | Resource bar color as a 6-digit hex string (no leading `#`). |
+| `color` | Color | yes | | Resource bar color (see [common.md](common.md#color)). |
 | `max` | float | yes | | Maximum value. |
 | `defaultValue` | float | yes | | Starting value, and the value the resource passively returns toward. |
 | `returnRate` | float | no | `0.0` | Rate per second at which the resource moves toward `defaultValue`. Must be non-negative. |

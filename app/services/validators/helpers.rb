@@ -2,6 +2,33 @@ module Validators
   module Helpers
     module_function
 
+    # 6 hex digits, optionally led by "#" (see docs/schema/common.md#color).
+    HEX_COLOR_RE = /\A#?[0-9a-fA-F]{6}\z/
+
+    def validate_hex_color!(data, key, path:)
+      color = require_string!(data, key, path: path)
+      return if HEX_COLOR_RE.match?(color)
+      raise ValidationError.new("#{key} must be a 6-digit hex string, optionally led by #", path: child_path(path, key))
+    end
+
+    # True when `key` is present with a non-blank value: not nil, and not an
+    # empty/whitespace-only string. Every editor (see
+    # client/src/editor/AbilityFieldsPanel.jsx's EditableField/EntryField,
+    # client/src/editor/StatusEditor.jsx's AuraEffectFields, and the
+    # generic abilityReducer they both dispatch through) clears an optional
+    # field to null rather than deleting its key - so "was this optional
+    # field actually given" means this, not data.key?(key), which would
+    # still be true for a field the author just cleared. A blank string
+    # gets the same treatment for hand-edited (or future editor) content
+    # that clears a text field to "" instead. A boolean `false` or numeric
+    # `0` are real values, not blanks, so those still count as given.
+    def given?(data, key)
+      value = data[key]
+      return false if value.nil?
+      return false if value.is_a?(String) && value.strip.empty?
+      true
+    end
+
     def asset_reference?(value)
       value.is_a?(Hash) && value.key?("$ref")
     end
@@ -98,8 +125,8 @@ module Validators
     end
 
     def validate_graphic_sprite_sheet!(data, path:)
-      has_columns = data.key?("spriteColumns")
-      has_rows = data.key?("spriteRows")
+      has_columns = given?(data, "spriteColumns")
+      has_rows = given?(data, "spriteRows")
       unless has_columns == has_rows
         raise ValidationError.new("spriteColumns and spriteRows must be given together", path: path)
       end
@@ -107,8 +134,8 @@ module Validators
 
       require_integer!(data, "spriteColumns", path: path)
       require_integer!(data, "spriteRows", path: path)
-      require_integer!(data, "spriteFrameCount", path: path) if data.key?("spriteFrameCount")
-      require_numeric!(data, "spriteFrameRate", path: path) if data.key?("spriteFrameRate")
+      require_integer!(data, "spriteFrameCount", path: path) if given?(data, "spriteFrameCount")
+      require_numeric!(data, "spriteFrameRate", path: path) if given?(data, "spriteFrameRate")
     end
 
     def validate_tags!(data, path:)

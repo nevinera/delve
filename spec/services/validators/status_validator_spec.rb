@@ -30,6 +30,18 @@ RSpec.describe Validators::StatusValidator, type: :validator do
       expect { described_class.validate!(minimal_status.except("description")) }.not_to raise_error
     end
 
+    it "allows description explicitly null, same as omitted" do
+      expect { described_class.validate!(minimal_status.merge("description" => nil)) }.not_to raise_error
+    end
+
+    it "allows maxStacks explicitly null, same as omitted" do
+      expect { described_class.validate!(minimal_status.merge("stacking" => "stack", "maxStacks" => nil)) }.not_to raise_error
+    end
+
+    it "allows auraEffect explicitly null, same as omitted" do
+      expect { described_class.validate!(minimal_status.merge("auraEffect" => nil)) }.not_to raise_error
+    end
+
     it "accepts a description" do
       data = minimal_status.merge("description" => "Unable to act.")
       expect { described_class.validate!(data) }.not_to raise_error

@@ -10,18 +10,18 @@ module Validators
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
       validate_optional_fields!(data, path: path)
-      validate_powers!(data, path: path) if data.key?("powers")
-      validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if data.key?("targeting")
-      validate_tactics!(data["tactics"], path: child_path(path, "tactics")) if data.key?("tactics")
+      validate_powers!(data, path: path) if given?(data, "powers")
+      validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if given?(data, "targeting")
+      validate_tactics!(data["tactics"], path: child_path(path, "tactics")) if given?(data, "tactics")
     end
 
     private
 
     def validate_optional_fields!(data, path:)
-      validate_speed_factor!(data, path: path) if data.key?("speedFactor")
-      validate_positive_numeric!(data, "basicAttackRange", path: path) if data.key?("basicAttackRange")
-      validate_basic_attack_school!(data, path: path) if data.key?("basicAttackSchool")
-      validate_basic_attack_style!(data, path: path) if data.key?("basicAttackStyle")
+      validate_speed_factor!(data, path: path) if given?(data, "speedFactor")
+      validate_positive_numeric!(data, "basicAttackRange", path: path) if given?(data, "basicAttackRange")
+      validate_basic_attack_school!(data, path: path) if given?(data, "basicAttackSchool")
+      validate_basic_attack_style!(data, path: path) if given?(data, "basicAttackStyle")
     end
 
     def validate_fixed_fields!(data, path:)
@@ -130,8 +130,8 @@ module Validators
 
     def validate_phase_transition!(data, path:)
       require_object!(data, path: path)
-      has_time = data.key?("timeElapsed")
-      has_health = data.key?("healthBelow")
+      has_time = given?(data, "timeElapsed")
+      has_health = given?(data, "healthBelow")
       raise ValidationError.new("transition must specify timeElapsed or healthBelow", path: path) unless has_time || has_health
       validate_time_elapsed!(data, path: path) if has_time
       validate_health_below!(data, path: path) if has_health

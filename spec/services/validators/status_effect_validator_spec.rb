@@ -98,6 +98,10 @@ RSpec.describe Validators::StatusEffectValidator, type: :validator do
         expect { described_class.validate!(recurring_effect.except("school")) }.not_to raise_error
       end
 
+      it "allows school explicitly null, same as omitted" do
+        expect { described_class.validate!(recurring_effect.merge("school" => nil)) }.not_to raise_error
+      end
+
       it "allows school magic" do
         expect { described_class.validate!(recurring_effect.merge("school" => "magic")) }.not_to raise_error
       end

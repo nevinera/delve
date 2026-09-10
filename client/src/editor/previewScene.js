@@ -254,7 +254,9 @@ export class PreviewSceneManager {
       group.position.set(fromPos.x, EFFECT_HEIGHT, fromPos.z);
       this.scene.add(group);
 
-      const durationMs = (traveling && travelOverrideMs > 0) ? travelOverrideMs : duration * 1000;
+      // See the matching guard in game/scene.js - duration may be omitted on a
+      // travelling effect when the power sets `speed`.
+      const durationMs = (traveling && travelOverrideMs > 0) ? travelOverrideMs : (duration ?? 0) * 1000;
       this.activeEffects.push({
         group, mat, texture, opacity,
         startedAt: performance.now(),

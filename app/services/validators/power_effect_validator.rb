@@ -9,7 +9,7 @@ module Validators
       require_object!(data, path: path)
       type = require_string!(data, "type", path: path)
       require_one_of!(type, TYPE_OPTIONS, path: child_path(path, "type"))
-      validate_tags!(data, path: path) if data.key?("tags")
+      validate_tags!(data, path: path) if given?(data, "tags")
 
       case type
       when "harm" then validate_harm!(data, path: path)
@@ -28,7 +28,7 @@ module Validators
       validate_float_or_range!(amount, path: child_path(path, "amount"))
       range_val = require_key!(data, "range", path: path)
       validate_float_or_range!(range_val, path: child_path(path, "range"))
-      validate_school!(data, path: path) if data.key?("school")
+      validate_school!(data, path: path) if given?(data, "school")
     end
 
     def validate_school!(data, path:)

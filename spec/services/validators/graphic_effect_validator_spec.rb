@@ -20,9 +20,68 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
       expect { described_class.validate!(valid_graphic.merge("to" => "affected")) }.not_to raise_error
     end
 
+    it "accepts to explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(valid_graphic.merge("to" => nil)) }.not_to raise_error
+    end
+
+    it "still requires duration on an effect whose to was cleared to null, not travelling" do
+      data = valid_graphic.except("duration").merge("to" => nil)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /duration is required/)
+    end
+
     it "accepts optional scale and opacity" do
       data = valid_graphic.merge("scale" => 1.5, "opacity" => 0.8)
       expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "accepts an optional color tint" do
+      expect { described_class.validate!(valid_graphic.merge("color" => "ff0000")) }.not_to raise_error
+    end
+
+    it "accepts a color tint led by a # prefix" do
+      expect { described_class.validate!(valid_graphic.merge("color" => "#ff0000")) }.not_to raise_error
+    end
+
+    it "raises when the color tint is not a valid hex string" do
+      expect { described_class.validate!(valid_graphic.merge("color" => "red")) }
+        .to raise_error(Validators::ValidationError, /color must be a 6-digit hex string/)
+    end
+
+    it "accepts color explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(valid_graphic.merge("color" => nil)) }.not_to raise_error
+    end
+
+    it "accepts spriteColumns/spriteRows explicitly null" do
+      data = valid_graphic.merge("spriteColumns" => nil, "spriteRows" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when duration is missing on a static (non-travelling) effect" do
+      expect { described_class.validate!(valid_graphic.except("duration")) }
+        .to raise_error(Validators::ValidationError, /duration is required/)
+    end
+
+    it "accepts a travelling effect with no duration - its flight time comes from the power's speed" do
+      data = valid_graphic.except("duration").merge("to" => "affected")
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "accepts a travelling effect with duration explicitly null - the editor clears a field this way, not by deleting its key" do
+      data = valid_graphic.merge("to" => "affected", "duration" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "still requires duration on a static effect even when explicitly null" do
+      data = valid_graphic.merge("duration" => nil)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /duration must be a number/)
+    end
+
+    it "still validates duration's type when given on a travelling effect" do
+      data = valid_graphic.merge("to" => "affected", "duration" => "fast")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /duration must be a number/)
     end
 
     it "raises when sourceURL is missing" do

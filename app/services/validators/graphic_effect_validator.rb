@@ -7,15 +7,28 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_graphic_source_url!(data, path: path)
-      require_numeric!(data, "duration", path: path)
+      validate_duration!(data, path: path)
       validate_from_field!(data, path: path)
-      validate_to_field!(data, path: path) if data.key?("to")
+      validate_to_field!(data, path: path) if given?(data, "to")
       validate_when_field!(data, path: path)
       validate_condition_field!(data, path: path)
       validate_graphic_sprite_sheet!(data, path: path)
+      validate_hex_color!(data, "color", path: path) if given?(data, "color")
     end
 
     private
+
+    # Required for a static effect (no "to") - there's nothing else to derive
+    # a display duration from. A travelling effect's flight time is normally
+    # computed client-side from the power's own `speed` instead, so duration
+    # may be omitted (or explicitly null - the editor clears a field to null
+    # rather than deleting its key, same as castTime) there; if given
+    # anyway, it's still validated (used as a fallback when the power has no
+    # `speed`).
+    def validate_duration!(data, path:)
+      return if given?(data, "to") && data["duration"].nil?
+      require_numeric!(data, "duration", path: path)
+    end
 
     def validate_from_field!(data, path:)
       from = require_string!(data, "from", path: path)

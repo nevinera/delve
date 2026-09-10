@@ -73,6 +73,10 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
         expect { described_class.validate!(harm_effect.except("school")) }.not_to raise_error
       end
 
+      it "allows school explicitly null - the editor clears a field this way, not by deleting its key" do
+        expect { described_class.validate!(harm_effect.merge("school" => nil)) }.not_to raise_error
+      end
+
       it "allows school magic" do
         expect { described_class.validate!(harm_effect.merge("school" => "magic")) }.not_to raise_error
       end
@@ -94,6 +98,10 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
         data = harm_effect.merge("tags" => Array.new(25, "tag"))
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /may not exceed 24/)
+      end
+
+      it "accepts tags explicitly null, same as omitted" do
+        expect { described_class.validate!(harm_effect.merge("tags" => nil)) }.not_to raise_error
       end
     end
 

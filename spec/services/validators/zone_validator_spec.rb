@@ -21,6 +21,13 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /elvl must be at least 0/)
     end
 
+    it "allows unitTypes, items, zoneLinks, entryPoints, and openConnections explicitly null, same as omitted" do
+      data = zone_fixture.merge(
+        "unitTypes" => nil, "items" => nil, "zoneLinks" => nil, "entryPoints" => nil, "openConnections" => nil
+      )
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
     it "raises when private is missing" do
       expect { described_class.validate!(zone_fixture.except("private")) }
         .to raise_error(Validators::ValidationError, /private is required/)
