@@ -1011,14 +1011,14 @@ function StatusTooltip({ name, description, appliedByName, children }) {
 
 // Mouse-tracked portal tooltip for a plain text hint - same approach as
 // StatusTooltip/ItemTooltip/StatEffectTooltip, styled like statusTooltip.
-// cursor: "help" (not the browser's default text-select cursor) matches the
-// convention used for other hoverable hints (see charSheetStatLabelHoverable).
+// cursor: "default" keeps the standard arrow (not the browser's text-select
+// cursor, which a plain div with text would otherwise show).
 function HintTooltip({ text, children }) {
   const [pos, setPos] = useState(null);
 
   return (
     <span
-      style={{ display: "inline-block", cursor: "help" }}
+      style={{ display: "inline-block", cursor: "default" }}
       onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setPos(null)}
