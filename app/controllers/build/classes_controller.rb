@@ -70,11 +70,13 @@ class Build::ClassesController < Build::BaseController
     client = Github::ContentClient.new(current_user)
     entries = client.list_directory_recursive("abilities/classes/#{params[:id]}")
       .select { |entry| entry["name"].end_with?(".json") }
-    entries.each_with_object({}) do |entry, map|
-      key = entry["path"].delete_prefix("abilities/").delete_suffix(".json")
-      ability = JSON.parse(client.file_content(entry["path"]))
-      map[key] = {ability: ability, assetMap: fetch_asset_thumbnails(client, key, ability)}
-    end
+    entries.to_h { |entry| ability_entry(client, entry) }
+  end
+
+  def ability_entry(client, entry)
+    key = entry["path"].delete_prefix("abilities/").delete_suffix(".json")
+    ability = JSON.parse(client.file_content(entry["path"]))
+    [key, {ability: ability, assetMap: fetch_asset_thumbnails(client, key, ability)}]
   end
 
   def fetch_asset_thumbnails(client, key, ability)
