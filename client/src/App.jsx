@@ -457,10 +457,15 @@ const styles = {
     background: "#111",
     borderTop: "1px solid #333",
   },
-  charSheetButton: {
-    position: "absolute",
-    left: 8,
-    bottom: 4,
+  utilityRow: {
+    flexShrink: 0,
+    display: "flex",
+    gap: 4,
+    padding: "4px 8px",
+    background: "#111",
+    borderTop: "1px solid #333",
+  },
+  utilityButton: {
     width: 52,
     height: 26,
     background: "#1c1c1c",
@@ -2758,13 +2763,6 @@ export default function App({
         />
       </div>
       <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
-        <button
-          style={styles.charSheetButton}
-          title="Character sheet (P)"
-          onClick={() => setCharSheetOpen(o => !o)}
-        >
-          Char
-        </button>
         {viewportMode.isPortraitPhone ? (
           <div style={styles.actionStack}>
             {ACTION_ROWS.map((row, ri) => (
@@ -2781,6 +2779,22 @@ export default function App({
         {log.map((line, i) => (
           <div key={i}>{line}</div>
         ))}
+      </div>
+      <div style={styles.utilityRow}>
+        <button
+          style={styles.utilityButton}
+          title="Character sheet (P)"
+          onClick={() => setCharSheetOpen(o => !o)}
+        >
+          Char
+        </button>
+        <button
+          style={styles.utilityButton}
+          title="Toggle latency display (L)"
+          onClick={() => setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current))}
+        >
+          Latency
+        </button>
       </div>
       {disconnected && (
         <div style={{
