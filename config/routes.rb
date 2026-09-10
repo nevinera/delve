@@ -31,6 +31,7 @@ Rails.application.routes.draw do
     resources :handles, only: [:index, :show, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
     post "validators/ability", to: "validators#ability"
+    post "validators/character_class", to: "validators#character_class"
   end
 
   # A glob segment, not a plain :id + regex constraint (and defined outside

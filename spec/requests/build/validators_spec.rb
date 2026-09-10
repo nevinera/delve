@@ -45,5 +45,45 @@ RSpec.describe "Build::Validators", type: :request do
         expect(JSON.parse(response.body)["valid"]).to eq(false)
       end
     end
+
+    describe "POST /build/validators/character_class" do
+      let(:valid_class) do
+        {
+          name: "Puncher", colors: {major: "8B4513", minor: "F4A460"},
+          primaryStats: ["strength"],
+          secondaryStats: %w[crit_rating haste_rating mastery_rating versatility_rating recovery_rating],
+          wields: ["axe", "dagger"]
+        }
+      end
+
+      it "returns valid: true for a valid (already-resolved) class" do
+        post "/build/validators/character_class", params: valid_class.to_json, headers: {"Content-Type" => "application/json"}
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)).to eq({"valid" => true})
+      end
+
+      it "returns valid: false with the error message and path for an invalid color" do
+        invalid_class = valid_class.merge(colors: {major: "8B45", minor: "F4A460"})
+
+        post "/build/validators/character_class", params: invalid_class.to_json, headers: {"Content-Type" => "application/json"}
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include("major must be a 6-digit hex string")
+        expect(body["error"]["path"]).to eq("$.colors.major")
+      end
+
+      it "rejects a class whose powers are still $ref pointers, not the resolved form" do
+        abstract_class = valid_class.merge(powers: [{"$ref" => "../abilities/classes/puncher/punch.json", "referenceTo" => "power"}])
+
+        post "/build/validators/character_class", params: abstract_class.to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include("full JSON required")
+      end
+    end
   end
 end

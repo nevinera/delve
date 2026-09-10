@@ -2,11 +2,16 @@ import {describe, it, expect, vi, beforeEach} from "vitest";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import ClassEditor from "../ClassEditor";
 import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+import {validateCharacterClass} from "../../validators/validateContent";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
   return {...actual, commitFiles: vi.fn()};
 });
+
+vi.mock("../../validators/validateContent", () => ({
+  validateCharacterClass: vi.fn(),
+}));
 
 // ClassPreviewPane mounts a real Three.js WebGLRenderer via AbilityPreviewCanvas,
 // which jsdom can't back - stub it so this test can exercise the reducer wiring
@@ -57,6 +62,8 @@ describe("ClassEditor", () => {
   describe("saving", () => {
     beforeEach(() => {
       commitFiles.mockReset();
+      validateCharacterClass.mockReset();
+      validateCharacterClass.mockResolvedValue({valid: true});
     });
 
     it("commits the class under classes/<key>.json and shows a success message", async () => {
@@ -93,6 +100,38 @@ describe("ClassEditor", () => {
       await waitFor(() => expect(window.location.href).toEqual("/github/reauth"));
 
       window.location = originalLocation;
+    });
+
+    it("validates the resolved (powers-inlined) form, not the raw $ref draft", async () => {
+      commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
+      const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "power"}]};
+      render(<ClassEditor classKey="puncher" initialClass={withPower} availableAbilities={availableAbilities} stockAssets={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+      expect(validateCharacterClass).toHaveBeenCalledWith({...withPower, powers: [{name: "Punch"}]});
+    });
+
+    it("shows the validation error and never commits when the resolved class is invalid", async () => {
+      validateCharacterClass.mockResolvedValue({valid: false, error: {message: "major must be a 6-digit hex string (at $.colors.major)", path: "$.colors.major"}});
+      render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(screen.getByText("major must be a 6-digit hex string (at $.colors.major)")).toBeInTheDocument());
+      expect(commitFiles).not.toHaveBeenCalled();
+    });
+
+    it("shows a resolution error and never validates or commits when a power references an unloaded ability", async () => {
+      const withBadPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "power"}]};
+      render(<ClassEditor classKey="puncher" initialClass={withBadPower} availableAbilities={{}} stockAssets={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(screen.getByText(/No ability loaded/)).toBeInTheDocument());
+      expect(validateCharacterClass).not.toHaveBeenCalled();
+      expect(commitFiles).not.toHaveBeenCalled();
     });
   });
 });

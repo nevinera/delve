@@ -3,6 +3,8 @@ import {classReducer} from "./classReducer";
 import ClassPreviewPane from "./ClassPreviewPane";
 import ClassFieldsPanel from "./ClassFieldsPanel";
 import {saveClass} from "./saveClass";
+import {resolveFullClass} from "./resolveFullClass";
+import {validateCharacterClass} from "../validators/validateContent";
 import {GithubAuthError} from "../github/commitFiles";
 
 export default function ClassEditor({classKey, initialClass, availableAbilities, stockAssets, newAbilityUrl}) {
@@ -12,6 +14,12 @@ export default function ClassEditor({classKey, initialClass, availableAbilities,
   async function handleSave() {
     setSaveState({status: "saving"});
     try {
+      const fullClass = await resolveFullClass(classKey, classData, availableAbilities);
+      const {valid, error} = await validateCharacterClass(fullClass);
+      if (!valid) {
+        setSaveState({status: "error", message: error.message});
+        return;
+      }
       const {commitSha} = await saveClass(classKey, classData, availableAbilities);
       setSaveState({status: "success", commitSha});
     } catch (error) {

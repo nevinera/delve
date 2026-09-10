@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach} from "vitest";
-import {validateAbility} from "../validateContent";
+import {validateAbility, validateCharacterClass} from "../validateContent";
 
 describe("validateAbility", () => {
   beforeEach(() => {
@@ -29,5 +29,26 @@ describe("validateAbility", () => {
     const result = await validateAbility({});
 
     expect(result).toEqual({valid: false, error: {message: "name is required (at $.name)", path: "$.name"}});
+  });
+});
+
+describe("validateCharacterClass", () => {
+  beforeEach(() => {
+    document.head.innerHTML = '<meta name="csrf-token" content="fake-token">';
+    global.fetch = vi.fn();
+  });
+
+  it("posts the resolved class to Build::ValidatorsController#character_class", async () => {
+    global.fetch.mockResolvedValue({json: () => Promise.resolve({valid: true})});
+    const fullClass = {name: "Puncher", powers: [{name: "Punch"}]};
+
+    const result = await validateCharacterClass(fullClass);
+
+    expect(global.fetch).toHaveBeenCalledWith("/build/validators/character_class", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": "fake-token"},
+      body: JSON.stringify(fullClass),
+    });
+    expect(result).toEqual({valid: true});
   });
 });
