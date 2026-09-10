@@ -73,6 +73,10 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
         expect { described_class.validate!(harm_effect.except("school")) }.not_to raise_error
       end
 
+      it "allows school explicitly null - the editor clears a field this way, not by deleting its key" do
+        expect { described_class.validate!(harm_effect.merge("school" => nil)) }.not_to raise_error
+      end
+
       it "allows school magic" do
         expect { described_class.validate!(harm_effect.merge("school" => "magic")) }.not_to raise_error
       end

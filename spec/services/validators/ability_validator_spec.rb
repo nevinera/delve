@@ -64,6 +64,10 @@ RSpec.describe Validators::AbilityValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /speed must be a number/)
     end
 
+    it "accepts speed explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(stab_power.merge("speed" => nil)) }.not_to raise_error
+    end
+
     it "accepts an optional description" do
       expect { described_class.validate!(stab_power.merge("description" => "Hurts.")) }.not_to raise_error
     end
@@ -71,6 +75,14 @@ RSpec.describe Validators::AbilityValidator, type: :validator do
     it "raises when description is not a string" do
       expect { described_class.validate!(stab_power.merge("description" => 5)) }
         .to raise_error(Validators::ValidationError, /description must be a string/)
+    end
+
+    it "accepts description explicitly null" do
+      expect { described_class.validate!(stab_power.merge("description" => nil)) }.not_to raise_error
+    end
+
+    it "accepts iconURL explicitly null" do
+      expect { described_class.validate!(stab_power.merge("iconURL" => nil)) }.not_to raise_error
     end
 
     it "accepts optional top-level tags" do

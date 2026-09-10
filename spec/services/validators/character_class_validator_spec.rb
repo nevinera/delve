@@ -99,6 +99,10 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       expect { described_class.validate!(character_class_fixture.except("description")) }.not_to raise_error
     end
 
+    it "accepts description explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(character_class_fixture.merge("description" => nil)) }.not_to raise_error
+    end
+
     it "raises when primaryStats is missing" do
       expect { described_class.validate!(character_class_fixture.except("primaryStats")) }
         .to raise_error(Validators::ValidationError, /primaryStats must be an array/)

@@ -9,11 +9,11 @@ module Validators
       validate_graphic_source_url!(data, path: path)
       validate_duration!(data, path: path)
       validate_from_field!(data, path: path)
-      validate_to_field!(data, path: path) if data.key?("to")
+      validate_to_field!(data, path: path) if given?(data, "to")
       validate_when_field!(data, path: path)
       validate_condition_field!(data, path: path)
       validate_graphic_sprite_sheet!(data, path: path)
-      validate_hex_color!(data, "color", path: path) if data.key?("color")
+      validate_hex_color!(data, "color", path: path) if given?(data, "color")
     end
 
     private
@@ -26,7 +26,7 @@ module Validators
     # anyway, it's still validated (used as a fallback when the power has no
     # `speed`).
     def validate_duration!(data, path:)
-      return if data.key?("to") && data["duration"].nil?
+      return if given?(data, "to") && data["duration"].nil?
       require_numeric!(data, "duration", path: path)
     end
 

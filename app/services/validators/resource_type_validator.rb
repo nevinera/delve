@@ -6,7 +6,7 @@ module Validators
       validate_hex_color!(data, "color", path: path)
       require_numeric!(data, "max", path: path)
       require_numeric!(data, "defaultValue", path: path)
-      validate_return_rate!(data, path: path) if data.key?("returnRate")
+      validate_return_rate!(data, path: path) if given?(data, "returnRate")
       require_boolean!(data, "isFluid", path: path)
     end
 

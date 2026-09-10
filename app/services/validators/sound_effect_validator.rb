@@ -15,7 +15,7 @@ module Validators
       require_one_of!(when_val, WHEN_OPTIONS, path: child_path(path, "when"))
       condition = require_string!(data, "condition", path: path)
       require_one_of!(condition, CONDITION_OPTIONS, path: child_path(path, "condition"))
-      validate_impact_timing!(data, path: path) if data.key?("impactTiming")
+      validate_impact_timing!(data, path: path) if given?(data, "impactTiming")
     end
 
     private

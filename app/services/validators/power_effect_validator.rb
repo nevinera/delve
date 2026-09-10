@@ -28,7 +28,7 @@ module Validators
       validate_float_or_range!(amount, path: child_path(path, "amount"))
       range_val = require_key!(data, "range", path: path)
       validate_float_or_range!(range_val, path: child_path(path, "range"))
-      validate_school!(data, path: path) if data.key?("school")
+      validate_school!(data, path: path) if given?(data, "school")
     end
 
     def validate_school!(data, path:)

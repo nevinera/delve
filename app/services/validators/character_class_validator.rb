@@ -3,7 +3,7 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
-      validate_description!(data, path: path) if data.key?("description")
+      validate_description!(data, path: path) if given?(data, "description")
       validate_colors!(require_hash!(data, "colors", path: path), path: child_path(path, "colors"))
       validate_resources!(data, path: path) if data.key?("resources")
       validate_powers!(data, path: path) if data.key?("powers")

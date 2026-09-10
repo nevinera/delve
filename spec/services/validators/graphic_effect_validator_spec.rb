@@ -20,6 +20,16 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
       expect { described_class.validate!(valid_graphic.merge("to" => "affected")) }.not_to raise_error
     end
 
+    it "accepts to explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(valid_graphic.merge("to" => nil)) }.not_to raise_error
+    end
+
+    it "still requires duration on an effect whose to was cleared to null, not travelling" do
+      data = valid_graphic.except("duration").merge("to" => nil)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /duration is required/)
+    end
+
     it "accepts optional scale and opacity" do
       data = valid_graphic.merge("scale" => 1.5, "opacity" => 0.8)
       expect { described_class.validate!(data) }.not_to raise_error
@@ -36,6 +46,15 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
     it "raises when the color tint is not a valid hex string" do
       expect { described_class.validate!(valid_graphic.merge("color" => "red")) }
         .to raise_error(Validators::ValidationError, /color must be a 6-digit hex string/)
+    end
+
+    it "accepts color explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(valid_graphic.merge("color" => nil)) }.not_to raise_error
+    end
+
+    it "accepts spriteColumns/spriteRows explicitly null" do
+      data = valid_graphic.merge("spriteColumns" => nil, "spriteRows" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
     end
 
     it "raises when duration is missing on a static (non-travelling) effect" do

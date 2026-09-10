@@ -61,6 +61,10 @@ RSpec.describe Validators::SoundEffectValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /must be one of/)
     end
 
+    it "accepts impactTiming explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(valid_sound.merge("impactTiming" => nil)) }.not_to raise_error
+    end
+
     context "stock asset references" do
       it "accepts a recognized stock sound" do
         expect { described_class.validate!(valid_sound.merge("sourceURL" => ":twang:")) }.not_to raise_error

@@ -13,6 +13,10 @@ RSpec.describe Validators::ResourceTypeValidator, type: :validator do
       expect { described_class.validate!(data) }.not_to raise_error
     end
 
+    it "accepts returnRate explicitly null - the editor clears a field this way, not by deleting its key" do
+      expect { described_class.validate!(valid_resource.merge("returnRate" => nil)) }.not_to raise_error
+    end
+
     it "raises when name is missing" do
       expect { described_class.validate!(valid_resource.except("name")) }
         .to raise_error(Validators::ValidationError, /name is required/)
