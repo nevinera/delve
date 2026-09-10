@@ -956,6 +956,22 @@ export function shouldAutoShowLatency(history, now, windowMs = 10000, thresholdM
   return overCount / recent.length > 0.5;
 }
 
+// Whether the latency badge is actually on screen: the player's explicit L
+// choice (override) if they've made one, otherwise whatever
+// shouldAutoShowLatency last decided.
+export function isLatencyVisible(override, autoShow) {
+  return override != null ? override : autoShow;
+}
+
+// What `override` should become after an L press: it's a toggle of current
+// *visibility*, not of the override itself - so hitting L while the badge
+// happens to be auto-shown turns it off (and that off sticks), and hitting
+// it while auto-hidden turns it on (and that sticks too), regardless of
+// whether a previous override was ever set.
+export function nextLatencyOverride(override, autoShow) {
+  return !isLatencyVisible(override, autoShow);
+}
+
 // "3:05", "0:08" - minutes unpadded, seconds zero-padded. Rounds up so a
 // status showing "0:01" is still actually active, not already expired.
 export function formatRemaining(ms) {
@@ -1888,8 +1904,11 @@ export default function App({
   const [targetId, setTargetId] = useState(null);
   const [attacking, setAttacking] = useState(false);
   const [latencyMs, setLatencyMs] = useState(null);
-  const [showLatency, setShowLatency] = useState(false);
+  // null = no manual choice yet (visibility follows autoShowLatency); true/false
+  // = the player hit L, which sticks regardless of autoShowLatency afterward.
+  const [latencyOverride, setLatencyOverride] = useState(null);
   const [autoShowLatency, setAutoShowLatency] = useState(false);
+  const autoShowLatencyRef = useRef(false); // mirrors autoShowLatency, for the KeyL handler below
   const lastHeartbeatSeqRef = useRef(null);
   const rttHistoryRef = useRef([]); // {t, rtt}, last 10s - see shouldAutoShowLatency
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
@@ -2159,7 +2178,7 @@ export default function App({
         return;
       }
       if (e.code === "KeyL") {
-        setShowLatency(o => !o);
+        setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
         return;
       }
       if (e.code === "KeyT") {
@@ -2252,7 +2271,9 @@ export default function App({
             const hist = rttHistoryRef.current.filter((e) => now - e.t <= 10000);
             hist.push({ t: now, rtt });
             rttHistoryRef.current = hist;
-            setAutoShowLatency(shouldAutoShowLatency(hist, now));
+            const auto = shouldAutoShowLatency(hist, now);
+            autoShowLatencyRef.current = auto;
+            setAutoShowLatency(auto);
           }
         }
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
@@ -2494,14 +2515,19 @@ export default function App({
         : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
 
+  const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
+
   return (
     <div style={styles.root}>
-      {(showLatency || autoShowLatency) && (
-        <div style={{
-          position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
-          background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
-          fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
-        }}>
+      {latencyVisible && (
+        <div
+          title="Hit 'L' to toggle"
+          style={{
+            position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
+            background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
+            fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
+          }}
+        >
           {latencyMs != null ? `RTT Latency: ${latencyMs} ms` : "RTT Latency: —"}
         </div>
       )}

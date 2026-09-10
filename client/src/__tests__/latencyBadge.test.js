@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latencyColor, shouldAutoShowLatency } from "../App";
+import { latencyColor, shouldAutoShowLatency, isLatencyVisible, nextLatencyOverride } from "../App";
 
 describe("latencyColor", () => {
   it("is green under 200ms", () => {
@@ -75,5 +75,34 @@ describe("shouldAutoShowLatency", () => {
     const history = Array.from({ length: 9 }, (_, i) => ({ t: now - i * 1000, rtt: 100 }));
     history.push({ t: now - 9000, rtt: 1000 });
     expect(shouldAutoShowLatency(history, now)).toBe(false);
+  });
+});
+
+describe("isLatencyVisible", () => {
+  it("follows autoShow when there's no manual override yet", () => {
+    expect(isLatencyVisible(null, true)).toBe(true);
+    expect(isLatencyVisible(null, false)).toBe(false);
+  });
+
+  it("sticks to the override once one has been set, regardless of autoShow", () => {
+    expect(isLatencyVisible(true, false)).toBe(true);
+    expect(isLatencyVisible(false, true)).toBe(false);
+  });
+});
+
+describe("nextLatencyOverride", () => {
+  it("turns it on when hit while auto-hidden and unset", () => {
+    expect(nextLatencyOverride(null, false)).toBe(true);
+  });
+
+  it("turns it off when hit while auto-shown and unset", () => {
+    expect(nextLatencyOverride(null, true)).toBe(false);
+  });
+
+  it("flips an existing override regardless of the current autoShow value", () => {
+    expect(nextLatencyOverride(true, false)).toBe(false);
+    expect(nextLatencyOverride(true, true)).toBe(false);
+    expect(nextLatencyOverride(false, false)).toBe(true);
+    expect(nextLatencyOverride(false, true)).toBe(true);
   });
 });
