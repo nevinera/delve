@@ -65,7 +65,7 @@ const Canvas = forwardRef(function Canvas({
   return (
     <canvas
       ref={canvasRef}
-      style={{ display: "block" }}
+      style={{ display: "block", touchAction: "none" }}
     />
   );
 });

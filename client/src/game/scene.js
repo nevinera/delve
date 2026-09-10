@@ -14,6 +14,9 @@ const PITCH_MIN = 20 * DEG;
 const PITCH_MAX = 60 * DEG;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 1.5;
+const LONG_PRESS_MS = 500; // touch substitute for right-click
+const DRAG_THRESHOLD_SQ = 9; // px^2; below this a pointer down/up pair counts as a tap/click
+const PINCH_ZOOM_SENSITIVITY = 0.003; // per px of finger-distance change
 const EFFECT_HEIGHT = 0.4; // graphic effects float just above the tokens' top surface (y ~0.31)
 const DEFAULT_SPRITE_FRAME_RATE = 8; // fps, used when spriteFrameRate is omitted
 
@@ -193,6 +196,35 @@ export function edgeTowards(pos, other) {
 export function reconciledTarget(matched, currentX, currentY, serverX, serverY) {
   if (!matched) return { x: serverX, y: serverY };
   return { x: currentX + (serverX - matched.x), y: currentY + (serverY - matched.y) };
+}
+
+// Pointer-gesture math for _initMouseControls, pulled out for unit testing -
+// pointer events themselves (and the canvas/THREE.js state they touch)
+// aren't practical to exercise directly in tests.
+
+export function clampZoom(zoom) {
+  return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom));
+}
+
+// Pinch spread (dist > lastDist) zooms in (decreases camZoom, see
+// _positionCamera - smaller camZoom means a closer camera).
+export function pinchZoom(camZoom, dist, lastDist) {
+  return clampZoom(camZoom - (dist - lastDist) * PINCH_ZOOM_SENSITIVITY);
+}
+
+export function pointerDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+export function orbitFromDrag(camFacing, camPitch, dx, dy) {
+  return {
+    facing: camFacing + dx * 0.005,
+    pitch: Math.max(PITCH_MIN, Math.min(PITCH_MAX, camPitch + dy * 0.005)),
+  };
+}
+
+export function isTap(dx, dy) {
+  return dx * dx + dy * dy < DRAG_THRESHOLD_SQ;
 }
 
 export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
@@ -422,40 +454,112 @@ export class SceneManager {
     }
   }
 
+  // Pointer Events (not Mouse/Touch Events) so mouse, touch and pen all
+  // drive orbit/click/hover through one path. Touch has no right-click, so a
+  // long-press on the canvas substitutes for it (see LONG_PRESS_MS below).
   _initMouseControls() {
     let downX = null, downY = null, lastX = null, lastY = null;
-    this._canvas.addEventListener("mousedown", (e) => {
+    let activePointerId = null;
+    let longPressTimer = null;
+    let longPressFired = false;
+    // Second-finger pinch-zoom. Tracked separately from the single-pointer
+    // orbit/tap state above - a second touch landing cancels any in-progress
+    // orbit-drag/long-press and takes over until fingers drop back below 2.
+    const touchPoints = new Map(); // pointerId -> {x, y}, touch pointers currently down
+    let pinchLastDist = null;
+
+    const clearLongPress = () => {
+      if (longPressTimer !== null) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+    const endDrag = () => {
+      activePointerId = null;
+      downX = null; downY = null; lastX = null; lastY = null;
+    };
+    const pinchDistance = () => {
+      const [a, b] = [...touchPoints.values()];
+      return pointerDistance(a, b);
+    };
+
+    this._canvas.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "touch") touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (touchPoints.size === 2) {
+        clearLongPress();
+        endDrag();
+        pinchLastDist = pinchDistance();
+        return;
+      }
+      if (touchPoints.size > 2 || activePointerId !== null) return;
+
+      // Capture so drag keeps tracking even once the finger crosses off the
+      // canvas - the canvas is letterboxed to 4:3 and doesn't fill the
+      // screen, so a vertical drag on a portrait phone exits its bounds
+      // almost immediately without this.
+      this._canvas.setPointerCapture?.(e.pointerId);
+      activePointerId = e.pointerId;
       downX = e.clientX;
       downY = e.clientY;
       lastX = e.clientX;
       lastY = e.clientY;
+      longPressFired = false;
+      if (e.pointerType === "touch") {
+        longPressTimer = setTimeout(() => {
+          longPressFired = true;
+          this._handleRightClick(e);
+        }, LONG_PRESS_MS);
+      }
     });
-    this._canvas.addEventListener("mousemove", (e) => {
-      if (lastX === null) return;
-      this._camFacing += (e.clientX - lastX) * 0.005;
-      this._camPitch = Math.max(
-        PITCH_MIN,
-        Math.min(PITCH_MAX, this._camPitch + (e.clientY - lastY) * 0.005)
-      );
+    this._canvas.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch" && touchPoints.has(e.pointerId)) {
+        touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+      if (touchPoints.size === 2) {
+        const dist = pinchDistance();
+        if (pinchLastDist !== null) {
+          this._camZoom = pinchZoom(this._camZoom, dist, pinchLastDist);
+        }
+        pinchLastDist = dist;
+        return;
+      }
+      if (e.pointerId !== activePointerId || lastX === null) return;
+      const dx = e.clientX - downX, dy = e.clientY - downY;
+      if (!isTap(dx, dy)) clearLongPress();
+      const orbit = orbitFromDrag(this._camFacing, this._camPitch, e.clientX - lastX, e.clientY - lastY);
+      this._camFacing = orbit.facing;
+      this._camPitch = orbit.pitch;
       lastX = e.clientX;
       lastY = e.clientY;
     });
-    window.addEventListener("mouseup", (e) => {
-      if (downX !== null) {
+    window.addEventListener("pointerup", (e) => {
+      if (e.pointerType === "touch") touchPoints.delete(e.pointerId);
+      if (touchPoints.size < 2) pinchLastDist = null;
+      if (e.pointerId !== activePointerId) return;
+      clearLongPress();
+      if (!longPressFired && downX !== null) {
         const dx = e.clientX - downX, dy = e.clientY - downY;
-        if (dx * dx + dy * dy < 9) this._handleClick(e);
+        if (isTap(dx, dy)) this._handleClick(e);
       }
-      downX = null; downY = null; lastX = null; lastY = null;
+      endDrag();
+    });
+    window.addEventListener("pointercancel", (e) => {
+      if (e.pointerType === "touch") touchPoints.delete(e.pointerId);
+      if (touchPoints.size < 2) pinchLastDist = null;
+      if (e.pointerId !== activePointerId) return;
+      clearLongPress();
+      endDrag();
     });
     this._canvas.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       this._handleRightClick(e);
     });
-    this._canvas.addEventListener("mousemove", (e) => this._handleHover(e));
-    this._canvas.addEventListener("mouseleave", () => this._onUnitHover?.(null));
+    this._canvas.addEventListener("pointermove", (e) => this._handleHover(e));
+    this._canvas.addEventListener("pointerleave", () => this._onUnitHover?.(null));
     this._canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
-      this._camZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._camZoom + e.deltaY * 0.001));
+      this._camZoom = clampZoom(this._camZoom + e.deltaY * 0.001);
     }, { passive: false });
   }
 

@@ -1,6 +1,18 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { createNpcToken, setTokenTagDimmed, computeTargetLineDots, targetLineColor, edgeTowards, reconciledTarget } from "../scene";
+import {
+  createNpcToken,
+  setTokenTagDimmed,
+  computeTargetLineDots,
+  targetLineColor,
+  edgeTowards,
+  reconciledTarget,
+  clampZoom,
+  pinchZoom,
+  pointerDistance,
+  orbitFromDrag,
+  isTap,
+} from "../scene";
 
 describe("createNpcToken", () => {
   it("stores the hostility body color for later dimming", () => {
@@ -128,5 +140,87 @@ describe("reconciledTarget", () => {
 
   it("falls back to the raw echoed position when there's nothing to match against", () => {
     expect(reconciledTarget(null, 0, 0, 42, 7)).toEqual({ x: 42, y: 7 });
+  });
+});
+
+describe("clampZoom", () => {
+  it("clamps below the minimum", () => {
+    expect(clampZoom(0)).toBe(0.5);
+  });
+
+  it("clamps above the maximum", () => {
+    expect(clampZoom(10)).toBe(1.5);
+  });
+
+  it("passes through values already in range", () => {
+    expect(clampZoom(1)).toBe(1);
+  });
+});
+
+describe("pinchZoom", () => {
+  it("zooms in (decreases camZoom) when fingers spread apart", () => {
+    expect(pinchZoom(1.0, 150, 100)).toBeLessThan(1.0);
+  });
+
+  it("zooms out (increases camZoom) when fingers pinch together", () => {
+    expect(pinchZoom(1.0, 100, 150)).toBeGreaterThan(1.0);
+  });
+
+  it("is a no-op when finger distance is unchanged", () => {
+    expect(pinchZoom(1.2, 100, 100)).toBe(1.2);
+  });
+
+  it("clamps a huge spread to the zoom minimum", () => {
+    expect(pinchZoom(0.5, 1000, 0)).toBe(0.5);
+  });
+
+  it("clamps a huge pinch to the zoom maximum", () => {
+    expect(pinchZoom(1.5, 0, 1000)).toBe(1.5);
+  });
+});
+
+describe("pointerDistance", () => {
+  it("computes the euclidean distance between two points", () => {
+    expect(pointerDistance({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
+  });
+});
+
+describe("orbitFromDrag", () => {
+  it("increases facing when dragging right", () => {
+    expect(orbitFromDrag(0, 0.5, 10, 0).facing).toBeGreaterThan(0);
+  });
+
+  it("decreases facing when dragging left", () => {
+    expect(orbitFromDrag(0, 0.5, -10, 0).facing).toBeLessThan(0);
+  });
+
+  it("leaves facing unchanged for a purely vertical drag", () => {
+    expect(orbitFromDrag(1.2, 0.5, 0, 5).facing).toBe(1.2);
+  });
+
+  it("clamps pitch to the minimum when dragging far up", () => {
+    expect(orbitFromDrag(0, 0.5, 0, -1000).pitch).toBeCloseTo(20 * (Math.PI / 180));
+  });
+
+  it("clamps pitch to the maximum when dragging far down", () => {
+    expect(orbitFromDrag(0, 0.5, 0, 1000).pitch).toBeCloseTo(60 * (Math.PI / 180));
+  });
+});
+
+describe("isTap", () => {
+  it("treats zero movement as a tap", () => {
+    expect(isTap(0, 0)).toBe(true);
+  });
+
+  it("treats a small movement under the threshold as a tap", () => {
+    expect(isTap(2, 2)).toBe(true); // dx^2+dy^2 = 8 < 9
+  });
+
+  it("treats a movement at the threshold as a drag", () => {
+    expect(isTap(3, 0)).toBe(false); // dx^2+dy^2 = 9, not < 9
+  });
+
+  it("treats a larger movement as a drag", () => {
+    expect(isTap(10, 10)).toBe(false);
   });
 });
