@@ -36,6 +36,13 @@ export const ACTION_ROWS = [
   [0, 1, 2],
 ];
 
+// Landscape-phone action grid: two columns of five, read top-to-bottom
+// left column first (slots 1-5), then the right column (slots 6-10).
+export const ACTION_COLUMNS = [
+  [0, 1, 2, 3, 4],
+  [5, 6, 7, 8, 9],
+];
+
 // Flat placeholder basic-attack values; must match command.characterBasicAttackRange
 // and command.characterBasicAttackInterval in the game server.
 const BASIC_ATTACK_RANGE = 5.0;
@@ -418,6 +425,29 @@ const styles = {
     border: "1px solid #6a2a2a",
     padding: 8,
   },
+  // Landscape phone: canvas fills the whole screen, so the frames sit in a
+  // single fixed row pinned to the top-left corner (self then target, side
+  // by side) instead of stretching full-width above the canvas.
+  framesLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    top: 8,
+    left: 8,
+    display: "flex",
+    gap: 8,
+  },
+  // Merged onto selfFrame/targetFrame at the render site (same background/
+  // border/gap, just a fixed size instead of flex:1).
+  selfFrameLandscape: {
+    flex: undefined,
+    width: 220,
+    height: 74,
+  },
+  targetFrameLandscape: {
+    flex: undefined,
+    width: 220,
+    height: 74,
+  },
   frameImage: {
     height: "100%",
     width: "auto",
@@ -582,6 +612,74 @@ const styles = {
     color: "#ff8c1a",
     background: "#2a1c0a",
   },
+  // Landscape phone: no log/utility row below to clear, so the joystick and
+  // its Tab/Atk row anchor straight off the bottom edge instead.
+  joystickZoneLandscape: {
+    position: "fixed",
+    zIndex: 13,
+    left: 8,
+    bottom: 8,
+    width: 116,
+    height: 116,
+  },
+  touchControlsRowLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    left: 8,
+    bottom: 8 + 116 + 24, // above the joystick zone, with real finger clearance
+    width: 140,
+    display: "flex",
+    gap: 8,
+  },
+  // Landscape phone: chat/log becomes a fixed box in the top-right corner,
+  // same height as the unit frames and filling the horizontal space they
+  // leave, above the action grid, instead of a full-width strip below the
+  // (now full-height) canvas. Smaller font/line-height to fit that height.
+  logLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    top: 8,
+    left: 8 + 220 + 8 + 220 + 8, // right of the self+target frame row, with a gap
+    right: 8,
+    height: 74, // same as selfFrameLandscape/targetFrameLandscape
+    background: "#1a1a1a",
+    border: "1px solid #333",
+    borderRadius: 4,
+    padding: "4px 8px",
+    overflowY: "auto",
+    fontSize: 11,
+    lineHeight: 1.3,
+  },
+  // Landscape phone: action bar becomes a two-column grid pinned to the
+  // bottom-right corner, instead of a row below the canvas. Buttons shrink
+  // from the usual 52px (see actionButtonLandscape) so 5 rows fit.
+  actionGridLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    bottom: 8,
+    right: 8,
+    display: "flex",
+    gap: 4,
+  },
+  actionColumn: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  actionButtonLandscape: {
+    width: 48,
+    height: 48,
+  },
+  // Landscape phone: Char/Latency move to a fixed row right under the log,
+  // at the top of the right column (action grid takes the bottom instead).
+  utilityRowLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    top: 8 + 74 + 8, // below the log box (top + height + gap)
+    right: 8,
+    display: "flex",
+    gap: 4,
+  },
   canvasWrapper: {
     flex: 1,
     position: "relative",
@@ -711,20 +809,55 @@ const styles = {
     alignItems: "flex-start",
     gap: 8,
   },
-  // Portrait phone: covers the region between the frames and the log,
-  // scrolling internally instead of floating fixed-width over the canvas.
+  // Portrait phone: covers the region between the frames and the log. The
+  // border/background live on this fixed-size wrapper (the "frame"), with
+  // overflow:hidden clipping to it, while charSheetScrollArea (below)
+  // scrolls the actual content inside - so the border stays put as a
+  // window frame instead of scrolling away with the content and leaving
+  // its bottom edge hidden until you scroll all the way down.
   charSheetWrapperPortrait: {
     position: "fixed",
     zIndex: 25,
-    left: 0,
-    right: 0,
+    left: 8,
+    right: 8,
     top: 90, // styles.frames.height
     bottom: 110 + 34, // styles.log.height + the utility row below it
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  // Landscape phone: same fixed-frame-with-scrolling-content idea as
+  // charSheetWrapperPortrait, just inset from all four edges instead of
+  // pinned to the frames/log gap (canvas fills the whole screen here).
+  charSheetWrapperLandscape: {
+    position: "fixed",
+    zIndex: 25,
+    top: 16,
+    left: 16,
+    right: 16,
+    bottom: 16,
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  // The scrollable content area inside charSheetWrapperPortrait/Landscape -
+  // flex:1 + minHeight:0 lets it shrink below its content's natural height
+  // so overflowY:auto actually triggers, instead of growing the flex
+  // column (and its fixed-size parent) to fit.
+  charSheetScrollArea: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: "10px 16px 14px",
     display: "flex",
     flexDirection: "column",
     gap: 8,
-    padding: "0 8px",
-    overflowY: "auto",
   },
   charSheet: {
     background: "rgba(20,16,12,0.97)",
@@ -733,16 +866,6 @@ const styles = {
     padding: "10px 16px 14px",
     width: 480,
     pointerEvents: "auto",
-  },
-  charSheetPortrait: {
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "10px 16px 14px",
-    width: "100%",
-    boxSizing: "border-box",
-    pointerEvents: "auto",
-    flexShrink: 0,
   },
   charSheetCandidatePane: {
     background: "rgba(20,16,12,0.97)",
@@ -762,6 +885,23 @@ const styles = {
     right: 8,
     top: 90, // styles.frames.height
     bottom: 110 + 34, // styles.log.height + the utility row below it
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    boxSizing: "border-box",
+    overflowY: "auto",
+    pointerEvents: "auto",
+  },
+  // Landscape phone: same overlay-in-front-of-the-sheet idea, inset from
+  // the edges like charSheetWrapperLandscape instead of the frames/log gap.
+  charSheetCandidatePaneLandscape: {
+    position: "fixed",
+    zIndex: 26,
+    top: 16,
+    left: 16,
+    right: 16,
+    bottom: 16,
     background: "rgba(20,16,12,0.97)",
     border: "1px solid #7a5a2a",
     borderRadius: 6,
@@ -1721,9 +1861,9 @@ function gearElevation(equippedItems) {
 
 // Scrollable list of candidate items for one equipped slot, shown to the
 // left of the character sheet. Clicking an item equips it into that slot.
-function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl, portrait = false }) {
+function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl, portrait = false, landscape = false }) {
   return (
-    <div style={portrait ? styles.charSheetCandidatePanePortrait : styles.charSheetCandidatePane}>
+    <div style={portrait ? styles.charSheetCandidatePanePortrait : landscape ? styles.charSheetCandidatePaneLandscape : styles.charSheetCandidatePane}>
       <div style={styles.charSheetHeader}>
         <span style={styles.charSheetCandidateTitle}>{slotLabel}</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
@@ -1732,7 +1872,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
       {loading ? (
         <div style={styles.charSheetCandidateEmpty}>Loading…</div>
       ) : (
-        <div style={portrait ? undefined : styles.charSheetCandidateListWrapper}>
+        <div style={(portrait || landscape) ? undefined : styles.charSheetCandidateListWrapper}>
           <table style={styles.charSheetCandidateTable}>
             <tbody>
               {[...items].sort((a, b) => (b.elvl ?? -Infinity) - (a.elvl ?? -Infinity)).map(item => (
@@ -1778,7 +1918,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [], portrait = false }) {
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [], portrait = false, landscape = false }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -1924,7 +2064,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
   );
 
   return (
-    <div style={portrait ? styles.charSheetWrapperPortrait : styles.charSheetWrapper}>
+    <div style={portrait ? styles.charSheetWrapperPortrait : landscape ? styles.charSheetWrapperLandscape : styles.charSheetWrapper}>
       {expandedSlot && (
         <CandidateItemsPane
           slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}
@@ -1936,9 +2076,10 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
           onClose={() => setExpandedSlot(null)}
           localElvl={localElvl}
           portrait={portrait}
+          landscape={landscape}
         />
       )}
-      <div style={portrait ? styles.charSheetPortrait : styles.charSheet}>
+      <div style={(portrait || landscape) ? styles.charSheetScrollArea : styles.charSheet}>
         <div style={styles.charSheetHeader}>
           <span style={styles.charSheetTitle}>Character</span>
           <button style={styles.lootClose} onClick={onClose}>✕</button>
@@ -2721,7 +2862,40 @@ export default function App({
 
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
-  function renderActionSlot(i) {
+  function renderSelfFrameContent() {
+    return (
+      <>
+        {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
+        <div style={styles.frameInfo}>
+          <strong>{characterName ?? "—"}</strong>
+          {selfUnit && (
+            <>
+              <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
+              <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
+            </>
+          )}
+          {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+        </div>
+      </>
+    );
+  }
+
+  function renderTargetFrameContent() {
+    if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
+    return (
+      <>
+        {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
+        <div style={styles.frameInfo}>
+          <strong>{formatUnitName(targetUnit)}</strong>
+          {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
+          <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+          {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+        </div>
+      </>
+    );
+  }
+
+  function renderActionSlot(i, extraStyle) {
     const slot = i + 1;
     const key = slot === 10 ? "0" : String(slot);
     const power = powers[i];
@@ -2760,7 +2934,7 @@ export default function App({
     return (
       <AbilityTooltip key={slot} ability={power}>
         <div
-          style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
+          style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
           onClick={power ? () => usePower(i) : undefined}
         >
           {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
@@ -2806,36 +2980,21 @@ export default function App({
           </HintTooltip>
         </div>
       )}
-      <div style={styles.frames}>
-        <div style={styles.selfFrame}>
-          {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
-          <div style={styles.frameInfo}>
-            <strong>{characterName ?? "—"}</strong>
-            {selfUnit && (
-              <>
-                <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
-                <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
-              </>
-            )}
-            {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+      {viewportMode.isLandscapePhone ? (
+        <div style={styles.framesLandscape}>
+          <div style={{ ...styles.selfFrame, ...styles.selfFrameLandscape }}>
+            {renderSelfFrameContent()}
+          </div>
+          <div style={{ ...styles.targetFrame, ...styles.targetFrameLandscape }}>
+            {renderTargetFrameContent()}
           </div>
         </div>
-        <div style={styles.targetFrame}>
-          {targetUnit ? (
-            <>
-              {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
-              <div style={styles.frameInfo}>
-                <strong>{formatUnitName(targetUnit)}</strong>
-                {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-                <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
-                {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
-              </div>
-            </>
-          ) : (
-            <span style={{ color: "#666" }}>No target</span>
-          )}
+      ) : (
+        <div style={styles.frames}>
+          <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
+          <div style={styles.targetFrame}>{renderTargetFrameContent()}</div>
         </div>
-      </div>
+      )}
       <div style={styles.canvasWrapper}>
         <Canvas
           ref={canvasRef}
@@ -2879,11 +3038,12 @@ export default function App({
           localElvl={localElvl}
           primaryStats={primaryStats}
           portrait={viewportMode.isPortraitPhone}
+          landscape={viewportMode.isLandscapePhone}
         />
       </div>
-      {viewportMode.isPortraitPhone && (
+      {(viewportMode.isPortraitPhone || viewportMode.isLandscapePhone) && (
         <>
-          <div style={styles.touchControlsRow}>
+          <div style={viewportMode.isLandscapePhone ? styles.touchControlsRowLandscape : styles.touchControlsRow}>
             <button
               style={styles.touchControlButton}
               title="Tab-target (Tab)"
@@ -2899,28 +3059,42 @@ export default function App({
               Atk
             </button>
           </div>
-          <Joystick movementKeysRef={movementKeysRef} onChange={sendMove} style={styles.joystickZone} />
+          <Joystick
+            movementKeysRef={movementKeysRef}
+            onChange={sendMove}
+            style={viewportMode.isLandscapePhone ? styles.joystickZoneLandscape : styles.joystickZone}
+          />
         </>
       )}
-      <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
-        {viewportMode.isPortraitPhone ? (
-          <div style={styles.actionStack}>
-            {ACTION_ROWS.map((row, ri) => (
-              <div key={ri} style={styles.actionRow}>
-                {row.map((i) => renderActionSlot(i))}
-              </div>
-            ))}
-          </div>
-        ) : (
-          Array.from({ length: 10 }, (_, i) => renderActionSlot(i))
-        )}
-      </div>
-      <div style={styles.log}>
+      {viewportMode.isLandscapePhone ? (
+        <div style={styles.actionGridLandscape}>
+          {ACTION_COLUMNS.map((col, ci) => (
+            <div key={ci} style={styles.actionColumn}>
+              {col.map((i) => renderActionSlot(i, styles.actionButtonLandscape))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
+          {viewportMode.isPortraitPhone ? (
+            <div style={styles.actionStack}>
+              {ACTION_ROWS.map((row, ri) => (
+                <div key={ri} style={styles.actionRow}>
+                  {row.map((i) => renderActionSlot(i))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            Array.from({ length: 10 }, (_, i) => renderActionSlot(i))
+          )}
+        </div>
+      )}
+      <div style={viewportMode.isLandscapePhone ? styles.logLandscape : styles.log}>
         {log.map((line, i) => (
           <div key={i}>{line}</div>
         ))}
       </div>
-      <div style={styles.utilityRow}>
+      <div style={viewportMode.isLandscapePhone ? styles.utilityRowLandscape : styles.utilityRow}>
         <button
           style={styles.utilityButton}
           title="Character sheet (P)"

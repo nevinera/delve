@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACTION_ROWS } from "../App";
+import { ACTION_ROWS, ACTION_COLUMNS } from "../App";
 
 describe("ACTION_ROWS", () => {
   it("covers all 10 slots exactly once", () => {
@@ -18,5 +18,22 @@ describe("ACTION_ROWS", () => {
     // read it bottom-to-top to recover the numbering order.
     const readingOrder = [...ACTION_ROWS].reverse().flat();
     expect(readingOrder).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+});
+
+describe("ACTION_COLUMNS", () => {
+  it("covers all 10 slots exactly once", () => {
+    const flat = ACTION_COLUMNS.flat();
+    expect(flat.length).toBe(10);
+    expect(new Set(flat).size).toBe(10);
+    for (let i = 0; i < 10; i++) expect(flat).toContain(i);
+  });
+
+  it("is two columns of five", () => {
+    expect(ACTION_COLUMNS.map((col) => col.length)).toEqual([5, 5]);
+  });
+
+  it("numbers slots top-to-bottom, left column first, as 1..10", () => {
+    expect(ACTION_COLUMNS.flat()).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 });

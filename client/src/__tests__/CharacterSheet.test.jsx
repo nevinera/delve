@@ -271,6 +271,12 @@ describe("CharacterSheet", () => {
       const text = container.textContent;
       expect(text.indexOf("Stats")).toBeLessThan(text.indexOf("Equipment"));
     });
+
+    it("keeps Equipment before Stats when landscape (side-by-side, not stacked)", () => {
+      const { container } = render(<CharacterSheet open equippedItems={{}} onClose={() => {}} landscape />);
+      const text = container.textContent;
+      expect(text.indexOf("Equipment")).toBeLessThan(text.indexOf("Stats"));
+    });
   });
 
   describe("candidate pane", () => {
@@ -318,6 +324,30 @@ describe("CharacterSheet", () => {
           onEquip={onEquip}
           onClose={() => {}}
           portrait
+        />
+      );
+
+      fireEvent.click(screen.getAllByText("Empty")[0]);
+      await waitFor(() => expect(screen.getByText("Novice Boots")).toBeInTheDocument());
+      fireEvent.click(screen.getByText("Novice Boots"));
+
+      expect(onEquip).toHaveBeenCalledWith("head", expect.objectContaining({ id: 3 }));
+    });
+
+    it("still opens and equips from the candidate pane when landscape (overlay, not inline)", async () => {
+      stubFetch([
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", stats: {} },
+      ]);
+      const onEquip = vi.fn().mockResolvedValue(null);
+
+      render(
+        <CharacterSheet
+          open
+          equippedItems={{}}
+          characterItemsUrl="/play/characters/1/character_items.json"
+          onEquip={onEquip}
+          onClose={() => {}}
+          landscape
         />
       );
 
