@@ -57,8 +57,16 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
     setTargetDistanceFt((current) => Math.min(current, maxRange));
   }, [maxRange]);
 
+  // Unlike AbilityPreviewPane (one ability, one slider clamped to its own
+  // range - the target is always moved into range), here one slider is
+  // shared across every slot's differently-ranged ability, so it can't
+  // clamp to all of them at once. Out-of-range abilities are disabled
+  // instead of firing regardless. `<img>` has no native disabled state, so
+  // this check has to happen here too, not just in the disabled CSS class
+  // applied below - a click still reaches onClick either way.
   function play(resolvedAbility) {
     if (firing || !resolvedAbility) return;
+    if (targetDistanceFt > abilityRange(resolvedAbility)) return;
     setFiring(true);
     setStatus(`"${resolvedAbility.name}" fired!`);
     const positions = canvasRef.current?.positions();
@@ -92,22 +100,24 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
       </div>
       <div className="preview-status">{status}</div>
       <div className="power-slots">
-        {resolvedSlots.map((resolvedAbility, i) => (
-          <div className="power-slot" key={i}>
-            {resolvedAbility
-              ? (
-                <AbilityTooltip ability={resolvedAbility} hint="Use ability">
-                  <img
-                    src={resolvedAbility.iconURL}
-                    alt={resolvedAbility.name}
-                    className={`power-slot-icon${firing ? " disabled" : ""}`}
-                    onClick={() => play(resolvedAbility)}
-                  />
-                </AbilityTooltip>
-              )
-              : <div className="power-slot-icon empty" />}
-          </div>
-        ))}
+        {resolvedSlots.map((resolvedAbility, i) => {
+          if (!resolvedAbility) return <div className="power-slot" key={i}><div className="power-slot-icon empty" /></div>;
+
+          const outOfRange = targetDistanceFt > abilityRange(resolvedAbility);
+          const disabled = firing || outOfRange;
+          return (
+            <div className="power-slot" key={i}>
+              <AbilityTooltip ability={resolvedAbility} hint={outOfRange ? "Out of range" : "Use ability"}>
+                <img
+                  src={resolvedAbility.iconURL}
+                  alt={resolvedAbility.name}
+                  className={`power-slot-icon${disabled ? " disabled" : ""}`}
+                  onClick={() => play(resolvedAbility)}
+                />
+              </AbilityTooltip>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
