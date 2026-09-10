@@ -8,6 +8,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "nipplejs": "^1.0.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.176.0"

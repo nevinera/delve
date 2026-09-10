@@ -3,12 +3,14 @@ import { createPortal } from "react-dom";
 
 const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
+import { Joystick } from "./Joystick";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
+import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
@@ -22,6 +24,24 @@ const KEY_MAP = {
 };
 const MOVEMENT_KEYS = new Set(["forward", "backward", "strafe_left", "strafe_right"]);
 const TURN_KEYS = new Set(["turn_left", "turn_right"]);
+
+// Portrait-phone action bar: a stack of rows, sized 3/3/2/2 from the
+// bottom. Slots are numbered left-to-right, bottom-to-top, so row order
+// here is top-to-bottom for normal DOM/flex stacking (first child renders
+// at the top).
+export const ACTION_ROWS = [
+  [8, 9],
+  [6, 7],
+  [3, 4, 5],
+  [0, 1, 2],
+];
+
+// Landscape-phone action grid: two columns of five, read top-to-bottom
+// left column first (slots 1-5), then the right column (slots 6-10).
+export const ACTION_COLUMNS = [
+  [0, 1, 2, 3, 4],
+  [5, 6, 7, 8, 9],
+];
 
 // Flat placeholder basic-attack values; must match command.characterBasicAttackRange
 // and command.characterBasicAttackInterval in the game server.
@@ -370,6 +390,17 @@ const styles = {
     fontSize: 13,
     overflow: "hidden",
   },
+  viewportDebug: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    zIndex: 2000,
+    background: "rgba(0,0,0,0.7)",
+    color: "#0f0",
+    fontFamily: "monospace",
+    fontSize: 11,
+    padding: "2px 6px",
+  },
   frames: {
     display: "flex",
     flexShrink: 0,
@@ -393,6 +424,29 @@ const styles = {
     background: "#2b0d0d",
     border: "1px solid #6a2a2a",
     padding: 8,
+  },
+  // Landscape phone: canvas fills the whole screen, so the frames sit in a
+  // single fixed row pinned to the top-left corner (self then target, side
+  // by side) instead of stretching full-width above the canvas.
+  framesLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    top: 8,
+    left: 8,
+    display: "flex",
+    gap: 8,
+  },
+  // Merged onto selfFrame/targetFrame at the render site (same background/
+  // border/gap, just a fixed size instead of flex:1).
+  selfFrameLandscape: {
+    flex: undefined,
+    width: 220,
+    height: 74,
+  },
+  targetFrameLandscape: {
+    flex: undefined,
+    width: 220,
+    height: 74,
   },
   frameImage: {
     height: "100%",
@@ -434,10 +488,15 @@ const styles = {
     background: "#111",
     borderTop: "1px solid #333",
   },
-  charSheetButton: {
-    position: "absolute",
-    left: 8,
-    bottom: 4,
+  utilityRow: {
+    flexShrink: 0,
+    display: "flex",
+    gap: 4,
+    padding: "4px 8px",
+    background: "#111",
+    borderTop: "1px solid #333",
+  },
+  utilityButton: {
     width: 52,
     height: 26,
     background: "#1c1c1c",
@@ -447,6 +506,16 @@ const styles = {
     fontSize: 10,
     letterSpacing: 0.5,
     cursor: "pointer",
+  },
+  actionStack: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  actionRow: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 4,
   },
   actionButton: {
     position: "relative",
@@ -501,6 +570,115 @@ const styles = {
     padding: "6px 8px",
     overflowY: "auto",
     lineHeight: 1.5,
+  },
+  // nipplejs treats the whole zone rect as the touch-start hit-region for
+  // the joystick, not just the visible knob (Joystick.jsx's size: 100) -
+  // keep this close to that size so it doesn't eat into the space reserved
+  // for the buttons above it.
+  joystickZone: {
+    position: "fixed",
+    // Explicitly above touchControlsRow (not just relying on DOM-order
+    // tie-breaking at equal z-index) so the joystick always wins any
+    // overlap rather than having its touches swallowed by the row above it.
+    zIndex: 13,
+    left: 8,
+    bottom: 110 + 34, // styles.log.height + the utility row below it
+    width: 116,
+    height: 116,
+  },
+  touchControlsRow: {
+    position: "fixed",
+    zIndex: 12,
+    left: 8,
+    bottom: 110 + 34 + 116 + 24, // above the joystick zone, with real finger clearance
+    width: 140,
+    display: "flex",
+    gap: 8,
+  },
+  touchControlButton: {
+    flex: 1,
+    height: 40,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#ccc",
+    fontSize: 13,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+    cursor: "pointer",
+  },
+  touchControlButtonActive: {
+    borderColor: "#ff8c1a",
+    color: "#ff8c1a",
+    background: "#2a1c0a",
+  },
+  // Landscape phone: no log/utility row below to clear, so the joystick and
+  // its Tab/Atk row anchor straight off the bottom edge instead.
+  joystickZoneLandscape: {
+    position: "fixed",
+    zIndex: 13,
+    left: 8,
+    bottom: 8,
+    width: 116,
+    height: 116,
+  },
+  touchControlsRowLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    left: 8,
+    bottom: 8 + 116 + 24, // above the joystick zone, with real finger clearance
+    width: 140,
+    display: "flex",
+    gap: 8,
+  },
+  // Landscape phone: chat/log becomes a fixed box in the top-right corner,
+  // same height as the unit frames and filling the horizontal space they
+  // leave, above the action grid, instead of a full-width strip below the
+  // (now full-height) canvas. Smaller font/line-height to fit that height.
+  logLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    top: 8,
+    left: 8 + 220 + 8 + 220 + 8, // right of the self+target frame row, with a gap
+    right: 8,
+    height: 74, // same as selfFrameLandscape/targetFrameLandscape
+    background: "#1a1a1a",
+    border: "1px solid #333",
+    borderRadius: 4,
+    padding: "4px 8px",
+    overflowY: "auto",
+    fontSize: 11,
+    lineHeight: 1.3,
+  },
+  // Landscape phone: action bar becomes a two-column grid pinned to the
+  // bottom-right corner, instead of a row below the canvas. Buttons shrink
+  // from the usual 52px (see actionButtonLandscape) so 5 rows fit.
+  actionGridLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    bottom: 8,
+    right: 8,
+    display: "flex",
+    gap: 4,
+  },
+  actionColumn: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  actionButtonLandscape: {
+    width: 48,
+    height: 48,
+  },
+  // Landscape phone: Char/Latency move to a fixed row right under the log,
+  // at the top of the right column (action grid takes the bottom instead).
+  utilityRowLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    top: 8 + 74 + 8, // below the log box (top + height + gap)
+    right: 8,
+    display: "flex",
+    gap: 4,
   },
   canvasWrapper: {
     flex: 1,
@@ -631,6 +809,56 @@ const styles = {
     alignItems: "flex-start",
     gap: 8,
   },
+  // Portrait phone: covers the region between the frames and the log. The
+  // border/background live on this fixed-size wrapper (the "frame"), with
+  // overflow:hidden clipping to it, while charSheetScrollArea (below)
+  // scrolls the actual content inside - so the border stays put as a
+  // window frame instead of scrolling away with the content and leaving
+  // its bottom edge hidden until you scroll all the way down.
+  charSheetWrapperPortrait: {
+    position: "fixed",
+    zIndex: 25,
+    left: 8,
+    right: 8,
+    top: 90, // styles.frames.height
+    bottom: 110 + 34, // styles.log.height + the utility row below it
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  // Landscape phone: same fixed-frame-with-scrolling-content idea as
+  // charSheetWrapperPortrait, just inset from all four edges instead of
+  // pinned to the frames/log gap (canvas fills the whole screen here).
+  charSheetWrapperLandscape: {
+    position: "fixed",
+    zIndex: 25,
+    top: 16,
+    left: 16,
+    right: 16,
+    bottom: 16,
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  // The scrollable content area inside charSheetWrapperPortrait/Landscape -
+  // flex:1 + minHeight:0 lets it shrink below its content's natural height
+  // so overflowY:auto actually triggers, instead of growing the flex
+  // column (and its fixed-size parent) to fit.
+  charSheetScrollArea: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: "10px 16px 14px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
   charSheet: {
     background: "rgba(20,16,12,0.97)",
     border: "1px solid #7a5a2a",
@@ -645,6 +873,41 @@ const styles = {
     borderRadius: 6,
     padding: "10px 16px 14px",
     width: 440,
+    pointerEvents: "auto",
+  },
+  // Portrait phone: overlays the character sheet (same region it occupies)
+  // instead of sitting inline above it, since the candidate list can run
+  // long and pushing the sheet down would bury it off-screen.
+  charSheetCandidatePanePortrait: {
+    position: "fixed",
+    zIndex: 26,
+    left: 8,
+    right: 8,
+    top: 90, // styles.frames.height
+    bottom: 110 + 34, // styles.log.height + the utility row below it
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    boxSizing: "border-box",
+    overflowY: "auto",
+    pointerEvents: "auto",
+  },
+  // Landscape phone: same overlay-in-front-of-the-sheet idea, inset from
+  // the edges like charSheetWrapperLandscape instead of the frames/log gap.
+  charSheetCandidatePaneLandscape: {
+    position: "fixed",
+    zIndex: 26,
+    top: 16,
+    left: 16,
+    right: 16,
+    bottom: 16,
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    boxSizing: "border-box",
+    overflowY: "auto",
     pointerEvents: "auto",
   },
   charSheetCandidateTitle: {
@@ -716,9 +979,20 @@ const styles = {
     display: "flex",
     gap: 20,
   },
+  charSheetBodyPortrait: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
   charSheetColumn: {
     flex: 1,
     minWidth: 0,
+  },
+  // Stats laid out as two CSS columns (rather than one long list) so the
+  // portrait character sheet doesn't need as much vertical scroll.
+  charSheetStatsColumns: {
+    columnCount: 2,
+    columnGap: 20,
   },
   charSheetColumnTitle: {
     fontSize: 11,
@@ -1587,9 +1861,9 @@ function gearElevation(equippedItems) {
 
 // Scrollable list of candidate items for one equipped slot, shown to the
 // left of the character sheet. Clicking an item equips it into that slot.
-function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl }) {
+function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl, portrait = false, landscape = false }) {
   return (
-    <div style={styles.charSheetCandidatePane}>
+    <div style={portrait ? styles.charSheetCandidatePanePortrait : landscape ? styles.charSheetCandidatePaneLandscape : styles.charSheetCandidatePane}>
       <div style={styles.charSheetHeader}>
         <span style={styles.charSheetCandidateTitle}>{slotLabel}</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
@@ -1598,7 +1872,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
       {loading ? (
         <div style={styles.charSheetCandidateEmpty}>Loading…</div>
       ) : (
-        <div style={styles.charSheetCandidateListWrapper}>
+        <div style={(portrait || landscape) ? undefined : styles.charSheetCandidateListWrapper}>
           <table style={styles.charSheetCandidateTable}>
             <tbody>
               {[...items].sort((a, b) => (b.elvl ?? -Infinity) - (a.elvl ?? -Infinity)).map(item => (
@@ -1644,7 +1918,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [] }) {
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [], portrait = false, landscape = false }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -1691,8 +1965,106 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
     }
   };
 
+  const statGroupStyle = portrait ? { ...styles.charSheetStatGroup, breakInside: "avoid" } : styles.charSheetStatGroup;
+
+  const equipmentBlock = (
+    <div style={styles.charSheetColumn}>
+      <div style={styles.charSheetColumnTitle}>Equipment</div>
+      <table style={styles.charSheetEquipTable}>
+        <tbody>
+          {EQUIPPED_SLOT_ORDER.map(slot => {
+            const item = equippedItems?.[slot];
+            const rowStyle = {
+              ...styles.charSheetEquipRow,
+              ...styles.charSheetEquipRowClickable,
+              ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+              ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
+            };
+            return (
+              <tr
+                key={slot}
+                style={rowStyle}
+                onClick={() => toggleSlot(slot)}
+                onMouseEnter={() => setHoveredSlot(slot)}
+                onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
+              >
+                <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
+                <td style={{ ...styles.charSheetElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                  {item?.elvl ?? ""}
+                </td>
+                <td style={styles.charSheetNameCell}>
+                  {item ? (
+                    <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                      <span style={styles.charSheetNameBox}>{item.name || formatItemName(item.identifier)}</span>
+                    </ItemTooltip>
+                  ) : (
+                    <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const statsBlock = (
+    <div style={styles.charSheetColumn}>
+      <div style={styles.charSheetColumnTitle}>Stats</div>
+      <div style={portrait ? styles.charSheetStatsColumns : undefined}>
+        <div style={statGroupStyle}>
+          <ul style={styles.charSheetStatsList}>
+            <li style={styles.charSheetStatRow}>
+              <span>Local Elevation</span>
+              <span>{localElvl ?? "—"}</span>
+            </li>
+            <li style={styles.charSheetStatRow}>
+              <span>Gear Elevation</span>
+              <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
+            </li>
+          </ul>
+        </div>
+        {STAT_GROUPS.map(group => (
+          <div key={group.title} style={statGroupStyle}>
+            <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
+            <ul style={styles.charSheetStatsList}>
+              {group.keys.map(key => {
+                if (key === "basic_attack_dps") {
+                  const {value, lines} = basicAttackDps(stats, primaryStats);
+                  return (
+                    <li key={key} style={styles.charSheetStatRow}>
+                      <StatEffectTooltip lines={lines}>
+                        <span style={styles.charSheetStatLabelHoverable}>{STAT_LABELS[key]}</span>
+                      </StatEffectTooltip>
+                      <span>{value.toFixed(1)}</span>
+                    </li>
+                  );
+                }
+                const value = stats[key] || 0;
+                const lines = group.title === "Secondary"
+                  ? secondaryStatEffectLines(key, value)
+                  : primaryStatEffectLines(key, value, primaryStats, stats);
+                return (
+                  <li key={key} style={styles.charSheetStatRow}>
+                    <StatEffectTooltip lines={lines}>
+                      <span style={lines.length > 0 ? styles.charSheetStatLabelHoverable : undefined}>
+                        {STAT_LABELS[key] || key}
+                      </span>
+                    </StatEffectTooltip>
+                    <span>{value.toFixed(1)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div style={styles.charSheetWrapper}>
+    <div style={portrait ? styles.charSheetWrapperPortrait : landscape ? styles.charSheetWrapperLandscape : styles.charSheetWrapper}>
       {expandedSlot && (
         <CandidateItemsPane
           slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}
@@ -1703,102 +2075,27 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
           onSelect={handleSelect}
           onClose={() => setExpandedSlot(null)}
           localElvl={localElvl}
+          portrait={portrait}
+          landscape={landscape}
         />
       )}
-      <div style={styles.charSheet}>
+      <div style={(portrait || landscape) ? styles.charSheetScrollArea : styles.charSheet}>
         <div style={styles.charSheetHeader}>
           <span style={styles.charSheetTitle}>Character</span>
           <button style={styles.lootClose} onClick={onClose}>✕</button>
         </div>
-        <div style={styles.charSheetBody}>
-          <div style={styles.charSheetColumn}>
-            <div style={styles.charSheetColumnTitle}>Equipment</div>
-            <table style={styles.charSheetEquipTable}>
-              <tbody>
-                {EQUIPPED_SLOT_ORDER.map(slot => {
-                  const item = equippedItems?.[slot];
-                  const rowStyle = {
-                    ...styles.charSheetEquipRow,
-                    ...styles.charSheetEquipRowClickable,
-                    ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
-                    ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
-                  };
-                  return (
-                    <tr
-                      key={slot}
-                      style={rowStyle}
-                      onClick={() => toggleSlot(slot)}
-                      onMouseEnter={() => setHoveredSlot(slot)}
-                      onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
-                    >
-                      <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
-                      <td style={{ ...styles.charSheetElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
-                        {item?.elvl ?? ""}
-                      </td>
-                      <td style={styles.charSheetNameCell}>
-                        {item ? (
-                          <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
-                            <span style={styles.charSheetNameBox}>{item.name || formatItemName(item.identifier)}</span>
-                          </ItemTooltip>
-                        ) : (
-                          <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div style={styles.charSheetColumn}>
-            <div style={styles.charSheetColumnTitle}>Stats</div>
-            <div style={styles.charSheetStatGroup}>
-              <ul style={styles.charSheetStatsList}>
-                <li style={styles.charSheetStatRow}>
-                  <span>Local Elevation</span>
-                  <span>{localElvl ?? "—"}</span>
-                </li>
-                <li style={styles.charSheetStatRow}>
-                  <span>Gear Elevation</span>
-                  <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
-                </li>
-              </ul>
-            </div>
-            {STAT_GROUPS.map(group => (
-              <div key={group.title} style={styles.charSheetStatGroup}>
-                <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
-                <ul style={styles.charSheetStatsList}>
-                  {group.keys.map(key => {
-                    if (key === "basic_attack_dps") {
-                      const {value, lines} = basicAttackDps(stats, primaryStats);
-                      return (
-                        <li key={key} style={styles.charSheetStatRow}>
-                          <StatEffectTooltip lines={lines}>
-                            <span style={styles.charSheetStatLabelHoverable}>{STAT_LABELS[key]}</span>
-                          </StatEffectTooltip>
-                          <span>{value.toFixed(1)}</span>
-                        </li>
-                      );
-                    }
-                    const value = stats[key] || 0;
-                    const lines = group.title === "Secondary"
-                      ? secondaryStatEffectLines(key, value)
-                      : primaryStatEffectLines(key, value, primaryStats, stats);
-                    return (
-                      <li key={key} style={styles.charSheetStatRow}>
-                        <StatEffectTooltip lines={lines}>
-                          <span style={lines.length > 0 ? styles.charSheetStatLabelHoverable : undefined}>
-                            {STAT_LABELS[key] || key}
-                          </span>
-                        </StatEffectTooltip>
-                        <span>{value.toFixed(1)}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
+        <div style={portrait ? styles.charSheetBodyPortrait : styles.charSheetBody}>
+          {portrait ? (
+            <>
+              {statsBlock}
+              {equipmentBlock}
+            </>
+          ) : (
+            <>
+              {equipmentBlock}
+              {statsBlock}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1928,6 +2225,7 @@ export default function App({
   equippedItemsUrl,
   stockAssets,
 }) {
+  const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
   const canvasRef = useRef(null);
   const movementKeysRef = useRef(new Set());
@@ -2564,8 +2862,112 @@ export default function App({
 
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
+  function renderSelfFrameContent() {
+    return (
+      <>
+        {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
+        <div style={styles.frameInfo}>
+          <strong>{characterName ?? "—"}</strong>
+          {selfUnit && (
+            <>
+              <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
+              <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
+            </>
+          )}
+          {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+        </div>
+      </>
+    );
+  }
+
+  function renderTargetFrameContent() {
+    if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
+    return (
+      <>
+        {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
+        <div style={styles.frameInfo}>
+          <strong>{formatUnitName(targetUnit)}</strong>
+          {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
+          <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+          {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+        </div>
+      </>
+    );
+  }
+
+  function renderActionSlot(i, extraStyle) {
+    const slot = i + 1;
+    const key = slot === 10 ? "0" : String(slot);
+    const power = powers[i];
+    const iconUrl = power?.iconURL
+      ? (resolveStockAssetUrl(power.iconURL, "icons", stockAssets) ?? new URL(power.iconURL, classConfigUrl).href)
+      : null;
+    let inRange = true;
+    let isFacing = true;
+    if (power && targetUnit && selfUnit) {
+      const range = powerMaxRange(power);
+      if (range != null) {
+        const dx = targetUnit.position.x - selfUnit.position.x;
+        const dy = targetUnit.position.y - selfUnit.position.y;
+        inRange = Math.sqrt(dx * dx + dy * dy) <= range + (selfUnit.radius ?? 0) + (targetUnit.radius ?? 0);
+        if (power.frontal !== false) {
+          const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
+          let diff = toTarget - selfUnit.position.angle;
+          while (diff > 180) diff -= 360;
+          while (diff < -180) diff += 360;
+          isFacing = Math.abs(diff) <= 75;
+        }
+      }
+    }
+    const now = Date.now();
+    const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
+    // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
+    const cdEndsAt = Math.max(gcdEndsAt, pcEndsAt);
+    const onCooldown = power && cdEndsAt > now;
+    const remainingMs = onCooldown ? cdEndsAt - now : 0;
+    const usingGcd = gcdEndsAt >= pcEndsAt;
+    const totalMs = usingGcd ? (gcdTotalMsRef.current || 1) : (power?.cooldown ?? 1) * 1000;
+    const fraction = onCooldown ? remainingMs / totalMs : 0;
+    const revealedDeg = (1 - fraction) * 360;
+    const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
+
+    return (
+      <AbilityTooltip key={slot} ability={power}>
+        <div
+          style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
+          onClick={power ? () => usePower(i) : undefined}
+        >
+          {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
+          {onCooldown && (
+            <div style={{
+              position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
+              background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
+            }}/>
+          )}
+          {cdSecs && (
+            <div style={styles.actionCooldownOverlay}>
+              <span style={styles.actionCooldownText}>{cdSecs}</span>
+            </div>
+          )}
+          <span style={styles.actionKeybind}>{key}</span>
+        </div>
+      </AbilityTooltip>
+    );
+  }
+
   return (
-    <div style={styles.root}>
+    <div
+      style={styles.root}
+      data-touch={viewportMode.isTouch || undefined}
+      data-phone-layout={viewportMode.isPhoneLayout || undefined}
+      data-orientation={viewportMode.isPhoneLayout ? (viewportMode.isPortraitPhone ? "portrait" : "landscape") : undefined}
+    >
+      {new URLSearchParams(window.location.search).has("debugViewport") && (
+        <div style={styles.viewportDebug}>
+          touch={String(viewportMode.isTouch)} phone={String(viewportMode.isPhoneLayout)}{" "}
+          {viewportMode.isPhoneLayout && (viewportMode.isPortraitPhone ? "portrait" : "landscape")}
+        </div>
+      )}
       {latencyVisible && (
         <div style={{ position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000 }}>
           <HintTooltip text="Hit 'L' to toggle">
@@ -2578,36 +2980,21 @@ export default function App({
           </HintTooltip>
         </div>
       )}
-      <div style={styles.frames}>
-        <div style={styles.selfFrame}>
-          {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
-          <div style={styles.frameInfo}>
-            <strong>{characterName ?? "—"}</strong>
-            {selfUnit && (
-              <>
-                <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
-                <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
-              </>
-            )}
-            {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+      {viewportMode.isLandscapePhone ? (
+        <div style={styles.framesLandscape}>
+          <div style={{ ...styles.selfFrame, ...styles.selfFrameLandscape }}>
+            {renderSelfFrameContent()}
+          </div>
+          <div style={{ ...styles.targetFrame, ...styles.targetFrameLandscape }}>
+            {renderTargetFrameContent()}
           </div>
         </div>
-        <div style={styles.targetFrame}>
-          {targetUnit ? (
-            <>
-              {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
-              <div style={styles.frameInfo}>
-                <strong>{formatUnitName(targetUnit)}</strong>
-                {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-                <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
-                {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
-              </div>
-            </>
-          ) : (
-            <span style={{ color: "#666" }}>No target</span>
-          )}
+      ) : (
+        <div style={styles.frames}>
+          <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
+          <div style={styles.targetFrame}>{renderTargetFrameContent()}</div>
         </div>
-      </div>
+      )}
       <div style={styles.canvasWrapper}>
         <Canvas
           ref={canvasRef}
@@ -2650,80 +3037,78 @@ export default function App({
           onClose={() => setCharSheetOpen(false)}
           localElvl={localElvl}
           primaryStats={primaryStats}
+          portrait={viewportMode.isPortraitPhone}
+          landscape={viewportMode.isLandscapePhone}
         />
       </div>
-      <div style={styles.actionBar}>
+      {(viewportMode.isPortraitPhone || viewportMode.isLandscapePhone) && (
+        <>
+          <div style={viewportMode.isLandscapePhone ? styles.touchControlsRowLandscape : styles.touchControlsRow}>
+            <button
+              style={styles.touchControlButton}
+              title="Tab-target (Tab)"
+              onClick={() => handleTabTarget(unitsRef.current, targetIdRef.current, selfIdentifier)}
+            >
+              Tab
+            </button>
+            <button
+              style={{ ...styles.touchControlButton, ...(attacking ? styles.touchControlButtonActive : {}) }}
+              title="Start/stop attacking (T)"
+              onClick={() => (attacking ? handleStopAttacking() : handleStartAttacking())}
+            >
+              Atk
+            </button>
+          </div>
+          <Joystick
+            movementKeysRef={movementKeysRef}
+            onChange={sendMove}
+            style={viewportMode.isLandscapePhone ? styles.joystickZoneLandscape : styles.joystickZone}
+          />
+        </>
+      )}
+      {viewportMode.isLandscapePhone ? (
+        <div style={styles.actionGridLandscape}>
+          {ACTION_COLUMNS.map((col, ci) => (
+            <div key={ci} style={styles.actionColumn}>
+              {col.map((i) => renderActionSlot(i, styles.actionButtonLandscape))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
+          {viewportMode.isPortraitPhone ? (
+            <div style={styles.actionStack}>
+              {ACTION_ROWS.map((row, ri) => (
+                <div key={ri} style={styles.actionRow}>
+                  {row.map((i) => renderActionSlot(i))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            Array.from({ length: 10 }, (_, i) => renderActionSlot(i))
+          )}
+        </div>
+      )}
+      <div style={viewportMode.isLandscapePhone ? styles.logLandscape : styles.log}>
+        {log.map((line, i) => (
+          <div key={i}>{line}</div>
+        ))}
+      </div>
+      <div style={viewportMode.isLandscapePhone ? styles.utilityRowLandscape : styles.utilityRow}>
         <button
-          style={styles.charSheetButton}
+          style={styles.utilityButton}
           title="Character sheet (P)"
           onClick={() => setCharSheetOpen(o => !o)}
         >
           Char
         </button>
-        {Array.from({ length: 10 }, (_, i) => {
-          const slot = i + 1;
-          const key = slot === 10 ? "0" : String(slot);
-          const power = powers[i];
-          const iconUrl = power?.iconURL
-            ? (resolveStockAssetUrl(power.iconURL, "icons", stockAssets) ?? new URL(power.iconURL, classConfigUrl).href)
-            : null;
-          let inRange = true;
-          let isFacing = true;
-          if (power && targetUnit && selfUnit) {
-            const range = powerMaxRange(power);
-            if (range != null) {
-              const dx = targetUnit.position.x - selfUnit.position.x;
-              const dy = targetUnit.position.y - selfUnit.position.y;
-              inRange = Math.sqrt(dx * dx + dy * dy) <= range + (selfUnit.radius ?? 0) + (targetUnit.radius ?? 0);
-              if (power.frontal !== false) {
-                const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
-                let diff = toTarget - selfUnit.position.angle;
-                while (diff > 180) diff -= 360;
-                while (diff < -180) diff += 360;
-                isFacing = Math.abs(diff) <= 75;
-              }
-            }
-          }
-          const now = Date.now();
-          const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
-          // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
-          const cdEndsAt = Math.max(gcdEndsAt, pcEndsAt);
-          const onCooldown = power && cdEndsAt > now;
-          const remainingMs = onCooldown ? cdEndsAt - now : 0;
-          const usingGcd = gcdEndsAt >= pcEndsAt;
-          const totalMs = usingGcd ? (gcdTotalMsRef.current || 1) : (power?.cooldown ?? 1) * 1000;
-          const fraction = onCooldown ? remainingMs / totalMs : 0;
-          const revealedDeg = (1 - fraction) * 360;
-          const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
-
-          return (
-            <AbilityTooltip key={slot} ability={power}>
-              <div
-                style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
-                onClick={power ? () => usePower(i) : undefined}
-              >
-                {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
-                {onCooldown && (
-                  <div style={{
-                    position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
-                    background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
-                  }}/>
-                )}
-                {cdSecs && (
-                  <div style={styles.actionCooldownOverlay}>
-                    <span style={styles.actionCooldownText}>{cdSecs}</span>
-                  </div>
-                )}
-                <span style={styles.actionKeybind}>{key}</span>
-              </div>
-            </AbilityTooltip>
-          );
-        })}
-      </div>
-      <div style={styles.log}>
-        {log.map((line, i) => (
-          <div key={i}>{line}</div>
-        ))}
+        <button
+          style={styles.utilityButton}
+          title="Toggle latency display (L)"
+          onClick={() => setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current))}
+        >
+          Latency
+        </button>
       </div>
       {disconnected && (
         <div style={{
