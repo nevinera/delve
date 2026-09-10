@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
+import { Joystick } from "./Joystick";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
@@ -539,6 +540,14 @@ const styles = {
     padding: "6px 8px",
     overflowY: "auto",
     lineHeight: 1.5,
+  },
+  joystickZone: {
+    position: "fixed",
+    zIndex: 12,
+    left: 8,
+    bottom: 110 + 34, // styles.log.height + the utility row below it
+    width: 140,
+    height: 140,
   },
   canvasWrapper: {
     flex: 1,
@@ -2839,6 +2848,9 @@ export default function App({
           portrait={viewportMode.isPortraitPhone}
         />
       </div>
+      {viewportMode.isPortraitPhone && (
+        <Joystick movementKeysRef={movementKeysRef} onChange={sendMove} style={styles.joystickZone} />
+      )}
       <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
         {viewportMode.isPortraitPhone ? (
           <div style={styles.actionStack}>
