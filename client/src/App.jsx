@@ -541,19 +541,26 @@ const styles = {
     overflowY: "auto",
     lineHeight: 1.5,
   },
+  // nipplejs treats the whole zone rect as the touch-start hit-region for
+  // the joystick, not just the visible knob (Joystick.jsx's size: 100) -
+  // keep this close to that size so it doesn't eat into the space reserved
+  // for the buttons above it.
   joystickZone: {
     position: "fixed",
-    zIndex: 12,
+    // Explicitly above touchControlsRow (not just relying on DOM-order
+    // tie-breaking at equal z-index) so the joystick always wins any
+    // overlap rather than having its touches swallowed by the row above it.
+    zIndex: 13,
     left: 8,
     bottom: 110 + 34, // styles.log.height + the utility row below it
-    width: 140,
-    height: 140,
+    width: 116,
+    height: 116,
   },
   touchControlsRow: {
     position: "fixed",
     zIndex: 12,
     left: 8,
-    bottom: 110 + 34 + 140 + 8, // above the joystick zone
+    bottom: 110 + 34 + 116 + 24, // above the joystick zone, with real finger clearance
     width: 140,
     display: "flex",
     gap: 8,
