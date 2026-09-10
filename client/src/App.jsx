@@ -936,6 +936,26 @@ const styles = {
   },
 };
 
+// Green/yellow/red thresholds match what a player would recognize from WoW's
+// ping-color convention: <200ms fine, 200-350ms noticeable, 350ms+ rough.
+export function latencyColor(ms) {
+  if (ms == null) return "#ddd";
+  if (ms < 200) return "#4caf50";
+  if (ms < 350) return "#ffc107";
+  return "#f44336";
+}
+
+// Whether to auto-show the latency badge even without the manual L toggle:
+// true once more than half of the RTT samples from the last windowMs were
+// above thresholdMs - a blip shouldn't pop the badge up, but sustained bad
+// latency should, so the player knows it's their connection and not the game.
+export function shouldAutoShowLatency(history, now, windowMs = 10000, thresholdMs = 250) {
+  const recent = history.filter((e) => now - e.t <= windowMs);
+  if (recent.length === 0) return false;
+  const overCount = recent.filter((e) => e.rtt > thresholdMs).length;
+  return overCount / recent.length > 0.5;
+}
+
 // "3:05", "0:08" - minutes unpadded, seconds zero-padded. Rounds up so a
 // status showing "0:01" is still actually active, not already expired.
 export function formatRemaining(ms) {
@@ -1869,7 +1889,9 @@ export default function App({
   const [attacking, setAttacking] = useState(false);
   const [latencyMs, setLatencyMs] = useState(null);
   const [showLatency, setShowLatency] = useState(false);
+  const [autoShowLatency, setAutoShowLatency] = useState(false);
   const lastHeartbeatSeqRef = useRef(null);
+  const rttHistoryRef = useRef([]); // {t, rtt}, last 10s - see shouldAutoShowLatency
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
@@ -2224,7 +2246,14 @@ export default function App({
         if (heartbeatSeq != null && heartbeatSeq !== lastHeartbeatSeqRef.current) {
           lastHeartbeatSeqRef.current = heartbeatSeq;
           const rtt = connRef.current?.rttForSeq(heartbeatSeq);
-          if (rtt != null) setLatencyMs(rtt);
+          if (rtt != null) {
+            setLatencyMs(rtt);
+            const now = Date.now();
+            const hist = rttHistoryRef.current.filter((e) => now - e.t <= 10000);
+            hist.push({ t: now, rtt });
+            rttHistoryRef.current = hist;
+            setAutoShowLatency(shouldAutoShowLatency(hist, now));
+          }
         }
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
         if (tgt) {
@@ -2467,11 +2496,11 @@ export default function App({
 
   return (
     <div style={styles.root}>
-      {showLatency && (
+      {(showLatency || autoShowLatency) && (
         <div style={{
-          position: "fixed", top: 8, right: 8, zIndex: 1000,
-          background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "monospace",
-          fontSize: 12, padding: "2px 6px", borderRadius: 3,
+          position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
+          background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
+          fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
         }}>
           {latencyMs != null ? `RTT: ${latencyMs} ms` : "RTT: —"}
         </div>
