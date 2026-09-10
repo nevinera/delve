@@ -11,7 +11,7 @@ asset syntax accepted by `sourceURL`.
 |---|---|---|---|---|
 | `name` | string | no | | Optional label for editor display. |
 | `sourceURL` | string | yes | | URL of the image or animation file, or a stock asset reference (see above). |
-| `duration` | float | yes | | Display duration in seconds. |
+| `duration` | float | no\* | | Display duration in seconds. \*Required unless `to` is set - a travelling effect's flight time is computed client-side from the power's own `speed` instead. If given anyway on a travelling effect, it's used as a fallback for when the power has no `speed`. |
 | `from` | string | yes | | Origin location. `"self"` or `"affected"`. |
 | `to` | string | no | | Destination location. `"self"` or `"affected"`. If present, the graphic travels from `from` to `to`. |
 | `when` | string | yes | | Display trigger. `"immediate"` or `"impact"`. |
@@ -45,7 +45,6 @@ asset syntax accepted by `sourceURL`.
 {
   "name": "Arrow",
   "sourceURL": "../../assets/interactions/images/arrow.webp",
-  "duration": 0.3,
   "from": "self",
   "to": "affected",
   "when": "immediate",
@@ -53,3 +52,5 @@ asset syntax accepted by `sourceURL`.
   "scale": 0.5
 }
 ```
+
+Flight time here comes from the power's `speed` (distance / speed); `duration` is omitted.

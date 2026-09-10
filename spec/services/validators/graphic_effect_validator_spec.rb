@@ -38,6 +38,22 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /color must be a 6-digit hex string/)
     end
 
+    it "raises when duration is missing on a static (non-travelling) effect" do
+      expect { described_class.validate!(valid_graphic.except("duration")) }
+        .to raise_error(Validators::ValidationError, /duration is required/)
+    end
+
+    it "accepts a travelling effect with no duration - its flight time comes from the power's speed" do
+      data = valid_graphic.except("duration").merge("to" => "affected")
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "still validates duration's type when given on a travelling effect" do
+      data = valid_graphic.merge("to" => "affected", "duration" => "fast")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /duration must be a number/)
+    end
+
     it "raises when sourceURL is missing" do
       expect { described_class.validate!(valid_graphic.except("sourceURL")) }
         .to raise_error(Validators::ValidationError, /sourceURL is required/)

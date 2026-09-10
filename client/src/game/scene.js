@@ -918,7 +918,11 @@ export class SceneManager {
       group.position.set(fromX, EFFECT_HEIGHT, fromZ);
       this._scene.add(group);
 
-      const durationMs = (traveling && travelOverrideMs > 0) ? travelOverrideMs : duration * 1000;
+      // duration may be omitted on a travelling effect (see docs/schema/graphic_effect.md)
+      // when the power sets `speed`, which is the normal case (travelOverrideMs > 0)
+      // - the ?? 0 guard only matters for the degenerate case of a travelling effect
+      // with neither speed nor duration, so it fades instantly rather than never.
+      const durationMs = (traveling && travelOverrideMs > 0) ? travelOverrideMs : (duration ?? 0) * 1000;
       this._activeEffects.push({
         group, mat, texture, opacity,
         startedAt: performance.now(),
