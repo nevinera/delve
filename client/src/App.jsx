@@ -2502,7 +2502,7 @@ export default function App({
           background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
           fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
         }}>
-          {latencyMs != null ? `RTT: ${latencyMs} ms` : "RTT: —"}
+          {latencyMs != null ? `RTT Latency: ${latencyMs} ms` : "RTT Latency: —"}
         </div>
       )}
       <div style={styles.frames}>
