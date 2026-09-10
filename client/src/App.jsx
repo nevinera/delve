@@ -1867,6 +1867,9 @@ export default function App({
   const [units, setUnits] = useState({});
   const [targetId, setTargetId] = useState(null);
   const [attacking, setAttacking] = useState(false);
+  const [latencyMs, setLatencyMs] = useState(null);
+  const [showLatency, setShowLatency] = useState(false);
+  const lastHeartbeatBeatIdRef = useRef(null);
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
@@ -2128,6 +2131,10 @@ export default function App({
         setCharSheetOpen(o => !o);
         return;
       }
+      if (e.code === "KeyL") {
+        setShowLatency(o => !o);
+        return;
+      }
       if (e.code === "KeyT") {
         if (e.shiftKey) handleStopAttacking(); else handleStartAttacking();
         return;
@@ -2195,6 +2202,13 @@ export default function App({
       onStateChange: ({ units: u, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
         unitsRef.current = u;
         setUnits(u);
+        const selfForHeartbeat = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
+        const beatId = selfForHeartbeat?.last_heartbeat_beat_id;
+        if (beatId != null && beatId !== lastHeartbeatBeatIdRef.current) {
+          lastHeartbeatBeatIdRef.current = beatId;
+          const rtt = connRef.current?.rttForBeat(beatId);
+          if (rtt != null) setLatencyMs(rtt);
+        }
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
         if (tgt) {
           const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
@@ -2436,6 +2450,15 @@ export default function App({
 
   return (
     <div style={styles.root}>
+      {showLatency && (
+        <div style={{
+          position: "fixed", top: 8, right: 8, zIndex: 1000,
+          background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "monospace",
+          fontSize: 12, padding: "2px 6px", borderRadius: 3,
+        }}>
+          {latencyMs != null ? `RTT: ${latencyMs} ms` : "RTT: —"}
+        </div>
+      )}
       <div style={styles.frames}>
         <div style={styles.selfFrame}>
           {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}

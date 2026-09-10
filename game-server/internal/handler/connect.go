@@ -103,7 +103,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
-		handleClientMessage(data, slot.CharacterUnitID, inst, powers)
+		handleClientMessage(data, slotID, slot.CharacterUnitID, inst, powers)
 	}
 
 	close(quit)
@@ -120,14 +120,19 @@ type incomingMsg struct {
 	Slot         *int     `json:"slot"`
 	TargetUnitID *string  `json:"target_unit_id"`
 	ItemIndex    *int     `json:"item_index"`
+	BeatID       *int64   `json:"beat_id"`
 }
 
-func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance, powers []instanceconfig.Power) {
+func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.Instance, powers []instanceconfig.Power) {
 	var msg incomingMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return
 	}
 	switch msg.Type {
+	case "heartbeat":
+		if msg.BeatID != nil {
+			inst.RecordHeartbeat(slotID, *msg.BeatID, time.Now())
+		}
 	case "move":
 		keys := make([]command.MoveKey, len(msg.Keys))
 		for i, k := range msg.Keys {

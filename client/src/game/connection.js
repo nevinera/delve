@@ -2,6 +2,7 @@ import { computeChecksum } from "./checksum";
 import { applyFullState, applyDelta } from "./state";
 
 const HEARTBEAT_MS = 300;
+const HEARTBEAT_HISTORY = 20;
 
 export class GameConnection {
   constructor({ gameServerUrl, instanceId, slotId, slotToken, onOpen, onClose, onStateChange }) {
@@ -16,6 +17,12 @@ export class GameConnection {
     this._ws = null;
     this._heartbeatTimer = null;
     this._units = {};
+    this._beatId = 0;
+    // beat_id -> the local Date.now() it was sent at, so rttForBeat can
+    // measure round-trip time once the server echoes that beat_id back on
+    // our own unit (see last_heartbeat_beat_id in state.js). Bounded to the
+    // last HEARTBEAT_HISTORY sends since beat_id only increases.
+    this._heartbeatSentAt = new Map();
   }
 
   connect() {
@@ -23,7 +30,10 @@ export class GameConnection {
 
     this._ws.onopen = () => {
       this._heartbeatTimer = setInterval(() => {
-        this._send({ direction: "up", type: "heartbeat" });
+        this._beatId += 1;
+        this._heartbeatSentAt.set(this._beatId, Date.now());
+        this._heartbeatSentAt.delete(this._beatId - HEARTBEAT_HISTORY);
+        this._send({ direction: "up", type: "heartbeat", beat_id: this._beatId });
       }, HEARTBEAT_MS);
       this._onOpen?.();
     };
@@ -76,6 +86,14 @@ export class GameConnection {
       }
       this._onStateChange?.({ units: this._units, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
     }
+  }
+
+  // Round-trip time in ms for a beat_id echoed back by the server on our own
+  // unit's last_heartbeat_beat_id, or null if we no longer have that send
+  // recorded (evicted, or from before this connection).
+  rttForBeat(beatId) {
+    const sentAt = this._heartbeatSentAt.get(beatId);
+    return sentAt == null ? null : Date.now() - sentAt;
   }
 
   _send(data) {

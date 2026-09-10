@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
@@ -77,6 +79,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 	defer ticker.Stop()
 
 	prevState := state.Clone()
+	prevHeartbeats := map[uuid.UUID]HeartbeatInfo{}
 	var tickCount int64
 	var emptyAt time.Time // zero means "not yet tracking"
 
@@ -136,6 +139,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 
 			checksum := state.Checksum()
 			inst.Checksum = checksum
+			heartbeats := inst.HeartbeatsByUnit()
 
 			if slots := inst.SlotsForTick(); len(slots) > 0 {
 				// Build the delta once; reuse for all slots that don't need full state.
@@ -144,10 +148,10 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 					var payload []byte
 					var err error
 					if s.NeedsFullState {
-						payload, err = buildFullStateMsg(state, now, checksum)
+						payload, err = buildFullStateMsg(state, now, checksum, heartbeats)
 					} else {
 						if deltaPayload == nil {
-							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum)
+							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum, prevHeartbeats, heartbeats)
 						}
 						payload = deltaPayload
 					}
@@ -182,6 +186,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			state.PendingOwnershipUpdates = nil
 			state.PendingCombatEvents = nil
 			prevState = state.Clone()
+			prevHeartbeats = heartbeats
 
 			// Remove slots that have been pending or waiting too long.
 			slotWaitTimeout := inst.SlotWaitTimeout

@@ -56,6 +56,14 @@ type InstanceSlot struct {
 	connDone       chan struct{}      // closed by the handler when its goroutines have all exited
 	needsFullState bool               // true until the tick loop sends the first full-state message
 	stateEnteredAt time.Time          // when the slot entered its current state
+
+	// Latency-measurement fields; also protected by slotsMu. Set by
+	// RecordHeartbeat when a client heartbeat arrives, and echoed back to
+	// every client on the next tick's state broadcast (see
+	// Instance.HeartbeatsByUnit) so each client can compare the echoed
+	// beat_id/timestamp against its own locally-recorded send time.
+	lastHeartbeatBeatID int64
+	lastHeartbeatAt     time.Time
 }
 
 // recomputeStats sums the raw (em=1.0) stats of every equipped item into
@@ -244,6 +252,43 @@ func (inst *Instance) DisconnectSlot(id uuid.UUID) {
 		slot.stateEnteredAt = time.Now()
 		inst.recomputeSlotCounts()
 	}
+}
+
+// RecordHeartbeat stores the beat id and receipt time of a client heartbeat
+// for the given slot, so the next tick's state broadcast can echo it back to
+// all clients for round-trip latency measurement (see HeartbeatsByUnit). A
+// no-op if the slot no longer exists (e.g. it disconnected mid-flight).
+func (inst *Instance) RecordHeartbeat(slotID uuid.UUID, beatID int64, at time.Time) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot, ok := inst.slots[slotID]
+	if !ok {
+		return
+	}
+	slot.lastHeartbeatBeatID = beatID
+	slot.lastHeartbeatAt = at
+}
+
+// HeartbeatInfo is one connected slot's most recently recorded heartbeat.
+type HeartbeatInfo struct {
+	BeatID int64
+	At     time.Time
+}
+
+// HeartbeatsByUnit returns each slot's last recorded heartbeat, keyed by
+// CharacterUnitID so the tick loop can attach it to that unit's state
+// message. Slots with no heartbeat recorded yet are omitted.
+func (inst *Instance) HeartbeatsByUnit() map[uuid.UUID]HeartbeatInfo {
+	inst.slotsMu.RLock()
+	defer inst.slotsMu.RUnlock()
+	result := make(map[uuid.UUID]HeartbeatInfo, len(inst.slots))
+	for _, s := range inst.slots {
+		if s.lastHeartbeatBeatID == 0 {
+			continue
+		}
+		result[s.CharacterUnitID] = HeartbeatInfo{BeatID: s.lastHeartbeatBeatID, At: s.lastHeartbeatAt}
+	}
+	return result
 }
 
 // SlotForTick carries the data the tick loop needs for one connected slot.

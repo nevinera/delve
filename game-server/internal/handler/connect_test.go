@@ -218,6 +218,35 @@ func TestConnect_HeartbeatResetsTimeout(t *testing.T) {
 	assert.Equal(t, instance.SlotStateConnected, s.State)
 }
 
+func TestConnect_HeartbeatBeatIDIsRecorded(t *testing.T) {
+	reg := instance.NewRegistry()
+	inst := addTestInstance(t, reg)
+	slot, err := inst.AddSlot("Aldric", "42", instanceconfig.CharacterClass{
+		Name: "Puncher", Colors: instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"},
+	}, nil, nil)
+	require.NoError(t, err)
+	wsBase := startWS(t, mountConnect(reg))
+
+	conn, _, err := dialConnect(wsBase, inst.Identifier.String(), slot.ID.String(), slot.Token.String())
+	require.NoError(t, err)
+	defer func() { _ = conn.Close() }()
+
+	waitState(t, inst, slot.ID, instance.SlotStateConnected)
+
+	err = conn.WriteMessage(websocket.TextMessage, []byte(`{"direction":"up","type":"heartbeat","beat_id":42}`))
+	require.NoError(t, err)
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if hb, ok := inst.HeartbeatsByUnit()[slot.CharacterUnitID]; ok {
+			assert.Equal(t, int64(42), hb.BeatID)
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("heartbeat beat_id was never recorded")
+}
+
 func TestConnect_ReconnectKicksOldConnection(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := addTestInstance(t, reg)

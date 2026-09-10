@@ -520,3 +520,132 @@ func TestTick_ReconnectGetsFreshFullState(t *testing.T) {
 	msg := readMsg(t, ch2)
 	assert.Equal(t, "instance-state", msg["type"])
 }
+
+// ---------------------------------------------------------------------------
+// heartbeat echo (see Instance.RecordHeartbeat / HeartbeatsByUnit)
+// ---------------------------------------------------------------------------
+
+func TestFullStateMsg_HeartbeatIncludedWhenPresent(t *testing.T) {
+	state := stateWithUnit(t)
+	var unitID uuid.UUID
+	for id := range state.Units {
+		unitID = id
+	}
+	at := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	heartbeats := map[uuid.UUID]instance.HeartbeatInfo{unitID: {BeatID: 7, At: at}}
+
+	raw, err := instance.BuildFullStateMsgWithHeartbeatsForTest(state, time.Now(), "test-checksum", heartbeats)
+	require.NoError(t, err)
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal(raw, &msg))
+
+	units := msg["units"].(map[string]any)
+	unit := units[unitID.String()].(map[string]any)
+	assert.Equal(t, float64(7), unit["last_heartbeat_beat_id"])
+	assert.Equal(t, float64(at.UnixMilli()), unit["last_heartbeat_at"])
+}
+
+func TestFullStateMsg_HeartbeatOmittedWhenAbsent(t *testing.T) {
+	msg := fullState(t, stateWithUnit(t))
+	units := msg["units"].(map[string]any)
+	for _, u := range units {
+		unit := u.(map[string]any)
+		_, has := unit["last_heartbeat_beat_id"]
+		assert.False(t, has, "unit with no recorded heartbeat should omit the field")
+	}
+}
+
+func TestDeltaMsg_HeartbeatChangeIncludedInPatch(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	var unitID uuid.UUID
+	for id := range curr.Units {
+		unitID = id
+	}
+	prevHB := map[uuid.UUID]instance.HeartbeatInfo{unitID: {BeatID: 1, At: time.Now()}}
+	currHB := map[uuid.UUID]instance.HeartbeatInfo{unitID: {BeatID: 2, At: time.Now()}}
+
+	raw, err := instance.BuildDeltaMsgWithHeartbeatsForTest(prev, curr, time.Now(), "test-checksum", prevHB, currHB)
+	require.NoError(t, err)
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal(raw, &msg))
+
+	updates := msg["unit_updates"].(map[string]any)
+	patch := updates[unitID.String()].(map[string]any)
+	assert.Equal(t, float64(2), patch["last_heartbeat_beat_id"])
+}
+
+func TestDeltaMsg_HeartbeatUnchangedNotInPatch(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	var unitID uuid.UUID
+	for id := range curr.Units {
+		unitID = id
+	}
+	hb := map[uuid.UUID]instance.HeartbeatInfo{unitID: {BeatID: 5, At: time.Now()}}
+
+	raw, err := instance.BuildDeltaMsgWithHeartbeatsForTest(prev, curr, time.Now(), "test-checksum", hb, hb)
+	require.NoError(t, err)
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal(raw, &msg))
+
+	assert.Empty(t, msg["unit_updates"])
+}
+
+func TestHeartbeatsByUnit_OmitsSlotsWithNoHeartbeat(t *testing.T) {
+	inst := startedGoblinInstance(t)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	assert.NotContains(t, inst.HeartbeatsByUnit(), slot.CharacterUnitID)
+
+	inst.RecordHeartbeat(slot.ID, 9, time.Now())
+
+	hb := inst.HeartbeatsByUnit()
+	require.Contains(t, hb, slot.CharacterUnitID)
+	assert.Equal(t, int64(9), hb[slot.CharacterUnitID].BeatID)
+}
+
+func TestTick_HeartbeatEchoedInFullState(t *testing.T) {
+	inst := startedGoblinInstance(t)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+
+	// Recorded before connecting, so it's already there for the first tick's
+	// full-state message.
+	inst.RecordHeartbeat(slot.ID, 7, time.Now())
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	msg := readMsg(t, writeCh)
+	units := msg["units"].(map[string]any)
+	unit := units[slot.CharacterUnitID.String()].(map[string]any)
+	assert.Equal(t, float64(7), unit["last_heartbeat_beat_id"])
+	assert.NotNil(t, unit["last_heartbeat_at"])
+}
+
+func TestTick_HeartbeatChangeAppearsInNextDelta(t *testing.T) {
+	inst := startedGoblinInstance(t)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	first := readMsg(t, writeCh)
+	require.Equal(t, "instance-state", first["type"])
+
+	inst.RecordHeartbeat(slot.ID, 3, time.Now())
+
+	delta := readMsg(t, writeCh)
+	require.Equal(t, "delta", delta["type"])
+	updates := delta["unit_updates"].(map[string]any)
+	unit := updates[slot.CharacterUnitID.String()].(map[string]any)
+	assert.Equal(t, float64(3), unit["last_heartbeat_beat_id"])
+}

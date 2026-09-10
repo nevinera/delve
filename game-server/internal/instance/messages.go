@@ -40,6 +40,13 @@ type unitJSON struct {
 	PowerCooldowns       map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
 	LootItems            []lootItemJSON           `json:"loot_items,omitempty"`
+
+	// Set only for player-character units with a connected slot that has sent
+	// at least one heartbeat - see Instance.HeartbeatsByUnit. Echoing the
+	// client's own beat_id/timestamp back lets that client compute round-trip
+	// latency by comparing against its own locally-recorded send time.
+	LastHeartbeatBeatID *int64 `json:"last_heartbeat_beat_id,omitempty"`
+	LastHeartbeatAt     *int64 `json:"last_heartbeat_at,omitempty"`
 }
 
 type effectJSON struct {
@@ -134,7 +141,7 @@ type deltaMsg struct {
 	LootFailures  []lootFailureJSON         `json:"loot_failures,omitempty"`
 }
 
-func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
+func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string, heartbeats map[uuid.UUID]HeartbeatInfo) ([]byte, error) {
 	units := make(map[string]unitJSON, len(state.Units))
 	for id, u := range state.Units {
 		effects := make([]effectJSON, len(u.ActiveStatusEffects))
@@ -166,6 +173,13 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			ms := u.NextBasicAttackAt.UnixMilli()
 			nextBasicAttackMs = &ms
 		}
+		var hbBeatID *int64
+		var hbAt *int64
+		if hb, ok := heartbeats[id]; ok {
+			hbBeatID = &hb.BeatID
+			ms := hb.At.UnixMilli()
+			hbAt = &ms
+		}
 		units[id.String()] = unitJSON{
 			ZoneUnitIdentifier:   u.ZoneUnitIdentifier,
 			UnitTypeIdentifier:   u.UnitTypeIdentifier,
@@ -187,6 +201,8 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
 			ActiveStatusEffects:  effects,
 			LootItems:            lootItemsToJSON(u.LootItems),
+			LastHeartbeatBeatID:  hbBeatID,
+			LastHeartbeatAt:      hbAt,
 		}
 	}
 	return json.Marshal(fullStateMsg{
@@ -200,7 +216,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 	})
 }
 
-func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, lootFailures []instancestate.LootFailure, now time.Time, checksum string) ([]byte, error) {
+func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, lootFailures []instancestate.LootFailure, now time.Time, checksum string, prevHeartbeats, currHeartbeats map[uuid.UUID]HeartbeatInfo) ([]byte, error) {
 	msg := deltaMsg{
 		downBase: downBase{
 			Direction: "down",
@@ -258,6 +274,10 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			}
 			if li := lootItemsToJSON(cu.LootItems); li != nil {
 				update["loot_items"] = li
+			}
+			if hb, ok := currHeartbeats[id]; ok {
+				update["last_heartbeat_beat_id"] = hb.BeatID
+				update["last_heartbeat_at"] = hb.At.UnixMilli()
 			}
 			msg.UnitUpdates[idStr] = update
 			for _, e := range cu.ActiveStatusEffects {
@@ -322,6 +342,10 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		}
 		if !lootItemsEqual(cu.LootItems, pu.LootItems) {
 			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
+		}
+		if hb, ok := currHeartbeats[id]; ok && hb.BeatID != prevHeartbeats[id].BeatID {
+			patch["last_heartbeat_beat_id"] = hb.BeatID
+			patch["last_heartbeat_at"] = hb.At.UnixMilli()
 		}
 		if len(patch) > 0 {
 			msg.UnitUpdates[idStr] = patch
