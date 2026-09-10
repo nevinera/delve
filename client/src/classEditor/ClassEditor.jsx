@@ -1,33 +1,51 @@
-import {useReducer, useState} from "react";
+import {useReducer} from "react";
 import {classReducer} from "./classReducer";
 import ClassPreviewPane from "./ClassPreviewPane";
 import ClassFieldsPanel from "./ClassFieldsPanel";
 import {saveClass} from "./saveClass";
 import {resolveFullClass} from "./resolveFullClass";
 import {validateCharacterClass} from "../validators/validateContent";
+import {useValidateThenSave} from "../validators/useValidateThenSave";
+import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubAuthError} from "../github/commitFiles";
 
 export default function ClassEditor({classKey, initialClass, availableAbilities, stockAssets, newAbilityUrl}) {
-  const [classData, dispatch] = useReducer(classReducer, initialClass);
-  const [saveState, setSaveState] = useState({status: "idle"});
+  const [classData, rawDispatch] = useReducer(classReducer, initialClass);
+  const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
 
-  async function handleSave() {
-    setSaveState({status: "saving"});
+  // Every draft edit drops a prior "valid" (or "invalid") result - see
+  // useValidateThenSave.
+  function dispatch(action) {
+    markDirty();
+    rawDispatch(action);
+  }
+
+  async function handleValidate() {
+    setValidating();
     try {
       const fullClass = await resolveFullClass(classKey, classData, availableAbilities);
       const {valid, error} = await validateCharacterClass(fullClass);
-      if (!valid) {
-        setSaveState({status: "error", message: error.message});
-        return;
+      if (valid) {
+        setValid();
+      } else {
+        setInvalid(error.message);
       }
-      const {commitSha} = await saveClass(classKey, classData, availableAbilities);
-      setSaveState({status: "success", commitSha});
+    } catch (error) {
+      setInvalid(error.message);
+    }
+  }
+
+  async function handleSave() {
+    setSaving();
+    try {
+      await saveClass(classKey, classData, availableAbilities);
+      setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
         window.location.href = error.redirectUrl;
         return;
       }
-      setSaveState({status: "error", message: error.message});
+      setSaveError(error.message);
     }
   }
 
@@ -37,13 +55,7 @@ export default function ClassEditor({classKey, initialClass, availableAbilities,
         <ClassPreviewPane classKey={classKey} powers={classData.powers ?? []} availableAbilities={availableAbilities} stockAssets={stockAssets} />
       </div>
       <div className="class-editor-fields">
-        <div className="save-bar">
-          <button type="button" className="save-button" onClick={handleSave} disabled={saveState.status === "saving"}>
-            {saveState.status === "saving" ? "Saving…" : "Save"}
-          </button>
-          {saveState.status === "success" && <span className="save-message save-success">Saved.</span>}
-          {saveState.status === "error" && <span className="save-message save-error">{saveState.message}</span>}
-        </div>
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
         <ClassFieldsPanel
           classKey={classKey}
           classData={classData}

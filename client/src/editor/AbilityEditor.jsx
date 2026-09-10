@@ -5,6 +5,8 @@ import AbilityFieldsPanel from "./AbilityFieldsPanel";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
 import {saveAbility} from "./saveAbility";
 import {validateAbility} from "../validators/validateContent";
+import {useValidateThenSave} from "../validators/useValidateThenSave";
+import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubAuthError} from "../github/commitFiles";
 
 // Removing an entry shifts every later entry's index down by one, so any
@@ -32,14 +34,22 @@ function reindexBySection(map, section, removedIndex, onRemoved) {
 }
 
 export default function AbilityEditor({abilityKey, initialAbility, assetMap, stockAssets}) {
-  const [ability, dispatch] = useReducer(abilityReducer, initialAbility);
+  const [ability, rawDispatch] = useReducer(abilityReducer, initialAbility);
   const [assetOverrides, setAssetOverrides] = useState({});
   const overrideUrlsRef = useRef({});
   // The actual uploaded File objects, keyed the same way as assetOverrides -
   // needed at save time (assetOverrides only holds blob: URLs, which are
   // for preview only and can't be read back into bytes for a commit).
   const pendingFilesRef = useRef({});
-  const [saveState, setSaveState] = useState({status: "idle"});
+  const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
+
+  // Every draft edit needs to drop a prior "valid" (or "invalid") result -
+  // see useValidateThenSave - so this wraps the reducer's dispatch rather
+  // than calling markDirty at each of the several call sites below.
+  function dispatch(action) {
+    markDirty();
+    rawDispatch(action);
+  }
 
   // "Uploads" a local file as a stand-in for a not-yet-saved asset (preview
   // only - see resolveAbilityForPlayback). Keyed by field name, not by the
@@ -52,7 +62,7 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap, sto
     overrideUrlsRef.current[field] = url;
     pendingFilesRef.current[field] = file;
     setAssetOverrides((current) => ({...current, [field]: url}));
-    setSaveState({status: "idle"});
+    markDirty();
   }
 
   // Reverts a field to whatever the server-resolved assetMap (or the field's
@@ -78,22 +88,27 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap, sto
     setAssetOverrides((current) => reindexBySection(current, section, index));
   }
 
+  async function handleValidate() {
+    setValidating();
+    const {valid, error} = await validateAbility(ability);
+    if (valid) {
+      setValid();
+    } else {
+      setInvalid(error.message);
+    }
+  }
+
   async function handleSave() {
-    setSaveState({status: "saving"});
+    setSaving();
     try {
-      const {valid, error} = await validateAbility(ability);
-      if (!valid) {
-        setSaveState({status: "error", message: error.message});
-        return;
-      }
-      const {commitSha} = await saveAbility(abilityKey, ability, pendingFilesRef.current);
-      setSaveState({status: "success", commitSha});
+      await saveAbility(abilityKey, ability, pendingFilesRef.current);
+      setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
         window.location.href = error.redirectUrl;
         return;
       }
-      setSaveState({status: "error", message: error.message});
+      setSaveError(error.message);
     }
   }
 
@@ -103,13 +118,7 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap, sto
         <AbilityPreviewPane ability={ability} assetMap={assetMap} assetOverrides={assetOverrides} stockAssets={stockAssets} />
       </div>
       <div className="ability-editor-fields">
-        <div className="save-bar">
-          <button type="button" className="save-button" onClick={handleSave} disabled={saveState.status === "saving"}>
-            {saveState.status === "saving" ? "Saving…" : "Save"}
-          </button>
-          {saveState.status === "success" && <span className="save-message save-success">Saved.</span>}
-          {saveState.status === "error" && <span className="save-message save-error">{saveState.message}</span>}
-        </div>
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
         <AbilityFieldsPanel
           ability={ability}
           dispatch={dispatch}
