@@ -549,6 +549,32 @@ const styles = {
     width: 140,
     height: 140,
   },
+  touchControlsRow: {
+    position: "fixed",
+    zIndex: 12,
+    left: 8,
+    bottom: 110 + 34 + 140 + 8, // above the joystick zone
+    width: 140,
+    display: "flex",
+    gap: 8,
+  },
+  touchControlButton: {
+    flex: 1,
+    height: 40,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#ccc",
+    fontSize: 13,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+    cursor: "pointer",
+  },
+  touchControlButtonActive: {
+    borderColor: "#ff8c1a",
+    color: "#ff8c1a",
+    background: "#2a1c0a",
+  },
   canvasWrapper: {
     flex: 1,
     position: "relative",
@@ -2849,7 +2875,25 @@ export default function App({
         />
       </div>
       {viewportMode.isPortraitPhone && (
-        <Joystick movementKeysRef={movementKeysRef} onChange={sendMove} style={styles.joystickZone} />
+        <>
+          <div style={styles.touchControlsRow}>
+            <button
+              style={styles.touchControlButton}
+              title="Tab-target (Tab)"
+              onClick={() => handleTabTarget(unitsRef.current, targetIdRef.current, selfIdentifier)}
+            >
+              Tab
+            </button>
+            <button
+              style={{ ...styles.touchControlButton, ...(attacking ? styles.touchControlButtonActive : {}) }}
+              title="Start/stop attacking (T)"
+              onClick={() => (attacking ? handleStopAttacking() : handleStartAttacking())}
+            >
+              Atk
+            </button>
+          </div>
+          <Joystick movementKeysRef={movementKeysRef} onChange={sendMove} style={styles.joystickZone} />
+        </>
       )}
       <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
         {viewportMode.isPortraitPhone ? (
