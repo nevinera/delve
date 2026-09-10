@@ -36,6 +36,22 @@ sound) with values appropriate to that asset.
 
 ---
 
+## Color
+
+A 6-digit hexadecimal color, an optional leading `#` followed by exactly 6
+hex digits (`0-9`, `a-f`/`A-F`). Named CSS colors (e.g. `"red"`) aren't
+supported yet.
+
+```json
+"AA2200"
+```
+
+```json
+"#AA2200"
+```
+
+---
+
 ## Location
 
 A point in map coordinates (feet).

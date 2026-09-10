@@ -25,6 +25,19 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
       expect { described_class.validate!(data) }.not_to raise_error
     end
 
+    it "accepts an optional color tint" do
+      expect { described_class.validate!(valid_graphic.merge("color" => "ff0000")) }.not_to raise_error
+    end
+
+    it "accepts a color tint led by a # prefix" do
+      expect { described_class.validate!(valid_graphic.merge("color" => "#ff0000")) }.not_to raise_error
+    end
+
+    it "raises when the color tint is not a valid hex string" do
+      expect { described_class.validate!(valid_graphic.merge("color" => "red")) }
+        .to raise_error(Validators::ValidationError, /color must be a 6-digit hex string/)
+    end
+
     it "raises when sourceURL is missing" do
       expect { described_class.validate!(valid_graphic.except("sourceURL")) }
         .to raise_error(Validators::ValidationError, /sourceURL is required/)

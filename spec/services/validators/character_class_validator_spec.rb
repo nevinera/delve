@@ -34,7 +34,7 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
     end
 
     it "raises when major color is not a valid hex string" do
-      data = character_class_fixture.merge("colors" => {"major" => "#8B4513", "minor" => "F4A460"})
+      data = character_class_fixture.merge("colors" => {"major" => "8B451", "minor" => "F4A460"})
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /major must be a 6-digit hex string/)
     end
@@ -43,6 +43,11 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       data = character_class_fixture.merge("colors" => {"major" => "8B4513", "minor" => "gg0000"})
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /minor must be a 6-digit hex string/)
+    end
+
+    it "accepts a color led by a # prefix" do
+      data = character_class_fixture.merge("colors" => {"major" => "#8B4513", "minor" => "F4A460"})
+      expect { described_class.validate!(data) }.not_to raise_error
     end
 
     it "raises when resources is not an array" do

@@ -23,9 +23,8 @@ RSpec.describe Validators::ResourceTypeValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /color is required/)
     end
 
-    it "raises when color has a # prefix" do
-      expect { described_class.validate!(valid_resource.merge("color" => "#AADD00")) }
-        .to raise_error(Validators::ValidationError, /6-digit hex/)
+    it "accepts a color led by a # prefix" do
+      expect { described_class.validate!(valid_resource.merge("color" => "#AADD00")) }.not_to raise_error
     end
 
     it "raises when color is not 6 characters" do

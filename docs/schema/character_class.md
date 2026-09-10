@@ -26,8 +26,8 @@ Two display colors for this class, used for token rendering and UI theming.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `major` | string | yes | Primary color as a 6-digit hex string (no leading `#`). |
-| `minor` | string | yes | Secondary color as a 6-digit hex string (no leading `#`). |
+| `major` | Color | yes | Primary color (see [common.md](common.md#color)). |
+| `minor` | Color | yes | Secondary color (see [common.md](common.md#color)). |
 
 ```json
 { "major": "1144CC", "minor": "88AAFF" }

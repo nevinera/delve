@@ -20,7 +20,7 @@ asset syntax accepted by `sourceURL`.
 | `sourceURL` | string | yes | | URL of the image or animation file, or a stock asset reference (see above). |
 | `scale` | float | no | `1.0` | Size multiplier, applied on top of the holder's own token radius. |
 | `opacity` | float | no | `1.0` | Opacity, from `0.0` (invisible) to `1.0` (fully opaque). |
-| `color` | string | no | | Optional color tint applied to the image, as a 6-digit hex string (no leading `#`). If omitted, no tint is applied. |
+| `color` | Color | no | | Optional color tint applied to the image (see [common.md](common.md#color)). If omitted, no tint is applied. |
 | `spriteColumns` | integer | no | | Number of columns in a sprite-sheet grid. Required together with `spriteRows` to enable sprite-sheet animation. |
 | `spriteRows` | integer | no | | Number of rows in a sprite-sheet grid. Required together with `spriteColumns` to enable sprite-sheet animation. |
 | `spriteFrameCount` | integer | no | `spriteColumns * spriteRows` | Number of frames to play, in case the grid has trailing unused cells. Only meaningful with `spriteColumns`/`spriteRows`. |

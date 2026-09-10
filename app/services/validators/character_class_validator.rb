@@ -1,7 +1,5 @@
 module Validators
   class CharacterClassValidator < Base
-    HEX_COLOR_RE = /\A[0-9a-fA-F]{6}\z/
-
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
@@ -23,14 +21,8 @@ module Validators
 
     def validate_colors!(data, path:)
       require_object!(data, path: path)
-      validate_color!(data, "major", path: path)
-      validate_color!(data, "minor", path: path)
-    end
-
-    def validate_color!(data, key, path:)
-      color = require_string!(data, key, path: path)
-      return if HEX_COLOR_RE.match?(color)
-      raise ValidationError.new("#{key} must be a 6-digit hex string without #", path: child_path(path, key))
+      validate_hex_color!(data, "major", path: path)
+      validate_hex_color!(data, "minor", path: path)
     end
 
     def validate_resources!(data, path:)

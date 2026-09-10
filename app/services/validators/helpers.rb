@@ -2,6 +2,15 @@ module Validators
   module Helpers
     module_function
 
+    # 6 hex digits, optionally led by "#" (see docs/schema/common.md#color).
+    HEX_COLOR_RE = /\A#?[0-9a-fA-F]{6}\z/
+
+    def validate_hex_color!(data, key, path:)
+      color = require_string!(data, key, path: path)
+      return if HEX_COLOR_RE.match?(color)
+      raise ValidationError.new("#{key} must be a 6-digit hex string, optionally led by #", path: child_path(path, key))
+    end
+
     def asset_reference?(value)
       value.is_a?(Hash) && value.key?("$ref")
     end

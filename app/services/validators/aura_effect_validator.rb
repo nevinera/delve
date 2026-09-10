@@ -9,6 +9,7 @@ module Validators
       require_object!(data, path: path)
       validate_graphic_source_url!(data, path: path)
       validate_graphic_sprite_sheet!(data, path: path)
+      validate_hex_color!(data, "color", path: path) if data.key?("color")
     end
   end
 end

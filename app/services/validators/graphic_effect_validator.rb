@@ -13,6 +13,7 @@ module Validators
       validate_when_field!(data, path: path)
       validate_condition_field!(data, path: path)
       validate_graphic_sprite_sheet!(data, path: path)
+      validate_hex_color!(data, "color", path: path) if data.key?("color")
     end
 
     private
