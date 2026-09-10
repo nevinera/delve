@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latencyColor, shouldAutoShowLatency, isLatencyVisible, nextLatencyOverride } from "../App";
+import { latencyColor, shouldAutoShowLatency, stickyAutoShow, isLatencyVisible, nextLatencyOverride } from "../App";
 
 describe("latencyColor", () => {
   it("is green under 200ms", () => {
@@ -75,6 +75,33 @@ describe("shouldAutoShowLatency", () => {
     const history = Array.from({ length: 9 }, (_, i) => ({ t: now - i * 1000, rtt: 100 }));
     history.push({ t: now - 9000, rtt: 1000 });
     expect(shouldAutoShowLatency(history, now)).toBe(false);
+  });
+});
+
+describe("stickyAutoShow", () => {
+  it("turns on and records `since` the first time rawAuto is true", () => {
+    expect(stickyAutoShow(true, null, 1000)).toEqual({ visible: true, since: 1000 });
+  });
+
+  it("stays off, with no `since`, while rawAuto is false and it was never on", () => {
+    expect(stickyAutoShow(false, null, 1000)).toEqual({ visible: false, since: null });
+  });
+
+  it("keeps `since` unchanged on later true readings, rather than resetting the timer", () => {
+    expect(stickyAutoShow(true, 1000, 5000)).toEqual({ visible: true, since: 1000 });
+  });
+
+  it("stays visible if rawAuto flips false before the minimum duration has passed", () => {
+    expect(stickyAutoShow(false, 1000, 5000)).toEqual({ visible: true, since: 1000 });
+  });
+
+  it("goes invisible once rawAuto is false and the minimum duration has passed", () => {
+    expect(stickyAutoShow(false, 1000, 11001)).toEqual({ visible: false, since: null });
+  });
+
+  it("respects a custom minVisibleMs", () => {
+    expect(stickyAutoShow(false, 1000, 3500, 2000)).toEqual({ visible: false, since: null }); // 2500ms elapsed
+    expect(stickyAutoShow(false, 1000, 2500, 2000)).toEqual({ visible: true, since: 1000 }); // 1500ms elapsed
   });
 });
 

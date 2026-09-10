@@ -956,6 +956,17 @@ export function shouldAutoShowLatency(history, now, windowMs = 10000, thresholdM
   return overCount / recent.length > 0.5;
 }
 
+// Applies a minimum-visible duration to rawAuto (shouldAutoShowLatency's
+// output), so hovering right around the threshold doesn't flicker the badge
+// on and off: once it turns on, it stays on for at least minVisibleMs even
+// if rawAuto flips back to false in the meantime. `since` is when it last
+// turned on (null while off); pass back the returned `since` next call.
+export function stickyAutoShow(rawAuto, since, now, minVisibleMs = 10000) {
+  if (rawAuto) return { visible: true, since: since ?? now };
+  if (since != null && now - since < minVisibleMs) return { visible: true, since };
+  return { visible: false, since: null };
+}
+
 // Whether the latency badge is actually on screen: the player's explicit L
 // choice (override) if they've made one, otherwise whatever
 // shouldAutoShowLatency last decided.
@@ -1936,6 +1947,8 @@ export default function App({
   const autoShowLatencyRef = useRef(false); // mirrors autoShowLatency, for the KeyL handler below
   const lastHeartbeatSeqRef = useRef(null);
   const rttHistoryRef = useRef([]); // {t, rtt}, last 10s - see shouldAutoShowLatency
+  const lastLatencyDisplayAtRef = useRef(0); // throttles the displayed number - see below
+  const autoShowSinceRef = useRef(null); // when autoShowLatency last turned on - see stickyAutoShow
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
@@ -2291,12 +2304,21 @@ export default function App({
           lastHeartbeatSeqRef.current = heartbeatSeq;
           const rtt = connRef.current?.rttForSeq(heartbeatSeq);
           if (rtt != null) {
-            setLatencyMs(rtt);
             const now = Date.now();
+            // The displayed number updates at most every 2s - constantly
+            // ticking it (every heartbeat, ~300ms) reads as distracting
+            // flicker rather than a useful reading. The auto-show decision
+            // below still uses every sample, just the visible text is throttled.
+            if (now - lastLatencyDisplayAtRef.current >= 2000) {
+              lastLatencyDisplayAtRef.current = now;
+              setLatencyMs(rtt);
+            }
             const hist = rttHistoryRef.current.filter((e) => now - e.t <= 10000);
             hist.push({ t: now, rtt });
             rttHistoryRef.current = hist;
-            const auto = shouldAutoShowLatency(hist, now);
+            const rawAuto = shouldAutoShowLatency(hist, now);
+            const { visible: auto, since } = stickyAutoShow(rawAuto, autoShowSinceRef.current, now);
+            autoShowSinceRef.current = since;
             autoShowLatencyRef.current = auto;
             setAutoShowLatency(auto);
           }
