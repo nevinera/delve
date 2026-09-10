@@ -7,9 +7,9 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_core_fields!(data, path: path)
-      validate_hp_fraction!(data, path: path) if data.key?("currentHpFraction")
-      validate_movement!(data["movement"], path: child_path(path, "movement")) if data.key?("movement")
-      validate_links!(data, path: path) if data.key?("links")
+      validate_hp_fraction!(data, path: path) if given?(data, "currentHpFraction")
+      validate_movement!(data["movement"], path: child_path(path, "movement")) if given?(data, "movement")
+      validate_links!(data, path: path) if given?(data, "links")
     end
 
     private

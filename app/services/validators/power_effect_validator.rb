@@ -9,7 +9,7 @@ module Validators
       require_object!(data, path: path)
       type = require_string!(data, "type", path: path)
       require_one_of!(type, TYPE_OPTIONS, path: child_path(path, "type"))
-      validate_tags!(data, path: path) if data.key?("tags")
+      validate_tags!(data, path: path) if given?(data, "tags")
 
       case type
       when "harm" then validate_harm!(data, path: path)

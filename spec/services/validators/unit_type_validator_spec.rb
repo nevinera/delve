@@ -93,6 +93,13 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
       expect { described_class.validate!(goblin_unit_type.except("basicAttackSchool")) }.not_to raise_error
     end
 
+    it "allows basicAttackSchool, basicAttackStyle, basicAttackRange, and speedFactor explicitly null, same as omitted" do
+      data = goblin_unit_type.merge(
+        "basicAttackSchool" => nil, "basicAttackStyle" => nil, "basicAttackRange" => nil, "speedFactor" => nil
+      )
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
     it "allows basicAttackSchool magic" do
       expect { described_class.validate!(goblin_unit_type.merge("basicAttackSchool" => "magic")) }.not_to raise_error
     end
@@ -129,6 +136,11 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
       data = goblin_unit_type.merge("powers" => [{"$ref" => "powers/stab.json", "referenceTo" => "power"}])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /full JSON required/)
+    end
+
+    it "allows powers, targeting, and tactics explicitly null, same as omitted" do
+      data = goblin_unit_type.merge("powers" => nil, "targeting" => nil, "tactics" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
     end
 
     it "raises when targeting type is invalid" do
@@ -173,6 +185,18 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
       })
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /must be one of/)
+    end
+
+    it "raises when a phase transition has timeElapsed and healthBelow both explicitly null, same as omitted" do
+      data = goblin_unit_type.merge("tactics" => {
+        "type" => "phased",
+        "phases" => [
+          {"tactics" => {"type" => "randomAvailable"}, "transition" => {"timeElapsed" => nil, "healthBelow" => nil}},
+          {"tactics" => {"type" => "priorityRotation", "powers" => ["Enrage", "Stab"]}}
+        ]
+      })
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /transition must specify timeElapsed or healthBelow/)
     end
 
     it "raises when phased has fewer than 2 phases" do

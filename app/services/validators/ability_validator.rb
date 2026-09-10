@@ -18,11 +18,11 @@ module Validators
 
     def validate_optional_fields!(data, path:)
       require_string!(data, "description", path: path) if given?(data, "description")
-      validate_tags!(data, path: path) if data.key?("tags")
+      validate_tags!(data, path: path) if given?(data, "tags")
       validate_icon_url!(data, path: path) if given?(data, "iconURL")
       validate_speed!(data, path: path) if given?(data, "speed")
-      validate_graphic_effects!(data, path: path) if data.key?("graphicEffects")
-      validate_sound_effects!(data, path: path) if data.key?("soundEffects")
+      validate_graphic_effects!(data, path: path) if given?(data, "graphicEffects")
+      validate_sound_effects!(data, path: path) if given?(data, "soundEffects")
     end
 
     def validate_cast_time!(data, path:)

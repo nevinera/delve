@@ -81,6 +81,10 @@ RSpec.describe Validators::AbilityValidator, type: :validator do
       expect { described_class.validate!(stab_power.merge("description" => nil)) }.not_to raise_error
     end
 
+    it "treats a blank description the same as omitted, not just null" do
+      expect { described_class.validate!(stab_power.merge("description" => "   ")) }.not_to raise_error
+    end
+
     it "accepts iconURL explicitly null" do
       expect { described_class.validate!(stab_power.merge("iconURL" => nil)) }.not_to raise_error
     end
@@ -97,6 +101,11 @@ RSpec.describe Validators::AbilityValidator, type: :validator do
     it "raises when there are more than 24 top-level tags" do
       expect { described_class.validate!(stab_power.merge("tags" => Array.new(25, "tag"))) }
         .to raise_error(Validators::ValidationError, /may not exceed 24/)
+    end
+
+    it "accepts tags, graphicEffects, and soundEffects explicitly null, same as omitted" do
+      data = stab_power.merge("tags" => nil, "graphicEffects" => nil, "soundEffects" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
     end
 
     it "accepts a class ability's iconURL and maxRange, since the schema is shared" do

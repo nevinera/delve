@@ -99,6 +99,10 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /may not exceed 24/)
       end
+
+      it "accepts tags explicitly null, same as omitted" do
+        expect { described_class.validate!(harm_effect.merge("tags" => nil)) }.not_to raise_error
+      end
     end
 
     context "status effects" do

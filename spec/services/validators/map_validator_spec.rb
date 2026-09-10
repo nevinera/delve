@@ -58,6 +58,15 @@ RSpec.describe Validators::MapValidator, type: :validator do
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /elvl must be at least 0/)
       end
+
+      it "accepts elvl explicitly null, same as omitted" do
+        expect { described_class.validate!(cave_entrance_map.merge("elvl" => nil)) }.not_to raise_error
+      end
+    end
+
+    it "accepts barriers/connections/units explicitly null, same as omitted" do
+      data = cave_entrance_map.merge("barriers" => nil, "connections" => nil, "units" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
     end
 
     context "barriers" do

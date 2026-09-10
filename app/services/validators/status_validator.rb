@@ -7,12 +7,12 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
-      require_string!(data, "description", path: path) if data.key?("description")
+      require_string!(data, "description", path: path) if given?(data, "description")
       validate_short_name!(data, path: path)
       validate_treat_as!(data, path: path)
       validate_stacking!(data, path: path)
-      validate_max_stacks!(data, path: path) if data.key?("maxStacks")
-      validate_aura_effect!(data, path: path) if data.key?("auraEffect")
+      validate_max_stacks!(data, path: path) if given?(data, "maxStacks")
+      validate_aura_effect!(data, path: path) if given?(data, "auraEffect")
       validate_effects!(data, path: path)
     end
 

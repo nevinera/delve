@@ -95,6 +95,11 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       expect { described_class.validate!(character_class_fixture.except("resources")) }.not_to raise_error
     end
 
+    it "accepts resources and powers explicitly null, same as omitted" do
+      data = character_class_fixture.merge("resources" => nil, "powers" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
     it "accepts a class with no description" do
       expect { described_class.validate!(character_class_fixture.except("description")) }.not_to raise_error
     end

@@ -16,11 +16,11 @@ module Validators
     end
 
     def validate_optional_sections!(data, path:)
-      validate_unit_types!(data, path: path) if data.key?("unitTypes")
-      validate_items!(data, path: path) if data.key?("items")
-      validate_zone_links!(data, path: path) if data.key?("zoneLinks")
-      validate_entry_points!(data, path: path) if data.key?("entryPoints")
-      validate_open_connections!(data, path: path) if data.key?("openConnections")
+      validate_unit_types!(data, path: path) if given?(data, "unitTypes")
+      validate_items!(data, path: path) if given?(data, "items")
+      validate_zone_links!(data, path: path) if given?(data, "zoneLinks")
+      validate_entry_points!(data, path: path) if given?(data, "entryPoints")
+      validate_open_connections!(data, path: path) if given?(data, "openConnections")
     end
 
     def validate_elvl!(data, path:)

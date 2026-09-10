@@ -11,15 +11,22 @@ module Validators
       raise ValidationError.new("#{key} must be a 6-digit hex string, optionally led by #", path: child_path(path, key))
     end
 
-    # True when `key` is present with a non-nil value. Every editor (see
+    # True when `key` is present with a non-blank value: not nil, and not an
+    # empty/whitespace-only string. Every editor (see
     # client/src/editor/AbilityFieldsPanel.jsx's EditableField/EntryField,
     # client/src/editor/StatusEditor.jsx's AuraEffectFields, and the
     # generic abilityReducer they both dispatch through) clears an optional
     # field to null rather than deleting its key - so "was this optional
     # field actually given" means this, not data.key?(key), which would
-    # still be true for a field the author just cleared.
+    # still be true for a field the author just cleared. A blank string
+    # gets the same treatment for hand-edited (or future editor) content
+    # that clears a text field to "" instead. A boolean `false` or numeric
+    # `0` are real values, not blanks, so those still count as given.
     def given?(data, key)
-      !data[key].nil?
+      value = data[key]
+      return false if value.nil?
+      return false if value.is_a?(String) && value.strip.empty?
+      true
     end
 
     def asset_reference?(value)
