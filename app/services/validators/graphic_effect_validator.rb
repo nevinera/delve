@@ -21,10 +21,12 @@ module Validators
     # Required for a static effect (no "to") - there's nothing else to derive
     # a display duration from. A travelling effect's flight time is normally
     # computed client-side from the power's own `speed` instead, so duration
-    # may be omitted there; if given anyway, it's still validated (used as a
-    # fallback when the power has no `speed`).
+    # may be omitted (or explicitly null - the editor clears a field to null
+    # rather than deleting its key, same as castTime) there; if given
+    # anyway, it's still validated (used as a fallback when the power has no
+    # `speed`).
     def validate_duration!(data, path:)
-      return if data.key?("to") && !data.key?("duration")
+      return if data.key?("to") && data["duration"].nil?
       require_numeric!(data, "duration", path: path)
     end
 

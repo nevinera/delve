@@ -48,6 +48,17 @@ RSpec.describe Validators::GraphicEffectValidator, type: :validator do
       expect { described_class.validate!(data) }.not_to raise_error
     end
 
+    it "accepts a travelling effect with duration explicitly null - the editor clears a field this way, not by deleting its key" do
+      data = valid_graphic.merge("to" => "affected", "duration" => nil)
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "still requires duration on a static effect even when explicitly null" do
+      data = valid_graphic.merge("duration" => nil)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /duration must be a number/)
+    end
+
     it "still validates duration's type when given on a travelling effect" do
       data = valid_graphic.merge("to" => "affected", "duration" => "fast")
       expect { described_class.validate!(data) }
