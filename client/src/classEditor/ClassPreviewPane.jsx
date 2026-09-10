@@ -22,6 +22,20 @@ function abilityRange(ability) {
   return ability.maxRange ?? maxEffectRange(ability.effects) ?? DEFAULT_MAX_RANGE;
 }
 
+// A self-only ability (every effect affects "self", or it has no effects
+// at all) has no real target distance to be in or out of range of -
+// PowerEffectValidator doesn't even require `range` on a self-affecting
+// effect (see validate_heal!/validate_resource!/validate_status!), so
+// falling back to DEFAULT_MAX_RANGE for one would invent a limit that
+// doesn't exist and wrongly disable it at any real distance.
+function isSelfOnly(ability) {
+  return (ability.effects ?? []).every((e) => e.affects === "self");
+}
+
+function inRange(ability, targetDistanceFt) {
+  return isSelfOnly(ability) || targetDistanceFt <= abilityRange(ability);
+}
+
 // Resolves every filled slot's referenced ability (already fetched, with its
 // own asset thumbnails, by Build::ClassesController#load_available_abilities)
 // into a playable form, padded out to SLOT_COUNT with nulls for the
@@ -48,7 +62,7 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
   );
 
   const maxRange = useMemo(() => {
-    const ranges = resolvedSlots.filter(Boolean).map(abilityRange);
+    const ranges = resolvedSlots.filter(Boolean).filter((a) => !isSelfOnly(a)).map(abilityRange);
     return ranges.length ? Math.max(...ranges) : DEFAULT_MAX_RANGE;
   }, [resolvedSlots]);
   const [targetDistanceFt, setTargetDistanceFt] = useState(maxRange);
@@ -66,7 +80,7 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
   // applied below - a click still reaches onClick either way.
   function play(resolvedAbility) {
     if (firing || !resolvedAbility) return;
-    if (targetDistanceFt > abilityRange(resolvedAbility)) return;
+    if (!inRange(resolvedAbility, targetDistanceFt)) return;
     setFiring(true);
     setStatus(`"${resolvedAbility.name}" fired!`);
     const positions = canvasRef.current?.positions();
@@ -103,7 +117,7 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
         {resolvedSlots.map((resolvedAbility, i) => {
           if (!resolvedAbility) return <div className="power-slot" key={i}><div className="power-slot-icon empty" /></div>;
 
-          const outOfRange = targetDistanceFt > abilityRange(resolvedAbility);
+          const outOfRange = !inRange(resolvedAbility, targetDistanceFt);
           const disabled = firing || outOfRange;
           return (
             <div className="power-slot" key={i}>

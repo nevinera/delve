@@ -1,4 +1,4 @@
-import {describe, it, expect, vi} from "vitest";
+import {describe, it, expect, vi, beforeEach} from "vitest";
 import {forwardRef, useImperativeHandle} from "react";
 import {render, screen, fireEvent} from "@testing-library/react";
 import ClassPreviewPane from "../ClassPreviewPane";
@@ -22,8 +22,14 @@ vi.mock("../../AbilityTooltip", () => ({
 }));
 
 const availableAbilities = {
-  "classes/x/short": {ability: {name: "Punch", castTime: null, maxRange: 5, iconURL: "punch.svg"}, assetMap: {}},
-  "classes/x/long": {ability: {name: "Firebolt", castTime: null, maxRange: 20, iconURL: "firebolt.svg"}, assetMap: {}},
+  "classes/x/short": {
+    ability: {name: "Punch", castTime: null, maxRange: 5, iconURL: "punch.svg", effects: [{type: "harm", affects: "bTarget", range: 5, amount: 5}]},
+    assetMap: {},
+  },
+  "classes/x/long": {
+    ability: {name: "Firebolt", castTime: null, maxRange: 20, iconURL: "firebolt.svg", effects: [{type: "harm", affects: "bTarget", range: 20, amount: 10}]},
+    assetMap: {},
+  },
 };
 
 const powers = [
@@ -36,6 +42,10 @@ function renderPane() {
 }
 
 describe("ClassPreviewPane", () => {
+  beforeEach(() => {
+    firePowerEffects.mockClear();
+  });
+
   it("starts the slider at the longest ability's range, so both slots are in range", () => {
     renderPane();
 
@@ -90,5 +100,44 @@ describe("ClassPreviewPane", () => {
     fireEvent.change(screen.getByRole("slider"), {target: {value: "5"}});
 
     expect(screen.getAllByRole("img")[0]).not.toHaveClass("disabled");
+  });
+
+  describe("a self-only ability (e.g. Recover)", () => {
+    const selfOnlyAbilities = {
+      "classes/x/recover": {
+        ability: {name: "Recover", castTime: null, iconURL: "recover.svg", effects: [{type: "heal", affects: "self", amount: 10}]},
+        assetMap: {},
+      },
+      "classes/x/long": availableAbilities["classes/x/long"],
+    };
+    const selfOnlyPowers = [
+      {$ref: "../abilities/classes/x/recover.json", referenceTo: "power"},
+      {$ref: "../abilities/classes/x/long.json", referenceTo: "power"},
+    ];
+
+    it("is never disabled for range, even at a distance beyond the DEFAULT_MAX_RANGE fallback", () => {
+      render(<ClassPreviewPane classKey="x" powers={selfOnlyPowers} availableAbilities={selfOnlyAbilities} stockAssets={{}} />);
+      // the slider starts at Firebolt's range (20), well past the 10ft
+      // fallback a ranged ability with no maxRange/effect range would get
+      expect(screen.getByText("Target distance: 20.0 ft")).toBeInTheDocument();
+
+      expect(screen.getAllByRole("img")[0]).not.toHaveClass("disabled");
+    });
+
+    it("does not inflate the shared slider's max range", () => {
+      render(<ClassPreviewPane classKey="x" powers={[selfOnlyPowers[0]]} availableAbilities={selfOnlyAbilities} stockAssets={{}} />);
+
+      // with no ranged ability in the class at all, the slider falls back
+      // to DEFAULT_MAX_RANGE (10) rather than Recover's own fallback
+      expect(screen.getByText("Target distance: 10.0 ft")).toBeInTheDocument();
+    });
+
+    it("still fires on click", () => {
+      render(<ClassPreviewPane classKey="x" powers={selfOnlyPowers} availableAbilities={selfOnlyAbilities} stockAssets={{}} />);
+
+      fireEvent.click(screen.getAllByRole("img")[0]);
+
+      expect(firePowerEffects).toHaveBeenCalledTimes(1);
+    });
   });
 });
