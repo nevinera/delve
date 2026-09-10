@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { createNpcToken, setTokenTagDimmed, computeTargetLineDots, targetLineColor, edgeTowards } from "../scene";
+import { createNpcToken, setTokenTagDimmed, computeTargetLineDots, targetLineColor, edgeTowards, closestSentPosition, reconciledTarget } from "../scene";
 
 describe("createNpcToken", () => {
   it("stores the hostility body color for later dimming", () => {
@@ -98,5 +98,46 @@ describe("setTokenTagDimmed", () => {
 
     expect(group._dimmed).toBe(false);
     expect(group._bodyMaterial.color.getHex()).toBe(0xc62828);
+  });
+});
+
+describe("closestSentPosition", () => {
+  it("returns the entry nearest in value to the given position", () => {
+    const history = [{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 0 }];
+    expect(closestSentPosition(history, 19, 1)).toEqual({ x: 20, y: 0 });
+  });
+
+  it("returns null for an empty history", () => {
+    expect(closestSentPosition([], 5, 5)).toBeNull();
+  });
+});
+
+describe("reconciledTarget", () => {
+  it("targets the current position unchanged when the echo exactly matches a sent position", () => {
+    const history = [{ x: 5, y: 5 }, { x: 10, y: 8 }];
+    // Server echoed back exactly what was sent - no real correction.
+    expect(reconciledTarget(history, 10, 8, 10, 8)).toEqual({ x: 10, y: 8 });
+  });
+
+  it("does not yank the target back to a stale echo once the client has since moved on", () => {
+    const history = [{ x: 5, y: 0 }];
+    // The echo matches an old send; the client has since predicted forward
+    // to (12, 0). No correction was actually made (echo == matched send), so
+    // the target should stay at the client's current position, not snap
+    // back to the stale (5, 0).
+    expect(reconciledTarget(history, 12, 0, 5, 0)).toEqual({ x: 12, y: 0 });
+  });
+
+  it("applies a genuine server correction (e.g. a wall clamp) as an offset from the current position", () => {
+    const history = [{ x: 10, y: 0 }];
+    // Client asked to move to (10, 0) but the server clamped it to (7, 0)
+    // (e.g. a wall 3ft short of the requested move). The client has since
+    // predicted forward to (12, 0); the same 3ft correction should apply
+    // there too, not replace it with the stale absolute value.
+    expect(reconciledTarget(history, 12, 0, 7, 0)).toEqual({ x: 9, y: 0 });
+  });
+
+  it("falls back to the raw echoed position when there's no history to match against", () => {
+    expect(reconciledTarget([], 0, 0, 42, 7)).toEqual({ x: 42, y: 7 });
   });
 });

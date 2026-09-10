@@ -16,6 +16,7 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 1.5;
 const EFFECT_HEIGHT = 0.4; // graphic effects float just above the tokens' top surface (y ~0.31)
 const DEFAULT_SPRITE_FRAME_RATE = 8; // fps, used when spriteFrameRate is omitted
+const SENT_POSITION_HISTORY = 20; // ~600ms of history at the 30ms send cadence below
 
 // Facing convention shared with tokens: angle 0 = -Z ("north"); rotation.y = -angle.
 function facingToward(x1, z1, x2, z2) {
@@ -180,6 +181,43 @@ export function edgeTowards(pos, other) {
   return { x: pos.x + (dx / dist) * pos.radius, y: pos.y + (dy / dist) * pos.radius };
 }
 
+// Finds the entry in `history` (an array of {x, y} positions the client has
+// sent to the server, oldest first) closest in value to (x, y) - used to
+// match a server-echoed self position back to whichever locally-predicted
+// send it answers. Position updates carry no sequence id, so there's no
+// explicit correlation; but the server echoes back what the client sent
+// nearly verbatim except when it actually corrects something (see
+// move_feasibility.go's speed/wall clamping), so the closest match is almost
+// always the exact send being answered.
+export function closestSentPosition(history, x, y) {
+  let best = null;
+  let bestDistSq = Infinity;
+  for (const entry of history) {
+    const dx = entry.x - x;
+    const dy = entry.y - y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      best = entry;
+    }
+  }
+  return best;
+}
+
+// The position the client should converge its own prediction toward once a
+// server echo (serverX, serverY) arrives, given its current predicted
+// position (currentX, currentY): the current position offset by whatever the
+// server actually corrected, rather than the raw echoed absolute position -
+// which is normally just a stale snapshot of somewhere the client already
+// predicted correctly one round trip ago (see closestSentPosition). Falls
+// back to the raw echoed position if history is empty (nothing sent yet to
+// match against).
+export function reconciledTarget(history, currentX, currentY, serverX, serverY) {
+  const matched = closestSentPosition(history, serverX, serverY);
+  if (!matched) return { x: serverX, y: serverY };
+  return { x: currentX + (serverX - matched.x), y: currentY + (serverY - matched.y) };
+}
+
 export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   const { body: bodyColor, cone: coneColor } =
     HOSTILITY_COLORS[hostility] ?? HOSTILITY_COLORS.hostile;
@@ -321,8 +359,13 @@ export class SceneManager {
     this._selfMapX = 0;
     this._selfMapY = 0;
     this._selfSpeed = BASE_PLAYER_SPEED; // updated from server unit state
-    this._serverMapX = 0;
-    this._serverMapY = 0;
+    // Where to converge _selfMapX/Y toward when movement stops - see
+    // reconciledTarget, computed fresh each time a self position arrives.
+    this._selfMapTargetX = 0;
+    this._selfMapTargetY = 0;
+    // Positions we've sent the server, most recent last, capped at
+    // SENT_POSITION_HISTORY - see reconciledTarget for why.
+    this._sentPositionHistory = [];
     this._selfInitialized = false;
     this._selfMapIdentifier = null;
 
@@ -580,6 +623,11 @@ export class SceneManager {
       this._selfMapIdentifier = selfUnit.map_identifier;
       this._selfMapX = selfUnit.position.x;
       this._selfMapY = selfUnit.position.y;
+      this._selfMapTargetX = selfUnit.position.x;
+      this._selfMapTargetY = selfUnit.position.y;
+      // Sent positions are in the old map's coordinate space - matching
+      // against them after a map change would be meaningless.
+      this._sentPositionHistory = [];
     }
 
     const seen = new Set();
@@ -591,13 +639,19 @@ export class SceneManager {
       const angle = -(unit.position.angle * DEG);
 
       if (isSelf) {
-        this._serverMapX = unit.position.x;
-        this._serverMapY = unit.position.y;
+        const target = reconciledTarget(this._sentPositionHistory, this._selfMapX, this._selfMapY, unit.position.x, unit.position.y);
+        this._selfMapTargetX = target.x;
+        this._selfMapTargetY = target.y;
+
         const nowDead = unit.status === "dead";
         if (this._selfDead && !nowDead) {
-          // Respawned: snap predicted position to server so there's no slide.
+          // Respawned: snap predicted position (and target) to server so
+          // there's no slide, and drop history from the pre-respawn position.
           this._selfMapX = unit.position.x;
           this._selfMapY = unit.position.y;
+          this._selfMapTargetX = unit.position.x;
+          this._selfMapTargetY = unit.position.y;
+          this._sentPositionHistory = [];
         }
         this._selfDead = nowDead;
         this.setAttacking(unit.attacking);
@@ -605,6 +659,8 @@ export class SceneManager {
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
           this._selfMapY = unit.position.y;
+          this._selfMapTargetX = unit.position.x;
+          this._selfMapTargetY = unit.position.y;
           this._selfInitialized = true;
         }
       }
@@ -791,10 +847,17 @@ export class SceneManager {
           }
         }
         if (!moved) {
-          // Stopped: converge quickly to server-confirmed position.
+          // Stopped: converge toward _selfMapTargetX/Y (see reconciledTarget)
+          // - not the raw server-echoed position, which is normally just a
+          // stale snapshot of somewhere we already predicted correctly one
+          // round trip ago and would visibly yank the token backward under
+          // any real latency. The target is only ever the *actual*
+          // correction (e.g. a feasibility clamp near a wall - see
+          // move_feasibility.go - or a collision push-out), so it's ~0 in
+          // the common case and converging to it is a no-op.
           const cf = 1 - Math.exp(-10 * elapsed);
-          this._selfMapX += (this._serverMapX - this._selfMapX) * cf;
-          this._selfMapY += (this._serverMapY - this._selfMapY) * cf;
+          this._selfMapX += (this._selfMapTargetX - this._selfMapX) * cf;
+          this._selfMapY += (this._selfMapTargetY - this._selfMapY) * cf;
         }
 
         // Apply client-side collision so predicted position stays out of walls.
@@ -814,6 +877,8 @@ export class SceneManager {
         if (this._onSelfPosition && time - this._lastPosSendTime >= 30) {
           this._onSelfPosition({ x: this._selfMapX, y: this._selfMapY });
           this._lastPosSendTime = time;
+          this._sentPositionHistory.push({ x: this._selfMapX, y: this._selfMapY });
+          if (this._sentPositionHistory.length > SENT_POSITION_HISTORY) this._sentPositionHistory.shift();
         }
 
         const [sx, sz] = this._toWorld(this._selfMapX, this._selfMapY);
