@@ -2,11 +2,16 @@ import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import AbilityEditor from "../AbilityEditor";
 import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+import {validateAbility} from "../../validators/validateContent";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
   return {...actual, commitFiles: vi.fn()};
 });
+
+vi.mock("../../validators/validateContent", () => ({
+  validateAbility: vi.fn(),
+}));
 
 // AbilityPreviewPane mounts a real Three.js WebGLRenderer, which jsdom can't
 // back - stub it so this test can exercise the reducer/upload wiring in isolation.
@@ -142,6 +147,8 @@ describe("AbilityEditor", () => {
   describe("saving", () => {
     beforeEach(() => {
       commitFiles.mockReset();
+      validateAbility.mockReset();
+      validateAbility.mockResolvedValue({valid: true});
     });
 
     it("commits the ability under abilities/<key>.json and shows a success message", async () => {
@@ -194,6 +201,16 @@ describe("AbilityEditor", () => {
       await waitFor(() => expect(window.location.href).toEqual("/github/reauth"));
 
       window.location = originalLocation;
+    });
+
+    it("shows the validation error and never commits when the draft is invalid", async () => {
+      validateAbility.mockResolvedValue({valid: false, error: {message: "castTime must be a number or null (at $.castTime)", path: "$.castTime"}});
+      render(<AbilityEditor abilityKey="firebolt" initialAbility={initialAbility} assetMap={{}} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(screen.getByText("castTime must be a number or null (at $.castTime)")).toBeInTheDocument());
+      expect(commitFiles).not.toHaveBeenCalled();
     });
   });
 });

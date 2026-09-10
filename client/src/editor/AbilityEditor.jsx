@@ -4,6 +4,7 @@ import AbilityPreviewPane from "./AbilityPreviewPane";
 import AbilityFieldsPanel from "./AbilityFieldsPanel";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
 import {saveAbility} from "./saveAbility";
+import {validateAbility} from "../validators/validateContent";
 import {GithubAuthError} from "../github/commitFiles";
 
 // Removing an entry shifts every later entry's index down by one, so any
@@ -80,6 +81,11 @@ export default function AbilityEditor({abilityKey, initialAbility, assetMap, sto
   async function handleSave() {
     setSaveState({status: "saving"});
     try {
+      const {valid, error} = await validateAbility(ability);
+      if (!valid) {
+        setSaveState({status: "error", message: error.message});
+        return;
+      }
       const {commitSha} = await saveAbility(abilityKey, ability, pendingFilesRef.current);
       setSaveState({status: "success", commitSha});
     } catch (error) {
