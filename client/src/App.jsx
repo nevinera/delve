@@ -2192,11 +2192,23 @@ export default function App({
   }, [sendMove, usePower, handleTabTarget, handleStartAttacking, handleStopAttacking]);
 
   useEffect(() => {
+    // Dev/QA aid for reproducing latency-dependent bugs (e.g. movement
+    // reconciliation) - Chrome's network throttling doesn't touch a
+    // WebSocket's ongoing frame traffic, only its opening handshake, and has
+    // no jitter control. ?simLatency=150&simJitter=50 delays every send and
+    // receive on the game socket by ~150ms +/-50ms. Absent (or 0), it's a
+    // no-op, so this is safe to leave wired up in every environment.
+    const simParams = new URLSearchParams(window.location.search);
+    const simulatedLatencyMs = Number(simParams.get("simLatency")) || 0;
+    const simulatedJitterMs = Number(simParams.get("simJitter")) || 0;
+
     const conn = new GameConnection({
       gameServerUrl,
       instanceId,
       slotId,
       slotToken,
+      simulatedLatencyMs,
+      simulatedJitterMs,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
       onClose: () => { setDisconnected(true); addLog("Disconnected."); },
       onStateChange: ({ units: u, combatEvents = [], lootEvents = [], lootFailures = [] }) => {

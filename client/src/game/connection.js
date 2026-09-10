@@ -5,10 +5,28 @@ const HEARTBEAT_MS = 300;
 const HEARTBEAT_HISTORY = 20;
 
 export class GameConnection {
-  constructor({ gameServerUrl, instanceId, slotId, slotToken, onOpen, onClose, onStateChange }) {
+  constructor({
+    gameServerUrl,
+    instanceId,
+    slotId,
+    slotToken,
+    onOpen,
+    onClose,
+    onStateChange,
+    // Artificial one-way delay applied to every send and every receive, for
+    // reproducing latency-dependent bugs (e.g. movement reconciliation)
+    // without relying on Chrome's network throttling - which throttles the
+    // WebSocket's opening HTTP handshake but not its ongoing frame traffic,
+    // and has no jitter control at all. simulatedJitterMs adds independent
+    // uniform random variance (+/-) to each direction of each message.
+    simulatedLatencyMs = 0,
+    simulatedJitterMs = 0,
+  }) {
     this._onOpen = onOpen;
     this._onClose = onClose;
     this._onStateChange = onStateChange;
+    this._simulatedLatencyMs = simulatedLatencyMs;
+    this._simulatedJitterMs = simulatedJitterMs;
 
     const url = new URL(gameServerUrl);
     const scheme = url.protocol === "https:" ? "wss" : "ws";
@@ -45,7 +63,12 @@ export class GameConnection {
       } catch {
         return;
       }
-      this._handleMessage(msg);
+      const delayMs = this._simulatedDelayMs();
+      if (delayMs > 0) {
+        setTimeout(() => this._handleMessage(msg), delayMs);
+      } else {
+        this._handleMessage(msg);
+      }
     };
 
     this._ws.onclose = () => {
@@ -96,9 +119,26 @@ export class GameConnection {
     return sentAt == null ? null : Date.now() - sentAt;
   }
 
+  // Base delay plus independent uniform jitter in [-jitter, +jitter], floored
+  // at 0. Called separately per direction per message, so send/receive delay
+  // (and beat_id RTT, since it spans both) vary independently rather than by
+  // a fixed offset - closer to real network jitter than a constant delay.
+  _simulatedDelayMs() {
+    if (!this._simulatedLatencyMs && !this._simulatedJitterMs) return 0;
+    const jitter = this._simulatedJitterMs ? (Math.random() * 2 - 1) * this._simulatedJitterMs : 0;
+    return Math.max(0, this._simulatedLatencyMs + jitter);
+  }
+
   _send(data) {
-    if (this._ws?.readyState === WebSocket.OPEN) {
-      this._ws.send(JSON.stringify(data));
+    if (this._ws?.readyState !== WebSocket.OPEN) return;
+    const payload = JSON.stringify(data);
+    const delayMs = this._simulatedDelayMs();
+    if (delayMs > 0) {
+      setTimeout(() => {
+        if (this._ws?.readyState === WebSocket.OPEN) this._ws.send(payload);
+      }, delayMs);
+    } else {
+      this._ws.send(payload);
     }
   }
 }
