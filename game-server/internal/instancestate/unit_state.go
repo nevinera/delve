@@ -179,4 +179,10 @@ type UnitState struct {
 	ActiveStatusEffects  []ActiveStatusEffect
 	Behavior             BehaviorState
 	MovementIntent       MovementIntent
+
+	// LastMoveAt is when the server last processed a client-submitted move
+	// with an explicit position (see command.MoveHandler), used to bound how
+	// far that position can feasibly have moved since - zero until the first
+	// such move.
+	LastMoveAt time.Time
 }
