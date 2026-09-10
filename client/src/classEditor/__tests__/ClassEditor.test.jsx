@@ -66,7 +66,10 @@ describe("ClassEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
-      expect(commitFiles).toHaveBeenCalledWith({"classes/puncher.json": initialClass}, {message: "Update Puncher"});
+      expect(commitFiles).toHaveBeenCalledWith(
+        {"classes/puncher.json": initialClass, "classes/puncher.full.json": initialClass},
+        {message: "Update Puncher"}
+      );
     });
 
     it("shows an error message when the commit fails", async () => {

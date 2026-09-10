@@ -12,7 +12,7 @@ export default function ClassEditor({classKey, initialClass, availableAbilities,
   async function handleSave() {
     setSaveState({status: "saving"});
     try {
-      const {commitSha} = await saveClass(classKey, classData);
+      const {commitSha} = await saveClass(classKey, classData, availableAbilities);
       setSaveState({status: "success", commitSha});
     } catch (error) {
       if (error instanceof GithubAuthError) {
