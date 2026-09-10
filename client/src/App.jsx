@@ -383,7 +383,11 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     width: "100vw",
-    height: "100vh",
+    // dvh (dynamic viewport height) tracks the actually-visible viewport as
+    // mobile browser chrome (the URL bar) collapses/expands, unlike vh -
+    // which is pinned to the viewport's largest possible size and leaves a
+    // gap (or lets the URL bar cover real content) when the chrome is showing.
+    height: "100dvh",
     background: "#111",
     color: "#ddd",
     fontFamily: "monospace",
