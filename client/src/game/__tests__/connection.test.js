@@ -154,6 +154,24 @@ describe("GameConnection simulated latency/jitter", () => {
     randomSpy.mockRestore();
   });
 
+  it("delivers sends in order even when a later message rolls a shorter delay", () => {
+    const randomSpy = vi.spyOn(Math, "random");
+    const {conn, ws} = connectAndOpen({simulatedLatencyMs: 100, simulatedJitterMs: 50});
+
+    randomSpy.mockReturnValueOnce(1); // message 1: +jitter -> 150ms
+    conn.send({type: "move", seq: 1});
+    randomSpy.mockReturnValueOnce(0); // message 2: -jitter -> 50ms, rolled shorter than message 1
+    conn.send({type: "move", seq: 2});
+
+    vi.advanceTimersByTime(150);
+    expect(ws.sent.map((m) => m.seq)).toEqual([1]); // not yet reordered ahead of message 1
+
+    vi.advanceTimersByTime(1);
+    expect(ws.sent.map((m) => m.seq)).toEqual([1, 2]);
+
+    randomSpy.mockRestore();
+  });
+
   it("never applies a negative delay even with jitter larger than the base latency", () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0); // -jitter
     const {conn, ws} = connectAndOpen({simulatedLatencyMs: 10, simulatedJitterMs: 100});

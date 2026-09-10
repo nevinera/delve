@@ -36,6 +36,10 @@ export class GameConnection {
     this._heartbeatTimer = null;
     this._units = {};
     this._beatId = 0;
+    // Latest scheduled delivery time (epoch ms) for each direction, so
+    // _scheduleOrdered can enforce in-order delivery - see its comment.
+    this._nextSendAt = 0;
+    this._nextRecvAt = 0;
     // beat_id -> the local Date.now() it was sent at, so rttForBeat can
     // measure round-trip time once the server echoes that beat_id back on
     // our own unit (see last_heartbeat_beat_id in state.js). Bounded to the
@@ -63,11 +67,10 @@ export class GameConnection {
       } catch {
         return;
       }
-      const delayMs = this._simulatedDelayMs();
-      if (delayMs > 0) {
-        setTimeout(() => this._handleMessage(msg), delayMs);
-      } else {
+      if (!this._simulatedLatencyMs && !this._simulatedJitterMs) {
         this._handleMessage(msg);
+      } else {
+        this._scheduleOrdered("_nextRecvAt", () => this._handleMessage(msg));
       }
     };
 
@@ -119,26 +122,41 @@ export class GameConnection {
     return sentAt == null ? null : Date.now() - sentAt;
   }
 
-  // Base delay plus independent uniform jitter in [-jitter, +jitter], floored
-  // at 0. Called separately per direction per message, so send/receive delay
-  // (and beat_id RTT, since it spans both) vary independently rather than by
-  // a fixed offset - closer to real network jitter than a constant delay.
+  // Base delay plus uniform jitter in [-jitter, +jitter], floored at 0. Each
+  // call rolls its own jitter, so consecutive messages on the same direction
+  // don't get a fixed offset - closer to real network jitter than a
+  // constant delay. Ordering across calls is enforced separately, by
+  // _scheduleOrdered - this is just "how long would this one message take".
   _simulatedDelayMs() {
-    if (!this._simulatedLatencyMs && !this._simulatedJitterMs) return 0;
     const jitter = this._simulatedJitterMs ? (Math.random() * 2 - 1) * this._simulatedJitterMs : 0;
     return Math.max(0, this._simulatedLatencyMs + jitter);
+  }
+
+  // Runs fn after this message's own simulated delay, but never before the
+  // previously scheduled message on the same direction (nextAtProp is
+  // "_nextSendAt" or "_nextRecvAt"). A WebSocket runs over one TCP
+  // connection, which guarantees in-order delivery - variable latency
+  // changes the *spacing* between messages on a real network, never their
+  // order. Scheduling each message independently (a first attempt at this)
+  // let a later message's shorter roll jump ahead of an earlier one still in
+  // flight, which doesn't happen on a real connection and produced movement
+  // reconciliation artifacts a real laggy connection never would.
+  _scheduleOrdered(nextAtProp, fn) {
+    const now = Date.now();
+    const deliverAt = Math.max(now + this._simulatedDelayMs(), this[nextAtProp] + 1);
+    this[nextAtProp] = deliverAt;
+    setTimeout(fn, deliverAt - now);
   }
 
   _send(data) {
     if (this._ws?.readyState !== WebSocket.OPEN) return;
     const payload = JSON.stringify(data);
-    const delayMs = this._simulatedDelayMs();
-    if (delayMs > 0) {
-      setTimeout(() => {
-        if (this._ws?.readyState === WebSocket.OPEN) this._ws.send(payload);
-      }, delayMs);
-    } else {
+    if (!this._simulatedLatencyMs && !this._simulatedJitterMs) {
       this._ws.send(payload);
+      return;
     }
+    this._scheduleOrdered("_nextSendAt", () => {
+      if (this._ws?.readyState === WebSocket.OPEN) this._ws.send(payload);
+    });
   }
 }
