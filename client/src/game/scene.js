@@ -16,7 +16,6 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 1.5;
 const EFFECT_HEIGHT = 0.4; // graphic effects float just above the tokens' top surface (y ~0.31)
 const DEFAULT_SPRITE_FRAME_RATE = 8; // fps, used when spriteFrameRate is omitted
-const SENT_POSITION_HISTORY = 20; // ~600ms of history at the 30ms send cadence below
 
 // Facing convention shared with tokens: angle 0 = -Z ("north"); rotation.y = -angle.
 function facingToward(x1, z1, x2, z2) {
@@ -181,39 +180,17 @@ export function edgeTowards(pos, other) {
   return { x: pos.x + (dx / dist) * pos.radius, y: pos.y + (dy / dist) * pos.radius };
 }
 
-// Finds the entry in `history` (an array of {x, y} positions the client has
-// sent to the server, oldest first) closest in value to (x, y) - used to
-// match a server-echoed self position back to whichever locally-predicted
-// send it answers. Position updates carry no sequence id, so there's no
-// explicit correlation; but the server echoes back what the client sent
-// nearly verbatim except when it actually corrects something (see
-// move_feasibility.go's speed/wall clamping), so the closest match is almost
-// always the exact send being answered.
-export function closestSentPosition(history, x, y) {
-  let best = null;
-  let bestDistSq = Infinity;
-  for (const entry of history) {
-    const dx = entry.x - x;
-    const dy = entry.y - y;
-    const distSq = dx * dx + dy * dy;
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      best = entry;
-    }
-  }
-  return best;
-}
-
 // The position the client should converge its own prediction toward once a
 // server echo (serverX, serverY) arrives, given its current predicted
-// position (currentX, currentY): the current position offset by whatever the
-// server actually corrected, rather than the raw echoed absolute position -
-// which is normally just a stale snapshot of somewhere the client already
-// predicted correctly one round trip ago (see closestSentPosition). Falls
-// back to the raw echoed position if history is empty (nothing sent yet to
-// match against).
-export function reconciledTarget(history, currentX, currentY, serverX, serverY) {
-  const matched = closestSentPosition(history, serverX, serverY);
+// position (currentX, currentY) and `matched` - the {x, y} the client itself
+// sent for the move seq this echo answers (see GameConnection.positionForSeq
+// and last_move_seq), or null if that send is no longer on record: the
+// current position offset by whatever the server actually corrected, rather
+// than the raw echoed absolute position - which is normally just a stale
+// snapshot of somewhere the client already predicted correctly one round
+// trip ago. Falls back to the raw echoed position when there's nothing to
+// match against.
+export function reconciledTarget(matched, currentX, currentY, serverX, serverY) {
   if (!matched) return { x: serverX, y: serverY };
   return { x: currentX + (serverX - matched.x), y: currentY + (serverY - matched.y) };
 }
@@ -311,12 +288,13 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, onUnitClick, onUnitRightClick, onUnitHover } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
     this._onFacingChange = onFacingChange;
     this._onSelfPosition = onSelfPosition;
+    this._positionForMoveSeq = positionForMoveSeq;
     this._onUnitClick = onUnitClick;
     this._onUnitRightClick = onUnitRightClick;
     this._onUnitHover = onUnitHover;
@@ -363,9 +341,6 @@ export class SceneManager {
     // reconciledTarget, computed fresh each time a self position arrives.
     this._selfMapTargetX = 0;
     this._selfMapTargetY = 0;
-    // Positions we've sent the server, most recent last, capped at
-    // SENT_POSITION_HISTORY - see reconciledTarget for why.
-    this._sentPositionHistory = [];
     this._selfInitialized = false;
     this._selfMapIdentifier = null;
 
@@ -625,9 +600,6 @@ export class SceneManager {
       this._selfMapY = selfUnit.position.y;
       this._selfMapTargetX = selfUnit.position.x;
       this._selfMapTargetY = selfUnit.position.y;
-      // Sent positions are in the old map's coordinate space - matching
-      // against them after a map change would be meaningless.
-      this._sentPositionHistory = [];
     }
 
     const seen = new Set();
@@ -639,19 +611,19 @@ export class SceneManager {
       const angle = -(unit.position.angle * DEG);
 
       if (isSelf) {
-        const target = reconciledTarget(this._sentPositionHistory, this._selfMapX, this._selfMapY, unit.position.x, unit.position.y);
+        const matched = unit.last_move_seq != null ? (this._positionForMoveSeq?.(unit.last_move_seq) ?? null) : null;
+        const target = reconciledTarget(matched, this._selfMapX, this._selfMapY, unit.position.x, unit.position.y);
         this._selfMapTargetX = target.x;
         this._selfMapTargetY = target.y;
 
         const nowDead = unit.status === "dead";
         if (this._selfDead && !nowDead) {
           // Respawned: snap predicted position (and target) to server so
-          // there's no slide, and drop history from the pre-respawn position.
+          // there's no slide.
           this._selfMapX = unit.position.x;
           this._selfMapY = unit.position.y;
           this._selfMapTargetX = unit.position.x;
           this._selfMapTargetY = unit.position.y;
-          this._sentPositionHistory = [];
         }
         this._selfDead = nowDead;
         this.setAttacking(unit.attacking);
@@ -874,11 +846,11 @@ export class SceneManager {
         }
 
         // Send position to server ~3-4x per server tick (every ~30ms).
+        // GameConnection records what was sent, keyed by the seq it stamps
+        // on the message - see positionForMoveSeq/reconciledTarget above.
         if (this._onSelfPosition && time - this._lastPosSendTime >= 30) {
           this._onSelfPosition({ x: this._selfMapX, y: this._selfMapY });
           this._lastPosSendTime = time;
-          this._sentPositionHistory.push({ x: this._selfMapX, y: this._selfMapY });
-          if (this._sentPositionHistory.length > SENT_POSITION_HISTORY) this._sentPositionHistory.shift();
         }
 
         const [sx, sz] = this._toWorld(this._selfMapX, this._selfMapY);

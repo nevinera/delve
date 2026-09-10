@@ -2,7 +2,12 @@ import { computeChecksum } from "./checksum";
 import { applyFullState, applyDelta } from "./state";
 
 const HEARTBEAT_MS = 300;
-const HEARTBEAT_HISTORY = 20;
+// How long to remember what we've sent, keyed by seq, for matching a server
+// echo back to exactly the send it answers. Generous on purpose: once
+// matching is by exact id rather than guessing from position/timing, a
+// longer window only costs a few bytes per entry, not precision - see
+// positionForSeq/rttForSeq.
+const SENT_RETENTION_MS = 10000;
 
 export class GameConnection {
   constructor({
@@ -35,16 +40,25 @@ export class GameConnection {
     this._ws = null;
     this._heartbeatTimer = null;
     this._units = {};
-    this._beatId = 0;
     // Latest scheduled delivery time (epoch ms) for each direction, so
     // _scheduleOrdered can enforce in-order delivery - see its comment.
     this._nextSendAt = 0;
     this._nextRecvAt = 0;
-    // beat_id -> the local Date.now() it was sent at, so rttForBeat can
-    // measure round-trip time once the server echoes that beat_id back on
-    // our own unit (see last_heartbeat_beat_id in state.js). Bounded to the
-    // last HEARTBEAT_HISTORY sends since beat_id only increases.
-    this._heartbeatSentAt = new Map();
+
+    // A single monotonically increasing id, stamped as a hex string on every
+    // outgoing message (see _send) - not just heartbeat/move - so any
+    // message type can be acked the same way without new plumbing.
+    this._seq = 0;
+    // seq -> the local Date.now() it was sent at, for every message (used by
+    // rttForSeq). Map iteration order is insertion order, which is
+    // chronological here, so _pruneOld can stop at the first still-fresh
+    // entry rather than scanning the whole map.
+    this._sentAt = new Map();
+    // seq -> {x, y} for move messages that included a position, so
+    // positionForSeq can match a server-echoed position (last_move_seq) back
+    // to exactly the local prediction it answers - see scene.js's
+    // reconciledTarget.
+    this._sentPositions = new Map();
   }
 
   connect() {
@@ -52,10 +66,7 @@ export class GameConnection {
 
     this._ws.onopen = () => {
       this._heartbeatTimer = setInterval(() => {
-        this._beatId += 1;
-        this._heartbeatSentAt.set(this._beatId, Date.now());
-        this._heartbeatSentAt.delete(this._beatId - HEARTBEAT_HISTORY);
-        this._send({ direction: "up", type: "heartbeat", beat_id: this._beatId });
+        this._send({ direction: "up", type: "heartbeat" });
       }, HEARTBEAT_MS);
       this._onOpen?.();
     };
@@ -114,12 +125,29 @@ export class GameConnection {
     }
   }
 
-  // Round-trip time in ms for a beat_id echoed back by the server on our own
-  // unit's last_heartbeat_beat_id, or null if we no longer have that send
+  // Round-trip time in ms for a seq echoed back by the server (e.g. on our
+  // own unit's last_heartbeat_seq), or null if we no longer have that send
   // recorded (evicted, or from before this connection).
-  rttForBeat(beatId) {
-    const sentAt = this._heartbeatSentAt.get(beatId);
+  rttForSeq(seq) {
+    const sentAt = this._sentAt.get(seq);
     return sentAt == null ? null : Date.now() - sentAt;
+  }
+
+  // The {x, y} we sent for a seq echoed back by the server (e.g. on our own
+  // unit's last_move_seq), or null if we no longer have that send recorded,
+  // or it wasn't a move with a position.
+  positionForSeq(seq) {
+    return this._sentPositions.get(seq) ?? null;
+  }
+
+  // Deletes entries older than SENT_RETENTION_MS from the front of `map`
+  // (insertion order = chronological), stopping at the first still-fresh
+  // one. `getAt` extracts the sent-at timestamp from an entry.
+  _pruneOld(map, now, getAt) {
+    for (const [key, entry] of map) {
+      if (now - getAt(entry) > SENT_RETENTION_MS) map.delete(key);
+      else break;
+    }
   }
 
   // Base delay plus uniform jitter in [-jitter, +jitter], floored at 0. Each
@@ -150,7 +178,18 @@ export class GameConnection {
 
   _send(data) {
     if (this._ws?.readyState !== WebSocket.OPEN) return;
-    const payload = JSON.stringify(data);
+
+    this._seq += 1;
+    const seq = this._seq.toString(16);
+    const now = Date.now();
+    this._sentAt.set(seq, now);
+    this._pruneOld(this._sentAt, now, (at) => at);
+    if (data.type === "move" && data.x != null && data.y != null) {
+      this._sentPositions.set(seq, { x: data.x, y: data.y, at: now });
+      this._pruneOld(this._sentPositions, now, (entry) => entry.at);
+    }
+
+    const payload = JSON.stringify({ ...data, seq });
     if (!this._simulatedLatencyMs && !this._simulatedJitterMs) {
       this._ws.send(payload);
       return;

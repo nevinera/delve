@@ -40,7 +40,7 @@ function connectAndOpen(options = {}) {
   return {conn, ws};
 }
 
-describe("GameConnection heartbeats", () => {
+describe("GameConnection seq stamping", () => {
   beforeEach(() => {
     FakeWebSocket.instances = [];
     vi.stubGlobal("WebSocket", FakeWebSocket);
@@ -52,39 +52,101 @@ describe("GameConnection heartbeats", () => {
     vi.unstubAllGlobals();
   });
 
-  it("sends heartbeats with an incrementing beat_id", () => {
+  it("sends heartbeats with an incrementing hex seq", () => {
     const {ws} = connectAndOpen();
 
     vi.advanceTimersByTime(300);
     vi.advanceTimersByTime(300);
 
-    const beatIds = ws.sent.filter((m) => m.type === "heartbeat").map((m) => m.beat_id);
-    expect(beatIds).toEqual([1, 2]);
+    const seqs = ws.sent.filter((m) => m.type === "heartbeat").map((m) => m.seq);
+    expect(seqs).toEqual(["1", "2"]);
   });
 
-  it("computes the round-trip time for a beat_id it sent", () => {
+  it("stamps every outgoing message with a seq, not just heartbeat/move", () => {
+    const {conn, ws} = connectAndOpen();
+
+    conn.send({type: "target", target_id: "abc"});
+
+    const msg = ws.sent.find((m) => m.type === "target");
+    expect(msg.seq).toMatch(/^[0-9a-f]+$/);
+  });
+
+  it("overwrites any seq the caller already set, so it can't collide with the connection's own counter", () => {
+    const {conn, ws} = connectAndOpen();
+
+    conn.send({type: "target", seq: "not-a-real-seq"});
+
+    expect(ws.sent[0].seq).not.toBe("not-a-real-seq");
+  });
+
+  it("computes the round-trip time for a seq it sent", () => {
     const {conn} = connectAndOpen();
 
-    vi.advanceTimersByTime(300); // sends beat_id 1
+    vi.advanceTimersByTime(300); // sends seq "1" (a heartbeat)
     vi.advanceTimersByTime(150); // 150ms pass before the server's echo is processed
 
-    expect(conn.rttForBeat(1)).toBe(150);
+    expect(conn.rttForSeq("1")).toBe(150);
   });
 
-  it("returns null for a beat_id that was never sent", () => {
+  it("returns null for a seq that was never sent", () => {
     const {conn} = connectAndOpen();
     vi.advanceTimersByTime(300);
 
-    expect(conn.rttForBeat(999)).toBeNull();
+    expect(conn.rttForSeq("does-not-exist")).toBeNull();
   });
 
-  it("forgets beat ids once more than 20 newer ones have been sent", () => {
+  it("forgets a seq once it's older than the retention window", () => {
     const {conn} = connectAndOpen();
 
-    vi.advanceTimersByTime(300 * 21); // sends beat_id 1..21
+    vi.advanceTimersByTime(300); // sends seq "1"
+    // Well past the 10s retention window - a later heartbeat send (every
+    // 300ms) is what actually triggers the prune, so advance past the next
+    // one due after the window closes, not just past the window itself.
+    vi.advanceTimersByTime(10500);
 
-    expect(conn.rttForBeat(1)).toBeNull();
-    expect(conn.rttForBeat(21)).not.toBeNull();
+    expect(conn.rttForSeq("1")).toBeNull();
+  });
+
+  it("keeps a seq within the retention window", () => {
+    const {conn} = connectAndOpen();
+
+    vi.advanceTimersByTime(300); // sends seq "1"
+    vi.advanceTimersByTime(9000); // still within the 10s retention window
+
+    expect(conn.rttForSeq("1")).not.toBeNull();
+  });
+
+  it("records the position for a move that included x/y, retrievable by its seq", () => {
+    const {conn, ws} = connectAndOpen();
+
+    conn.send({type: "move", x: 5, y: 7});
+    const seq = ws.sent.find((m) => m.type === "move").seq;
+
+    expect(conn.positionForSeq(seq)).toMatchObject({x: 5, y: 7});
+  });
+
+  it("returns null for a move's seq when it had no x/y", () => {
+    const {conn, ws} = connectAndOpen();
+
+    conn.send({type: "move", keys: ["forward"]});
+    const seq = ws.sent.find((m) => m.type === "move").seq;
+
+    expect(conn.positionForSeq(seq)).toBeNull();
+  });
+
+  it("prunes a position seq once a later move send finds it past the retention window", () => {
+    // _sentPositions is only pruned on a move send (not every heartbeat,
+    // unlike _sentAt) - so an old entry needs a fresh move to trigger its
+    // own cleanup, not just the passage of time.
+    const {conn, ws} = connectAndOpen();
+
+    conn.send({type: "move", x: 1, y: 1});
+    const firstSeq = ws.sent.find((m) => m.type === "move").seq;
+
+    vi.advanceTimersByTime(10300);
+    conn.send({type: "move", x: 2, y: 2});
+
+    expect(conn.positionForSeq(firstSeq)).toBeNull();
   });
 });
 
@@ -159,15 +221,15 @@ describe("GameConnection simulated latency/jitter", () => {
     const {conn, ws} = connectAndOpen({simulatedLatencyMs: 100, simulatedJitterMs: 50});
 
     randomSpy.mockReturnValueOnce(1); // message 1: +jitter -> 150ms
-    conn.send({type: "move", seq: 1});
+    conn.send({type: "move", label: 1});
     randomSpy.mockReturnValueOnce(0); // message 2: -jitter -> 50ms, rolled shorter than message 1
-    conn.send({type: "move", seq: 2});
+    conn.send({type: "move", label: 2});
 
     vi.advanceTimersByTime(150);
-    expect(ws.sent.map((m) => m.seq)).toEqual([1]); // not yet reordered ahead of message 1
+    expect(ws.sent.map((m) => m.label)).toEqual([1]); // not yet reordered ahead of message 1
 
     vi.advanceTimersByTime(1);
-    expect(ws.sent.map((m) => m.seq)).toEqual([1, 2]);
+    expect(ws.sent.map((m) => m.label)).toEqual([1, 2]);
 
     randomSpy.mockRestore();
   });

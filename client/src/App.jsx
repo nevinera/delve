@@ -1869,7 +1869,7 @@ export default function App({
   const [attacking, setAttacking] = useState(false);
   const [latencyMs, setLatencyMs] = useState(null);
   const [showLatency, setShowLatency] = useState(false);
-  const lastHeartbeatBeatIdRef = useRef(null);
+  const lastHeartbeatSeqRef = useRef(null);
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
@@ -2088,6 +2088,11 @@ export default function App({
     sendMove();
   }, [sendMove]);
 
+  // Looks up the position sent for a server-echoed move seq (last_move_seq),
+  // for SceneManager to reconcile its prediction against - see
+  // GameConnection.positionForSeq and scene.js's reconciledTarget.
+  const positionForMoveSeq = useCallback((seq) => connRef.current?.positionForSeq(seq) ?? null, []);
+
   // Called by SceneManager when continuous turning updates the facing angle
   const handleFacingChange = useCallback((degrees) => {
     facingRef.current = ((degrees % 360) + 360) % 360;
@@ -2215,10 +2220,10 @@ export default function App({
         unitsRef.current = u;
         setUnits(u);
         const selfForHeartbeat = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
-        const beatId = selfForHeartbeat?.last_heartbeat_beat_id;
-        if (beatId != null && beatId !== lastHeartbeatBeatIdRef.current) {
-          lastHeartbeatBeatIdRef.current = beatId;
-          const rtt = connRef.current?.rttForBeat(beatId);
+        const heartbeatSeq = selfForHeartbeat?.last_heartbeat_seq;
+        if (heartbeatSeq != null && heartbeatSeq !== lastHeartbeatSeqRef.current) {
+          lastHeartbeatSeqRef.current = heartbeatSeq;
+          const rtt = connRef.current?.rttForSeq(heartbeatSeq);
           if (rtt != null) setLatencyMs(rtt);
         }
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
@@ -2512,6 +2517,7 @@ export default function App({
           turnKeysRef={turnKeysRef}
           onFacingChange={handleFacingChange}
           onSelfPosition={handleSelfPosition}
+          positionForMoveSeq={positionForMoveSeq}
           onUnitClick={handleTargetUnit}
           onUnitRightClick={handleUnitRightClick}
           onUnitHover={setHoveredUnitId}

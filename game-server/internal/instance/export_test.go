@@ -23,19 +23,19 @@ func ApplyMovementForTest(state *instancestate.InstanceState) {
 }
 
 func BuildFullStateMsgForTest(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
-	return buildFullStateMsg(state, now, checksum, nil)
+	return buildFullStateMsg(state, now, checksum, nil, nil)
 }
 
 func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
-	return buildDeltaMsg(prev, curr, nil, nil, nil, now, checksum, nil, nil)
+	return buildDeltaMsg(prev, curr, nil, nil, nil, now, checksum, nil, nil, nil, nil)
 }
 
-func BuildFullStateMsgWithHeartbeatsForTest(state *instancestate.InstanceState, now time.Time, checksum string, heartbeats map[uuid.UUID]HeartbeatInfo) ([]byte, error) {
-	return buildFullStateMsg(state, now, checksum, heartbeats)
+func BuildFullStateMsgWithSeqsForTest(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string) ([]byte, error) {
+	return buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs)
 }
 
-func BuildDeltaMsgWithHeartbeatsForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string, prevHeartbeats, currHeartbeats map[uuid.UUID]HeartbeatInfo) ([]byte, error) {
-	return buildDeltaMsg(prev, curr, nil, nil, nil, now, checksum, prevHeartbeats, currHeartbeats)
+func BuildDeltaMsgWithSeqsForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string, prevHeartbeatSeqs, currHeartbeatSeqs, prevMoveSeqs, currMoveSeqs map[uuid.UUID]string) ([]byte, error) {
+	return buildDeltaMsg(prev, curr, nil, nil, nil, now, checksum, prevHeartbeatSeqs, currHeartbeatSeqs, prevMoveSeqs, currMoveSeqs)
 }
 
 func PushOutOfSegmentForTest(px, py, r, ax, ay, bx, by float64) (float64, float64) {

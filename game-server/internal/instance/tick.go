@@ -79,7 +79,8 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 	defer ticker.Stop()
 
 	prevState := state.Clone()
-	prevHeartbeats := map[uuid.UUID]HeartbeatInfo{}
+	prevHeartbeatSeqs := map[uuid.UUID]string{}
+	prevMoveSeqs := map[uuid.UUID]string{}
 	var tickCount int64
 	var emptyAt time.Time // zero means "not yet tracking"
 
@@ -139,7 +140,8 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 
 			checksum := state.Checksum()
 			inst.Checksum = checksum
-			heartbeats := inst.HeartbeatsByUnit()
+			heartbeatSeqs := inst.LastSeqsByUnit("heartbeat")
+			moveSeqs := inst.LastSeqsByUnit("move")
 
 			if slots := inst.SlotsForTick(); len(slots) > 0 {
 				// Build the delta once; reuse for all slots that don't need full state.
@@ -148,10 +150,10 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 					var payload []byte
 					var err error
 					if s.NeedsFullState {
-						payload, err = buildFullStateMsg(state, now, checksum, heartbeats)
+						payload, err = buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs)
 					} else {
 						if deltaPayload == nil {
-							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum, prevHeartbeats, heartbeats)
+							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum, prevHeartbeatSeqs, heartbeatSeqs, prevMoveSeqs, moveSeqs)
 						}
 						payload = deltaPayload
 					}
@@ -186,7 +188,8 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			state.PendingOwnershipUpdates = nil
 			state.PendingCombatEvents = nil
 			prevState = state.Clone()
-			prevHeartbeats = heartbeats
+			prevHeartbeatSeqs = heartbeatSeqs
+			prevMoveSeqs = moveSeqs
 
 			// Remove slots that have been pending or waiting too long.
 			slotWaitTimeout := inst.SlotWaitTimeout
