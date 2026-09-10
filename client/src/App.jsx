@@ -9,6 +9,7 @@ import { canTargetUnit } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
+import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
@@ -22,6 +23,17 @@ const KEY_MAP = {
 };
 const MOVEMENT_KEYS = new Set(["forward", "backward", "strafe_left", "strafe_right"]);
 const TURN_KEYS = new Set(["turn_left", "turn_right"]);
+
+// Portrait-phone action bar: a stack of rows, sized 3/3/2/2 from the
+// bottom. Slots are numbered left-to-right, bottom-to-top, so row order
+// here is top-to-bottom for normal DOM/flex stacking (first child renders
+// at the top).
+export const ACTION_ROWS = [
+  [8, 9],
+  [6, 7],
+  [3, 4, 5],
+  [0, 1, 2],
+];
 
 // Flat placeholder basic-attack values; must match command.characterBasicAttackRange
 // and command.characterBasicAttackInterval in the game server.
@@ -370,6 +382,17 @@ const styles = {
     fontSize: 13,
     overflow: "hidden",
   },
+  viewportDebug: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    zIndex: 2000,
+    background: "rgba(0,0,0,0.7)",
+    color: "#0f0",
+    fontFamily: "monospace",
+    fontSize: 11,
+    padding: "2px 6px",
+  },
   frames: {
     display: "flex",
     flexShrink: 0,
@@ -447,6 +470,16 @@ const styles = {
     fontSize: 10,
     letterSpacing: 0.5,
     cursor: "pointer",
+  },
+  actionStack: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  actionRow: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 4,
   },
   actionButton: {
     position: "relative",
@@ -1928,6 +1961,7 @@ export default function App({
   equippedItemsUrl,
   stockAssets,
 }) {
+  const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
   const canvasRef = useRef(null);
   const movementKeysRef = useRef(new Set());
@@ -2564,8 +2598,79 @@ export default function App({
 
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
+  function renderActionSlot(i) {
+    const slot = i + 1;
+    const key = slot === 10 ? "0" : String(slot);
+    const power = powers[i];
+    const iconUrl = power?.iconURL
+      ? (resolveStockAssetUrl(power.iconURL, "icons", stockAssets) ?? new URL(power.iconURL, classConfigUrl).href)
+      : null;
+    let inRange = true;
+    let isFacing = true;
+    if (power && targetUnit && selfUnit) {
+      const range = powerMaxRange(power);
+      if (range != null) {
+        const dx = targetUnit.position.x - selfUnit.position.x;
+        const dy = targetUnit.position.y - selfUnit.position.y;
+        inRange = Math.sqrt(dx * dx + dy * dy) <= range + (selfUnit.radius ?? 0) + (targetUnit.radius ?? 0);
+        if (power.frontal !== false) {
+          const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
+          let diff = toTarget - selfUnit.position.angle;
+          while (diff > 180) diff -= 360;
+          while (diff < -180) diff += 360;
+          isFacing = Math.abs(diff) <= 75;
+        }
+      }
+    }
+    const now = Date.now();
+    const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
+    // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
+    const cdEndsAt = Math.max(gcdEndsAt, pcEndsAt);
+    const onCooldown = power && cdEndsAt > now;
+    const remainingMs = onCooldown ? cdEndsAt - now : 0;
+    const usingGcd = gcdEndsAt >= pcEndsAt;
+    const totalMs = usingGcd ? (gcdTotalMsRef.current || 1) : (power?.cooldown ?? 1) * 1000;
+    const fraction = onCooldown ? remainingMs / totalMs : 0;
+    const revealedDeg = (1 - fraction) * 360;
+    const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
+
+    return (
+      <AbilityTooltip key={slot} ability={power}>
+        <div
+          style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
+          onClick={power ? () => usePower(i) : undefined}
+        >
+          {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
+          {onCooldown && (
+            <div style={{
+              position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
+              background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
+            }}/>
+          )}
+          {cdSecs && (
+            <div style={styles.actionCooldownOverlay}>
+              <span style={styles.actionCooldownText}>{cdSecs}</span>
+            </div>
+          )}
+          <span style={styles.actionKeybind}>{key}</span>
+        </div>
+      </AbilityTooltip>
+    );
+  }
+
   return (
-    <div style={styles.root}>
+    <div
+      style={styles.root}
+      data-touch={viewportMode.isTouch || undefined}
+      data-phone-layout={viewportMode.isPhoneLayout || undefined}
+      data-orientation={viewportMode.isPhoneLayout ? (viewportMode.isPortraitPhone ? "portrait" : "landscape") : undefined}
+    >
+      {new URLSearchParams(window.location.search).has("debugViewport") && (
+        <div style={styles.viewportDebug}>
+          touch={String(viewportMode.isTouch)} phone={String(viewportMode.isPhoneLayout)}{" "}
+          {viewportMode.isPhoneLayout && (viewportMode.isPortraitPhone ? "portrait" : "landscape")}
+        </div>
+      )}
       {latencyVisible && (
         <div style={{ position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000 }}>
           <HintTooltip text="Hit 'L' to toggle">
@@ -2652,7 +2757,7 @@ export default function App({
           primaryStats={primaryStats}
         />
       </div>
-      <div style={styles.actionBar}>
+      <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
         <button
           style={styles.charSheetButton}
           title="Character sheet (P)"
@@ -2660,65 +2765,17 @@ export default function App({
         >
           Char
         </button>
-        {Array.from({ length: 10 }, (_, i) => {
-          const slot = i + 1;
-          const key = slot === 10 ? "0" : String(slot);
-          const power = powers[i];
-          const iconUrl = power?.iconURL
-            ? (resolveStockAssetUrl(power.iconURL, "icons", stockAssets) ?? new URL(power.iconURL, classConfigUrl).href)
-            : null;
-          let inRange = true;
-          let isFacing = true;
-          if (power && targetUnit && selfUnit) {
-            const range = powerMaxRange(power);
-            if (range != null) {
-              const dx = targetUnit.position.x - selfUnit.position.x;
-              const dy = targetUnit.position.y - selfUnit.position.y;
-              inRange = Math.sqrt(dx * dx + dy * dy) <= range + (selfUnit.radius ?? 0) + (targetUnit.radius ?? 0);
-              if (power.frontal !== false) {
-                const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
-                let diff = toTarget - selfUnit.position.angle;
-                while (diff > 180) diff -= 360;
-                while (diff < -180) diff += 360;
-                isFacing = Math.abs(diff) <= 75;
-              }
-            }
-          }
-          const now = Date.now();
-          const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
-          // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
-          const cdEndsAt = Math.max(gcdEndsAt, pcEndsAt);
-          const onCooldown = power && cdEndsAt > now;
-          const remainingMs = onCooldown ? cdEndsAt - now : 0;
-          const usingGcd = gcdEndsAt >= pcEndsAt;
-          const totalMs = usingGcd ? (gcdTotalMsRef.current || 1) : (power?.cooldown ?? 1) * 1000;
-          const fraction = onCooldown ? remainingMs / totalMs : 0;
-          const revealedDeg = (1 - fraction) * 360;
-          const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
-
-          return (
-            <AbilityTooltip key={slot} ability={power}>
-              <div
-                style={{...styles.actionButton, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
-                onClick={power ? () => usePower(i) : undefined}
-              >
-                {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
-                {onCooldown && (
-                  <div style={{
-                    position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
-                    background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
-                  }}/>
-                )}
-                {cdSecs && (
-                  <div style={styles.actionCooldownOverlay}>
-                    <span style={styles.actionCooldownText}>{cdSecs}</span>
-                  </div>
-                )}
-                <span style={styles.actionKeybind}>{key}</span>
+        {viewportMode.isPortraitPhone ? (
+          <div style={styles.actionStack}>
+            {ACTION_ROWS.map((row, ri) => (
+              <div key={ri} style={styles.actionRow}>
+                {row.map((i) => renderActionSlot(i))}
               </div>
-            </AbilityTooltip>
-          );
-        })}
+            ))}
+          </div>
+        ) : (
+          Array.from({ length: 10 }, (_, i) => renderActionSlot(i))
+        )}
       </div>
       <div style={styles.log}>
         {log.map((line, i) => (
