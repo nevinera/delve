@@ -1009,6 +1009,31 @@ function StatusTooltip({ name, description, appliedByName, children }) {
   );
 }
 
+// Mouse-tracked portal tooltip for a plain text hint - same approach as
+// StatusTooltip/ItemTooltip/StatEffectTooltip, styled like statusTooltip.
+// cursor: "help" (not the browser's default text-select cursor) matches the
+// convention used for other hoverable hints (see charSheetStatLabelHoverable).
+function HintTooltip({ text, children }) {
+  const [pos, setPos] = useState(null);
+
+  return (
+    <span
+      style={{ display: "inline-block", cursor: "help" }}
+      onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && createPortal(
+        <div style={{ ...styles.statusTooltip, left: pos.x + 16, top: pos.y + 16 }}>
+          <div style={styles.statusTooltipName}>{text}</div>
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
 function StatusColumn({ entries, color }) {
   return (
     <div style={styles.statusColumn}>
@@ -2520,15 +2545,15 @@ export default function App({
   return (
     <div style={styles.root}>
       {latencyVisible && (
-        <div
-          title="Hit 'L' to toggle"
-          style={{
-            position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
-            background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
-            fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
-          }}
-        >
-          {latencyMs != null ? `RTT Latency: ${latencyMs} ms` : "RTT Latency: —"}
+        <div style={{ position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000 }}>
+          <HintTooltip text="Hit 'L' to toggle">
+            <div style={{
+              background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
+              fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
+            }}>
+              {latencyMs != null ? `RTT Latency: ${latencyMs} ms` : "RTT Latency: —"}
+            </div>
+          </HintTooltip>
         </div>
       )}
       <div style={styles.frames}>
