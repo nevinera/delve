@@ -669,6 +669,21 @@ const styles = {
     alignItems: "flex-start",
     gap: 8,
   },
+  // Portrait phone: covers the region between the frames and the log,
+  // scrolling internally instead of floating fixed-width over the canvas.
+  charSheetWrapperPortrait: {
+    position: "fixed",
+    zIndex: 25,
+    left: 0,
+    right: 0,
+    top: 90, // styles.frames.height
+    bottom: 110 + 34, // styles.log.height + the utility row below it
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    padding: "0 8px",
+    overflowY: "auto",
+  },
   charSheet: {
     background: "rgba(20,16,12,0.97)",
     border: "1px solid #7a5a2a",
@@ -677,12 +692,40 @@ const styles = {
     width: 480,
     pointerEvents: "auto",
   },
+  charSheetPortrait: {
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    width: "100%",
+    boxSizing: "border-box",
+    pointerEvents: "auto",
+    flexShrink: 0,
+  },
   charSheetCandidatePane: {
     background: "rgba(20,16,12,0.97)",
     border: "1px solid #7a5a2a",
     borderRadius: 6,
     padding: "10px 16px 14px",
     width: 440,
+    pointerEvents: "auto",
+  },
+  // Portrait phone: overlays the character sheet (same region it occupies)
+  // instead of sitting inline above it, since the candidate list can run
+  // long and pushing the sheet down would bury it off-screen.
+  charSheetCandidatePanePortrait: {
+    position: "fixed",
+    zIndex: 26,
+    left: 8,
+    right: 8,
+    top: 90, // styles.frames.height
+    bottom: 110 + 34, // styles.log.height + the utility row below it
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: "10px 16px 14px",
+    boxSizing: "border-box",
+    overflowY: "auto",
     pointerEvents: "auto",
   },
   charSheetCandidateTitle: {
@@ -754,9 +797,20 @@ const styles = {
     display: "flex",
     gap: 20,
   },
+  charSheetBodyPortrait: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  },
   charSheetColumn: {
     flex: 1,
     minWidth: 0,
+  },
+  // Stats laid out as two CSS columns (rather than one long list) so the
+  // portrait character sheet doesn't need as much vertical scroll.
+  charSheetStatsColumns: {
+    columnCount: 2,
+    columnGap: 20,
   },
   charSheetColumnTitle: {
     fontSize: 11,
@@ -1625,9 +1679,9 @@ function gearElevation(equippedItems) {
 
 // Scrollable list of candidate items for one equipped slot, shown to the
 // left of the character sheet. Clicking an item equips it into that slot.
-function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl }) {
+function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl, portrait = false }) {
   return (
-    <div style={styles.charSheetCandidatePane}>
+    <div style={portrait ? styles.charSheetCandidatePanePortrait : styles.charSheetCandidatePane}>
       <div style={styles.charSheetHeader}>
         <span style={styles.charSheetCandidateTitle}>{slotLabel}</span>
         <button style={styles.lootClose} onClick={onClose}>✕</button>
@@ -1636,7 +1690,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
       {loading ? (
         <div style={styles.charSheetCandidateEmpty}>Loading…</div>
       ) : (
-        <div style={styles.charSheetCandidateListWrapper}>
+        <div style={portrait ? undefined : styles.charSheetCandidateListWrapper}>
           <table style={styles.charSheetCandidateTable}>
             <tbody>
               {[...items].sort((a, b) => (b.elvl ?? -Infinity) - (a.elvl ?? -Infinity)).map(item => (
@@ -1682,7 +1736,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [] }) {
+export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [], portrait = false }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -1729,8 +1783,106 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
     }
   };
 
+  const statGroupStyle = portrait ? { ...styles.charSheetStatGroup, breakInside: "avoid" } : styles.charSheetStatGroup;
+
+  const equipmentBlock = (
+    <div style={styles.charSheetColumn}>
+      <div style={styles.charSheetColumnTitle}>Equipment</div>
+      <table style={styles.charSheetEquipTable}>
+        <tbody>
+          {EQUIPPED_SLOT_ORDER.map(slot => {
+            const item = equippedItems?.[slot];
+            const rowStyle = {
+              ...styles.charSheetEquipRow,
+              ...styles.charSheetEquipRowClickable,
+              ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+              ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
+            };
+            return (
+              <tr
+                key={slot}
+                style={rowStyle}
+                onClick={() => toggleSlot(slot)}
+                onMouseEnter={() => setHoveredSlot(slot)}
+                onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
+              >
+                <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
+                <td style={{ ...styles.charSheetElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                  {item?.elvl ?? ""}
+                </td>
+                <td style={styles.charSheetNameCell}>
+                  {item ? (
+                    <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                      <span style={styles.charSheetNameBox}>{item.name || formatItemName(item.identifier)}</span>
+                    </ItemTooltip>
+                  ) : (
+                    <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const statsBlock = (
+    <div style={styles.charSheetColumn}>
+      <div style={styles.charSheetColumnTitle}>Stats</div>
+      <div style={portrait ? styles.charSheetStatsColumns : undefined}>
+        <div style={statGroupStyle}>
+          <ul style={styles.charSheetStatsList}>
+            <li style={styles.charSheetStatRow}>
+              <span>Local Elevation</span>
+              <span>{localElvl ?? "—"}</span>
+            </li>
+            <li style={styles.charSheetStatRow}>
+              <span>Gear Elevation</span>
+              <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
+            </li>
+          </ul>
+        </div>
+        {STAT_GROUPS.map(group => (
+          <div key={group.title} style={statGroupStyle}>
+            <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
+            <ul style={styles.charSheetStatsList}>
+              {group.keys.map(key => {
+                if (key === "basic_attack_dps") {
+                  const {value, lines} = basicAttackDps(stats, primaryStats);
+                  return (
+                    <li key={key} style={styles.charSheetStatRow}>
+                      <StatEffectTooltip lines={lines}>
+                        <span style={styles.charSheetStatLabelHoverable}>{STAT_LABELS[key]}</span>
+                      </StatEffectTooltip>
+                      <span>{value.toFixed(1)}</span>
+                    </li>
+                  );
+                }
+                const value = stats[key] || 0;
+                const lines = group.title === "Secondary"
+                  ? secondaryStatEffectLines(key, value)
+                  : primaryStatEffectLines(key, value, primaryStats, stats);
+                return (
+                  <li key={key} style={styles.charSheetStatRow}>
+                    <StatEffectTooltip lines={lines}>
+                      <span style={lines.length > 0 ? styles.charSheetStatLabelHoverable : undefined}>
+                        {STAT_LABELS[key] || key}
+                      </span>
+                    </StatEffectTooltip>
+                    <span>{value.toFixed(1)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div style={styles.charSheetWrapper}>
+    <div style={portrait ? styles.charSheetWrapperPortrait : styles.charSheetWrapper}>
       {expandedSlot && (
         <CandidateItemsPane
           slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}
@@ -1741,102 +1893,26 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
           onSelect={handleSelect}
           onClose={() => setExpandedSlot(null)}
           localElvl={localElvl}
+          portrait={portrait}
         />
       )}
-      <div style={styles.charSheet}>
+      <div style={portrait ? styles.charSheetPortrait : styles.charSheet}>
         <div style={styles.charSheetHeader}>
           <span style={styles.charSheetTitle}>Character</span>
           <button style={styles.lootClose} onClick={onClose}>✕</button>
         </div>
-        <div style={styles.charSheetBody}>
-          <div style={styles.charSheetColumn}>
-            <div style={styles.charSheetColumnTitle}>Equipment</div>
-            <table style={styles.charSheetEquipTable}>
-              <tbody>
-                {EQUIPPED_SLOT_ORDER.map(slot => {
-                  const item = equippedItems?.[slot];
-                  const rowStyle = {
-                    ...styles.charSheetEquipRow,
-                    ...styles.charSheetEquipRowClickable,
-                    ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
-                    ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
-                  };
-                  return (
-                    <tr
-                      key={slot}
-                      style={rowStyle}
-                      onClick={() => toggleSlot(slot)}
-                      onMouseEnter={() => setHoveredSlot(slot)}
-                      onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
-                    >
-                      <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
-                      <td style={{ ...styles.charSheetElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
-                        {item?.elvl ?? ""}
-                      </td>
-                      <td style={styles.charSheetNameCell}>
-                        {item ? (
-                          <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
-                            <span style={styles.charSheetNameBox}>{item.name || formatItemName(item.identifier)}</span>
-                          </ItemTooltip>
-                        ) : (
-                          <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div style={styles.charSheetColumn}>
-            <div style={styles.charSheetColumnTitle}>Stats</div>
-            <div style={styles.charSheetStatGroup}>
-              <ul style={styles.charSheetStatsList}>
-                <li style={styles.charSheetStatRow}>
-                  <span>Local Elevation</span>
-                  <span>{localElvl ?? "—"}</span>
-                </li>
-                <li style={styles.charSheetStatRow}>
-                  <span>Gear Elevation</span>
-                  <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
-                </li>
-              </ul>
-            </div>
-            {STAT_GROUPS.map(group => (
-              <div key={group.title} style={styles.charSheetStatGroup}>
-                <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
-                <ul style={styles.charSheetStatsList}>
-                  {group.keys.map(key => {
-                    if (key === "basic_attack_dps") {
-                      const {value, lines} = basicAttackDps(stats, primaryStats);
-                      return (
-                        <li key={key} style={styles.charSheetStatRow}>
-                          <StatEffectTooltip lines={lines}>
-                            <span style={styles.charSheetStatLabelHoverable}>{STAT_LABELS[key]}</span>
-                          </StatEffectTooltip>
-                          <span>{value.toFixed(1)}</span>
-                        </li>
-                      );
-                    }
-                    const value = stats[key] || 0;
-                    const lines = group.title === "Secondary"
-                      ? secondaryStatEffectLines(key, value)
-                      : primaryStatEffectLines(key, value, primaryStats, stats);
-                    return (
-                      <li key={key} style={styles.charSheetStatRow}>
-                        <StatEffectTooltip lines={lines}>
-                          <span style={lines.length > 0 ? styles.charSheetStatLabelHoverable : undefined}>
-                            {STAT_LABELS[key] || key}
-                          </span>
-                        </StatEffectTooltip>
-                        <span>{value.toFixed(1)}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
+        <div style={portrait ? styles.charSheetBodyPortrait : styles.charSheetBody}>
+          {portrait ? (
+            <>
+              {statsBlock}
+              {equipmentBlock}
+            </>
+          ) : (
+            <>
+              {equipmentBlock}
+              {statsBlock}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -2760,6 +2836,7 @@ export default function App({
           onClose={() => setCharSheetOpen(false)}
           localElvl={localElvl}
           primaryStats={primaryStats}
+          portrait={viewportMode.isPortraitPhone}
         />
       </div>
       <div style={viewportMode.isPortraitPhone ? { ...styles.actionBar, justifyContent: "flex-end" } : styles.actionBar}>
