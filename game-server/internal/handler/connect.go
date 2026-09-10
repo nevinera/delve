@@ -103,7 +103,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(HeartbeatTimeout))
-		handleClientMessage(data, slot.CharacterUnitID, inst, powers)
+		handleClientMessage(data, slotID, slot.CharacterUnitID, inst, powers)
 	}
 
 	close(quit)
@@ -120,14 +120,25 @@ type incomingMsg struct {
 	Slot         *int     `json:"slot"`
 	TargetUnitID *string  `json:"target_unit_id"`
 	ItemIndex    *int     `json:"item_index"`
+	// Seq is a per-connection, monotonically increasing hex id the client
+	// stamps on every outgoing message (see GameConnection._send). Recorded
+	// per message type that needs acking (heartbeat, move) via RecordSeq, and
+	// echoed back per-unit in state broadcasts (see LastSeqsByUnit) so the
+	// client can match a given echo to exactly the send it answers.
+	Seq *string `json:"seq"`
 }
 
-func handleClientMessage(data []byte, unitID uuid.UUID, inst *instance.Instance, powers []instanceconfig.Power) {
+func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.Instance, powers []instanceconfig.Power) {
 	var msg incomingMsg
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return
 	}
+	if msg.Seq != nil {
+		inst.RecordSeq(slotID, msg.Type, *msg.Seq)
+	}
 	switch msg.Type {
+	case "heartbeat":
+		// Recording above is all a heartbeat needs - no command to send.
 	case "move":
 		keys := make([]command.MoveKey, len(msg.Keys))
 		for i, k := range msg.Keys {

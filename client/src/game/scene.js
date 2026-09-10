@@ -180,6 +180,21 @@ export function edgeTowards(pos, other) {
   return { x: pos.x + (dx / dist) * pos.radius, y: pos.y + (dy / dist) * pos.radius };
 }
 
+// The position the client should converge its own prediction toward once a
+// server echo (serverX, serverY) arrives, given its current predicted
+// position (currentX, currentY) and `matched` - the {x, y} the client itself
+// sent for the move seq this echo answers (see GameConnection.positionForSeq
+// and last_move_seq), or null if that send is no longer on record: the
+// current position offset by whatever the server actually corrected, rather
+// than the raw echoed absolute position - which is normally just a stale
+// snapshot of somewhere the client already predicted correctly one round
+// trip ago. Falls back to the raw echoed position when there's nothing to
+// match against.
+export function reconciledTarget(matched, currentX, currentY, serverX, serverY) {
+  if (!matched) return { x: serverX, y: serverY };
+  return { x: currentX + (serverX - matched.x), y: currentY + (serverY - matched.y) };
+}
+
 export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   const { body: bodyColor, cone: coneColor } =
     HOSTILITY_COLORS[hostility] ?? HOSTILITY_COLORS.hostile;
@@ -273,12 +288,13 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, onUnitClick, onUnitRightClick, onUnitHover } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
     this._onFacingChange = onFacingChange;
     this._onSelfPosition = onSelfPosition;
+    this._positionForMoveSeq = positionForMoveSeq;
     this._onUnitClick = onUnitClick;
     this._onUnitRightClick = onUnitRightClick;
     this._onUnitHover = onUnitHover;
@@ -321,8 +337,10 @@ export class SceneManager {
     this._selfMapX = 0;
     this._selfMapY = 0;
     this._selfSpeed = BASE_PLAYER_SPEED; // updated from server unit state
-    this._serverMapX = 0;
-    this._serverMapY = 0;
+    // Where to converge _selfMapX/Y toward when movement stops - see
+    // reconciledTarget, computed fresh each time a self position arrives.
+    this._selfMapTargetX = 0;
+    this._selfMapTargetY = 0;
     this._selfInitialized = false;
     this._selfMapIdentifier = null;
 
@@ -580,6 +598,8 @@ export class SceneManager {
       this._selfMapIdentifier = selfUnit.map_identifier;
       this._selfMapX = selfUnit.position.x;
       this._selfMapY = selfUnit.position.y;
+      this._selfMapTargetX = selfUnit.position.x;
+      this._selfMapTargetY = selfUnit.position.y;
     }
 
     const seen = new Set();
@@ -591,13 +611,19 @@ export class SceneManager {
       const angle = -(unit.position.angle * DEG);
 
       if (isSelf) {
-        this._serverMapX = unit.position.x;
-        this._serverMapY = unit.position.y;
+        const matched = unit.last_move_seq != null ? (this._positionForMoveSeq?.(unit.last_move_seq) ?? null) : null;
+        const target = reconciledTarget(matched, this._selfMapX, this._selfMapY, unit.position.x, unit.position.y);
+        this._selfMapTargetX = target.x;
+        this._selfMapTargetY = target.y;
+
         const nowDead = unit.status === "dead";
         if (this._selfDead && !nowDead) {
-          // Respawned: snap predicted position to server so there's no slide.
+          // Respawned: snap predicted position (and target) to server so
+          // there's no slide.
           this._selfMapX = unit.position.x;
           this._selfMapY = unit.position.y;
+          this._selfMapTargetX = unit.position.x;
+          this._selfMapTargetY = unit.position.y;
         }
         this._selfDead = nowDead;
         this.setAttacking(unit.attacking);
@@ -605,6 +631,8 @@ export class SceneManager {
         if (!this._selfInitialized) {
           this._selfMapX = unit.position.x;
           this._selfMapY = unit.position.y;
+          this._selfMapTargetX = unit.position.x;
+          this._selfMapTargetY = unit.position.y;
           this._selfInitialized = true;
         }
       }
@@ -791,10 +819,17 @@ export class SceneManager {
           }
         }
         if (!moved) {
-          // Stopped: converge quickly to server-confirmed position.
+          // Stopped: converge toward _selfMapTargetX/Y (see reconciledTarget)
+          // - not the raw server-echoed position, which is normally just a
+          // stale snapshot of somewhere we already predicted correctly one
+          // round trip ago and would visibly yank the token backward under
+          // any real latency. The target is only ever the *actual*
+          // correction (e.g. a feasibility clamp near a wall - see
+          // move_feasibility.go - or a collision push-out), so it's ~0 in
+          // the common case and converging to it is a no-op.
           const cf = 1 - Math.exp(-10 * elapsed);
-          this._selfMapX += (this._serverMapX - this._selfMapX) * cf;
-          this._selfMapY += (this._serverMapY - this._selfMapY) * cf;
+          this._selfMapX += (this._selfMapTargetX - this._selfMapX) * cf;
+          this._selfMapY += (this._selfMapTargetY - this._selfMapY) * cf;
         }
 
         // Apply client-side collision so predicted position stays out of walls.
@@ -811,6 +846,8 @@ export class SceneManager {
         }
 
         // Send position to server ~3-4x per server tick (every ~30ms).
+        // GameConnection records what was sent, keyed by the seq it stamps
+        // on the message - see positionForMoveSeq/reconciledTarget above.
         if (this._onSelfPosition && time - this._lastPosSendTime >= 30) {
           this._onSelfPosition({ x: this._selfMapX, y: this._selfMapY });
           this._lastPosSendTime = time;

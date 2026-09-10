@@ -520,3 +520,141 @@ func TestTick_ReconnectGetsFreshFullState(t *testing.T) {
 	msg := readMsg(t, ch2)
 	assert.Equal(t, "instance-state", msg["type"])
 }
+
+// ---------------------------------------------------------------------------
+// seq echo (see Instance.RecordSeq / LastSeqsByUnit) - covers both
+// "heartbeat" and "move", the two message types currently acked.
+// ---------------------------------------------------------------------------
+
+func TestFullStateMsg_SeqsIncludedWhenPresent(t *testing.T) {
+	state := stateWithUnit(t)
+	var unitID uuid.UUID
+	for id := range state.Units {
+		unitID = id
+	}
+	heartbeatSeqs := map[uuid.UUID]string{unitID: "7"}
+	moveSeqs := map[uuid.UUID]string{unitID: "1a"}
+
+	raw, err := instance.BuildFullStateMsgWithSeqsForTest(state, time.Now(), "test-checksum", heartbeatSeqs, moveSeqs)
+	require.NoError(t, err)
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal(raw, &msg))
+
+	units := msg["units"].(map[string]any)
+	unit := units[unitID.String()].(map[string]any)
+	assert.Equal(t, "7", unit["last_heartbeat_seq"])
+	assert.Equal(t, "1a", unit["last_move_seq"])
+}
+
+func TestFullStateMsg_SeqsOmittedWhenAbsent(t *testing.T) {
+	msg := fullState(t, stateWithUnit(t))
+	units := msg["units"].(map[string]any)
+	for _, u := range units {
+		unit := u.(map[string]any)
+		_, hasHB := unit["last_heartbeat_seq"]
+		_, hasMove := unit["last_move_seq"]
+		assert.False(t, hasHB, "unit with no recorded heartbeat should omit the field")
+		assert.False(t, hasMove, "unit with no recorded move should omit the field")
+	}
+}
+
+func TestDeltaMsg_SeqChangeIncludedInPatch(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	var unitID uuid.UUID
+	for id := range curr.Units {
+		unitID = id
+	}
+	prevHB := map[uuid.UUID]string{unitID: "1"}
+	currHB := map[uuid.UUID]string{unitID: "2"}
+	prevMove := map[uuid.UUID]string{unitID: "a"}
+	currMove := map[uuid.UUID]string{unitID: "b"}
+
+	raw, err := instance.BuildDeltaMsgWithSeqsForTest(prev, curr, time.Now(), "test-checksum", prevHB, currHB, prevMove, currMove)
+	require.NoError(t, err)
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal(raw, &msg))
+
+	updates := msg["unit_updates"].(map[string]any)
+	patch := updates[unitID.String()].(map[string]any)
+	assert.Equal(t, "2", patch["last_heartbeat_seq"])
+	assert.Equal(t, "b", patch["last_move_seq"])
+}
+
+func TestDeltaMsg_SeqUnchangedNotInPatch(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	var unitID uuid.UUID
+	for id := range curr.Units {
+		unitID = id
+	}
+	hb := map[uuid.UUID]string{unitID: "5"}
+	move := map[uuid.UUID]string{unitID: "c"}
+
+	raw, err := instance.BuildDeltaMsgWithSeqsForTest(prev, curr, time.Now(), "test-checksum", hb, hb, move, move)
+	require.NoError(t, err)
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal(raw, &msg))
+
+	assert.Empty(t, msg["unit_updates"])
+}
+
+func TestLastSeqsByUnit_OmitsSlotsWithNoRecordedSeq(t *testing.T) {
+	inst := startedGoblinInstance(t)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	assert.NotContains(t, inst.LastSeqsByUnit("heartbeat"), slot.CharacterUnitID)
+
+	inst.RecordSeq(slot.ID, "heartbeat", "9")
+
+	seqs := inst.LastSeqsByUnit("heartbeat")
+	require.Contains(t, seqs, slot.CharacterUnitID)
+	assert.Equal(t, "9", seqs[slot.CharacterUnitID])
+	assert.NotContains(t, inst.LastSeqsByUnit("move"), slot.CharacterUnitID, "recording a heartbeat seq should not affect the move seq")
+}
+
+func TestTick_SeqsEchoedInFullState(t *testing.T) {
+	inst := startedGoblinInstance(t)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+
+	// Recorded before connecting, so it's already there for the first tick's
+	// full-state message.
+	inst.RecordSeq(slot.ID, "heartbeat", "7")
+	inst.RecordSeq(slot.ID, "move", "1a")
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	msg := readMsg(t, writeCh)
+	units := msg["units"].(map[string]any)
+	unit := units[slot.CharacterUnitID.String()].(map[string]any)
+	assert.Equal(t, "7", unit["last_heartbeat_seq"])
+	assert.Equal(t, "1a", unit["last_move_seq"])
+}
+
+func TestTick_SeqChangeAppearsInNextDelta(t *testing.T) {
+	inst := startedGoblinInstance(t)
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	first := readMsg(t, writeCh)
+	require.Equal(t, "instance-state", first["type"])
+
+	inst.RecordSeq(slot.ID, "move", "3")
+
+	delta := readMsg(t, writeCh)
+	require.Equal(t, "delta", delta["type"])
+	updates := delta["unit_updates"].(map[string]any)
+	unit := updates[slot.CharacterUnitID.String()].(map[string]any)
+	assert.Equal(t, "3", unit["last_move_seq"])
+}

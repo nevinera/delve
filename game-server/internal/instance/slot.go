@@ -56,6 +56,15 @@ type InstanceSlot struct {
 	connDone       chan struct{}      // closed by the handler when its goroutines have all exited
 	needsFullState bool               // true until the tick loop sends the first full-state message
 	stateEnteredAt time.Time          // when the slot entered its current state
+
+	// lastSeqByType is the most recent seq this slot has sent per message
+	// type (e.g. "heartbeat" -> "1a2b", "move" -> "1a2f") - every outgoing
+	// client message carries one (see client's GameConnection._send). Echoed
+	// back per-unit on the next tick's state broadcast (see
+	// Instance.LastSeqsByUnit) so each client can match a given echo back to
+	// exactly the send it answers, rather than guessing from position/timing
+	// alone. Protected by slotsMu.
+	lastSeqByType map[string]string
 }
 
 // recomputeStats sums the raw (em=1.0) stats of every equipped item into
@@ -244,6 +253,39 @@ func (inst *Instance) DisconnectSlot(id uuid.UUID) {
 		slot.stateEnteredAt = time.Now()
 		inst.recomputeSlotCounts()
 	}
+}
+
+// RecordHeartbeat stores the beat id and receipt time of a client heartbeat
+// for the given slot, so the next tick's state broadcast can echo it back to
+// all clients for round-trip latency measurement (see LastSeqsByUnit). A
+// no-op if the slot no longer exists (e.g. it disconnected mid-flight).
+func (inst *Instance) RecordSeq(slotID uuid.UUID, msgType, seq string) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot, ok := inst.slots[slotID]
+	if !ok {
+		return
+	}
+	if slot.lastSeqByType == nil {
+		slot.lastSeqByType = make(map[string]string)
+	}
+	slot.lastSeqByType[msgType] = seq
+}
+
+// LastSeqsByUnit returns each connected slot's most recently recorded seq
+// for the given message type, keyed by CharacterUnitID so the tick loop can
+// attach it to that unit's state message. Slots with no such seq recorded
+// yet are omitted.
+func (inst *Instance) LastSeqsByUnit(msgType string) map[uuid.UUID]string {
+	inst.slotsMu.RLock()
+	defer inst.slotsMu.RUnlock()
+	result := make(map[uuid.UUID]string, len(inst.slots))
+	for _, s := range inst.slots {
+		if seq, ok := s.lastSeqByType[msgType]; ok {
+			result[s.CharacterUnitID] = seq
+		}
+	}
+	return result
 }
 
 // SlotForTick carries the data the tick loop needs for one connected slot.

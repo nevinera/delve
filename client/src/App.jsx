@@ -936,6 +936,53 @@ const styles = {
   },
 };
 
+// Green/yellow/red thresholds match what a player would recognize from WoW's
+// ping-color convention: <200ms fine, 200-350ms noticeable, 350ms+ rough.
+export function latencyColor(ms) {
+  if (ms == null) return "#ddd";
+  if (ms < 200) return "#4caf50";
+  if (ms < 350) return "#ffc107";
+  return "#f44336";
+}
+
+// Whether to auto-show the latency badge even without the manual L toggle:
+// true once more than half of the RTT samples from the last windowMs were
+// above thresholdMs - a blip shouldn't pop the badge up, but sustained bad
+// latency should, so the player knows it's their connection and not the game.
+export function shouldAutoShowLatency(history, now, windowMs = 10000, thresholdMs = 250) {
+  const recent = history.filter((e) => now - e.t <= windowMs);
+  if (recent.length === 0) return false;
+  const overCount = recent.filter((e) => e.rtt > thresholdMs).length;
+  return overCount / recent.length > 0.5;
+}
+
+// Applies a minimum-visible duration to rawAuto (shouldAutoShowLatency's
+// output), so hovering right around the threshold doesn't flicker the badge
+// on and off: once it turns on, it stays on for at least minVisibleMs even
+// if rawAuto flips back to false in the meantime. `since` is when it last
+// turned on (null while off); pass back the returned `since` next call.
+export function stickyAutoShow(rawAuto, since, now, minVisibleMs = 10000) {
+  if (rawAuto) return { visible: true, since: since ?? now };
+  if (since != null && now - since < minVisibleMs) return { visible: true, since };
+  return { visible: false, since: null };
+}
+
+// Whether the latency badge is actually on screen: the player's explicit L
+// choice (override) if they've made one, otherwise whatever
+// shouldAutoShowLatency last decided.
+export function isLatencyVisible(override, autoShow) {
+  return override != null ? override : autoShow;
+}
+
+// What `override` should become after an L press: it's a toggle of current
+// *visibility*, not of the override itself - so hitting L while the badge
+// happens to be auto-shown turns it off (and that off sticks), and hitting
+// it while auto-hidden turns it on (and that sticks too), regardless of
+// whether a previous override was ever set.
+export function nextLatencyOverride(override, autoShow) {
+  return !isLatencyVisible(override, autoShow);
+}
+
 // "3:05", "0:08" - minutes unpadded, seconds zero-padded. Rounds up so a
 // status showing "0:01" is still actually active, not already expired.
 export function formatRemaining(ms) {
@@ -966,6 +1013,31 @@ function StatusTooltip({ name, description, appliedByName, children }) {
           <div style={styles.statusTooltipName}>{name}</div>
           {description && <div style={styles.statusTooltipDescription}>{description}</div>}
           {appliedByName && <div style={styles.statusTooltipAppliedBy}>Applied by {appliedByName}</div>}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+}
+
+// Mouse-tracked portal tooltip for a plain text hint - same approach as
+// StatusTooltip/ItemTooltip/StatEffectTooltip, styled like statusTooltip.
+// cursor: "default" keeps the standard arrow (not the browser's text-select
+// cursor, which a plain div with text would otherwise show).
+function HintTooltip({ text, children }) {
+  const [pos, setPos] = useState(null);
+
+  return (
+    <span
+      style={{ display: "inline-block", cursor: "default" }}
+      onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && createPortal(
+        <div style={{ ...styles.statusTooltip, left: pos.x + 16, top: pos.y + 16 }}>
+          <div style={styles.statusTooltipName}>{text}</div>
         </div>,
         document.body
       )}
@@ -1867,6 +1939,16 @@ export default function App({
   const [units, setUnits] = useState({});
   const [targetId, setTargetId] = useState(null);
   const [attacking, setAttacking] = useState(false);
+  const [latencyMs, setLatencyMs] = useState(null);
+  // null = no manual choice yet (visibility follows autoShowLatency); true/false
+  // = the player hit L, which sticks regardless of autoShowLatency afterward.
+  const [latencyOverride, setLatencyOverride] = useState(null);
+  const [autoShowLatency, setAutoShowLatency] = useState(false);
+  const autoShowLatencyRef = useRef(false); // mirrors autoShowLatency, for the KeyL handler below
+  const lastHeartbeatSeqRef = useRef(null);
+  const rttHistoryRef = useRef([]); // {t, rtt}, last 10s - see shouldAutoShowLatency
+  const lastLatencyDisplayAtRef = useRef(0); // throttles the displayed number - see below
+  const autoShowSinceRef = useRef(null); // when autoShowLatency last turned on - see stickyAutoShow
   const [hoveredUnitId, setHoveredUnitId] = useState(null);
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
@@ -2085,6 +2167,11 @@ export default function App({
     sendMove();
   }, [sendMove]);
 
+  // Looks up the position sent for a server-echoed move seq (last_move_seq),
+  // for SceneManager to reconcile its prediction against - see
+  // GameConnection.positionForSeq and scene.js's reconciledTarget.
+  const positionForMoveSeq = useCallback((seq) => connRef.current?.positionForSeq(seq) ?? null, []);
+
   // Called by SceneManager when continuous turning updates the facing angle
   const handleFacingChange = useCallback((degrees) => {
     facingRef.current = ((degrees % 360) + 360) % 360;
@@ -2126,6 +2213,10 @@ export default function App({
       }
       if (e.code === "KeyP") {
         setCharSheetOpen(o => !o);
+        return;
+      }
+      if (e.code === "KeyL") {
+        setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
         return;
       }
       if (e.code === "KeyT") {
@@ -2185,16 +2276,53 @@ export default function App({
   }, [sendMove, usePower, handleTabTarget, handleStartAttacking, handleStopAttacking]);
 
   useEffect(() => {
+    // Dev/QA aid for reproducing latency-dependent bugs (e.g. movement
+    // reconciliation) - Chrome's network throttling doesn't touch a
+    // WebSocket's ongoing frame traffic, only its opening handshake, and has
+    // no jitter control. ?simLatency=150&simJitter=50 delays every send and
+    // receive on the game socket by ~150ms +/-50ms. Absent (or 0), it's a
+    // no-op, so this is safe to leave wired up in every environment.
+    const simParams = new URLSearchParams(window.location.search);
+    const simulatedLatencyMs = Number(simParams.get("simLatency")) || 0;
+    const simulatedJitterMs = Number(simParams.get("simJitter")) || 0;
+
     const conn = new GameConnection({
       gameServerUrl,
       instanceId,
       slotId,
       slotToken,
+      simulatedLatencyMs,
+      simulatedJitterMs,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
       onClose: () => { setDisconnected(true); addLog("Disconnected."); },
       onStateChange: ({ units: u, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
         unitsRef.current = u;
         setUnits(u);
+        const selfForHeartbeat = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
+        const heartbeatSeq = selfForHeartbeat?.last_heartbeat_seq;
+        if (heartbeatSeq != null && heartbeatSeq !== lastHeartbeatSeqRef.current) {
+          lastHeartbeatSeqRef.current = heartbeatSeq;
+          const rtt = connRef.current?.rttForSeq(heartbeatSeq);
+          if (rtt != null) {
+            const now = Date.now();
+            // The displayed number updates at most every 2s - constantly
+            // ticking it (every heartbeat, ~300ms) reads as distracting
+            // flicker rather than a useful reading. The auto-show decision
+            // below still uses every sample, just the visible text is throttled.
+            if (now - lastLatencyDisplayAtRef.current >= 2000) {
+              lastLatencyDisplayAtRef.current = now;
+              setLatencyMs(rtt);
+            }
+            const hist = rttHistoryRef.current.filter((e) => now - e.t <= 10000);
+            hist.push({ t: now, rtt });
+            rttHistoryRef.current = hist;
+            const rawAuto = shouldAutoShowLatency(hist, now);
+            const { visible: auto, since } = stickyAutoShow(rawAuto, autoShowSinceRef.current, now);
+            autoShowSinceRef.current = since;
+            autoShowLatencyRef.current = auto;
+            setAutoShowLatency(auto);
+          }
+        }
         const tgt = targetIdRef.current ? u[targetIdRef.current] : null;
         if (tgt) {
           const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
@@ -2434,8 +2562,22 @@ export default function App({
         : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
 
+  const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
+
   return (
     <div style={styles.root}>
+      {latencyVisible && (
+        <div style={{ position: "fixed", top: 98, left: "50%", transform: "translateX(-50%)", zIndex: 1000 }}>
+          <HintTooltip text="Hit 'L' to toggle">
+            <div style={{
+              background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
+              fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
+            }}>
+              {latencyMs != null ? `RTT Latency: ${latencyMs} ms` : "RTT Latency: —"}
+            </div>
+          </HintTooltip>
+        </div>
+      )}
       <div style={styles.frames}>
         <div style={styles.selfFrame}>
           {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
@@ -2477,6 +2619,7 @@ export default function App({
           turnKeysRef={turnKeysRef}
           onFacingChange={handleFacingChange}
           onSelfPosition={handleSelfPosition}
+          positionForMoveSeq={positionForMoveSeq}
           onUnitClick={handleTargetUnit}
           onUnitRightClick={handleUnitRightClick}
           onUnitHover={setHoveredUnitId}

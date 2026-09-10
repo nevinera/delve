@@ -40,6 +40,16 @@ type unitJSON struct {
 	PowerCooldowns       map[string]int64         `json:"power_cooldowns,omitempty"`
 	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
 	LootItems            []lootItemJSON           `json:"loot_items,omitempty"`
+
+	// Set only for player-character units with a connected slot that has sent
+	// at least one heartbeat/move - see Instance.LastSeqsByUnit. Echoing the
+	// client's own seq back lets it match this to exactly the send it
+	// answers: for heartbeat, to compute round-trip latency against its own
+	// locally-recorded send time; for move, to reconcile its predicted
+	// position against the difference between what it sent and what the
+	// server actually accepted (see move_feasibility.go).
+	LastHeartbeatSeq *string `json:"last_heartbeat_seq,omitempty"`
+	LastMoveSeq      *string `json:"last_move_seq,omitempty"`
 }
 
 type effectJSON struct {
@@ -134,7 +144,7 @@ type deltaMsg struct {
 	LootFailures  []lootFailureJSON         `json:"loot_failures,omitempty"`
 }
 
-func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
+func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string) ([]byte, error) {
 	units := make(map[string]unitJSON, len(state.Units))
 	for id, u := range state.Units {
 		effects := make([]effectJSON, len(u.ActiveStatusEffects))
@@ -166,6 +176,14 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			ms := u.NextBasicAttackAt.UnixMilli()
 			nextBasicAttackMs = &ms
 		}
+		var hbSeq *string
+		if seq, ok := heartbeatSeqs[id]; ok {
+			hbSeq = &seq
+		}
+		var moveSeq *string
+		if seq, ok := moveSeqs[id]; ok {
+			moveSeq = &seq
+		}
 		units[id.String()] = unitJSON{
 			ZoneUnitIdentifier:   u.ZoneUnitIdentifier,
 			UnitTypeIdentifier:   u.UnitTypeIdentifier,
@@ -187,6 +205,8 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
 			ActiveStatusEffects:  effects,
 			LootItems:            lootItemsToJSON(u.LootItems),
+			LastHeartbeatSeq:     hbSeq,
+			LastMoveSeq:          moveSeq,
 		}
 	}
 	return json.Marshal(fullStateMsg{
@@ -200,7 +220,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 	})
 }
 
-func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, lootFailures []instancestate.LootFailure, now time.Time, checksum string) ([]byte, error) {
+func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, lootFailures []instancestate.LootFailure, now time.Time, checksum string, prevHeartbeatSeqs, currHeartbeatSeqs, prevMoveSeqs, currMoveSeqs map[uuid.UUID]string) ([]byte, error) {
 	msg := deltaMsg{
 		downBase: downBase{
 			Direction: "down",
@@ -258,6 +278,12 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			}
 			if li := lootItemsToJSON(cu.LootItems); li != nil {
 				update["loot_items"] = li
+			}
+			if seq, ok := currHeartbeatSeqs[id]; ok {
+				update["last_heartbeat_seq"] = seq
+			}
+			if seq, ok := currMoveSeqs[id]; ok {
+				update["last_move_seq"] = seq
 			}
 			msg.UnitUpdates[idStr] = update
 			for _, e := range cu.ActiveStatusEffects {
@@ -322,6 +348,12 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		}
 		if !lootItemsEqual(cu.LootItems, pu.LootItems) {
 			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
+		}
+		if seq, ok := currHeartbeatSeqs[id]; ok && seq != prevHeartbeatSeqs[id] {
+			patch["last_heartbeat_seq"] = seq
+		}
+		if seq, ok := currMoveSeqs[id]; ok && seq != prevMoveSeqs[id] {
+			patch["last_move_seq"] = seq
 		}
 		if len(patch) > 0 {
 			msg.UnitUpdates[idStr] = patch

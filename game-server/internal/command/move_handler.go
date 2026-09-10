@@ -1,6 +1,8 @@
 package command
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
@@ -13,7 +15,7 @@ type MoveHandler struct{}
 func (MoveHandler) Type() string      { return "move" }
 func (MoveHandler) Deduplicate() bool { return true }
 
-func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ instanceconfig.Zone, next *instancestate.InstanceState) error {
+func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error {
 	p, ok := payload.(MovePayload)
 	if !ok {
 		return nil
@@ -23,15 +25,26 @@ func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ instanceco
 		return nil
 	}
 	unit.Position.Angle = p.Facing
+	now := time.Now()
 	if p.X != nil && p.Y != nil {
-		// Client-computed position: accept it directly and clear intent so
-		// applyMovement skips this unit. resolveCollisions still runs after.
-		unit.Position.X = *p.X
-		unit.Position.Y = *p.Y
+		// Client-computed position: clamp it to what's actually feasible -
+		// within the unit's speed budget for the time since its last
+		// accepted move, and not through a wall or circle barrier - rather
+		// than trusting it outright. resolveCollisions still runs after.
+		elapsed := maxFeasibilityElapsedSeconds
+		if !unit.LastMoveAt.IsZero() {
+			elapsed = now.Sub(unit.LastMoveAt).Seconds()
+		}
+		barriers := barriersForMap(zone, unit.MapIdentifier)
+		unit.Position.X, unit.Position.Y = clampFeasibleMove(
+			unit.Position.X, unit.Position.Y, *p.X, *p.Y, unit.Speed, elapsed, barriers,
+		)
 		unit.MovementIntent = instancestate.MovementIntent{}
+		unit.LastMoveAt = now
 		return nil
 	}
 	// Fallback (no position from client): derive movement from key intent.
+	unit.LastMoveAt = now
 	unit.MovementIntent = instancestate.MovementIntent{}
 	for _, key := range p.Keys {
 		switch key {
