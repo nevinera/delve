@@ -50,17 +50,20 @@ export function AbilityTooltip({ability, hint, children, style}) {
     setPos(null);
   }
 
-  if (!ability) return children;
-
+  // Always wraps in the same span regardless of whether there's an ability
+  // (just without hover handlers when there isn't) - an empty slot used to
+  // skip the wrapper entirely, which broke layouts that size buttons via
+  // flex on the wrapped element (the span never got flex:1, so a filled
+  // slot next to an empty one could end up drastically differently sized).
   return (
     <span
       style={{display: "inline-block", ...style}}
-      onMouseEnter={handleEnter}
-      onMouseMove={handleMove}
-      onMouseLeave={handleLeave}
+      onMouseEnter={ability ? handleEnter : undefined}
+      onMouseMove={ability ? handleMove : undefined}
+      onMouseLeave={ability ? handleLeave : undefined}
     >
       {children}
-      {pos && createPortal(
+      {ability && pos && createPortal(
         <div style={{...tooltipStyle, left: pos.x + 16, top: pos.y + 16}}>
           <div style={nameStyle}>{ability.name}</div>
           {ability.description && <div style={descriptionStyle}>{ability.description}</div>}

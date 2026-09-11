@@ -1,21 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { ACTION_ROWS_LANDSCAPE, fitActionGridColumns } from "../App";
+import { ACTION_ROWS_PORTRAIT, fitActionGridColumns } from "../App";
 
-describe("ACTION_ROWS_LANDSCAPE", () => {
+describe("ACTION_ROWS_PORTRAIT", () => {
   it("covers all 10 slots exactly once", () => {
-    const flat = ACTION_ROWS_LANDSCAPE.flat();
+    const flat = ACTION_ROWS_PORTRAIT.flat();
     expect(flat.length).toBe(10);
     expect(new Set(flat).size).toBe(10);
     for (let i = 0; i < 10; i++) expect(flat).toContain(i);
   });
 
-  it("is sized 2/3/3/2 from the bottom (top-to-bottom array order)", () => {
-    expect(ACTION_ROWS_LANDSCAPE.map((row) => row.length)).toEqual([2, 3, 3, 2]);
+  it("is two rows of 5", () => {
+    expect(ACTION_ROWS_PORTRAIT.map((row) => row.length)).toEqual([5, 5]);
   });
 
-  it("numbers slots left-to-right, bottom-to-top as 1..10", () => {
-    const readingOrder = [...ACTION_ROWS_LANDSCAPE].reverse().flat();
-    expect(readingOrder).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  it("numbers the bottom row 1-5 reading right to left", () => {
+    const bottomRow = ACTION_ROWS_PORTRAIT[1];
+    const rightToLeft = [...bottomRow].reverse();
+    expect(rightToLeft.map((i) => i + 1)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("numbers the top row 6-10 reading right to left", () => {
+    const topRow = ACTION_ROWS_PORTRAIT[0];
+    const rightToLeft = [...topRow].reverse();
+    expect(rightToLeft.map((i) => i + 1)).toEqual([6, 7, 8, 9, 10]);
   });
 });
 

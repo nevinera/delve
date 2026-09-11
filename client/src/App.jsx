@@ -26,16 +26,15 @@ const KEY_MAP = {
 const MOVEMENT_KEYS = new Set(["forward", "backward", "strafe_left", "strafe_right"]);
 const TURN_KEYS = new Set(["turn_left", "turn_right"]);
 
-// Portrait phone action bar only (landscape's control-panel grid now wraps
-// itself via CSS flex-wrap instead of a fixed row grouping - see
-// landscapeActionGrid): four rows sized 2/3/3/2 from the bottom.
-// Right-aligned rows, numbered left-to-right bottom-to-top, so row order
-// here is top-to-bottom for normal DOM/flex stacking.
-export const ACTION_ROWS_LANDSCAPE = [
-  [8, 9],
-  [5, 6, 7],
-  [2, 3, 4],
-  [0, 1],
+// Portrait phone action bar: two full-width rows of 5, spanning the whole
+// screen instead of a compact corner grid (there's no side panel in
+// portrait to keep it narrow). Each row reads right-to-left as 1..10 - the
+// arrays below are left-to-right DOM/render order, so they're reversed
+// relative to that reading order. Row 0 (top) = slots 6-10, row 1 (bottom)
+// = slots 1-5, matching the on-screen top-to-bottom layout.
+export const ACTION_ROWS_PORTRAIT = [
+  [9, 8, 7, 6, 5],
+  [4, 3, 2, 1, 0],
 ];
 
 // Landscape control panels: preferred/floor sizing for the ability-button
@@ -479,47 +478,14 @@ const styles = {
     border: "1px solid #6a2a2a",
     padding: 8,
   },
-  // Portrait phone: same minimal-HUD treatment as landscape, but the frame
-  // spans from its screen edge to nearly the horizontal middle (left+right
-  // instead of a fixed width, so the health bar - which fills the
-  // container - is as wide as that space allows), and the token image
-  // stacks below the header instead of sitting beside it.
-  selfFramePortraitHud: {
-    position: "fixed",
-    zIndex: 12,
-    top: 8,
-    left: 8,
-    right: "52%",
-    display: "flex",
-    flexDirection: "column",
-    background: "none",
-    border: "none",
-    padding: 0,
-  },
-  targetFramePortraitHud: {
-    position: "fixed",
-    zIndex: 12,
-    top: 8,
-    right: 8,
-    left: "52%",
-    display: "flex",
-    flexDirection: "column",
-    background: "none",
-    border: "none",
-    padding: 0,
-  },
-  // Landscape phone: same bar+name-below HUD as portrait, but as a normal
-  // flow child of the control panel (see landscapeControlPanel) instead of
-  // a fixed corner overlay - the panel's width naturally bounds it instead
-  // of a hardcoded pixel width. marginTop cancels the panel's own top
-  // padding so the health bar (first thing in the header) pokes up flush
-  // with the very top of the screen, "over" the scene panel beside it,
-  // while the rest of the frame stays within the panel's padded box.
-  // flex/minHeight:0 stretch this to fill landscapeFrameSlot's full 15% so
-  // the token image (frameImageLandscapeHud) has real room to scale into,
-  // instead of sizing to its own fixed-pixel content like portrait does -
-  // portrait's frame has no flex parent forcing extra height, so this is a
-  // no-op there (same reasoning as frameImageNameRow above).
+  // Both orientations now give this a real box to fill (landscapeFrameSlot
+  // for landscape, portraitFramePane for portrait) - flex/minHeight:0
+  // stretch it to that box's full height so the token image
+  // (frameImageAdaptiveHud/frameImagePortraitHud) has real room to scale
+  // into, instead of sizing to its own fixed-pixel content. marginTop
+  // cancels the container's own top offset/padding so the health bar
+  // (first thing in the header) pokes up flush with the very top of the
+  // screen.
   frameInPanelHud: {
     display: "flex",
     flexDirection: "column",
@@ -597,14 +563,12 @@ const styles = {
     height: 18,
     flexShrink: 0,
   },
-  // Portrait HUD: image + name side by side, below the header ("moved
-  // down" to clear it). Row-reverse for target so the name still sits
-  // nearer the header it belongs to while the image is still in the
-  // original image/name reading order (matches the old row-reverse
-  // targetFrame convention for the same reason). flex/minHeight:0 only
-  // matter in landscape, where frameInPanelHud is stretched to fill its
-  // pane (see frameInPanelHud) - in portrait's auto-height frame there's no
-  // extra space to grow into, so this is a no-op there.
+  // Image + name side by side, below the header ("moved down" to clear
+  // it). Row-reverse for target so the name still sits nearer the header
+  // it belongs to while the image is still in the original image/name
+  // reading order (matches the old row-reverse targetFrame convention for
+  // the same reason). flex/minHeight:0 let this fill whatever height
+  // frameInPanelHud has to give it (see frameInPanelHud).
   frameImageNameRow: {
     display: "flex",
     alignItems: "center",
@@ -622,21 +586,27 @@ const styles = {
     flex: 1,
     minHeight: 0,
   },
-  frameImagePortraitHud: {
-    height: 60,
-    width: "auto",
-    objectFit: "cover",
-    borderRadius: 4,
-    flexShrink: 0,
-  },
-  // Landscape only: scales with the pane instead of a fixed pixel height -
-  // fills whatever vertical room frameImageNameRow actually has, capped by
-  // maxWidth so a wide/tall aspect ratio can't push the name out or bleed
-  // past the panel's width.
-  frameImageLandscapeHud: {
+  // Landscape: scales with the frame's box instead of a fixed pixel height
+  // - fills whatever vertical room frameImageNameRow actually has (see
+  // landscapeFrameSlot), capped by maxWidth so a wide/tall aspect ratio
+  // can't push the name out or bleed past the panel's width.
+  frameImageAdaptiveHud: {
     height: "100%",
     width: "auto",
     maxWidth: "65%",
+    objectFit: "cover",
+    borderRadius: 4,
+    flexShrink: 0,
+    minHeight: 0,
+  },
+  // Portrait: tripled back up from an initial 40% (100%/2.5) after that
+  // read as too small once the frame band itself also got shrunk - maxWidth
+  // loosened to match (the row is nearly full screen width, so this isn't
+  // a meaningful cap at this scale, just a backstop against true overflow).
+  frameImagePortraitHud: {
+    height: "120%",
+    width: "auto",
+    maxWidth: "100%",
     objectFit: "cover",
     borderRadius: 4,
     flexShrink: 0,
@@ -650,6 +620,22 @@ const styles = {
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
+    minWidth: 0,
+  },
+  // Portrait: wraps instead of truncating - the name breaks at whitespace
+  // (normal word-wrap) and only breaks mid-word (overflowWrap) if a single
+  // word is too long to fit at all. Smaller base font than landscape's
+  // single-line frameNameInline since it has to share room with a 2.5x
+  // smaller token image, not the whole panel width.
+  frameNamePortraitHud: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: "#eee",
+    textShadow: "0 1px 2px #000",
+    whiteSpace: "normal",
+    overflowWrap: "break-word",
+    wordBreak: "normal",
+    lineHeight: 1.15,
     minWidth: 0,
   },
   targetRange: {
@@ -857,42 +843,116 @@ const styles = {
     gap: 8,
     height: "100%",
   },
-  // Portrait phone: same shape/size as the landscape sticks, but anchored
-  // above the log + utility row (still in normal flow for portrait,
-  // unlike landscape which hides them) instead of the bare viewport edge.
-  joystickZonePortrait: {
-    position: "fixed",
-    zIndex: 13,
-    left: 8,
-    bottom: 110 + 34, // styles.log.height + the utility row below it
-    width: 116,
-    height: 116,
-  },
-  joystickZonePortraitRight: {
-    position: "fixed",
-    zIndex: 13,
-    right: 8,
-    bottom: 110 + 34,
-    width: 116,
-    height: 116,
-  },
-  touchControlsRowPortrait: {
-    position: "fixed",
-    zIndex: 12,
-    left: 8,
-    bottom: 110 + 34 + 116 + 16, // above the left (movement) stick
-    width: 43 * 2 + 8,
-    display: "flex",
-    gap: 8,
-  },
-  actionGridPortrait: {
-    position: "fixed",
-    zIndex: 12,
-    bottom: 110 + 34 + 116 + 16, // above the right (camera) stick
-    right: 8,
+  // Portrait phone: a top-to-bottom flex column of 5 bands (frames, scene,
+  // controls, joysticks, bottom buttons) - same idea as landscape's
+  // left-to-right row of panels, just rotated, and with real flexbox
+  // sizing instead of position:fixed pixel-offset math.
+  portraitColumn: {
+    flex: 1,
+    minHeight: 0,
+    position: "relative", // positioning root for chatPanelLandscape (reused here to cover the whole column, not just the scene band)
     display: "flex",
     flexDirection: "column",
+  },
+  portraitFrameBand: {
+    flex: "0 0 9%",
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "row",
+  },
+  portraitFramePane: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    padding: 8,
+    boxSizing: "border-box",
+  },
+  // flex-shrink:1 (unlike the other bands, which are all 0) - the scene
+  // canvas is protected from shrinking (see its portrait-specific override
+  // below) so if the column ever runs short on height, this is the band
+  // that gives up space first instead of the scene.
+  portraitControlsBand: {
+    flex: "0 1 auto",
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    padding: "4px 8px",
+    boxSizing: "border-box",
+  },
+  // justifyContent:space-between with exactly two children pins them to
+  // the row's own left/right edges - same edges the action rows below use
+  // (same horizontal padding), so Tab/Atk end up flush above column 1 and
+  // column 5 of the grid without needing to match its column math exactly.
+  portraitTabAtkRow: {
+    display: "flex",
+    justifyContent: "space-between",
+  },
+  // space-between (fixed-size square buttons, extra room goes into the
+  // gaps) instead of flex:1 (which stretched buttons into wide rectangles
+  // to fill the row) - same edges as portraitTabAtkRow's own space-between
+  // treatment, so Tab/Atk still land above column 1 and column 5.
+  portraitActionRow: {
+    display: "flex",
+    justifyContent: "space-between",
+  },
+  // Extra padding (beyond the band's own gap) around each joystick zone so
+  // a full-deflection drag stays clear of the controls above and the
+  // bottom buttons below instead of visually crowding them.
+  // space-between (not space-around) pins the two sticks to the row's own
+  // edges - so aside from the row's own padding, each stick sits flush
+  // against the screen edge instead of drifting toward the center.
+  portraitJoystickBand: {
+    flex: "0 0 auto",
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: "10px 24px",
+    boxSizing: "border-box",
+  },
+  portraitBottomButtonsBand: {
+    flex: "0 0 auto",
+    display: "flex",
     gap: 8,
+    padding: 6,
+    boxSizing: "border-box",
+  },
+  // Half-height, roughly one grid-column wide - sized to sit above a single
+  // column of the action grid below rather than spanning it.
+  touchControlButtonPortrait: {
+    flex: "0 0 18%",
+    height: 22,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#ccc",
+    fontSize: 11,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+    cursor: "pointer",
+  },
+  // flex:1 (equal width, filling the full-width row) instead of the
+  // landscape grid's fixed 43x43 - portrait has the whole screen width to
+  // spread 5 buttons across instead of a narrow side panel.
+  actionButtonPortrait: {
+    flex: "0 0 44px",
+    width: 44,
+    height: 44,
+  },
+  // Chat/Menu, portrait: normal-flow buttons filling the bottom band
+  // (unlike landscape's absolutely-positioned corner buttons - see
+  // chatButtonLandscape/menuButtonLandscape), splitting its width evenly.
+  bottomBandButtonPortrait: {
+    flex: 1,
+    height: 32,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#ccc",
+    fontSize: 13,
+    fontWeight: "bold",
+    cursor: "pointer",
   },
   // Landscape phone: Chat/Menu corner buttons, absolutely positioned within
   // the scene panel (canvasWrapper, which is position:relative) instead of
@@ -927,7 +987,7 @@ const styles = {
     fontWeight: "bold",
     cursor: "pointer",
   },
-  chatButtonLandscapeActive: {
+  chatButtonActive: {
     borderColor: "#4caf50",
     color: "#4caf50",
     background: "#0d2b0d",
@@ -985,11 +1045,6 @@ const styles = {
     fontWeight: "bold",
     letterSpacing: 0.5,
     cursor: "pointer",
-  },
-  actionRowLandscape: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 8,
   },
   actionButtonLandscape: {
     width: 43, // 48 * 0.9
@@ -2665,8 +2720,8 @@ export default function App({
     observer.observe(el);
     return () => observer.disconnect();
   }, [viewportMode.isLandscapePhone]);
-  const [landscapeChatOpen, setLandscapeChatOpen] = useState(false);
-  const [landscapeMenuOpen, setLandscapeMenuOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
   const [primaryStats, setPrimaryStats] = useState([]);
@@ -3296,13 +3351,13 @@ export default function App({
 
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
-  // stacked (portrait HUD): bar+name header spans the full container width
-  // at the top, token image below it (shifted down to clear the header) -
-  // instead of landscape's image-beside-bar row layout.
   // stacked (portrait and landscape both use this now): bar+name header
   // spans the full container width at the top, token image below it -
-  // instead of desktop's boxed image-beside-bars layout.
-  function renderSelfFrameContent(stacked, landscape) {
+  // instead of desktop's boxed image-beside-bars layout. `portrait` swaps
+  // in the smaller, wrapping-name variant (frameImagePortraitHud/
+  // frameNamePortraitHud) - portrait's frame pane is wide but the token
+  // is scaled way down, so the name needs to wrap instead of truncate.
+  function renderSelfFrameContent(stacked, portrait) {
     if (stacked) {
       return (
         <>
@@ -3310,8 +3365,8 @@ export default function App({
             {selfUnit && <HealthBar current={selfUnit.health} max={selfUnit.max_health} landscape />}
           </div>
           <div style={styles.frameImageNameRow}>
-            {characterTokenUrl && <img src={characterTokenUrl} alt="" style={landscape ? styles.frameImageLandscapeHud : styles.frameImagePortraitHud} />}
-            <div style={styles.frameNameInline}>{characterName ?? "—"}</div>
+            {characterTokenUrl && <img src={characterTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
+            <div style={portrait ? styles.frameNamePortraitHud : styles.frameNameInline}>{characterName ?? "—"}</div>
           </div>
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </>
@@ -3334,17 +3389,18 @@ export default function App({
     );
   }
 
-  function renderTargetFrameContent(stacked, landscape) {
+  function renderTargetFrameContent(stacked, portrait) {
     if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
     if (stacked) {
+      const nameStyle = { ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline), ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) };
       return (
         <>
           <div style={styles.frameHudHeader}>
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
           </div>
           <div style={styles.frameImageNameRowRight}>
-            {targetTokenUrl && <img src={targetTokenUrl} alt="" style={landscape ? styles.frameImageLandscapeHud : styles.frameImagePortraitHud} />}
-            <div style={{ ...styles.frameNameInline, ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) }}>
+            {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
+            <div style={nameStyle}>
               {formatUnitName(targetUnit)}
             </div>
           </div>
@@ -3401,8 +3457,12 @@ export default function App({
     const revealedDeg = (1 - fraction) * 360;
     const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
 
+    // extraStyle also goes on the tooltip's own wrapper (not just the inner
+    // button div) - it's the wrapper that's actually the flex item in a
+    // flex row (e.g. portraitActionRow), so sizing like flex:1 has to be
+    // set there or it's a no-op.
     return (
-      <AbilityTooltip key={slot} ability={power}>
+      <AbilityTooltip key={slot} ability={power} style={extraStyle}>
         <div
           style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
           onClick={power ? () => usePower(i) : undefined}
@@ -3449,8 +3509,13 @@ export default function App({
         statusCatalog={statusCatalog}
         stockAssets={stockAssets}
       />
-      <StatusBar statuses={selfStatuses} now={Date.now()} side="left" landscape={viewportMode.isLandscapePhone} />
-      <StatusBar statuses={targetStatuses} now={Date.now()} side="right" landscape={viewportMode.isLandscapePhone} />
+      {/* landscape prop: the compact/stacked treatment now applies to both
+          phone orientations, not just landscape - portrait's full-width
+          canvas band still doesn't have room for buffs/debuffs side by
+          side with mm:ss timers once the frame/controls bands take their
+          share too. */}
+      <StatusBar statuses={selfStatuses} now={Date.now()} side="left" landscape={viewportMode.isPhoneLayout} />
+      <StatusBar statuses={targetStatuses} now={Date.now()} side="right" landscape={viewportMode.isPhoneLayout} />
       <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
       <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
       <LootWindow
@@ -3473,6 +3538,46 @@ export default function App({
         portrait={viewportMode.isPortraitPhone}
         landscape={viewportMode.isLandscapePhone}
       />
+      {/* Menu dialog: shared by both phone orientations (only the trigger
+          button's position/look differs - see chatButtonLandscape/
+          menuButtonLandscape for landscape's absolute corner buttons vs.
+          the portrait bottom band's static ones). Chat's log panel is
+          NOT here - landscape's covers just the scene panel (rendered
+          below, inside canvasWrapper), while portrait's covers the top
+          two-thirds of the whole screen (rendered in portraitColumn) - two
+          different positioned ancestors, so each needs its own instance. */}
+      {viewportMode.isLandscapePhone && chatOpen && (
+        <div style={styles.chatPanelLandscape}>
+          {log.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
+      {viewportMode.isPhoneLayout && menuOpen && (
+        <div style={styles.menuDialogLandscape}>
+          <button
+            style={styles.menuDialogButton}
+            onClick={() => { window.location.reload(); }}
+          >
+            Reload
+          </button>
+          <button
+            style={styles.menuDialogButton}
+            onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
+          >
+            Character
+          </button>
+          <button
+            style={styles.menuDialogButton}
+            onClick={() => {
+              setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
+              setMenuOpen(false);
+            }}
+          >
+            Show Latency
+          </button>
+        </div>
+      )}
     </>
   );
 
@@ -3512,7 +3617,7 @@ export default function App({
           <div style={styles.landscapeControlPanel}>
             <div style={styles.landscapeFrameSlot}>
               <div style={styles.frameInPanelHud}>
-                {renderSelfFrameContent(true, true)}
+                {renderSelfFrameContent(true)}
               </div>
             </div>
             <div style={{ ...styles.landscapeControlsSlot, ...styles.landscapeControlsSlotLeft }}>
@@ -3549,57 +3654,25 @@ export default function App({
             <button
               style={{
                 ...styles.chatButtonLandscape,
-                ...(landscapeChatOpen ? styles.chatButtonLandscapeActive : {}),
+                ...(chatOpen ? styles.chatButtonActive : {}),
               }}
               title="Toggle chat"
-              onClick={() => setLandscapeChatOpen((o) => !o)}
+              onClick={() => setChatOpen((o) => !o)}
             >
               Chat
             </button>
             <button
               style={styles.menuButtonLandscape}
               title="Menu"
-              onClick={() => setLandscapeMenuOpen((o) => !o)}
+              onClick={() => setMenuOpen((o) => !o)}
             >
               Menu
             </button>
-            {landscapeChatOpen && (
-              <div style={styles.chatPanelLandscape}>
-                {log.map((line, i) => (
-                  <div key={i}>{line}</div>
-                ))}
-              </div>
-            )}
-            {landscapeMenuOpen && (
-              <div style={styles.menuDialogLandscape}>
-                <button
-                  style={styles.menuDialogButton}
-                  onClick={() => { window.location.reload(); }}
-                >
-                  Reload
-                </button>
-                <button
-                  style={styles.menuDialogButton}
-                  onClick={() => { setCharSheetOpen((o) => !o); setLandscapeMenuOpen(false); }}
-                >
-                  Character
-                </button>
-                <button
-                  style={styles.menuDialogButton}
-                  onClick={() => {
-                    setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
-                    setLandscapeMenuOpen(false);
-                  }}
-                >
-                  Show Latency
-                </button>
-              </div>
-            )}
           </div>
           <div style={styles.landscapeControlPanel}>
             <div style={styles.landscapeFrameSlot}>
               <div style={styles.frameInPanelHud}>
-                {renderTargetFrameContent(true, true)}
+                {renderTargetFrameContent(true)}
               </div>
             </div>
             <div ref={actionGridPaneRef} style={{ ...styles.landscapeControlsSlot, ...styles.landscapeControlsSlotRight }}>
@@ -3627,30 +3700,30 @@ export default function App({
             </div>
           </div>
         </div>
-      ) : (
-        <>
-          {viewportMode.isPortraitPhone ? (
-            <>
-              <div style={styles.selfFramePortraitHud}>
-                {renderSelfFrameContent(true)}
+      ) : viewportMode.isPortraitPhone ? (
+        <div style={styles.portraitColumn}>
+          <div style={styles.portraitFrameBand}>
+            <div style={styles.portraitFramePane}>
+              <div style={styles.frameInPanelHud}>
+                {renderSelfFrameContent(true, true)}
               </div>
-              <div style={styles.targetFramePortraitHud}>
-                {renderTargetFrameContent(true)}
-              </div>
-            </>
-          ) : (
-            <div style={styles.frames}>
-              <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
-              <div style={styles.targetFrame}>{renderTargetFrameContent()}</div>
             </div>
-          )}
-          <div style={viewportMode.isPortraitPhone ? { ...styles.canvasWrapper, alignItems: "flex-start", paddingTop: 100 } : styles.canvasWrapper}>
+            <div style={styles.portraitFramePane}>
+              <div style={styles.frameInPanelHud}>
+                {renderTargetFrameContent(true, true)}
+              </div>
+            </div>
+          </div>
+          {/* flexShrink:0 override: if the column ever runs short on
+              height, the scene should never be the one that gives up
+              space - portraitControlsBand does that instead. */}
+          <div style={{ ...styles.canvasWrapper, flexShrink: 0 }}>
             {sceneContent}
           </div>
-          {viewportMode.isPortraitPhone && (
-            <div style={styles.touchControlsRowPortrait}>
+          <div style={styles.portraitControlsBand}>
+            <div style={styles.portraitTabAtkRow}>
               <button
-                style={styles.touchControlButtonLandscape}
+                style={styles.touchControlButtonPortrait}
                 title="Tab-target (Tab)"
                 onClick={() => handleTabTarget(unitsRef.current, targetIdRef.current, selfIdentifier)}
               >
@@ -3658,7 +3731,7 @@ export default function App({
               </button>
               <button
                 style={{
-                  ...styles.touchControlButtonLandscape,
+                  ...styles.touchControlButtonPortrait,
                   ...(attacking ? styles.touchControlButtonActive : {}),
                 }}
                 title="Start/stop attacking (T)"
@@ -3667,48 +3740,77 @@ export default function App({
                 Atk
               </button>
             </div>
-          )}
-          {viewportMode.isPortraitPhone && (
+            {ACTION_ROWS_PORTRAIT.map((row, ri) => (
+              <div key={ri} style={styles.portraitActionRow}>
+                {row.map((i) => renderActionSlot(i, styles.actionButtonPortrait))}
+              </div>
+            ))}
+          </div>
+          <div style={styles.portraitJoystickBand}>
             <Joystick
               onMove={handleMovementStickMove}
               onEnd={handleMovementStickEnd}
-              style={styles.joystickZonePortrait}
+              style={styles.landscapeJoystickZone}
             />
-          )}
-          {/* Right stick: console-style continuous camera look, symmetric with the left (movement) stick. */}
-          {viewportMode.isPortraitPhone && (
+            {/* Right stick: console-style continuous camera look, symmetric with the left (movement) stick. */}
             <Joystick
               onMove={handleCameraStickMove}
               onEnd={handleCameraStickEnd}
-              style={styles.joystickZonePortraitRight}
+              style={styles.landscapeJoystickZone}
             />
-          )}
-          {viewportMode.isPortraitPhone ? (
-            <div style={styles.actionGridPortrait}>
-              {ACTION_ROWS_LANDSCAPE.map((row, ri) => (
-                <div key={ri} style={styles.actionRowLandscape}>
-                  {row.map((i) => renderActionSlot(i, styles.actionButtonLandscape))}
-                </div>
+          </div>
+          <div style={styles.portraitBottomButtonsBand}>
+            <button
+              style={{
+                ...styles.bottomBandButtonPortrait,
+                ...(chatOpen ? styles.chatButtonActive : {}),
+              }}
+              title="Toggle chat"
+              onClick={() => setChatOpen((o) => !o)}
+            >
+              Chat
+            </button>
+            <button
+              style={styles.bottomBandButtonPortrait}
+              title="Menu"
+              onClick={() => setMenuOpen((o) => !o)}
+            >
+              Menu
+            </button>
+          </div>
+          {chatOpen && (
+            <div style={styles.chatPanelLandscape}>
+              {log.map((line, i) => (
+                <div key={i}>{line}</div>
               ))}
             </div>
-          ) : (
-            <div style={styles.actionBar}>
-              {Array.from({ length: 10 }, (_, i) => renderActionSlot(i))}
-            </div>
           )}
+        </div>
+      ) : (
+        <>
+          <div style={styles.frames}>
+            <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
+            <div style={styles.targetFrame}>{renderTargetFrameContent()}</div>
+          </div>
+          <div style={styles.canvasWrapper}>
+            {sceneContent}
+          </div>
+          <div style={styles.actionBar}>
+            {Array.from({ length: 10 }, (_, i) => renderActionSlot(i))}
+          </div>
         </>
       )}
-      {/* Log: portrait/desktop only for now - redesign in progress for landscape. */}
-      {!viewportMode.isLandscapePhone && (
+      {/* Log: desktop only now - portrait rolled it into the Chat button. */}
+      {!viewportMode.isPhoneLayout && (
         <div style={styles.log}>
           {log.map((line, i) => (
             <div key={i}>{line}</div>
           ))}
         </div>
       )}
-      {/* Char/Latency/Reload: portrait/desktop only for now - redesign in progress for landscape. */}
-      {!viewportMode.isLandscapePhone && (
-        <div style={viewportMode.isPortraitPhone ? { ...styles.utilityRow, justifyContent: "space-between" } : styles.utilityRow}>
+      {/* Char/Latency/Reload: desktop only now - both phone orientations roll these into the Menu button/dialog instead. */}
+      {!viewportMode.isPhoneLayout && (
+        <div style={styles.utilityRow}>
           <button
             style={styles.utilityButton}
             title="Character sheet (P)"
