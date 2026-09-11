@@ -693,6 +693,17 @@ export class SceneManager {
     const selfUnitId = selfEntry?.[0] ?? null;
     const currentMap = selfUnit?.map_identifier;
 
+    if (new URLSearchParams(window.location.search).has("debugScene")) {
+      console.log("[scene] updateUnits", {
+        selfIdentifier,
+        unitCount: Object.keys(units).length,
+        unitIdentifiers: Object.values(units).map((u) => u.zone_unit_identifier),
+        selfFound: !!selfUnit,
+        currentMap,
+        zoneMapIdentifiers: [...this._mapGroups.keys()],
+      });
+    }
+
     // Detect map change before the unit loop so _toWorld uses the correct
     // coordinate transform for every unit on the new map this tick.
     if (selfUnit && selfUnit.map_identifier !== this._selfMapIdentifier) {
