@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 const RESPAWN_DELAY_S = 10;
 import Canvas from "./Canvas";
 import { Joystick } from "./Joystick";
+import { angleToMovementKeys } from "./joystickAngle";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit } from "./game/state";
@@ -36,11 +37,15 @@ export const ACTION_ROWS = [
   [0, 1, 2],
 ];
 
-// Landscape-phone action grid: two columns of five, read top-to-bottom
-// left column first (slots 1-5), then the right column (slots 6-10).
-export const ACTION_COLUMNS = [
-  [0, 1, 2, 3, 4],
-  [5, 6, 7, 8, 9],
+// Landscape-phone action grid: four rows sized 2/3/3/2 from the bottom (the
+// two-columns-of-five version was too tall). Right-aligned rows, numbered
+// left-to-right bottom-to-top like ACTION_ROWS, so row order here is
+// top-to-bottom for normal DOM/flex stacking.
+export const ACTION_ROWS_LANDSCAPE = [
+  [8, 9],
+  [5, 6, 7],
+  [2, 3, 4],
+  [0, 1],
 ];
 
 // Flat placeholder basic-attack values; must match command.characterBasicAttackRange
@@ -429,31 +434,46 @@ const styles = {
     border: "1px solid #6a2a2a",
     padding: 8,
   },
-  // Landscape phone: canvas fills the whole screen, so the frames sit in a
-  // single fixed row pinned to the top-left corner (self then target, side
-  // by side) instead of stretching full-width above the canvas.
-  framesLandscape: {
+  // Landscape phone: canvas fills the whole screen, so the frames become
+  // independent fixed corner overlays (self top-left, target top-right)
+  // instead of a row above the canvas - and de-backgrounded (no rectangle
+  // chrome), just the token image and text floating directly over the scene.
+  // Merged onto selfFrame/targetFrame at the render site, overriding out
+  // the background/border/padding/gap those bring for the desktop layout.
+  selfFrameLandscape: {
     position: "fixed",
     zIndex: 12,
     top: 8,
     left: 8,
-    display: "flex",
-    gap: 8,
-  },
-  // Merged onto selfFrame/targetFrame at the render site (same background/
-  // border/gap, just a fixed size instead of flex:1).
-  selfFrameLandscape: {
     flex: undefined,
-    width: 220,
+    width: 264, // 396 * 0.67 - health bar spans this full width
     height: 74,
+    background: "none",
+    border: "none",
+    padding: 0,
   },
   targetFrameLandscape: {
+    position: "fixed",
+    zIndex: 12,
+    top: 8,
+    right: 8,
     flex: undefined,
-    width: 220,
+    width: 264,
     height: 74,
+    background: "none",
+    border: "none",
+    padding: 0,
   },
   frameImage: {
     height: "100%",
+    width: "auto",
+    objectFit: "cover",
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  // Landscape phone: token scaled down ~25% from the desktop/portrait frame.
+  frameImageLandscape: {
+    height: "75%",
     width: "auto",
     objectFit: "cover",
     borderRadius: 4,
@@ -463,6 +483,75 @@ const styles = {
     position: "relative",
     flex: 1,
     minWidth: 0,
+  },
+  healthBarTrack: {
+    position: "absolute",
+    bottom: 6,
+    left: 6,
+    right: 6,
+    height: 9,
+    border: "1px solid #3a8a3a",
+    borderRadius: 2,
+    background: "#5a1010",
+  },
+  // Landscape phone: pinned to the top of frameInfo (which itself sits a
+  // couple px from the top of the screen), twice the height/length of the
+  // desktop bar (no left/right margin, full frameInfo width).
+  healthBarTrackLandscape: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 18,
+    // Black instead of the desktop bar's green border - green blends into
+    // grass/foliage scenery now that the frame has no background box.
+    border: "1px solid #000",
+    borderRadius: 2,
+    background: "#5a1010",
+  },
+  healthBarPctLandscape: {
+    position: "absolute",
+    top: "50%",
+    right: 4,
+    transform: "translateY(-50%)",
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#fff",
+    textShadow: "0 1px 2px #000",
+    pointerEvents: "none",
+  },
+  healthBarPctLandscapeLeft: {
+    position: "absolute",
+    top: "50%",
+    left: 4,
+    transform: "translateY(-50%)",
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#fff",
+    textShadow: "0 1px 2px #000",
+    pointerEvents: "none",
+  },
+  // Landscape phone: name directly below the health bar, left-aligned with
+  // its left edge.
+  frameNameLandscape: {
+    position: "absolute",
+    top: 22,
+    left: 0,
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#eee",
+    textShadow: "0 1px 2px #000",
+    whiteSpace: "nowrap",
+  },
+  frameNameLandscapeRight: {
+    position: "absolute",
+    top: 22,
+    right: 0,
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#eee",
+    textShadow: "0 1px 2px #000",
+    whiteSpace: "nowrap",
   },
   targetRange: {
     fontSize: 11,
@@ -626,14 +715,119 @@ const styles = {
     width: 116,
     height: 116,
   },
+  // Right stick: console-style camera look, symmetrical with the movement
+  // stick on the left.
+  joystickZoneLandscapeRight: {
+    position: "fixed",
+    zIndex: 13,
+    right: 8,
+    bottom: 8,
+    width: 116,
+    height: 116,
+  },
+  // Landscape phone: Chat/Menu corner buttons. zIndex above both joysticks
+  // (13) since they sit just inside the same corners - a real DOM element
+  // with a higher z-index correctly steals that little bit of the
+  // joystick's touch-start zone from underneath it (same mechanism as the
+  // earlier Tab/Atk-vs-joystick overlap fix), which is fine here since it's
+  // only the very corner, not the joystick's visible knob.
+  chatButtonLandscape: {
+    position: "fixed",
+    zIndex: 20,
+    left: 8,
+    bottom: 8,
+    width: 52,
+    height: 28,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#ccc",
+    fontSize: 11,
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  menuButtonLandscape: {
+    position: "fixed",
+    zIndex: 20,
+    right: 8,
+    bottom: 8,
+    width: 52,
+    height: 28,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#ccc",
+    fontSize: 11,
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  chatButtonLandscapeActive: {
+    borderColor: "#4caf50",
+    color: "#4caf50",
+    background: "#0d2b0d",
+  },
+  // Covers the top 2/3 of the (full-screen) canvas when chat is toggled on.
+  chatPanelLandscape: {
+    position: "fixed",
+    zIndex: 15,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "66.6667%",
+    background: "rgba(20,20,20,0.85)",
+    padding: "8px 12px",
+    overflowY: "auto",
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "#ddd",
+    boxSizing: "border-box",
+  },
+  menuDialogLandscape: {
+    position: "fixed",
+    zIndex: 20,
+    top: 90,
+    left: "50%",
+    transform: "translateX(-50%)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    background: "rgba(20,16,12,0.97)",
+    border: "1px solid #7a5a2a",
+    borderRadius: 6,
+    padding: 12,
+  },
+  menuDialogButton: {
+    width: 160,
+    height: 36,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#eee",
+    fontSize: 13,
+    cursor: "pointer",
+  },
   touchControlsRowLandscape: {
     position: "fixed",
     zIndex: 12,
     left: 8,
-    bottom: 8 + 116 + 24, // above the joystick zone, with real finger clearance
-    width: 140,
+    bottom: 8 + 116 + 16, // above the joystick zone, same gap as the action grid above the right stick
+    width: 43 * 2 + 8,
     display: "flex",
     gap: 8,
+  },
+  // Landscape phone: same size as an action button, instead of the
+  // flex:1-in-a-140px-row sizing the portrait version uses.
+  touchControlButtonLandscape: {
+    width: 43,
+    height: 43,
+    background: "#1c1c1c",
+    border: "1px solid #444",
+    borderRadius: 4,
+    color: "#ccc",
+    fontSize: 13,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+    cursor: "pointer",
   },
   // Landscape phone: chat/log becomes a fixed box in the top-right corner,
   // same height as the unit frames and filling the horizontal space they
@@ -654,25 +848,27 @@ const styles = {
     fontSize: 11,
     lineHeight: 1.3,
   },
-  // Landscape phone: action bar becomes a two-column grid pinned to the
-  // bottom-right corner, instead of a row below the canvas. Buttons shrink
-  // from the usual 52px (see actionButtonLandscape) so 5 rows fit.
+  // Landscape phone: action bar becomes a stack of right-aligned rows (see
+  // ACTION_ROWS_LANDSCAPE) pinned above the right joystick, instead of a
+  // row below the canvas. Buttons shrink from the usual 52px (see
+  // actionButtonLandscape) so it fits without crowding the target frame.
   actionGridLandscape: {
     position: "fixed",
     zIndex: 12,
-    bottom: 8,
+    bottom: 8 + 116 + 16, // above the right (camera) joystick, with a gap
     right: 8,
     display: "flex",
-    gap: 4,
-  },
-  actionColumn: {
-    display: "flex",
     flexDirection: "column",
-    gap: 4,
+    gap: 8,
+  },
+  actionRowLandscape: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 8,
   },
   actionButtonLandscape: {
-    width: 48,
-    height: 48,
+    width: 43, // 48 * 0.9
+    height: 43,
   },
   // Landscape phone: Char/Latency move to a fixed row right under the log,
   // at the top of the right column (action grid takes the bottom instead).
@@ -691,7 +887,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "#000",
+    background: "#111",
   },
   respawnOverlay: {
     position: "absolute",
@@ -1376,20 +1572,16 @@ function UnitBar({ label, current, max }) {
 // (target's frame) above its left end, so on-screen both labels land near
 // the center of the frames row, next to each other. Omitted entirely
 // (rather than defaulting to a side) when the caller doesn't want it shown.
-function HealthBar({ current, max, numbersAlign }) {
+// landscape swaps to the big top-of-screen bar instead, with a plain
+// percentage (no numbersAlign label) inside its own right edge.
+// mirrored (target's landscape bar): fill anchors from the right instead of
+// the left, so it empties toward the left (center) rather than the right -
+// paired with the percentage text also moving to the bar's left edge.
+function HealthBar({ current, max, numbersAlign, landscape, mirrored }) {
   const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
   return (
-    <div style={{
-      position: "absolute",
-      bottom: 6,
-      left: 6,
-      right: 6,
-      height: 9,
-      border: "1px solid #3a8a3a",
-      borderRadius: 2,
-      background: "#5a1010",
-    }}>
-      {numbersAlign && current != null && max != null && (
+    <div style={landscape ? styles.healthBarTrackLandscape : styles.healthBarTrack}>
+      {!landscape && numbersAlign && current != null && max != null && (
         <div style={{
           position: "absolute",
           bottom: "100%",
@@ -1403,12 +1595,25 @@ function HealthBar({ current, max, numbersAlign }) {
           {Math.round(current)}/{Math.round(max)}
         </div>
       )}
-      <div style={{
+      <div style={mirrored ? {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        right: 0,
+        width: `${pct * 100}%`,
+        background: "#2a7a2a",
+        borderRadius: 1,
+      } : {
         width: `${pct * 100}%`,
         height: "100%",
         background: "#2a7a2a",
         borderRadius: 1,
       }} />
+      {landscape && (
+        <span style={mirrored ? styles.healthBarPctLandscapeLeft : styles.healthBarPctLandscape}>
+          {Math.round(pct * 100)}
+        </span>
+      )}
     </div>
   );
 }
@@ -2234,6 +2439,7 @@ export default function App({
   const canvasRef = useRef(null);
   const movementKeysRef = useRef(new Set());
   const turnKeysRef = useRef(new Set());
+  const cameraStickRef = useRef({ x: 0, y: 0 }); // right joystick (landscape): continuous console-style camera look
   const facingRef = useRef(0); // degrees
   const selfPosRef = useRef(null); // latest client-predicted position {x, y}
   const selfIdentifierRef = useRef(`player:${characterName}`);
@@ -2258,6 +2464,13 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [charSheetOpen, setCharSheetOpen] = useState(false);
+  // The canvas is letterboxed/pillarboxed (centered, fixed 4:3) within its
+  // wrapper - this is its actual on-screen rect, reported by scene.js's
+  // handleResize(), for UI meant to sit "inside the canvas" rather than
+  // just inside the viewport (e.g. the landscape Chat/Menu buttons).
+  const [canvasRect, setCanvasRect] = useState(null);
+  const [landscapeChatOpen, setLandscapeChatOpen] = useState(false);
+  const [landscapeMenuOpen, setLandscapeMenuOpen] = useState(false);
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
   const [primaryStats, setPrimaryStats] = useState([]);
@@ -2462,6 +2675,25 @@ export default function App({
       keys: [...movementKeysRef.current],
       ...(pos !== null ? { x: pos.x, y: pos.y } : {}),
     });
+  }, []);
+
+  const handleMovementStickMove = useCallback((data) => {
+    movementKeysRef.current.clear();
+    for (const key of angleToMovementKeys(data.angle.degree)) movementKeysRef.current.add(key);
+    sendMove();
+  }, [sendMove]);
+
+  const handleMovementStickEnd = useCallback(() => {
+    movementKeysRef.current.clear();
+    sendMove();
+  }, [sendMove]);
+
+  const handleCameraStickMove = useCallback((data) => {
+    cameraStickRef.current = { x: data.vector.x, y: data.vector.y };
+  }, []);
+
+  const handleCameraStickEnd = useCallback(() => {
+    cameraStickRef.current = { x: 0, y: 0 };
   }, []);
 
   const handleSelfPosition = useCallback((pos) => {
@@ -2866,16 +3098,25 @@ export default function App({
 
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
-  function renderSelfFrameContent() {
+  function renderSelfFrameContent(landscape) {
     return (
       <>
-        {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
+        {characterTokenUrl && <img src={characterTokenUrl} alt="" style={landscape ? styles.frameImageLandscape : styles.frameImage} />}
         <div style={styles.frameInfo}>
-          <strong>{characterName ?? "—"}</strong>
-          {selfUnit && (
+          {landscape ? (
             <>
-              <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
-              <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
+              {selfUnit && <HealthBar current={selfUnit.health} max={selfUnit.max_health} landscape />}
+              <div style={styles.frameNameLandscape}>{characterName ?? "—"}</div>
+            </>
+          ) : (
+            <>
+              <strong>{characterName ?? "—"}</strong>
+              {selfUnit && (
+                <>
+                  <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
+                  <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
+                </>
+              )}
             </>
           )}
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
@@ -2884,15 +3125,26 @@ export default function App({
     );
   }
 
-  function renderTargetFrameContent() {
+  function renderTargetFrameContent(landscape) {
     if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
     return (
       <>
-        {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
+        {targetTokenUrl && <img src={targetTokenUrl} alt="" style={landscape ? styles.frameImageLandscape : styles.frameImage} />}
         <div style={styles.frameInfo}>
-          <strong>{formatUnitName(targetUnit)}</strong>
-          {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-          <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+          {landscape ? (
+            <>
+              <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
+              <div style={{ ...styles.frameNameLandscapeRight, ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) }}>
+                {formatUnitName(targetUnit)}
+              </div>
+            </>
+          ) : (
+            <>
+              <strong>{formatUnitName(targetUnit)}</strong>
+              {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
+              <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+            </>
+          )}
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
       </>
@@ -2985,14 +3237,14 @@ export default function App({
         </div>
       )}
       {viewportMode.isLandscapePhone ? (
-        <div style={styles.framesLandscape}>
+        <>
           <div style={{ ...styles.selfFrame, ...styles.selfFrameLandscape }}>
-            {renderSelfFrameContent()}
+            {renderSelfFrameContent(true)}
           </div>
           <div style={{ ...styles.targetFrame, ...styles.targetFrameLandscape }}>
-            {renderTargetFrameContent()}
+            {renderTargetFrameContent(true)}
           </div>
-        </div>
+        </>
       ) : (
         <div style={styles.frames}>
           <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
@@ -3008,7 +3260,9 @@ export default function App({
           characterTokenUrl={characterTokenUrl}
           movementKeysRef={movementKeysRef}
           turnKeysRef={turnKeysRef}
+          cameraStickRef={cameraStickRef}
           onFacingChange={handleFacingChange}
+          onCanvasResize={setCanvasRect}
           onSelfPosition={handleSelfPosition}
           positionForMoveSeq={positionForMoveSeq}
           onUnitClick={handleTargetUnit}
@@ -3046,35 +3300,103 @@ export default function App({
         />
       </div>
       {(viewportMode.isPortraitPhone || viewportMode.isLandscapePhone) && (
+        <div style={viewportMode.isLandscapePhone ? styles.touchControlsRowLandscape : styles.touchControlsRow}>
+          <button
+            style={viewportMode.isLandscapePhone ? styles.touchControlButtonLandscape : styles.touchControlButton}
+            title="Tab-target (Tab)"
+            onClick={() => handleTabTarget(unitsRef.current, targetIdRef.current, selfIdentifier)}
+          >
+            Tab
+          </button>
+          <button
+            style={{
+              ...(viewportMode.isLandscapePhone ? styles.touchControlButtonLandscape : styles.touchControlButton),
+              ...(attacking ? styles.touchControlButtonActive : {}),
+            }}
+            title="Start/stop attacking (T)"
+            onClick={() => (attacking ? handleStopAttacking() : handleStartAttacking())}
+          >
+            Atk
+          </button>
+        </div>
+      )}
+      {(viewportMode.isPortraitPhone || viewportMode.isLandscapePhone) && (
+        <Joystick
+          onMove={handleMovementStickMove}
+          onEnd={handleMovementStickEnd}
+          style={viewportMode.isLandscapePhone ? styles.joystickZoneLandscape : styles.joystickZone}
+        />
+      )}
+      {/* Right stick (landscape only for now): console-style continuous camera look. */}
+      {viewportMode.isLandscapePhone && (
+        <Joystick
+          onMove={handleCameraStickMove}
+          onEnd={handleCameraStickEnd}
+          style={styles.joystickZoneLandscapeRight}
+        />
+      )}
+      {viewportMode.isLandscapePhone && (
         <>
-          <div style={viewportMode.isLandscapePhone ? styles.touchControlsRowLandscape : styles.touchControlsRow}>
-            <button
-              style={styles.touchControlButton}
-              title="Tab-target (Tab)"
-              onClick={() => handleTabTarget(unitsRef.current, targetIdRef.current, selfIdentifier)}
-            >
-              Tab
-            </button>
-            <button
-              style={{ ...styles.touchControlButton, ...(attacking ? styles.touchControlButtonActive : {}) }}
-              title="Start/stop attacking (T)"
-              onClick={() => (attacking ? handleStopAttacking() : handleStartAttacking())}
-            >
-              Atk
-            </button>
-          </div>
-          <Joystick
-            movementKeysRef={movementKeysRef}
-            onChange={sendMove}
-            style={viewportMode.isLandscapePhone ? styles.joystickZoneLandscape : styles.joystickZone}
-          />
+          <button
+            style={{
+              ...styles.chatButtonLandscape,
+              left: (canvasRect?.left ?? 0) + 8,
+              ...(landscapeChatOpen ? styles.chatButtonLandscapeActive : {}),
+            }}
+            title="Toggle chat"
+            onClick={() => setLandscapeChatOpen((o) => !o)}
+          >
+            Chat
+          </button>
+          <button
+            style={{
+              ...styles.menuButtonLandscape,
+              right: (canvasRect ? window.innerWidth - canvasRect.right : 0) + 8,
+            }}
+            title="Menu"
+            onClick={() => setLandscapeMenuOpen((o) => !o)}
+          >
+            Menu
+          </button>
+          {landscapeChatOpen && (
+            <div style={styles.chatPanelLandscape}>
+              {log.map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+          )}
+          {landscapeMenuOpen && (
+            <div style={styles.menuDialogLandscape}>
+              <button
+                style={styles.menuDialogButton}
+                onClick={() => { window.location.reload(); }}
+              >
+                Reload
+              </button>
+              <button
+                style={styles.menuDialogButton}
+                onClick={() => { setCharSheetOpen((o) => !o); setLandscapeMenuOpen(false); }}
+              >
+                Character
+              </button>
+              <button
+                style={styles.menuDialogButton}
+                onClick={() => {
+                  setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
+                  setLandscapeMenuOpen(false);
+                }}
+              >
+                Show Latency
+              </button>
+            </div>
+          )}
         </>
       )}
       {viewportMode.isLandscapePhone ? (
         <div style={styles.actionGridLandscape}>
-          {ACTION_COLUMNS.map((col, ci) => (
-            <div key={ci} style={styles.actionColumn}>
-              {col.map((i) => renderActionSlot(i, styles.actionButtonLandscape))}
+          {ACTION_ROWS_LANDSCAPE.map((row, ri) => (
+            <div key={ri} style={styles.actionRowLandscape}>
+              {row.map((i) => renderActionSlot(i, styles.actionButtonLandscape))}
             </div>
           ))}
         </div>
@@ -3093,34 +3415,40 @@ export default function App({
           )}
         </div>
       )}
-      <div style={viewportMode.isLandscapePhone ? styles.logLandscape : styles.log}>
-        {log.map((line, i) => (
-          <div key={i}>{line}</div>
-        ))}
-      </div>
-      <div style={viewportMode.isLandscapePhone ? styles.utilityRowLandscape : styles.utilityRow}>
-        <button
-          style={styles.utilityButton}
-          title="Character sheet (P)"
-          onClick={() => setCharSheetOpen(o => !o)}
-        >
-          Char
-        </button>
-        <button
-          style={styles.utilityButton}
-          title="Toggle latency display (L)"
-          onClick={() => setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current))}
-        >
-          Latency
-        </button>
-        <button
-          style={styles.utilityButton}
-          title="Reload"
-          onClick={() => window.location.reload()}
-        >
-          Reload
-        </button>
-      </div>
+      {/* Log: portrait/desktop only for now - redesign in progress for landscape. */}
+      {!viewportMode.isLandscapePhone && (
+        <div style={styles.log}>
+          {log.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
+      {/* Char/Latency/Reload: portrait/desktop only for now - redesign in progress for landscape. */}
+      {!viewportMode.isLandscapePhone && (
+        <div style={styles.utilityRow}>
+          <button
+            style={styles.utilityButton}
+            title="Character sheet (P)"
+            onClick={() => setCharSheetOpen(o => !o)}
+          >
+            Char
+          </button>
+          <button
+            style={styles.utilityButton}
+            title="Toggle latency display (L)"
+            onClick={() => setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current))}
+          >
+            Latency
+          </button>
+          <button
+            style={styles.utilityButton}
+            title="Reload"
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </button>
+        </div>
+      )}
       {disconnected && (
         <div style={{
           position: "fixed", inset: 0, display: "flex",

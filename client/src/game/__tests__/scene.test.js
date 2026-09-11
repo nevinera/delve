@@ -11,6 +11,7 @@ import {
   pinchZoom,
   pointerDistance,
   orbitFromDrag,
+  orbitFromStick,
   isTap,
 } from "../scene";
 
@@ -204,6 +205,46 @@ describe("orbitFromDrag", () => {
 
   it("clamps pitch to the maximum when dragging far down", () => {
     expect(orbitFromDrag(0, 0.5, 0, 1000).pitch).toBeCloseTo(60 * (Math.PI / 180));
+  });
+});
+
+describe("orbitFromStick", () => {
+  it("increases facing when pushed right", () => {
+    expect(orbitFromStick(0, 0.5, 1, 0, 1).facing).toBeGreaterThan(0);
+  });
+
+  it("decreases facing when pushed left", () => {
+    expect(orbitFromStick(0, 0.5, -1, 0, 1).facing).toBeLessThan(0);
+  });
+
+  it("leaves facing unchanged for a purely vertical deflection", () => {
+    expect(orbitFromStick(1.2, 0.5, 0, 1, 1).facing).toBe(1.2);
+  });
+
+  it("scales facing change by elapsed time", () => {
+    const half = orbitFromStick(0, 0.5, 1, 0, 0.5).facing;
+    const full = orbitFromStick(0, 0.5, 1, 0, 1).facing;
+    expect(half).toBeCloseTo(full / 2);
+  });
+
+  it("decreases pitch (looks up) when pulled back/down", () => {
+    expect(orbitFromStick(0, 0.5, 0, -1, 1).pitch).toBeLessThan(0.5);
+  });
+
+  it("increases pitch (steeper overhead angle) when pushed forward/up", () => {
+    expect(orbitFromStick(0, 0.5, 0, 1, 1).pitch).toBeGreaterThan(0.5);
+  });
+
+  it("clamps pitch to the minimum when pulled back/down for a long time", () => {
+    expect(orbitFromStick(0, 0.5, 0, -1, 1000).pitch).toBeCloseTo(20 * (Math.PI / 180));
+  });
+
+  it("clamps pitch to the maximum when pushed forward/up for a long time", () => {
+    expect(orbitFromStick(0, 0.5, 0, 1, 1000).pitch).toBeCloseTo(60 * (Math.PI / 180));
+  });
+
+  it("does nothing at zero elapsed time", () => {
+    expect(orbitFromStick(1.2, 0.5, 1, 1, 0)).toEqual({ facing: 1.2, pitch: 0.5 });
   });
 });
 

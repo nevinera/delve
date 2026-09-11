@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import nipplejs from "nipplejs";
-import { angleToMovementKeys } from "./joystickAngle";
 
-// Touch movement control: drives movementKeysRef exactly like WASD does
-// (see KEY_MAP in App.jsx), so scene.js's prediction and the server's move
-// handler don't need to know movement came from a stick instead of keys.
-export function Joystick({ movementKeysRef, onChange, style }) {
+// Generic touch-stick wrapper around nipplejs - reports each move as the raw
+// nipplejs event data (angle/force/vector) via onMove, and calls onEnd when
+// released or dragged back into the deadzone. Callers decide what the stick
+// controls (movementKeysRef for discrete WASD-style movement, a continuous
+// vector ref for camera look, etc.) rather than this component assuming one.
+export function Joystick({ onMove, onEnd, style }) {
   const zoneRef = useRef(null);
 
   useEffect(() => {
@@ -25,13 +26,6 @@ export function Joystick({ movementKeysRef, onChange, style }) {
       size: 100,
     });
 
-    const applyKeys = (keys) => {
-      movementKeysRef.current.clear();
-      for (const key of keys) movementKeysRef.current.add(key);
-      if (debug) console.log("[joystick] keys ->", keys);
-      onChange();
-    };
-
     if (debug) {
       manager.on("start", () => console.log("[joystick] start"));
       manager.on("destroyed", () => console.log("[joystick] destroyed"));
@@ -42,22 +36,17 @@ export function Joystick({ movementKeysRef, onChange, style }) {
     // signature most nipplejs examples/docs show.
     manager.on("move", (evt) => {
       const data = evt.data;
-      if (debug) console.log("[joystick] move raw angle.degree:", data.angle?.degree, "force:", data.force);
-      if (!data.angle || data.force < 0.1) { applyKeys([]); return; }
-      // data.angle.degree is already standard math convention (0deg=east,
-      // 90deg=north) despite nipplejs's own internal "180 - raw" transform
-      // (Joystick.ts) - that transform composes with its raw-angle
-      // convention to cancel out, confirmed against its own test fixtures
-      // (raw degree 90 = a physical drag up = their own 'up' label).
-      applyKeys(angleToMovementKeys(data.angle.degree));
+      if (debug) console.log("[joystick] move", { angle: data.angle?.degree, force: data.force, vector: data.vector });
+      if (!data.angle || data.force < 0.1) { onEnd?.(); return; }
+      onMove?.(data);
     });
     manager.on("end", () => {
       if (debug) console.log("[joystick] end");
-      applyKeys([]);
+      onEnd?.();
     });
 
     return () => manager.destroy();
-  }, [movementKeysRef, onChange]);
+  }, [onMove, onEnd]);
 
   return <div ref={zoneRef} style={style} />;
 }
