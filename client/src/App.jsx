@@ -3113,6 +3113,13 @@ export default function App({
         >
           Latency
         </button>
+        <button
+          style={styles.utilityButton}
+          title="Reload"
+          onClick={() => window.location.reload()}
+        >
+          Reload
+        </button>
       </div>
       {disconnected && (
         <div style={{
