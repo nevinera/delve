@@ -99,6 +99,6 @@
   </head>
   <body>
     <%= yield %>
-    <script type="module" src="/client/editor.js"></script>
+    <%= vite_script_tags("src/editor/main.jsx", "/client/editor.js") %>
   </body>
 </html>

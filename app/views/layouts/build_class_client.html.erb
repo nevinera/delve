@@ -75,6 +75,6 @@
   </head>
   <body>
     <%= yield %>
-    <script type="module" src="/client/classEditor.js"></script>
+    <%= vite_script_tags("src/classEditor/main.jsx", "/client/classEditor.js") %>
   </body>
 </html>

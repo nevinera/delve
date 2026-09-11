@@ -21,6 +21,6 @@
   </head>
   <body>
     <%= yield %>
-    <script type="module" src="/client/main.js"></script>
+    <%= vite_script_tags("src/main.jsx", "/client/main.js") %>
   </body>
 </html>
