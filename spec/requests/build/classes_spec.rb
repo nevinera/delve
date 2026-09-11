@@ -159,7 +159,7 @@ RSpec.describe "Build::Classes", type: :request do
 
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('id="editor-root"')
-          expect(response.body).to include('src="/client/classEditor.js"')
+          expect(response.body).to match(%r{src="/client/classEditor[^"]*\.js"})
           expect(response.body).to include(CGI.escapeHTML(content.to_json))
           expect(response.body).to include(CGI.escapeHTML("classes/puncher/punch"))
           expect(response.body).to include(CGI.escapeHTML({"../graphics/icons/punch.svg" => "data:image/svg+xml;base64,#{Base64.strict_encode64("fake-svg-bytes")}"}.to_json))

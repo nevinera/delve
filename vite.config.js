@@ -10,6 +10,11 @@ export default defineConfig({
   build: {
     outDir: "../public/client",
     emptyOutDir: true,
+    // Content-hashed filenames so a new build gets a new URL instead of
+    // relying on Cache-Control headers to avoid serving a stale bundle
+    // (see config/environments/production.rb) - manifest.json maps each
+    // entry to its current hashed filename for app/helpers/vite_helper.rb.
+    manifest: true,
     rollupOptions: {
       input: {
         main: resolve(__dirname, "client/src/main.jsx"),
@@ -17,9 +22,9 @@ export default defineConfig({
         classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
       },
       output: {
-        entryFileNames: "[name].js",
-        chunkFileNames: "[name].js",
-        assetFileNames: "[name][extname]",
+        entryFileNames: "[name]-[hash].js",
+        chunkFileNames: "[name]-[hash].js",
+        assetFileNames: "[name]-[hash][extname]",
       },
     },
   },

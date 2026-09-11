@@ -14,6 +14,8 @@ const PITCH_MIN = 20 * DEG;
 const PITCH_MAX = 60 * DEG;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 1.5;
+const CAMERA_STICK_TURN_RATE = 120 * DEG; // radians/sec at full deflection
+const CAMERA_STICK_PITCH_RATE = 60 * DEG; // radians/sec at full deflection
 const LONG_PRESS_MS = 500; // touch substitute for right-click
 const DRAG_THRESHOLD_SQ = 9; // px^2; below this a pointer down/up pair counts as a tap/click
 const PINCH_ZOOM_SENSITIVITY = 0.003; // per px of finger-distance change
@@ -223,6 +225,21 @@ export function orbitFromDrag(camFacing, camPitch, dx, dy) {
   };
 }
 
+// Console-style right-stick camera look, applied continuously (every frame,
+// scaled by elapsed time) rather than per-drag-delta like orbitFromDrag.
+// Controller convention: pull back/down to look up - higher camPitch means a
+// steeper overhead angle (see _positionCamera), so "look up" means pitch
+// decreases, same sign as the stick's up-positive y.
+export function orbitFromStick(camFacing, camPitch, stickX, stickY, elapsed) {
+  return {
+    facing: camFacing + stickX * CAMERA_STICK_TURN_RATE * elapsed,
+    pitch: Math.max(
+      PITCH_MIN,
+      Math.min(PITCH_MAX, camPitch + stickY * CAMERA_STICK_PITCH_RATE * elapsed)
+    ),
+  };
+}
+
 export function isTap(dx, dy) {
   return dx * dx + dy * dy < DRAG_THRESHOLD_SQ;
 }
@@ -320,10 +337,12 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, cameraStickRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onCanvasResize } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
+    this._cameraStickRef = cameraStickRef;
+    this._onCanvasResize = onCanvasResize;
     this._onFacingChange = onFacingChange;
     this._onSelfPosition = onSelfPosition;
     this._positionForMoveSeq = positionForMoveSeq;
@@ -693,6 +712,17 @@ export class SceneManager {
     const selfUnitId = selfEntry?.[0] ?? null;
     const currentMap = selfUnit?.map_identifier;
 
+    if (new URLSearchParams(window.location.search).has("debugScene")) {
+      console.log("[scene] updateUnits", {
+        selfIdentifier,
+        unitCount: Object.keys(units).length,
+        unitIdentifiers: Object.values(units).map((u) => u.zone_unit_identifier),
+        selfFound: !!selfUnit,
+        currentMap,
+        zoneMapIdentifiers: [...this._mapGroups.keys()],
+      });
+    }
+
     // Detect map change before the unit loop so _toWorld uses the correct
     // coordinate transform for every unit on the new map this tick.
     if (selfUnit && selfUnit.map_identifier !== this._selfMapIdentifier) {
@@ -898,6 +928,17 @@ export class SceneManager {
         if (keys.has("turn_left"))  { this._camFacing -= TURN_RATE * elapsed; turned = true; }
         if (keys.has("turn_right")) { this._camFacing += TURN_RATE * elapsed; turned = true; }
         if (turned) this._onFacingChange?.(this._camFacing / DEG);
+      }
+
+      // Right stick: continuous console-style camera look, read every frame
+      // (not event-driven) so holding a constant deflection keeps rotating
+      // even though nipplejs only fires "move" while the finger itself moves.
+      const camStick = this._cameraStickRef?.current;
+      if (camStick && (camStick.x || camStick.y)) {
+        const orbit = orbitFromStick(this._camFacing, this._camPitch, camStick.x, camStick.y, elapsed);
+        this._camFacing = orbit.facing;
+        this._camPitch = orbit.pitch;
+        this._onFacingChange?.(this._camFacing / DEG);
       }
 
       // Self unit: apply local movement prediction each frame.
@@ -1154,6 +1195,11 @@ export class SceneManager {
     this._renderer.setSize(w, h, false);
     this._camera.aspect = 4 / 3;
     this._camera.updateProjectionMatrix();
+    // Canvas is letterboxed/pillarboxed (centered) within its parent at a
+    // fixed 4:3 - report its actual on-screen rect so UI meant to sit
+    // "inside the canvas" (not just inside the viewport) can position
+    // itself against real edges instead of the screen's.
+    this._onCanvasResize?.(this._canvas.getBoundingClientRect());
   }
 
   dispose() {

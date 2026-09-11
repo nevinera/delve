@@ -226,7 +226,7 @@ RSpec.describe "Build::Abilities", type: :request do
           get "/build/abilities/punch/edit"
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('<div id="editor-root"')
-          expect(response.body).to include('src="/client/editor.js"')
+          expect(response.body).to match(%r{src="/client/editor[^"]*\.js"})
           expect(response.body).to include(CGI.escapeHTML(content.to_json))
           expect(response.body).to include(CGI.escapeHTML({"../graphics/effects/punch-impact.webp" => "data:image/webp;base64,#{Base64.strict_encode64("fake-webp-bytes")}"}.to_json))
           expect(response.body).to include(build_abilities_path)

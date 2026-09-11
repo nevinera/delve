@@ -15,8 +15,18 @@ Rails.application.configure do
   # Turn on fragment caching in view templates.
   config.action_controller.perform_caching = true
 
-  # Cache assets for far-future expiry since they are all digest stamped.
-  config.public_file_server.headers = {"cache-control" => "public, max-age=#{1.year.to_i}"}
+  # Cache assets for far-future expiry since they are all digest stamped -
+  # except the client/ build (public/client/*.js) and manifest/icons, which
+  # aren't: same filename every build, so a long max-age means mobile
+  # browsers can serve a stale bundle indefinitely. Set
+  # DISABLE_ASSET_CACHING=1 (e.g. on a dev/staging box that rebuilds often)
+  # to turn this off entirely instead.
+  config.public_file_server.headers =
+    if ENV["DISABLE_ASSET_CACHING"] == "1"
+      {"cache-control" => "no-cache"}
+    else
+      {"cache-control" => "public, max-age=#{1.year.to_i}"}
+    end
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"

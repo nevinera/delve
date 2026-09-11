@@ -8,7 +8,9 @@ const Canvas = forwardRef(function Canvas({
   characterTokenUrl,
   movementKeysRef,
   turnKeysRef,
+  cameraStickRef,
   onFacingChange,
+  onCanvasResize,
   onSelfPosition,
   positionForMoveSeq,
   onUnitClick,
@@ -30,7 +32,7 @@ const Canvas = forwardRef(function Canvas({
   }));
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover });
+    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, cameraStickRef, onFacingChange, onCanvasResize, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();

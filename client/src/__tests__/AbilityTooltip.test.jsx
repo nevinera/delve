@@ -10,13 +10,42 @@ afterEach(() => {
 });
 
 describe("AbilityTooltip", () => {
-  it("renders only the children when no ability is given", () => {
+  it("renders only the children's text when no ability is given", () => {
     render(
       <AbilityTooltip ability={null}>
         <button>slot</button>
       </AbilityTooltip>
     );
     expect(screen.getByText("slot")).toBeInTheDocument();
+    expect(document.body.textContent).toBe("slot");
+  });
+
+  // Regression: an ability-less slot used to skip the wrapping span
+  // entirely, so a caller sizing the wrapper via flex (e.g. the portrait
+  // action grid) got wildly different sizes for filled vs. empty slots.
+  it("still wraps children in the same span when no ability is given", () => {
+    render(
+      <AbilityTooltip ability={null} style={{flex: 1}}>
+        <button>slot</button>
+      </AbilityTooltip>
+    );
+    const wrapper = screen.getByText("slot").closest("span");
+    expect(wrapper).toBeInTheDocument();
+    expect(wrapper).toHaveStyle({ flex: "1" });
+  });
+
+  it("hovering an ability-less slot does not show a tooltip or throw", () => {
+    vi.useFakeTimers();
+    render(
+      <AbilityTooltip ability={null}>
+        <button>slot</button>
+      </AbilityTooltip>
+    );
+    const target = screen.getByText("slot");
+    expect(() => {
+      fireEvent.mouseEnter(target, {clientX: 10, clientY: 10});
+      act(() => vi.advanceTimersByTime(500));
+    }).not.toThrow();
     expect(document.body.textContent).toBe("slot");
   });
 

@@ -33,58 +33,44 @@ function fire(event, data) {
 
 describe("Joystick", () => {
   it("creates the nipplejs manager against its own zone element", () => {
-    const movementKeysRef = { current: new Set() };
-    render(<Joystick movementKeysRef={movementKeysRef} onChange={() => {}} style={{}} />);
+    render(<Joystick onMove={() => {}} onEnd={() => {}} style={{}} />);
 
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(createMock.mock.calls[0][0].zone).toBeInstanceOf(HTMLElement);
   });
 
-  it("sets movementKeysRef from the move angle and calls onChange", () => {
-    const movementKeysRef = { current: new Set() };
-    const onChange = vi.fn();
-    render(<Joystick movementKeysRef={movementKeysRef} onChange={onChange} style={{}} />);
+  it("calls onMove with the raw move data once past the deadzone", () => {
+    const onMove = vi.fn();
+    render(<Joystick onMove={onMove} onEnd={() => {}} style={{}} />);
 
-    fire("move", { angle: { degree: 90 }, force: 0.5 });
+    const data = { angle: { degree: 90 }, force: 0.5, vector: { x: 0, y: 1 } };
+    fire("move", data);
 
-    expect([...movementKeysRef.current]).toEqual(["forward"]);
-    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onMove).toHaveBeenCalledWith(data);
   });
 
-  it("maps a diagonal angle to both movement keys", () => {
-    const movementKeysRef = { current: new Set() };
-    render(<Joystick movementKeysRef={movementKeysRef} onChange={() => {}} style={{}} />);
+  it("calls onEnd instead of onMove when force is below the deadzone", () => {
+    const onMove = vi.fn();
+    const onEnd = vi.fn();
+    render(<Joystick onMove={onMove} onEnd={onEnd} style={{}} />);
 
-    fire("move", { angle: { degree: 45 }, force: 0.8 });
+    fire("move", { angle: { degree: 90 }, force: 0.05, vector: { x: 0, y: 0.05 } });
 
-    expect([...movementKeysRef.current].sort()).toEqual(["forward", "strafe_right"]);
+    expect(onMove).not.toHaveBeenCalled();
+    expect(onEnd).toHaveBeenCalledTimes(1);
   });
 
-  it("clears movement keys when force is below the deadzone", () => {
-    const movementKeysRef = { current: new Set(["forward"]) };
-    const onChange = vi.fn();
-    render(<Joystick movementKeysRef={movementKeysRef} onChange={onChange} style={{}} />);
-
-    fire("move", { angle: { degree: 90 }, force: 0.05 });
-
-    expect(movementKeysRef.current.size).toBe(0);
-    expect(onChange).toHaveBeenCalledTimes(1);
-  });
-
-  it("clears movement keys on end", () => {
-    const movementKeysRef = { current: new Set(["forward", "strafe_right"]) };
-    const onChange = vi.fn();
-    render(<Joystick movementKeysRef={movementKeysRef} onChange={onChange} style={{}} />);
+  it("calls onEnd on end", () => {
+    const onEnd = vi.fn();
+    render(<Joystick onMove={() => {}} onEnd={onEnd} style={{}} />);
 
     fire("end", undefined);
 
-    expect(movementKeysRef.current.size).toBe(0);
-    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onEnd).toHaveBeenCalledTimes(1);
   });
 
   it("destroys the nipplejs manager on unmount", () => {
-    const movementKeysRef = { current: new Set() };
-    const { unmount } = render(<Joystick movementKeysRef={movementKeysRef} onChange={() => {}} style={{}} />);
+    const { unmount } = render(<Joystick onMove={() => {}} onEnd={() => {}} style={{}} />);
 
     unmount();
 

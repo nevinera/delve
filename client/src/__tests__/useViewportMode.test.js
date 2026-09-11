@@ -46,4 +46,31 @@ describe("classifyViewport", () => {
       isLandscapePhone: true,
     });
   });
+
+  it("forceViewport=portrait overrides real detection on a desktop mouse/large screen", () => {
+    expect(classifyViewport({ isTouch: false, isPhoneDimension: false, isPortrait: false, forceViewport: "portrait" })).toEqual({
+      isTouch: true,
+      isPhoneLayout: true,
+      isPortraitPhone: true,
+      isLandscapePhone: false,
+    });
+  });
+
+  it("forceViewport=landscape overrides real detection on a desktop mouse/large screen", () => {
+    expect(classifyViewport({ isTouch: false, isPhoneDimension: false, isPortrait: true, forceViewport: "landscape" })).toEqual({
+      isTouch: true,
+      isPhoneLayout: true,
+      isPortraitPhone: false,
+      isLandscapePhone: true,
+    });
+  });
+
+  it("ignores an unrecognized forceViewport value and falls back to real detection", () => {
+    expect(classifyViewport({ isTouch: true, isPhoneDimension: true, isPortrait: true, forceViewport: "sideways" })).toEqual({
+      isTouch: true,
+      isPhoneLayout: true,
+      isPortraitPhone: true,
+      isLandscapePhone: false,
+    });
+  });
 });
