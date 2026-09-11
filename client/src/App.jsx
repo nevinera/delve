@@ -495,6 +495,11 @@ const styles = {
   // padding so the health bar (first thing in the header) pokes up flush
   // with the very top of the screen, "over" the scene panel beside it,
   // while the rest of the frame stays within the panel's padded box.
+  // flex/minHeight:0 stretch this to fill landscapeFrameSlot's full 15% so
+  // the token image (frameImageLandscapeHud) has real room to scale into,
+  // instead of sizing to its own fixed-pixel content like portrait does -
+  // portrait's frame has no flex parent forcing extra height, so this is a
+  // no-op there (same reasoning as frameImageNameRow above).
   frameInPanelHud: {
     display: "flex",
     flexDirection: "column",
@@ -502,6 +507,8 @@ const styles = {
     border: "none",
     padding: 0,
     marginTop: -8,
+    flex: 1,
+    minHeight: 0,
   },
   frameImage: {
     height: "100%",
@@ -568,17 +575,23 @@ const styles = {
   frameHudHeader: {
     position: "relative",
     height: 18,
+    flexShrink: 0,
   },
   // Portrait HUD: image + name side by side, below the header ("moved
   // down" to clear it). Row-reverse for target so the name still sits
   // nearer the header it belongs to while the image is still in the
   // original image/name reading order (matches the old row-reverse
-  // targetFrame convention for the same reason).
+  // targetFrame convention for the same reason). flex/minHeight:0 only
+  // matter in landscape, where frameInPanelHud is stretched to fill its
+  // pane (see frameInPanelHud) - in portrait's auto-height frame there's no
+  // extra space to grow into, so this is a no-op there.
   frameImageNameRow: {
     display: "flex",
     alignItems: "center",
     gap: 8,
     marginTop: 6,
+    flex: 1,
+    minHeight: 0,
   },
   frameImageNameRowRight: {
     display: "flex",
@@ -586,6 +599,8 @@ const styles = {
     alignItems: "center",
     gap: 8,
     marginTop: 6,
+    flex: 1,
+    minHeight: 0,
   },
   frameImagePortraitHud: {
     height: 60,
@@ -594,12 +609,28 @@ const styles = {
     borderRadius: 4,
     flexShrink: 0,
   },
+  // Landscape only: scales with the pane instead of a fixed pixel height -
+  // fills whatever vertical room frameImageNameRow actually has, capped by
+  // maxWidth so a wide/tall aspect ratio can't push the name out or bleed
+  // past the panel's width.
+  frameImageLandscapeHud: {
+    height: "100%",
+    width: "auto",
+    maxWidth: "65%",
+    objectFit: "cover",
+    borderRadius: 4,
+    flexShrink: 0,
+    minHeight: 0,
+  },
   frameNameInline: {
     fontSize: 13,
     fontWeight: "bold",
     color: "#eee",
     textShadow: "0 1px 2px #000",
     whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    minWidth: 0,
   },
   targetRange: {
     fontSize: 11,
@@ -3190,7 +3221,7 @@ export default function App({
   // stacked (portrait and landscape both use this now): bar+name header
   // spans the full container width at the top, token image below it -
   // instead of desktop's boxed image-beside-bars layout.
-  function renderSelfFrameContent(stacked) {
+  function renderSelfFrameContent(stacked, landscape) {
     if (stacked) {
       return (
         <>
@@ -3198,7 +3229,7 @@ export default function App({
             {selfUnit && <HealthBar current={selfUnit.health} max={selfUnit.max_health} landscape />}
           </div>
           <div style={styles.frameImageNameRow}>
-            {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImagePortraitHud} />}
+            {characterTokenUrl && <img src={characterTokenUrl} alt="" style={landscape ? styles.frameImageLandscapeHud : styles.frameImagePortraitHud} />}
             <div style={styles.frameNameInline}>{characterName ?? "—"}</div>
           </div>
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
@@ -3222,7 +3253,7 @@ export default function App({
     );
   }
 
-  function renderTargetFrameContent(stacked) {
+  function renderTargetFrameContent(stacked, landscape) {
     if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
     if (stacked) {
       return (
@@ -3231,7 +3262,7 @@ export default function App({
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
           </div>
           <div style={styles.frameImageNameRowRight}>
-            {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImagePortraitHud} />}
+            {targetTokenUrl && <img src={targetTokenUrl} alt="" style={landscape ? styles.frameImageLandscapeHud : styles.frameImagePortraitHud} />}
             <div style={{ ...styles.frameNameInline, ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) }}>
               {formatUnitName(targetUnit)}
             </div>
@@ -3400,7 +3431,7 @@ export default function App({
           <div style={styles.landscapeControlPanel}>
             <div style={styles.landscapeFrameSlot}>
               <div style={styles.frameInPanelHud}>
-                {renderSelfFrameContent(true)}
+                {renderSelfFrameContent(true, true)}
               </div>
             </div>
             <div style={{ ...styles.landscapeControlsSlot, ...styles.landscapeControlsSlotLeft }}>
@@ -3487,7 +3518,7 @@ export default function App({
           <div style={styles.landscapeControlPanel}>
             <div style={styles.landscapeFrameSlot}>
               <div style={styles.frameInPanelHud}>
-                {renderTargetFrameContent(true)}
+                {renderTargetFrameContent(true, true)}
               </div>
             </div>
             <div ref={actionGridPaneRef} style={{ ...styles.landscapeControlsSlot, ...styles.landscapeControlsSlotRight }}>
