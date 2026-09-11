@@ -73,6 +73,26 @@ export function fitActionGridColumns({ itemCount, width, height, gap, size, minS
   return { ...best, size: Math.max(minSize, best.size) };
 }
 
+// ?debugStatuses=N appends N fake buffs and N fake debuffs to both status
+// bars, for eyeballing layout without needing real statuses applied in a
+// live game. shortName is capped at 6 chars (see
+// Validators::StatusValidator::SHORT_NAME_MAX_LENGTH server-side) - slicing
+// keeps this safe even for a two-digit N.
+export function buildDebugStatuses(n, now) {
+  const entry = (i, treatAs, label, shortPrefix) => ({
+    key: `debug-${treatAs}-${i}`,
+    shortName: `${shortPrefix}${i}`.slice(0, 6),
+    treatAs,
+    expiresAt: now + 999000,
+    name: `Fake ${label} ${i}`,
+    description: `Debug placeholder ${label.toLowerCase()} #${i}`,
+    appliedByName: null,
+  });
+  const buffs = Array.from({ length: n }, (_, idx) => entry(idx + 1, "buff", "Buff", "FBuff"));
+  const debuffs = Array.from({ length: n }, (_, idx) => entry(idx + 1, "debuff", "Debuff", "FDbuf"));
+  return [...buffs, ...debuffs];
+}
+
 // Flat placeholder basic-attack values; must match command.characterBasicAttackRange
 // and command.characterBasicAttackInterval in the game server.
 const BASIC_ATTACK_RANGE = 5.0;
@@ -1431,10 +1451,46 @@ const styles = {
     gap: 10,
     pointerEvents: "none",
   },
+  // Landscape: too little room for buffs/debuffs side by side - stack the
+  // buff block above the debuff block instead (DOM order is buffs-then-
+  // debuffs, so plain top-to-bottom column order already puts buffs on
+  // top). alignItems hugs each block to the side's outer screen edge so a
+  // shorter block doesn't look adrift from a longer one above/below it.
+  statusBarLeftLandscape: {
+    position: "absolute",
+    left: 8,
+    top: 8,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+    pointerEvents: "none",
+  },
+  statusBarRightLandscape: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 4,
+    pointerEvents: "none",
+  },
+  // width: max-content makes each block's box size deterministic from its
+  // own content instead of leaning on flex shrink-to-fit - without it, the
+  // right-anchored (target) column could end up a hair wider than its text
+  // at small font sizes, reading as the text overhanging the block's edge.
   statusColumn: {
     display: "flex",
     flexDirection: "column",
     gap: 1,
+    width: "max-content",
+  },
+  statusRowLandscape: {
+    fontSize: 8,
+    lineHeight: 1.2,
+    whiteSpace: "nowrap",
+    textShadow: "0 1px 3px #000",
   },
   statusRow: {
     fontSize: 11,
@@ -1561,6 +1617,16 @@ export function formatRemaining(ms) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Landscape's status rows are tight on space - a max-3-char "16m"/"22s"
+// instead of "15:39"/"0:22". Minutes are rounded (not floored) so a status
+// that's about to roll from 1m to 0s doesn't read as having longer left
+// than it does.
+export function formatRemainingCompact(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  return `${Math.round(totalSeconds / 60)}m`;
+}
+
 // Mouse-tracked portal tooltip for one status row - mirrors StatEffectTooltip/
 // AbilityTooltip's approach. Shown on hover, name+description+applier;
 // description is optional (Status.description), and the applier line is
@@ -1614,13 +1680,14 @@ function HintTooltip({ text, children }) {
   );
 }
 
-function StatusColumn({ entries, color }) {
+function StatusColumn({ entries, color, landscape, align }) {
+  const format = landscape ? formatRemainingCompact : formatRemaining;
   return (
     <div style={styles.statusColumn}>
       {entries.map(({ key, shortName, remainingMs, name, description, appliedByName }) => (
         <StatusTooltip key={key} name={name} description={description} appliedByName={appliedByName}>
-          <div style={{ ...styles.statusRow, color }}>
-            {formatRemaining(remainingMs)} {shortName}
+          <div style={{ ...(landscape ? styles.statusRowLandscape : styles.statusRow), color, ...(align ? { textAlign: align } : {}) }}>
+            {format(remainingMs)} {shortName}
           </div>
         </StatusTooltip>
       ))}
@@ -1629,14 +1696,17 @@ function StatusColumn({ entries, color }) {
 }
 
 // Buffs and debuffs (only - "inherent" statuses have no meaningful
-// countdown to show) sorted ascending by time remaining, so the row with
-// the most time left ends up at the bottom - combined with bottom-anchored
-// positioning (see styles.statusBarLeft/statusBarRight), the whole thing
-// visually grows upward as more statuses land, rather than pushing
-// existing rows down. `side` only picks which edge of the screen it's
-// anchored to (self: left, target: right) - the buff/debuff column order
-// (buffs, then debuffs) stays the same either way.
-export function StatusBar({ statuses, now, side = "left" }) {
+// countdown to show) sorted ascending by time remaining. Desktop/portrait
+// anchor to the bottom, so the row with the most time left ends up last and
+// the whole thing visually grows upward as more statuses land; landscape
+// anchors to the top instead (see statusBarLeftLandscape/RightLandscape),
+// where there's room above the frame/controls but not below them. `side`
+// only picks which edge of the screen it's anchored to (self: left,
+// target: right) - the buff/debuff column order (buffs, then debuffs)
+// stays the same either way. `landscape` swaps to the stacked (buffs above
+// debuffs), smaller-font, compact-duration variant - there's no room for
+// buffs/debuffs side by side with mm:ss timers there.
+export function StatusBar({ statuses, now, side = "left", landscape }) {
   const withRemaining = statuses
     .map((s) => ({ ...s, remainingMs: s.expiresAt - now }))
     .filter((s) => s.remainingMs > 0)
@@ -1645,10 +1715,19 @@ export function StatusBar({ statuses, now, side = "left" }) {
   const debuffs = withRemaining.filter((s) => s.treatAs === "debuff");
   if (!buffs.length && !debuffs.length) return null;
 
+  const containerStyle = landscape
+    ? (side === "right" ? styles.statusBarRightLandscape : styles.statusBarLeftLandscape)
+    : (side === "right" ? styles.statusBarRight : styles.statusBarLeft);
+  // Belt-and-suspenders alongside statusColumn's width:max-content - even
+  // if a row's box ends up a hair wider than its text, explicit textAlign
+  // still hugs the text to the pane's outer edge instead of leaving it
+  // hanging past it.
+  const align = landscape ? (side === "right" ? "right" : "left") : undefined;
+
   return (
-    <div style={side === "right" ? styles.statusBarRight : styles.statusBarLeft}>
-      <StatusColumn entries={buffs} color="#5ec95e" />
-      <StatusColumn entries={debuffs} color="#ff5c5c" />
+    <div style={containerStyle}>
+      <StatusColumn entries={buffs} color="#5ec95e" landscape={landscape} align={align} />
+      <StatusColumn entries={debuffs} color="#ff5c5c" landscape={landscape} align={align} />
     </div>
   );
 }
@@ -3059,8 +3138,10 @@ export default function App({
       })
       .filter(Boolean);
   }
-  const selfStatuses = activeStatusesFor(selfUnit);
-  const targetStatuses = activeStatusesFor(targetUnit);
+  const debugStatusCount = Number(new URLSearchParams(window.location.search).get("debugStatuses")) || 0;
+  const debugStatuses = debugStatusCount > 0 ? buildDebugStatuses(debugStatusCount, Date.now()) : [];
+  const selfStatuses = [...activeStatusesFor(selfUnit), ...debugStatuses];
+  const targetStatuses = [...activeStatusesFor(targetUnit), ...debugStatuses];
 
   // Ticks re-renders once a second (only while there's something to count
   // down) so the status bars' MM:SS stays live between server updates.
@@ -3368,8 +3449,8 @@ export default function App({
         statusCatalog={statusCatalog}
         stockAssets={stockAssets}
       />
-      <StatusBar statuses={selfStatuses} now={Date.now()} side="left" />
-      <StatusBar statuses={targetStatuses} now={Date.now()} side="right" />
+      <StatusBar statuses={selfStatuses} now={Date.now()} side="left" landscape={viewportMode.isLandscapePhone} />
+      <StatusBar statuses={targetStatuses} now={Date.now()} side="right" landscape={viewportMode.isLandscapePhone} />
       <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
       <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
       <LootWindow

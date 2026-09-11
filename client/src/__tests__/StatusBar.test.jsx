@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { StatusBar, formatRemaining } from "../App";
+import { StatusBar, formatRemaining, formatRemainingCompact } from "../App";
 
 describe("formatRemaining", () => {
   it("formats minutes unpadded and seconds zero-padded", () => {
@@ -14,6 +14,28 @@ describe("formatRemaining", () => {
 
   it("clamps negative remaining time to 0:00", () => {
     expect(formatRemaining(-500)).toEqual("0:00");
+  });
+});
+
+describe("formatRemainingCompact", () => {
+  it("shows seconds under a minute", () => {
+    expect(formatRemainingCompact(22_000)).toEqual("22s");
+    expect(formatRemainingCompact(8_000)).toEqual("8s");
+  });
+
+  it("switches to rounded minutes at and above a minute", () => {
+    expect(formatRemainingCompact(60_000)).toEqual("1m");
+    expect(formatRemainingCompact(939_000)).toEqual("16m"); // 15:39 -> 16m
+  });
+
+  it("never exceeds 3 characters for realistic buff durations", () => {
+    for (const ms of [500, 8_000, 59_000, 60_000, 185_000, 3_599_000]) {
+      expect(formatRemainingCompact(ms).length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("clamps negative remaining time to 0s", () => {
+    expect(formatRemainingCompact(-500)).toEqual("0s");
   });
 });
 
@@ -87,6 +109,50 @@ describe("StatusBar", () => {
   it("anchors to the right edge when side is 'right'", () => {
     render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} side="right" />);
     expect(screen.getByText(/Buffed/).closest("[style*='position: absolute']")).toHaveStyle({ right: "8px" });
+  });
+
+  describe("landscape mode", () => {
+    it("uses the compact duration format instead of mm:ss", () => {
+      render(<StatusBar statuses={[{ key: "a", shortName: "2ndWnd", treatAs: "buff", expiresAt: NOW + 65_000 }]} now={NOW} landscape />);
+      expect(screen.getByText("1m 2ndWnd")).toBeInTheDocument();
+    });
+
+    it("stacks the buff/debuff columns vertically instead of side by side", () => {
+      render(
+        <StatusBar
+          statuses={[
+            { key: "b", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 },
+            { key: "d", shortName: "Debuffed", treatAs: "debuff", expiresAt: NOW + 10_000 },
+          ]}
+          now={NOW}
+          landscape
+        />
+      );
+      const container = screen.getByText(/Buffed/).closest("[style*='position: absolute']");
+      expect(container).toHaveStyle({ flexDirection: "column" });
+    });
+
+    it("anchors to the top corner instead of the bottom", () => {
+      render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} landscape />);
+      const container = screen.getByText(/Buffed/).closest("[style*='position: absolute']");
+      expect(container).toHaveStyle({ top: "8px" });
+      expect(container.style.bottom).toBe("");
+    });
+
+    it("text-aligns rows to the left side's outer (left) edge", () => {
+      render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} landscape />);
+      expect(screen.getByText(/Buffed/)).toHaveStyle({ textAlign: "left" });
+    });
+
+    it("text-aligns rows to the right side's outer (right) edge", () => {
+      render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} side="right" landscape />);
+      expect(screen.getByText(/Buffed/)).toHaveStyle({ textAlign: "right" });
+    });
+
+    it("doesn't set textAlign outside landscape mode", () => {
+      render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} side="right" />);
+      expect(screen.getByText(/Buffed/).style.textAlign).toBe("");
+    });
   });
 
   describe("hover tooltip", () => {
