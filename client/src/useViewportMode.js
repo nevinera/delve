@@ -7,7 +7,18 @@ const COARSE_POINTER_QUERY = "(pointer: coarse)";
 const PHONE_DIMENSION_QUERY = "(max-width: 600px), (max-height: 600px)";
 const PORTRAIT_QUERY = "(orientation: portrait)";
 
-export function classifyViewport({ isTouch, isPhoneDimension, isPortrait }) {
+// forceViewport ("portrait" or "landscape") overrides real detection
+// entirely - lets ?forceViewport=portrait/landscape force the phone layout
+// on a desktop browser for quick layout checks without an emulator/device.
+export function classifyViewport({ isTouch, isPhoneDimension, isPortrait, forceViewport }) {
+  if (forceViewport === "portrait" || forceViewport === "landscape") {
+    return {
+      isTouch: true,
+      isPhoneLayout: true,
+      isPortraitPhone: forceViewport === "portrait",
+      isLandscapePhone: forceViewport === "landscape",
+    };
+  }
   const isPhoneLayout = isTouch && isPhoneDimension;
   return {
     isTouch,
@@ -28,6 +39,9 @@ function readRaw() {
     isTouch: matches(COARSE_POINTER_QUERY),
     isPhoneDimension: matches(PHONE_DIMENSION_QUERY),
     isPortrait: matches(PORTRAIT_QUERY),
+    forceViewport: typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("forceViewport")
+      : null,
   };
 }
 
