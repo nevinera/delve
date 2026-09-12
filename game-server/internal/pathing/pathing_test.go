@@ -145,6 +145,20 @@ func TestFindPathTowardMap_LineConnectionUsesMidpoint(t *testing.T) {
 	assert.Equal(t, Point{X: 8, Y: 0}, path[len(path)-1])
 }
 
+func TestGraph_SegmentClear(t *testing.T) {
+	zone := instanceconfig.Zone{
+		Maps: []instanceconfig.Map{
+			{Identifier: "map1", Barriers: []instanceconfig.Barrier{circleBarrier(5, 0, 2)}},
+		},
+	}
+	g, err := Build(zone, 0.5)
+	require.NoError(t, err)
+
+	assert.True(t, g.SegmentClear("map1", 0, 5, 10, 5))
+	assert.False(t, g.SegmentClear("map1", 0, 0, 10, 0))
+	assert.True(t, g.SegmentClear("no-such-map", 0, 0, 10, 0), "unknown map is treated as clear")
+}
+
 func TestMaxUnitRadius(t *testing.T) {
 	zone := instanceconfig.Zone{
 		UnitTypes: map[string]instanceconfig.UnitType{

@@ -280,6 +280,15 @@ func (g *MapGraph) FindPath(sx, sy, tx, ty float64) ([]Point, bool) {
 	return path, true
 }
 
+// SegmentClear reports whether a unit of this graph's agent radius could
+// travel in a straight line between the two points without overlapping a
+// barrier. Used to sanity-check a cached waypoint is still safely reachable
+// from wherever a unit actually ended up (e.g. after being shoved off its
+// path by crowd separation), not just from where the path was computed.
+func (g *MapGraph) SegmentClear(x1, y1, x2, y2 float64) bool {
+	return !segmentBlockedByBarriers(x1, y1, x2, y2, g.agentRadius, g.barriers)
+}
+
 // distFromPoint returns the shortest distance from an arbitrary point
 // (x,y) - not necessarily a graph node - to graph node nodeIdx, via
 // whichever of this map's nodes are visible from (x,y) (this naturally

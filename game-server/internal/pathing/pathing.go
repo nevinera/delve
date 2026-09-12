@@ -197,6 +197,18 @@ func (g *Graph) FindPath(mapIdentifier string, sx, sy, tx, ty float64) ([]Point,
 	return mg.FindPath(sx, sy, tx, ty)
 }
 
+// SegmentClear reports whether a unit of this graph's agent radius could
+// travel in a straight line between the two points on the named map
+// without overlapping a barrier. Returns true if the map is unknown,
+// matching instanceconfig.LineOfSightClear's convention.
+func (g *Graph) SegmentClear(mapIdentifier string, x1, y1, x2, y2 float64) bool {
+	mg, ok := g.maps[mapIdentifier]
+	if !ok {
+		return true
+	}
+	return mg.SegmentClear(x1, y1, x2, y2)
+}
+
 // FindPathTowardMap routes from (sx,sy) on fromMap toward whichever
 // connection leads (possibly through further intermediate maps) to toMap,
 // and returns the waypoints to travel on fromMap to reach that connection -

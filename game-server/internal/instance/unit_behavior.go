@@ -431,7 +431,20 @@ func moveStraightToward(unit *instancestate.UnitState, destX, destY, speed, dt f
 func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, destY, speed, dt float64, pathGraph *pathing.Graph) {
 	b := &unit.Behavior
 	b.PathRecalcIn -= dt
-	if pathGraph != nil && (len(b.PathWaypoints) == 0 || b.PathRecalcIn <= 0) {
+	needsRecalc := len(b.PathWaypoints) == 0 || b.PathRecalcIn <= 0
+	if !needsRecalc && pathGraph != nil {
+		// A cached path only stays valid from wherever it was computed -
+		// something else (crowd separation shoving the unit back around a
+		// corner it just rounded, say) can leave it somewhere the next
+		// waypoint is no longer safely reachable in a straight line. Rather
+		// than grinding into whatever's now in the way until the next
+		// scheduled recalculation, check every tick and force one early.
+		next := b.PathWaypoints[0]
+		if !pathGraph.SegmentClear(unit.MapIdentifier, unit.Position.X, unit.Position.Y, next.X, next.Y) {
+			needsRecalc = true
+		}
+	}
+	if pathGraph != nil && needsRecalc {
 		b.PathRecalcIn = pathRecalcInterval
 		if wps, ok := pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, destX, destY); ok {
 			b.PathWaypoints = wps

@@ -113,6 +113,18 @@ func TestFindPath_LCornerRoutesAroundNearestOpenEnd(t *testing.T) {
 	assert.True(t, nearEnd, "path should route around a wall end, not cut through the corner")
 }
 
+func TestMapGraph_SegmentClear(t *testing.T) {
+	m := instanceconfig.Map{
+		Identifier: "m",
+		Barriers:   []instanceconfig.Barrier{circleBarrier(5, 0, 2)},
+	}
+	g, _, err := BuildMapGraph(m, 0.5, nil)
+	require.NoError(t, err)
+
+	assert.True(t, g.SegmentClear(0, 5, 10, 5), "well clear of the circle")
+	assert.False(t, g.SegmentClear(0, 0, 10, 0), "straight through the circle")
+}
+
 func TestBuildMapGraph_TooManyNodesErrors(t *testing.T) {
 	var barriers []instanceconfig.Barrier
 	for i := range 30 {

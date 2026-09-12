@@ -727,6 +727,38 @@ func TestUnitBehavior_Chase_DetoursAroundWallWhenPathGraphAvailable(t *testing.T
 	assert.Greater(t, u.Position.Y, 0.0)
 }
 
+func TestUnitBehavior_Chase_RecomputesPathWhenShovedOffStaleWaypoint(t *testing.T) {
+	// Simulates crowd separation (applyNPCSeparation) having shoved a
+	// mid-detour unit back onto the wrong side of a wall it had just
+	// rounded, while it still had a stale waypoint queued pointing straight
+	// at the (now blocked again) target. Without a per-tick sanity check,
+	// the unit would blindly keep closing on that stale waypoint - straight
+	// into the wall - until the next scheduled path recalculation.
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(2, 2)) // back on the near side of the wall, clear of its radius-2 clearance zone
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 10) // far side of the wall
+	manualEngage(u, playerID)
+
+	u.Behavior.PathWaypoints = []pathing.Point{{X: 0, Y: 10}} // stale: straight through the wall
+	u.Behavior.PathRecalcIn = 0.5                             // recalculation not due yet on its own
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	require.NotEmpty(t, u.Behavior.PathWaypoints)
+	assert.NotEqual(t, pathing.Point{X: 0, Y: 10}, u.Behavior.PathWaypoints[0],
+		"stale waypoint straight through the wall should have been discarded and recomputed")
+}
+
 func TestUnitBehavior_Chase_StopsShortOfBasicAttackRange(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0) // default (melee) basicAttackRange = 5.0
 	u, s := npcState("g1", pos(0, 0))
