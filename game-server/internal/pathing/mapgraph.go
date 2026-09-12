@@ -50,12 +50,28 @@ type MapGraph struct {
 }
 
 // BuildMapGraph precomputes a visibility graph over m's barriers for a unit
-// of the given collision radius. It returns an error if the barrier
-// geometry produces more than MaxNodesPerMap candidate nodes.
-func BuildMapGraph(m instanceconfig.Map, agentRadius float64) (*MapGraph, error) {
+// of the given collision radius. anchors are extra node positions that must
+// exist in the graph regardless of barrier geometry - map-connection points,
+// for stitching separate maps' graphs together - and get validated the same
+// way as any other node. The returned anchorIndex[i] is anchors[i]'s node
+// index, or -1 if that position was blocked by a barrier (so no such node
+// could be added). Returns an error if the barrier geometry plus anchors
+// together produce more than MaxNodesPerMap nodes.
+func BuildMapGraph(m instanceconfig.Map, agentRadius float64, anchors []Point) (*MapGraph, []int, error) {
 	nodes := generateNodes(m.Barriers, agentRadius)
+
+	anchorIndex := make([]int, len(anchors))
+	for i, a := range anchors {
+		if pointBlockedByBarriers(a.X, a.Y, agentRadius, m.Barriers) {
+			anchorIndex[i] = -1
+			continue
+		}
+		anchorIndex[i] = len(nodes)
+		nodes = append(nodes, a)
+	}
+
 	if len(nodes) > MaxNodesPerMap {
-		return nil, fmt.Errorf("pathing: map %q needs %d visibility-graph nodes, exceeds limit of %d",
+		return nil, nil, fmt.Errorf("pathing: map %q needs %d visibility-graph nodes, exceeds limit of %d",
 			m.Identifier, len(nodes), MaxNodesPerMap)
 	}
 
@@ -65,7 +81,7 @@ func BuildMapGraph(m instanceconfig.Map, agentRadius float64) (*MapGraph, error)
 		nodes:       nodes,
 	}
 	g.buildAllPairs()
-	return g, nil
+	return g, anchorIndex, nil
 }
 
 // generateNodes produces candidate visibility-graph nodes: offset points
@@ -262,6 +278,26 @@ func (g *MapGraph) FindPath(sx, sy, tx, ty float64) ([]Point, bool) {
 	}
 	path = append(path, Point{X: tx, Y: ty})
 	return path, true
+}
+
+// distFromPoint returns the shortest distance from an arbitrary point
+// (x,y) - not necessarily a graph node - to graph node nodeIdx, via
+// whichever of this map's nodes are visible from (x,y) (this naturally
+// covers a direct, node-free line too, since nodeIdx itself is among its
+// own visible nodes whenever it's directly reachable). ok is false if
+// nodeIdx is unreachable from every node visible from (x,y).
+func (g *MapGraph) distFromPoint(x, y float64, nodeIdx int) (float64, bool) {
+	best := math.Inf(1)
+	found := false
+	for _, i := range g.visibleNodes(x, y) {
+		if g.dist[i][nodeIdx] == math.Inf(1) {
+			continue
+		}
+		if d := math.Hypot(g.nodes[i].X-x, g.nodes[i].Y-y) + g.dist[i][nodeIdx]; d < best {
+			best, found = d, true
+		}
+	}
+	return best, found
 }
 
 func (g *MapGraph) visibleNodes(x, y float64) []int {

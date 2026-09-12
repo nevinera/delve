@@ -11,7 +11,7 @@ import (
 )
 
 func TestBuildMapGraph_NoBarriers_DirectPathOnly(t *testing.T) {
-	g, err := BuildMapGraph(instanceconfig.Map{Identifier: "m"}, 0.5)
+	g, _, err := BuildMapGraph(instanceconfig.Map{Identifier: "m"}, 0.5, nil)
 	require.NoError(t, err)
 
 	path, ok := g.FindPath(0, 0, 10, 0)
@@ -29,7 +29,7 @@ func TestFindPath_DetoursAroundWallEnd(t *testing.T) {
 			),
 		},
 	}
-	g, err := BuildMapGraph(m, 0.5)
+	g, _, err := BuildMapGraph(m, 0.5, nil)
 	require.NoError(t, err)
 
 	path, ok := g.FindPath(0, 0, 10, 0)
@@ -48,7 +48,7 @@ func TestFindPath_DetoursAroundCircle(t *testing.T) {
 		Identifier: "m",
 		Barriers:   []instanceconfig.Barrier{circleBarrier(5, 0, 2)},
 	}
-	g, err := BuildMapGraph(m, 0.5)
+	g, _, err := BuildMapGraph(m, 0.5, nil)
 	require.NoError(t, err)
 
 	path, ok := g.FindPath(0, 0, 10, 0)
@@ -72,7 +72,7 @@ func TestFindPath_UnreachableInsideClosedBox(t *testing.T) {
 			),
 		},
 	}
-	g, err := BuildMapGraph(m, 0.3)
+	g, _, err := BuildMapGraph(m, 0.3, nil)
 	require.NoError(t, err)
 
 	_, ok := g.FindPath(0, -20, 0, 0)
@@ -94,7 +94,7 @@ func TestFindPath_LCornerRoutesAroundNearestOpenEnd(t *testing.T) {
 			),
 		},
 	}
-	g, err := BuildMapGraph(m, 1.0)
+	g, _, err := BuildMapGraph(m, 1.0, nil)
 	require.NoError(t, err)
 
 	path, ok := g.FindPath(-5, -5, 15, 15)
@@ -120,7 +120,7 @@ func TestBuildMapGraph_TooManyNodesErrors(t *testing.T) {
 	}
 	m := instanceconfig.Map{Identifier: "crowded", Barriers: barriers}
 
-	_, err := BuildMapGraph(m, 0)
+	_, _, err := BuildMapGraph(m, 0, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "crowded")
 }

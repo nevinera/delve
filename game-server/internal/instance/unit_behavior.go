@@ -180,7 +180,7 @@ func applyUnitBehavior(
 		} else {
 			// Target crossed to another map. Move toward last known position so
 			// we reach the connection and traverse it on a future tick.
-			chaseLastSeen(unit, speed, dt)
+			chaseLastSeen(unit, speed, dt, pathGraph)
 		}
 
 	case instancestate.UnitStatusLeashing:
@@ -403,18 +403,37 @@ const pathRecalcInterval = 0.75 // seconds
 // waypoint before advancing to the next one.
 const waypointArriveDist = 0.5
 
-// chaseAlongPath moves unit toward target when a direct line is blocked,
-// following a cached visibility-graph path around obstacles instead of
-// chaseTarget's straight line (which would walk it into whatever's in the
-// way). Falls back to chaseTarget if pathGraph is nil or no route exists
-// (e.g. the target is genuinely unreachable) - same "keep closing" behavior
-// the blocked-LOS case already had before pathing existed.
-func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
+// moveStraightToward moves unit directly toward (destX,destY) with no stop
+// distance - used as the no-pathGraph/no-route fallback for both
+// chaseAlongPath and chaseLastSeen, which never need to stop short (unlike
+// chaseTarget, which stops at attack range when LOS is clear).
+func moveStraightToward(unit *instancestate.UnitState, destX, destY, speed, dt float64) {
+	dx, dy := destX-unit.Position.X, destY-unit.Position.Y
+	dist := math.Sqrt(dx*dx + dy*dy)
+	if dist < 0.01 {
+		return
+	}
+	unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, destX, destY)
+	move := math.Min(speed*dt, dist)
+	unit.Position.X += (dx / dist) * move
+	unit.Position.Y += (dy / dist) * move
+}
+
+// moveTowardPointAvoidingObstacles moves unit toward (destX,destY) on its
+// current map, following a cached visibility-graph path around obstacles
+// when pathGraph is available, recomputing it at most every
+// pathRecalcInterval rather than every tick. Falls back to a straight line
+// if pathGraph is nil or no route exists (e.g. the destination is
+// genuinely unreachable) - same "keep closing" behavior blocked chases had
+// before pathing existed. Shared by chaseAlongPath (chasing a visible-map
+// target around a corner) and chaseLastSeen (heading for wherever the
+// target was last seen, typically near the map connection it crossed).
+func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, destY, speed, dt float64, pathGraph *pathing.Graph) {
 	b := &unit.Behavior
 	b.PathRecalcIn -= dt
 	if pathGraph != nil && (len(b.PathWaypoints) == 0 || b.PathRecalcIn <= 0) {
 		b.PathRecalcIn = pathRecalcInterval
-		if wps, ok := pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y); ok {
+		if wps, ok := pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, destX, destY); ok {
 			b.PathWaypoints = wps
 		} else {
 			b.PathWaypoints = nil
@@ -422,7 +441,7 @@ func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pa
 	}
 
 	if len(b.PathWaypoints) == 0 {
-		chaseTarget(unit, target, speed, dt, 0)
+		moveStraightToward(unit, destX, destY, speed, dt)
 		return
 	}
 
@@ -448,20 +467,19 @@ func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pa
 	unit.Position.Y += (dy / dist) * move
 }
 
+// chaseAlongPath moves unit toward target when a direct line is blocked,
+// detouring around obstacles instead of chaseTarget's straight line (which
+// would walk it into whatever's in the way).
+func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
+	moveTowardPointAvoidingObstacles(unit, target.Position.X, target.Position.Y, speed, dt, pathGraph)
+}
+
 // chaseLastSeen moves unit toward the last recorded position of its target.
-// Used when the target has crossed to another map; no stop distance is applied
-// so the unit walks all the way to the connection and triggers a map transition.
-func chaseLastSeen(unit *instancestate.UnitState, speed, dt float64) {
-	dx := unit.Behavior.LastSeenX - unit.Position.X
-	dy := unit.Behavior.LastSeenY - unit.Position.Y
-	dist := math.Sqrt(dx*dx + dy*dy)
-	if dist < 0.01 {
-		return
-	}
-	unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY)
-	move := math.Min(speed*dt, dist)
-	unit.Position.X += (dx / dist) * move
-	unit.Position.Y += (dy / dist) * move
+// Used when the target has crossed to another map; no stop distance is
+// applied so the unit walks all the way to the connection and triggers a
+// map transition.
+func chaseLastSeen(unit *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
+	moveTowardPointAvoidingObstacles(unit, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY, speed, dt, pathGraph)
 }
 
 // engageUnit gives unit a target and transitions it to the engaged status.

@@ -970,6 +970,31 @@ func TestUnitBehavior_Chase_MovesTowardLastSeenWhenTargetOnDifferentMap(t *testi
 	assert.Greater(t, u.Position.Y, 0.0)     // NPC moved toward last seen
 }
 
+func TestUnitBehavior_Chase_LastSeenDetoursAroundWallWhenPathGraphAvailable(t *testing.T) {
+	zone := twoMapZone()
+	// A short wall directly between the NPC and where it last saw its
+	// target (which has since crossed to map2), with open ends close by.
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	u.Behavior.LastSeenX = 0
+	u.Behavior.LastSeenY = 10
+	playerID, _ := addPlayer(s, "map2", 0, 0) // player already on the other map
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.NotEqual(t, 0.0, u.Position.X, "should be heading toward the wall's open end, not straight into it")
+	assert.Greater(t, u.Position.Y, 0.0)
+}
+
 func TestUnitBehavior_Chase_ResumesDirectChaseWhenTargetReturns(t *testing.T) {
 	zone := twoMapZone()
 	u, s := npcState("g1", pos(0, 8))
