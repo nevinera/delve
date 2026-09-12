@@ -65,6 +65,13 @@ func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.M
 	unit.MapIdentifier = destMap.Identifier
 	unit.Position = spawnPosition(fromConn, destConn, prevX, prevY, unit.Position.Angle)
 
+	// Any cached detour was computed against the map just left behind -
+	// those coordinates mean nothing on the new map's geometry, so using
+	// them here would walk the unit into whatever's actually there. Force
+	// a fresh path query next time one is needed.
+	unit.Behavior.PathWaypoints = nil
+	unit.Behavior.PathRecalcIn = 0
+
 	// Reset idle NPCs that wander through a connection; keep engaged NPCs chasing.
 	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") && unit.Status != instancestate.UnitStatusEngaged {
 		unit.Target = nil
