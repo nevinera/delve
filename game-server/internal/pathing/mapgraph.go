@@ -32,6 +32,17 @@ const circleSampleCount = 16
 // barrier features generate almost-coincident offset points.
 const nodeDedupeDist = 0.01
 
+// cornerClearancePadding is added to every agent radius before it's used
+// for anything in this package - node placement, validity, and edge/query
+// clearance checks alike. Nodes sit deliberately right at a barrier's true
+// clearance boundary (see sampleCircumscribedCircle), which leaves zero
+// margin for the polygon-approximation of arcs/caps and any floating-point
+// slop in the intersection math; a unit could end up nominally "clear" by
+// a hair and still visually clip a corner. This trades a small, fixed
+// amount of path optimality for not being that exact right at the one
+// place (barrier corners) where exactness has no room for error.
+const cornerClearancePadding = 0.25
+
 // Point is a location in map feet-coordinates.
 type Point struct {
 	X, Y float64
@@ -50,14 +61,16 @@ type MapGraph struct {
 }
 
 // BuildMapGraph precomputes a visibility graph over m's barriers for a unit
-// of the given collision radius. anchors are extra node positions that must
-// exist in the graph regardless of barrier geometry - map-connection points,
-// for stitching separate maps' graphs together - and get validated the same
-// way as any other node. The returned anchorIndex[i] is anchors[i]'s node
-// index, or -1 if that position was blocked by a barrier (so no such node
-// could be added). Returns an error if the barrier geometry plus anchors
-// together produce more than MaxNodesPerMap nodes.
+// of the given collision radius (plus cornerClearancePadding - see its doc).
+// anchors are extra node positions that must exist in the graph regardless
+// of barrier geometry - map-connection points, for stitching separate maps'
+// graphs together - and get validated the same way as any other node. The
+// returned anchorIndex[i] is anchors[i]'s node index, or -1 if that position
+// was blocked by a barrier (so no such node could be added). Returns an
+// error if the barrier geometry plus anchors together produce more than
+// MaxNodesPerMap nodes.
 func BuildMapGraph(m instanceconfig.Map, agentRadius float64, anchors []Point) (*MapGraph, []int, error) {
+	agentRadius += cornerClearancePadding
 	nodes := generateNodes(m.Barriers, agentRadius)
 
 	anchorIndex := make([]int, len(anchors))
