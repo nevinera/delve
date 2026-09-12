@@ -95,7 +95,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			updatePlayerMaxHealth(state, inst.ZoneConfig)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
-			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds())
+			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds())
 			expireStatusEffects(state, now)

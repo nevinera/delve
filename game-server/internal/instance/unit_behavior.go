@@ -11,6 +11,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 // npcChaseStopBuffer is how far short (feet) of its basic-attack range a
@@ -59,7 +60,7 @@ type CombatEvent = instancestate.CombatEvent
 // applyUnitBehaviors is the NPC brain, called once per tick for every
 // non-player unit. It handles aggro detection, status transitions, and
 // dispatches to the appropriate movement routine.
-func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) []CombatEvent {
+func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, pathGraph *pathing.Graph) []CombatEvent {
 	cfgByID := buildNPCConfigByID(zone)
 
 	// Index live players by map for O(1) aggro checks.
@@ -90,7 +91,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, linkGroupByID, dt, &events)
+		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, linkGroupByID, dt, pathGraph, &events)
 	}
 
 	applyNPCSeparation(state, dt)
@@ -107,6 +108,7 @@ func applyUnitBehavior(
 	stateByZoneID map[string]*instancestate.UnitState,
 	linkGroupByID map[string][]string,
 	dt float64,
+	pathGraph *pathing.Graph,
 	events *[]CombatEvent,
 ) {
 	sf := e.unitType.SpeedFactor
@@ -159,13 +161,28 @@ func applyUnitBehavior(
 			unit.Behavior.LastSeenX = target.Position.X
 			unit.Behavior.LastSeenY = target.Position.Y
 			losClear := instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
-			chaseRange := effectiveBasicAttackRange(e.unitType)
-			if !losClear {
-				// Can't see the target from here (e.g. around a corner) - keep
-				// closing in rather than sitting at max range doing nothing.
-				chaseRange = 0
+			// losClear is a zero-width ray test - fine for gating attacks (an
+			// arrow doesn't need clearance for the archer's whole body), but
+			// not for deciding whether to walk straight there: a ray can
+			// graze past a corner clear while the unit's own radius sweeping
+			// that same line would clip it. canWalkStraight adds that radius
+			// check (via the map's pathing graph, sized for the largest unit
+			// on it) so "direct pursuit" mode never sends a unit grinding
+			// into a corner it only narrowly has line of sight past.
+			canWalkStraight := losClear
+			if pathGraph != nil {
+				canWalkStraight = losClear && pathGraph.SegmentClear(unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 			}
-			chaseTarget(unit, target, speed, dt, chaseRange)
+			if canWalkStraight {
+				unit.Behavior.PathWaypoints = nil // no longer detouring around anything
+				chaseTarget(unit, target, speed, dt, effectiveBasicAttackRange(e.unitType))
+			} else {
+				// Can't walk straight there (blocked, or too close to a
+				// corner for this body to fit past) - detour around
+				// obstacles rather than walking into (or grinding along)
+				// whatever's in the way.
+				chaseAlongPath(unit, target, speed, dt, pathGraph)
+			}
 			now := time.Now()
 			if losClear {
 				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
@@ -174,9 +191,9 @@ func applyUnitBehavior(
 				}
 			}
 		} else {
-			// Target crossed to another map. Move toward last known position so
-			// we reach the connection and traverse it on a future tick.
-			chaseLastSeen(unit, speed, dt)
+			// Target crossed to another map. Head for whichever connection
+			// leads there so we cross it too on a future tick.
+			chaseAcrossMap(unit, target.MapIdentifier, speed, dt, pathGraph)
 		}
 
 	case instancestate.UnitStatusLeashing:
@@ -389,20 +406,127 @@ func chaseTarget(unit, target *instancestate.UnitState, speed, dt, attackRange f
 	unit.Position.Y += (dy / dist) * move
 }
 
-// chaseLastSeen moves unit toward the last recorded position of its target.
-// Used when the target has crossed to another map; no stop distance is applied
-// so the unit walks all the way to the connection and triggers a map transition.
-func chaseLastSeen(unit *instancestate.UnitState, speed, dt float64) {
-	dx := unit.Behavior.LastSeenX - unit.Position.X
-	dy := unit.Behavior.LastSeenY - unit.Position.Y
+// pathRecalcInterval limits how often a blocked-LOS chase recomputes its
+// waypoint path. The target moves a little every tick, but rerunning the
+// visibility-graph query for that is unnecessary; the existing path stays
+// good enough between recalculations.
+const pathRecalcInterval = 0.75 // seconds
+
+// waypointArriveDist is how close (feet) a unit must get to its current
+// waypoint before advancing to the next one.
+const waypointArriveDist = 0.5
+
+// moveStraightToward moves unit directly toward (destX,destY) with no stop
+// distance - used as the no-pathGraph/no-route fallback for both
+// chaseAlongPath and chaseLastSeen, which never need to stop short (unlike
+// chaseTarget, which stops at attack range when LOS is clear).
+func moveStraightToward(unit *instancestate.UnitState, destX, destY, speed, dt float64) {
+	dx, dy := destX-unit.Position.X, destY-unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 	if dist < 0.01 {
 		return
 	}
-	unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY)
+	unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, destX, destY)
 	move := math.Min(speed*dt, dist)
 	unit.Position.X += (dx / dist) * move
 	unit.Position.Y += (dy / dist) * move
+}
+
+// moveAlongPlannedPath drives unit along its cached Behavior.PathWaypoints,
+// recomputing via computePath whenever the cache is empty, its recalc timer
+// has expired, or the next waypoint is no longer safely reachable from
+// wherever the unit actually is (see MapGraph.SegmentClear's doc - crowd
+// separation shoving the unit back around a corner it just rounded, say).
+// If pathGraph is nil (pathing unavailable for this instance), calls
+// fallback instead - the original pre-pathing "keep closing" behavior. If
+// pathGraph is available but computePath finds no route, holds position:
+// walking anyway would mean grinding into whatever it just confirmed is in
+// the way. A later tick (target moved, a blocked start point cleared,
+// etc.) gets another attempt.
+//
+// Shared by chaseAlongPath (chasing a same-map target around a corner) and
+// chaseAcrossMap (heading for whichever connection leads to the map the
+// target crossed to).
+func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph, computePath func() ([]pathing.Point, bool), fallback func()) {
+	if pathGraph == nil {
+		fallback()
+		return
+	}
+
+	b := &unit.Behavior
+	b.PathRecalcIn -= dt
+	needsRecalc := len(b.PathWaypoints) == 0 || b.PathRecalcIn <= 0
+	if !needsRecalc {
+		next := b.PathWaypoints[0]
+		if !pathGraph.SegmentClear(unit.MapIdentifier, unit.Position.X, unit.Position.Y, next.X, next.Y) {
+			needsRecalc = true
+		}
+	}
+	if needsRecalc {
+		b.PathRecalcIn = pathRecalcInterval
+		if wps, ok := computePath(); ok {
+			b.PathWaypoints = wps
+		} else {
+			b.PathWaypoints = nil
+		}
+	}
+
+	if len(b.PathWaypoints) == 0 {
+		return
+	}
+
+	next := b.PathWaypoints[0]
+	dx, dy := next.X-unit.Position.X, next.Y-unit.Position.Y
+	dist := math.Sqrt(dx*dx + dy*dy)
+
+	if dist <= waypointArriveDist {
+		b.PathWaypoints = b.PathWaypoints[1:]
+		if len(b.PathWaypoints) == 0 {
+			return
+		}
+		next = b.PathWaypoints[0]
+		dx, dy = next.X-unit.Position.X, next.Y-unit.Position.Y
+		dist = math.Sqrt(dx*dx + dy*dy)
+	}
+
+	if dist > 0.01 {
+		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, next.X, next.Y)
+	}
+	move := math.Min(speed*dt, dist)
+	unit.Position.X += (dx / dist) * move
+	unit.Position.Y += (dy / dist) * move
+}
+
+// chaseAlongPath moves unit toward target when a direct line is blocked,
+// detouring around obstacles instead of chaseTarget's straight line (which
+// would walk it into whatever's in the way).
+func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
+	moveAlongPlannedPath(unit, speed, dt, pathGraph,
+		func() ([]pathing.Point, bool) {
+			return pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
+		},
+		func() { moveStraightToward(unit, target.Position.X, target.Position.Y, speed, dt) },
+	)
+}
+
+// chaseAcrossMap moves unit toward whichever connection on its current map
+// leads to targetMapID, using the connections' own geometry rather than
+// the target's last-seen position: applyMapTransitions runs before
+// applyUnitBehaviors each tick, so by the tick a target actually crosses,
+// its MapIdentifier has already changed and Behavior.LastSeenX/Y never
+// gets a final update - it's frozen up to one full tick of the target's
+// movement short of wherever it actually crossed. At typical player speed
+// that's easily more than a connection's own trigger radius, so aiming at
+// the connection itself (which FindPathTowardMap already knows the exact
+// position of) is what reliably completes the follow, instead of almost
+// always landing just short of it.
+func chaseAcrossMap(unit *instancestate.UnitState, targetMapID string, speed, dt float64, pathGraph *pathing.Graph) {
+	moveAlongPlannedPath(unit, speed, dt, pathGraph,
+		func() ([]pathing.Point, bool) {
+			return pathGraph.FindPathTowardMap(unit.MapIdentifier, unit.Position.X, unit.Position.Y, targetMapID)
+		},
+		func() { moveStraightToward(unit, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY, speed, dt) },
+	)
 }
 
 // engageUnit gives unit a target and transitions it to the engaged status.
@@ -417,6 +541,7 @@ func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
 	unit.Target = &id
 	unit.Attacking = true
 	unit.Status = instancestate.UnitStatusEngaged
+	unit.Behavior.PathWaypoints = nil // discard any detour left over from a previous target
 }
 
 // startLeash clears a unit's target and begins leashing it back to the position

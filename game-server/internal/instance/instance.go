@@ -2,6 +2,7 @@ package instance
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,8 +11,14 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/pathing"
 	"github.com/delve-mmo/game-server/internal/railsclient"
 )
+
+// fallbackPathingRadius sizes the pathing graph on maps with no units
+// placed on them at all (see pathing.Build). Matches UnitType.TokenRadius's
+// documented minimum.
+const fallbackPathingRadius = 1.0
 
 // Status is the lifecycle state of an Instance.
 type Status string
@@ -43,6 +50,14 @@ type Instance struct {
 	Status         Status
 	ZoneConfig     instanceconfig.Zone
 	CreatedAt      time.Time
+
+	// PathGraph is a precomputed visibility graph used by chasing NPCs to
+	// detour around obstacles when they lose direct line of sight to their
+	// target. Built once in NewInstance from ZoneConfig (immutable, same as
+	// ZoneConfig itself); nil if it failed to build, in which case chasing
+	// units fall back to straight-line pursuit. Not shared across separate
+	// Instances of the same zone.
+	PathGraph *pathing.Graph
 
 	Checksum string // SHA256 of canonical state JSON; updated every tick
 
@@ -109,6 +124,14 @@ func NewInstance(
 	inst.commandProcessor.Register(command.UsePowerHandler{})
 	inst.commandProcessor.Register(command.RespawnHandler{})
 	inst.commandProcessor.Register(command.LootItemHandler{})
+
+	if graph, err := pathing.Build(zone, fallbackPathingRadius); err != nil {
+		slog.Error("pathing graph build failed; chasing units will fall back to straight-line pursuit",
+			"zoneIdentifier", zoneIdentifier, "error", err)
+	} else {
+		inst.PathGraph = graph
+	}
+
 	return inst
 }
 

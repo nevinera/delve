@@ -12,6 +12,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 func farFuture() time.Time { return time.Now().Add(time.Hour) }
@@ -699,6 +700,122 @@ func TestUnitBehavior_Chase_ContinuesClosingWhenLOSBlocked(t *testing.T) {
 	assert.Greater(t, u.Position.Y, 0.0)
 }
 
+func TestUnitBehavior_Chase_DetoursAroundWallWhenPathGraphAvailable(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	// A short wall directly between the NPC and the player, with open ends
+	// close by (unlike withWallAt's full-width wall) - detouring around
+	// either end should be much cheaper than plowing straight into it.
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 10)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	// A blind straight-line chase would move purely along Y (X stays 0);
+	// routing around the wall's end requires moving in X too.
+	assert.NotEqual(t, 0.0, u.Position.X, "should be heading toward the wall's open end, not straight into it")
+	assert.Greater(t, u.Position.Y, 0.0)
+}
+
+func TestUnitBehavior_Chase_TreatsGrazingCornerAsBlockedWhenPathGraphAvailable(t *testing.T) {
+	// The raw zero-width line between these two points passes just past the
+	// wall's east endpoint (3,5) without technically crossing the wall
+	// segment, so instanceconfig.LineOfSightClear alone reports clear - but
+	// a radius-2 body sweeping that same line would clip the corner. The
+	// movement decision must not treat a merely-line-of-sight-clear path as
+	// walkable straight-line if a body of this size can't actually fit.
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(10, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", -2, 10)
+	manualEngage(u, playerID)
+
+	require.True(t, instanceconfig.LineOfSightClear(zone, "map1", 10, 0, -2, 10),
+		"sanity check: the raw ray should read as clear for this test to mean anything")
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.NotEmpty(t, u.Behavior.PathWaypoints, "should have switched to path-following instead of a naive straight chase")
+}
+
+func TestUnitBehavior_Chase_HoldsPositionWhenNoRouteExists(t *testing.T) {
+	// The NPC is sealed inside a walled box with no gap; the target is
+	// outside, unreachable by any route. Blindly walking straight at a
+	// target FindPath already confirmed has no path would just be grinding
+	// into the wall that's sealing the unit in - it should hold position
+	// instead and wait for something to change.
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -2, Y: -2}, {X: 2, Y: -2}, {X: 2, Y: 2}, {X: -2, Y: 2}, {X: -2, Y: -2},
+		},
+	}}
+	graph, err := pathing.Build(zone, 0.3)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 0.3
+	playerID, _ := addPlayer(s, "map1", 0, 20) // well outside the sealed box
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.Equal(t, 0.0, u.Position.X)
+	assert.Equal(t, 0.0, u.Position.Y)
+}
+
+func TestUnitBehavior_Chase_RecomputesPathWhenShovedOffStaleWaypoint(t *testing.T) {
+	// Simulates crowd separation (applyNPCSeparation) having shoved a
+	// mid-detour unit back onto the wrong side of a wall it had just
+	// rounded, while it still had a stale waypoint queued pointing straight
+	// at the (now blocked again) target. Without a per-tick sanity check,
+	// the unit would blindly keep closing on that stale waypoint - straight
+	// into the wall - until the next scheduled path recalculation.
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(2, 2)) // back on the near side of the wall, clear of its radius-2 clearance zone
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 10) // far side of the wall
+	manualEngage(u, playerID)
+
+	u.Behavior.PathWaypoints = []pathing.Point{{X: 0, Y: 10}} // stale: straight through the wall
+	u.Behavior.PathRecalcIn = 0.5                             // recalculation not due yet on its own
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	require.NotEmpty(t, u.Behavior.PathWaypoints)
+	assert.NotEqual(t, pathing.Point{X: 0, Y: 10}, u.Behavior.PathWaypoints[0],
+		"stale waypoint straight through the wall should have been discarded and recomputed")
+}
+
 func TestUnitBehavior_Chase_StopsShortOfBasicAttackRange(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0) // default (melee) basicAttackRange = 5.0
 	u, s := npcState("g1", pos(0, 0))
@@ -909,8 +1026,22 @@ func twoMapZone() instanceconfig.Zone {
 					Position:   pos(0, 0),
 					Hostility:  "hostile",
 				}},
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "exit", Type: "point", Position: &instanceconfig.Position{X: 0, Y: 10}},
+				},
 			},
-			{Identifier: "map2"},
+			{
+				Identifier: "map2",
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "entrance", Type: "point", Position: &instanceconfig.Position{X: 0, Y: -10}},
+				},
+			},
+		},
+		ZoneLinks: []instanceconfig.ZoneLink{
+			{
+				ConnectionA: instanceconfig.ConnectionIdentifier{Map: "map1", Connection: "exit"},
+				ConnectionB: instanceconfig.ConnectionIdentifier{Map: "map2", Connection: "entrance"},
+			},
 		},
 	}
 }
@@ -940,6 +1071,86 @@ func TestUnitBehavior_Chase_MovesTowardLastSeenWhenTargetOnDifferentMap(t *testi
 	assert.Equal(t, instancestate.UnitStatusEngaged, u.Status)
 	assert.Equal(t, p.MapIdentifier, "map2") // player unchanged
 	assert.Greater(t, u.Position.Y, 0.0)     // NPC moved toward last seen
+}
+
+func TestUnitBehavior_Chase_EventuallyCrossesConnectionDespiteStaleLastSeen(t *testing.T) {
+	// Regression: applyMapTransitions runs before applyUnitBehaviors each
+	// tick, so on the tick a target actually crosses, Behavior.LastSeenX/Y
+	// never gets a final update - it's frozen wherever the target was one
+	// tick earlier. At normal player speed that's easily farther than a
+	// connection's own trigger radius, so a chase that heads straight for
+	// that stale point (rather than the connection itself) gets right next
+	// to the connection and then stops forever, never actually crossing.
+	zone := instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10},
+		},
+		Maps: []instanceconfig.Map{
+			{
+				Identifier: "map1",
+				Units: []instanceconfig.Unit{{
+					Identifier: "g1", UnitType: "goblin", Position: pos(0, 0), Hostility: "hostile",
+				}},
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "exit", Type: "point", Position: &instanceconfig.Position{X: 0, Y: 10}, FuzzRadius: 1.5},
+				},
+			},
+			{
+				Identifier: "map2",
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "entrance", Type: "point", Position: &instanceconfig.Position{X: 0, Y: -10}, FuzzRadius: 1.5},
+				},
+			},
+		},
+		ZoneLinks: []instanceconfig.ZoneLink{{
+			ConnectionA: instanceconfig.ConnectionIdentifier{Map: "map1", Connection: "exit"},
+			ConnectionB: instanceconfig.ConnectionIdentifier{Map: "map2", Connection: "entrance"},
+		}},
+	}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	playerID, _ := addPlayer(s, "map2", 0, 0) // player already across
+	manualEngage(u, playerID)
+	// Stale by more than the connection's 1.5ft trigger radius - exactly
+	// the gap a real tick of player movement leaves behind.
+	u.Behavior.LastSeenX, u.Behavior.LastSeenY = 0, 8
+
+	prev := s.Clone()
+	for range 50 {
+		instance.ApplyMapTransitionsForTest(s, prev, zone)
+		prev = s.Clone()
+		instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+		if u.MapIdentifier == "map2" {
+			return
+		}
+	}
+	t.Fatal("NPC never crossed to map2 despite a known connection leading there")
+}
+
+func TestUnitBehavior_Chase_LastSeenDetoursAroundWallWhenPathGraphAvailable(t *testing.T) {
+	zone := twoMapZone()
+	// A short wall directly between the NPC and map1's exit connection (at
+	// (0,10), where the target has since crossed through to map2), with
+	// open ends close by.
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	playerID, _ := addPlayer(s, "map2", 0, 0) // player already on the other map
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.NotEqual(t, 0.0, u.Position.X, "should be heading toward the wall's open end, not straight into it")
+	assert.Greater(t, u.Position.Y, 0.0)
 }
 
 func TestUnitBehavior_Chase_ResumesDirectChaseWhenTargetReturns(t *testing.T) {

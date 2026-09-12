@@ -10,6 +10,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 // ---------------------------------------------------------------------------
@@ -208,6 +209,34 @@ func TestMapTransition_EngagedNPCKeepsAggroOnTransition(t *testing.T) {
 	require.Equal(t, "map_b", s.Units[npcID].MapIdentifier)
 	assert.NotNil(t, s.Units[npcID].Target)
 	assert.Equal(t, instancestate.UnitStatusEngaged, s.Units[npcID].Status)
+}
+
+func TestMapTransition_EngagedNPCDropsStalePathOnTransition(t *testing.T) {
+	// A chasing NPC that was mid-detour when it crossed a connection must not
+	// carry those waypoints onto the new map - they're coordinates from the
+	// map it just left, meaningless (or worse, misleadingly wall-shaped)
+	// against the new map's geometry.
+	zone := transitionZone()
+	s := emptyInstanceState()
+	playerID, _ := playerOnMap(s, "map_a", 50, 99)
+
+	npcID := uuid.New()
+	s.Units[npcID] = &instancestate.UnitState{
+		ZoneUnitIdentifier: "goblin_1",
+		MapIdentifier:      "map_a",
+		Position:           instanceconfig.Position{X: 50, Y: 99},
+		Status:             instancestate.UnitStatusEngaged,
+		Target:             &playerID,
+	}
+	s.Units[npcID].Behavior.PathWaypoints = []pathing.Point{{X: 12, Y: 34}}
+	s.Units[npcID].Behavior.PathRecalcIn = 0.5
+	prev := prevStateWithUnit(playerID, "map_a", 50, 97)
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	require.Equal(t, "map_b", s.Units[npcID].MapIdentifier)
+	assert.Empty(t, s.Units[npcID].Behavior.PathWaypoints)
+	assert.LessOrEqual(t, s.Units[npcID].Behavior.PathRecalcIn, 0.0)
 }
 
 func TestMapTransition_IdleNPCLosesAggroOnTransition(t *testing.T) {
