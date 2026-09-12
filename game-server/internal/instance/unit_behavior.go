@@ -161,13 +161,26 @@ func applyUnitBehavior(
 			unit.Behavior.LastSeenX = target.Position.X
 			unit.Behavior.LastSeenY = target.Position.Y
 			losClear := instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
-			if losClear {
+			// losClear is a zero-width ray test - fine for gating attacks (an
+			// arrow doesn't need clearance for the archer's whole body), but
+			// not for deciding whether to walk straight there: a ray can
+			// graze past a corner clear while the unit's own radius sweeping
+			// that same line would clip it. canWalkStraight adds that radius
+			// check (via the map's pathing graph, sized for the largest unit
+			// on it) so "direct pursuit" mode never sends a unit grinding
+			// into a corner it only narrowly has line of sight past.
+			canWalkStraight := losClear
+			if pathGraph != nil {
+				canWalkStraight = losClear && pathGraph.SegmentClear(unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
+			}
+			if canWalkStraight {
 				unit.Behavior.PathWaypoints = nil // no longer detouring around anything
 				chaseTarget(unit, target, speed, dt, effectiveBasicAttackRange(e.unitType))
 			} else {
-				// Can't see the target from here (e.g. around a corner) - detour
-				// around obstacles rather than walking straight at (and into)
-				// whatever's blocking the view.
+				// Can't walk straight there (blocked, or too close to a
+				// corner for this body to fit past) - detour around
+				// obstacles rather than walking into (or grinding along)
+				// whatever's in the way.
 				chaseAlongPath(unit, target, speed, dt, pathGraph)
 			}
 			now := time.Now()

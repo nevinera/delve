@@ -727,6 +727,36 @@ func TestUnitBehavior_Chase_DetoursAroundWallWhenPathGraphAvailable(t *testing.T
 	assert.Greater(t, u.Position.Y, 0.0)
 }
 
+func TestUnitBehavior_Chase_TreatsGrazingCornerAsBlockedWhenPathGraphAvailable(t *testing.T) {
+	// The raw zero-width line between these two points passes just past the
+	// wall's east endpoint (3,5) without technically crossing the wall
+	// segment, so instanceconfig.LineOfSightClear alone reports clear - but
+	// a radius-2 body sweeping that same line would clip the corner. The
+	// movement decision must not treat a merely-line-of-sight-clear path as
+	// walkable straight-line if a body of this size can't actually fit.
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(10, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", -2, 10)
+	manualEngage(u, playerID)
+
+	require.True(t, instanceconfig.LineOfSightClear(zone, "map1", 10, 0, -2, 10),
+		"sanity check: the raw ray should read as clear for this test to mean anything")
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.NotEmpty(t, u.Behavior.PathWaypoints, "should have switched to path-following instead of a naive straight chase")
+}
+
 func TestUnitBehavior_Chase_RecomputesPathWhenShovedOffStaleWaypoint(t *testing.T) {
 	// Simulates crowd separation (applyNPCSeparation) having shoved a
 	// mid-detour unit back onto the wrong side of a wall it had just
