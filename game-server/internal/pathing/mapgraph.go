@@ -253,8 +253,14 @@ func (g *MapGraph) buildAllPairs() {
 // radius overlapping any barrier. If the straight line is already clear,
 // the result is just the target point. Returns false if no route exists
 // (target unreachable within this map's graph).
+//
+// (sx,sy) and (tx,ty) are treated leniently if either is already closer to
+// a barrier than this graph's agent radius allows (see
+// travelBlockedByBarriers) - they're a unit's actual position and desired
+// destination, not graph nodes, and may not themselves satisfy the full
+// clearance this package otherwise requires.
 func (g *MapGraph) FindPath(sx, sy, tx, ty float64) ([]Point, bool) {
-	if !segmentBlockedByBarriers(sx, sy, tx, ty, g.agentRadius, g.barriers) {
+	if !travelBlockedByBarriers(sx, sy, tx, ty, g.agentRadius, g.barriers) {
 		return []Point{{X: tx, Y: ty}}, true
 	}
 
@@ -298,8 +304,9 @@ func (g *MapGraph) FindPath(sx, sy, tx, ty float64) ([]Point, bool) {
 // barrier. Used to sanity-check a cached waypoint is still safely reachable
 // from wherever a unit actually ended up (e.g. after being shoved off its
 // path by crowd separation), not just from where the path was computed.
+// (x1,y1) is treated leniently the same way FindPath's start point is.
 func (g *MapGraph) SegmentClear(x1, y1, x2, y2 float64) bool {
-	return !segmentBlockedByBarriers(x1, y1, x2, y2, g.agentRadius, g.barriers)
+	return !travelBlockedByBarriers(x1, y1, x2, y2, g.agentRadius, g.barriers)
 }
 
 // distFromPoint returns the shortest distance from an arbitrary point
@@ -325,7 +332,7 @@ func (g *MapGraph) distFromPoint(x, y float64, nodeIdx int) (float64, bool) {
 func (g *MapGraph) visibleNodes(x, y float64) []int {
 	var out []int
 	for i, n := range g.nodes {
-		if !segmentBlockedByBarriers(x, y, n.X, n.Y, g.agentRadius, g.barriers) {
+		if !travelBlockedByBarriers(x, y, n.X, n.Y, g.agentRadius, g.barriers) {
 			out = append(out, i)
 		}
 	}

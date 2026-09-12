@@ -49,6 +49,27 @@ func TestSegmentBlockedByBarriers_CircleRespectsRadius(t *testing.T) {
 	assert.True(t, segmentBlockedByBarriers(0, 3.5, 10, 3.5, 2, barriers), "unit radius extends reach into the circle's margin")
 }
 
+func TestTravelBlockedByBarriers_LenientAtStartButNotBeyond(t *testing.T) {
+	barriers := []instanceconfig.Barrier{
+		wallBarrier(instanceconfig.Location{X: -3, Y: 5}, instanceconfig.Location{X: 3, Y: 5}),
+	}
+	// (0,3) is only 2.0ft from the wall - inside a 2.25ft required radius -
+	// but that's the start point's own existing distance, so moving away
+	// from it (not closer to the wall) must not read as blocked.
+	assert.False(t, travelBlockedByBarriers(0, 3, 0, 0, 2.25, barriers),
+		"moving away from a wall the start point already rests near should be clear")
+	assert.False(t, travelBlockedByBarriers(0, 3, 5, 3, 2.25, barriers),
+		"moving parallel to that same wall, no closer, should also be clear")
+	// Moving further INTO the same wall - actually closer than the start's
+	// own 2.0ft - must still be caught.
+	assert.True(t, travelBlockedByBarriers(0, 3, 0, 4.5, 2.25, barriers),
+		"approaching closer than the start's own distance must still block")
+	// A start point with full clearance behaves exactly like the strict
+	// check (leniency is a no-op when it isn't needed).
+	assert.True(t, travelBlockedByBarriers(0, 0, 0, 10, 2.25, barriers),
+		"a well-clear start point must still detect a real crossing ahead")
+}
+
 func TestPointBlockedByBarriers(t *testing.T) {
 	barriers := []instanceconfig.Barrier{circleBarrier(0, 0, 5)}
 	assert.True(t, pointBlockedByBarriers(0, 0, 1, barriers), "standing at the center")

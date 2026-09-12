@@ -49,6 +49,68 @@ func pointBlockedByBarriers(x, y, radius float64, barriers []instanceconfig.Barr
 	return segmentBlockedByBarriers(x, y, x, y, radius, barriers)
 }
 
+// travelBlockedByBarriers is like segmentBlockedByBarriers, but for
+// checking travel FROM a live, arbitrary point (x1,y1) - a unit's actual
+// current position, not a precomputed graph node - rather than between two
+// already-validated nodes.
+//
+// A real unit's position is a given fact, not a choice: collision
+// resolution rests it at its own true radius from a wall, which is less
+// than this package's padded clearance radius (see cornerClearancePadding)
+// by design. Using the strict check here would mean any unit resting
+// against a wall - a completely normal thing - reads every single
+// direction as blocked (the segment's minimum distance to that wall is
+// already close at t=0, regardless of which way the segment points),
+// leaving it unable to find a single visible node and thus unable to ever
+// plan a route away again.
+//
+// So for each barrier, the required clearance is capped at however close
+// (x1,y1) already legitimately is to it: the barrier only blocks the
+// segment if some point along it comes CLOSER than the start already is,
+// never merely for matching the start's own existing distance. For a
+// start point that already has full clearance from every barrier (the
+// common case, and always true for a precomputed graph node, whose own
+// validation already required full clearance) this is identical to
+// segmentBlockedByBarriers - the leniency only ever kicks in exactly where
+// it's needed.
+func travelBlockedByBarriers(x1, y1, x2, y2, radius float64, barriers []instanceconfig.Barrier) bool {
+	for _, b := range barriers {
+		effectiveRadius := radius
+		if d0 := distanceToBarrierClearance(x1, y1, b); d0 < effectiveRadius {
+			effectiveRadius = d0
+		}
+		if segmentBlockedByBarrier(x1, y1, x2, y2, effectiveRadius, b) {
+			return true
+		}
+	}
+	return false
+}
+
+// distanceToBarrierClearance returns the distance from (x,y) to a
+// barrier's own true (unpadded) geometry: perpendicular distance to the
+// nearest wall segment, or distance to a circle's edge (negative if
+// already inside it).
+func distanceToBarrierClearance(x, y float64, b instanceconfig.Barrier) float64 {
+	switch b.Type {
+	case "wall":
+		min := math.Inf(1)
+		for i := 0; i+1 < len(b.Locations); i++ {
+			a, c := b.Locations[i], b.Locations[i+1]
+			if d := segToPointDist(a.X, a.Y, c.X, c.Y, x, y); d < min {
+				min = d
+			}
+		}
+		return min
+	case "circle":
+		if b.Location == nil {
+			return math.Inf(1)
+		}
+		return math.Hypot(x-b.Location.X, y-b.Location.Y) - b.Radius
+	default:
+		return math.Inf(1)
+	}
+}
+
 // segToPointDist returns the minimum distance between segment (x1,y1)-(x2,y2)
 // and point (px,py).
 func segToPointDist(x1, y1, x2, y2, px, py float64) float64 {
