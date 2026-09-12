@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 // LootClaimState is the per-character state of a loot item claim.
@@ -132,6 +133,13 @@ type BehaviorState struct {
 	LeashX     float64
 	LeashY     float64
 	LeashMapID string
+
+	// short-range detour around obstacles when the chase target isn't in
+	// direct line of sight. Waypoints are consumed front-to-back as the unit
+	// reaches each one; PathRecalcIn counts down so the underlying
+	// visibility-graph query only reruns periodically, not every tick.
+	PathWaypoints []pathing.Point
+	PathRecalcIn  float64
 
 	// phased tactics
 	PhaseIndex   int

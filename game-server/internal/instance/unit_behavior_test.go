@@ -12,6 +12,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 func farFuture() time.Time { return time.Now().Add(time.Hour) }
@@ -696,6 +697,33 @@ func TestUnitBehavior_Chase_ContinuesClosingWhenLOSBlocked(t *testing.T) {
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
+	assert.Greater(t, u.Position.Y, 0.0)
+}
+
+func TestUnitBehavior_Chase_DetoursAroundWallWhenPathGraphAvailable(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	// A short wall directly between the NPC and the player, with open ends
+	// close by (unlike withWallAt's full-width wall) - detouring around
+	// either end should be much cheaper than plowing straight into it.
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -3, Y: 5}, {X: 3, Y: 5},
+		},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 10)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	// A blind straight-line chase would move purely along Y (X stays 0);
+	// routing around the wall's end requires moving in X too.
+	assert.NotEqual(t, 0.0, u.Position.X, "should be heading toward the wall's open end, not straight into it")
 	assert.Greater(t, u.Position.Y, 0.0)
 }
 

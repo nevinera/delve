@@ -12,6 +12,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 func (inst *Instance) RegisterCommandHandlerForTest(h command.CommandHandler) {
@@ -51,7 +52,11 @@ func ResolveCollisionsForTest(state *instancestate.InstanceState, zone instancec
 }
 
 func ApplyUnitBehaviorsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
-	applyUnitBehaviors(state, zone, dt)
+	applyUnitBehaviors(state, zone, dt, nil)
+}
+
+func ApplyUnitBehaviorsWithPathGraphForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, graph *pathing.Graph) {
+	applyUnitBehaviors(state, zone, dt, graph)
 }
 
 func ApplyMapTransitionsForTest(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {

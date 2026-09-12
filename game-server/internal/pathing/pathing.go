@@ -5,22 +5,23 @@ import (
 )
 
 // Graph is a zone's set of per-map visibility graphs, one per map
-// identifier. It's built once (currently for a single agent radius, shared
-// by every unit on the map) and queried at chase time; it is not safe to
+// identifier. It's built once and queried at chase time; it is not safe to
 // share across separate Instances of the same zone, since a future
 // door-toggle rebuild will mutate a specific map's graph in place.
 type Graph struct {
 	maps map[string]*MapGraph
 }
 
-// Build precomputes a visibility graph for every map in the zone, sized for
-// a unit with the given collision radius. This is the v1, single-size
-// entry point; per-size-bucket graphs will replace the single agentRadius
-// parameter once multiple unit sizes need to path independently.
-func Build(zone instanceconfig.Zone, agentRadius float64) (*Graph, error) {
+// Build precomputes a visibility graph for every map in the zone, each
+// sized for the largest unit placed on that specific map (see
+// MaxUnitRadius) - this is the v1, single-size-per-map approach; per-size
+// buckets will replace it once multiple unit sizes need to path
+// independently on the same map. fallbackRadius is used for maps with no
+// units placed on them at all.
+func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
 	g := &Graph{maps: make(map[string]*MapGraph, len(zone.Maps))}
 	for _, m := range zone.Maps {
-		mg, err := BuildMapGraph(m, agentRadius)
+		mg, err := BuildMapGraph(m, MaxUnitRadius(zone, m, fallbackRadius))
 		if err != nil {
 			return nil, err
 		}
