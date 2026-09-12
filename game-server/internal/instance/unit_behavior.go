@@ -435,12 +435,15 @@ func moveStraightToward(unit *instancestate.UnitState, destX, destY, speed, dt f
 // moveTowardPointAvoidingObstacles moves unit toward (destX,destY) on its
 // current map, following a cached visibility-graph path around obstacles
 // when pathGraph is available, recomputing it at most every
-// pathRecalcInterval rather than every tick. Falls back to a straight line
-// if pathGraph is nil or no route exists (e.g. the destination is
-// genuinely unreachable) - same "keep closing" behavior blocked chases had
-// before pathing existed. Shared by chaseAlongPath (chasing a visible-map
-// target around a corner) and chaseLastSeen (heading for wherever the
-// target was last seen, typically near the map connection it crossed).
+// pathRecalcInterval rather than every tick. If pathGraph is nil (pathing
+// unavailable for this instance), falls back to a straight line - the
+// original pre-pathing "keep closing" behavior. If pathGraph is available
+// but finds no route, holds position instead: FindPath already tried a
+// direct line first, so "no route" means that's blocked too, and walking
+// anyway would mean grinding into whatever it just confirmed is in the
+// way. Shared by chaseAlongPath (chasing a visible-map target around a
+// corner) and chaseLastSeen (heading for wherever the target was last
+// seen, typically near the map connection it crossed).
 func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, destY, speed, dt float64, pathGraph *pathing.Graph) {
 	b := &unit.Behavior
 	b.PathRecalcIn -= dt
@@ -457,7 +460,15 @@ func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, dest
 			needsRecalc = true
 		}
 	}
-	if pathGraph != nil && needsRecalc {
+	if pathGraph == nil {
+		// No pathing capability at all for this instance - this is the
+		// original pre-pathing "keep closing" fallback, kept for when the
+		// feature is unavailable rather than when a route search failed.
+		moveStraightToward(unit, destX, destY, speed, dt)
+		return
+	}
+
+	if needsRecalc {
 		b.PathRecalcIn = pathRecalcInterval
 		if wps, ok := pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, destX, destY); ok {
 			b.PathWaypoints = wps
@@ -467,7 +478,11 @@ func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, dest
 	}
 
 	if len(b.PathWaypoints) == 0 {
-		moveStraightToward(unit, destX, destY, speed, dt)
+		// pathGraph found no route (FindPath already tried the direct line
+		// first, so this means that's blocked too) - hold position rather
+		// than blindly walking into whatever it just confirmed is in the
+		// way. A later tick (target moved, a repositioned neighbor cleared
+		// a blocked start point, etc.) gets another attempt.
 		return
 	}
 

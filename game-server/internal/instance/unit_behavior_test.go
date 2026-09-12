@@ -757,6 +757,33 @@ func TestUnitBehavior_Chase_TreatsGrazingCornerAsBlockedWhenPathGraphAvailable(t
 	assert.NotEmpty(t, u.Behavior.PathWaypoints, "should have switched to path-following instead of a naive straight chase")
 }
 
+func TestUnitBehavior_Chase_HoldsPositionWhenNoRouteExists(t *testing.T) {
+	// The NPC is sealed inside a walled box with no gap; the target is
+	// outside, unreachable by any route. Blindly walking straight at a
+	// target FindPath already confirmed has no path would just be grinding
+	// into the wall that's sealing the unit in - it should hold position
+	// instead and wait for something to change.
+	zone := basicAttackZone(4.0, 1.0) // goblin TokenRadius: 2.0
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall",
+		Locations: []instanceconfig.Location{
+			{X: -2, Y: -2}, {X: 2, Y: -2}, {X: 2, Y: 2}, {X: -2, Y: 2}, {X: -2, Y: -2},
+		},
+	}}
+	graph, err := pathing.Build(zone, 0.3)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 0.3
+	playerID, _ := addPlayer(s, "map1", 0, 20) // well outside the sealed box
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.Equal(t, 0.0, u.Position.X)
+	assert.Equal(t, 0.0, u.Position.Y)
+}
+
 func TestUnitBehavior_Chase_RecomputesPathWhenShovedOffStaleWaypoint(t *testing.T) {
 	// Simulates crowd separation (applyNPCSeparation) having shoved a
 	// mid-detour unit back onto the wrong side of a wall it had just
