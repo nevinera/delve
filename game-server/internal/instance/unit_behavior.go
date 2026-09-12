@@ -191,9 +191,9 @@ func applyUnitBehavior(
 				}
 			}
 		} else {
-			// Target crossed to another map. Move toward last known position so
-			// we reach the connection and traverse it on a future tick.
-			chaseLastSeen(unit, speed, dt, pathGraph)
+			// Target crossed to another map. Head for whichever connection
+			// leads there so we cross it too on a future tick.
+			chaseAcrossMap(unit, target.MapIdentifier, speed, dt, pathGraph)
 		}
 
 	case instancestate.UnitStatusLeashing:
@@ -432,45 +432,39 @@ func moveStraightToward(unit *instancestate.UnitState, destX, destY, speed, dt f
 	unit.Position.Y += (dy / dist) * move
 }
 
-// moveTowardPointAvoidingObstacles moves unit toward (destX,destY) on its
-// current map, following a cached visibility-graph path around obstacles
-// when pathGraph is available, recomputing it at most every
-// pathRecalcInterval rather than every tick. If pathGraph is nil (pathing
-// unavailable for this instance), falls back to a straight line - the
-// original pre-pathing "keep closing" behavior. If pathGraph is available
-// but finds no route, holds position instead: FindPath already tried a
-// direct line first, so "no route" means that's blocked too, and walking
-// anyway would mean grinding into whatever it just confirmed is in the
-// way. Shared by chaseAlongPath (chasing a visible-map target around a
-// corner) and chaseLastSeen (heading for wherever the target was last
-// seen, typically near the map connection it crossed).
-func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, destY, speed, dt float64, pathGraph *pathing.Graph) {
+// moveAlongPlannedPath drives unit along its cached Behavior.PathWaypoints,
+// recomputing via computePath whenever the cache is empty, its recalc timer
+// has expired, or the next waypoint is no longer safely reachable from
+// wherever the unit actually is (see MapGraph.SegmentClear's doc - crowd
+// separation shoving the unit back around a corner it just rounded, say).
+// If pathGraph is nil (pathing unavailable for this instance), calls
+// fallback instead - the original pre-pathing "keep closing" behavior. If
+// pathGraph is available but computePath finds no route, holds position:
+// walking anyway would mean grinding into whatever it just confirmed is in
+// the way. A later tick (target moved, a blocked start point cleared,
+// etc.) gets another attempt.
+//
+// Shared by chaseAlongPath (chasing a same-map target around a corner) and
+// chaseAcrossMap (heading for whichever connection leads to the map the
+// target crossed to).
+func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph, computePath func() ([]pathing.Point, bool), fallback func()) {
+	if pathGraph == nil {
+		fallback()
+		return
+	}
+
 	b := &unit.Behavior
 	b.PathRecalcIn -= dt
 	needsRecalc := len(b.PathWaypoints) == 0 || b.PathRecalcIn <= 0
-	if !needsRecalc && pathGraph != nil {
-		// A cached path only stays valid from wherever it was computed -
-		// something else (crowd separation shoving the unit back around a
-		// corner it just rounded, say) can leave it somewhere the next
-		// waypoint is no longer safely reachable in a straight line. Rather
-		// than grinding into whatever's now in the way until the next
-		// scheduled recalculation, check every tick and force one early.
+	if !needsRecalc {
 		next := b.PathWaypoints[0]
 		if !pathGraph.SegmentClear(unit.MapIdentifier, unit.Position.X, unit.Position.Y, next.X, next.Y) {
 			needsRecalc = true
 		}
 	}
-	if pathGraph == nil {
-		// No pathing capability at all for this instance - this is the
-		// original pre-pathing "keep closing" fallback, kept for when the
-		// feature is unavailable rather than when a route search failed.
-		moveStraightToward(unit, destX, destY, speed, dt)
-		return
-	}
-
 	if needsRecalc {
 		b.PathRecalcIn = pathRecalcInterval
-		if wps, ok := pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, destX, destY); ok {
+		if wps, ok := computePath(); ok {
 			b.PathWaypoints = wps
 		} else {
 			b.PathWaypoints = nil
@@ -478,11 +472,6 @@ func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, dest
 	}
 
 	if len(b.PathWaypoints) == 0 {
-		// pathGraph found no route (FindPath already tried the direct line
-		// first, so this means that's blocked too) - hold position rather
-		// than blindly walking into whatever it just confirmed is in the
-		// way. A later tick (target moved, a repositioned neighbor cleared
-		// a blocked start point, etc.) gets another attempt.
 		return
 	}
 
@@ -512,15 +501,32 @@ func moveTowardPointAvoidingObstacles(unit *instancestate.UnitState, destX, dest
 // detouring around obstacles instead of chaseTarget's straight line (which
 // would walk it into whatever's in the way).
 func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
-	moveTowardPointAvoidingObstacles(unit, target.Position.X, target.Position.Y, speed, dt, pathGraph)
+	moveAlongPlannedPath(unit, speed, dt, pathGraph,
+		func() ([]pathing.Point, bool) {
+			return pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
+		},
+		func() { moveStraightToward(unit, target.Position.X, target.Position.Y, speed, dt) },
+	)
 }
 
-// chaseLastSeen moves unit toward the last recorded position of its target.
-// Used when the target has crossed to another map; no stop distance is
-// applied so the unit walks all the way to the connection and triggers a
-// map transition.
-func chaseLastSeen(unit *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
-	moveTowardPointAvoidingObstacles(unit, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY, speed, dt, pathGraph)
+// chaseAcrossMap moves unit toward whichever connection on its current map
+// leads to targetMapID, using the connections' own geometry rather than
+// the target's last-seen position: applyMapTransitions runs before
+// applyUnitBehaviors each tick, so by the tick a target actually crosses,
+// its MapIdentifier has already changed and Behavior.LastSeenX/Y never
+// gets a final update - it's frozen up to one full tick of the target's
+// movement short of wherever it actually crossed. At typical player speed
+// that's easily more than a connection's own trigger radius, so aiming at
+// the connection itself (which FindPathTowardMap already knows the exact
+// position of) is what reliably completes the follow, instead of almost
+// always landing just short of it.
+func chaseAcrossMap(unit *instancestate.UnitState, targetMapID string, speed, dt float64, pathGraph *pathing.Graph) {
+	moveAlongPlannedPath(unit, speed, dt, pathGraph,
+		func() ([]pathing.Point, bool) {
+			return pathGraph.FindPathTowardMap(unit.MapIdentifier, unit.Position.X, unit.Position.Y, targetMapID)
+		},
+		func() { moveStraightToward(unit, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY, speed, dt) },
+	)
 }
 
 // engageUnit gives unit a target and transitions it to the engaged status.

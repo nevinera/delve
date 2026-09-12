@@ -1026,8 +1026,22 @@ func twoMapZone() instanceconfig.Zone {
 					Position:   pos(0, 0),
 					Hostility:  "hostile",
 				}},
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "exit", Type: "point", Position: &instanceconfig.Position{X: 0, Y: 10}},
+				},
 			},
-			{Identifier: "map2"},
+			{
+				Identifier: "map2",
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "entrance", Type: "point", Position: &instanceconfig.Position{X: 0, Y: -10}},
+				},
+			},
+		},
+		ZoneLinks: []instanceconfig.ZoneLink{
+			{
+				ConnectionA: instanceconfig.ConnectionIdentifier{Map: "map1", Connection: "exit"},
+				ConnectionB: instanceconfig.ConnectionIdentifier{Map: "map2", Connection: "entrance"},
+			},
 		},
 	}
 }
@@ -1059,10 +1073,67 @@ func TestUnitBehavior_Chase_MovesTowardLastSeenWhenTargetOnDifferentMap(t *testi
 	assert.Greater(t, u.Position.Y, 0.0)     // NPC moved toward last seen
 }
 
+func TestUnitBehavior_Chase_EventuallyCrossesConnectionDespiteStaleLastSeen(t *testing.T) {
+	// Regression: applyMapTransitions runs before applyUnitBehaviors each
+	// tick, so on the tick a target actually crosses, Behavior.LastSeenX/Y
+	// never gets a final update - it's frozen wherever the target was one
+	// tick earlier. At normal player speed that's easily farther than a
+	// connection's own trigger radius, so a chase that heads straight for
+	// that stale point (rather than the connection itself) gets right next
+	// to the connection and then stops forever, never actually crossing.
+	zone := instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10},
+		},
+		Maps: []instanceconfig.Map{
+			{
+				Identifier: "map1",
+				Units: []instanceconfig.Unit{{
+					Identifier: "g1", UnitType: "goblin", Position: pos(0, 0), Hostility: "hostile",
+				}},
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "exit", Type: "point", Position: &instanceconfig.Position{X: 0, Y: 10}, FuzzRadius: 1.5},
+				},
+			},
+			{
+				Identifier: "map2",
+				Connections: []instanceconfig.MapConnection{
+					{Identifier: "entrance", Type: "point", Position: &instanceconfig.Position{X: 0, Y: -10}, FuzzRadius: 1.5},
+				},
+			},
+		},
+		ZoneLinks: []instanceconfig.ZoneLink{{
+			ConnectionA: instanceconfig.ConnectionIdentifier{Map: "map1", Connection: "exit"},
+			ConnectionB: instanceconfig.ConnectionIdentifier{Map: "map2", Connection: "entrance"},
+		}},
+	}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	playerID, _ := addPlayer(s, "map2", 0, 0) // player already across
+	manualEngage(u, playerID)
+	// Stale by more than the connection's 1.5ft trigger radius - exactly
+	// the gap a real tick of player movement leaves behind.
+	u.Behavior.LastSeenX, u.Behavior.LastSeenY = 0, 8
+
+	prev := s.Clone()
+	for range 50 {
+		instance.ApplyMapTransitionsForTest(s, prev, zone)
+		prev = s.Clone()
+		instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+		if u.MapIdentifier == "map2" {
+			return
+		}
+	}
+	t.Fatal("NPC never crossed to map2 despite a known connection leading there")
+}
+
 func TestUnitBehavior_Chase_LastSeenDetoursAroundWallWhenPathGraphAvailable(t *testing.T) {
 	zone := twoMapZone()
-	// A short wall directly between the NPC and where it last saw its
-	// target (which has since crossed to map2), with open ends close by.
+	// A short wall directly between the NPC and map1's exit connection (at
+	// (0,10), where the target has since crossed through to map2), with
+	// open ends close by.
 	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
 		Type: "wall",
 		Locations: []instanceconfig.Location{
@@ -1073,8 +1144,6 @@ func TestUnitBehavior_Chase_LastSeenDetoursAroundWallWhenPathGraphAvailable(t *t
 	require.NoError(t, err)
 
 	u, s := npcState("g1", pos(0, 0))
-	u.Behavior.LastSeenX = 0
-	u.Behavior.LastSeenY = 10
 	playerID, _ := addPlayer(s, "map2", 0, 0) // player already on the other map
 	manualEngage(u, playerID)
 
