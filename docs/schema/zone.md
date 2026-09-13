@@ -83,7 +83,7 @@ A LootTable maps item identifiers to integer weights expressing relative drop pr
   "elvl": 200,
   "private": true,
   "unitTypes": {
-    "goblin_raider": { "$ref": "./unit-types/goblin-raider.json", "referenceTo": "unit_type" }
+    "goblin_raider": { "$ref": "./unit_types/goblin-raider.json", "referenceTo": "unit_type" }
   },
   "maps": [
     { "$ref": "./maps/goblin-cave-entrance-tunnel.json", "referenceTo": "map" },

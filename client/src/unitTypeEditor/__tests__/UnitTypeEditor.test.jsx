@@ -126,7 +126,7 @@ describe("UnitTypeEditor", () => {
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     });
 
-    it("commits the unit type under unit-types/<key>.json and shows a success message", async () => {
+    it("commits the unit type under unit_types/<key>.json and shows a success message", async () => {
       validateUnitType.mockResolvedValue({valid: true});
       commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
       render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
@@ -137,7 +137,7 @@ describe("UnitTypeEditor", () => {
 
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
       expect(commitFiles).toHaveBeenCalledWith(
-        {"unit-types/goblin-raider.json": initialUnitType, "unit-types/goblin-raider.full.json": initialUnitType},
+        {"unit_types/goblin-raider.json": initialUnitType, "unit_types/goblin-raider.full.json": initialUnitType},
         {message: "Update Goblin Raider"}
       );
     });

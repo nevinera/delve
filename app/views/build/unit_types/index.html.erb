@@ -8,7 +8,7 @@
   </thead>
   <tbody>
     <% @unit_types.each do |entry| %>
-      <% identifier = entry["path"].delete_prefix("unit-types/").delete_suffix(".json") %>
+      <% identifier = entry["path"].delete_prefix("unit_types/").delete_suffix(".json") %>
       <tr>
         <td><%= link_to identifier, edit_build_unit_type_path(id: identifier) %></td>
       </tr>

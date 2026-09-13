@@ -5,7 +5,7 @@ class Build::UnitTypesController < Build::BaseController
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
 
   def index
-    @unit_types = Github::ContentClient.new(current_user).list_directory_recursive("unit-types")
+    @unit_types = Github::ContentClient.new(current_user).list_directory_recursive("unit_types")
       .select { |entry| entry["name"].end_with?(".json") && !entry["name"].end_with?(".full.json") }
       .sort_by { |entry| entry["path"] }
   end
@@ -45,11 +45,11 @@ class Build::UnitTypesController < Build::BaseController
   end
 
   def unit_type_key_taken?(key)
-    Github::ContentClient.new(current_user).list_directory_recursive("unit-types").any? { |entry| entry["path"] == "unit-types/#{key}.json" }
+    Github::ContentClient.new(current_user).list_directory_recursive("unit_types").any? { |entry| entry["path"] == "unit_types/#{key}.json" }
   end
 
   def load_unit_type
-    content = Github::ContentClient.new(current_user).file_content("unit-types/#{params[:id]}.json")
+    content = Github::ContentClient.new(current_user).file_content("unit_types/#{params[:id]}.json")
     @unit_type = JSON.parse(content)
   rescue Github::NotFoundError
     @unit_type = blank_unit_type(params[:id])

@@ -1,13 +1,13 @@
 // Converts between an availableAbilities key (e.g. "units/goblin-raider/slash",
 // the path under abilities/ - see Build::UnitTypesController#load_available_abilities)
 // and the $ref string a unit type's `powers` entry stores, which is relative
-// to the unit type's own file at unit-types/<unitTypeKey>.json.
+// to the unit type's own file at unit_types/<unitTypeKey>.json.
 //
-// unitTypeKey's own "/"s each add a directory level beneath unit-types/ (same
+// unitTypeKey's own "/"s each add a directory level beneath unit_types/ (same
 // nesting Build::AbilitiesController's KEY_FORMAT allows for abilities), so
 // escaping back up to the repo root before descending into abilities/ needs
 // one ".." per segment of unitTypeKey. For a flat key like "goblin-raider"
-// that's a single "..", matching real content (see unit-types/goblin-raider.json).
+// that's a single "..", matching real content (see unit_types/goblin-raider.json).
 function relativePrefix(unitTypeKey) {
   return "../".repeat(unitTypeKey.split("/").length);
 }

@@ -3,7 +3,7 @@ import {abilityKeyForRef} from "./abilityRefs";
 
 // Produces the fully-resolved ("full") form of a unit type draft: every
 // power's $ref dereferenced into the real ability content, recursively -
-// this is what eventually gets committed as unit-types/<key>.full.json (see
+// this is what eventually gets committed as unit_types/<key>.full.json (see
 // docs/schema/common.md#assetreference). The abilities themselves are
 // already fetched by Build::UnitTypesController#edit (see
 // availableAbilities), so no network access is needed here.

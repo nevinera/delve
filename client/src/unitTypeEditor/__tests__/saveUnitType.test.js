@@ -15,7 +15,7 @@ describe("saveUnitType", () => {
     commitFiles.mockReset();
   });
 
-  it("commits both unit-types/<key>.json and its resolved .full.json companion", async () => {
+  it("commits both unit_types/<key>.json and its resolved .full.json companion", async () => {
     commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
     const unitTypeData = {
       name: "Goblin Raider",
@@ -26,8 +26,8 @@ describe("saveUnitType", () => {
 
     expect(commitFiles).toHaveBeenCalledWith(
       {
-        "unit-types/goblin-raider.json": unitTypeData,
-        "unit-types/goblin-raider.full.json": {name: "Goblin Raider", powers: [{name: "Slash", castTime: null}]},
+        "unit_types/goblin-raider.json": unitTypeData,
+        "unit_types/goblin-raider.full.json": {name: "Goblin Raider", powers: [{name: "Slash", castTime: null}]},
       },
       {message: "Update Goblin Raider"}
     );
@@ -42,14 +42,14 @@ describe("saveUnitType", () => {
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update goblin-raider"});
   });
 
-  it("commits a nested key's JSON at unit-types/<key>.json and .full.json", async () => {
+  it("commits a nested key's JSON at unit_types/<key>.json and .full.json", async () => {
     commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
     const unitTypeData = {name: "Raider", powers: []};
 
     await saveUnitType("goblins/raider", unitTypeData, {});
 
     expect(commitFiles).toHaveBeenCalledWith(
-      {"unit-types/goblins/raider.json": unitTypeData, "unit-types/goblins/raider.full.json": unitTypeData},
+      {"unit_types/goblins/raider.json": unitTypeData, "unit_types/goblins/raider.full.json": unitTypeData},
       {message: "Update Raider"}
     );
   });

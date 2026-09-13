@@ -24,14 +24,14 @@ RSpec.describe "Build::UnitTypes", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        it "lists the unit-types directory contents, linking to the edit page" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit-types")
+        it "lists the unit_types directory contents, linking to the edit page" do
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
             .to_return(
               status: 200,
               headers: {"Content-Type" => "application/json"},
               body: [
-                {name: "goblin-raider.json", path: "unit-types/goblin-raider.json", type: "file"},
-                {name: "goblin-raider.full.json", path: "unit-types/goblin-raider.full.json", type: "file"}
+                {name: "goblin-raider.json", path: "unit_types/goblin-raider.json", type: "file"},
+                {name: "goblin-raider.full.json", path: "unit_types/goblin-raider.full.json", type: "file"}
               ].to_json
             )
 
@@ -67,11 +67,11 @@ RSpec.describe "Build::UnitTypes", type: :request do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
       def stub_existing_unit_types(names)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit-types")
+        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
           .to_return(
             status: 200,
             headers: {"Content-Type" => "application/json"},
-            body: names.map { |n| {name: "#{n}.json", path: "unit-types/#{n}.json", type: "file"} }.to_json
+            body: names.map { |n| {name: "#{n}.json", path: "unit_types/#{n}.json", type: "file"} }.to_json
           )
       end
 
@@ -117,7 +117,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
         end
 
         it "bootstraps a blank unit type when the key doesn't exist yet in the repo" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit-types/goblin-archer.json")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-archer.json")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
           stub_empty_abilities_dir("goblin-archer")
 
@@ -138,7 +138,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
             "resource" => {"name" => "energy", "color" => "888888", "max" => 100.0, "defaultValue" => 100.0, "returnRate" => 0.0, "isFluid" => true},
             "powers" => [{"$ref" => "../abilities/units/goblin-raider/slash.json", "referenceTo" => "ability"}]
           }
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit-types/goblin-raider.json")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-raider.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
 
           slash_ability = {"name" => "Slash", "castTime" => nil, "globalCooldown" => 1.0}
@@ -161,7 +161,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
         end
 
         it "links to a new ability pre-filled under the unit type's own abilities subdirectory" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit-types/goblin-archer.json")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-archer.json")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
           stub_empty_abilities_dir("goblin-archer")
 
