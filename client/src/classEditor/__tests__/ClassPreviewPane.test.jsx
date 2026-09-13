@@ -33,8 +33,8 @@ const availableAbilities = {
 };
 
 const powers = [
-  {$ref: "../abilities/classes/x/short.json", referenceTo: "power"},
-  {$ref: "../abilities/classes/x/long.json", referenceTo: "power"},
+  {$ref: "../abilities/classes/x/short.json", referenceTo: "ability"},
+  {$ref: "../abilities/classes/x/long.json", referenceTo: "ability"},
 ];
 
 function renderPane() {
@@ -102,6 +102,17 @@ describe("ClassPreviewPane", () => {
     expect(screen.getAllByRole("img")[0]).not.toHaveClass("disabled");
   });
 
+  it("still renders a clickable button for a power with no iconURL", () => {
+    const noIconAbilities = {
+      "classes/x/short": {ability: {name: "Enrage", castTime: null, effects: []}, assetMap: {}},
+      "classes/x/long": availableAbilities["classes/x/long"],
+    };
+    render(<ClassPreviewPane classKey="x" powers={powers} availableAbilities={noIconAbilities} stockAssets={{}} />);
+
+    expect(screen.getAllByRole("img")).toHaveLength(1); // just Firebolt
+    expect(screen.getByRole("button", {name: "EN"})).toBeInTheDocument();
+  });
+
   describe("a self-only ability (e.g. Recover)", () => {
     const selfOnlyAbilities = {
       "classes/x/recover": {
@@ -111,8 +122,8 @@ describe("ClassPreviewPane", () => {
       "classes/x/long": availableAbilities["classes/x/long"],
     };
     const selfOnlyPowers = [
-      {$ref: "../abilities/classes/x/recover.json", referenceTo: "power"},
-      {$ref: "../abilities/classes/x/long.json", referenceTo: "power"},
+      {$ref: "../abilities/classes/x/recover.json", referenceTo: "ability"},
+      {$ref: "../abilities/classes/x/long.json", referenceTo: "ability"},
     ];
 
     it("is never disabled for range, even at a distance beyond the DEFAULT_MAX_RANGE fallback", () => {

@@ -20,6 +20,7 @@ export default defineConfig({
         main: resolve(__dirname, "client/src/main.jsx"),
         editor: resolve(__dirname, "client/src/editor/main.jsx"),
         classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
+        unitTypeEditor: resolve(__dirname, "client/src/unitTypeEditor/main.jsx"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",

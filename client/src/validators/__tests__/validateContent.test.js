@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach} from "vitest";
-import {validateAbility, validateCharacterClass} from "../validateContent";
+import {validateAbility, validateCharacterClass, validateUnitType} from "../validateContent";
 
 describe("validateAbility", () => {
   beforeEach(() => {
@@ -48,6 +48,27 @@ describe("validateCharacterClass", () => {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-CSRF-Token": "fake-token"},
       body: JSON.stringify(fullClass),
+    });
+    expect(result).toEqual({valid: true});
+  });
+});
+
+describe("validateUnitType", () => {
+  beforeEach(() => {
+    document.head.innerHTML = '<meta name="csrf-token" content="fake-token">';
+    global.fetch = vi.fn();
+  });
+
+  it("posts the resolved unit type to Build::ValidatorsController#unit_type", async () => {
+    global.fetch.mockResolvedValue({json: () => Promise.resolve({valid: true})});
+    const fullUnitType = {name: "Goblin Raider", powers: [{name: "Slash"}]};
+
+    const result = await validateUnitType(fullUnitType);
+
+    expect(global.fetch).toHaveBeenCalledWith("/build/validators/unit_type", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-CSRF-Token": "fake-token"},
+      body: JSON.stringify(fullUnitType),
     });
     expect(result).toEqual({valid: true});
   });

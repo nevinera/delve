@@ -9,7 +9,7 @@ describe("resolveFullClass", () => {
   it("inlines a power's $ref into the real ability content", async () => {
     const classData = {
       name: "Puncher",
-      powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "power"}],
+      powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}],
     };
 
     const result = await resolveFullClass("puncher", classData, availableAbilities);
@@ -26,7 +26,7 @@ describe("resolveFullClass", () => {
   });
 
   it("throws a clear error when a referenced ability wasn't loaded", async () => {
-    const classData = {powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "power"}]};
+    const classData = {powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "ability"}]};
 
     await expect(resolveFullClass("puncher", classData, availableAbilities)).rejects.toThrow(/No ability loaded/);
   });

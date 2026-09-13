@@ -1,8 +1,6 @@
 module Validators
   class UnitTypeValidator < Base
     TARGETING_TYPES = %w[aggroTable nearest healerAggro].freeze
-    TACTICS_TYPES = %w[randomAvailable rotation priorityRotation scripted phased].freeze
-    PATROL_TACTICS_TYPES = (TACTICS_TYPES - ["phased"]).freeze
     BASIC_ATTACK_SCHOOLS = %w[physical magic].freeze
     BASIC_ATTACK_STYLES = %w[claw sword axe club arrow arcane ice nature fire].freeze
 
@@ -12,7 +10,9 @@ module Validators
       validate_optional_fields!(data, path: path)
       validate_powers!(data, path: path) if given?(data, "powers")
       validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if given?(data, "targeting")
-      validate_tactics!(data["tactics"], path: child_path(path, "tactics")) if given?(data, "tactics")
+      if given?(data, "tactics")
+        UnitTacticsValidator.validate!(data["tactics"], known_power_names: known_power_names(data), path: child_path(path, "tactics"))
+      end
     end
 
     private
@@ -87,65 +87,10 @@ module Validators
       require_one_of!(type, TARGETING_TYPES, path: child_path(path, "type"))
     end
 
-    def validate_tactics!(data, path:, allow_phased: true)
-      require_object!(data, path: path)
-      type = require_string!(data, "type", path: path)
-      require_one_of!(type, allow_phased ? TACTICS_TYPES : PATROL_TACTICS_TYPES, path: child_path(path, "type"))
-
-      case type
-      when "rotation", "priorityRotation" then validate_rotation_tactics!(data, path: path)
-      when "scripted" then validate_scripted_tactics!(data, path: path)
-      when "phased" then validate_phased_tactics!(data, path: path)
-      end
-    end
-
-    def validate_rotation_tactics!(data, path:)
-      powers = require_array!(data, "powers", path: path, min: 1)
-      powers.each_with_index do |p, i|
-        raise ValidationError.new("power name must be a string", path: index_path(child_path(path, "powers"), i)) unless p.is_a?(String)
-      end
-    end
-
-    def validate_scripted_tactics!(data, path:)
-      require_numeric!(data, "duration", path: path)
-      events = require_array!(data, "events", path: path)
-      events.each_with_index do |event, i|
-        event_path = index_path(child_path(path, "events"), i)
-        require_object!(event, path: event_path)
-        require_string!(event, "power", path: event_path)
-        require_numeric!(event, "at", path: event_path)
-      end
-    end
-
-    def validate_phased_tactics!(data, path:)
-      phases = require_array!(data, "phases", path: path, min: 2)
-      phases.each_with_index do |phase, i|
-        phase_path = index_path(child_path(path, "phases"), i)
-        require_object!(phase, path: phase_path)
-        validate_tactics!(require_hash!(phase, "tactics", path: phase_path), path: child_path(phase_path, "tactics"), allow_phased: false)
-        next if i == phases.length - 1
-        validate_phase_transition!(require_hash!(phase, "transition", path: phase_path), path: child_path(phase_path, "transition"))
-      end
-    end
-
-    def validate_phase_transition!(data, path:)
-      require_object!(data, path: path)
-      has_time = given?(data, "timeElapsed")
-      has_health = given?(data, "healthBelow")
-      raise ValidationError.new("transition must specify timeElapsed or healthBelow", path: path) unless has_time || has_health
-      validate_time_elapsed!(data, path: path) if has_time
-      validate_health_below!(data, path: path) if has_health
-    end
-
-    def validate_time_elapsed!(data, path:)
-      val = data["timeElapsed"]
-      raise ValidationError.new("timeElapsed must be a number", path: child_path(path, "timeElapsed")) unless val.is_a?(Numeric)
-    end
-
-    def validate_health_below!(data, path:)
-      val = data["healthBelow"]
-      return if val.is_a?(Numeric) && val.between?(0.0, 1.0)
-      raise ValidationError.new("healthBelow must be a number between 0.0 and 1.0", path: child_path(path, "healthBelow"))
+    def known_power_names(data)
+      powers = data["powers"]
+      return [] unless powers.is_a?(Array)
+      powers.filter_map { |p| p["name"] if p.is_a?(Hash) }
     end
   end
 end

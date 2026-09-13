@@ -19,7 +19,7 @@ describe("saveClass", () => {
     commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
     const classData = {
       name: "Puncher",
-      powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "power"}],
+      powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}],
     };
 
     const result = await saveClass("puncher", classData, availableAbilities);
@@ -55,7 +55,7 @@ describe("saveClass", () => {
   });
 
   it("rejects, without committing anything, when a power references an ability that wasn't loaded", async () => {
-    const classData = {name: "Puncher", powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "power"}]};
+    const classData = {name: "Puncher", powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "ability"}]};
 
     await expect(saveClass("puncher", classData, availableAbilities)).rejects.toThrow(/No ability loaded/);
     expect(commitFiles).not.toHaveBeenCalled();

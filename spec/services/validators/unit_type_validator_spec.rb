@@ -133,7 +133,7 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
     end
 
     it "raises when a power is an AssetReference" do
-      data = goblin_unit_type.merge("powers" => [{"$ref" => "powers/stab.json", "referenceTo" => "power"}])
+      data = goblin_unit_type.merge("powers" => [{"$ref" => "powers/stab.json", "referenceTo" => "ability"}])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /full JSON required/)
     end
@@ -206,6 +206,53 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
       })
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /at least 2 elements/)
+    end
+
+    describe "tactics power references" do
+      it "raises when a rotation lists a power name not in powers" do
+        data = goblin_unit_type.merge("tactics" => {"type" => "rotation", "powers" => ["Stab", "Fireball"]})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /references power "Fireball"/)
+      end
+
+      it "raises when a priorityRotation lists a power name not in powers" do
+        data = goblin_unit_type.merge("tactics" => {"type" => "priorityRotation", "powers" => ["Fireball"]})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /references power "Fireball"/)
+      end
+
+      it "raises when a scripted event references a power name not in powers" do
+        data = goblin_unit_type.merge("tactics" => {
+          "type" => "scripted",
+          "duration" => 5.0,
+          "events" => [{"power" => "Fireball", "at" => 1.0}]
+        })
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /references power "Fireball"/)
+      end
+
+      it "raises when a phased sub-tactic references a power name not in powers" do
+        data = goblin_unit_type.merge("tactics" => {
+          "type" => "phased",
+          "phases" => [
+            {"tactics" => {"type" => "rotation", "powers" => ["Fireball"]}, "transition" => {"healthBelow" => 0.5}},
+            {"tactics" => {"type" => "randomAvailable"}}
+          ]
+        })
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /references power "Fireball"/)
+      end
+
+      it "raises when tactics reference a power but the unit type has no powers at all" do
+        data = goblin_unit_type.except("powers").merge("tactics" => {"type" => "rotation", "powers" => ["Stab"]})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /references power "Stab"/)
+      end
+
+      it "accepts randomAvailable tactics regardless of powers, since it names none" do
+        data = goblin_unit_type.except("powers").merge("tactics" => {"type" => "randomAvailable"})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
     end
   end
 end

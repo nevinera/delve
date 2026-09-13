@@ -11,7 +11,7 @@ A pointer to an external config file rather than an inline definition. Any confi
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `$ref` | string | yes | Relative path to the referenced config file. |
-| `referenceTo` | string | yes | Asset type: `"map"`, `"zone"`, `"unit_type"`, `"power"`, etc. |
+| `referenceTo` | string | yes | Asset type: `"map"`, `"zone"`, `"unit_type"`, `"ability"`, etc. |
 
 ```json
 { "$ref": "../maps/main-chamber.json", "referenceTo": "map" }
