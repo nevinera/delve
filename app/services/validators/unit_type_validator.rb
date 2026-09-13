@@ -12,7 +12,10 @@ module Validators
       validate_optional_fields!(data, path: path)
       validate_powers!(data, path: path) if given?(data, "powers")
       validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if given?(data, "targeting")
-      validate_tactics!(data["tactics"], path: child_path(path, "tactics")) if given?(data, "tactics")
+      if given?(data, "tactics")
+        validate_tactics!(data["tactics"], path: child_path(path, "tactics"))
+        validate_tactics_power_references!(data, path: path)
+      end
     end
 
     private
@@ -126,6 +129,46 @@ module Validators
         next if i == phases.length - 1
         validate_phase_transition!(require_hash!(phase, "transition", path: phase_path), path: child_path(phase_path, "transition"))
       end
+    end
+
+    # Every power name a rotation/priorityRotation/scripted tactic refers to
+    # (recursing through phased phases, for hand-authored content - the
+    # editor doesn't offer "phased" yet) must actually be one of this unit
+    # type's own powers. Runs after validate_tactics! has already confirmed
+    # the tactics tree's own shape, so nothing here needs to re-check types.
+    def validate_tactics_power_references!(data, path:)
+      check_tactics_power_references!(data["tactics"], known_power_names(data), path: child_path(path, "tactics"))
+    end
+
+    def known_power_names(data)
+      powers = data["powers"]
+      return [] unless powers.is_a?(Array)
+      powers.filter_map { |p| p["name"] if p.is_a?(Hash) }
+    end
+
+    def check_tactics_power_references!(data, known, path:)
+      case data["type"]
+      when "rotation", "priorityRotation"
+        check_power_name_list!(data["powers"], known, path: child_path(path, "powers"))
+      when "scripted"
+        Array(data["events"]).each_with_index do |event, i|
+          check_power_name!(event["power"], known, path: child_path(index_path(child_path(path, "events"), i), "power"))
+        end
+      when "phased"
+        Array(data["phases"]).each_with_index do |phase, i|
+          phase_path = child_path(index_path(child_path(path, "phases"), i), "tactics")
+          check_tactics_power_references!(phase["tactics"], known, path: phase_path)
+        end
+      end
+    end
+
+    def check_power_name_list!(list, known, path:)
+      Array(list).each_with_index { |name, i| check_power_name!(name, known, path: index_path(path, i)) }
+    end
+
+    def check_power_name!(name, known, path:)
+      return if known.include?(name)
+      raise ValidationError.new("references power #{name.inspect}, which is not in this unit type's powers", path: path)
     end
 
     def validate_phase_transition!(data, path:)
