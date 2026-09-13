@@ -784,6 +784,50 @@ func TestUnitBehavior_Chase_HoldsPositionWhenNoRouteExists(t *testing.T) {
 	assert.Equal(t, 0.0, u.Position.Y)
 }
 
+func TestUnitBehavior_Chase_DifferentSizeBucketsRouteIndependently(t *testing.T) {
+	// A 3ft-wide doorway (gap between two walls): comfortably wide enough
+	// for a 1ft-radius unit, too narrow for a 5ft-radius one. Both chase
+	// the same player through it; each should be routed according to its
+	// own actual size, not a single shared map-wide radius.
+	zone := instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"rat":  {Name: "Rat", SpeedFactor: 1.0, MaxHP: 5, TokenRadius: 1},
+			"ogre": {Name: "Ogre", SpeedFactor: 1.0, MaxHP: 50, TokenRadius: 5},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{
+				{Identifier: "r1", UnitType: "rat", Position: pos(0, -5), Hostility: "hostile"},
+				{Identifier: "o1", UnitType: "ogre", Position: pos(0, -8), Hostility: "hostile"},
+			},
+			Barriers: []instanceconfig.Barrier{
+				{Type: "wall", Locations: []instanceconfig.Location{{X: -20, Y: 5}, {X: -1.5, Y: 5}}},
+				{Type: "wall", Locations: []instanceconfig.Location{{X: 1.5, Y: 5}, {X: 20, Y: 5}}},
+			},
+		}},
+	}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	rat, s := npcState("r1", pos(0, -5))
+	rat.Radius = 1.0
+	ogreID := uuid.New()
+	s.Units[ogreID] = &instancestate.UnitState{
+		ZoneUnitIdentifier: "o1", MapIdentifier: "map1", Position: pos(0, -8),
+		Status: instancestate.UnitStatusIdle, Health: 50, MaxHealth: 50, Radius: 5.0,
+	}
+	ogre := s.Units[ogreID]
+
+	playerID, _ := addPlayer(s, "map1", 0, 15)
+	manualEngage(rat, playerID)
+	manualEngage(ogre, playerID)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.Empty(t, rat.Behavior.PathWaypoints, "rat fits through the doorway and should go straight for the player")
+	assert.NotEmpty(t, ogre.Behavior.PathWaypoints, "ogre doesn't fit through the doorway and must detour")
+}
+
 func TestUnitBehavior_Chase_RecomputesPathWhenShovedOffStaleWaypoint(t *testing.T) {
 	// Simulates crowd separation (applyNPCSeparation) having shoved a
 	// mid-detour unit back onto the wrong side of a wall it had just

@@ -6,19 +6,22 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
-// Graph is a zone's set of per-map visibility graphs, one per map
-// identifier, stitched together at their MapConnection points so a route
-// can be planned toward a map other than the one it starts on. It's built
-// once and queried at chase time; it is not safe to share across separate
-// Instances of the same zone, since a future door-toggle rebuild will
-// mutate a specific map's graph in place.
+// Graph is a zone's set of visibility graphs, one per (map, size bucket)
+// pair - see bucketRadius - stitched together at their MapConnection points
+// so a route can be planned toward a map other than the one it starts on.
+// It's built once and queried at chase time; it is not safe to share across
+// separate Instances of the same zone, since a future door-toggle rebuild
+// will mutate a specific map's graph in place.
 type Graph struct {
+	buckets map[float64]*zoneGraph
+}
+
+// zoneGraph is one size bucket's worth of precomputed graphs: a MapGraph
+// per map (inflated for that bucket's radius), and a small meta-graph over
+// just their connection nodes, used by FindPathTowardMap.
+type zoneGraph struct {
 	maps map[string]*MapGraph
 
-	// meta is a small graph over just the connection nodes across every
-	// map (not the full per-map node sets), used to plan which connection
-	// to head for when the goal is on a different map. See
-	// nearestExitToward.
 	meta      []metaNode
 	metaIndex map[mapNode]int
 	metaAdj   [][]metaEdge
@@ -40,19 +43,75 @@ type metaEdge struct {
 	cost float64
 }
 
-// Build precomputes a visibility graph for every map in the zone, each
-// sized for the largest unit placed on that specific map (see
-// MaxUnitRadius) - this is the v1, single-size-per-map approach; per-size
-// buckets will replace it once multiple unit sizes need to path
-// independently on the same map. fallbackRadius is used for maps with no
-// units placed on them at all.
-//
-// Every MapConnection referenced by a ZoneLink gets a graph node on its own
-// map (so ordinary same-map routing already reaches it), plus an entry in
-// the cross-map meta-graph connecting it to whichever connection it links
-// to - see FindPathTowardMap.
+// bucketRadius rounds r up to the nearest agent-size bucket: 1ft, 3ft, 5ft,
+// then every 5 feet from there (10, 15, 20, ...). A zone with several
+// differently-sized units doesn't need a fully separate graph per exact
+// radius - only per bucket - while still giving each unit a graph inflated
+// close to its own true size, rather than the single largest-unit-on-the-
+// map compromise this package started with.
+func bucketRadius(r float64) float64 {
+	switch {
+	case r <= 1:
+		return 1
+	case r <= 3:
+		return 3
+	case r <= 5:
+		return 5
+	default:
+		return math.Ceil(r/5) * 5
+	}
+}
+
+// Build precomputes a visibility graph for every map in the zone, once per
+// size bucket actually needed by some unit somewhere in the zone (plus
+// fallbackRadius's bucket, for maps with no units placed on them at all -
+// see neededBucketRadii). Every MapConnection referenced by a ZoneLink gets a
+// graph node on its own map in every bucket, plus an entry in that
+// bucket's cross-map meta-graph connecting it to whichever connection it
+// links to - see FindPathTowardMap. A bucket's graphs are entirely
+// independent of every other bucket's: a connection or route that doesn't
+// fit a larger bucket's agent size simply doesn't appear in that bucket's
+// graph, while smaller buckets route through it normally.
 func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
-	g := &Graph{
+	g := &Graph{buckets: make(map[float64]*zoneGraph)}
+	for _, radius := range neededBucketRadii(zone, fallbackRadius) {
+		zg, err := buildZoneGraph(zone, radius)
+		if err != nil {
+			return nil, err
+		}
+		g.buckets[radius] = zg
+	}
+	return g, nil
+}
+
+// neededBucketRadii returns the sorted, deduplicated set of size buckets
+// required to cover every unit placed anywhere in the zone, plus
+// fallbackRadius's own bucket (used for maps with no units at all).
+func neededBucketRadii(zone instanceconfig.Zone, fallbackRadius float64) []float64 {
+	seen := map[float64]bool{bucketRadius(fallbackRadius): true}
+	for _, m := range zone.Maps {
+		for _, u := range m.Units {
+			if ut, ok := zone.UnitTypes[u.UnitType]; ok {
+				seen[bucketRadius(ut.TokenRadius)] = true
+			}
+		}
+	}
+	radii := make([]float64, 0, len(seen))
+	for r := range seen {
+		radii = append(radii, r)
+	}
+	for i := 1; i < len(radii); i++ {
+		for j := i; j > 0 && radii[j-1] > radii[j]; j-- {
+			radii[j-1], radii[j] = radii[j], radii[j-1]
+		}
+	}
+	return radii
+}
+
+// buildZoneGraph builds one size bucket's worth of per-map graphs and
+// stitches their connection nodes into a cross-map meta-graph.
+func buildZoneGraph(zone instanceconfig.Zone, agentRadius float64) (*zoneGraph, error) {
+	zg := &zoneGraph{
 		maps:      make(map[string]*MapGraph, len(zone.Maps)),
 		metaIndex: make(map[mapNode]int),
 	}
@@ -70,11 +129,11 @@ func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
 			anchorConnIDs = append(anchorConnIDs, c.Identifier)
 		}
 
-		mg, anchorIdx, err := BuildMapGraph(m, MaxUnitRadius(zone, m, fallbackRadius), anchors)
+		mg, anchorIdx, err := BuildMapGraph(m, agentRadius, anchors)
 		if err != nil {
 			return nil, err
 		}
-		g.maps[m.Identifier] = mg
+		zg.maps[m.Identifier] = mg
 
 		for i, connID := range anchorConnIDs {
 			if anchorIdx[i] < 0 {
@@ -82,20 +141,20 @@ func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
 			}
 			mn := mapNode{m.Identifier, anchorIdx[i]}
 			connNode[connKey{m.Identifier, connID}] = mn
-			g.addMetaNode(mn, anchors[i])
+			zg.addMetaNode(mn, anchors[i])
 		}
 	}
 
 	// Same-map edges between every pair of connection nodes on one map,
 	// using that map's own precomputed all-pairs table.
-	for i, mi := range g.meta {
-		mg := g.maps[mi.mapID]
-		for j, mj := range g.meta {
+	for i, mi := range zg.meta {
+		mg := zg.maps[mi.mapID]
+		for j, mj := range zg.meta {
 			if i == j || mi.mapID != mj.mapID {
 				continue
 			}
 			if d := mg.dist[mi.node][mj.node]; d != math.Inf(1) {
-				g.metaAdj[i] = append(g.metaAdj[i], metaEdge{to: j, cost: d})
+				zg.metaAdj[i] = append(zg.metaAdj[i], metaEdge{to: j, cost: d})
 			}
 		}
 	}
@@ -107,34 +166,34 @@ func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
 		if !aOK || !bOK {
 			continue
 		}
-		g.addMetaEdge(a, b)
+		zg.addMetaEdge(a, b)
 		if !zl.OneWay {
-			g.addMetaEdge(b, a)
+			zg.addMetaEdge(b, a)
 		}
 	}
 
-	return g, nil
+	return zg, nil
 }
 
-func (g *Graph) addMetaNode(mn mapNode, p Point) {
-	if _, exists := g.metaIndex[mn]; exists {
+func (zg *zoneGraph) addMetaNode(mn mapNode, p Point) {
+	if _, exists := zg.metaIndex[mn]; exists {
 		return
 	}
-	g.metaIndex[mn] = len(g.meta)
-	g.meta = append(g.meta, metaNode{mapID: mn.mapID, node: mn.node, point: p})
-	g.metaAdj = append(g.metaAdj, nil)
+	zg.metaIndex[mn] = len(zg.meta)
+	zg.meta = append(zg.meta, metaNode{mapID: mn.mapID, node: mn.node, point: p})
+	zg.metaAdj = append(zg.metaAdj, nil)
 }
 
-func (g *Graph) addMetaEdge(from, to mapNode) {
-	fi, ok := g.metaIndex[from]
+func (zg *zoneGraph) addMetaEdge(from, to mapNode) {
+	fi, ok := zg.metaIndex[from]
 	if !ok {
 		return
 	}
-	ti, ok := g.metaIndex[to]
+	ti, ok := zg.metaIndex[to]
 	if !ok {
 		return
 	}
-	g.metaAdj[fi] = append(g.metaAdj[fi], metaEdge{to: ti, cost: 0})
+	zg.metaAdj[fi] = append(zg.metaAdj[fi], metaEdge{to: ti, cost: 0})
 }
 
 // connKey identifies one side of a map connection, as declared by a
@@ -167,65 +226,61 @@ func connectionPoint(c instanceconfig.MapConnection) (Point, bool) {
 	}
 }
 
-// MaxUnitRadius returns the largest UnitType.TokenRadius among units placed
-// on the given map, or fallback if the map has no units (or references an
-// unknown unit type). This is a convenience for callers building a single
-// agentRadius per map for v1; it will be superseded by per-size-bucket
-// radii once those exist.
-func MaxUnitRadius(zone instanceconfig.Zone, m instanceconfig.Map, fallback float64) float64 {
-	max := fallback
-	for _, u := range m.Units {
-		ut, ok := zone.UnitTypes[u.UnitType]
-		if !ok {
-			continue
-		}
-		if ut.TokenRadius > max {
-			max = ut.TokenRadius
-		}
+// FindPath routes a unit of the given collision radius from (sx,sy) to
+// (tx,ty) on the named map. Returns false if agentRadius's size bucket or
+// the map is unknown, or no path exists.
+func (g *Graph) FindPath(agentRadius float64, mapIdentifier string, sx, sy, tx, ty float64) ([]Point, bool) {
+	zg, ok := g.buckets[bucketRadius(agentRadius)]
+	if !ok {
+		return nil, false
 	}
-	return max
-}
-
-// FindPath routes a unit of this graph's agent radius from (sx,sy) to
-// (tx,ty) on the named map. Returns false if the map is unknown or no path
-// exists.
-func (g *Graph) FindPath(mapIdentifier string, sx, sy, tx, ty float64) ([]Point, bool) {
-	mg, ok := g.maps[mapIdentifier]
+	mg, ok := zg.maps[mapIdentifier]
 	if !ok {
 		return nil, false
 	}
 	return mg.FindPath(sx, sy, tx, ty)
 }
 
-// SegmentClear reports whether a unit of this graph's agent radius could
+// SegmentClear reports whether a unit of the given collision radius could
 // travel in a straight line between the two points on the named map
-// without overlapping a barrier. Returns true if the map is unknown,
-// matching instanceconfig.LineOfSightClear's convention.
-func (g *Graph) SegmentClear(mapIdentifier string, x1, y1, x2, y2 float64) bool {
-	mg, ok := g.maps[mapIdentifier]
+// without overlapping a barrier. Returns true if agentRadius's size bucket
+// or the map is unknown, matching instanceconfig.LineOfSightClear's
+// convention.
+func (g *Graph) SegmentClear(agentRadius float64, mapIdentifier string, x1, y1, x2, y2 float64) bool {
+	zg, ok := g.buckets[bucketRadius(agentRadius)]
+	if !ok {
+		return true
+	}
+	mg, ok := zg.maps[mapIdentifier]
 	if !ok {
 		return true
 	}
 	return mg.SegmentClear(x1, y1, x2, y2)
 }
 
-// FindPathTowardMap routes from (sx,sy) on fromMap toward whichever
-// connection leads (possibly through further intermediate maps) to toMap,
-// and returns the waypoints to travel on fromMap to reach that connection -
-// not a full multi-map route, since once a unit actually crosses, the
-// receiving map's own layout (and the target's exact position there) get
-// re-evaluated fresh anyway, the same way any other chase decision does
-// every tick. Returns false if fromMap == toMap (use FindPath directly for
-// same-map routing) or toMap isn't reachable through any known connection.
-func (g *Graph) FindPathTowardMap(fromMap string, sx, sy float64, toMap string) ([]Point, bool) {
+// FindPathTowardMap routes a unit of the given collision radius from
+// (sx,sy) on fromMap toward whichever connection leads (possibly through
+// further intermediate maps) to toMap, and returns the waypoints to travel
+// on fromMap to reach that connection - not a full multi-map route, since
+// once a unit actually crosses, the receiving map's own layout (and the
+// target's exact position there) get re-evaluated fresh anyway, the same
+// way any other chase decision does every tick. Returns false if
+// agentRadius's size bucket is unknown, fromMap == toMap (use FindPath
+// directly for same-map routing), or toMap isn't reachable through any
+// connection this bucket's agent size can actually fit through.
+func (g *Graph) FindPathTowardMap(agentRadius float64, fromMap string, sx, sy float64, toMap string) ([]Point, bool) {
 	if fromMap == toMap {
 		return nil, false
 	}
-	mg, ok := g.maps[fromMap]
+	zg, ok := g.buckets[bucketRadius(agentRadius)]
 	if !ok {
 		return nil, false
 	}
-	exit, ok := g.nearestExitToward(fromMap, sx, sy, toMap)
+	mg, ok := zg.maps[fromMap]
+	if !ok {
+		return nil, false
+	}
+	exit, ok := zg.nearestExitToward(fromMap, sx, sy, toMap)
 	if !ok {
 		return nil, false
 	}
@@ -239,17 +294,17 @@ func (g *Graph) FindPathTowardMap(fromMap string, sx, sy float64, toMap string) 
 // intermediate maps) that eventually reaches toMap. The returned point is
 // always on fromMap - it's the connection the caller should walk to, not
 // wherever the route eventually arrives.
-func (g *Graph) nearestExitToward(fromMap string, sx, sy float64, toMap string) (Point, bool) {
-	mg := g.maps[fromMap]
+func (zg *zoneGraph) nearestExitToward(fromMap string, sx, sy float64, toMap string) (Point, bool) {
+	mg := zg.maps[fromMap]
 
-	dist := make([]float64, len(g.meta))
-	origin := make([]int, len(g.meta)) // which fromMap seed connection started the best route to this node
-	visited := make([]bool, len(g.meta))
+	dist := make([]float64, len(zg.meta))
+	origin := make([]int, len(zg.meta)) // which fromMap seed connection started the best route to this node
+	visited := make([]bool, len(zg.meta))
 	for i := range dist {
 		dist[i] = math.Inf(1)
 		origin[i] = -1
 	}
-	for i, mn := range g.meta {
+	for i, mn := range zg.meta {
 		if mn.mapID != fromMap {
 			continue
 		}
@@ -271,10 +326,10 @@ func (g *Graph) nearestExitToward(fromMap string, sx, sy float64, toMap string) 
 			return Point{}, false
 		}
 		visited[u] = true
-		if g.meta[u].mapID == toMap {
-			return g.meta[origin[u]].point, true
+		if zg.meta[u].mapID == toMap {
+			return zg.meta[origin[u]].point, true
 		}
-		for _, e := range g.metaAdj[u] {
+		for _, e := range zg.metaAdj[u] {
 			if nd := dist[u] + e.cost; nd < dist[e.to] {
 				dist[e.to] = nd
 				origin[e.to] = origin[u]

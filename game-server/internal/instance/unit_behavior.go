@@ -166,12 +166,12 @@ func applyUnitBehavior(
 			// not for deciding whether to walk straight there: a ray can
 			// graze past a corner clear while the unit's own radius sweeping
 			// that same line would clip it. canWalkStraight adds that radius
-			// check (via the map's pathing graph, sized for the largest unit
-			// on it) so "direct pursuit" mode never sends a unit grinding
-			// into a corner it only narrowly has line of sight past.
+			// check (via the map's pathing graph, sized for this unit's own
+			// size bucket) so "direct pursuit" mode never sends a unit
+			// grinding into a corner it only narrowly has line of sight past.
 			canWalkStraight := losClear
 			if pathGraph != nil {
-				canWalkStraight = losClear && pathGraph.SegmentClear(unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
+				canWalkStraight = losClear && pathGraph.SegmentClear(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 			}
 			if canWalkStraight {
 				unit.Behavior.PathWaypoints = nil // no longer detouring around anything
@@ -458,7 +458,7 @@ func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, path
 	needsRecalc := len(b.PathWaypoints) == 0 || b.PathRecalcIn <= 0
 	if !needsRecalc {
 		next := b.PathWaypoints[0]
-		if !pathGraph.SegmentClear(unit.MapIdentifier, unit.Position.X, unit.Position.Y, next.X, next.Y) {
+		if !pathGraph.SegmentClear(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, next.X, next.Y) {
 			needsRecalc = true
 		}
 	}
@@ -503,7 +503,7 @@ func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, path
 func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
 	moveAlongPlannedPath(unit, speed, dt, pathGraph,
 		func() ([]pathing.Point, bool) {
-			return pathGraph.FindPath(unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
+			return pathGraph.FindPath(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 		},
 		func() { moveStraightToward(unit, target.Position.X, target.Position.Y, speed, dt) },
 	)
@@ -523,7 +523,7 @@ func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pa
 func chaseAcrossMap(unit *instancestate.UnitState, targetMapID string, speed, dt float64, pathGraph *pathing.Graph) {
 	moveAlongPlannedPath(unit, speed, dt, pathGraph,
 		func() ([]pathing.Point, bool) {
-			return pathGraph.FindPathTowardMap(unit.MapIdentifier, unit.Position.X, unit.Position.Y, targetMapID)
+			return pathGraph.FindPathTowardMap(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, targetMapID)
 		},
 		func() { moveStraightToward(unit, unit.Behavior.LastSeenX, unit.Behavior.LastSeenY, speed, dt) },
 	)
