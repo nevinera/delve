@@ -2,9 +2,8 @@ require "rails_helper"
 
 RSpec.describe TraineeGear::GrantInitialEquipment do
   let(:user) { create(:user) }
-  let(:handle) { create(:handle, user: user) }
   let(:character_class) do
-    create(:character_class, user: user, handle: handle,
+    create(:character_class, user: user,
       primary_stats: ["strength"],
       secondary_stats: %w[crit_rating haste_rating mastery_rating versatility_rating stamina],
       wields: %w[sword shield])
@@ -26,7 +25,7 @@ RSpec.describe TraineeGear::GrantInitialEquipment do
 
   context "with a two-handed weapon (single wield entry)" do
     let(:character_class) do
-      create(:character_class, user: user, handle: handle,
+      create(:character_class, user: user,
         primary_stats: ["strength"],
         secondary_stats: %w[crit_rating haste_rating mastery_rating versatility_rating stamina],
         wields: ["staff"])
@@ -95,7 +94,7 @@ RSpec.describe TraineeGear::GrantInitialEquipment do
   end
 
   it "raises ClassContentNotReady when the character's class hasn't finished fetching content" do
-    unfetched_class = create(:character_class, user: user, handle: handle, primary_stats: [], secondary_stats: [], wields: [])
+    unfetched_class = create(:character_class, user: user, primary_stats: [], secondary_stats: [], wields: [])
     other_character = create(:character, user: user, character_class: unfetched_class)
 
     expect { described_class.call(character: other_character) }

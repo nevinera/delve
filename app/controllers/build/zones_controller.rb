@@ -1,7 +1,7 @@
 class Build::ZonesController < Build::BaseController
   def index
     authorize! :read, Zone
-    @pagy, @zones = pagy(:offset, Zone.includes(:handle).order(:identifier, :version))
+    @pagy, @zones = pagy(:offset, Zone.order(:identifier, :version))
   end
 
   def show
@@ -11,7 +11,6 @@ class Build::ZonesController < Build::BaseController
 
   def new
     @zone = Zone.new
-    @handles = current_user.handles.order(:identifier)
     authorize! :create, Zone
   end
 
@@ -22,7 +21,6 @@ class Build::ZonesController < Build::BaseController
     if @zone.save
       redirect_to build_zone_path(@zone), notice: "Zone registered."
     else
-      @handles = current_user.handles.order(:identifier)
       render :new, status: :unprocessable_content
     end
   end
@@ -30,6 +28,6 @@ class Build::ZonesController < Build::BaseController
   private
 
   def zone_params
-    params.require(:zone).permit(:handle_id, :identifier, :version, :name, :description, :config_url)
+    params.require(:zone).permit(:identifier, :version, :name, :description, :config_url)
   end
 end

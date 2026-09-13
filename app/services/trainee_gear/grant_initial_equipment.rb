@@ -41,7 +41,7 @@ module TraineeGear
 
     def raise_unless_class_content_ready!
       return unless [character_class.primary_stats, character_class.secondary_stats, character_class.wields].any?(&:blank?)
-      raise ClassContentNotReady, "#{character_class.full_identifier} lacks required values for primary_stats, secondary_stats, or wields; ensure FetchCharacterClassContentJob has completed."
+      raise ClassContentNotReady, "#{character_class.identifier} lacks required values for primary_stats, secondary_stats, or wields; ensure FetchCharacterClassContentJob has completed."
     end
 
     memoize def character_class = @character.character_class

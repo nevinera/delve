@@ -1,5 +1,4 @@
 class Zone < ApplicationRecord
-  belongs_to :handle
   belongs_to :registering_user, class_name: "User"
 
   enum :state, {provided: "provided", fetched: "fetched", validation_failed: "validation_failed"}

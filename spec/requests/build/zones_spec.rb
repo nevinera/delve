@@ -2,8 +2,7 @@ require "rails_helper"
 
 RSpec.describe "Build::Zones", type: :request do
   let(:user) { create(:user) }
-  let(:handle) { create(:handle, user: user) }
-  let!(:zone) { create(:zone, handle: handle, registering_user: user, identifier: "goblin_cave", version: "1.0", name: "Goblin Cave") }
+  let!(:zone) { create(:zone, registering_user: user, identifier: "goblin_cave", version: "1.0", name: "Goblin Cave") }
 
   context "when not logged in" do
     it "redirects index to login" do
@@ -58,7 +57,7 @@ RSpec.describe "Build::Zones", type: :request do
 
     describe "POST /build/zones" do
       let(:valid_params) do
-        {zone: {handle_id: handle.id, identifier: "spider_den", version: "1.0", name: "Spider Den", config_url: "https://example.com/spider-den.json"}}
+        {zone: {identifier: "spider_den", version: "1.0", name: "Spider Den", config_url: "https://example.com/spider-den.json"}}
       end
 
       context "with valid params" do

@@ -2,9 +2,8 @@ require "rails_helper"
 
 RSpec.describe GrantTraineeGearJob, type: :job do
   let(:user) { create(:user) }
-  let(:handle) { create(:handle, user: user) }
   let(:character_class) do
-    create(:character_class, user: user, handle: handle,
+    create(:character_class, user: user,
       primary_stats: ["strength"],
       secondary_stats: %w[crit_rating haste_rating mastery_rating versatility_rating stamina],
       wields: %w[dagger dagger])

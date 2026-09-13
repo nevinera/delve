@@ -10,12 +10,11 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_01_205842) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
     t.integer "file_size"
-    t.integer "handle_id", null: false
     t.string "identifier", null: false
     t.string "location", null: false
     t.json "primary_stats", default: [], null: false
@@ -26,8 +25,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_205842) do
     t.string "validity_error"
     t.string "version", null: false
     t.json "wields", default: [], null: false
-    t.index ["handle_id", "identifier", "version"], name: "idx_on_handle_id_identifier_version_b6e2d417bf", unique: true
-    t.index ["handle_id"], name: "index_character_classes_on_handle_id"
+    t.index ["identifier", "version"], name: "index_character_classes_on_identifier_and_version", unique: true
     t.index ["state"], name: "index_character_classes_on_state"
     t.index ["user_id"], name: "index_character_classes_on_user_id"
   end
@@ -93,16 +91,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_205842) do
     t.index ["user_id"], name: "index_github_installations_on_user_id", unique: true
   end
 
-  create_table "handles", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.text "description"
-    t.string "identifier", null: false
-    t.datetime "updated_at", null: false
-    t.integer "user_id", null: false
-    t.index ["identifier"], name: "index_handles_on_identifier", unique: true
-    t.index ["user_id"], name: "index_handles_on_user_id"
-  end
-
   create_table "slot_sessions", force: :cascade do |t|
     t.integer "character_id", null: false
     t.datetime "created_at", null: false
@@ -141,7 +129,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_205842) do
     t.text "description"
     t.integer "elvl"
     t.integer "file_size"
-    t.integer "handle_id", null: false
     t.string "identifier", null: false
     t.string "name", null: false
     t.integer "registering_user_id", null: false
@@ -149,13 +136,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_205842) do
     t.datetime "updated_at", null: false
     t.string "validity_error"
     t.string "version", null: false
-    t.index ["handle_id"], name: "index_zones_on_handle_id"
     t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version", unique: true
     t.index ["registering_user_id"], name: "index_zones_on_registering_user_id"
     t.index ["state"], name: "index_zones_on_state"
   end
 
-  add_foreign_key "character_classes", "handles"
   add_foreign_key "character_classes", "users"
   add_foreign_key "character_items", "characters"
   add_foreign_key "character_items", "zones", column: "provenance_zone_id"
@@ -164,9 +149,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_01_205842) do
   add_foreign_key "equipped_items", "character_items"
   add_foreign_key "equipped_items", "characters"
   add_foreign_key "github_installations", "users"
-  add_foreign_key "handles", "users"
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"
-  add_foreign_key "zones", "handles"
   add_foreign_key "zones", "users", column: "registering_user_id"
 end

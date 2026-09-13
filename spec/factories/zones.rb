@@ -1,6 +1,5 @@
 FactoryBot.define do
   factory :zone do
-    association :handle
     association :registering_user, factory: :user
     sequence(:identifier) do |n|
       suffix = +""

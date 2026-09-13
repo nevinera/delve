@@ -1,9 +1,7 @@
 <h1><%= @zone.name %></h1>
 
 <p><strong>Identifier:</strong> <%= @zone.identifier %></p>
-<p><strong>Version:</strong> <%= @zone.version %></p>
-<p><strong>Handle:</strong> <%= @zone.handle.identifier %></p>
-<% if @zone.elvl %>
+<p><strong>Version:</strong> <%= @zone.version %></p><% if @zone.elvl %>
   <p><strong>Elevation:</strong> <%= @zone.elvl %></p>
 <% end %>
 <% if @zone.description.present? %>

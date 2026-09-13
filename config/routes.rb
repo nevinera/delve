@@ -28,7 +28,6 @@ Rails.application.routes.draw do
     root to: "dashboard#index"
     resources :abilities, only: [:index, :new, :create]
     resources :classes, only: [:index, :new, :create]
-    resources :handles, only: [:index, :show, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
     post "validators/ability", to: "validators#ability"
     post "validators/character_class", to: "validators#character_class"

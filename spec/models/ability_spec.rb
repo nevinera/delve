@@ -5,37 +5,20 @@ RSpec.describe Ability, type: :model do
   let(:other_user) { create(:user) }
   let(:ability) { Ability.new(user) }
 
-  let(:own_handle) { create(:handle, user: user) }
-  let(:other_handle) { create(:handle, user: other_user) }
-
   describe "Zone" do
-    let(:own_zone) { create(:zone, handle: own_handle, registering_user: user) }
-    let(:other_zone) { create(:zone, handle: other_handle, registering_user: other_user) }
+    let(:own_zone) { create(:zone, registering_user: user) }
+    let(:other_zone) { create(:zone, registering_user: other_user) }
 
-    it "can manage a zone whose handle belongs to the user" do
+    it "can manage a zone registered by the user" do
       expect(ability).to be_able_to(:manage, own_zone)
     end
 
-    it "cannot manage a zone whose handle belongs to another user" do
+    it "cannot manage a zone registered by another user" do
       expect(ability).not_to be_able_to(:manage, other_zone)
     end
 
     it "can read any zone" do
       expect(ability).to be_able_to(:read, other_zone)
-    end
-  end
-
-  describe "Handle" do
-    it "can manage own handles" do
-      expect(ability).to be_able_to(:manage, own_handle)
-    end
-
-    it "cannot manage another user's handle" do
-      expect(ability).not_to be_able_to(:manage, other_handle)
-    end
-
-    it "can read any handle" do
-      expect(ability).to be_able_to(:read, other_handle)
     end
   end
 
