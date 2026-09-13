@@ -111,15 +111,17 @@ RSpec.describe "Build::UnitTypes", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        def stub_empty_abilities_dir(key)
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/#{key}")
+        # abilities/units/ is scanned whole, not scoped to any one unit
+        # type's key - see Build::UnitTypesController#load_available_abilities.
+        def stub_empty_abilities_dir
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
         end
 
         it "bootstraps a blank unit type when the key doesn't exist yet in the repo" do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-archer.json")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
-          stub_empty_abilities_dir("goblin-archer")
+          stub_empty_abilities_dir
 
           get "/build/unit_types/goblin-archer/edit"
 
@@ -127,7 +129,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
           expect(response.body).to include(CGI.escapeHTML("Goblin Archer"))
         end
 
-        it "renders the JS editor shell, bootstrapping the unit type and available abilities as data attributes" do
+        it "renders the JS editor shell, bootstrapping the unit type and every available ability under abilities/units/ (shared family folders included, not just this unit type's own key)" do
           content = {
             "name" => "Goblin Raider",
             "tokenImageUrl" => [],
@@ -136,19 +138,25 @@ RSpec.describe "Build::UnitTypes", type: :request do
             "dps" => 4.0,
             "attackSpeed" => 1.0,
             "resource" => {"name" => "energy", "color" => "888888", "max" => 100.0, "defaultValue" => 100.0, "returnRate" => 0.0, "isFluid" => true},
-            "powers" => [{"$ref" => "../abilities/units/goblin-raider/slash.json", "referenceTo" => "ability"}]
+            "powers" => [{"$ref" => "../abilities/units/goblins/slash.json", "referenceTo" => "ability"}]
           }
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-raider.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
 
           slash_ability = {"name" => "Slash", "castTime" => nil, "globalCooldown" => 1.0}
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblin-raider")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units")
             .to_return(
               status: 200,
               headers: {"Content-Type" => "application/json"},
-              body: [{name: "slash.json", path: "abilities/units/goblin-raider/slash.json", type: "file"}].to_json
+              body: [{name: "goblins", path: "abilities/units/goblins", type: "dir"}].to_json
             )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblin-raider/slash.json")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [{name: "slash.json", path: "abilities/units/goblins/slash.json", type: "file"}].to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/slash.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(slash_ability.to_json), encoding: "base64"}.to_json)
 
           get "/build/unit_types/goblin-raider/edit"
@@ -157,13 +165,13 @@ RSpec.describe "Build::UnitTypes", type: :request do
           expect(response.body).to include('id="editor-root"')
           expect(response.body).to match(%r{src="/client/unitTypeEditor[^"]*\.js"})
           expect(response.body).to include(CGI.escapeHTML(content.to_json))
-          expect(response.body).to include(CGI.escapeHTML("units/goblin-raider/slash"))
+          expect(response.body).to include(CGI.escapeHTML("units/goblins/slash"))
         end
 
         it "links to a new ability pre-filled under the unit type's own abilities subdirectory" do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-archer.json")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
-          stub_empty_abilities_dir("goblin-archer")
+          stub_empty_abilities_dir
 
           get "/build/unit_types/goblin-archer/edit"
 
@@ -177,23 +185,42 @@ RSpec.describe "Build::UnitTypes", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        it "returns the current available-abilities map as JSON" do
+        it "returns the current available-abilities map as JSON, up to one level of subdirectory beneath abilities/units/" do
           slash_ability = {"name" => "Slash", "castTime" => nil, "globalCooldown" => 1.0}
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblin-raider")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units")
             .to_return(
               status: 200,
               headers: {"Content-Type" => "application/json"},
-              body: [{name: "slash.json", path: "abilities/units/goblin-raider/slash.json", type: "file"}].to_json
+              body: [
+                {name: "goblins", path: "abilities/units/goblins", type: "dir"},
+                {name: "bite.json", path: "abilities/units/bite.json", type: "file"}
+              ].to_json
             )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblin-raider/slash.json")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [
+                {name: "slash.json", path: "abilities/units/goblins/slash.json", type: "file"},
+                {name: "melee", path: "abilities/units/goblins/melee", type: "dir"}
+              ].to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/melee")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [{name: "too-deep.json", path: "abilities/units/goblins/melee/too-deep.json", type: "file"}].to_json
+            )
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/slash.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(slash_ability.to_json), encoding: "base64"}.to_json)
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/bite.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64({"name" => "Bite"}.to_json), encoding: "base64"}.to_json)
 
           get "/build/unit_types/goblin-raider/available_abilities"
 
           expect(response).to have_http_status(:ok)
           json = JSON.parse(response.body)
-          expect(json.keys).to eq(["units/goblin-raider/slash"])
-          expect(json["units/goblin-raider/slash"]["ability"]["name"]).to eq("Slash")
+          expect(json.keys).to contain_exactly("units/goblins/slash", "units/bite")
         end
       end
     end

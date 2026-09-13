@@ -71,12 +71,18 @@ class Build::UnitTypesController < Build::BaseController
     }
   end
 
-  # Every ability committed under abilities/units/<key>/ - see
-  # Build::ClassesController#load_available_abilities, which this mirrors.
+  # Every ability committed under abilities/units/, not scoped to this unit
+  # type's own key: unit types are often grouped by category rather than
+  # authored 1:1 with an ability folder (e.g. "goblin" and "goblin-boss"
+  # share abilities/units/goblins/, since they fight together and share some
+  # abilities), so every unit type's editor needs to see the whole tree.
+  # Only one level of subdirectory nesting is supported - abilities/units/*.json
+  # or abilities/units/*/*.json, not deeper.
   def load_available_abilities
     client = Github::ContentClient.new(current_user)
-    entries = client.list_directory_recursive("abilities/units/#{params[:id]}")
+    entries = client.list_directory_recursive("abilities/units")
       .select { |entry| entry["name"].end_with?(".json") }
+      .select { |entry| entry["path"].delete_prefix("abilities/units/").count("/") <= 1 }
     entries.to_h { |entry| ability_entry(client, entry) }
   end
 
