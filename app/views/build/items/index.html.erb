@@ -1,0 +1,19 @@
+<h1>Items</h1>
+
+<p><%= link_to "New Item", new_build_item_path %></p>
+
+<table>
+  <thead>
+    <tr><th>Key</th></tr>
+  </thead>
+  <tbody>
+    <% @items.each do |entry| %>
+      <% identifier = entry["path"].delete_prefix("items/").delete_suffix(".json") %>
+      <tr>
+        <td><%= link_to identifier, edit_build_item_path(id: identifier) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to Build", build_root_path %>

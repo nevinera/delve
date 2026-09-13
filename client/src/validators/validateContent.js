@@ -32,3 +32,9 @@ export function validateCharacterClass(fullClass) {
 export function validateUnitType(fullUnitType) {
   return postValidation("/build/validators/unit_type", fullUnitType);
 }
+
+// Items have no $ref fields at all (see docs/schema/item.md), so there's no
+// resolved/abstract distinction here - the draft is validated as-is.
+export function validateItem(item) {
+  return postValidation("/build/validators/item", item);
+}

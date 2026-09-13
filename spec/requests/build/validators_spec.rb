@@ -122,5 +122,29 @@ RSpec.describe "Build::Validators", type: :request do
         expect(body["error"]["message"]).to include("full JSON required")
       end
     end
+
+    describe "POST /build/validators/item" do
+      let(:valid_item) do
+        {identifier: "sword-of-doom", name: "Sword of Doom", slot: "main_hand", weaponType: "sword", elvl: 584}
+      end
+
+      it "returns valid: true for a valid item" do
+        post "/build/validators/item", params: valid_item.to_json, headers: {"Content-Type" => "application/json"}
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)).to eq({"valid" => true})
+      end
+
+      it "returns valid: false with the error message and path for a negative elvl" do
+        invalid = valid_item.merge(elvl: -1)
+
+        post "/build/validators/item", params: invalid.to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include("elvl must be at least 0")
+        expect(body["error"]["path"]).to eq("$.elvl")
+      end
+    end
   end
 end

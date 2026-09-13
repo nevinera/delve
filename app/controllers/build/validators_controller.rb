@@ -3,7 +3,7 @@
 # requires for FetchAbilityContentJob/FetchCharacterClassContentJob, rather
 # than re-implementing that (constantly-changing) schema a second time in JS.
 class Build::ValidatorsController < Build::BaseController
-  skip_authorization_check only: [:ability, :character_class, :unit_type]
+  skip_authorization_check only: [:ability, :character_class, :unit_type, :item]
 
   def ability
     validate_with(Validators::AbilityValidator)
@@ -22,6 +22,13 @@ class Build::ValidatorsController < Build::BaseController
   # resolved form, since UnitTypeValidator's powers rejects $ref entries too.
   def unit_type
     validate_with(Validators::UnitTypeValidator)
+  end
+
+  # Items have no $ref fields at all (see docs/schema/item.md) - unlike the
+  # class/unit type editors, there's no abstract-vs-resolved distinction to
+  # worry about here, just the draft as-is.
+  def item
+    validate_with(Validators::ItemValidator)
   end
 
   private

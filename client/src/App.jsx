@@ -1914,7 +1914,7 @@ const STAT_LABELS = {
 // Mirrors docs/stats.md's "Item coloration" table (delta up to -15/-5/+5/+15
 // -> gray/green/blue/purple, above +15 -> orange), but computed against the
 // player's current local elevation rather than a weighted mean.
-function itemColor(item, localElvl) {
+export function itemColor(item, localElvl) {
   if (item?.elvl == null || localElvl == null) return null;
   const delta = item.elvl - localElvl;
   if (delta <= -15) return "#9d9d9d";
@@ -1926,7 +1926,7 @@ function itemColor(item, localElvl) {
 
 // Mirrors ItemStats::ElevationMultiplier (app/services/item_stats/elevation_multiplier.rb)
 // / itemstats.ElevationMultiplier (game-server/internal/itemstats/elevation_multiplier.go).
-function elevationMultiplier(ee) {
+export function elevationMultiplier(ee) {
   const base = 2 / (1 + Math.pow(3, -ee / 10));
   let taper;
   if (Math.abs(ee) <= 10) taper = 1;
@@ -1942,7 +1942,11 @@ function elevationMultiplier(ee) {
 // `stats` is assumed to be raw (em=1.0, i.e. computed as if the item were
 // exactly on-level with itself) - it's rescaled here against `localElvl`
 // (the elevation of the map the player is currently on), not shown raw.
-export function ItemTooltip({ item, children, style, localElvl }) {
+// pinned: skips the hover/portal machinery entirely and renders the tooltip
+// body inline, always visible - for the item editor's preview pane, which
+// wants a persistent live view rather than something you have to hover to
+// see (see client/src/itemEditor/ItemPreviewPane.jsx).
+export function ItemTooltip({ item, children, style, localElvl, pinned }) {
   const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
 
   if (!item) return children;
@@ -1954,6 +1958,40 @@ export function ItemTooltip({ item, children, style, localElvl }) {
     .map(([key, value]) => [key, value * em])
     .filter(([, v]) => v)
     .sort(([a], [b]) => statOrder.indexOf(a) - statOrder.indexOf(b));
+
+  const body = (
+    <div style={pinned ? { ...styles.itemTooltip, position: "static" } : { ...styles.itemTooltip, left: pos?.x + 16, top: pos?.y + 16 }}>
+      <div style={styles.itemTooltipName}>{item.name}</div>
+      {(item.slot || item.elvl != null) && (
+        <div style={styles.itemTooltipMeta}>
+          {item.elvl != null && <span style={color ? { color } : undefined}>e{item.elvl}</span>}
+          {item.elvl != null && item.slot ? " " : ""}
+          {item.slot}
+        </div>
+      )}
+      {stats.length > 0 && (
+        <div style={styles.itemTooltipStats}>
+          {stats.map(([key, value]) => (
+            <div key={key} style={styles.itemTooltipStat}>
+              +{value.toFixed(1)} {STAT_LABELS[key] || key}
+            </div>
+          ))}
+        </div>
+      )}
+      {item.description && (
+        <div style={styles.itemTooltipDescription}>{item.description}</div>
+      )}
+    </div>
+  );
+
+  if (pinned) {
+    return (
+      <span style={{ ...styles.itemTooltipAnchor, ...style }}>
+        {children}
+        {body}
+      </span>
+    );
+  }
 
   return (
     <span
@@ -1969,28 +2007,7 @@ export function ItemTooltip({ item, children, style, localElvl }) {
         // it the containing block for position:fixed descendants - without
         // the portal, this tooltip's left/top would resolve against that
         // transformed ancestor instead of the viewport.
-        <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
-          <div style={styles.itemTooltipName}>{item.name}</div>
-          {(item.slot || item.elvl != null) && (
-            <div style={styles.itemTooltipMeta}>
-              {item.elvl != null && <span style={color ? { color } : undefined}>e{item.elvl}</span>}
-              {item.elvl != null && item.slot ? " " : ""}
-              {item.slot}
-            </div>
-          )}
-          {stats.length > 0 && (
-            <div style={styles.itemTooltipStats}>
-              {stats.map(([key, value]) => (
-                <div key={key} style={styles.itemTooltipStat}>
-                  +{value.toFixed(1)} {STAT_LABELS[key] || key}
-                </div>
-              ))}
-            </div>
-          )}
-          {item.description && (
-            <div style={styles.itemTooltipDescription}>{item.description}</div>
-          )}
-        </div>,
+        body,
         document.body
       )}
     </span>
