@@ -9,8 +9,18 @@ import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubAuthError} from "../github/commitFiles";
 
+// tokenImageUrl is schema-legal as a bare string (see docs/schema/unit_type.md)
+// and real content uses that form - but this editor always edits/saves it as
+// an array (a one-entry array behaves identically for every consumer), so
+// normalize once here rather than guarding every place that reads it.
+function normalizeUnitType(unitType) {
+  const url = unitType.tokenImageUrl;
+  if (Array.isArray(url)) return unitType;
+  return {...unitType, tokenImageUrl: url ? [url] : []};
+}
+
 export default function UnitTypeEditor({unitTypeKey, initialUnitType, initialAvailableAbilities, stockAssets, newAbilityUrl, availableAbilitiesUrl}) {
-  const [unitTypeData, rawDispatch] = useReducer(unitTypeReducer, initialUnitType);
+  const [unitTypeData, rawDispatch] = useReducer(unitTypeReducer, initialUnitType, normalizeUnitType);
   const [availableAbilities, setAvailableAbilities] = useState(initialAvailableAbilities);
   const [refreshStatus, setRefreshStatus] = useState("");
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();

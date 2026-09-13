@@ -41,6 +41,13 @@ describe("UnitTypeEditor", () => {
     expect(screen.getByDisplayValue("Goblin Brute")).toBeInTheDocument();
   });
 
+  it("normalizes a bare-string tokenImageUrl (schema-legal, used by real content) into a one-entry array instead of crashing", () => {
+    const withStringToken = {...initialUnitType, tokenImageUrl: "../tokens/unit/goblin-archer.webp"};
+    render(<UnitTypeEditor unitTypeKey="goblin-archer" initialUnitType={withStringToken} initialAvailableAbilities={{}} stockAssets={{}} />);
+
+    expect(screen.getByDisplayValue("../tokens/unit/goblin-archer.webp")).toBeInTheDocument();
+  });
+
   it("adds a power's $ref when '+ Add power' is clicked", () => {
     render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={availableAbilities} stockAssets={{}} />);
     expect(screen.getByTestId("preview-powers")).toHaveTextContent("[]");
