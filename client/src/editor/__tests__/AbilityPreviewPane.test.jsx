@@ -57,6 +57,14 @@ describe("AbilityPreviewPane", () => {
     expect(screen.getByTestId("canvas")).toHaveAttribute("data-target", "/tokens/male-elf-guard.webp");
   });
 
+  it("still renders a clickable button when the ability has no iconURL", () => {
+    const noIconAbility = {name: "Enrage", castTime: null, effects: []};
+    render(<AbilityPreviewPane ability={noIconAbility} assetMap={{}} assetOverrides={{}} stockAssets={{}} />);
+
+    expect(screen.queryByRole("img", {name: "ability icon"})).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "EN"})).toBeInTheDocument();
+  });
+
   it("falls back to the default self token once the override is cleared", () => {
     render(<AbilityPreviewPane ability={ability} assetMap={{}} assetOverrides={{}} stockAssets={{}} />);
     fireEvent.change(screen.getByLabelText(/Token URL/), {target: {value: "/tokens/my-monster.webp"}});

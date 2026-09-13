@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useRef, useState} from "react";
 import {firePowerEffects} from "../game/effectPlayback";
 import {AbilityTooltip} from "../AbilityTooltip";
+import AbilityIcon from "../AbilityIcon";
 import AbilityPreviewCanvas from "./AbilityPreviewCanvas";
 import {resolveAbilityForPlayback} from "./resolveAbilityForPlayback";
 
@@ -78,16 +79,9 @@ export default function AbilityPreviewPane({ability, assetMap, assetOverrides, s
           targetTokenUrl={targetTokenUrl}
           targetDistanceFt={targetDistanceFt}
         />
-        {resolvedAbility.iconURL && (
-          <AbilityTooltip ability={ability} hint="Use Ability (space)">
-            <img
-              src={resolvedAbility.iconURL}
-              alt="ability icon"
-              className={`ability-icon-button${firing ? " disabled" : ""}`}
-              onClick={play}
-            />
-          </AbilityTooltip>
-        )}
+        <AbilityTooltip ability={ability} hint="Use Ability (space)">
+          <AbilityIcon ability={resolvedAbility} className={`ability-icon-button${firing ? " disabled" : ""}`} onClick={play} />
+        </AbilityTooltip>
       </div>
       <div className="preview-controls">
         <label>

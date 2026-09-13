@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useRef, useState} from "react";
 import {firePowerEffects} from "../game/effectPlayback";
 import {AbilityTooltip} from "../AbilityTooltip";
+import AbilityIcon from "../AbilityIcon";
 import AbilityPreviewCanvas from "../editor/AbilityPreviewCanvas";
 import {resolveAbilityForPlayback} from "../editor/resolveAbilityForPlayback";
 import {abilityKeyForRef} from "./abilityRefs";
@@ -129,9 +130,8 @@ export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availabl
           return (
             <div className="power-slot" key={i}>
               <AbilityTooltip ability={resolvedAbility} hint={outOfRange ? "Out of range" : "Use ability"}>
-                <img
-                  src={resolvedAbility.iconURL}
-                  alt={resolvedAbility.name}
+                <AbilityIcon
+                  ability={resolvedAbility}
                   className={`power-slot-icon${disabled ? " disabled" : ""}`}
                   onClick={() => play(resolvedAbility)}
                 />

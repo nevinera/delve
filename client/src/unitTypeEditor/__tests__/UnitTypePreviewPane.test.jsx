@@ -96,6 +96,17 @@ describe("UnitTypePreviewPane", () => {
     expect(firePowerEffects).toHaveBeenCalledTimes(1);
   });
 
+  it("still renders a clickable button for a power with no iconURL - common for unit-type powers", () => {
+    const noIconAbilities = {
+      "units/goblin/short": {ability: {name: "Enrage", castTime: null, effects: []}, assetMap: {}},
+      "units/goblin/long": availableAbilities["units/goblin/long"],
+    };
+    render(<UnitTypePreviewPane unitTypeKey="goblin" unitTypeData={{tokenImageUrl: [], powers}} availableAbilities={noIconAbilities} stockAssets={{}} />);
+
+    expect(screen.getAllByRole("img")).toHaveLength(1); // just Hurl
+    expect(screen.getByRole("button", {name: "EN"})).toBeInTheDocument();
+  });
+
   it("shows no power icons (just an empty slot) when the unit type has no powers", () => {
     renderPane({powers: []});
 

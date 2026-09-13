@@ -102,6 +102,17 @@ describe("ClassPreviewPane", () => {
     expect(screen.getAllByRole("img")[0]).not.toHaveClass("disabled");
   });
 
+  it("still renders a clickable button for a power with no iconURL", () => {
+    const noIconAbilities = {
+      "classes/x/short": {ability: {name: "Enrage", castTime: null, effects: []}, assetMap: {}},
+      "classes/x/long": availableAbilities["classes/x/long"],
+    };
+    render(<ClassPreviewPane classKey="x" powers={powers} availableAbilities={noIconAbilities} stockAssets={{}} />);
+
+    expect(screen.getAllByRole("img")).toHaveLength(1); // just Firebolt
+    expect(screen.getByRole("button", {name: "EN"})).toBeInTheDocument();
+  });
+
   describe("a self-only ability (e.g. Recover)", () => {
     const selfOnlyAbilities = {
       "classes/x/recover": {
