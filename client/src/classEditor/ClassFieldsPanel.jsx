@@ -145,7 +145,7 @@ function PowerSlots({classKey, powers, availableAbilities, dispatch}) {
   const abilityKeys = Object.keys(availableAbilities).sort();
 
   function setSlot(index, abilityKey) {
-    const entry = {$ref: refForAbilityKey(classKey, abilityKey), referenceTo: "power"};
+    const entry = {$ref: refForAbilityKey(classKey, abilityKey), referenceTo: "ability"};
     if (index < powers.length) {
       dispatch({type: "UPDATE_ENTRY_FIELDS", section: "powers", index, fields: entry});
     } else {

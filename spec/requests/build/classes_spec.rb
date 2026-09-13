@@ -138,7 +138,7 @@ RSpec.describe "Build::Classes", type: :request do
             "primaryStats" => ["strength"],
             "secondaryStats" => ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "recovery_rating"],
             "wields" => ["axe", "dagger"],
-            "powers" => [{"$ref" => "../abilities/classes/puncher/punch.json", "referenceTo" => "power"}]
+            "powers" => [{"$ref" => "../abilities/classes/puncher/punch.json", "referenceTo" => "ability"}]
           }
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/classes/puncher.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)

@@ -9,7 +9,7 @@ import {abilityKeyForRef} from "./powerRefs";
 // availableAbilities), so no network access is needed here.
 export function resolveFullClass(classKey, classData, availableAbilities) {
   return resolveReferences(classData, (ref, referenceTo) => {
-    if (referenceTo !== "power") {
+    if (referenceTo !== "ability") {
       throw new Error(`Don't know how to resolve a "${referenceTo}" reference from a class`);
     }
 

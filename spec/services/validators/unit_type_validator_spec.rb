@@ -133,7 +133,7 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
     end
 
     it "raises when a power is an AssetReference" do
-      data = goblin_unit_type.merge("powers" => [{"$ref" => "powers/stab.json", "referenceTo" => "power"}])
+      data = goblin_unit_type.merge("powers" => [{"$ref" => "powers/stab.json", "referenceTo" => "ability"}])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /full JSON required/)
     end

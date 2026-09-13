@@ -33,8 +33,8 @@ const availableAbilities = {
 };
 
 const powers = [
-  {$ref: "../abilities/classes/x/short.json", referenceTo: "power"},
-  {$ref: "../abilities/classes/x/long.json", referenceTo: "power"},
+  {$ref: "../abilities/classes/x/short.json", referenceTo: "ability"},
+  {$ref: "../abilities/classes/x/long.json", referenceTo: "ability"},
 ];
 
 function renderPane() {
@@ -111,8 +111,8 @@ describe("ClassPreviewPane", () => {
       "classes/x/long": availableAbilities["classes/x/long"],
     };
     const selfOnlyPowers = [
-      {$ref: "../abilities/classes/x/recover.json", referenceTo: "power"},
-      {$ref: "../abilities/classes/x/long.json", referenceTo: "power"},
+      {$ref: "../abilities/classes/x/recover.json", referenceTo: "ability"},
+      {$ref: "../abilities/classes/x/long.json", referenceTo: "ability"},
     ];
 
     it("is never disabled for range, even at a distance beyond the DEFAULT_MAX_RANGE fallback", () => {

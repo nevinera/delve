@@ -16,12 +16,12 @@ describe("refForAbilityKey", () => {
 describe("abilityKeyForRef", () => {
   it("round-trips a ref built by refForAbilityKey", () => {
     const ref = refForAbilityKey("puncher", "classes/puncher/punch");
-    expect(abilityKeyForRef("puncher", {$ref: ref, referenceTo: "power"})).toBe("classes/puncher/punch");
+    expect(abilityKeyForRef("puncher", {$ref: ref, referenceTo: "ability"})).toBe("classes/puncher/punch");
   });
 
   it("round-trips a nested class key's ref", () => {
     const ref = refForAbilityKey("hybrid/druid", "classes/hybrid/druid/wildshape");
-    expect(abilityKeyForRef("hybrid/druid", {$ref: ref, referenceTo: "power"})).toBe("classes/hybrid/druid/wildshape");
+    expect(abilityKeyForRef("hybrid/druid", {$ref: ref, referenceTo: "ability"})).toBe("classes/hybrid/druid/wildshape");
   });
 
   it("returns null for an inline ability entry (no $ref)", () => {
@@ -29,6 +29,6 @@ describe("abilityKeyForRef", () => {
   });
 
   it("returns null for a $ref that doesn't match this class's expected prefix", () => {
-    expect(abilityKeyForRef("puncher", {$ref: "../../abilities/units/goblins/enrage.json", referenceTo: "power"})).toBeNull();
+    expect(abilityKeyForRef("puncher", {$ref: "../../abilities/units/goblins/enrage.json", referenceTo: "ability"})).toBeNull();
   });
 });

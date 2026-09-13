@@ -21,7 +21,7 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 | `basicAttackSchool` | string | no | `"physical"` | `"physical"` or `"magic"`. Picks the basic-attack visual/sound and which of the target's Avoidance/Defence Rating pools mitigates it - see [stats.md](../stats.md). |
 | `basicAttackStyle` | string | no | derived from `basicAttackSchool`/`basicAttackRange` | One of `claw`, `sword`, `axe`, `club`, `arrow`, `arcane`, `ice`, `nature`, `fire`. Purely cosmetic - picks the basic-attack graphic/sound; has no mechanical effect. When omitted, the client falls back to `arcane`/`arrow`/`sword` based on `basicAttackSchool`/`basicAttackRange`. |
 | `resource` | ResourceType | yes | | The resource used to power this unit's abilities. |
-| `powers` | array of Ability \| AssetReference(`referenceTo: "power"`) | no | `[]` | Abilities available to this unit. Inline Ability objects or references to external power files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
+| `powers` | array of Ability \| AssetReference(`referenceTo: "ability"`) | no | `[]` | Abilities available to this unit. Inline Ability objects or references to external ability files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `targeting` | UnitTargeting | no | `{ "type": "aggroTable" }` | How this unit selects its target when aggro'd. |
 | `tactics` | UnitTactics | no | `{ "type": "randomAvailable" }` | How this unit decides which power to use. |
 

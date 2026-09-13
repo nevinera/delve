@@ -47,11 +47,11 @@ describe("ClassEditor", () => {
     });
 
     const powers = JSON.parse(screen.getByTestId("preview-powers").textContent);
-    expect(powers).toEqual([{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "power"}]);
+    expect(powers).toEqual([{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]);
   });
 
   it("clears a filled slot back to an empty array", () => {
-    const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "power"}]};
+    const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
     render(<ClassEditor classKey="puncher" initialClass={withPower} availableAbilities={availableAbilities} stockAssets={{}} />);
 
     fireEvent.click(screen.getByRole("button", {name: "Clear"}));
@@ -134,7 +134,7 @@ describe("ClassEditor", () => {
 
     it("validates the resolved (powers-inlined) form, not the raw $ref draft", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
-      const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "power"}]};
+      const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
       render(<ClassEditor classKey="puncher" initialClass={withPower} availableAbilities={availableAbilities} stockAssets={{}} />);
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
@@ -153,7 +153,7 @@ describe("ClassEditor", () => {
     });
 
     it("shows a resolution error and keeps Save disabled when a power references an unloaded ability", async () => {
-      const withBadPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "power"}]};
+      const withBadPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "ability"}]};
       render(<ClassEditor classKey="puncher" initialClass={withBadPower} availableAbilities={{}} stockAssets={{}} />);
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));

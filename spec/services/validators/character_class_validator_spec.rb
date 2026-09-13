@@ -82,7 +82,7 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
     end
 
     it "raises when a power is an AssetReference" do
-      data = character_class_fixture.merge("powers" => [{"$ref" => "powers/punch.json", "referenceTo" => "power"}])
+      data = character_class_fixture.merge("powers" => [{"$ref" => "powers/punch.json", "referenceTo" => "ability"}])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /full JSON required/)
     end
