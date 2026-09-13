@@ -26,3 +26,9 @@ export function validateAbility(ability) {
 export function validateCharacterClass(fullClass) {
   return postValidation("/build/validators/character_class", fullClass);
 }
+
+// Takes the *resolved* unit type (see resolveFullUnitType.js) - UnitTypeValidator
+// rejects $ref powers outright, same reasoning as validateCharacterClass.
+export function validateUnitType(fullUnitType) {
+  return postValidation("/build/validators/unit_type", fullUnitType);
+}
