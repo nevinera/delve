@@ -1,14 +1,17 @@
 import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
+import UnitTypeEditor from "./UnitTypeEditor";
 
-// Placeholder mount point - Build::UnitTypesController#edit and its routes/
-// views/layout are wired up end-to-end, but the real editor UI (fields
-// panel, preview pane, save/validate) lands in a follow-up pass. Reads the
-// same data-* attributes app/views/build/unit_types/edit.html.erb already
-// renders, so swapping this out later needs no controller/view changes.
 const el = document.getElementById("editor-root");
 createRoot(el).render(
   <StrictMode>
-    <p style={{padding: 20}}>Unit type editor coming soon - key: {el.dataset.key}</p>
+    <UnitTypeEditor
+      unitTypeKey={el.dataset.key}
+      initialUnitType={JSON.parse(el.dataset.unitType)}
+      initialAvailableAbilities={JSON.parse(el.dataset.availableAbilities)}
+      stockAssets={JSON.parse(el.dataset.stockAssets)}
+      newAbilityUrl={el.dataset.newAbilityUrl}
+      availableAbilitiesUrl={el.dataset.availableAbilitiesUrl}
+    />
   </StrictMode>
 );
