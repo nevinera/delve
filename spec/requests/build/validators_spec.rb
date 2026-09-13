@@ -76,9 +76,46 @@ RSpec.describe "Build::Validators", type: :request do
       end
 
       it "rejects a class whose powers are still $ref pointers, not the resolved form" do
-        abstract_class = valid_class.merge(powers: [{"$ref" => "../abilities/classes/puncher/punch.json", "referenceTo" => "power"}])
+        abstract_class = valid_class.merge(powers: [{"$ref" => "../abilities/classes/puncher/punch.json", "referenceTo" => "ability"}])
 
         post "/build/validators/character_class", params: abstract_class.to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include("full JSON required")
+      end
+    end
+
+    describe "POST /build/validators/unit_type" do
+      let(:valid_unit_type) do
+        {
+          name: "Goblin Raider", tokenImageUrl: ["../assets/tokens/goblin.webp"], tokenRadius: 1.5,
+          maxHP: 20, dps: 4.0, attackSpeed: 1.0,
+          resource: {name: "energy", color: "888888", max: 100.0, defaultValue: 100.0, returnRate: 0.0, isFluid: true}
+        }
+      end
+
+      it "returns valid: true for a valid (already-resolved) unit type" do
+        post "/build/validators/unit_type", params: valid_unit_type.to_json, headers: {"Content-Type" => "application/json"}
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)).to eq({"valid" => true})
+      end
+
+      it "returns valid: false for an out-of-range tokenRadius" do
+        invalid = valid_unit_type.merge(tokenRadius: 0.5)
+
+        post "/build/validators/unit_type", params: invalid.to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include("tokenRadius must be between 1.0 and 20.0")
+      end
+
+      it "rejects a unit type whose powers are still $ref pointers, not the resolved form" do
+        abstract_unit_type = valid_unit_type.merge(powers: [{"$ref" => "../abilities/units/goblin-raider/slash.json", "referenceTo" => "ability"}])
+
+        post "/build/validators/unit_type", params: abstract_unit_type.to_json, headers: {"Content-Type" => "application/json"}
 
         body = JSON.parse(response.body)
         expect(body["valid"]).to eq(false)

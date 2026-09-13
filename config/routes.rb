@@ -28,9 +28,11 @@ Rails.application.routes.draw do
     root to: "dashboard#index"
     resources :abilities, only: [:index, :new, :create]
     resources :classes, only: [:index, :new, :create]
+    resources :unit_types, only: [:index, :new, :create]
     resources :zones, only: [:index, :show, :new, :create]
     post "validators/ability", to: "validators#ability"
     post "validators/character_class", to: "validators#character_class"
+    post "validators/unit_type", to: "validators#unit_type"
   end
 
   # A glob segment, not a plain :id + regex constraint (and defined outside
@@ -47,6 +49,8 @@ Rails.application.routes.draw do
   # "/build/abilities/a/b/edit" with no encoding involved.
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
   get "build/classes/*id/edit", to: "build/classes#edit", as: "edit_build_class"
+  get "build/unit_types/*id/edit", to: "build/unit_types#edit", as: "edit_build_unit_type"
+  get "build/unit_types/*id/available_abilities", to: "build/unit_types#available_abilities", as: "available_abilities_build_unit_type"
 
   namespace :play do
     root to: "dashboard#index"

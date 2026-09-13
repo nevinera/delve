@@ -1,0 +1,19 @@
+<h1>Unit Types</h1>
+
+<p><%= link_to "New Unit Type", new_build_unit_type_path %></p>
+
+<table>
+  <thead>
+    <tr><th>Key</th></tr>
+  </thead>
+  <tbody>
+    <% @unit_types.each do |entry| %>
+      <% identifier = entry["path"].delete_prefix("unit-types/").delete_suffix(".json") %>
+      <tr>
+        <td><%= link_to identifier, edit_build_unit_type_path(id: identifier) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to Build", build_root_path %>
