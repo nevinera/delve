@@ -59,13 +59,32 @@ describe("UnitTypePreviewPane", () => {
     expect(screen.getByTestId("canvas")).toHaveAttribute("data-self", "../assets/tokens/my-goblin.webp");
   });
 
-  it("starts the slider at the longest power's range, so both powers are in range", () => {
+  it("starts the slider at the default melee basic attack range (5ft) when basicAttackRange is unset, not at any power's range", () => {
     renderPane();
 
-    expect(screen.getByText("Target distance: 20.0 ft")).toBeInTheDocument();
+    expect(screen.getByText("Target distance: 5.0 ft")).toBeInTheDocument();
+  });
+
+  it("starts the slider at the unit type's own basicAttackRange when set", () => {
+    renderPane({basicAttackRange: 30});
+
+    expect(screen.getByText("Target distance: 30.0 ft")).toBeInTheDocument();
+  });
+
+  it("starts the slider at basicAttackRange even when the unit type has no powers at all", () => {
+    renderPane({powers: [], basicAttackRange: 15});
+
+    expect(screen.getByText("Target distance: 15.0 ft")).toBeInTheDocument();
+  });
+
+  it("lets the slider reach a power's range even when it exceeds basicAttackRange", () => {
+    renderPane(); // basicAttackRange defaults to 5, Hurl's range is 20
+
+    fireEvent.change(screen.getByRole("slider"), {target: {value: "20"}});
+
     const icons = screen.getAllByRole("img");
     expect(icons[0]).toHaveClass("disabled"); // Slash (range 5) is out of range at distance 20
-    expect(icons[1]).not.toHaveClass("disabled");
+    expect(icons[1]).not.toHaveClass("disabled"); // Hurl (range 20) is in range
   });
 
   it("disables only the powers whose own range is shorter than the current target distance", () => {

@@ -7,6 +7,10 @@ import {resolveAbilityForPlayback} from "../editor/resolveAbilityForPlayback";
 import {abilityKeyForRef} from "./abilityRefs";
 
 const DEFAULT_MAX_RANGE = 10;
+// Melee default per docs/schema/unit_type.md#basicAttackRange - every unit
+// has a basic attack, unlike powers (plenty of unit types have none at all),
+// so it's the right thing to preview distance from, not a power's range.
+const DEFAULT_BASIC_ATTACK_RANGE = 5.0;
 const FALLBACK_SELF_TOKEN_URL = "/tokens/goblin-1.webp";
 // The elf token stands in as the player everywhere else in the build tools
 // (ability/class editor previews use it as the *actor*) - here the unit
@@ -75,11 +79,16 @@ export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availabl
     [unitTypeKey, unitTypeData.powers, availableAbilities, stockAssets]
   );
 
+  const basicAttackRange = unitTypeData.basicAttackRange || DEFAULT_BASIC_ATTACK_RANGE;
+
+  // The slider starts at (and can always reach back down to) the unit's own
+  // basic attack range, but stretches out further when a power outranges it,
+  // so a ranged power stays reachable for testing.
   const maxRange = useMemo(() => {
     const ranges = resolvedPowers.filter((a) => !isSelfOnly(a)).map(abilityRange);
-    return ranges.length ? Math.max(...ranges) : DEFAULT_MAX_RANGE;
-  }, [resolvedPowers]);
-  const [targetDistanceFt, setTargetDistanceFt] = useState(maxRange);
+    return Math.max(basicAttackRange, ...ranges);
+  }, [resolvedPowers, basicAttackRange]);
+  const [targetDistanceFt, setTargetDistanceFt] = useState(basicAttackRange);
 
   useEffect(() => {
     setTargetDistanceFt((current) => Math.min(current, maxRange));
