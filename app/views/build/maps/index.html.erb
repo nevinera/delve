@@ -1,0 +1,19 @@
+<h1>Maps</h1>
+
+<p><%= link_to "New Map", new_build_map_path %></p>
+
+<table>
+  <thead>
+    <tr><th>Key</th></tr>
+  </thead>
+  <tbody>
+    <% @maps.each do |entry| %>
+      <% identifier = File.dirname(entry["path"].delete_prefix("zones/").delete_suffix(".json")) %>
+      <tr>
+        <td><%= link_to identifier, edit_build_map_path(id: identifier) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to Build", build_root_path %>
