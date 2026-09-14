@@ -1,6 +1,7 @@
 <div
   id="editor-root"
   data-key="<%= params[:id] %>"
+  data-initial-map="<%= @map.to_json %>"
   data-initial-image-data-uri="<%= @initial_image_data_uri %>"
   data-initial-pixel-dimensions="<%= @map["pixelDimensions"]&.to_json %>"
   data-back-url="<%= build_maps_path %>"

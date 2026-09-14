@@ -262,4 +262,53 @@ describe("MapCanvas", () => {
 
     expect(event.defaultPrevented).toBe(true);
   });
+
+  it("draws the 5ft grid only once feetDimensions has both axes set", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={() => {}} />);
+    expect(document.querySelector(".map-canvas-grid")).not.toBeInTheDocument();
+
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={() => {}} feetDimensions={{width: 160, height: 120}} />);
+    const grid = document.querySelector(".map-canvas-grid");
+    expect(grid).toBeInTheDocument();
+
+    // 800px / 160ft = 5px/ft, so 5ft of spacing is 25px on each axis here.
+    const pattern = grid.querySelector("pattern");
+    expect(pattern).toHaveAttribute("width", "25");
+    expect(pattern).toHaveAttribute("height", "25");
+  });
+
+  it("does not draw a grid when feetDimensions is missing an axis", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={() => {}} feetDimensions={{width: 160, height: null}} />);
+    expect(document.querySelector(".map-canvas-grid")).not.toBeInTheDocument();
+  });
+
+  it("shows a cursor readout in pixels (and feet, once feetDimensions is set) while hovering, and clears on pointer leave", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={() => {}} feetDimensions={{width: 160, height: 120}} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    const base = transformParts();
+
+    fireEvent.pointerMove(wrapper, {clientX: 100, clientY: 50});
+
+    const expectedPixelX = Math.round((100 - base.x) / base.scale);
+    const expectedPixelY = Math.round((50 - base.y) / base.scale);
+    expect(document.querySelector(".map-canvas-status-bar")).toHaveTextContent(`${expectedPixelX}, ${expectedPixelY} px`);
+    // 800px wide / 160ft = 5px/ft, so pixel-x / 5 = feet-x; feet-y flips
+    // (image y grows down, feet y grows up) - see mapCoords.js.
+    const expectedFeetX = (expectedPixelX / 5).toFixed(1);
+    const expectedFeetY = (120 - expectedPixelY / 5).toFixed(1);
+    expect(document.querySelector(".map-canvas-status-bar")).toHaveTextContent(`${expectedFeetX}, ${expectedFeetY} ft`);
+
+    fireEvent.pointerLeave(wrapper);
+    expect(document.querySelector(".map-canvas-status-bar")).toHaveTextContent("—");
+  });
+
+  it("shows only the pixel readout (no feet) when feetDimensions isn't set", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={() => {}} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+
+    fireEvent.pointerMove(wrapper, {clientX: 100, clientY: 50});
+
+    expect(document.querySelector(".map-canvas-status-bar")).toHaveTextContent(/px/);
+    expect(document.querySelector(".map-canvas-status-bar")).not.toHaveTextContent(/ft/);
+  });
 });

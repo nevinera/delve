@@ -87,9 +87,10 @@ class Build::MapsController < Build::BaseController
   end
 
   def blank_map(key)
+    basename = key.split("/").last
     {
-      "identifier" => key.split("/").last,
-      "name" => key.tr("_-", " ").split.map(&:capitalize).join(" "),
+      "identifier" => basename,
+      "name" => basename.tr("_-", " ").split.map(&:capitalize).join(" "),
       "elvl" => nil,
       "imageUrl" => nil,
       "pixelDimensions" => nil,

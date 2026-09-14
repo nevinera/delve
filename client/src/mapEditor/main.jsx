@@ -7,6 +7,7 @@ createRoot(el).render(
   <StrictMode>
     <MapEditor
       mapKey={el.dataset.key}
+      initialMap={JSON.parse(el.dataset.initialMap)}
       initialImageDataUri={el.dataset.initialImageDataUri || null}
       initialPixelDimensions={el.dataset.initialPixelDimensions ? JSON.parse(el.dataset.initialPixelDimensions) : null}
       backUrl={el.dataset.backUrl}

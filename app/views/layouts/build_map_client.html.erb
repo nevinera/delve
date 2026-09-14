@@ -69,6 +69,14 @@
          big image visibly stutters before catching up. */
       .map-canvas-content { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
       .map-canvas-content img { display: block; user-select: none; }
+      /* Same pixel-space box as the image, so its grid lines pan/zoom
+         together with it for free via the shared parent's transform. */
+      .map-canvas-grid { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+      .map-canvas-status-bar {
+        flex: 0 0 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+        background: #1c2126; border-top: 1px solid #333; color: #9ab; font-size: 12px; font-variant-numeric: tabular-nums;
+      }
 
       /* Proportional, like the class editor's preview/fields split (flex
          2:1) - there'll be a lot to show here (barriers/connections/units
@@ -85,6 +93,14 @@
       .map-editor-sidebar-toggle:hover { background: #345; }
       .map-editor-sidebar-content { flex: 1; min-width: 0; overflow-y: auto; padding: 0 14px 14px; }
       .map-editor-sidebar-placeholder { color: #778; font-size: 13px; }
+
+      .map-editor-sidebar-content table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+      .map-editor-sidebar-content th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
+      .map-editor-sidebar-content td { padding: 4px 0; word-break: break-word; }
+      .map-editor-sidebar-content input[type=number] { width: 100px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .map-editor-sidebar-content input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .map-fields-dimension-pair { display: flex; align-items: center; gap: 6px; }
+      .map-fields-dimension-pair input[type=number] { width: 70px; }
 
       @media (max-width: 700px) {
         .map-editor { flex-direction: column; }

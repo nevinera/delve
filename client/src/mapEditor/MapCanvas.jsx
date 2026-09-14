@@ -1,8 +1,14 @@
 import {useEffect, useRef, useState} from "react";
+import {pixelToFeet, feetSpacingToPixelsX, feetSpacingToPixelsY} from "./mapCoords";
 
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 1.25; // per click of the +/- buttons
+const GRID_SPACING_FEET = 5;
+
+function hasBothAxes(dimensions) {
+  return dimensions?.width && dimensions?.height;
+}
 // Wheel zoom is proportional to deltaY rather than one full ZOOM_STEP per
 // event - a single mouse-wheel notch (deltaY ~100) lands around a gentle
 // ~8% zoom instead of the buttons' 25%; a trackpad's much smaller
@@ -25,10 +31,11 @@ function clampZoom(zoom) {
 // The toolbar is two rows - row 1 (navigation/view: back, zoom) is always
 // present; row 2 (editing actions: replace image today, tool-mode buttons
 // in later slices) only once there's something to put there.
-export default function MapCanvas({image, imageError, onImageFile, backUrl}) {
+export default function MapCanvas({image, imageError, onImageFile, backUrl, feetDimensions}) {
   const wrapperRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({x: 0, y: 0});
+  const [cursorPixel, setCursorPixel] = useState(null); // {x, y} in content (image) pixel space, or null off-canvas
   const dragRef = useRef(null); // {startX, startY, startOffset} while a pan drag is in progress
   const panRafRef = useRef(null); // pending requestAnimationFrame id, or null
   const pendingOffsetRef = useRef(null); // latest not-yet-applied offset from pointermove
@@ -137,7 +144,23 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl}) {
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
+  // Cursor readout: independent of whether a pan drag is in progress, so it
+  // tracks the mouse on plain hover too. Inverts the current offset/zoom to
+  // recover the image-pixel coordinate under the cursor - a plain state
+  // update (not rAF-throttled like pan/zoom) since updating a short text
+  // readout has no meaningful paint cost.
+  function updateCursorPixel(e) {
+    if (!image || !wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    setCursorPixel({
+      x: (e.clientX - rect.left - offset.x) / zoom,
+      y: (e.clientY - rect.top - offset.y) / zoom,
+    });
+  }
+
   function handlePointerMove(e) {
+    updateCursorPixel(e);
+
     if (!dragRef.current) return;
     const {startX, startY, startOffset} = dragRef.current;
     // Always record the latest position (cheap, no re-render) - only the
@@ -156,6 +179,11 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl}) {
 
   function handlePointerUp() {
     dragRef.current = null;
+  }
+
+  function handlePointerLeave() {
+    handlePointerUp();
+    setCursorPixel(null);
   }
 
   function handleFileInputChange(e) {
@@ -197,7 +225,7 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl}) {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          onPointerLeave={handlePointerLeave}
         >
           <div
             className="map-canvas-content"
@@ -210,6 +238,28 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl}) {
               draggable={false}
               alt=""
             />
+            {hasBothAxes(feetDimensions) && (
+              <svg
+                className="map-canvas-grid"
+                width={image.pixelDimensions.width}
+                height={image.pixelDimensions.height}
+              >
+                <defs>
+                  <pattern
+                    id="map-canvas-grid-pattern"
+                    width={feetSpacingToPixelsX(GRID_SPACING_FEET, image.pixelDimensions, feetDimensions)}
+                    height={feetSpacingToPixelsY(GRID_SPACING_FEET, image.pixelDimensions, feetDimensions)}
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <path
+                      d={`M ${feetSpacingToPixelsX(GRID_SPACING_FEET, image.pixelDimensions, feetDimensions)} 0 L 0 0 0 ${feetSpacingToPixelsY(GRID_SPACING_FEET, image.pixelDimensions, feetDimensions)}`}
+                      fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1"
+                    />
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#map-canvas-grid-pattern)" />
+              </svg>
+            )}
           </div>
         </div>
       ) : (
@@ -218,6 +268,21 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl}) {
             Choose a map image, or drop one here (under 25MB)
             <input type="file" accept="image/*" onChange={handleFileInputChange} />
           </label>
+        </div>
+      )}
+      {image && (
+        <div className="map-canvas-status-bar">
+          {cursorPixel ? (
+            <>
+              <span>{Math.round(cursorPixel.x)}, {Math.round(cursorPixel.y)} px</span>
+              {hasBothAxes(feetDimensions) && (() => {
+                const feet = pixelToFeet(cursorPixel.x, cursorPixel.y, image.pixelDimensions, feetDimensions);
+                return <span>{feet.x.toFixed(1)}, {feet.y.toFixed(1)} ft</span>;
+              })()}
+            </>
+          ) : (
+            <span>—</span>
+          )}
         </div>
       )}
     </div>

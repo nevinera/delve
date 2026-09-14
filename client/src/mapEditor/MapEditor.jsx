@@ -1,6 +1,8 @@
-import {useState} from "react";
+import {useEffect, useReducer, useState} from "react";
 import MapCanvas from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
+import MapFieldsPanel from "./MapFieldsPanel";
+import {mapReducer} from "./mapReducer";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
 // battle-map background needs (the docs' own example is 2048x1536), and
@@ -16,9 +18,17 @@ function initialImage(initialImageDataUri, initialPixelDimensions) {
   return {file: null, url: initialImageDataUri, pixelDimensions: initialPixelDimensions};
 }
 
-export default function MapEditor({mapKey, initialImageDataUri, initialPixelDimensions, backUrl}) {
+export default function MapEditor({mapKey, initialMap, initialImageDataUri, initialPixelDimensions, backUrl}) {
   const [image, setImage] = useState(() => initialImage(initialImageDataUri, initialPixelDimensions));
   const [imageError, setImageError] = useState("");
+  const [mapData, dispatch] = useReducer(mapReducer, initialMap);
+
+  // pixelDimensions is derived, not authored - keep the draft in sync with
+  // whatever image is actually loaded (a freshly uploaded file's natural
+  // size overrides whatever the map's JSON said before).
+  useEffect(() => {
+    if (image) dispatch({type: "SET_FIELD", field: "pixelDimensions", value: image.pixelDimensions});
+  }, [image]);
 
   function handleImageFile(file) {
     setImageError("");
@@ -50,8 +60,15 @@ export default function MapEditor({mapKey, initialImageDataUri, initialPixelDime
 
   return (
     <div className="map-editor" data-map-key={mapKey}>
-      <MapCanvas image={image} imageError={imageError} onImageFile={handleImageFile} backUrl={backUrl} />
+      <MapCanvas
+        image={image}
+        imageError={imageError}
+        onImageFile={handleImageFile}
+        backUrl={backUrl}
+        feetDimensions={mapData.feetDimensions}
+      />
       <MapSidebar>
+        <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
         <p className="map-editor-sidebar-placeholder">Barrier, connection, and unit lists will land here.</p>
       </MapSidebar>
     </div>
