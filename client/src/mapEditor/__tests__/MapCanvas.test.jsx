@@ -333,70 +333,18 @@ describe("MapCanvas", () => {
       fireEvent.click(screen.getByRole("button", {name: "Fit"}));
     }
 
-    it("disables Add Wall/Add Circle until feetDimensions is set, with a hint", () => {
-      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
-
-      expect(screen.getByRole("button", {name: "Add Wall"})).toBeDisabled();
-      expect(screen.getByRole("button", {name: "Add Circle"})).toBeDisabled();
-      expect(screen.getByText(/Set feet dimensions/)).toBeInTheDocument();
-    });
-
-    it("draws a wall by clicking points, then committing with Enter", () => {
+    it("draws a circle by dragging out a radius, committing on pointer up, then reverts the tool to select", () => {
       const dispatch = vi.fn();
-      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop} />);
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-circle" onToolChange={onToolChange}
+        />
+      );
       const wrapper = document.querySelector(".map-canvas-wrapper");
       fitToImageSize();
 
-      fireEvent.click(screen.getByRole("button", {name: "Add Wall"}));
-      // At zoom=1/offset=(0,0), client coordinates are content-pixel
-      // coordinates directly - converted to feet via mapCoords (5px/ft,
-      // feet-y flipped from pixel-y - see mapCoords.test.js).
-      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0}); // (0, 0) px -> (0, 120) ft
-      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0) px -> (10, 120) ft
-      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 300}); // (50, 300) px -> (10, 60) ft
-
-      fireEvent.keyDown(document, {key: "Enter"});
-
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "ADD_ENTRY", section: "barriers",
-        entry: {type: "wall", locations: [{x: 0, y: 120}, {x: 10, y: 120}, {x: 10, y: 60}]},
-      });
-    });
-
-    it("cancels an in-progress wall on Escape without committing", () => {
-      const dispatch = vi.fn();
-      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop} />);
-      const wrapper = document.querySelector(".map-canvas-wrapper");
-
-      fireEvent.click(screen.getByRole("button", {name: "Add Wall"}));
-      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
-      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
-      fireEvent.keyDown(document, {key: "Escape"});
-      fireEvent.keyDown(document, {key: "Enter"});
-
-      expect(dispatch).not.toHaveBeenCalled();
-    });
-
-    it("commits a wall on double-click", () => {
-      const dispatch = vi.fn();
-      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop} />);
-      const wrapper = document.querySelector(".map-canvas-wrapper");
-
-      fireEvent.click(screen.getByRole("button", {name: "Add Wall"}));
-      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
-      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
-      fireEvent.doubleClick(wrapper);
-
-      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({type: "ADD_ENTRY", section: "barriers"}));
-    });
-
-    it("draws a circle by dragging out a radius, committing on pointer up", () => {
-      const dispatch = vi.fn();
-      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop} />);
-      const wrapper = document.querySelector(".map-canvas-wrapper");
-      fitToImageSize();
-
-      fireEvent.click(screen.getByRole("button", {name: "Add Circle"}));
       fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1}); // center at (0, 120) ft
       fireEvent.pointerMove(wrapper, {clientX: 25, clientY: 0, pointerId: 1}); // 25px right = 5ft
       fireEvent.pointerUp(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
@@ -405,18 +353,111 @@ describe("MapCanvas", () => {
         type: "ADD_ENTRY", section: "barriers",
         entry: {type: "circle", location: {x: 0, y: 120}, radius: 5},
       });
+      expect(onToolChange).toHaveBeenCalledWith("select");
     });
 
-    it("does not commit a zero-radius circle (an accidental click)", () => {
+    it("does not commit a zero-radius circle (an accidental click), but still reverts the tool to select", () => {
       const dispatch = vi.fn();
-      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop} />);
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-circle" onToolChange={onToolChange}
+        />
+      );
       const wrapper = document.querySelector(".map-canvas-wrapper");
 
-      fireEvent.click(screen.getByRole("button", {name: "Add Circle"}));
       fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
       fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
 
       expect(dispatch).not.toHaveBeenCalled();
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("cancels add-circle mode on Escape before any drag has started", () => {
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          tool="add-circle" onToolChange={onToolChange}
+        />
+      );
+
+      fireEvent.keyDown(document, {key: "Escape"});
+
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("thickens only the hovered barrier's shape, not others or their handles", () => {
+      const barriers = [
+        {type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]},
+        {type: "circle", location: {x: 5, y: 5}, radius: 3},
+      ];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers})}
+          dispatch={noop} selectedBarrierIndex={0} onSelectBarrier={noop} hoveredBarrierIndex={0}
+        />
+      );
+
+      const groups = document.querySelectorAll(".map-canvas-shapes g");
+      const wallGroup = groups[0]; // barrier 0 (hovered + selected): polyline + 2 point handles
+      const circleGroup = groups[1]; // barrier 1 (not hovered): just the body circle
+
+      expect(wallGroup.querySelector("polyline")).toHaveAttribute("stroke-width", "6");
+      expect(circleGroup.querySelector("circle")).toHaveAttribute("stroke-width", "3");
+      // The selected wall's own point handles are unaffected by hover.
+      wallGroup.querySelectorAll("circle").forEach((handle) => {
+        expect(handle).toHaveAttribute("stroke-width", "1");
+      });
+    });
+
+    it("renders a translucent 3ft-radius ring around a hovered wall point", () => {
+      const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers})}
+          dispatch={noop} selectedBarrierIndex={0} onSelectBarrier={noop}
+          hoveredPoint={{barrierIndex: 0, pointIndex: 1}}
+        />
+      );
+
+      const ring = document.querySelector(".map-canvas-point-hover-ring");
+      expect(ring).toBeInTheDocument();
+      // Point 1 (10, 0)ft -> pixel (50, 600) at 5px/ft; radius 3ft -> 15px.
+      expect(ring).toHaveAttribute("cx", "50");
+      expect(ring).toHaveAttribute("cy", "600");
+      expect(ring).toHaveAttribute("r", "15");
+    });
+
+    it("shows no hover ring when hoveredPoint is null, or points at a different barrier", () => {
+      const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers})}
+          dispatch={noop} onSelectBarrier={noop}
+          hoveredPoint={{barrierIndex: 1, pointIndex: 0}}
+        />
+      );
+
+      expect(document.querySelector(".map-canvas-point-hover-ring")).not.toBeInTheDocument();
+    });
+
+    it("does not crash when hoveredPoint's index is stale (points past the barrier's current length)", () => {
+      const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers})}
+          dispatch={noop} onSelectBarrier={noop}
+          hoveredPoint={{barrierIndex: 0, pointIndex: 5}}
+        />
+      );
+
+      expect(document.querySelector(".map-canvas-point-hover-ring")).not.toBeInTheDocument();
     });
 
     it("selects an existing barrier by clicking it, and shows drag handles", () => {
@@ -490,6 +531,140 @@ describe("MapCanvas", () => {
       expect(call.value.x).toBeCloseTo(10, 5);
       expect(call.value.y).toBeCloseTo(5, 5);
       expect(transformParts().x).toBeCloseTo(base.x, 5);
+    });
+  });
+
+  describe("point placement (from BarriersPanel's '+' buttons)", () => {
+    const FEET_DIMENSIONS = {width: 160, height: 120}; // 5px/ft both axes
+
+    function fitToImageSize() {
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+    }
+
+    it("shows the yellow 'Placing Points' status while placement is active, not otherwise", () => {
+      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+      expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
+
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={noop} onCancelPlacement={noop}
+        />
+      );
+      expect(screen.getByText("Placing Points")).toBeInTheDocument();
+    });
+
+    it("clicking the map calls onPlacePoint with the clicked feet position", () => {
+      const onPlacePoint = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={onPlacePoint} onCancelPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
+
+      // (50, 0)px -> (10, 120)ft at 5px/ft (zoom=1/offset=0 after Fit).
+      expect(onPlacePoint).toHaveBeenCalledWith({x: 10, y: 120});
+    });
+
+    it("placement takes priority over the current tool (e.g. add-wall doesn't also start a draft wall)", () => {
+      const onPlacePoint = vi.fn();
+      const dispatch = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={onPlacePoint} onCancelPlacement={noop}
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+
+      expect(onPlacePoint).toHaveBeenCalledTimes(1);
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it("cancels on Escape", () => {
+      const onCancelPlacement = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={noop} onCancelPlacement={onCancelPlacement}
+        />
+      );
+
+      fireEvent.keyDown(document, {key: "Escape"});
+
+      expect(onCancelPlacement).toHaveBeenCalled();
+    });
+
+    it("cancels on a click outside the map", () => {
+      const onCancelPlacement = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={noop} onCancelPlacement={onCancelPlacement}
+        />
+      );
+
+      fireEvent.pointerDown(document.body);
+
+      expect(onCancelPlacement).toHaveBeenCalled();
+    });
+
+    it("uses a crosshair cursor while placement is active, not otherwise", () => {
+      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+      expect(document.querySelector(".map-canvas-wrapper")).not.toHaveClass("map-canvas-wrapper-placing");
+
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={noop} onCancelPlacement={noop}
+        />
+      );
+      expect(document.querySelectorAll(".map-canvas-wrapper")[1]).toHaveClass("map-canvas-wrapper-placing");
+    });
+
+    it("does not pan the map on a pointerdown+move while placement is active", () => {
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={vi.fn()} onCancelPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const contentBefore = document.querySelector(".map-canvas-content").style.transform;
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+      fireEvent.pointerMove(wrapper, {clientX: 100, clientY: 100});
+
+      expect(document.querySelector(".map-canvas-content").style.transform).toBe(contentBefore);
+    });
+
+    it("does not cancel on a click on a '+' button (starting a new placement supersedes this one instead)", () => {
+      const onCancelPlacement = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          placement={{barrierIndex: 0, insertIndex: 0}} onPlacePoint={noop} onCancelPlacement={onCancelPlacement}
+        />
+      );
+      const plusButton = document.createElement("button");
+      plusButton.className = "map-point-plus";
+      document.body.appendChild(plusButton);
+
+      fireEvent.pointerDown(plusButton);
+
+      expect(onCancelPlacement).not.toHaveBeenCalled();
+      document.body.removeChild(plusButton);
     });
   });
 });

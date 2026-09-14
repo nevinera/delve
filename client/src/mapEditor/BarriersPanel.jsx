@@ -1,8 +1,15 @@
-// Barriers are created by clicking on the canvas (Add Wall/Add Circle tools
-// in MapCanvas's toolbar) - there's nothing useful to "+ Add" from here
-// without a position, unlike every other editor's entry lists. This panel
-// is purely for viewing/precise-editing/removing what's already there,
-// synced with canvas selection (see MapEditor's selectedBarrierIndex).
+import {useState} from "react";
+
+// Both "+ Add Wall" and "+ Add Circle" live here, at the top of the list.
+// A wall starts as a blank slate (no points yet) and gets built up via the
+// pill "+" buttons below (placement mode - see MapCanvas); a circle still
+// needs a drag on the map to give it a center/radius, so its button just
+// arms MapCanvas's single-shot "add-circle" tool instead of adding
+// anything itself. Either way, this panel is the place for
+// viewing/removing/reordering a barrier's fields, synced with canvas
+// selection (see MapEditor's selectedBarrierIndex) - point positions
+// themselves are only ever set by clicking the map (placement mode, below)
+// or dragging a point's handle on canvas, not typed in.
 
 function NumberField({value, onChange}) {
   return (
@@ -13,34 +20,70 @@ function NumberField({value, onChange}) {
   );
 }
 
-function WallPoints({locations, onChange}) {
-  function updatePoint(index, axis, value) {
-    onChange(locations.map((loc, i) => (i === index ? {...loc, [axis]: value} : loc)));
-  }
+function round1(n) {
+  return Math.round(n * 10) / 10;
+}
 
-  function removePoint(index) {
+// A wall's points render as a wrapping row of "pills" (coordinates + a
+// remove button) with a "+" between/around them - clicking a "+" doesn't
+// insert anything by itself, it starts placement mode (see MapCanvas):
+// the *next* click on the map becomes that point, and placement then
+// automatically advances to the gap right after it, so a run of clicks
+// lays down consecutive points. Escape or a click outside the map cancels
+// - nothing was ever written for a not-yet-placed point, so there's
+// nothing to clean up.
+function WallPoints({barrierIndex, locations, onChange, onHoverPoint, placement, onStartPlacement}) {
+  const isPlacingHere = placement?.barrierIndex === barrierIndex;
+
+  function removePoint(index, e) {
+    e.stopPropagation();
     onChange(locations.filter((_, i) => i !== index));
+    // The pill unmounts instead of firing a mouseleave - clear its hover
+    // explicitly so a stale pointIndex doesn't briefly point past the
+    // shrunk array (see BarrierShapes' matching defensive check).
+    onHoverPoint(null);
   }
 
-  return (
-    <table>
-      <tbody>
-        {locations.map((loc, i) => (
-          <tr key={i}>
-            <th>Point {i + 1}</th>
-            <td className="map-fields-dimension-pair">
-              <NumberField value={loc.x} onChange={(v) => updatePoint(i, "x", v)} />
-              <span>,</span>
-              <NumberField value={loc.y} onChange={(v) => updatePoint(i, "y", v)} />
-              {locations.length > 2 && (
-                <button type="button" className="remove-entry" onClick={() => removePoint(i)}>×</button>
-              )}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+  function startPlacement(insertIndex, e) {
+    e.stopPropagation();
+    onStartPlacement(barrierIndex, insertIndex);
+  }
+
+  function PlusButton({insertIndex}) {
+    return (
+      <button
+        type="button" className="map-point-plus" disabled={isPlacingHere}
+        onClick={(e) => startPlacement(insertIndex, e)}
+      >
+        +
+      </button>
+    );
+  }
+
+  const items = [];
+  items.push(<PlusButton key="plus-0" insertIndex={0} />);
+  locations.forEach((loc, i) => {
+    if (isPlacingHere && placement.insertIndex === i) {
+      items.push(<span key={`pending-${i}`} className="map-point-pill map-point-pill-pending">…</span>);
+    }
+    items.push(
+      <span
+        key={i} className="map-point-pill"
+        onMouseEnter={() => onHoverPoint(i)} onMouseLeave={() => onHoverPoint(null)}
+      >
+        {round1(loc.x)}, {round1(loc.y)}
+        {locations.length > 2 && (
+          <button type="button" className="map-point-pill-remove" onClick={(e) => removePoint(i, e)}>×</button>
+        )}
+      </span>
+    );
+    items.push(<PlusButton key={`plus-${i + 1}`} insertIndex={i + 1} />);
+  });
+  if (isPlacingHere && placement.insertIndex === locations.length) {
+    items.push(<span key="pending-end" className="map-point-pill map-point-pill-pending">…</span>);
+  }
+
+  return <div className="map-point-pills">{items}</div>;
 }
 
 function CircleFields({barrier, onChange}) {
@@ -64,10 +107,17 @@ function CircleFields({barrier, onChange}) {
   );
 }
 
-export default function BarriersPanel({barriers, selectedIndex, onSelect, dispatch}) {
-  if (barriers.length === 0) {
-    return <p className="map-editor-sidebar-placeholder">No barriers yet - use the Add Wall / Add Circle tools on the canvas.</p>;
-  }
+function barrierSummary(barrier) {
+  return barrier.type === "wall" ? `${barrier.locations.length} points` : `r=${barrier.radius}ft`;
+}
+
+export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, tool, onStartAddCircle, dispatch}) {
+  // The "Barriers" section as a whole starts collapsed - a list of every
+  // point in every wall would otherwise dominate the sidebar before
+  // there's much else to look at. Individual entries, once the section is
+  // open, are small enough now (pills, not one row per point) not to need
+  // their own collapse - every barrier's fields show at once.
+  const [sectionCollapsed, setSectionCollapsed] = useState(true);
 
   function updateBarrier(index, nextBarrier) {
     Object.entries(nextBarrier).forEach(([field, value]) => {
@@ -80,26 +130,67 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, dispat
     if (selectedIndex === index) onSelect(null);
   }
 
+  function addWall() {
+    dispatch({type: "ADD_ENTRY", section: "barriers", entry: {type: "wall", locations: []}});
+    setSectionCollapsed(false);
+    onSelect(barriers.length); // select+expand the new (last) entry right away
+  }
+
   return (
     <>
-      <h3>Barriers</h3>
-      {barriers.map((barrier, i) => (
-        <div
-          key={i}
-          className={`entry-block${selectedIndex === i ? " map-entry-selected" : ""}`}
-          onClick={() => onSelect(i)}
-        >
-          <div className="entry-heading-row">
-            <h3>Barrier {i + 1}: {barrier.type}</h3>
-            <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); removeBarrier(i); }}>
-              Remove
+      <div className="map-sidebar-section-heading" onClick={() => setSectionCollapsed((c) => !c)}>
+        <span className="map-sidebar-section-toggle">{sectionCollapsed ? "▸" : "▾"}</span>
+        <h3>Barriers{barriers.length > 0 ? ` (${barriers.length})` : ""}</h3>
+      </div>
+      {!sectionCollapsed && (
+        <>
+          <div className="add-buttons-row">
+            <button type="button" className="add-entry" onClick={(e) => { e.stopPropagation(); addWall(); }}>+ Add Wall</button>
+            <button
+              type="button" className="add-entry" disabled={tool === "add-circle" || !!placement}
+              onClick={(e) => { e.stopPropagation(); onStartAddCircle(); }}
+            >
+              + Add Circle
             </button>
           </div>
-          {barrier.type === "wall"
-            ? <WallPoints locations={barrier.locations} onChange={(locations) => updateBarrier(i, {locations})} />
-            : <CircleFields barrier={barrier} onChange={(next) => updateBarrier(i, next)} />}
-        </div>
-      ))}
+          {barriers.length === 0
+            ? <p className="map-editor-sidebar-placeholder">No barriers yet - use the buttons above to add one.</p>
+            : barriers.map((barrier, i) => {
+              const selected = selectedIndex === i;
+              return (
+                <div
+                  key={i}
+                  className={`entry-block${selected ? " map-entry-selected" : ""}`}
+                  onMouseEnter={() => onHover(i)}
+                  onMouseLeave={() => onHover(null)}
+                >
+                  {/* Selecting (for canvas highlight/drag handles) lives on
+                      the heading row only, not the whole block - otherwise
+                      every click inside the fields below (a pill's remove
+                      button, a "+") would bubble up and toggle it too. */}
+                  <div className="entry-heading-row" onClick={() => onSelect(selected ? null : i)}>
+                    <h3>Barrier {i + 1}: {barrier.type} <span className="map-entry-summary">({barrierSummary(barrier)})</span></h3>
+                    <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); removeBarrier(i); }}>
+                      Remove
+                    </button>
+                  </div>
+                  {barrier.type === "wall"
+                    ? (
+                      <WallPoints
+                        barrierIndex={i}
+                        locations={barrier.locations}
+                        onChange={(locations) => updateBarrier(i, {locations})}
+                        onHoverPoint={(pointIndex) => onHoverPoint(pointIndex === null ? null : {barrierIndex: i, pointIndex})}
+                        placement={placement}
+                        onStartPlacement={onStartPlacement}
+                      />
+                    )
+                    : <CircleFields barrier={barrier} onChange={(next) => updateBarrier(i, next)} />}
+                </div>
+              );
+            })}
+        </>
+      )}
     </>
   );
 }

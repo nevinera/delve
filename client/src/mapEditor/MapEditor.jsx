@@ -24,6 +24,23 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
   const [imageError, setImageError] = useState("");
   const [mapData, dispatch] = useReducer(mapReducer, initialMap);
   const [selectedBarrierIndex, setSelectedBarrierIndex] = useState(null);
+  const [hoveredBarrierIndex, setHoveredBarrierIndex] = useState(null);
+  const [hoveredPoint, setHoveredPoint] = useState(null); // {barrierIndex, pointIndex} | null
+  const [placement, setPlacement] = useState(null); // {barrierIndex, insertIndex} | null - see MapCanvas/BarriersPanel
+  const [tool, setTool] = useState("select"); // "select" | "add-circle" - see MapCanvas/BarriersPanel
+
+  // Inserts the clicked feet position into the placement's barrier/index,
+  // then advances to the gap right after it - a run of map clicks lays
+  // down consecutive points. Nothing is ever written for a point that
+  // hasn't been placed yet, so canceling (see MapCanvas) is just clearing
+  // this state, no cleanup needed.
+  function placePoint(feet) {
+    const {barrierIndex, insertIndex} = placement;
+    const locations = mapData.barriers[barrierIndex].locations;
+    const nextLocations = [...locations.slice(0, insertIndex), feet, ...locations.slice(insertIndex)];
+    dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "locations", value: nextLocations});
+    setPlacement({barrierIndex, insertIndex: insertIndex + 1});
+  }
 
   // pixelDimensions is derived, not authored - keep the draft in sync with
   // whatever image is actually loaded (a freshly uploaded file's natural
@@ -71,6 +88,13 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
         dispatch={dispatch}
         selectedBarrierIndex={selectedBarrierIndex}
         onSelectBarrier={setSelectedBarrierIndex}
+        hoveredBarrierIndex={hoveredBarrierIndex}
+        hoveredPoint={hoveredPoint}
+        placement={placement}
+        onPlacePoint={placePoint}
+        onCancelPlacement={() => setPlacement(null)}
+        tool={tool}
+        onToolChange={setTool}
       />
       <MapSidebar>
         <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
@@ -78,6 +102,12 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
           barriers={mapData.barriers}
           selectedIndex={selectedBarrierIndex}
           onSelect={setSelectedBarrierIndex}
+          onHover={setHoveredBarrierIndex}
+          onHoverPoint={setHoveredPoint}
+          placement={placement}
+          onStartPlacement={(barrierIndex, insertIndex) => setPlacement({barrierIndex, insertIndex})}
+          tool={tool}
+          onStartAddCircle={() => setTool("add-circle")}
           dispatch={dispatch}
         />
       </MapSidebar>

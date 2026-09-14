@@ -7,8 +7,11 @@ import {feetToPixel, feetSpacingToPixelsX} from "./mapCoords";
 const BARRIER_COLOR = "#e0b64a";
 const SELECTED_COLOR = "#ffde7a";
 const HANDLE_RADIUS = 5;
+const STROKE_WIDTH = 3;
+const HOVERED_STROKE_WIDTH = STROKE_WIDTH * 2;
+const POINT_HOVER_RADIUS_FEET = 3;
 
-export default function BarrierShapes({barriers, pixelDimensions, feetDimensions, tool, selectedIndex, onSelect, onStartDragPoint, onStartDragCircleMove, onStartDragCircleResize}) {
+export default function BarrierShapes({barriers, pixelDimensions, feetDimensions, tool, selectedIndex, hoveredIndex, hoveredPoint, onSelect, onStartDragPoint, onStartDragCircleMove, onStartDragCircleResize}) {
   function toPixel(loc) {
     return feetToPixel(loc.x, loc.y, pixelDimensions, feetDimensions);
   }
@@ -24,6 +27,7 @@ export default function BarrierShapes({barriers, pixelDimensions, feetDimensions
       {barriers.map((barrier, i) => {
         const selected = selectable && selectedIndex === i;
         const color = selected ? SELECTED_COLOR : BARRIER_COLOR;
+        const strokeWidth = hoveredIndex === i ? HOVERED_STROKE_WIDTH : STROKE_WIDTH;
 
         if (barrier.type === "wall") {
           const points = barrier.locations.map(toPixel);
@@ -31,7 +35,7 @@ export default function BarrierShapes({barriers, pixelDimensions, feetDimensions
             <g key={i}>
               <polyline
                 points={points.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill="none" stroke={color} strokeWidth={3}
+                fill="none" stroke={color} strokeWidth={strokeWidth}
                 onPointerDown={selectable ? (e) => { e.stopPropagation(); onSelect(i); } : undefined}
               />
               {selected && points.map((p, pi) => (
@@ -41,6 +45,19 @@ export default function BarrierShapes({barriers, pixelDimensions, feetDimensions
                   onPointerDown={(e) => onStartDragPoint(i, pi, e)}
                 />
               ))}
+              {/* points[hoveredPoint.pointIndex] can briefly be missing -
+                  removing a point via its pill's × button doesn't fire a
+                  mouseleave (the pill unmounts instead), so a stale
+                  pointIndex can still be hovered for one render after the
+                  removal shrinks this barrier's locations. */}
+              {hoveredPoint?.barrierIndex === i && points[hoveredPoint.pointIndex] && (
+                <circle
+                  className="map-canvas-point-hover-ring"
+                  cx={points[hoveredPoint.pointIndex].x} cy={points[hoveredPoint.pointIndex].y}
+                  r={feetSpacingToPixelsX(POINT_HOVER_RADIUS_FEET, pixelDimensions, feetDimensions)}
+                  fill="rgba(255,255,255,0.25)" stroke="none"
+                />
+              )}
             </g>
           );
         }
@@ -55,7 +72,7 @@ export default function BarrierShapes({barriers, pixelDimensions, feetDimensions
           <g key={i}>
             <circle
               cx={center.x} cy={center.y} r={radiusPx}
-              fill="rgba(224,182,74,0.15)" stroke={color} strokeWidth={3}
+              fill="rgba(224,182,74,0.15)" stroke={color} strokeWidth={strokeWidth}
               onPointerDown={selectable ? (e) => onStartDragCircleMove(i, e) : undefined}
             />
             {selected && (

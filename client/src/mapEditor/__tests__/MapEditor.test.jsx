@@ -117,7 +117,24 @@ describe("MapEditor", () => {
     expect(screen.getByText("800 × 600")).toBeInTheDocument();
   });
 
-  it("flows a wall drawn on the canvas into the sidebar's Barriers list", () => {
+  it("adds a wall via the sidebar's '+ Add Wall' button", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+
+    // The Barriers section starts collapsed.
+    fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
+    fireEvent.click(screen.getByRole("button", {name: "+ Add Wall"}));
+
+    expect(screen.getByText(/Barrier 1: wall/)).toBeInTheDocument();
+  });
+
+  it("flows the sidebar's '+ Add Circle' button into a canvas drag, creating a circle barrier and reverting the tool", () => {
     render(
       <MapEditor
         mapKey="goblin-cave/gc1-entrance"
@@ -131,11 +148,68 @@ describe("MapEditor", () => {
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
     fireEvent.click(screen.getByRole("button", {name: "Fit"}));
 
-    fireEvent.click(screen.getByRole("button", {name: "Add Wall"}));
-    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
-    fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
-    fireEvent.keyDown(document, {key: "Enter"});
+    fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
+    fireEvent.click(screen.getByRole("button", {name: "+ Add Circle"}));
+    expect(screen.getByRole("button", {name: "+ Add Circle"})).toBeDisabled();
 
-    expect(screen.getByText("Barrier 1: wall")).toBeInTheDocument();
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+    fireEvent.pointerMove(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
+    fireEvent.pointerUp(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
+
+    expect(screen.getByText(/Barrier 1: circle/)).toBeInTheDocument();
+    // Single-shot - the tool reverted to "select", so the button's enabled again.
+    expect(screen.getByRole("button", {name: "+ Add Circle"})).not.toBeDisabled();
+  });
+
+  it("flows a '+' click in the sidebar into placement mode, then a map click into a new pill", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    // Expand Barriers, select the wall, start placement via its leading "+".
+    fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
+    fireEvent.click(screen.getByText(/Barrier 1: wall/));
+    expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
+    fireEvent.click(document.querySelectorAll(".map-point-plus")[0]);
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
+
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 300});
+
+    // (0, 300)px -> (0, 60)ft at 5px/ft - inserted before the existing points.
+    expect(document.querySelectorAll(".map-point-pill")[0]).toHaveTextContent("0, 60");
+    // Placement auto-advances rather than exiting - a pending pill still shows.
+    expect(document.querySelector(".map-point-pill-pending")).toBeInTheDocument();
+  });
+
+  it("cancels placement on Escape, from the canvas", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+
+    fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
+    fireEvent.click(screen.getByText(/Barrier 1: wall/));
+    fireEvent.click(document.querySelectorAll(".map-point-plus")[0]);
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, {key: "Escape"});
+
+    expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
+    expect(document.querySelector(".map-point-pill-pending")).not.toBeInTheDocument();
+    // Nothing was written for the cancelled point.
+    expect(document.querySelectorAll(".map-point-pill").length).toBe(2);
   });
 });
