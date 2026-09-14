@@ -85,8 +85,8 @@
          the SVG root stays passthrough so empty space still reaches the
          wrapper underneath for panning/add-tool clicks. */
       .map-canvas-shapes { position: absolute; top: 0; left: 0; pointer-events: none; }
-      .map-canvas-shapes polyline, .map-canvas-shapes circle { pointer-events: auto; }
-      .map-canvas-shapes circle { cursor: grab; }
+      .map-canvas-shapes polyline, .map-canvas-shapes circle, .map-canvas-shapes line { pointer-events: auto; }
+      .map-canvas-shapes circle, .map-canvas-shapes line { cursor: grab; }
       /* The 3ft hover ring around a wall point (from hovering its row in
          BarriersPanel) is a pure visual marker, not an interactive handle -
          needs to win over the plain "circle" rule above. */
@@ -112,6 +112,7 @@
       .map-editor-sidebar-toggle:hover { background: #345; }
       .map-editor-sidebar-content { flex: 1; min-width: 0; overflow-y: auto; padding: 0 14px 14px; }
       .map-editor-sidebar-placeholder { color: #778; font-size: 13px; }
+      .map-sidebar-hint { color: #987; font-size: 12px; margin: 4px 0 8px; }
 
       .map-editor-sidebar-content table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
       .map-editor-sidebar-content th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
@@ -123,6 +124,12 @@
 
       .map-editor-sidebar-content .entry-block { margin: 8px 0; padding: 6px 0; border-top: 1px solid #2a2f35; border-radius: 4px; }
       .map-editor-sidebar-content .entry-block.map-entry-selected { background: #202832; }
+      /* A not-yet-placed entry for an armed single-shot add-tool (Add
+         Circle/Add Point Connection/Add Line Connection) - nothing's
+         actually in mapData yet, just a cue that something's pending at
+         the list position the real entry will land at once placed. */
+      .map-editor-sidebar-content .entry-block.map-entry-pending { border-top-style: dashed; }
+      .map-editor-sidebar-content .entry-block.map-entry-pending h3 { color: #789; font-style: italic; }
       .map-editor-sidebar-content .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; margin-bottom: 6px; }
       .map-editor-sidebar-content .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
       .map-editor-sidebar-content .entry-heading-row h3 .map-entry-summary { font-weight: normal; color: #789; }
@@ -142,6 +149,8 @@
         color: #cde; font-size: 12px; padding: 3px 4px 3px 8px; border-radius: 12px; font-variant-numeric: tabular-nums;
       }
       .map-point-pill-pending { border-style: dashed; color: #789; }
+      .map-point-pill-editable { cursor: pointer; }
+      .map-point-pill-editable:hover { border-color: #9cf; color: #eef; }
       .map-point-pill-remove {
         background: none; border: none; color: #e9a; font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; border-radius: 50%;
       }

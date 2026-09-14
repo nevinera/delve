@@ -26,14 +26,19 @@ function round1(n) {
 
 // A wall's points render as a wrapping row of "pills" (coordinates + a
 // remove button) with a "+" between/around them - clicking a "+" doesn't
-// insert anything by itself, it starts placement mode (see MapCanvas):
-// the *next* click on the map becomes that point, and placement then
-// automatically advances to the gap right after it, so a run of clicks
-// lays down consecutive points. Escape or a click outside the map cancels
-// - nothing was ever written for a not-yet-placed point, so there's
-// nothing to clean up.
-function WallPoints({barrierIndex, locations, onChange, onHoverPoint, placement, onStartPlacement}) {
-  const isPlacingHere = placement?.barrierIndex === barrierIndex;
+// insert anything by itself, it starts *insert* placement mode (see
+// MapCanvas): the *next* click on the map becomes a new point there, and
+// placement then automatically advances to the gap right after it, so a
+// run of clicks lays down consecutive points. Clicking a pill itself
+// (not its "+"s or its own "×") starts *edit* placement mode instead - the
+// next map click replaces just that point, then placement exits (no
+// advancing, unlike insert). Either way, Escape or a click outside the map
+// cancels - nothing was ever written for a not-yet-placed/edited point, so
+// there's nothing to clean up.
+function WallPoints({barrierIndex, locations, onChange, onHoverPoint, placement, onStartPlacement, onStartPointEdit}) {
+  const barrierPlacementActive = placement?.barrierIndex === barrierIndex;
+  const insertingAt = barrierPlacementActive && placement.mode !== "edit" ? placement.pointIndex : null;
+  const editingIndex = barrierPlacementActive && placement.mode === "edit" ? placement.pointIndex : null;
 
   function removePoint(index, e) {
     e.stopPropagation();
@@ -49,10 +54,15 @@ function WallPoints({barrierIndex, locations, onChange, onHoverPoint, placement,
     onStartPlacement(barrierIndex, insertIndex);
   }
 
+  function startEdit(index, e) {
+    e.stopPropagation();
+    onStartPointEdit(barrierIndex, index);
+  }
+
   function PlusButton({insertIndex}) {
     return (
       <button
-        type="button" className="map-point-plus" disabled={isPlacingHere}
+        type="button" className="map-point-plus" disabled={barrierPlacementActive}
         onClick={(e) => startPlacement(insertIndex, e)}
       >
         +
@@ -63,23 +73,28 @@ function WallPoints({barrierIndex, locations, onChange, onHoverPoint, placement,
   const items = [];
   items.push(<PlusButton key="plus-0" insertIndex={0} />);
   locations.forEach((loc, i) => {
-    if (isPlacingHere && placement.insertIndex === i) {
+    if (insertingAt === i) {
       items.push(<span key={`pending-${i}`} className="map-point-pill map-point-pill-pending">…</span>);
     }
     items.push(
-      <span
-        key={i} className="map-point-pill"
-        onMouseEnter={() => onHoverPoint(i)} onMouseLeave={() => onHoverPoint(null)}
-      >
-        {round1(loc.x)}, {round1(loc.y)}
-        {locations.length > 2 && (
-          <button type="button" className="map-point-pill-remove" onClick={(e) => removePoint(i, e)}>×</button>
-        )}
-      </span>
+      editingIndex === i
+        ? <span key={i} className="map-point-pill map-point-pill-pending">…</span>
+        : (
+          <span
+            key={i} className="map-point-pill map-point-pill-editable"
+            onMouseEnter={() => onHoverPoint(i)} onMouseLeave={() => onHoverPoint(null)}
+            onClick={(e) => startEdit(i, e)}
+          >
+            {round1(loc.x)}, {round1(loc.y)}
+            {locations.length > 2 && (
+              <button type="button" className="map-point-pill-remove" onClick={(e) => removePoint(i, e)}>×</button>
+            )}
+          </span>
+        )
     );
     items.push(<PlusButton key={`plus-${i + 1}`} insertIndex={i + 1} />);
   });
-  if (isPlacingHere && placement.insertIndex === locations.length) {
+  if (insertingAt === locations.length) {
     items.push(<span key="pending-end" className="map-point-pill map-point-pill-pending">…</span>);
   }
 
@@ -111,7 +126,7 @@ function barrierSummary(barrier) {
   return barrier.type === "wall" ? `${barrier.locations.length} points` : `r=${barrier.radius}ft`;
 }
 
-export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, tool, onStartAddCircle, dispatch}) {
+export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, onStartPointEdit, tool, onStartAddCircle, canPlaceOnMap, otherPlacementActive, dispatch}) {
   // The "Barriers" section as a whole starts collapsed - a list of every
   // point in every wall would otherwise dominate the sidebar before
   // there's much else to look at. Individual entries, once the section is
@@ -147,13 +162,14 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
           <div className="add-buttons-row">
             <button type="button" className="add-entry" onClick={(e) => { e.stopPropagation(); addWall(); }}>+ Add Wall</button>
             <button
-              type="button" className="add-entry" disabled={tool !== "select" || !!placement}
+              type="button" className="add-entry" disabled={tool !== "select" || !!placement || !!otherPlacementActive || !canPlaceOnMap}
               onClick={(e) => { e.stopPropagation(); onStartAddCircle(); }}
             >
               + Add Circle
             </button>
           </div>
-          {barriers.length === 0
+          {!canPlaceOnMap && <p className="map-sidebar-hint">Set feet dimensions (above) before placing barriers.</p>}
+          {barriers.length === 0 && tool !== "add-circle"
             ? <p className="map-editor-sidebar-placeholder">No barriers yet - use the buttons above to add one.</p>
             : barriers.map((barrier, i) => {
               const selected = selectedIndex === i;
@@ -183,12 +199,24 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
                         onHoverPoint={(pointIndex) => onHoverPoint(pointIndex === null ? null : {barrierIndex: i, pointIndex})}
                         placement={placement}
                         onStartPlacement={onStartPlacement}
+                        onStartPointEdit={onStartPointEdit}
                       />
                     )
                     : <CircleFields barrier={barrier} onChange={(next) => updateBarrier(i, next)} />}
                 </div>
               );
             })}
+          {/* Nothing is written to mapData until the drag on the map
+              actually happens (see MapCanvas's commitCircle) - this is
+              purely a "something's in progress" cue, at the position the
+              real entry will land once placed (the list's end). */}
+          {tool === "add-circle" && (
+            <div className="entry-block map-entry-pending">
+              <div className="entry-heading-row">
+                <h3>Barrier {barriers.length + 1}: circle <span className="map-entry-summary">(placing…)</span></h3>
+              </div>
+            </div>
+          )}
         </>
       )}
     </>

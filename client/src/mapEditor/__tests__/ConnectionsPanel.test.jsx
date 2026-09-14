@@ -6,6 +6,7 @@ function noop() {}
 
 const DEFAULT_PROPS = {
   selectedIndex: null, onSelect: noop, onHover: noop, tool: "select", placement: null,
+  canPlaceOnMap: true, connectionPlacement: null, onStartConnectionPlacement: noop,
   onStartAddPointConnection: noop, onStartAddLineConnection: noop, dispatch: noop,
 };
 
@@ -139,12 +140,78 @@ describe("ConnectionsPanel", () => {
     expect(screen.getByRole("button", {name: "+ Add Point Connection"})).toBeDisabled();
     expect(screen.getByRole("button", {name: "+ Add Line Connection"})).toBeDisabled();
 
-    rerender(<ConnectionsPanel {...DEFAULT_PROPS} connections={[]} tool="select" placement={{barrierIndex: 0, insertIndex: 0}} />);
+    rerender(<ConnectionsPanel {...DEFAULT_PROPS} connections={[]} tool="select" placement={{barrierIndex: 0, pointIndex: 0}} />);
     expect(screen.getByRole("button", {name: "+ Add Point Connection"})).toBeDisabled();
     expect(screen.getByRole("button", {name: "+ Add Line Connection"})).toBeDisabled();
 
     rerender(<ConnectionsPanel {...DEFAULT_PROPS} connections={[]} tool="select" placement={null} />);
     expect(screen.getByRole("button", {name: "+ Add Point Connection"})).not.toBeDisabled();
     expect(screen.getByRole("button", {name: "+ Add Line Connection"})).not.toBeDisabled();
+  });
+
+  it("disables both add buttons and shows a hint when the map has no feetDimensions yet", () => {
+    render(<ConnectionsPanel {...DEFAULT_PROPS} connections={[]} canPlaceOnMap={false} />);
+    expandSection();
+
+    expect(screen.getByRole("button", {name: "+ Add Point Connection"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "+ Add Line Connection"})).toBeDisabled();
+    expect(screen.getByText(/Set feet dimensions/)).toBeInTheDocument();
+  });
+
+  it("shows a pending placeholder entry while add-point-connection is armed, in place of the empty-list message", () => {
+    render(<ConnectionsPanel {...DEFAULT_PROPS} connections={[]} tool="add-point-connection" />);
+    expandSection();
+
+    expect(screen.getByText(/Connection 1: point/)).toBeInTheDocument();
+    expect(screen.getByText("(placing…)")).toBeInTheDocument();
+    expect(screen.queryByText(/No connections yet/)).not.toBeInTheDocument();
+  });
+
+  it("shows a pending placeholder entry while add-line-connection is armed", () => {
+    render(<ConnectionsPanel {...DEFAULT_PROPS} connections={[]} tool="add-line-connection" />);
+    expandSection();
+
+    expect(screen.getByText(/Connection 1: line/)).toBeInTheDocument();
+  });
+
+  it("shows no pending placeholder while the tool is 'select'", () => {
+    render(<ConnectionsPanel {...DEFAULT_PROPS} connections={[]} tool="select" />);
+    expandSection();
+
+    expect(screen.queryByText("(placing…)")).not.toBeInTheDocument();
+  });
+
+  it("renders a point connection's position as a clickable coordinate pill that starts field placement", () => {
+    const onStartConnectionPlacement = vi.fn();
+    const connections = [{identifier: "a", type: "point", position: {x: 12, y: 8, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}];
+    render(<ConnectionsPanel {...DEFAULT_PROPS} connections={connections} onStartConnectionPlacement={onStartConnectionPlacement} />);
+    expandSection();
+
+    fireEvent.click(screen.getByRole("button", {name: "12, 8"}));
+
+    expect(onStartConnectionPlacement).toHaveBeenCalledWith(0, "position");
+  });
+
+  it("renders a line connection's start/end as separate clickable coordinate pills", () => {
+    const onStartConnectionPlacement = vi.fn();
+    const connections = [{identifier: "a", type: "line", start: {x: 8, y: 20}, end: {x: 12, y: 20}}];
+    render(<ConnectionsPanel {...DEFAULT_PROPS} connections={connections} onStartConnectionPlacement={onStartConnectionPlacement} />);
+    expandSection();
+
+    fireEvent.click(screen.getByRole("button", {name: "8, 20"}));
+    expect(onStartConnectionPlacement).toHaveBeenCalledWith(0, "start");
+
+    fireEvent.click(screen.getByRole("button", {name: "12, 20"}));
+    expect(onStartConnectionPlacement).toHaveBeenCalledWith(0, "end");
+  });
+
+  it("shows a pending '…' on the coordinate pill currently being placed, and disables it", () => {
+    const connections = [{identifier: "a", type: "point", position: {x: 12, y: 8, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}];
+    render(<ConnectionsPanel {...DEFAULT_PROPS} connections={connections} connectionPlacement={{connectionIndex: 0, field: "position"}} />);
+    expandSection();
+
+    const pending = screen.getByRole("button", {name: "…"});
+    expect(pending).toBeDisabled();
+    expect(screen.queryByRole("button", {name: "12, 8"})).not.toBeInTheDocument();
   });
 });

@@ -27,23 +27,78 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
   const [selectedBarrierIndex, setSelectedBarrierIndex] = useState(null);
   const [hoveredBarrierIndex, setHoveredBarrierIndex] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null); // {barrierIndex, pointIndex} | null
-  const [placement, setPlacement] = useState(null); // {barrierIndex, insertIndex} | null - see MapCanvas/BarriersPanel
+  // {barrierIndex, pointIndex, mode: "insert" | "edit"} | null - see MapCanvas/BarriersPanel.
+  // "insert" (from a "+" pill button) splices a new point in at pointIndex
+  // and advances to pointIndex+1 on each click, so a run of clicks lays
+  // down consecutive points; "edit" (from clicking an existing pill)
+  // replaces that one point and exits - single-shot, like connectionPlacement.
+  const [placement, setPlacement] = useState(null);
   const [selectedConnectionIndex, setSelectedConnectionIndex] = useState(null);
   const [hoveredConnectionIndex, setHoveredConnectionIndex] = useState(null);
+  const [connectionPlacement, setConnectionPlacement] = useState(null); // {connectionIndex, field: "position" | "start" | "end"} | null
   // "select" | "add-circle" | "add-point-connection" | "add-line-connection" - see MapCanvas/BarriersPanel/ConnectionsPanel
   const [tool, setTool] = useState("select");
+  const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
 
-  // Inserts the clicked feet position into the placement's barrier/index,
-  // then advances to the gap right after it - a run of map clicks lays
-  // down consecutive points. Nothing is ever written for a point that
-  // hasn't been placed yet, so canceling (see MapCanvas) is just clearing
-  // this state, no cleanup needed.
+  // At most one of {wall-point placement, connection-field placement, an
+  // armed add-tool} is ever active - starting one cancels the others,
+  // rather than every trigger needing to know about every other mode.
+  function startBarrierPlacement(barrierIndex, pointIndex, mode = "insert") {
+    setConnectionPlacement(null);
+    setTool("select");
+    setPlacement({barrierIndex, pointIndex, mode});
+  }
+
+  function startBarrierPointEdit(barrierIndex, pointIndex) {
+    startBarrierPlacement(barrierIndex, pointIndex, "edit");
+  }
+
+  function startConnectionFieldPlacement(connectionIndex, field) {
+    setPlacement(null);
+    setTool("select");
+    setConnectionPlacement({connectionIndex, field});
+  }
+
+  function startTool(nextTool) {
+    setPlacement(null);
+    setConnectionPlacement(null);
+    setTool(nextTool);
+  }
+
+  // "insert" mode splices the clicked feet position in at pointIndex, then
+  // advances to the gap right after it - a run of map clicks lays down
+  // consecutive points. "edit" mode replaces the existing point at
+  // pointIndex and exits immediately. Nothing is ever written for a point
+  // that hasn't been placed/edited yet, so canceling (see MapCanvas) is
+  // just clearing this state, no cleanup needed.
   function placePoint(feet) {
-    const {barrierIndex, insertIndex} = placement;
+    const {barrierIndex, pointIndex, mode} = placement;
     const locations = mapData.barriers[barrierIndex].locations;
-    const nextLocations = [...locations.slice(0, insertIndex), feet, ...locations.slice(insertIndex)];
+
+    if (mode === "edit") {
+      const nextLocations = locations.map((loc, i) => (i === pointIndex ? feet : loc));
+      dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "locations", value: nextLocations});
+      setPlacement(null);
+      return;
+    }
+
+    const nextLocations = [...locations.slice(0, pointIndex), feet, ...locations.slice(pointIndex)];
     dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "locations", value: nextLocations});
-    setPlacement({barrierIndex, insertIndex: insertIndex + 1});
+    setPlacement({barrierIndex, pointIndex: pointIndex + 1, mode: "insert"});
+  }
+
+  // Single-shot, unlike placePoint above - re-placing one already-existing
+  // connection field (position/start/end) sets it and exits, no advancing
+  // to a next gap.
+  function placeConnectionField(feet) {
+    const {connectionIndex, field} = connectionPlacement;
+    if (field === "position") {
+      const current = mapData.connections[connectionIndex].position;
+      dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: "position", value: {...current, x: feet.x, y: feet.y}});
+    } else {
+      dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field, value: feet});
+    }
+    setConnectionPlacement(null);
   }
 
   // pixelDimensions is derived, not authored - keep the draft in sync with
@@ -100,6 +155,9 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
         selectedConnectionIndex={selectedConnectionIndex}
         onSelectConnection={setSelectedConnectionIndex}
         hoveredConnectionIndex={hoveredConnectionIndex}
+        connectionPlacement={connectionPlacement}
+        onPlaceConnectionField={placeConnectionField}
+        onCancelConnectionPlacement={() => setConnectionPlacement(null)}
         tool={tool}
         onToolChange={setTool}
       />
@@ -112,9 +170,12 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
           onHover={setHoveredBarrierIndex}
           onHoverPoint={setHoveredPoint}
           placement={placement}
-          onStartPlacement={(barrierIndex, insertIndex) => setPlacement({barrierIndex, insertIndex})}
+          onStartPlacement={startBarrierPlacement}
+          onStartPointEdit={startBarrierPointEdit}
           tool={tool}
-          onStartAddCircle={() => setTool("add-circle")}
+          onStartAddCircle={() => startTool("add-circle")}
+          canPlaceOnMap={canPlaceOnMap}
+          otherPlacementActive={!!connectionPlacement}
           dispatch={dispatch}
         />
         <ConnectionsPanel
@@ -124,8 +185,11 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
           onHover={setHoveredConnectionIndex}
           tool={tool}
           placement={placement}
-          onStartAddPointConnection={() => setTool("add-point-connection")}
-          onStartAddLineConnection={() => setTool("add-line-connection")}
+          canPlaceOnMap={canPlaceOnMap}
+          connectionPlacement={connectionPlacement}
+          onStartConnectionPlacement={startConnectionFieldPlacement}
+          onStartAddPointConnection={() => startTool("add-point-connection")}
+          onStartAddLineConnection={() => startTool("add-line-connection")}
           dispatch={dispatch}
         />
       </MapSidebar>

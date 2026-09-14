@@ -6,7 +6,8 @@ function noop() {}
 
 const DEFAULT_PROPS = {
   selectedIndex: null, onSelect: noop, onHover: noop, onHoverPoint: noop,
-  placement: null, onStartPlacement: noop, tool: "select", onStartAddCircle: noop, dispatch: noop,
+  placement: null, onStartPlacement: noop, onStartPointEdit: noop, tool: "select", onStartAddCircle: noop,
+  canPlaceOnMap: true, otherPlacementActive: false, dispatch: noop,
 };
 
 // The "Barriers" section itself starts collapsed - expand it before
@@ -180,7 +181,7 @@ describe("BarriersPanel", () => {
 
   it("shows a pending pill at the current insertIndex while placing, and disables this barrier's '+' buttons", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
-    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 0, insertIndex: 1}} />);
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 0, pointIndex: 1}} />);
     expandSection();
 
     expect(document.querySelector(".map-point-pill-pending")).toBeInTheDocument();
@@ -189,10 +190,42 @@ describe("BarriersPanel", () => {
 
   it("does not show a pending pill for a different barrier's placement", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
-    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 1, insertIndex: 0}} />);
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 1, pointIndex: 0}} />);
     expandSection();
 
     expect(document.querySelector(".map-point-pill-pending")).not.toBeInTheDocument();
+  });
+
+  it("clicking an existing pill starts edit placement for that point, not insert", () => {
+    const onStartPointEdit = vi.fn();
+    const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onStartPointEdit={onStartPointEdit} />);
+    expandSection();
+
+    fireEvent.click(pills()[1]);
+
+    expect(onStartPointEdit).toHaveBeenCalledWith(0, 1);
+  });
+
+  it("shows the edited pill as pending ('…'), keeping the others normal, and disables all '+' buttons for this barrier", () => {
+    const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 0, pointIndex: 1, mode: "edit"}} />);
+    expandSection();
+
+    expect(pills().length).toBe(2);
+    expect(pills()[0]).toHaveTextContent("0, 0");
+    expect(pills()[1]).toHaveTextContent("…");
+    document.querySelectorAll(".map-point-plus").forEach((button) => expect(button).toBeDisabled());
+  });
+
+  it("does not show an edit-pending pill for a different barrier's edit placement", () => {
+    const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 1, pointIndex: 0, mode: "edit"}} />);
+    expandSection();
+
+    expect(pills().length).toBe(2);
+    expect(pills()[0]).toHaveTextContent("0, 0");
+    expect(pills()[1]).toHaveTextContent("10, 0");
   });
 
   it("adds a new blank wall, selecting it", () => {
@@ -227,8 +260,41 @@ describe("BarriersPanel", () => {
     expandSection();
     expect(screen.getByRole("button", {name: "+ Add Circle"})).toBeDisabled();
 
-    rerender(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} tool="select" placement={{barrierIndex: 0, insertIndex: 0}} />);
+    rerender(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} tool="select" placement={{barrierIndex: 0, pointIndex: 0}} />);
     expect(screen.getByRole("button", {name: "+ Add Circle"})).toBeDisabled();
+  });
+
+  it("disables '+ Add Circle' while a connection field is being placed elsewhere", () => {
+    const barriers = [];
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} otherPlacementActive />);
+    expandSection();
+
+    expect(screen.getByRole("button", {name: "+ Add Circle"})).toBeDisabled();
+  });
+
+  it("disables '+ Add Circle' and shows a hint when the map has no feetDimensions yet", () => {
+    const barriers = [];
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} canPlaceOnMap={false} />);
+    expandSection();
+
+    expect(screen.getByRole("button", {name: "+ Add Circle"})).toBeDisabled();
+    expect(screen.getByText(/Set feet dimensions/)).toBeInTheDocument();
+  });
+
+  it("shows a pending placeholder entry while add-circle is armed, in place of the empty-list message", () => {
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} tool="add-circle" />);
+    expandSection();
+
+    expect(screen.getByText(/Barrier 1: circle/)).toBeInTheDocument();
+    expect(screen.getByText("(placing…)")).toBeInTheDocument();
+    expect(screen.queryByText(/No barriers yet/)).not.toBeInTheDocument();
+  });
+
+  it("shows no pending placeholder while the tool is 'select'", () => {
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} tool="select" />);
+    expandSection();
+
+    expect(screen.queryByText("(placing…)")).not.toBeInTheDocument();
   });
 
   it("edits a circle's center and radius", () => {

@@ -209,6 +209,60 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "+ Add Line Connection"})).not.toBeDisabled();
   });
 
+  it("flows a coordinate pill click in the sidebar into re-placing an existing point connection", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{
+          ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+          connections: [{identifier: "a", type: "point", position: {x: 0, y: 0, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}],
+        }}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
+    fireEvent.click(screen.getByRole("button", {name: "0, 0"})); // the position pill
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
+
+    fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+
+    expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
+  });
+
+  it("starting a barrier-point placement cancels an in-progress connection-field placement", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{
+          ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+          barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}],
+          connections: [{identifier: "a", type: "point", position: {x: 0, y: 0, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}],
+        }}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
+    fireEvent.click(screen.getByRole("button", {name: "0, 0"}));
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[0]); // Barriers
+    fireEvent.click(screen.getByText(/Barrier 1: wall/));
+    fireEvent.click(document.querySelectorAll(".map-point-plus")[0]);
+
+    // Still just one "Placing Points" status - the connection pill's own
+    // placement was cancelled when the barrier one started.
+    expect(screen.getAllByText("Placing Points").length).toBe(1);
+  });
+
   it("flows a '+' click in the sidebar into placement mode, then a map click into a new pill", () => {
     render(
       <MapEditor
@@ -259,5 +313,37 @@ describe("MapEditor", () => {
     expect(document.querySelector(".map-point-pill-pending")).not.toBeInTheDocument();
     // Nothing was written for the cancelled point.
     expect(document.querySelectorAll(".map-point-pill").length).toBe(2);
+  });
+
+  it("flows a click on an existing pill into edit placement, then a map click replaces that point in place", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
+    fireEvent.click(screen.getByText(/Barrier 1: wall/));
+
+    // Click the second pill (10, 0) rather than a "+".
+    fireEvent.click(document.querySelectorAll(".map-point-pill")[1]);
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
+    expect(document.querySelectorAll(".map-point-pill")[1]).toHaveTextContent("…");
+    // The wall still has exactly 2 points during edit - nothing inserted.
+    expect(document.querySelectorAll(".map-point-pill").length).toBe(2);
+
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 300}); // (0, 300)px -> (0, 60)ft
+
+    // Replaced in place, still 2 pills, and placement exited (no auto-advance).
+    expect(document.querySelectorAll(".map-point-pill").length).toBe(2);
+    expect(document.querySelectorAll(".map-point-pill")[1]).toHaveTextContent("0, 60");
+    expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
   });
 });

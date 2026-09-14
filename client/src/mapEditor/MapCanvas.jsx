@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from "react";
 import {pixelToFeet, feetToPixel, feetSpacingToPixelsX, feetSpacingToPixelsY} from "./mapCoords";
+import {collectSnapPoints, nearestSnapPoint} from "./mapSnap";
 import BarrierShapes from "./BarrierShapes";
 import ConnectionShapes from "./ConnectionShapes";
 
@@ -52,6 +53,7 @@ export default function MapCanvas({
   image, imageError, onImageFile, backUrl, mapData, dispatch,
   selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement,
   selectedConnectionIndex, onSelectConnection, hoveredConnectionIndex,
+  connectionPlacement, onPlaceConnectionField, onCancelConnectionPlacement,
   tool = "select", onToolChange,
 }) {
   const wrapperRef = useRef(null);
@@ -193,6 +195,16 @@ export default function MapCanvas({
     return pixelToFeet(px.x, px.y, image.pixelDimensions, feetDimensions);
   }
 
+  // Pulls `feet` onto an existing barrier/connection point within
+  // SNAP_RADIUS_FEET, so two things meant to share a corner actually do -
+  // `exclude` (see mapSnap.js) keeps the point currently being
+  // placed/dragged from snapping to itself. Shift disables this per-gesture.
+  function snapFeet(feet, exclude, shiftKey) {
+    if (!feet || shiftKey) return feet;
+    const match = nearestSnapPoint(collectSnapPoints(mapData, exclude), feet);
+    return match ? {x: match.x, y: match.y} : feet;
+  }
+
   // A circle is single-shot - whether or not the drag actually produced one
   // (a plain click with no drag leaves radius 0 and commits nothing), the
   // tool always reverts to "select" afterward, same as BarriersPanel's
@@ -261,6 +273,31 @@ export default function MapCanvas({
     };
   }, [placement, onCancelPlacement]);
 
+  // Same cancellation pattern as wall-point placement above, but for
+  // re-placing a single already-existing connection field (see
+  // ConnectionsPanel's CoordinateButton) - a click on another coordinate
+  // pill should win over this one canceling itself, not race it.
+  useEffect(() => {
+    if (!connectionPlacement) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") onCancelConnectionPlacement();
+    }
+
+    function onDocPointerDown(e) {
+      if (wrapperRef.current?.contains(e.target)) return;
+      if (e.target.closest?.(".map-connection-field-btn")) return;
+      onCancelConnectionPlacement();
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onDocPointerDown);
+    };
+  }, [connectionPlacement, onCancelConnectionPlacement]);
+
   function startDragWallPoint(barrierIndex, pointIndex, e) {
     e.stopPropagation();
     onSelectBarrier(barrierIndex);
@@ -298,13 +335,26 @@ export default function MapCanvas({
     if (!image) return;
 
     if (placement) {
-      const feet = feetFromClient(e.clientX, e.clientY);
+      const exclude = placement.mode === "edit"
+        ? {kind: "wall-point", barrierIndex: placement.barrierIndex, pointIndex: placement.pointIndex}
+        : null;
+      const feet = snapFeet(feetFromClient(e.clientX, e.clientY), exclude, e.shiftKey);
       if (feet) onPlacePoint(feet);
       return;
     }
 
+    if (connectionPlacement) {
+      const {connectionIndex, field} = connectionPlacement;
+      const exclude = field === "position"
+        ? {kind: "connection-point", connectionIndex}
+        : {kind: "connection-endpoint", connectionIndex, endpoint: field};
+      const feet = snapFeet(feetFromClient(e.clientX, e.clientY), exclude, e.shiftKey);
+      if (feet) onPlaceConnectionField(feet);
+      return;
+    }
+
     if (tool === "add-circle") {
-      const feet = feetFromClient(e.clientX, e.clientY);
+      const feet = snapFeet(feetFromClient(e.clientX, e.clientY), null, e.shiftKey);
       if (!feet) return;
       setDrawingCircle({location: feet, radius: 0});
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -312,7 +362,7 @@ export default function MapCanvas({
     }
 
     if (tool === "add-point-connection") {
-      const feet = feetFromClient(e.clientX, e.clientY);
+      const feet = snapFeet(feetFromClient(e.clientX, e.clientY), null, e.shiftKey);
       if (feet) {
         dispatch({
           type: "ADD_ENTRY", section: "connections",
@@ -324,7 +374,7 @@ export default function MapCanvas({
     }
 
     if (tool === "add-line-connection") {
-      const feet = feetFromClient(e.clientX, e.clientY);
+      const feet = snapFeet(feetFromClient(e.clientX, e.clientY), null, e.shiftKey);
       if (!feet) return;
       setDrawingLine({start: feet, end: feet});
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -355,11 +405,15 @@ export default function MapCanvas({
       const barrier = mapData.barriers[barrierIndex];
       if (type === "wall-point") {
         const {pointIndex} = barrierDragRef.current;
-        const nextLocations = barrier.locations.map((loc, i) => (i === pointIndex ? feet : loc));
+        const snapped = snapFeet(feet, {kind: "wall-point", barrierIndex, pointIndex}, e.shiftKey);
+        const nextLocations = barrier.locations.map((loc, i) => (i === pointIndex ? snapped : loc));
         dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "locations", value: nextLocations});
       } else if (type === "circle-move") {
-        dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "location", value: feet});
+        const snapped = snapFeet(feet, {kind: "circle", barrierIndex}, e.shiftKey);
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "location", value: snapped});
       } else if (type === "circle-resize") {
+        // Not snapped - a resize handle traces the circle's edge, not a
+        // discrete point meant to coincide with anything else.
         const dx = feet.x - barrier.location.x;
         const dy = feet.y - barrier.location.y;
         dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "radius", value: Math.sqrt(dx * dx + dy * dy)});
@@ -373,15 +427,19 @@ export default function MapCanvas({
       const {type, connectionIndex} = connectionDragRef.current;
       const connection = mapData.connections[connectionIndex];
       if (type === "point-move") {
-        dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: "position", value: {...connection.position, x: feet.x, y: feet.y}});
+        const snapped = snapFeet(feet, {kind: "connection-point", connectionIndex}, e.shiftKey);
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: "position", value: {...connection.position, x: snapped.x, y: snapped.y}});
       } else if (type === "line-endpoint") {
         const {endpoint} = connectionDragRef.current;
-        dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: endpoint, value: feet});
+        const snapped = snapFeet(feet, {kind: "connection-endpoint", connectionIndex, endpoint}, e.shiftKey);
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: endpoint, value: snapped});
       }
       return;
     }
 
     if (tool === "add-circle" && drawingCircle) {
+      // The center (set on pointerdown) is already snapped - the radius
+      // drag itself traces a circle's edge, not a point to snap.
       const feet = feetFromClient(e.clientX, e.clientY);
       if (!feet) return;
       const dx = feet.x - drawingCircle.location.x;
@@ -391,8 +449,14 @@ export default function MapCanvas({
     }
 
     if (tool === "add-line-connection" && drawingLine) {
-      const feet = feetFromClient(e.clientX, e.clientY);
-      if (!feet) return;
+      const rawFeet = feetFromClient(e.clientX, e.clientY);
+      if (!rawFeet) return;
+      let feet = snapFeet(rawFeet, null, e.shiftKey);
+      // Snapping "end" onto the same point as "start" would make the line
+      // uncommittable (see commitLineConnection's zero-length guard) -
+      // fall back to the raw position rather than silently discarding the
+      // drag.
+      if (feet.x === drawingLine.start.x && feet.y === drawingLine.start.y) feet = rawFeet;
       setDrawingLine((current) => ({...current, end: feet}));
       return;
     }
@@ -437,6 +501,46 @@ export default function MapCanvas({
     if (file) onImageFile(file);
   }
 
+  // Live "where would this land" preview while wall-point placement is
+  // active - lets the author see the resulting wall shape, including the
+  // not-yet-placed point, as they move the mouse before committing with a
+  // click. Snapped like a real placement would be, but not shift-aware
+  // (there's no live modifier-key tracking outside an actual pointer
+  // event) - always previews as if snapping were on.
+  const placementPreviewLocations = (() => {
+    if (!placement || !cursorPixel || !hasBothAxes(feetDimensions)) return null;
+    const barrier = mapData.barriers[placement.barrierIndex];
+    if (!barrier || barrier.type !== "wall") return null;
+    const hoverFeet = pixelToFeet(cursorPixel.x, cursorPixel.y, image.pixelDimensions, feetDimensions);
+    const {locations} = barrier;
+
+    if (placement.mode === "edit") {
+      // Exclude the point being edited from its own snap candidates -
+      // otherwise it'd always "snap" right back to wherever it already is.
+      const exclude = {kind: "wall-point", barrierIndex: placement.barrierIndex, pointIndex: placement.pointIndex};
+      const previewPoint = snapFeet(hoverFeet, exclude, false);
+      return locations.map((loc, i) => (i === placement.pointIndex ? previewPoint : loc));
+    }
+
+    const previewPoint = snapFeet(hoverFeet, null, false);
+    return [...locations.slice(0, placement.pointIndex), previewPoint, ...locations.slice(placement.pointIndex)];
+  })();
+
+  // Every armed interactive mode gets a status readout and a crosshair
+  // cursor (below) - wall/connection-field placement had this already;
+  // the single-shot add-tools (armed from BarriersPanel/ConnectionsPanel's
+  // "+" buttons, but with no visible change until now) didn't, which made
+  // it impossible to tell whether a sidebar click had actually armed
+  // anything before the next click on the map.
+  const placingStatusText = placement || connectionPlacement
+    ? "Placing Points"
+    : {
+      "add-circle": "Placing Circle - drag on the map",
+      "add-point-connection": "Placing Point Connection - click the map",
+      "add-line-connection": "Placing Line Connection - drag on the map",
+    }[tool];
+  const isPlacing = !!placingStatusText;
+
   return (
     <div className="map-canvas-area">
       <div className="map-canvas-toolbar-row">
@@ -448,7 +552,7 @@ export default function MapCanvas({
             <button type="button" onClick={() => setZoom((z) => clampZoom(z * ZOOM_STEP))}>+</button>
           </div>
         )}
-        {placement && <span className="map-canvas-placing-status">Placing Points</span>}
+        {isPlacing && <span className="map-canvas-placing-status">{placingStatusText}</span>}
       </div>
       {image && (
         <div className="map-canvas-toolbar-row">
@@ -465,7 +569,7 @@ export default function MapCanvas({
       {image ? (
         <div
           ref={wrapperRef}
-          className={`map-canvas-wrapper${placement ? " map-canvas-wrapper-placing" : ""}`}
+          className={`map-canvas-wrapper${isPlacing ? " map-canvas-wrapper-placing" : ""}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -518,6 +622,24 @@ export default function MapCanvas({
                 onStartDragCircleMove={startDragCircleMove}
                 onStartDragCircleResize={startDragCircleResize}
               />
+            )}
+            {canDrawBarriers && placementPreviewLocations && (
+              <svg className="map-canvas-shapes map-canvas-placement-preview" width={image.pixelDimensions.width} height={image.pixelDimensions.height}>
+                {placementPreviewLocations.length >= 2 && (
+                  <polyline
+                    points={placementPreviewLocations.map((loc) => {
+                      const p = feetToPixel(loc.x, loc.y, image.pixelDimensions, feetDimensions);
+                      return `${p.x},${p.y}`;
+                    }).join(" ")}
+                    fill="none" stroke="#ffde7a" strokeWidth={3} strokeDasharray="6,4"
+                  />
+                )}
+                {(() => {
+                  const pending = placementPreviewLocations[placement.pointIndex];
+                  const p = feetToPixel(pending.x, pending.y, image.pixelDimensions, feetDimensions);
+                  return <circle cx={p.x} cy={p.y} r={4} fill="#ffde7a" />;
+                })()}
+              </svg>
             )}
             {canDrawBarriers && drawingCircle && drawingCircle.radius > 0 && (
               <svg className="map-canvas-shapes" width={image.pixelDimensions.width} height={image.pixelDimensions.height}>
