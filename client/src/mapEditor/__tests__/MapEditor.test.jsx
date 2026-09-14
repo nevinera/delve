@@ -116,4 +116,26 @@ describe("MapEditor", () => {
 
     expect(screen.getByText("800 × 600")).toBeInTheDocument();
   });
+
+  it("flows a wall drawn on the canvas into the sidebar's Barriers list", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(screen.getByRole("button", {name: "Add Wall"}));
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+    fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
+    fireEvent.keyDown(document, {key: "Enter"});
+
+    expect(screen.getByText("Barrier 1: wall")).toBeInTheDocument();
+  });
 });

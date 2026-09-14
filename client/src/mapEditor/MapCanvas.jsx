@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from "react";
-import {pixelToFeet, feetSpacingToPixelsX, feetSpacingToPixelsY} from "./mapCoords";
+import {pixelToFeet, feetToPixel, feetSpacingToPixelsX, feetSpacingToPixelsY} from "./mapCoords";
+import BarrierShapes from "./BarrierShapes";
 
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 4;
@@ -21,26 +22,35 @@ function clampZoom(zoom) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 }
 
-// Top-down pan/zoom viewport for the map background image. Panning is a
-// plain CSS transform on a content div holding the image at native pixel
-// size (not native scroll, not an SVG viewBox) - drag-to-pan works
-// regardless of tool/zoom, and every future slice (grid, barriers,
-// connections, units) draws into the same untransformed pixel-space content
-// div, so their own coordinates are always just raw image pixels.
+// Top-down pan/zoom viewport for the map background image, plus barrier
+// placement/editing (slice 3). Panning is a plain CSS transform on a
+// content div holding the image at native pixel size (not native scroll,
+// not an SVG viewBox); barriers/connections/units draw into the same
+// untransformed pixel-space content div, so their own coordinates are
+// always just raw image pixels (converted from the feet-space values the
+// schema actually stores, via mapCoords.js).
 //
 // The toolbar is two rows - row 1 (navigation/view: back, zoom) is always
-// present; row 2 (editing actions: replace image today, tool-mode buttons
-// in later slices) only once there's something to put there.
-export default function MapCanvas({image, imageError, onImageFile, backUrl, feetDimensions}) {
+// present; row 2 (editing actions: replace image, tool-mode buttons) once
+// there's something to put there.
+export default function MapCanvas({image, imageError, onImageFile, backUrl, mapData, dispatch, selectedBarrierIndex, onSelectBarrier}) {
   const wrapperRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({x: 0, y: 0});
   const [cursorPixel, setCursorPixel] = useState(null); // {x, y} in content (image) pixel space, or null off-canvas
+  const [tool, setTool] = useState("select"); // "select" | "add-wall" | "add-circle"
+  const [drawingWall, setDrawingWall] = useState(null); // array of {x, y} feet points while add-wall is in progress
+  const [drawingCircle, setDrawingCircle] = useState(null); // {location: {x, y}, radius} while add-circle is in progress
   const dragRef = useRef(null); // {startX, startY, startOffset} while a pan drag is in progress
   const panRafRef = useRef(null); // pending requestAnimationFrame id, or null
   const pendingOffsetRef = useRef(null); // latest not-yet-applied offset from pointermove
   const zoomRafRef = useRef(null); // pending requestAnimationFrame id, or null
   const pendingZoomRef = useRef(null); // {factor, cursorX, cursorY} accumulated since the last flush
+  // {type: "wall-point", barrierIndex, pointIndex} | {type: "circle-move" | "circle-resize", barrierIndex} | null
+  const barrierDragRef = useRef(null);
+
+  const feetDimensions = mapData.feetDimensions;
+  const canDrawBarriers = hasBothAxes(feetDimensions);
 
   // Native pointermove/wheel both fire far more often than the screen
   // repaints - coalesce each to one state update per frame instead of one
@@ -138,8 +148,96 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, feet
     return () => wrapper.removeEventListener("wheel", onWheel);
   }, [image]);
 
+  // Screen (client) coordinates -> image-pixel coordinates, inverting the
+  // current pan/zoom transform.
+  function contentPixelFromClient(clientX, clientY) {
+    const rect = wrapperRef.current.getBoundingClientRect();
+    return {x: (clientX - rect.left - offset.x) / zoom, y: (clientY - rect.top - offset.y) / zoom};
+  }
+
+  // Screen coordinates -> feet coordinates (what the schema actually
+  // stores for barrier/connection/unit positions) - null when there's no
+  // feetDimensions to convert against yet.
+  function feetFromClient(clientX, clientY) {
+    if (!canDrawBarriers) return null;
+    const px = contentPixelFromClient(clientX, clientY);
+    return pixelToFeet(px.x, px.y, image.pixelDimensions, feetDimensions);
+  }
+
+  function selectTool(nextTool) {
+    setDrawingWall(null);
+    setDrawingCircle(null);
+    setTool(nextTool);
+  }
+
+  function commitWall() {
+    if (drawingWall && drawingWall.length >= 2) {
+      dispatch({type: "ADD_ENTRY", section: "barriers", entry: {type: "wall", locations: drawingWall}});
+    }
+    setDrawingWall(null);
+    setTool("select");
+  }
+
+  function commitCircle() {
+    if (drawingCircle && drawingCircle.radius > 0) {
+      dispatch({type: "ADD_ENTRY", section: "barriers", entry: {type: "circle", location: drawingCircle.location, radius: drawingCircle.radius}});
+    }
+    setDrawingCircle(null);
+  }
+
+  // Esc cancels an in-progress wall rather than committing it (a partial
+  // wall with <2 points can't be saved anyway) - Enter/double-click are the
+  // deliberate "I'm done" gestures.
+  useEffect(() => {
+    if (tool !== "add-wall" || !drawingWall) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Enter") commitWall();
+      else if (e.key === "Escape") setDrawingWall(null);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool, drawingWall]);
+
+  function startDragWallPoint(barrierIndex, pointIndex, e) {
+    e.stopPropagation();
+    onSelectBarrier(barrierIndex);
+    barrierDragRef.current = {type: "wall-point", barrierIndex, pointIndex};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
+  function startDragCircleMove(barrierIndex, e) {
+    e.stopPropagation();
+    onSelectBarrier(barrierIndex);
+    barrierDragRef.current = {type: "circle-move", barrierIndex};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
+  function startDragCircleResize(barrierIndex, e) {
+    e.stopPropagation();
+    barrierDragRef.current = {type: "circle-resize", barrierIndex};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
   function handlePointerDown(e) {
     if (!image) return;
+
+    if (tool === "add-wall") {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) setDrawingWall((current) => [...(current ?? []), feet]);
+      return;
+    }
+
+    if (tool === "add-circle") {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      setDrawingCircle({location: feet, radius: 0});
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+
     dragRef.current = {startX: e.clientX, startY: e.clientY, startOffset: offset};
     e.currentTarget.setPointerCapture(e.pointerId);
   }
@@ -151,15 +249,39 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, feet
   // readout has no meaningful paint cost.
   function updateCursorPixel(e) {
     if (!image || !wrapperRef.current) return;
-    const rect = wrapperRef.current.getBoundingClientRect();
-    setCursorPixel({
-      x: (e.clientX - rect.left - offset.x) / zoom,
-      y: (e.clientY - rect.top - offset.y) / zoom,
-    });
+    setCursorPixel(contentPixelFromClient(e.clientX, e.clientY));
   }
 
   function handlePointerMove(e) {
     updateCursorPixel(e);
+
+    if (barrierDragRef.current) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const {type, barrierIndex} = barrierDragRef.current;
+      const barrier = mapData.barriers[barrierIndex];
+      if (type === "wall-point") {
+        const {pointIndex} = barrierDragRef.current;
+        const nextLocations = barrier.locations.map((loc, i) => (i === pointIndex ? feet : loc));
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "locations", value: nextLocations});
+      } else if (type === "circle-move") {
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "location", value: feet});
+      } else if (type === "circle-resize") {
+        const dx = feet.x - barrier.location.x;
+        const dy = feet.y - barrier.location.y;
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "radius", value: Math.sqrt(dx * dx + dy * dy)});
+      }
+      return;
+    }
+
+    if (tool === "add-circle" && drawingCircle) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const dx = feet.x - drawingCircle.location.x;
+      const dy = feet.y - drawingCircle.location.y;
+      setDrawingCircle((current) => ({...current, radius: Math.sqrt(dx * dx + dy * dy)}));
+      return;
+    }
 
     if (!dragRef.current) return;
     const {startX, startY, startOffset} = dragRef.current;
@@ -179,11 +301,17 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, feet
 
   function handlePointerUp() {
     dragRef.current = null;
+    barrierDragRef.current = null;
+    if (tool === "add-circle" && drawingCircle) commitCircle();
   }
 
   function handlePointerLeave() {
     handlePointerUp();
     setCursorPixel(null);
+  }
+
+  function handleDoubleClick() {
+    if (tool === "add-wall") commitWall();
   }
 
   function handleFileInputChange(e) {
@@ -211,6 +339,22 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, feet
       </div>
       {image && (
         <div className="map-canvas-toolbar-row">
+          <div className="map-toolbar-button-group">
+            <button type="button" className={tool === "select" ? "map-tool-active" : ""} onClick={() => selectTool("select")}>Select</button>
+            <button
+              type="button" className={tool === "add-wall" ? "map-tool-active" : ""}
+              disabled={!canDrawBarriers} onClick={() => selectTool("add-wall")}
+            >
+              Add Wall
+            </button>
+            <button
+              type="button" className={tool === "add-circle" ? "map-tool-active" : ""}
+              disabled={!canDrawBarriers} onClick={() => selectTool("add-circle")}
+            >
+              Add Circle
+            </button>
+          </div>
+          {!canDrawBarriers && <span className="map-canvas-tool-hint">Set feet dimensions to place barriers</span>}
           <label className="map-canvas-replace">
             Replace image
             <input type="file" accept="image/*" onChange={handleFileInputChange} />
@@ -226,6 +370,7 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, feet
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerLeave}
+          onDoubleClick={handleDoubleClick}
         >
           <div
             className="map-canvas-content"
@@ -258,6 +403,44 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, feet
                   </pattern>
                 </defs>
                 <rect width="100%" height="100%" fill="url(#map-canvas-grid-pattern)" />
+              </svg>
+            )}
+            {canDrawBarriers && mapData.barriers.length > 0 && (
+              <BarrierShapes
+                barriers={mapData.barriers}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                tool={tool}
+                selectedIndex={selectedBarrierIndex}
+                onSelect={onSelectBarrier}
+                onStartDragPoint={startDragWallPoint}
+                onStartDragCircleMove={startDragCircleMove}
+                onStartDragCircleResize={startDragCircleResize}
+              />
+            )}
+            {canDrawBarriers && drawingWall && drawingWall.length > 0 && (
+              <svg className="map-canvas-shapes" width={image.pixelDimensions.width} height={image.pixelDimensions.height}>
+                <polyline
+                  points={drawingWall.map((loc) => {
+                    const p = feetToPixel(loc.x, loc.y, image.pixelDimensions, feetDimensions);
+                    return `${p.x},${p.y}`;
+                  }).join(" ")}
+                  fill="none" stroke="#ffde7a" strokeWidth={3} strokeDasharray="6,4"
+                />
+                {drawingWall.map((loc, i) => {
+                  const p = feetToPixel(loc.x, loc.y, image.pixelDimensions, feetDimensions);
+                  return <circle key={i} cx={p.x} cy={p.y} r={4} fill="#ffde7a" />;
+                })}
+              </svg>
+            )}
+            {canDrawBarriers && drawingCircle && drawingCircle.radius > 0 && (
+              <svg className="map-canvas-shapes" width={image.pixelDimensions.width} height={image.pixelDimensions.height}>
+                <circle
+                  cx={feetToPixel(drawingCircle.location.x, drawingCircle.location.y, image.pixelDimensions, feetDimensions).x}
+                  cy={feetToPixel(drawingCircle.location.x, drawingCircle.location.y, image.pixelDimensions, feetDimensions).y}
+                  r={feetSpacingToPixelsX(drawingCircle.radius, image.pixelDimensions, feetDimensions)}
+                  fill="rgba(255,222,122,0.15)" stroke="#ffde7a" strokeWidth={3} strokeDasharray="6,4"
+                />
               </svg>
             )}
           </div>

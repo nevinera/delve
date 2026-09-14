@@ -48,6 +48,9 @@
         padding: 5px 12px; border-radius: 3px; cursor: pointer;
       }
       .map-canvas-toolbar-row button:hover { background: #345; }
+      .map-canvas-toolbar-row button:disabled { opacity: 0.4; cursor: default; }
+      .map-canvas-toolbar-row button.map-tool-active { background: #2a4; border-color: #4c7; color: #efe; }
+      .map-canvas-tool-hint { font-size: 12px; color: #987; }
       .map-canvas-replace { font-size: 12px; color: #9ab; cursor: pointer; }
       .map-canvas-replace input { display: none; }
 
@@ -72,6 +75,12 @@
       /* Same pixel-space box as the image, so its grid lines pan/zoom
          together with it for free via the shared parent's transform. */
       .map-canvas-grid { position: absolute; top: 0; left: 0; pointer-events: none; }
+      /* Same idea, but its shapes DO take pointer events (for select/drag) -
+         the SVG root stays passthrough so empty space still reaches the
+         wrapper underneath for panning/add-tool clicks. */
+      .map-canvas-shapes { position: absolute; top: 0; left: 0; pointer-events: none; }
+      .map-canvas-shapes polyline, .map-canvas-shapes circle { pointer-events: auto; }
+      .map-canvas-shapes circle { cursor: grab; }
 
       .map-canvas-status-bar {
         flex: 0 0 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
@@ -101,6 +110,13 @@
       .map-editor-sidebar-content input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
       .map-fields-dimension-pair { display: flex; align-items: center; gap: 6px; }
       .map-fields-dimension-pair input[type=number] { width: 70px; }
+
+      .map-editor-sidebar-content .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid #2a2f35; border-radius: 4px; cursor: pointer; }
+      .map-editor-sidebar-content .entry-block.map-entry-selected { background: #202832; }
+      .map-editor-sidebar-content .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+      .map-editor-sidebar-content .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
+      .map-editor-sidebar-content button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .map-editor-sidebar-content button.remove-entry:hover { background: #533; }
 
       @media (max-width: 700px) {
         .map-editor { flex-direction: column; }

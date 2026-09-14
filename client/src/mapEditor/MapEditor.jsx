@@ -2,6 +2,7 @@ import {useEffect, useReducer, useState} from "react";
 import MapCanvas from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
+import BarriersPanel from "./BarriersPanel";
 import {mapReducer} from "./mapReducer";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
@@ -22,6 +23,7 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
   const [image, setImage] = useState(() => initialImage(initialImageDataUri, initialPixelDimensions));
   const [imageError, setImageError] = useState("");
   const [mapData, dispatch] = useReducer(mapReducer, initialMap);
+  const [selectedBarrierIndex, setSelectedBarrierIndex] = useState(null);
 
   // pixelDimensions is derived, not authored - keep the draft in sync with
   // whatever image is actually loaded (a freshly uploaded file's natural
@@ -65,11 +67,19 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}
-        feetDimensions={mapData.feetDimensions}
+        mapData={mapData}
+        dispatch={dispatch}
+        selectedBarrierIndex={selectedBarrierIndex}
+        onSelectBarrier={setSelectedBarrierIndex}
       />
       <MapSidebar>
         <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
-        <p className="map-editor-sidebar-placeholder">Barrier, connection, and unit lists will land here.</p>
+        <BarriersPanel
+          barriers={mapData.barriers}
+          selectedIndex={selectedBarrierIndex}
+          onSelect={setSelectedBarrierIndex}
+          dispatch={dispatch}
+        />
       </MapSidebar>
     </div>
   );
