@@ -1,5 +1,5 @@
 class Build::MapsController < Build::BaseController
-  skip_authorization_check only: [:index, :new, :create, :edit]
+  skip_authorization_check only: [:index, :new, :create, :edit, :available_unit_types]
   layout "build_map_client", only: :edit
 
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
@@ -26,6 +26,28 @@ class Build::MapsController < Build::BaseController
   def edit
     load_map
     @initial_image_data_uri = fetch_image_data_uri
+    @available_unit_type_keys = list_unit_type_keys
+    @initial_unit_type_details = unit_type_details_for(map_unit_type_keys)
+  end
+
+  # Two different things depending on `keys[]`, both re-fetchable from the
+  # client without a full page reload (e.g. after creating a new unit type
+  # in another tab, or picking one from the dropdown):
+  #
+  # - no `keys[]`: the *cheap* full list of every unit_types/*.json key (a
+  #   directory listing, not opening any file) - what the placement
+  #   dropdown is built from. With real content potentially holding
+  #   hundreds of unit types for a handful actually used on any one map,
+  #   #edit and this action deliberately do NOT open/parse every file the
+  #   way Build::UnitTypesController#load_available_abilities does -
+  #   that doesn't scale.
+  # - `keys[]` given: {name, tokenRadius, tokenImageUrl} for exactly those
+  #   keys (each *does* open its file, and its token image) - used for
+  #   units already on the map (see #edit's @initial_unit_type_details) and
+  #   lazily for whichever key the author actually picks/places.
+  def available_unit_types
+    keys = Array(params[:keys])
+    render json: keys.present? ? unit_type_details_for(keys) : list_unit_type_keys
   end
 
   private
@@ -84,6 +106,64 @@ class Build::MapsController < Build::BaseController
 
   def resolve_image_path(url)
     Pathname.new("zones").join(params[:id]).join(url).cleanpath.to_s
+  end
+
+  # Every unit_types/*.json key (unit types can nest in subdirectories,
+  # unlike abilities - no depth limit) - just a directory listing, no file
+  # contents opened, so this stays cheap regardless of how many unit types
+  # the repo has.
+  def list_unit_type_keys
+    Github::ContentClient.new(current_user).list_directory_recursive("unit_types")
+      .select { |entry| entry["name"].end_with?(".json") && !entry["name"].end_with?(".full.json") }
+      .map { |entry| entry["path"].delete_prefix("unit_types/").delete_suffix(".json") }
+  end
+
+  # The distinct unitType keys already used by this map's units - what
+  # #edit prefetches full details for, so already-placed units render
+  # their real token immediately without the client needing to ask.
+  def map_unit_type_keys
+    Array(@map["units"]).filter_map { |unit| unit["unitType"] }.uniq
+  end
+
+  # {name, tokenRadius, tokenImageUrl} for exactly the given keys - each
+  # opens that unit type's file (and its token image), unlike
+  # #list_unit_type_keys. A key with no matching/parseable file (deleted or
+  # renamed since a unit referencing it was placed, say) is just omitted,
+  # not an error - the client already falls back gracefully (see
+  # UnitShapes.jsx) for a unitType it has no details for.
+  def unit_type_details_for(keys)
+    client = Github::ContentClient.new(current_user)
+    keys.filter_map { |key| unit_type_detail_pair(client, key) }.to_h
+  end
+
+  def unit_type_detail_pair(client, key)
+    unit_type = JSON.parse(client.file_content("unit_types/#{key}.json"))
+    [key, {name: unit_type["name"], tokenRadius: unit_type["tokenRadius"], tokenImageUrl: unit_type_token_data_uri(client, key, unit_type["tokenImageUrl"])}]
+  rescue Github::ReauthRequiredError
+    raise
+  rescue
+    nil
+  end
+
+  # tokenImageUrl may be a bare string or an array (docs/schema/unit_type.md)
+  # - just the first option is enough for a dropdown/canvas thumbnail. Paths
+  # are relative to the unit type's own file, same convention as
+  # Build::UnitTypesController#fetch_asset_thumbnails.
+  def unit_type_token_data_uri(client, key, token_image_url)
+    url = token_image_url.is_a?(Array) ? token_image_url.first : token_image_url
+    mime_type = url.present? && Build::AbilitiesController::MIME_TYPES[File.extname(url).downcase]
+    return nil unless mime_type
+
+    bytes = client.file_content(resolve_unit_type_asset_path(key, url))
+    "data:#{mime_type};base64,#{Base64.strict_encode64(bytes)}"
+  rescue Github::ReauthRequiredError
+    raise
+  rescue
+    nil
+  end
+
+  def resolve_unit_type_asset_path(key, url)
+    Pathname.new("unit_types").join(File.dirname(key)).join(url).cleanpath.to_s
   end
 
   def blank_map(key)

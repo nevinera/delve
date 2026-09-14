@@ -11,6 +11,10 @@ createRoot(el).render(
       initialImageDataUri={el.dataset.initialImageDataUri || null}
       initialPixelDimensions={el.dataset.initialPixelDimensions ? JSON.parse(el.dataset.initialPixelDimensions) : null}
       backUrl={el.dataset.backUrl}
+      initialAvailableUnitTypeKeys={JSON.parse(el.dataset.availableUnitTypeKeys)}
+      initialUnitTypeDetails={JSON.parse(el.dataset.initialUnitTypeDetails)}
+      newUnitTypeUrl={el.dataset.newUnitTypeUrl}
+      availableUnitTypesUrl={el.dataset.availableUnitTypesUrl}
     />
   </StrictMode>
 );

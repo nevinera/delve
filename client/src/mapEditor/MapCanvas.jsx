@@ -3,6 +3,7 @@ import {pixelToFeet, feetToPixel, feetSpacingToPixelsX, feetSpacingToPixelsY} fr
 import {collectSnapPoints, nearestSnapPoint} from "./mapSnap";
 import BarrierShapes from "./BarrierShapes";
 import ConnectionShapes from "./ConnectionShapes";
+import UnitShapes from "./UnitShapes";
 
 // Connections need a required, zone-unique `identifier` the moment they're
 // created (unlike barriers, which have none) - this picks the first unused
@@ -54,6 +55,8 @@ export default function MapCanvas({
   selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement,
   selectedConnectionIndex, onSelectConnection, hoveredConnectionIndex,
   connectionPlacement, onPlaceConnectionField, onCancelConnectionPlacement,
+  selectedUnitIndex, onSelectUnit, hoveredUnitIndex, pendingUnitType, availableUnitTypes = {},
+  unitPlacement, onPlaceUnitPosition, onCancelUnitPlacement,
   tool = "select", onToolChange,
 }) {
   const wrapperRef = useRef(null);
@@ -79,6 +82,8 @@ export default function MapCanvas({
   const barrierDragRef = useRef(null);
   // {type: "point-move", connectionIndex} | {type: "line-endpoint", connectionIndex, endpoint: "start" | "end"} | null
   const connectionDragRef = useRef(null);
+  // {unitIndex} | null - a unit only ever moves as a whole (no sub-handles).
+  const unitDragRef = useRef(null);
 
   const feetDimensions = mapData.feetDimensions;
   const canDrawBarriers = hasBothAxes(feetDimensions);
@@ -298,6 +303,29 @@ export default function MapCanvas({
     };
   }, [connectionPlacement, onCancelConnectionPlacement]);
 
+  // Same cancellation pattern again, for re-placing a unit's position (see
+  // UnitsPanel's PositionButton).
+  useEffect(() => {
+    if (!unitPlacement) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") onCancelUnitPlacement();
+    }
+
+    function onDocPointerDown(e) {
+      if (wrapperRef.current?.contains(e.target)) return;
+      if (e.target.closest?.(".map-unit-position-btn")) return;
+      onCancelUnitPlacement();
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onDocPointerDown);
+    };
+  }, [unitPlacement, onCancelUnitPlacement]);
+
   function startDragWallPoint(barrierIndex, pointIndex, e) {
     e.stopPropagation();
     onSelectBarrier(barrierIndex);
@@ -331,6 +359,13 @@ export default function MapCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
+  function startDragUnit(unitIndex, e) {
+    e.stopPropagation();
+    onSelectUnit(unitIndex);
+    unitDragRef.current = {unitIndex};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
   function handlePointerDown(e) {
     if (!image) return;
 
@@ -350,6 +385,13 @@ export default function MapCanvas({
         : {kind: "connection-endpoint", connectionIndex, endpoint: field};
       const feet = snapFeet(feetFromClient(e.clientX, e.clientY), exclude, e.shiftKey);
       if (feet) onPlaceConnectionField(feet);
+      return;
+    }
+
+    if (unitPlacement) {
+      // Not snapped - see the "add-unit" tool below for why.
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) onPlaceUnitPosition(feet);
       return;
     }
 
@@ -378,6 +420,20 @@ export default function MapCanvas({
       if (!feet) return;
       setDrawingLine({start: feet, end: feet});
       e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    if (tool === "add-unit") {
+      // Not snapped - a unit's position isn't meant to coincide with a
+      // barrier corner or connection point the way those snap to each other.
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) {
+        dispatch({
+          type: "ADD_ENTRY", section: "units",
+          entry: {unitType: pendingUnitType, position: {x: feet.x, y: feet.y, angle: 0}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
+        });
+      }
+      onToolChange?.("select");
       return;
     }
 
@@ -437,6 +493,15 @@ export default function MapCanvas({
       return;
     }
 
+    if (unitDragRef.current) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const {unitIndex} = unitDragRef.current;
+      const unit = mapData.units[unitIndex];
+      dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "position", value: {...unit.position, x: feet.x, y: feet.y}});
+      return;
+    }
+
     if (tool === "add-circle" && drawingCircle) {
       // The center (set on pointerdown) is already snapped - the radius
       // drag itself traces a circle's edge, not a point to snap.
@@ -481,6 +546,7 @@ export default function MapCanvas({
     dragRef.current = null;
     barrierDragRef.current = null;
     connectionDragRef.current = null;
+    unitDragRef.current = null;
     if (tool === "add-circle" && drawingCircle) commitCircle();
     if (tool === "add-line-connection" && drawingLine) commitLineConnection();
   }
@@ -532,12 +598,13 @@ export default function MapCanvas({
   // "+" buttons, but with no visible change until now) didn't, which made
   // it impossible to tell whether a sidebar click had actually armed
   // anything before the next click on the map.
-  const placingStatusText = placement || connectionPlacement
+  const placingStatusText = placement || connectionPlacement || unitPlacement
     ? "Placing Points"
     : {
       "add-circle": "Placing Circle - drag on the map",
       "add-point-connection": "Placing Point Connection - click the map",
       "add-line-connection": "Placing Line Connection - drag on the map",
+      "add-unit": "Placing Unit - click the map",
     }[tool];
   const isPlacing = !!placingStatusText;
 
@@ -674,6 +741,19 @@ export default function MapCanvas({
                   stroke="#8fe3fa" strokeWidth={3} strokeDasharray="6,4"
                 />
               </svg>
+            )}
+            {canDrawBarriers && mapData.units.length > 0 && (
+              <UnitShapes
+                units={mapData.units}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                tool={tool}
+                availableUnitTypes={availableUnitTypes}
+                selectedIndex={selectedUnitIndex}
+                hoveredIndex={hoveredUnitIndex}
+                onSelect={onSelectUnit}
+                onStartDrag={startDragUnit}
+              />
             )}
           </div>
         </div>

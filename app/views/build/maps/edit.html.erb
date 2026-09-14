@@ -5,4 +5,8 @@
   data-initial-image-data-uri="<%= @initial_image_data_uri %>"
   data-initial-pixel-dimensions="<%= @map["pixelDimensions"]&.to_json %>"
   data-back-url="<%= build_maps_path %>"
+  data-available-unit-type-keys="<%= @available_unit_type_keys.to_json %>"
+  data-initial-unit-type-details="<%= @initial_unit_type_details.to_json %>"
+  data-new-unit-type-url="<%= new_build_unit_type_path %>"
+  data-available-unit-types-url="<%= available_unit_types_build_map_path(id: params[:id]) %>"
 ></div>

@@ -209,6 +209,63 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "+ Add Line Connection"})).not.toBeDisabled();
   });
 
+  it("flows choosing a unit type + '+ Add Unit' into a single canvas click, creating a unit", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialAvailableUnitTypeKeys={["goblin-raider"]}
+        initialUnitTypeDetails={{"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}}
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+    fireEvent.change(screen.getByRole("combobox"), {target: {value: "goblin-raider"}});
+    fireEvent.click(screen.getByRole("button", {name: "+ Add Unit"}));
+
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+
+    expect(screen.getByText(/Unit 1: Goblin Raider/)).toBeInTheDocument();
+    // Single-shot - the tool reverted to "select", so the button's enabled
+    // again (the dropdown's own choice isn't cleared by placing one).
+    expect(screen.getByRole("button", {name: "+ Add Unit"})).not.toBeDisabled();
+  });
+
+  it("flows a click on a unit's position pill into re-placing it via a map click", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{
+          ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+          units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
+        }}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialAvailableUnitTypeKeys={["goblin-raider"]}
+        initialUnitTypeDetails={{"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}}
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+    fireEvent.click(screen.getByRole("button", {name: "0, 0"})); // the position pill
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
+
+    fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+
+    expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
+  });
+
   it("flows a coordinate pill click in the sidebar into re-placing an existing point connection", () => {
     render(
       <MapEditor
@@ -345,5 +402,67 @@ describe("MapEditor", () => {
     expect(document.querySelectorAll(".map-point-pill").length).toBe(2);
     expect(document.querySelectorAll(".map-point-pill")[1]).toHaveTextContent("0, 60");
     expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
+  });
+
+  describe("refreshing available unit types", () => {
+    beforeEach(() => {
+      global.fetch = vi.fn();
+    });
+
+    it("adds a newly-fetched unit type key to the dropdown without a page reload", async () => {
+      // The key list is cheap (no per-file fetch, see
+      // Build::MapsController#list_unit_type_keys) - it shows up by its raw
+      // key until actually chosen, not a friendly name yet.
+      global.fetch.mockResolvedValue({ok: true, json: () => Promise.resolve(["goblin-raider"])});
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP}
+          initialAvailableUnitTypeKeys={[]} availableUnitTypesUrl="/build/maps/goblin-cave/gc1-entrance/available_unit_types"
+        />
+      );
+
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      expect(screen.queryByRole("option", {name: "goblin-raider"})).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
+      await waitFor(() => expect(screen.getByText("Refreshed.")).toBeInTheDocument());
+
+      expect(screen.getByRole("option", {name: "goblin-raider"})).toBeInTheDocument();
+    });
+
+    it("shows an error message when the refresh request fails", async () => {
+      global.fetch.mockResolvedValue({ok: false, status: 500});
+      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} initialAvailableUnitTypeKeys={[]} />);
+
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
+
+      await waitFor(() => expect(screen.getByText(/Refresh failed/)).toBeInTheDocument());
+    });
+  });
+
+  describe("lazily loading unit type details", () => {
+    it("fetches a unit type's details only once it's actually chosen in the dropdown", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}),
+      });
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP}
+          initialAvailableUnitTypeKeys={["goblin-raider"]} initialUnitTypeDetails={{}}
+          availableUnitTypesUrl="/build/maps/goblin-cave/gc1-entrance/available_unit_types"
+        />
+      );
+
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      expect(fetch).not.toHaveBeenCalled();
+      expect(screen.getByRole("option", {name: "goblin-raider"})).toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole("combobox"), {target: {value: "goblin-raider"}});
+
+      expect(fetch).toHaveBeenCalledWith(expect.stringContaining("keys[]=goblin-raider"));
+      await waitFor(() => expect(screen.getByRole("option", {name: "Goblin Raider"})).toBeInTheDocument());
+    });
   });
 });

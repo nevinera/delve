@@ -127,9 +127,18 @@ RSpec.describe "Build::Maps", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
+        # #edit also loads the available-unit-types list for the unit
+        # placement dropdown (see Build::MapsController#load_available_unit_types) -
+        # stub an empty directory for tests that aren't exercising that.
+        def stub_empty_unit_types_dir
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
+            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+        end
+
         it "renders the JS editor shell for a map that doesn't exist in the repo yet" do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc2-interior/gc2-interior.json")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+          stub_empty_unit_types_dir
 
           get "/build/maps/goblin-cave/gc2-interior/edit"
 
@@ -161,6 +170,7 @@ RSpec.describe "Build::Maps", type: :request do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc1-entrance/gc1-entrance.webp")
             .with(headers: {"Accept" => "application/vnd.github.raw+json"})
             .to_return(status: 200, headers: {"Content-Type" => "image/webp"}, body: "fake-webp-bytes")
+          stub_empty_unit_types_dir
 
           get "/build/maps/goblin-cave/gc1-entrance/edit"
 
@@ -168,6 +178,88 @@ RSpec.describe "Build::Maps", type: :request do
           expected_data_uri = "data:image/webp;base64,#{Base64.strict_encode64("fake-webp-bytes")}"
           expect(response.body).to include(CGI.escapeHTML(expected_data_uri))
           expect(response.body).to include(CGI.escapeHTML({"width" => 2048, "height" => 1536}.to_json))
+        end
+      end
+    end
+
+    describe "GET /build/maps/:id/available_unit_types" do
+      context "with a connected repository" do
+        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+        it "without keys[], returns just the cheap key list - no unit type file is opened" do
+          # Deliberately stubs *only* the directory listing - if the
+          # controller opened any file to build this list (the way
+          # Build::UnitTypesController#load_available_abilities does for
+          # abilities), WebMock would raise on the unstubbed request and
+          # fail this test. That's the point: a repo with hundreds of unit
+          # types must stay cheap to list.
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [
+                {name: "goblin-raider.json", path: "unit_types/goblin-raider.json", type: "file"},
+                {name: "slime.json", path: "unit_types/slime.json", type: "file"}
+              ].to_json
+            )
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_unit_types"
+
+          expect(response).to have_http_status(:ok)
+          expect(JSON.parse(response.body)).to contain_exactly("goblin-raider", "slime")
+        end
+
+        it "with keys[], returns resolved details (including a token thumbnail) for exactly those keys" do
+          goblin = {"name" => "Goblin Raider", "tokenRadius" => 2.5, "tokenImageUrl" => ["../assets/tokens/goblin.webp", "../assets/tokens/goblin2.webp"]}
+          slime = {"name" => "Slime", "tokenRadius" => 1.5, "tokenImageUrl" => nil}
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-raider.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(goblin.to_json), encoding: "base64"}.to_json)
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/slime.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(slime.to_json), encoding: "base64"}.to_json)
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/assets/tokens/goblin.webp")
+            .with(headers: {"Accept" => "application/vnd.github+json"})
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64("goblin-bytes"), encoding: "base64"}.to_json)
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_unit_types", params: {keys: ["goblin-raider", "slime"]}
+
+          expect(response).to have_http_status(:ok)
+          json = JSON.parse(response.body)
+          expect(json.keys).to contain_exactly("goblin-raider", "slime")
+          expect(json["goblin-raider"]["name"]).to eq("Goblin Raider")
+          expect(json["goblin-raider"]["tokenRadius"]).to eq(2.5)
+          expect(json["goblin-raider"]["tokenImageUrl"]).to eq("data:image/webp;base64,#{Base64.strict_encode64("goblin-bytes")}")
+          expect(json["slime"]["tokenRadius"]).to eq(1.5)
+          expect(json["slime"]["tokenImageUrl"]).to be_nil
+        end
+
+        it "with keys[], resolves a nested unit type's token relative to its own file" do
+          shaman = {"name" => "Goblin Shaman", "tokenRadius" => 2.0, "tokenImageUrl" => "../../tokens/unit/goblin-shaman.webp"}
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblins/goblin-shaman.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(shaman.to_json), encoding: "base64"}.to_json)
+          # "unit_types/goblins/goblin-shaman.json" resolving "../../tokens/unit/goblin-shaman.webp"
+          # relative to its own directory ("unit_types/goblins") lands on "tokens/unit/goblin-shaman.webp" -
+          # one "../" to leave unit_types/goblins/, a second to leave unit_types/ itself.
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/tokens/unit/goblin-shaman.webp")
+            .with(headers: {"Accept" => "application/vnd.github+json"})
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64("shaman-bytes"), encoding: "base64"}.to_json)
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_unit_types", params: {keys: ["goblins/goblin-shaman"]}
+
+          expect(response).to have_http_status(:ok)
+          json = JSON.parse(response.body)
+          expect(json.keys).to contain_exactly("goblins/goblin-shaman")
+          expect(json["goblins/goblin-shaman"]["name"]).to eq("Goblin Shaman")
+          expect(json["goblins/goblin-shaman"]["tokenImageUrl"]).to eq("data:image/webp;base64,#{Base64.strict_encode64("shaman-bytes")}")
+        end
+
+        it "with keys[], omits a key whose file no longer exists rather than erroring" do
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/deleted-type.json")
+            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_unit_types", params: {keys: ["deleted-type"]}
+
+          expect(response).to have_http_status(:ok)
+          expect(JSON.parse(response.body)).to eq({})
         end
       end
     end

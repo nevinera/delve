@@ -5,7 +5,7 @@ import MapCanvas from "../MapCanvas";
 const IMAGE = {url: "blob:fake", pixelDimensions: {width: 800, height: 600}};
 
 function mapData(overrides = {}) {
-  return {barriers: [], connections: [], feetDimensions: null, ...overrides};
+  return {barriers: [], connections: [], units: [], feetDimensions: null, ...overrides};
 }
 
 function content() {
@@ -689,6 +689,227 @@ describe("MapCanvas", () => {
       expect(call.value.x).toBeCloseTo(10, 5);
       expect(call.value.y).toBeCloseTo(5, 5);
       expect(call.value.angle).toBe(180);
+    });
+  });
+
+  describe("units (slice 5)", () => {
+    const FEET_DIMENSIONS = {width: 160, height: 120}; // 800px/160ft = 5px/ft, 600px/120ft = 5px/ft
+
+    function fitToImageSize() {
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+    }
+
+    it("places a unit on a single click with the pending unit type, then reverts the tool to select", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-unit" pendingUnitType="goblin-raider" onToolChange={onToolChange}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY", section: "units",
+        entry: {unitType: "goblin-raider", position: {x: 10, y: 120, angle: 0}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
+      });
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("does not snap unit placement to a nearby barrier point", () => {
+      const dispatch = vi.fn();
+      const barriers = [{type: "wall", locations: [{x: 10, y: 120}, {x: 20, y: 120}]}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-unit" pendingUnitType="goblin-raider" onToolChange={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      // 1ft from the barrier point (10,120) - would snap for a barrier/connection, but not a unit.
+      fireEvent.pointerDown(wrapper, {clientX: 55, clientY: 0});
+
+      expect(dispatch.mock.calls[0][0].entry.position).toEqual({x: 11, y: 120, angle: 0});
+    });
+
+    it("selects an existing unit by clicking its marker, and shows drag handles via selection", () => {
+      const onSelectUnit = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          selectedUnitIndex={0} onSelectUnit={onSelectUnit}
+        />
+      );
+
+      const marker = document.querySelector(".map-canvas-shapes circle");
+      fireEvent.pointerDown(marker);
+
+      expect(onSelectUnit).toHaveBeenCalledWith(0);
+    });
+
+    it("dragging a unit's marker moves its position, keeping its facing angle", () => {
+      const dispatch = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 90}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={dispatch} onSelectBarrier={noop}
+          selectedUnitIndex={0} onSelectUnit={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const marker = document.querySelector(".map-canvas-shapes circle"); // (5,5)ft -> (25,575)px
+
+      fireEvent.pointerDown(marker, {pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 575, pointerId: 1});
+
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      const call = dispatch.mock.calls[0][0];
+      expect(call).toMatchObject({type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "position"});
+      expect(call.value.x).toBeCloseTo(10, 5);
+      expect(call.value.y).toBeCloseTo(5, 5);
+      expect(call.value.angle).toBe(90);
+    });
+
+    it("renders a unit's real token image, circularly clipped and sized to its unit type's tokenRadius", () => {
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 10, y: 60, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      const availableUnitTypes = {"goblin-raider": {name: "Goblin Raider", tokenRadius: 3, tokenImageUrl: "data:image/webp;base64,AAAA"}};
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop} availableUnitTypes={availableUnitTypes}
+        />
+      );
+
+      // (10,60)ft -> (50,300)px at 5px/ft; tokenRadius 3ft -> 15px.
+      const image = document.querySelector(".map-canvas-shapes image");
+      expect(image).toHaveAttribute("href", "data:image/webp;base64,AAAA");
+      expect(image).toHaveAttribute("x", "35"); // 50 - 15
+      expect(image).toHaveAttribute("y", "285"); // 300 - 15
+      expect(image).toHaveAttribute("width", "30");
+      expect(image).toHaveAttribute("height", "30");
+    });
+
+    it("falls back to a plain hostility-colored circle when the unit type has no tokenImageUrl", () => {
+      const units = [{unitType: "slime", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      const availableUnitTypes = {slime: {name: "Slime", tokenRadius: 2, tokenImageUrl: null}};
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop} availableUnitTypes={availableUnitTypes}
+        />
+      );
+
+      expect(document.querySelector(".map-canvas-shapes image")).not.toBeInTheDocument();
+      expect(document.querySelector(".map-canvas-shapes circle")).toBeInTheDocument();
+    });
+  });
+
+  describe("unit position re-placement (from UnitsPanel's PositionButton)", () => {
+    const FEET_DIMENSIONS = {width: 160, height: 120}; // 5px/ft both axes
+
+    function fitToImageSize() {
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+    }
+
+    it("shows the 'Placing Points' status and crosshair cursor while a unit's position is being placed", () => {
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop}
+          unitPlacement={{unitIndex: 0}} onPlaceUnitPosition={noop} onCancelUnitPlacement={noop}
+        />
+      );
+
+      expect(screen.getByText("Placing Points")).toBeInTheDocument();
+      expect(document.querySelector(".map-canvas-wrapper")).toHaveClass("map-canvas-wrapper-placing");
+    });
+
+    it("clicking the map updates a unit's position, keeping its facing angle, then exits placement", () => {
+      const dispatch = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 45}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={dispatch} onSelectBarrier={noop}
+          unitPlacement={{unitIndex: 0}}
+          onPlaceUnitPosition={(feet) => dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "position", value: {...units[0].position, ...feet}})}
+          onCancelUnitPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "position", value: {x: 10, y: 120, angle: 45},
+      });
+    });
+
+    it("does not snap unit re-placement, takes priority over the current tool, and does not pan", () => {
+      const onPlaceUnitPosition = vi.fn();
+      const dispatch = vi.fn();
+      const barriers = [{type: "wall", locations: [{x: 10, y: 120}, {x: 20, y: 120}]}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-circle" onToolChange={noop}
+          unitPlacement={{unitIndex: 0}} onPlaceUnitPosition={onPlaceUnitPosition} onCancelUnitPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const contentBefore = document.querySelector(".map-canvas-content").style.transform;
+
+      // 1ft from the barrier point (10,120) - would snap for a barrier, but not a unit.
+      fireEvent.pointerDown(wrapper, {clientX: 55, clientY: 0});
+      fireEvent.pointerMove(wrapper, {clientX: 100, clientY: 100});
+
+      expect(onPlaceUnitPosition).toHaveBeenCalledWith({x: 11, y: 120});
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(document.querySelector(".map-canvas-content").style.transform).toBe(contentBefore);
+    });
+
+    it("cancels on Escape, and on a click outside the map but not on the position pill", () => {
+      const onCancelUnitPlacement = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          unitPlacement={{unitIndex: 0}} onPlaceUnitPosition={noop} onCancelUnitPlacement={onCancelUnitPlacement}
+        />
+      );
+
+      fireEvent.keyDown(document, {key: "Escape"});
+      expect(onCancelUnitPlacement).toHaveBeenCalledTimes(1);
+
+      const pillButton = document.createElement("button");
+      pillButton.className = "map-unit-position-btn";
+      document.body.appendChild(pillButton);
+      fireEvent.pointerDown(pillButton);
+      expect(onCancelUnitPlacement).toHaveBeenCalledTimes(1);
+
+      fireEvent.pointerDown(document.body);
+      expect(onCancelUnitPlacement).toHaveBeenCalledTimes(2);
+
+      document.body.removeChild(pillButton);
     });
   });
 

@@ -4,6 +4,7 @@ import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
+import UnitsPanel from "./UnitsPanel";
 import {mapReducer} from "./mapReducer";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
@@ -20,7 +21,10 @@ function initialImage(initialImageDataUri, initialPixelDimensions) {
   return {file: null, url: initialImageDataUri, pixelDimensions: initialPixelDimensions};
 }
 
-export default function MapEditor({mapKey, initialMap, initialImageDataUri, initialPixelDimensions, backUrl}) {
+export default function MapEditor({
+  mapKey, initialMap, initialImageDataUri, initialPixelDimensions, backUrl,
+  initialAvailableUnitTypeKeys, initialUnitTypeDetails, newUnitTypeUrl, availableUnitTypesUrl,
+}) {
   const [image, setImage] = useState(() => initialImage(initialImageDataUri, initialPixelDimensions));
   const [imageError, setImageError] = useState("");
   const [mapData, dispatch] = useReducer(mapReducer, initialMap);
@@ -36,15 +40,31 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
   const [selectedConnectionIndex, setSelectedConnectionIndex] = useState(null);
   const [hoveredConnectionIndex, setHoveredConnectionIndex] = useState(null);
   const [connectionPlacement, setConnectionPlacement] = useState(null); // {connectionIndex, field: "position" | "start" | "end"} | null
-  // "select" | "add-circle" | "add-point-connection" | "add-line-connection" - see MapCanvas/BarriersPanel/ConnectionsPanel
+  const [selectedUnitIndex, setSelectedUnitIndex] = useState(null);
+  const [hoveredUnitIndex, setHoveredUnitIndex] = useState(null);
+  const [pendingUnitType, setPendingUnitType] = useState(null); // the unitType key armed for "add-unit" (see startAddUnit)
+  const [unitPlacement, setUnitPlacement] = useState(null); // {unitIndex} | null - re-placing an existing unit's position
+  // The full list of unit_types/*.json keys (cheap - a directory listing,
+  // see Build::MapsController#list_unit_type_keys) vs. {name, tokenRadius,
+  // tokenImageUrl} for just the keys actually needed so far (units already
+  // on the map, plus whichever key the author has picked/placed since) -
+  // kept separate so the dropdown/tool never has to open every unit type
+  // file just to list them, which doesn't scale (a repo can hold far more
+  // unit types than any one map uses).
+  const [availableUnitTypeKeys, setAvailableUnitTypeKeys] = useState(initialAvailableUnitTypeKeys ?? []);
+  const [unitTypeDetails, setUnitTypeDetails] = useState(initialUnitTypeDetails ?? {});
+  const [unitTypesRefreshStatus, setUnitTypesRefreshStatus] = useState("");
+  // "select" | "add-circle" | "add-point-connection" | "add-line-connection" | "add-unit" - see MapCanvas/BarriersPanel/ConnectionsPanel/UnitsPanel
   const [tool, setTool] = useState("select");
   const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
 
-  // At most one of {wall-point placement, connection-field placement, an
-  // armed add-tool} is ever active - starting one cancels the others,
-  // rather than every trigger needing to know about every other mode.
+  // At most one of {wall-point placement, connection-field placement,
+  // unit-position placement, an armed add-tool} is ever active - starting
+  // one cancels the others, rather than every trigger needing to know
+  // about every other mode.
   function startBarrierPlacement(barrierIndex, pointIndex, mode = "insert") {
     setConnectionPlacement(null);
+    setUnitPlacement(null);
     setTool("select");
     setPlacement({barrierIndex, pointIndex, mode});
   }
@@ -55,15 +75,80 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
 
   function startConnectionFieldPlacement(connectionIndex, field) {
     setPlacement(null);
+    setUnitPlacement(null);
     setTool("select");
     setConnectionPlacement({connectionIndex, field});
+  }
+
+  function startUnitPlacement(unitIndex) {
+    setPlacement(null);
+    setConnectionPlacement(null);
+    setTool("select");
+    setUnitPlacement({unitIndex});
   }
 
   function startTool(nextTool) {
     setPlacement(null);
     setConnectionPlacement(null);
+    setUnitPlacement(null);
     setTool(nextTool);
   }
+
+  function startAddUnit(unitTypeKey) {
+    setPendingUnitType(unitTypeKey);
+    requestUnitTypeDetails(unitTypeKey);
+    startTool("add-unit");
+  }
+
+  // Lets a unit type created in another tab (via "+ New Unit Type") show up
+  // in the dropdown here without reloading the whole editor and losing the
+  // draft - same pattern as UnitTypeEditor's handleRefreshAbilities, but
+  // only re-fetches the (cheap) key list, not every unit type's details.
+  async function handleRefreshUnitTypes() {
+    setUnitTypesRefreshStatus("Refreshing…");
+    try {
+      const res = await fetch(availableUnitTypesUrl);
+      if (!res.ok) throw new Error(`request failed: ${res.status}`);
+      setAvailableUnitTypeKeys(await res.json());
+      setUnitTypesRefreshStatus("Refreshed.");
+    } catch (error) {
+      setUnitTypesRefreshStatus(`Refresh failed: ${error.message}`);
+    }
+  }
+
+  // Fetches {name, tokenRadius, tokenImageUrl} for exactly the given keys
+  // (skipping ones already cached) and merges them in - best-effort, since
+  // a unit type that fails to resolve just keeps using UnitShapes' default
+  // fallback marker rather than needing to surface an error here.
+  async function fetchUnitTypeDetails(keys) {
+    const missing = keys.filter((key) => !(key in unitTypeDetails));
+    if (!availableUnitTypesUrl || missing.length === 0) return;
+    try {
+      const query = missing.map((key) => `keys[]=${encodeURIComponent(key)}`).join("&");
+      const res = await fetch(`${availableUnitTypesUrl}?${query}`);
+      if (!res.ok) return;
+      const details = await res.json();
+      setUnitTypeDetails((current) => ({...current, ...details}));
+    } catch {
+      // best-effort, see above
+    }
+  }
+
+  function requestUnitTypeDetails(key) {
+    if (key) fetchUnitTypeDetails([key]);
+  }
+
+  // Covers units already on the map whose type wasn't prefetched by #edit
+  // (e.g. one this session just placed, or a map loaded without a full
+  // server round-trip in a test) - requestUnitTypeDetails at placement time
+  // handles the common case already, this is the backstop.
+  useEffect(() => {
+    const usedKeys = [...new Set(mapData.units.map((unit) => unit.unitType).filter(Boolean))];
+    fetchUnitTypeDetails(usedKeys);
+    // fetchUnitTypeDetails reads the latest unitTypeDetails/availableUnitTypesUrl
+    // via closure each call; only re-run when the actual set of unitTypes in use changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapData.units]);
 
   // "insert" mode splices the clicked feet position in at pointIndex, then
   // advances to the gap right after it - a run of map clicks lays down
@@ -99,6 +184,15 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
       dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field, value: feet});
     }
     setConnectionPlacement(null);
+  }
+
+  // Single-shot, like placeConnectionField above - keeps the unit's facing
+  // angle, only replaces x/y.
+  function placeUnitPosition(feet) {
+    const {unitIndex} = unitPlacement;
+    const current = mapData.units[unitIndex].position;
+    dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "position", value: {...current, x: feet.x, y: feet.y}});
+    setUnitPlacement(null);
   }
 
   // pixelDimensions is derived, not authored - keep the draft in sync with
@@ -158,6 +252,14 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
         connectionPlacement={connectionPlacement}
         onPlaceConnectionField={placeConnectionField}
         onCancelConnectionPlacement={() => setConnectionPlacement(null)}
+        selectedUnitIndex={selectedUnitIndex}
+        onSelectUnit={setSelectedUnitIndex}
+        hoveredUnitIndex={hoveredUnitIndex}
+        pendingUnitType={pendingUnitType}
+        availableUnitTypes={unitTypeDetails}
+        unitPlacement={unitPlacement}
+        onPlaceUnitPosition={placeUnitPosition}
+        onCancelUnitPlacement={() => setUnitPlacement(null)}
         tool={tool}
         onToolChange={setTool}
       />
@@ -190,6 +292,26 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
           onStartConnectionPlacement={startConnectionFieldPlacement}
           onStartAddPointConnection={() => startTool("add-point-connection")}
           onStartAddLineConnection={() => startTool("add-line-connection")}
+          dispatch={dispatch}
+        />
+        <UnitsPanel
+          units={mapData.units}
+          selectedIndex={selectedUnitIndex}
+          onSelect={setSelectedUnitIndex}
+          onHover={setHoveredUnitIndex}
+          availableUnitTypeKeys={availableUnitTypeKeys}
+          unitTypeDetails={unitTypeDetails}
+          onChooseUnitType={requestUnitTypeDetails}
+          newUnitTypeUrl={newUnitTypeUrl}
+          onRefreshUnitTypes={handleRefreshUnitTypes}
+          refreshStatus={unitTypesRefreshStatus}
+          tool={tool}
+          placement={placement}
+          canPlaceOnMap={canPlaceOnMap}
+          pendingUnitType={pendingUnitType}
+          onStartAddUnit={startAddUnit}
+          unitPlacement={unitPlacement}
+          onStartUnitPlacement={startUnitPlacement}
           dispatch={dispatch}
         />
       </MapSidebar>
