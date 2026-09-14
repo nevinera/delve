@@ -48,6 +48,17 @@ RSpec.describe Validators::UnitValidator, type: :validator do
       expect { described_class.validate!(data) }.not_to raise_error
     end
 
+    it "accepts a groupIdentifier" do
+      data = still_unit.merge("groupIdentifier" => "goblin_pack")
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when groupIdentifier is not a string" do
+      data = still_unit.merge("groupIdentifier" => 3)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /groupIdentifier must be a string/)
+    end
+
     it "raises when position angle is out of range" do
       data = still_unit.merge("position" => still_unit["position"].merge("angle" => 400.0))
       expect { described_class.validate!(data) }

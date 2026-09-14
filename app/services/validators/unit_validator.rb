@@ -10,6 +10,7 @@ module Validators
       validate_hp_fraction!(data, path: path) if given?(data, "currentHpFraction")
       validate_movement!(data["movement"], path: child_path(path, "movement")) if given?(data, "movement")
       validate_links!(data, path: path) if given?(data, "links")
+      validate_group_identifier!(data, path: path) if given?(data, "groupIdentifier")
     end
 
     private
@@ -34,6 +35,13 @@ module Validators
       links.each_with_index do |link, i|
         raise ValidationError.new("link must be a string", path: index_path(child_path(path, "links"), i)) unless link.is_a?(String)
       end
+    end
+
+    # Editor-only - see docs/schema/unit.md. The game server never reads
+    # this; only `links` determines grouping at runtime.
+    def validate_group_identifier!(data, path:)
+      group_identifier = data["groupIdentifier"]
+      raise ValidationError.new("groupIdentifier must be a string", path: child_path(path, "groupIdentifier")) unless group_identifier.is_a?(String)
     end
 
     def validate_movement!(data, path:)
