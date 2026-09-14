@@ -5,7 +5,7 @@ import MapCanvas from "../MapCanvas";
 const IMAGE = {url: "blob:fake", pixelDimensions: {width: 800, height: 600}};
 
 function mapData(overrides = {}) {
-  return {barriers: [], feetDimensions: null, ...overrides};
+  return {barriers: [], connections: [], feetDimensions: null, ...overrides};
 }
 
 function content() {
@@ -531,6 +531,164 @@ describe("MapCanvas", () => {
       expect(call.value.x).toBeCloseTo(10, 5);
       expect(call.value.y).toBeCloseTo(5, 5);
       expect(transformParts().x).toBeCloseTo(base.x, 5);
+    });
+  });
+
+  describe("connections (slice 4)", () => {
+    const FEET_DIMENSIONS = {width: 160, height: 120}; // 800px/160ft = 5px/ft, 600px/120ft = 5px/ft
+
+    function fitToImageSize() {
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+    }
+
+    it("places a point connection on a single click, then reverts the tool to select", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-point-connection" onToolChange={onToolChange}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY", section: "connections",
+        entry: {identifier: "connection-1", type: "point", position: {x: 10, y: 120, angle: 0}, fuzzRadius: 2, fuzzAngle: 90},
+      });
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("picks the first unused connection-N identifier", () => {
+      const dispatch = vi.fn();
+      const connections = [{identifier: "connection-1", type: "point", position: {x: 0, y: 0, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, connections})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-point-connection" onToolChange={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+
+      expect(dispatch.mock.calls[0][0].entry.identifier).toBe("connection-2");
+    });
+
+    it("draws a line connection by dragging start to end, committing on pointer up, then reverts the tool", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-line-connection" onToolChange={onToolChange}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1}); // (0, 0)px -> (0, 120)ft
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 0, pointerId: 1}); // (50, 0)px -> (10, 120)ft
+      fireEvent.pointerUp(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY", section: "connections",
+        entry: {identifier: "connection-1", type: "line", start: {x: 0, y: 120}, end: {x: 10, y: 120}},
+      });
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("does not commit a zero-length line (an accidental click), but still reverts the tool", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-line-connection" onToolChange={onToolChange}
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("selects an existing line connection by clicking it, and shows endpoint drag handles", () => {
+      const onSelectConnection = vi.fn();
+      const connections = [{identifier: "a", type: "line", start: {x: 0, y: 0}, end: {x: 10, y: 0}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, connections})}
+          dispatch={noop} onSelectBarrier={noop}
+          selectedConnectionIndex={0} onSelectConnection={onSelectConnection}
+        />
+      );
+
+      const line = document.querySelector(".map-canvas-shapes line");
+      fireEvent.pointerDown(line);
+      expect(onSelectConnection).toHaveBeenCalledWith(0);
+
+      expect(document.querySelectorAll(".map-canvas-shapes circle").length).toBe(2);
+    });
+
+    it("dragging a line connection's endpoint handle updates just that end", () => {
+      const dispatch = vi.fn();
+      const connections = [{identifier: "a", type: "line", start: {x: 0, y: 0}, end: {x: 10, y: 0}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, connections})}
+          dispatch={dispatch} onSelectBarrier={noop}
+          selectedConnectionIndex={0} onSelectConnection={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const handle = document.querySelectorAll(".map-canvas-shapes circle")[0]; // start handle: (0,0)ft -> (0,600)px
+
+      fireEvent.pointerDown(handle, {pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 25, clientY: 600, pointerId: 1});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "connections", index: 0, field: "start", value: {x: 5, y: 0},
+      });
+    });
+
+    it("dragging a point connection's marker moves its position, keeping its facing angle", () => {
+      const dispatch = vi.fn();
+      const connections = [{identifier: "a", type: "point", position: {x: 5, y: 5, angle: 180}, fuzzRadius: 2, fuzzAngle: 90}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, connections})}
+          dispatch={dispatch} onSelectBarrier={noop}
+          selectedConnectionIndex={0} onSelectConnection={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const marker = document.querySelector(".map-canvas-shapes circle"); // (5,5)ft -> (25,575)px
+
+      fireEvent.pointerDown(marker, {pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 575, pointerId: 1});
+
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      const call = dispatch.mock.calls[0][0];
+      expect(call).toMatchObject({type: "UPDATE_ENTRY_FIELD", section: "connections", index: 0, field: "position"});
+      expect(call.value.x).toBeCloseTo(10, 5);
+      expect(call.value.y).toBeCloseTo(5, 5);
+      expect(call.value.angle).toBe(180);
     });
   });
 

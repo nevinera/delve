@@ -3,6 +3,7 @@ import MapCanvas from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
+import ConnectionsPanel from "./ConnectionsPanel";
 import {mapReducer} from "./mapReducer";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
@@ -27,7 +28,10 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
   const [hoveredBarrierIndex, setHoveredBarrierIndex] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null); // {barrierIndex, pointIndex} | null
   const [placement, setPlacement] = useState(null); // {barrierIndex, insertIndex} | null - see MapCanvas/BarriersPanel
-  const [tool, setTool] = useState("select"); // "select" | "add-circle" - see MapCanvas/BarriersPanel
+  const [selectedConnectionIndex, setSelectedConnectionIndex] = useState(null);
+  const [hoveredConnectionIndex, setHoveredConnectionIndex] = useState(null);
+  // "select" | "add-circle" | "add-point-connection" | "add-line-connection" - see MapCanvas/BarriersPanel/ConnectionsPanel
+  const [tool, setTool] = useState("select");
 
   // Inserts the clicked feet position into the placement's barrier/index,
   // then advances to the gap right after it - a run of map clicks lays
@@ -93,6 +97,9 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
         placement={placement}
         onPlacePoint={placePoint}
         onCancelPlacement={() => setPlacement(null)}
+        selectedConnectionIndex={selectedConnectionIndex}
+        onSelectConnection={setSelectedConnectionIndex}
+        hoveredConnectionIndex={hoveredConnectionIndex}
         tool={tool}
         onToolChange={setTool}
       />
@@ -108,6 +115,17 @@ export default function MapEditor({mapKey, initialMap, initialImageDataUri, init
           onStartPlacement={(barrierIndex, insertIndex) => setPlacement({barrierIndex, insertIndex})}
           tool={tool}
           onStartAddCircle={() => setTool("add-circle")}
+          dispatch={dispatch}
+        />
+        <ConnectionsPanel
+          connections={mapData.connections}
+          selectedIndex={selectedConnectionIndex}
+          onSelect={setSelectedConnectionIndex}
+          onHover={setHoveredConnectionIndex}
+          tool={tool}
+          placement={placement}
+          onStartAddPointConnection={() => setTool("add-point-connection")}
+          onStartAddLineConnection={() => setTool("add-line-connection")}
           dispatch={dispatch}
         />
       </MapSidebar>

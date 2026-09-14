@@ -1,6 +1,18 @@
 import {useEffect, useRef, useState} from "react";
 import {pixelToFeet, feetToPixel, feetSpacingToPixelsX, feetSpacingToPixelsY} from "./mapCoords";
 import BarrierShapes from "./BarrierShapes";
+import ConnectionShapes from "./ConnectionShapes";
+
+// Connections need a required, zone-unique `identifier` the moment they're
+// created (unlike barriers, which have none) - this picks the first unused
+// "connection-N" rather than leaving it blank, so a freshly placed
+// connection is already valid; the author can rename it in the sidebar.
+function nextConnectionIdentifier(connections) {
+  const existing = new Set(connections.map((c) => c.identifier));
+  let n = connections.length + 1;
+  while (existing.has(`connection-${n}`)) n++;
+  return `connection-${n}`;
+}
 
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 4;
@@ -36,18 +48,26 @@ function clampZoom(zoom) {
 // of a canvas tool-mode row - "add-circle" is still a tool this component
 // tracks (a drag on the map sets a circle's center/radius), but it's
 // entered externally via the `tool`/`onToolChange` props, not a button here.
-export default function MapCanvas({image, imageError, onImageFile, backUrl, mapData, dispatch, selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement, tool = "select", onToolChange}) {
+export default function MapCanvas({
+  image, imageError, onImageFile, backUrl, mapData, dispatch,
+  selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement,
+  selectedConnectionIndex, onSelectConnection, hoveredConnectionIndex,
+  tool = "select", onToolChange,
+}) {
   const wrapperRef = useRef(null);
   const replaceInputRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({x: 0, y: 0});
   const [cursorPixel, setCursorPixel] = useState(null); // {x, y} in content (image) pixel space, or null off-canvas
-  // "select" (the default - drag/select existing shapes) or "add-circle"
-  // (a single-shot mode entered via BarriersPanel's "+ Add Circle" button -
-  // the next drag on the map sets its center/radius, then it reverts back
-  // to "select" on its own). Walls no longer have a canvas draw-tool - see
-  // BarriersPanel's pill-based placement instead.
+  // "select" (the default - drag/select existing shapes) or a single-shot
+  // add-tool entered externally via the `tool`/`onToolChange` props (see
+  // BarriersPanel/ConnectionsPanel's "+" buttons): "add-circle",
+  // "add-point-connection", "add-line-connection". Each reverts back to
+  // "select" on its own once it's placed one thing (or been cancelled).
+  // Walls don't have a canvas draw-tool - see BarriersPanel's pill-based
+  // placement instead.
   const [drawingCircle, setDrawingCircle] = useState(null); // {location: {x, y}, radius} while add-circle is in progress
+  const [drawingLine, setDrawingLine] = useState(null); // {start: {x, y}, end: {x, y}} while add-line-connection is in progress
   const dragRef = useRef(null); // {startX, startY, startOffset} while a pan drag is in progress
   const panRafRef = useRef(null); // pending requestAnimationFrame id, or null
   const pendingOffsetRef = useRef(null); // latest not-yet-applied offset from pointermove
@@ -55,6 +75,8 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
   const pendingZoomRef = useRef(null); // {factor, cursorX, cursorY} accumulated since the last flush
   // {type: "wall-point", barrierIndex, pointIndex} | {type: "circle-move" | "circle-resize", barrierIndex} | null
   const barrierDragRef = useRef(null);
+  // {type: "point-move", connectionIndex} | {type: "line-endpoint", connectionIndex, endpoint: "start" | "end"} | null
+  const connectionDragRef = useRef(null);
 
   const feetDimensions = mapData.feetDimensions;
   const canDrawBarriers = hasBothAxes(feetDimensions);
@@ -183,11 +205,27 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
     onToolChange?.("select");
   }
 
-  // Esc backs out of add-circle mode before any drag has started (e.g. the
+  // A line connection is single-shot too - a plain click (start === end)
+  // commits nothing, same as circle's zero-radius guard.
+  function commitLineConnection() {
+    if (drawingLine && (drawingLine.start.x !== drawingLine.end.x || drawingLine.start.y !== drawingLine.end.y)) {
+      dispatch({
+        type: "ADD_ENTRY", section: "connections",
+        entry: {identifier: nextConnectionIdentifier(mapData.connections), type: "line", start: drawingLine.start, end: drawingLine.end},
+      });
+    }
+    setDrawingLine(null);
+    onToolChange?.("select");
+  }
+
+  // Esc backs out of an armed-but-not-yet-used add-tool (e.g. a sidebar
   // button was clicked by mistake) - there's no "Select" button to fall
-  // back on otherwise.
+  // back on otherwise. Only while nothing's actually being dragged yet;
+  // once a drag has started, releasing the pointer is what commits/cancels
+  // it (see commitCircle/commitLineConnection).
   useEffect(() => {
-    if (tool !== "add-circle" || drawingCircle) return;
+    const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection" || (tool === "add-line-connection" && !drawingLine);
+    if (!armed) return;
 
     function onKeyDown(e) {
       if (e.key === "Escape") onToolChange?.("select");
@@ -195,7 +233,7 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [tool, drawingCircle, onToolChange]);
+  }, [tool, drawingCircle, drawingLine, onToolChange]);
 
   // Point placement (from BarriersPanel's "+" buttons) cancels the same
   // way: Escape, or a click anywhere outside the map - except a click on
@@ -243,6 +281,19 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
+  function startDragConnectionPoint(connectionIndex, e) {
+    e.stopPropagation();
+    onSelectConnection(connectionIndex);
+    connectionDragRef.current = {type: "point-move", connectionIndex};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
+  function startDragConnectionEndpoint(connectionIndex, endpoint, e) {
+    e.stopPropagation();
+    connectionDragRef.current = {type: "line-endpoint", connectionIndex, endpoint};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
   function handlePointerDown(e) {
     if (!image) return;
 
@@ -256,6 +307,26 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
       const feet = feetFromClient(e.clientX, e.clientY);
       if (!feet) return;
       setDrawingCircle({location: feet, radius: 0});
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    if (tool === "add-point-connection") {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) {
+        dispatch({
+          type: "ADD_ENTRY", section: "connections",
+          entry: {identifier: nextConnectionIdentifier(mapData.connections), type: "point", position: {x: feet.x, y: feet.y, angle: 0}, fuzzRadius: 2, fuzzAngle: 90},
+        });
+      }
+      onToolChange?.("select");
+      return;
+    }
+
+    if (tool === "add-line-connection") {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      setDrawingLine({start: feet, end: feet});
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
@@ -296,12 +367,33 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
       return;
     }
 
+    if (connectionDragRef.current) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const {type, connectionIndex} = connectionDragRef.current;
+      const connection = mapData.connections[connectionIndex];
+      if (type === "point-move") {
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: "position", value: {...connection.position, x: feet.x, y: feet.y}});
+      } else if (type === "line-endpoint") {
+        const {endpoint} = connectionDragRef.current;
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: endpoint, value: feet});
+      }
+      return;
+    }
+
     if (tool === "add-circle" && drawingCircle) {
       const feet = feetFromClient(e.clientX, e.clientY);
       if (!feet) return;
       const dx = feet.x - drawingCircle.location.x;
       const dy = feet.y - drawingCircle.location.y;
       setDrawingCircle((current) => ({...current, radius: Math.sqrt(dx * dx + dy * dy)}));
+      return;
+    }
+
+    if (tool === "add-line-connection" && drawingLine) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      setDrawingLine((current) => ({...current, end: feet}));
       return;
     }
 
@@ -324,7 +416,9 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
   function handlePointerUp() {
     dragRef.current = null;
     barrierDragRef.current = null;
+    connectionDragRef.current = null;
     if (tool === "add-circle" && drawingCircle) commitCircle();
+    if (tool === "add-line-connection" && drawingLine) commitLineConnection();
   }
 
   function handlePointerLeave() {
@@ -432,6 +526,30 @@ export default function MapCanvas({image, imageError, onImageFile, backUrl, mapD
                   cy={feetToPixel(drawingCircle.location.x, drawingCircle.location.y, image.pixelDimensions, feetDimensions).y}
                   r={feetSpacingToPixelsX(drawingCircle.radius, image.pixelDimensions, feetDimensions)}
                   fill="rgba(255,222,122,0.15)" stroke="#ffde7a" strokeWidth={3} strokeDasharray="6,4"
+                />
+              </svg>
+            )}
+            {canDrawBarriers && mapData.connections.length > 0 && (
+              <ConnectionShapes
+                connections={mapData.connections}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                tool={tool}
+                selectedIndex={selectedConnectionIndex}
+                hoveredIndex={hoveredConnectionIndex}
+                onSelect={onSelectConnection}
+                onStartDragPoint={startDragConnectionPoint}
+                onStartDragEndpoint={startDragConnectionEndpoint}
+              />
+            )}
+            {canDrawBarriers && drawingLine && (
+              <svg className="map-canvas-shapes" width={image.pixelDimensions.width} height={image.pixelDimensions.height}>
+                <line
+                  x1={feetToPixel(drawingLine.start.x, drawingLine.start.y, image.pixelDimensions, feetDimensions).x}
+                  y1={feetToPixel(drawingLine.start.x, drawingLine.start.y, image.pixelDimensions, feetDimensions).y}
+                  x2={feetToPixel(drawingLine.end.x, drawingLine.end.y, image.pixelDimensions, feetDimensions).x}
+                  y2={feetToPixel(drawingLine.end.x, drawingLine.end.y, image.pixelDimensions, feetDimensions).y}
+                  stroke="#8fe3fa" strokeWidth={3} strokeDasharray="6,4"
                 />
               </svg>
             )}

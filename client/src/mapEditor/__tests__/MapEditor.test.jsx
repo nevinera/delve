@@ -161,6 +161,54 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "+ Add Circle"})).not.toBeDisabled();
   });
 
+  it("flows the sidebar's '+ Add Point Connection' button into a single canvas click, creating a point connection", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
+    fireEvent.click(screen.getByRole("button", {name: "+ Add Point Connection"}));
+
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+
+    expect(screen.getByText(/Connection 1: point/)).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "+ Add Point Connection"})).not.toBeDisabled();
+  });
+
+  it("flows the sidebar's '+ Add Line Connection' button into a canvas drag, creating a line connection", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
+    fireEvent.click(screen.getByRole("button", {name: "+ Add Line Connection"}));
+
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+    fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+    fireEvent.pointerUp(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+
+    expect(screen.getByText(/Connection 1: line/)).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "+ Add Line Connection"})).not.toBeDisabled();
+  });
+
   it("flows a '+' click in the sidebar into placement mode, then a map click into a new pill", () => {
     render(
       <MapEditor

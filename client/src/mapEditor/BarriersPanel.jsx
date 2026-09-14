@@ -147,7 +147,7 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
           <div className="add-buttons-row">
             <button type="button" className="add-entry" onClick={(e) => { e.stopPropagation(); addWall(); }}>+ Add Wall</button>
             <button
-              type="button" className="add-entry" disabled={tool === "add-circle" || !!placement}
+              type="button" className="add-entry" disabled={tool !== "select" || !!placement}
               onClick={(e) => { e.stopPropagation(); onStartAddCircle(); }}
             >
               + Add Circle
