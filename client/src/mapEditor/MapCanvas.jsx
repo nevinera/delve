@@ -667,6 +667,25 @@ export default function MapCanvas({
     return [...locations.slice(0, placement.pointIndex), previewPoint, ...locations.slice(placement.pointIndex)];
   })();
 
+  // Same live "where would this land" preview as placementPreviewLocations
+  // above, for a patrol step - not snapped though (see handlePointerDown's
+  // patrolStepPlacement branch: a step's position isn't meant to snap to a
+  // barrier/connection point the way those snap to each other).
+  const patrolStepPreviewPositions = (() => {
+    if (!patrolStepPlacement || !cursorPixel || !hasBothAxes(feetDimensions)) return null;
+    const unit = mapData.units[patrolStepPlacement.unitIndex];
+    if (!unit || unit.movement?.type !== "patrol") return null;
+    const positions = (unit.movement.steps ?? []).map((step) => step.position);
+    const hoverFeet = pixelToFeet(cursorPixel.x, cursorPixel.y, image.pixelDimensions, feetDimensions);
+
+    if (patrolStepPlacement.mode === "edit") {
+      return positions.map((pos, i) => (i === patrolStepPlacement.stepIndex ? hoverFeet : pos));
+    }
+
+    const {stepIndex} = patrolStepPlacement;
+    return [...positions.slice(0, stepIndex), hoverFeet, ...positions.slice(stepIndex)];
+  })();
+
   // Every armed interactive mode gets a status readout and a crosshair
   // cursor (below) - wall/connection-field placement had this already;
   // the single-shot add-tools (armed from BarriersPanel/ConnectionsPanel's
@@ -780,6 +799,24 @@ export default function MapCanvas({
                   const pending = placementPreviewLocations[placement.pointIndex];
                   const p = feetToPixel(pending.x, pending.y, image.pixelDimensions, feetDimensions);
                   return <circle cx={p.x} cy={p.y} r={4} fill="#ffde7a" />;
+                })()}
+              </svg>
+            )}
+            {canDrawBarriers && patrolStepPreviewPositions && (
+              <svg className="map-canvas-shapes map-canvas-placement-preview" width={image.pixelDimensions.width} height={image.pixelDimensions.height}>
+                {patrolStepPreviewPositions.length >= 2 && (
+                  <polyline
+                    points={patrolStepPreviewPositions.map((pos) => {
+                      const p = feetToPixel(pos.x, pos.y, image.pixelDimensions, feetDimensions);
+                      return `${p.x},${p.y}`;
+                    }).join(" ")}
+                    fill="none" stroke="#ff9800" strokeWidth={3} strokeDasharray="1,6" strokeLinecap="round"
+                  />
+                )}
+                {(() => {
+                  const pending = patrolStepPreviewPositions[patrolStepPlacement.stepIndex];
+                  const p = feetToPixel(pending.x, pending.y, image.pixelDimensions, feetDimensions);
+                  return <circle cx={p.x} cy={p.y} r={4} fill="#ff9800" />;
                 })()}
               </svg>
             )}

@@ -1130,6 +1130,107 @@ describe("MapCanvas", () => {
 
       expect(onPlaceWanderLocation).toHaveBeenCalledWith({x: 10, y: 120});
     });
+
+    it("previews a patrol unit's route with the pending point inserted at the hovered position", () => {
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {
+          type: "patrol", choose: "loop",
+          steps: [
+            {position: {x: 0, y: 0, angle: 0}, movementRate: 0.5, waitTime: 1},
+            {position: {x: 10, y: 0, angle: 0}, movementRate: 0.5, waitTime: 1},
+          ],
+        },
+      }];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          patrolStepPlacement={{unitIndex: 0, stepIndex: 1, mode: "insert"}} onPlacePatrolStep={noop} onCancelPatrolStepPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 300}); // (50,300)px -> (10,60)ft
+
+      // Existing steps at (0,0)ft and (10,0)ft -> (0,600)px and (50,600)px;
+      // the pending point inserted between them at the hovered (10,60)ft -> (50,300)px.
+      const preview = document.querySelector(".map-canvas-placement-preview");
+      expect(preview.querySelector("polyline")).toHaveAttribute("points", "0,600 50,300 50,600");
+      const marker = preview.querySelector("circle");
+      expect(marker).toHaveAttribute("cx", "50");
+      expect(marker).toHaveAttribute("cy", "300");
+    });
+
+    it("previews just the pending marker (no polyline) for a route with no steps yet", () => {
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {type: "patrol", choose: "loop", steps: []},
+      }];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          patrolStepPlacement={{unitIndex: 0, stepIndex: 0, mode: "insert"}} onPlacePatrolStep={noop} onCancelPatrolStepPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 300});
+
+      const preview = document.querySelector(".map-canvas-placement-preview");
+      expect(preview.querySelector("polyline")).not.toBeInTheDocument();
+      expect(preview.querySelectorAll("circle")).toHaveLength(1);
+    });
+
+    it("previews an edit-mode re-place by moving just that one step's position", () => {
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {
+          type: "patrol", choose: "loop",
+          steps: [
+            {position: {x: 0, y: 0, angle: 0}, movementRate: 0.5, waitTime: 1},
+            {position: {x: 10, y: 0, angle: 0}, movementRate: 0.5, waitTime: 1},
+          ],
+        },
+      }];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          patrolStepPlacement={{unitIndex: 0, stepIndex: 1, mode: "edit"}} onPlacePatrolStep={noop} onCancelPatrolStepPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 300}); // -> (10,60)ft
+
+      // Still 2 points total (step 0 unchanged, step 1 replaced by the hover position).
+      const preview = document.querySelector(".map-canvas-placement-preview");
+      expect(preview.querySelector("polyline")).toHaveAttribute("points", "0,600 50,300");
+    });
+
+    it("shows no preview before the cursor has hovered the map, or once placement ends", () => {
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {type: "patrol", choose: "loop", steps: [{position: {x: 0, y: 0, angle: 0}, movementRate: 0.5, waitTime: 1}]},
+      }];
+      const {rerender} = render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          patrolStepPlacement={{unitIndex: 0, stepIndex: 1, mode: "insert"}} onPlacePatrolStep={noop} onCancelPatrolStepPlacement={noop}
+        />
+      );
+      expect(document.querySelector(".map-canvas-placement-preview")).not.toBeInTheDocument();
+
+      rerender(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          patrolStepPlacement={null} onPlacePatrolStep={noop} onCancelPatrolStepPlacement={noop}
+        />
+      );
+      expect(document.querySelector(".map-canvas-placement-preview")).not.toBeInTheDocument();
+    });
   });
 
   describe("unit position re-placement (from UnitsPanel's PositionButton)", () => {
