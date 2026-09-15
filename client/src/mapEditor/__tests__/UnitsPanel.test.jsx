@@ -145,6 +145,19 @@ describe("UnitsPanel", () => {
     expect(document.querySelector(".map-unit-body")).not.toBeInTheDocument();
   });
 
+  it("reports the expanded index set upward via onExpandedIndicesChange, for MapCanvas's movement overlay", () => {
+    const onExpandedIndicesChange = vi.fn();
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} onExpandedIndicesChange={onExpandedIndicesChange} />);
+    expandSection();
+
+    expect(onExpandedIndicesChange).toHaveBeenLastCalledWith(new Set());
+    expandUnitRow();
+    expect(onExpandedIndicesChange).toHaveBeenLastCalledWith(new Set([0]));
+    expandUnitRow();
+    expect(onExpandedIndicesChange).toHaveBeenLastCalledWith(new Set());
+  });
+
   it("expands multiple units' rows independently - opening one doesn't close another", () => {
     const units = [
       {unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
@@ -609,6 +622,237 @@ describe("UnitsPanel", () => {
       expandSection();
 
       expect(screen.getByText(/Grouping "pack"/)).toBeInTheDocument();
+    });
+  });
+
+  describe("movement", () => {
+    function unit(overrides) {
+      return {unitType: "goblin-raider", identifier: "a", position: {x: 10, y: 20, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, ...overrides};
+    }
+
+    function movementSelect() {
+      const selects = screen.getAllByRole("combobox");
+      return selects.find((el) => el.querySelector('option[value="patrol"]'));
+    }
+
+    it("defaults to Still, and switching to Patrol replaces the whole movement object, seeding one step at the unit's own position", () => {
+      const dispatch = vi.fn();
+      const units = [unit()];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(movementSelect()).toHaveValue("still");
+      fireEvent.change(movementSelect(), {target: {value: "patrol"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "movement",
+        value: {
+          type: "patrol", choose: "loop",
+          steps: [{position: {x: 10, y: 20, angle: 0}, movementRate: 0.5, waitTime: 1}],
+        },
+      });
+    });
+
+    it("switching to Wander seeds the location from the unit's own position", () => {
+      const dispatch = vi.fn();
+      const units = [unit()];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+      expandSection();
+      expandUnitRow();
+
+      fireEvent.change(movementSelect(), {target: {value: "wander"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "movement",
+        value: {type: "wander", location: {x: 10, y: 20}, radius: 10, speed: 0.3, waitTime: 1},
+      });
+    });
+
+    it("shows a placeholder and a single '+' when a patrol unit has no steps yet, arming insert placement at index 0", () => {
+      const onStartPatrolStepPlacement = vi.fn();
+      const units = [unit({movement: {type: "patrol", choose: "loop", steps: []}})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onStartPatrolStepPlacement={onStartPatrolStepPlacement} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(screen.getByText("No steps yet.")).toBeInTheDocument();
+      const plusButtons = document.querySelectorAll(".map-unit-movement-fields .map-point-plus");
+      expect(plusButtons).toHaveLength(1);
+      fireEvent.click(plusButtons[0]);
+
+      expect(onStartPatrolStepPlacement).toHaveBeenCalledWith(0, 0, "insert");
+    });
+
+    it("shows no '+' before step 0 (the unit's own position) - only between/after existing steps", () => {
+      const onStartPatrolStepPlacement = vi.fn();
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [
+          {position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2},
+          {position: {x: 3, y: 4, angle: 0}, movementRate: 0.4, waitTime: 2},
+        ],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onStartPatrolStepPlacement={onStartPatrolStepPlacement} />);
+      expandSection();
+      expandUnitRow();
+
+      const plusButtons = document.querySelectorAll(".map-unit-movement-fields .map-point-plus");
+      expect(plusButtons).toHaveLength(2); // between 0/1, after step 1 - none before step 0
+
+      fireEvent.click(plusButtons[0]); // between the two existing steps
+      expect(onStartPatrolStepPlacement).toHaveBeenCalledWith(0, 1, "insert");
+    });
+
+    it("shows a single '+' (and no remove button) for step 0 when it's the only step, since it's the unit's own position", () => {
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [{position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2}],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(document.querySelectorAll(".map-unit-movement-fields .map-point-plus")).toHaveLength(1);
+      expect(document.querySelector(".map-patrol-step .map-loot-entry-remove")).not.toBeInTheDocument();
+    });
+
+    it("shows a pending '…' placeholder at the gap currently being placed into", () => {
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [{position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2}],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} patrolStepPlacement={{unitIndex: 0, stepIndex: 1, mode: "insert"}} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(document.querySelector(".map-patrol-step-pending")).toHaveTextContent("…");
+    });
+
+    it("lists a patrol unit's steps with an editable position pill, rate, and wait time", () => {
+      const onUpdateMovement = vi.fn();
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [{position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2}],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onUpdateMovement={onUpdateMovement} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(screen.getByRole("button", {name: "1, 2"})).toBeInTheDocument();
+
+      fireEvent.change(document.querySelector(".map-patrol-step input"), {target: {value: "0.8"}});
+      expect(onUpdateMovement).toHaveBeenCalledWith(0, {
+        steps: [{position: {x: 1, y: 2, angle: 0}, movementRate: 0.8, waitTime: 2}],
+      });
+    });
+
+    it("clicking a patrol step's position pill starts edit placement for that step", () => {
+      const onStartPatrolStepEdit = vi.fn();
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [{position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2}],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onStartPatrolStepEdit={onStartPatrolStepEdit} />);
+      expandSection();
+      expandUnitRow();
+
+      fireEvent.click(screen.getByRole("button", {name: "1, 2"}));
+
+      expect(onStartPatrolStepEdit).toHaveBeenCalledWith(0, 0);
+    });
+
+    it("calls onHoverPatrolStep on mouse enter/leave of a patrol step's position pill", () => {
+      const onHoverPatrolStep = vi.fn();
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [{position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2}],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onHoverPatrolStep={onHoverPatrolStep} />);
+      expandSection();
+      expandUnitRow();
+
+      const pill = screen.getByRole("button", {name: "1, 2"});
+      fireEvent.mouseEnter(pill);
+      expect(onHoverPatrolStep).toHaveBeenCalledWith({unitIndex: 0, stepIndex: 0});
+      fireEvent.mouseLeave(pill);
+      expect(onHoverPatrolStep).toHaveBeenCalledWith(null);
+    });
+
+    it("removes a patrol step after the first one (step 0 has no remove button)", () => {
+      const onUpdateMovement = vi.fn();
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [
+          {position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2},
+          {position: {x: 3, y: 4, angle: 0}, movementRate: 0.4, waitTime: 2},
+          {position: {x: 5, y: 6, angle: 0}, movementRate: 0.4, waitTime: 2},
+        ],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onUpdateMovement={onUpdateMovement} />);
+      expandSection();
+      expandUnitRow();
+
+      const removeButtons = document.querySelectorAll(".map-patrol-step .map-loot-entry-remove");
+      expect(removeButtons).toHaveLength(2); // steps 1 and 2, not step 0
+      fireEvent.click(removeButtons[0]);
+
+      expect(onUpdateMovement).toHaveBeenCalledWith(0, {
+        steps: [
+          {position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2},
+          {position: {x: 5, y: 6, angle: 0}, movementRate: 0.4, waitTime: 2},
+        ],
+      });
+    });
+
+    it("edits a patrol unit's choose mode", () => {
+      const onUpdateMovement = vi.fn();
+      const units = [unit({movement: {type: "patrol", choose: "loop", steps: []}})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onUpdateMovement={onUpdateMovement} />);
+      expandSection();
+      expandUnitRow();
+
+      fireEvent.change(screen.getByDisplayValue("loop"), {target: {value: "random"}});
+
+      expect(onUpdateMovement).toHaveBeenCalledWith(0, {choose: "random"});
+    });
+
+    it("shows a wander unit's location pill, and starts placement on click", () => {
+      const onStartWanderLocationPlacement = vi.fn();
+      const units = [unit({movement: {type: "wander", location: {x: 5, y: 6}, radius: 10, speed: 0.3, waitTime: 1}})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onStartWanderLocationPlacement={onStartWanderLocationPlacement} />);
+      expandSection();
+      expandUnitRow();
+
+      const pill = screen.getByRole("button", {name: "5, 6"});
+      fireEvent.click(pill);
+
+      expect(onStartWanderLocationPlacement).toHaveBeenCalledWith(0);
+    });
+
+    it("edits a wander unit's radius/speed/waitTime", () => {
+      const onUpdateMovement = vi.fn();
+      const units = [unit({movement: {type: "wander", location: {x: 5, y: 6}, radius: 10, speed: 0.3, waitTime: 1}})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onUpdateMovement={onUpdateMovement} />);
+      expandSection();
+      expandUnitRow();
+
+      fireEvent.change(screen.getByDisplayValue("10"), {target: {value: "15"}});
+      expect(onUpdateMovement).toHaveBeenCalledWith(0, {radius: 15});
+    });
+
+    it("disables the pending pill and shows '…' while a patrol step is being placed", () => {
+      const units = [unit({movement: {
+        type: "patrol", choose: "loop",
+        steps: [{position: {x: 1, y: 2, angle: 0}, movementRate: 0.4, waitTime: 2}],
+      }})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} patrolStepPlacement={{unitIndex: 0, stepIndex: 0, mode: "edit"}} />);
+      expandSection();
+      expandUnitRow();
+
+      const pending = screen.getByRole("button", {name: "…"});
+      expect(pending).toBeDisabled();
+      expect(screen.queryByRole("button", {name: "1, 2"})).not.toBeInTheDocument();
     });
   });
 });

@@ -5,6 +5,7 @@ import BarrierShapes from "./BarrierShapes";
 import ConnectionShapes from "./ConnectionShapes";
 import UnitShapes from "./UnitShapes";
 import GroupShapes from "./GroupShapes";
+import MovementShapes from "./MovementShapes";
 
 // Connections need a required, zone-unique `identifier` the moment they're
 // created (unlike barriers, which have none) - this picks the first unused
@@ -58,6 +59,9 @@ export default function MapCanvas({
   connectionPlacement, onPlaceConnectionField, onCancelConnectionPlacement,
   selectedUnitIndex, onSelectUnit, hoveredUnitIndex, onHoverUnit, pendingUnitType, availableUnitTypes = {},
   unitPlacement, onPlaceUnitPosition, onCancelUnitPlacement,
+  patrolStepPlacement, onPlacePatrolStep, onCancelPatrolStepPlacement,
+  wanderLocationPlacement, onPlaceWanderLocation, onCancelWanderLocationPlacement,
+  hoveredPatrolStep, expandedUnitIndices,
   groupingMode, onToggleGroupMember, hoveredGroupIdentifier,
   tool = "select", onToolChange,
 }) {
@@ -328,6 +332,56 @@ export default function MapCanvas({
     };
   }, [unitPlacement, onCancelUnitPlacement]);
 
+  // Same cancellation pattern again, for a patrol step's position - "insert"
+  // (from a "+" pill, same class/convention as WallPoints') auto-advances to
+  // the gap right after it on each click, so a run of clicks lays down
+  // consecutive waypoints; "edit" (from clicking an existing step's pill)
+  // replaces just that one and exits.
+  useEffect(() => {
+    if (!patrolStepPlacement) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") onCancelPatrolStepPlacement();
+    }
+
+    function onDocPointerDown(e) {
+      if (wrapperRef.current?.contains(e.target)) return;
+      if (e.target.closest?.(".map-point-plus, .map-patrol-step-pill")) return;
+      onCancelPatrolStepPlacement();
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onDocPointerDown);
+    };
+  }, [patrolStepPlacement, onCancelPatrolStepPlacement]);
+
+  // Same cancellation pattern again, for re-placing a wander zone's location
+  // (see UnitsPanel's WanderLocationButton) - single-shot, like a unit's own
+  // position pill.
+  useEffect(() => {
+    if (!wanderLocationPlacement) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") onCancelWanderLocationPlacement();
+    }
+
+    function onDocPointerDown(e) {
+      if (wrapperRef.current?.contains(e.target)) return;
+      if (e.target.closest?.(".map-wander-location-btn")) return;
+      onCancelWanderLocationPlacement();
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onDocPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onDocPointerDown);
+    };
+  }, [wanderLocationPlacement, onCancelWanderLocationPlacement]);
+
   function startDragWallPoint(barrierIndex, pointIndex, e) {
     e.stopPropagation();
     onSelectBarrier(barrierIndex);
@@ -400,6 +454,19 @@ export default function MapCanvas({
       // Not snapped - see the "add-unit" tool below for why.
       const feet = feetFromClient(e.clientX, e.clientY);
       if (feet) onPlaceUnitPosition(feet);
+      return;
+    }
+
+    if (patrolStepPlacement) {
+      // Not snapped, same reasoning as unit placement above.
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) onPlacePatrolStep(feet);
+      return;
+    }
+
+    if (wanderLocationPlacement) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) onPlaceWanderLocation(feet);
       return;
     }
 
@@ -606,7 +673,7 @@ export default function MapCanvas({
   // "+" buttons, but with no visible change until now) didn't, which made
   // it impossible to tell whether a sidebar click had actually armed
   // anything before the next click on the map.
-  const placingStatusText = placement || connectionPlacement || unitPlacement
+  const placingStatusText = placement || connectionPlacement || unitPlacement || patrolStepPlacement || wanderLocationPlacement
     ? "Placing Points"
     : {
       "add-circle": "Placing Circle - drag on the map",
@@ -749,6 +816,17 @@ export default function MapCanvas({
                   stroke="#8fe3fa" strokeWidth={3} strokeDasharray="6,4"
                 />
               </svg>
+            )}
+            {canDrawBarriers && mapData.units.length > 0 && (
+              <MovementShapes
+                units={mapData.units}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                availableUnitTypes={availableUnitTypes}
+                hoveredPatrolStep={hoveredPatrolStep}
+                hoveredUnitIndex={hoveredUnitIndex}
+                expandedUnitIndices={expandedUnitIndices}
+              />
             )}
             {canDrawBarriers && mapData.units.length > 0 && (
               <UnitShapes

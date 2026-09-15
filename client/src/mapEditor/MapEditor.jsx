@@ -45,6 +45,26 @@ export default function MapEditor({
   const [hoveredUnitIndex, setHoveredUnitIndex] = useState(null);
   const [pendingUnitType, setPendingUnitType] = useState(null); // the unitType key armed for "add-unit" (see startAddUnit)
   const [unitPlacement, setUnitPlacement] = useState(null); // {unitIndex} | null - re-placing an existing unit's position
+  // {unitIndex, stepIndex, mode: "insert" | "edit"} | null - a patrol step's
+  // position (see MapCanvas/UnitsPanel's PatrolFields). Mirrors `placement`
+  // (barrier wall points) exactly: "insert" (from "+ Add Step") appends at
+  // stepIndex and advances to stepIndex+1 on each click, so a run of clicks
+  // lays down consecutive waypoints; "edit" (from clicking an existing
+  // step's pill) replaces just that one and exits.
+  const [patrolStepPlacement, setPatrolStepPlacement] = useState(null);
+  // {unitIndex} | null - re-placing a wander zone's location, single-shot
+  // like unitPlacement above.
+  const [wanderLocationPlacement, setWanderLocationPlacement] = useState(null);
+  // {unitIndex, stepIndex} | null - hovering a patrol step's pill in
+  // UnitsPanel lights up a token-sized ring at that step's position on the
+  // canvas (see MovementShapes) - same idea as BarriersPanel's hoveredPoint.
+  const [hoveredPatrolStep, setHoveredPatrolStep] = useState(null);
+  // Mirrors UnitsPanel's own expandedIndices (which unit rows are open) up
+  // here, so MovementShapes can treat "being edited" the same as hovered -
+  // opaque, so its patrol path/wander circle stands out from anyone else's
+  // in the same region. UnitsPanel still owns the state; this is just a
+  // read-only copy reported via onExpandedIndicesChange.
+  const [expandedUnitIndices, setExpandedUnitIndices] = useState(() => new Set());
   // Clicking a unit's token on the map (see MapCanvas's startDragUnit) is
   // distinct from clicking its row in UnitsPanel: the map click should open
   // that one unit's row exclusively (closing every other open row) and
@@ -101,6 +121,8 @@ export default function MapEditor({
   function startBarrierPlacement(barrierIndex, pointIndex, mode = "insert") {
     setConnectionPlacement(null);
     setUnitPlacement(null);
+    setPatrolStepPlacement(null);
+    setWanderLocationPlacement(null);
     setGroupingMode(null);
     setTool("select");
     setPlacement({barrierIndex, pointIndex, mode});
@@ -113,6 +135,8 @@ export default function MapEditor({
   function startConnectionFieldPlacement(connectionIndex, field) {
     setPlacement(null);
     setUnitPlacement(null);
+    setPatrolStepPlacement(null);
+    setWanderLocationPlacement(null);
     setGroupingMode(null);
     setTool("select");
     setConnectionPlacement({connectionIndex, field});
@@ -121,9 +145,36 @@ export default function MapEditor({
   function startUnitPlacement(unitIndex) {
     setPlacement(null);
     setConnectionPlacement(null);
+    setPatrolStepPlacement(null);
+    setWanderLocationPlacement(null);
     setGroupingMode(null);
     setTool("select");
     setUnitPlacement({unitIndex});
+  }
+
+  // Mirrors startBarrierPlacement exactly, for a patrol step's position.
+  function startPatrolStepPlacement(unitIndex, stepIndex, mode = "insert") {
+    setPlacement(null);
+    setConnectionPlacement(null);
+    setUnitPlacement(null);
+    setWanderLocationPlacement(null);
+    setGroupingMode(null);
+    setTool("select");
+    setPatrolStepPlacement({unitIndex, stepIndex, mode});
+  }
+
+  function startPatrolStepEdit(unitIndex, stepIndex) {
+    startPatrolStepPlacement(unitIndex, stepIndex, "edit");
+  }
+
+  function startWanderLocationPlacement(unitIndex) {
+    setPlacement(null);
+    setConnectionPlacement(null);
+    setUnitPlacement(null);
+    setPatrolStepPlacement(null);
+    setGroupingMode(null);
+    setTool("select");
+    setWanderLocationPlacement({unitIndex});
   }
 
   function focusUnitFromMap(unitIndex) {
@@ -140,6 +191,8 @@ export default function MapEditor({
     setPlacement(null);
     setConnectionPlacement(null);
     setUnitPlacement(null);
+    setPatrolStepPlacement(null);
+    setWanderLocationPlacement(null);
     setGroupingMode(null);
     setTool(nextTool);
   }
@@ -156,6 +209,8 @@ export default function MapEditor({
     setPlacement(null);
     setConnectionPlacement(null);
     setUnitPlacement(null);
+    setPatrolStepPlacement(null);
+    setWanderLocationPlacement(null);
     setTool("select");
     setGroupingMode((current) => (current?.groupIdentifier === groupIdentifier ? null : {groupIdentifier}));
   }
@@ -342,6 +397,42 @@ export default function MapEditor({
     setUnitPlacement(null);
   }
 
+  // `movement` is a single nested object (like `position`/`lootTable`), so
+  // every field change here dispatches the whole updated object rather than
+  // a deep-path update - same convention as those.
+  function updateMovement(unitIndex, fields) {
+    const current = mapData.units[unitIndex].movement ?? {type: "still"};
+    dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "movement", value: {...current, ...fields}});
+  }
+
+  // "insert" mode appends a new step at stepIndex and advances to
+  // stepIndex+1 on each click - same auto-advancing run-of-clicks pattern
+  // as placePoint (wall points) above. "edit" mode replaces the existing
+  // step's position (keeping its movementRate/waitTime) and exits.
+  function placePatrolStep(feet) {
+    const {unitIndex, stepIndex, mode} = patrolStepPlacement;
+    const steps = mapData.units[unitIndex].movement.steps;
+
+    if (mode === "edit") {
+      const nextSteps = steps.map((step, i) => (i === stepIndex ? {...step, position: {x: feet.x, y: feet.y, angle: 0}} : step));
+      updateMovement(unitIndex, {steps: nextSteps});
+      setPatrolStepPlacement(null);
+      return;
+    }
+
+    const newStep = {position: {x: feet.x, y: feet.y, angle: 0}, movementRate: 0.5, waitTime: 1};
+    const nextSteps = [...steps.slice(0, stepIndex), newStep, ...steps.slice(stepIndex)];
+    updateMovement(unitIndex, {steps: nextSteps});
+    setPatrolStepPlacement({unitIndex, stepIndex: stepIndex + 1, mode: "insert"});
+  }
+
+  // Single-shot, like placeConnectionField/placeUnitPosition above.
+  function placeWanderLocation(feet) {
+    const {unitIndex} = wanderLocationPlacement;
+    updateMovement(unitIndex, {location: {x: feet.x, y: feet.y}});
+    setWanderLocationPlacement(null);
+  }
+
   // pixelDimensions is derived, not authored - keep the draft in sync with
   // whatever image is actually loaded (a freshly uploaded file's natural
   // size overrides whatever the map's JSON said before).
@@ -408,6 +499,14 @@ export default function MapEditor({
         unitPlacement={unitPlacement}
         onPlaceUnitPosition={placeUnitPosition}
         onCancelUnitPlacement={() => setUnitPlacement(null)}
+        patrolStepPlacement={patrolStepPlacement}
+        onPlacePatrolStep={placePatrolStep}
+        onCancelPatrolStepPlacement={() => setPatrolStepPlacement(null)}
+        wanderLocationPlacement={wanderLocationPlacement}
+        onPlaceWanderLocation={placeWanderLocation}
+        onCancelWanderLocationPlacement={() => setWanderLocationPlacement(null)}
+        hoveredPatrolStep={hoveredPatrolStep}
+        expandedUnitIndices={expandedUnitIndices}
         groupingMode={groupingMode}
         onToggleGroupMember={toggleGroupMember}
         hoveredGroupIdentifier={hoveredGroupIdentifier}
@@ -469,6 +568,14 @@ export default function MapEditor({
           onStartAddUnit={startAddUnit}
           unitPlacement={unitPlacement}
           onStartUnitPlacement={startUnitPlacement}
+          patrolStepPlacement={patrolStepPlacement}
+          onStartPatrolStepPlacement={startPatrolStepPlacement}
+          onStartPatrolStepEdit={startPatrolStepEdit}
+          wanderLocationPlacement={wanderLocationPlacement}
+          onStartWanderLocationPlacement={startWanderLocationPlacement}
+          onUpdateMovement={updateMovement}
+          onHoverPatrolStep={setHoveredPatrolStep}
+          onExpandedIndicesChange={setExpandedUnitIndices}
           groupingMode={groupingMode}
           onStartGroupingMode={startGroupingMode}
           onToggleGroupMember={toggleGroupMember}

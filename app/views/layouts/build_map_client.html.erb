@@ -95,6 +95,10 @@
          never intercept a click meant for the real token underneath
          (grouping mode relies on that to toggle membership). */
       .map-group-highlight { position: absolute; top: 0; left: 0; pointer-events: none; }
+      /* Movement path/zone overlay (MovementShapes) - same positioning as
+         the group highlight above, but its own class since both can be
+         present at once and are visually distinct (dim vs. loud). */
+      .map-movement-highlight { position: absolute; top: 0; left: 0; pointer-events: none; }
 
       .map-canvas-status-bar {
         flex: 0 0 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
@@ -171,6 +175,14 @@
       .map-editor-sidebar-content .map-loot-count-field { font-size: 12px; margin-bottom: 6px; }
       .map-editor-sidebar-content .map-loot-count-field input[type=number] { width: 56px; }
       .map-editor-sidebar-content .map-loot-count-field .map-sidebar-hint { margin: 2px 0 0; }
+
+      .map-editor-sidebar-content .map-unit-movement-fields { margin-top: 8px; font-size: 12px; }
+      .map-editor-sidebar-content .map-movement-choose { display: block; margin-bottom: 6px; color: #9ab; }
+      .map-editor-sidebar-content .map-movement-choose select { margin-left: 2px; }
+      .map-editor-sidebar-content .map-patrol-step { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+      .map-editor-sidebar-content .map-patrol-step label { color: #9ab; display: flex; align-items: center; gap: 3px; }
+      .map-editor-sidebar-content .map-patrol-step input[type=number] { width: 48px; }
+      .map-editor-sidebar-content .map-patrol-step-pending { color: #789; font-style: italic; font-size: 12px; margin: 3px 0; }
 
       /* A group is derived (units sharing a groupIdentifier), not stored -
          its block encloses member rows with a left border rather than

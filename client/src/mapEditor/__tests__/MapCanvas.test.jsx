@@ -918,6 +918,220 @@ describe("MapCanvas", () => {
     });
   });
 
+  describe("movement (slice 8)", () => {
+    const FEET_DIMENSIONS = {width: 160, height: 120}; // 800px/160ft = 5px/ft, 600px/120ft = 5px/ft
+
+    function fitToImageSize() {
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+    }
+
+    function patrolUnit(overrides) {
+      return {
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {
+          type: "patrol", choose: "loop",
+          steps: [
+            {position: {x: 10, y: 10, angle: 0}, movementRate: 0.5, waitTime: 1},
+            {position: {x: 20, y: 10, angle: 0}, movementRate: 0.5, waitTime: 1},
+          ],
+        },
+        ...overrides,
+      };
+    }
+
+    it("draws an orange dotted path through a patrol unit's steps in order, translucent by default", () => {
+      const units = [patrolUnit()];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+        />
+      );
+
+      const overlay = document.querySelector(".map-movement-highlight");
+      expect(overlay).toBeInTheDocument();
+      const line = overlay.querySelector("polyline");
+      expect(line).toBeInTheDocument();
+      expect(line).toHaveAttribute("stroke", "rgba(255, 152, 0, 0.35)");
+      expect(overlay.querySelectorAll("circle")).toHaveLength(2);
+    });
+
+    it("draws a patrol unit's path fully opaque when its token is hovered", () => {
+      const units = [patrolUnit()];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          hoveredUnitIndex={0}
+        />
+      );
+
+      expect(document.querySelector(".map-movement-highlight polyline")).toHaveAttribute("stroke", "#ff9800");
+    });
+
+    it("draws a patrol unit's path fully opaque when its row is expanded (being edited)", () => {
+      const units = [patrolUnit()];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          expandedUnitIndices={new Set([0])}
+        />
+      );
+
+      expect(document.querySelector(".map-movement-highlight polyline")).toHaveAttribute("stroke", "#ff9800");
+    });
+
+    it("lights up a token-sized orange ring at a hovered patrol step's location", () => {
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {
+          type: "patrol", choose: "loop",
+          steps: [
+            {position: {x: 10, y: 10, angle: 0}, movementRate: 0.5, waitTime: 1},
+            {position: {x: 20, y: 10, angle: 0}, movementRate: 0.5, waitTime: 1},
+          ],
+        },
+      }];
+      const availableUnitTypes = {"goblin-raider": {name: "Goblin Raider", tokenRadius: 4}};
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          availableUnitTypes={availableUnitTypes}
+          hoveredPatrolStep={{unitIndex: 0, stepIndex: 1}}
+        />
+      );
+
+      // Base rendering: polyline + 2 step dots = 3 shapes without a hover ring.
+      // With hoveredPatrolStep targeting step 1, a 4th (the ring) appears at (20,10)ft.
+      const overlay = document.querySelector(".map-movement-highlight");
+      const circles = overlay.querySelectorAll("circle");
+      expect(circles).toHaveLength(3);
+      const ring = circles[2];
+      expect(ring).toHaveAttribute("cx", "100"); // 20ft * 5px/ft
+      expect(ring).toHaveAttribute("cy", "550"); // (120-10)ft * 5px/ft
+      expect(ring).toHaveAttribute("r", "20"); // tokenRadius 4ft * 5px/ft
+    });
+
+    it("draws a dim translucent circle at a wander unit's location/radius", () => {
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {type: "wander", location: {x: 30, y: 30}, radius: 8, speed: 0.3, waitTime: 1},
+      }];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+        />
+      );
+
+      const circle = document.querySelector(".map-movement-highlight circle");
+      expect(circle).toBeInTheDocument();
+      expect(circle).toHaveAttribute("cx", "150"); // 30ft * 5px/ft
+      expect(circle).toHaveAttribute("cy", "450"); // (120-30)ft * 5px/ft
+      expect(circle).toHaveAttribute("r", "40"); // 8ft * 5px/ft
+      // Filled in but translucent by default (not just an outline).
+      expect(circle).toHaveAttribute("fill", "rgba(255, 152, 0, 0.18)");
+      expect(circle).toHaveAttribute("stroke", "rgba(255, 152, 0, 0.35)");
+    });
+
+    it("draws a wander unit's circle more opaque when its token is hovered", () => {
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {type: "wander", location: {x: 30, y: 30}, radius: 8, speed: 0.3, waitTime: 1},
+      }];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          hoveredUnitIndex={0}
+        />
+      );
+
+      const circle = document.querySelector(".map-movement-highlight circle");
+      expect(circle).toHaveAttribute("fill", "rgba(255, 152, 0, 0.35)");
+      expect(circle).toHaveAttribute("stroke", "#ff9800");
+    });
+
+    it("draws nothing for a still unit", () => {
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+        />
+      );
+
+      expect(document.querySelector(".map-movement-highlight").children).toHaveLength(0);
+    });
+
+    it("clicking the map appends a patrol step and auto-advances placement, so a run of clicks lays a path", () => {
+      const dispatch = vi.fn();
+      const units = [{
+        unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+        movement: {type: "patrol", choose: "loop", steps: []},
+      }];
+      const onPlacePatrolStep = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={dispatch} onSelectBarrier={noop}
+          patrolStepPlacement={{unitIndex: 0, stepIndex: 0, mode: "insert"}} onPlacePatrolStep={onPlacePatrolStep} onCancelPatrolStepPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50,0)px -> (10,120)ft
+
+      expect(onPlacePatrolStep).toHaveBeenCalledWith({x: 10, y: 120});
+    });
+
+    it("shows the 'Placing Points' status while a patrol step or wander location is being placed", () => {
+      const {rerender} = render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop}
+          patrolStepPlacement={{unitIndex: 0, stepIndex: 0, mode: "insert"}}
+        />
+      );
+      expect(screen.getByText("Placing Points")).toBeInTheDocument();
+
+      rerender(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop}
+          wanderLocationPlacement={{unitIndex: 0}}
+        />
+      );
+      expect(screen.getByText("Placing Points")).toBeInTheDocument();
+    });
+
+    it("clicking the map sets a wander unit's location, then exits placement", () => {
+      const onPlaceWanderLocation = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          wanderLocationPlacement={{unitIndex: 0}} onPlaceWanderLocation={onPlaceWanderLocation} onCancelWanderLocationPlacement={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
+
+      expect(onPlaceWanderLocation).toHaveBeenCalledWith({x: 10, y: 120});
+    });
+  });
+
   describe("unit position re-placement (from UnitsPanel's PositionButton)", () => {
     const FEET_DIMENSIONS = {width: 160, height: 120}; // 5px/ft both axes
 

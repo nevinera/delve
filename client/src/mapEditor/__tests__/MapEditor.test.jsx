@@ -615,6 +615,114 @@ describe("MapEditor", () => {
     });
   });
 
+  describe("movement", () => {
+    function renderWithOneUnit() {
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance"
+          initialMap={{
+            ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+            units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
+          }}
+          initialImageDataUri="data:image/webp;base64,AAAA"
+          initialPixelDimensions={{width: 800, height: 600}}
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row
+      return wrapper;
+    }
+
+    it("switches a unit to patrol, lays down two consecutive steps via '+' then clicks, and draws the path", () => {
+      const wrapper = renderWithOneUnit();
+
+      const movementSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="patrol"]'));
+      fireEvent.change(movementSelect, {target: {value: "patrol"}});
+      fireEvent.click(document.querySelector(".map-unit-movement-fields .map-point-plus"));
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // -> (10,120)ft
+      fireEvent.pointerDown(wrapper, {clientX: 100, clientY: 0}); // -> (20,120)ft, auto-advanced
+
+      expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
+      expect(screen.getByRole("button", {name: "20, 120"})).toBeInTheDocument();
+      const overlay = document.querySelector(".map-movement-highlight");
+      expect(overlay.querySelector("polyline")).toBeInTheDocument();
+
+      fireEvent.keyDown(document, {key: "Escape"}); // stop the still-armed placement
+    });
+
+    it("inserts a step between two existing ones via that gap's '+', without disturbing the others", () => {
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance"
+          initialMap={{
+            ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+            units: [{
+              unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+              movement: {
+                type: "patrol", choose: "loop",
+                steps: [
+                  {position: {x: 5, y: 5, angle: 0}, movementRate: 0.5, waitTime: 1},
+                  {position: {x: 50, y: 5, angle: 0}, movementRate: 0.5, waitTime: 1},
+                ],
+              },
+            }],
+          }}
+          initialImageDataUri="data:image/webp;base64,AAAA"
+          initialPixelDimensions={{width: 800, height: 600}}
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      fireEvent.click(document.querySelector(".map-unit-row"));
+
+      const plusButtons = document.querySelectorAll(".map-unit-movement-fields .map-point-plus");
+      expect(plusButtons).toHaveLength(2); // between the two steps, and after the last - none before step 0
+      fireEvent.click(plusButtons[0]); // between the two existing steps
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // -> (10,120)ft
+
+      const pills = [...document.querySelectorAll(".map-patrol-step-pill")].map((p) => p.textContent);
+      expect(pills).toEqual(["5, 5", "10, 120", "50, 5"]);
+    });
+
+    it("switches a unit to wander, re-places its location via the pill, and draws the dim circle", () => {
+      const wrapper = renderWithOneUnit();
+
+      const movementSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="wander"]'));
+      fireEvent.change(movementSelect, {target: {value: "wander"}});
+
+      fireEvent.click(document.querySelector(".map-wander-location-btn")); // the seeded location pill
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // -> (10,120)ft
+
+      expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
+      expect(document.querySelector(".map-movement-highlight circle")).toBeInTheDocument();
+    });
+
+    it("switching back to still clears the visualization", () => {
+      renderWithOneUnit();
+      const movementSelect = () => screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="patrol"]'));
+      fireEvent.change(movementSelect(), {target: {value: "patrol"}});
+      fireEvent.click(document.querySelector(".map-unit-movement-fields .map-point-plus"));
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
+      fireEvent.keyDown(document, {key: "Escape"});
+      expect(document.querySelector(".map-movement-highlight polyline")).toBeInTheDocument();
+
+      const stillSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="still"]'));
+      fireEvent.change(stillSelect, {target: {value: "still"}});
+
+      expect(document.querySelector(".map-movement-highlight polyline")).not.toBeInTheDocument();
+      expect(document.querySelector(".map-movement-highlight circle")).not.toBeInTheDocument();
+    });
+  });
+
   describe("lazily loading unit type details", () => {
     it("fetches a unit type's details only once it's actually chosen in the dropdown", async () => {
       global.fetch = vi.fn().mockResolvedValue({
