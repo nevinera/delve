@@ -173,8 +173,10 @@ type UnitState struct {
 	EquippedItems map[string]instanceconfig.EquippedItem
 	DamageStatKey string // "strength", "agility", or "" - see CharacterClass.DamageStatKey
 
-	LootTable map[string]int    // identifier → weight; nil means no loot
-	LootCount [2]int            // [min, max] items to award; both 1 when lootCount omitted
+	LootTable map[string]int // identifier → weight; nil means no loot
+	LootCount [2]float64     // [min, max]; both 1 when lootCount omitted. A resolved value
+	// >= 1 awards that many items (truncated); a value in [0, 1)
+	// is the probability of awarding exactly one item.
 	LootItems []PendingLootItem // rolled at death; nil until the unit dies
 
 	Status               UnitStatus

@@ -17,7 +17,7 @@ See [common.md](common.md) for `Location` and `Position`.
 | `links` | array of strings | no | `[]` | Identifiers of other units that aggro when this unit aggros. |
 | `groupIdentifier` | string | no | | Editor-only grouping label; the game server ignores it entirely - only `links` (mutual references between units) determines aggro grouping in play. Lets authoring tools require units to be assigned a group before adding them to one, rather than inferring group membership from `links` alone. |
 | `lootTable` | LootTable | no | | Items this unit can drop on death. See [zone.md](zone.md) for the LootTable type. All referenced identifiers must be defined in the zone's `items` map. |
-| `lootCount` | integer \| [integer, integer] | no | `1` | Number of items to award from `lootTable` per kill. A range varies the count between min and max. Ignored if `lootTable` is absent. |
+| `lootCount` | number \| [number, number] | no | `1` | Number of items to award from `lootTable` per kill. A range is resolved to a single value uniformly between min and max first. A resolved value >= 1 awards that many items (truncated to an integer); a resolved value between 0 and 1 is instead the *probability* of awarding exactly one item (0 otherwise) - e.g. `0.25` drops one item 25% of the time. Ignored if `lootTable` is absent. |
 
 ---
 
