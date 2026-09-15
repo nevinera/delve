@@ -63,6 +63,7 @@ export default function MapCanvas({
   wanderLocationPlacement, onPlaceWanderLocation, onCancelWanderLocationPlacement,
   hoveredPatrolStep, expandedUnitIndices,
   groupingMode, onToggleGroupMember, hoveredGroupIdentifier,
+  simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   tool = "select", onToolChange,
 }) {
   const wrapperRef = useRef(null);
@@ -383,7 +384,12 @@ export default function MapCanvas({
   }, [wanderLocationPlacement, onCancelWanderLocationPlacement]);
 
   function startDragWallPoint(barrierIndex, pointIndex, e) {
+    // stopPropagation first, always - even while simulating (read-only)
+    // blocks the actual selection/drag, the click on this shape still
+    // shouldn't fall through and bubble to the wrapper's own pointerdown
+    // handler, which would otherwise arm a pan from here instead.
     e.stopPropagation();
+    if (simulating) return;
     onSelectBarrier(barrierIndex);
     barrierDragRef.current = {type: "wall-point", barrierIndex, pointIndex};
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -391,6 +397,7 @@ export default function MapCanvas({
 
   function startDragCircleMove(barrierIndex, e) {
     e.stopPropagation();
+    if (simulating) return;
     onSelectBarrier(barrierIndex);
     barrierDragRef.current = {type: "circle-move", barrierIndex};
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -398,12 +405,14 @@ export default function MapCanvas({
 
   function startDragCircleResize(barrierIndex, e) {
     e.stopPropagation();
+    if (simulating) return;
     barrierDragRef.current = {type: "circle-resize", barrierIndex};
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
   function startDragConnectionPoint(connectionIndex, e) {
     e.stopPropagation();
+    if (simulating) return;
     onSelectConnection(connectionIndex);
     connectionDragRef.current = {type: "point-move", connectionIndex};
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -411,12 +420,14 @@ export default function MapCanvas({
 
   function startDragConnectionEndpoint(connectionIndex, endpoint, e) {
     e.stopPropagation();
+    if (simulating) return;
     connectionDragRef.current = {type: "line-endpoint", connectionIndex, endpoint};
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
   function startDragUnit(unitIndex, e) {
     e.stopPropagation();
+    if (simulating) return;
     // Grouping mode hijacks every unit click into a membership toggle -
     // no select/drag while it's active (see MapEditor's toggleGroupMember).
     if (groupingMode) {
@@ -430,6 +441,14 @@ export default function MapCanvas({
 
   function handlePointerDown(e) {
     if (!image) return;
+    // No separate `simulating` guard needed here - MapEditor's
+    // startSimulation already clears every placement state and forces
+    // `tool` back to "select" before simulating starts (and the sidebar
+    // that could re-arm one of them is hidden while it's active), so every
+    // branch below is already unreachable; this always falls through to
+    // ordinary panning, which stays available during simulation. The six
+    // startDrag* handlers below (reachable by clicking an existing shape
+    // regardless of the sidebar) are what actually need their own guards.
 
     if (placement) {
       const exclude = placement.mode === "edit"
@@ -711,6 +730,25 @@ export default function MapCanvas({
             <button type="button" onClick={() => setZoom((z) => clampZoom(z / ZOOM_STEP))}>−</button>
             <button type="button" onClick={applyFit}>Fit</button>
             <button type="button" onClick={() => setZoom((z) => clampZoom(z * ZOOM_STEP))}>+</button>
+          </div>
+        )}
+        {image && mapData.units.length > 0 && (
+          <div className="map-toolbar-button-group map-simulate-group">
+            <button
+              type="button" className={simulating ? "map-simulate-active" : ""}
+              onClick={() => onToggleSimulate?.()}
+            >
+              {simulating ? "Stop Simulating" : "Simulate Units"}
+            </button>
+            {simulating && (
+              <label className="map-simulate-speed">
+                {simSpeed}x
+                <input
+                  type="range" min="1" max="10" step="1" value={simSpeed}
+                  onChange={(e) => onSimSpeedChange?.(parseInt(e.target.value, 10))}
+                />
+              </label>
+            )}
           </div>
         )}
         {isPlacing && <span className="map-canvas-placing-status">{placingStatusText}</span>}

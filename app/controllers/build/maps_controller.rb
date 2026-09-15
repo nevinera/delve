@@ -43,10 +43,15 @@ class Build::MapsController < Build::BaseController
   #   #edit and this action deliberately do NOT open/parse every file the
   #   way Build::UnitTypesController#load_available_abilities does -
   #   that doesn't scale.
-  # - `keys[]` given: {name, tokenRadius, tokenImageUrl} for exactly those
-  #   keys (each *does* open its file, and its token image) - used for
-  #   units already on the map (see #edit's @initial_unit_type_details) and
-  #   lazily for whichever key the author actually picks/places.
+  # - `keys[]` given: {name, tokenRadius, tokenImageUrl, speedFactor} for
+  #   exactly those keys (each *does* open its file, and its token image) -
+  #   used for units already on the map (see #edit's
+  #   @initial_unit_type_details) and lazily for whichever key the author
+  #   actually picks/places. speedFactor feeds the map editor's Simulate
+  #   Units mode (Slice 9) - it's the same multiplier the real game server
+  #   applies to BaseMobSpeed (see game-server/internal/instance's
+  #   BaseMobSpeed usage), so simulated movement matches actual gameplay
+  #   speed rather than an approximation.
   def available_unit_types
     keys = Array(params[:keys])
     render json: keys.present? ? unit_type_details_for(keys) : list_unit_type_keys
@@ -140,8 +145,8 @@ class Build::MapsController < Build::BaseController
     Array(@map["units"]).filter_map { |unit| unit["unitType"] }.uniq
   end
 
-  # {name, tokenRadius, tokenImageUrl} for exactly the given keys - each
-  # opens that unit type's file (and its token image), unlike
+  # {name, tokenRadius, tokenImageUrl, speedFactor} for exactly the given
+  # keys - each opens that unit type's file (and its token image), unlike
   # #list_unit_type_keys. A key with no matching/parseable file (deleted or
   # renamed since a unit referencing it was placed, say) is just omitted,
   # not an error - the client already falls back gracefully (see
@@ -153,7 +158,11 @@ class Build::MapsController < Build::BaseController
 
   def unit_type_detail_pair(client, key)
     unit_type = JSON.parse(client.file_content("unit_types/#{key}.json"))
-    [key, {name: unit_type["name"], tokenRadius: unit_type["tokenRadius"], tokenImageUrl: unit_type_token_data_uri(client, key, unit_type["tokenImageUrl"])}]
+    [key, {
+      name: unit_type["name"], tokenRadius: unit_type["tokenRadius"],
+      tokenImageUrl: unit_type_token_data_uri(client, key, unit_type["tokenImageUrl"]),
+      speedFactor: unit_type["speedFactor"]
+    }]
   rescue Github::ReauthRequiredError
     raise
   rescue

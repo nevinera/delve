@@ -218,9 +218,9 @@ RSpec.describe "Build::Maps", type: :request do
           expect(JSON.parse(response.body)).to contain_exactly("goblin-raider", "slime")
         end
 
-        it "with keys[], returns resolved details (including a token thumbnail) for exactly those keys" do
-          goblin = {"name" => "Goblin Raider", "tokenRadius" => 2.5, "tokenImageUrl" => ["../assets/tokens/goblin.webp", "../assets/tokens/goblin2.webp"]}
-          slime = {"name" => "Slime", "tokenRadius" => 1.5, "tokenImageUrl" => nil}
+        it "with keys[], returns resolved details (including a token thumbnail and speedFactor) for exactly those keys" do
+          goblin = {"name" => "Goblin Raider", "tokenRadius" => 2.5, "tokenImageUrl" => ["../assets/tokens/goblin.webp", "../assets/tokens/goblin2.webp"], "speedFactor" => 1.2}
+          slime = {"name" => "Slime", "tokenRadius" => 1.5, "tokenImageUrl" => nil, "speedFactor" => 0.8}
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-raider.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(goblin.to_json), encoding: "base64"}.to_json)
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/slime.json")
@@ -237,8 +237,10 @@ RSpec.describe "Build::Maps", type: :request do
           expect(json["goblin-raider"]["name"]).to eq("Goblin Raider")
           expect(json["goblin-raider"]["tokenRadius"]).to eq(2.5)
           expect(json["goblin-raider"]["tokenImageUrl"]).to eq("data:image/webp;base64,#{Base64.strict_encode64("goblin-bytes")}")
+          expect(json["goblin-raider"]["speedFactor"]).to eq(1.2)
           expect(json["slime"]["tokenRadius"]).to eq(1.5)
           expect(json["slime"]["tokenImageUrl"]).to be_nil
+          expect(json["slime"]["speedFactor"]).to eq(0.8)
         end
 
         it "with keys[], resolves a nested unit type's token relative to its own file" do

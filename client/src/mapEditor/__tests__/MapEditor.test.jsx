@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
-import {render, screen, fireEvent, waitFor} from "@testing-library/react";
+import {render, screen, fireEvent, waitFor, act} from "@testing-library/react";
 import MapEditor from "../MapEditor";
 
 // jsdom doesn't decode real image bytes, so Image().src never fires a real
@@ -720,6 +720,76 @@ describe("MapEditor", () => {
 
       expect(document.querySelector(".map-movement-highlight polyline")).not.toBeInTheDocument();
       expect(document.querySelector(".map-movement-highlight circle")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("simulate units (slice 9)", () => {
+    it("toggling into simulate mode hides the editing panels, blocks drags, animates the unit, and restores everything on stop", () => {
+      let frameCallback = null;
+      vi.stubGlobal("requestAnimationFrame", (cb) => { frameCallback = cb; return 1; });
+      vi.stubGlobal("cancelAnimationFrame", () => {});
+      let now = 1000;
+      vi.spyOn(performance, "now").mockImplementation(() => now);
+
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance"
+          initialMap={{
+            ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+            units: [{
+              unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
+              movement: {
+                type: "patrol", choose: "loop",
+                steps: [
+                  {position: {x: 0, y: 0, angle: 0}, movementRate: 1, waitTime: 0},
+                  {position: {x: 50, y: 0, angle: 0}, movementRate: 1, waitTime: 0},
+                ],
+              },
+            }],
+          }}
+          initialImageDataUri="data:image/webp;base64,AAAA"
+          initialPixelDimensions={{width: 800, height: 600}}
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Simulate Units"}));
+
+      // Sidebar swaps to a status notice, hiding every editing control.
+      expect(screen.getByText(/Simulating units/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", {name: "+ Add Unit"})).not.toBeInTheDocument();
+
+      // Dragging the unit's token is a no-op while simulating.
+      const marker = document.querySelector(".map-canvas-shapes g");
+      const cxBefore = document.querySelector(".map-canvas-shapes circle").getAttribute("cx");
+      fireEvent.pointerDown(marker, {pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 999, clientY: 999, pointerId: 1});
+      expect(document.querySelector(".map-canvas-shapes circle").getAttribute("cx")).toBe(cxBefore);
+
+      // Advance the animation loop - the token visibly moves.
+      expect(frameCallback).toBeTypeOf("function");
+      act(() => {
+        for (let i = 0; i < 5; i++) {
+          now += 20;
+          frameCallback(now);
+        }
+      });
+      expect(document.querySelector(".map-canvas-shapes circle").getAttribute("cx")).not.toBe(cxBefore);
+
+      fireEvent.click(screen.getByRole("button", {name: "Stop Simulating"}));
+
+      // Sidebar and editing controls are back, and the unit snapped back to
+      // its authored position (0,0)ft - nothing was ever written to mapData.
+      expect(screen.queryByText(/Simulating units/)).not.toBeInTheDocument();
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      expect(screen.getByRole("button", {name: "+ Add Unit"})).toBeInTheDocument();
+      expect(document.querySelector(".map-canvas-shapes circle").getAttribute("cx")).toBe(cxBefore);
+
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
     });
   });
 

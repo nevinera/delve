@@ -1233,6 +1233,114 @@ describe("MapCanvas", () => {
     });
   });
 
+  describe("simulate units (slice 9)", () => {
+    const FEET_DIMENSIONS = {width: 160, height: 120};
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+
+    it("shows the toggle only once there's at least one unit", () => {
+      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop} />);
+      expect(screen.queryByRole("button", {name: "Simulate Units"})).not.toBeInTheDocument();
+    });
+
+    it("calls onToggleSimulate when clicked, and shows 'Stop Simulating' + a speed slider once active", () => {
+      const onToggleSimulate = vi.fn();
+      const {rerender} = render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          onToggleSimulate={onToggleSimulate}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", {name: "Simulate Units"}));
+      expect(onToggleSimulate).toHaveBeenCalled();
+      expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+
+      rerender(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          onToggleSimulate={onToggleSimulate} simulating simSpeed={3}
+        />
+      );
+      expect(screen.getByRole("button", {name: "Stop Simulating"})).toBeInTheDocument();
+      expect(screen.getByRole("slider")).toHaveValue("3");
+      expect(screen.getByText("3x")).toBeInTheDocument();
+    });
+
+    it("calls onSimSpeedChange when the slider moves", () => {
+      const onSimSpeedChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          simulating simSpeed={1} onSimSpeedChange={onSimSpeedChange}
+        />
+      );
+
+      fireEvent.change(screen.getByRole("slider"), {target: {value: "7"}});
+      expect(onSimSpeedChange).toHaveBeenCalledWith(7);
+    });
+
+    it("ignores dragging a unit's marker while simulating (read-only)", () => {
+      const dispatch = vi.fn();
+      const onSelectUnit = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={dispatch} onSelectBarrier={noop} onSelectUnit={onSelectUnit}
+          simulating
+        />
+      );
+      const marker = document.querySelector(".map-canvas-shapes g");
+
+      fireEvent.pointerDown(marker, {pointerId: 1});
+
+      expect(onSelectUnit).not.toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it("ignores dragging a barrier's wall point while simulating", () => {
+      const dispatch = vi.fn();
+      const onSelectBarrier = vi.fn();
+      const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers})}
+          dispatch={dispatch} onSelectBarrier={onSelectBarrier}
+          selectedBarrierIndex={0}
+          simulating
+        />
+      );
+      const handle = document.querySelector(".map-canvas-shapes circle");
+
+      fireEvent.pointerDown(handle, {pointerId: 1});
+
+      expect(onSelectBarrier).not.toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it("still allows panning the map while simulating", () => {
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          simulating
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const base = transformParts();
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 20, clientY: 10, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 20, clientY: 10, pointerId: 1});
+
+      const after = transformParts();
+      expect(after.x - base.x).toBeCloseTo(20, 5);
+      expect(after.y - base.y).toBeCloseTo(10, 5);
+    });
+  });
+
   describe("unit position re-placement (from UnitsPanel's PositionButton)", () => {
     const FEET_DIMENSIONS = {width: 160, height: 120}; // 5px/ft both axes
 

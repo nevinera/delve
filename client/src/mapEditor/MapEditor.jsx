@@ -6,6 +6,7 @@ import BarriersPanel from "./BarriersPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsPanel from "./UnitsPanel";
 import {mapReducer} from "./mapReducer";
+import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
 // battle-map background needs (the docs' own example is 2048x1536), and
@@ -113,6 +114,20 @@ export default function MapEditor({
   // "select" | "add-circle" | "add-point-connection" | "add-line-connection" | "add-unit" - see MapCanvas/BarriersPanel/ConnectionsPanel/UnitsPanel
   const [tool, setTool] = useState("select");
   const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
+  // Simulate Units mode (Slice 9): a read-only preview of patrol/wander
+  // movement, running entirely client-side (see simulateMovement.js) - the
+  // editor has no live game-server connection to actually watch. Entering
+  // it locks out every editing interaction (see startSimulation) and
+  // replaces the sidebar with a plain status panel; simPositions is a
+  // render-only overlay of {x, y, angle} per unit (parallel to mapData.units)
+  // - mapData itself is never touched, so exiting always restores each
+  // unit's authored position exactly.
+  const [simulating, setSimulating] = useState(false);
+  const [simSpeed, setSimSpeed] = useState(1);
+  const [simPositions, setSimPositions] = useState(null);
+  const simUnitsRef = useRef([]); // mutable per-unit sim state, not itself rendered
+  const simRafRef = useRef(null);
+  const simLastTimeRef = useRef(null);
 
   // At most one of {wall-point placement, connection-field placement,
   // unit-position placement, an armed add-tool} is ever active - starting
@@ -260,6 +275,62 @@ export default function MapEditor({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [groupingMode]);
+
+  // Starting a simulation clears every other mode first, same mutual-
+  // exclusion convention as the rest of this editor - simulating is a
+  // read-only preview, not something that coexists with an armed edit.
+  function startSimulation() {
+    setPlacement(null);
+    setConnectionPlacement(null);
+    setUnitPlacement(null);
+    setPatrolStepPlacement(null);
+    setWanderLocationPlacement(null);
+    setGroupingMode(null);
+    setTool("select");
+    simUnitsRef.current = mapData.units.map(initSimUnit);
+    setSimPositions(simUnitsRef.current.map((sim) => ({x: sim.x, y: sim.y, angle: sim.angle})));
+    setSimulating(true);
+  }
+
+  function stopSimulation() {
+    setSimulating(false);
+    setSimPositions(null);
+  }
+
+  function toggleSimulation() {
+    if (simulating) stopSimulation();
+    else startSimulation();
+  }
+
+  // Drives simUnitsRef forward every animation frame while simulating, then
+  // mirrors the positions into simPositions to trigger a render - real
+  // elapsed time is clamped before scaling by simSpeed so a throttled/
+  // backgrounded tab can't produce one huge catch-up jump when it resumes.
+  useEffect(() => {
+    if (!simulating) return;
+    simLastTimeRef.current = performance.now();
+
+    function frame(now) {
+      const rawDt = Math.min((now - simLastTimeRef.current) / 1000, 0.05);
+      simLastTimeRef.current = now;
+      const dt = rawDt * simSpeed;
+      simUnitsRef.current.forEach((sim, i) => {
+        const unit = mapData.units[i];
+        const speedFactor = unitTypeDetails[unit.unitType]?.speedFactor ?? 1.0;
+        tickSimUnit(sim, unit, BASE_MOB_SPEED * speedFactor, dt);
+      });
+      setSimPositions(simUnitsRef.current.map((sim) => ({x: sim.x, y: sim.y, angle: sim.angle})));
+      simRafRef.current = requestAnimationFrame(frame);
+    }
+
+    simRafRef.current = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(simRafRef.current);
+    // mapData.units/unitTypeDetails are read via closure each frame, not
+    // re-subscribed to - editing is locked while simulating, so units can't
+    // change out from under the loop; unitTypeDetails updating mid-sim
+    // (a background fetch resolving) is harmless to pick up next frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simulating, simSpeed]);
 
   // Lets a unit type or item created in another tab (via "+ New Unit
   // Type"/"+ New Item") show up in their dropdowns here without reloading
@@ -468,6 +539,20 @@ export default function MapEditor({
     img.src = url;
   }
 
+  // Render-only overlay while simulating: the same units with their
+  // position swapped for the live sim position - mapData itself (and
+  // everything derived from it, like dispatch targets) is never touched,
+  // so stopping always snaps back to the authored positions exactly.
+  const effectiveMapData = simulating && simPositions
+    ? {
+      ...mapData,
+      units: mapData.units.map((unit, i) => ({
+        ...unit,
+        position: {...unit.position, x: simPositions[i].x, y: simPositions[i].y, angle: simPositions[i].angle},
+      })),
+    }
+    : mapData;
+
   return (
     <div className="map-editor" data-map-key={mapKey}>
       <MapCanvas
@@ -475,7 +560,7 @@ export default function MapEditor({
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}
-        mapData={mapData}
+        mapData={effectiveMapData}
         dispatch={dispatch}
         selectedBarrierIndex={selectedBarrierIndex}
         onSelectBarrier={setSelectedBarrierIndex}
@@ -510,82 +595,94 @@ export default function MapEditor({
         groupingMode={groupingMode}
         onToggleGroupMember={toggleGroupMember}
         hoveredGroupIdentifier={hoveredGroupIdentifier}
+        simulating={simulating}
+        onToggleSimulate={toggleSimulation}
+        simSpeed={simSpeed}
+        onSimSpeedChange={setSimSpeed}
         tool={tool}
         onToolChange={setTool}
       />
       <MapSidebar>
-        <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
-        <BarriersPanel
-          barriers={mapData.barriers}
-          selectedIndex={selectedBarrierIndex}
-          onSelect={setSelectedBarrierIndex}
-          onHover={setHoveredBarrierIndex}
-          onHoverPoint={setHoveredPoint}
-          placement={placement}
-          onStartPlacement={startBarrierPlacement}
-          onStartPointEdit={startBarrierPointEdit}
-          tool={tool}
-          onStartAddCircle={() => startTool("add-circle")}
-          canPlaceOnMap={canPlaceOnMap}
-          otherPlacementActive={!!connectionPlacement}
-          dispatch={dispatch}
-        />
-        <ConnectionsPanel
-          connections={mapData.connections}
-          selectedIndex={selectedConnectionIndex}
-          onSelect={setSelectedConnectionIndex}
-          onHover={setHoveredConnectionIndex}
-          tool={tool}
-          placement={placement}
-          canPlaceOnMap={canPlaceOnMap}
-          connectionPlacement={connectionPlacement}
-          onStartConnectionPlacement={startConnectionFieldPlacement}
-          onStartAddPointConnection={() => startTool("add-point-connection")}
-          onStartAddLineConnection={() => startTool("add-line-connection")}
-          dispatch={dispatch}
-        />
-        <UnitsPanel
-          units={mapData.units}
-          selectedIndex={selectedUnitIndex}
-          onSelect={setSelectedUnitIndex}
-          onHover={setHoveredUnitIndex}
-          hoveredIndex={hoveredUnitIndex}
-          focusUnitRequest={unitFocusRequest}
-          availableUnitTypeKeys={availableUnitTypeKeys}
-          unitTypeDetails={unitTypeDetails}
-          onChooseUnitType={requestUnitTypeDetails}
-          newUnitTypeUrl={newUnitTypeUrl}
-          availableItemKeys={availableItemKeys}
-          itemDetails={itemDetails}
-          onChooseItem={requestItemDetails}
-          newItemUrl={newItemUrl}
-          onRefresh={handleRefresh}
-          refreshStatus={refreshStatus}
-          tool={tool}
-          placement={placement}
-          canPlaceOnMap={canPlaceOnMap}
-          pendingUnitType={pendingUnitType}
-          onStartAddUnit={startAddUnit}
-          unitPlacement={unitPlacement}
-          onStartUnitPlacement={startUnitPlacement}
-          patrolStepPlacement={patrolStepPlacement}
-          onStartPatrolStepPlacement={startPatrolStepPlacement}
-          onStartPatrolStepEdit={startPatrolStepEdit}
-          wanderLocationPlacement={wanderLocationPlacement}
-          onStartWanderLocationPlacement={startWanderLocationPlacement}
-          onUpdateMovement={updateMovement}
-          onHoverPatrolStep={setHoveredPatrolStep}
-          onExpandedIndicesChange={setExpandedUnitIndices}
-          groupingMode={groupingMode}
-          onStartGroupingMode={startGroupingMode}
-          onToggleGroupMember={toggleGroupMember}
-          hoveredGroupIdentifier={hoveredGroupIdentifier}
-          onHoverGroup={setHoveredGroupIdentifier}
-          pendingGroupNames={pendingGroupNames}
-          onAddPendingGroup={addPendingGroup}
-          onRenameGroup={renameGroup}
-          dispatch={dispatch}
-        />
+        {simulating ? (
+          <div className="map-sidebar-section-heading map-simulate-notice">
+            <h3>Simulating units - editing is disabled while this runs.</h3>
+          </div>
+        ) : (
+          <>
+            <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
+            <BarriersPanel
+              barriers={mapData.barriers}
+              selectedIndex={selectedBarrierIndex}
+              onSelect={setSelectedBarrierIndex}
+              onHover={setHoveredBarrierIndex}
+              onHoverPoint={setHoveredPoint}
+              placement={placement}
+              onStartPlacement={startBarrierPlacement}
+              onStartPointEdit={startBarrierPointEdit}
+              tool={tool}
+              onStartAddCircle={() => startTool("add-circle")}
+              canPlaceOnMap={canPlaceOnMap}
+              otherPlacementActive={!!connectionPlacement}
+              dispatch={dispatch}
+            />
+            <ConnectionsPanel
+              connections={mapData.connections}
+              selectedIndex={selectedConnectionIndex}
+              onSelect={setSelectedConnectionIndex}
+              onHover={setHoveredConnectionIndex}
+              tool={tool}
+              placement={placement}
+              canPlaceOnMap={canPlaceOnMap}
+              connectionPlacement={connectionPlacement}
+              onStartConnectionPlacement={startConnectionFieldPlacement}
+              onStartAddPointConnection={() => startTool("add-point-connection")}
+              onStartAddLineConnection={() => startTool("add-line-connection")}
+              dispatch={dispatch}
+            />
+            <UnitsPanel
+              units={mapData.units}
+              selectedIndex={selectedUnitIndex}
+              onSelect={setSelectedUnitIndex}
+              onHover={setHoveredUnitIndex}
+              hoveredIndex={hoveredUnitIndex}
+              focusUnitRequest={unitFocusRequest}
+              availableUnitTypeKeys={availableUnitTypeKeys}
+              unitTypeDetails={unitTypeDetails}
+              onChooseUnitType={requestUnitTypeDetails}
+              newUnitTypeUrl={newUnitTypeUrl}
+              availableItemKeys={availableItemKeys}
+              itemDetails={itemDetails}
+              onChooseItem={requestItemDetails}
+              newItemUrl={newItemUrl}
+              onRefresh={handleRefresh}
+              refreshStatus={refreshStatus}
+              tool={tool}
+              placement={placement}
+              canPlaceOnMap={canPlaceOnMap}
+              pendingUnitType={pendingUnitType}
+              onStartAddUnit={startAddUnit}
+              unitPlacement={unitPlacement}
+              onStartUnitPlacement={startUnitPlacement}
+              patrolStepPlacement={patrolStepPlacement}
+              onStartPatrolStepPlacement={startPatrolStepPlacement}
+              onStartPatrolStepEdit={startPatrolStepEdit}
+              wanderLocationPlacement={wanderLocationPlacement}
+              onStartWanderLocationPlacement={startWanderLocationPlacement}
+              onUpdateMovement={updateMovement}
+              onHoverPatrolStep={setHoveredPatrolStep}
+              onExpandedIndicesChange={setExpandedUnitIndices}
+              groupingMode={groupingMode}
+              onStartGroupingMode={startGroupingMode}
+              onToggleGroupMember={toggleGroupMember}
+              hoveredGroupIdentifier={hoveredGroupIdentifier}
+              onHoverGroup={setHoveredGroupIdentifier}
+              pendingGroupNames={pendingGroupNames}
+              onAddPendingGroup={addPendingGroup}
+              onRenameGroup={renameGroup}
+              dispatch={dispatch}
+            />
+          </>
+        )}
       </MapSidebar>
     </div>
   );
