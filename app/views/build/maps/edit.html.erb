@@ -9,4 +9,8 @@
   data-initial-unit-type-details="<%= @initial_unit_type_details.to_json %>"
   data-new-unit-type-url="<%= new_build_unit_type_path %>"
   data-available-unit-types-url="<%= available_unit_types_build_map_path(id: params[:id]) %>"
+  data-available-item-keys="<%= @available_item_keys.to_json %>"
+  data-initial-item-details="<%= @initial_item_details.to_json %>"
+  data-new-item-url="<%= new_build_item_path %>"
+  data-available-items-url="<%= available_items_build_map_path(id: params[:id]) %>"
 ></div>

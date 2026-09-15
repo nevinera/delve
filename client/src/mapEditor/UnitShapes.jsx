@@ -12,7 +12,7 @@ const SELECTED_RING_COLOR = "#ffb0b0";
 const HOVER_RING_COLOR = "#fff";
 const DEFAULT_TOKEN_RADIUS_FEET = 2; // used only if the unit's type is missing from availableUnitTypes
 
-export default function UnitShapes({units, pixelDimensions, feetDimensions, tool, availableUnitTypes, selectedIndex, hoveredIndex, onSelect, onStartDrag}) {
+export default function UnitShapes({units, pixelDimensions, feetDimensions, tool, availableUnitTypes, selectedIndex, hoveredIndex, onSelect, onStartDrag, onHoverUnit}) {
   const selectable = tool === "select";
 
   return (
@@ -28,7 +28,12 @@ export default function UnitShapes({units, pixelDimensions, feetDimensions, tool
         const clipId = `map-unit-token-clip-${i}`;
 
         return (
-          <g key={i} onPointerDown={selectable ? (e) => onStartDrag(i, e) : undefined}>
+          <g
+            key={i}
+            onPointerDown={selectable ? (e) => onStartDrag(i, e) : undefined}
+            onPointerEnter={() => onHoverUnit?.(i)}
+            onPointerLeave={() => onHoverUnit?.(null)}
+          >
             {info?.tokenImageUrl
               ? (
                 <>

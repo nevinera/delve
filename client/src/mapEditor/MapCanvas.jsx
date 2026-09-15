@@ -55,7 +55,7 @@ export default function MapCanvas({
   selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement,
   selectedConnectionIndex, onSelectConnection, hoveredConnectionIndex,
   connectionPlacement, onPlaceConnectionField, onCancelConnectionPlacement,
-  selectedUnitIndex, onSelectUnit, hoveredUnitIndex, pendingUnitType, availableUnitTypes = {},
+  selectedUnitIndex, onSelectUnit, hoveredUnitIndex, onHoverUnit, pendingUnitType, availableUnitTypes = {},
   unitPlacement, onPlaceUnitPosition, onCancelUnitPlacement,
   tool = "select", onToolChange,
 }) {
@@ -753,6 +753,7 @@ export default function MapCanvas({
                 hoveredIndex={hoveredUnitIndex}
                 onSelect={onSelectUnit}
                 onStartDrag={startDragUnit}
+                onHoverUnit={onHoverUnit}
               />
             )}
           </div>

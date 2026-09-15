@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 
 // "+ Add Unit" is two steps, unlike every other add-tool here: pick a unit
 // type from the dropdown (this panel's own local state - it's not written
@@ -63,17 +63,121 @@ function UnitTypeSelect({value, availableUnitTypeKeys, unitTypeDetails, onChange
 // token looks like.
 const HOSTILITY_COLORS = {hostile: "#e05a5a", neutral: "#d9b64a", friendly: "#5ac07a"};
 
-function TokenThumb({unit, unitTypeDetails}) {
+function TokenThumb({unit, unitTypeDetails, className = "map-unit-token-thumb"}) {
   const tokenImageUrl = unitTypeDetails[unit.unitType]?.tokenImageUrl;
   if (tokenImageUrl) {
-    return <img className="map-unit-token-thumb" src={tokenImageUrl} alt="" />;
+    return <img className={className} src={tokenImageUrl} alt="" />;
   }
   return (
     <div
-      className="map-unit-token-thumb map-unit-token-thumb-fallback"
+      className={`${className} map-unit-token-thumb-fallback`}
       style={{background: HOSTILITY_COLORS[unit.hostility] ?? HOSTILITY_COLORS.hostile}}
     />
   );
+}
+
+// Falls back to the raw key, same as unitTypeLabel - see MapEditor's
+// itemDetails (keyed by the item's file path, lazily populated).
+function itemLabel(itemDetails, itemKey) {
+  return itemDetails[itemKey]?.name || itemKey;
+}
+
+// lootTable is a plain {identifier: weight} object (docs/schema/zone.md's
+// LootTable), not an entry array like every other list in this editor - so
+// add/remove/reweigh all funnel through one dispatch of the whole updated
+// object rather than ADD_ENTRY/REMOVE_ENTRY. A new entry always starts at
+// weight 1: since every entry starts equal, an untouched table is "one
+// item, evenly split among options" for free, no redistribution math
+// needed (see the map editor plan's Slice 6).
+// docs/schema/unit.md's lootCount: a resolved value >= 1 awards that many
+// items (truncated); a value between 0 and 1 is instead the probability of
+// awarding exactly one item (0 otherwise) - the game server (see
+// game-server/internal/instancestate/loot.go's resolveLootCount) implements
+// this split. This field only edits a fixed number for now, not a
+// [min, max] range - matches every other numeric field in this editor
+// (e.g. currentHpFraction), which are all single values, not ranges.
+function LootCountField({unit, unitIndex, dispatch}) {
+  const value = unit.lootCount ?? 1;
+  return (
+    <div className="map-loot-count-field">
+      <label>
+        Loot Count{" "}
+        <input
+          type="number" min="0" step="0.1" value={value}
+          onChange={(e) => dispatch({
+            type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "lootCount",
+            value: e.target.value === "" ? 1 : parseFloat(e.target.value),
+          })}
+        />
+      </label>
+      <p className="map-sidebar-hint">1 or more: number of items dropped. Between 0 and 1: odds of dropping one item.</p>
+    </div>
+  );
+}
+
+function LootTableFields({unit, unitIndex, availableItemKeys, itemDetails, onChooseItem, dispatch}) {
+  const [chosenItem, setChosenItem] = useState("");
+  const lootTable = unit.lootTable ?? {};
+  const entries = Object.entries(lootTable);
+  // An item already in the table isn't offered again - lootTable is keyed
+  // by identifier, so picking it again would just silently overwrite the
+  // existing entry's weight instead of adding a second one.
+  const usedIdentifiers = new Set(entries.map(([identifier]) => identifier));
+  const pickableKeys = availableItemKeys.filter((key) => !usedIdentifiers.has(itemDetails[key]?.identifier ?? key));
+
+  function setLootTable(next) {
+    dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "lootTable", value: next});
+  }
+
+  function addEntry() {
+    if (!chosenItem) return;
+    const identifier = itemDetails[chosenItem]?.identifier ?? chosenItem;
+    setLootTable({...lootTable, [identifier]: 1});
+    setChosenItem("");
+  }
+
+  function removeEntry(identifier) {
+    const next = {...lootTable};
+    delete next[identifier];
+    setLootTable(next);
+  }
+
+  function setWeight(identifier, weight) {
+    setLootTable({...lootTable, [identifier]: weight});
+  }
+
+  return (
+    <div className="map-unit-loot-table">
+      <h4>Loot Table</h4>
+      <LootCountField unit={unit} unitIndex={unitIndex} dispatch={dispatch} />
+      {entries.length === 0 && <p className="map-editor-sidebar-placeholder">No loot yet.</p>}
+      {entries.map(([identifier, weight]) => (
+        <div key={identifier} className="map-loot-entry">
+          <span className="map-loot-entry-name">{itemLabel(itemDetails, identifier)}</span>
+          <input
+            type="number" min="1" step="1" value={weight}
+            onChange={(e) => setWeight(identifier, e.target.value === "" ? 1 : parseInt(e.target.value, 10))}
+          />
+          <button type="button" className="map-loot-entry-remove" onClick={() => removeEntry(identifier)}>×</button>
+        </div>
+      ))}
+      <div className="add-buttons-row">
+        <select value={chosenItem} onChange={(e) => { setChosenItem(e.target.value); onChooseItem(e.target.value); }}>
+          <option value="">Choose item…</option>
+          {pickableKeys.map((key) => <option key={key} value={key}>{itemLabel(itemDetails, key)}</option>)}
+        </select>
+        <button type="button" className="add-entry" disabled={!chosenItem} onClick={addEntry}>+ Add Loot Entry</button>
+      </div>
+    </div>
+  );
+}
+
+// Small utf8 marker shown in a unit's collapsed row when it has any loot
+// entries, so "does this unit drop anything" is visible without expanding
+// every row to check.
+function LootIcon({unit}) {
+  if (!unit.lootTable || Object.keys(unit.lootTable).length === 0) return null;
+  return <span className="map-unit-row-loot-icon" title="Has loot">💰</span>;
 }
 
 function PositionButton({unitIndex, position, unitPlacement, onStartUnitPlacement}) {
@@ -90,14 +194,56 @@ function PositionButton({unitIndex, position, unitPlacement, onStartUnitPlacemen
 }
 
 export default function UnitsPanel({
-  units, selectedIndex, onSelect, onHover,
-  availableUnitTypeKeys, unitTypeDetails, onChooseUnitType, newUnitTypeUrl, onRefreshUnitTypes, refreshStatus,
+  units, selectedIndex, onSelect, onHover, hoveredIndex,
+  availableUnitTypeKeys, unitTypeDetails, onChooseUnitType, newUnitTypeUrl,
+  availableItemKeys, itemDetails, onChooseItem, newItemUrl,
+  onRefresh, refreshStatus,
   tool, placement, canPlaceOnMap, pendingUnitType, onStartAddUnit,
   unitPlacement, onStartUnitPlacement, dispatch,
+  focusUnitRequest,
 }) {
   const [sectionCollapsed, setSectionCollapsed] = useState(true);
   const [chosenUnitType, setChosenUnitType] = useState("");
+  // Each unit's row collapses independently - unlike the section-level
+  // collapse above, there's no single "selected" unit: a row toggles only
+  // itself on click, so several can be open at once (see PositionButton's
+  // unitPlacement for the one thing that's still exclusive - re-placing a
+  // position on the map).
+  const [expandedIndices, setExpandedIndices] = useState(() => new Set());
   const toolBusy = tool !== "select" || !!placement || !!unitPlacement || !canPlaceOnMap;
+  const rowRefs = useRef({});
+  const pendingScrollIndexRef = useRef(null);
+
+  function toggleExpanded(index) {
+    setExpandedIndices((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  }
+
+  // A unit clicked *on the map* (see MapCanvas/MapEditor's focusUnitFromMap)
+  // is different from clicking its row here: it opens that unit's row
+  // exclusively (closing every other open row) and scrolls it into view -
+  // clicking a row directly never closes any other row. focusUnitRequest
+  // carries a nonce so re-clicking the same unit's token still re-scrolls.
+  useEffect(() => {
+    if (!focusUnitRequest) return;
+    setSectionCollapsed(false);
+    setExpandedIndices(new Set([focusUnitRequest.index]));
+    pendingScrollIndexRef.current = focusUnitRequest.index;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusUnitRequest]);
+
+  useEffect(() => {
+    const index = pendingScrollIndexRef.current;
+    if (index === null) return;
+    const el = rowRefs.current[index];
+    if (el) {
+      el.scrollIntoView({block: "nearest", behavior: "smooth"});
+      pendingScrollIndexRef.current = null;
+    }
+  });
 
   function updateUnit(index, fields) {
     Object.entries(fields).forEach(([field, value]) => {
@@ -108,6 +254,12 @@ export default function UnitsPanel({
   function removeUnit(index) {
     dispatch({type: "REMOVE_ENTRY", section: "units", index});
     if (selectedIndex === index) onSelect(null);
+    setExpandedIndices((current) => {
+      if (!current.has(index)) return current;
+      const next = new Set(current);
+      next.delete(index);
+      return next;
+    });
   }
 
   return (
@@ -120,7 +272,8 @@ export default function UnitsPanel({
         <>
           <p className="map-sidebar-unit-type-links">
             <a href={newUnitTypeUrl} target="_blank" rel="noreferrer">+ New Unit Type</a>{" "}
-            <button type="button" onClick={(e) => { e.stopPropagation(); onRefreshUnitTypes(); }}>Refresh</button>{" "}
+            <a href={newItemUrl} target="_blank" rel="noreferrer">+ New Item</a>{" "}
+            <button type="button" onClick={(e) => { e.stopPropagation(); onRefresh(); }}>Refresh</button>{" "}
             {refreshStatus}
           </p>
           <div className="add-buttons-row">
@@ -144,61 +297,80 @@ export default function UnitsPanel({
           {units.length === 0 && tool !== "add-unit"
             ? <p className="map-editor-sidebar-placeholder">No units yet - pick a unit type above and click "+ Add Unit".</p>
             : units.map((unit, i) => {
-              const selected = selectedIndex === i;
+              const expanded = expandedIndices.has(i);
+              const hovered = hoveredIndex === i;
               return (
                 <div
                   key={i}
-                  className={`entry-block${selected ? " map-entry-selected" : ""}`}
+                  ref={(el) => { rowRefs.current[i] = el; }}
+                  className={`entry-block map-unit-block${expanded ? " map-unit-expanded" : ""}${hovered ? " map-entry-hovered" : ""}`}
                   onMouseEnter={() => onHover(i)}
                   onMouseLeave={() => onHover(null)}
                 >
-                  <div className="entry-heading-row" onClick={() => onSelect(selected ? null : i)}>
-                    <h3>Unit {i + 1}: {unitTypeLabel(unitTypeDetails, unit.unitType)}</h3>
-                    <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); removeUnit(i); }}>
-                      Remove
-                    </button>
-                  </div>
-                  <div className="map-unit-body">
-                    <table>
-                      <tbody>
-                        <tr>
-                          <th>Type</th>
-                          <td>
-                            <UnitTypeSelect
-                              value={unit.unitType} availableUnitTypeKeys={availableUnitTypeKeys} unitTypeDetails={unitTypeDetails}
-                              onChange={(v) => { updateUnit(i, {unitType: v}); onChooseUnitType(v); }}
-                            />
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Identifier</th>
-                          <td><TextField value={unit.identifier} placeholder="goblin_a" onChange={(v) => updateUnit(i, {identifier: v})} /></td>
-                        </tr>
-                        <tr>
-                          <th>Position</th>
-                          <td>
-                            <PositionButton
-                              unitIndex={i} position={unit.position}
-                              unitPlacement={unitPlacement} onStartUnitPlacement={onStartUnitPlacement}
-                            />
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>HP</th>
-                          <td>
-                            <input
-                              type="range" min="0" max="1" step="0.01" value={unit.currentHpFraction ?? 1}
-                              onChange={(e) => updateUnit(i, {currentHpFraction: parseFloat(e.target.value)})}
-                            />
-                            {" "}{Math.round((unit.currentHpFraction ?? 1) * 100)}%
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <div className="map-unit-token-panel">
-                      <TokenThumb unit={unit} unitTypeDetails={unitTypeDetails} />
+                  <div className="entry-heading-row map-unit-row" onClick={() => toggleExpanded(i)}>
+                    <div className="map-unit-row-summary">
+                      <span className="map-sidebar-section-toggle">{expanded ? "▾" : "▸"}</span>
+                      <TokenThumb unit={unit} unitTypeDetails={unitTypeDetails} className="map-unit-token-thumb map-unit-row-token" />
+                      <span className="map-unit-row-name">{unit.identifier || `Unit ${i + 1}`}</span>
+                      <span className="map-unit-row-type">{unitTypeLabel(unitTypeDetails, unit.unitType)}</span>
+                      <LootIcon unit={unit} />
                     </div>
+                    {expanded && (
+                      <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); removeUnit(i); }}>
+                        Remove
+                      </button>
+                    )}
                   </div>
+                  {expanded && (
+                    <>
+                      <div className="map-unit-body">
+                        <table>
+                          <tbody>
+                            <tr>
+                              <th>Type</th>
+                              <td>
+                                <UnitTypeSelect
+                                  value={unit.unitType} availableUnitTypeKeys={availableUnitTypeKeys} unitTypeDetails={unitTypeDetails}
+                                  onChange={(v) => { updateUnit(i, {unitType: v}); onChooseUnitType(v); }}
+                                />
+                              </td>
+                            </tr>
+                            <tr>
+                              <th>Identifier</th>
+                              <td><TextField value={unit.identifier} placeholder="goblin_a" onChange={(v) => updateUnit(i, {identifier: v})} /></td>
+                            </tr>
+                            <tr>
+                              <th>Position</th>
+                              <td>
+                                <PositionButton
+                                  unitIndex={i} position={unit.position}
+                                  unitPlacement={unitPlacement} onStartUnitPlacement={onStartUnitPlacement}
+                                />
+                              </td>
+                            </tr>
+                            <tr>
+                              <th>HP</th>
+                              <td>
+                                <input
+                                  type="range" min="0" max="1" step="0.01" value={unit.currentHpFraction ?? 1}
+                                  onChange={(e) => updateUnit(i, {currentHpFraction: parseFloat(e.target.value)})}
+                                />
+                                {" "}{Math.round((unit.currentHpFraction ?? 1) * 100)}%
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <div className="map-unit-token-panel">
+                          <TokenThumb unit={unit} unitTypeDetails={unitTypeDetails} />
+                        </div>
+                      </div>
+                      <LootTableFields
+                        unit={unit} unitIndex={i}
+                        availableItemKeys={availableItemKeys} itemDetails={itemDetails} onChooseItem={onChooseItem}
+                        dispatch={dispatch}
+                      />
+                    </>
+                  )}
                 </div>
               );
             })}

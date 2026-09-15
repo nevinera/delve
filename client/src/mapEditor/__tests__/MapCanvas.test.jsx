@@ -759,6 +759,25 @@ describe("MapCanvas", () => {
       expect(onSelectUnit).toHaveBeenCalledWith(0);
     });
 
+    it("calls onHoverUnit on pointer enter/leave of a unit's marker (so its sidebar row can highlight)", () => {
+      const onHoverUnit = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          selectedUnitIndex={null} onSelectUnit={noop} onHoverUnit={onHoverUnit}
+        />
+      );
+
+      const marker = document.querySelector(".map-canvas-shapes g");
+      fireEvent.pointerEnter(marker);
+      expect(onHoverUnit).toHaveBeenCalledWith(0);
+      fireEvent.pointerLeave(marker);
+      expect(onHoverUnit).toHaveBeenCalledWith(null);
+    });
+
     it("dragging a unit's marker moves its position, keeping its facing angle", () => {
       const dispatch = vi.fn();
       const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 90}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];

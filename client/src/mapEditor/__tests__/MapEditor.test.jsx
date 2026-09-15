@@ -231,7 +231,8 @@ describe("MapEditor", () => {
 
     fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
 
-    expect(screen.getByText(/Unit 1: Goblin Raider/)).toBeInTheDocument();
+    expect(document.querySelector(".map-unit-row-name")).toHaveTextContent("Unit 1");
+    expect(document.querySelector(".map-unit-row-type")).toHaveTextContent("Goblin Raider");
     // Single-shot - the tool reverted to "select", so the button's enabled
     // again (the dropdown's own choice isn't cleared by placing one).
     expect(screen.getByRole("button", {name: "+ Add Unit"})).not.toBeDisabled();
@@ -257,6 +258,7 @@ describe("MapEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "Fit"}));
 
     fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+    fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row
     fireEvent.click(screen.getByRole("button", {name: "0, 0"})); // the position pill
     expect(screen.getByText("Placing Points")).toBeInTheDocument();
 
@@ -264,6 +266,44 @@ describe("MapEditor", () => {
 
     expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
     expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
+  });
+
+  it("clicking a unit's token on the map opens only that unit's row and scrolls it into view, closing any others already open", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{
+          ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+          units: [
+            {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+            {unitType: "goblin-raider", identifier: "b", position: {x: 50, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+          ],
+        }}
+        initialImageDataUri="data:image/webp;base64,AAAA"
+        initialAvailableUnitTypeKeys={["goblin-raider"]}
+        initialUnitTypeDetails={{"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}}
+        initialPixelDimensions={{width: 800, height: 600}}
+      />
+    );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+    const rows = document.querySelectorAll(".map-unit-row");
+    fireEvent.click(rows[0]);
+    fireEvent.click(rows[1]);
+    expect(document.querySelectorAll(".map-unit-body")).toHaveLength(2);
+
+    const markers = document.querySelectorAll(".map-canvas-shapes g");
+    fireEvent.pointerDown(markers[0]);
+
+    const bodies = document.querySelectorAll(".map-unit-body");
+    expect(bodies).toHaveLength(1);
+    expect(document.querySelectorAll(".map-unit-block")[0].querySelector(".map-unit-body")).toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
   it("flows a coordinate pill click in the sidebar into re-placing an existing point connection", () => {
@@ -438,6 +478,64 @@ describe("MapEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
 
       await waitFor(() => expect(screen.getByText(/Refresh failed/)).toBeInTheDocument());
+    });
+
+    it("refreshes both unit type and item key lists from the one shared button", async () => {
+      global.fetch = vi.fn((url) => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(url.includes("available_unit_types") ? ["goblin-raider"] : ["sword-of-doom"]),
+      }));
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance"
+          initialMap={{
+            ...BLANK_MAP,
+            units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
+          }}
+          initialAvailableUnitTypeKeys={[]} availableUnitTypesUrl="/build/maps/goblin-cave/gc1-entrance/available_unit_types"
+          initialAvailableItemKeys={[]} availableItemsUrl="/build/maps/goblin-cave/gc1-entrance/available_items"
+        />
+      );
+
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row, revealing its Type dropdown
+      expect(screen.queryAllByRole("option", {name: "goblin-raider"}).length).toBe(0);
+      expect(screen.queryAllByRole("option", {name: "sword-of-doom"}).length).toBe(0);
+
+      fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
+      await waitFor(() => expect(screen.getByText("Refreshed.")).toBeInTheDocument());
+
+      // "goblin-raider" now shows up in both the "+ Add Unit" dropdown and
+      // the existing unit's own Type dropdown.
+      expect(screen.getAllByRole("option", {name: "goblin-raider"}).length).toBe(2);
+      expect(screen.getAllByRole("option", {name: "sword-of-doom"}).length).toBe(1);
+    });
+  });
+
+  describe("loot tables", () => {
+    it("flows choosing an item + '+ Add Loot Entry' into a unit's lootTable at weight 1", () => {
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance"
+          initialMap={{
+            ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+            units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
+          }}
+          initialImageDataUri="data:image/webp;base64,AAAA"
+          initialPixelDimensions={{width: 800, height: 600}}
+          initialAvailableItemKeys={["sword-of-doom"]}
+          initialItemDetails={{"sword-of-doom": {identifier: "sword-of-doom", name: "Sword of Doom", slot: "main_hand"}}}
+        />
+      );
+
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row, revealing its loot table
+      const itemSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="sword-of-doom"]'));
+      fireEvent.change(itemSelect, {target: {value: "sword-of-doom"}});
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Loot Entry"}));
+
+      expect(screen.getByText("Sword of Doom")).toBeInTheDocument();
+      expect(document.querySelector(".map-loot-entry input")).toHaveValue(1);
     });
   });
 

@@ -145,6 +145,28 @@
         width: 64px; height: 64px; border-radius: 50%; border: 1px solid #000;
         object-fit: cover; background: #223;
       }
+      /* A unit's collapsed row: just its token, name, type, and a loot
+         icon - the editing form/loot table only render once expanded. */
+      .map-editor-sidebar-content .map-unit-row-summary { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+      .map-editor-sidebar-content .map-unit-row-token { width: 22px; height: 22px; flex-shrink: 0; }
+      .map-editor-sidebar-content .map-unit-row-name { font-size: 13px; color: #cce; font-weight: 600; white-space: nowrap; }
+      .map-editor-sidebar-content .map-unit-row-type { font-size: 12px; color: #9ab; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .map-editor-sidebar-content .map-unit-row-loot-icon { font-size: 12px; flex-shrink: 0; }
+      /* Hovering a row (or the unit's token on the map, via hoveredIndex)
+         highlights it the same way a canvas-selected entry does. */
+      .map-editor-sidebar-content .entry-block.map-unit-block.map-entry-hovered { background: #202832; }
+      .map-editor-sidebar-content .map-unit-loot-table { margin-top: 8px; }
+      .map-editor-sidebar-content .map-unit-loot-table h4 { font-size: 12px; color: #9ab; font-weight: 600; margin-bottom: 4px; }
+      .map-editor-sidebar-content .map-loot-entry { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 12px; }
+      .map-editor-sidebar-content .map-loot-entry-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .map-editor-sidebar-content .map-loot-entry input[type=number] { width: 48px; }
+      .map-editor-sidebar-content .map-loot-entry-remove {
+        background: none; border: none; color: #e9a; font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; border-radius: 50%;
+      }
+      .map-editor-sidebar-content .map-loot-entry-remove:hover { background: #422; }
+      .map-editor-sidebar-content .map-loot-count-field { font-size: 12px; margin-bottom: 6px; }
+      .map-editor-sidebar-content .map-loot-count-field input[type=number] { width: 56px; }
+      .map-editor-sidebar-content .map-loot-count-field .map-sidebar-hint { margin: 2px 0 0; }
 
       .map-editor-sidebar-content .add-buttons-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
       .map-editor-sidebar-content button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }

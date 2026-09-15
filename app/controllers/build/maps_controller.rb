@@ -1,5 +1,5 @@
 class Build::MapsController < Build::BaseController
-  skip_authorization_check only: [:index, :new, :create, :edit, :available_unit_types]
+  skip_authorization_check only: [:index, :new, :create, :edit, :available_unit_types, :available_items]
   layout "build_map_client", only: :edit
 
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
@@ -28,6 +28,8 @@ class Build::MapsController < Build::BaseController
     @initial_image_data_uri = fetch_image_data_uri
     @available_unit_type_keys = list_unit_type_keys
     @initial_unit_type_details = unit_type_details_for(map_unit_type_keys)
+    @available_item_keys = list_item_keys
+    @initial_item_details = item_details_for(map_loot_item_identifiers)
   end
 
   # Two different things depending on `keys[]`, both re-fetchable from the
@@ -48,6 +50,19 @@ class Build::MapsController < Build::BaseController
   def available_unit_types
     keys = Array(params[:keys])
     render json: keys.present? ? unit_type_details_for(keys) : list_unit_type_keys
+  end
+
+  # Same cheap-list-vs-lazy-details split as #available_unit_types, for the
+  # items a unit's lootTable can reference. Unlike a unit's `unitType` key,
+  # a lootTable key is the item's own `identifier` *field* (per
+  # docs/schema/unit.md), not necessarily its file path - #item_details_for
+  # assumes they match (true of every real item so far, and the convention
+  # Build::ItemsController's own blank_item follows), returning the file's
+  # real identifier either way so a mismatch still writes correctly, just
+  # without a resolvable path back to it for prefetching.
+  def available_items
+    keys = Array(params[:keys])
+    render json: keys.present? ? item_details_for(keys) : list_item_keys
   end
 
   private
@@ -164,6 +179,41 @@ class Build::MapsController < Build::BaseController
 
   def resolve_unit_type_asset_path(key, url)
     Pathname.new("unit_types").join(File.dirname(key)).join(url).cleanpath.to_s
+  end
+
+  # Every items/*.json key (items can nest in subdirectories, same as unit
+  # types) - a directory listing only, same cost tradeoff as
+  # #list_unit_type_keys.
+  def list_item_keys
+    Github::ContentClient.new(current_user).list_directory_recursive("items")
+      .select { |entry| entry["name"].end_with?(".json") }
+      .map { |entry| entry["path"].delete_prefix("items/").delete_suffix(".json") }
+  end
+
+  # Every distinct item identifier already referenced in any unit's
+  # lootTable on this map - what #edit prefetches details for (assuming,
+  # per #available_items' note, that the identifier is also the file path).
+  def map_loot_item_identifiers
+    Array(@map["units"]).flat_map { |unit| (unit["lootTable"] || {}).keys }.uniq
+  end
+
+  # {identifier, name, slot} for exactly the given keys - the returned
+  # `identifier` is the item's own field (what actually belongs in a
+  # lootTable), which may differ from `key` if the assumption above doesn't
+  # hold for a particular item; a key with no matching/parseable file is
+  # just omitted, not an error, same as #unit_type_details_for.
+  def item_details_for(keys)
+    client = Github::ContentClient.new(current_user)
+    keys.filter_map { |key| item_detail_pair(client, key) }.to_h
+  end
+
+  def item_detail_pair(client, key)
+    item = JSON.parse(client.file_content("items/#{key}.json"))
+    [key, {identifier: item["identifier"], name: item["name"], slot: item["slot"]}]
+  rescue Github::ReauthRequiredError
+    raise
+  rescue
+    nil
   end
 
   def blank_map(key)

@@ -135,10 +135,18 @@ RSpec.describe "Build::Maps", type: :request do
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
         end
 
+        # #edit also loads the available-items list for the loot table
+        # dropdown (see Build::MapsController#list_item_keys).
+        def stub_empty_items_dir
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items")
+            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+        end
+
         it "renders the JS editor shell for a map that doesn't exist in the repo yet" do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc2-interior/gc2-interior.json")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
           stub_empty_unit_types_dir
+          stub_empty_items_dir
 
           get "/build/maps/goblin-cave/gc2-interior/edit"
 
@@ -171,6 +179,7 @@ RSpec.describe "Build::Maps", type: :request do
             .with(headers: {"Accept" => "application/vnd.github.raw+json"})
             .to_return(status: 200, headers: {"Content-Type" => "image/webp"}, body: "fake-webp-bytes")
           stub_empty_unit_types_dir
+          stub_empty_items_dir
 
           get "/build/maps/goblin-cave/gc1-entrance/edit"
 
@@ -257,6 +266,67 @@ RSpec.describe "Build::Maps", type: :request do
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
 
           get "/build/maps/goblin-cave/gc1-entrance/available_unit_types", params: {keys: ["deleted-type"]}
+
+          expect(response).to have_http_status(:ok)
+          expect(JSON.parse(response.body)).to eq({})
+        end
+      end
+    end
+
+    describe "GET /build/maps/:id/available_items" do
+      context "with a connected repository" do
+        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+
+        it "without keys[], returns just the cheap key list - no item file is opened" do
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items")
+            .to_return(
+              status: 200,
+              headers: {"Content-Type" => "application/json"},
+              body: [
+                {name: "sword-of-doom.json", path: "items/sword-of-doom.json", type: "file"},
+                {name: "iron-shield.json", path: "items/iron-shield.json", type: "file"}
+              ].to_json
+            )
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_items"
+
+          expect(response).to have_http_status(:ok)
+          expect(JSON.parse(response.body)).to contain_exactly("sword-of-doom", "iron-shield")
+        end
+
+        it "with keys[], returns resolved details for exactly those keys" do
+          sword = {"identifier" => "sword-of-doom", "name" => "Sword of Doom", "slot" => "main_hand"}
+          shield = {"identifier" => "iron-shield", "name" => "Iron Shield", "slot" => "off_hand"}
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items/sword-of-doom.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(sword.to_json), encoding: "base64"}.to_json)
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items/iron-shield.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(shield.to_json), encoding: "base64"}.to_json)
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_items", params: {keys: ["sword-of-doom", "iron-shield"]}
+
+          expect(response).to have_http_status(:ok)
+          json = JSON.parse(response.body)
+          expect(json.keys).to contain_exactly("sword-of-doom", "iron-shield")
+          expect(json["sword-of-doom"]).to eq({"identifier" => "sword-of-doom", "name" => "Sword of Doom", "slot" => "main_hand"})
+          expect(json["iron-shield"]).to eq({"identifier" => "iron-shield", "name" => "Iron Shield", "slot" => "off_hand"})
+        end
+
+        it "with keys[], returns the item's own identifier field, even if it differs from the file key" do
+          mismatched = {"identifier" => "actual-identifier", "name" => "Odd One", "slot" => "chest"}
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items/file-key.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(mismatched.to_json), encoding: "base64"}.to_json)
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_items", params: {keys: ["file-key"]}
+
+          expect(response).to have_http_status(:ok)
+          expect(JSON.parse(response.body)["file-key"]["identifier"]).to eq("actual-identifier")
+        end
+
+        it "with keys[], omits a key whose file no longer exists rather than erroring" do
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items/deleted-item.json")
+            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+
+          get "/build/maps/goblin-cave/gc1-entrance/available_items", params: {keys: ["deleted-item"]}
 
           expect(response).to have_http_status(:ok)
           expect(JSON.parse(response.body)).to eq({})

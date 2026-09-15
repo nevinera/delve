@@ -15,6 +15,10 @@ createRoot(el).render(
       initialUnitTypeDetails={JSON.parse(el.dataset.initialUnitTypeDetails)}
       newUnitTypeUrl={el.dataset.newUnitTypeUrl}
       availableUnitTypesUrl={el.dataset.availableUnitTypesUrl}
+      initialAvailableItemKeys={JSON.parse(el.dataset.availableItemKeys)}
+      initialItemDetails={JSON.parse(el.dataset.initialItemDetails)}
+      newItemUrl={el.dataset.newItemUrl}
+      availableItemsUrl={el.dataset.availableItemsUrl}
     />
   </StrictMode>
 );

@@ -9,17 +9,30 @@ const UNIT_TYPE_DETAILS = {
   "goblin-raider": {name: "Goblin Raider", tokenImageUrl: "data:image/webp;base64,AAAA"},
   slime: {name: "Slime", tokenImageUrl: null},
 };
+const AVAILABLE_ITEM_KEYS = ["sword-of-doom", "iron-shield"];
+const ITEM_DETAILS = {
+  "sword-of-doom": {identifier: "sword-of-doom", name: "Sword of Doom", slot: "main_hand"},
+  "iron-shield": {identifier: "iron-shield", name: "Iron Shield", slot: "off_hand"},
+};
 
 const DEFAULT_PROPS = {
   selectedIndex: null, onSelect: noop, onHover: noop,
   availableUnitTypeKeys: AVAILABLE_UNIT_TYPE_KEYS, unitTypeDetails: UNIT_TYPE_DETAILS, onChooseUnitType: noop,
-  newUnitTypeUrl: "/build/unit_types/new", onRefreshUnitTypes: noop, refreshStatus: "",
+  newUnitTypeUrl: "/build/unit_types/new",
+  availableItemKeys: AVAILABLE_ITEM_KEYS, itemDetails: ITEM_DETAILS, onChooseItem: noop, newItemUrl: "/build/items/new",
+  onRefresh: noop, refreshStatus: "",
   tool: "select", placement: null, canPlaceOnMap: true, pendingUnitType: null, onStartAddUnit: noop,
   unitPlacement: null, onStartUnitPlacement: noop, dispatch: noop,
 };
 
 function expandSection() {
   fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
+}
+
+// A unit's own row is collapsed by default (name/type/token/loot-icon only)
+// - most tests need it open to reach the editing form/loot table.
+function expandUnitRow(i = 0) {
+  fireEvent.click(document.querySelectorAll(".map-unit-row")[i]);
 }
 
 describe("UnitsPanel", () => {
@@ -90,20 +103,77 @@ describe("UnitsPanel", () => {
     expect(screen.queryByText(/No units yet/)).not.toBeInTheDocument();
   });
 
-  it("lists each unit with its type label, identifier field, and HP slider", () => {
-    const units = [{unitType: "goblin-raider", identifier: "goblin_a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 0.5, movement: {type: "still"}}];
+  it("collapses each unit into a row with just its name, type, and token - no loot icon without loot", () => {
+    const units = [{unitType: "goblin-raider", identifier: "goblin_a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
     expandSection();
 
-    expect(screen.getByText(/Unit 1: Goblin Raider/)).toBeInTheDocument();
+    expect(document.querySelector(".map-unit-row-name")).toHaveTextContent("goblin_a");
+    expect(document.querySelector(".map-unit-row-type")).toHaveTextContent("Goblin Raider");
+    expect(document.querySelector(".map-unit-row-token")).toBeInTheDocument();
+    expect(document.querySelector(".map-unit-row-loot-icon")).not.toBeInTheDocument();
+    // Collapsed - the editing form/loot table/Remove button aren't rendered yet.
+    expect(document.querySelector(".map-unit-body")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "Remove"})).not.toBeInTheDocument();
+  });
+
+  it("falls back to 'Unit N' as the row name when a unit has no identifier yet", () => {
+    const units = [{unitType: "goblin-raider", identifier: null, position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+    expandSection();
+
+    expect(document.querySelector(".map-unit-row-name")).toHaveTextContent("Unit 1");
+  });
+
+  it("shows a 💰 loot icon on the row only when the unit has loot entries", () => {
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, lootTable: {"sword-of-doom": 1}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+    expandSection();
+
+    expect(document.querySelector(".map-unit-row-loot-icon")).toHaveTextContent("💰");
+  });
+
+  it("expands a unit's row on click, revealing the editing form, and collapses it again on a second click", () => {
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+    expandSection();
+
+    expect(document.querySelector(".map-unit-body")).not.toBeInTheDocument();
+    expandUnitRow();
+    expect(document.querySelector(".map-unit-body")).toBeInTheDocument();
+    expandUnitRow();
+    expect(document.querySelector(".map-unit-body")).not.toBeInTheDocument();
+  });
+
+  it("expands multiple units' rows independently - opening one doesn't close another", () => {
+    const units = [
+      {unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+      {unitType: "slime", identifier: "b", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+    ];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+    expandSection();
+
+    expandUnitRow(0);
+    expandUnitRow(1);
+
+    expect(document.querySelectorAll(".map-unit-body")).toHaveLength(2);
+  });
+
+  it("lists each unit with its type label, identifier field, and HP slider, once expanded", () => {
+    const units = [{unitType: "goblin-raider", identifier: "goblin_a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 0.5, movement: {type: "still"}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+    expandSection();
+    expandUnitRow();
+
     expect(screen.getByDisplayValue("goblin_a")).toBeInTheDocument();
     expect(screen.getByText("50%")).toBeInTheDocument();
   });
 
-  it("shows a unit's real token image in its own panel beside the editing form", () => {
+  it("shows a unit's real token image in its own panel beside the editing form, once expanded", () => {
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
     expandSection();
+    expandUnitRow();
 
     const body = document.querySelector(".map-unit-body");
     expect(body).toBeInTheDocument();
@@ -117,6 +187,7 @@ describe("UnitsPanel", () => {
     const units = [{unitType: "slime", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
     expandSection();
+    expandUnitRow();
 
     expect(document.querySelector(".map-unit-token-panel img")).not.toBeInTheDocument();
     expect(document.querySelector(".map-unit-token-panel .map-unit-token-thumb-fallback")).toBeInTheDocument();
@@ -127,6 +198,7 @@ describe("UnitsPanel", () => {
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 12.34, y: 8, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} onStartUnitPlacement={onStartUnitPlacement} />);
     expandSection();
+    expandUnitRow();
 
     fireEvent.click(screen.getByRole("button", {name: "12.3, 8"}));
 
@@ -137,6 +209,7 @@ describe("UnitsPanel", () => {
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} unitPlacement={{unitIndex: 0}} />);
     expandSection();
+    expandUnitRow();
 
     const pending = screen.getByRole("button", {name: "…"});
     expect(pending).toBeDisabled();
@@ -156,7 +229,7 @@ describe("UnitsPanel", () => {
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
     expandSection();
 
-    expect(screen.getByText(/Unit 1: unknown-type/)).toBeInTheDocument();
+    expect(document.querySelector(".map-unit-row-type")).toHaveTextContent("unknown-type");
   });
 
   it("edits a unit's type via the dropdown", () => {
@@ -164,9 +237,10 @@ describe("UnitsPanel", () => {
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
     expandSection();
+    expandUnitRow();
 
     const selects = screen.getAllByRole("combobox");
-    const typeSelect = selects.find((el) => el.closest(".entry-block"));
+    const typeSelect = selects.find((el) => el.closest(".map-unit-body"));
     fireEvent.change(typeSelect, {target: {value: "slime"}});
 
     expect(dispatch).toHaveBeenCalledWith({
@@ -178,10 +252,11 @@ describe("UnitsPanel", () => {
     const units = [{unitType: "goblin", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
     expandSection();
+    expandUnitRow();
 
     expect(screen.getByRole("option", {name: "goblin (not a real unit type)"})).toBeInTheDocument();
     const selects = screen.getAllByRole("combobox");
-    const typeSelect = selects.find((el) => el.closest(".entry-block"));
+    const typeSelect = selects.find((el) => el.closest(".map-unit-body"));
     expect(typeSelect).toHaveValue("goblin");
   });
 
@@ -190,6 +265,7 @@ describe("UnitsPanel", () => {
     const units = [{unitType: "goblin-raider", identifier: "old", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
     expandSection();
+    expandUnitRow();
 
     fireEvent.change(screen.getByDisplayValue("old"), {target: {value: "new_id"}});
 
@@ -203,22 +279,13 @@ describe("UnitsPanel", () => {
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
     expandSection();
+    expandUnitRow();
 
     fireEvent.change(screen.getByRole("slider"), {target: {value: "0.25"}});
 
     expect(dispatch).toHaveBeenCalledWith({
       type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "currentHpFraction", value: 0.25,
     });
-  });
-
-  it("selects an entry on click, highlighting it", () => {
-    const onSelect = vi.fn();
-    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
-    render(<UnitsPanel {...DEFAULT_PROPS} units={units} onSelect={onSelect} />);
-    expandSection();
-
-    fireEvent.click(screen.getByText(/Unit 1:/));
-    expect(onSelect).toHaveBeenCalledWith(0);
   });
 
   it("calls onHover on mouse enter/leave of an entry", () => {
@@ -234,12 +301,21 @@ describe("UnitsPanel", () => {
     expect(onHover).toHaveBeenCalledWith(null);
   });
 
+  it("highlights a row when hoveredIndex matches it (e.g. hovering its token on the map)", () => {
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} hoveredIndex={0} />);
+    expandSection();
+
+    expect(document.querySelector(".entry-block")).toHaveClass("map-entry-hovered");
+  });
+
   it("removes a unit, clearing selection if it was selected", () => {
     const dispatch = vi.fn();
     const onSelect = vi.fn();
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} selectedIndex={0} onSelect={onSelect} dispatch={dispatch} />);
     expandSection();
+    expandUnitRow();
 
     fireEvent.click(screen.getByRole("button", {name: "Remove"}));
 
@@ -247,23 +323,165 @@ describe("UnitsPanel", () => {
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
-  it("calls onRefreshUnitTypes from the Refresh button, and shows refreshStatus", () => {
-    const onRefreshUnitTypes = vi.fn();
-    render(<UnitsPanel {...DEFAULT_PROPS} units={[]} onRefreshUnitTypes={onRefreshUnitTypes} refreshStatus="Refreshed." />);
+  it("opens a unit's row exclusively, closing others, and scrolls it into view when focusUnitRequest targets it", () => {
+    const units = [
+      {unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+      {unitType: "slime", identifier: "b", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+    ];
+    const {rerender} = render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+    // Section starts collapsed, and both rows are opened directly by hand.
+    expandSection();
+    expandUnitRow(0);
+    expandUnitRow(1);
+    expect(document.querySelectorAll(".map-unit-body")).toHaveLength(2);
+
+    const scrollIntoView = vi.fn();
+    document.querySelectorAll(".map-unit-block").forEach((el) => { el.scrollIntoView = scrollIntoView; });
+    rerender(<UnitsPanel {...DEFAULT_PROPS} units={units} focusUnitRequest={{index: 1, nonce: 1}} />);
+
+    const bodies = document.querySelectorAll(".map-unit-body");
+    expect(bodies).toHaveLength(1);
+    expect(document.querySelectorAll(".map-unit-block")[1].querySelector(".map-unit-body")).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  describe("loot table", () => {
+    function unitWithLoot(lootTable) {
+      return {unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, lootTable};
+    }
+
+    it("shows a placeholder when a unit has no loot yet", () => {
+      render(<UnitsPanel {...DEFAULT_PROPS} units={[unitWithLoot(undefined)]} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(screen.getByText("No loot yet.")).toBeInTheDocument();
+    });
+
+    it("lists each loot entry with its resolved item name and weight", () => {
+      const units = [unitWithLoot({"sword-of-doom": 3})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(screen.getByText("Sword of Doom")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("3")).toBeInTheDocument();
+    });
+
+    it("adds a new loot entry at weight 1, keyed by the item's own identifier", () => {
+      const dispatch = vi.fn();
+      const units = [unitWithLoot({})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+      expandSection();
+      expandUnitRow();
+
+      // Two comboboxes exist (unit type + loot item) - find the one offering items.
+      const itemSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="sword-of-doom"]'));
+      fireEvent.change(itemSelect, {target: {value: "sword-of-doom"}});
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Loot Entry"}));
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "lootTable", value: {"sword-of-doom": 1},
+      });
+    });
+
+    it("does not offer an item that's already in the loot table", () => {
+      const units = [unitWithLoot({"sword-of-doom": 1})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+      expandSection();
+      expandUnitRow();
+
+      const itemSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="iron-shield"]'));
+      expect(itemSelect.querySelector('option[value="sword-of-doom"]')).not.toBeInTheDocument();
+      expect(itemSelect.querySelector('option[value="iron-shield"]')).toBeInTheDocument();
+    });
+
+    it("edits a loot entry's weight", () => {
+      const dispatch = vi.fn();
+      const units = [unitWithLoot({"sword-of-doom": 1})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+      expandSection();
+      expandUnitRow();
+
+      fireEvent.change(document.querySelector(".map-loot-entry input"), {target: {value: "5"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "lootTable", value: {"sword-of-doom": 5},
+      });
+    });
+
+    it("removes a loot entry", () => {
+      const dispatch = vi.fn();
+      const units = [unitWithLoot({"sword-of-doom": 1, "iron-shield": 2})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+      expandSection();
+      expandUnitRow();
+
+      fireEvent.click(document.querySelector(".map-loot-entry-remove"));
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "lootTable", value: {"iron-shield": 2},
+      });
+    });
+
+    it("requests item details when an item is chosen from the dropdown", () => {
+      const onChooseItem = vi.fn();
+      const units = [unitWithLoot({})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onChooseItem={onChooseItem} />);
+      expandSection();
+      expandUnitRow();
+
+      const itemSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="sword-of-doom"]'));
+      fireEvent.change(itemSelect, {target: {value: "sword-of-doom"}});
+
+      expect(onChooseItem).toHaveBeenCalledWith("sword-of-doom");
+    });
+
+    it("defaults the loot count field to 1 when unset", () => {
+      const units = [unitWithLoot({"sword-of-doom": 1})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+      expandSection();
+      expandUnitRow();
+
+      expect(document.querySelector(".map-loot-count-field input").value).toBe("1");
+    });
+
+    it("edits the loot count field", () => {
+      const dispatch = vi.fn();
+      const units = [unitWithLoot({"sword-of-doom": 1})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+      expandSection();
+      expandUnitRow();
+
+      fireEvent.change(document.querySelector(".map-loot-count-field input"), {target: {value: "0.25"}});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "lootCount", value: 0.25,
+      });
+    });
+  });
+
+  it("calls onRefresh from the shared Refresh button, and shows refreshStatus", () => {
+    const onRefresh = vi.fn();
+    render(<UnitsPanel {...DEFAULT_PROPS} units={[]} onRefresh={onRefresh} refreshStatus="Refreshed." />);
     expandSection();
 
     fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
 
-    expect(onRefreshUnitTypes).toHaveBeenCalled();
+    expect(onRefresh).toHaveBeenCalled();
     expect(screen.getByText("Refreshed.")).toBeInTheDocument();
   });
 
-  it("links '+ New Unit Type' to newUnitTypeUrl, opening in a new tab", () => {
-    render(<UnitsPanel {...DEFAULT_PROPS} units={[]} newUnitTypeUrl="/build/unit_types/new" />);
+  it("links '+ New Unit Type' to newUnitTypeUrl, and '+ New Item' to newItemUrl, both opening in a new tab", () => {
+    render(<UnitsPanel {...DEFAULT_PROPS} units={[]} newUnitTypeUrl="/build/unit_types/new" newItemUrl="/build/items/new" />);
     expandSection();
 
-    const link = screen.getByRole("link", {name: "+ New Unit Type"});
-    expect(link).toHaveAttribute("href", "/build/unit_types/new");
-    expect(link).toHaveAttribute("target", "_blank");
+    const unitTypeLink = screen.getByRole("link", {name: "+ New Unit Type"});
+    expect(unitTypeLink).toHaveAttribute("href", "/build/unit_types/new");
+    expect(unitTypeLink).toHaveAttribute("target", "_blank");
+
+    const itemLink = screen.getByRole("link", {name: "+ New Item"});
+    expect(itemLink).toHaveAttribute("href", "/build/items/new");
+    expect(itemLink).toHaveAttribute("target", "_blank");
   });
 });

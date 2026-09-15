@@ -1,4 +1,4 @@
-import {useEffect, useReducer, useState} from "react";
+import {useEffect, useReducer, useRef, useState} from "react";
 import MapCanvas from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
@@ -24,6 +24,7 @@ function initialImage(initialImageDataUri, initialPixelDimensions) {
 export default function MapEditor({
   mapKey, initialMap, initialImageDataUri, initialPixelDimensions, backUrl,
   initialAvailableUnitTypeKeys, initialUnitTypeDetails, newUnitTypeUrl, availableUnitTypesUrl,
+  initialAvailableItemKeys, initialItemDetails, newItemUrl, availableItemsUrl,
 }) {
   const [image, setImage] = useState(() => initialImage(initialImageDataUri, initialPixelDimensions));
   const [imageError, setImageError] = useState("");
@@ -44,6 +45,15 @@ export default function MapEditor({
   const [hoveredUnitIndex, setHoveredUnitIndex] = useState(null);
   const [pendingUnitType, setPendingUnitType] = useState(null); // the unitType key armed for "add-unit" (see startAddUnit)
   const [unitPlacement, setUnitPlacement] = useState(null); // {unitIndex} | null - re-placing an existing unit's position
+  // Clicking a unit's token on the map (see MapCanvas's startDragUnit) is
+  // distinct from clicking its row in UnitsPanel: the map click should open
+  // that one unit's row exclusively (closing every other open row) and
+  // scroll it into view there, while a direct sidebar row click just toggles
+  // that row alone. {index, nonce} rather than a bare index so re-clicking
+  // the same already-open unit's token still re-triggers the scroll (a
+  // plain index wouldn't change, so a dependent effect wouldn't re-fire).
+  const [unitFocusRequest, setUnitFocusRequest] = useState(null);
+  const unitFocusNonceRef = useRef(0);
   // The full list of unit_types/*.json keys (cheap - a directory listing,
   // see Build::MapsController#list_unit_type_keys) vs. {name, tokenRadius,
   // tokenImageUrl} for just the keys actually needed so far (units already
@@ -53,7 +63,14 @@ export default function MapEditor({
   // unit types than any one map uses).
   const [availableUnitTypeKeys, setAvailableUnitTypeKeys] = useState(initialAvailableUnitTypeKeys ?? []);
   const [unitTypeDetails, setUnitTypeDetails] = useState(initialUnitTypeDetails ?? {});
-  const [unitTypesRefreshStatus, setUnitTypesRefreshStatus] = useState("");
+  // Same cheap-list/lazy-details split, for the items a unit's lootTable
+  // can reference (see Build::MapsController#list_item_keys) - itemDetails
+  // is keyed by the same file-path key as availableItemKeys, but each
+  // value's own `identifier` field (not necessarily the key) is what
+  // actually belongs in a lootTable.
+  const [availableItemKeys, setAvailableItemKeys] = useState(initialAvailableItemKeys ?? []);
+  const [itemDetails, setItemDetails] = useState(initialItemDetails ?? {});
+  const [refreshStatus, setRefreshStatus] = useState("");
   // "select" | "add-circle" | "add-point-connection" | "add-line-connection" | "add-unit" - see MapCanvas/BarriersPanel/ConnectionsPanel/UnitsPanel
   const [tool, setTool] = useState("select");
   const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
@@ -87,6 +104,12 @@ export default function MapEditor({
     setUnitPlacement({unitIndex});
   }
 
+  function focusUnitFromMap(unitIndex) {
+    setSelectedUnitIndex(unitIndex);
+    unitFocusNonceRef.current += 1;
+    setUnitFocusRequest({index: unitIndex, nonce: unitFocusNonceRef.current});
+  }
+
   function startTool(nextTool) {
     setPlacement(null);
     setConnectionPlacement(null);
@@ -100,19 +123,31 @@ export default function MapEditor({
     startTool("add-unit");
   }
 
-  // Lets a unit type created in another tab (via "+ New Unit Type") show up
-  // in the dropdown here without reloading the whole editor and losing the
-  // draft - same pattern as UnitTypeEditor's handleRefreshAbilities, but
-  // only re-fetches the (cheap) key list, not every unit type's details.
-  async function handleRefreshUnitTypes() {
-    setUnitTypesRefreshStatus("Refreshing…");
+  // Lets a unit type or item created in another tab (via "+ New Unit
+  // Type"/"+ New Item") show up in their dropdowns here without reloading
+  // the whole editor and losing the draft - same pattern as
+  // UnitTypeEditor's handleRefreshAbilities, but only re-fetches the
+  // (cheap) key lists, not every unit type/item's details. One shared
+  // button/status for both, since they're both "pick up what's new" in
+  // the same gesture.
+  async function handleRefresh() {
+    setRefreshStatus("Refreshing…");
     try {
-      const res = await fetch(availableUnitTypesUrl);
-      if (!res.ok) throw new Error(`request failed: ${res.status}`);
-      setAvailableUnitTypeKeys(await res.json());
-      setUnitTypesRefreshStatus("Refreshed.");
+      const [unitTypeKeys, itemKeys] = await Promise.all([
+        fetch(availableUnitTypesUrl).then((res) => {
+          if (!res.ok) throw new Error(`request failed: ${res.status}`);
+          return res.json();
+        }),
+        fetch(availableItemsUrl).then((res) => {
+          if (!res.ok) throw new Error(`request failed: ${res.status}`);
+          return res.json();
+        }),
+      ]);
+      setAvailableUnitTypeKeys(unitTypeKeys);
+      setAvailableItemKeys(itemKeys);
+      setRefreshStatus("Refreshed.");
     } catch (error) {
-      setUnitTypesRefreshStatus(`Refresh failed: ${error.message}`);
+      setRefreshStatus(`Refresh failed: ${error.message}`);
     }
   }
 
@@ -147,6 +182,35 @@ export default function MapEditor({
     fetchUnitTypeDetails(usedKeys);
     // fetchUnitTypeDetails reads the latest unitTypeDetails/availableUnitTypesUrl
     // via closure each call; only re-run when the actual set of unitTypes in use changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapData.units]);
+
+  // Same idea as fetchUnitTypeDetails, for items - {identifier, name, slot}.
+  async function fetchItemDetails(keys) {
+    const missing = keys.filter((key) => !(key in itemDetails));
+    if (!availableItemsUrl || missing.length === 0) return;
+    try {
+      const query = missing.map((key) => `keys[]=${encodeURIComponent(key)}`).join("&");
+      const res = await fetch(`${availableItemsUrl}?${query}`);
+      if (!res.ok) return;
+      const details = await res.json();
+      setItemDetails((current) => ({...current, ...details}));
+    } catch {
+      // best-effort, see above
+    }
+  }
+
+  function requestItemDetails(key) {
+    if (key) fetchItemDetails([key]);
+  }
+
+  // Backstop covering loot table item identifiers not prefetched by #edit
+  // (assumed to also be the item's file key - see
+  // Build::MapsController#available_items) - same role as the unitType
+  // effect above.
+  useEffect(() => {
+    const usedIdentifiers = [...new Set(mapData.units.flatMap((unit) => Object.keys(unit.lootTable ?? {})))];
+    fetchItemDetails(usedIdentifiers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapData.units]);
 
@@ -253,8 +317,9 @@ export default function MapEditor({
         onPlaceConnectionField={placeConnectionField}
         onCancelConnectionPlacement={() => setConnectionPlacement(null)}
         selectedUnitIndex={selectedUnitIndex}
-        onSelectUnit={setSelectedUnitIndex}
+        onSelectUnit={focusUnitFromMap}
         hoveredUnitIndex={hoveredUnitIndex}
+        onHoverUnit={setHoveredUnitIndex}
         pendingUnitType={pendingUnitType}
         availableUnitTypes={unitTypeDetails}
         unitPlacement={unitPlacement}
@@ -299,12 +364,18 @@ export default function MapEditor({
           selectedIndex={selectedUnitIndex}
           onSelect={setSelectedUnitIndex}
           onHover={setHoveredUnitIndex}
+          hoveredIndex={hoveredUnitIndex}
+          focusUnitRequest={unitFocusRequest}
           availableUnitTypeKeys={availableUnitTypeKeys}
           unitTypeDetails={unitTypeDetails}
           onChooseUnitType={requestUnitTypeDetails}
           newUnitTypeUrl={newUnitTypeUrl}
-          onRefreshUnitTypes={handleRefreshUnitTypes}
-          refreshStatus={unitTypesRefreshStatus}
+          availableItemKeys={availableItemKeys}
+          itemDetails={itemDetails}
+          onChooseItem={requestItemDetails}
+          newItemUrl={newItemUrl}
+          onRefresh={handleRefresh}
+          refreshStatus={refreshStatus}
           tool={tool}
           placement={placement}
           canPlaceOnMap={canPlaceOnMap}
