@@ -54,6 +54,25 @@ export default function MapEditor({
   // plain index wouldn't change, so a dependent effect wouldn't re-fire).
   const [unitFocusRequest, setUnitFocusRequest] = useState(null);
   const unitFocusNonceRef = useRef(0);
+  // {groupIdentifier} | null - while active, clicking a unit (its token on
+  // the map, or its row in UnitsPanel) toggles that unit's membership in
+  // this group instead of that click's normal effect (select/drag on
+  // canvas; expand/collapse in the sidebar) - see toggleGroupMember. Mutual
+  // exclusion with the placement/tool states below, same pattern as those
+  // already have with each other.
+  const [groupingMode, setGroupingMode] = useState(null);
+  // Drives the map's translucent-red group highlight (tokens + full-mesh
+  // lines between every member pair) when a group's row is hovered in
+  // UnitsPanel - groupingMode's own group is always highlighted regardless
+  // of this, forcing the same visual on permanently (see MapCanvas).
+  const [hoveredGroupIdentifier, setHoveredGroupIdentifier] = useState(null);
+  // Group names created via "+ Add Group" before any unit has joined them -
+  // a group isn't real data (docs/schema/unit.md's groupIdentifier is just
+  // a plain string on each unit, no separate Map.groups list), so an empty
+  // one only exists here, in memory, for this session - it's never written
+  // to mapData/the saved file, and simply stops appearing if the page
+  // reloads before it gains a member.
+  const [pendingGroupNames, setPendingGroupNames] = useState([]);
   // The full list of unit_types/*.json keys (cheap - a directory listing,
   // see Build::MapsController#list_unit_type_keys) vs. {name, tokenRadius,
   // tokenImageUrl} for just the keys actually needed so far (units already
@@ -82,6 +101,7 @@ export default function MapEditor({
   function startBarrierPlacement(barrierIndex, pointIndex, mode = "insert") {
     setConnectionPlacement(null);
     setUnitPlacement(null);
+    setGroupingMode(null);
     setTool("select");
     setPlacement({barrierIndex, pointIndex, mode});
   }
@@ -93,6 +113,7 @@ export default function MapEditor({
   function startConnectionFieldPlacement(connectionIndex, field) {
     setPlacement(null);
     setUnitPlacement(null);
+    setGroupingMode(null);
     setTool("select");
     setConnectionPlacement({connectionIndex, field});
   }
@@ -100,11 +121,16 @@ export default function MapEditor({
   function startUnitPlacement(unitIndex) {
     setPlacement(null);
     setConnectionPlacement(null);
+    setGroupingMode(null);
     setTool("select");
     setUnitPlacement({unitIndex});
   }
 
   function focusUnitFromMap(unitIndex) {
+    if (groupingMode) {
+      toggleGroupMember(unitIndex);
+      return;
+    }
     setSelectedUnitIndex(unitIndex);
     unitFocusNonceRef.current += 1;
     setUnitFocusRequest({index: unitIndex, nonce: unitFocusNonceRef.current});
@@ -114,6 +140,7 @@ export default function MapEditor({
     setPlacement(null);
     setConnectionPlacement(null);
     setUnitPlacement(null);
+    setGroupingMode(null);
     setTool(nextTool);
   }
 
@@ -122,6 +149,62 @@ export default function MapEditor({
     requestUnitTypeDetails(unitTypeKey);
     startTool("add-unit");
   }
+
+  // Toggling the same group's button again turns grouping mode back off,
+  // same as every other single-shot mode in this editor.
+  function startGroupingMode(groupIdentifier) {
+    setPlacement(null);
+    setConnectionPlacement(null);
+    setUnitPlacement(null);
+    setTool("select");
+    setGroupingMode((current) => (current?.groupIdentifier === groupIdentifier ? null : {groupIdentifier}));
+  }
+
+  function addPendingGroup(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setPendingGroupNames((current) => (current.includes(trimmed) ? current : [...current, trimmed]));
+    startGroupingMode(trimmed);
+  }
+
+  // The only way a unit's groupIdentifier ever changes - toggled by
+  // clicking a unit (its map token, via focusUnitFromMap above, or its
+  // UnitsPanel row) while grouping mode targets a group: already a member
+  // -> clear it; not a member -> set it, silently moving the unit out of
+  // whatever other group it was in.
+  function toggleGroupMember(unitIndex) {
+    if (!groupingMode) return;
+    const unit = mapData.units[unitIndex];
+    const target = groupingMode.groupIdentifier;
+    const nextValue = unit.groupIdentifier === target ? null : target;
+    dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "groupIdentifier", value: nextValue});
+  }
+
+  // Renaming a group rewrites every current member's groupIdentifier in one
+  // batch of dispatches - the identifier *is* the group's identity, there's
+  // no separate id to keep stable underneath.
+  function renameGroup(oldName, newName) {
+    mapData.units.forEach((unit, i) => {
+      if (unit.groupIdentifier === oldName) {
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: i, field: "groupIdentifier", value: newName});
+      }
+    });
+    setPendingGroupNames((current) => current.map((name) => (name === oldName ? newName : name)));
+    setGroupingMode((current) => (current?.groupIdentifier === oldName ? {groupIdentifier: newName} : current));
+  }
+
+  // Grouping mode's only cancel gesture is Escape or its own button again
+  // (see startGroupingMode) - unlike the placement modes above, clicks
+  // everywhere in the canvas and sidebar are meaningful membership toggles,
+  // not "click outside to cancel" targets.
+  useEffect(() => {
+    if (!groupingMode) return;
+    function onKeyDown(e) {
+      if (e.key === "Escape") setGroupingMode(null);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [groupingMode]);
 
   // Lets a unit type or item created in another tab (via "+ New Unit
   // Type"/"+ New Item") show up in their dropdowns here without reloading
@@ -325,6 +408,9 @@ export default function MapEditor({
         unitPlacement={unitPlacement}
         onPlaceUnitPosition={placeUnitPosition}
         onCancelUnitPlacement={() => setUnitPlacement(null)}
+        groupingMode={groupingMode}
+        onToggleGroupMember={toggleGroupMember}
+        hoveredGroupIdentifier={hoveredGroupIdentifier}
         tool={tool}
         onToolChange={setTool}
       />
@@ -383,6 +469,14 @@ export default function MapEditor({
           onStartAddUnit={startAddUnit}
           unitPlacement={unitPlacement}
           onStartUnitPlacement={startUnitPlacement}
+          groupingMode={groupingMode}
+          onStartGroupingMode={startGroupingMode}
+          onToggleGroupMember={toggleGroupMember}
+          hoveredGroupIdentifier={hoveredGroupIdentifier}
+          onHoverGroup={setHoveredGroupIdentifier}
+          pendingGroupNames={pendingGroupNames}
+          onAddPendingGroup={addPendingGroup}
+          onRenameGroup={renameGroup}
           dispatch={dispatch}
         />
       </MapSidebar>

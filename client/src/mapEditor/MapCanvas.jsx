@@ -4,6 +4,7 @@ import {collectSnapPoints, nearestSnapPoint} from "./mapSnap";
 import BarrierShapes from "./BarrierShapes";
 import ConnectionShapes from "./ConnectionShapes";
 import UnitShapes from "./UnitShapes";
+import GroupShapes from "./GroupShapes";
 
 // Connections need a required, zone-unique `identifier` the moment they're
 // created (unlike barriers, which have none) - this picks the first unused
@@ -57,6 +58,7 @@ export default function MapCanvas({
   connectionPlacement, onPlaceConnectionField, onCancelConnectionPlacement,
   selectedUnitIndex, onSelectUnit, hoveredUnitIndex, onHoverUnit, pendingUnitType, availableUnitTypes = {},
   unitPlacement, onPlaceUnitPosition, onCancelUnitPlacement,
+  groupingMode, onToggleGroupMember, hoveredGroupIdentifier,
   tool = "select", onToolChange,
 }) {
   const wrapperRef = useRef(null);
@@ -361,6 +363,12 @@ export default function MapCanvas({
 
   function startDragUnit(unitIndex, e) {
     e.stopPropagation();
+    // Grouping mode hijacks every unit click into a membership toggle -
+    // no select/drag while it's active (see MapEditor's toggleGroupMember).
+    if (groupingMode) {
+      onToggleGroupMember(unitIndex);
+      return;
+    }
     onSelectUnit(unitIndex);
     unitDragRef.current = {unitIndex};
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -754,6 +762,15 @@ export default function MapCanvas({
                 onSelect={onSelectUnit}
                 onStartDrag={startDragUnit}
                 onHoverUnit={onHoverUnit}
+              />
+            )}
+            {canDrawBarriers && (
+              <GroupShapes
+                units={mapData.units}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                availableUnitTypes={availableUnitTypes}
+                groupIdentifier={groupingMode?.groupIdentifier ?? hoveredGroupIdentifier}
               />
             )}
           </div>

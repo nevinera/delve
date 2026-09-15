@@ -484,4 +484,131 @@ describe("UnitsPanel", () => {
     expect(itemLink).toHaveAttribute("href", "/build/items/new");
     expect(itemLink).toHaveAttribute("target", "_blank");
   });
+
+  describe("groups", () => {
+    function unit(overrides) {
+      return {unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, ...overrides};
+    }
+
+    it("encloses units sharing a groupIdentifier in one group block instead of flat rows", () => {
+      const units = [
+        unit({identifier: "a", groupIdentifier: "pack"}),
+        unit({identifier: "b"}),
+        unit({identifier: "b2", groupIdentifier: "pack"}),
+      ];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+      expandSection();
+
+      expect(document.querySelectorAll(".map-unit-group-block")).toHaveLength(1);
+      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(2)");
+      // The ungrouped unit stays a flat row.
+      expect(document.querySelectorAll(".map-unit-group-block .map-unit-row")).toHaveLength(2);
+    });
+
+    it("submits '+ Add Group' with the typed name and clears the field", () => {
+      const onAddPendingGroup = vi.fn();
+      render(<UnitsPanel {...DEFAULT_PROPS} units={[]} onAddPendingGroup={onAddPendingGroup} />);
+      expandSection();
+
+      fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "goblin pack"}});
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
+
+      expect(onAddPendingGroup).toHaveBeenCalledWith("goblin pack");
+      expect(screen.getByPlaceholderText("New group name…")).toHaveValue("");
+    });
+
+    it("shows a pending (memberless) group from pendingGroupNames", () => {
+      render(<UnitsPanel {...DEFAULT_PROPS} units={[]} pendingGroupNames={["new pack"]} />);
+      expandSection();
+
+      expect(document.querySelector(".map-unit-group-block")).toBeInTheDocument();
+      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(0)");
+    });
+
+    it("toggles grouping mode via the group's Add/Remove Units button", () => {
+      const onStartGroupingMode = vi.fn();
+      const units = [unit({groupIdentifier: "pack"})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onStartGroupingMode={onStartGroupingMode} />);
+      expandSection();
+
+      fireEvent.click(screen.getByRole("button", {name: "Add/Remove Units"}));
+
+      expect(onStartGroupingMode).toHaveBeenCalledWith("pack");
+    });
+
+    it("shows 'Done' instead of 'Add/Remove Units' when grouping mode targets this group", () => {
+      const units = [unit({groupIdentifier: "pack"})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} groupingMode={{groupIdentifier: "pack"}} />);
+      expandSection();
+
+      expect(screen.getByRole("button", {name: "Done"})).toBeInTheDocument();
+    });
+
+    it("clicking a unit row while grouping mode is active toggles membership instead of expanding", () => {
+      const onToggleGroupMember = vi.fn();
+      const units = [unit({identifier: "a"})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} groupingMode={{groupIdentifier: "pack"}} onToggleGroupMember={onToggleGroupMember} />);
+      expandSection();
+
+      fireEvent.click(document.querySelector(".map-unit-row"));
+
+      expect(onToggleGroupMember).toHaveBeenCalledWith(0);
+      // Grouping mode suppresses the normal expand - no editing form shown.
+      expect(document.querySelector(".map-unit-body")).not.toBeInTheDocument();
+    });
+
+    it("marks a group's own members with a checkmark while grouping mode targets it", () => {
+      const units = [unit({identifier: "a", groupIdentifier: "pack"}), unit({identifier: "b"})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} groupingMode={{groupIdentifier: "pack"}} />);
+      expandSection();
+
+      const rows = document.querySelectorAll(".map-unit-row");
+      expect(rows[0]).toHaveTextContent("✓");
+    });
+
+    it("renames a group on blur, dispatching UPDATE_ENTRY_FIELD's rewrite via onRenameGroup", () => {
+      const onRenameGroup = vi.fn();
+      const units = [unit({groupIdentifier: "old-name"})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onRenameGroup={onRenameGroup} />);
+      expandSection();
+
+      const nameField = document.querySelector(".map-unit-group-name");
+      fireEvent.change(nameField, {target: {value: "new-name"}});
+      fireEvent.blur(nameField);
+
+      expect(onRenameGroup).toHaveBeenCalledWith("old-name", "new-name");
+    });
+
+    it("hovering a group's header calls onHoverGroup, and reverts on leave", () => {
+      const onHoverGroup = vi.fn();
+      const units = [unit({groupIdentifier: "pack"})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} onHoverGroup={onHoverGroup} />);
+      expandSection();
+
+      const header = document.querySelector(".map-unit-group-header");
+      fireEvent.mouseEnter(header.closest(".map-unit-group-block"));
+      expect(onHoverGroup).toHaveBeenCalledWith("pack");
+      fireEvent.mouseLeave(header.closest(".map-unit-group-block"));
+      expect(onHoverGroup).toHaveBeenCalledWith(null);
+    });
+
+    it("collapses/expands a group's member rows on header click, independent of member expand state", () => {
+      const units = [unit({identifier: "a", groupIdentifier: "pack"})];
+      render(<UnitsPanel {...DEFAULT_PROPS} units={units} />);
+      expandSection();
+
+      expect(document.querySelector(".map-unit-group-members")).toBeInTheDocument();
+      fireEvent.click(document.querySelector(".map-unit-group-header"));
+      expect(document.querySelector(".map-unit-group-members")).not.toBeInTheDocument();
+      fireEvent.click(document.querySelector(".map-unit-group-header"));
+      expect(document.querySelector(".map-unit-group-members")).toBeInTheDocument();
+    });
+
+    it("shows a grouping-mode hint with the active group's name", () => {
+      render(<UnitsPanel {...DEFAULT_PROPS} units={[]} groupingMode={{groupIdentifier: "pack"}} />);
+      expandSection();
+
+      expect(screen.getByText(/Grouping "pack"/)).toBeInTheDocument();
+    });
+  });
 });

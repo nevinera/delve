@@ -91,6 +91,10 @@
          BarriersPanel) is a pure visual marker, not an interactive handle -
          needs to win over the plain "circle" rule above. */
       .map-canvas-shapes circle.map-canvas-point-hover-ring { pointer-events: none; cursor: default; }
+      /* Group-highlight overlay (GroupShapes) - purely decorative, must
+         never intercept a click meant for the real token underneath
+         (grouping mode relies on that to toggle membership). */
+      .map-group-highlight { position: absolute; top: 0; left: 0; pointer-events: none; }
 
       .map-canvas-status-bar {
         flex: 0 0 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
@@ -167,6 +171,34 @@
       .map-editor-sidebar-content .map-loot-count-field { font-size: 12px; margin-bottom: 6px; }
       .map-editor-sidebar-content .map-loot-count-field input[type=number] { width: 56px; }
       .map-editor-sidebar-content .map-loot-count-field .map-sidebar-hint { margin: 2px 0 0; }
+
+      /* A group is derived (units sharing a groupIdentifier), not stored -
+         its block encloses member rows with a left border rather than
+         looking like its own separate entry-block. */
+      .map-editor-sidebar-content .map-unit-group-block { margin: 8px 0; padding: 6px 0; border-top: 1px solid #2a2f35; border-radius: 4px; }
+      .map-editor-sidebar-content .map-unit-group-block.map-entry-hovered { background: #2a2016; }
+      .map-editor-sidebar-content .map-unit-group-header {
+        display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 4px; padding: 0 2px;
+      }
+      .map-editor-sidebar-content .map-unit-group-name {
+        flex: 1; min-width: 0; background: transparent; border: 1px solid transparent; color: #fca; font-size: 13px; font-weight: 600;
+        padding: 2px 4px; border-radius: 3px;
+      }
+      .map-editor-sidebar-content .map-unit-group-name:hover, .map-editor-sidebar-content .map-unit-group-name:focus { border-color: #555; background: #111; }
+      .map-editor-sidebar-content .map-unit-group-count { font-size: 12px; color: #987; flex-shrink: 0; }
+      .map-editor-sidebar-content .map-unit-group-toggle {
+        background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0;
+      }
+      .map-editor-sidebar-content .map-unit-group-toggle:hover { background: #444; }
+      .map-editor-sidebar-content .map-unit-group-toggle.map-unit-group-toggle-active { background: #533; border-color: #a55; color: #fca; }
+      .map-editor-sidebar-content .map-unit-group-members {
+        margin-left: 10px; padding-left: 10px; border-left: 2px solid #543; display: flex; flex-direction: column; gap: 2px;
+      }
+      .map-editor-sidebar-content .map-unit-group-members .entry-block { margin: 2px 0; }
+      /* While grouping mode is active, a member of the group currently
+         being edited gets a distinct left accent so it reads as "in" the
+         group even flat in the list (e.g. a different group's members). */
+      .map-editor-sidebar-content .entry-block.map-unit-grouping-target { border-left: 3px solid #fca; padding-left: 5px; }
 
       .map-editor-sidebar-content .add-buttons-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
       .map-editor-sidebar-content button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }

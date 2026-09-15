@@ -12,7 +12,7 @@ import {useEffect, useRef, useState} from "react";
 // hostility is fixed to "hostile" and movement to {type: "still"} for
 // every unit in this slice (no pickers yet - see the map editor plan's
 // Slice 5/8). identifier isn't schema-required, but is part of the form
-// already since Slice 7's unit groups will need it.
+// already since it's used in a group's display name.
 //
 // unitType *is* editable, via UnitTypeSelect below - unlike position, this
 // is typed/picked rather than set by interacting with the map, and an
@@ -193,6 +193,188 @@ function PositionButton({unitIndex, position, unitPlacement, onStartUnitPlacemen
   );
 }
 
+// One unit's row - collapsed by default (token, name, type, loot icon);
+// clicking it expands the full editing form, unless grouping mode is
+// active, in which case any click here toggles this unit's membership in
+// the group being edited instead (see UnitsPanel's handleRowClick).
+function UnitRow({
+  unit, index, expanded, hovered, rowRef, onRowClick, onHover, onRemove,
+  availableUnitTypeKeys, unitTypeDetails, onChooseUnitType,
+  unitPlacement, onStartUnitPlacement,
+  availableItemKeys, itemDetails, onChooseItem,
+  updateUnit, dispatch,
+  inGroupingMode, isGroupingTarget,
+}) {
+  return (
+    <div
+      ref={rowRef}
+      className={`entry-block map-unit-block${expanded ? " map-unit-expanded" : ""}${hovered ? " map-entry-hovered" : ""}${isGroupingTarget ? " map-unit-grouping-target" : ""}`}
+      onMouseEnter={() => onHover(index)}
+      onMouseLeave={() => onHover(null)}
+    >
+      <div className="entry-heading-row map-unit-row" onClick={() => onRowClick(index)}>
+        <div className="map-unit-row-summary">
+          <span className="map-sidebar-section-toggle">
+            {inGroupingMode ? (isGroupingTarget ? "✓" : "") : (expanded ? "▾" : "▸")}
+          </span>
+          <TokenThumb unit={unit} unitTypeDetails={unitTypeDetails} className="map-unit-token-thumb map-unit-row-token" />
+          <span className="map-unit-row-name">{unit.identifier || `Unit ${index + 1}`}</span>
+          <span className="map-unit-row-type">{unitTypeLabel(unitTypeDetails, unit.unitType)}</span>
+          <LootIcon unit={unit} />
+        </div>
+        {expanded && !inGroupingMode && (
+          <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); onRemove(index); }}>
+            Remove
+          </button>
+        )}
+      </div>
+      {expanded && !inGroupingMode && (
+        <>
+          <div className="map-unit-body">
+            <table>
+              <tbody>
+                <tr>
+                  <th>Type</th>
+                  <td>
+                    <UnitTypeSelect
+                      value={unit.unitType} availableUnitTypeKeys={availableUnitTypeKeys} unitTypeDetails={unitTypeDetails}
+                      onChange={(v) => { updateUnit(index, {unitType: v}); onChooseUnitType(v); }}
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <th>Identifier</th>
+                  <td><TextField value={unit.identifier} placeholder="goblin_a" onChange={(v) => updateUnit(index, {identifier: v})} /></td>
+                </tr>
+                <tr>
+                  <th>Position</th>
+                  <td>
+                    <PositionButton
+                      unitIndex={index} position={unit.position}
+                      unitPlacement={unitPlacement} onStartUnitPlacement={onStartUnitPlacement}
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <th>HP</th>
+                  <td>
+                    <input
+                      type="range" min="0" max="1" step="0.01" value={unit.currentHpFraction ?? 1}
+                      onChange={(e) => updateUnit(index, {currentHpFraction: parseFloat(e.target.value)})}
+                    />
+                    {" "}{Math.round((unit.currentHpFraction ?? 1) * 100)}%
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="map-unit-token-panel">
+              <TokenThumb unit={unit} unitTypeDetails={unitTypeDetails} />
+            </div>
+          </div>
+          <LootTableFields
+            unit={unit} unitIndex={index}
+            availableItemKeys={availableItemKeys} itemDetails={itemDetails} onChooseItem={onChooseItem}
+            dispatch={dispatch}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// A group's display name is renamed on blur/Enter, not per-keystroke -
+// renaming dispatches UPDATE_ENTRY_FIELD for every member at once (see
+// MapEditor's renameGroup), and committing on every keystroke would both
+// thrash that and risk a mid-edit empty string briefly ungrouping every
+// member (buildEntries below treats a falsy groupIdentifier as ungrouped).
+function GroupNameField({identifier, onRename}) {
+  const [value, setValue] = useState(identifier);
+  useEffect(() => setValue(identifier), [identifier]);
+
+  function commit() {
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== identifier) onRename(identifier, trimmed);
+    else setValue(identifier);
+  }
+
+  return (
+    <input
+      type="text" className="map-unit-group-name" value={value}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+    />
+  );
+}
+
+// A group is derived, not stored - see MapEditor's groupingMode/
+// pendingGroupNames comments. Its header shows the shared name (editable),
+// a member count, and the "Add/Remove Units" toggle for grouping mode;
+// clicking the header itself (not the name field or button) collapses/
+// expands the enclosed member rows, independent of each member's own
+// expand state underneath.
+function GroupBlock({
+  identifier, memberIndices, collapsed, onToggleCollapsed,
+  groupingMode, onStartGroupingMode, hoveredGroupIdentifier, onHoverGroup, onRenameGroup,
+  renderMember,
+}) {
+  const isGroupingThis = groupingMode?.groupIdentifier === identifier;
+  const isHighlighted = isGroupingThis || hoveredGroupIdentifier === identifier;
+
+  return (
+    <div
+      className={`map-unit-group-block${isHighlighted ? " map-entry-hovered" : ""}`}
+      onMouseEnter={() => onHoverGroup(identifier)}
+      onMouseLeave={() => onHoverGroup(null)}
+    >
+      <div className="map-unit-group-header" onClick={() => onToggleCollapsed(identifier)}>
+        <span className="map-sidebar-section-toggle">{collapsed ? "▸" : "▾"}</span>
+        <GroupNameField identifier={identifier} onRename={onRenameGroup} />
+        <span className="map-unit-group-count">({memberIndices.length})</span>
+        <button
+          type="button" className={`map-unit-group-toggle${isGroupingThis ? " map-unit-group-toggle-active" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onStartGroupingMode(identifier); }}
+        >
+          {isGroupingThis ? "Done" : "Add/Remove Units"}
+        </button>
+      </div>
+      {!collapsed && (
+        <div className="map-unit-group-members">
+          {memberIndices.map((i) => renderMember(i))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Splits units into flat (ungrouped) rows and group blocks, in units-array
+// order - a group block appears at the position of its first member, and
+// pulls in every other member regardless of where they sit in the array
+// (see the map editor plan's Slice 7). pendingGroupNames (MapEditor-local,
+// never written to mapData) appends any group created but not yet given a
+// member, so "+ Add Group" has somewhere to show up before its first click.
+function buildEntries(units, pendingGroupNames) {
+  const entries = [];
+  const seenGroups = new Set();
+  units.forEach((unit, i) => {
+    const gid = unit.groupIdentifier;
+    if (!gid) {
+      entries.push({type: "unit", index: i});
+      return;
+    }
+    if (seenGroups.has(gid)) return;
+    seenGroups.add(gid);
+    const memberIndices = [];
+    units.forEach((u, j) => { if (u.groupIdentifier === gid) memberIndices.push(j); });
+    entries.push({type: "group", identifier: gid, memberIndices});
+  });
+  pendingGroupNames.forEach((name) => {
+    if (!seenGroups.has(name)) entries.push({type: "group", identifier: name, memberIndices: []});
+  });
+  return entries;
+}
+
 export default function UnitsPanel({
   units, selectedIndex, onSelect, onHover, hoveredIndex,
   availableUnitTypeKeys, unitTypeDetails, onChooseUnitType, newUnitTypeUrl,
@@ -201,15 +383,21 @@ export default function UnitsPanel({
   tool, placement, canPlaceOnMap, pendingUnitType, onStartAddUnit,
   unitPlacement, onStartUnitPlacement, dispatch,
   focusUnitRequest,
+  groupingMode = null, onStartGroupingMode, onToggleGroupMember,
+  hoveredGroupIdentifier = null, onHoverGroup, pendingGroupNames = [], onAddPendingGroup, onRenameGroup,
 }) {
   const [sectionCollapsed, setSectionCollapsed] = useState(true);
   const [chosenUnitType, setChosenUnitType] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
   // Each unit's row collapses independently - unlike the section-level
   // collapse above, there's no single "selected" unit: a row toggles only
   // itself on click, so several can be open at once (see PositionButton's
   // unitPlacement for the one thing that's still exclusive - re-placing a
   // position on the map).
   const [expandedIndices, setExpandedIndices] = useState(() => new Set());
+  // A group block's own collapse - separate from its members' individual
+  // expand state, which is preserved underneath while the block is closed.
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
   const toolBusy = tool !== "select" || !!placement || !!unitPlacement || !canPlaceOnMap;
   const rowRefs = useRef({});
   const pendingScrollIndexRef = useRef(null);
@@ -222,15 +410,45 @@ export default function UnitsPanel({
     });
   }
 
+  function toggleGroupCollapsed(identifier) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(identifier)) next.delete(identifier); else next.add(identifier);
+      return next;
+    });
+  }
+
+  // While grouping mode is active, any unit click (this row's, or a
+  // different one's) toggles membership instead of expanding/collapsing -
+  // see MapEditor's toggleGroupMember.
+  function handleRowClick(index) {
+    if (groupingMode) {
+      onToggleGroupMember(index);
+      return;
+    }
+    toggleExpanded(index);
+  }
+
   // A unit clicked *on the map* (see MapCanvas/MapEditor's focusUnitFromMap)
   // is different from clicking its row here: it opens that unit's row
   // exclusively (closing every other open row) and scrolls it into view -
   // clicking a row directly never closes any other row. focusUnitRequest
   // carries a nonce so re-clicking the same unit's token still re-scrolls.
+  // If the unit is inside a collapsed group block, that block is opened too
+  // (otherwise there'd be nothing in the DOM yet to scroll to).
   useEffect(() => {
     if (!focusUnitRequest) return;
     setSectionCollapsed(false);
     setExpandedIndices(new Set([focusUnitRequest.index]));
+    const gid = units[focusUnitRequest.index]?.groupIdentifier;
+    if (gid) {
+      setCollapsedGroups((current) => {
+        if (!current.has(gid)) return current;
+        const next = new Set(current);
+        next.delete(gid);
+        return next;
+      });
+    }
     pendingScrollIndexRef.current = focusUnitRequest.index;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusUnitRequest]);
@@ -260,6 +478,44 @@ export default function UnitsPanel({
       next.delete(index);
       return next;
     });
+  }
+
+  function submitNewGroup(e) {
+    e.preventDefault();
+    if (!newGroupName.trim()) return;
+    onAddPendingGroup(newGroupName);
+    setNewGroupName("");
+  }
+
+  const entries = buildEntries(units, pendingGroupNames);
+
+  // Shared, index-independent props for every UnitRow - deliberately
+  // excludes anything that varies per row (expanded/hovered/rowRef/
+  // isGroupingTarget, set explicitly in renderUnitRow below) so spread
+  // order here can never accidentally clobber a per-row value.
+  const unitRowProps = {
+    onHover, onRemove: removeUnit,
+    availableUnitTypeKeys, unitTypeDetails, onChooseUnitType,
+    unitPlacement, onStartUnitPlacement,
+    availableItemKeys, itemDetails, onChooseItem,
+    updateUnit, dispatch,
+    onRowClick: handleRowClick,
+    inGroupingMode: !!groupingMode,
+  };
+
+  function renderUnitRow(index) {
+    return (
+      <UnitRow
+        key={index}
+        index={index}
+        unit={units[index]}
+        expanded={expandedIndices.has(index)}
+        hovered={hoveredIndex === index}
+        rowRef={(el) => { rowRefs.current[index] = el; }}
+        isGroupingTarget={!!groupingMode && units[index].groupIdentifier === groupingMode.groupIdentifier}
+        {...unitRowProps}
+      />
+    );
   }
 
   return (
@@ -293,87 +549,43 @@ export default function UnitsPanel({
               + Add Unit
             </button>
           </div>
+          <form className="add-buttons-row" onSubmit={submitNewGroup}>
+            <input
+              type="text" placeholder="New group name…" value={newGroupName}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setNewGroupName(e.target.value)}
+            />
+            <button type="submit" className="add-entry" disabled={!newGroupName.trim()}>+ Add Group</button>
+          </form>
           {!canPlaceOnMap && <p className="map-sidebar-hint">Set feet dimensions (above) before placing units.</p>}
-          {units.length === 0 && tool !== "add-unit"
-            ? <p className="map-editor-sidebar-placeholder">No units yet - pick a unit type above and click "+ Add Unit".</p>
-            : units.map((unit, i) => {
-              const expanded = expandedIndices.has(i);
-              const hovered = hoveredIndex === i;
-              return (
-                <div
-                  key={i}
-                  ref={(el) => { rowRefs.current[i] = el; }}
-                  className={`entry-block map-unit-block${expanded ? " map-unit-expanded" : ""}${hovered ? " map-entry-hovered" : ""}`}
-                  onMouseEnter={() => onHover(i)}
-                  onMouseLeave={() => onHover(null)}
-                >
-                  <div className="entry-heading-row map-unit-row" onClick={() => toggleExpanded(i)}>
-                    <div className="map-unit-row-summary">
-                      <span className="map-sidebar-section-toggle">{expanded ? "▾" : "▸"}</span>
-                      <TokenThumb unit={unit} unitTypeDetails={unitTypeDetails} className="map-unit-token-thumb map-unit-row-token" />
-                      <span className="map-unit-row-name">{unit.identifier || `Unit ${i + 1}`}</span>
-                      <span className="map-unit-row-type">{unitTypeLabel(unitTypeDetails, unit.unitType)}</span>
-                      <LootIcon unit={unit} />
-                    </div>
-                    {expanded && (
-                      <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); removeUnit(i); }}>
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  {expanded && (
-                    <>
-                      <div className="map-unit-body">
-                        <table>
-                          <tbody>
-                            <tr>
-                              <th>Type</th>
-                              <td>
-                                <UnitTypeSelect
-                                  value={unit.unitType} availableUnitTypeKeys={availableUnitTypeKeys} unitTypeDetails={unitTypeDetails}
-                                  onChange={(v) => { updateUnit(i, {unitType: v}); onChooseUnitType(v); }}
-                                />
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>Identifier</th>
-                              <td><TextField value={unit.identifier} placeholder="goblin_a" onChange={(v) => updateUnit(i, {identifier: v})} /></td>
-                            </tr>
-                            <tr>
-                              <th>Position</th>
-                              <td>
-                                <PositionButton
-                                  unitIndex={i} position={unit.position}
-                                  unitPlacement={unitPlacement} onStartUnitPlacement={onStartUnitPlacement}
-                                />
-                              </td>
-                            </tr>
-                            <tr>
-                              <th>HP</th>
-                              <td>
-                                <input
-                                  type="range" min="0" max="1" step="0.01" value={unit.currentHpFraction ?? 1}
-                                  onChange={(e) => updateUnit(i, {currentHpFraction: parseFloat(e.target.value)})}
-                                />
-                                {" "}{Math.round((unit.currentHpFraction ?? 1) * 100)}%
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        <div className="map-unit-token-panel">
-                          <TokenThumb unit={unit} unitTypeDetails={unitTypeDetails} />
-                        </div>
-                      </div>
-                      <LootTableFields
-                        unit={unit} unitIndex={i}
-                        availableItemKeys={availableItemKeys} itemDetails={itemDetails} onChooseItem={onChooseItem}
-                        dispatch={dispatch}
-                      />
-                    </>
-                  )}
-                </div>
-              );
-            })}
+          {groupingMode && (
+            <p className="map-sidebar-hint">
+              Grouping "{groupingMode.groupIdentifier}" - click units (here or on the map) to add or remove them.
+              Press Escape or click "Done" to finish.
+            </p>
+          )}
+          {entries.length === 0 && tool !== "add-unit" && (
+            <p className="map-editor-sidebar-placeholder">No units yet - pick a unit type above and click "+ Add Unit".</p>
+          )}
+          {entries.map((entry) => (
+            entry.type === "unit"
+              ? renderUnitRow(entry.index)
+              : (
+                <GroupBlock
+                  key={`group-${entry.identifier}`}
+                  identifier={entry.identifier}
+                  memberIndices={entry.memberIndices}
+                  collapsed={collapsedGroups.has(entry.identifier)}
+                  onToggleCollapsed={toggleGroupCollapsed}
+                  groupingMode={groupingMode}
+                  onStartGroupingMode={onStartGroupingMode}
+                  hoveredGroupIdentifier={hoveredGroupIdentifier}
+                  onHoverGroup={onHoverGroup}
+                  onRenameGroup={onRenameGroup}
+                  renderMember={renderUnitRow}
+                />
+              )
+          ))}
           {/* Nothing is written to mapData until the map click actually
               happens (see MapCanvas) - this is purely a "something's in
               progress" cue, at the position the real entry will land once

@@ -778,6 +778,84 @@ describe("MapCanvas", () => {
       expect(onHoverUnit).toHaveBeenCalledWith(null);
     });
 
+    it("clicking a unit's marker while grouping mode is active toggles membership instead of selecting/dragging", () => {
+      const onSelectUnit = vi.fn();
+      const onToggleGroupMember = vi.fn();
+      const dispatch = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={dispatch} onSelectBarrier={noop}
+          selectedUnitIndex={null} onSelectUnit={onSelectUnit}
+          groupingMode={{groupIdentifier: "pack"}} onToggleGroupMember={onToggleGroupMember}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const marker = document.querySelector(".map-canvas-shapes g");
+
+      fireEvent.pointerDown(marker, {pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 999, clientY: 999, pointerId: 1});
+
+      expect(onToggleGroupMember).toHaveBeenCalledWith(0);
+      expect(onSelectUnit).not.toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it("draws a translucent-red highlight (ring per member + full-mesh lines) for the group named by groupIdentifier via groupingMode", () => {
+      const units = [
+        {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
+        {unitType: "goblin-raider", identifier: "b", position: {x: 20, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
+        {unitType: "goblin-raider", identifier: "c", position: {x: 40, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+      ];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          groupingMode={{groupIdentifier: "pack"}}
+        />
+      );
+
+      const highlight = document.querySelector(".map-group-highlight");
+      expect(highlight).toBeInTheDocument();
+      // Two members -> one ring each, one connecting line.
+      expect(highlight.querySelectorAll("circle")).toHaveLength(2);
+      expect(highlight.querySelectorAll("line")).toHaveLength(1);
+    });
+
+    it("highlights via hoveredGroupIdentifier when grouping mode isn't active", () => {
+      const units = [
+        {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
+        {unitType: "goblin-raider", identifier: "b", position: {x: 20, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
+      ];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+          hoveredGroupIdentifier="pack"
+        />
+      );
+
+      expect(document.querySelector(".map-group-highlight").querySelectorAll("circle")).toHaveLength(2);
+    });
+
+    it("draws no group highlight when no group is hovered/active", () => {
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
+          dispatch={noop} onSelectBarrier={noop}
+        />
+      );
+
+      expect(document.querySelector(".map-group-highlight")).not.toBeInTheDocument();
+    });
+
     it("dragging a unit's marker moves its position, keeping its facing angle", () => {
       const dispatch = vi.fn();
       const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 90}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];

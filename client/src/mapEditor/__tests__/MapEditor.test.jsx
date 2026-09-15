@@ -539,6 +539,82 @@ describe("MapEditor", () => {
     });
   });
 
+  describe("unit groups", () => {
+    function twoUnitMap() {
+      return {
+        ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+        units: [
+          {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+          {unitType: "goblin-raider", identifier: "b", position: {x: 50, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+        ],
+      };
+    }
+
+    function renderWithTwoUnits() {
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance"
+          initialMap={twoUnitMap()}
+          initialImageDataUri="data:image/webp;base64,AAAA"
+          initialPixelDimensions={{width: 800, height: 600}}
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
+      return wrapper;
+    }
+
+    it("'+ Add Group' immediately enters grouping mode, and clicking units (map token + sidebar row) adds both", () => {
+      renderWithTwoUnits();
+
+      fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
+      expect(screen.getByRole("button", {name: "Done"})).toBeInTheDocument();
+
+      // Add the first unit via its token on the map.
+      const marker = document.querySelectorAll(".map-canvas-shapes g")[0];
+      fireEvent.pointerDown(marker, {pointerId: 1});
+
+      // Add the second unit via its row in the sidebar.
+      const rows = document.querySelectorAll(".map-unit-row");
+      const ungroupedRow = [...rows].find((r) => r.querySelector(".map-unit-row-name")?.textContent === "b");
+      fireEvent.click(ungroupedRow);
+
+      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(2)");
+      const highlight = document.querySelector(".map-group-highlight");
+      expect(highlight.querySelectorAll("circle")).toHaveLength(2);
+      expect(highlight.querySelectorAll("line")).toHaveLength(1);
+    });
+
+    it("clicking a group member again (while grouping mode is active) removes it", () => {
+      renderWithTwoUnits();
+
+      fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
+      const marker = document.querySelectorAll(".map-canvas-shapes g")[0];
+      fireEvent.pointerDown(marker, {pointerId: 1});
+      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(1)");
+
+      fireEvent.pointerDown(marker, {pointerId: 1});
+
+      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(0)");
+    });
+
+    it("Escape exits grouping mode", () => {
+      renderWithTwoUnits();
+      fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
+      fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
+      expect(screen.getByRole("button", {name: "Done"})).toBeInTheDocument();
+
+      fireEvent.keyDown(document, {key: "Escape"});
+
+      expect(screen.getByRole("button", {name: "Add/Remove Units"})).toBeInTheDocument();
+    });
+  });
+
   describe("lazily loading unit type details", () => {
     it("fetches a unit type's details only once it's actually chosen in the dropdown", async () => {
       global.fetch = vi.fn().mockResolvedValue({
