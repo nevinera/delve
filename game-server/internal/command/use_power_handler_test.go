@@ -512,7 +512,7 @@ func TestUsePowerHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
 	assert.Nil(t, state.Units[targetID].Target)
 }
 
-func TestUsePowerHandler_KillAggroesLinkedIdleUnit(t *testing.T) {
+func TestUsePowerHandler_KillAggroesGroupedIdleUnit(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	state.Units[targetID].Health = 1.0
@@ -526,8 +526,8 @@ func TestUsePowerHandler_KillAggroesLinkedIdleUnit(t *testing.T) {
 	zone := instanceconfig.Zone{
 		Maps: []instanceconfig.Map{{
 			Units: []instanceconfig.Unit{
-				{Identifier: "goblin_1", Links: []string{"goblin_2"}},
-				{Identifier: "goblin_2"},
+				{Identifier: "goblin_1", GroupIdentifier: "pack"},
+				{Identifier: "goblin_2", GroupIdentifier: "pack"},
 			},
 		}},
 	}

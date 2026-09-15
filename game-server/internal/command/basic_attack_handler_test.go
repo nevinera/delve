@@ -247,14 +247,14 @@ func TestBasicAttackHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
 	assert.Nil(t, state.Units[targetID].Target)
 }
 
-func TestBasicAttackHandler_KillAggroesLinkedIdleUnitEvenIfItNeverAggroedItself(t *testing.T) {
+func TestBasicAttackHandler_KillAggroesGroupedIdleUnitEvenIfItNeverAggroedItself(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	linkedID := uuid.New()
 	zone := instanceconfig.Zone{
 		Maps: []instanceconfig.Map{{
 			Units: []instanceconfig.Unit{
-				{Identifier: "goblin_1", Links: []string{"goblin_2"}},
-				{Identifier: "goblin_2"},
+				{Identifier: "goblin_1", GroupIdentifier: "pack"},
+				{Identifier: "goblin_2", GroupIdentifier: "pack"},
 			},
 		}},
 	}

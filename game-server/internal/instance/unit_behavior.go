@@ -71,7 +71,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		}
 	}
 
-	// Index unit state by zone identifier for linked-aggro resolution.
+	// Index unit state by zone identifier for grouped-aggro resolution.
 	stateByZoneID := make(map[string]*instancestate.UnitState)
 	for _, u := range state.Units {
 		if u.ZoneUnitIdentifier != "" {
@@ -79,8 +79,8 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		}
 	}
 
-	// Build a symmetric link index: if A lists B, both A→B and B→A propagate aggro.
-	linkGroupByID := instanceconfig.SymmetricLinkGroups(zone)
+	// Every unit on the same map sharing a groupIdentifier propagates aggro to each other.
+	groupByID := instanceconfig.GroupedUnits(zone)
 
 	var events []CombatEvent
 	for id, unit := range state.Units {
@@ -91,7 +91,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, linkGroupByID, dt, pathGraph, &events)
+		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, groupByID, dt, pathGraph, &events)
 	}
 
 	applyNPCSeparation(state, dt)
@@ -106,7 +106,7 @@ func applyUnitBehavior(
 	zone instanceconfig.Zone,
 	playersByMap map[string][]playerRef,
 	stateByZoneID map[string]*instancestate.UnitState,
-	linkGroupByID map[string][]string,
+	groupByID map[string][]string,
 	dt float64,
 	pathGraph *pathing.Graph,
 	events *[]CombatEvent,
@@ -125,9 +125,9 @@ func applyUnitBehavior(
 	if unit.Status == instancestate.UnitStatusIdle && e.unit.Hostility == "hostile" {
 		if targetID := nearestPlayerInRadius(unit, playersByMap[unit.MapIdentifier], aggroRadius); targetID != nil {
 			engageUnit(unit, *targetID)
-			for _, link := range linkGroupByID[e.unit.Identifier] {
-				if linked, ok := stateByZoneID[link]; ok && linked.Status == instancestate.UnitStatusIdle {
-					engageUnit(linked, *targetID)
+			for _, groupmate := range groupByID[e.unit.Identifier] {
+				if other, ok := stateByZoneID[groupmate]; ok && other.Status == instancestate.UnitStatusIdle {
+					engageUnit(other, *targetID)
 				}
 			}
 		}

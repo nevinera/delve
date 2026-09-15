@@ -43,8 +43,8 @@ RSpec.describe Validators::UnitValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /between 0.0 and 1.0/)
     end
 
-    it "allows currentHpFraction, movement, and links explicitly null, same as omitted" do
-      data = still_unit.merge("currentHpFraction" => nil, "movement" => nil, "links" => nil)
+    it "allows currentHpFraction and movement explicitly null, same as omitted" do
+      data = still_unit.merge("currentHpFraction" => nil, "movement" => nil)
       expect { described_class.validate!(data) }.not_to raise_error
     end
 

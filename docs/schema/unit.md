@@ -13,9 +13,8 @@ See [common.md](common.md) for `Location` and `Position`.
 | `hostility` | string | yes | | `"hostile"`, `"neutral"`, or `"friendly"`. Determines token color and aggro behavior. |
 | `currentHpFraction` | float | no | `1.0` | Starting HP as a fraction of `maxHP`. Range: 0.0-1.0. |
 | `movement` | UnitMovement | no | `{ "type": "still" }` | How the unit moves when un-aggro'd. |
-| `identifier` | string | no | | Optional identifier for this unit, used in `links`. |
-| `links` | array of strings | no | `[]` | Identifiers of other units that aggro when this unit aggros. |
-| `groupIdentifier` | string | no | | Editor-only grouping label; the game server ignores it entirely - only `links` (mutual references between units) determines aggro grouping in play. Lets authoring tools require units to be assigned a group before adding them to one, rather than inferring group membership from `links` alone. |
+| `identifier` | string | no | | Optional identifier for this unit, unique within the zone. |
+| `groupIdentifier` | string | no | | Grouping label. Every unit on the *same map* sharing a non-empty `groupIdentifier` aggros together: when one engages, the rest idle-transition to engaged against the same target too, same as a kill does. Grouping never crosses maps, even if two maps happen to reuse the same string. |
 | `lootTable` | LootTable | no | | Items this unit can drop on death. See [zone.md](zone.md) for the LootTable type. All referenced identifiers must be defined in the zone's `items` map. |
 | `lootCount` | number \| [number, number] | no | `1` | Number of items to award from `lootTable` per kill. A range is resolved to a single value uniformly between min and max first. A resolved value >= 1 awards that many items (truncated to an integer); a resolved value between 0 and 1 is instead the *probability* of awarding exactly one item (0 otherwise) - e.g. `0.25` drops one item 25% of the time. Ignored if `lootTable` is absent. |
 
@@ -102,7 +101,6 @@ The unit roams randomly within a radius of a fixed point.
   "hostility": "hostile",
   "identifier": "raider_a",
   "groupIdentifier": "raider_pack",
-  "links": ["raider_b"],
   "movement": {
     "type": "patrol",
     "choose": "return",

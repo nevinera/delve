@@ -99,7 +99,7 @@
           "position": { "x": 15.0, "y": 10.0, "angle": 180.0 },
           "hostility": "hostile",
           "identifier": "raider_a",
-          "links": ["raider_b"],
+          "groupIdentifier": "raiders",
           "movement": {
             "type": "patrol",
             "choose": "return",
@@ -114,7 +114,7 @@
           "position": { "x": 20.0, "y": 10.0, "angle": 180.0 },
           "hostility": "hostile",
           "identifier": "raider_b",
-          "links": ["raider_a"],
+          "groupIdentifier": "raiders",
           "movement": {
             "type": "wander",
             "location": { "x": 20.0, "y": 10.0 },

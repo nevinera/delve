@@ -13,28 +13,29 @@ import (
 // attack actually lands, since noticing you swung at it doesn't require the
 // swing to connect. Call this before rolling miss/avoidance/damage, not
 // after, so a miss still aggros (some units may later get exceptions to
-// this). Also pulls in any idle units linked to target, same as a kill
+// this). Also pulls in any idle units in target's group, same as a kill
 // would, in case this attack is the killing blow.
 func EngageOnAttack(target *instancestate.UnitState, attackerID uuid.UUID, zone instanceconfig.Zone, next *instancestate.InstanceState) {
 	if target.Status == instancestate.UnitStatusIdle && target.Hostility == "hostile" {
 		engageIdleUnit(target, attackerID)
 	}
-	aggroLinkedGroup(target.ZoneUnitIdentifier, attackerID, zone, next)
+	aggroGroupedUnits(target.ZoneUnitIdentifier, attackerID, zone, next)
 }
 
-// aggroLinkedGroup pulls every idle unit linked to zoneID (see
-// instanceconfig.SymmetricLinkGroups) into combat against attackerID.
-func aggroLinkedGroup(zoneID string, attackerID uuid.UUID, zone instanceconfig.Zone, next *instancestate.InstanceState) {
-	links := instanceconfig.SymmetricLinkGroups(zone)[zoneID]
-	if len(links) == 0 {
+// aggroGroupedUnits pulls every idle unit grouped with zoneID (see
+// instanceconfig.GroupedUnits - same map, shared groupIdentifier) into
+// combat against attackerID.
+func aggroGroupedUnits(zoneID string, attackerID uuid.UUID, zone instanceconfig.Zone, next *instancestate.InstanceState) {
+	group := instanceconfig.GroupedUnits(zone)[zoneID]
+	if len(group) == 0 {
 		return
 	}
-	linkSet := make(map[string]struct{}, len(links))
-	for _, l := range links {
-		linkSet[l] = struct{}{}
+	groupSet := make(map[string]struct{}, len(group))
+	for _, id := range group {
+		groupSet[id] = struct{}{}
 	}
 	for _, u := range next.Units {
-		if _, ok := linkSet[u.ZoneUnitIdentifier]; !ok || u.Status != instancestate.UnitStatusIdle {
+		if _, ok := groupSet[u.ZoneUnitIdentifier]; !ok || u.Status != instancestate.UnitStatusIdle {
 			continue
 		}
 		engageIdleUnit(u, attackerID)
