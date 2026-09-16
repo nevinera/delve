@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useRef} from "react";
 import {MapPreviewScene} from "./MapPreviewScene";
 
 // A map has no dedicated "spawn point" field of its own - where a player
@@ -27,15 +27,15 @@ export function startPositionFor(mapData) {
 export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl, onExit}) {
   const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
-  const sceneRef = useRef(null);
-  // "daylight" | "torchlight" - see MapPreviewScene's setLightingMode.
-  // Daylight (the original, only) look is the default - torchlight is an
-  // in-preview toggle for now, ahead of a possible future per-map setting.
-  const [lightingMode, setLightingModeState] = useState("daylight");
 
   useEffect(() => {
     const scene = new MapPreviewScene(canvasRef.current);
-    sceneRef.current = scene;
+    // "daylight" | "torchlight" - see MapPreviewScene's setLightingMode.
+    // The map's own authored `lighting` field (MapFieldsPanel.jsx,
+    // docs/schema/map.md) - defaults to daylight when unset, same as
+    // everywhere else that field is read. No in-preview toggle any more -
+    // it's an authored map setting now, not a session-only choice.
+    scene.setLightingMode(mapData.lighting === "torchlight" ? "torchlight" : "daylight");
     const {x, y} = startPositionFor(mapData);
     // isSvg comes from mapData.imageUrl - the repo-relative filename - not
     // the imageUrl prop above (an opaque blob:/data: URL used to actually
@@ -54,7 +54,6 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
     return () => {
       resizeObserver.disconnect();
       scene.dispose();
-      sceneRef.current = null;
     };
     // Mounts once per preview session - mapData/availableUnitTypes/imageUrl
     // are read only at mount (editing is locked while previewing, so they
@@ -62,23 +61,10 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function toggleLighting() {
-    const next = lightingMode === "daylight" ? "torchlight" : "daylight";
-    setLightingModeState(next);
-    sceneRef.current?.setLightingMode(next);
-  }
-
   return (
     <div ref={wrapperRef} className="map-preview-wrapper">
       <canvas ref={canvasRef} className="map-preview-canvas" />
       <p className="map-preview-hint">Drag to look around, scroll to zoom, W/S walk, Q/E strafe, A/D turn, Shift to sprint.</p>
-      <button
-        type="button"
-        className={`map-preview-lighting-toggle${lightingMode === "torchlight" ? " map-preview-lighting-active" : ""}`}
-        onClick={toggleLighting}
-      >
-        {lightingMode === "daylight" ? "Daylight" : "Torchlight"}
-      </button>
       <button type="button" className="map-preview-exit" onClick={onExit}>Exit Preview</button>
     </div>
   );

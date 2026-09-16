@@ -67,4 +67,19 @@ describe("MapFieldsPanel", () => {
 
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "feetDimensions", value: {width: 60}});
   });
+
+  it("defaults the Lighting select to Daylight when unset, and dispatches on change", () => {
+    const dispatch = vi.fn();
+    render(<MapFieldsPanel mapData={MAP_DATA} pixelDimensions={null} dispatch={dispatch} />);
+
+    expect(screen.getByRole("combobox")).toHaveValue("daylight");
+
+    fireEvent.change(screen.getByRole("combobox"), {target: {value: "torchlight"}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "lighting", value: "torchlight"});
+  });
+
+  it("shows the map's own lighting value when set", () => {
+    render(<MapFieldsPanel mapData={{...MAP_DATA, lighting: "torchlight"}} pixelDimensions={null} dispatch={() => {}} />);
+    expect(screen.getByRole("combobox")).toHaveValue("torchlight");
+  });
 });

@@ -158,6 +158,7 @@ RSpec.describe "Build::Maps", type: :request do
           # points.
           expect(response.body).to include(%(data-back-url="#{build_maps_path}"))
           expect(response.body).to include(CGI.escapeHTML("Gc2 Interior"))
+          expect(response.body).to include(CGI.escapeHTML('"lighting":"daylight"'))
         end
 
         it "inlines an existing map's image as a data URI, resolved relative to the map's own file" do

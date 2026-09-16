@@ -252,7 +252,8 @@ describe("MapEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "Fit"}));
 
     fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-    fireEvent.change(screen.getByRole("combobox"), {target: {value: "goblin-raider"}});
+    const unitTypeSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="goblin-raider"]'));
+    fireEvent.change(unitTypeSelect, {target: {value: "goblin-raider"}});
     fireEvent.click(screen.getByRole("button", {name: "+ Add Unit"}));
 
     fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
@@ -837,7 +838,8 @@ describe("MapEditor", () => {
       expect(fetch).not.toHaveBeenCalled();
       expect(screen.getByRole("option", {name: "goblin-raider"})).toBeInTheDocument();
 
-      fireEvent.change(screen.getByRole("combobox"), {target: {value: "goblin-raider"}});
+      const unitTypeSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="goblin-raider"]'));
+      fireEvent.change(unitTypeSelect, {target: {value: "goblin-raider"}});
 
       expect(fetch).toHaveBeenCalledWith(expect.stringContaining("keys[]=goblin-raider"));
       await waitFor(() => expect(screen.getByRole("option", {name: "Goblin Raider"})).toBeInTheDocument());

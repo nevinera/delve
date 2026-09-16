@@ -76,17 +76,6 @@
         font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 3px; cursor: pointer;
       }
       .map-preview-exit:hover { background: #345; }
-      /* Daylight/Torchlight toggle - see MapPreviewScene's setLightingMode.
-         Distinct orange (matching MovementShapes/Simulate Units' active
-         color) while showing "Torchlight", so its own state reads clearly
-         at a glance next to Exit. */
-      .map-preview-lighting-toggle {
-        position: absolute; top: 10px; left: 10px; background: #234; border: 1px solid #457; color: #9cf;
-        font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 3px; cursor: pointer;
-      }
-      .map-preview-lighting-toggle:hover { background: #345; }
-      .map-preview-lighting-toggle.map-preview-lighting-active { background: #532; border-color: #a72; color: #fca; }
-      .map-preview-lighting-toggle.map-preview-lighting-active:hover { background: #643; }
 
       .map-canvas-wrapper {
         flex: 1; min-height: 0; overflow: hidden; position: relative;

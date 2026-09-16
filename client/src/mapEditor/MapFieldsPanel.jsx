@@ -11,6 +11,19 @@ function NumberField({value, onChange}) {
   );
 }
 
+// Client-only display setting for the walk preview (see
+// MapPreviewScene.js's setLightingMode) - the game server never reads this
+// field (see docs/schema/map.md). Defaults to "daylight" when unset, same
+// as Build::MapsController#blank_map.
+function LightingSelect({value, onChange}) {
+  return (
+    <select value={value ?? "daylight"} onChange={(e) => onChange(e.target.value)}>
+      <option value="daylight">Daylight</option>
+      <option value="torchlight">Torchlight</option>
+    </select>
+  );
+}
+
 // pixelDimensions is never hand-edited - it's read straight off the loaded
 // image (see MapEditor's sync effect), only feetDimensions is an authoring
 // decision.
@@ -67,6 +80,10 @@ export default function MapFieldsPanel({mapData, pixelDimensions, dispatch}) {
             <span>×</span>
             <NumberField value={mapData.feetDimensions?.height} onChange={(v) => setFeetDimension("height", v)} />
           </td>
+        </tr>
+        <tr>
+          <th>Lighting</th>
+          <td><LightingSelect value={mapData.lighting} onChange={(v) => setField("lighting", v)} /></td>
         </tr>
       </tbody>
     </table>

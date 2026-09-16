@@ -234,6 +234,7 @@ class Build::MapsController < Build::BaseController
       "imageUrl" => nil,
       "pixelDimensions" => nil,
       "feetDimensions" => nil,
+      "lighting" => "daylight",
       "barriers" => [],
       "connections" => [],
       "units" => []

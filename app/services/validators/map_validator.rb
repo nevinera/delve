@@ -2,11 +2,13 @@ module Validators
   class MapValidator < Base
     BARRIER_TYPES = %w[wall circle].freeze
     CONNECTION_TYPES = %w[point line].freeze
+    LIGHTING_OPTIONS = %w[daylight torchlight].freeze
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
       validate_elvl!(data, path: path) if given?(data, "elvl")
+      validate_lighting!(data, path: path) if given?(data, "lighting")
       validate_barriers!(data, path: path) if given?(data, "barriers")
       validate_connections!(data, path: path) if given?(data, "connections")
       validate_units!(data, path: path) if given?(data, "units")
@@ -41,6 +43,15 @@ module Validators
       raise ValidationError.new("width must be positive", path: child_path(path, "width")) unless width > 0
       height = require_numeric!(data, "height", path: path)
       raise ValidationError.new("height must be positive", path: child_path(path, "height")) unless height > 0
+    end
+
+    # Client-only - purely a walk-preview display setting (see
+    # MapPreviewScene.js's setLightingMode), not consumed by the game
+    # server. Optional; a missing value means "daylight" (see
+    # Build::MapsController#blank_map's default).
+    def validate_lighting!(data, path:)
+      lighting = require_string!(data, "lighting", path: path)
+      require_one_of!(lighting, LIGHTING_OPTIONS, path: child_path(path, "lighting"))
     end
 
     def validate_barriers!(data, path:)

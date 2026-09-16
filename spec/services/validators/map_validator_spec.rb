@@ -64,6 +64,28 @@ RSpec.describe Validators::MapValidator, type: :validator do
       end
     end
 
+    context "lighting" do
+      it "accepts a map without lighting (defaults to daylight client-side)" do
+        expect { described_class.validate!(cave_entrance_map.except("lighting")) }.not_to raise_error
+      end
+
+      it "accepts 'daylight'" do
+        data = cave_entrance_map.merge("lighting" => "daylight")
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "accepts 'torchlight'" do
+        data = cave_entrance_map.merge("lighting" => "torchlight")
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises for an invalid value" do
+        data = cave_entrance_map.merge("lighting" => "moonlight")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+    end
+
     it "accepts barriers/connections/units explicitly null, same as omitted" do
       data = cave_entrance_map.merge("barriers" => nil, "connections" => nil, "units" => nil)
       expect { described_class.validate!(data) }.not_to raise_error
