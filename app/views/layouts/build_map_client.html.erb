@@ -93,6 +93,15 @@
          flash back to "grabbing". */
       .map-canvas-wrapper.map-canvas-wrapper-placing,
       .map-canvas-wrapper.map-canvas-wrapper-placing:active { cursor: crosshair; }
+      /* The crosshair above only wins over empty map background - an
+         existing shape underneath the cursor (a barrier's line/points, a
+         connection, a unit token) sets its own cursor: grab below, which
+         otherwise overrides it right when precision matters most (clicking
+         a new point near/against existing geometry, e.g. to snap to it).
+         Higher specificity than that plain rule, so it wins while placing. */
+      .map-canvas-wrapper-placing .map-canvas-shapes circle,
+      .map-canvas-wrapper-placing .map-canvas-shapes line,
+      .map-canvas-wrapper-placing .map-canvas-shapes image { cursor: crosshair; }
       /* will-change hints the browser to promote this to its own GPU
          compositing layer up front, so panning/zooming a large map image is
          a cheap composite instead of a full repaint of the bitmap on every
@@ -189,6 +198,11 @@
         width: 64px; height: 64px; border-radius: 50%; border: 1px solid #000;
         object-fit: cover; background: #223;
       }
+      /* Generic heading-row summary wrapper (toggle chevron + title), so the
+         remove button stays a separate flex item pinned to the far right
+         via the heading row's own space-between - reused by BarriersPanel's
+         per-entry collapse. */
+      .map-editor-sidebar-content .map-row-summary { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
       /* A unit's collapsed row: just its token, name, type, and a loot
          icon - the editing form/loot table only render once expanded. */
       .map-editor-sidebar-content .map-unit-row-summary { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }

@@ -128,7 +128,7 @@ describe("MapEditor", () => {
     expect(screen.getByText("800 × 600")).toBeInTheDocument();
   });
 
-  it("adds a wall via the sidebar's '+ Add Wall' button", () => {
+  it("adds a wall via the sidebar's '+ Add Wall' button, going straight into placing its first point", () => {
     render(
       <MapEditor
         mapKey="goblin-cave/gc1-entrance"
@@ -137,12 +137,27 @@ describe("MapEditor", () => {
         initialPixelDimensions={{width: 800, height: 600}}
       />
     );
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
 
     // The Barriers section starts collapsed.
     fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
     fireEvent.click(screen.getByRole("button", {name: "+ Add Wall"}));
 
     expect(screen.getByText(/Barrier 1: wall/)).toBeInTheDocument();
+    // No extra "+" click needed - placement mode for the first point is
+    // already armed, and the row's already expanded so a placed pill
+    // shows up right away.
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
+
+    fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+
+    expect(document.querySelector(".map-point-pill-editable")).toHaveTextContent("10, 120");
+    // Insert mode auto-advances to the next gap, so a second click lays
+    // down a consecutive point too.
+    expect(screen.getByText("Placing Points")).toBeInTheDocument();
   });
 
   it("flows the sidebar's '+ Add Circle' button into a canvas drag, creating a circle barrier and reverting the tool", () => {

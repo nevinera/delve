@@ -129,10 +129,23 @@ function barrierSummary(barrier) {
 export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, onStartPointEdit, tool, onStartAddCircle, canPlaceOnMap, otherPlacementActive, dispatch}) {
   // The "Barriers" section as a whole starts collapsed - a list of every
   // point in every wall would otherwise dominate the sidebar before
-  // there's much else to look at. Individual entries, once the section is
-  // open, are small enough now (pills, not one row per point) not to need
-  // their own collapse - every barrier's fields show at once.
+  // there's much else to look at.
   const [sectionCollapsed, setSectionCollapsed] = useState(true);
+  // Each barrier's own row also collapses independently, same as UnitsPanel's
+  // expandedIndices - a wall with many points renders as a wide block of
+  // pills, which gets unwieldy once there's more than one or two barriers.
+  // Decoupled from selectedIndex (canvas drag-handle visibility, driven by
+  // clicking the shape itself on the map) - same split as units, where a
+  // row's expand state and its on-canvas selection ring are independent.
+  const [expandedIndices, setExpandedIndices] = useState(() => new Set());
+
+  function toggleExpanded(index) {
+    setExpandedIndices((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  }
 
   function updateBarrier(index, nextBarrier) {
     Object.entries(nextBarrier).forEach(([field, value]) => {
@@ -143,12 +156,21 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
   function removeBarrier(index) {
     dispatch({type: "REMOVE_ENTRY", section: "barriers", index});
     if (selectedIndex === index) onSelect(null);
+    setExpandedIndices((current) => {
+      if (!current.has(index)) return current;
+      const next = new Set(current);
+      next.delete(index);
+      return next;
+    });
   }
 
   function addWall() {
+    const newIndex = barriers.length;
     dispatch({type: "ADD_ENTRY", section: "barriers", entry: {type: "wall", locations: []}});
     setSectionCollapsed(false);
-    onSelect(barriers.length); // select+expand the new (last) entry right away
+    onSelect(newIndex); // select the new entry right away, for its canvas handles
+    setExpandedIndices((current) => new Set(current).add(newIndex)); // and expand its row, so its pills are visible
+    onStartPlacement(newIndex, 0); // and go straight into placing the first point - no separate "+" click needed
   }
 
   return (
@@ -173,24 +195,33 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
             ? <p className="map-editor-sidebar-placeholder">No barriers yet - use the buttons above to add one.</p>
             : barriers.map((barrier, i) => {
               const selected = selectedIndex === i;
+              const expanded = expandedIndices.has(i);
               return (
                 <div
                   key={i}
-                  className={`entry-block${selected ? " map-entry-selected" : ""}`}
+                  className={`entry-block${selected ? " map-entry-selected" : ""}${expanded ? " map-entry-expanded" : ""}`}
                   onMouseEnter={() => onHover(i)}
                   onMouseLeave={() => onHover(null)}
                 >
-                  {/* Selecting (for canvas highlight/drag handles) lives on
-                      the heading row only, not the whole block - otherwise
-                      every click inside the fields below (a pill's remove
-                      button, a "+") would bubble up and toggle it too. */}
-                  <div className="entry-heading-row" onClick={() => onSelect(selected ? null : i)}>
-                    <h3>Barrier {i + 1}: {barrier.type} <span className="map-entry-summary">({barrierSummary(barrier)})</span></h3>
-                    <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); removeBarrier(i); }}>
-                      Remove
-                    </button>
+                  {/* Expand/collapse lives on the heading row only, not the
+                      whole block - otherwise every click inside the fields
+                      below (a pill's remove button, a "+") would bubble up
+                      and toggle it too. Independent of on-canvas selection
+                      (selectedIndex, which drives drag-handle visibility) -
+                      click the shape itself on the map to select it, same
+                      split as UnitsPanel's row-expand vs. token-select. */}
+                  <div className="entry-heading-row" onClick={() => toggleExpanded(i)}>
+                    <div className="map-row-summary">
+                      <span className="map-sidebar-section-toggle">{expanded ? "▾" : "▸"}</span>
+                      <h3>Barrier {i + 1}: {barrier.type} <span className="map-entry-summary">({barrierSummary(barrier)})</span></h3>
+                    </div>
+                    {expanded && (
+                      <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); removeBarrier(i); }}>
+                        Remove
+                      </button>
+                    )}
                   </div>
-                  {barrier.type === "wall"
+                  {expanded && (barrier.type === "wall"
                     ? (
                       <WallPoints
                         barrierIndex={i}
@@ -202,7 +233,7 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
                         onStartPointEdit={onStartPointEdit}
                       />
                     )
-                    : <CircleFields barrier={barrier} onChange={(next) => updateBarrier(i, next)} />}
+                    : <CircleFields barrier={barrier} onChange={(next) => updateBarrier(i, next)} />)}
                 </div>
               );
             })}

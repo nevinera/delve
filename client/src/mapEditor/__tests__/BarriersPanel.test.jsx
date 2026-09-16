@@ -16,6 +16,14 @@ function expandSection() {
   fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
 }
 
+// Each barrier's own row is also collapsed by default (heading only) -
+// most tests need it open to reach its pills/fields. There's no
+// barrier-specific row class (unlike UnitsPanel's .map-unit-row) - every
+// entry's heading is just .entry-heading-row, in list order.
+function expandBarrier(i = 0) {
+  fireEvent.click(document.querySelectorAll(".entry-heading-row")[i]);
+}
+
 function pills() {
   return document.querySelectorAll(".map-point-pill");
 }
@@ -35,34 +43,48 @@ describe("BarriersPanel", () => {
     expect(screen.getByText(/No barriers yet/)).toBeInTheDocument();
   });
 
-  it("lists each barrier with a type-labeled heading and its fields, all at once (no per-entry collapse)", () => {
-    const onSelect = vi.fn();
+  it("lists each barrier with a type-labeled heading, collapsed until its own row is clicked", () => {
     const barriers = [
       {type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]},
       {type: "circle", location: {x: 5, y: 5}, radius: 3},
     ];
-    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onSelect={onSelect} />);
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} />);
     expandSection();
 
     expect(screen.getByText(/Barrier 1: wall/)).toBeInTheDocument();
     expect(screen.getByText(/Barrier 2: circle/)).toBeInTheDocument();
-    // Both barriers' fields show without needing to select either one.
-    expect(pills().length).toBe(2);
-    expect(screen.getByDisplayValue("3")).toBeInTheDocument(); // the circle's radius field
+    // Collapsed by default - neither entry's fields show yet.
+    expect(pills().length).toBe(0);
+    expect(screen.queryByDisplayValue("3")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText(/Barrier 2: circle/));
-    expect(onSelect).toHaveBeenCalledWith(1);
+    expandBarrier(1); // Barrier 2
+    expect(screen.getByDisplayValue("3")).toBeInTheDocument(); // the circle's radius field
+    expect(pills().length).toBe(0); // Barrier 1 (the wall) is still collapsed
+
+    expandBarrier(0); // Barrier 1
+    expect(pills().length).toBe(2); // now both are open at once, independently
   });
 
-  it("deselects an entry on a second click of its heading (fields stay visible either way)", () => {
+  it("collapses an entry on a second click of its heading, hiding its fields again", () => {
+    const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} />);
+    expandSection();
+    expandBarrier();
+
+    expect(document.querySelector(".map-point-pills")).toBeInTheDocument();
+
+    expandBarrier();
+    expect(document.querySelector(".map-point-pills")).not.toBeInTheDocument();
+  });
+
+  it("clicking an entry's heading toggles expand/collapse, not on-canvas selection", () => {
     const onSelect = vi.fn();
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
-    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} selectedIndex={0} onSelect={onSelect} />);
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onSelect={onSelect} />);
     expandSection();
+    expandBarrier();
 
-    fireEvent.click(screen.getByText(/Barrier 1: wall/));
-    expect(onSelect).toHaveBeenCalledWith(null);
-    expect(document.querySelector(".map-point-pills")).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("highlights the selected entry", () => {
@@ -91,6 +113,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10.34, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} />);
     expandSection();
+    expandBarrier();
 
     expect(pills().length).toBe(2);
     expect(pills()[1]).toHaveTextContent("10.3, 0");
@@ -101,6 +124,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onHoverPoint={onHoverPoint} />);
     expandSection();
+    expandBarrier();
 
     fireEvent.mouseEnter(pills()[1]);
     expect(onHoverPoint).toHaveBeenCalledWith({barrierIndex: 0, pointIndex: 1});
@@ -114,6 +138,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}, {x: 10, y: 10}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} dispatch={dispatch} />);
     expandSection();
+    expandBarrier();
 
     expect(screen.getAllByRole("button", {name: "×"}).length).toBe(3);
     fireEvent.click(screen.getAllByRole("button", {name: "×"})[0]);
@@ -129,6 +154,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}, {x: 10, y: 10}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onHoverPoint={onHoverPoint} />);
     expandSection();
+    expandBarrier();
 
     fireEvent.click(screen.getAllByRole("button", {name: "×"})[0]);
 
@@ -140,6 +166,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}, {x: 10, y: 10}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} selectedIndex={0} onSelect={onSelect} />);
     expandSection();
+    expandBarrier();
 
     fireEvent.click(screen.getAllByRole("button", {name: "×"})[0]);
 
@@ -150,6 +177,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} />);
     expandSection();
+    expandBarrier();
 
     expect(screen.queryByRole("button", {name: "×"})).not.toBeInTheDocument();
   });
@@ -160,6 +188,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onSelect={onSelect} onStartPlacement={onStartPlacement} />);
     expandSection();
+    expandBarrier();
 
     // Pill "+" buttons: [before point 1, after point 1, after point 2].
     const plusButtons = document.querySelectorAll(".map-point-plus");
@@ -175,6 +204,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: []}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} />);
     expandSection();
+    expandBarrier();
 
     expect(document.querySelectorAll(".map-point-plus").length).toBe(1);
   });
@@ -183,6 +213,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 0, pointIndex: 1}} />);
     expandSection();
+    expandBarrier();
 
     expect(document.querySelector(".map-point-pill-pending")).toBeInTheDocument();
     document.querySelectorAll(".map-point-plus").forEach((button) => expect(button).toBeDisabled());
@@ -192,6 +223,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 1, pointIndex: 0}} />);
     expandSection();
+    expandBarrier();
 
     expect(document.querySelector(".map-point-pill-pending")).not.toBeInTheDocument();
   });
@@ -201,6 +233,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onStartPointEdit={onStartPointEdit} />);
     expandSection();
+    expandBarrier();
 
     fireEvent.click(pills()[1]);
 
@@ -211,6 +244,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 0, pointIndex: 1, mode: "edit"}} />);
     expandSection();
+    expandBarrier();
 
     expect(pills().length).toBe(2);
     expect(pills()[0]).toHaveTextContent("0, 0");
@@ -222,23 +256,30 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} placement={{barrierIndex: 1, pointIndex: 0, mode: "edit"}} />);
     expandSection();
+    expandBarrier();
 
     expect(pills().length).toBe(2);
     expect(pills()[0]).toHaveTextContent("0, 0");
     expect(pills()[1]).toHaveTextContent("10, 0");
   });
 
-  it("adds a new blank wall, selecting it", () => {
+  it("adds a new blank wall, selecting/expanding it and going straight into placing its first point", () => {
     const dispatch = vi.fn();
     const onSelect = vi.fn();
+    const onStartPlacement = vi.fn();
     const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
-    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onSelect={onSelect} dispatch={dispatch} />);
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} onSelect={onSelect} onStartPlacement={onStartPlacement} dispatch={dispatch} />);
     expandSection();
 
     fireEvent.click(screen.getByRole("button", {name: "+ Add Wall"}));
 
     expect(dispatch).toHaveBeenCalledWith({type: "ADD_ENTRY", section: "barriers", entry: {type: "wall", locations: []}});
     expect(onSelect).toHaveBeenCalledWith(1); // the new entry lands at the current length
+    expect(onStartPlacement).toHaveBeenCalledWith(1, 0); // no separate "+" click needed to start placing the first point
+    // dispatch is a no-op mock, so the new wall isn't actually in `barriers`
+    // here - but its row (barrier 1, the existing one at index 0) stays
+    // collapsed, confirming the auto-expand targeted the *new* entry only.
+    expect(document.querySelector(".map-point-pills")).not.toBeInTheDocument();
   });
 
   it("starts add-circle mode via '+ Add Circle', without dispatching anything itself", () => {
@@ -302,6 +343,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "circle", location: {x: 5, y: 5}, radius: 3}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} dispatch={dispatch} />);
     expandSection();
+    expandBarrier();
 
     fireEvent.change(screen.getByDisplayValue("3"), {target: {value: "8"}});
 
@@ -316,6 +358,7 @@ describe("BarriersPanel", () => {
     const barriers = [{type: "circle", location: {x: 5, y: 5}, radius: 3}];
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} selectedIndex={0} onSelect={onSelect} dispatch={dispatch} />);
     expandSection();
+    expandBarrier();
 
     fireEvent.click(screen.getByRole("button", {name: "Remove"}));
 
