@@ -6,6 +6,7 @@ import ConnectionShapes from "./ConnectionShapes";
 import UnitShapes from "./UnitShapes";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
+import MapPreviewCanvas from "./MapPreviewCanvas";
 
 // Connections need a required, zone-unique `identifier` the moment they're
 // created (unlike barriers, which have none) - this picks the first unused
@@ -64,6 +65,7 @@ export default function MapCanvas({
   hoveredPatrolStep, expandedUnitIndices,
   groupingMode, onToggleGroupMember, hoveredGroupIdentifier,
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
+  previewing = false, onTogglePreview,
   tool = "select", onToolChange,
 }) {
   const wrapperRef = useRef(null);
@@ -736,6 +738,7 @@ export default function MapCanvas({
           <div className="map-toolbar-button-group map-simulate-group">
             <button
               type="button" className={simulating ? "map-simulate-active" : ""}
+              disabled={previewing}
               onClick={() => onToggleSimulate?.()}
             >
               {simulating ? "Stop Simulating" : "Simulate Units"}
@@ -749,6 +752,17 @@ export default function MapCanvas({
                 />
               </label>
             )}
+          </div>
+        )}
+        {image && canDrawBarriers && (
+          <div className="map-toolbar-button-group map-preview-group">
+            <button
+              type="button" className={previewing ? "map-simulate-active" : ""}
+              disabled={simulating}
+              onClick={() => onTogglePreview?.()}
+            >
+              {previewing ? "Exit Walk Preview" : "Walk Preview"}
+            </button>
           </div>
         )}
         {isPlacing && <span className="map-canvas-placing-status">{placingStatusText}</span>}
@@ -765,7 +779,9 @@ export default function MapCanvas({
         </div>
       )}
       {imageError && <div className="map-canvas-error">{imageError}</div>}
-      {image ? (
+      {previewing ? (
+        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={image.url} onExit={() => onTogglePreview?.()} />
+      ) : image ? (
         <div
           ref={wrapperRef}
           className={`map-canvas-wrapper${isPlacing ? " map-canvas-wrapper-placing" : ""}`}

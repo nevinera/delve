@@ -1341,6 +1341,45 @@ describe("MapCanvas", () => {
     });
   });
 
+  // MapPreviewCanvas mounts a real THREE.WebGLRenderer on an actual canvas,
+  // which jsdom can't provide a WebGL context for - so, matching this
+  // codebase's existing convention for such components (editor/
+  // AbilityPreviewCanvas.jsx and previewScene.js have no test coverage
+  // either), these only exercise the toggle button itself, never actually
+  // rendering with `previewing` true.
+  describe("walk preview (phase 2)", () => {
+    const FEET_DIMENSIONS = {width: 160, height: 120};
+
+    it("shows the toggle only once feetDimensions is set", () => {
+      render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+      expect(screen.queryByRole("button", {name: "Walk Preview"})).not.toBeInTheDocument();
+    });
+
+    it("calls onTogglePreview when clicked", () => {
+      const onTogglePreview = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          onTogglePreview={onTogglePreview}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", {name: "Walk Preview"}));
+      expect(onTogglePreview).toHaveBeenCalled();
+    });
+
+    it("disables Walk Preview while simulating", () => {
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          simulating
+        />
+      );
+      expect(screen.getByRole("button", {name: "Walk Preview"})).toBeDisabled();
+    });
+  });
+
   describe("unit position re-placement (from UnitsPanel's PositionButton)", () => {
     const FEET_DIMENSIONS = {width: 160, height: 120}; // 5px/ft both axes
 

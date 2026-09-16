@@ -66,7 +66,14 @@ function computeWallPolygon(points, half) {
   return result;
 }
 
-function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
+// Exported (only these two, not computeWallPolygon) - the map editor's
+// MapPreviewScene reuses them as-is, no signature changes needed to serve
+// both callers. Everything else the preview needs (facing math, movement,
+// camera positioning) is small enough to just duplicate there instead, same
+// as editor/previewScene.js already does for the ability preview - see its
+// header comment for why an editor-only preview stays decoupled from this
+// file rather than growing options to accommodate a second caller.
+export function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
   const poly = computeWallPolygon(worldPoints, thickness / 2);
   const shape = new THREE.Shape();
   poly.forEach(([x, z], i) => (i === 0 ? shape.moveTo(x, -z) : shape.lineTo(x, -z)));
@@ -108,7 +115,7 @@ function addFacingArrow(group, radius, color) {
   group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })));
 }
 
-function createPlayerToken(radius, tokenUrl) {
+export function createPlayerToken(radius, tokenUrl) {
   const group = new THREE.Group();
 
   const body = new THREE.Mesh(

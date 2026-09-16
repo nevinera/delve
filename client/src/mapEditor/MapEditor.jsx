@@ -128,6 +128,13 @@ export default function MapEditor({
   const simUnitsRef = useRef([]); // mutable per-unit sim state, not itself rendered
   const simRafRef = useRef(null);
   const simLastTimeRef = useRef(null);
+  // Walk Preview mode (Phase 2, formerly Phase 3 - see the plan's reordering
+  // note): a read-only "walk it" 3D preview (MapPreviewScene/MapPreviewCanvas)
+  // swapped in for MapCanvas's whole top-down view. Same "lock out editing,
+  // hide the sidebar" treatment as Simulate Units, and mutually exclusive
+  // with it (the toolbar disables each while the other is active) - both are
+  // read-only previews of the current draft, never touching mapData.
+  const [previewing, setPreviewing] = useState(false);
 
   // At most one of {wall-point placement, connection-field placement,
   // unit-position placement, an armed add-tool} is ever active - starting
@@ -287,6 +294,7 @@ export default function MapEditor({
     setWanderLocationPlacement(null);
     setGroupingMode(null);
     setTool("select");
+    setPreviewing(false);
     simUnitsRef.current = mapData.units.map(initSimUnit);
     setSimPositions(simUnitsRef.current.map((sim) => ({x: sim.x, y: sim.y, angle: sim.angle})));
     setSimulating(true);
@@ -300,6 +308,22 @@ export default function MapEditor({
   function toggleSimulation() {
     if (simulating) stopSimulation();
     else startSimulation();
+  }
+
+  function togglePreview() {
+    if (previewing) {
+      setPreviewing(false);
+      return;
+    }
+    setPlacement(null);
+    setConnectionPlacement(null);
+    setUnitPlacement(null);
+    setPatrolStepPlacement(null);
+    setWanderLocationPlacement(null);
+    setGroupingMode(null);
+    setTool("select");
+    stopSimulation();
+    setPreviewing(true);
   }
 
   // Drives simUnitsRef forward every animation frame while simulating, then
@@ -599,6 +623,8 @@ export default function MapEditor({
         onToggleSimulate={toggleSimulation}
         simSpeed={simSpeed}
         onSimSpeedChange={setSimSpeed}
+        previewing={previewing}
+        onTogglePreview={togglePreview}
         tool={tool}
         onToolChange={setTool}
       />
@@ -606,6 +632,10 @@ export default function MapEditor({
         {simulating ? (
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Simulating units - editing is disabled while this runs.</h3>
+          </div>
+        ) : previewing ? (
+          <div className="map-sidebar-section-heading map-simulate-notice">
+            <h3>Walk preview running - editing is disabled while this runs.</h3>
           </div>
         ) : (
           <>
