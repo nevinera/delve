@@ -14,6 +14,7 @@ See [common.md](common.md) for `Location`, `Position`, and `floatRange`.
 | `imageUrl` | string | yes | URL of the map background image. |
 | `pixelDimensions` | object | yes | Image dimensions in pixels: `{ "width": int, "height": int }`. |
 | `feetDimensions` | object | yes | Map dimensions in feet: `{ "width": float, "height": float }`. Used to convert pixel coordinates to world coordinates. |
+| `lighting` | string | no | `"daylight"` or `"torchlight"`, controls the map editor's walk-preview lighting/view-distance style. Defaults to `"daylight"` when omitted. Client-only (a display setting for the map editor's own preview) - the game server does not read this field. |
 | `barriers` | array of Barrier | no | Impassable obstacles on this map. |
 | `connections` | array of MapConnection | no | Entry/exit points on this map. The zone defines how connections pair up and which are entry points. |
 | `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |

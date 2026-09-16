@@ -43,9 +43,20 @@ RSpec.describe Validators::UnitValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /between 0.0 and 1.0/)
     end
 
-    it "allows currentHpFraction, movement, and links explicitly null, same as omitted" do
-      data = still_unit.merge("currentHpFraction" => nil, "movement" => nil, "links" => nil)
+    it "allows currentHpFraction and movement explicitly null, same as omitted" do
+      data = still_unit.merge("currentHpFraction" => nil, "movement" => nil)
       expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "accepts a groupIdentifier" do
+      data = still_unit.merge("groupIdentifier" => "goblin_pack")
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when groupIdentifier is not a string" do
+      data = still_unit.merge("groupIdentifier" => 3)
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /groupIdentifier must be a string/)
     end
 
     it "raises when position angle is out of range" do

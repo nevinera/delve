@@ -22,6 +22,7 @@ export default defineConfig({
         classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
         unitTypeEditor: resolve(__dirname, "client/src/unitTypeEditor/main.jsx"),
         itemEditor: resolve(__dirname, "client/src/itemEditor/main.jsx"),
+        mapEditor: resolve(__dirname, "client/src/mapEditor/main.jsx"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",

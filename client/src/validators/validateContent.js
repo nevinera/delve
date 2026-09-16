@@ -38,3 +38,9 @@ export function validateUnitType(fullUnitType) {
 export function validateItem(item) {
   return postValidation("/build/validators/item", item);
 }
+
+// Maps have no $ref fields either (see the map editor plan's Phase 1
+// context note) - the draft is validated as-is.
+export function validateMap(map) {
+  return postValidation("/build/validators/map", map);
+}

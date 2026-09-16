@@ -30,7 +30,7 @@ func RollAndRecordLoot(unitID uuid.UUID, unit *UnitState, state *InstanceState) 
 	})
 }
 
-func rollLoot(table map[string]int, count [2]int, catalog map[string]instanceconfig.Item) []PendingLootItem {
+func rollLoot(table map[string]int, count [2]float64, catalog map[string]instanceconfig.Item) []PendingLootItem {
 	type entry struct {
 		id    string
 		cumul int
@@ -47,10 +47,7 @@ func rollLoot(table map[string]int, count [2]int, catalog map[string]instancecon
 		return nil
 	}
 
-	n := count[0]
-	if count[1] > count[0] {
-		n = count[0] + rand.Intn(count[1]-count[0]+1)
-	}
+	n := resolveLootCount(count)
 
 	var result []PendingLootItem
 	for range n {
@@ -68,4 +65,23 @@ func rollLoot(table map[string]int, count [2]int, catalog map[string]instancecon
 		}
 	}
 	return result
+}
+
+// resolveLootCount turns a [min, max] lootCount range into a concrete item
+// count for one kill. A resolved value >= 1 awards that many items
+// (truncated to an integer); a resolved value in [0, 1) is instead the
+// probability of awarding exactly one item (0 otherwise) - this lets a unit
+// be configured to drop its loot only some of the time.
+func resolveLootCount(count [2]float64) int {
+	value := count[0]
+	if count[1] > count[0] {
+		value = count[0] + rand.Float64()*(count[1]-count[0])
+	}
+	if value < 1 {
+		if rand.Float64() < value {
+			return 1
+		}
+		return 0
+	}
+	return int(value)
 }

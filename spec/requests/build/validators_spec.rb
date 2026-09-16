@@ -146,5 +146,32 @@ RSpec.describe "Build::Validators", type: :request do
         expect(body["error"]["path"]).to eq("$.elvl")
       end
     end
+
+    describe "POST /build/validators/map" do
+      let(:valid_map) do
+        {
+          identifier: "gc1-goblin-cave-entrance", name: "Gc1 Goblin Cave Entrance", imageUrl: "gc1-goblin-cave-entrance.webp",
+          pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160.0, height: 120.0},
+          barriers: [], connections: [], units: []
+        }
+      end
+
+      it "returns valid: true for a valid map" do
+        post "/build/validators/map", params: valid_map.to_json, headers: {"Content-Type" => "application/json"}
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)).to eq({"valid" => true})
+      end
+
+      it "returns valid: false with the error message and path for a missing imageUrl" do
+        invalid = valid_map.except(:imageUrl)
+
+        post "/build/validators/map", params: invalid.to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["path"]).to eq("$.imageUrl")
+      end
+    end
   end
 end

@@ -94,9 +94,9 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 			if hpFraction == 0 {
 				hpFraction = 1.0
 			}
-			lootCount := [2]int{1, 1}
+			lootCount := [2]float64{1, 1}
 			if u.LootCount != nil {
-				lootCount = [2]int{int(u.LootCount.Min()), int(u.LootCount.Max())}
+				lootCount = [2]float64{u.LootCount.Min(), u.LootCount.Max()}
 			}
 			id := uuid.New()
 			state.Units[id] = &UnitState{

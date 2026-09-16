@@ -145,4 +145,27 @@ RSpec.describe Github::ContentClient do
       expect { described_class.new(user).file_content("abilities/missing.json") }.to raise_error(Github::NotFoundError)
     end
   end
+
+  describe "#raw_file_content" do
+    let!(:installation) do
+      create(:github_installation, user: user, repo_full_name: "nevinera/delve-content",
+        access_token: "gho_fresh", access_token_expires_at: 1.hour.from_now)
+    end
+
+    it "returns the exact bytes GitHub sends back for the raw media type, with no base64/JSON envelope" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc1-entrance/gc1-entrance.webp")
+        .with(headers: {"Authorization" => "Bearer gho_fresh", "Accept" => "application/vnd.github.raw+json"})
+        .to_return(status: 200, headers: {"Content-Type" => "image/webp"}, body: "fake-webp-bytes")
+
+      result = described_class.new(user).raw_file_content("zones/goblin-cave/gc1-entrance/gc1-entrance.webp")
+      expect(result).to eq("fake-webp-bytes")
+    end
+
+    it "raises NotFoundError when GitHub returns a 404 for the path" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/missing.webp")
+        .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+
+      expect { described_class.new(user).raw_file_content("zones/missing.webp") }.to raise_error(Github::NotFoundError)
+    end
+  end
 end

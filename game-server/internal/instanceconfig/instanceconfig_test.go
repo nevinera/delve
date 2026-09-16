@@ -115,7 +115,7 @@ func TestZone_ValidFull_Units(t *testing.T) {
 		assert.Equal(t, "goblin_raider", u.UnitType)
 		assert.Equal(t, "hostile", u.Hostility)
 		assert.Equal(t, "raider_a", u.Identifier)
-		assert.Equal(t, []string{"raider_b"}, u.Links)
+		assert.Equal(t, "raiders", u.GroupIdentifier)
 		assert.Equal(t, "patrol", u.Movement.Type)
 		assert.Equal(t, "return", u.Movement.Choose)
 		assert.Len(t, u.Movement.Steps, 2)

@@ -196,7 +196,7 @@ A LootTable maps item identifiers to integer weights expressing relative drop pr
           "position": { "x": 15.0, "y": 10.0, "angle": 180.0 },
           "hostility": "hostile",
           "identifier": "raider_a",
-          "links": ["raider_b"],
+          "groupIdentifier": "raider_pack",
           "movement": {
             "type": "patrol",
             "choose": "return",
@@ -211,7 +211,7 @@ A LootTable maps item identifiers to integer weights expressing relative drop pr
           "position": { "x": 20.0, "y": 10.0, "angle": 180.0 },
           "hostility": "hostile",
           "identifier": "raider_b",
-          "links": ["raider_a"],
+          "groupIdentifier": "raider_pack",
           "movement": { "type": "wander", "location": { "x": 20.0, "y": 10.0 }, "radius": 5.0, "speed": 0.3, "waitTime": [2.0, 5.0] }
         }
       ]

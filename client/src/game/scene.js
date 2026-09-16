@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { resolveBarrierCollisions } from "./collision.js";
 import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
+import { loadSvgToCanvas } from "./svgRaster.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -66,7 +67,14 @@ function computeWallPolygon(points, half) {
   return result;
 }
 
-function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
+// Exported (only these two, not computeWallPolygon) - the map editor's
+// MapPreviewScene reuses them as-is, no signature changes needed to serve
+// both callers. Everything else the preview needs (facing math, movement,
+// camera positioning) is small enough to just duplicate there instead, same
+// as editor/previewScene.js already does for the ability preview - see its
+// header comment for why an editor-only preview stays decoupled from this
+// file rather than growing options to accommodate a second caller.
+export function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
   const poly = computeWallPolygon(worldPoints, thickness / 2);
   const shape = new THREE.Shape();
   poly.forEach(([x, z], i) => (i === 0 ? shape.moveTo(x, -z) : shape.lineTo(x, -z)));
@@ -108,7 +116,7 @@ function addFacingArrow(group, radius, color) {
   group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })));
 }
 
-function createPlayerToken(radius, tokenUrl) {
+export function createPlayerToken(radius, tokenUrl) {
   const group = new THREE.Group();
 
   const body = new THREE.Mesh(
@@ -672,14 +680,30 @@ export class SceneManager {
 
       if (m.imageUrl) {
         const mapUrl = new URL(m.imageUrl, baseUrl).href;
-        new THREE.TextureLoader().load(mapUrl, (texture) => {
+        const addGround = (texture) => {
+          // See MapPreviewScene.js's loadMap for why this matters - a
+          // ground texture viewed at a shallow, walking-height angle blurs
+          // heavily without anisotropic filtering, regardless of the
+          // source image's own resolution.
+          texture.anisotropy = this._renderer.capabilities.getMaxAnisotropy();
           const plane = new THREE.Mesh(
             new THREE.PlaneGeometry(width, height),
             new THREE.MeshLambertMaterial({ map: texture })
           );
           plane.rotation.x = -Math.PI / 2;
           group.add(plane);
-        });
+        };
+        // A map background is committed as its original SVG (smaller than a
+        // pre-baked raster, and losslessly re-renderable at any resolution -
+        // see the map editor plan's Phase 3 note) rather than a raster
+        // format - rasterize it ourselves at a map-scale-appropriate
+        // resolution instead of trusting the browser's default SVG decode
+        // size, same as the map editor's own walk preview.
+        if (m.imageUrl.toLowerCase().endsWith(".svg")) {
+          loadSvgToCanvas(mapUrl, { width, height }).then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
+        } else {
+          new THREE.TextureLoader().load(mapUrl, addGround);
+        }
       }
 
       for (const barrier of m.barriers ?? []) {
