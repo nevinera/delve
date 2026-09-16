@@ -14,15 +14,19 @@ const POINT_RADIUS = 5;
 const STROKE_WIDTH = 3;
 const HOVERED_STROKE_WIDTH = STROKE_WIDTH * 2;
 
-export default function ConnectionShapes({connections, pixelDimensions, feetDimensions, tool, selectedIndex, hoveredIndex, onSelect, onStartDragPoint, onStartDragEndpoint}) {
+export default function ConnectionShapes({connections, pixelDimensions, feetDimensions, interactive, selectedIndex, hoveredIndex, onSelect, onStartDragPoint, onStartDragEndpoint}) {
   function toPixel(loc) {
     return feetToPixel(loc.x, loc.y, pixelDimensions, feetDimensions);
   }
 
-  // Only "select" mode selects/drags an existing connection on click - in
-  // an add-tool, a click landing on top of an existing connection should
-  // fall through untouched to the canvas's own add handling.
-  const selectable = tool === "select";
+  // Only interactive (tool === "select" and no add-tool/placement of any
+  // kind active - see MapCanvas's isPlacing) selects/drags an existing
+  // connection on click - otherwise a click landing on top of one (e.g. a
+  // line connection's own endpoint handle, while placing a barrier wall
+  // point nearby) should fall through untouched to whatever's actually
+  // armed, so it can snap to this very point instead of dragging the
+  // connection.
+  const selectable = interactive;
 
   return (
     <svg className="map-canvas-shapes" width={pixelDimensions.width} height={pixelDimensions.height}>

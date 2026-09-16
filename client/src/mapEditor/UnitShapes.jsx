@@ -23,8 +23,12 @@ const DEFAULT_TOKEN_RADIUS_FEET = 2; // used only if the unit's type is missing 
 // real pixels for the browser to rasterize the portrait from.
 const TOKEN_IMAGE_RASTER_PX = 256;
 
-export default function UnitShapes({units, pixelDimensions, feetDimensions, tool, availableUnitTypes, selectedIndex, hoveredIndex, onSelect, onStartDrag, onHoverUnit}) {
-  const selectable = tool === "select";
+export default function UnitShapes({units, pixelDimensions, feetDimensions, interactive, availableUnitTypes, selectedIndex, hoveredIndex, onSelect, onStartDrag, onHoverUnit}) {
+  // Only interactive (tool === "select" and no add-tool/placement of any
+  // kind active - see MapCanvas's isPlacing) drags an existing unit on
+  // click - otherwise a click landing on a token should fall through
+  // untouched to whatever's actually armed.
+  const selectable = interactive;
 
   return (
     <svg className="map-canvas-shapes" width={pixelDimensions.width} height={pixelDimensions.height}>

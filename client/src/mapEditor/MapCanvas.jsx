@@ -1001,7 +1001,7 @@ export default function MapCanvas({
                 barriers={mapData.barriers}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                tool={tool}
+                interactive={!isPlacing}
                 selectedIndex={selectedBarrierIndex}
                 hoveredIndex={hoveredBarrierIndex}
                 hoveredPoint={hoveredPoint}
@@ -1062,7 +1062,7 @@ export default function MapCanvas({
                 connections={mapData.connections}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                tool={tool}
+                interactive={!isPlacing}
                 selectedIndex={selectedConnectionIndex}
                 hoveredIndex={hoveredConnectionIndex}
                 onSelect={onSelectConnection}
@@ -1097,7 +1097,7 @@ export default function MapCanvas({
                 units={mapData.units}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                tool={tool}
+                interactive={!isPlacing}
                 availableUnitTypes={availableUnitTypes}
                 selectedIndex={selectedUnitIndex}
                 hoveredIndex={hoveredUnitIndex}

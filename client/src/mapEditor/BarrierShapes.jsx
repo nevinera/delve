@@ -11,16 +11,19 @@ const STROKE_WIDTH = 3;
 const HOVERED_STROKE_WIDTH = STROKE_WIDTH * 2;
 const POINT_HOVER_RADIUS_FEET = 3;
 
-export default function BarrierShapes({barriers, pixelDimensions, feetDimensions, tool, selectedIndex, hoveredIndex, hoveredPoint, onSelect, onStartDragPoint, onStartDragCircleMove, onStartDragCircleResize}) {
+export default function BarrierShapes({barriers, pixelDimensions, feetDimensions, interactive, selectedIndex, hoveredIndex, hoveredPoint, onSelect, onStartDragPoint, onStartDragCircleMove, onStartDragCircleResize}) {
   function toPixel(loc) {
     return feetToPixel(loc.x, loc.y, pixelDimensions, feetDimensions);
   }
 
-  // Only "select" mode selects/drags an existing shape on click - in an
-  // add-tool, a click landing on top of an existing barrier should fall
-  // through untouched to the canvas's own add-wall/add-circle handling
-  // (no stopPropagation, no selection change).
-  const selectable = tool === "select";
+  // Only interactive (tool === "select" and no add-tool/placement of any
+  // kind active - see MapCanvas's isPlacing) selects/drags an existing
+  // shape on click - otherwise a click landing on top of an existing
+  // barrier should fall through untouched to whatever's actually armed
+  // (an add-tool's own handling, or a wall/connection-field placement
+  // that should treat this click as an ordinary map click, possibly
+  // snapping to this very point - not start dragging this barrier).
+  const selectable = interactive;
 
   return (
     <svg className="map-canvas-shapes" width={pixelDimensions.width} height={pixelDimensions.height}>

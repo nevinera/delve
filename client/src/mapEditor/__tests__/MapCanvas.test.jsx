@@ -1825,6 +1825,37 @@ describe("MapCanvas", () => {
       expect(onPlacePoint).toHaveBeenCalledWith({x: 10, y: 120});
     });
 
+    it("hides a selected line connection's endpoint drag handles while a barrier wall point is being placed (regression)", () => {
+      // Previously, only `tool` gated whether an existing shape's own
+      // pointer handlers (here, a selected connection's endpoint drag
+      // handle - see ConnectionShapes.jsx) were attached - and wall-point
+      // placement never changes `tool` away from "select" (it's tracked
+      // separately, via `placement`). So a selected line connection kept
+      // its endpoint handles live and interactive the whole time a wall
+      // point was being placed nearby: a real click landing on one of
+      // those handles would be captured by its own onPointerDown (which
+      // calls stopPropagation - see startDragConnectionEndpoint) instead
+      // of ever reaching this placement, making it impossible to land a
+      // wall point on (or snapped to) that exact spot. jsdom can't
+      // simulate the coordinate-based hit-testing that would actually
+      // demonstrate the click being intercepted (fireEvent dispatches
+      // bypass that, like the SVG <image> pointer-events gap from Slice 5)
+      // - the closest verifiable proxy is that the handle shouldn't even
+      // exist in the DOM while placement is active.
+      const connections = [{identifier: "c1", type: "line", start: {x: 0, y: 0}, end: {x: 10, y: 120}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, connections})} dispatch={noop} onSelectBarrier={noop}
+          selectedConnectionIndex={0}
+          placement={{barrierIndex: 0, pointIndex: 0}} onPlacePoint={noop} onCancelPlacement={noop}
+        />
+      );
+      fitToImageSize();
+
+      expect(document.querySelectorAll(".map-canvas-shapes circle").length).toBe(0);
+    });
+
     it("previews the wall's boundary with the pending point at the hovered position", () => {
       const barriers = [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}];
       render(
