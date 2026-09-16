@@ -163,6 +163,22 @@ describe("MapCanvas", () => {
     expect(afterFit.y).toBeCloseTo(base.y, 5);
   });
 
+  it("the +/- buttons zoom around the wrapper's own center, not the top-left corner", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    const before = transformParts();
+    const centerX = 400, centerY = 300;
+    const pixelUnderCenter = {x: (centerX - before.x) / before.scale, y: (centerY - before.y) / before.scale};
+
+    fireEvent.click(screen.getByRole("button", {name: "+"}));
+
+    const after = transformParts();
+    expect(after.x + pixelUnderCenter.x * after.scale).toBeCloseTo(centerX, 5);
+    expect(after.y + pixelUnderCenter.y * after.scale).toBeCloseTo(centerY, 5);
+  });
+
   it("Fit shows the whole image (contain), not just fit-to-width, and centers the axis with leftover space", () => {
     // A tall, narrow image in a roughly square wrapper: fitting to width
     // alone (1000/500 = 2x) would blow the image up well past the
@@ -252,6 +268,88 @@ describe("MapCanvas", () => {
     for (let i = 0; i < 30; i++) fireEvent.click(screen.getByRole("button", {name: "+"}));
 
     expect(transformParts().scale).toBeCloseTo(4, 5);
+  });
+
+  it("pans the map continuously while a WASD key is held, and stops on keyup", () => {
+    let frameCallback = null;
+    vi.stubGlobal("requestAnimationFrame", (cb) => { frameCallback = cb; return 1; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    let now = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const before = transformParts();
+
+    fireEvent.keyDown(document, {code: "KeyD"}); // pans content left (the "camera" moves right/east)
+    act(() => frameCallback(now)); // first frame: dt=0, no movement yet, but reschedules
+    now += 500; // 0.5s at 500px/sec -> 250px
+    act(() => frameCallback(now));
+
+    expect(transformParts().x - before.x).toBeCloseTo(-250, 5);
+    expect(transformParts().y - before.y).toBeCloseTo(0, 5);
+
+    fireEvent.keyUp(document, {code: "KeyD"});
+    const afterKeyUp = transformParts();
+    now += 500; // this frame sees no held keys, moves nothing, and doesn't reschedule again
+    act(() => frameCallback(now));
+
+    expect(transformParts()).toEqual(afterKeyUp);
+
+    vi.spyOn(performance, "now").mockRestore();
+  });
+
+  it("ignores WASD while typing in a text field", () => {
+    let frameCallback = null;
+    vi.stubGlobal("requestAnimationFrame", (cb) => { frameCallback = cb; return 1; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const replaceInput = document.querySelector('input[type="file"]');
+
+    fireEvent.keyDown(replaceInput, {code: "KeyD"});
+
+    expect(frameCallback).toBeNull();
+  });
+
+  it("'+'/'-' zoom in/out by one ZOOM_STEP, same as their buttons - '=' works too, without Shift", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const before = transformParts();
+
+    fireEvent.keyDown(document, {key: "+"});
+    expect(transformParts().scale).toBeCloseTo(before.scale * 1.25, 5);
+
+    fireEvent.keyDown(document, {key: "="});
+    expect(transformParts().scale).toBeCloseTo(before.scale * 1.25 * 1.25, 5);
+
+    fireEvent.keyDown(document, {key: "-"});
+    fireEvent.keyDown(document, {key: "-"});
+    expect(transformParts().scale).toBeCloseTo(before.scale, 5);
+  });
+
+  it("+/- zoom around the wrapper's own center, keeping that point fixed - same idea as wheel zoom's cursor anchor", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    const before = transformParts();
+    const centerX = 400, centerY = 300; // 800/2, 600/2
+    const pixelUnderCenter = {x: (centerX - before.x) / before.scale, y: (centerY - before.y) / before.scale};
+
+    fireEvent.keyDown(document, {key: "+"});
+
+    const after = transformParts();
+    expect(after.x + pixelUnderCenter.x * after.scale).toBeCloseTo(centerX, 5);
+    expect(after.y + pixelUnderCenter.y * after.scale).toBeCloseTo(centerY, 5);
+  });
+
+  it("ignores +/- while typing in a text field", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const before = transformParts();
+    const replaceInput = document.querySelector('input[type="file"]');
+
+    fireEvent.keyDown(replaceInput, {key: "+"});
+
+    expect(transformParts().scale).toBeCloseTo(before.scale, 5);
   });
 
   it("coalesces several wheel events within one frame by multiplying their factors together", () => {

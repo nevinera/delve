@@ -924,4 +924,113 @@ describe("MapEditor", () => {
       await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
     });
   });
+
+  describe("hotkeys", () => {
+    function renderWithDimensions() {
+      render(
+        <MapEditor
+          mapKey="goblin-cave/gc1-entrance"
+          initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
+          initialImageDataUri="data:image/webp;base64,AAAA"
+          initialPixelDimensions={{width: 800, height: 600}}
+        />
+      );
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+      return wrapper;
+    }
+
+    it("'b' starts a new line barrier, straight into placing its first point - same as the button", () => {
+      renderWithDimensions();
+
+      fireEvent.keyDown(document, {key: "b"});
+
+      fireEvent.click(document.querySelector(".map-sidebar-section-heading")); // Barriers
+      expect(screen.getByText(/Barrier 1: wall/)).toBeInTheDocument();
+      expect(screen.getByText("Placing Points")).toBeInTheDocument();
+    });
+
+    it("'c' arms the add-circle tool - same as the '+ Add Circle' button", () => {
+      const wrapper = renderWithDimensions();
+
+      fireEvent.keyDown(document, {key: "c"});
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
+
+      fireEvent.click(document.querySelector(".map-sidebar-section-heading")); // Barriers
+      expect(screen.getByText(/Barrier 1: circle/)).toBeInTheDocument();
+    });
+
+    it("'l' arms the add-line-connection tool - same as the '+ Add Line Connection' button", () => {
+      const wrapper = renderWithDimensions();
+
+      fireEvent.keyDown(document, {key: "l"});
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
+      expect(screen.getByText(/Connection 1: line/)).toBeInTheDocument();
+    });
+
+    it("'p' arms the add-point-connection tool - same as the '+ Add Point Connection' button", () => {
+      const wrapper = renderWithDimensions();
+
+      fireEvent.keyDown(document, {key: "p"});
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+
+      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
+      expect(screen.getByText(/Connection 1: point/)).toBeInTheDocument();
+    });
+
+    it("ignores hotkeys while typing in a text field", () => {
+      renderWithDimensions();
+      fireEvent.click(document.querySelector(".map-sidebar-section-heading")); // Barriers - unrelated, just to reach a text field
+      const nameInput = screen.getByPlaceholderText("gc1-goblin-cave-entrance");
+
+      fireEvent.keyDown(nameInput, {key: "b"});
+
+      expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
+    });
+
+    it("ignores hotkeys while another tool/placement is already active", () => {
+      const wrapper = renderWithDimensions();
+      fireEvent.keyDown(document, {key: "c"}); // arm add-circle first
+
+      fireEvent.keyDown(document, {key: "b"}); // shouldn't override it with a wall
+
+      // add-circle is still the pending placeholder/active tool, not a wall -
+      // and a drag still creates a circle, confirming "b" never fired.
+      fireEvent.click(document.querySelector(".map-sidebar-section-heading")); // Barriers
+      expect(screen.getByText(/Barrier 1: circle/)).toBeInTheDocument();
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
+      expect(screen.getAllByText(/Barrier 1:/).length).toBe(1);
+      expect(screen.getByText(/Barrier 1: circle/)).toBeInTheDocument();
+    });
+
+    it("'?' shows the hotkey list, and Escape dismisses it", () => {
+      renderWithDimensions();
+
+      fireEvent.keyDown(document, {key: "?"});
+      expect(screen.getByText("Hotkeys")).toBeInTheDocument();
+      expect(screen.getByText("New line barrier")).toBeInTheDocument();
+
+      fireEvent.keyDown(document, {key: "Escape"});
+      expect(screen.queryByText("Hotkeys")).not.toBeInTheDocument();
+    });
+
+    it("does nothing for any hotkey until feetDimensions is set", () => {
+      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+
+      fireEvent.keyDown(document, {key: "b"});
+
+      fireEvent.click(document.querySelector(".map-sidebar-section-heading")); // Barriers
+      expect(screen.queryByText(/Barrier 1:/)).not.toBeInTheDocument();
+    });
+  });
 });

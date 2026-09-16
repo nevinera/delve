@@ -307,6 +307,28 @@
         .map-editor-sidebar { flex: none; width: 100%; border-left: none; border-top: 1px solid #333; }
         .map-editor-sidebar.collapsed { flex: 0 0 36px; }
       }
+
+      /* "?" hotkey help (HotkeyHelp.jsx) - a plain centered overlay, no
+         existing modal component here to reuse. Escape-only dismiss (see
+         MapEditor's own keydown effect), no backdrop click. */
+      .map-hotkey-help-backdrop {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+        display: flex; align-items: center; justify-content: center; z-index: 10;
+      }
+      .map-hotkey-help {
+        background: #1a1e22; border: 1px solid #445; border-radius: 6px;
+        padding: 20px 24px; min-width: 220px;
+      }
+      .map-hotkey-help h3 { font-size: 14px; color: #cce; font-weight: 600; margin-bottom: 12px; }
+      .map-hotkey-help table { border-collapse: collapse; }
+      .map-hotkey-help td { padding: 4px 0; font-size: 13px; color: #ccd; }
+      .map-hotkey-help td:first-child { padding-right: 14px; }
+      .map-hotkey-help kbd {
+        display: inline-block; min-width: 1.4em; text-align: center; background: #2a2f36;
+        border: 1px solid #556; border-radius: 3px; padding: 2px 6px; font-family: inherit;
+        font-size: 12px; color: #9cf;
+      }
+      .map-hotkey-help-hint { margin-top: 14px; font-size: 11px; color: #789; }
     </style>
   </head>
   <body>

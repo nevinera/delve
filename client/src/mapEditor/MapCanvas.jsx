@@ -50,6 +50,14 @@ function facingDegrees(dx, dy) {
 // delta spike (some mice report much bigger notches) can't jump too far.
 const WHEEL_ZOOM_SENSITIVITY = 0.0008;
 const MAX_WHEEL_FACTOR_PER_EVENT = 1.25;
+const KEYBOARD_PAN_SPEED = 500; // screen px/sec, independent of zoom - see the WASD panning effect
+// W/A/S/D -> [dx, dy] the *content* shifts by (offset.x/y) while that key
+// is held - W is "the camera moves up/north," which reads on screen as the
+// content sliding down, same convention a top-down game camera would use.
+const PAN_KEY_DIRECTIONS = {
+  KeyW: [0, 1], KeyS: [0, -1],
+  KeyA: [1, 0], KeyD: [-1, 0],
+};
 
 // Top-down pan/zoom viewport for the map background image, plus barrier
 // placement/editing (slice 3). Panning is a plain CSS transform on a
@@ -110,6 +118,9 @@ export default function MapCanvas({
   const connectionDragRef = useRef(null);
   // {unitIndex} | null - a unit only ever moves as a whole (no sub-handles).
   const unitDragRef = useRef(null);
+  const panKeysRef = useRef(new Set()); // currently-held WASD KeyboardEvent.code values
+  const panKeysLoopRef = useRef(null); // pending requestAnimationFrame id while any pan key is held, or null
+  const panKeysLastTimeRef = useRef(null);
 
   const feetDimensions = mapData.feetDimensions;
   const canDrawBarriers = hasBothAxes(feetDimensions);
@@ -148,6 +159,27 @@ export default function MapCanvas({
       if (zoomRafRef.current != null) cancelAnimationFrame(zoomRafRef.current);
     };
   }, []);
+
+  // Zooms by `factor` (> 1 in, < 1 out) around the wrapper's own center -
+  // used by the +/- buttons and their keyboard equivalents (unlike wheel
+  // zoom, which anchors on the cursor - there's no cursor position for
+  // either of these, so the center is the sensible fixed point). Same
+  // offset-compensation math as the wheel handler's own zoom, just a fixed
+  // anchor instead of the cursor's.
+  function zoomAroundCenter(factor) {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const anchorX = wrapper.clientWidth / 2;
+    const anchorY = wrapper.clientHeight / 2;
+    setZoom((prevZoom) => {
+      const nextZoom = clampZoom(prevZoom * factor);
+      setOffset((prevOffset) => ({
+        x: anchorX - ((anchorX - prevOffset.x) / prevZoom) * nextZoom,
+        y: anchorY - ((anchorY - prevOffset.y) / prevZoom) * nextZoom,
+      }));
+      return nextZoom;
+    });
+  }
 
   // "Contain" fit: the smaller of the two axis scales, so the whole image
   // is visible regardless of its aspect ratio versus the wrapper's - fitting
@@ -231,6 +263,75 @@ export default function MapCanvas({
     wrapper.addEventListener("wheel", onWheel, {passive: false});
     return () => wrapper.removeEventListener("wheel", onWheel);
   }, [image]);
+
+  // WASD pans the map, +/- zoom it - deliberately *not* gated behind
+  // "nothing else armed" the way MapEditor's B/C/L/P hotkeys are, since the
+  // whole point is panning/zooming while a boundary/connection placement is
+  // already in progress (mouse busy placing points, keyboard free to
+  // reposition the view). Held WASD keys drive a requestAnimationFrame loop
+  // (same shape as MapPreviewScene's own movement key handling) for smooth
+  // continuous panning; +/- just do one ZOOM_STEP per keydown, same as
+  // their buttons - the browser's own key-repeat gives a "held" feel for
+  // free, no separate loop needed. Disabled during Walk Preview - WASD
+  // means something else entirely there (MapPreviewScene's own listeners),
+  // and this component doesn't unmount while previewing, just swaps in
+  // MapPreviewCanvas as a sibling.
+  useEffect(() => {
+    function isEditableTarget(t) {
+      return t instanceof HTMLElement && (
+        t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable
+      );
+    }
+
+    function stepPan(now) {
+      const dt = panKeysLastTimeRef.current == null ? 0 : (now - panKeysLastTimeRef.current) / 1000;
+      panKeysLastTimeRef.current = now;
+      let dx = 0, dy = 0;
+      for (const code of panKeysRef.current) {
+        const [kx, ky] = PAN_KEY_DIRECTIONS[code];
+        dx += kx;
+        dy += ky;
+      }
+      if (dx !== 0 || dy !== 0) {
+        const mag = Math.hypot(dx, dy); // normalize diagonals (e.g. W+D) to the same speed as a single key
+        const dist = KEYBOARD_PAN_SPEED * dt;
+        setOffset((o) => ({x: o.x + (dx / mag) * dist, y: o.y + (dy / mag) * dist}));
+      }
+      panKeysLoopRef.current = panKeysRef.current.size > 0 ? requestAnimationFrame(stepPan) : null;
+      if (panKeysLoopRef.current == null) panKeysLastTimeRef.current = null;
+    }
+
+    function onKeyDown(e) {
+      if (previewing || !image || isEditableTarget(e.target)) return;
+
+      if (PAN_KEY_DIRECTIONS[e.code]) {
+        panKeysRef.current.add(e.code);
+        if (panKeysLoopRef.current == null) {
+          panKeysLastTimeRef.current = null;
+          panKeysLoopRef.current = requestAnimationFrame(stepPan);
+        }
+        return;
+      }
+
+      // "=" alongside "+" - zooming in shouldn't require holding Shift.
+      if (e.key === "+" || e.key === "=") zoomAroundCenter(ZOOM_STEP);
+      else if (e.key === "-" || e.key === "_") zoomAroundCenter(1 / ZOOM_STEP);
+    }
+    function onKeyUp(e) {
+      panKeysRef.current.delete(e.code);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keyup", onKeyUp);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keyup", onKeyUp);
+      if (panKeysLoopRef.current != null) cancelAnimationFrame(panKeysLoopRef.current);
+      panKeysRef.current.clear();
+      panKeysLoopRef.current = null;
+      panKeysLastTimeRef.current = null;
+    };
+  }, [image, previewing]);
 
   // Screen (client) coordinates -> image-pixel coordinates, inverting the
   // current pan/zoom transform.
@@ -795,9 +896,9 @@ export default function MapCanvas({
         <a href={backUrl} className="map-canvas-back-link">← Back</a>
         {image && (
           <div className="map-toolbar-button-group">
-            <button type="button" onClick={() => setZoom((z) => clampZoom(z / ZOOM_STEP))}>−</button>
+            <button type="button" onClick={() => zoomAroundCenter(1 / ZOOM_STEP)}>−</button>
             <button type="button" onClick={applyFit}>Fit</button>
-            <button type="button" onClick={() => setZoom((z) => clampZoom(z * ZOOM_STEP))}>+</button>
+            <button type="button" onClick={() => zoomAroundCenter(ZOOM_STEP)}>+</button>
           </div>
         )}
         {image && mapData.units.length > 0 && (

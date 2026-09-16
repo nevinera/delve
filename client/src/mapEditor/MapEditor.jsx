@@ -5,6 +5,7 @@ import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsPanel from "./UnitsPanel";
+import HotkeyHelp from "./HotkeyHelp";
 import {mapReducer} from "./mapReducer";
 import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement";
 import {saveMap} from "./saveMap";
@@ -172,6 +173,8 @@ export default function MapEditor({
   // "select" | "add-circle" | "add-point-connection" | "add-line-connection" | "add-unit" - see MapCanvas/BarriersPanel/ConnectionsPanel/UnitsPanel
   const [tool, setTool] = useState("select");
   const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
+  // "?" toggles this; Escape (see the hotkeys effect below) closes it.
+  const [showHotkeyHelp, setShowHotkeyHelp] = useState(false);
   // Simulate Units mode (Slice 9): a read-only preview of patrol/wander
   // movement, running entirely client-side (see simulateMovement.js) - the
   // editor has no live game-server connection to actually watch. Entering
@@ -340,6 +343,65 @@ export default function MapEditor({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [groupingMode]);
+
+  // Global editor hotkeys - B/C/L/P start the same single-shot add-tools as
+  // BarriersPanel/ConnectionsPanel's own buttons (B also immediately arms
+  // first-point placement, mirroring "+ Add Wall"'s own behavior - see
+  // BarriersPanel.jsx's addWall; the hotkey version skips that panel's own
+  // sidebar-expand niceties, which aren't essential to actually placing
+  // points), and "?" shows the hotkey list (Escape closes it). Units don't
+  // get a hotkey yet. Only fires with nothing else armed already (mirrors
+  // each button's own disabled condition) and not while typing in a field.
+  // Not W - that's reserved for WASD panning (see MapCanvas.jsx), which
+  // needs to keep working *while* a placement like this is active (so you
+  // can pan mid-boundary-placement), unlike these single-shot tools.
+  useEffect(() => {
+    function onKeyDown(e) {
+      const t = e.target;
+      const isEditable = t instanceof HTMLElement && (
+        t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable
+      );
+      if (isEditable) return;
+
+      if (showHotkeyHelp) {
+        if (e.key === "Escape") setShowHotkeyHelp(false);
+        return;
+      }
+      if (simulating || previewing) return;
+
+      if (e.key === "?") {
+        setShowHotkeyHelp(true);
+        return;
+      }
+
+      const nothingArmed = tool === "select" && !placement && !connectionPlacement && !unitPlacement
+        && !patrolStepPlacement && !wanderLocationPlacement && !groupingMode;
+      if (!nothingArmed || !canPlaceOnMap) return;
+
+      if (e.key === "b" || e.key === "B") {
+        const newIndex = mapData.barriers.length;
+        dispatch({type: "ADD_ENTRY", section: "barriers", entry: {type: "wall", locations: []}});
+        setSelectedBarrierIndex(newIndex);
+        startBarrierPlacement(newIndex, 0);
+      } else if (e.key === "c" || e.key === "C") {
+        startTool("add-circle");
+      } else if (e.key === "l" || e.key === "L") {
+        startTool("add-line-connection");
+      } else if (e.key === "p" || e.key === "P") {
+        startTool("add-point-connection");
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+    // dispatch/setSelectedBarrierIndex/startBarrierPlacement/startTool are
+    // plain functions re-created every render, read via closure here like
+    // everywhere else in this file - only the values below actually change
+    // what this handler should do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    showHotkeyHelp, simulating, previewing, tool, placement, connectionPlacement, unitPlacement,
+    patrolStepPlacement, wanderLocationPlacement, groupingMode, canPlaceOnMap, mapData.barriers,
+  ]);
 
   // Starting a simulation clears every other mode first, same mutual-
   // exclusion convention as the rest of this editor - simulating is a
@@ -831,6 +893,7 @@ export default function MapEditor({
           </>
         )}
       </MapSidebar>
+      {showHotkeyHelp && <HotkeyHelp />}
     </div>
   );
 }
