@@ -28,6 +28,53 @@ const TOKEN_RADIUS = 2.2; // matches game/scene.js's TOKEN_RADIUS
 const DEFAULT_NPC_RADIUS = 2; // used only if a unit's type has no real tokenRadius
 const TURN_RATE = (120 * Math.PI) / 180; // radians/sec - matches game/scene.js's TURN_RATE (A/D)
 
+// Two lighting modes, toggled live (see setLightingMode) rather than
+// re-loading the scene - both cap view distance, by different means, chosen
+// per mode's own feel: "daylight" keeps the original flat ambient+
+// directional look, capped by linear fog (a uniform distance haze, the
+// right fit for an ordinarily-lit scene); "torchlight" is a player-attached
+// point light for an "underground" feel instead - a lit radius that moves
+// with the player reads differently than a uniform fade, even though both
+// can reach true black by a similar far distance. Everything (lights, fog)
+// is created once in the constructor and switched via `.visible`/
+// `.intensity`/`scene.fog`, so toggling live has no load/rebuild cost.
+//
+// three.js's own point-light distance-attenuation shader is:
+//   falloff = 1 / max(pow(lightDistance, decay), 0.01)
+//   if (distance > 0) falloff *= (1 - (lightDistance / distance)^4)^2
+// That second line is a smooth S-curve, independent of decay: it sits near
+// 1 for most of the range then eases down to *exactly* 0 right at
+// `distance` (three.js's PointLight `distance` param) - a real cutoff, not
+// an asymptote. `decay: 0` makes that S-curve the *only* shaping factor (no
+// extra inverse-square dimming stacked on top near the light, which is what
+// an earlier decay:2 attempt needed a huge intensity to compensate for) -
+// closest to a flat-then-fade shape without losing the smooth edge a hard
+// cutoff alone would have. Every material here (buildWall/createPlayerToken/
+// createNpcToken's MeshLambertMaterial) already responds to scene lighting,
+// so this needs no material changes, only the lights.
+const TORCH_RADIUS_FEET = 120; // distance at which the light's contribution reaches exactly zero
+const TORCH_HEIGHT = 6; // feet above the ground, torch-like
+const TORCH_INTENSITY = 3; // decay:0 means this is ~directly the near-field brightness, not distance-squared-attenuated - no three-digit candela math needed
+const TORCH_DECAY = 0; // S-curve cutoff only, no additional inverse-power falloff
+const DAYLIGHT_AMBIENT_INTENSITY = 0.5;
+const DAYLIGHT_SUN_INTENSITY = 1.4;
+const DAYLIGHT_BG_COLOR = 0x14181c;
+// Linear fog, so daylight caps view distance too - same near/far as
+// torchlight's own radius, for a comparable "how far can I see" between the
+// two modes even though the shape differs (torchlight's S-curve vs. fog's
+// straight line). Unlike torchlight, this fades everything toward the sky
+// color uniformly regardless of lighting - not "underground," but distance
+// haze, which is the right fit for an ordinarily-lit outdoor/daylight scene.
+// These two are distances *from the player token* - THREE.Fog itself only
+// knows distance from the camera, which orbits the player at CAM_RADIUS
+// (~67ft, scaled by zoom) rather than sitting at the token, so fog.near/far
+// are recomputed every frame in _updateFog as camDistance + these values -
+// using these constants directly as fog.near/far (the first attempt) made
+// the fade start almost immediately, since the camera itself already starts
+// most of the way to a 60ft "near" distance.
+const DAYLIGHT_FOG_NEAR_FEET = 60;
+const DAYLIGHT_FOG_FAR_FEET = 120;
+
 // Real client scheme (see App.jsx's KEY_MAP): W/S walk forward/back, Q/E
 // strafe, A/D turn the view - not strafe, despite how that reads on a WASD
 // keyboard. Arrow keys mirror W/S/A/D (forward/back/turn) since there's no
@@ -72,11 +119,21 @@ export class MapPreviewScene {
     this.renderer.setPixelRatio(window.devicePixelRatio);
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x14181c);
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-    sun.position.set(5, 10, 5);
-    this.scene.add(sun);
+    // Daylight's ambient+sun; torchlight's player-attached point light (see
+    // setLightingMode) - both created up front and switched via visibility/
+    // intensity, so toggling live has no load/rebuild cost.
+    this._ambient = new THREE.AmbientLight(0xffffff, DAYLIGHT_AMBIENT_INTENSITY);
+    this.scene.add(this._ambient);
+    this._sun = new THREE.DirectionalLight(0xffffff, DAYLIGHT_SUN_INTENSITY);
+    this._sun.position.set(5, 10, 5);
+    this.scene.add(this._sun);
+    // Follows the player every frame, see _updatePlayerLight.
+    this._torchLight = new THREE.PointLight(0xfff2d0, TORCH_INTENSITY, TORCH_RADIUS_FEET, TORCH_DECAY);
+    this.scene.add(this._torchLight);
+    // Daylight-only fog - kept as a standalone object (not reallocated on
+    // every toggle) and swapped onto scene.fog by setLightingMode.
+    this._daylightFog = new THREE.Fog(DAYLIGHT_BG_COLOR, DAYLIGHT_FOG_NEAR_FEET, DAYLIGHT_FOG_FAR_FEET);
+    this.setLightingMode("daylight");
 
     this.camera = new THREE.PerspectiveCamera(34, 1, 0.1, 500);
 
@@ -174,7 +231,43 @@ export class MapPreviewScene {
 
     const [wx, wz] = this._toWorld(startX, startY);
     this.playerToken.position.set(wx, 0, wz);
+    this._updatePlayerLight();
+    this._updateFog();
     this._positionCamera();
+  }
+
+  _updatePlayerLight() {
+    this._torchLight.position.set(this.playerToken.position.x, TORCH_HEIGHT, this.playerToken.position.z);
+  }
+
+  // Fog is defined in terms of distance from the camera, not the player -
+  // recomputed every frame (zoom changes the camera's distance from the
+  // player, via _camZoom scaling CAM_RADIUS in _positionCamera) so
+  // DAYLIGHT_FOG_NEAR_FEET/FAR_FEET stay accurate as "distance from the
+  // player" regardless of current zoom. A no-op in torchlight mode - fog is
+  // cleared there (see setLightingMode).
+  _updateFog() {
+    if (this._lightingMode === "torchlight") return;
+    const camDistance = this._camZoom * CAM_RADIUS;
+    this._daylightFog.near = camDistance + DAYLIGHT_FOG_NEAR_FEET;
+    this._daylightFog.far = camDistance + DAYLIGHT_FOG_FAR_FEET;
+  }
+
+  // "daylight" | "torchlight" - swaps which light set is active, the fog
+  // (daylight-only - torchlight's own S-curve cutoff already limits view
+  // distance, and fog fading everything uniformly on top would fight the
+  // "lit by this one light" read), and the background color to match
+  // (torchlight's true black vs. daylight's original dark-gray void), with
+  // no scene rebuild.
+  setLightingMode(mode) {
+    this._lightingMode = mode;
+    const torch = mode === "torchlight";
+    this._ambient.intensity = torch ? 0 : DAYLIGHT_AMBIENT_INTENSITY;
+    this._sun.visible = !torch;
+    this._torchLight.visible = torch;
+    this.scene.fog = torch ? null : this._daylightFog;
+    this.scene.background = new THREE.Color(torch ? 0x000000 : DAYLIGHT_BG_COLOR);
+    this._updateFog(); // refresh near/far immediately, not just on the next frame
   }
 
   handleResize() {
@@ -298,6 +391,8 @@ export class MapPreviewScene {
       this._applyMovement(dt);
       this._applyNpcMovement(dt);
       this.playerToken.rotation.y = -this._camFacing;
+      this._updatePlayerLight();
+      this._updateFog();
       this._positionCamera();
       this.renderer.render(this.scene, this.camera);
     };
