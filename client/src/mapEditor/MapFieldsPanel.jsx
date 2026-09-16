@@ -19,9 +19,22 @@ export default function MapFieldsPanel({mapData, pixelDimensions, dispatch}) {
     dispatch({type: "SET_FIELD", field, value});
   }
 
+  // The background image's own aspect ratio is known (pixelDimensions) once
+  // one's loaded, and a map's background is never meant to render stretched
+  // - so editing one feet axis derives the other from that same ratio,
+  // rather than leaving them free to drift out of proportion. Clearing a
+  // field (value === null) doesn't touch the other axis. No image yet -
+  // no ratio to derive from - leaves both axes independent, as before.
   function setFeetDimension(axis, value) {
     const current = mapData.feetDimensions ?? {};
-    setField("feetDimensions", {...current, [axis]: value});
+    if (value == null || !pixelDimensions?.width || !pixelDimensions?.height) {
+      setField("feetDimensions", {...current, [axis]: value});
+      return;
+    }
+    const ratio = pixelDimensions.width / pixelDimensions.height;
+    const otherAxis = axis === "width" ? "height" : "width";
+    const otherValue = axis === "width" ? value / ratio : value * ratio;
+    setField("feetDimensions", {...current, [axis]: value, [otherAxis]: Math.round(otherValue * 100) / 100});
   }
 
   return (

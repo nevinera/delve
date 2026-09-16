@@ -16,6 +16,7 @@
 import * as THREE from "three";
 import {buildWall, createPlayerToken, createNpcToken, orbitFromDrag, clampZoom} from "../game/scene.js";
 import {resolveBarrierCollisions} from "../game/collision.js";
+import {loadSvgToCanvas} from "../game/svgRaster.js";
 import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement.js";
 
 const CAM_BACK = 45;
@@ -41,6 +42,10 @@ const TURN_KEYS = {
   KeyA: "turn_left", ArrowLeft: "turn_left",
   KeyD: "turn_right", ArrowRight: "turn_right",
 };
+// Editor-only convenience (the real client has no equivalent) - holding
+// either Shift key doubles walking speed, for covering a big map quickly.
+const SPRINT_KEYS = {ShiftLeft: "sprint", ShiftRight: "sprint"};
+const SPRINT_MULTIPLIER = 2;
 
 // Feet (x, y) -> Three.js world direction, matching this module's own
 // _toWorld (world Z = height/2 - feetY, world X = feetX - width/2) - used to
@@ -96,8 +101,14 @@ export class MapPreviewScene {
   // either), but they still collide - see resolveBarrierCollisions, which
   // handles both types. availableUnitTypes is MapEditor's unitTypeDetails
   // ({name, tokenRadius, tokenImageUrl, speedFactor} by unitType key) -
-  // only types actually used need to have been fetched already.
-  loadMap({feetDimensions, barriers, connections, units, imageUrl}, availableUnitTypes, startX, startY) {
+  // only types actually used need to have been fetched already. `isSvg`
+  // (derived by the caller from mapData.imageUrl's own extension, not the
+  // loadable imageUrl below, which is an opaque blob:/data: URL) picks
+  // between rasterizing the SVG ourselves at a map-scale-appropriate
+  // resolution (see game/svgRaster.js) versus loading a raster image
+  // directly - see MapEditor's handleImageFile for why a map's background
+  // is committed as the original SVG rather than a pre-baked PNG.
+  loadMap({feetDimensions, barriers, connections, units, imageUrl, isSvg}, availableUnitTypes, startX, startY) {
     this._feetDimensions = feetDimensions;
     this._barriers = barriers ?? [];
     this._playerX = startX;
@@ -105,11 +116,22 @@ export class MapPreviewScene {
 
     const {width, height} = feetDimensions;
     if (imageUrl) {
-      new THREE.TextureLoader().load(imageUrl, (texture) => {
+      const addGround = (texture) => {
+        // Ground textures are viewed at a shallow, walking-height angle,
+        // which minifies them much more steeply along depth than width -
+        // without anisotropic filtering (the default is 1, effectively
+        // off) that reads as heavy blur close to the camera, regardless of
+        // the source image's own resolution.
+        texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshLambertMaterial({map: texture}));
         ground.rotation.x = -Math.PI / 2;
         this.scene.add(ground);
-      });
+      };
+      if (isSvg) {
+        loadSvgToCanvas(imageUrl, feetDimensions).then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
+      } else {
+        new THREE.TextureLoader().load(imageUrl, addGround);
+      }
     }
 
     for (const barrier of this._barriers) {
@@ -197,10 +219,12 @@ export class MapPreviewScene {
     this._onKeyDown = (e) => {
       if (MOVEMENT_KEYS[e.code]) this._pressedKeys.add(MOVEMENT_KEYS[e.code]);
       if (TURN_KEYS[e.code]) this._pressedKeys.add(TURN_KEYS[e.code]);
+      if (SPRINT_KEYS[e.code]) this._pressedKeys.add(SPRINT_KEYS[e.code]);
     };
     this._onKeyUp = (e) => {
       if (MOVEMENT_KEYS[e.code]) this._pressedKeys.delete(MOVEMENT_KEYS[e.code]);
       if (TURN_KEYS[e.code]) this._pressedKeys.delete(TURN_KEYS[e.code]);
+      if (SPRINT_KEYS[e.code]) this._pressedKeys.delete(SPRINT_KEYS[e.code]);
     };
 
     this.canvas.addEventListener("pointerdown", this._onPointerDown);
@@ -235,7 +259,8 @@ export class MapPreviewScene {
     const mag = Math.sqrt(dx * dx + dy * dy);
     if (mag === 0) return;
 
-    const dist = (PLAYER_SPEED * dt) / mag;
+    const speed = keys.has("sprint") ? PLAYER_SPEED * SPRINT_MULTIPLIER : PLAYER_SPEED;
+    const dist = (speed * dt) / mag;
     this._playerX += dx * dist;
     this._playerY += dy * dist;
 

@@ -1,6 +1,17 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {render, screen, fireEvent, waitFor, act} from "@testing-library/react";
 import MapEditor from "../MapEditor";
+import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+import {validateMap} from "../../validators/validateContent";
+
+vi.mock("../../github/commitFiles", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {...actual, commitFiles: vi.fn()};
+});
+
+vi.mock("../../validators/validateContent", () => ({
+  validateMap: vi.fn(),
+}));
 
 // jsdom doesn't decode real image bytes, so Image().src never fires a real
 // onload - stub it to synchronously report a fixed size, like a real image
@@ -815,6 +826,69 @@ describe("MapEditor", () => {
 
       expect(fetch).toHaveBeenCalledWith(expect.stringContaining("keys[]=goblin-raider"));
       await waitFor(() => expect(screen.getByRole("option", {name: "Goblin Raider"})).toBeInTheDocument());
+    });
+  });
+
+  describe("choosing a background image", () => {
+    it("sets imageUrl to a sibling filename based on the map's own key", async () => {
+      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+      const input = document.querySelector('input[type="file"]');
+
+      fireEvent.change(input, {target: {files: [file("background.webp")]}});
+      await waitFor(() => expect(screen.getByRole("button", {name: "Fit"})).toBeInTheDocument());
+
+      validateMap.mockResolvedValue({valid: true});
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(validateMap).toHaveBeenCalledWith(expect.objectContaining({imageUrl: "gc1-entrance.webp"})));
+    });
+  });
+
+  describe("validate/save", () => {
+    it("validates, then allows saving (image + json) once valid", async () => {
+      validateMap.mockResolvedValue({valid: true});
+      commitFiles.mockResolvedValue({commitSha: "abc", branch: "main"});
+      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+      const input = document.querySelector('input[type="file"]');
+      fireEvent.change(input, {target: {files: [file("background.webp")]}});
+      await waitFor(() => expect(screen.getByRole("button", {name: "Fit"})).toBeInTheDocument());
+
+      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      await waitFor(() => expect(commitFiles).toHaveBeenCalledWith(
+        {
+          "zones/goblin-cave/gc1-entrance/gc1-entrance.json": expect.objectContaining({imageUrl: "gc1-entrance.webp"}),
+          "zones/goblin-cave/gc1-entrance/gc1-entrance.webp": expect.any(File),
+        },
+        {message: "Update Gc1 Entrance"}
+      ));
+      await screen.findByText("Saved.");
+    });
+
+    it("shows the validation error message and re-disables Save", async () => {
+      validateMap.mockResolvedValue({valid: false, error: {message: "feetDimensions is required", path: "$.feetDimensions"}});
+      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+
+      await screen.findByText("feetDimensions is required");
+      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+    });
+
+    it("redirects to the GitHub reauth URL on a GithubAuthError during save", async () => {
+      validateMap.mockResolvedValue({valid: true});
+      commitFiles.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+      delete window.location;
+      window.location = {href: ""};
+
+      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
     });
   });
 });

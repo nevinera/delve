@@ -31,8 +31,12 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
   useEffect(() => {
     const scene = new MapPreviewScene(canvasRef.current);
     const {x, y} = startPositionFor(mapData);
+    // isSvg comes from mapData.imageUrl - the repo-relative filename - not
+    // the imageUrl prop above (an opaque blob:/data: URL used to actually
+    // load the bytes), since that carries no file extension to sniff.
+    const isSvg = Boolean(mapData.imageUrl?.toLowerCase().endsWith(".svg"));
     scene.loadMap(
-      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, units: mapData.units, imageUrl},
+      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, units: mapData.units, imageUrl, isSvg},
       availableUnitTypes, x, y
     );
     scene.handleResize();
@@ -54,7 +58,7 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
   return (
     <div ref={wrapperRef} className="map-preview-wrapper">
       <canvas ref={canvasRef} className="map-preview-canvas" />
-      <p className="map-preview-hint">Drag to look around, scroll to zoom, W/S walk, Q/E strafe, A/D turn.</p>
+      <p className="map-preview-hint">Drag to look around, scroll to zoom, W/S walk, Q/E strafe, A/D turn, Shift to sprint.</p>
       <button type="button" className="map-preview-exit" onClick={onExit}>Exit Preview</button>
     </div>
   );

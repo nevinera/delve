@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { resolveBarrierCollisions } from "./collision.js";
 import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
+import { loadSvgToCanvas } from "./svgRaster.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -679,14 +680,30 @@ export class SceneManager {
 
       if (m.imageUrl) {
         const mapUrl = new URL(m.imageUrl, baseUrl).href;
-        new THREE.TextureLoader().load(mapUrl, (texture) => {
+        const addGround = (texture) => {
+          // See MapPreviewScene.js's loadMap for why this matters - a
+          // ground texture viewed at a shallow, walking-height angle blurs
+          // heavily without anisotropic filtering, regardless of the
+          // source image's own resolution.
+          texture.anisotropy = this._renderer.capabilities.getMaxAnisotropy();
           const plane = new THREE.Mesh(
             new THREE.PlaneGeometry(width, height),
             new THREE.MeshLambertMaterial({ map: texture })
           );
           plane.rotation.x = -Math.PI / 2;
           group.add(plane);
-        });
+        };
+        // A map background is committed as its original SVG (smaller than a
+        // pre-baked raster, and losslessly re-renderable at any resolution -
+        // see the map editor plan's Phase 3 note) rather than a raster
+        // format - rasterize it ourselves at a map-scale-appropriate
+        // resolution instead of trusting the browser's default SVG decode
+        // size, same as the map editor's own walk preview.
+        if (m.imageUrl.toLowerCase().endsWith(".svg")) {
+          loadSvgToCanvas(mapUrl, { width, height }).then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
+        } else {
+          new THREE.TextureLoader().load(mapUrl, addGround);
+        }
       }
 
       for (const barrier of m.barriers ?? []) {

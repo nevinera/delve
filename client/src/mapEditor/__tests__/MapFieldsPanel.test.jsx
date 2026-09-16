@@ -39,6 +39,25 @@ describe("MapFieldsPanel", () => {
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "feetDimensions", value: {width: 60, height: 50}});
   });
 
+  it("derives the other feet axis from the image's own aspect ratio once one's loaded", () => {
+    const dispatch = vi.fn();
+    render(<MapFieldsPanel mapData={MAP_DATA} pixelDimensions={{width: 2048, height: 1024}} dispatch={dispatch} />);
+
+    fireEvent.change(screen.getByDisplayValue("60"), {target: {value: "100"}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "feetDimensions", value: {width: 100, height: 50}});
+
+    fireEvent.change(screen.getByDisplayValue("45"), {target: {value: "30"}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "feetDimensions", value: {width: 60, height: 30}});
+  });
+
+  it("clearing a feet axis leaves the other axis alone even with an image loaded", () => {
+    const dispatch = vi.fn();
+    render(<MapFieldsPanel mapData={MAP_DATA} pixelDimensions={{width: 2048, height: 1024}} dispatch={dispatch} />);
+
+    fireEvent.change(screen.getByDisplayValue("60"), {target: {value: ""}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "feetDimensions", value: {width: null, height: 45}});
+  });
+
   it("starts feetDimensions from an empty object when the map has none yet", () => {
     const dispatch = vi.fn();
     render(<MapFieldsPanel mapData={{...MAP_DATA, feetDimensions: null}} pixelDimensions={null} dispatch={dispatch} />);

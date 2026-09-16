@@ -3,7 +3,7 @@
 # requires for FetchAbilityContentJob/FetchCharacterClassContentJob, rather
 # than re-implementing that (constantly-changing) schema a second time in JS.
 class Build::ValidatorsController < Build::BaseController
-  skip_authorization_check only: [:ability, :character_class, :unit_type, :item]
+  skip_authorization_check only: [:ability, :character_class, :unit_type, :item, :map]
 
   def ability
     validate_with(Validators::AbilityValidator)
@@ -29,6 +29,12 @@ class Build::ValidatorsController < Build::BaseController
   # worry about here, just the draft as-is.
   def item
     validate_with(Validators::ItemValidator)
+  end
+
+  # Maps have no $ref fields either (see the map editor plan) - the draft is
+  # validated as-is, same as #item.
+  def map
+    validate_with(Validators::MapValidator)
   end
 
   private

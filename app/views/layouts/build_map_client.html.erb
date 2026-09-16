@@ -145,6 +145,19 @@
       .map-editor-sidebar-placeholder { color: #778; font-size: 13px; }
       .map-sidebar-hint { color: #987; font-size: 12px; margin: 4px 0 8px; }
 
+      /* Validate/Save controls - see client/src/validators/ValidateSaveBar.jsx,
+         same markup/classes as the item/ability/class editors. */
+      .save-bar { display: flex; align-items: center; gap: 10px; margin: 14px 0; }
+      .save-bar .validate-button { background: #245; border: 1px solid #47a; color: #dee; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .validate-button:hover:not(:disabled) { background: #356; }
+      .save-bar .validate-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .save-button:hover:not(:disabled) { background: #3b5; }
+      .save-bar .save-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-message { font-size: 12px; }
+      .save-bar .save-success { color: #7c7; }
+      .save-bar .save-error { color: #e79; }
+
       .map-editor-sidebar-content table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
       .map-editor-sidebar-content th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
       .map-editor-sidebar-content td { padding: 4px 0; word-break: break-word; }

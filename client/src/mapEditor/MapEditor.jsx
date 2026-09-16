@@ -7,6 +7,11 @@ import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsPanel from "./UnitsPanel";
 import {mapReducer} from "./mapReducer";
 import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement";
+import {saveMap} from "./saveMap";
+import {validateMap} from "../validators/validateContent";
+import {useValidateThenSave} from "../validators/useValidateThenSave";
+import ValidateSaveBar from "../validators/ValidateSaveBar";
+import {GithubAuthError} from "../github/commitFiles";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
 // battle-map background needs (the docs' own example is 2048x1536), and
@@ -29,7 +34,13 @@ export default function MapEditor({
 }) {
   const [image, setImage] = useState(() => initialImage(initialImageDataUri, initialPixelDimensions));
   const [imageError, setImageError] = useState("");
-  const [mapData, dispatch] = useReducer(mapReducer, initialMap);
+  const [mapData, rawDispatch] = useReducer(mapReducer, initialMap);
+  const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
+
+  function dispatch(action) {
+    markDirty();
+    rawDispatch(action);
+  }
   const [selectedBarrierIndex, setSelectedBarrierIndex] = useState(null);
   const [hoveredBarrierIndex, setHoveredBarrierIndex] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null); // {barrierIndex, pointIndex} | null
@@ -531,20 +542,46 @@ export default function MapEditor({
   // pixelDimensions is derived, not authored - keep the draft in sync with
   // whatever image is actually loaded (a freshly uploaded file's natural
   // size overrides whatever the map's JSON said before).
+  // Derived sync, not an authored edit - uses rawDispatch so merely loading/
+  // resizing the underlying image doesn't spuriously invalidate a prior
+  // Validate pass the way a real field edit should.
   useEffect(() => {
-    if (image) dispatch({type: "SET_FIELD", field: "pixelDimensions", value: image.pixelDimensions});
+    if (image) rawDispatch({type: "SET_FIELD", field: "pixelDimensions", value: image.pixelDimensions});
   }, [image]);
 
-  function handleImageFile(file) {
+  async function handleImageFile(rawFile) {
     setImageError("");
 
-    if (!file.type.startsWith("image/")) {
+    if (!rawFile.type.startsWith("image/")) {
       setImageError("Please choose an image file.");
       return;
     }
-    if (file.size > MAX_IMAGE_BYTES) {
+    if (rawFile.size > MAX_IMAGE_BYTES) {
       const mb = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
-      setImageError(`Image must be under ${mb(MAX_IMAGE_BYTES)}MB (this one is ${mb(file.size)}MB).`);
+      setImageError(`Image must be under ${mb(MAX_IMAGE_BYTES)}MB (this one is ${mb(rawFile.size)}MB).`);
+      return;
+    }
+
+    // Read the bytes into memory right away instead of holding onto the
+    // original File handle until Save (which could be much later, after
+    // filling in every other field) - a File picked via drag-and-drop
+    // (rather than the file-picker dialog) isn't always backed by a stable
+    // on-disk path, and re-reading it late can throw a browser NotFoundError
+    // ("A requested file or directory could not be found...") that has
+    // nothing to do with GitHub at all. A fresh File wrapping an already-
+    // read ArrayBuffer is a plain in-memory Blob from here on, so
+    // saveMap.js's later FileReader pass can't fail this way. An SVG is
+    // committed as-is (not rasterized) - see MapPreviewScene.js's loadMap
+    // and game/scene.js's own map loading, which each rasterize it
+    // themselves at render time via game/svgRaster.js, sized to the map's
+    // real-world scale - a stored SVG is smaller than a pre-baked raster
+    // and stays losslessly re-renderable at whatever resolution a given
+    // renderer needs, rather than committing to one fixed size up front.
+    let file;
+    try {
+      file = new File([await rawFile.arrayBuffer()], rawFile.name, {type: rawFile.type});
+    } catch {
+      setImageError("Couldn't read that file - try choosing it again.");
       return;
     }
 
@@ -555,12 +592,43 @@ export default function MapEditor({
         if (current) URL.revokeObjectURL(current.url);
         return {file, url, pixelDimensions: {width: img.naturalWidth, height: img.naturalHeight}};
       });
+      // imageUrl is a plain sibling-file reference (see saveMap.js) - this is
+      // where the "sibling file, same basename" convention actually gets
+      // authored into the draft, not just assumed at save time.
+      const basename = mapKey.split("/").pop();
+      const extension = file.name.includes(".") ? file.name.split(".").pop() : "png";
+      dispatch({type: "SET_FIELD", field: "imageUrl", value: `${basename}.${extension}`});
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
       setImageError("Couldn't load that as an image.");
     };
     img.src = url;
+  }
+
+  async function handleValidate() {
+    setValidating();
+    try {
+      const {valid, error} = await validateMap(mapData);
+      if (valid) setValid();
+      else setInvalid(error.message);
+    } catch (error) {
+      setInvalid(error.message);
+    }
+  }
+
+  async function handleSave() {
+    setSaving();
+    try {
+      await saveMap(mapKey, mapData, image?.file ?? null);
+      setSaved();
+    } catch (error) {
+      if (error instanceof GithubAuthError) {
+        window.location.href = error.redirectUrl;
+        return;
+      }
+      setSaveError(error.message);
+    }
   }
 
   // Render-only overlay while simulating: the same units with their
@@ -629,6 +697,7 @@ export default function MapEditor({
         onToolChange={setTool}
       />
       <MapSidebar>
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
         {simulating ? (
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Simulating units - editing is disabled while this runs.</h3>
