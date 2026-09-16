@@ -20,12 +20,28 @@ function nextConnectionIdentifier(connections) {
 }
 
 const MIN_ZOOM = 0.05;
-const MAX_ZOOM = 4;
+// Used before an image/wrapper size is available to compute the real cap
+// (see maxZoom below), and as a floor under it for a tiny map.
+const FALLBACK_MAX_ZOOM = 4;
+// The real max zoom cap: however far in you can go, the canvas's shorter
+// screen dimension should still show at least this many feet of the map -
+// see maxZoom, which is why MAX_ZOOM isn't a fixed constant any more.
+const MIN_VISIBLE_FEET_AT_MAX_ZOOM = 40;
 const ZOOM_STEP = 1.25; // per click of the +/- buttons
 const GRID_SPACING_FEET = 5;
+const DEFAULT_UNIT_RADIUS_FEET = 2; // matches UnitShapes' own fallback, for the drag-to-face preview's arrow cap
+const MIN_FACING_DRAG_FEET = 3; // below this, a placement drag is treated as a plain click - facing defaults to 0
 
 function hasBothAxes(dimensions) {
   return dimensions?.width && dimensions?.height;
+}
+
+// (dx, dy) feet -> degrees, 0 = north (+y), clockwise positive - matches
+// docs/schema/common.md's Position.angle convention exactly, same formula
+// as simulateMovement.js's facingTowardDeg.
+function facingDegrees(dx, dy) {
+  const deg = (Math.atan2(dx, dy) * 180) / Math.PI;
+  return ((deg % 360) + 360) % 360;
 }
 // Wheel zoom is proportional to deltaY rather than one full ZOOM_STEP per
 // event - a single mouse-wheel notch (deltaY ~100) lands around a gentle
@@ -34,10 +50,6 @@ function hasBothAxes(dimensions) {
 // delta spike (some mice report much bigger notches) can't jump too far.
 const WHEEL_ZOOM_SENSITIVITY = 0.0008;
 const MAX_WHEEL_FACTOR_PER_EVENT = 1.25;
-
-function clampZoom(zoom) {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
-}
 
 // Top-down pan/zoom viewport for the map background image, plus barrier
 // placement/editing (slice 3). Panning is a plain CSS transform on a
@@ -54,7 +66,7 @@ function clampZoom(zoom) {
 // tracks (a drag on the map sets a circle's center/radius), but it's
 // entered externally via the `tool`/`onToolChange` props, not a button here.
 export default function MapCanvas({
-  image, imageError, onImageFile, backUrl, mapData, dispatch,
+  image, displayImageUrl, imageError, onImageFile, backUrl, mapData, dispatch,
   selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement,
   selectedConnectionIndex, onSelectConnection, hoveredConnectionIndex,
   connectionPlacement, onPlaceConnectionField, onCancelConnectionPlacement,
@@ -82,6 +94,11 @@ export default function MapCanvas({
   // placement instead.
   const [drawingCircle, setDrawingCircle] = useState(null); // {location: {x, y}, radius} while add-circle is in progress
   const [drawingLine, setDrawingLine] = useState(null); // {start: {x, y}, end: {x, y}} while add-line-connection is in progress
+  // {position: {x, y}, current: {x, y}} while add-unit's placement drag is
+  // in progress - `position` (set on pointerdown) is where the unit lands;
+  // `current` tracks the live pointer, used both for the facing preview
+  // arrow and, on release, to compute the unit's own facing angle.
+  const [drawingUnit, setDrawingUnit] = useState(null);
   const dragRef = useRef(null); // {startX, startY, startOffset} while a pan drag is in progress
   const panRafRef = useRef(null); // pending requestAnimationFrame id, or null
   const pendingOffsetRef = useRef(null); // latest not-yet-applied offset from pointermove
@@ -96,6 +113,28 @@ export default function MapCanvas({
 
   const feetDimensions = mapData.feetDimensions;
   const canDrawBarriers = hasBothAxes(feetDimensions);
+
+  // How far zoom can go: whichever of the wrapper's screen dimensions is
+  // shorter should still show at least MIN_VISIBLE_FEET_AT_MAX_ZOOM feet of
+  // the map at max zoom - computed fresh (not a fixed constant) since it
+  // depends on the wrapper's current on-screen size and the image's own
+  // px/ft ratio, which can differ per axis (see feetSpacingToPixelsX/Y) -
+  // uses whichever axis the shorter screen dimension corresponds to.
+  function maxZoom() {
+    if (!image || !wrapperRef.current || !canDrawBarriers) return FALLBACK_MAX_ZOOM;
+    const wrapper = wrapperRef.current;
+    const shorterIsWidth = wrapper.clientWidth <= wrapper.clientHeight;
+    const shorterPx = shorterIsWidth ? wrapper.clientWidth : wrapper.clientHeight;
+    const pxPerFoot = shorterIsWidth
+      ? image.pixelDimensions.width / feetDimensions.width
+      : image.pixelDimensions.height / feetDimensions.height;
+    const zoomFor40Feet = shorterPx / (MIN_VISIBLE_FEET_AT_MAX_ZOOM * pxPerFoot);
+    return Math.max(FALLBACK_MAX_ZOOM, zoomFor40Feet);
+  }
+
+  function clampZoom(zoom) {
+    return Math.min(maxZoom(), Math.max(MIN_ZOOM, zoom));
+  }
 
   // Native pointermove/wheel both fire far more often than the screen
   // repaints - coalesce each to one state update per frame instead of one
@@ -244,13 +283,32 @@ export default function MapCanvas({
     onToolChange?.("select");
   }
 
+  // A drag of at least MIN_FACING_DRAG_FEET sets the unit's facing toward
+  // where the pointer was released; anything shorter (including a plain
+  // click, position === current) is treated as "didn't mean to set a
+  // facing" and defaults to 0, same as before this drag gesture existed.
+  function commitUnit() {
+    if (drawingUnit) {
+      const {position, current} = drawingUnit;
+      const dx = current.x - position.x, dy = current.y - position.y;
+      const angle = Math.hypot(dx, dy) >= MIN_FACING_DRAG_FEET ? facingDegrees(dx, dy) : 0;
+      dispatch({
+        type: "ADD_ENTRY", section: "units",
+        entry: {unitType: pendingUnitType, position: {x: position.x, y: position.y, angle}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
+      });
+    }
+    setDrawingUnit(null);
+    onToolChange?.("select");
+  }
+
   // Esc backs out of an armed-but-not-yet-used add-tool (e.g. a sidebar
   // button was clicked by mistake) - there's no "Select" button to fall
   // back on otherwise. Only while nothing's actually being dragged yet;
   // once a drag has started, releasing the pointer is what commits/cancels
-  // it (see commitCircle/commitLineConnection).
+  // it (see commitCircle/commitLineConnection/commitUnit).
   useEffect(() => {
-    const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection" || (tool === "add-line-connection" && !drawingLine);
+    const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection"
+      || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit);
     if (!armed) return;
 
     function onKeyDown(e) {
@@ -259,7 +317,7 @@ export default function MapCanvas({
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [tool, drawingCircle, drawingLine, onToolChange]);
+  }, [tool, drawingCircle, drawingLine, drawingUnit, onToolChange]);
 
   // Point placement (from BarriersPanel's "+" buttons) cancels the same
   // way: Escape, or a click anywhere outside the map - except a click on
@@ -522,14 +580,13 @@ export default function MapCanvas({
     if (tool === "add-unit") {
       // Not snapped - a unit's position isn't meant to coincide with a
       // barrier corner or connection point the way those snap to each other.
+      // A plain click (no further drag) commits immediately with facing 0,
+      // same as before - the drag is only for the (optional) facing
+      // gesture, see commitUnit.
       const feet = feetFromClient(e.clientX, e.clientY);
-      if (feet) {
-        dispatch({
-          type: "ADD_ENTRY", section: "units",
-          entry: {unitType: pendingUnitType, position: {x: feet.x, y: feet.y, angle: 0}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
-        });
-      }
-      onToolChange?.("select");
+      if (!feet) return;
+      setDrawingUnit({position: feet, current: feet});
+      e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
 
@@ -622,6 +679,14 @@ export default function MapCanvas({
       return;
     }
 
+    if (tool === "add-unit" && drawingUnit) {
+      // Not snapped, same reasoning as the position itself above.
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      setDrawingUnit((current) => ({...current, current: feet}));
+      return;
+    }
+
     if (!dragRef.current) return;
     const {startX, startY, startOffset} = dragRef.current;
     // Always record the latest position (cheap, no re-render) - only the
@@ -645,6 +710,7 @@ export default function MapCanvas({
     unitDragRef.current = null;
     if (tool === "add-circle" && drawingCircle) commitCircle();
     if (tool === "add-line-connection" && drawingLine) commitLineConnection();
+    if (tool === "add-unit" && drawingUnit) commitUnit();
   }
 
   function handlePointerLeave() {
@@ -795,7 +861,13 @@ export default function MapCanvas({
             style={{transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`}}
           >
             <img
-              src={image.url}
+              // displayImageUrl swaps in a higher-res rasterized bitmap for
+              // an SVG source (see MapEditor's own effect) - image.url
+              // itself stays the raw asset, used for saving and the walk
+              // preview. width/height stay exactly image.pixelDimensions
+              // regardless (the coordinate space every overlay below uses),
+              // whichever URL is actually painted into that box.
+              src={displayImageUrl ?? image.url}
               width={image.pixelDimensions.width}
               height={image.pixelDimensions.height}
               draggable={false}
@@ -942,6 +1014,41 @@ export default function MapCanvas({
                 groupIdentifier={groupingMode?.groupIdentifier ?? hoveredGroupIdentifier}
               />
             )}
+            {canDrawBarriers && drawingUnit && (() => {
+              const start = feetToPixel(drawingUnit.position.x, drawingUnit.position.y, image.pixelDimensions, feetDimensions);
+              const rawEnd = feetToPixel(drawingUnit.current.x, drawingUnit.current.y, image.pixelDimensions, feetDimensions);
+              const vx = rawEnd.x - start.x, vy = rawEnd.y - start.y;
+              const dragPixelLength = Math.hypot(vx, vy);
+              if (dragPixelLength === 0) return null;
+              // Capped at 2x the unit's own radius (feet, converted to this
+              // map's px/ft scale) - the drag itself can go arbitrarily far
+              // (that's what decides the committed angle, see commitUnit),
+              // but the preview arrow only ever needs to show direction.
+              const tokenRadiusFeet = availableUnitTypes[pendingUnitType]?.tokenRadius ?? DEFAULT_UNIT_RADIUS_FEET;
+              const maxPixelLength = feetSpacingToPixelsX(tokenRadiusFeet * 2, image.pixelDimensions, feetDimensions);
+              const length = Math.min(dragPixelLength, maxPixelLength);
+              const ux = vx / dragPixelLength, uy = vy / dragPixelLength;
+              const tipX = start.x + ux * length, tipY = start.y + uy * length;
+              // A small hand-drawn arrowhead (two short segments back from
+              // the tip) - simpler than an SVG marker, matches this file's
+              // existing preference for plain shapes over defs/markers.
+              // Proportional to the (already-capped) shaft length, not a
+              // flat pixel size - a low-density map (few image-px per foot)
+              // can cap the shaft itself at just a few pixels, and a fixed
+              // 8px head would then dwarf the whole arrow.
+              const headLength = Math.min(8, length * 0.4), headSpread = 0.5;
+              const headAngle = Math.atan2(uy, ux);
+              const leftX = tipX - headLength * Math.cos(headAngle - headSpread);
+              const leftY = tipY - headLength * Math.sin(headAngle - headSpread);
+              const rightX = tipX - headLength * Math.cos(headAngle + headSpread);
+              const rightY = tipY - headLength * Math.sin(headAngle + headSpread);
+              return (
+                <svg className="map-canvas-shapes" width={image.pixelDimensions.width} height={image.pixelDimensions.height}>
+                  <line x1={start.x} y1={start.y} x2={tipX} y2={tipY} stroke="#ff3b3b" strokeWidth={1} />
+                  <polyline points={`${leftX},${leftY} ${tipX},${tipY} ${rightX},${rightY}`} fill="none" stroke="#ff3b3b" strokeWidth={1} />
+                </svg>
+              );
+            })()}
           </div>
         </div>
       ) : (

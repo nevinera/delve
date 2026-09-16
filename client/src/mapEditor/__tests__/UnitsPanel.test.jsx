@@ -218,6 +218,22 @@ describe("UnitsPanel", () => {
     expect(onStartUnitPlacement).toHaveBeenCalledWith(0);
   });
 
+  it("edits a unit's facing angle, keeping x/y", () => {
+    const dispatch = vi.fn();
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 12.34, y: 8, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+    expandSection();
+    expandUnitRow();
+
+    const facingSlider = screen.getAllByRole("slider").find((el) => el.max === "359");
+    fireEvent.change(facingSlider, {target: {value: "180"}});
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "position",
+      value: {x: 12.34, y: 8, angle: 180},
+    });
+  });
+
   it("shows a pending '…' on the position pill while placing, and disables it", () => {
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
     render(<UnitsPanel {...DEFAULT_PROPS} units={units} unitPlacement={{unitIndex: 0}} />);
@@ -294,7 +310,8 @@ describe("UnitsPanel", () => {
     expandSection();
     expandUnitRow();
 
-    fireEvent.change(screen.getByRole("slider"), {target: {value: "0.25"}});
+    const hpSlider = screen.getAllByRole("slider").find((el) => el.max === "1");
+    fireEvent.change(hpSlider, {target: {value: "0.25"}});
 
     expect(dispatch).toHaveBeenCalledWith({
       type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "currentHpFraction", value: 0.25,

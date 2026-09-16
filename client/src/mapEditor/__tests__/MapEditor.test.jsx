@@ -102,6 +102,21 @@ describe("MapEditor", () => {
     expect(document.querySelector(".map-canvas-content img").src).toBe("data:image/webp;base64,AAAA");
   });
 
+  it("doesn't crash mounting a map with an SVG background (the higher-res re-rasterization needs a real canvas 2D context, unavailable in jsdom - see MapPreviewScene's own WebGL note)", () => {
+    render(
+      <MapEditor
+        mapKey="goblin-cave/gc1-entrance"
+        initialMap={{...BLANK_MAP, imageUrl: "gc1-entrance.svg", pixelDimensions: {width: 2048, height: 1536}}}
+        initialImageDataUri="data:image/svg+xml;base64,AAAA"
+        initialPixelDimensions={{width: 2048, height: 1536}}
+      />
+    );
+
+    // Rasterization never resolves here (no real Image decoding in jsdom),
+    // so the canvas still falls back to the original (raw SVG) source.
+    expect(document.querySelector(".map-canvas-content img").src).toBe("data:image/svg+xml;base64,AAAA");
+  });
+
   it("flows a feetDimensions edit from the fields panel into the canvas grid", () => {
     render(
       <MapEditor
@@ -257,6 +272,7 @@ describe("MapEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "+ Add Unit"}));
 
     fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+    fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0});
 
     expect(document.querySelector(".map-unit-row-name")).toHaveTextContent("Unit 1");
     expect(document.querySelector(".map-unit-row-type")).toHaveTextContent("Goblin Raider");

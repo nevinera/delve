@@ -224,6 +224,36 @@ describe("MapCanvas", () => {
     expect(transformParts().scale).toBeCloseTo(before.scale / Math.exp(0.08), 5);
   });
 
+  it("raises the max zoom above the old fixed cap for a large map, so the shorter screen dimension can show as little as 40ft", () => {
+    // 800x600px wrapper, 1600x1200ft map -> 0.5px/ft on both axes (the
+    // shorter screen dimension, 600px, corresponds to the height axis) -
+    // showing only 40ft there needs zoom = 600 / (40 * 0.5) = 30, well past
+    // the old fixed MAX_ZOOM of 4.
+    const largeMapData = mapData({feetDimensions: {width: 1600, height: 1200}});
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={largeMapData} dispatch={noop} onSelectBarrier={noop} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    for (let i = 0; i < 30; i++) fireEvent.click(screen.getByRole("button", {name: "+"})); // saturate well past 30x
+
+    expect(transformParts().scale).toBeCloseTo(30, 5);
+  });
+
+  it("keeps the old fixed cap for a small map, where 40ft would already need zooming out, not in", () => {
+    const smallMapData = mapData({feetDimensions: {width: 80, height: 60}});
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={smallMapData} dispatch={noop} onSelectBarrier={noop} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
+    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
+    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+
+    for (let i = 0; i < 30; i++) fireEvent.click(screen.getByRole("button", {name: "+"}));
+
+    expect(transformParts().scale).toBeCloseTo(4, 5);
+  });
+
   it("coalesces several wheel events within one frame by multiplying their factors together", () => {
     let scheduleCount = 0;
     let scheduledCallback = null;
@@ -714,7 +744,9 @@ describe("MapCanvas", () => {
       fitToImageSize();
       const wrapper = document.querySelector(".map-canvas-wrapper");
 
+      // A plain click (no drag) commits immediately on release, with facing 0.
       fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+      fireEvent.pointerUp(wrapper, {clientX: 50, clientY: 0});
 
       expect(dispatch).toHaveBeenCalledWith({
         type: "ADD_ENTRY", section: "units",
@@ -737,8 +769,75 @@ describe("MapCanvas", () => {
 
       // 1ft from the barrier point (10,120) - would snap for a barrier/connection, but not a unit.
       fireEvent.pointerDown(wrapper, {clientX: 55, clientY: 0});
+      fireEvent.pointerUp(wrapper, {clientX: 55, clientY: 0});
 
       expect(dispatch.mock.calls[0][0].entry.position).toEqual({x: 11, y: 120, angle: 0});
+    });
+
+    it("sets facing from a drag of at least 3ft, released in that direction", () => {
+      const dispatch = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-unit" pendingUnitType="goblin-raider" onToolChange={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      // Start at (10,120)ft, drag 4ft east (+x, screen right) -> facing east = 90°.
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 70, clientY: 0, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 70, clientY: 0, pointerId: 1});
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY", section: "units",
+        entry: {unitType: "goblin-raider", position: {x: 10, y: 120, angle: 90}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
+      });
+    });
+
+    it("keeps facing 0 for a drag shorter than 3ft", () => {
+      const dispatch = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-unit" pendingUnitType="goblin-raider" onToolChange={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      // Only a 2ft drag (10px at 5px/ft) - below the 3ft threshold.
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 60, clientY: 0, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 60, clientY: 0, pointerId: 1});
+
+      expect(dispatch.mock.calls[0][0].entry.position.angle).toBe(0);
+    });
+
+    it("shows a live red facing-arrow preview while dragging, capped at 2x the unit's token radius", () => {
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={noop} onSelectBarrier={noop}
+          tool="add-unit" pendingUnitType="goblin-raider" onToolChange={noop}
+          availableUnitTypes={{"goblin-raider": {tokenRadius: 2}}}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      expect(document.querySelector('line[stroke="#ff3b3b"]')).not.toBeInTheDocument();
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
+      // Drag 40px (8ft) east - well past the 2x2=4ft (20px) cap.
+      fireEvent.pointerMove(wrapper, {clientX: 90, clientY: 0, pointerId: 1});
+
+      const arrow = document.querySelector('line[stroke="#ff3b3b"]');
+      expect(arrow).toBeInTheDocument();
+      expect(Number(arrow.getAttribute("x2")) - Number(arrow.getAttribute("x1"))).toBeCloseTo(20, 5); // capped, not the full 40px drag
+
+      fireEvent.pointerUp(wrapper, {clientX: 90, clientY: 0, pointerId: 1});
+      expect(document.querySelector('line[stroke="#ff3b3b"]')).not.toBeInTheDocument();
     });
 
     it("selects an existing unit by clicking its marker, and shows drag handles via selection", () => {
@@ -893,13 +992,27 @@ describe("MapCanvas", () => {
         />
       );
 
-      // (10,60)ft -> (50,300)px at 5px/ft; tokenRadius 3ft -> 15px.
-      const image = document.querySelector(".map-canvas-shapes image");
+      // (10,60)ft -> (50,300)px at 5px/ft; tokenRadius 3ft -> radiusPx 15.
+      // Drawn at a fixed 256px local resolution (real pixels for the
+      // browser to rasterize the portrait from, even on a low-density map),
+      // then the enclosing <g> scales the whole thing back down to land at
+      // exactly radiusPx (15) in the real coordinate space - same
+      // crop/framing as drawing directly at 15px would (box is still
+      // exactly 2x the clip radius, both just bigger pre-shrink).
+      const group = document.querySelector(".map-canvas-shapes g[transform]");
+      expect(group).toHaveAttribute("transform", "translate(50 300) scale(0.1171875)"); // 15 / (256/2)
+
+      const image = group.querySelector("image");
       expect(image).toHaveAttribute("href", "data:image/webp;base64,AAAA");
-      expect(image).toHaveAttribute("x", "35"); // 50 - 15
-      expect(image).toHaveAttribute("y", "285"); // 300 - 15
-      expect(image).toHaveAttribute("width", "30");
-      expect(image).toHaveAttribute("height", "30");
+      expect(image).toHaveAttribute("x", "-128"); // -256/2
+      expect(image).toHaveAttribute("y", "-128");
+      expect(image).toHaveAttribute("width", "256");
+      expect(image).toHaveAttribute("height", "256");
+
+      const clip = group.querySelector("clipPath circle");
+      expect(clip).toHaveAttribute("cx", "0");
+      expect(clip).toHaveAttribute("cy", "0");
+      expect(clip).toHaveAttribute("r", "128"); // 256/2 - same 2x ratio to the image box as before
     });
 
     it("falls back to a plain hostility-colored circle when the unit type has no tokenImageUrl", () => {

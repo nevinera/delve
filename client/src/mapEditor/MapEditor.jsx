@@ -12,6 +12,7 @@ import {validateMap} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubAuthError} from "../github/commitFiles";
+import {loadSvgToCanvas} from "../game/svgRaster";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
 // battle-map background needs (the docs' own example is 2048x1536), and
@@ -41,6 +42,52 @@ export default function MapEditor({
     markDirty();
     rawDispatch(action);
   }
+
+  // The 2D top-down canvas shows the background as a plain <img> at a fixed
+  // layout size (image.pixelDimensions), scaled purely via a CSS transform
+  // for pan/zoom (see MapCanvas.jsx) - great for panning performance, but a
+  // `transform: scale()` only ever bitmap-scales whatever was rasterized at
+  // that fixed layout size; it never re-rasterizes on zoom. For an SVG
+  // background that means the browser only ever renders it once, at
+  // whatever (often modest, arbitrary) resolution its own declared
+  // width/height implies - unlike the walk preview and the real game
+  // client, which each deliberately rasterize an SVG themselves at a much
+  // higher, map-scale-appropriate resolution (see game/svgRaster.js).
+  // Mirrors that fix here too: a separately pre-rasterized, high-res bitmap
+  // used only for on-screen display in the 2D canvas - image.url itself
+  // (the actual asset committed on Save, and what the walk preview reads)
+  // is left untouched, still the raw SVG.
+  const [displayImageUrl, setDisplayImageUrl] = useState(null);
+  useEffect(() => {
+    if (!image) { setDisplayImageUrl(null); return; }
+    const isSvg = Boolean(mapData.imageUrl?.toLowerCase().endsWith(".svg"));
+    if (!isSvg) { setDisplayImageUrl(image.url); return; }
+
+    let cancelled = false;
+    let objectUrl = null;
+    // Best-effort: a canvas 2D context isn't guaranteed everywhere (jsdom
+    // has none at all - see MapPreviewScene's own WebGL note for the same
+    // caveat), and a malformed SVG could fail to decode - either way,
+    // displayImageUrl just stays at its fallback (image.url, the original
+    // raw SVG) rather than this enhancement ever crashing the editor.
+    loadSvgToCanvas(image.url, mapData.feetDimensions).then((canvas) => {
+      if (cancelled) return;
+      canvas.toBlob((blob) => {
+        if (cancelled || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setDisplayImageUrl(objectUrl);
+      }, "image/png");
+    }).catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // Only the image itself (a fresh upload/load) or a feetDimensions edit
+    // (svgRasterSize's density target) should re-trigger a re-rasterize.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [image, mapData.imageUrl, mapData.feetDimensions]);
+
   const [selectedBarrierIndex, setSelectedBarrierIndex] = useState(null);
   const [hoveredBarrierIndex, setHoveredBarrierIndex] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null); // {barrierIndex, pointIndex} | null
@@ -649,6 +696,7 @@ export default function MapEditor({
     <div className="map-editor" data-map-key={mapKey}>
       <MapCanvas
         image={image}
+        displayImageUrl={displayImageUrl}
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}

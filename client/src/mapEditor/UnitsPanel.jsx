@@ -461,6 +461,16 @@ function UnitRow({
                   </td>
                 </tr>
                 <tr>
+                  <th>Facing</th>
+                  <td>
+                    <input
+                      type="range" min="0" max="359" step="1" value={unit.position.angle ?? 0}
+                      onChange={(e) => updateUnit(index, {position: {...unit.position, angle: parseFloat(e.target.value) || 0}})}
+                    />
+                    {" "}{Math.round(unit.position.angle ?? 0)}°
+                  </td>
+                </tr>
+                <tr>
                   <th>HP</th>
                   <td>
                     <input
