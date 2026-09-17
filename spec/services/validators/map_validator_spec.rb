@@ -86,6 +86,27 @@ RSpec.describe Validators::MapValidator, type: :validator do
       end
     end
 
+    context "thumbnailUrl" do
+      it "accepts a map without thumbnailUrl (older maps, or generation failed)" do
+        expect { described_class.validate!(cave_entrance_map.except("thumbnailUrl")) }.not_to raise_error
+      end
+
+      it "accepts a map with a thumbnailUrl" do
+        data = cave_entrance_map.merge("thumbnailUrl" => "gc1-goblin-cave-entrance.thumb.webp")
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when thumbnailUrl is not a string" do
+        data = cave_entrance_map.merge("thumbnailUrl" => 123)
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be a string/)
+      end
+
+      it "accepts thumbnailUrl explicitly null, same as omitted" do
+        expect { described_class.validate!(cave_entrance_map.merge("thumbnailUrl" => nil)) }.not_to raise_error
+      end
+    end
+
     it "accepts barriers/connections/units explicitly null, same as omitted" do
       data = cave_entrance_map.merge("barriers" => nil, "connections" => nil, "units" => nil)
       expect { described_class.validate!(data) }.not_to raise_error
