@@ -76,6 +76,12 @@ RSpec.describe "Build::Maps", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('name="key"')
         end
+
+        it "pre-fills the key field from a prefix param (the zone editor's Create Map link)" do
+          get "/build/maps/new", params: {prefix: "goblin-cave/"}
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include('value="goblin-cave/"')
+        end
       end
     end
 

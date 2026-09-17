@@ -69,6 +69,7 @@ Rails.application.routes.draw do
   get "build/maps/*id/available_unit_types", to: "build/maps#available_unit_types", as: "available_unit_types_build_map"
   get "build/maps/*id/available_items", to: "build/maps#available_items", as: "available_items_build_map"
   get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
+  get "build/zones/*id/available_maps", to: "build/zones#available_maps", as: "available_maps_build_zone"
 
   namespace :play do
     root to: "dashboard#index"

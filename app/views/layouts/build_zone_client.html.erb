@@ -9,7 +9,7 @@
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; }
 
-      .zone-editor { max-width: 480px; margin: 40px auto; padding: 0 14px; }
+      .zone-editor { max-width: 640px; margin: 40px auto; padding: 0 14px; }
       .zone-editor-fields table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
       .zone-editor-fields th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; }
       .zone-editor-fields td { padding: 4px 0; }
@@ -22,6 +22,31 @@
       .save-bar .save-message { font-size: 12px; }
       .save-bar .save-success { color: #7c7; }
       .save-bar .save-error { color: #e79; }
+
+      /* Same collapsible-section-heading and entry-block/remove-entry/
+         add-entry conventions the map editor's sidebar uses (see
+         build_map_client.html.erb) - reused here rather than reinvented. */
+      .map-sidebar-section-heading { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 0; }
+      .map-sidebar-section-heading h3 { font-size: 13px; color: #cce; font-weight: 600; }
+      .map-sidebar-section-toggle { font-size: 11px; color: #9ab; width: 1em; text-align: center; }
+      .map-sidebar-hint { color: #987; font-size: 12px; margin: 4px 0 8px; }
+      .map-sidebar-unit-type-links { font-size: 11px; color: #9ab; margin: 4px 0; }
+
+      .entry-block { margin: 8px 0; padding: 6px 0; border-top: 1px solid #2a2f35; border-radius: 4px; }
+      .map-row-summary { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+      button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      button.remove-entry:hover { background: #533; }
+      .add-buttons-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+      button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      button.add-entry:hover { background: #345; }
+      button.add-entry:disabled { opacity: 0.4; cursor: default; }
+      .add-buttons-row select { background: #111; border: 1px solid #555; color: #eee; font-size: 12px; padding: 4px 6px; border-radius: 3px; }
+      .add-buttons-row a { color: #9cf; font-size: 12px; }
+
+      .zone-map-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .zone-map-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; background: #223; flex-shrink: 0; }
+      .zone-map-thumb-placeholder { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #223; border-radius: 4px; flex-shrink: 0; }
+      .zone-map-name { font-size: 13px; color: #cce; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     </style>
   </head>
   <body>

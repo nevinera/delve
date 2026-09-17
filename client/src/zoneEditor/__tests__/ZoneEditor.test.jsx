@@ -1,10 +1,14 @@
-import {describe, it, expect} from "vitest";
-import {render, screen, fireEvent} from "@testing-library/react";
+import {describe, it, expect, vi, afterEach} from "vitest";
+import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import ZoneEditor from "../ZoneEditor";
 
-const initialZone = {name: "Goblin Cave"};
+const initialZone = {name: "Goblin Cave", maps: [], zoneLinks: [], entryPoints: {}, openConnections: {}};
 
 describe("ZoneEditor", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("flows a name edit from the field into the zone state", () => {
     render(<ZoneEditor initialZone={initialZone} />);
 
@@ -19,5 +23,28 @@ describe("ZoneEditor", () => {
     render(<ZoneEditor initialZone={initialZone} />);
 
     expect(screen.queryByRole("button", {name: "Save"})).not.toBeInTheDocument();
+  });
+
+  it("renders the maps panel, seeded from the initial available-map-details prop", () => {
+    const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
+    const details = {"gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [], thumbnailUrl: null}};
+    render(<ZoneEditor initialZone={{...initialZone, maps}} initialAvailableMapDetails={details} />);
+
+    expect(screen.getByText("Cave Entrance")).toBeInTheDocument();
+  });
+
+  it("refreshes map details from availableMapsUrl without touching the rest of the draft", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({"gc2-new-room": {identifier: "new_room", name: "New Room", connections: [], thumbnailUrl: null}}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ZoneEditor initialZone={initialZone} availableMapsUrl="/build/zones/goblin-cave/available_maps" zoneKey="goblin-cave" newMapUrl="/build/maps/new" />);
+
+    fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/build/zones/goblin-cave/available_maps"));
+    await screen.findByRole("option", {name: "New Room"});
   });
 });
