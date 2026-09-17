@@ -128,6 +128,30 @@ export default function ZoneEditor({
                 />
               </td>
             </tr>
+            <tr>
+              <th><label htmlFor="zone-elvl">Elevation</label></th>
+              <td>
+                <input
+                  id="zone-elvl"
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={zoneData.elvl ?? ""}
+                  onChange={(e) => dispatch({type: "SET_FIELD", field: "elvl", value: e.target.value === "" ? null : parseInt(e.target.value, 10)})}
+                />
+              </td>
+            </tr>
+            <tr>
+              <th><label htmlFor="zone-private">Private</label></th>
+              <td>
+                <input
+                  id="zone-private"
+                  type="checkbox"
+                  checked={zoneData.private ?? false}
+                  onChange={(e) => dispatch({type: "SET_FIELD", field: "private", value: e.target.checked})}
+                />
+              </td>
+            </tr>
           </tbody>
         </table>
         <ZoneMapsPanel

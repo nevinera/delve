@@ -37,6 +37,31 @@ describe("ZoneEditor", () => {
     expect(screen.getByDisplayValue("Goblin Warren")).toBeInTheDocument();
   });
 
+  it("flows an elvl edit, as an integer, into the zone state", () => {
+    render(<ZoneEditor initialZone={initialZone} />);
+
+    fireEvent.change(screen.getByLabelText("Elevation"), {target: {value: "200"}});
+
+    expect(screen.getByLabelText("Elevation")).toHaveValue(200);
+  });
+
+  it("clearing the elvl field sets it back to null, not an empty string", () => {
+    render(<ZoneEditor initialZone={{...initialZone, elvl: 200}} />);
+
+    fireEvent.change(screen.getByLabelText("Elevation"), {target: {value: ""}});
+
+    expect(screen.getByLabelText("Elevation")).toHaveValue(null);
+  });
+
+  it("flows a private edit into the zone state", () => {
+    render(<ZoneEditor initialZone={initialZone} />);
+
+    expect(screen.getByLabelText("Private")).not.toBeChecked();
+    fireEvent.click(screen.getByLabelText("Private"));
+
+    expect(screen.getByLabelText("Private")).toBeChecked();
+  });
+
   it("renders Validate and Save, with Save disabled until a Validate click passes", async () => {
     resolveZoneRefs.mockResolvedValue({name: "Goblin Cave"});
     validateZone.mockResolvedValue({valid: true});
