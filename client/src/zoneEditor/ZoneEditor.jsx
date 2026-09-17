@@ -2,6 +2,7 @@ import {useReducer, useState} from "react";
 import {zoneReducer} from "./zoneReducer";
 import ZoneMapsPanel from "./ZoneMapsPanel";
 import ZoneItemsPanel from "./ZoneItemsPanel";
+import ZoneUnitTypesPanel from "./ZoneUnitTypesPanel";
 import ZoneGraphCanvas from "./ZoneGraphCanvas";
 import ZoneSidebar from "./ZoneSidebar";
 
@@ -85,6 +86,7 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapKey
           refreshStatus={refreshStatus}
         />
         <ZoneItemsPanel zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} zoneKey={zoneKey} />
+        <ZoneUnitTypesPanel zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} />
       </ZoneSidebar>
     </div>
   );
