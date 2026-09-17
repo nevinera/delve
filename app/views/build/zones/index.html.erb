@@ -1,0 +1,19 @@
+<h1>Zones</h1>
+
+<p><%= link_to "New Zone", new_build_zone_path %></p>
+
+<table>
+  <thead>
+    <tr><th>Key</th></tr>
+  </thead>
+  <tbody>
+    <% @zones.each do |entry| %>
+      <% identifier = File.dirname(entry["path"].delete_prefix("zones/").delete_suffix(".json")) %>
+      <tr>
+        <td><%= link_to identifier, edit_build_zone_path(id: identifier) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to Build", build_root_path %>

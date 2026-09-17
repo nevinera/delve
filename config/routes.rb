@@ -31,12 +31,13 @@ Rails.application.routes.draw do
     resources :unit_types, only: [:index, :new, :create]
     resources :items, only: [:index, :new, :create]
     resources :maps, only: [:index, :new, :create]
-    # The content-editing zone editor (a future addition - see
-    # plans/zone-editor.md) will own the bare `zones` resource name, matching
-    # every other content editor above (classes/unit_types/items/maps). The
-    # DB-backed Zone *registration* UI (register a deployed zone config by
-    # identifier/version/config_url - unrelated to content editing) lives
-    # under this `registration` namespace instead, out of that name's way.
+    # The content-editing zone editor (see plans/zone-editor.md) owns the
+    # bare `zones` resource name, matching every other content editor above
+    # (classes/unit_types/items/maps). The DB-backed Zone *registration* UI
+    # (register a deployed zone config by identifier/version/config_url -
+    # unrelated to content editing) lives under this `registration`
+    # namespace instead, out of that name's way.
+    resources :zones, only: [:index, :new, :create]
     namespace :registration do
       resources :zones, only: [:index, :show, :new, :create]
     end
@@ -67,6 +68,7 @@ Rails.application.routes.draw do
   get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
   get "build/maps/*id/available_unit_types", to: "build/maps#available_unit_types", as: "available_unit_types_build_map"
   get "build/maps/*id/available_items", to: "build/maps#available_items", as: "available_items_build_map"
+  get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
 
   namespace :play do
     root to: "dashboard#index"

@@ -1,0 +1,13 @@
+<h1>New Zone</h1>
+
+<%= form_with url: build_zones_path, method: :post do %>
+  <div>
+    <label for="key">Key</label>
+    <%= text_field_tag :key, @key, placeholder: "goblin-cave" %>
+  </div>
+  <p style="font-size: 0.85em; color: #666;">Use "/" to place it in a subdirectory.</p>
+
+  <%= submit_tag "Create" %>
+<% end %>
+
+<%= link_to "Cancel", build_zones_path %>
