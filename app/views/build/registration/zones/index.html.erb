@@ -12,7 +12,7 @@
   <tbody>
     <% @zones.each do |zone| %>
       <tr>
-        <td><%= link_to zone.identifier, build_zone_path(zone) %></td>
+        <td><%= link_to zone.identifier, build_registration_zone_path(zone) %></td>
         <td><%= zone.version %></td>
         <td><%= zone.name %></td>
         <td><%= zone.elvl %></td>
@@ -23,4 +23,4 @@
 
 <%== @pagy.series_nav if @pagy.pages > 1 %>
 
-<%= link_to "Register a zone", new_build_zone_path %>
+<%= link_to "Register a zone", new_build_registration_zone_path %>

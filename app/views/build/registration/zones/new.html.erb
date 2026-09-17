@@ -1,6 +1,6 @@
 <h1>Register a Zone</h1>
 
-<%= form_with model: @zone, url: build_zones_path do |f| %>
+<%= form_with model: @zone, url: build_registration_zones_path do |f| %>
   <% if @zone.errors.any? %>
     <ul>
       <% @zone.errors.full_messages.each do |msg| %>
@@ -37,4 +37,4 @@
   <%= f.submit "Register" %>
 <% end %>
 
-<%= link_to "Cancel", build_zones_path %>
+<%= link_to "Cancel", build_registration_zones_path %>

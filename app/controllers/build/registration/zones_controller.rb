@@ -1,4 +1,4 @@
-class Build::ZonesController < Build::BaseController
+class Build::Registration::ZonesController < Build::BaseController
   def index
     authorize! :read, Zone
     @pagy, @zones = pagy(:offset, Zone.order(:identifier, :version))
@@ -19,7 +19,7 @@ class Build::ZonesController < Build::BaseController
     @zone.registering_user = current_user
     authorize! :create, @zone
     if @zone.save
-      redirect_to build_zone_path(@zone), notice: "Zone registered."
+      redirect_to build_registration_zone_path(@zone), notice: "Zone registered."
     else
       render :new, status: :unprocessable_content
     end

@@ -31,7 +31,15 @@ Rails.application.routes.draw do
     resources :unit_types, only: [:index, :new, :create]
     resources :items, only: [:index, :new, :create]
     resources :maps, only: [:index, :new, :create]
-    resources :zones, only: [:index, :show, :new, :create]
+    # The content-editing zone editor (a future addition - see
+    # plans/zone-editor.md) will own the bare `zones` resource name, matching
+    # every other content editor above (classes/unit_types/items/maps). The
+    # DB-backed Zone *registration* UI (register a deployed zone config by
+    # identifier/version/config_url - unrelated to content editing) lives
+    # under this `registration` namespace instead, out of that name's way.
+    namespace :registration do
+      resources :zones, only: [:index, :show, :new, :create]
+    end
     post "validators/ability", to: "validators#ability"
     post "validators/character_class", to: "validators#character_class"
     post "validators/unit_type", to: "validators#unit_type"

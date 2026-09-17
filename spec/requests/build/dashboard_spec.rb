@@ -56,7 +56,7 @@ RSpec.describe "Build::Dashboard", type: :request do
 
         it "links to the zones listing" do
           get "/build"
-          expect(response.body).to include(build_zones_path)
+          expect(response.body).to include(build_registration_zones_path)
         end
 
         it "links to the classes listing" do
