@@ -229,9 +229,32 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
               )}
               {nodes.map((node) => {
                 const {x, y} = nodePosition(node.key);
+                const clipId = `zone-graph-node-clip-${node.key}`;
                 return (
                   <g key={node.key} transform={`translate(${x}, ${y})`} data-node-key={node.key}>
                     <circle className="zone-graph-node" r={NODE_RADIUS} onPointerDown={(e) => handleNodePointerDown(e, node)} />
+                    {node.detail?.thumbnailUrl ? (
+                      <>
+                        <clipPath id={clipId}>
+                          <circle r={NODE_RADIUS} />
+                        </clipPath>
+                        <image
+                          className="zone-graph-node-thumb"
+                          href={node.detail.thumbnailUrl}
+                          x={-NODE_RADIUS}
+                          y={-NODE_RADIUS}
+                          width={NODE_RADIUS * 2}
+                          height={NODE_RADIUS * 2}
+                          preserveAspectRatio="xMidYMid slice"
+                          clipPath={`url(#${clipId})`}
+                          pointerEvents="none"
+                        />
+                      </>
+                    ) : (
+                      <text className="zone-graph-node-thumb-placeholder" textAnchor="middle" dominantBaseline="central" pointerEvents="none">
+                        🗺
+                      </text>
+                    )}
                     <text className="zone-graph-node-label" y={NODE_RADIUS + 14} textAnchor="middle">{node.name}</text>
                   </g>
                 );
@@ -248,7 +271,9 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
                   data-connection={port.connectionIdentifier}
                   data-status={port.status.type}
                   onPointerDown={(e) => handlePortPointerDown(e, port)}
-                />
+                >
+                  <title>{port.connectionIdentifier}</title>
+                </circle>
               ))}
             </g>
           </svg>

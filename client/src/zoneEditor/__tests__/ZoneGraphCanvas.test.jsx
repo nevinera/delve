@@ -37,6 +37,31 @@ describe("ZoneGraphCanvas", () => {
     expect(screen.getByText("Cave Interior")).toBeInTheDocument();
   });
 
+  it("shows a placeholder icon inside a node with no thumbnail", () => {
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+    const node = container.querySelector('[data-node-key="gc1-goblin-cave-entrance"]');
+    expect(node.querySelector(".zone-graph-node-thumb-placeholder")).toHaveTextContent("🗺");
+    expect(node.querySelector("image")).toBeNull();
+  });
+
+  it("renders a clipped thumbnail image inside a node that has one", () => {
+    const details = {
+      ...mapDetailsByKey,
+      "gc1-goblin-cave-entrance": {...mapDetailsByKey["gc1-goblin-cave-entrance"], thumbnailUrl: "data:image/webp;base64,AAA="},
+    };
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={details} dispatch={vi.fn()} />);
+    const node = container.querySelector('[data-node-key="gc1-goblin-cave-entrance"]');
+    const image = node.querySelector("image");
+    expect(image).toHaveAttribute("href", "data:image/webp;base64,AAA=");
+    expect(node.querySelector(".zone-graph-node-thumb-placeholder")).toBeNull();
+  });
+
+  it("gives each port a title tooltip with its connection identifier", () => {
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+    const p = port(container, "cave_entrance", "cave_mouth");
+    expect(p.querySelector("title")).toHaveTextContent("cave_mouth");
+  });
+
   it("renders one port per connection, tagged with its open status", () => {
     const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
     expect(port(container, "cave_entrance", "cave_mouth")).toHaveAttribute("data-status", "open");
