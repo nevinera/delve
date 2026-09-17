@@ -33,6 +33,7 @@ class Build::ZonesController < Build::BaseController
   # actually in use.
   def edit
     load_zone
+    load_layout_positions
     client = Github::ContentClient.new(current_user)
     @available_map_keys = zone_map_keys(client, params[:id])
     @available_map_details = map_details_for(client, params[:id], referenced_map_keys(@zone))
@@ -67,12 +68,16 @@ class Build::ZonesController < Build::BaseController
   # file from a map file living deeper inside it (see #map_file? for the
   # exact same trick at depth 2).
   def zone_file?(path)
-    return false unless path.end_with?(".json") && !path.end_with?(".full.json")
+    return false unless path.end_with?(".json") && !path.end_with?(".full.json") && !path.end_with?(".layout.json")
     path.delete_prefix("zones/").count("/") == 1
   end
 
   def zone_path(key)
     "zones/#{key}/#{key.split("/").last}.json"
+  end
+
+  def layout_path(key)
+    "zones/#{key}/#{key.split("/").last}.layout.json"
   end
 
   def zone_key_taken?(key)
@@ -84,6 +89,17 @@ class Build::ZonesController < Build::BaseController
     @zone = JSON.parse(content)
   rescue Github::NotFoundError
     @zone = blank_zone(params[:id])
+  end
+
+  # <zone>.layout.json (see saveZone.js/layoutMetadata.js) is purely an
+  # editor display concern, not part of the zone schema - absent for a
+  # zone that's never been saved since the graph existed, same tolerant
+  # rescue as #load_zone's own missing-file case.
+  def load_layout_positions
+    content = Github::ContentClient.new(current_user).file_content(layout_path(params[:id]))
+    @layout_positions = JSON.parse(content)["positions"] || {}
+  rescue Github::NotFoundError
+    @layout_positions = {}
   end
 
   def map_details_for(client, zone_key, keys)

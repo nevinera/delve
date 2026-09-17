@@ -5,29 +5,45 @@ import ZoneItemsPanel from "./ZoneItemsPanel";
 import ZoneUnitTypesPanel from "./ZoneUnitTypesPanel";
 import ZoneGraphCanvas from "./ZoneGraphCanvas";
 import ZoneSidebar from "./ZoneSidebar";
-import ZoneValidateBar from "./ZoneValidateBar";
+import {resolveZoneRefs} from "./resolveZoneRefs";
+import {saveZone} from "./saveZone";
+import {validateZone} from "../validators/validateContent";
+import {useValidateThenSave} from "../validators/useValidateThenSave";
+import ValidateSaveBar from "../validators/ValidateSaveBar";
+import {GithubAuthError} from "../github/commitFiles";
 
 // Same two-pane layout every other editor uses: the graph fills the big
 // left-hand canvas area, the collapsible right-hand sidebar holds the
-// entry-list panels (name field, maps list). Still no Save (deferred to
-// step 11, see plans/zone-editor.md) and no zoneKey-driven persistence.
+// entry-list panels (Validate/Save, name field, maps list). Validate
+// resolves the draft's $refs client-side (resolveZoneRefs.js) before
+// posting - same resolved-form requirement the class/unit type editors'
+// own Validate has. Save commits the abstract zone.json, a resolved
+// .full.json companion, and the graph's own layout metadata together in
+// one atomic commit (saveZone.js) - see docs/schema/common.md#assetreference
+// for why an abstract config needs that .full.json alongside it.
 //
 // mapDetailsByKey only ever holds full detail for maps this zone's draft
 // actually references - availableMapKeys is the cheap, full directory
 // listing (bare keys, no file opens) "Add Map" offers candidates from.
 // Picking one fetches just that map's detail lazily (see handleAddMap) -
 // see Build::ZonesController for the matching server-side split.
-export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapKeys, initialAvailableMapDetails, availableMapsUrl, newMapUrl}) {
-  const [zoneData, dispatch] = useReducer(zoneReducer, initialZone);
+export default function ZoneEditor({
+  zoneKey, initialZone, initialPositions, initialAvailableMapKeys, initialAvailableMapDetails, availableMapsUrl, newMapUrl,
+}) {
+  const [zoneData, rawDispatch] = useReducer(zoneReducer, initialZone);
   const [availableMapKeys, setAvailableMapKeys] = useState(initialAvailableMapKeys ?? []);
   const [mapDetailsByKey, setMapDetailsByKey] = useState(initialAvailableMapDetails ?? {});
   const [refreshStatus, setRefreshStatus] = useState("");
   // The graph's own live drag-override map (see ZoneGraphCanvas's
-  // onPositionsChange), tracked here without ZoneGraphCanvas needing to
-  // know anything about persistence itself. Not consumed anywhere yet -
-  // step 11's Save is what will pass this through layoutMetadata.js's
-  // buildLayoutMetadata to get <zone>.layout.json's actual content.
-  const [graphPositions, setGraphPositions] = useState({});
+  // onPositionsChange/initialPositions) - tracked here without
+  // ZoneGraphCanvas needing to know anything about persistence itself.
+  const [graphPositions, setGraphPositions] = useState(initialPositions ?? {});
+  const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
+
+  function dispatch(action) {
+    markDirty();
+    rawDispatch(action);
+  }
 
   // Picks up a map created in another tab (via the "Create Map ↗" link)
   // without reloading the whole editor and losing the draft - re-fetches
@@ -60,13 +76,45 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapKey
     }
   }
 
+  async function handleValidate() {
+    setValidating();
+    try {
+      const fullZone = await resolveZoneRefs(zoneData, `zones/${zoneKey}`);
+      const {valid, error} = await validateZone(fullZone);
+      if (valid) setValid();
+      else setInvalid(error.message);
+    } catch (error) {
+      setInvalid(error.message);
+    }
+  }
+
+  async function handleSave() {
+    setSaving();
+    try {
+      await saveZone(zoneKey, zoneData, graphPositions);
+      setSaved();
+    } catch (error) {
+      if (error instanceof GithubAuthError) {
+        window.location.href = error.redirectUrl;
+        return;
+      }
+      setSaveError(error.message);
+    }
+  }
+
   return (
     <div className="zone-editor">
       <div className="zone-editor-canvas-area">
-        <ZoneGraphCanvas zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} dispatch={dispatch} onPositionsChange={setGraphPositions} />
+        <ZoneGraphCanvas
+          zoneData={zoneData}
+          mapDetailsByKey={mapDetailsByKey}
+          dispatch={dispatch}
+          initialPositions={initialPositions}
+          onPositionsChange={setGraphPositions}
+        />
       </div>
       <ZoneSidebar>
-        <ZoneValidateBar zoneData={zoneData} zoneKey={zoneKey} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
         <table>
           <tbody>
             <tr>

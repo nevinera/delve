@@ -1,10 +1,30 @@
-import {describe, it, expect, vi, afterEach} from "vitest";
+import {describe, it, expect, vi, afterEach, beforeEach} from "vitest";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import ZoneEditor from "../ZoneEditor";
+import {resolveZoneRefs} from "../resolveZoneRefs";
+import {saveZone} from "../saveZone";
+import {validateZone} from "../../validators/validateContent";
+import {GithubAuthError} from "../../github/commitFiles";
+
+vi.mock("../resolveZoneRefs", () => ({
+  resolveZoneRefs: vi.fn(),
+}));
+vi.mock("../saveZone", () => ({
+  saveZone: vi.fn(),
+}));
+vi.mock("../../validators/validateContent", () => ({
+  validateZone: vi.fn(),
+}));
 
 const initialZone = {name: "Goblin Cave", maps: [], zoneLinks: [], entryPoints: {}, openConnections: {}};
 
 describe("ZoneEditor", () => {
+  beforeEach(() => {
+    resolveZoneRefs.mockReset();
+    saveZone.mockReset();
+    validateZone.mockReset();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -17,18 +37,58 @@ describe("ZoneEditor", () => {
     expect(screen.getByDisplayValue("Goblin Warren")).toBeInTheDocument();
   });
 
-  it("does not persist the edit anywhere - saving is deferred to step 11", () => {
-    // No commitFiles mock, no Save button to click - an edit here only
-    // ever touches in-memory React state until step 11 adds saving.
-    render(<ZoneEditor initialZone={initialZone} />);
+  it("renders Validate and Save, with Save disabled until a Validate click passes", async () => {
+    resolveZoneRefs.mockResolvedValue({name: "Goblin Cave"});
+    validateZone.mockResolvedValue({valid: true});
 
-    expect(screen.queryByRole("button", {name: "Save"})).not.toBeInTheDocument();
+    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
+
+    expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+
+    await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+    expect(resolveZoneRefs).toHaveBeenCalledWith(initialZone, "zones/goblin-cave");
   });
 
-  it("renders the Validate button", () => {
-    render(<ZoneEditor initialZone={initialZone} />);
+  it("shows the validator's error and keeps Save disabled when the resolved zone is invalid", async () => {
+    resolveZoneRefs.mockResolvedValue({});
+    validateZone.mockResolvedValue({valid: false, error: {message: "elvl is required", path: "$.elvl"}});
 
-    expect(screen.getByRole("button", {name: "Validate"})).toBeInTheDocument();
+    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
+    fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+
+    await screen.findByText("elvl is required");
+    expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+  });
+
+  it("saves the current draft and the graph's layout positions once valid", async () => {
+    resolveZoneRefs.mockResolvedValue({name: "Goblin Cave"});
+    validateZone.mockResolvedValue({valid: true});
+    saveZone.mockResolvedValue({commitSha: "abc", branch: "main"});
+
+    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
+    fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+
+    fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+    await waitFor(() => expect(saveZone).toHaveBeenCalledWith("goblin-cave", initialZone, {}));
+    await screen.findByText("Saved.");
+  });
+
+  it("redirects to the GitHub reauth URL on a GithubAuthError during save", async () => {
+    resolveZoneRefs.mockResolvedValue({});
+    validateZone.mockResolvedValue({valid: true});
+    saveZone.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+    delete window.location;
+    window.location = {href: ""};
+
+    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
+    fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
   });
 
   it("renders the maps panel, seeded from the initial available-map-details prop", () => {

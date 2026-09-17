@@ -24,7 +24,7 @@ RSpec.describe "Build::Zones", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        it "lists only zone files (not maps nested inside them), linking to the edit page" do
+        it "lists only zone files (not maps nested inside them, nor .full.json/.layout.json companions), linking to the edit page" do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones")
             .to_return(
               status: 200,
@@ -32,14 +32,15 @@ RSpec.describe "Build::Zones", type: :request do
               body: [
                 {name: "goblin-cave.json", path: "zones/goblin-cave/goblin-cave.json", type: "file"},
                 {name: "gc1-goblin-cave-entrance.json", path: "zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", type: "file"},
-                {name: "goblin-cave.full.json", path: "zones/goblin-cave/goblin-cave.full.json", type: "file"}
+                {name: "goblin-cave.full.json", path: "zones/goblin-cave/goblin-cave.full.json", type: "file"},
+                {name: "goblin-cave.layout.json", path: "zones/goblin-cave/goblin-cave.layout.json", type: "file"}
               ].to_json
             )
 
           get "/build/zones"
           expect(response).to have_http_status(:ok)
           expect(response.body).to include(">goblin-cave<")
-          expect(response.body).to include(edit_build_zone_path(id: "goblin-cave"))
+          expect(response.body.scan(edit_build_zone_path(id: "goblin-cave")).size).to eq(1)
           expect(response.body).not_to include("gc1-goblin-cave-entrance")
         end
       end
@@ -117,9 +118,15 @@ RSpec.describe "Build::Zones", type: :request do
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
         end
 
+        def stub_missing_layout(zone_key)
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/#{zone_key}/#{zone_key}.layout.json")
+            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+        end
+
         it "bootstraps a blank zone when the key doesn't exist yet in the repo" do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/darkwood/darkwood.json")
             .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+          stub_missing_layout("darkwood")
           stub_empty_zone_directory("darkwood")
 
           get "/build/zones/darkwood/edit"
@@ -132,6 +139,7 @@ RSpec.describe "Build::Zones", type: :request do
           content = {"name" => "Goblin Cave", "elvl" => 200, "private" => true, "maps" => []}
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/goblin-cave.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
+          stub_missing_layout("goblin-cave")
           stub_empty_zone_directory("goblin-cave")
 
           get "/build/zones/goblin-cave/edit"
@@ -143,10 +151,26 @@ RSpec.describe "Build::Zones", type: :request do
           expect(response.body).to include(build_zones_path)
         end
 
+        it "loads persisted layout positions when a <zone>.layout.json file exists" do
+          content = {"name" => "Goblin Cave", "maps" => []}
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/goblin-cave.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
+          layout = {"positions" => {"gc1-goblin-cave-entrance" => {"x" => 12.5, "y" => -8.0}}}
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/goblin-cave.layout.json")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(layout.to_json), encoding: "base64"}.to_json)
+          stub_empty_zone_directory("goblin-cave")
+
+          get "/build/zones/goblin-cave/edit"
+
+          expect(response).to have_http_status(:ok)
+          expect(response.body).to include(CGI.escapeHTML(layout["positions"].to_json))
+        end
+
         it "prefetches full detail only for maps the zone already references, not every map under its directory" do
           content = {"name" => "Goblin Cave", "maps" => [{"$ref" => "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", "referenceTo" => "map"}]}
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/goblin-cave.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
+          stub_missing_layout("goblin-cave")
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave")
             .to_return(
               status: 200,

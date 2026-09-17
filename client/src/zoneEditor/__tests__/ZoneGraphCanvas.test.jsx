@@ -366,4 +366,15 @@ describe("ZoneGraphCanvas", () => {
     expect(typeof lastCall["gc1-goblin-cave-entrance"].x).toBe("number");
     expect(typeof lastCall["gc1-goblin-cave-entrance"].y).toBe("number");
   });
+
+  it("seeds node positions from initialPositions (persisted layout metadata)", () => {
+    const onPositionsChange = vi.fn();
+    const initialPositions = {"gc1-goblin-cave-entrance": {x: 500, y: 500}};
+    const {container} = render(
+      <ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} initialPositions={initialPositions} onPositionsChange={onPositionsChange} />
+    );
+
+    expect(nodeCenter(container, "gc1-goblin-cave-entrance")).toEqual({x: 500, y: 500});
+    expect(onPositionsChange).toHaveBeenLastCalledWith(initialPositions);
+  });
 });

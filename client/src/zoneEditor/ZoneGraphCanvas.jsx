@@ -67,15 +67,16 @@ const STATUS_COLOR = {
 // already use, so both
 // UIs stay in sync automatically.
 //
-// onPositionsChange, if given, is called with the current drag-override
-// map every time it changes - lets a caller (see ZoneEditor) observe the
-// live layout for generating layout metadata (plans/zone-editor.md step
-// 9), without this component needing to know anything about that concern
-// itself. Purely observational - there's no initialPositions prop (yet);
-// loading persisted layout back in is step 11's job.
-export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch, onPositionsChange}) {
+// initialPositions seeds the drag-override map from persisted layout
+// metadata (see layoutMetadata.js/saveZone.js), loaded back in by
+// Build::ZonesController#edit. onPositionsChange, if given, is then called
+// with the current drag-override map every time it changes - lets a
+// caller (see ZoneEditor) observe the live layout for generating that
+// same metadata on save, without this component needing to know anything
+// about persistence itself.
+export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch, initialPositions, onPositionsChange}) {
   const containerRef = useRef(null);
-  const [positions, setPositions] = useState({}); // {[nodeKey]: {x, y}} - drag overrides
+  const [positions, setPositions] = useState(initialPositions ?? {}); // {[nodeKey]: {x, y}} - drag overrides
   const [view, setView] = useState({panX: 0, panY: 0, zoom: 1});
   const [nodeDrag, setNodeDrag] = useState(null);
   const [pan, setPan] = useState(null);
