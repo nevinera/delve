@@ -40,6 +40,9 @@
       }
 
       .save-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .save-bar .validate-button { background: #245; border: 1px solid #47a; color: #dee; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .validate-button:hover:not(:disabled) { background: #356; }
+      .save-bar .validate-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
       .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
       .save-bar .save-button:hover:not(:disabled) { background: #3b5; }
       .save-bar .save-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }

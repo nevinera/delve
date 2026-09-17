@@ -3,7 +3,7 @@
 # requires for FetchAbilityContentJob/FetchCharacterClassContentJob, rather
 # than re-implementing that (constantly-changing) schema a second time in JS.
 class Build::ValidatorsController < Build::BaseController
-  skip_authorization_check only: [:ability, :character_class, :unit_type, :item, :map]
+  skip_authorization_check only: [:ability, :character_class, :unit_type, :item, :map, :zone]
 
   def ability
     validate_with(Validators::AbilityValidator)
@@ -35,6 +35,16 @@ class Build::ValidatorsController < Build::BaseController
   # validated as-is, same as #item.
   def map
     validate_with(Validators::MapValidator)
+  end
+
+  # Same reasoning as #character_class/#unit_type: ZoneValidator#validate_maps!
+  # calls MapValidator directly on each maps[i] with no $ref handling, so it
+  # rejects an abstract zone with $ref map/unitType entries outright - the
+  # zone editor resolves those client-side (resolveZoneRefs.js) before
+  # posting here, same as the class/unit type editors resolve their own
+  # $refs before validating.
+  def zone
+    validate_with(Validators::ZoneValidator)
   end
 
   private

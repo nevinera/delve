@@ -46,6 +46,7 @@ Rails.application.routes.draw do
     post "validators/unit_type", to: "validators#unit_type"
     post "validators/item", to: "validators#item"
     post "validators/map", to: "validators#map"
+    post "validators/zone", to: "validators#zone"
   end
 
   # A glob segment, not a plain :id + regex constraint (and defined outside

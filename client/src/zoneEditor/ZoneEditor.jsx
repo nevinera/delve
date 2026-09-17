@@ -5,6 +5,7 @@ import ZoneItemsPanel from "./ZoneItemsPanel";
 import ZoneUnitTypesPanel from "./ZoneUnitTypesPanel";
 import ZoneGraphCanvas from "./ZoneGraphCanvas";
 import ZoneSidebar from "./ZoneSidebar";
+import ZoneValidateBar from "./ZoneValidateBar";
 
 // Same two-pane layout every other editor uses: the graph fills the big
 // left-hand canvas area, the collapsible right-hand sidebar holds the
@@ -65,6 +66,7 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapKey
         <ZoneGraphCanvas zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} dispatch={dispatch} onPositionsChange={setGraphPositions} />
       </div>
       <ZoneSidebar>
+        <ZoneValidateBar zoneData={zoneData} zoneKey={zoneKey} />
         <table>
           <tbody>
             <tr>

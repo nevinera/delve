@@ -25,6 +25,12 @@ describe("ZoneEditor", () => {
     expect(screen.queryByRole("button", {name: "Save"})).not.toBeInTheDocument();
   });
 
+  it("renders the Validate button", () => {
+    render(<ZoneEditor initialZone={initialZone} />);
+
+    expect(screen.getByRole("button", {name: "Validate"})).toBeInTheDocument();
+  });
+
   it("renders the maps panel, seeded from the initial available-map-details prop", () => {
     const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
     const details = {"gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [], thumbnailUrl: null}};
