@@ -46,6 +46,24 @@ describe("ZoneMapsPanel", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
+  it("links to the map editor's edit page for a resolved map, in a new tab", () => {
+    const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
+    renderPanel({zoneData: zoneData(maps)});
+
+    const link = screen.getByRole("link", {name: "Edit ↗"});
+    expect(link).toHaveAttribute("href", "/build/maps/goblin-cave/gc1-goblin-cave-entrance/edit");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("clicking the Edit link does not toggle the row's expanded state", () => {
+    const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
+    renderPanel({zoneData: zoneData(maps)});
+
+    fireEvent.click(screen.getByRole("link", {name: "Edit ↗"}));
+
+    expect(screen.queryByText("cave_mouth")).not.toBeInTheDocument();
+  });
+
   it("shows the raw ref key while a referenced map's details haven't resolved yet", () => {
     const maps = [{$ref: "./gc3-unknown/gc3-unknown.json", referenceTo: "map"}];
     renderPanel({zoneData: zoneData(maps), availableMapKeys: [], mapDetailsByKey: {}});

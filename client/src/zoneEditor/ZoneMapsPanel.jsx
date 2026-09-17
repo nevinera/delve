@@ -1,7 +1,7 @@
 import {useState} from "react";
 import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
 import {connectionStatus} from "./connectionStatus";
-import {keyFromRef, refFromKey} from "./mapRef";
+import {keyFromRef, refFromKey, mapEditPath} from "./mapRef";
 
 export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
   const [collapsed, setCollapsed] = useState(false);
@@ -63,7 +63,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
       {!collapsed && (
         <div className="zone-maps-list">
           {rows.length === 0 && <p className="map-sidebar-hint">No maps yet.</p>}
-          {rows.map(({index, detail, name}) => {
+          {rows.map(({index, key, detail, name}) => {
             const expanded = expandedIndexes.has(index);
             return (
               <div className="entry-block zone-map-row" key={index}>
@@ -77,6 +77,17 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
                     )}
                     <span className="zone-map-name">{name}</span>
                   </div>
+                  {key && (
+                    <a
+                      className="zone-map-edit-link"
+                      href={mapEditPath(zoneKey, key)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Edit ↗
+                    </a>
+                  )}
                   <button
                     type="button"
                     className="remove-entry"
