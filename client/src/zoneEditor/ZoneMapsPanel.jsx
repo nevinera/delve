@@ -1,5 +1,6 @@
 import {useState} from "react";
 import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
+import {connectionStatus} from "./connectionStatus";
 
 // A zone's maps are always $ref entries in real content (see
 // plans/zone-editor.md) - "./<key>/<key>.json", the same basename-matched
@@ -39,6 +40,18 @@ export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zone
   });
   const referencedKeys = new Set(rows.map((row) => row.key).filter(Boolean));
   const availableKeys = Object.keys(mapDetailsByKey).filter((key) => !referencedKeys.has(key));
+
+  // Every open connection on any *referenced* map (not just the current
+  // one) - what "+ Link to" offers across the whole zone. Only referenced
+  // maps are eligible targets ("some identifier on another map that is in
+  // the zone"), and only ones whose details actually resolved (an
+  // unresolved reference has no connections to offer).
+  const linkTargets = rows.flatMap(({detail}) => {
+    if (!detail?.identifier) return [];
+    return (detail.connections ?? [])
+      .filter((connection) => connectionStatus(detail.identifier, connection.identifier, zoneData).type === "open")
+      .map((connection) => ({mapIdentifier: detail.identifier, mapName: detail.name, connectionIdentifier: connection.identifier}));
+  });
 
   function handleRemove(index, mapIdentifier) {
     dispatch({type: "REMOVE_MAP", index, mapIdentifier});
@@ -92,6 +105,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zone
                     connections={detail?.connections ?? []}
                     zoneData={zoneData}
                     dispatch={dispatch}
+                    linkTargets={linkTargets}
                   />
                 )}
               </div>

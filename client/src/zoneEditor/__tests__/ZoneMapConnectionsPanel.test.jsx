@@ -74,4 +74,34 @@ describe("ZoneMapConnectionsPanel", () => {
     fireEvent.click(screen.getByRole("button", {name: "Remove Link"}));
     expect(dispatch).toHaveBeenCalledWith({type: "REMOVE_ZONE_LINK", index: 0});
   });
+
+  it("hides the Link to select when there are no open connections on other maps", () => {
+    render(<ZoneMapConnectionsPanel mapIdentifier="cave_entrance" connections={[connections[0]]} zoneData={zoneData()} dispatch={vi.fn()} linkTargets={[]} />);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("excludes this map's own open connections from the Link to select (no self-loops)", () => {
+    const linkTargets = [
+      {mapIdentifier: "cave_entrance", mapName: "Cave Entrance", connectionIdentifier: "clearing_entrance"},
+      {mapIdentifier: "cave_interior", mapName: "Cave Interior", connectionIdentifier: "entrance"},
+    ];
+    render(<ZoneMapConnectionsPanel mapIdentifier="cave_entrance" connections={[connections[0]]} zoneData={zoneData()} dispatch={vi.fn()} linkTargets={linkTargets} />);
+
+    expect(screen.queryByRole("option", {name: /Cave Entrance/})).not.toBeInTheDocument();
+    expect(screen.getByRole("option", {name: "Cave Interior — entrance"})).toBeInTheDocument();
+  });
+
+  it("dispatches ADD_ZONE_LINK with both connection identifiers when a link target is picked", () => {
+    const dispatch = vi.fn();
+    const linkTargets = [{mapIdentifier: "cave_interior", mapName: "Cave Interior", connectionIdentifier: "entrance"}];
+    render(<ZoneMapConnectionsPanel mapIdentifier="cave_entrance" connections={[connections[0]]} zoneData={zoneData()} dispatch={dispatch} linkTargets={linkTargets} />);
+
+    fireEvent.change(screen.getByRole("combobox"), {target: {value: "cave_interior/entrance"}});
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ADD_ZONE_LINK",
+      connectionA: {map: "cave_entrance", connection: "cave_mouth"},
+      connectionB: {map: "cave_interior", connection: "entrance"},
+    });
+  });
 });

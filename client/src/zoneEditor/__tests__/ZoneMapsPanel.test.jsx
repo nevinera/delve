@@ -4,7 +4,7 @@ import ZoneMapsPanel from "../ZoneMapsPanel";
 
 const mapDetailsByKey = {
   "gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [{identifier: "cave_mouth", type: "line"}], thumbnailUrl: "data:image/webp;base64,AAA="},
-  "gc2-goblin-cave-interior": {identifier: "cave_interior", name: "Cave Interior", connections: [], thumbnailUrl: null},
+  "gc2-goblin-cave-interior": {identifier: "cave_interior", name: "Cave Interior", connections: [{identifier: "entrance", type: "line"}], thumbnailUrl: null},
 };
 
 function zoneData(maps = []) {
@@ -121,6 +121,24 @@ describe("ZoneMapsPanel", () => {
     fireEvent.click(screen.getByText("Cave Entrance"));
 
     expect(screen.getByText("cave_mouth")).toBeInTheDocument();
+  });
+
+  it("offers cross-map linking: expanding both rows lets one map's open connection link to another's", () => {
+    const maps = [
+      {$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"},
+      {$ref: "./gc2-goblin-cave-interior/gc2-goblin-cave-interior.json", referenceTo: "map"},
+    ];
+    const dispatch = vi.fn();
+    render(<ZoneMapsPanel zoneData={zoneData(maps)} dispatch={dispatch} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" newMapUrl="/build/maps/new" />);
+
+    fireEvent.click(screen.getByText("Cave Entrance"));
+    fireEvent.change(screen.getByRole("combobox"), {target: {value: "cave_interior/entrance"}});
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ADD_ZONE_LINK",
+      connectionA: {map: "cave_entrance", connection: "cave_mouth"},
+      connectionB: {map: "cave_interior", connection: "entrance"},
+    });
   });
 
   it("removing a map row does not toggle its own expanded state", () => {

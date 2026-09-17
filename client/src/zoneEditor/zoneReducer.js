@@ -58,6 +58,14 @@ function removeZoneLink(state, index) {
   return {...state, zoneLinks: state.zoneLinks.filter((_, i) => i !== index)};
 }
 
+// Creates a new zoneLink between two open connections - assumed two-way and
+// keyless for now, same as everywhere else in this editor (see
+// ZoneMapConnectionsPanel). connectionA/connectionB are each {map,
+// connection} (matching docs/schema/zone.md's ConnectionIdentifier shape).
+function addZoneLink(state, connectionA, connectionB) {
+  return {...state, zoneLinks: [...(state.zoneLinks ?? []), {connectionA, connectionB, oneWay: false, requiredKey: null}]};
+}
+
 export function zoneReducer(state, action) {
   switch (action.type) {
     case "REMOVE_MAP":
@@ -72,6 +80,8 @@ export function zoneReducer(state, action) {
       return removeOpenConnection(state, action.key);
     case "REMOVE_ZONE_LINK":
       return removeZoneLink(state, action.index);
+    case "ADD_ZONE_LINK":
+      return addZoneLink(state, action.connectionA, action.connectionB);
     default:
       return abilityReducer(state, action);
   }

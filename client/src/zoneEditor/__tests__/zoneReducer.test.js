@@ -96,4 +96,19 @@ describe("zoneReducer", () => {
     const result = zoneReducer(state, {type: "REMOVE_ZONE_LINK", index: 0});
     expect(result.zoneLinks).toEqual([{connectionA: {map: "c", connection: "z"}, connectionB: {map: "d", connection: "w"}}]);
   });
+
+  it("adds a new zoneLink, assumed two-way and keyless, without touching existing links", () => {
+    const state = zoneState({zoneLinks: [{connectionA: {map: "a", connection: "x"}, connectionB: {map: "b", connection: "y"}}]});
+
+    const result = zoneReducer(state, {
+      type: "ADD_ZONE_LINK",
+      connectionA: {map: "cave_entrance", connection: "cave_mouth"},
+      connectionB: {map: "cave_interior", connection: "entrance"},
+    });
+
+    expect(result.zoneLinks).toEqual([
+      {connectionA: {map: "a", connection: "x"}, connectionB: {map: "b", connection: "y"}},
+      {connectionA: {map: "cave_entrance", connection: "cave_mouth"}, connectionB: {map: "cave_interior", connection: "entrance"}, oneWay: false, requiredKey: null},
+    ]);
+  });
 });
