@@ -1,16 +1,7 @@
 <div
   id="editor-root"
   data-key="<%= params[:id] %>"
-  data-initial-map="<%= @map.to_json %>"
-  data-initial-image-data-uri="<%= @initial_image_data_uri %>"
-  data-initial-pixel-dimensions="<%= @map["pixelDimensions"]&.to_json %>"
   data-back-url="<%= build_maps_path %>"
-  data-available-unit-type-keys="<%= @available_unit_type_keys.to_json %>"
-  data-initial-unit-type-details="<%= @initial_unit_type_details.to_json %>"
   data-new-unit-type-url="<%= new_build_unit_type_path %>"
-  data-available-unit-types-url="<%= available_unit_types_build_map_path(id: params[:id]) %>"
-  data-available-item-keys="<%= @available_item_keys.to_json %>"
-  data-initial-item-details="<%= @initial_item_details.to_json %>"
   data-new-item-url="<%= new_build_item_path %>"
-  data-available-items-url="<%= available_items_build_map_path(id: params[:id]) %>"
 ></div>

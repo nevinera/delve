@@ -1,12 +1,32 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {render, screen, fireEvent, waitFor, act} from "@testing-library/react";
 import MapEditor from "../MapEditor";
-import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
+import {GithubClient} from "../../github/delve-github";
+import {loadMap, loadMapImageUrl, listUnitTypeKeys, listItemKeys, unitTypeDetailsFor, itemDetailsFor} from "../mapContentLoaders";
 import {validateMap} from "../../validators/validateContent";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
   return {...actual, commitFiles: vi.fn()};
+});
+
+vi.mock("../../github/delve-github", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {...actual, GithubClient: vi.fn(() => ({}))};
+});
+
+vi.mock("../mapContentLoaders", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    loadMap: vi.fn(),
+    loadMapImageUrl: vi.fn(),
+    listUnitTypeKeys: vi.fn(),
+    listItemKeys: vi.fn(),
+    unitTypeDetailsFor: vi.fn(),
+    itemDetailsFor: vi.fn(),
+  };
 });
 
 vi.mock("../../validators/validateContent", () => ({
@@ -36,6 +56,26 @@ const BLANK_MAP = {
   barriers: [], connections: [], units: [],
 };
 
+// Mocks every loader MapEditor fetches on mount, then renders and waits for
+// the load to finish (mapData starts out as a blank placeholder, not null -
+// see MapEditor.jsx's own comment on why - so "loaded" is a separate flag,
+// not a null check).
+async function renderReady({
+  mapKey = "goblin-cave/gc1-entrance", map = BLANK_MAP, imageUrl = null,
+  unitTypeKeys = [], unitTypeDetails = {}, itemKeys = [], itemDetails = {},
+  backUrl, newUnitTypeUrl, newItemUrl,
+} = {}) {
+  loadMap.mockResolvedValue(map);
+  loadMapImageUrl.mockResolvedValue(imageUrl);
+  listUnitTypeKeys.mockResolvedValue(unitTypeKeys);
+  listItemKeys.mockResolvedValue(itemKeys);
+  unitTypeDetailsFor.mockResolvedValue(unitTypeDetails);
+  itemDetailsFor.mockResolvedValue(itemDetails);
+
+  render(<MapEditor mapKey={mapKey} backUrl={backUrl} newUnitTypeUrl={newUnitTypeUrl} newItemUrl={newItemUrl} />);
+  await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
+}
+
 describe("MapEditor", () => {
   beforeEach(() => {
     vi.stubGlobal("Image", FakeImage);
@@ -45,20 +85,55 @@ describe("MapEditor", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
-  it("shows a file picker with no image yet", () => {
-    render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+  it("shows a loading state, then the editor once the fetch resolves", async () => {
+    let resolveLoad;
+    loadMap.mockImplementation(() => new Promise((resolve) => (resolveLoad = resolve)));
+    loadMapImageUrl.mockResolvedValue(null);
+    listUnitTypeKeys.mockResolvedValue([]);
+    listItemKeys.mockResolvedValue([]);
+    unitTypeDetailsFor.mockResolvedValue({});
+    itemDetailsFor.mockResolvedValue({});
+
+    render(<MapEditor mapKey="goblin-cave/gc1-entrance" />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+
+    resolveLoad(BLANK_MAP);
+    await waitFor(() => expect(screen.getByText(/Choose a map image/)).toBeInTheDocument());
+  });
+
+  it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
+    loadMap.mockRejectedValue(new Error("network down"));
+
+    render(<MapEditor mapKey="goblin-cave/gc1-entrance" />);
+
+    await screen.findByText(/Failed to load: network down/);
+  });
+
+  it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
+    loadMap.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
+    delete window.location;
+    window.location = {href: ""};
+
+    render(<MapEditor mapKey="goblin-cave/gc1-entrance" />);
+
+    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+  });
+
+  it("shows a file picker with no image yet", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
     expect(screen.getByText(/Choose a map image/)).toBeInTheDocument();
   });
 
-  it("renders the (collapsible) sidebar alongside the canvas", () => {
-    render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+  it("renders the (collapsible) sidebar alongside the canvas", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
     expect(document.querySelector(".map-editor-sidebar")).toBeInTheDocument();
   });
 
-  it("rejects a non-image file without touching URL.createObjectURL", () => {
-    render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+  it("rejects a non-image file without touching URL.createObjectURL", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
     const input = document.querySelector('input[type="file"]');
 
     fireEvent.change(input, {target: {files: [file("notes.txt", {type: "text/plain"})]}});
@@ -67,8 +142,8 @@ describe("MapEditor", () => {
     expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
 
-  it("rejects an image over 25MB", () => {
-    render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+  it("rejects an image over 25MB", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
     const input = document.querySelector('input[type="file"]');
 
     fireEvent.change(input, {target: {files: [file("huge.png", {size: 26 * 1024 * 1024})]}});
@@ -78,7 +153,7 @@ describe("MapEditor", () => {
   });
 
   it("accepts a valid image and renders the canvas toolbar", async () => {
-    render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
     const input = document.querySelector('input[type="file"]');
 
     fireEvent.change(input, {target: {files: [file("map.png")]}});
@@ -87,45 +162,24 @@ describe("MapEditor", () => {
     expect(screen.queryByText(/Choose a map image/)).not.toBeInTheDocument();
   });
 
-  it("shows an existing map's image immediately, without requiring a re-upload", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 2048, height: 1536}}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 2048, height: 1536}}
-      />
-    );
+  it("shows an existing map's image immediately, without requiring a re-upload", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 2048, height: 1536}}, imageUrl: "data:image/webp;base64,AAAA"});
 
     expect(screen.queryByText(/Choose a map image/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Fit"})).toBeInTheDocument();
     expect(document.querySelector(".map-canvas-content img").src).toBe("data:image/webp;base64,AAAA");
   });
 
-  it("doesn't crash mounting a map with an SVG background (the higher-res re-rasterization needs a real canvas 2D context, unavailable in jsdom - see MapPreviewScene's own WebGL note)", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, imageUrl: "gc1-entrance.svg", pixelDimensions: {width: 2048, height: 1536}}}
-        initialImageDataUri="data:image/svg+xml;base64,AAAA"
-        initialPixelDimensions={{width: 2048, height: 1536}}
-      />
-    );
+  it("doesn't crash mounting a map with an SVG background (the higher-res re-rasterization needs a real canvas 2D context, unavailable in jsdom - see MapPreviewScene's own WebGL note)", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, imageUrl: "gc1-entrance.svg", pixelDimensions: {width: 2048, height: 1536}}, imageUrl: "data:image/svg+xml;base64,AAAA"});
 
     // Rasterization never resolves here (no real Image decoding in jsdom),
     // so the canvas still falls back to the original (raw SVG) source.
     expect(document.querySelector(".map-canvas-content img").src).toBe("data:image/svg+xml;base64,AAAA");
   });
 
-  it("flows a feetDimensions edit from the fields panel into the canvas grid", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 2048, height: 1536}}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 2048, height: 1536}}
-      />
-    );
+  it("flows a feetDimensions edit from the fields panel into the canvas grid", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 2048, height: 1536}}, imageUrl: "data:image/webp;base64,AAAA"});
     expect(document.querySelector(".map-canvas-grid")).not.toBeInTheDocument();
 
     fireEvent.change(document.querySelectorAll(".map-fields-dimension-pair input")[0], {target: {value: "60"}});
@@ -135,7 +189,7 @@ describe("MapEditor", () => {
   });
 
   it("keeps the draft's pixelDimensions in sync with whatever image is actually loaded", async () => {
-    render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
 
     fireEvent.change(document.querySelector('input[type="file"]'), {target: {files: [file("map.png")]}});
     await waitFor(() => expect(screen.getByRole("button", {name: "Fit"})).toBeInTheDocument());
@@ -143,15 +197,8 @@ describe("MapEditor", () => {
     expect(screen.getByText("800 × 600")).toBeInTheDocument();
   });
 
-  it("adds a wall via the sidebar's '+ Add Wall' button, going straight into placing its first point", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("adds a wall via the sidebar's '+ Add Wall' button, going straight into placing its first point", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -175,15 +222,8 @@ describe("MapEditor", () => {
     expect(screen.getByText("Placing Points")).toBeInTheDocument();
   });
 
-  it("flows the sidebar's '+ Add Circle' button into a canvas drag, creating a circle barrier and reverting the tool", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("flows the sidebar's '+ Add Circle' button into a canvas drag, creating a circle barrier and reverting the tool", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -202,15 +242,8 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "+ Add Circle"})).not.toBeDisabled();
   });
 
-  it("flows the sidebar's '+ Add Point Connection' button into a single canvas click, creating a point connection", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("flows the sidebar's '+ Add Point Connection' button into a single canvas click, creating a point connection", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -225,15 +258,8 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "+ Add Point Connection"})).not.toBeDisabled();
   });
 
-  it("flows the sidebar's '+ Add Line Connection' button into a canvas drag, creating a line connection", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("flows the sidebar's '+ Add Line Connection' button into a canvas drag, creating a line connection", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -250,17 +276,8 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "+ Add Line Connection"})).not.toBeDisabled();
   });
 
-  it("flows choosing a unit type + '+ Add Unit' into a single canvas click, creating a unit", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialAvailableUnitTypeKeys={["goblin-raider"]}
-        initialUnitTypeDetails={{"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}}
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("flows choosing a unit type + '+ Add Unit' into a single canvas click, creating a unit", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA", unitTypeKeys: ["goblin-raider"], unitTypeDetails: {"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -275,26 +292,20 @@ describe("MapEditor", () => {
     fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0});
 
     expect(document.querySelector(".map-unit-row-name")).toHaveTextContent("Unit 1");
-    expect(document.querySelector(".map-unit-row-type")).toHaveTextContent("Goblin Raider");
+    // Choosing "goblin-raider" from the dropdown kicks off an async detail
+    // fetch (see requestUnitTypeDetails) - the resolved name lands a tick
+    // later, not synchronously.
+    await waitFor(() => expect(document.querySelector(".map-unit-row-type")).toHaveTextContent("Goblin Raider"));
     // Single-shot - the tool reverted to "select", so the button's enabled
     // again (the dropdown's own choice isn't cleared by placing one).
     expect(screen.getByRole("button", {name: "+ Add Unit"})).not.toBeDisabled();
   });
 
-  it("flows a click on a unit's position pill into re-placing it via a map click", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{
+  it("flows a click on a unit's position pill into re-placing it via a map click", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
           ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
           units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
-        }}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialAvailableUnitTypeKeys={["goblin-raider"]}
-        initialUnitTypeDetails={{"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}}
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+        }, imageUrl: "data:image/webp;base64,AAAA", unitTypeKeys: ["goblin-raider"], unitTypeDetails: {"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -311,24 +322,15 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
   });
 
-  it("clicking a unit's token on the map opens only that unit's row and scrolls it into view, closing any others already open", () => {
+  it("clicking a unit's token on the map opens only that unit's row and scrolls it into view, closing any others already open", async () => {
     Element.prototype.scrollIntoView = vi.fn();
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
           ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
           units: [
             {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
             {unitType: "goblin-raider", identifier: "b", position: {x: 50, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
           ],
-        }}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialAvailableUnitTypeKeys={["goblin-raider"]}
-        initialUnitTypeDetails={{"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}}
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+        }, imageUrl: "data:image/webp;base64,AAAA", unitTypeKeys: ["goblin-raider"], unitTypeDetails: {"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -349,18 +351,11 @@ describe("MapEditor", () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
   });
 
-  it("flows a coordinate pill click in the sidebar into re-placing an existing point connection", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{
+  it("flows a coordinate pill click in the sidebar into re-placing an existing point connection", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
           ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
           connections: [{identifier: "a", type: "point", position: {x: 0, y: 0, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}],
-        }}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+        }, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -376,19 +371,12 @@ describe("MapEditor", () => {
     expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
   });
 
-  it("starting a barrier-point placement cancels an in-progress connection-field placement", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{
+  it("starting a barrier-point placement cancels an in-progress connection-field placement", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
           ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
           barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}],
           connections: [{identifier: "a", type: "point", position: {x: 0, y: 0, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}],
-        }}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+        }, imageUrl: "data:image/webp;base64,AAAA"});
 
     fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
     fireEvent.click(screen.getByRole("button", {name: "0, 0"}));
@@ -403,15 +391,8 @@ describe("MapEditor", () => {
     expect(screen.getAllByText("Placing Points").length).toBe(1);
   });
 
-  it("flows a '+' click in the sidebar into placement mode, then a map click into a new pill", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("flows a '+' click in the sidebar into placement mode, then a map click into a new pill", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -432,15 +413,8 @@ describe("MapEditor", () => {
     expect(document.querySelector(".map-point-pill-pending")).toBeInTheDocument();
   });
 
-  it("cancels placement on Escape, from the canvas", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("cancels placement on Escape, from the canvas", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}, imageUrl: "data:image/webp;base64,AAAA"});
 
     fireEvent.click(document.querySelector(".map-sidebar-section-heading"));
     fireEvent.click(screen.getByText(/Barrier 1: wall/));
@@ -455,15 +429,8 @@ describe("MapEditor", () => {
     expect(document.querySelectorAll(".map-point-pill").length).toBe(2);
   });
 
-  it("flows a click on an existing pill into edit placement, then a map click replaces that point in place", () => {
-    render(
-      <MapEditor
-        mapKey="goblin-cave/gc1-entrance"
-        initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}}
-        initialImageDataUri="data:image/webp;base64,AAAA"
-        initialPixelDimensions={{width: 800, height: 600}}
-      />
-    );
+  it("flows a click on an existing pill into edit placement, then a map click replaces that point in place", async () => {
+    await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, barriers: [{type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]}]}, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -488,25 +455,16 @@ describe("MapEditor", () => {
   });
 
   describe("refreshing available unit types", () => {
-    beforeEach(() => {
-      global.fetch = vi.fn();
-    });
-
     it("adds a newly-fetched unit type key to the dropdown without a page reload", async () => {
       // The key list is cheap (no per-file fetch, see
       // Build::MapsController#list_unit_type_keys) - it shows up by its raw
       // key until actually chosen, not a friendly name yet.
-      global.fetch.mockResolvedValue({ok: true, json: () => Promise.resolve(["goblin-raider"])});
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP}
-          initialAvailableUnitTypeKeys={[]} availableUnitTypesUrl="/build/maps/goblin-cave/gc1-entrance/available_unit_types"
-        />
-      );
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP, unitTypeKeys: []});
 
       fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
       expect(screen.queryByRole("option", {name: "goblin-raider"})).not.toBeInTheDocument();
 
+      listUnitTypeKeys.mockResolvedValueOnce(["goblin-raider"]);
       fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
       await waitFor(() => expect(screen.getByText("Refreshed.")).toBeInTheDocument());
 
@@ -514,8 +472,8 @@ describe("MapEditor", () => {
     });
 
     it("shows an error message when the refresh request fails", async () => {
-      global.fetch.mockResolvedValue({ok: false, status: 500});
-      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} initialAvailableUnitTypeKeys={[]} />);
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP, unitTypeKeys: []});
+      listUnitTypeKeys.mockRejectedValueOnce(new Error("request failed: 500"));
 
       fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
       fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
@@ -524,21 +482,12 @@ describe("MapEditor", () => {
     });
 
     it("refreshes both unit type and item key lists from the one shared button", async () => {
-      global.fetch = vi.fn((url) => Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(url.includes("available_unit_types") ? ["goblin-raider"] : ["sword-of-doom"]),
-      }));
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance"
-          initialMap={{
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
             ...BLANK_MAP,
             units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
-          }}
-          initialAvailableUnitTypeKeys={[]} availableUnitTypesUrl="/build/maps/goblin-cave/gc1-entrance/available_unit_types"
-          initialAvailableItemKeys={[]} availableItemsUrl="/build/maps/goblin-cave/gc1-entrance/available_items"
-        />
-      );
+          }, unitTypeKeys: [], itemKeys: []});
+      listUnitTypeKeys.mockResolvedValueOnce(["goblin-raider"]);
+      listItemKeys.mockResolvedValueOnce(["sword-of-doom"]);
 
       fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
       fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row, revealing its Type dropdown
@@ -556,20 +505,11 @@ describe("MapEditor", () => {
   });
 
   describe("loot tables", () => {
-    it("flows choosing an item + '+ Add Loot Entry' into a unit's lootTable at weight 1", () => {
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance"
-          initialMap={{
+    it("flows choosing an item + '+ Add Loot Entry' into a unit's lootTable at weight 1", async () => {
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
             ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
             units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
-          }}
-          initialImageDataUri="data:image/webp;base64,AAAA"
-          initialPixelDimensions={{width: 800, height: 600}}
-          initialAvailableItemKeys={["sword-of-doom"]}
-          initialItemDetails={{"sword-of-doom": {identifier: "sword-of-doom", name: "Sword of Doom", slot: "main_hand"}}}
-        />
-      );
+          }, imageUrl: "data:image/webp;base64,AAAA", itemKeys: ["sword-of-doom"], itemDetails: {"sword-of-doom": {identifier: "sword-of-doom", name: "Sword of Doom", slot: "main_hand"}}});
 
       fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
       fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row, revealing its loot table
@@ -577,7 +517,9 @@ describe("MapEditor", () => {
       fireEvent.change(itemSelect, {target: {value: "sword-of-doom"}});
       fireEvent.click(screen.getByRole("button", {name: "+ Add Loot Entry"}));
 
-      expect(screen.getByText("Sword of Doom")).toBeInTheDocument();
+      // Choosing the item kicks off an async detail fetch (requestItemDetails) -
+      // the resolved name lands a tick later, not synchronously.
+      await waitFor(() => expect(screen.getByText("Sword of Doom")).toBeInTheDocument());
       expect(document.querySelector(".map-loot-entry input")).toHaveValue(1);
     });
   });
@@ -593,15 +535,8 @@ describe("MapEditor", () => {
       };
     }
 
-    function renderWithTwoUnits() {
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance"
-          initialMap={twoUnitMap()}
-          initialImageDataUri="data:image/webp;base64,AAAA"
-          initialPixelDimensions={{width: 800, height: 600}}
-        />
-      );
+    async function renderWithTwoUnits() {
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: twoUnitMap(), imageUrl: "data:image/webp;base64,AAAA"});
       const wrapper = document.querySelector(".map-canvas-wrapper");
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -610,8 +545,8 @@ describe("MapEditor", () => {
       return wrapper;
     }
 
-    it("'+ Add Group' immediately enters grouping mode, and clicking units (map token + sidebar row) adds both", () => {
-      renderWithTwoUnits();
+    it("'+ Add Group' immediately enters grouping mode, and clicking units (map token + sidebar row) adds both", async () => {
+      await renderWithTwoUnits();
 
       fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
       fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
@@ -632,8 +567,8 @@ describe("MapEditor", () => {
       expect(highlight.querySelectorAll("line")).toHaveLength(1);
     });
 
-    it("clicking a group member again (while grouping mode is active) removes it", () => {
-      renderWithTwoUnits();
+    it("clicking a group member again (while grouping mode is active) removes it", async () => {
+      await renderWithTwoUnits();
 
       fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
       fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
@@ -646,8 +581,8 @@ describe("MapEditor", () => {
       expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(0)");
     });
 
-    it("Escape exits grouping mode", () => {
-      renderWithTwoUnits();
+    it("Escape exits grouping mode", async () => {
+      await renderWithTwoUnits();
       fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
       fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
       expect(screen.getByRole("button", {name: "Done"})).toBeInTheDocument();
@@ -659,18 +594,11 @@ describe("MapEditor", () => {
   });
 
   describe("movement", () => {
-    function renderWithOneUnit() {
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance"
-          initialMap={{
+    async function renderWithOneUnit() {
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
             ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
             units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
-          }}
-          initialImageDataUri="data:image/webp;base64,AAAA"
-          initialPixelDimensions={{width: 800, height: 600}}
-        />
-      );
+          }, imageUrl: "data:image/webp;base64,AAAA"});
       const wrapper = document.querySelector(".map-canvas-wrapper");
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -680,8 +608,8 @@ describe("MapEditor", () => {
       return wrapper;
     }
 
-    it("switches a unit to patrol, lays down two consecutive steps via '+' then clicks, and draws the path", () => {
-      const wrapper = renderWithOneUnit();
+    it("switches a unit to patrol, lays down two consecutive steps via '+' then clicks, and draws the path", async () => {
+      const wrapper = await renderWithOneUnit();
 
       const movementSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="patrol"]'));
       fireEvent.change(movementSelect, {target: {value: "patrol"}});
@@ -698,11 +626,8 @@ describe("MapEditor", () => {
       fireEvent.keyDown(document, {key: "Escape"}); // stop the still-armed placement
     });
 
-    it("inserts a step between two existing ones via that gap's '+', without disturbing the others", () => {
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance"
-          initialMap={{
+    it("inserts a step between two existing ones via that gap's '+', without disturbing the others", async () => {
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
             ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
             units: [{
               unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
@@ -714,11 +639,7 @@ describe("MapEditor", () => {
                 ],
               },
             }],
-          }}
-          initialImageDataUri="data:image/webp;base64,AAAA"
-          initialPixelDimensions={{width: 800, height: 600}}
-        />
-      );
+          }, imageUrl: "data:image/webp;base64,AAAA"});
       const wrapper = document.querySelector(".map-canvas-wrapper");
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -735,8 +656,8 @@ describe("MapEditor", () => {
       expect(pills).toEqual(["5, 5", "10, 120", "50, 5"]);
     });
 
-    it("switches a unit to wander, re-places its location via the pill, and draws the dim circle", () => {
-      const wrapper = renderWithOneUnit();
+    it("switches a unit to wander, re-places its location via the pill, and draws the dim circle", async () => {
+      const wrapper = await renderWithOneUnit();
 
       const movementSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="wander"]'));
       fireEvent.change(movementSelect, {target: {value: "wander"}});
@@ -748,8 +669,8 @@ describe("MapEditor", () => {
       expect(document.querySelector(".map-movement-highlight circle")).toBeInTheDocument();
     });
 
-    it("switching back to still clears the visualization", () => {
-      renderWithOneUnit();
+    it("switching back to still clears the visualization", async () => {
+      await renderWithOneUnit();
       const movementSelect = () => screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="patrol"]'));
       fireEvent.change(movementSelect(), {target: {value: "patrol"}});
       fireEvent.click(document.querySelector(".map-unit-movement-fields .map-point-plus"));
@@ -767,17 +688,14 @@ describe("MapEditor", () => {
   });
 
   describe("simulate units (slice 9)", () => {
-    it("toggling into simulate mode hides the editing panels, blocks drags, animates the unit, and restores everything on stop", () => {
+    it("toggling into simulate mode hides the editing panels, blocks drags, animates the unit, and restores everything on stop", async () => {
       let frameCallback = null;
       vi.stubGlobal("requestAnimationFrame", (cb) => { frameCallback = cb; return 1; });
       vi.stubGlobal("cancelAnimationFrame", () => {});
       let now = 1000;
       vi.spyOn(performance, "now").mockImplementation(() => now);
 
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance"
-          initialMap={{
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {
             ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
             units: [{
               unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1,
@@ -789,11 +707,7 @@ describe("MapEditor", () => {
                 ],
               },
             }],
-          }}
-          initialImageDataUri="data:image/webp;base64,AAAA"
-          initialPixelDimensions={{width: 800, height: 600}}
-        />
-      );
+          }, imageUrl: "data:image/webp;base64,AAAA"});
       const wrapper = document.querySelector(".map-canvas-wrapper");
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -838,33 +752,24 @@ describe("MapEditor", () => {
 
   describe("lazily loading unit type details", () => {
     it("fetches a unit type's details only once it's actually chosen in the dropdown", async () => {
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}),
-      });
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP}
-          initialAvailableUnitTypeKeys={["goblin-raider"]} initialUnitTypeDetails={{}}
-          availableUnitTypesUrl="/build/maps/goblin-cave/gc1-entrance/available_unit_types"
-        />
-      );
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP, unitTypeKeys: ["goblin-raider"], unitTypeDetails: {}});
 
       fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-      expect(fetch).not.toHaveBeenCalled();
+      expect(unitTypeDetailsFor).not.toHaveBeenCalled();
       expect(screen.getByRole("option", {name: "goblin-raider"})).toBeInTheDocument();
 
+      unitTypeDetailsFor.mockResolvedValueOnce({"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}});
       const unitTypeSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="goblin-raider"]'));
       fireEvent.change(unitTypeSelect, {target: {value: "goblin-raider"}});
 
-      expect(fetch).toHaveBeenCalledWith(expect.stringContaining("keys[]=goblin-raider"));
+      expect(unitTypeDetailsFor).toHaveBeenCalledWith(expect.anything(), ["goblin-raider"]);
       await waitFor(() => expect(screen.getByRole("option", {name: "Goblin Raider"})).toBeInTheDocument());
     });
   });
 
   describe("choosing a background image", () => {
     it("sets imageUrl to a sibling filename based on the map's own key", async () => {
-      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
       const input = document.querySelector('input[type="file"]');
 
       fireEvent.change(input, {target: {files: [file("background.webp")]}});
@@ -880,7 +785,7 @@ describe("MapEditor", () => {
     it("validates, then allows saving (image + json) once valid", async () => {
       validateMap.mockResolvedValue({valid: true});
       commitFiles.mockResolvedValue({commitSha: "abc", branch: "main"});
-      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
       const input = document.querySelector('input[type="file"]');
       fireEvent.change(input, {target: {files: [file("background.webp")]}});
       await waitFor(() => expect(screen.getByRole("button", {name: "Fit"})).toBeInTheDocument());
@@ -902,7 +807,7 @@ describe("MapEditor", () => {
 
     it("shows the validation error message and re-disables Save", async () => {
       validateMap.mockResolvedValue({valid: false, error: {message: "feetDimensions is required", path: "$.feetDimensions"}});
-      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
@@ -912,11 +817,11 @@ describe("MapEditor", () => {
 
     it("redirects to the GitHub reauth URL on a GithubAuthError during save", async () => {
       validateMap.mockResolvedValue({valid: true});
-      commitFiles.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+      commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
       delete window.location;
       window.location = {href: ""};
 
-      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
@@ -926,15 +831,8 @@ describe("MapEditor", () => {
   });
 
   describe("hotkeys", () => {
-    function renderWithDimensions() {
-      render(
-        <MapEditor
-          mapKey="goblin-cave/gc1-entrance"
-          initialMap={{...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}}
-          initialImageDataUri="data:image/webp;base64,AAAA"
-          initialPixelDimensions={{width: 800, height: 600}}
-        />
-      );
+    async function renderWithDimensions() {
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA"});
       const wrapper = document.querySelector(".map-canvas-wrapper");
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
@@ -942,8 +840,8 @@ describe("MapEditor", () => {
       return wrapper;
     }
 
-    it("'b' starts a new line barrier, straight into placing its first point - same as the button", () => {
-      renderWithDimensions();
+    it("'b' starts a new line barrier, straight into placing its first point - same as the button", async () => {
+      await renderWithDimensions();
 
       fireEvent.keyDown(document, {key: "b"});
 
@@ -952,8 +850,8 @@ describe("MapEditor", () => {
       expect(screen.getByText("Placing Points")).toBeInTheDocument();
     });
 
-    it("'c' arms the add-circle tool - same as the '+ Add Circle' button", () => {
-      const wrapper = renderWithDimensions();
+    it("'c' arms the add-circle tool - same as the '+ Add Circle' button", async () => {
+      const wrapper = await renderWithDimensions();
 
       fireEvent.keyDown(document, {key: "c"});
       fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
@@ -964,8 +862,8 @@ describe("MapEditor", () => {
       expect(screen.getByText(/Barrier 1: circle/)).toBeInTheDocument();
     });
 
-    it("'l' arms the add-line-connection tool - same as the '+ Add Line Connection' button", () => {
-      const wrapper = renderWithDimensions();
+    it("'l' arms the add-line-connection tool - same as the '+ Add Line Connection' button", async () => {
+      const wrapper = await renderWithDimensions();
 
       fireEvent.keyDown(document, {key: "l"});
       fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
@@ -976,8 +874,8 @@ describe("MapEditor", () => {
       expect(screen.getByText(/Connection 1: line/)).toBeInTheDocument();
     });
 
-    it("'p' arms the add-point-connection tool - same as the '+ Add Point Connection' button", () => {
-      const wrapper = renderWithDimensions();
+    it("'p' arms the add-point-connection tool - same as the '+ Add Point Connection' button", async () => {
+      const wrapper = await renderWithDimensions();
 
       fireEvent.keyDown(document, {key: "p"});
       fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
@@ -986,8 +884,8 @@ describe("MapEditor", () => {
       expect(screen.getByText(/Connection 1: point/)).toBeInTheDocument();
     });
 
-    it("ignores hotkeys while typing in a text field", () => {
-      renderWithDimensions();
+    it("ignores hotkeys while typing in a text field", async () => {
+      await renderWithDimensions();
       fireEvent.click(document.querySelector(".map-sidebar-section-heading")); // Barriers - unrelated, just to reach a text field
       const nameInput = screen.getByPlaceholderText("gc1-goblin-cave-entrance");
 
@@ -996,8 +894,8 @@ describe("MapEditor", () => {
       expect(screen.queryByText("Placing Points")).not.toBeInTheDocument();
     });
 
-    it("ignores hotkeys while another tool/placement is already active", () => {
-      const wrapper = renderWithDimensions();
+    it("ignores hotkeys while another tool/placement is already active", async () => {
+      const wrapper = await renderWithDimensions();
       fireEvent.keyDown(document, {key: "c"}); // arm add-circle first
 
       fireEvent.keyDown(document, {key: "b"}); // shouldn't override it with a wall
@@ -1013,8 +911,8 @@ describe("MapEditor", () => {
       expect(screen.getByText(/Barrier 1: circle/)).toBeInTheDocument();
     });
 
-    it("'?' shows the hotkey list, and Escape dismisses it", () => {
-      renderWithDimensions();
+    it("'?' shows the hotkey list, and Escape dismisses it", async () => {
+      await renderWithDimensions();
 
       fireEvent.keyDown(document, {key: "?"});
       expect(screen.getByText("Hotkeys")).toBeInTheDocument();
@@ -1024,8 +922,8 @@ describe("MapEditor", () => {
       expect(screen.queryByText("Hotkeys")).not.toBeInTheDocument();
     });
 
-    it("does nothing for any hotkey until feetDimensions is set", () => {
-      render(<MapEditor mapKey="goblin-cave/gc1-entrance" initialMap={BLANK_MAP} />);
+    it("does nothing for any hotkey until feetDimensions is set", async () => {
+      await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
 
       fireEvent.keyDown(document, {key: "b"});
 

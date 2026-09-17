@@ -9,10 +9,11 @@ import HotkeyHelp from "./HotkeyHelp";
 import {mapReducer} from "./mapReducer";
 import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement";
 import {saveMap} from "./saveMap";
+import {blankMap, loadMap, loadMapImageUrl, listUnitTypeKeys, listItemKeys, unitTypeDetailsFor, itemDetailsFor} from "./mapContentLoaders";
 import {validateMap} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
-import {GithubAuthError} from "../github/commitFiles";
+import {GithubClient, GithubAuthError} from "../github/delve-github";
 import {loadSvgToCanvas} from "../game/svgRaster";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
@@ -21,22 +22,25 @@ import {loadSvgToCanvas} from "../game/svgRaster";
 // Phase 2 actually commits it.
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
-// {file, url, pixelDimensions} | null - file is null for an existing map's
-// image (fetched server-side as a data URI, see Build::MapsController#edit),
-// since there's no local File object for it until it's replaced.
-function initialImage(initialImageDataUri, initialPixelDimensions) {
-  if (!initialImageDataUri || !initialPixelDimensions) return null;
-  return {file: null, url: initialImageDataUri, pixelDimensions: initialPixelDimensions};
-}
-
-export default function MapEditor({
-  mapKey, initialMap, initialImageDataUri, initialPixelDimensions, backUrl,
-  initialAvailableUnitTypeKeys, initialUnitTypeDetails, newUnitTypeUrl, availableUnitTypesUrl,
-  initialAvailableItemKeys, initialItemDetails, newItemUrl, availableItemsUrl,
-}) {
-  const [image, setImage] = useState(() => initialImage(initialImageDataUri, initialPixelDimensions));
+// Neither the map's own content, its background image, nor the unit-type/
+// item lists it needs are bootstrapped from the server any more (see
+// plans/editor-git.md) - all fetched here, client-side, on mount.
+//
+// mapData starts out as a blank placeholder (mapReducer's own LOAD-friendly
+// initial state), not null - unlike the simpler editors, huge swaths of
+// this component (effect dependency arrays, effectiveMapData, the hotkey
+// handler, ...) dereference mapData.* unconditionally on every render, so a
+// null initial state would crash before the fetch even resolves. `loaded`
+// is a separate flag purely for the "show a loading placeholder" gate;
+// every hook below still runs (harmlessly, against blank data) while it's
+// false, same as it always has for a genuinely new, still-blank map.
+export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl}) {
+  const [image, setImage] = useState(null);
   const [imageError, setImageError] = useState("");
-  const [mapData, rawDispatch] = useReducer(mapReducer, initialMap);
+  const [mapData, rawDispatch] = useReducer(mapReducer, null, () => blankMap(mapKey));
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const client = useRef(new GithubClient());
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
 
   function dispatch(action) {
@@ -160,16 +164,53 @@ export default function MapEditor({
   // kept separate so the dropdown/tool never has to open every unit type
   // file just to list them, which doesn't scale (a repo can hold far more
   // unit types than any one map uses).
-  const [availableUnitTypeKeys, setAvailableUnitTypeKeys] = useState(initialAvailableUnitTypeKeys ?? []);
-  const [unitTypeDetails, setUnitTypeDetails] = useState(initialUnitTypeDetails ?? {});
+  const [availableUnitTypeKeys, setAvailableUnitTypeKeys] = useState([]);
+  const [unitTypeDetails, setUnitTypeDetails] = useState({});
   // Same cheap-list/lazy-details split, for the items a unit's lootTable
   // can reference (see Build::MapsController#list_item_keys) - itemDetails
   // is keyed by the same file-path key as availableItemKeys, but each
   // value's own `identifier` field (not necessarily the key) is what
   // actually belongs in a lootTable.
-  const [availableItemKeys, setAvailableItemKeys] = useState(initialAvailableItemKeys ?? []);
-  const [itemDetails, setItemDetails] = useState(initialItemDetails ?? {});
+  const [availableItemKeys, setAvailableItemKeys] = useState([]);
+  const [itemDetails, setItemDetails] = useState({});
   const [refreshStatus, setRefreshStatus] = useState("");
+
+  // Fetches the map's own content, its background image (if any), and the
+  // two cheap key lists, all client-side, on mount. Deliberately doesn't
+  // prefetch unitTypeDetails/itemDetails for units already on the map here -
+  // the backstop effects further down (keyed on mapData.units) already
+  // cover that once LOAD lands real units, so there's nothing to duplicate.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await loadMap(client.current, mapKey);
+        if (cancelled) return;
+        rawDispatch({type: "LOAD", data});
+
+        const imageUrl = await loadMapImageUrl(client.current, mapKey, data);
+        if (!cancelled && imageUrl && data.pixelDimensions) {
+          setImage({file: null, url: imageUrl, pixelDimensions: data.pixelDimensions});
+        }
+
+        const [unitTypeKeys, itemKeys] = await Promise.all([listUnitTypeKeys(client.current), listItemKeys(client.current)]);
+        if (cancelled) return;
+        setAvailableUnitTypeKeys(unitTypeKeys);
+        setAvailableItemKeys(itemKeys);
+        setLoaded(true);
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof GithubAuthError) {
+          window.location.href = error.redirectUrl;
+          return;
+        }
+        setLoadError(error.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mapKey]);
   // "select" | "add-circle" | "add-point-connection" | "add-line-connection" | "add-unit" - see MapCanvas/BarriersPanel/ConnectionsPanel/UnitsPanel
   const [tool, setTool] = useState("select");
   const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
@@ -486,16 +527,7 @@ export default function MapEditor({
   async function handleRefresh() {
     setRefreshStatus("Refreshing…");
     try {
-      const [unitTypeKeys, itemKeys] = await Promise.all([
-        fetch(availableUnitTypesUrl).then((res) => {
-          if (!res.ok) throw new Error(`request failed: ${res.status}`);
-          return res.json();
-        }),
-        fetch(availableItemsUrl).then((res) => {
-          if (!res.ok) throw new Error(`request failed: ${res.status}`);
-          return res.json();
-        }),
-      ]);
+      const [unitTypeKeys, itemKeys] = await Promise.all([listUnitTypeKeys(client.current), listItemKeys(client.current)]);
       setAvailableUnitTypeKeys(unitTypeKeys);
       setAvailableItemKeys(itemKeys);
       setRefreshStatus("Refreshed.");
@@ -510,12 +542,9 @@ export default function MapEditor({
   // fallback marker rather than needing to surface an error here.
   async function fetchUnitTypeDetails(keys) {
     const missing = keys.filter((key) => !(key in unitTypeDetails));
-    if (!availableUnitTypesUrl || missing.length === 0) return;
+    if (missing.length === 0) return;
     try {
-      const query = missing.map((key) => `keys[]=${encodeURIComponent(key)}`).join("&");
-      const res = await fetch(`${availableUnitTypesUrl}?${query}`);
-      if (!res.ok) return;
-      const details = await res.json();
+      const details = await unitTypeDetailsFor(client.current, missing);
       setUnitTypeDetails((current) => ({...current, ...details}));
     } catch {
       // best-effort, see above
@@ -541,12 +570,9 @@ export default function MapEditor({
   // Same idea as fetchUnitTypeDetails, for items - {identifier, name, slot}.
   async function fetchItemDetails(keys) {
     const missing = keys.filter((key) => !(key in itemDetails));
-    if (!availableItemsUrl || missing.length === 0) return;
+    if (missing.length === 0) return;
     try {
-      const query = missing.map((key) => `keys[]=${encodeURIComponent(key)}`).join("&");
-      const res = await fetch(`${availableItemsUrl}?${query}`);
-      if (!res.ok) return;
-      const details = await res.json();
+      const details = await itemDetailsFor(client.current, missing);
       setItemDetails((current) => ({...current, ...details}));
     } catch {
       // best-effort, see above
@@ -753,6 +779,9 @@ export default function MapEditor({
       })),
     }
     : mapData;
+
+  if (loadError) return <div className="map-editor-load-error">Failed to load: {loadError}</div>;
+  if (!loaded) return <div className="map-editor-loading">Loading…</div>;
 
   return (
     <div className="map-editor" data-map-key={mapKey}>
