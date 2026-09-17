@@ -274,7 +274,7 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
                           y={-NODE_RADIUS}
                           width={NODE_RADIUS * 2}
                           height={NODE_RADIUS * 2}
-                          preserveAspectRatio="xMidYMid slice"
+                          preserveAspectRatio="xMidYMid meet"
                           clipPath={`url(#${clipId})`}
                           pointerEvents="none"
                         />

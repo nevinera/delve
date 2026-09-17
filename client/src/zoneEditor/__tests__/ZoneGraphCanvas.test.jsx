@@ -53,6 +53,9 @@ describe("ZoneGraphCanvas", () => {
     const node = container.querySelector('[data-node-key="gc1-goblin-cave-entrance"]');
     const image = node.querySelector("image");
     expect(image).toHaveAttribute("href", "data:image/webp;base64,AAA=");
+    // "meet", not "slice" - the whole thumbnail must stay visible (fit,
+    // not filled-and-cropped), so a non-square image is still recognizable.
+    expect(image).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
     expect(node.querySelector(".zone-graph-node-thumb-placeholder")).toBeNull();
   });
 
