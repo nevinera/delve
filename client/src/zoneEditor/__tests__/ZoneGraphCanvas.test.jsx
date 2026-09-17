@@ -126,8 +126,26 @@ describe("ZoneGraphCanvas", () => {
     fireEvent.click(screen.getByRole("button", {name: "+"}));
     expect(group).toHaveAttribute("transform", "translate(0, 0) scale(1.25)");
 
-    fireEvent.click(screen.getByRole("button", {name: "Reset"}));
+    fireEvent.click(screen.getByRole("button", {name: "−"}));
     expect(group).toHaveAttribute("transform", "translate(0, 0) scale(1)");
+  });
+
+  it("Reset re-fits the view to the current node positions once the wrapper has a real size", () => {
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+    const wrapper = container.querySelector(".zone-graph-wrapper");
+    const group = container.querySelector(".zone-graph-svg > g");
+
+    // jsdom never lays anything out - getBoundingClientRect always
+    // reports zero size, which is exactly why the mount-time fit is a
+    // no-op in every other test here. Mock a real size just for this one.
+    vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({width: 400, height: 300, left: 0, top: 0});
+
+    fireEvent.click(screen.getByRole("button", {name: "Reset"}));
+
+    // Both nodes are resolved with a connection each - circleLayout puts
+    // them on opposite sides of the origin, so their mean is the origin;
+    // fitting to a 400x300 wrapper should center pan on (200, 150).
+    expect(group.getAttribute("transform")).toMatch(/^translate\(200(\.\d+)?, 150(\.\d+)?\) scale\(/);
   });
 
   it("dragging a node moves its ports along with it", () => {

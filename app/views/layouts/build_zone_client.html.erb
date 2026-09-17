@@ -7,13 +7,37 @@
     <%= csp_meta_tag %>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; }
+      html, body, #editor-root { width: 100%; height: 100%; }
+      body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; overflow: hidden; }
 
-      .zone-editor { max-width: 900px; margin: 40px auto; padding: 0 14px; }
-      .zone-editor-fields table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-      .zone-editor-fields th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; }
-      .zone-editor-fields td { padding: 4px 0; }
-      .zone-editor-fields input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      /* Same two-pane layout every other editor uses: graph fills the big
+         left-hand area, sidebar is the collapsible right-hand column (see
+         build_map_client.html.erb's .map-editor/.map-editor-sidebar). */
+      .zone-editor { display: flex; height: 100%; }
+      .zone-editor-canvas-area { flex: 2; min-width: 0; display: flex; flex-direction: column; }
+
+      .map-editor-sidebar {
+        flex: 1; min-width: 0; display: flex; flex-direction: column;
+        background: #1c2126; border-left: 1px solid #333; transition: flex-basis 0.15s ease;
+      }
+      .map-editor-sidebar.collapsed { flex: 0 0 36px; }
+      .map-editor-sidebar-toggle {
+        align-self: flex-start; margin: 8px; background: #234; border: 1px solid #457; color: #9cf;
+        font-size: 13px; padding: 5px 10px; border-radius: 3px; cursor: pointer;
+      }
+      .map-editor-sidebar-toggle:hover { background: #345; }
+      .map-editor-sidebar-content { flex: 1; min-width: 0; overflow-y: auto; padding: 0 14px 14px; }
+
+      .map-editor-sidebar-content table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+      .map-editor-sidebar-content th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; }
+      .map-editor-sidebar-content td { padding: 4px 0; }
+      .map-editor-sidebar-content input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+
+      @media (max-width: 700px) {
+        .zone-editor { flex-direction: column; }
+        .map-editor-sidebar { flex: none; width: 100%; border-left: none; border-top: 1px solid #333; }
+        .map-editor-sidebar.collapsed { flex: 0 0 36px; }
+      }
 
       .save-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
       .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
@@ -64,15 +88,15 @@
         background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 3px; text-decoration: none;
       }
 
-      .zone-graph-panel { margin: 14px 0; }
-      .zone-graph-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+      .zone-graph-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px; }
+      .zone-graph-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex: 0 0 auto; }
       .zone-graph-toolbar button {
         background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600;
         padding: 4px 10px; border-radius: 3px; cursor: pointer;
       }
       .zone-graph-toolbar button:hover { background: #345; }
       .zone-graph-wrapper {
-        height: 480px; border: 1px solid #333; border-radius: 4px; background: #0a0c0e;
+        flex: 1; min-height: 0; border: 1px solid #333; border-radius: 4px; background: #0a0c0e;
         background-image: linear-gradient(45deg, #101316 25%, transparent 25%), linear-gradient(-45deg, #101316 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #101316 75%), linear-gradient(-45deg, transparent 75%, #101316 75%);
         background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         touch-action: none; cursor: grab; overflow: hidden;

@@ -2,11 +2,12 @@ import {useReducer, useState} from "react";
 import {zoneReducer} from "./zoneReducer";
 import ZoneMapsPanel from "./ZoneMapsPanel";
 import ZoneGraphCanvas from "./ZoneGraphCanvas";
+import ZoneSidebar from "./ZoneSidebar";
 
-// Step 2's skeleton has grown a `maps` list (step 3) - still no Save
-// (deferred to step 11, see plans/zone-editor.md) and no zoneKey-driven
-// persistence, but there's now real in-memory structure worth editing:
-// `name`, and the zone's maps list with add/remove.
+// Same two-pane layout every other editor uses: the graph fills the big
+// left-hand canvas area, the collapsible right-hand sidebar holds the
+// entry-list panels (name field, maps list). Still no Save (deferred to
+// step 11, see plans/zone-editor.md) and no zoneKey-driven persistence.
 export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapDetails, availableMapsUrl, newMapUrl}) {
   const [zoneData, dispatch] = useReducer(zoneReducer, initialZone);
   const [mapDetailsByKey, setMapDetailsByKey] = useState(initialAvailableMapDetails ?? {});
@@ -29,7 +30,10 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapDet
 
   return (
     <div className="zone-editor">
-      <div className="zone-editor-fields">
+      <div className="zone-editor-canvas-area">
+        <ZoneGraphCanvas zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} dispatch={dispatch} />
+      </div>
+      <ZoneSidebar>
         <table>
           <tbody>
             <tr>
@@ -54,8 +58,7 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapDet
           onRefresh={handleRefreshMaps}
           refreshStatus={refreshStatus}
         />
-        <ZoneGraphCanvas zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} dispatch={dispatch} />
-      </div>
+      </ZoneSidebar>
     </div>
   );
 }

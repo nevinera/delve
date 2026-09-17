@@ -1,7 +1,8 @@
-import {useMemo, useRef, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {keyFromRef} from "./mapRef";
 import {circleLayout, NODE_RADIUS} from "./circleLayout";
 import {connectionStatus} from "./connectionStatus";
+import {computeFitView, MIN_ZOOM, MAX_ZOOM} from "./graphView";
 
 const PORT_RADIUS = 6;
 // World-space distance within which a drag-drop counts as "on" a port -
@@ -9,8 +10,6 @@ const PORT_RADIUS = 6;
 // ports on the same node (which sit NODE_RADIUS apart, at minimum) never
 // both qualify.
 const HIT_RADIUS = 16;
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 3;
 const ZOOM_STEP = 1.25;
 
 const STATUS_COLOR = {
@@ -114,6 +113,29 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
     zoomBy(e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
   }
 
+  // Centers the view on the mean of every node's current position, zoomed
+  // out just enough that they're all visible - the default view (see the
+  // mount effect below) and what the toolbar's Reset button recomputes on
+  // demand. No-ops if the wrapper hasn't been measured yet (zero size - a
+  // real browser always has one once laid out; a test environment with no
+  // real layout never does, which is fine - it just keeps whatever view
+  // state it already had).
+  function fitView() {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const fit = computeFitView(nodes.map((node) => nodePosition(node.key)), rect.width, rect.height);
+    if (fit) setView(fit);
+  }
+
+  const nodeKeysSignature = nodes.map((node) => node.key).join(",");
+  useEffect(() => {
+    fitView();
+    // Only when the set of maps changes (added/removed) - not on every
+    // render, and deliberately not on every node drag (positions), which
+    // would fight a manual drag by re-centering under it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeKeysSignature]);
+
   // Only ever reached when the pointerdown wasn't already claimed (and
   // stopped) by a node or port below - i.e. a genuine background click.
   function handleBackgroundPointerDown(e) {
@@ -190,7 +212,7 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
     <div className="zone-graph-panel">
       <div className="zone-graph-toolbar">
         <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)}>−</button>
-        <button type="button" onClick={() => setView({panX: 0, panY: 0, zoom: 1})}>Reset</button>
+        <button type="button" onClick={fitView}>Reset</button>
         <button type="button" onClick={() => zoomBy(ZOOM_STEP)}>+</button>
       </div>
       {nodes.length === 0 ? (
