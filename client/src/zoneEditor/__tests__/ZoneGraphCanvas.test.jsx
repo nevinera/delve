@@ -238,6 +238,28 @@ describe("ZoneGraphCanvas", () => {
     });
   });
 
+  it("shows a tooltip for the port under the cursor while dragging a link, even though pointer capture means it never gets a real mouseenter", () => {
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+    const wrapper = container.querySelector(".zone-graph-wrapper");
+
+    const from = port(container, "cave_entrance", "cave_mouth");
+    const to = port(container, "cave_interior", "entrance");
+    const toX = Number(to.getAttribute("cx"));
+    const toY = Number(to.getAttribute("cy"));
+
+    fireEvent.pointerDown(from, {pointerId: 1, clientX: 0, clientY: 0});
+    expect(screen.queryByText("entrance")).not.toBeInTheDocument();
+
+    fireEvent.pointerMove(wrapper, {pointerId: 1, clientX: toX, clientY: toY});
+    expect(screen.getByText("entrance")).toBeInTheDocument();
+
+    fireEvent.pointerMove(wrapper, {pointerId: 1, clientX: 9999, clientY: 9999});
+    expect(screen.queryByText("entrance")).not.toBeInTheDocument();
+
+    fireEvent.pointerUp(wrapper, {pointerId: 1, clientX: 9999, clientY: 9999});
+    expect(screen.queryByText("entrance")).not.toBeInTheDocument();
+  });
+
   it("dragging an existing link's port to empty space dispatches REMOVE_ZONE_LINK", () => {
     const dispatch = vi.fn();
     const data = zoneData({

@@ -269,6 +269,13 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
     if (linkDrag) {
       const {x, y} = screenToWorld(e.clientX, e.clientY);
       setLinkDrag((current) => ({...current, x, y}));
+
+      // The origin port captured the pointer (see handlePortPointerDown),
+      // so real mouseenter/mouseleave never fire on whatever's actually
+      // under the cursor now - this is the only signal available for
+      // "what am I about to drop onto" while a link drag is in progress.
+      const hovered = nearestPort(x, y, linkDrag);
+      setPortTooltip(hovered ? {x: e.clientX, y: e.clientY, label: hovered.connectionIdentifier} : null);
     }
   }
 
@@ -293,6 +300,7 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
         dispatch({type: "REMOVE_ZONE_LINK", index: linkDrag.fromStatus.linkIndex});
       }
       setLinkDrag(null);
+      setPortTooltip(null);
     }
   }
 
