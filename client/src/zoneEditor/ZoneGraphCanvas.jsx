@@ -20,6 +20,12 @@ const TOOLTIP_STYLE = {
   pointerEvents: "none",
 };
 
+// A square this size, however an image's aspect ratio fits into it, always
+// has a diagonal <= the node's own diameter (2 * NODE_RADIUS) - see the
+// thumbnail <image>'s own comment below for why that guarantees no
+// circular clipping.
+const NODE_THUMB_SIZE = (NODE_RADIUS * 2) / Math.SQRT2;
+
 const PORT_RADIUS = 6;
 // World-space distance within which a drag-drop counts as "on" a port -
 // generous enough to not require pixel-perfect aim, small enough that two
@@ -267,13 +273,25 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
                         <clipPath id={clipId}>
                           <circle r={NODE_RADIUS} />
                         </clipPath>
+                        {/* "meet" fits the image into its box preserving
+                            aspect ratio, but a box sized to the full
+                            diameter still lets a fitted rectangle's
+                            corners stick out past the circle (e.g. a
+                            landscape image touching the left/right edges
+                            has taller corners than the circle allows at
+                            that x). Sizing the box to diameter/√2 instead
+                            means the worst case - a square image filling
+                            the box exactly - has a diagonal exactly equal
+                            to the circle's diameter, so it (and every
+                            other aspect ratio, which fits even smaller)
+                            always lands fully inside with no clipping. */}
                         <image
                           className="zone-graph-node-thumb"
                           href={node.detail.thumbnailUrl}
-                          x={-NODE_RADIUS}
-                          y={-NODE_RADIUS}
-                          width={NODE_RADIUS * 2}
-                          height={NODE_RADIUS * 2}
+                          x={-NODE_THUMB_SIZE / 2}
+                          y={-NODE_THUMB_SIZE / 2}
+                          width={NODE_THUMB_SIZE}
+                          height={NODE_THUMB_SIZE}
                           preserveAspectRatio="xMidYMid meet"
                           clipPath={`url(#${clipId})`}
                           pointerEvents="none"

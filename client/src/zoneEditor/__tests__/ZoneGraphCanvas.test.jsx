@@ -1,6 +1,7 @@
 import {describe, it, expect, vi} from "vitest";
 import {render, screen, fireEvent} from "@testing-library/react";
 import ZoneGraphCanvas from "../ZoneGraphCanvas";
+import {NODE_RADIUS} from "../circleLayout";
 
 const mapDetailsByKey = {
   "gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [{identifier: "cave_mouth", type: "line"}]},
@@ -57,6 +58,20 @@ describe("ZoneGraphCanvas", () => {
     // not filled-and-cropped), so a non-square image is still recognizable.
     expect(image).toHaveAttribute("preserveAspectRatio", "xMidYMid meet");
     expect(node.querySelector(".zone-graph-node-thumb-placeholder")).toBeNull();
+  });
+
+  it("sizes the thumbnail's box so even a square image's diagonal never exceeds the node's diameter (no clipping by the circle)", () => {
+    const details = {
+      ...mapDetailsByKey,
+      "gc1-goblin-cave-entrance": {...mapDetailsByKey["gc1-goblin-cave-entrance"], thumbnailUrl: "data:image/webp;base64,AAA="},
+    };
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={details} dispatch={vi.fn()} />);
+    const image = container.querySelector('[data-node-key="gc1-goblin-cave-entrance"] image');
+
+    const width = Number(image.getAttribute("width"));
+    const height = Number(image.getAttribute("height"));
+    expect(width).toBe(height); // square box, so the worst case (a square image) is the one that matters
+    expect(Math.hypot(width, height)).toBeLessThanOrEqual(NODE_RADIUS * 2 + 1e-9);
   });
 
   it("shows a custom tooltip with the connection identifier on hover, and hides it on mouse leave", () => {
