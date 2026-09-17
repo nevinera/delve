@@ -1,5 +1,5 @@
-import {useEffect, useReducer, useRef, useState} from "react";
-import {itemReducer} from "./itemReducer";
+import {useEffect, useRef, useState} from "react";
+import {ItemDraft} from "./ItemDraft";
 import {blankItem} from "./blankItem";
 import ItemPreviewPane from "./ItemPreviewPane";
 import ItemFieldsPanel from "./ItemFieldsPanel";
@@ -15,8 +15,14 @@ import {GithubClient, GithubAuthError} from "../github/delve-github";
 // across this and any future reads the editor adds). A 404 means the key
 // doesn't exist yet - blankItem's the same fallback Build::ItemsController
 // used to build server-side.
+//
+// The draft itself is an ItemDraft (see ItemDraft.js) - an immutable
+// domain object owning the data and every mutation (setSlot, setShield,
+// toggleSecondary, ...). React only ever holds "the current instance" and
+// replaces it wholesale via setDraft; none of the field-clearing/cap rules
+// live here or in ItemFieldsPanel any more (see plans/editors-as-classes.md).
 export default function ItemEditor({itemKey}) {
-  const [itemData, rawDispatch] = useReducer(itemReducer, null);
+  const [draft, setDraft] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
   const client = useRef(new GithubClient());
@@ -27,7 +33,7 @@ export default function ItemEditor({itemKey}) {
       .fetchFile(`items/${itemKey}.json`)
       .then((content) => {
         if (cancelled) return;
-        rawDispatch({type: "LOAD", data: content === null ? blankItem(itemKey) : JSON.parse(content)});
+        setDraft(new ItemDraft(content === null ? blankItem(itemKey) : JSON.parse(content)));
       })
       .catch((error) => {
         if (cancelled) return;
@@ -42,15 +48,15 @@ export default function ItemEditor({itemKey}) {
     };
   }, [itemKey]);
 
-  function dispatch(action) {
+  function handleChange(nextDraft) {
     markDirty();
-    rawDispatch(action);
+    setDraft(nextDraft);
   }
 
   async function handleValidate() {
     setValidating();
     try {
-      const {valid, error} = await validateItem(itemData);
+      const {valid, error} = await validateItem(draft.data);
       if (valid) {
         setValid();
       } else {
@@ -64,7 +70,7 @@ export default function ItemEditor({itemKey}) {
   async function handleSave() {
     setSaving();
     try {
-      await saveItem(itemKey, itemData);
+      await saveItem(itemKey, draft.data);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -76,16 +82,16 @@ export default function ItemEditor({itemKey}) {
   }
 
   if (loadError) return <div className="item-editor-load-error">Failed to load: {loadError}</div>;
-  if (itemData === null) return <div className="item-editor-loading">Loading…</div>;
+  if (draft === null) return <div className="item-editor-loading">Loading…</div>;
 
   return (
     <div className="item-editor">
       <div className="item-editor-preview">
-        <ItemPreviewPane itemData={itemData} />
+        <ItemPreviewPane itemData={draft.data} />
       </div>
       <div className="item-editor-fields">
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
-        <ItemFieldsPanel itemData={itemData} dispatch={dispatch} />
+        <ItemFieldsPanel draft={draft} onChange={handleChange} />
       </div>
     </div>
   );
