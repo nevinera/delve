@@ -3,6 +3,7 @@
   id="editor-root"
   data-key="<%= params[:id] %>"
   data-zone="<%= @zone.to_json %>"
+  data-available-map-keys="<%= @available_map_keys.to_json %>"
   data-available-map-details="<%= @available_map_details.to_json %>"
   data-available-maps-url="<%= available_maps_build_zone_path(id: params[:id]) %>"
   data-new-map-url="<%= new_build_map_path %>"

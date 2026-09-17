@@ -23,24 +23,33 @@ class Build::ZonesController < Build::BaseController
     redirect_to edit_build_zone_path(id: @key)
   end
 
+  # Same cheap-list-vs-lazy-details split as Build::MapsController's own
+  # #available_unit_types: @available_map_keys is a directory listing only
+  # (no file opens at all), covering every real map under this zone -
+  # what the "Add Map" dropdown shows candidates from, as bare keys, until
+  # one is actually picked. @available_map_details opens a file per key,
+  # but only for maps this zone *already* references - a bounded set,
+  # unlike the full directory, which could hold many more maps than are
+  # actually in use.
   def edit
     load_zone
-    @available_map_details = map_details_for(params[:id])
+    client = Github::ContentClient.new(current_user)
+    @available_map_keys = zone_map_keys(client, params[:id])
+    @available_map_details = map_details_for(client, params[:id], referenced_map_keys(@zone))
   end
 
-  # {identifier, name, connections, units, thumbnailUrl} for every real map
-  # file under this zone's own directory, keyed by the map's file key (not its
-  # `identifier` field, which the map editor lets diverge from the file
-  # name/directory freely - see e.g. real content's
-  # gc1-goblin-cave-entrance.json, whose own `identifier` is
-  # "cave_entrance"). Covers both maps this zone already references (so the
-  # list can render their name/thumbnail) and ones it doesn't yet (so "Add
-  # Map" has something to offer) - the client does that split itself, since
-  # it already knows which $refs its own draft holds. A JS "Refresh" action
-  # (see ZoneEditor) hits this same action after a map is created in
-  # another tab, so it shows up without reloading.
+  # keys[] given: {identifier, name, connections, units, thumbnailUrl} for
+  # exactly those keys (each opens that map's file, and its thumbnail) -
+  # used lazily for a map the author just picked from "Add Map", and for
+  # #edit's own prefetch of already-referenced maps above. No keys[]: the
+  # *cheap* full list of every real map key under this zone (a directory
+  # listing, not opening any file) - what "Add Map"'s dropdown re-fetches
+  # via a "Refresh" action (see ZoneEditor) after a map is created in
+  # another tab.
   def available_maps
-    render json: map_details_for(params[:id])
+    client = Github::ContentClient.new(current_user)
+    keys = Array(params[:keys])
+    render json: keys.present? ? map_details_for(client, params[:id], keys) : zone_map_keys(client, params[:id])
   end
 
   private
@@ -77,12 +86,22 @@ class Build::ZonesController < Build::BaseController
     @zone = blank_zone(params[:id])
   end
 
-  def map_details_for(zone_key)
-    client = Github::ContentClient.new(current_user)
-    zone_map_keys(client, zone_key).filter_map { |key|
+  def map_details_for(client, zone_key, keys)
+    keys.filter_map { |key|
       detail = map_detail(client, zone_key, key)
       [key, detail] if detail
     }.to_h
+  end
+
+  # The map keys this zone's own draft already references, derived from its
+  # `maps` array's $ref strings ("./<key>/<key>.json") - mirrors the
+  # client's own keyFromRef (mapRef.js) exactly, since both need to agree
+  # on what "already referenced" means.
+  def referenced_map_keys(zone)
+    Array(zone["maps"]).filter_map { |entry|
+      ref = entry["$ref"]
+      ref&.delete_prefix("./")&.split("/")&.first
+    }
   end
 
   # Every real map file directly under zones/<zone_key>/ - one slash after

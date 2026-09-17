@@ -43,11 +43,8 @@ describe("ZoneEditor", () => {
     expect(document.querySelector('.zone-graph-panel [data-node-key="gc1-goblin-cave-entrance"]')).not.toBeNull();
   });
 
-  it("refreshes map details from availableMapsUrl without touching the rest of the draft", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({"gc2-new-room": {identifier: "new_room", name: "New Room", connections: [], thumbnailUrl: null}}),
-    });
+  it("refreshes the cheap key list from availableMapsUrl (no keys[]) without touching the rest of the draft", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, json: async () => ["gc2-new-room"]});
     vi.stubGlobal("fetch", fetchMock);
 
     render(<ZoneEditor initialZone={initialZone} availableMapsUrl="/build/zones/goblin-cave/available_maps" zoneKey="goblin-cave" newMapUrl="/build/maps/new" />);
@@ -55,6 +52,32 @@ describe("ZoneEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/build/zones/goblin-cave/available_maps"));
-    await screen.findByRole("option", {name: "New Room"});
+    await screen.findByRole("option", {name: "gc2-new-room"});
+  });
+
+  it("lazily fetches a picked map's detail (keys[]=...) only once it's actually added", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({"gc2-new-room": {identifier: "new_room", name: "New Room", connections: [], units: [], thumbnailUrl: null}}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ZoneEditor
+        initialZone={initialZone}
+        initialAvailableMapKeys={["gc2-new-room"]}
+        availableMapsUrl="/build/zones/goblin-cave/available_maps"
+        zoneKey="goblin-cave"
+        newMapUrl="/build/maps/new"
+      />
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole("combobox"), {target: {value: "gc2-new-room"}});
+    fireEvent.click(screen.getByRole("button", {name: "Add"}));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/build/zones/goblin-cave/available_maps?keys%5B%5D=gc2-new-room"));
+    await waitFor(() => expect(document.querySelector(".zone-maps-panel").textContent).toContain("New Room"));
   });
 });

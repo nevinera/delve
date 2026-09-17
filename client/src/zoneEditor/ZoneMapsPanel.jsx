@@ -3,7 +3,7 @@ import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
 import {connectionStatus} from "./connectionStatus";
 import {keyFromRef, refFromKey} from "./mapRef";
 
-export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
+export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
   const [collapsed, setCollapsed] = useState(false);
   const [pendingKey, setPendingKey] = useState("");
   // Which map rows have their connections list expanded - starts empty
@@ -27,7 +27,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zone
     return {index, key, detail, name};
   });
   const referencedKeys = new Set(rows.map((row) => row.key).filter(Boolean));
-  const availableKeys = Object.keys(mapDetailsByKey).filter((key) => !referencedKeys.has(key));
+  const candidateKeys = availableMapKeys.filter((key) => !referencedKeys.has(key));
 
   // Every open connection on any *referenced* map (not just the current
   // one) - what "+ Link to" offers across the whole zone. Only referenced
@@ -48,6 +48,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zone
   function handleAdd() {
     if (!pendingKey) return;
     dispatch({type: "ADD_ENTRY", section: "maps", entry: {$ref: refFromKey(pendingKey), referenceTo: "map"}});
+    onAddMap(pendingKey);
     setPendingKey("");
   }
 
@@ -101,12 +102,16 @@ export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zone
           })}
 
           <div className="add-buttons-row">
-            {availableKeys.length > 0 && (
+            {candidateKeys.length > 0 && (
               <>
+                {/* Bare key, not a fetched name - showing a friendly name
+                    here would mean opening every candidate's file just to
+                    populate this dropdown, defeating the point of keeping
+                    this list cheap (see Build::ZonesController). */}
                 <select value={pendingKey} onChange={(e) => setPendingKey(e.target.value)}>
                   <option value="">Pick an existing map…</option>
-                  {availableKeys.map((key) => (
-                    <option key={key} value={key}>{mapDetailsByKey[key].name ?? key}</option>
+                  {candidateKeys.map((key) => (
+                    <option key={key} value={key}>{key}</option>
                   ))}
                 </select>
                 <button type="button" className="add-entry" disabled={!pendingKey} onClick={handleAdd}>
