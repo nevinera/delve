@@ -98,83 +98,18 @@ RSpec.describe "Build::UnitTypes", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        # abilities/units/ is scanned whole, not scoped to any one unit
-        # type's key - see Build::UnitTypesController#load_available_abilities.
-        def stub_empty_abilities_dir
-          stub_missing_tree_listing("nevinera/delve-content", "abilities/units")
-        end
-
-        it "bootstraps a blank unit type when the key doesn't exist yet in the repo" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-archer.json")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
-          stub_empty_abilities_dir
-
-          get "/build/unit_types/goblin-archer/edit"
-
-          expect(response).to have_http_status(:ok)
-          expect(response.body).to include(CGI.escapeHTML("Goblin Archer"))
-        end
-
-        it "renders the JS editor shell, bootstrapping the unit type and every available ability under abilities/units/ (shared family folders included, not just this unit type's own key)" do
-          content = {
-            "name" => "Goblin Raider",
-            "tokenImageUrl" => [],
-            "tokenRadius" => 1.5,
-            "maxHP" => 20,
-            "dps" => 4.0,
-            "attackSpeed" => 1.0,
-            "resource" => {"name" => "energy", "color" => "888888", "max" => 100.0, "defaultValue" => 100.0, "returnRate" => 0.0, "isFluid" => true},
-            "powers" => [{"$ref" => "../abilities/units/goblins/slash.json", "referenceTo" => "ability"}]
-          }
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-raider.json")
-            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
-
-          slash_ability = {"name" => "Slash", "castTime" => nil, "globalCooldown" => 1.0}
-          stub_tree_listing("nevinera/delve-content", "abilities/units", ["goblins/slash.json"])
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/slash.json")
-            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(slash_ability.to_json), encoding: "base64"}.to_json)
-
+        it "renders the JS editor shell with just the key and a new-ability link - the unit type's own content and available abilities are fetched client-side, not here" do
           get "/build/unit_types/goblin-raider/edit"
 
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('id="editor-root"')
           expect(response.body).to match(%r{src="/client/unitTypeEditor[^"]*\.js"})
-          expect(response.body).to include(CGI.escapeHTML(content.to_json))
-          expect(response.body).to include(CGI.escapeHTML("units/goblins/slash"))
-        end
-
-        it "links to a new ability pre-filled under the unit type's own abilities subdirectory" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types/goblin-archer.json")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
-          stub_empty_abilities_dir
-
-          get "/build/unit_types/goblin-archer/edit"
-
-          expect(response).to have_http_status(:ok)
-          expect(response.body).to include(CGI.escapeHTML(new_build_ability_path(key: "units/goblin-archer/")))
-        end
-      end
-    end
-
-    describe "GET /build/unit_types/:id/available_abilities" do
-      context "with a connected repository" do
-        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
-
-        it "returns the current available-abilities map as JSON, up to one level of subdirectory beneath abilities/units/" do
-          slash_ability = {"name" => "Slash", "castTime" => nil, "globalCooldown" => 1.0}
-          stub_tree_listing("nevinera/delve-content", "abilities/units", [
-            "bite.json", "goblins/slash.json", "goblins/melee/too-deep.json"
-          ])
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/slash.json")
-            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(slash_ability.to_json), encoding: "base64"}.to_json)
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/bite.json")
-            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64({"name" => "Bite"}.to_json), encoding: "base64"}.to_json)
-
-          get "/build/unit_types/goblin-raider/available_abilities"
-
-          expect(response).to have_http_status(:ok)
-          json = JSON.parse(response.body)
-          expect(json.keys).to contain_exactly("units/goblins/slash", "units/bite")
+          expect(response.body).to include('data-key="goblin-raider"')
+          expect(response.body).to include(CGI.escapeHTML(new_build_ability_path(key: "units/goblin-raider/")))
+          # The point of this move: Rails never opens the unit type file,
+          # the abilities/units/ directory, or any asset - WebMock would
+          # raise if it tried.
+          expect(WebMock).not_to have_requested(:get, %r{api\.github\.com/repos/nevinera/delve-content/contents/(unit_types|abilities|graphics)})
         end
       end
     end

@@ -1,5 +1,7 @@
-import {useReducer, useState} from "react";
+import {useEffect, useReducer, useRef, useState} from "react";
 import {unitTypeReducer} from "./unitTypeReducer";
+import {blankUnitType} from "./blankUnitType";
+import {loadAvailableAbilities} from "./loadAvailableAbilities";
 import UnitTypePreviewPane from "./UnitTypePreviewPane";
 import UnitTypeFieldsPanel from "./UnitTypeFieldsPanel";
 import {saveUnitType} from "./saveUnitType";
@@ -7,7 +9,7 @@ import {resolveFullUnitType} from "./resolveFullUnitType";
 import {validateUnitType} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
-import {GithubAuthError} from "../github/commitFiles";
+import {GithubClient, GithubAuthError} from "../github/delve-github";
 
 // tokenImageUrl is schema-legal as a bare string (see docs/schema/unit_type.md)
 // and real content uses that form - but this editor always edits/saves it as
@@ -19,11 +21,41 @@ function normalizeUnitType(unitType) {
   return {...unitType, tokenImageUrl: url ? [url] : []};
 }
 
-export default function UnitTypeEditor({unitTypeKey, initialUnitType, initialAvailableAbilities, stockAssets, newAbilityUrl, availableAbilitiesUrl}) {
-  const [unitTypeData, rawDispatch] = useReducer(unitTypeReducer, initialUnitType, normalizeUnitType);
-  const [availableAbilities, setAvailableAbilities] = useState(initialAvailableAbilities);
+// Neither the unit type's own content nor its available-abilities map is
+// bootstrapped from the server any more (see plans/editor-git.md) - both
+// are fetched here, client-side, on mount, via one shared GithubClient
+// instance.
+export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}) {
+  const [unitTypeData, rawDispatch] = useReducer(unitTypeReducer, null);
+  const [availableAbilities, setAvailableAbilities] = useState({});
+  const [loadError, setLoadError] = useState(null);
   const [refreshStatus, setRefreshStatus] = useState("");
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
+  const client = useRef(new GithubClient());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const content = await client.current.fetchFile(`unit_types/${unitTypeKey}.json`);
+        if (cancelled) return;
+        rawDispatch({type: "LOAD", data: normalizeUnitType(content === null ? blankUnitType(unitTypeKey) : JSON.parse(content))});
+
+        const abilities = await loadAvailableAbilities(client.current);
+        if (!cancelled) setAvailableAbilities(abilities);
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof GithubAuthError) {
+          window.location.href = error.redirectUrl;
+          return;
+        }
+        setLoadError(error.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [unitTypeKey]);
 
   // Every draft edit drops a prior "valid" (or "invalid") result - see
   // useValidateThenSave.
@@ -33,13 +65,13 @@ export default function UnitTypeEditor({unitTypeKey, initialUnitType, initialAva
   }
 
   // Lets an ability created in another tab (via the "+ New ability" link)
-  // show up here without reloading the whole editor and losing the draft.
+  // show up here without reloading the whole editor and losing the draft -
+  // just re-runs the same client-side load, no server round trip needed
+  // any more.
   async function handleRefreshAbilities() {
     setRefreshStatus("Refreshing…");
     try {
-      const res = await fetch(availableAbilitiesUrl);
-      if (!res.ok) throw new Error(`request failed: ${res.status}`);
-      setAvailableAbilities(await res.json());
+      setAvailableAbilities(await loadAvailableAbilities(client.current));
       setRefreshStatus("Refreshed.");
     } catch (error) {
       setRefreshStatus(`Refresh failed: ${error.message}`);
@@ -74,6 +106,9 @@ export default function UnitTypeEditor({unitTypeKey, initialUnitType, initialAva
       setSaveError(error.message);
     }
   }
+
+  if (loadError) return <div className="unit-type-editor-load-error">Failed to load: {loadError}</div>;
+  if (unitTypeData === null) return <div className="unit-type-editor-loading">Loading…</div>;
 
   return (
     <div className="unit-type-editor">

@@ -64,7 +64,6 @@ Rails.application.routes.draw do
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
   get "build/classes/*id/edit", to: "build/classes#edit", as: "edit_build_class"
   get "build/unit_types/*id/edit", to: "build/unit_types#edit", as: "edit_build_unit_type"
-  get "build/unit_types/*id/available_abilities", to: "build/unit_types#available_abilities", as: "available_abilities_build_unit_type"
   get "build/items/*id/edit", to: "build/items#edit", as: "edit_build_item"
   get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
   get "build/maps/*id/available_unit_types", to: "build/maps#available_unit_types", as: "available_unit_types_build_map"

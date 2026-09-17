@@ -1,13 +1,24 @@
-import {describe, it, expect, vi, beforeEach} from "vitest";
+import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {render, screen, fireEvent, waitFor, within} from "@testing-library/react";
 import UnitTypeEditor from "../UnitTypeEditor";
-import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
+import {GithubClient} from "../../github/delve-github";
+import {loadAvailableAbilities} from "../loadAvailableAbilities";
 import {validateUnitType} from "../../validators/validateContent";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
   return {...actual, commitFiles: vi.fn()};
 });
+
+vi.mock("../../github/delve-github", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {...actual, GithubClient: vi.fn()};
+});
+
+vi.mock("../loadAvailableAbilities", () => ({
+  loadAvailableAbilities: vi.fn(),
+}));
 
 vi.mock("../../validators/validateContent", () => ({
   validateUnitType: vi.fn(),
@@ -32,24 +43,78 @@ const availableAbilities = {
   "units/goblin-raider/slash": {ability: {name: "Slash"}, assetMap: {}},
 };
 
+function mockUnitTypeLoad(unitType, abilities = {}) {
+  GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockResolvedValue(JSON.stringify(unitType))}));
+  loadAvailableAbilities.mockResolvedValue(abilities);
+}
+
+async function renderReady(unitType = initialUnitType, abilities = {}) {
+  mockUnitTypeLoad(unitType, abilities);
+  render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+  await screen.findByDisplayValue(unitType.name);
+}
+
 describe("UnitTypeEditor", () => {
-  it("flows a name edit from the fields panel into the unit type state", () => {
-    render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
+  afterEach(() => vi.clearAllMocks());
+
+  it("shows a loading state, then the fields panel once the fetch resolves", async () => {
+    let resolveFetch;
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)))}));
+    loadAvailableAbilities.mockResolvedValue({});
+
+    render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+
+    resolveFetch(JSON.stringify(initialUnitType));
+    await waitFor(() => expect(screen.getByDisplayValue("Goblin Raider")).toBeInTheDocument());
+  });
+
+  it("falls back to a blank unit type when the file doesn't exist yet (404 -> null)", async () => {
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockResolvedValue(null)}));
+    loadAvailableAbilities.mockResolvedValue({});
+
+    render(<UnitTypeEditor unitTypeKey="goblin-archer" stockAssets={{}} />);
+
+    await screen.findByDisplayValue("Goblin Archer");
+  });
+
+  it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}));
+    loadAvailableAbilities.mockResolvedValue({});
+
+    render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+
+    await screen.findByText(/Failed to load: network down/);
+  });
+
+  it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}));
+    loadAvailableAbilities.mockResolvedValue({});
+    delete window.location;
+    window.location = {href: ""};
+
+    render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+
+    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+  });
+
+  it("flows a name edit from the fields panel into the unit type state", async () => {
+    await renderReady();
 
     fireEvent.change(screen.getByDisplayValue("Goblin Raider"), {target: {value: "Goblin Brute"}});
 
     expect(screen.getByDisplayValue("Goblin Brute")).toBeInTheDocument();
   });
 
-  it("normalizes a bare-string tokenImageUrl (schema-legal, used by real content) into a one-entry array instead of crashing", () => {
+  it("normalizes a bare-string tokenImageUrl (schema-legal, used by real content) into a one-entry array instead of crashing", async () => {
     const withStringToken = {...initialUnitType, tokenImageUrl: "../tokens/unit/goblin-archer.webp"};
-    render(<UnitTypeEditor unitTypeKey="goblin-archer" initialUnitType={withStringToken} initialAvailableAbilities={{}} stockAssets={{}} />);
+    await renderReady(withStringToken);
 
     expect(screen.getByDisplayValue("../tokens/unit/goblin-archer.webp")).toBeInTheDocument();
   });
 
-  it("adds a power's $ref when '+ Add power' is clicked", () => {
-    render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={availableAbilities} stockAssets={{}} />);
+  it("adds a power's $ref when '+ Add power' is clicked", async () => {
+    await renderReady(initialUnitType, availableAbilities);
     expect(screen.getByTestId("preview-powers")).toHaveTextContent("[]");
 
     fireEvent.click(screen.getByRole("button", {name: "+ Add power"}));
@@ -58,9 +123,9 @@ describe("UnitTypeEditor", () => {
     expect(powers).toEqual([{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]);
   });
 
-  it("removes a power", () => {
+  it("removes a power", async () => {
     const withPower = {...initialUnitType, powers: [{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]};
-    render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={withPower} initialAvailableAbilities={availableAbilities} stockAssets={{}} />);
+    await renderReady(withPower, availableAbilities);
 
     fireEvent.click(screen.getByRole("button", {name: "Remove"}));
 
@@ -68,25 +133,12 @@ describe("UnitTypeEditor", () => {
   });
 
   describe("refreshing available abilities", () => {
-    beforeEach(() => {
-      global.fetch = vi.fn();
-    });
-
-    it("adds newly-fetched abilities to the power picker without a page reload", async () => {
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          "units/goblin-raider/slash": {ability: {name: "Slash"}, assetMap: {}},
-          "units/goblin-raider/bite": {ability: {name: "Bite"}, assetMap: {}},
-        }),
+    it("adds newly-refreshed abilities to the power picker without a page reload", async () => {
+      await renderReady(initialUnitType, availableAbilities);
+      loadAvailableAbilities.mockResolvedValue({
+        "units/goblin-raider/slash": {ability: {name: "Slash"}, assetMap: {}},
+        "units/goblin-raider/bite": {ability: {name: "Bite"}, assetMap: {}},
       });
-      render(
-        <UnitTypeEditor
-          unitTypeKey="goblin-raider" initialUnitType={initialUnitType}
-          initialAvailableAbilities={availableAbilities} stockAssets={{}}
-          availableAbilitiesUrl="/build/unit_types/goblin-raider/available_abilities"
-        />
-      );
 
       fireEvent.click(screen.getByRole("button", {name: "Refresh abilities"}));
       await waitFor(() => expect(screen.getByText("Refreshed.")).toBeInTheDocument());
@@ -96,9 +148,9 @@ describe("UnitTypeEditor", () => {
       expect(within(select).getByText("units/goblin-raider/bite")).toBeInTheDocument();
     });
 
-    it("shows an error message when the refresh request fails", async () => {
-      global.fetch.mockResolvedValue({ok: false, status: 500});
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
+    it("shows an error message when the refresh fails", async () => {
+      await renderReady();
+      loadAvailableAbilities.mockRejectedValue(new Error("request failed: 500"));
 
       fireEvent.click(screen.getByRole("button", {name: "Refresh abilities"}));
 
@@ -114,7 +166,7 @@ describe("UnitTypeEditor", () => {
 
     it("disables Save until Validate passes", async () => {
       validateUnitType.mockResolvedValue({valid: true});
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
@@ -124,7 +176,7 @@ describe("UnitTypeEditor", () => {
 
     it("disables Save again after an edit, even though the draft was previously validated", async () => {
       validateUnitType.mockResolvedValue({valid: true});
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
@@ -136,7 +188,7 @@ describe("UnitTypeEditor", () => {
     it("commits the unit type under unit_types/<key>.json and shows a success message", async () => {
       validateUnitType.mockResolvedValue({valid: true});
       commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
@@ -151,12 +203,12 @@ describe("UnitTypeEditor", () => {
 
     it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
       validateUnitType.mockResolvedValue({valid: true});
-      commitFiles.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+      commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
       const originalLocation = window.location;
       delete window.location;
       window.location = {href: ""};
 
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
@@ -169,7 +221,7 @@ describe("UnitTypeEditor", () => {
     it("validates the resolved (powers-inlined) form, not the raw $ref draft", async () => {
       validateUnitType.mockResolvedValue({valid: true});
       const withPower = {...initialUnitType, powers: [{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]};
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={withPower} initialAvailableAbilities={availableAbilities} stockAssets={{}} />);
+      await renderReady(withPower, availableAbilities);
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
@@ -178,7 +230,7 @@ describe("UnitTypeEditor", () => {
 
     it("shows the validation error and keeps Save disabled when the resolved unit type is invalid", async () => {
       validateUnitType.mockResolvedValue({valid: false, error: {message: "tokenRadius must be between 1.0 and 20.0", path: "$.tokenRadius"}});
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={initialUnitType} initialAvailableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
@@ -188,7 +240,7 @@ describe("UnitTypeEditor", () => {
 
     it("shows a resolution error and keeps Save disabled when a power references an unloaded ability", async () => {
       const withBadPower = {...initialUnitType, powers: [{$ref: "../abilities/units/goblin-raider/missing.json", referenceTo: "ability"}]};
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" initialUnitType={withBadPower} initialAvailableAbilities={{}} stockAssets={{}} />);
+      await renderReady(withBadPower);
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 

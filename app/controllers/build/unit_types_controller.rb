@@ -1,5 +1,5 @@
 class Build::UnitTypesController < Build::BaseController
-  skip_authorization_check only: [:index, :new, :create, :edit, :available_abilities]
+  skip_authorization_check only: [:index, :new, :create, :edit]
   layout "build_unit_type_client", only: :edit
 
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
@@ -24,17 +24,15 @@ class Build::UnitTypesController < Build::BaseController
     redirect_to edit_build_unit_type_path(id: @key)
   end
 
+  # No unit type content, or its available abilities, are fetched here -
+  # the editor fetches both itself, client-side, on mount (see
+  # client/src/unitTypeEditor/UnitTypeEditor.jsx and plans/editor-git.md).
+  # Still checks for a connected repo up front, the same way #new does.
+  # There's no separate #available_abilities refresh action any more either
+  # - refreshing is just re-running the same client-side load.
   def edit
-    load_unit_type
-    @available_abilities = load_available_abilities
+    Github::ContentClient.new(current_user)
     @stock_assets = Content::StockAssets.client_json
-  end
-
-  # Refreshes the available-abilities list without a full page reload (e.g.
-  # after creating a new ability in another tab) - same shape @available_abilities
-  # takes in #edit.
-  def available_abilities
-    render json: load_available_abilities
   end
 
   private
@@ -46,81 +44,5 @@ class Build::UnitTypesController < Build::BaseController
 
   def unit_type_key_taken?(key)
     Github::ContentClient.new(current_user).list_directory_recursive("unit_types").any? { |entry| entry["path"] == "unit_types/#{key}.json" }
-  end
-
-  def load_unit_type
-    content = Github::ContentClient.new(current_user).file_content("unit_types/#{params[:id]}.json")
-    @unit_type = JSON.parse(content)
-  rescue Github::NotFoundError
-    @unit_type = blank_unit_type(params[:id])
-  end
-
-  def blank_unit_type(key)
-    {
-      "name" => key.tr("_-", " ").split.map(&:capitalize).join(" "),
-      "description" => "",
-      "tokenImageUrl" => [],
-      "tokenRadius" => 2.0,
-      "maxHP" => 20,
-      "dps" => 4.0,
-      "attackSpeed" => 1.0,
-      "resource" => {"name" => "energy", "color" => "888888", "max" => 100.0, "defaultValue" => 100.0, "returnRate" => 0.0, "isFluid" => true},
-      "targeting" => {"type" => "aggroTable"},
-      "tactics" => {"type" => "randomAvailable"},
-      "powers" => []
-    }
-  end
-
-  # Every ability committed under abilities/units/, not scoped to this unit
-  # type's own key: unit types are often grouped by category rather than
-  # authored 1:1 with an ability folder (e.g. "goblin" and "goblin-boss"
-  # share abilities/units/goblins/, since they fight together and share some
-  # abilities), so every unit type's editor needs to see the whole tree.
-  # Only one level of subdirectory nesting is supported - abilities/units/*.json
-  # or abilities/units/*/*.json, not deeper.
-  def load_available_abilities
-    client = Github::ContentClient.new(current_user)
-    entries = client.list_directory_recursive("abilities/units")
-      .select { |entry| entry["name"].end_with?(".json") }
-      .select { |entry| entry["path"].delete_prefix("abilities/units/").count("/") <= 1 }
-    entries.to_h { |entry| ability_entry(client, entry) }
-  end
-
-  def ability_entry(client, entry)
-    key = entry["path"].delete_prefix("abilities/").delete_suffix(".json")
-    ability = JSON.parse(client.file_content(entry["path"]))
-    [key, {ability: ability, assetMap: fetch_asset_thumbnails(client, key, ability)}]
-  end
-
-  def fetch_asset_thumbnails(client, key, ability)
-    base_dir = Pathname.new("abilities").join(File.dirname(key))
-    collect_asset_urls(ability).index_with { |url| asset_data_uri(client, base_dir, url) }.compact
-  end
-
-  def collect_asset_urls(data)
-    case data
-    when Hash
-      data.flat_map { |k, value| (k.end_with?("URL") && value.is_a?(String) && !stock_reference?(value)) ? [value] : collect_asset_urls(value) }
-    when Array
-      data.flat_map { |value| collect_asset_urls(value) }
-    else
-      []
-    end
-  end
-
-  def stock_reference?(value)
-    value.start_with?(":") && value.end_with?(":")
-  end
-
-  def asset_data_uri(client, base_dir, relative_url)
-    mime_type = Build::AbilitiesController::MIME_TYPES[File.extname(relative_url).downcase]
-    return nil unless mime_type
-
-    resolved_path = base_dir.join(relative_url).cleanpath.to_s
-    "data:#{mime_type};base64,#{Base64.strict_encode64(client.file_content(resolved_path))}"
-  rescue Github::ReauthRequiredError
-    raise
-  rescue
-    nil
   end
 end
