@@ -1,19 +1,7 @@
 import {useState} from "react";
 import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
 import {connectionStatus} from "./connectionStatus";
-
-// A zone's maps are always $ref entries in real content (see
-// plans/zone-editor.md) - "./<key>/<key>.json", the same basename-matched
-// convention Build::MapsController's #map_path already uses. An inline Map
-// object (allowed by the schema, never produced by this editor) is treated
-// as unresolvable-by-key here - just falls back to showing its own `name`.
-function keyFromRef(ref) {
-  return ref.replace(/^\.\//, "").split("/")[0];
-}
-
-function refFromKey(key) {
-  return `./${key}/${key}.json`;
-}
+import {keyFromRef, refFromKey} from "./mapRef";
 
 export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
   const [collapsed, setCollapsed] = useState(false);

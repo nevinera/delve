@@ -1,0 +1,237 @@
+import {useMemo, useRef, useState} from "react";
+import {keyFromRef} from "./mapRef";
+import {circleLayout, NODE_RADIUS} from "./circleLayout";
+import {connectionStatus} from "./connectionStatus";
+
+const PORT_RADIUS = 6;
+// World-space distance within which a drag-drop counts as "on" a port -
+// generous enough to not require pixel-perfect aim, small enough that two
+// ports on the same node (which sit NODE_RADIUS apart, at minimum) never
+// both qualify.
+const HIT_RADIUS = 16;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 1.25;
+
+const STATUS_COLOR = {
+  open: "#567",
+  entryPoint: "#4a7",
+  openConnection: "#a94",
+  zoneLink: "#59c",
+};
+
+// Nodes = referenced maps, ports = each map's own connections evenly
+// spaced around its node's boundary, edges = zoneLinks between two ports
+// (see plans/zone-editor.md step 6). Node positions start from
+// circleLayout's default (no persisted layout metadata exists until step
+// 11) and are freely drag-adjustable - those adjustments live only in this
+// component's own state for now, lost on reload, same as every other draft
+// edit before step 11's save. Dragging from one port to another creates a
+// zoneLink (ADD_ZONE_LINK); dragging an already-linked port to empty space
+// removes it (REMOVE_ZONE_LINK) - the same reducer actions
+// ZoneMapConnectionsPanel's "+ Link to"/"Remove Link" already use, so both
+// UIs stay in sync automatically.
+export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
+  const containerRef = useRef(null);
+  const [positions, setPositions] = useState({}); // {[nodeKey]: {x, y}} - drag overrides
+  const [view, setView] = useState({panX: 0, panY: 0, zoom: 1});
+  const [nodeDrag, setNodeDrag] = useState(null);
+  const [pan, setPan] = useState(null);
+  const [linkDrag, setLinkDrag] = useState(null); // {fromKey, fromMapIdentifier, fromConnection, fromStatus, x, y}
+
+  const nodes = useMemo(
+    () =>
+      zoneData.maps
+        .map((entry) => {
+          const key = entry?.$ref ? keyFromRef(entry.$ref) : null;
+          const detail = key ? mapDetailsByKey[key] : null;
+          return {key, detail, name: detail?.name ?? entry?.name ?? key ?? "?"};
+        })
+        .filter((node) => node.key),
+    [zoneData.maps, mapDetailsByKey]
+  );
+
+  const defaultPositions = useMemo(() => circleLayout(nodes.map((n) => n.key)), [nodes]);
+
+  function nodePosition(key) {
+    return positions[key] ?? defaultPositions[key] ?? {x: 0, y: 0};
+  }
+
+  // Every port on every node, with its resolved world position and current
+  // status - the one list both rendering and link drag/drop hit-testing
+  // read from.
+  const ports = useMemo(() => {
+    const list = [];
+    for (const node of nodes) {
+      const connections = node.detail?.connections ?? [];
+      const {x: cx, y: cy} = nodePosition(node.key);
+      connections.forEach((connection, i) => {
+        const angle = (i / connections.length) * 2 * Math.PI;
+        const status = node.detail?.identifier
+          ? connectionStatus(node.detail.identifier, connection.identifier, zoneData)
+          : {type: "open"};
+        list.push({
+          nodeKey: node.key,
+          mapIdentifier: node.detail?.identifier,
+          connectionIdentifier: connection.identifier,
+          x: cx + NODE_RADIUS * Math.cos(angle),
+          y: cy + NODE_RADIUS * Math.sin(angle),
+          status,
+        });
+      });
+    }
+    return list;
+    // nodePosition reads `positions` (drag overrides) and defaultPositions
+    // via closure - both already listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, defaultPositions, positions, zoneData]);
+
+  function screenToWorld(clientX, clientY) {
+    const rect = containerRef.current?.getBoundingClientRect() ?? {left: 0, top: 0};
+    return {x: (clientX - rect.left - view.panX) / view.zoom, y: (clientY - rect.top - view.panY) / view.zoom};
+  }
+
+  function nearestPort(worldX, worldY, exclude) {
+    let best = null;
+    let bestDist = HIT_RADIUS;
+    for (const port of ports) {
+      if (port.nodeKey === exclude.fromKey && port.connectionIdentifier === exclude.fromConnection) continue;
+      const dist = Math.hypot(port.x - worldX, port.y - worldY);
+      if (dist <= bestDist) {
+        best = port;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  function zoomBy(factor) {
+    setView((v) => ({...v, zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom * factor))}));
+  }
+
+  function handleWheel(e) {
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+  }
+
+  // Only ever reached when the pointerdown wasn't already claimed (and
+  // stopped) by a node or port below - i.e. a genuine background click.
+  function handleBackgroundPointerDown(e) {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setPan({pointerId: e.pointerId, startClientX: e.clientX, startClientY: e.clientY, startPanX: view.panX, startPanY: view.panY});
+  }
+
+  function handleNodePointerDown(e, node) {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const {x, y} = nodePosition(node.key);
+    setNodeDrag({key: node.key, pointerId: e.pointerId, startClientX: e.clientX, startClientY: e.clientY, startX: x, startY: y});
+  }
+
+  function handlePortPointerDown(e, port) {
+    if (!port.mapIdentifier) return; // can't create/remove a link without a resolved map identifier
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setLinkDrag({fromKey: port.nodeKey, fromMapIdentifier: port.mapIdentifier, fromConnection: port.connectionIdentifier, fromStatus: port.status, x: port.x, y: port.y});
+  }
+
+  function handlePointerMove(e) {
+    if (pan && e.pointerId === pan.pointerId) {
+      setView((v) => ({...v, panX: pan.startPanX + (e.clientX - pan.startClientX), panY: pan.startPanY + (e.clientY - pan.startClientY)}));
+      return;
+    }
+    if (nodeDrag && e.pointerId === nodeDrag.pointerId) {
+      const dx = (e.clientX - nodeDrag.startClientX) / view.zoom;
+      const dy = (e.clientY - nodeDrag.startClientY) / view.zoom;
+      setPositions((current) => ({...current, [nodeDrag.key]: {x: nodeDrag.startX + dx, y: nodeDrag.startY + dy}}));
+      return;
+    }
+    if (linkDrag) {
+      const {x, y} = screenToWorld(e.clientX, e.clientY);
+      setLinkDrag((current) => ({...current, x, y}));
+    }
+  }
+
+  function handlePointerUp(e) {
+    if (pan && e.pointerId === pan.pointerId) {
+      setPan(null);
+      return;
+    }
+    if (nodeDrag && e.pointerId === nodeDrag.pointerId) {
+      setNodeDrag(null);
+      return;
+    }
+    if (linkDrag) {
+      const target = nearestPort(linkDrag.x, linkDrag.y, linkDrag);
+      if (target) {
+        dispatch({
+          type: "ADD_ZONE_LINK",
+          connectionA: {map: linkDrag.fromMapIdentifier, connection: linkDrag.fromConnection},
+          connectionB: {map: target.mapIdentifier, connection: target.connectionIdentifier},
+        });
+      } else if (linkDrag.fromStatus?.type === "zoneLink") {
+        dispatch({type: "REMOVE_ZONE_LINK", index: linkDrag.fromStatus.linkIndex});
+      }
+      setLinkDrag(null);
+    }
+  }
+
+  const edges = (zoneData.zoneLinks ?? [])
+    .map((link, index) => {
+      const a = ports.find((p) => p.mapIdentifier === link.connectionA?.map && p.connectionIdentifier === link.connectionA?.connection);
+      const b = ports.find((p) => p.mapIdentifier === link.connectionB?.map && p.connectionIdentifier === link.connectionB?.connection);
+      return a && b ? {index, a, b} : null;
+    })
+    .filter(Boolean);
+
+  const dragOrigin = linkDrag && ports.find((p) => p.nodeKey === linkDrag.fromKey && p.connectionIdentifier === linkDrag.fromConnection);
+
+  return (
+    <div className="zone-graph-panel">
+      <div className="zone-graph-toolbar">
+        <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)}>−</button>
+        <button type="button" onClick={() => setView({panX: 0, panY: 0, zoom: 1})}>Reset</button>
+        <button type="button" onClick={() => zoomBy(ZOOM_STEP)}>+</button>
+      </div>
+      {nodes.length === 0 ? (
+        <p className="map-sidebar-hint">No maps yet.</p>
+      ) : (
+        <div className="zone-graph-wrapper" ref={containerRef} onPointerDown={handleBackgroundPointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
+          <svg className="zone-graph-svg" width="100%" height="100%">
+            <g transform={`translate(${view.panX}, ${view.panY}) scale(${view.zoom})`}>
+              {edges.map(({index, a, b}) => (
+                <line key={index} className="zone-graph-edge" x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+              ))}
+              {linkDrag && (
+                <line className="zone-graph-drag-line" x1={dragOrigin?.x ?? linkDrag.x} y1={dragOrigin?.y ?? linkDrag.y} x2={linkDrag.x} y2={linkDrag.y} />
+              )}
+              {nodes.map((node) => {
+                const {x, y} = nodePosition(node.key);
+                return (
+                  <g key={node.key} transform={`translate(${x}, ${y})`} data-node-key={node.key}>
+                    <circle className="zone-graph-node" r={NODE_RADIUS} onPointerDown={(e) => handleNodePointerDown(e, node)} />
+                    <text className="zone-graph-node-label" y={NODE_RADIUS + 14} textAnchor="middle">{node.name}</text>
+                  </g>
+                );
+              })}
+              {ports.map((port) => (
+                <circle
+                  key={`${port.nodeKey}/${port.connectionIdentifier}`}
+                  className="zone-graph-port"
+                  cx={port.x}
+                  cy={port.y}
+                  r={PORT_RADIUS}
+                  fill={STATUS_COLOR[port.status.type] ?? STATUS_COLOR.open}
+                  data-node-key={port.nodeKey}
+                  data-connection={port.connectionIdentifier}
+                  data-status={port.status.type}
+                  onPointerDown={(e) => handlePortPointerDown(e, port)}
+                />
+              ))}
+            </g>
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+}

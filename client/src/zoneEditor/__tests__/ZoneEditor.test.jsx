@@ -30,7 +30,17 @@ describe("ZoneEditor", () => {
     const details = {"gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [], thumbnailUrl: null}};
     render(<ZoneEditor initialZone={{...initialZone, maps}} initialAvailableMapDetails={details} />);
 
-    expect(screen.getByText("Cave Entrance")).toBeInTheDocument();
+    // "Cave Entrance" appears both in the maps list row and as the graph
+    // node's label - just confirm the maps panel itself rendered it.
+    expect(document.querySelector(".zone-maps-panel").textContent).toContain("Cave Entrance");
+  });
+
+  it("passes the same map details to the graph, which draws a node for it too", () => {
+    const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
+    const details = {"gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [], thumbnailUrl: null}};
+    render(<ZoneEditor initialZone={{...initialZone, maps}} initialAvailableMapDetails={details} />);
+
+    expect(document.querySelector('.zone-graph-panel [data-node-key="gc1-goblin-cave-entrance"]')).not.toBeNull();
   });
 
   it("refreshes map details from availableMapsUrl without touching the rest of the draft", async () => {

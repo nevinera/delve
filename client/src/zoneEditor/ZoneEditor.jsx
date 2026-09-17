@@ -1,6 +1,7 @@
 import {useReducer, useState} from "react";
 import {zoneReducer} from "./zoneReducer";
 import ZoneMapsPanel from "./ZoneMapsPanel";
+import ZoneGraphCanvas from "./ZoneGraphCanvas";
 
 // Step 2's skeleton has grown a `maps` list (step 3) - still no Save
 // (deferred to step 11, see plans/zone-editor.md) and no zoneKey-driven
@@ -53,6 +54,7 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapDet
           onRefresh={handleRefreshMaps}
           refreshStatus={refreshStatus}
         />
+        <ZoneGraphCanvas zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} dispatch={dispatch} />
       </div>
     </div>
   );
