@@ -16,6 +16,9 @@
 !/log/.keep
 !/tmp/.keep
 
+# directory for transient planning and tracking
+/plans/*
+
 # Ignore pidfiles, but keep the directory.
 /tmp/pids/*
 !/tmp/pids/
