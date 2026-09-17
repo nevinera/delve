@@ -157,14 +157,25 @@ RSpec.describe "Build::Zones", type: :request do
                 {name: "gc1-goblin-cave-entrance.json", path: "zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", type: "file"}
               ].to_json
             )
-          map_content = {"identifier" => "cave_entrance", "name" => "Cave Entrance", "connections" => [{"identifier" => "cave_mouth", "type" => "line"}]}
+          map_content = {
+            "identifier" => "cave_entrance", "name" => "Cave Entrance",
+            "connections" => [{"identifier" => "cave_mouth", "type" => "line"}],
+            "units" => [{"unitType" => "goblin_raider", "position" => {"x" => 1, "y" => 1}, "hostility" => "hostile", "lootTable" => {"sword-of-doom" => 10}}]
+          }
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(map_content.to_json), encoding: "base64"}.to_json)
 
           get "/build/zones/goblin-cave/edit"
 
           expect(response).to have_http_status(:ok)
-          expected = {"gc1-goblin-cave-entrance" => {"identifier" => "cave_entrance", "name" => "Cave Entrance", "connections" => map_content["connections"], "thumbnailUrl" => nil}}
+          expected = {
+            "gc1-goblin-cave-entrance" => {
+              "identifier" => "cave_entrance", "name" => "Cave Entrance",
+              "connections" => map_content["connections"],
+              "units" => [{"unitType" => "goblin_raider", "itemKeys" => ["sword-of-doom"]}],
+              "thumbnailUrl" => nil
+            }
+          }
           expect(response.body).to include(CGI.escapeHTML(expected.to_json))
         end
       end

@@ -28,8 +28,8 @@ class Build::ZonesController < Build::BaseController
     @available_map_details = map_details_for(params[:id])
   end
 
-  # {identifier, name, connections, thumbnailUrl} for every real map file
-  # under this zone's own directory, keyed by the map's file key (not its
+  # {identifier, name, connections, units, thumbnailUrl} for every real map
+  # file under this zone's own directory, keyed by the map's file key (not its
   # `identifier` field, which the map editor lets diverge from the file
   # name/directory freely - see e.g. real content's
   # gc1-goblin-cave-entrance.json, whose own `identifier` is
@@ -109,12 +109,21 @@ class Build::ZonesController < Build::BaseController
       identifier: map_data["identifier"],
       name: map_data["name"],
       connections: map_data["connections"] || [],
+      units: unit_summaries(map_data["units"]),
       thumbnailUrl: map_thumbnail_data_uri(client, zone_key, map_key, map_data["thumbnailUrl"])
     }
   rescue Github::ReauthRequiredError
     raise
   rescue
     nil
+  end
+
+  # {unitType, itemKeys} per unit - just enough for the zone editor's
+  # items/unit types lists (steps 7/8) to aggregate usage, not the unit's
+  # full position/movement/etc, which would bloat this payload for a map
+  # with many units for no reason those lists need it.
+  def unit_summaries(units)
+    Array(units).map { |unit| {unitType: unit["unitType"], itemKeys: (unit["lootTable"] || {}).keys} }
   end
 
   # Mirrors Build::MapsController#fetch_image_data_uri's approach, but for
