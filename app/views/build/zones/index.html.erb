@@ -1,26 +1,19 @@
 <h1>Zones</h1>
 
+<p><%= link_to "New Zone", new_build_zone_path %></p>
+
 <table>
   <thead>
-    <tr>
-      <th>Identifier</th>
-      <th>Version</th>
-      <th>Name</th>
-      <th>Elevation</th>
-    </tr>
+    <tr><th>Key</th></tr>
   </thead>
   <tbody>
-    <% @zones.each do |zone| %>
+    <% @zones.each do |entry| %>
+      <% identifier = File.dirname(entry["path"].delete_prefix("zones/").delete_suffix(".json")) %>
       <tr>
-        <td><%= link_to zone.identifier, build_zone_path(zone) %></td>
-        <td><%= zone.version %></td>
-        <td><%= zone.name %></td>
-        <td><%= zone.elvl %></td>
+        <td><%= link_to identifier, edit_build_zone_path(id: identifier) %></td>
       </tr>
     <% end %>
   </tbody>
 </table>
 
-<%== @pagy.series_nav if @pagy.pages > 1 %>
-
-<%= link_to "Register a zone", new_build_zone_path %>
+<%= link_to "Back to Build", build_root_path %>

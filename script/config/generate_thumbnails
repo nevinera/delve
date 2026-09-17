@@ -1,0 +1,90 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Generates a small (<=256px) thumbnail alongside every map's background
+# image under a zones/ directory, and records it as that map's
+# thumbnailUrl - the same step saveMap.js performs client-side on every
+# future save (see plans/zone-editor.md step 1), backfilled here for maps
+# that predate that feature (i.e. every real map as of this writing).
+#
+# Usage:
+#   script/config/generate_thumbnails [zones_dir] [--force]
+#
+# zones_dir defaults to ../content/zones (relative to this repo's root -
+# the sibling content repo used throughout this codebase). --force
+# regenerates a thumbnail even for a map that already has one.
+#
+# Requires `vipsthumbnail` (libvips) on PATH - e.g. `brew install vips`.
+
+require "json"
+require "pathname"
+
+MAX_DIMENSION = 256
+
+force = !!ARGV.delete("--force")
+zones_dir = Pathname.new(ARGV[0] || File.join(__dir__, "..", "..", "..", "content", "zones")).expand_path
+
+unless system("which vipsthumbnail > /dev/null 2>&1")
+  abort "vipsthumbnail not found on PATH - install libvips (e.g. `brew install vips`)"
+end
+abort "#{zones_dir}: not a directory" unless zones_dir.directory?
+
+# Adds/replaces the thumbnailUrl key by editing the file's raw text, not by
+# JSON.parse + re-serializing it - a round-trip through JSON.pretty_generate
+# reformats every compact inline object (e.g. `{ "width": 2048, "height":
+# 1536 }`) onto multiple lines, turning a one-line addition into a review-
+# hostile whole-file diff.
+def set_thumbnail_url(raw, thumbnail_name)
+  existing = /"thumbnailUrl"\s*:\s*"[^"]*"/
+  if raw.match?(existing)
+    raw.sub(existing, "\"thumbnailUrl\": #{thumbnail_name.to_json}")
+  else
+    body = raw.rstrip.then { |s| s.end_with?("}") ? s[0...-1].rstrip : s }
+    "#{body},\n  \"thumbnailUrl\": #{thumbnail_name.to_json}\n}\n"
+  end
+end
+
+# A map file lives at zones/<zone>/<map>/<map>.json - one directory level
+# deeper than the zone's own zones/<zone>/<zone>.json (see
+# Build::MapsController#map_file? for the same depth-based distinction).
+map_files = zones_dir.glob("*/*/*.json").reject { |path| path.to_s.end_with?(".full.json") }.sort
+
+generated = 0
+skipped = 0
+failed = 0
+
+map_files.each do |map_path|
+  data = JSON.parse(map_path.read)
+  image_url = data["imageUrl"]
+  if image_url.nil? || image_url.empty?
+    next
+  end
+
+  if data["thumbnailUrl"] && !force
+    skipped += 1
+    next
+  end
+
+  image_path = (map_path.dirname + image_url).cleanpath
+  unless image_path.exist?
+    warn "#{map_path}: imageUrl #{image_url.inspect} does not exist, skipping"
+    failed += 1
+    next
+  end
+
+  thumbnail_name = "#{map_path.basename(".json")}.thumb.webp"
+  thumbnail_path = map_path.dirname + thumbnail_name
+
+  unless system("vipsthumbnail", image_path.to_s, "--size=#{MAX_DIMENSION}x#{MAX_DIMENSION}", "--path=#{thumbnail_path}")
+    warn "#{map_path}: vipsthumbnail failed on #{image_path}, skipping"
+    failed += 1
+    next
+  end
+
+  map_path.write(set_thumbnail_url(map_path.read, thumbnail_name))
+  puts "#{map_path}: generated #{thumbnail_name}"
+  generated += 1
+end
+
+puts
+puts "#{generated} generated, #{skipped} already had a thumbnail, #{failed} failed"

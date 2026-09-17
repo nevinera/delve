@@ -13,6 +13,12 @@ if (!Element.prototype.setPointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
 
+// jsdom doesn't implement Blob object URLs at all - real browsers always do.
+if (!URL.createObjectURL) {
+  URL.createObjectURL = () => "blob:mock-url";
+  URL.revokeObjectURL = () => {};
+}
+
 afterEach(() => {
   cleanup();
 });

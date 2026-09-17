@@ -1,40 +1,13 @@
-<h1>Register a Zone</h1>
+<h1>New Zone</h1>
 
-<%= form_with model: @zone, url: build_zones_path do |f| %>
-  <% if @zone.errors.any? %>
-    <ul>
-      <% @zone.errors.full_messages.each do |msg| %>
-        <li><%= msg %></li>
-      <% end %>
-    </ul>
-  <% end %>
-
+<%= form_with url: build_zones_path, method: :post do %>
   <div>
-    <%= f.label :identifier %>
-    <%= f.text_field :identifier %>
+    <label for="key">Key</label>
+    <%= text_field_tag :key, @key, placeholder: "goblin-cave" %>
   </div>
+  <p style="font-size: 0.85em; color: #666;">Use "/" to place it in a subdirectory.</p>
 
-  <div>
-    <%= f.label :version %>
-    <%= f.text_field :version, placeholder: "1.0" %>
-  </div>
-
-  <div>
-    <%= f.label :name %>
-    <%= f.text_field :name %>
-  </div>
-
-  <div>
-    <%= f.label :config_url, "Config URL" %>
-    <%= f.text_field :config_url %>
-  </div>
-
-  <div>
-    <%= f.label :description %>
-    <%= f.text_area :description %>
-  </div>
-
-  <%= f.submit "Register" %>
+  <%= submit_tag "Create" %>
 <% end %>
 
 <%= link_to "Cancel", build_zones_path %>

@@ -173,5 +173,45 @@ RSpec.describe "Build::Validators", type: :request do
         expect(body["error"]["path"]).to eq("$.imageUrl")
       end
     end
+
+    describe "POST /build/validators/zone" do
+      let(:valid_map) do
+        {
+          identifier: "gc1-goblin-cave-entrance", name: "Gc1 Goblin Cave Entrance", imageUrl: "gc1-goblin-cave-entrance.webp",
+          pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160.0, height: 120.0},
+          barriers: [], connections: [], units: []
+        }
+      end
+      let(:valid_zone) do
+        {name: "Goblin Cave", elvl: 200, private: true, maps: [valid_map]}
+      end
+
+      it "returns valid: true for a valid (already-resolved) zone" do
+        post "/build/validators/zone", params: valid_zone.to_json, headers: {"Content-Type" => "application/json"}
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)).to eq({"valid" => true})
+      end
+
+      it "returns valid: false with the error message and path for a missing elvl" do
+        invalid = valid_zone.except(:elvl)
+
+        post "/build/validators/zone", params: invalid.to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["path"]).to eq("$.elvl")
+      end
+
+      it "rejects a zone whose maps are still $ref pointers, not the resolved form" do
+        abstract_zone = valid_zone.merge(maps: [{"$ref" => "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", "referenceTo" => "map"}])
+
+        post "/build/validators/zone", params: abstract_zone.to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include("full JSON required")
+      end
+    end
   end
 end

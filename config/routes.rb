@@ -31,12 +31,22 @@ Rails.application.routes.draw do
     resources :unit_types, only: [:index, :new, :create]
     resources :items, only: [:index, :new, :create]
     resources :maps, only: [:index, :new, :create]
-    resources :zones, only: [:index, :show, :new, :create]
+    # The content-editing zone editor (see plans/zone-editor.md) owns the
+    # bare `zones` resource name, matching every other content editor above
+    # (classes/unit_types/items/maps). The DB-backed Zone *registration* UI
+    # (register a deployed zone config by identifier/version/config_url -
+    # unrelated to content editing) lives under this `registration`
+    # namespace instead, out of that name's way.
+    resources :zones, only: [:index, :new, :create]
+    namespace :registration do
+      resources :zones, only: [:index, :show, :new, :create]
+    end
     post "validators/ability", to: "validators#ability"
     post "validators/character_class", to: "validators#character_class"
     post "validators/unit_type", to: "validators#unit_type"
     post "validators/item", to: "validators#item"
     post "validators/map", to: "validators#map"
+    post "validators/zone", to: "validators#zone"
   end
 
   # A glob segment, not a plain :id + regex constraint (and defined outside
@@ -59,6 +69,8 @@ Rails.application.routes.draw do
   get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
   get "build/maps/*id/available_unit_types", to: "build/maps#available_unit_types", as: "available_unit_types_build_map"
   get "build/maps/*id/available_items", to: "build/maps#available_items", as: "available_items_build_map"
+  get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
+  get "build/zones/*id/available_maps", to: "build/zones#available_maps", as: "available_maps_build_zone"
 
   namespace :play do
     root to: "dashboard#index"

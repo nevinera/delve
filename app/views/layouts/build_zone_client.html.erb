@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Delve - Zone Editor</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #editor-root { width: 100%; height: 100%; }
+      body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; overflow: hidden; }
+
+      /* Same two-pane layout every other editor uses: graph fills the big
+         left-hand area, sidebar is the collapsible right-hand column (see
+         build_map_client.html.erb's .map-editor/.map-editor-sidebar). */
+      .zone-editor { display: flex; height: 100%; }
+      .zone-editor-canvas-area { flex: 2; min-width: 0; display: flex; flex-direction: column; }
+
+      .map-editor-sidebar {
+        flex: 1; min-width: 0; display: flex; flex-direction: column;
+        background: #1c2126; border-left: 1px solid #333; transition: flex-basis 0.15s ease;
+      }
+      .map-editor-sidebar.collapsed { flex: 0 0 36px; }
+      .map-editor-sidebar-toggle {
+        align-self: flex-start; margin: 8px; background: #234; border: 1px solid #457; color: #9cf;
+        font-size: 13px; padding: 5px 10px; border-radius: 3px; cursor: pointer;
+      }
+      .map-editor-sidebar-toggle:hover { background: #345; }
+      .map-editor-sidebar-content { flex: 1; min-width: 0; overflow-y: auto; padding: 0 14px 14px; }
+
+      .map-editor-sidebar-content table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+      .map-editor-sidebar-content th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; }
+      .map-editor-sidebar-content td { padding: 4px 0; }
+      .map-editor-sidebar-content input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+
+      @media (max-width: 700px) {
+        .zone-editor { flex-direction: column; }
+        .map-editor-sidebar { flex: none; width: 100%; border-left: none; border-top: 1px solid #333; }
+        .map-editor-sidebar.collapsed { flex: 0 0 36px; }
+      }
+
+      .save-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .save-bar .validate-button { background: #245; border: 1px solid #47a; color: #dee; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .validate-button:hover:not(:disabled) { background: #356; }
+      .save-bar .validate-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .save-button:hover:not(:disabled) { background: #3b5; }
+      .save-bar .save-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-message { font-size: 12px; }
+      .save-bar .save-success { color: #7c7; }
+      .save-bar .save-error { color: #e79; }
+
+      /* Same collapsible-section-heading and entry-block/remove-entry/
+         add-entry conventions the map editor's sidebar uses (see
+         build_map_client.html.erb) - reused here rather than reinvented. */
+      .map-sidebar-section-heading { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 0; }
+      .map-sidebar-section-heading h3 { font-size: 13px; color: #cce; font-weight: 600; }
+      .map-sidebar-section-toggle { font-size: 11px; color: #9ab; width: 1em; text-align: center; }
+      .map-sidebar-hint { color: #987; font-size: 12px; margin: 4px 0 8px; }
+      .map-sidebar-unit-type-links { font-size: 11px; color: #9ab; margin: 4px 0; }
+
+      .entry-block { margin: 8px 0; padding: 6px 0; border-top: 1px solid #2a2f35; border-radius: 4px; }
+      .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
+      .map-row-summary { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+      button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      button.remove-entry:hover { background: #533; }
+      .add-buttons-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+      button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      button.add-entry:hover { background: #345; }
+      button.add-entry:disabled { opacity: 0.4; cursor: default; }
+      .add-buttons-row select { background: #111; border: 1px solid #555; color: #eee; font-size: 12px; padding: 4px 6px; border-radius: 3px; }
+      .add-buttons-row a { color: #9cf; font-size: 12px; }
+
+      .zone-map-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; background: #223; flex-shrink: 0; }
+      .zone-map-thumb-placeholder { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #223; border-radius: 4px; flex-shrink: 0; }
+      .zone-map-name { font-size: 13px; color: #cce; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .zone-map-edit-link { color: #9cf; font-size: 12px; flex-shrink: 0; margin-left: 8px; }
+
+      .zone-connections-list { margin: 8px 0 4px 20px; }
+      .zone-connection-row { padding: 4px 0; }
+      .zone-connection-row .map-row-summary { flex: 0 0 auto; gap: 6px; }
+      .zone-connection-name { font-size: 13px; color: #cce; font-weight: 600; }
+      .zone-connection-type { font-size: 12px; color: #789; }
+      .zone-connection-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 12px; color: #9ab; }
+      .zone-connection-status-label { color: #9ab; }
+      .zone-connection-status input[type=text] { width: 140px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; font-size: 12px; }
+
+      .zone-item-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+      .zone-item-name { font-size: 13px; color: #cce; font-weight: 600; }
+      .zone-item-invalid { color: #e79; cursor: help; }
+      .zone-item-usage { font-size: 12px; color: #9ab; }
+      .zone-item-usage a { color: #9cf; }
+
+      /* Same top-left overlay convention as the item/unit_type/class/
+         ability editors' own back-link (see build_item_client.html.erb). */
+      a.back-link {
+        position: absolute; top: 10px; left: 10px; color: #9ab; font-size: 13px; z-index: 1;
+        background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 3px; text-decoration: none;
+      }
+
+      .zone-graph-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px; }
+      .zone-graph-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex: 0 0 auto; }
+      .zone-graph-toolbar button {
+        background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600;
+        padding: 4px 10px; border-radius: 3px; cursor: pointer;
+      }
+      .zone-graph-toolbar button:hover { background: #345; }
+      .zone-graph-wrapper {
+        flex: 1; min-height: 0; border: 1px solid #333; border-radius: 4px; background: #0a0c0e;
+        background-image: linear-gradient(45deg, #101316 25%, transparent 25%), linear-gradient(-45deg, #101316 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #101316 75%), linear-gradient(-45deg, transparent 75%, #101316 75%);
+        background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        touch-action: none; cursor: grab; overflow: hidden;
+      }
+      .zone-graph-wrapper:active { cursor: grabbing; }
+      .zone-graph-node { fill: #1c2126; stroke: #457; stroke-width: 2; cursor: grab; }
+      .zone-graph-node:active { cursor: grabbing; }
+      .zone-graph-node-thumb { cursor: grab; }
+      .zone-graph-node-thumb-placeholder { font-size: 28px; pointer-events: none; }
+      .zone-graph-node-label { fill: #cce; font-size: 12px; text-anchor: middle; pointer-events: none; }
+      .zone-graph-port { cursor: crosshair; stroke: #000; stroke-width: 1; }
+      .zone-graph-edge { stroke: #59c; stroke-width: 2; }
+      .zone-graph-drag-line { stroke: #fd0; stroke-width: 2; stroke-dasharray: 4 3; }
+      .zone-graph-satellite { stroke: #000; stroke-width: 1; cursor: grab; }
+      .zone-graph-satellite:active { cursor: grabbing; }
+      .zone-graph-satellite-tether { stroke: #667; stroke-width: 1; stroke-dasharray: 3 3; }
+      .zone-graph-satellite-label { fill: #cce; font-size: 11px; text-anchor: middle; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <%= yield %>
+    <%= vite_script_tags("src/zoneEditor/main.jsx", "/client/zoneEditor.js") %>
+  </body>
+</html>

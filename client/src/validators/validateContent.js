@@ -44,3 +44,10 @@ export function validateItem(item) {
 export function validateMap(map) {
   return postValidation("/build/validators/map", map);
 }
+
+// Takes the *resolved* zone (see resolveZoneRefs.js) - ZoneValidator#validate_maps!
+// calls MapValidator directly on each maps[i] with no $ref handling, same
+// reasoning as validateCharacterClass/validateUnitType.
+export function validateZone(fullZone) {
+  return postValidation("/build/validators/zone", fullZone);
+}

@@ -9,9 +9,12 @@ class Build::MapsController < Build::BaseController
     @maps = entries.select { |entry| map_file?(entry["path"]) }.sort_by { |entry| entry["path"] }
   end
 
+  # `prefix` lets the zone editor's "Create Map" link (opened in a new tab -
+  # see Build::ZonesController) pre-fill the zone's own key, e.g.
+  # "goblin-cave/", so the author only has to type the map's own key.
   def new
     Github::ContentClient.new(current_user) # raises (and BaseController redirects) if there's no repo connected yet
-    @key = ""
+    @key = params[:prefix].to_s
   end
 
   def create

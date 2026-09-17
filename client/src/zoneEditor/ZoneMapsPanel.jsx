@@ -1,0 +1,141 @@
+import {useState} from "react";
+import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
+import {connectionStatus} from "./connectionStatus";
+import {keyFromRef, refFromKey, mapEditPath} from "./mapRef";
+
+export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [pendingKey, setPendingKey] = useState("");
+  // Which map rows have their connections list expanded - starts empty
+  // (all collapsed), same as every other per-entry collapse in this app.
+  const [expandedIndexes, setExpandedIndexes] = useState(() => new Set());
+
+  function toggleExpanded(index) {
+    setExpandedIndexes((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  const rows = zoneData.maps.map((entry, index) => {
+    const ref = entry?.$ref;
+    const key = ref ? keyFromRef(ref) : null;
+    const detail = key ? mapDetailsByKey[key] : null;
+    const name = detail?.name ?? entry?.name ?? key ?? "(unresolved reference)";
+    return {index, key, detail, name};
+  });
+  const referencedKeys = new Set(rows.map((row) => row.key).filter(Boolean));
+  const candidateKeys = availableMapKeys.filter((key) => !referencedKeys.has(key));
+
+  // Every open connection on any *referenced* map (not just the current
+  // one) - what "+ Link to" offers across the whole zone. Only referenced
+  // maps are eligible targets ("some identifier on another map that is in
+  // the zone"), and only ones whose details actually resolved (an
+  // unresolved reference has no connections to offer).
+  const linkTargets = rows.flatMap(({detail}) => {
+    if (!detail?.identifier) return [];
+    return (detail.connections ?? [])
+      .filter((connection) => connectionStatus(detail.identifier, connection.identifier, zoneData).type === "open")
+      .map((connection) => ({mapIdentifier: detail.identifier, mapName: detail.name, connectionIdentifier: connection.identifier}));
+  });
+
+  function handleRemove(index, mapIdentifier) {
+    dispatch({type: "REMOVE_MAP", index, mapIdentifier});
+  }
+
+  function handleAdd() {
+    if (!pendingKey) return;
+    dispatch({type: "ADD_ENTRY", section: "maps", entry: {$ref: refFromKey(pendingKey), referenceTo: "map"}});
+    onAddMap(pendingKey);
+    setPendingKey("");
+  }
+
+  const createMapHref = `${newMapUrl}?prefix=${encodeURIComponent(`${zoneKey}/`)}`;
+
+  return (
+    <div className="zone-maps-panel">
+      <div className="map-sidebar-section-heading" onClick={() => setCollapsed((c) => !c)}>
+        <span className="map-sidebar-section-toggle">{collapsed ? "▸" : "▾"}</span>
+        <h3>Maps ({rows.length})</h3>
+      </div>
+      {!collapsed && (
+        <div className="zone-maps-list">
+          {rows.length === 0 && <p className="map-sidebar-hint">No maps yet.</p>}
+          {rows.map(({index, key, detail, name}) => {
+            const expanded = expandedIndexes.has(index);
+            return (
+              <div className="entry-block zone-map-row" key={index}>
+                <div className="entry-heading-row" onClick={() => toggleExpanded(index)}>
+                  <div className="map-row-summary">
+                    <span className="map-sidebar-section-toggle">{expanded ? "▾" : "▸"}</span>
+                    {detail?.thumbnailUrl ? (
+                      <img className="zone-map-thumb" src={detail.thumbnailUrl} alt={name} />
+                    ) : (
+                      <span className="zone-map-thumb-placeholder" aria-hidden="true">🗺</span>
+                    )}
+                    <span className="zone-map-name">{name}</span>
+                  </div>
+                  {key && (
+                    <a
+                      className="zone-map-edit-link"
+                      href={mapEditPath(zoneKey, key)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Edit ↗
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="remove-entry"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemove(index, detail?.identifier);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                {expanded && (
+                  <ZoneMapConnectionsPanel
+                    mapIdentifier={detail?.identifier}
+                    connections={detail?.connections ?? []}
+                    zoneData={zoneData}
+                    dispatch={dispatch}
+                    linkTargets={linkTargets}
+                  />
+                )}
+              </div>
+            );
+          })}
+
+          <div className="add-buttons-row">
+            {candidateKeys.length > 0 && (
+              <>
+                {/* Bare key, not a fetched name - showing a friendly name
+                    here would mean opening every candidate's file just to
+                    populate this dropdown, defeating the point of keeping
+                    this list cheap (see Build::ZonesController). */}
+                <select value={pendingKey} onChange={(e) => setPendingKey(e.target.value)}>
+                  <option value="">Pick an existing map…</option>
+                  {candidateKeys.map((key) => (
+                    <option key={key} value={key}>{key}</option>
+                  ))}
+                </select>
+                <button type="button" className="add-entry" disabled={!pendingKey} onClick={handleAdd}>
+                  Add
+                </button>
+              </>
+            )}
+            <a href={createMapHref} target="_blank" rel="noreferrer">Create Map ↗</a>
+            <button type="button" className="add-entry" onClick={onRefresh}>Refresh</button>
+            {refreshStatus && <span className="map-sidebar-unit-type-links">{refreshStatus}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
