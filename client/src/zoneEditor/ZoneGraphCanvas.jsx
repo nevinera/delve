@@ -83,15 +83,34 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
   // status - the one list both rendering and link drag/drop hit-testing
   // read from.
   const ports = useMemo(() => {
+    // A linked port's angle points at whichever node it's connected to
+    // (see below) - needs a way to look up that other node by the map
+    // identifier a zoneLink names, not by file key.
+    const nodesByIdentifier = new Map(nodes.filter((n) => n.detail?.identifier).map((n) => [n.detail.identifier, n]));
+
     const list = [];
     for (const node of nodes) {
       const connections = node.detail?.connections ?? [];
       const {x: cx, y: cy} = nodePosition(node.key);
       connections.forEach((connection, i) => {
-        const angle = (i / connections.length) * 2 * Math.PI;
         const status = node.detail?.identifier
           ? connectionStatus(node.detail.identifier, connection.identifier, zoneData)
           : {type: "open"};
+
+        // A linked port sits on the side of its node facing whatever it's
+        // connected to, recomputed from both nodes' current positions -
+        // so it tracks either end being dragged. Anything unlinked (open/
+        // entryPoint/openConnection) has no "other node" to face, so it
+        // keeps the even-spacing-by-index fallback.
+        let angle;
+        const otherNode = status.type === "zoneLink" ? nodesByIdentifier.get(status.otherSide?.map) : null;
+        if (otherNode) {
+          const other = nodePosition(otherNode.key);
+          angle = Math.atan2(other.y - cy, other.x - cx);
+        } else {
+          angle = (i / connections.length) * 2 * Math.PI;
+        }
+
         list.push({
           nodeKey: node.key,
           mapIdentifier: node.detail?.identifier,

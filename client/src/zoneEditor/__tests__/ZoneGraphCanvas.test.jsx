@@ -26,6 +26,12 @@ function port(container, mapIdentifier, connectionIdentifier) {
   return container.querySelector(`.zone-graph-port[data-node-key="${nodeKey}"][data-connection="${connectionIdentifier}"]`);
 }
 
+function nodeCenter(container, nodeKey) {
+  const transform = container.querySelector(`[data-node-key="${nodeKey}"]`).getAttribute("transform");
+  const [, x, y] = transform.match(/translate\(([^,]+), ([^)]+)\)/);
+  return {x: parseFloat(x), y: parseFloat(y)};
+}
+
 describe("ZoneGraphCanvas", () => {
   it("shows a hint instead of a graph when there are no maps", () => {
     render(<ZoneGraphCanvas zoneData={zoneData({maps: []})} mapDetailsByKey={{}} dispatch={vi.fn()} />);
@@ -72,6 +78,57 @@ describe("ZoneGraphCanvas", () => {
     const height = Number(image.getAttribute("height"));
     expect(width).toBe(height); // square box, so the worst case (a square image) is the one that matters
     expect(Math.hypot(width, height)).toBeLessThanOrEqual(NODE_RADIUS * 2 + 1e-9);
+  });
+
+  it("places a linked port on the side of its node facing the node it's connected to", () => {
+    const data = zoneData({
+      zoneLinks: [{connectionA: {map: "cave_entrance", connection: "cave_mouth"}, connectionB: {map: "cave_interior", connection: "entrance"}, oneWay: false, requiredKey: null}],
+    });
+    const {container} = render(<ZoneGraphCanvas zoneData={data} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+
+    const entranceCenter = nodeCenter(container, "gc1-goblin-cave-entrance");
+    const interiorCenter = nodeCenter(container, "gc2-goblin-cave-interior");
+    const entrancePort = port(container, "cave_entrance", "cave_mouth");
+    const interiorPort = port(container, "cave_interior", "entrance");
+
+    const angleToOther = Math.atan2(interiorCenter.y - entranceCenter.y, interiorCenter.x - entranceCenter.x);
+    const angleOfPort = Math.atan2(Number(entrancePort.getAttribute("cy")) - entranceCenter.y, Number(entrancePort.getAttribute("cx")) - entranceCenter.x);
+    expect(angleOfPort).toBeCloseTo(angleToOther);
+
+    const angleBack = Math.atan2(entranceCenter.y - interiorCenter.y, entranceCenter.x - interiorCenter.x);
+    const angleOfOtherPort = Math.atan2(Number(interiorPort.getAttribute("cy")) - interiorCenter.y, Number(interiorPort.getAttribute("cx")) - interiorCenter.x);
+    expect(angleOfOtherPort).toBeCloseTo(angleBack);
+  });
+
+  it("keeps a linked port facing its target even after that target node is dragged", () => {
+    const data = zoneData({
+      zoneLinks: [{connectionA: {map: "cave_entrance", connection: "cave_mouth"}, connectionB: {map: "cave_interior", connection: "entrance"}, oneWay: false, requiredKey: null}],
+    });
+    const {container} = render(<ZoneGraphCanvas zoneData={data} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+
+    const interiorNode = container.querySelector('[data-node-key="gc2-goblin-cave-interior"] .zone-graph-node');
+    fireEvent.pointerDown(interiorNode, {pointerId: 5, clientX: 0, clientY: 0});
+    fireEvent.pointerMove(interiorNode, {pointerId: 5, clientX: 500, clientY: 500});
+    fireEvent.pointerUp(interiorNode, {pointerId: 5, clientX: 500, clientY: 500});
+
+    const entranceCenter = nodeCenter(container, "gc1-goblin-cave-entrance");
+    const interiorCenter = nodeCenter(container, "gc2-goblin-cave-interior");
+    const entrancePort = port(container, "cave_entrance", "cave_mouth");
+
+    const angleToOther = Math.atan2(interiorCenter.y - entranceCenter.y, interiorCenter.x - entranceCenter.x);
+    const angleOfPort = Math.atan2(Number(entrancePort.getAttribute("cy")) - entranceCenter.y, Number(entrancePort.getAttribute("cx")) - entranceCenter.x);
+    expect(angleOfPort).toBeCloseTo(angleToOther);
+  });
+
+  it("leaves an unlinked port on the even-spacing fallback, not pointing at anything", () => {
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+    const entranceCenter = nodeCenter(container, "gc1-goblin-cave-entrance");
+    const entrancePort = port(container, "cave_entrance", "cave_mouth");
+
+    // The one connection on this node, unlinked, falls back to angle 0
+    // (i=0 of 1) - i.e. straight out along +x from the node center.
+    expect(Number(entrancePort.getAttribute("cx"))).toBeCloseTo(entranceCenter.x + NODE_RADIUS);
+    expect(Number(entrancePort.getAttribute("cy"))).toBeCloseTo(entranceCenter.y);
   });
 
   it("shows a custom tooltip with the connection identifier on hover, and hides it on mouse leave", () => {
