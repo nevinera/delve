@@ -1,10 +1,12 @@
-import {describe, it, expect, vi, afterEach, beforeEach} from "vitest";
+import {describe, it, expect, vi, afterEach} from "vitest";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import ZoneEditor from "../ZoneEditor";
 import {resolveZoneRefs} from "../resolveZoneRefs";
 import {saveZone} from "../saveZone";
+import {GithubClient, GithubAuthError} from "../../github/delve-github";
+import {loadZone, loadLayoutPositions, listZoneMapKeys, mapDetailsFor} from "../zoneContentLoaders";
 import {validateZone} from "../../validators/validateContent";
-import {GithubAuthError} from "../../github/commitFiles";
+import {GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
 
 vi.mock("../resolveZoneRefs", () => ({
   resolveZoneRefs: vi.fn(),
@@ -12,49 +14,104 @@ vi.mock("../resolveZoneRefs", () => ({
 vi.mock("../saveZone", () => ({
   saveZone: vi.fn(),
 }));
+vi.mock("../../github/delve-github", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {...actual, GithubClient: vi.fn(() => ({}))};
+});
+vi.mock("../zoneContentLoaders", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    loadZone: vi.fn(),
+    loadLayoutPositions: vi.fn(),
+    listZoneMapKeys: vi.fn(),
+    mapDetailsFor: vi.fn(),
+  };
+});
 vi.mock("../../validators/validateContent", () => ({
   validateZone: vi.fn(),
 }));
 
 const initialZone = {name: "Goblin Cave", maps: [], zoneLinks: [], entryPoints: {}, openConnections: {}};
 
-describe("ZoneEditor", () => {
-  beforeEach(() => {
-    resolveZoneRefs.mockReset();
-    saveZone.mockReset();
-    validateZone.mockReset();
-  });
+// Mocks every loader ZoneEditor fetches on mount, renders, and waits for
+// the load to finish. referencedMapKeys itself is NOT mocked (imported for
+// real via importOriginal above) - it's a pure derivation from zone.maps,
+// no reason to fake it.
+async function renderReady({zoneKey = "goblin-cave", newMapUrl, zone = initialZone, positions = {}, mapKeys = [], mapDetails = {}} = {}) {
+  loadZone.mockResolvedValue(zone);
+  loadLayoutPositions.mockResolvedValue(positions);
+  listZoneMapKeys.mockResolvedValue(mapKeys);
+  mapDetailsFor.mockResolvedValue(mapDetails);
 
+  render(<ZoneEditor zoneKey={zoneKey} newMapUrl={newMapUrl} />);
+  await waitFor(() => expect(screen.queryByText("Loading…")).not.toBeInTheDocument());
+}
+
+describe("ZoneEditor", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
-  it("flows a name edit from the field into the zone state", () => {
-    render(<ZoneEditor initialZone={initialZone} />);
+  it("shows a loading state, then the editor once the fetch resolves", async () => {
+    let resolveLoad;
+    loadZone.mockImplementation(() => new Promise((resolve) => (resolveLoad = resolve)));
+    loadLayoutPositions.mockResolvedValue({});
+    listZoneMapKeys.mockResolvedValue([]);
+    mapDetailsFor.mockResolvedValue({});
+
+    render(<ZoneEditor zoneKey="goblin-cave" />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+
+    resolveLoad(initialZone);
+    await waitFor(() => expect(screen.getByDisplayValue("Goblin Cave")).toBeInTheDocument());
+  });
+
+  it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
+    loadZone.mockRejectedValue(new Error("network down"));
+
+    render(<ZoneEditor zoneKey="goblin-cave" />);
+
+    await screen.findByText(/Failed to load: network down/);
+  });
+
+  it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
+    loadZone.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+    delete window.location;
+    window.location = {href: ""};
+
+    render(<ZoneEditor zoneKey="goblin-cave" />);
+
+    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+  });
+
+  it("flows a name edit from the field into the zone state", async () => {
+    await renderReady();
 
     fireEvent.change(screen.getByDisplayValue("Goblin Cave"), {target: {value: "Goblin Warren"}});
 
     expect(screen.getByDisplayValue("Goblin Warren")).toBeInTheDocument();
   });
 
-  it("flows an elvl edit, as an integer, into the zone state", () => {
-    render(<ZoneEditor initialZone={initialZone} />);
+  it("flows an elvl edit, as an integer, into the zone state", async () => {
+    await renderReady();
 
     fireEvent.change(screen.getByLabelText("Elevation"), {target: {value: "200"}});
 
     expect(screen.getByLabelText("Elevation")).toHaveValue(200);
   });
 
-  it("clearing the elvl field sets it back to null, not an empty string", () => {
-    render(<ZoneEditor initialZone={{...initialZone, elvl: 200}} />);
+  it("clearing the elvl field sets it back to null, not an empty string", async () => {
+    await renderReady({zone: {...initialZone, elvl: 200}});
 
     fireEvent.change(screen.getByLabelText("Elevation"), {target: {value: ""}});
 
     expect(screen.getByLabelText("Elevation")).toHaveValue(null);
   });
 
-  it("flows a private edit into the zone state", () => {
-    render(<ZoneEditor initialZone={initialZone} />);
+  it("flows a private edit into the zone state", async () => {
+    await renderReady();
 
     expect(screen.getByLabelText("Private")).not.toBeChecked();
     fireEvent.click(screen.getByLabelText("Private"));
@@ -65,8 +122,7 @@ describe("ZoneEditor", () => {
   it("renders Validate and Save, with Save disabled until a Validate click passes", async () => {
     resolveZoneRefs.mockResolvedValue({name: "Goblin Cave"});
     validateZone.mockResolvedValue({valid: true});
-
-    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
+    await renderReady();
 
     expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
@@ -78,8 +134,8 @@ describe("ZoneEditor", () => {
   it("shows the validator's error and keeps Save disabled when the resolved zone is invalid", async () => {
     resolveZoneRefs.mockResolvedValue({});
     validateZone.mockResolvedValue({valid: false, error: {message: "elvl is required", path: "$.elvl"}});
+    await renderReady();
 
-    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
     await screen.findByText("elvl is required");
@@ -90,8 +146,8 @@ describe("ZoneEditor", () => {
     resolveZoneRefs.mockResolvedValue({name: "Goblin Cave"});
     validateZone.mockResolvedValue({valid: true});
     saveZone.mockResolvedValue({commitSha: "abc", branch: "main"});
+    await renderReady();
 
-    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
@@ -104,11 +160,11 @@ describe("ZoneEditor", () => {
   it("redirects to the GitHub reauth URL on a GithubAuthError during save", async () => {
     resolveZoneRefs.mockResolvedValue({});
     validateZone.mockResolvedValue({valid: true});
-    saveZone.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+    saveZone.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
     delete window.location;
     window.location = {href: ""};
+    await renderReady();
 
-    render(<ZoneEditor initialZone={initialZone} zoneKey="goblin-cave" />);
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
@@ -116,59 +172,43 @@ describe("ZoneEditor", () => {
     await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
   });
 
-  it("renders the maps panel, seeded from the initial available-map-details prop", () => {
+  it("renders the maps panel, seeded from the resolved map details", async () => {
     const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
     const details = {"gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [], thumbnailUrl: null}};
-    render(<ZoneEditor initialZone={{...initialZone, maps}} initialAvailableMapDetails={details} />);
+    await renderReady({zone: {...initialZone, maps}, mapDetails: details});
 
     // "Cave Entrance" appears both in the maps list row and as the graph
     // node's label - just confirm the maps panel itself rendered it.
     expect(document.querySelector(".zone-maps-panel").textContent).toContain("Cave Entrance");
   });
 
-  it("passes the same map details to the graph, which draws a node for it too", () => {
+  it("passes the same map details to the graph, which draws a node for it too", async () => {
     const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
     const details = {"gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [], thumbnailUrl: null}};
-    render(<ZoneEditor initialZone={{...initialZone, maps}} initialAvailableMapDetails={details} />);
+    await renderReady({zone: {...initialZone, maps}, mapDetails: details});
 
     expect(document.querySelector('.zone-graph-panel [data-node-key="gc1-goblin-cave-entrance"]')).not.toBeNull();
   });
 
-  it("refreshes the cheap key list from availableMapsUrl (no keys[]) without touching the rest of the draft", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ok: true, json: async () => ["gc2-new-room"]});
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<ZoneEditor initialZone={initialZone} availableMapsUrl="/build/zones/goblin-cave/available_maps" zoneKey="goblin-cave" newMapUrl="/build/maps/new" />);
+  it("refreshes the cheap key list without touching the rest of the draft", async () => {
+    await renderReady({newMapUrl: "/build/maps/new"});
+    listZoneMapKeys.mockResolvedValueOnce(["gc2-new-room"]);
 
     fireEvent.click(screen.getByRole("button", {name: "Refresh"}));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/build/zones/goblin-cave/available_maps"));
+    await waitFor(() => expect(screen.getByText("Refreshed.")).toBeInTheDocument());
     await screen.findByRole("option", {name: "gc2-new-room"});
   });
 
-  it("lazily fetches a picked map's detail (keys[]=...) only once it's actually added", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({"gc2-new-room": {identifier: "new_room", name: "New Room", connections: [], units: [], thumbnailUrl: null}}),
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("lazily fetches a picked map's detail only once it's actually added", async () => {
+    await renderReady({mapKeys: ["gc2-new-room"], newMapUrl: "/build/maps/new"});
+    expect(mapDetailsFor).not.toHaveBeenCalled();
 
-    render(
-      <ZoneEditor
-        initialZone={initialZone}
-        initialAvailableMapKeys={["gc2-new-room"]}
-        availableMapsUrl="/build/zones/goblin-cave/available_maps"
-        zoneKey="goblin-cave"
-        newMapUrl="/build/maps/new"
-      />
-    );
-
-    expect(fetchMock).not.toHaveBeenCalled();
-
+    mapDetailsFor.mockResolvedValueOnce({"gc2-new-room": {identifier: "new_room", name: "New Room", connections: [], units: [], thumbnailUrl: null}});
     fireEvent.change(screen.getByRole("combobox"), {target: {value: "gc2-new-room"}});
     fireEvent.click(screen.getByRole("button", {name: "Add"}));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/build/zones/goblin-cave/available_maps?keys%5B%5D=gc2-new-room"));
+    await waitFor(() => expect(mapDetailsFor).toHaveBeenCalledWith(expect.anything(), "goblin-cave", ["gc2-new-room"]));
     await waitFor(() => expect(document.querySelector(".zone-maps-panel").textContent).toContain("New Room"));
   });
 });

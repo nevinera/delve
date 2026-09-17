@@ -7,16 +7,6 @@ class Build::AbilitiesController < Build::BaseController
   # into subdirectories instead of all living flat in abilities/.
   KEY_FORMAT = %r{\A[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*\z}
 
-  # Still used by classes/unit_types/maps/zones controllers' own asset
-  # resolution (their editors haven't moved this client-side yet - see
-  # plans/editor-git.md's step ordering) - not dead even though this
-  # controller's own edit action no longer needs it.
-  MIME_TYPES = {
-    ".svg" => "image/svg+xml", ".png" => "image/png", ".webp" => "image/webp",
-    ".jpg" => "image/jpeg", ".jpeg" => "image/jpeg", ".gif" => "image/gif",
-    ".ogg" => "audio/ogg", ".mp3" => "audio/mpeg", ".wav" => "audio/wav"
-  }.freeze
-
   def index
     entries = Github::ContentClient.new(current_user).list_directory_recursive("abilities")
     @abilities = entries.select { |entry| entry["name"].end_with?(".json") }.sort_by { |entry| entry["path"] }

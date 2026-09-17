@@ -28,17 +28,6 @@ module Github
       Base64.decode64(data["content"])
     end
 
-    # Like #file_content, but for binary assets that can plausibly exceed
-    # 1MB (a map's background image, say) - see
-    # Github::ApiClient#raw_repository_contents for why this can't just
-    # reuse #file_content's JSON+base64 path.
-    def raw_file_content(path)
-      ensure_fresh_token!
-      response = Github::ApiClient.new(@installation.access_token).raw_repository_contents(@installation.repo_full_name, path)
-      raise NotFoundError, "#{path} not found in #{@installation.repo_full_name}" unless response.is_a?(Net::HTTPSuccess)
-      response.body
-    end
-
     private
 
     def contents(path)
