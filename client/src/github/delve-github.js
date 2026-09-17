@@ -21,11 +21,35 @@ function decodeBase64Content(base64) {
 export class GithubClient {
   constructor() {
     this._auth = null;
+    this._defaultBranch = null;
   }
 
   async _getAuth() {
     if (!this._auth) this._auth = await fetchToken();
     return this._auth;
+  }
+
+  async _getDefaultBranch(repo, token) {
+    if (!this._defaultBranch) {
+      const res = await fetch(`${GITHUB_API}/repos/${repo}`, {
+        headers: {Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+      });
+      if (!res.ok) throw new Error(`GitHub API error ${res.status} fetching ${repo}: ${res.statusText}`);
+      this._defaultBranch = (await res.json()).default_branch;
+    }
+    return this._defaultBranch;
+  }
+
+  // Binary assets (images, audio) are served straight from
+  // raw.githubusercontent.com rather than fetched/base64'd through the
+  // Contents API - the content repo is always public (assets need to play
+  // without any auth, in-game), so this URL can go directly into an
+  // <img>/<audio> src with no fetch, no CORS concern, and no size ceiling
+  // (unlike the Contents API's base64 envelope, capped at 1MB).
+  async assetUrl(path) {
+    const {token, repo_full_name: repo} = await this._getAuth();
+    const branch = await this._getDefaultBranch(repo, token);
+    return `https://raw.githubusercontent.com/${repo}/${branch}/${path}`;
   }
 
   // Returns a file's decoded text content, or null if it doesn't exist -

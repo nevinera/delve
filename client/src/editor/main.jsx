@@ -7,8 +7,6 @@ createRoot(el).render(
   <StrictMode>
     <AbilityEditor
       abilityKey={el.dataset.key}
-      initialAbility={JSON.parse(el.dataset.ability)}
-      assetMap={JSON.parse(el.dataset.assetMap)}
       stockAssets={JSON.parse(el.dataset.stockAssets)}
     />
   </StrictMode>

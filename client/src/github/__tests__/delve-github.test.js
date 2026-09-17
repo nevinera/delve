@@ -59,3 +59,31 @@ describe("GithubClient#fetchFile", () => {
     await expect(new GithubClient().fetchFile("items/a.json")).rejects.toBeInstanceOf(GithubAuthError);
   });
 });
+
+describe("GithubClient#assetUrl", () => {
+  it("builds a raw.githubusercontent.com URL using the repo's default branch", async () => {
+    vi.spyOn(tokenModule, "fetchToken").mockResolvedValue({token: "tok", repo_full_name: "nevinera/delve-content"});
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, json: async () => ({default_branch: "main"})});
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await new GithubClient().assetUrl("abilities/graphics/icons/punch.svg");
+
+    expect(result).toBe("https://raw.githubusercontent.com/nevinera/delve-content/main/abilities/graphics/icons/punch.svg");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.github.com/repos/nevinera/delve-content",
+      expect.objectContaining({headers: expect.objectContaining({Authorization: "Bearer tok"})})
+    );
+  });
+
+  it("caches the default branch across multiple calls on the same instance", async () => {
+    vi.spyOn(tokenModule, "fetchToken").mockResolvedValue({token: "tok", repo_full_name: "nevinera/delve-content"});
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, json: async () => ({default_branch: "main"})});
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new GithubClient();
+    await client.assetUrl("a.svg");
+    await client.assetUrl("b.svg");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
