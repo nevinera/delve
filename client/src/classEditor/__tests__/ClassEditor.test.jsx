@@ -1,13 +1,24 @@
-import {describe, it, expect, vi, beforeEach} from "vitest";
+import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import ClassEditor from "../ClassEditor";
-import {commitFiles, GithubAuthError} from "../../github/commitFiles";
+import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
+import {GithubClient} from "../../github/delve-github";
+import {loadAvailableAbilities} from "../loadAvailableAbilities";
 import {validateCharacterClass} from "../../validators/validateContent";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
   return {...actual, commitFiles: vi.fn()};
 });
+
+vi.mock("../../github/delve-github", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {...actual, GithubClient: vi.fn()};
+});
+
+vi.mock("../loadAvailableAbilities", () => ({
+  loadAvailableAbilities: vi.fn(),
+}));
 
 vi.mock("../../validators/validateContent", () => ({
   validateCharacterClass: vi.fn(),
@@ -29,17 +40,71 @@ const availableAbilities = {
   "classes/puncher/punch": {ability: {name: "Punch"}, assetMap: {}},
 };
 
+function mockClassLoad(classData, abilities = {}) {
+  GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockResolvedValue(JSON.stringify(classData))}));
+  loadAvailableAbilities.mockResolvedValue(abilities);
+}
+
+async function renderReady(classData = initialClass, abilities = {}) {
+  mockClassLoad(classData, abilities);
+  render(<ClassEditor classKey="puncher" stockAssets={{}} />);
+  await screen.findByDisplayValue(classData.name);
+}
+
 describe("ClassEditor", () => {
-  it("flows a name edit from the fields panel into the class state", () => {
-    render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+  afterEach(() => vi.clearAllMocks());
+
+  it("shows a loading state, then the fields panel once the fetch resolves", async () => {
+    let resolveFetch;
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)))}));
+    loadAvailableAbilities.mockResolvedValue({});
+
+    render(<ClassEditor classKey="puncher" stockAssets={{}} />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+
+    resolveFetch(JSON.stringify(initialClass));
+    await waitFor(() => expect(screen.getByDisplayValue("Puncher")).toBeInTheDocument());
+  });
+
+  it("falls back to a blank class when the file doesn't exist yet (404 -> null)", async () => {
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockResolvedValue(null)}));
+    loadAvailableAbilities.mockResolvedValue({});
+
+    render(<ClassEditor classKey="druid" stockAssets={{}} />);
+
+    await screen.findByDisplayValue("Druid");
+  });
+
+  it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}));
+    loadAvailableAbilities.mockResolvedValue({});
+
+    render(<ClassEditor classKey="puncher" stockAssets={{}} />);
+
+    await screen.findByText(/Failed to load: network down/);
+  });
+
+  it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
+    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}));
+    loadAvailableAbilities.mockResolvedValue({});
+    delete window.location;
+    window.location = {href: ""};
+
+    render(<ClassEditor classKey="puncher" stockAssets={{}} />);
+
+    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+  });
+
+  it("flows a name edit from the fields panel into the class state", async () => {
+    await renderReady();
 
     fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
 
     expect(screen.getByDisplayValue("Brawler")).toBeInTheDocument();
   });
 
-  it("adds a power slot's $ref when an ability is picked from an empty slot", () => {
-    render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={availableAbilities} stockAssets={{}} />);
+  it("adds a power slot's $ref when an ability is picked from an empty slot", async () => {
+    await renderReady(initialClass, availableAbilities);
     expect(screen.getByTestId("preview-powers")).toHaveTextContent("[]");
 
     fireEvent.change(screen.getAllByRole("combobox").find((el) => el.closest("tr")?.textContent.includes("Slot 1")), {
@@ -50,9 +115,9 @@ describe("ClassEditor", () => {
     expect(powers).toEqual([{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]);
   });
 
-  it("clears a filled slot back to an empty array", () => {
+  it("clears a filled slot back to an empty array", async () => {
     const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
-    render(<ClassEditor classKey="puncher" initialClass={withPower} availableAbilities={availableAbilities} stockAssets={{}} />);
+    await renderReady(withPower, availableAbilities);
 
     fireEvent.click(screen.getByRole("button", {name: "Clear"}));
 
@@ -67,7 +132,7 @@ describe("ClassEditor", () => {
 
     it("disables Save until Validate passes", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
-      render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
@@ -77,7 +142,7 @@ describe("ClassEditor", () => {
 
     it("disables Save again after an edit, even though the draft was previously validated", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
-      render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
@@ -89,7 +154,7 @@ describe("ClassEditor", () => {
     it("commits the class under classes/<key>.json and shows a success message", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
       commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
-      render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
@@ -105,7 +170,7 @@ describe("ClassEditor", () => {
     it("shows an error message when the commit fails, without requiring revalidation to retry", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new Error("network exploded"));
-      render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
@@ -117,12 +182,12 @@ describe("ClassEditor", () => {
 
     it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
-      commitFiles.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
+      commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
       const originalLocation = window.location;
       delete window.location;
       window.location = {href: ""};
 
-      render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
@@ -135,7 +200,7 @@ describe("ClassEditor", () => {
     it("validates the resolved (powers-inlined) form, not the raw $ref draft", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
       const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
-      render(<ClassEditor classKey="puncher" initialClass={withPower} availableAbilities={availableAbilities} stockAssets={{}} />);
+      await renderReady(withPower, availableAbilities);
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
@@ -144,7 +209,7 @@ describe("ClassEditor", () => {
 
     it("shows the validation error and keeps Save disabled when the resolved class is invalid", async () => {
       validateCharacterClass.mockResolvedValue({valid: false, error: {message: "major must be a 6-digit hex string (at $.colors.major)", path: "$.colors.major"}});
-      render(<ClassEditor classKey="puncher" initialClass={initialClass} availableAbilities={{}} stockAssets={{}} />);
+      await renderReady();
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
@@ -154,7 +219,7 @@ describe("ClassEditor", () => {
 
     it("shows a resolution error and keeps Save disabled when a power references an unloaded ability", async () => {
       const withBadPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "ability"}]};
-      render(<ClassEditor classKey="puncher" initialClass={withBadPower} availableAbilities={{}} stockAssets={{}} />);
+      await renderReady(withBadPower);
 
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
