@@ -21,6 +21,12 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapKey
   const [availableMapKeys, setAvailableMapKeys] = useState(initialAvailableMapKeys ?? []);
   const [mapDetailsByKey, setMapDetailsByKey] = useState(initialAvailableMapDetails ?? {});
   const [refreshStatus, setRefreshStatus] = useState("");
+  // The graph's own live drag-override map (see ZoneGraphCanvas's
+  // onPositionsChange), tracked here without ZoneGraphCanvas needing to
+  // know anything about persistence itself. Not consumed anywhere yet -
+  // step 11's Save is what will pass this through layoutMetadata.js's
+  // buildLayoutMetadata to get <zone>.layout.json's actual content.
+  const [graphPositions, setGraphPositions] = useState({});
 
   // Picks up a map created in another tab (via the "Create Map ↗" link)
   // without reloading the whole editor and losing the draft - re-fetches
@@ -56,7 +62,7 @@ export default function ZoneEditor({zoneKey, initialZone, initialAvailableMapKey
   return (
     <div className="zone-editor">
       <div className="zone-editor-canvas-area">
-        <ZoneGraphCanvas zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} dispatch={dispatch} />
+        <ZoneGraphCanvas zoneData={zoneData} mapDetailsByKey={mapDetailsByKey} dispatch={dispatch} onPositionsChange={setGraphPositions} />
       </div>
       <ZoneSidebar>
         <table>

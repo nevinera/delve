@@ -66,7 +66,14 @@ const STATUS_COLOR = {
 // same reducer actions ZoneMapConnectionsPanel's "+ Link to"/"Remove Link"
 // already use, so both
 // UIs stay in sync automatically.
-export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
+//
+// onPositionsChange, if given, is called with the current drag-override
+// map every time it changes - lets a caller (see ZoneEditor) observe the
+// live layout for generating layout metadata (plans/zone-editor.md step
+// 9), without this component needing to know anything about that concern
+// itself. Purely observational - there's no initialPositions prop (yet);
+// loading persisted layout back in is step 11's job.
+export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch, onPositionsChange}) {
   const containerRef = useRef(null);
   const [positions, setPositions] = useState({}); // {[nodeKey]: {x, y}} - drag overrides
   const [view, setView] = useState({panX: 0, panY: 0, zoom: 1});
@@ -92,6 +99,11 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
   function nodePosition(key) {
     return positions[key] ?? defaultPositions[key] ?? {x: 0, y: 0};
   }
+
+  useEffect(() => {
+    onPositionsChange?.(positions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions]);
 
   // Every port on every node (resolved world position + current status),
   // and a small satellite node for every entry point/open connection - the

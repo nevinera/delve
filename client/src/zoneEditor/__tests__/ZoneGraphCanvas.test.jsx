@@ -348,4 +348,22 @@ describe("ZoneGraphCanvas", () => {
     const after = port(container, "cave_entrance", "cave_mouth").getAttribute("cx");
     expect(Number(after)).toBeCloseTo(Number(before) + 50);
   });
+
+  it("reports the current drag-override map via onPositionsChange whenever it changes", () => {
+    const onPositionsChange = vi.fn();
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} onPositionsChange={onPositionsChange} />);
+
+    // Called once on mount, with no overrides yet.
+    expect(onPositionsChange).toHaveBeenLastCalledWith({});
+
+    const nodeCircle = container.querySelector('[data-node-key="gc1-goblin-cave-entrance"] .zone-graph-node');
+    fireEvent.pointerDown(nodeCircle, {pointerId: 9, clientX: 0, clientY: 0});
+    fireEvent.pointerMove(nodeCircle, {pointerId: 9, clientX: 50, clientY: 30});
+    fireEvent.pointerUp(nodeCircle, {pointerId: 9, clientX: 50, clientY: 30});
+
+    const lastCall = onPositionsChange.mock.calls.at(-1)[0];
+    expect(Object.keys(lastCall)).toEqual(["gc1-goblin-cave-entrance"]);
+    expect(typeof lastCall["gc1-goblin-cave-entrance"].x).toBe("number");
+    expect(typeof lastCall["gc1-goblin-cave-entrance"].y).toBe("number");
+  });
 });
