@@ -94,7 +94,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, groupByID, dt, pathGraph, &events)
 	}
 
-	applyNPCSeparation(state, dt)
+	applyNPCSeparation(state, zone, dt)
 	return events
 }
 
@@ -586,8 +586,12 @@ const (
 )
 
 // applyNPCSeparation pushes NPC units apart when they crowd each other,
-// preventing clumping when multiple units chase the same target.
-func applyNPCSeparation(state *instancestate.InstanceState, dt float64) {
+// preventing clumping when multiple units chase the same target. A shove
+// that would cross a barrier is skipped rather than applied - the intent is
+// to relieve crowding, not to shove a unit through a wall it happens to be
+// crowded up against. (restoreUnitsThatCrossedBarriers still runs at the end
+// of every tick as a backstop, for any other path that moves a unit.)
+func applyNPCSeparation(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
 	type entry struct {
 		unit  *instancestate.UnitState
 		x, y  float64
@@ -618,8 +622,10 @@ func applyNPCSeparation(state *instancestate.InstanceState, dt float64) {
 			fy += (dy / dist) * mag
 		}
 		if fx != 0 || fy != 0 {
-			npcs[i].unit.Position.X += fx * dt
-			npcs[i].unit.Position.Y += fy * dt
+			newX, newY := npcs[i].x+fx*dt, npcs[i].y+fy*dt
+			if instanceconfig.LineOfSightClear(zone, npcs[i].mapID, npcs[i].x, npcs[i].y, newX, newY) {
+				npcs[i].unit.Position.X, npcs[i].unit.Position.Y = newX, newY
+			}
 		}
 	}
 }

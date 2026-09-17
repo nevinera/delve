@@ -63,8 +63,12 @@ func ApplyMapTransitionsForTest(state *instancestate.InstanceState, prevState *i
 	applyMapTransitions(state, prevState, zone)
 }
 
-func ApplyNPCSeparationForTest(state *instancestate.InstanceState, dt float64) {
-	applyNPCSeparation(state, dt)
+func ApplyNPCSeparationForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	applyNPCSeparation(state, zone, dt)
+}
+
+func RestoreUnitsThatCrossedBarriersForTest(state, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
+	restoreUnitsThatCrossedBarriers(state, prevState, zone)
 }
 
 func FacingTowardDegForTest(x1, y1, x2, y2 float64) float64 {

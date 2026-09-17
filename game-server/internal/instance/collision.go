@@ -47,6 +47,32 @@ func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Z
 	}
 }
 
+// restoreUnitsThatCrossedBarriers is a last-resort safety net, run at the
+// very end of the tick (after every other step that can move a unit,
+// including resolveCollisions itself): for each unit that moved this tick on
+// the same map it started the tick on, if the straight line from its
+// start-of-tick position to its current position crossed a barrier, the
+// unit is snapped back to where it started. This catches cases
+// resolveCollisions can't - e.g. applyNPCSeparation shoving a unit clean
+// through a wall in one tick, landing it on the far side with no overlap at
+// its final position for resolveCollisions to push back out of. A unit
+// whose map changed this tick (applyMapTransitions) is left alone; that's a
+// legitimate teleport, not a shove-through-wall.
+func restoreUnitsThatCrossedBarriers(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
+	for id, unit := range state.Units {
+		prev, ok := prevState.Units[id]
+		if !ok || prev.MapIdentifier != unit.MapIdentifier {
+			continue
+		}
+		if prev.Position.X == unit.Position.X && prev.Position.Y == unit.Position.Y {
+			continue
+		}
+		if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, prev.Position.X, prev.Position.Y, unit.Position.X, unit.Position.Y) {
+			unit.Position.X, unit.Position.Y = prev.Position.X, prev.Position.Y
+		}
+	}
+}
+
 // pushOutOfSegment returns (px, py) pushed outside radius r of the closest
 // point on segment (ax,ay)→(bx,by). Returns (px,py) unchanged if no overlap.
 func pushOutOfSegment(px, py, r, ax, ay, bx, by float64) (float64, float64) {

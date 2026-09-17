@@ -100,6 +100,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds())
 			expireStatusEffects(state, now)
 			resolveCollisions(state, inst.ZoneConfig)
+			restoreUnitsThatCrossedBarriers(state, prevState, inst.ZoneConfig)
 			roundPositions(state)
 			sweepLootClaims(state)
 			inst.processLootEvents(ctx, state)

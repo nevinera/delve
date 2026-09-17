@@ -249,3 +249,87 @@ func TestResolveCollisions_MapEdge_NoBoundsWhenDimsZero(t *testing.T) {
 	instance.ResolveCollisionsForTest(s, collisionZone())
 	assert.InDelta(t, -5.0, u.Position.X, 1e-9)
 }
+
+// ---------------------------------------------------------------------------
+// restoreUnitsThatCrossedBarriers
+// ---------------------------------------------------------------------------
+
+// stateAtPosition builds a single-unit InstanceState (keyed by the given
+// uuid, so a matching prevState can be built for the same unit) at (x,y) on
+// "map1".
+func stateAtPosition(id uuid.UUID, x, y float64) *instancestate.InstanceState {
+	return &instancestate.InstanceState{
+		Units: map[uuid.UUID]*instancestate.UnitState{
+			id: {MapIdentifier: "map1", Position: instanceconfig.Position{X: x, Y: y}},
+		},
+	}
+}
+
+func TestRestoreUnitsThatCrossedBarriers_SnapsBackWhenMoveCrossesWall(t *testing.T) {
+	// Horizontal wall at y=0. Unit teleports from (5,-1) to (5,1) this tick -
+	// e.g. a separation shove big enough to clear the wall in one step,
+	// landing clean on the other side with no overlap for resolveCollisions
+	// to catch.
+	wall := instanceconfig.Barrier{
+		Type:      "wall",
+		Locations: []instanceconfig.Location{{X: 0, Y: 0}, {X: 10, Y: 0}},
+	}
+	id := uuid.New()
+	prev := stateAtPosition(id, 5, -1)
+	cur := stateAtPosition(id, 5, 1)
+
+	instance.RestoreUnitsThatCrossedBarriersForTest(cur, prev, collisionZone(wall))
+
+	u := cur.Units[id]
+	assert.InDelta(t, 5.0, u.Position.X, 1e-9)
+	assert.InDelta(t, -1.0, u.Position.Y, 1e-9, "must be snapped back to its start-of-tick position")
+}
+
+func TestRestoreUnitsThatCrossedBarriers_LeavesClearMoveAlone(t *testing.T) {
+	wall := instanceconfig.Barrier{
+		Type:      "wall",
+		Locations: []instanceconfig.Location{{X: 0, Y: 0}, {X: 10, Y: 0}},
+	}
+	id := uuid.New()
+	prev := stateAtPosition(id, 5, 5)
+	cur := stateAtPosition(id, 6, 6) // moved, but never near the wall
+
+	instance.RestoreUnitsThatCrossedBarriersForTest(cur, prev, collisionZone(wall))
+
+	u := cur.Units[id]
+	assert.InDelta(t, 6.0, u.Position.X, 1e-9)
+	assert.InDelta(t, 6.0, u.Position.Y, 1e-9)
+}
+
+func TestRestoreUnitsThatCrossedBarriers_IgnoresLegitimateMapTransition(t *testing.T) {
+	// A unit that changed maps this tick (e.g. via a ZoneLink) has no
+	// meaningful "straight line" between its old and new position - that's
+	// a teleport, not a shove-through-wall, and must not be reverted.
+	id := uuid.New()
+	prev := stateAtPosition(id, 5, 5)
+	cur := &instancestate.InstanceState{
+		Units: map[uuid.UUID]*instancestate.UnitState{
+			id: {MapIdentifier: "map2", Position: instanceconfig.Position{X: 500, Y: 500}},
+		},
+	}
+
+	instance.RestoreUnitsThatCrossedBarriersForTest(cur, prev, collisionZone())
+
+	u := cur.Units[id]
+	assert.InDelta(t, 500.0, u.Position.X, 1e-9)
+	assert.InDelta(t, 500.0, u.Position.Y, 1e-9)
+}
+
+func TestRestoreUnitsThatCrossedBarriers_IgnoresNewlySpawnedUnit(t *testing.T) {
+	// A unit with no entry in prevState (spawned this tick) has no
+	// start-of-tick position to revert to - must be left alone.
+	id := uuid.New()
+	prev := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	cur := stateAtPosition(id, 5, 5)
+
+	instance.RestoreUnitsThatCrossedBarriersForTest(cur, prev, collisionZone())
+
+	u := cur.Units[id]
+	assert.InDelta(t, 5.0, u.Position.X, 1e-9)
+	assert.InDelta(t, 5.0, u.Position.Y, 1e-9)
+}
