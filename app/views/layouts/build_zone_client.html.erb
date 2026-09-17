@@ -47,6 +47,13 @@
       .zone-map-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; background: #223; flex-shrink: 0; }
       .zone-map-thumb-placeholder { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #223; border-radius: 4px; flex-shrink: 0; }
       .zone-map-name { font-size: 13px; color: #cce; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* Same top-left overlay convention as the item/unit_type/class/
+         ability editors' own back-link (see build_item_client.html.erb). */
+      a.back-link {
+        position: absolute; top: 10px; left: 10px; color: #9ab; font-size: 13px; z-index: 1;
+        background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 3px; text-decoration: none;
+      }
     </style>
   </head>
   <body>

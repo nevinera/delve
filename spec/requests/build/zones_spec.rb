@@ -140,6 +140,7 @@ RSpec.describe "Build::Zones", type: :request do
           expect(response.body).to include('id="editor-root"')
           expect(response.body).to match(%r{src="/client/zoneEditor[^"]*\.js"})
           expect(response.body).to include(CGI.escapeHTML(content.to_json))
+          expect(response.body).to include(build_zones_path)
         end
 
         it "includes each real map's identifier/name/connections/thumbnail as available-map-details, excluding the zone's own file and any .full.json" do
