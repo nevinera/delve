@@ -27,14 +27,25 @@ function zoneData(overrides = {}) {
   };
 }
 
+function expand() {
+  fireEvent.click(screen.getByText(/Unit Types \(/));
+}
+
 describe("ZoneUnitTypesPanel", () => {
+  it("starts collapsed", () => {
+    render(<ZoneUnitTypesPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} />);
+    expect(screen.queryByText("goblin_raider")).not.toBeInTheDocument();
+  });
+
   it("shows a hint instead of a list when nothing is referenced", () => {
     render(<ZoneUnitTypesPanel zoneData={zoneData({maps: []})} mapDetailsByKey={{}} />);
+    expand();
     expect(screen.getByText("No unit types referenced yet.")).toBeInTheDocument();
   });
 
   it("counts every unit using a type, across every map", () => {
     render(<ZoneUnitTypesPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} />);
+    expand();
 
     expect(screen.getByText("goblin_raider")).toBeInTheDocument();
     expect(screen.getByText("2 units")).toBeInTheDocument();
@@ -44,6 +55,7 @@ describe("ZoneUnitTypesPanel", () => {
 
   it("marks a unit type not present in the zone's own unitTypes dict as invalid", () => {
     render(<ZoneUnitTypesPanel zoneData={zoneData({unitTypes: {goblin_boss: {}}})} mapDetailsByKey={mapDetailsByKey} />);
+    expand();
 
     const raiderRow = screen.getByText("goblin_raider").closest(".zone-item-row");
     const bossRow = screen.getByText("goblin_boss").closest(".zone-item-row");
@@ -51,11 +63,13 @@ describe("ZoneUnitTypesPanel", () => {
     expect(bossRow.querySelector(".zone-item-invalid")).toBeNull();
   });
 
-  it("collapses the list on heading click, hiding rows", () => {
+  it("toggles between expanded and collapsed on heading click", () => {
     render(<ZoneUnitTypesPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} />);
 
-    fireEvent.click(screen.getByText(/Unit Types \(/));
+    expand();
+    expect(screen.getByText("goblin_raider")).toBeInTheDocument();
 
+    expand();
     expect(screen.queryByText("goblin_raider")).not.toBeInTheDocument();
   });
 });

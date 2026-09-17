@@ -29,14 +29,25 @@ function zoneData(overrides = {}) {
   };
 }
 
+function expand() {
+  fireEvent.click(screen.getByText(/Items \(/));
+}
+
 describe("ZoneItemsPanel", () => {
+  it("starts collapsed", () => {
+    render(<ZoneItemsPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" />);
+    expect(screen.queryByText("iron-shield")).not.toBeInTheDocument();
+  });
+
   it("shows a hint instead of a list when nothing is referenced", () => {
     render(<ZoneItemsPanel zoneData={zoneData({maps: []})} mapDetailsByKey={{}} zoneKey="goblin-cave" />);
+    expand();
     expect(screen.getByText("No items referenced yet.")).toBeInTheDocument();
   });
 
   it("counts every unit referencing an item, across every map, and links to the single map when there's only one", () => {
     render(<ZoneItemsPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" />);
+    expand();
 
     // iron-shield is only used by one unit, on one map.
     expect(screen.getByText("iron-shield")).toBeInTheDocument();
@@ -46,6 +57,7 @@ describe("ZoneItemsPanel", () => {
 
   it("shows the across-maps count with no link when more than one map uses it", () => {
     render(<ZoneItemsPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" />);
+    expand();
 
     // sword-of-doom is used by 3 units total, across both maps.
     expect(screen.getByText("3 units across 2 maps")).toBeInTheDocument();
@@ -53,6 +65,7 @@ describe("ZoneItemsPanel", () => {
 
   it("marks an item not present in the zone's own items dict as invalid", () => {
     render(<ZoneItemsPanel zoneData={zoneData({items: {"iron-shield": {}}})} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" />);
+    expand();
 
     const swordRow = screen.getByText("sword-of-doom").closest(".zone-item-row");
     const shieldRow = screen.getByText("iron-shield").closest(".zone-item-row");
@@ -60,11 +73,13 @@ describe("ZoneItemsPanel", () => {
     expect(shieldRow.querySelector(".zone-item-invalid")).toBeNull();
   });
 
-  it("collapses the list on heading click, hiding rows", () => {
+  it("toggles between expanded and collapsed on heading click", () => {
     render(<ZoneItemsPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" />);
 
-    fireEvent.click(screen.getByText(/Items \(/));
+    expand();
+    expect(screen.getByText("iron-shield")).toBeInTheDocument();
 
+    expand();
     expect(screen.queryByText("iron-shield")).not.toBeInTheDocument();
   });
 });

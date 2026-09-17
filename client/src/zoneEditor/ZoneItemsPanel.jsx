@@ -24,7 +24,7 @@ function aggregateItemUsage(zoneData, mapDetailsByKey) {
 }
 
 export default function ZoneItemsPanel({zoneData, mapDetailsByKey, zoneKey}) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const usage = aggregateItemUsage(zoneData, mapDetailsByKey);
   const itemKeys = Object.keys(usage).sort();
 

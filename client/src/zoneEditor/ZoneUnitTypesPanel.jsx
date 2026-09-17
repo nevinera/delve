@@ -22,7 +22,7 @@ function aggregateUnitTypeUsage(zoneData, mapDetailsByKey) {
 }
 
 export default function ZoneUnitTypesPanel({zoneData, mapDetailsByKey}) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const usage = aggregateUnitTypeUsage(zoneData, mapDetailsByKey);
   const unitTypeKeys = Object.keys(usage).sort();
 
