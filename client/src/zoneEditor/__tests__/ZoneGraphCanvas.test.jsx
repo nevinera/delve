@@ -56,10 +56,18 @@ describe("ZoneGraphCanvas", () => {
     expect(node.querySelector(".zone-graph-node-thumb-placeholder")).toBeNull();
   });
 
-  it("gives each port a title tooltip with its connection identifier", () => {
+  it("shows a custom tooltip with the connection identifier on hover, and hides it on mouse leave", () => {
     const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
     const p = port(container, "cave_entrance", "cave_mouth");
-    expect(p.querySelector("title")).toHaveTextContent("cave_mouth");
+
+    expect(screen.queryByText("cave_mouth")).not.toBeInTheDocument();
+    expect(p.querySelector("title")).toBeNull(); // not the slow, unstyleable native tooltip
+
+    fireEvent.mouseEnter(p, {clientX: 50, clientY: 60});
+    expect(screen.getByText("cave_mouth")).toBeInTheDocument();
+
+    fireEvent.mouseLeave(p);
+    expect(screen.queryByText("cave_mouth")).not.toBeInTheDocument();
   });
 
   it("renders one port per connection, tagged with its open status", () => {

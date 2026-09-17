@@ -1,8 +1,24 @@
 import {useEffect, useMemo, useRef, useState} from "react";
+import {createPortal} from "react-dom";
 import {keyFromRef} from "./mapRef";
 import {circleLayout, NODE_RADIUS} from "./circleLayout";
 import {connectionStatus} from "./connectionStatus";
 import {computeFitView, MIN_ZOOM, MAX_ZOOM} from "./graphView";
+
+// Positioned near the cursor via a portal, same approach as
+// AbilityTooltip.jsx - a native SVG <title> tooltip is slow to appear and
+// can't be styled, so ports get this instead.
+const TOOLTIP_STYLE = {
+  position: "fixed",
+  zIndex: 100,
+  background: "rgba(20,16,12,0.97)",
+  border: "1px solid #556",
+  borderRadius: 6,
+  padding: "4px 8px",
+  color: "#cce",
+  fontSize: 12,
+  pointerEvents: "none",
+};
 
 const PORT_RADIUS = 6;
 // World-space distance within which a drag-drop counts as "on" a port -
@@ -37,6 +53,7 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
   const [nodeDrag, setNodeDrag] = useState(null);
   const [pan, setPan] = useState(null);
   const [linkDrag, setLinkDrag] = useState(null); // {fromKey, fromMapIdentifier, fromConnection, fromStatus, x, y}
+  const [portTooltip, setPortTooltip] = useState(null); // {x, y, label} - x/y are screen (clientX/Y), not world, coords
 
   const nodes = useMemo(
     () =>
@@ -135,6 +152,18 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
     // would fight a manual drag by re-centering under it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeKeysSignature]);
+
+  function handlePortMouseEnter(e, port) {
+    setPortTooltip({x: e.clientX, y: e.clientY, label: port.connectionIdentifier});
+  }
+
+  function handlePortMouseMove(e) {
+    setPortTooltip((current) => (current ? {...current, x: e.clientX, y: e.clientY} : current));
+  }
+
+  function handlePortMouseLeave() {
+    setPortTooltip(null);
+  }
 
   // Only ever reached when the pointerdown wasn't already claimed (and
   // stopped) by a node or port below - i.e. a genuine background click.
@@ -271,13 +300,18 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
                   data-connection={port.connectionIdentifier}
                   data-status={port.status.type}
                   onPointerDown={(e) => handlePortPointerDown(e, port)}
-                >
-                  <title>{port.connectionIdentifier}</title>
-                </circle>
+                  onMouseEnter={(e) => handlePortMouseEnter(e, port)}
+                  onMouseMove={handlePortMouseMove}
+                  onMouseLeave={handlePortMouseLeave}
+                />
               ))}
             </g>
           </svg>
         </div>
+      )}
+      {portTooltip && createPortal(
+        <div style={{...TOOLTIP_STYLE, left: portTooltip.x + 12, top: portTooltip.y + 12}}>{portTooltip.label}</div>,
+        document.body
       )}
     </div>
   );
