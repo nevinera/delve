@@ -120,6 +120,62 @@ describe("ZoneGraphCanvas", () => {
     expect(angleOfPort).toBeCloseTo(angleToOther);
   });
 
+  it("renders a satellite node for an entry point, labeled by the connection identifier", () => {
+    const data = zoneData({entryPoints: {"cave_entrance/cave_mouth": null}});
+    const {container} = render(<ZoneGraphCanvas zoneData={data} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+
+    const satellite = container.querySelector('.zone-graph-satellite[data-kind="entryPoint"]');
+    expect(satellite).not.toBeNull();
+    expect(screen.getByText("cave_mouth")).toBeInTheDocument();
+  });
+
+  it("renders a satellite node for an open connection, labeled by its exposed name", () => {
+    const data = zoneData({openConnections: {"cave_entrance/cave_mouth": "back_way"}});
+    render(<ZoneGraphCanvas zoneData={data} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+
+    expect(screen.getByText("back_way")).toBeInTheDocument();
+  });
+
+  it("renders no satellite for an open or zoneLink connection", () => {
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+    expect(container.querySelector(".zone-graph-satellite")).toBeNull();
+  });
+
+  it("places a fresh satellite along the same ray its port would already have used, so the port doesn't jump on first render", () => {
+    const data = zoneData({entryPoints: {"cave_entrance/cave_mouth": null}});
+    const {container} = render(<ZoneGraphCanvas zoneData={data} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+
+    const entranceCenter = nodeCenter(container, "gc1-goblin-cave-entrance");
+    const entrancePort = port(container, "cave_entrance", "cave_mouth");
+
+    // Same fallback ray as the unlinked case (i=0 of 1 connections -> +x).
+    expect(Number(entrancePort.getAttribute("cx"))).toBeCloseTo(entranceCenter.x + NODE_RADIUS);
+    expect(Number(entrancePort.getAttribute("cy"))).toBeCloseTo(entranceCenter.y);
+  });
+
+  it("dragging a satellite pulls its matched port to face the new position", () => {
+    const data = zoneData({entryPoints: {"cave_entrance/cave_mouth": null}});
+    const {container} = render(<ZoneGraphCanvas zoneData={data} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+
+    const satellite = container.querySelector('.zone-graph-satellite[data-kind="entryPoint"]');
+    fireEvent.pointerDown(satellite, {pointerId: 7, clientX: 0, clientY: 0});
+    fireEvent.pointerMove(satellite, {pointerId: 7, clientX: 0, clientY: 500});
+    fireEvent.pointerUp(satellite, {pointerId: 7, clientX: 0, clientY: 500});
+
+    const entranceCenter = nodeCenter(container, "gc1-goblin-cave-entrance");
+    const entrancePort = port(container, "cave_entrance", "cave_mouth");
+    const movedSatellite = container.querySelector('.zone-graph-satellite[data-kind="entryPoint"]');
+
+    const angleToSatellite = Math.atan2(
+      Number(movedSatellite.getAttribute("cy")) - entranceCenter.y,
+      Number(movedSatellite.getAttribute("cx")) - entranceCenter.x
+    );
+    const angleOfPort = Math.atan2(Number(entrancePort.getAttribute("cy")) - entranceCenter.y, Number(entrancePort.getAttribute("cx")) - entranceCenter.x);
+    expect(angleOfPort).toBeCloseTo(angleToSatellite);
+    // It actually moved from the original +x-facing default.
+    expect(Number(entrancePort.getAttribute("cy"))).not.toBeCloseTo(entranceCenter.y);
+  });
+
   it("leaves an unlinked port on the even-spacing fallback, not pointing at anything", () => {
     const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
     const entranceCenter = nodeCenter(container, "gc1-goblin-cave-entrance");

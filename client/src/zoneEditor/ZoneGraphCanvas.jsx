@@ -34,6 +34,16 @@ const PORT_RADIUS = 6;
 const HIT_RADIUS = 16;
 const ZOOM_STEP = 1.25;
 
+// An entry point/open connection's own small node (see plans/zone-editor.md) -
+// deliberately smaller than a map node, since it represents a single
+// connection, not a whole map. Its only real job is to be draggable
+// somewhere, so the matched port on the real map node can be pulled to
+// face it (see the ports/satellites memo below).
+const SATELLITE_RADIUS = 14;
+// Default distance from the map node's edge to a fresh satellite's
+// center, before it's ever been dragged.
+const SATELLITE_GAP = 24;
+
 const STATUS_COLOR = {
   open: "#567",
   entryPoint: "#4a7",
@@ -47,10 +57,14 @@ const STATUS_COLOR = {
 // circleLayout's default (no persisted layout metadata exists until step
 // 11) and are freely drag-adjustable - those adjustments live only in this
 // component's own state for now, lost on reload, same as every other draft
-// edit before step 11's save. Dragging from one port to another creates a
-// zoneLink (ADD_ZONE_LINK); dragging an already-linked port to empty space
-// removes it (REMOVE_ZONE_LINK) - the same reducer actions
-// ZoneMapConnectionsPanel's "+ Link to"/"Remove Link" already use, so both
+// edit before step 11's save. An entry point/open connection gets its own
+// small satellite node, independently draggable the same way - the matched
+// port doesn't move *to* it, it just turns to face wherever the satellite
+// currently is (a tether line makes that relationship visible). Dragging
+// from one port to another creates a zoneLink (ADD_ZONE_LINK); dragging an
+// already-linked port to empty space removes it (REMOVE_ZONE_LINK) - the
+// same reducer actions ZoneMapConnectionsPanel's "+ Link to"/"Remove Link"
+// already use, so both
 // UIs stay in sync automatically.
 export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
   const containerRef = useRef(null);
@@ -79,16 +93,17 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
     return positions[key] ?? defaultPositions[key] ?? {x: 0, y: 0};
   }
 
-  // Every port on every node, with its resolved world position and current
-  // status - the one list both rendering and link drag/drop hit-testing
-  // read from.
-  const ports = useMemo(() => {
+  // Every port on every node (resolved world position + current status),
+  // and a small satellite node for every entry point/open connection - the
+  // one pass both rendering and link drag/drop hit-testing read from.
+  const {ports, satellites} = useMemo(() => {
     // A linked port's angle points at whichever node it's connected to
     // (see below) - needs a way to look up that other node by the map
     // identifier a zoneLink names, not by file key.
     const nodesByIdentifier = new Map(nodes.filter((n) => n.detail?.identifier).map((n) => [n.detail.identifier, n]));
 
-    const list = [];
+    const portList = [];
+    const satelliteList = [];
     for (const node of nodes) {
       const connections = node.detail?.connections ?? [];
       const {x: cx, y: cy} = nodePosition(node.key);
@@ -96,22 +111,39 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
         const status = node.detail?.identifier
           ? connectionStatus(node.detail.identifier, connection.identifier, zoneData)
           : {type: "open"};
+        const fallbackAngle = (i / connections.length) * 2 * Math.PI;
 
         // A linked port sits on the side of its node facing whatever it's
-        // connected to, recomputed from both nodes' current positions -
-        // so it tracks either end being dragged. Anything unlinked (open/
-        // entryPoint/openConnection) has no "other node" to face, so it
-        // keeps the even-spacing-by-index fallback.
-        let angle;
-        const otherNode = status.type === "zoneLink" ? nodesByIdentifier.get(status.otherSide?.map) : null;
-        if (otherNode) {
-          const other = nodePosition(otherNode.key);
-          angle = Math.atan2(other.y - cy, other.x - cx);
-        } else {
-          angle = (i / connections.length) * 2 * Math.PI;
+        // connected to, recomputed from both nodes' current positions - so
+        // it tracks either end being dragged. An entry point/open
+        // connection instead faces its own small satellite node (below),
+        // draggable independently of any real map. Anything still open has
+        // no "other node" to face, so it keeps the even-spacing fallback.
+        let angle = fallbackAngle;
+        if (status.type === "zoneLink") {
+          const otherNode = nodesByIdentifier.get(status.otherSide?.map);
+          if (otherNode) {
+            const other = nodePosition(otherNode.key);
+            angle = Math.atan2(other.y - cy, other.x - cx);
+          }
+        } else if (status.type === "entryPoint" || status.type === "openConnection") {
+          const satelliteKey = `${status.type}:${status.key}`;
+          const distance = NODE_RADIUS + SATELLITE_GAP;
+          const defaultPos = {x: cx + distance * Math.cos(fallbackAngle), y: cy + distance * Math.sin(fallbackAngle)};
+          const satellitePos = positions[satelliteKey] ?? defaultPos;
+          angle = Math.atan2(satellitePos.y - cy, satellitePos.x - cx);
+          satelliteList.push({
+            satelliteKey,
+            kind: status.type,
+            x: satellitePos.x,
+            y: satellitePos.y,
+            label: status.type === "openConnection" ? (status.name || connection.identifier) : connection.identifier,
+            portX: cx + NODE_RADIUS * Math.cos(angle),
+            portY: cy + NODE_RADIUS * Math.sin(angle),
+          });
         }
 
-        list.push({
+        portList.push({
           nodeKey: node.key,
           mapIdentifier: node.detail?.identifier,
           connectionIdentifier: connection.identifier,
@@ -121,7 +153,7 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
         });
       });
     }
-    return list;
+    return {ports: portList, satellites: satelliteList};
     // nodePosition reads `positions` (drag overrides) and defaultPositions
     // via closure - both already listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +197,8 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
   function fitView() {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const fit = computeFitView(nodes.map((node) => nodePosition(node.key)), rect.width, rect.height);
+    const points = [...nodes.map((node) => nodePosition(node.key)), ...satellites.map((s) => ({x: s.x, y: s.y}))];
+    const fit = computeFitView(points, rect.width, rect.height);
     if (fit) setView(fit);
   }
 
@@ -197,11 +230,22 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
     setPan({pointerId: e.pointerId, startClientX: e.clientX, startClientY: e.clientY, startPanX: view.panX, startPanY: view.panY});
   }
 
-  function handleNodePointerDown(e, node) {
+  // Shared by a map node and a satellite node (entry point/open connection)
+  // - both are just "a positioned thing with a draggable key" as far as
+  // dragging itself is concerned; only their default position and how a
+  // port reacts to them differs (see the ports/satellites memo above).
+  function startElementDrag(e, key, pos) {
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    const {x, y} = nodePosition(node.key);
-    setNodeDrag({key: node.key, pointerId: e.pointerId, startClientX: e.clientX, startClientY: e.clientY, startX: x, startY: y});
+    setNodeDrag({key, pointerId: e.pointerId, startClientX: e.clientX, startClientY: e.clientY, startX: pos.x, startY: pos.y});
+  }
+
+  function handleNodePointerDown(e, node) {
+    startElementDrag(e, node.key, nodePosition(node.key));
+  }
+
+  function handleSatellitePointerDown(e, satellite) {
+    startElementDrag(e, satellite.satelliteKey, {x: satellite.x, y: satellite.y});
   }
 
   function handlePortPointerDown(e, port) {
@@ -341,6 +385,30 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch}) {
                   onMouseMove={handlePortMouseMove}
                   onMouseLeave={handlePortMouseLeave}
                 />
+              ))}
+              {satellites.map((satellite) => (
+                <g key={satellite.satelliteKey}>
+                  <line
+                    className="zone-graph-satellite-tether"
+                    x1={satellite.portX}
+                    y1={satellite.portY}
+                    x2={satellite.x}
+                    y2={satellite.y}
+                  />
+                  <circle
+                    className="zone-graph-satellite"
+                    cx={satellite.x}
+                    cy={satellite.y}
+                    r={SATELLITE_RADIUS}
+                    fill={STATUS_COLOR[satellite.kind]}
+                    data-satellite-key={satellite.satelliteKey}
+                    data-kind={satellite.kind}
+                    onPointerDown={(e) => handleSatellitePointerDown(e, satellite)}
+                  />
+                  <text className="zone-graph-satellite-label" x={satellite.x} y={satellite.y + SATELLITE_RADIUS + 12} textAnchor="middle">
+                    {satellite.label}
+                  </text>
+                </g>
               ))}
             </g>
           </svg>
