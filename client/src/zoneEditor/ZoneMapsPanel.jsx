@@ -1,4 +1,5 @@
 import {useState} from "react";
+import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
 
 // A zone's maps are always $ref entries in real content (see
 // plans/zone-editor.md) - "./<key>/<key>.json", the same basename-matched
@@ -16,6 +17,18 @@ function refFromKey(key) {
 export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
   const [collapsed, setCollapsed] = useState(false);
   const [pendingKey, setPendingKey] = useState("");
+  // Which map rows have their connections list expanded - starts empty
+  // (all collapsed), same as every other per-entry collapse in this app.
+  const [expandedIndexes, setExpandedIndexes] = useState(() => new Set());
+
+  function toggleExpanded(index) {
+    setExpandedIndexes((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   const rows = zoneData.maps.map((entry, index) => {
     const ref = entry?.$ref;
@@ -48,21 +61,42 @@ export default function ZoneMapsPanel({zoneData, dispatch, mapDetailsByKey, zone
       {!collapsed && (
         <div className="zone-maps-list">
           {rows.length === 0 && <p className="map-sidebar-hint">No maps yet.</p>}
-          {rows.map(({index, detail, name}) => (
-            <div className="entry-block zone-map-row" key={index}>
-              <div className="map-row-summary">
-                {detail?.thumbnailUrl ? (
-                  <img className="zone-map-thumb" src={detail.thumbnailUrl} alt={name} />
-                ) : (
-                  <span className="zone-map-thumb-placeholder" aria-hidden="true">🗺</span>
+          {rows.map(({index, detail, name}) => {
+            const expanded = expandedIndexes.has(index);
+            return (
+              <div className="entry-block zone-map-row" key={index}>
+                <div className="entry-heading-row" onClick={() => toggleExpanded(index)}>
+                  <div className="map-row-summary">
+                    <span className="map-sidebar-section-toggle">{expanded ? "▾" : "▸"}</span>
+                    {detail?.thumbnailUrl ? (
+                      <img className="zone-map-thumb" src={detail.thumbnailUrl} alt={name} />
+                    ) : (
+                      <span className="zone-map-thumb-placeholder" aria-hidden="true">🗺</span>
+                    )}
+                    <span className="zone-map-name">{name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="remove-entry"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemove(index, detail?.identifier);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                {expanded && (
+                  <ZoneMapConnectionsPanel
+                    mapIdentifier={detail?.identifier}
+                    connections={detail?.connections ?? []}
+                    zoneData={zoneData}
+                    dispatch={dispatch}
+                  />
                 )}
-                <span className="zone-map-name">{name}</span>
               </div>
-              <button type="button" className="remove-entry" onClick={() => handleRemove(index, detail?.identifier)}>
-                Remove
-              </button>
-            </div>
-          ))}
+            );
+          })}
 
           <div className="add-buttons-row">
             {availableKeys.length > 0 && (

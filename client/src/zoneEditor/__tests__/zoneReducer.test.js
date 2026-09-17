@@ -61,4 +61,51 @@ describe("zoneReducer", () => {
     expect(result.entryPoints).toEqual(state.entryPoints);
     expect(result.openConnections).toEqual(state.openConnections);
   });
+
+  it("sets an entry point, including a null required key, without touching other entries", () => {
+    const state = zoneState({entryPoints: {"cave_interior/pit": "iron_key"}});
+    const result = zoneReducer(state, {type: "SET_ENTRY_POINT", key: "cave_entrance/cave_mouth", requiredKey: null});
+    expect(result.entryPoints).toEqual({"cave_interior/pit": "iron_key", "cave_entrance/cave_mouth": null});
+  });
+
+  it("removes an entry point by key", () => {
+    const state = zoneState({entryPoints: {"cave_entrance/clearing": null, "cave_interior/pit": "iron_key"}});
+    const result = zoneReducer(state, {type: "REMOVE_ENTRY_POINT", key: "cave_entrance/clearing"});
+    expect(result.entryPoints).toEqual({"cave_interior/pit": "iron_key"});
+  });
+
+  it("sets an open connection's exposed name", () => {
+    const state = zoneState({openConnections: {}});
+    const result = zoneReducer(state, {type: "SET_OPEN_CONNECTION", key: "cave_entrance/back_door", name: "back_way"});
+    expect(result.openConnections).toEqual({"cave_entrance/back_door": "back_way"});
+  });
+
+  it("removes an open connection by key", () => {
+    const state = zoneState({openConnections: {"cave_entrance/back_door": "back_way", "cave_interior/vent": "upper_vent"}});
+    const result = zoneReducer(state, {type: "REMOVE_OPEN_CONNECTION", key: "cave_entrance/back_door"});
+    expect(result.openConnections).toEqual({"cave_interior/vent": "upper_vent"});
+  });
+
+  it("updates a single field on the zoneLink at the given index, leaving other links alone", () => {
+    const state = zoneState({
+      zoneLinks: [
+        {connectionA: {map: "a", connection: "x"}, connectionB: {map: "b", connection: "y"}, oneWay: false, requiredKey: null},
+        {connectionA: {map: "c", connection: "z"}, connectionB: {map: "d", connection: "w"}, oneWay: false, requiredKey: null},
+      ],
+    });
+    const result = zoneReducer(state, {type: "UPDATE_ZONE_LINK", index: 1, field: "oneWay", value: true});
+    expect(result.zoneLinks[0].oneWay).toBe(false);
+    expect(result.zoneLinks[1].oneWay).toBe(true);
+  });
+
+  it("removes the zoneLink at the given index", () => {
+    const state = zoneState({
+      zoneLinks: [
+        {connectionA: {map: "a", connection: "x"}, connectionB: {map: "b", connection: "y"}},
+        {connectionA: {map: "c", connection: "z"}, connectionB: {map: "d", connection: "w"}},
+      ],
+    });
+    const result = zoneReducer(state, {type: "REMOVE_ZONE_LINK", index: 0});
+    expect(result.zoneLinks).toEqual([{connectionA: {map: "c", connection: "z"}, connectionB: {map: "d", connection: "w"}}]);
+  });
 });

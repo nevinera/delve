@@ -33,6 +33,7 @@
       .map-sidebar-unit-type-links { font-size: 11px; color: #9ab; margin: 4px 0; }
 
       .entry-block { margin: 8px 0; padding: 6px 0; border-top: 1px solid #2a2f35; border-radius: 4px; }
+      .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
       .map-row-summary { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
       button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
       button.remove-entry:hover { background: #533; }
@@ -43,10 +44,19 @@
       .add-buttons-row select { background: #111; border: 1px solid #555; color: #eee; font-size: 12px; padding: 4px 6px; border-radius: 3px; }
       .add-buttons-row a { color: #9cf; font-size: 12px; }
 
-      .zone-map-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .zone-map-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; background: #223; flex-shrink: 0; }
       .zone-map-thumb-placeholder { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #223; border-radius: 4px; flex-shrink: 0; }
       .zone-map-name { font-size: 13px; color: #cce; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      .zone-connections-list { margin: 8px 0 4px 20px; }
+      .zone-connection-row { padding: 4px 0; }
+      .zone-connection-row .map-row-summary { flex: 0 0 auto; gap: 6px; }
+      .zone-connection-name { font-size: 13px; color: #cce; font-weight: 600; }
+      .zone-connection-type { font-size: 12px; color: #789; }
+      .zone-connection-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 12px; color: #9ab; }
+      .zone-connection-status-label { color: #9ab; }
+      .zone-connection-status input[type=text] { width: 140px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; font-size: 12px; }
+      .zone-connection-status label { display: flex; align-items: center; gap: 4px; }
 
       /* Same top-left overlay convention as the item/unit_type/class/
          ability editors' own back-link (see build_item_client.html.erb). */

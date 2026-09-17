@@ -30,7 +30,59 @@ function removeMap(state, index, mapIdentifier) {
   };
 }
 
+// entryPoints/openConnections are plain "<mapIdentifier>/<connectionId>" ->
+// value dicts (see docs/schema/zone.md), not the section-array shape
+// abilityReducer's generic actions assume - these four give a connection's
+// status (see connectionStatus.js) a place to write back to.
+function setEntryPoint(state, key, requiredKey) {
+  return {...state, entryPoints: {...(state.entryPoints ?? {}), [key]: requiredKey}};
+}
+
+function removeEntryPoint(state, key) {
+  const entryPoints = {...(state.entryPoints ?? {})};
+  delete entryPoints[key];
+  return {...state, entryPoints};
+}
+
+function setOpenConnection(state, key, name) {
+  return {...state, openConnections: {...(state.openConnections ?? {}), [key]: name}};
+}
+
+function removeOpenConnection(state, key) {
+  const openConnections = {...(state.openConnections ?? {})};
+  delete openConnections[key];
+  return {...state, openConnections};
+}
+
+// Editing an existing zoneLink's own oneWay/requiredKey fields (see
+// ZoneMapConnectionsPanel) - creating a new link is the graph's job (step
+// 6, drag between ports), not this flat list's.
+function updateZoneLink(state, index, field, value) {
+  const zoneLinks = state.zoneLinks.map((link, i) => (i === index ? {...link, [field]: value} : link));
+  return {...state, zoneLinks};
+}
+
+function removeZoneLink(state, index) {
+  return {...state, zoneLinks: state.zoneLinks.filter((_, i) => i !== index)};
+}
+
 export function zoneReducer(state, action) {
-  if (action.type === "REMOVE_MAP") return removeMap(state, action.index, action.mapIdentifier);
-  return abilityReducer(state, action);
+  switch (action.type) {
+    case "REMOVE_MAP":
+      return removeMap(state, action.index, action.mapIdentifier);
+    case "SET_ENTRY_POINT":
+      return setEntryPoint(state, action.key, action.requiredKey);
+    case "REMOVE_ENTRY_POINT":
+      return removeEntryPoint(state, action.key);
+    case "SET_OPEN_CONNECTION":
+      return setOpenConnection(state, action.key, action.name);
+    case "REMOVE_OPEN_CONNECTION":
+      return removeOpenConnection(state, action.key);
+    case "UPDATE_ZONE_LINK":
+      return updateZoneLink(state, action.index, action.field, action.value);
+    case "REMOVE_ZONE_LINK":
+      return removeZoneLink(state, action.index);
+    default:
+      return abilityReducer(state, action);
+  }
 }

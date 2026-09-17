@@ -3,12 +3,12 @@ import {render, screen, fireEvent} from "@testing-library/react";
 import ZoneMapsPanel from "../ZoneMapsPanel";
 
 const mapDetailsByKey = {
-  "gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [], thumbnailUrl: "data:image/webp;base64,AAA="},
+  "gc1-goblin-cave-entrance": {identifier: "cave_entrance", name: "Cave Entrance", connections: [{identifier: "cave_mouth", type: "line"}], thumbnailUrl: "data:image/webp;base64,AAA="},
   "gc2-goblin-cave-interior": {identifier: "cave_interior", name: "Cave Interior", connections: [], thumbnailUrl: null},
 };
 
 function zoneData(maps = []) {
-  return {maps};
+  return {maps, zoneLinks: [], entryPoints: {}, openConnections: {}};
 }
 
 describe("ZoneMapsPanel", () => {
@@ -110,5 +110,26 @@ describe("ZoneMapsPanel", () => {
     fireEvent.click(screen.getByText(/Maps \(/));
 
     expect(screen.queryByText("Cave Entrance")).not.toBeInTheDocument();
+  });
+
+  it("expanding a map row reveals its own connections list", () => {
+    const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
+    render(<ZoneMapsPanel zoneData={zoneData(maps)} dispatch={vi.fn()} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" newMapUrl="/build/maps/new" />);
+
+    expect(screen.queryByText("cave_mouth")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Cave Entrance"));
+
+    expect(screen.getByText("cave_mouth")).toBeInTheDocument();
+  });
+
+  it("removing a map row does not toggle its own expanded state", () => {
+    const maps = [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}];
+    const dispatch = vi.fn();
+    render(<ZoneMapsPanel zoneData={zoneData(maps)} dispatch={dispatch} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" newMapUrl="/build/maps/new" />);
+
+    fireEvent.click(screen.getByRole("button", {name: "Remove"}));
+
+    expect(screen.queryByText("cave_mouth")).not.toBeInTheDocument();
   });
 });
