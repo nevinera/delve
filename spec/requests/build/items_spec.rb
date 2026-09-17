@@ -97,35 +97,17 @@ RSpec.describe "Build::Items", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        it "bootstraps a blank item when the key doesn't exist yet in the repo" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items/bulwark-of-the-warband.json")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
-
-          get "/build/items/bulwark-of-the-warband/edit"
-
-          expect(response).to have_http_status(:ok)
-          expect(response.body).to include(CGI.escapeHTML("Bulwark Of The Warband"))
-        end
-
-        it "renders the JS editor shell, bootstrapping the item from the repo" do
-          content = {
-            "identifier" => "sword-of-doom",
-            "name" => "Sword of Doom",
-            "slot" => "main_hand",
-            "weaponType" => "sword",
-            "elvl" => 584,
-            "primary" => "strength",
-            "secondaries" => ["stamina", "crit_rating", "haste_rating"]
-          }
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items/sword-of-doom.json")
-            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
-
+        it "renders the JS editor shell with just the key - the item's own content is fetched client-side, not here" do
           get "/build/items/sword-of-doom/edit"
 
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('id="editor-root"')
           expect(response.body).to match(%r{src="/client/itemEditor[^"]*\.js"})
-          expect(response.body).to include(CGI.escapeHTML(content.to_json))
+          expect(response.body).to include('data-key="sword-of-doom"')
+          # The point of this move: Rails never opens the item file at all,
+          # not even to bootstrap a blank template - WebMock would raise if
+          # it tried.
+          expect(WebMock).not_to have_requested(:get, %r{api\.github\.com/repos/nevinera/delve-content/contents/items/})
         end
       end
     end

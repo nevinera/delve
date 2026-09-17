@@ -24,8 +24,13 @@ class Build::ItemsController < Build::BaseController
     redirect_to edit_build_item_path(id: @key)
   end
 
+  # No item content is fetched here - the editor fetches it itself,
+  # client-side, on mount (see client/src/itemEditor/ItemEditor.jsx and
+  # plans/editor-git.md). Still checks for a connected repo up front, the
+  # same way #new does, so a disconnected user gets redirected immediately
+  # rather than after the editor shell has already loaded.
   def edit
-    load_item
+    Github::ContentClient.new(current_user)
   end
 
   private
@@ -37,23 +42,5 @@ class Build::ItemsController < Build::BaseController
 
   def item_key_taken?(key)
     Github::ContentClient.new(current_user).list_directory_recursive("items").any? { |entry| entry["path"] == "items/#{key}.json" }
-  end
-
-  def load_item
-    content = Github::ContentClient.new(current_user).file_content("items/#{params[:id]}.json")
-    @item = JSON.parse(content)
-  rescue Github::NotFoundError
-    @item = blank_item(params[:id])
-  end
-
-  def blank_item(key)
-    {
-      "identifier" => key.split("/").last,
-      "name" => key.tr("_-", " ").split.map(&:capitalize).join(" "),
-      "slot" => "chest",
-      "elvl" => 0,
-      "primary" => nil,
-      "secondaries" => []
-    }
   end
 end

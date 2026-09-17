@@ -18,6 +18,11 @@ describe("abilityReducer", () => {
     expect(abilityReducer(baseState, {type: "BOGUS"})).toBe(baseState);
   });
 
+  it("LOAD replaces the whole state, ignoring whatever came before", () => {
+    const result = abilityReducer(null, {type: "LOAD", data: {name: "Loaded"}});
+    expect(result).toEqual({name: "Loaded"});
+  });
+
   describe("UPDATE_ENTRY_FIELD", () => {
     const stateWithEffects = {
       name: "Firebolt",
