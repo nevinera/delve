@@ -36,28 +36,16 @@ describe("ZoneMapConnectionsPanel", () => {
     expect(dispatch).toHaveBeenCalledWith({type: "SET_ENTRY_POINT", key: "cave_entrance/cave_mouth", requiredKey: null});
   });
 
-  it("shows an entry point's required key, editable, with a Remove button", () => {
+  it("shows an entry point with a Remove button, with no required-key field", () => {
     const dispatch = vi.fn();
     const data = zoneData({entryPoints: {"cave_entrance/cave_mouth": "iron_key"}});
     render(<ZoneMapConnectionsPanel mapIdentifier="cave_entrance" connections={[connections[0]]} zoneData={data} dispatch={dispatch} />);
 
-    expect(screen.getByDisplayValue("iron_key")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByDisplayValue("iron_key"), {target: {value: "bronze_key"}});
-    expect(dispatch).toHaveBeenCalledWith({type: "SET_ENTRY_POINT", key: "cave_entrance/cave_mouth", requiredKey: "bronze_key"});
+    expect(screen.getByText("Entry point")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", {name: "Remove"}));
     expect(dispatch).toHaveBeenCalledWith({type: "REMOVE_ENTRY_POINT", key: "cave_entrance/cave_mouth"});
-  });
-
-  it("clearing the required key field sets it back to null, not an empty string", () => {
-    const dispatch = vi.fn();
-    const data = zoneData({entryPoints: {"cave_entrance/cave_mouth": "iron_key"}});
-    render(<ZoneMapConnectionsPanel mapIdentifier="cave_entrance" connections={[connections[0]]} zoneData={data} dispatch={dispatch} />);
-
-    fireEvent.change(screen.getByDisplayValue("iron_key"), {target: {value: ""}});
-
-    expect(dispatch).toHaveBeenCalledWith({type: "SET_ENTRY_POINT", key: "cave_entrance/cave_mouth", requiredKey: null});
   });
 
   it("shows an open connection's exposed name, editable, with a Remove button", () => {
@@ -72,7 +60,7 @@ describe("ZoneMapConnectionsPanel", () => {
     expect(dispatch).toHaveBeenCalledWith({type: "REMOVE_OPEN_CONNECTION", key: "cave_entrance/cave_mouth"});
   });
 
-  it("shows a zoneLink's other side, oneWay checkbox, and required key, with a Remove Link button", () => {
+  it("shows a zoneLink's other side with a Remove Link button, with no oneWay/required-key controls", () => {
     const dispatch = vi.fn();
     const data = zoneData({
       zoneLinks: [{connectionA: {map: "cave_entrance", connection: "cave_mouth"}, connectionB: {map: "cave_interior", connection: "entrance"}, oneWay: false, requiredKey: null}],
@@ -80,9 +68,8 @@ describe("ZoneMapConnectionsPanel", () => {
     render(<ZoneMapConnectionsPanel mapIdentifier="cave_entrance" connections={[connections[0]]} zoneData={data} dispatch={dispatch} />);
 
     expect(screen.getByText("Linked to cave_interior/entrance")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("checkbox", {name: "One-way"}));
-    expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ZONE_LINK", index: 0, field: "oneWay", value: true});
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", {name: "Remove Link"}));
     expect(dispatch).toHaveBeenCalledWith({type: "REMOVE_ZONE_LINK", index: 0});

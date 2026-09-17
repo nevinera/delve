@@ -86,18 +86,6 @@ describe("zoneReducer", () => {
     expect(result.openConnections).toEqual({"cave_interior/vent": "upper_vent"});
   });
 
-  it("updates a single field on the zoneLink at the given index, leaving other links alone", () => {
-    const state = zoneState({
-      zoneLinks: [
-        {connectionA: {map: "a", connection: "x"}, connectionB: {map: "b", connection: "y"}, oneWay: false, requiredKey: null},
-        {connectionA: {map: "c", connection: "z"}, connectionB: {map: "d", connection: "w"}, oneWay: false, requiredKey: null},
-      ],
-    });
-    const result = zoneReducer(state, {type: "UPDATE_ZONE_LINK", index: 1, field: "oneWay", value: true});
-    expect(result.zoneLinks[0].oneWay).toBe(false);
-    expect(result.zoneLinks[1].oneWay).toBe(true);
-  });
-
   it("removes the zoneLink at the given index", () => {
     const state = zoneState({
       zoneLinks: [

@@ -6,9 +6,11 @@ import {connectionStatus, connectionKey} from "./connectionStatus";
 // only place with a canvas to place them against - see
 // plans/zone-editor.md step 4). What's editable here is purely zone-level:
 // whether this connection is an entry point, an open connection, or one end
-// of a zoneLink, and that link's own oneWay/requiredKey fields. Creating a
-// *new* zoneLink is the graph's job (step 6, drag between ports) - this
-// list only edits/removes one that already exists.
+// of a zoneLink. Creating a *new* zoneLink is the graph's job (step 6, drag
+// between ports) - this list only removes one that already exists.
+// requiredKey (entry points and zoneLinks) and a zoneLink's oneWay are
+// deliberately not exposed anywhere yet - every entry point/link is
+// assumed keyless and two-way for now (see plans/zone-editor.md).
 export default function ZoneMapConnectionsPanel({mapIdentifier, connections, zoneData, dispatch}) {
   if (!mapIdentifier || connections.length === 0) {
     return <p className="map-sidebar-hint">No connections on this map yet.</p>;
@@ -37,13 +39,9 @@ export default function ZoneMapConnectionsPanel({mapIdentifier, connections, zon
             )}
             {status.type === "entryPoint" && (
               <div className="zone-connection-status">
-                <span className="zone-connection-status-label">Entry point - required key:</span>
-                <input
-                  type="text"
-                  placeholder="(none)"
-                  value={status.requiredKey ?? ""}
-                  onChange={(e) => dispatch({type: "SET_ENTRY_POINT", key: status.key, requiredKey: e.target.value || null})}
-                />
+                {/* requiredKey is ignored for now - every entry point is
+                    assumed keyless (see plans/zone-editor.md). */}
+                <span className="zone-connection-status-label">Entry point</span>
                 <button type="button" className="remove-entry" onClick={() => dispatch({type: "REMOVE_ENTRY_POINT", key: status.key})}>
                   Remove
                 </button>
@@ -64,23 +62,11 @@ export default function ZoneMapConnectionsPanel({mapIdentifier, connections, zon
             )}
             {status.type === "zoneLink" && (
               <div className="zone-connection-status">
+                {/* oneWay/requiredKey are ignored for now - every zoneLink
+                    is assumed two-way and keyless (see plans/zone-editor.md). */}
                 <span className="zone-connection-status-label">
                   Linked to {connectionKey(status.otherSide?.map, status.otherSide?.connection)}
                 </span>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(status.oneWay)}
-                    onChange={(e) => dispatch({type: "UPDATE_ZONE_LINK", index: status.linkIndex, field: "oneWay", value: e.target.checked})}
-                  />
-                  One-way
-                </label>
-                <input
-                  type="text"
-                  placeholder="required key (none)"
-                  value={status.requiredKey ?? ""}
-                  onChange={(e) => dispatch({type: "UPDATE_ZONE_LINK", index: status.linkIndex, field: "requiredKey", value: e.target.value || null})}
-                />
                 <button type="button" className="remove-entry" onClick={() => dispatch({type: "REMOVE_ZONE_LINK", index: status.linkIndex})}>
                   Remove Link
                 </button>

@@ -54,14 +54,6 @@ function removeOpenConnection(state, key) {
   return {...state, openConnections};
 }
 
-// Editing an existing zoneLink's own oneWay/requiredKey fields (see
-// ZoneMapConnectionsPanel) - creating a new link is the graph's job (step
-// 6, drag between ports), not this flat list's.
-function updateZoneLink(state, index, field, value) {
-  const zoneLinks = state.zoneLinks.map((link, i) => (i === index ? {...link, [field]: value} : link));
-  return {...state, zoneLinks};
-}
-
 function removeZoneLink(state, index) {
   return {...state, zoneLinks: state.zoneLinks.filter((_, i) => i !== index)};
 }
@@ -78,8 +70,6 @@ export function zoneReducer(state, action) {
       return setOpenConnection(state, action.key, action.name);
     case "REMOVE_OPEN_CONNECTION":
       return removeOpenConnection(state, action.key);
-    case "UPDATE_ZONE_LINK":
-      return updateZoneLink(state, action.index, action.field, action.value);
     case "REMOVE_ZONE_LINK":
       return removeZoneLink(state, action.index);
     default:
