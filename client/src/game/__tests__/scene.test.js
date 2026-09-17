@@ -13,6 +13,7 @@ import {
   orbitFromDrag,
   orbitFromStick,
   isTap,
+  buildCircleBarrier,
 } from "../scene";
 
 describe("createNpcToken", () => {
@@ -263,5 +264,20 @@ describe("isTap", () => {
 
   it("treats a larger movement as a drag", () => {
     expect(isTap(10, 10)).toBe(false);
+  });
+});
+
+describe("buildCircleBarrier", () => {
+  it("positions the group at the given world coordinates", () => {
+    const group = buildCircleBarrier([5, -3], 2);
+    expect(group.position.x).toBe(5);
+    expect(group.position.z).toBe(-3);
+  });
+
+  it("sizes the cylinder geometry to the given radius", () => {
+    const group = buildCircleBarrier([0, 0], 4);
+    const [mesh] = group.children;
+    expect(mesh.geometry.parameters.radiusTop).toBe(4);
+    expect(mesh.geometry.parameters.radiusBottom).toBe(4);
   });
 });

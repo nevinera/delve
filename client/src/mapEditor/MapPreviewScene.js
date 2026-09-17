@@ -3,8 +3,8 @@
 // current draft map, colliding with its barriers, alongside every NPC unit
 // following its own configured patrol/wander route - no server, no
 // abilities/combat, just movement + collision, to judge scale/perspective
-// (see the map editor plan's Phase 2). Reuses buildWall/createPlayerToken/
-// createNpcToken from game/scene.js as-is (no changes needed to their
+// (see the map editor plan's Phase 2). Reuses buildWall/buildCircleBarrier/
+// createPlayerToken/createNpcToken from game/scene.js as-is (no changes needed to their
 // signatures to serve this second caller) and
 // orbitFromDrag/clampZoom/resolveBarrierCollisions (already standalone
 // exports), plus simulateMovement.js's initSimUnit/tickSimUnit (the same
@@ -14,7 +14,7 @@
 // scene.js's SceneManager, which is tightly coupled to live network state -
 // same reasoning as editor/previewScene.js's own header comment.
 import * as THREE from "three";
-import {buildWall, createPlayerToken, createNpcToken, orbitFromDrag, clampZoom} from "../game/scene.js";
+import {buildWall, buildCircleBarrier, createPlayerToken, createNpcToken, orbitFromDrag, clampZoom} from "../game/scene.js";
 import {resolveBarrierCollisions} from "../game/collision.js";
 import {loadSvgToCanvas} from "../game/svgRaster.js";
 import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement.js";
@@ -150,13 +150,11 @@ export class MapPreviewScene {
     return [x - this._feetDimensions.width / 2, this._feetDimensions.height / 2 - y];
   }
 
-  // Loads the map's background image (as the ground plane), its wall
-  // barriers, and every unit (each animated via its own configured
+  // Loads the map's background image (as the ground plane), its wall and
+  // circle barriers, and every unit (each animated via its own configured
   // movement, same simulation Simulate Units mode uses), and places the
   // player at the given feet position - called once when preview mode
-  // starts. Circle barriers aren't drawn (the real client doesn't draw them
-  // either), but they still collide - see resolveBarrierCollisions, which
-  // handles both types. availableUnitTypes is MapEditor's unitTypeDetails
+  // starts. availableUnitTypes is MapEditor's unitTypeDetails
   // ({name, tokenRadius, tokenImageUrl, speedFactor} by unitType key) -
   // only types actually used need to have been fetched already. `isSvg`
   // (derived by the caller from mapData.imageUrl's own extension, not the
@@ -192,9 +190,12 @@ export class MapPreviewScene {
     }
 
     for (const barrier of this._barriers) {
-      if (barrier.type !== "wall" || !barrier.locations || barrier.locations.length < 2) continue;
-      const pts = barrier.locations.map(({x, y}) => this._toWorld(x, y));
-      this.scene.add(buildWall(pts));
+      if (barrier.type === "wall" && barrier.locations && barrier.locations.length >= 2) {
+        const pts = barrier.locations.map(({x, y}) => this._toWorld(x, y));
+        this.scene.add(buildWall(pts));
+      } else if (barrier.type === "circle" && barrier.location) {
+        this.scene.add(buildCircleBarrier(this._toWorld(barrier.location.x, barrier.location.y), barrier.radius ?? 0));
+      }
     }
 
     // Line connections (map-to-map thresholds) render the same way the real

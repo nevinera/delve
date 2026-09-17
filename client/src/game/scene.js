@@ -67,13 +67,14 @@ function computeWallPolygon(points, half) {
   return result;
 }
 
-// Exported (only these two, not computeWallPolygon) - the map editor's
-// MapPreviewScene reuses them as-is, no signature changes needed to serve
-// both callers. Everything else the preview needs (facing math, movement,
-// camera positioning) is small enough to just duplicate there instead, same
-// as editor/previewScene.js already does for the ability preview - see its
-// header comment for why an editor-only preview stays decoupled from this
-// file rather than growing options to accommodate a second caller.
+// Exported (along with buildCircleBarrier below, not computeWallPolygon) -
+// the map editor's MapPreviewScene reuses them as-is, no signature changes
+// needed to serve both callers. Everything else the preview needs (facing
+// math, movement, camera positioning) is small enough to just duplicate
+// there instead, same as editor/previewScene.js already does for the
+// ability preview - see its header comment for why an editor-only preview
+// stays decoupled from this file rather than growing options to
+// accommodate a second caller.
 export function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
   const poly = computeWallPolygon(worldPoints, thickness / 2);
   const shape = new THREE.Shape();
@@ -90,6 +91,28 @@ export function buildWall(worldPoints, { thickness = 0.4, height = 0.8, color = 
     )
   );
   group.rotation.x = -Math.PI / 2;
+  return group;
+}
+
+// Same visual treatment as buildWall (translucent fill + dark edge outline),
+// as a cylinder matching resolveBarrierCollisions'/hasLineOfSight's circle
+// radius exactly - a unit visibly clips the mesh only where it would also
+// collide. centerWorld is [worldX, worldZ] - the same pair _toWorld/toWorld
+// produce for a wall point - not a feet-space location.
+export function buildCircleBarrier(centerWorld, radiusFeet, { height = 0.8, color = 0x333333, opacity = 0.4, segments = 24 } = {}) {
+  const geo = new THREE.CylinderGeometry(radiusFeet, radiusFeet, height, segments);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity }));
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geo),
+    new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: opacity * 2 })
+  );
+  mesh.position.y = height / 2;
+  edges.position.y = height / 2;
+
+  const group = new THREE.Group();
+  group.add(mesh, edges);
+  const [worldX, worldZ] = centerWorld;
+  group.position.set(worldX, 0, worldZ);
   return group;
 }
 
@@ -707,9 +730,12 @@ export class SceneManager {
       }
 
       for (const barrier of m.barriers ?? []) {
-        if (barrier.type !== "wall") continue;
-        const pts = barrier.locations.map(({ x, y }) => toWorld(x, y));
-        group.add(buildWall(pts));
+        if (barrier.type === "wall") {
+          const pts = barrier.locations.map(({ x, y }) => toWorld(x, y));
+          group.add(buildWall(pts));
+        } else if (barrier.type === "circle" && barrier.location) {
+          group.add(buildCircleBarrier(toWorld(barrier.location.x, barrier.location.y), barrier.radius ?? 0));
+        }
       }
 
       for (const conn of m.connections ?? []) {
