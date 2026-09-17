@@ -5,31 +5,13 @@
 // API, specifically because it needs no per-file "does this already exist"
 // check: a tree entry at a given path either already exists in the base
 // tree (and gets replaced) or doesn't (and gets added) - the same call
-// handles both create and update uniformly. The token comes from
-// GET /github/token (see Github::ConnectionsController#token), which
-// refreshes it server-side as needed.
+// handles both create and update uniformly.
+
+import {fetchToken, GithubAuthError} from "./token";
+
+export {GithubAuthError};
 
 const GITHUB_API = "https://api.github.com";
-
-// Thrown when /github/token reports the user isn't connected, or needs to
-// reauthorize - `redirectUrl` is where the caller should send them.
-export class GithubAuthError extends Error {
-  constructor(code, redirectUrl) {
-    super(`GitHub authorization required (${code})`);
-    this.name = "GithubAuthError";
-    this.code = code;
-    this.redirectUrl = redirectUrl;
-  }
-}
-
-async function fetchToken() {
-  const res = await fetch("/github/token");
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new GithubAuthError(body.error ?? "not_connected", body.connect_url ?? body.reauth_url ?? null);
-  }
-  return res.json();
-}
 
 async function githubRequest(token, path, options = {}) {
   // no-store: GitHub's API sends Cache-Control: private, max-age=60 on
