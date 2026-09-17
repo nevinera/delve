@@ -25,12 +25,7 @@ RSpec.describe "Build::Items", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         it "lists the items directory contents, linking to the edit page" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "sword-of-doom.json", path: "items/sword-of-doom.json", type: "file"}].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "items", ["sword-of-doom.json"])
 
           get "/build/items"
           expect(response).to have_http_status(:ok)
@@ -63,12 +58,7 @@ RSpec.describe "Build::Items", type: :request do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
       def stub_existing_items(names)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items")
-          .to_return(
-            status: 200,
-            headers: {"Content-Type" => "application/json"},
-            body: names.map { |n| {name: "#{n}.json", path: "items/#{n}.json", type: "file"} }.to_json
-          )
+        stub_tree_listing("nevinera/delve-content", "items", names.map { |n| "#{n}.json" })
       end
 
       it "redirects to the edit page for an available key" do

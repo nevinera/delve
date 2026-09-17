@@ -25,15 +25,7 @@ RSpec.describe "Build::Classes", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         it "lists the classes directory contents, linking to the edit page" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/classes")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "puncher.json", path: "classes/puncher.json", type: "file"},
-                {name: "puncher.full.json", path: "classes/puncher.full.json", type: "file"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "classes", ["puncher.json", "puncher.full.json"])
 
           get "/build/classes"
           expect(response).to have_http_status(:ok)
@@ -67,12 +59,7 @@ RSpec.describe "Build::Classes", type: :request do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
       def stub_existing_classes(names)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/classes")
-          .to_return(
-            status: 200,
-            headers: {"Content-Type" => "application/json"},
-            body: names.map { |n| {name: "#{n}.json", path: "classes/#{n}.json", type: "file"} }.to_json
-          )
+        stub_tree_listing("nevinera/delve-content", "classes", names.map { |n| "#{n}.json" })
       end
 
       it "redirects to the edit page for an available key" do
@@ -112,8 +99,7 @@ RSpec.describe "Build::Classes", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         def stub_empty_abilities_dir(key)
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/#{key}")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+          stub_missing_tree_listing("nevinera/delve-content", "abilities/classes/#{key}")
         end
 
         it "bootstraps a blank class when the key doesn't exist yet in the repo" do
@@ -144,12 +130,7 @@ RSpec.describe "Build::Classes", type: :request do
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
 
           punch_ability = {"name" => "Punch", "castTime" => nil, "globalCooldown" => 0.5, "iconURL" => "../graphics/icons/punch.svg"}
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/puncher")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "punch.json", path: "abilities/classes/puncher/punch.json", type: "file"}].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "abilities/classes/puncher", ["punch.json"])
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/puncher/punch.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(punch_ability.to_json), encoding: "base64"}.to_json)
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/graphics/icons/punch.svg")

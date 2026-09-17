@@ -25,17 +25,12 @@ RSpec.describe "Build::Zones", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         it "lists only zone files (not maps nested inside them, nor .full.json/.layout.json companions), linking to the edit page" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "goblin-cave.json", path: "zones/goblin-cave/goblin-cave.json", type: "file"},
-                {name: "gc1-goblin-cave-entrance.json", path: "zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", type: "file"},
-                {name: "goblin-cave.full.json", path: "zones/goblin-cave/goblin-cave.full.json", type: "file"},
-                {name: "goblin-cave.layout.json", path: "zones/goblin-cave/goblin-cave.layout.json", type: "file"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "zones", [
+            "goblin-cave/goblin-cave.json",
+            "goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json",
+            "goblin-cave/goblin-cave.full.json",
+            "goblin-cave/goblin-cave.layout.json"
+          ])
 
           get "/build/zones"
           expect(response).to have_http_status(:ok)
@@ -69,12 +64,7 @@ RSpec.describe "Build::Zones", type: :request do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
       def stub_existing_zones(keys)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones")
-          .to_return(
-            status: 200,
-            headers: {"Content-Type" => "application/json"},
-            body: keys.map { |k| {name: "#{k}.json", path: "zones/#{k}/#{k}.json", type: "file"} }.to_json
-          )
+        stub_tree_listing("nevinera/delve-content", "zones", keys.map { |k| "#{k}/#{k}.json" })
       end
 
       it "redirects to the edit page for an available key" do
@@ -114,8 +104,7 @@ RSpec.describe "Build::Zones", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         def stub_empty_zone_directory(zone_key)
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/#{zone_key}")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+          stub_missing_tree_listing("nevinera/delve-content", "zones/#{zone_key}")
         end
 
         def stub_missing_layout(zone_key)
@@ -171,17 +160,12 @@ RSpec.describe "Build::Zones", type: :request do
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/goblin-cave.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
           stub_missing_layout("goblin-cave")
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "goblin-cave.json", path: "zones/goblin-cave/goblin-cave.json", type: "file"},
-                {name: "goblin-cave.full.json", path: "zones/goblin-cave/goblin-cave.full.json", type: "file"},
-                {name: "gc1-goblin-cave-entrance.json", path: "zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", type: "file"},
-                {name: "gc2-goblin-cave-interior.json", path: "zones/goblin-cave/gc2-goblin-cave-interior/gc2-goblin-cave-interior.json", type: "file"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "zones/goblin-cave", [
+            "goblin-cave.json",
+            "goblin-cave.full.json",
+            "gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json",
+            "gc2-goblin-cave-interior/gc2-goblin-cave-interior.json"
+          ])
           map_content = {
             "identifier" => "cave_entrance", "name" => "Cave Entrance",
             "connections" => [{"identifier" => "cave_mouth", "type" => "line"}],
@@ -216,13 +200,12 @@ RSpec.describe "Build::Zones", type: :request do
     describe "GET /build/zones/:id/available_maps" do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-      def stub_zone_directory(entries)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave")
-          .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: entries.to_json)
+      def stub_zone_directory(relative_paths)
+        stub_tree_listing("nevinera/delve-content", "zones/goblin-cave", relative_paths)
       end
 
       it "with no keys[], returns the cheap bare-key list only - no map file is opened" do
-        stub_zone_directory([{name: "gc1-goblin-cave-entrance.json", path: "zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", type: "file"}])
+        stub_zone_directory(["gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json"])
         # Deliberately no stub for the map file itself - WebMock would raise
         # if the cheap path tried to open it.
 
@@ -233,7 +216,7 @@ RSpec.describe "Build::Zones", type: :request do
       end
 
       it "with keys[], returns full detail for exactly those keys" do
-        stub_zone_directory([{name: "gc1-goblin-cave-entrance.json", path: "zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", type: "file"}])
+        stub_zone_directory(["gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json"])
         map_content = {"identifier" => "cave_entrance", "name" => "Cave Entrance"}
         stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json")
           .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(map_content.to_json), encoding: "base64"}.to_json)

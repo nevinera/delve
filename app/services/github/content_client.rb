@@ -15,11 +15,11 @@ module Github
     # only (directory entries themselves are expanded, not included) - lets
     # content be organized into subdirectories (e.g. abilities/classes/druid/,
     # abilities/units/) without the caller needing to know that structure
-    # ahead of time.
+    # ahead of time. Backed by Github::TreeListing (Git Trees API) rather
+    # than one Contents API call per directory level.
     def list_directory_recursive(path)
-      entries = contents(path)
-      return [] unless entries.is_a?(Array)
-      entries.flat_map { |entry| (entry["type"] == "dir") ? list_directory_recursive(entry["path"]) : [entry] }
+      ensure_fresh_token!
+      Github::TreeListing.new(@installation.access_token, @installation.repo_full_name).list(path)
     end
 
     def file_content(path)

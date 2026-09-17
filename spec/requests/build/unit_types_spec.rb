@@ -25,15 +25,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         it "lists the unit_types directory contents, linking to the edit page" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "goblin-raider.json", path: "unit_types/goblin-raider.json", type: "file"},
-                {name: "goblin-raider.full.json", path: "unit_types/goblin-raider.full.json", type: "file"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "unit_types", ["goblin-raider.json", "goblin-raider.full.json"])
 
           get "/build/unit_types"
           expect(response).to have_http_status(:ok)
@@ -67,12 +59,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
       def stub_existing_unit_types(names)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
-          .to_return(
-            status: 200,
-            headers: {"Content-Type" => "application/json"},
-            body: names.map { |n| {name: "#{n}.json", path: "unit_types/#{n}.json", type: "file"} }.to_json
-          )
+        stub_tree_listing("nevinera/delve-content", "unit_types", names.map { |n| "#{n}.json" })
       end
 
       it "redirects to the edit page for an available key" do
@@ -114,8 +101,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
         # abilities/units/ is scanned whole, not scoped to any one unit
         # type's key - see Build::UnitTypesController#load_available_abilities.
         def stub_empty_abilities_dir
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+          stub_missing_tree_listing("nevinera/delve-content", "abilities/units")
         end
 
         it "bootstraps a blank unit type when the key doesn't exist yet in the repo" do
@@ -144,18 +130,7 @@ RSpec.describe "Build::UnitTypes", type: :request do
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(content.to_json), encoding: "base64"}.to_json)
 
           slash_ability = {"name" => "Slash", "castTime" => nil, "globalCooldown" => 1.0}
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "goblins", path: "abilities/units/goblins", type: "dir"}].to_json
-            )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "slash.json", path: "abilities/units/goblins/slash.json", type: "file"}].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "abilities/units", ["goblins/slash.json"])
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/slash.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(slash_ability.to_json), encoding: "base64"}.to_json)
 
@@ -187,30 +162,9 @@ RSpec.describe "Build::UnitTypes", type: :request do
 
         it "returns the current available-abilities map as JSON, up to one level of subdirectory beneath abilities/units/" do
           slash_ability = {"name" => "Slash", "castTime" => nil, "globalCooldown" => 1.0}
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "goblins", path: "abilities/units/goblins", type: "dir"},
-                {name: "bite.json", path: "abilities/units/bite.json", type: "file"}
-              ].to_json
-            )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "slash.json", path: "abilities/units/goblins/slash.json", type: "file"},
-                {name: "melee", path: "abilities/units/goblins/melee", type: "dir"}
-              ].to_json
-            )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/melee")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "too-deep.json", path: "abilities/units/goblins/melee/too-deep.json", type: "file"}].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "abilities/units", [
+            "bite.json", "goblins/slash.json", "goblins/melee/too-deep.json"
+          ])
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/goblins/slash.json")
             .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {content: Base64.encode64(slash_ability.to_json), encoding: "base64"}.to_json)
           stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/units/bite.json")

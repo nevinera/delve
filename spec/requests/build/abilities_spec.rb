@@ -35,14 +35,7 @@ RSpec.describe "Build::Abilities", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         it "lists the abilities directory contents, linking to the edit page" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "punch.json", path: "abilities/punch.json", type: "file", html_url: "https://github.com/nevinera/delve-content/blob/main/abilities/punch.json"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "abilities", ["punch.json"])
 
           get "/build/abilities"
           expect(response).to have_http_status(:ok)
@@ -53,27 +46,7 @@ RSpec.describe "Build::Abilities", type: :request do
         end
 
         it "recurses into subdirectories, showing each ability's full repo-relative path" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "punch.json", path: "abilities/punch.json", type: "file"},
-                {name: "classes", path: "abilities/classes", type: "dir"}
-              ].to_json
-            )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "druid", path: "abilities/classes/druid", type: "dir"}].to_json
-            )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/druid")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "wildshape.json", path: "abilities/classes/druid/wildshape.json", type: "file"}].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "abilities", ["punch.json", "classes/druid/wildshape.json"])
 
           get "/build/abilities"
 
@@ -113,12 +86,7 @@ RSpec.describe "Build::Abilities", type: :request do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
       def stub_existing_abilities(names)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
-          .to_return(
-            status: 200,
-            headers: {"Content-Type" => "application/json"},
-            body: names.map { |n| {name: "#{n}.json", path: "abilities/#{n}.json", type: "file"} }.to_json
-          )
+        stub_tree_listing("nevinera/delve-content", "abilities", names.map { |n| "#{n}.json" })
       end
 
       it "redirects to the edit page for an available key" do

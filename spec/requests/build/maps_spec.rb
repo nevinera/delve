@@ -25,30 +25,11 @@ RSpec.describe "Build::Maps", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         it "lists map files nested under zones/, linking to the edit page, and skips the zone's own json" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [{name: "goblin-cave", path: "zones/goblin-cave", type: "dir"}].to_json
-            )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "goblin-cave.json", path: "zones/goblin-cave/goblin-cave.json", type: "file"},
-                {name: "gc1-entrance", path: "zones/goblin-cave/gc1-entrance", type: "dir"}
-              ].to_json
-            )
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc1-entrance")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "gc1-entrance.json", path: "zones/goblin-cave/gc1-entrance/gc1-entrance.json", type: "file"},
-                {name: "gc1-entrance.webp", path: "zones/goblin-cave/gc1-entrance/gc1-entrance.webp", type: "file"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "zones", [
+            "goblin-cave/goblin-cave.json",
+            "goblin-cave/gc1-entrance/gc1-entrance.json",
+            "goblin-cave/gc1-entrance/gc1-entrance.webp"
+          ])
 
           get "/build/maps"
 
@@ -89,12 +70,7 @@ RSpec.describe "Build::Maps", type: :request do
       before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
       def stub_existing_maps(paths)
-        stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones")
-          .to_return(
-            status: 200,
-            headers: {"Content-Type" => "application/json"},
-            body: paths.map { |p| {name: File.basename(p), path: p, type: "file"} }.to_json
-          )
+        stub_tree_listing("nevinera/delve-content", "zones", paths.map { |p| p.delete_prefix("zones/") })
       end
 
       it "redirects to the edit page for an available key" do
@@ -137,15 +113,13 @@ RSpec.describe "Build::Maps", type: :request do
         # placement dropdown (see Build::MapsController#load_available_unit_types) -
         # stub an empty directory for tests that aren't exercising that.
         def stub_empty_unit_types_dir
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+          stub_missing_tree_listing("nevinera/delve-content", "unit_types")
         end
 
         # #edit also loads the available-items list for the loot table
         # dropdown (see Build::MapsController#list_item_keys).
         def stub_empty_items_dir
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items")
-            .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
+          stub_missing_tree_listing("nevinera/delve-content", "items")
         end
 
         it "renders the JS editor shell for a map that doesn't exist in the repo yet" do
@@ -209,15 +183,7 @@ RSpec.describe "Build::Maps", type: :request do
           # abilities), WebMock would raise on the unstubbed request and
           # fail this test. That's the point: a repo with hundreds of unit
           # types must stay cheap to list.
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/unit_types")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "goblin-raider.json", path: "unit_types/goblin-raider.json", type: "file"},
-                {name: "slime.json", path: "unit_types/slime.json", type: "file"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "unit_types", ["goblin-raider.json", "slime.json"])
 
           get "/build/maps/goblin-cave/gc1-entrance/available_unit_types"
 
@@ -287,15 +253,7 @@ RSpec.describe "Build::Maps", type: :request do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
         it "without keys[], returns just the cheap key list - no item file is opened" do
-          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/items")
-            .to_return(
-              status: 200,
-              headers: {"Content-Type" => "application/json"},
-              body: [
-                {name: "sword-of-doom.json", path: "items/sword-of-doom.json", type: "file"},
-                {name: "iron-shield.json", path: "items/iron-shield.json", type: "file"}
-              ].to_json
-            )
+          stub_tree_listing("nevinera/delve-content", "items", ["sword-of-doom.json", "iron-shield.json"])
 
           get "/build/maps/goblin-cave/gc1-entrance/available_items"
 
