@@ -1,5 +1,5 @@
-import {useEffect, useReducer, useRef, useState} from "react";
-import {unitTypeReducer} from "./unitTypeReducer";
+import {useEffect, useRef, useState} from "react";
+import {UnitTypeDraft} from "./UnitTypeDraft";
 import {blankUnitType} from "./blankUnitType";
 import {loadAvailableAbilities} from "./loadAvailableAbilities";
 import UnitTypePreviewPane from "./UnitTypePreviewPane";
@@ -26,7 +26,7 @@ function normalizeUnitType(unitType) {
 // are fetched here, client-side, on mount, via one shared GithubClient
 // instance.
 export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}) {
-  const [unitTypeData, rawDispatch] = useReducer(unitTypeReducer, null);
+  const [draft, setDraft] = useState(null);
   const [availableAbilities, setAvailableAbilities] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [refreshStatus, setRefreshStatus] = useState("");
@@ -39,7 +39,8 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
       try {
         const content = await client.current.fetchFile(`unit_types/${unitTypeKey}.json`);
         if (cancelled) return;
-        rawDispatch({type: "LOAD", data: normalizeUnitType(content === null ? blankUnitType(unitTypeKey) : JSON.parse(content))});
+        const data = normalizeUnitType(content === null ? blankUnitType(unitTypeKey) : JSON.parse(content));
+        setDraft(new UnitTypeDraft(data, unitTypeKey));
 
         const abilities = await loadAvailableAbilities(client.current);
         if (!cancelled) setAvailableAbilities(abilities);
@@ -59,9 +60,9 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
 
   // Every draft edit drops a prior "valid" (or "invalid") result - see
   // useValidateThenSave.
-  function dispatch(action) {
+  function handleChange(nextDraft) {
     markDirty();
-    rawDispatch(action);
+    setDraft(nextDraft);
   }
 
   // Lets an ability created in another tab (via the "+ New ability" link)
@@ -81,7 +82,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
   async function handleValidate() {
     setValidating();
     try {
-      const fullUnitType = await resolveFullUnitType(unitTypeKey, unitTypeData, availableAbilities);
+      const fullUnitType = await resolveFullUnitType(unitTypeKey, draft.data, availableAbilities);
       const {valid, error} = await validateUnitType(fullUnitType);
       if (valid) {
         setValid();
@@ -96,7 +97,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
   async function handleSave() {
     setSaving();
     try {
-      await saveUnitType(unitTypeKey, unitTypeData, availableAbilities);
+      await saveUnitType(unitTypeKey, draft.data, availableAbilities);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -108,14 +109,14 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
   }
 
   if (loadError) return <div className="unit-type-editor-load-error">Failed to load: {loadError}</div>;
-  if (unitTypeData === null) return <div className="unit-type-editor-loading">Loading…</div>;
+  if (draft === null) return <div className="unit-type-editor-loading">Loading…</div>;
 
   return (
     <div className="unit-type-editor">
       <div className="unit-type-editor-preview">
         <UnitTypePreviewPane
           unitTypeKey={unitTypeKey}
-          unitTypeData={unitTypeData}
+          unitTypeData={draft.data}
           availableAbilities={availableAbilities}
           stockAssets={stockAssets}
         />
@@ -123,13 +124,12 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
       <div className="unit-type-editor-fields">
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
         <UnitTypeFieldsPanel
-          unitTypeKey={unitTypeKey}
-          unitTypeData={unitTypeData}
+          draft={draft}
           availableAbilities={availableAbilities}
           newAbilityUrl={newAbilityUrl}
           onRefreshAbilities={handleRefreshAbilities}
           refreshStatus={refreshStatus}
-          dispatch={dispatch}
+          onChange={handleChange}
         />
       </div>
     </div>
