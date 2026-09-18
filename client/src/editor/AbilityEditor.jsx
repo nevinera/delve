@@ -1,5 +1,5 @@
-import {useEffect, useReducer, useRef, useState} from "react";
-import {abilityReducer} from "./abilityReducer";
+import {useEffect, useRef, useState} from "react";
+import {AbilityDraft} from "./AbilityDraft";
 import {blankAbility} from "./blankAbility";
 import {collectAssetUrls} from "./collectAssetUrls";
 import AbilityPreviewPane from "./AbilityPreviewPane";
@@ -44,7 +44,7 @@ function reindexBySection(map, section, removedIndex, onRemoved) {
 }
 
 export default function AbilityEditor({abilityKey, stockAssets}) {
-  const [ability, rawDispatch] = useReducer(abilityReducer, null);
+  const [draft, setDraft] = useState(null);
   const [assetMap, setAssetMap] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [assetOverrides, setAssetOverrides] = useState({});
@@ -69,7 +69,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
       .then(async (content) => {
         if (cancelled) return;
         const data = content === null ? blankAbility(abilityKey) : JSON.parse(content);
-        rawDispatch({type: "LOAD", data});
+        setDraft(new AbilityDraft(data));
 
         const urls = collectAssetUrls(data);
         const entries = await Promise.all(urls.map(async (url) => [url, await client.current.assetUrl(resolveRepoPath(abilityKey, url))]));
@@ -89,11 +89,11 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
   }, [abilityKey]);
 
   // Every draft edit needs to drop a prior "valid" (or "invalid") result -
-  // see useValidateThenSave - so this wraps the reducer's dispatch rather
-  // than calling markDirty at each of the several call sites below.
-  function dispatch(action) {
+  // see useValidateThenSave - so this wraps the setter rather than calling
+  // markDirty at each of the several call sites below.
+  function handleChange(nextDraft) {
     markDirty();
-    rawDispatch(action);
+    setDraft(nextDraft);
   }
 
   // "Uploads" a local file as a stand-in for a not-yet-saved asset (preview
@@ -126,7 +126,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
   }
 
   function removeEntry(section, index) {
-    dispatch({type: "REMOVE_ENTRY", section, index});
+    handleChange(draft.removeEntry(section, index));
 
     overrideUrlsRef.current = reindexBySection(overrideUrlsRef.current, section, index, (url) => URL.revokeObjectURL(url));
     pendingFilesRef.current = reindexBySection(pendingFilesRef.current, section, index);
@@ -135,7 +135,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
 
   async function handleValidate() {
     setValidating();
-    const {valid, error} = await validateAbility(ability);
+    const {valid, error} = await validateAbility(draft.data);
     if (valid) {
       setValid();
     } else {
@@ -146,7 +146,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
   async function handleSave() {
     setSaving();
     try {
-      await saveAbility(abilityKey, ability, pendingFilesRef.current);
+      await saveAbility(abilityKey, draft.data, pendingFilesRef.current);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -158,18 +158,18 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
   }
 
   if (loadError) return <div className="ability-editor-load-error">Failed to load: {loadError}</div>;
-  if (ability === null) return <div className="ability-editor-loading">Loading…</div>;
+  if (draft === null) return <div className="ability-editor-loading">Loading…</div>;
 
   return (
     <div className="ability-editor">
       <div className="ability-editor-preview">
-        <AbilityPreviewPane ability={ability} assetMap={assetMap} assetOverrides={assetOverrides} stockAssets={stockAssets} />
+        <AbilityPreviewPane ability={draft.data} assetMap={assetMap} assetOverrides={assetOverrides} stockAssets={stockAssets} />
       </div>
       <div className="ability-editor-fields">
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
         <AbilityFieldsPanel
-          ability={ability}
-          dispatch={dispatch}
+          draft={draft}
+          onChange={handleChange}
           assetOverrides={assetOverrides}
           onUploadAsset={uploadAsset}
           onClearAsset={clearAssetOverride}
