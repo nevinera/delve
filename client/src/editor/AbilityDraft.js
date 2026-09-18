@@ -1,5 +1,6 @@
 import {placeholderEntry} from "./entryFieldSchema";
 import {graphicFieldsFor, soundFieldsFor} from "./stockAssetFields";
+import {StatusDraft} from "./StatusDraft";
 
 // Owns an ability draft's data and every mutation the editor can make to
 // it - the UI (AbilityEditor.jsx/AbilityFieldsPanel.jsx/StatusEditor.jsx)
@@ -56,5 +57,29 @@ export class AbilityDraft {
 
   pickStockIcon(name) {
     return this.setField("iconURL", `:${name}:`);
+  }
+
+  // An `effects` entry's own `status` sub-object (see
+  // Validators::PowerEffectValidator's "status" type) is a nested domain
+  // object in its own right - reached and replaced *through* AbilityDraft,
+  // rather than StatusEditor.jsx composing/mutating it directly (see
+  // StatusDraft.js and plans/editors-as-classes.md). null when the entry
+  // has no status yet (or isn't a status-type effect at all).
+  statusFor(index) {
+    const status = this.data.effects?.[index]?.status;
+    return status ? new StatusDraft(status) : null;
+  }
+
+  // statusDraft may be null, to clear an entry's status entirely.
+  setStatus(index, statusDraft) {
+    return this.updateEntryField("effects", index, "status", statusDraft ? statusDraft.data : null);
+  }
+
+  addStatus(index) {
+    return this.setStatus(index, StatusDraft.blank());
+  }
+
+  removeStatus(index) {
+    return this.setStatus(index, null);
   }
 }

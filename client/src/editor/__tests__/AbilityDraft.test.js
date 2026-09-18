@@ -1,5 +1,6 @@
 import {describe, it, expect} from "vitest";
 import {AbilityDraft} from "../AbilityDraft";
+import {StatusDraft} from "../StatusDraft";
 
 const base = {name: "Firebolt", castTime: null, globalCooldown: 1.0, graphicEffects: [], soundEffects: [], effects: []};
 
@@ -102,6 +103,57 @@ describe("AbilityDraft", () => {
       const result = new AbilityDraft(base).pickStockIcon("heal");
 
       expect(result.data.iconURL).toBe(":heal:");
+    });
+  });
+
+  describe("statusFor/setStatus/addStatus/removeStatus", () => {
+    it("statusFor returns null when the entry has no status", () => {
+      const draft = new AbilityDraft({...base, effects: [{type: "harm"}]});
+
+      expect(draft.statusFor(0)).toBeNull();
+    });
+
+    it("statusFor returns a StatusDraft wrapping the entry's status", () => {
+      const status = {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []};
+      const draft = new AbilityDraft({...base, effects: [{type: "status", status}]});
+
+      expect(draft.statusFor(0)).toBeInstanceOf(StatusDraft);
+      expect(draft.statusFor(0).data).toEqual(status);
+    });
+
+    it("setStatus writes the given StatusDraft's data back onto the entry", () => {
+      const status = {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []};
+      const draft = new AbilityDraft({...base, effects: [{type: "status", status}]});
+
+      const result = draft.setStatus(0, new StatusDraft({...status, name: "Focused II"}));
+
+      expect(result.data.effects[0].status.name).toBe("Focused II");
+    });
+
+    it("setStatus(index, null) clears the entry's status", () => {
+      const status = {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []};
+      const draft = new AbilityDraft({...base, effects: [{type: "status", status}]});
+
+      const result = draft.setStatus(0, null);
+
+      expect(result.data.effects[0].status).toBeNull();
+    });
+
+    it("addStatus sets a fresh blank status on the entry", () => {
+      const draft = new AbilityDraft({...base, effects: [{type: "status"}]});
+
+      const result = draft.addStatus(0);
+
+      expect(result.data.effects[0].status).toEqual({name: "", shortName: "", treatAs: "buff", stacking: "replace", effects: []});
+    });
+
+    it("removeStatus clears the entry's status", () => {
+      const status = {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []};
+      const draft = new AbilityDraft({...base, effects: [{type: "status", status}]});
+
+      const result = draft.removeStatus(0);
+
+      expect(result.data.effects[0].status).toBeNull();
     });
   });
 });

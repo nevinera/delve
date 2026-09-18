@@ -184,8 +184,6 @@ function EntryField({field, value, onChange, stockAssets}) {
           onChange={(e) => onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
         />
       );
-    case "status":
-      return <StatusEditor value={value} onChange={onChange} stockAssets={stockAssets} />;
     case "readonly":
       return formatValue(value);
     default:
@@ -209,6 +207,26 @@ function EntryFieldsTable({section, index, entry, draft, onChange, assetOverride
     <table>
       <tbody>
         {entryFieldsFor(section, entry).map((field) => {
+          // A status is its own nested domain object (StatusDraft), reached
+          // and replaced through AbilityDraft rather than routed through
+          // the generic updateEntryField path every other field uses - see
+          // AbilityDraft#statusFor/setStatus/addStatus.
+          if (field === "status") {
+            return (
+              <tr key={field}>
+                <th>{humanize(field)}</th>
+                <td>
+                  <StatusEditor
+                    status={draft.statusFor(index)}
+                    onAdd={() => onChange(draft.addStatus(index))}
+                    onChange={(nextStatus) => onChange(draft.setStatus(index, nextStatus))}
+                    stockAssets={stockAssets}
+                  />
+                </td>
+              </tr>
+            );
+          }
+
           const value = entry[field];
           const uploadKey = field === "sourceURL" ? assetOverrideKey(section, index, field) : null;
           return (
