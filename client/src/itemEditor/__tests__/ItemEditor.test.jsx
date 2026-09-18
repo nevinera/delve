@@ -25,7 +25,7 @@ const initialItem = {
 };
 
 function mockFetchFile(implementation) {
-  GithubClient.mockImplementation(() => ({fetchFile: vi.fn(implementation)}));
+  GithubClient.mockImplementation(function () { return {fetchFile: vi.fn(implementation)}; });
 }
 
 async function renderLoaded(itemData = initialItem) {

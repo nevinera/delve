@@ -40,10 +40,12 @@ const initialAbility = {name: "Firebolt", castTime: null, globalCooldown: 1.0, s
 // stubbed out below anyway - see collectAssetUrls.test.js/delve-github's
 // own tests for that behavior in isolation).
 function mockAbilityLoad(ability) {
-  GithubClient.mockImplementation(() => ({
-    fetchFile: vi.fn().mockResolvedValue(JSON.stringify(ability)),
-    assetUrl: vi.fn().mockImplementation(async (path) => path),
-  }));
+  GithubClient.mockImplementation(function () {
+    return {
+      fetchFile: vi.fn().mockResolvedValue(JSON.stringify(ability)),
+      assetUrl: vi.fn().mockImplementation(async (path) => path),
+    };
+  });
 }
 
 async function renderReady(ability = initialAbility, props = {}) {
@@ -57,10 +59,12 @@ describe("AbilityEditor", () => {
 
   it("shows a loading state, then the fields panel once the fetch resolves", async () => {
     let resolveFetch;
-    GithubClient.mockImplementation(() => ({
-      fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))),
-      assetUrl: vi.fn().mockResolvedValue(""),
-    }));
+    GithubClient.mockImplementation(function () {
+      return {
+        fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))),
+        assetUrl: vi.fn().mockResolvedValue(""),
+      };
+    });
 
     render(<AbilityEditor abilityKey="firebolt" />);
     expect(screen.getByText("Loading…")).toBeInTheDocument();
@@ -70,10 +74,12 @@ describe("AbilityEditor", () => {
   });
 
   it("falls back to a blank ability when the file doesn't exist yet (404 -> null)", async () => {
-    GithubClient.mockImplementation(() => ({
-      fetchFile: vi.fn().mockResolvedValue(null),
-      assetUrl: vi.fn().mockResolvedValue(""),
-    }));
+    GithubClient.mockImplementation(function () {
+      return {
+        fetchFile: vi.fn().mockResolvedValue(null),
+        assetUrl: vi.fn().mockResolvedValue(""),
+      };
+    });
 
     render(<AbilityEditor abilityKey="fire_bolt" />);
 
@@ -81,10 +87,12 @@ describe("AbilityEditor", () => {
   });
 
   it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
-    GithubClient.mockImplementation(() => ({
-      fetchFile: vi.fn().mockRejectedValue(new Error("network down")),
-      assetUrl: vi.fn(),
-    }));
+    GithubClient.mockImplementation(function () {
+      return {
+        fetchFile: vi.fn().mockRejectedValue(new Error("network down")),
+        assetUrl: vi.fn(),
+      };
+    });
 
     render(<AbilityEditor abilityKey="firebolt" />);
 
@@ -92,10 +100,12 @@ describe("AbilityEditor", () => {
   });
 
   it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
-    GithubClient.mockImplementation(() => ({
-      fetchFile: vi.fn().mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth")),
-      assetUrl: vi.fn(),
-    }));
+    GithubClient.mockImplementation(function () {
+      return {
+        fetchFile: vi.fn().mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth")),
+        assetUrl: vi.fn(),
+      };
+    });
     delete window.location;
     window.location = {href: ""};
 

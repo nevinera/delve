@@ -41,7 +41,7 @@ const availableAbilities = {
 };
 
 function mockClassLoad(classData, abilities = {}) {
-  GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockResolvedValue(JSON.stringify(classData))}));
+  GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockResolvedValue(JSON.stringify(classData))}; });
   loadAvailableAbilities.mockResolvedValue(abilities);
 }
 
@@ -56,7 +56,7 @@ describe("ClassEditor", () => {
 
   it("shows a loading state, then the fields panel once the fetch resolves", async () => {
     let resolveFetch;
-    GithubClient.mockImplementation(() => ({fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)))}));
+    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)))}; });
     loadAvailableAbilities.mockResolvedValue({});
 
     render(<ClassEditor classKey="puncher" stockAssets={{}} />);
@@ -67,7 +67,7 @@ describe("ClassEditor", () => {
   });
 
   it("falls back to a blank class when the file doesn't exist yet (404 -> null)", async () => {
-    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockResolvedValue(null)}));
+    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockResolvedValue(null)}; });
     loadAvailableAbilities.mockResolvedValue({});
 
     render(<ClassEditor classKey="druid" stockAssets={{}} />);
@@ -76,7 +76,7 @@ describe("ClassEditor", () => {
   });
 
   it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
-    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}));
+    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}; });
     loadAvailableAbilities.mockResolvedValue({});
 
     render(<ClassEditor classKey="puncher" stockAssets={{}} />);
@@ -85,7 +85,7 @@ describe("ClassEditor", () => {
   });
 
   it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
-    GithubClient.mockImplementation(() => ({fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}));
+    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
     loadAvailableAbilities.mockResolvedValue({});
     delete window.location;
     window.location = {href: ""};

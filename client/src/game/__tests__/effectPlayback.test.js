@@ -8,7 +8,7 @@ describe("playSoundEffects", () => {
 
   beforeEach(() => {
     playedUrls = [];
-    global.Audio = vi.fn().mockImplementation((url) => {
+    global.Audio = vi.fn().mockImplementation(function (url) {
       playedUrls.push(url);
       return {play: () => Promise.resolve()};
     });
@@ -31,7 +31,9 @@ describe("playSoundEffects", () => {
 
 describe("firePowerEffects", () => {
   beforeEach(() => {
-    global.Audio = vi.fn().mockImplementation(() => ({play: () => Promise.resolve()}));
+    global.Audio = vi.fn().mockImplementation(function () {
+      return {play: () => Promise.resolve()};
+    });
   });
 
   afterEach(() => {

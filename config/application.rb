@@ -41,6 +41,10 @@ module DelveWeb
 
     config.assets.paths << Rails.root.join("app/javascript")
 
+    # Rails 8.1's new defaults switched this to :vips, but we don't have
+    # libvips/ruby-vips installed - keep the mini_magick behavior we've had.
+    config.active_storage.variant_processor = :mini_magick
+
     config.active_record.encryption.primary_key = ENV.string("AR_ENCRYPTION_PRIMARY_KEY", default: nil)
     config.active_record.encryption.deterministic_key = ENV.string("AR_ENCRYPTION_DETERMINISTIC_KEY", default: nil)
     config.active_record.encryption.key_derivation_salt = ENV.string("AR_ENCRYPTION_KEY_DERIVATION_SALT", default: nil)

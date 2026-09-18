@@ -43,17 +43,21 @@ const goblinCaveZone = {
 // (e.g. the world's own <key>.layout.json, before one's ever been saved)
 // just 404s to null, same as a real brand-new file would.
 function mockGithubFiles(files, {availableZonePaths = []} = {}) {
-  GithubClient.mockImplementation(() => ({
-    fetchFile: vi.fn(async (path) => (path in files ? files[path] : null)),
-    listDirectory: vi.fn(async () => availableZonePaths),
-  }));
+  GithubClient.mockImplementation(function () {
+    return {
+      fetchFile: vi.fn(async (path) => (path in files ? files[path] : null)),
+      listDirectory: vi.fn(async () => availableZonePaths),
+    };
+  });
 }
 
 function mockFetchFile(implementation, availableZonePaths = []) {
-  GithubClient.mockImplementation(() => ({
-    fetchFile: vi.fn(implementation),
-    listDirectory: vi.fn(async () => availableZonePaths),
-  }));
+  GithubClient.mockImplementation(function () {
+    return {
+      fetchFile: vi.fn(implementation),
+      listDirectory: vi.fn(async () => availableZonePaths),
+    };
+  });
 }
 
 async function renderLoaded(worldData = initialWorld) {

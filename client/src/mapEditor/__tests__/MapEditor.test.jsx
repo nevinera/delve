@@ -13,7 +13,7 @@ vi.mock("../../github/commitFiles", async (importOriginal) => {
 
 vi.mock("../../github/delve-github", async (importOriginal) => {
   const actual = await importOriginal();
-  return {...actual, GithubClient: vi.fn(() => ({}))};
+  return {...actual, GithubClient: vi.fn(function () { return {}; })};
 });
 
 vi.mock("../mapContentLoaders", async (importOriginal) => {

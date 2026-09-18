@@ -16,7 +16,7 @@ vi.mock("../saveZone", () => ({
 }));
 vi.mock("../../github/delve-github", async (importOriginal) => {
   const actual = await importOriginal();
-  return {...actual, GithubClient: vi.fn(() => ({}))};
+  return {...actual, GithubClient: vi.fn(function () { return {}; })};
 });
 vi.mock("../zoneContentLoaders", async (importOriginal) => {
   const actual = await importOriginal();
