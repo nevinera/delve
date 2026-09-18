@@ -1,5 +1,5 @@
 class Build::ZonesController < Build::BaseController
-  skip_authorization_check only: [:index, :new, :create, :edit, :available_maps]
+  skip_authorization_check only: [:index, :new, :create, :edit]
   layout "build_zone_client", only: :edit
 
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
@@ -23,34 +23,15 @@ class Build::ZonesController < Build::BaseController
     redirect_to edit_build_zone_path(id: @key)
   end
 
-  # Same cheap-list-vs-lazy-details split as Build::MapsController's own
-  # #available_unit_types: @available_map_keys is a directory listing only
-  # (no file opens at all), covering every real map under this zone -
-  # what the "Add Map" dropdown shows candidates from, as bare keys, until
-  # one is actually picked. @available_map_details opens a file per key,
-  # but only for maps this zone *already* references - a bounded set,
-  # unlike the full directory, which could hold many more maps than are
-  # actually in use.
+  # No zone content, its layout positions, or its maps lists/details are
+  # fetched here - the editor fetches all of it itself, client-side, on
+  # mount (see client/src/zoneEditor/ZoneEditor.jsx/zoneContentLoaders.js
+  # and plans/editor-git.md). Still checks for a connected repo up front,
+  # the same way #new does. There's no separate #available_maps refresh/
+  # lazy-fetch action any more either - both are just re-running the same
+  # client-side loaders.
   def edit
-    load_zone
-    load_layout_positions
-    client = Github::ContentClient.new(current_user)
-    @available_map_keys = zone_map_keys(client, params[:id])
-    @available_map_details = map_details_for(client, params[:id], referenced_map_keys(@zone))
-  end
-
-  # keys[] given: {identifier, name, connections, units, thumbnailUrl} for
-  # exactly those keys (each opens that map's file, and its thumbnail) -
-  # used lazily for a map the author just picked from "Add Map", and for
-  # #edit's own prefetch of already-referenced maps above. No keys[]: the
-  # *cheap* full list of every real map key under this zone (a directory
-  # listing, not opening any file) - what "Add Map"'s dropdown re-fetches
-  # via a "Refresh" action (see ZoneEditor) after a map is created in
-  # another tab.
-  def available_maps
-    client = Github::ContentClient.new(current_user)
-    keys = Array(params[:keys])
-    render json: keys.present? ? map_details_for(client, params[:id], keys) : zone_map_keys(client, params[:id])
+    Github::ContentClient.new(current_user)
   end
 
   private
@@ -76,125 +57,7 @@ class Build::ZonesController < Build::BaseController
     "zones/#{key}/#{key.split("/").last}.json"
   end
 
-  def layout_path(key)
-    "zones/#{key}/#{key.split("/").last}.layout.json"
-  end
-
   def zone_key_taken?(key)
     Github::ContentClient.new(current_user).list_directory_recursive("zones").any? { |entry| entry["path"] == zone_path(key) }
-  end
-
-  def load_zone
-    content = Github::ContentClient.new(current_user).file_content(zone_path(params[:id]))
-    @zone = JSON.parse(content)
-  rescue Github::NotFoundError
-    @zone = blank_zone(params[:id])
-  end
-
-  # <zone>.layout.json (see saveZone.js/layoutMetadata.js) is purely an
-  # editor display concern, not part of the zone schema - absent for a
-  # zone that's never been saved since the graph existed, same tolerant
-  # rescue as #load_zone's own missing-file case.
-  def load_layout_positions
-    content = Github::ContentClient.new(current_user).file_content(layout_path(params[:id]))
-    @layout_positions = JSON.parse(content)["positions"] || {}
-  rescue Github::NotFoundError
-    @layout_positions = {}
-  end
-
-  def map_details_for(client, zone_key, keys)
-    keys.filter_map { |key|
-      detail = map_detail(client, zone_key, key)
-      [key, detail] if detail
-    }.to_h
-  end
-
-  # The map keys this zone's own draft already references, derived from its
-  # `maps` array's $ref strings ("./<key>/<key>.json") - mirrors the
-  # client's own keyFromRef (mapRef.js) exactly, since both need to agree
-  # on what "already referenced" means.
-  def referenced_map_keys(zone)
-    Array(zone["maps"]).filter_map { |entry|
-      ref = entry["$ref"]
-      ref&.delete_prefix("./")&.split("/")&.first
-    }
-  end
-
-  # Every real map file directly under zones/<zone_key>/ - one slash after
-  # stripping that prefix distinguishes a map file (zones/<zone>/<map>/<map>.json)
-  # from the zone's own top-level file (zones/<zone>/<zone>.json), same
-  # trick #zone_file? uses one level up. Tolerates a zone directory that
-  # doesn't exist yet (a brand new zone) the same way
-  # Build::MapsController's #list_unit_type_keys tolerates a missing
-  # unit_types directory - list_directory_recursive just returns [].
-  def zone_map_keys(client, zone_key)
-    prefix = "zones/#{zone_key}/"
-    client.list_directory_recursive("zones/#{zone_key}")
-      .map { |entry| entry["path"] }
-      .select { |path| path.end_with?(".json") && !path.end_with?(".full.json") }
-      .map { |path| path.delete_prefix(prefix) }
-      .select { |relative| relative.count("/") == 1 }
-      .map { |relative| relative.split("/").first }
-      .uniq
-  end
-
-  def map_detail(client, zone_key, map_key)
-    map_data = JSON.parse(client.file_content("zones/#{zone_key}/#{map_key}/#{map_key}.json"))
-    {
-      identifier: map_data["identifier"],
-      name: map_data["name"],
-      connections: map_data["connections"] || [],
-      units: unit_summaries(map_data["units"]),
-      thumbnailUrl: map_thumbnail_data_uri(client, zone_key, map_key, map_data["thumbnailUrl"])
-    }
-  rescue Github::ReauthRequiredError
-    raise
-  rescue
-    nil
-  end
-
-  # {unitType, itemKeys} per unit - just enough for the zone editor's
-  # items/unit types lists (steps 7/8) to aggregate usage, not the unit's
-  # full position/movement/etc, which would bloat this payload for a map
-  # with many units for no reason those lists need it.
-  def unit_summaries(units)
-    Array(units).map { |unit| {unitType: unit["unitType"], itemKeys: (unit["lootTable"] || {}).keys} }
-  end
-
-  # Mirrors Build::MapsController#fetch_image_data_uri's approach, but for
-  # the small thumbnail (see saveMap.js) rather than the full background -
-  # resolved relative to the map's own file, same convention as that
-  # method's #resolve_image_path.
-  def map_thumbnail_data_uri(client, zone_key, map_key, thumbnail_url)
-    return nil if thumbnail_url.blank?
-    mime_type = Build::AbilitiesController::MIME_TYPES[File.extname(thumbnail_url).downcase]
-    return nil unless mime_type
-
-    path = Pathname.new("zones").join(zone_key).join(map_key).join(thumbnail_url).cleanpath.to_s
-    bytes = client.raw_file_content(path)
-    "data:#{mime_type};base64,#{Base64.strict_encode64(bytes)}"
-  rescue Github::ReauthRequiredError
-    raise
-  rescue
-    nil
-  end
-
-  # Only `name` is editable yet (see plans/zone-editor.md step 2) - the rest
-  # of the schema's fields are stubbed in now so later steps have something
-  # to read/mutate without every step needing its own migration of a
-  # partial draft.
-  def blank_zone(key)
-    {
-      "name" => key.split("/").last.tr("_-", " ").split.map(&:capitalize).join(" "),
-      "description" => nil,
-      "elvl" => nil,
-      "private" => nil,
-      "maps" => [],
-      "unitTypes" => {},
-      "items" => {},
-      "zoneLinks" => [],
-      "entryPoints" => {},
-      "openConnections" => {}
-    }
   end
 end

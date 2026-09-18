@@ -1,6 +1,15 @@
 // Reducer for the in-browser ability draft.
 export function abilityReducer(state, action) {
   switch (action.type) {
+    // Replaces the whole draft wholesale - used once, right after a
+    // client-side fetch (GithubClient#fetchFile) resolves on mount, since
+    // the editor no longer bootstraps with server-fetched content (see
+    // plans/editor-git.md). Every other action assumes state is already
+    // the real draft object, so this has to land before any of them can
+    // fire.
+    case "LOAD":
+      return action.data;
+
     case "SET_FIELD":
       return {...state, [action.field]: action.value};
 

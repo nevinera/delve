@@ -2,16 +2,14 @@ import {useState} from "react";
 import {describe, it, expect, vi} from "vitest";
 import {render, screen, fireEvent, act} from "@testing-library/react";
 import AbilityFieldsPanel from "../AbilityFieldsPanel";
+import {AbilityDraft} from "../AbilityDraft";
 
 function AddEntryWrapper() {
   // Stands in for AbilityEditor, which is what actually re-renders
-  // AbilityFieldsPanel with the post-dispatch ability - AbilityFieldsPanel
-  // alone has no way to update `ability`.
-  const [state, setState] = useState({name: "Bare Ability", castTime: null, globalCooldown: 1.0, effects: []});
-  function dispatch(action) {
-    setState((s) => (action.type === "ADD_ENTRY" ? {...s, [action.section]: [...(s[action.section] ?? []), action.entry]} : s));
-  }
-  return <AbilityFieldsPanel ability={state} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />;
+  // AbilityFieldsPanel with the post-change draft - AbilityFieldsPanel
+  // alone has no way to update `draft`.
+  const [draft, setDraft] = useState(new AbilityDraft({name: "Bare Ability", castTime: null, globalCooldown: 1.0, effects: []}));
+  return <AbilityFieldsPanel draft={draft} onChange={setDraft} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />;
 }
 
 const ability = {
@@ -37,14 +35,31 @@ const stockAssets = {
   sounds: {twang: {url: "/abilities/sounds/twang.ogg", duration: 0.12}},
 };
 
+function renderPanel(data, props = {}) {
+  const draft = new AbilityDraft(data);
+  const onChange = props.onChange ?? vi.fn();
+  render(
+    <AbilityFieldsPanel
+      draft={draft}
+      onChange={onChange}
+      assetOverrides={props.assetOverrides ?? {}}
+      onUploadAsset={props.onUploadAsset ?? (() => {})}
+      onClearAsset={props.onClearAsset ?? (() => {})}
+      onRemoveEntry={props.onRemoveEntry ?? (() => {})}
+      stockAssets={props.stockAssets}
+    />
+  );
+  return onChange;
+}
+
 describe("AbilityFieldsPanel", () => {
   it("renders every recognized field even when the ability lacks it, e.g. cooldown", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    renderPanel(ability);
     expect(screen.getByText("Cooldown")).toBeInTheDocument();
   });
 
   it("renders name/description/iconURL/castTime/globalCooldown/cooldown/maxRange/speed as editable inputs", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    renderPanel(ability);
     expect(screen.getByDisplayValue("Firebolt")).toBeInTheDocument();
     expect(screen.getByDisplayValue("A bolt of fire.")).toBeInTheDocument();
     expect(screen.getByDisplayValue("../graphics/icons/firebolt.svg")).toBeInTheDocument();
@@ -53,49 +68,44 @@ describe("AbilityFieldsPanel", () => {
     expect(screen.getByDisplayValue("40")).toBeInTheDocument(); // maxRange
   });
 
-  it("dispatches SET_FIELD with a string when the name field changes", () => {
-    const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+  it("calls onChange with an updated name when the name field changes", () => {
+    const onChange = renderPanel(ability);
     fireEvent.change(screen.getByDisplayValue("Firebolt"), {target: {value: "Frostbolt"}});
-    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "name", value: "Frostbolt"});
+    expect(onChange.mock.calls[0][0].data).toEqual({...ability, name: "Frostbolt"});
   });
 
-  it("dispatches SET_FIELD with a string when an editable text field changes", () => {
-    const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+  it("calls onChange with an updated string when an editable text field changes", () => {
+    const onChange = renderPanel(ability);
     fireEvent.change(screen.getByDisplayValue("../graphics/icons/firebolt.svg"), {target: {value: "../graphics/icons/new.svg"}});
-    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "iconURL", value: "../graphics/icons/new.svg"});
+    expect(onChange.mock.calls[0][0].data.iconURL).toBe("../graphics/icons/new.svg");
   });
 
-  it("dispatches SET_FIELD with a parsed number when an editable number field changes", () => {
-    const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+  it("calls onChange with a parsed number when an editable number field changes", () => {
+    const onChange = renderPanel(ability);
     fireEvent.change(screen.getByDisplayValue("60"), {target: {value: "75"}});
-    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "speed", value: 75});
+    expect(onChange.mock.calls[0][0].data.speed).toBe(75);
   });
 
-  it("dispatches SET_FIELD with null when a number field is cleared", () => {
-    const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+  it("calls onChange with null when a number field is cleared", () => {
+    const onChange = renderPanel(ability);
     fireEvent.change(screen.getByDisplayValue("40"), {target: {value: ""}});
-    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "maxRange", value: null});
+    expect(onChange.mock.calls[0][0].data.maxRange).toBeNull();
   });
 
   it("renders top-level tags as a comma-joined editable field", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    renderPanel(ability);
     expect(screen.getByDisplayValue("harmful, class_druid")).toBeInTheDocument();
   });
 
-  it("dispatches SET_FIELD with a parsed tag array when the top-level tags field changes", () => {
-    const dispatch = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+  it("calls onChange with a parsed tag array when the top-level tags field changes", () => {
+    const onChange = renderPanel(ability);
     fireEvent.change(screen.getByDisplayValue("harmful, class_druid"), {target: {value: "harmful, class_druid, aoe"}});
-    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "tags", value: ["harmful", "class_druid", "aoe"]});
+    expect(onChange.mock.calls[0][0].data.tags).toEqual(["harmful", "class_druid", "aoe"]);
   });
 
   it("renders a file upload input for iconURL and calls onUploadAsset with the chosen file", () => {
     const onUploadAsset = vi.fn();
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    renderPanel(ability, {onUploadAsset});
     const file = new File(["fake-bytes"], "new-icon.png", {type: "image/png"});
     const fileInput = document.querySelector('input[type="file"]');
 
@@ -105,39 +115,29 @@ describe("AbilityFieldsPanel", () => {
   });
 
   it("does not show a Restore button when there is no override for the field", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    renderPanel(ability);
     expect(screen.queryByRole("button", {name: "Restore"})).not.toBeInTheDocument();
   });
 
   it("shows a Restore button when an override is active and calls onClearAsset when clicked", () => {
     const onClearAsset = vi.fn();
-    render(
-      <AbilityFieldsPanel
-        ability={ability}
-        dispatch={() => {}}
-        assetOverrides={{iconURL: "blob:fake-url"}}
-        onUploadAsset={() => {}}
-        onClearAsset={onClearAsset}
-        onRemoveEntry={() => {}}
-      />
-    );
+    renderPanel(ability, {assetOverrides: {iconURL: "blob:fake-url"}, onClearAsset});
     fireEvent.click(screen.getByRole("button", {name: "Restore"}));
     expect(onClearAsset).toHaveBeenCalledWith("iconURL");
   });
 
   describe("stock asset pickers", () => {
-    it("lists the recognized stock icons and dispatches SET_FIELD with the colon-wrapped name when one is picked", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+    it("lists the recognized stock icons and calls onChange with the colon-wrapped name when one is picked", () => {
+      const onChange = renderPanel(ability, {stockAssets});
       const [iconPicker] = screen.getAllByDisplayValue("— stock asset —");
 
       fireEvent.change(iconPicker, {target: {value: "heal"}});
 
-      expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "iconURL", value: ":heal:"});
+      expect(onChange.mock.calls[0][0].data.iconURL).toBe(":heal:");
     });
 
     it("resets to the placeholder after a pick, rather than keeping the picked name selected", () => {
-      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+      renderPanel(ability, {stockAssets});
       const [iconPicker] = screen.getAllByDisplayValue("— stock asset —");
 
       fireEvent.change(iconPicker, {target: {value: "heal"}});
@@ -145,47 +145,40 @@ describe("AbilityFieldsPanel", () => {
       expect(iconPicker).toHaveValue("");
     });
 
-    it("dispatches UPDATE_ENTRY_FIELDS with sourceURL and sprite fields when a stock graphic is picked, clearing fields the new pick doesn't have", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+    it("calls onChange with sourceURL and sprite fields when a stock graphic is picked, clearing fields the new pick doesn't have", () => {
+      const onChange = renderPanel(ability, {stockAssets});
       const graphicPicker = screen.getAllByDisplayValue("— stock asset —")[1];
 
       fireEvent.change(graphicPicker, {target: {value: "arc"}});
 
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0,
-        fields: {sourceURL: ":arc:", spriteColumns: undefined, spriteRows: undefined, spriteFrameCount: undefined, spriteFrameRate: undefined},
-      });
+      const entry = onChange.mock.calls[0][0].data.graphicEffects[0];
+      expect(entry.sourceURL).toBe(":arc:");
+      expect(entry.spriteColumns).toBeUndefined();
+      expect(entry.spriteRows).toBeUndefined();
     });
 
     it("carries a stock graphic's sprite grid and frame rate along with sourceURL", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+      const onChange = renderPanel(ability, {stockAssets});
       const graphicPicker = screen.getAllByDisplayValue("— stock asset —")[1];
 
       fireEvent.change(graphicPicker, {target: {value: "magic-ball"}});
 
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "UPDATE_ENTRY_FIELDS", section: "graphicEffects", index: 0,
-        fields: {sourceURL: ":magic-ball:", spriteColumns: 3, spriteRows: 3, spriteFrameCount: undefined, spriteFrameRate: 12},
-      });
+      const entry = onChange.mock.calls[0][0].data.graphicEffects[0];
+      expect(entry).toMatchObject({sourceURL: ":magic-ball:", spriteColumns: 3, spriteRows: 3, spriteFrameRate: 12});
     });
 
-    it("dispatches UPDATE_ENTRY_FIELDS with sourceURL and duration when a stock sound is picked", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} stockAssets={stockAssets} />);
+    it("calls onChange with sourceURL and duration when a stock sound is picked", () => {
+      const onChange = renderPanel(ability, {stockAssets});
       const soundPicker = screen.getAllByDisplayValue("— stock asset —")[2];
 
       fireEvent.change(soundPicker, {target: {value: "twang"}});
 
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "UPDATE_ENTRY_FIELDS", section: "soundEffects", index: 0, fields: {sourceURL: ":twang:", duration: 0.12},
-      });
+      expect(onChange.mock.calls[0][0].data.soundEffects[0]).toMatchObject({sourceURL: ":twang:", duration: 0.12});
     });
   });
 
   it("renders a heading for each entry, sorted graphic/sound/effect, with no folding", () => {
-    render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    renderPanel(ability);
     expect(screen.getByRole("heading", {name: "Graphic effect 1: immediate"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Effect 1: harm"})).toBeInTheDocument();
     expect(document.querySelector("details")).not.toBeInTheDocument();
@@ -194,7 +187,7 @@ describe("AbilityFieldsPanel", () => {
 
   it("always shows all three Add buttons, even for an ability with no effects at all", () => {
     const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
-    render(<AbilityFieldsPanel ability={bare} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    renderPanel(bare);
     expect(screen.getByRole("button", {name: "+ Add Graphic effect"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "+ Add Sound effect"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "+ Add Effect"})).toBeInTheDocument();
@@ -202,57 +195,51 @@ describe("AbilityFieldsPanel", () => {
 
   describe("entry fields", () => {
     it("renders enum fields (when) as a select with the current value chosen", () => {
-      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      renderPanel(ability);
       expect(screen.getByDisplayValue("immediate").tagName).toEqual("SELECT");
     });
 
-    it("dispatches UPDATE_ENTRY_FIELD when a select (when) changes", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    it("calls onChange when a select (when) changes", () => {
+      const onChange = renderPanel(ability);
       fireEvent.change(screen.getByDisplayValue("immediate"), {target: {value: "impact"}});
-      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "when", value: "impact"});
+      expect(onChange.mock.calls[0][0].data.graphicEffects[0].when).toBe("impact");
     });
 
-    it("dispatches UPDATE_ENTRY_FIELD with a collapsed scalar when both range endpoints match", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    it("calls onChange with a collapsed scalar when both range endpoints match", () => {
+      const onChange = renderPanel(ability);
       fireEvent.change(screen.getByDisplayValue("140"), {target: {value: "89"}});
-      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "amount", value: 89});
+      expect(onChange.mock.calls[0][0].data.effects[0].amount).toBe(89);
     });
 
-    it("dispatches UPDATE_ENTRY_FIELD with an array when range endpoints differ", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    it("calls onChange with an array when range endpoints differ", () => {
+      const onChange = renderPanel(ability);
       fireEvent.change(screen.getByDisplayValue("89"), {target: {value: "50"}});
-      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "amount", value: [50, 140]});
+      expect(onChange.mock.calls[0][0].data.effects[0].amount).toEqual([50, 140]);
     });
 
-    it("dispatches UPDATE_ENTRY_FIELD with a parsed tag array when tags changes", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    it("calls onChange with a parsed tag array when tags changes", () => {
+      const onChange = renderPanel(ability);
       fireEvent.change(screen.getByDisplayValue("magic, ranged"), {target: {value: "magic, ranged, aoe"}});
-      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "tags", value: ["magic", "ranged", "aoe"]});
+      expect(onChange.mock.calls[0][0].data.effects[0].tags).toEqual(["magic", "ranged", "aoe"]);
     });
 
     it("keeps a trailing comma and space visible while typing a new tag, rather than stripping it immediately", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      const onChange = renderPanel(ability);
       const input = screen.getByDisplayValue("magic, ranged");
       fireEvent.change(input, {target: {value: "magic, ranged, "}});
       expect(input).toHaveValue("magic, ranged, ");
-      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "tags", value: ["magic", "ranged"]});
+      expect(onChange.mock.calls[0][0].data.effects[0].tags).toEqual(["magic", "ranged"]);
     });
 
-    it("dispatches UPDATE_ENTRY_FIELD when a plain numeric entry field changes", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    it("calls onChange when a plain numeric entry field changes", () => {
+      const onChange = renderPanel(ability);
       fireEvent.change(screen.getByDisplayValue("0.5"), {target: {value: "0.8"}});
-      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "duration", value: 0.8});
+      expect(onChange.mock.calls[0][0].data.graphicEffects[0].duration).toBe(0.8);
     });
 
     it("renders an image-accepting upload for a graphicEffects sourceURL and calls onUploadAsset with a scoped key", () => {
       const onUploadAsset = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      renderPanel(ability, {onUploadAsset});
       // index 1: index 0 is the top-level iconURL upload, also accept="image/*"
       const fileInput = document.querySelectorAll('input[type="file"][accept="image/*"]')[1];
       const file = new File(["fake-bytes"], "new-effect.png", {type: "image/png"});
@@ -265,7 +252,7 @@ describe("AbilityFieldsPanel", () => {
     it("renders an audio-accepting upload for a soundEffects sourceURL", () => {
       const abilityWithSound = {...ability, soundEffects: [{sourceURL: "../audio/firespell1.ogg", duration: 1.8, when: "immediate"}]};
       const onUploadAsset = vi.fn();
-      render(<AbilityFieldsPanel ability={abilityWithSound} dispatch={() => {}} assetOverrides={{}} onUploadAsset={onUploadAsset} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      renderPanel(abilityWithSound, {onUploadAsset});
       const fileInput = document.querySelector('input[type="file"][accept="audio/*"]');
       const file = new File(["fake-bytes"], "new-sound.ogg", {type: "audio/ogg"});
 
@@ -283,16 +270,7 @@ describe("AbilityFieldsPanel", () => {
         ],
       };
       const onClearAsset = vi.fn();
-      render(
-        <AbilityFieldsPanel
-          ability={twoEffects}
-          dispatch={() => {}}
-          assetOverrides={{"graphicEffects[1].sourceURL": "blob:local-b"}}
-          onUploadAsset={() => {}}
-          onClearAsset={onClearAsset}
-          onRemoveEntry={() => {}}
-        />
-      );
+      renderPanel(twoEffects, {assetOverrides: {"graphicEffects[1].sourceURL": "blob:local-b"}, onClearAsset});
 
       expect(screen.getAllByRole("button", {name: "Restore"})).toHaveLength(1);
       fireEvent.click(screen.getByRole("button", {name: "Restore"}));
@@ -304,23 +282,22 @@ describe("AbilityFieldsPanel", () => {
       // uploaded an animated sprite sheet to replace it - there needs to be
       // somewhere to declare the new grid dimensions.
       const plainImageAbility = {...ability, graphicEffects: [{sourceURL: "punch-impact.webp", duration: 0.3}]};
-      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      renderPanel(plainImageAbility);
 
       expect(screen.getByText("Sprite columns")).toBeInTheDocument();
       expect(screen.getByText("Sprite rows")).toBeInTheDocument();
       expect(screen.getByText("Sprite frame rate")).toBeInTheDocument();
     });
 
-    it("dispatches UPDATE_ENTRY_FIELD when a previously-unset spriteColumns field is filled in", () => {
-      const dispatch = vi.fn();
+    it("calls onChange when a previously-unset spriteColumns field is filled in", () => {
       const plainImageAbility = {...ability, graphicEffects: [{sourceURL: "punch-impact.webp", duration: 0.3}]};
-      render(<AbilityFieldsPanel ability={plainImageAbility} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      const onChange = renderPanel(plainImageAbility);
 
       const row = screen.getByText("Sprite columns").closest("tr");
       const input = row.querySelector("input");
       fireEvent.change(input, {target: {value: "3"}});
 
-      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "graphicEffects", index: 0, field: "spriteColumns", value: 3});
+      expect(onChange.mock.calls[0][0].data.graphicEffects[0].spriteColumns).toBe(3);
     });
 
     it("renders the nested status object as an editable name field, not read-only text", () => {
@@ -328,64 +305,58 @@ describe("AbilityFieldsPanel", () => {
         ...ability,
         effects: [{type: "status", affects: "self", duration: 5.0, status: {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []}}],
       };
-      render(<AbilityFieldsPanel ability={withStatus} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      renderPanel(withStatus);
       expect(screen.getByDisplayValue("Focused")).toBeInTheDocument();
       expect(screen.queryByText("Name: Focused; Treat as: buff")).not.toBeInTheDocument();
     });
 
-    it("dispatches UPDATE_ENTRY_FIELD with a merged status object when a nested status field changes", () => {
-      const dispatch = vi.fn();
+    it("calls onChange with a merged status object when a nested status field changes", () => {
       const withStatus = {
         ...ability,
         effects: [{type: "status", affects: "self", duration: 5.0, status: {name: "Focused", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []}}],
       };
-      render(<AbilityFieldsPanel ability={withStatus} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      const onChange = renderPanel(withStatus);
 
       fireEvent.change(screen.getByDisplayValue("Focused"), {target: {value: "Focused II"}});
 
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "UPDATE_ENTRY_FIELD", section: "effects", index: 0, field: "status",
-        value: {name: "Focused II", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: []},
+      expect(onChange.mock.calls[0][0].data.effects[0].status).toEqual({
+        name: "Focused II", shortName: "Focus", treatAs: "buff", stacking: "replace", effects: [],
       });
     });
   });
 
   describe("adding and removing entries", () => {
-    it("dispatches ADD_ENTRY with a placeholder graphicEffects entry when Add Graphic effect is clicked", () => {
-      const dispatch = vi.fn();
+    it("calls onChange with a placeholder graphicEffects entry when Add Graphic effect is clicked", () => {
       const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
-      render(<AbilityFieldsPanel ability={bare} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      const onChange = renderPanel(bare);
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add Graphic effect"}));
 
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "ADD_ENTRY",
-        section: "graphicEffects",
-        entry: {sourceURL: "", duration: 0.3, from: "self", when: "immediate", condition: "always"},
-      });
+      expect(onChange.mock.calls[0][0].data.graphicEffects).toEqual([
+        {sourceURL: "", duration: 0.3, from: "self", when: "immediate", condition: "always"},
+      ]);
     });
 
-    it("dispatches ADD_ENTRY with a placeholder harm effect when Add Effect is clicked", () => {
-      const dispatch = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+    it("calls onChange with a placeholder harm effect when Add Effect is clicked", () => {
+      const onChange = renderPanel(ability);
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add Effect"}));
 
-      expect(dispatch).toHaveBeenCalledWith({
-        type: "ADD_ENTRY",
-        section: "effects",
-        entry: {type: "harm", affects: "bTarget", amount: 10.0, range: 5.0},
-      });
+      expect(onChange.mock.calls[0][0].data.effects.at(-1)).toEqual({type: "harm", affects: "bTarget", amount: 10.0, range: 5.0});
     });
 
     it("renders a newly-added entry's fields immediately, with no expand step needed", () => {
-      const dispatch = vi.fn();
       const bare = {name: "Bare Ability", castTime: null, globalCooldown: 1.0};
-      const {rerender} = render(<AbilityFieldsPanel ability={bare} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      const onChange = vi.fn();
+      const {rerender} = render(
+        <AbilityFieldsPanel draft={new AbilityDraft(bare)} onChange={onChange} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />
+      );
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add Effect"}));
-      const addedEntry = dispatch.mock.calls[0][0].entry;
-      rerender(<AbilityFieldsPanel ability={{...bare, effects: [addedEntry]}} dispatch={dispatch} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />);
+      const nextDraft = onChange.mock.calls[0][0];
+      rerender(
+        <AbilityFieldsPanel draft={nextDraft} onChange={onChange} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={() => {}} />
+      );
 
       expect(screen.getByRole("heading", {name: "Effect 1: harm"})).toBeInTheDocument();
       expect(screen.getByDisplayValue("bTarget")).toBeInTheDocument();
@@ -425,7 +396,7 @@ describe("AbilityFieldsPanel", () => {
 
     it("calls onRemoveEntry with the section and index when Remove is clicked", () => {
       const onRemoveEntry = vi.fn();
-      render(<AbilityFieldsPanel ability={ability} dispatch={() => {}} assetOverrides={{}} onUploadAsset={() => {}} onClearAsset={() => {}} onRemoveEntry={onRemoveEntry} />);
+      renderPanel(ability, {onRemoveEntry});
 
       fireEvent.click(screen.getAllByRole("button", {name: "Remove"})[0]);
 

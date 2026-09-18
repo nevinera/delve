@@ -78,38 +78,27 @@ RSpec.describe Github::ContentClient do
         access_token: "gho_fresh", access_token_expires_at: 1.hour.from_now)
     end
 
-    it "recurses into subdirectories, returning only file entries" do
-      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
-        .to_return(
-          status: 200,
-          headers: {"Content-Type" => "application/json"},
-          body: [
-            {name: "punch.json", path: "abilities/punch.json", type: "file"},
-            {name: "classes", path: "abilities/classes", type: "dir"}
-          ].to_json
-        )
-      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes")
-        .to_return(
-          status: 200,
-          headers: {"Content-Type" => "application/json"},
-          body: [{name: "druid", path: "abilities/classes/druid", type: "dir"}].to_json
-        )
-      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities/classes/druid")
-        .to_return(
-          status: 200,
-          headers: {"Content-Type" => "application/json"},
-          body: [{name: "wildshape.json", path: "abilities/classes/druid/wildshape.json", type: "file"}].to_json
-        )
+    # Backed by Github::TreeListing now (see its own spec for the detailed
+    # request-shape coverage) - just confirm ContentClient wires it up with
+    # a fresh token and the installation's repo.
+    it "delegates to Github::TreeListing, refreshing the token first if needed" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {default_branch: "main"}.to_json)
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/git/trees/main")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {tree: [{path: "abilities", type: "tree", sha: "abilities-sha"}]}.to_json)
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/git/trees/abilities-sha?recursive=1")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {tree: [{path: "punch.json", type: "blob", sha: "s1"}]}.to_json)
 
       result = described_class.new(user).list_directory_recursive("abilities")
-      expect(result.map { |e| e["path"] }).to contain_exactly(
-        "abilities/punch.json", "abilities/classes/druid/wildshape.json"
-      )
+
+      expect(result).to eq([{"name" => "punch.json", "path" => "abilities/punch.json", "type" => "file"}])
     end
 
-    it "returns an empty array for an empty directory" do
-      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/abilities")
-        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: [].to_json)
+    it "returns an empty array for a path that doesn't exist" do
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {default_branch: "main"}.to_json)
+      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/git/trees/main")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {tree: []}.to_json)
 
       expect(described_class.new(user).list_directory_recursive("abilities")).to eq([])
     end
@@ -143,29 +132,6 @@ RSpec.describe Github::ContentClient do
         )
 
       expect { described_class.new(user).file_content("abilities/missing.json") }.to raise_error(Github::NotFoundError)
-    end
-  end
-
-  describe "#raw_file_content" do
-    let!(:installation) do
-      create(:github_installation, user: user, repo_full_name: "nevinera/delve-content",
-        access_token: "gho_fresh", access_token_expires_at: 1.hour.from_now)
-    end
-
-    it "returns the exact bytes GitHub sends back for the raw media type, with no base64/JSON envelope" do
-      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/goblin-cave/gc1-entrance/gc1-entrance.webp")
-        .with(headers: {"Authorization" => "Bearer gho_fresh", "Accept" => "application/vnd.github.raw+json"})
-        .to_return(status: 200, headers: {"Content-Type" => "image/webp"}, body: "fake-webp-bytes")
-
-      result = described_class.new(user).raw_file_content("zones/goblin-cave/gc1-entrance/gc1-entrance.webp")
-      expect(result).to eq("fake-webp-bytes")
-    end
-
-    it "raises NotFoundError when GitHub returns a 404 for the path" do
-      stub_request(:get, "https://api.github.com/repos/nevinera/delve-content/contents/zones/missing.webp")
-        .to_return(status: 404, headers: {"Content-Type" => "application/json"}, body: {message: "Not Found"}.to_json)
-
-      expect { described_class.new(user).raw_file_content("zones/missing.webp") }.to raise_error(Github::NotFoundError)
     end
   end
 end

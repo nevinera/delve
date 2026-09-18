@@ -1,0 +1,85 @@
+import {placeholderEntry} from "./entryFieldSchema";
+import {graphicFieldsFor, soundFieldsFor} from "./stockAssetFields";
+import {StatusDraft} from "./StatusDraft";
+
+// Owns an ability draft's data and every mutation the editor can make to
+// it - the UI (AbilityEditor.jsx/AbilityFieldsPanel.jsx/StatusEditor.jsx)
+// only ever reads `.data` and calls this class's methods, so the domain
+// rules (what a stock-asset pick writes, what a new entry starts as) are
+// unit-testable on their own, independent of React (see
+// plans/editors-as-classes.md).
+//
+// Immutable, like a reducer: every mutator returns a *new* AbilityDraft
+// rather than changing this one in place.
+//
+// Deliberately doesn't reach inside a nested entry's own sub-object (e.g. a
+// status effect's `status`/`auraEffect`) - StatusEditor.jsx already
+// composes those as plain, self-contained controlled values and bubbles
+// the whole new object up through updateEntryField/updateEntryFields, the
+// same way any other entry field does. Only the entry array itself
+// (add/remove/update) and the ability's own top-level fields are this
+// class's concern.
+export class AbilityDraft {
+  constructor(data) {
+    this.data = data;
+  }
+
+  setField(field, value) {
+    return new AbilityDraft({...this.data, [field]: value});
+  }
+
+  addEntry(section) {
+    const entries = this.data[section] ?? [];
+    return new AbilityDraft({...this.data, [section]: [...entries, placeholderEntry(section)]});
+  }
+
+  removeEntry(section, index) {
+    const entries = this.data[section] ?? [];
+    return new AbilityDraft({...this.data, [section]: entries.filter((_, i) => i !== index)});
+  }
+
+  updateEntryField(section, index, field, value) {
+    return this.updateEntryFields(section, index, {[field]: value});
+  }
+
+  updateEntryFields(section, index, fields) {
+    const entries = this.data[section] ?? [];
+    const next = entries.map((entry, i) => (i === index ? {...entry, ...fields} : entry));
+    return new AbilityDraft({...this.data, [section]: next});
+  }
+
+  // What picking a stock graphic/sound from the dropdown writes onto an
+  // entry - see stockAssetFields.js for exactly which fields each kind sets.
+  pickStockAsset(section, index, name, stockOptions) {
+    const fields = section === "soundEffects" ? soundFieldsFor(name, stockOptions[name]) : graphicFieldsFor(name, stockOptions[name]);
+    return this.updateEntryFields(section, index, fields);
+  }
+
+  pickStockIcon(name) {
+    return this.setField("iconURL", `:${name}:`);
+  }
+
+  // An `effects` entry's own `status` sub-object (see
+  // Validators::PowerEffectValidator's "status" type) is a nested domain
+  // object in its own right - reached and replaced *through* AbilityDraft,
+  // rather than StatusEditor.jsx composing/mutating it directly (see
+  // StatusDraft.js and plans/editors-as-classes.md). null when the entry
+  // has no status yet (or isn't a status-type effect at all).
+  statusFor(index) {
+    const status = this.data.effects?.[index]?.status;
+    return status ? new StatusDraft(status) : null;
+  }
+
+  // statusDraft may be null, to clear an entry's status entirely.
+  setStatus(index, statusDraft) {
+    return this.updateEntryField("effects", index, "status", statusDraft ? statusDraft.data : null);
+  }
+
+  addStatus(index) {
+    return this.setStatus(index, StatusDraft.blank());
+  }
+
+  removeStatus(index) {
+    return this.setStatus(index, null);
+  }
+}

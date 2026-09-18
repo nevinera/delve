@@ -1,4 +1,4 @@
-import {useEffect, useReducer, useRef, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import MapCanvas from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
@@ -6,13 +6,16 @@ import BarriersPanel from "./BarriersPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsPanel from "./UnitsPanel";
 import HotkeyHelp from "./HotkeyHelp";
-import {mapReducer} from "./mapReducer";
-import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement";
+import {MapDraft} from "./MapDraft";
+import {UiState} from "./UiState";
+import {PatrolSimState} from "./PatrolSimState";
+import {WalkSimState} from "./WalkSimState";
 import {saveMap} from "./saveMap";
+import {blankMap, loadMap, loadMapImageUrl, listUnitTypeKeys, listItemKeys, unitTypeDetailsFor, itemDetailsFor} from "./mapContentLoaders";
 import {validateMap} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
-import {GithubAuthError} from "../github/commitFiles";
+import {GithubClient, GithubAuthError} from "../github/delve-github";
 import {loadSvgToCanvas} from "../game/svgRaster";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
@@ -21,28 +24,53 @@ import {loadSvgToCanvas} from "../game/svgRaster";
 // Phase 2 actually commits it.
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
-// {file, url, pixelDimensions} | null - file is null for an existing map's
-// image (fetched server-side as a data URI, see Build::MapsController#edit),
-// since there's no local File object for it until it's replaced.
-function initialImage(initialImageDataUri, initialPixelDimensions) {
-  if (!initialImageDataUri || !initialPixelDimensions) return null;
-  return {file: null, url: initialImageDataUri, pixelDimensions: initialPixelDimensions};
-}
-
-export default function MapEditor({
-  mapKey, initialMap, initialImageDataUri, initialPixelDimensions, backUrl,
-  initialAvailableUnitTypeKeys, initialUnitTypeDetails, newUnitTypeUrl, availableUnitTypesUrl,
-  initialAvailableItemKeys, initialItemDetails, newItemUrl, availableItemsUrl,
-}) {
-  const [image, setImage] = useState(() => initialImage(initialImageDataUri, initialPixelDimensions));
+// Every domain rule (barrier/connection/unit mutations, group membership)
+// and every "which mode is active" rule (placement/tool/grouping mutual
+// exclusion) has moved out of this component and into three plain classes -
+// MapDraft (the saved data), UiState (interaction state), PatrolSimState
+// (the Simulate Units engine) - plus the thin WalkSimState for Walk
+// Preview's own on/off flag. This component's own job shrinks to: hold the
+// current instances, wire DOM events to their methods, and render. See
+// plans/editors-as-classes.md.
+//
+// mapData starts out as a blank placeholder (MapDraft's own LOAD-friendly
+// initial state), not null - unlike the simpler editors, huge swaths of
+// this component (effect dependency arrays, effectiveMapData, the hotkey
+// handler, ...) dereference draft.data.* unconditionally on every render,
+// so a null initial state would crash before the fetch even resolves.
+// `loaded` is a separate flag purely for the "show a loading placeholder"
+// gate; every hook below still runs (harmlessly, against blank data) while
+// it's false, same as it always has for a genuinely new, still-blank map.
+export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl}) {
+  const [image, setImage] = useState(null);
   const [imageError, setImageError] = useState("");
-  const [mapData, rawDispatch] = useReducer(mapReducer, initialMap);
+  const [draft, setDraft] = useState(() => new MapDraft(blankMap(mapKey)));
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const client = useRef(new GithubClient());
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
 
   function dispatch(action) {
     markDirty();
-    rawDispatch(action);
+    switch (action.type) {
+      case "SET_FIELD":
+        setDraft((d) => d.setField(action.field, action.value));
+        return;
+      case "ADD_ENTRY":
+        setDraft((d) => d.addEntry(action.section, action.entry));
+        return;
+      case "REMOVE_ENTRY":
+        setDraft((d) => d.removeEntry(action.section, action.index));
+        return;
+      case "UPDATE_ENTRY_FIELD":
+        setDraft((d) => d.updateEntryField(action.section, action.index, action.field, action.value));
+        return;
+      default:
+        throw new Error(`Unknown action type: ${action.type}`);
+    }
   }
+
+  const mapData = draft.data;
 
   // The 2D top-down canvas shows the background as a plain <img> at a fixed
   // layout size (image.pixelDimensions), scaled purely via a CSS transform
@@ -89,70 +117,20 @@ export default function MapEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [image, mapData.imageUrl, mapData.feetDimensions]);
 
-  const [selectedBarrierIndex, setSelectedBarrierIndex] = useState(null);
-  const [hoveredBarrierIndex, setHoveredBarrierIndex] = useState(null);
-  const [hoveredPoint, setHoveredPoint] = useState(null); // {barrierIndex, pointIndex} | null
-  // {barrierIndex, pointIndex, mode: "insert" | "edit"} | null - see MapCanvas/BarriersPanel.
-  // "insert" (from a "+" pill button) splices a new point in at pointIndex
-  // and advances to pointIndex+1 on each click, so a run of clicks lays
-  // down consecutive points; "edit" (from clicking an existing pill)
-  // replaces that one point and exits - single-shot, like connectionPlacement.
-  const [placement, setPlacement] = useState(null);
-  const [selectedConnectionIndex, setSelectedConnectionIndex] = useState(null);
-  const [hoveredConnectionIndex, setHoveredConnectionIndex] = useState(null);
-  const [connectionPlacement, setConnectionPlacement] = useState(null); // {connectionIndex, field: "position" | "start" | "end"} | null
-  const [selectedUnitIndex, setSelectedUnitIndex] = useState(null);
-  const [hoveredUnitIndex, setHoveredUnitIndex] = useState(null);
-  const [pendingUnitType, setPendingUnitType] = useState(null); // the unitType key armed for "add-unit" (see startAddUnit)
-  const [unitPlacement, setUnitPlacement] = useState(null); // {unitIndex} | null - re-placing an existing unit's position
-  // {unitIndex, stepIndex, mode: "insert" | "edit"} | null - a patrol step's
-  // position (see MapCanvas/UnitsPanel's PatrolFields). Mirrors `placement`
-  // (barrier wall points) exactly: "insert" (from "+ Add Step") appends at
-  // stepIndex and advances to stepIndex+1 on each click, so a run of clicks
-  // lays down consecutive waypoints; "edit" (from clicking an existing
-  // step's pill) replaces just that one and exits.
-  const [patrolStepPlacement, setPatrolStepPlacement] = useState(null);
-  // {unitIndex} | null - re-placing a wander zone's location, single-shot
-  // like unitPlacement above.
-  const [wanderLocationPlacement, setWanderLocationPlacement] = useState(null);
-  // {unitIndex, stepIndex} | null - hovering a patrol step's pill in
-  // UnitsPanel lights up a token-sized ring at that step's position on the
-  // canvas (see MovementShapes) - same idea as BarriersPanel's hoveredPoint.
-  const [hoveredPatrolStep, setHoveredPatrolStep] = useState(null);
-  // Mirrors UnitsPanel's own expandedIndices (which unit rows are open) up
-  // here, so MovementShapes can treat "being edited" the same as hovered -
-  // opaque, so its patrol path/wander circle stands out from anyone else's
-  // in the same region. UnitsPanel still owns the state; this is just a
-  // read-only copy reported via onExpandedIndicesChange.
-  const [expandedUnitIndices, setExpandedUnitIndices] = useState(() => new Set());
-  // Clicking a unit's token on the map (see MapCanvas's startDragUnit) is
-  // distinct from clicking its row in UnitsPanel: the map click should open
-  // that one unit's row exclusively (closing every other open row) and
-  // scroll it into view there, while a direct sidebar row click just toggles
-  // that row alone. {index, nonce} rather than a bare index so re-clicking
-  // the same already-open unit's token still re-triggers the scroll (a
-  // plain index wouldn't change, so a dependent effect wouldn't re-fire).
-  const [unitFocusRequest, setUnitFocusRequest] = useState(null);
-  const unitFocusNonceRef = useRef(0);
-  // {groupIdentifier} | null - while active, clicking a unit (its token on
-  // the map, or its row in UnitsPanel) toggles that unit's membership in
-  // this group instead of that click's normal effect (select/drag on
-  // canvas; expand/collapse in the sidebar) - see toggleGroupMember. Mutual
-  // exclusion with the placement/tool states below, same pattern as those
-  // already have with each other.
-  const [groupingMode, setGroupingMode] = useState(null);
-  // Drives the map's translucent-red group highlight (tokens + full-mesh
-  // lines between every member pair) when a group's row is hovered in
-  // UnitsPanel - groupingMode's own group is always highlighted regardless
-  // of this, forcing the same visual on permanently (see MapCanvas).
-  const [hoveredGroupIdentifier, setHoveredGroupIdentifier] = useState(null);
-  // Group names created via "+ Add Group" before any unit has joined them -
-  // a group isn't real data (docs/schema/unit.md's groupIdentifier is just
-  // a plain string on each unit, no separate Map.groups list), so an empty
-  // one only exists here, in memory, for this session - it's never written
-  // to mapData/the saved file, and simply stops appearing if the page
-  // reloads before it gains a member.
-  const [pendingGroupNames, setPendingGroupNames] = useState([]);
+  const [uiState, setUiState] = useState(() => new UiState());
+  const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
+
+  // UnitsPanel mirrors its own expandedIndices up via an effect that calls
+  // this directly (see UnitsPanel.jsx), with the callback itself in that
+  // effect's own dependency array - unlike every other handler below (only
+  // ever invoked from a real user event), this one needs a stable identity
+  // via useCallback/the functional-updater form, or a fresh arrow function
+  // every render would make that effect re-fire and call back in every
+  // time, forever.
+  const setExpandedUnitIndices = useCallback((indices) => {
+    setUiState((s) => s.with({expandedUnitIndices: indices}));
+  }, []);
+
   // The full list of unit_types/*.json keys (cheap - a directory listing,
   // see Build::MapsController#list_unit_type_keys) vs. {name, tokenRadius,
   // tokenImageUrl} for just the keys actually needed so far (units already
@@ -160,189 +138,94 @@ export default function MapEditor({
   // kept separate so the dropdown/tool never has to open every unit type
   // file just to list them, which doesn't scale (a repo can hold far more
   // unit types than any one map uses).
-  const [availableUnitTypeKeys, setAvailableUnitTypeKeys] = useState(initialAvailableUnitTypeKeys ?? []);
-  const [unitTypeDetails, setUnitTypeDetails] = useState(initialUnitTypeDetails ?? {});
+  const [availableUnitTypeKeys, setAvailableUnitTypeKeys] = useState([]);
+  const [unitTypeDetails, setUnitTypeDetails] = useState({});
   // Same cheap-list/lazy-details split, for the items a unit's lootTable
   // can reference (see Build::MapsController#list_item_keys) - itemDetails
   // is keyed by the same file-path key as availableItemKeys, but each
   // value's own `identifier` field (not necessarily the key) is what
   // actually belongs in a lootTable.
-  const [availableItemKeys, setAvailableItemKeys] = useState(initialAvailableItemKeys ?? []);
-  const [itemDetails, setItemDetails] = useState(initialItemDetails ?? {});
+  const [availableItemKeys, setAvailableItemKeys] = useState([]);
+  const [itemDetails, setItemDetails] = useState({});
   const [refreshStatus, setRefreshStatus] = useState("");
-  // "select" | "add-circle" | "add-point-connection" | "add-line-connection" | "add-unit" - see MapCanvas/BarriersPanel/ConnectionsPanel/UnitsPanel
-  const [tool, setTool] = useState("select");
-  const canPlaceOnMap = Boolean(mapData.feetDimensions?.width && mapData.feetDimensions?.height);
-  // "?" toggles this; Escape (see the hotkeys effect below) closes it.
-  const [showHotkeyHelp, setShowHotkeyHelp] = useState(false);
-  // Simulate Units mode (Slice 9): a read-only preview of patrol/wander
-  // movement, running entirely client-side (see simulateMovement.js) - the
-  // editor has no live game-server connection to actually watch. Entering
-  // it locks out every editing interaction (see startSimulation) and
-  // replaces the sidebar with a plain status panel; simPositions is a
-  // render-only overlay of {x, y, angle} per unit (parallel to mapData.units)
-  // - mapData itself is never touched, so exiting always restores each
-  // unit's authored position exactly.
-  const [simulating, setSimulating] = useState(false);
-  const [simSpeed, setSimSpeed] = useState(1);
-  const [simPositions, setSimPositions] = useState(null);
-  const simUnitsRef = useRef([]); // mutable per-unit sim state, not itself rendered
-  const simRafRef = useRef(null);
-  const simLastTimeRef = useRef(null);
-  // Walk Preview mode (Phase 2, formerly Phase 3 - see the plan's reordering
-  // note): a read-only "walk it" 3D preview (MapPreviewScene/MapPreviewCanvas)
-  // swapped in for MapCanvas's whole top-down view. Same "lock out editing,
-  // hide the sidebar" treatment as Simulate Units, and mutually exclusive
-  // with it (the toolbar disables each while the other is active) - both are
-  // read-only previews of the current draft, never touching mapData.
-  const [previewing, setPreviewing] = useState(false);
 
-  // At most one of {wall-point placement, connection-field placement,
-  // unit-position placement, an armed add-tool} is ever active - starting
-  // one cancels the others, rather than every trigger needing to know
-  // about every other mode.
-  function startBarrierPlacement(barrierIndex, pointIndex, mode = "insert") {
-    setConnectionPlacement(null);
-    setUnitPlacement(null);
-    setPatrolStepPlacement(null);
-    setWanderLocationPlacement(null);
-    setGroupingMode(null);
-    setTool("select");
-    setPlacement({barrierIndex, pointIndex, mode});
-  }
+  // Fetches the map's own content, its background image (if any), and the
+  // two cheap key lists, all client-side, on mount. Deliberately doesn't
+  // prefetch unitTypeDetails/itemDetails for units already on the map here -
+  // the backstop effects further down (keyed on mapData.units) already
+  // cover that once LOAD lands real units, so there's nothing to duplicate.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await loadMap(client.current, mapKey);
+        if (cancelled) return;
+        setDraft(new MapDraft(data));
 
-  function startBarrierPointEdit(barrierIndex, pointIndex) {
-    startBarrierPlacement(barrierIndex, pointIndex, "edit");
-  }
+        const imageUrl = await loadMapImageUrl(client.current, mapKey, data);
+        if (!cancelled && imageUrl && data.pixelDimensions) {
+          setImage({file: null, url: imageUrl, pixelDimensions: data.pixelDimensions});
+        }
 
-  function startConnectionFieldPlacement(connectionIndex, field) {
-    setPlacement(null);
-    setUnitPlacement(null);
-    setPatrolStepPlacement(null);
-    setWanderLocationPlacement(null);
-    setGroupingMode(null);
-    setTool("select");
-    setConnectionPlacement({connectionIndex, field});
-  }
+        const [unitTypeKeys, itemKeys] = await Promise.all([listUnitTypeKeys(client.current), listItemKeys(client.current)]);
+        if (cancelled) return;
+        setAvailableUnitTypeKeys(unitTypeKeys);
+        setAvailableItemKeys(itemKeys);
+        setLoaded(true);
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof GithubAuthError) {
+          window.location.href = error.redirectUrl;
+          return;
+        }
+        setLoadError(error.message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mapKey]);
 
-  function startUnitPlacement(unitIndex) {
-    setPlacement(null);
-    setConnectionPlacement(null);
-    setPatrolStepPlacement(null);
-    setWanderLocationPlacement(null);
-    setGroupingMode(null);
-    setTool("select");
-    setUnitPlacement({unitIndex});
-  }
-
-  // Mirrors startBarrierPlacement exactly, for a patrol step's position.
-  function startPatrolStepPlacement(unitIndex, stepIndex, mode = "insert") {
-    setPlacement(null);
-    setConnectionPlacement(null);
-    setUnitPlacement(null);
-    setWanderLocationPlacement(null);
-    setGroupingMode(null);
-    setTool("select");
-    setPatrolStepPlacement({unitIndex, stepIndex, mode});
-  }
-
-  function startPatrolStepEdit(unitIndex, stepIndex) {
-    startPatrolStepPlacement(unitIndex, stepIndex, "edit");
-  }
-
-  function startWanderLocationPlacement(unitIndex) {
-    setPlacement(null);
-    setConnectionPlacement(null);
-    setUnitPlacement(null);
-    setPatrolStepPlacement(null);
-    setGroupingMode(null);
-    setTool("select");
-    setWanderLocationPlacement({unitIndex});
+  function startAddUnit(unitTypeKey) {
+    setUiState(uiState.startAddUnit(unitTypeKey));
+    requestUnitTypeDetails(unitTypeKey);
   }
 
   function focusUnitFromMap(unitIndex) {
-    if (groupingMode) {
-      toggleGroupMember(unitIndex);
+    if (uiState.groupingMode) {
+      handleChange(draft.toggleGroupMember(uiState.groupingMode.groupIdentifier, unitIndex));
       return;
     }
-    setSelectedUnitIndex(unitIndex);
-    unitFocusNonceRef.current += 1;
-    setUnitFocusRequest({index: unitIndex, nonce: unitFocusNonceRef.current});
-  }
-
-  function startTool(nextTool) {
-    setPlacement(null);
-    setConnectionPlacement(null);
-    setUnitPlacement(null);
-    setPatrolStepPlacement(null);
-    setWanderLocationPlacement(null);
-    setGroupingMode(null);
-    setTool(nextTool);
-  }
-
-  function startAddUnit(unitTypeKey) {
-    setPendingUnitType(unitTypeKey);
-    requestUnitTypeDetails(unitTypeKey);
-    startTool("add-unit");
-  }
-
-  // Toggling the same group's button again turns grouping mode back off,
-  // same as every other single-shot mode in this editor.
-  function startGroupingMode(groupIdentifier) {
-    setPlacement(null);
-    setConnectionPlacement(null);
-    setUnitPlacement(null);
-    setPatrolStepPlacement(null);
-    setWanderLocationPlacement(null);
-    setTool("select");
-    setGroupingMode((current) => (current?.groupIdentifier === groupIdentifier ? null : {groupIdentifier}));
-  }
-
-  function addPendingGroup(name) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    setPendingGroupNames((current) => (current.includes(trimmed) ? current : [...current, trimmed]));
-    startGroupingMode(trimmed);
+    setUiState(uiState.focusUnit(unitIndex));
   }
 
   // The only way a unit's groupIdentifier ever changes - toggled by
   // clicking a unit (its map token, via focusUnitFromMap above, or its
-  // UnitsPanel row) while grouping mode targets a group: already a member
-  // -> clear it; not a member -> set it, silently moving the unit out of
-  // whatever other group it was in.
+  // UnitsPanel row) while grouping mode targets a group.
   function toggleGroupMember(unitIndex) {
-    if (!groupingMode) return;
-    const unit = mapData.units[unitIndex];
-    const target = groupingMode.groupIdentifier;
-    const nextValue = unit.groupIdentifier === target ? null : target;
-    dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "groupIdentifier", value: nextValue});
+    if (!uiState.groupingMode) return;
+    handleChange(draft.toggleGroupMember(uiState.groupingMode.groupIdentifier, unitIndex));
   }
 
-  // Renaming a group rewrites every current member's groupIdentifier in one
-  // batch of dispatches - the identifier *is* the group's identity, there's
-  // no separate id to keep stable underneath.
+  // Renaming a group touches both the units themselves (MapDraft) and
+  // whatever's tracking the name in UiState (pendingGroupNames/groupingMode).
   function renameGroup(oldName, newName) {
-    mapData.units.forEach((unit, i) => {
-      if (unit.groupIdentifier === oldName) {
-        dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: i, field: "groupIdentifier", value: newName});
-      }
-    });
-    setPendingGroupNames((current) => current.map((name) => (name === oldName ? newName : name)));
-    setGroupingMode((current) => (current?.groupIdentifier === oldName ? {groupIdentifier: newName} : current));
+    handleChange(draft.renameGroup(oldName, newName));
+    setUiState(uiState.renameGroup(oldName, newName));
   }
 
   // Grouping mode's only cancel gesture is Escape or its own button again
-  // (see startGroupingMode) - unlike the placement modes above, clicks
+  // (see UiState#startGroupingMode) - unlike the placement modes, clicks
   // everywhere in the canvas and sidebar are meaningful membership toggles,
   // not "click outside to cancel" targets.
   useEffect(() => {
-    if (!groupingMode) return;
+    if (!uiState.groupingMode) return;
     function onKeyDown(e) {
-      if (e.key === "Escape") setGroupingMode(null);
+      if (e.key === "Escape") setUiState((s) => s.with({groupingMode: null}));
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [groupingMode]);
+  }, [uiState.groupingMode]);
 
   // Global editor hotkeys - B/C/L/P start the same single-shot add-tools as
   // BarriersPanel/ConnectionsPanel's own buttons (B also immediately arms
@@ -363,107 +246,100 @@ export default function MapEditor({
       );
       if (isEditable) return;
 
-      if (showHotkeyHelp) {
-        if (e.key === "Escape") setShowHotkeyHelp(false);
+      if (uiState.showHotkeyHelp) {
+        if (e.key === "Escape") setUiState(uiState.with({showHotkeyHelp: false}));
         return;
       }
-      if (simulating || previewing) return;
+      if (patrolSim.current.running || walkSim.active) return;
 
       if (e.key === "?") {
-        setShowHotkeyHelp(true);
+        setUiState(uiState.with({showHotkeyHelp: true}));
         return;
       }
 
-      const nothingArmed = tool === "select" && !placement && !connectionPlacement && !unitPlacement
-        && !patrolStepPlacement && !wanderLocationPlacement && !groupingMode;
-      if (!nothingArmed || !canPlaceOnMap) return;
+      if (!uiState.nothingArmed || !canPlaceOnMap) return;
 
       if (e.key === "b" || e.key === "B") {
         const newIndex = mapData.barriers.length;
-        dispatch({type: "ADD_ENTRY", section: "barriers", entry: {type: "wall", locations: []}});
-        setSelectedBarrierIndex(newIndex);
-        startBarrierPlacement(newIndex, 0);
+        handleChange(draft.addWall());
+        setUiState(uiState.with({selectedBarrierIndex: newIndex}).startBarrierPlacement(newIndex, 0));
       } else if (e.key === "c" || e.key === "C") {
-        startTool("add-circle");
+        setUiState(uiState.startTool("add-circle"));
       } else if (e.key === "l" || e.key === "L") {
-        startTool("add-line-connection");
+        setUiState(uiState.startTool("add-line-connection"));
       } else if (e.key === "p" || e.key === "P") {
-        startTool("add-point-connection");
+        setUiState(uiState.startTool("add-point-connection"));
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-    // dispatch/setSelectedBarrierIndex/startBarrierPlacement/startTool are
-    // plain functions re-created every render, read via closure here like
-    // everywhere else in this file - only the values below actually change
-    // what this handler should do.
+    // draft/handleChange/setUiState are plain values/functions read via
+    // closure here like everywhere else in this file - only the values
+    // below actually change what this handler should do.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    showHotkeyHelp, simulating, previewing, tool, placement, connectionPlacement, unitPlacement,
-    patrolStepPlacement, wanderLocationPlacement, groupingMode, canPlaceOnMap, mapData.barriers,
-  ]);
+  }, [uiState, canPlaceOnMap, mapData.barriers]);
+
+  // Simulate Units mode (Slice 9): a read-only preview of patrol/wander
+  // movement (see PatrolSimState.js) - mapData itself is never touched, so
+  // exiting always restores each unit's authored position exactly.
+  const patrolSim = useRef(new PatrolSimState());
+  const [simPositions, setSimPositions] = useState(null);
+  const [simSpeed, setSimSpeedState] = useState(1);
+  const simRafRef = useRef(null);
+  const simLastTimeRef = useRef(null);
+  // Walk Preview mode (Phase 2, formerly Phase 3 - see the plan's reordering
+  // note): a read-only "walk it" 3D preview (MapPreviewScene/MapPreviewCanvas)
+  // swapped in for MapCanvas's whole top-down view. Mutually exclusive with
+  // Simulate Units (the toolbar disables each while the other is active) -
+  // both are read-only previews of the current draft, never touching mapData.
+  const [walkSim, setWalkSim] = useState(() => new WalkSimState());
 
   // Starting a simulation clears every other mode first, same mutual-
   // exclusion convention as the rest of this editor - simulating is a
   // read-only preview, not something that coexists with an armed edit.
   function startSimulation() {
-    setPlacement(null);
-    setConnectionPlacement(null);
-    setUnitPlacement(null);
-    setPatrolStepPlacement(null);
-    setWanderLocationPlacement(null);
-    setGroupingMode(null);
-    setTool("select");
-    setPreviewing(false);
-    simUnitsRef.current = mapData.units.map(initSimUnit);
-    setSimPositions(simUnitsRef.current.map((sim) => ({x: sim.x, y: sim.y, angle: sim.angle})));
-    setSimulating(true);
+    setUiState(uiState.clearModes());
+    setWalkSim(walkSim.stop());
+    setSimPositions(patrolSim.current.start(mapData.units));
   }
 
   function stopSimulation() {
-    setSimulating(false);
+    patrolSim.current.stop();
     setSimPositions(null);
   }
 
   function toggleSimulation() {
-    if (simulating) stopSimulation();
+    if (patrolSim.current.running) stopSimulation();
     else startSimulation();
   }
 
-  function togglePreview() {
-    if (previewing) {
-      setPreviewing(false);
-      return;
-    }
-    setPlacement(null);
-    setConnectionPlacement(null);
-    setUnitPlacement(null);
-    setPatrolStepPlacement(null);
-    setWanderLocationPlacement(null);
-    setGroupingMode(null);
-    setTool("select");
-    stopSimulation();
-    setPreviewing(true);
+  function setSimSpeed(speed) {
+    patrolSim.current.setSpeed(speed);
+    setSimSpeedState(speed);
   }
 
-  // Drives simUnitsRef forward every animation frame while simulating, then
-  // mirrors the positions into simPositions to trigger a render - real
+  function togglePreview() {
+    if (walkSim.active) {
+      setWalkSim(walkSim.stop());
+      return;
+    }
+    setUiState(uiState.clearModes());
+    stopSimulation();
+    setWalkSim(walkSim.start());
+  }
+
+  // Drives the sim forward every animation frame while running, then
+  // mirrors its positions into simPositions to trigger a render - real
   // elapsed time is clamped before scaling by simSpeed so a throttled/
   // backgrounded tab can't produce one huge catch-up jump when it resumes.
   useEffect(() => {
-    if (!simulating) return;
+    if (!patrolSim.current.running) return;
     simLastTimeRef.current = performance.now();
 
     function frame(now) {
       const rawDt = Math.min((now - simLastTimeRef.current) / 1000, 0.05);
       simLastTimeRef.current = now;
-      const dt = rawDt * simSpeed;
-      simUnitsRef.current.forEach((sim, i) => {
-        const unit = mapData.units[i];
-        const speedFactor = unitTypeDetails[unit.unitType]?.speedFactor ?? 1.0;
-        tickSimUnit(sim, unit, BASE_MOB_SPEED * speedFactor, dt);
-      });
-      setSimPositions(simUnitsRef.current.map((sim) => ({x: sim.x, y: sim.y, angle: sim.angle})));
+      setSimPositions(patrolSim.current.tick(mapData.units, unitTypeDetails, rawDt));
       simRafRef.current = requestAnimationFrame(frame);
     }
 
@@ -474,7 +350,7 @@ export default function MapEditor({
     // change out from under the loop; unitTypeDetails updating mid-sim
     // (a background fetch resolving) is harmless to pick up next frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simulating, simSpeed]);
+  }, [simPositions === null]);
 
   // Lets a unit type or item created in another tab (via "+ New Unit
   // Type"/"+ New Item") show up in their dropdowns here without reloading
@@ -486,16 +362,7 @@ export default function MapEditor({
   async function handleRefresh() {
     setRefreshStatus("Refreshing…");
     try {
-      const [unitTypeKeys, itemKeys] = await Promise.all([
-        fetch(availableUnitTypesUrl).then((res) => {
-          if (!res.ok) throw new Error(`request failed: ${res.status}`);
-          return res.json();
-        }),
-        fetch(availableItemsUrl).then((res) => {
-          if (!res.ok) throw new Error(`request failed: ${res.status}`);
-          return res.json();
-        }),
-      ]);
+      const [unitTypeKeys, itemKeys] = await Promise.all([listUnitTypeKeys(client.current), listItemKeys(client.current)]);
       setAvailableUnitTypeKeys(unitTypeKeys);
       setAvailableItemKeys(itemKeys);
       setRefreshStatus("Refreshed.");
@@ -510,12 +377,9 @@ export default function MapEditor({
   // fallback marker rather than needing to surface an error here.
   async function fetchUnitTypeDetails(keys) {
     const missing = keys.filter((key) => !(key in unitTypeDetails));
-    if (!availableUnitTypesUrl || missing.length === 0) return;
+    if (missing.length === 0) return;
     try {
-      const query = missing.map((key) => `keys[]=${encodeURIComponent(key)}`).join("&");
-      const res = await fetch(`${availableUnitTypesUrl}?${query}`);
-      if (!res.ok) return;
-      const details = await res.json();
+      const details = await unitTypeDetailsFor(client.current, missing);
       setUnitTypeDetails((current) => ({...current, ...details}));
     } catch {
       // best-effort, see above
@@ -541,12 +405,9 @@ export default function MapEditor({
   // Same idea as fetchUnitTypeDetails, for items - {identifier, name, slot}.
   async function fetchItemDetails(keys) {
     const missing = keys.filter((key) => !(key in itemDetails));
-    if (!availableItemsUrl || missing.length === 0) return;
+    if (missing.length === 0) return;
     try {
-      const query = missing.map((key) => `keys[]=${encodeURIComponent(key)}`).join("&");
-      const res = await fetch(`${availableItemsUrl}?${query}`);
-      if (!res.ok) return;
-      const details = await res.json();
+      const details = await itemDetailsFor(client.current, missing);
       setItemDetails((current) => ({...current, ...details}));
     } catch {
       // best-effort, see above
@@ -567,57 +428,48 @@ export default function MapEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapData.units]);
 
+  function handleChange(nextDraft) {
+    markDirty();
+    setDraft(nextDraft);
+  }
+
   // "insert" mode splices the clicked feet position in at pointIndex, then
   // advances to the gap right after it - a run of map clicks lays down
   // consecutive points. "edit" mode replaces the existing point at
   // pointIndex and exits immediately. Nothing is ever written for a point
   // that hasn't been placed/edited yet, so canceling (see MapCanvas) is
-  // just clearing this state, no cleanup needed.
+  // just clearing UiState's placement, no cleanup needed.
   function placePoint(feet) {
-    const {barrierIndex, pointIndex, mode} = placement;
-    const locations = mapData.barriers[barrierIndex].locations;
+    const {barrierIndex, pointIndex, mode} = uiState.placement;
 
     if (mode === "edit") {
-      const nextLocations = locations.map((loc, i) => (i === pointIndex ? feet : loc));
-      dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "locations", value: nextLocations});
-      setPlacement(null);
+      handleChange(draft.setBarrierPoint(barrierIndex, pointIndex, feet));
+      setUiState(uiState.clearPlacement());
       return;
     }
 
-    const nextLocations = [...locations.slice(0, pointIndex), feet, ...locations.slice(pointIndex)];
-    dispatch({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: barrierIndex, field: "locations", value: nextLocations});
-    setPlacement({barrierIndex, pointIndex: pointIndex + 1, mode: "insert"});
+    handleChange(draft.insertBarrierPoint(barrierIndex, pointIndex, feet));
+    setUiState(uiState.advanceBarrierPlacement());
   }
 
   // Single-shot, unlike placePoint above - re-placing one already-existing
   // connection field (position/start/end) sets it and exits, no advancing
   // to a next gap.
   function placeConnectionField(feet) {
-    const {connectionIndex, field} = connectionPlacement;
-    if (field === "position") {
-      const current = mapData.connections[connectionIndex].position;
-      dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: "position", value: {...current, x: feet.x, y: feet.y}});
-    } else {
-      dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field, value: feet});
-    }
-    setConnectionPlacement(null);
+    const {connectionIndex, field} = uiState.connectionPlacement;
+    handleChange(draft.setConnectionField(connectionIndex, field, feet));
+    setUiState(uiState.clearConnectionPlacement());
   }
 
-  // Single-shot, like placeConnectionField above - keeps the unit's facing
-  // angle, only replaces x/y.
+  // Single-shot, like placeConnectionField above.
   function placeUnitPosition(feet) {
-    const {unitIndex} = unitPlacement;
-    const current = mapData.units[unitIndex].position;
-    dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "position", value: {...current, x: feet.x, y: feet.y}});
-    setUnitPlacement(null);
+    const {unitIndex} = uiState.unitPlacement;
+    handleChange(draft.setUnitPosition(unitIndex, feet));
+    setUiState(uiState.clearUnitPlacement());
   }
 
-  // `movement` is a single nested object (like `position`/`lootTable`), so
-  // every field change here dispatches the whole updated object rather than
-  // a deep-path update - same convention as those.
   function updateMovement(unitIndex, fields) {
-    const current = mapData.units[unitIndex].movement ?? {type: "still"};
-    dispatch({type: "UPDATE_ENTRY_FIELD", section: "units", index: unitIndex, field: "movement", value: {...current, ...fields}});
+    handleChange(draft.updateMovement(unitIndex, fields));
   }
 
   // "insert" mode appends a new step at stepIndex and advances to
@@ -625,37 +477,33 @@ export default function MapEditor({
   // as placePoint (wall points) above. "edit" mode replaces the existing
   // step's position (keeping its movementRate/waitTime) and exits.
   function placePatrolStep(feet) {
-    const {unitIndex, stepIndex, mode} = patrolStepPlacement;
-    const steps = mapData.units[unitIndex].movement.steps;
+    const {unitIndex, stepIndex, mode} = uiState.patrolStepPlacement;
 
     if (mode === "edit") {
-      const nextSteps = steps.map((step, i) => (i === stepIndex ? {...step, position: {x: feet.x, y: feet.y, angle: 0}} : step));
-      updateMovement(unitIndex, {steps: nextSteps});
-      setPatrolStepPlacement(null);
+      handleChange(draft.setPatrolStep(unitIndex, stepIndex, feet));
+      setUiState(uiState.clearPatrolStepPlacement());
       return;
     }
 
-    const newStep = {position: {x: feet.x, y: feet.y, angle: 0}, movementRate: 0.5, waitTime: 1};
-    const nextSteps = [...steps.slice(0, stepIndex), newStep, ...steps.slice(stepIndex)];
-    updateMovement(unitIndex, {steps: nextSteps});
-    setPatrolStepPlacement({unitIndex, stepIndex: stepIndex + 1, mode: "insert"});
+    handleChange(draft.insertPatrolStep(unitIndex, stepIndex, feet));
+    setUiState(uiState.advancePatrolStepPlacement());
   }
 
   // Single-shot, like placeConnectionField/placeUnitPosition above.
   function placeWanderLocation(feet) {
-    const {unitIndex} = wanderLocationPlacement;
-    updateMovement(unitIndex, {location: {x: feet.x, y: feet.y}});
-    setWanderLocationPlacement(null);
+    const {unitIndex} = uiState.wanderLocationPlacement;
+    handleChange(draft.setWanderLocation(unitIndex, feet));
+    setUiState(uiState.clearWanderLocationPlacement());
   }
 
   // pixelDimensions is derived, not authored - keep the draft in sync with
   // whatever image is actually loaded (a freshly uploaded file's natural
-  // size overrides whatever the map's JSON said before).
-  // Derived sync, not an authored edit - uses rawDispatch so merely loading/
-  // resizing the underlying image doesn't spuriously invalidate a prior
-  // Validate pass the way a real field edit should.
+  // size overrides whatever the map's JSON said before). Derived sync, not
+  // an authored edit - skips markDirty so merely loading/resizing the
+  // underlying image doesn't spuriously invalidate a prior Validate pass
+  // the way a real field edit should.
   useEffect(() => {
-    if (image) rawDispatch({type: "SET_FIELD", field: "pixelDimensions", value: image.pixelDimensions});
+    if (image) setDraft((d) => d.setPixelDimensions(image.pixelDimensions));
   }, [image]);
 
   async function handleImageFile(rawFile) {
@@ -706,7 +554,7 @@ export default function MapEditor({
       // authored into the draft, not just assumed at save time.
       const basename = mapKey.split("/").pop();
       const extension = file.name.includes(".") ? file.name.split(".").pop() : "png";
-      dispatch({type: "SET_FIELD", field: "imageUrl", value: `${basename}.${extension}`});
+      handleChange(draft.setField("imageUrl", `${basename}.${extension}`));
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -744,7 +592,7 @@ export default function MapEditor({
   // position swapped for the live sim position - mapData itself (and
   // everything derived from it, like dispatch targets) is never touched,
   // so stopping always snaps back to the authored positions exactly.
-  const effectiveMapData = simulating && simPositions
+  const effectiveMapData = patrolSim.current.running && simPositions
     ? {
       ...mapData,
       units: mapData.units.map((unit, i) => ({
@@ -753,6 +601,9 @@ export default function MapEditor({
       })),
     }
     : mapData;
+
+  if (loadError) return <div className="map-editor-load-error">Failed to load: {loadError}</div>;
+  if (!loaded) return <div className="map-editor-loading">Loading…</div>;
 
   return (
     <div className="map-editor" data-map-key={mapKey}>
@@ -764,55 +615,55 @@ export default function MapEditor({
         backUrl={backUrl}
         mapData={effectiveMapData}
         dispatch={dispatch}
-        selectedBarrierIndex={selectedBarrierIndex}
-        onSelectBarrier={setSelectedBarrierIndex}
-        hoveredBarrierIndex={hoveredBarrierIndex}
-        hoveredPoint={hoveredPoint}
-        placement={placement}
+        selectedBarrierIndex={uiState.selectedBarrierIndex}
+        onSelectBarrier={(i) => setUiState(uiState.with({selectedBarrierIndex: i}))}
+        hoveredBarrierIndex={uiState.hoveredBarrierIndex}
+        hoveredPoint={uiState.hoveredPoint}
+        placement={uiState.placement}
         onPlacePoint={placePoint}
-        onCancelPlacement={() => setPlacement(null)}
-        selectedConnectionIndex={selectedConnectionIndex}
-        onSelectConnection={setSelectedConnectionIndex}
-        hoveredConnectionIndex={hoveredConnectionIndex}
-        connectionPlacement={connectionPlacement}
+        onCancelPlacement={() => setUiState(uiState.clearPlacement())}
+        selectedConnectionIndex={uiState.selectedConnectionIndex}
+        onSelectConnection={(i) => setUiState(uiState.with({selectedConnectionIndex: i}))}
+        hoveredConnectionIndex={uiState.hoveredConnectionIndex}
+        connectionPlacement={uiState.connectionPlacement}
         onPlaceConnectionField={placeConnectionField}
-        onCancelConnectionPlacement={() => setConnectionPlacement(null)}
-        selectedUnitIndex={selectedUnitIndex}
+        onCancelConnectionPlacement={() => setUiState(uiState.clearConnectionPlacement())}
+        selectedUnitIndex={uiState.selectedUnitIndex}
         onSelectUnit={focusUnitFromMap}
-        hoveredUnitIndex={hoveredUnitIndex}
-        onHoverUnit={setHoveredUnitIndex}
-        pendingUnitType={pendingUnitType}
+        hoveredUnitIndex={uiState.hoveredUnitIndex}
+        onHoverUnit={(i) => setUiState(uiState.with({hoveredUnitIndex: i}))}
+        pendingUnitType={uiState.pendingUnitType}
         availableUnitTypes={unitTypeDetails}
-        unitPlacement={unitPlacement}
+        unitPlacement={uiState.unitPlacement}
         onPlaceUnitPosition={placeUnitPosition}
-        onCancelUnitPlacement={() => setUnitPlacement(null)}
-        patrolStepPlacement={patrolStepPlacement}
+        onCancelUnitPlacement={() => setUiState(uiState.clearUnitPlacement())}
+        patrolStepPlacement={uiState.patrolStepPlacement}
         onPlacePatrolStep={placePatrolStep}
-        onCancelPatrolStepPlacement={() => setPatrolStepPlacement(null)}
-        wanderLocationPlacement={wanderLocationPlacement}
+        onCancelPatrolStepPlacement={() => setUiState(uiState.clearPatrolStepPlacement())}
+        wanderLocationPlacement={uiState.wanderLocationPlacement}
         onPlaceWanderLocation={placeWanderLocation}
-        onCancelWanderLocationPlacement={() => setWanderLocationPlacement(null)}
-        hoveredPatrolStep={hoveredPatrolStep}
-        expandedUnitIndices={expandedUnitIndices}
-        groupingMode={groupingMode}
+        onCancelWanderLocationPlacement={() => setUiState(uiState.clearWanderLocationPlacement())}
+        hoveredPatrolStep={uiState.hoveredPatrolStep}
+        expandedUnitIndices={uiState.expandedUnitIndices}
+        groupingMode={uiState.groupingMode}
         onToggleGroupMember={toggleGroupMember}
-        hoveredGroupIdentifier={hoveredGroupIdentifier}
-        simulating={simulating}
+        hoveredGroupIdentifier={uiState.hoveredGroupIdentifier}
+        simulating={patrolSim.current.running}
         onToggleSimulate={toggleSimulation}
         simSpeed={simSpeed}
         onSimSpeedChange={setSimSpeed}
-        previewing={previewing}
+        previewing={walkSim.active}
         onTogglePreview={togglePreview}
-        tool={tool}
-        onToolChange={setTool}
+        tool={uiState.tool}
+        onToolChange={(nextTool) => setUiState(uiState.with({tool: nextTool}))}
       />
       <MapSidebar>
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
-        {simulating ? (
+        {patrolSim.current.running ? (
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Simulating units - editing is disabled while this runs.</h3>
           </div>
-        ) : previewing ? (
+        ) : walkSim.active ? (
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Walk preview running - editing is disabled while this runs.</h3>
           </div>
@@ -821,40 +672,40 @@ export default function MapEditor({
             <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
             <BarriersPanel
               barriers={mapData.barriers}
-              selectedIndex={selectedBarrierIndex}
-              onSelect={setSelectedBarrierIndex}
-              onHover={setHoveredBarrierIndex}
-              onHoverPoint={setHoveredPoint}
-              placement={placement}
-              onStartPlacement={startBarrierPlacement}
-              onStartPointEdit={startBarrierPointEdit}
-              tool={tool}
-              onStartAddCircle={() => startTool("add-circle")}
+              selectedIndex={uiState.selectedBarrierIndex}
+              onSelect={(i) => setUiState(uiState.with({selectedBarrierIndex: i}))}
+              onHover={(i) => setUiState(uiState.with({hoveredBarrierIndex: i}))}
+              onHoverPoint={(p) => setUiState(uiState.with({hoveredPoint: p}))}
+              placement={uiState.placement}
+              onStartPlacement={(barrierIndex, pointIndex, mode) => setUiState(uiState.startBarrierPlacement(barrierIndex, pointIndex, mode))}
+              onStartPointEdit={(barrierIndex, pointIndex) => setUiState(uiState.startBarrierPointEdit(barrierIndex, pointIndex))}
+              tool={uiState.tool}
+              onStartAddCircle={() => setUiState(uiState.startTool("add-circle"))}
               canPlaceOnMap={canPlaceOnMap}
-              otherPlacementActive={!!connectionPlacement}
+              otherPlacementActive={!!uiState.connectionPlacement}
               dispatch={dispatch}
             />
             <ConnectionsPanel
               connections={mapData.connections}
-              selectedIndex={selectedConnectionIndex}
-              onSelect={setSelectedConnectionIndex}
-              onHover={setHoveredConnectionIndex}
-              tool={tool}
-              placement={placement}
+              selectedIndex={uiState.selectedConnectionIndex}
+              onSelect={(i) => setUiState(uiState.with({selectedConnectionIndex: i}))}
+              onHover={(i) => setUiState(uiState.with({hoveredConnectionIndex: i}))}
+              tool={uiState.tool}
+              placement={uiState.placement}
               canPlaceOnMap={canPlaceOnMap}
-              connectionPlacement={connectionPlacement}
-              onStartConnectionPlacement={startConnectionFieldPlacement}
-              onStartAddPointConnection={() => startTool("add-point-connection")}
-              onStartAddLineConnection={() => startTool("add-line-connection")}
+              connectionPlacement={uiState.connectionPlacement}
+              onStartConnectionPlacement={(connectionIndex, field) => setUiState(uiState.startConnectionFieldPlacement(connectionIndex, field))}
+              onStartAddPointConnection={() => setUiState(uiState.startTool("add-point-connection"))}
+              onStartAddLineConnection={() => setUiState(uiState.startTool("add-line-connection"))}
               dispatch={dispatch}
             />
             <UnitsPanel
               units={mapData.units}
-              selectedIndex={selectedUnitIndex}
-              onSelect={setSelectedUnitIndex}
-              onHover={setHoveredUnitIndex}
-              hoveredIndex={hoveredUnitIndex}
-              focusUnitRequest={unitFocusRequest}
+              selectedIndex={uiState.selectedUnitIndex}
+              onSelect={(i) => setUiState(uiState.with({selectedUnitIndex: i}))}
+              onHover={(i) => setUiState(uiState.with({hoveredUnitIndex: i}))}
+              hoveredIndex={uiState.hoveredUnitIndex}
+              focusUnitRequest={uiState.unitFocusRequest}
               availableUnitTypeKeys={availableUnitTypeKeys}
               unitTypeDetails={unitTypeDetails}
               onChooseUnitType={requestUnitTypeDetails}
@@ -865,35 +716,35 @@ export default function MapEditor({
               newItemUrl={newItemUrl}
               onRefresh={handleRefresh}
               refreshStatus={refreshStatus}
-              tool={tool}
-              placement={placement}
+              tool={uiState.tool}
+              placement={uiState.placement}
               canPlaceOnMap={canPlaceOnMap}
-              pendingUnitType={pendingUnitType}
+              pendingUnitType={uiState.pendingUnitType}
               onStartAddUnit={startAddUnit}
-              unitPlacement={unitPlacement}
-              onStartUnitPlacement={startUnitPlacement}
-              patrolStepPlacement={patrolStepPlacement}
-              onStartPatrolStepPlacement={startPatrolStepPlacement}
-              onStartPatrolStepEdit={startPatrolStepEdit}
-              wanderLocationPlacement={wanderLocationPlacement}
-              onStartWanderLocationPlacement={startWanderLocationPlacement}
+              unitPlacement={uiState.unitPlacement}
+              onStartUnitPlacement={(unitIndex) => setUiState(uiState.startUnitPlacement(unitIndex))}
+              patrolStepPlacement={uiState.patrolStepPlacement}
+              onStartPatrolStepPlacement={(unitIndex, stepIndex, mode) => setUiState(uiState.startPatrolStepPlacement(unitIndex, stepIndex, mode))}
+              onStartPatrolStepEdit={(unitIndex, stepIndex) => setUiState(uiState.startPatrolStepEdit(unitIndex, stepIndex))}
+              wanderLocationPlacement={uiState.wanderLocationPlacement}
+              onStartWanderLocationPlacement={(unitIndex) => setUiState(uiState.startWanderLocationPlacement(unitIndex))}
               onUpdateMovement={updateMovement}
-              onHoverPatrolStep={setHoveredPatrolStep}
+              onHoverPatrolStep={(p) => setUiState(uiState.with({hoveredPatrolStep: p}))}
               onExpandedIndicesChange={setExpandedUnitIndices}
-              groupingMode={groupingMode}
-              onStartGroupingMode={startGroupingMode}
+              groupingMode={uiState.groupingMode}
+              onStartGroupingMode={(groupIdentifier) => setUiState(uiState.startGroupingMode(groupIdentifier))}
               onToggleGroupMember={toggleGroupMember}
-              hoveredGroupIdentifier={hoveredGroupIdentifier}
-              onHoverGroup={setHoveredGroupIdentifier}
-              pendingGroupNames={pendingGroupNames}
-              onAddPendingGroup={addPendingGroup}
+              hoveredGroupIdentifier={uiState.hoveredGroupIdentifier}
+              onHoverGroup={(g) => setUiState(uiState.with({hoveredGroupIdentifier: g}))}
+              pendingGroupNames={uiState.pendingGroupNames}
+              onAddPendingGroup={(name) => setUiState(uiState.addPendingGroup(name))}
               onRenameGroup={renameGroup}
               dispatch={dispatch}
             />
           </>
         )}
       </MapSidebar>
-      {showHotkeyHelp && <HotkeyHelp />}
+      {uiState.showHotkeyHelp && <HotkeyHelp />}
     </div>
   );
 }

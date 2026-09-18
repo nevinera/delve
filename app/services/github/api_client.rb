@@ -22,26 +22,24 @@ module Github
       get("/repos/#{repo}/contents/#{path}")
     end
 
-    # Unlike #repository_contents (Accept: application/vnd.github+json), which
-    # only inlines base64 content for files <=1MB and otherwise silently
-    # returns an empty content field instead of an error - indistinguishable
-    # from a genuinely empty file - the raw media type returns the exact
-    # bytes directly, with no size-tiered response shape, up to 100MB. Use
-    # this for binary assets (a map's background image, say) that can
-    # plausibly exceed 1MB; returns the full Net::HTTPResponse so the caller
-    # can check the status itself rather than assume a JSON error body.
-    def raw_repository_contents(repo, path)
-      get_raw("/repos/#{repo}/contents/#{path}")
+    def repository(repo)
+      get("/repos/#{repo}")
+    end
+
+    # tree_sha may be a real tree SHA, or (only meaningfully for a first
+    # call) a branch/tag name - GitHub resolves either. recursive: true
+    # walks every level beneath it in this one call, instead of one call per
+    # level (see Github::TreeListing, the only caller).
+    def tree(repo, tree_sha, recursive: false)
+      path = "/repos/#{repo}/git/trees/#{tree_sha}"
+      path += "?recursive=1" if recursive
+      get(path)
     end
 
     private
 
     def get(path)
       JSON.parse(request(path, accept: "application/vnd.github+json").body)
-    end
-
-    def get_raw(path)
-      request(path, accept: "application/vnd.github.raw+json")
     end
 
     def request(path, accept:)

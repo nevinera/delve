@@ -2,9 +2,6 @@
 <div
   id="editor-root"
   data-key="<%= params[:id] %>"
-  data-unit-type="<%= @unit_type.to_json %>"
-  data-available-abilities="<%= @available_abilities.to_json %>"
   data-stock-assets="<%= @stock_assets.to_json %>"
   data-new-ability-url="<%= new_build_ability_path(key: "units/#{params[:id]}/") %>"
-  data-available-abilities-url="<%= available_abilities_build_unit_type_path(id: params[:id]) %>"
 ></div>

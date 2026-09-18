@@ -1,8 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityFormatting";
-import {entryFieldsFor, placeholderEntry, selectOptions, widgetFor} from "./entryFieldSchema";
+import {entryFieldsFor, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
-import {graphicFieldsFor, soundFieldsFor} from "./stockAssetFields";
 import StatusEditor from "./StatusEditor";
 
 // Order entries are added/listed in - graphic, then sound, then effect.
@@ -24,9 +23,9 @@ const TOP_LEVEL_FIELDS = [
   {key: "tags", type: "tags", editable: true},
 ];
 
-function EditableField({field, type, value, dispatch}) {
+function EditableField({field, type, value, draft, onChange}) {
   if (type === "tags") {
-    return <TagsField value={value} onChange={(newValue) => dispatch({type: "SET_FIELD", field, value: newValue})} />;
+    return <TagsField value={value} onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
   }
 
   return (
@@ -37,7 +36,7 @@ function EditableField({field, type, value, dispatch}) {
       onChange={(e) => {
         const raw = e.target.value;
         const parsed = raw === "" ? null : (type === "number" ? parseFloat(raw) : raw);
-        dispatch({type: "SET_FIELD", field, value: parsed});
+        onChange(draft.setField(field, parsed));
       }}
     />
   );
@@ -145,9 +144,9 @@ function RangeField({value, onChange}) {
 // space (typed to start the next tag) would immediately be stripped back
 // out, making it look like commas/spaces do nothing. `value` is only a
 // ref-equal echo of what this field itself last emitted (see
-// abilityReducer's SET_FIELD/UPDATE_ENTRY_FIELD, which assign it verbatim),
-// so lastValueRef lets us tell "value changed under us" (e.g. switching to
-// a different entry) from "value changed because we changed it".
+// AbilityDraft's setField/updateEntryField, which assign it verbatim), so
+// lastValueRef lets us tell "value changed under us" (e.g. switching to a
+// different entry) from "value changed because we changed it".
 function TagsField({value, onChange}) {
   const [text, setText] = useState((value ?? []).join(", "));
   const lastValueRef = useRef(value);
@@ -185,8 +184,6 @@ function EntryField({field, value, onChange, stockAssets}) {
           onChange={(e) => onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
         />
       );
-    case "status":
-      return <StatusEditor value={value} onChange={onChange} stockAssets={stockAssets} />;
     case "readonly":
       return formatValue(value);
     default:
@@ -199,20 +196,37 @@ function EntryField({field, value, onChange, stockAssets}) {
   }
 }
 
-function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUploadAsset, onClearAsset, stockAssets}) {
+function EntryFieldsTable({section, index, entry, draft, onChange, assetOverrides, onUploadAsset, onClearAsset, stockAssets}) {
   const stockOptions = section === "soundEffects" ? stockAssets.sounds : stockAssets.graphics;
 
   function pickStockAsset(name) {
-    const fields = section === "soundEffects"
-      ? soundFieldsFor(name, stockOptions[name])
-      : graphicFieldsFor(name, stockOptions[name]);
-    dispatch({type: "UPDATE_ENTRY_FIELDS", section, index, fields});
+    onChange(draft.pickStockAsset(section, index, name, stockOptions));
   }
 
   return (
     <table>
       <tbody>
         {entryFieldsFor(section, entry).map((field) => {
+          // A status is its own nested domain object (StatusDraft), reached
+          // and replaced through AbilityDraft rather than routed through
+          // the generic updateEntryField path every other field uses - see
+          // AbilityDraft#statusFor/setStatus/addStatus.
+          if (field === "status") {
+            return (
+              <tr key={field}>
+                <th>{humanize(field)}</th>
+                <td>
+                  <StatusEditor
+                    status={draft.statusFor(index)}
+                    onAdd={() => onChange(draft.addStatus(index))}
+                    onChange={(nextStatus) => onChange(draft.setStatus(index, nextStatus))}
+                    stockAssets={stockAssets}
+                  />
+                </td>
+              </tr>
+            );
+          }
+
           const value = entry[field];
           const uploadKey = field === "sourceURL" ? assetOverrideKey(section, index, field) : null;
           return (
@@ -222,7 +236,7 @@ function EntryFieldsTable({section, index, entry, dispatch, assetOverrides, onUp
                 <EntryField
                   field={field}
                   value={value}
-                  onChange={(newValue) => dispatch({type: "UPDATE_ENTRY_FIELD", section, index, field, value: newValue})}
+                  onChange={(newValue) => onChange(draft.updateEntryField(section, index, field, newValue))}
                   stockAssets={stockAssets}
                 />
                 {uploadKey && (
@@ -260,7 +274,11 @@ const HIGHLIGHT_MS = 1500;
 
 const EMPTY_STOCK_ASSETS = {icons: {}, graphics: {}, sounds: {}};
 
-export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry, stockAssets = EMPTY_STOCK_ASSETS}) {
+// Purely presentational - every domain rule (what a new entry starts as,
+// what a stock-asset pick writes) lives on AbilityDraft now; this just
+// renders draft's current values and calls its mutator methods.
+export default function AbilityFieldsPanel({draft, onChange, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry, stockAssets = EMPTY_STOCK_ASSETS}) {
+  const ability = draft.data;
   // Scrolls the fields panel to a newly-added entry, and briefly highlights
   // it, since it's appended at the end of a (possibly long) list and might
   // otherwise be easy to miss.
@@ -277,7 +295,7 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
 
   function handleAdd(section) {
     const index = (ability[section] ?? []).length;
-    dispatch({type: "ADD_ENTRY", section, entry: placeholderEntry(section)});
+    onChange(draft.addEntry(section));
     const key = `${section}-${index}`;
     setJustAddedKey(key);
     setHighlightedKey(key);
@@ -295,7 +313,7 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
               <th>{humanize(key)}</th>
               <td>
                 {editable
-                  ? <EditableField field={key} type={type} value={ability[key]} dispatch={dispatch} />
+                  ? <EditableField field={key} type={type} value={ability[key]} draft={draft} onChange={onChange} />
                   : formatValue(ability[key])}
                 {upload && (
                   <AssetUploadField
@@ -308,7 +326,7 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
                 {key === "iconURL" && (
                   <StockAssetPicker
                     options={stockAssets.icons}
-                    onPick={(name) => dispatch({type: "SET_FIELD", field: "iconURL", value: `:${name}:`})}
+                    onPick={(name) => onChange(draft.pickStockIcon(name))}
                   />
                 )}
               </td>
@@ -333,7 +351,8 @@ export default function AbilityFieldsPanel({ability, dispatch, assetOverrides, o
                 section={section}
                 index={index}
                 entry={entry}
-                dispatch={dispatch}
+                draft={draft}
+                onChange={onChange}
                 assetOverrides={assetOverrides}
                 onUploadAsset={onUploadAsset}
                 onClearAsset={onClearAsset}

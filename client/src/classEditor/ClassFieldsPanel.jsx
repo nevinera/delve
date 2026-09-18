@@ -1,6 +1,5 @@
 import {entryHeading, humanize} from "../editor/abilityFormatting";
 import {PRIMARY_STATS, SECONDARY_STATS, SLOT_COUNT, WIELD_TYPES} from "./classFieldOptions";
-import {abilityKeyForRef, refForAbilityKey} from "./powerRefs";
 
 const RESOURCE_FIELDS = [
   {key: "name", type: "text"},
@@ -10,8 +9,6 @@ const RESOURCE_FIELDS = [
   {key: "returnRate", type: "number"},
   {key: "isFluid", type: "checkbox"},
 ];
-
-const BLANK_RESOURCE = {name: "", color: "888888", max: 100, defaultValue: 0, returnRate: 0, isFluid: false};
 
 function TextField({value, onChange}) {
   return <input type="text" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} />;
@@ -26,12 +23,12 @@ function NumberField({value, onChange}) {
   );
 }
 
-function ResourceEntry({resource, index, dispatch}) {
+function ResourceEntry({resource, index, draft, onChange}) {
   return (
     <div className="entry-block">
       <div className="entry-heading-row">
         <h3>{entryHeading("resources", index, resource)}</h3>
-        <button type="button" className="remove-entry" onClick={() => dispatch({type: "REMOVE_ENTRY", section: "resources", index})}>
+        <button type="button" className="remove-entry" onClick={() => onChange(draft.removeResource(index))}>
           Remove
         </button>
       </div>
@@ -45,12 +42,12 @@ function ResourceEntry({resource, index, dispatch}) {
                   ? (
                     <input
                       type="checkbox" checked={Boolean(resource[key])}
-                      onChange={(e) => dispatch({type: "UPDATE_ENTRY_FIELD", section: "resources", index, field: key, value: e.target.checked})}
+                      onChange={(e) => onChange(draft.updateResourceField(index, key, e.target.checked))}
                     />
                   )
                   : type === "number"
-                    ? <NumberField value={resource[key]} onChange={(value) => dispatch({type: "UPDATE_ENTRY_FIELD", section: "resources", index, field: key, value})} />
-                    : <TextField value={resource[key]} onChange={(value) => dispatch({type: "UPDATE_ENTRY_FIELD", section: "resources", index, field: key, value})} />}
+                    ? <NumberField value={resource[key]} onChange={(value) => onChange(draft.updateResourceField(index, key, value))} />
+                    : <TextField value={resource[key]} onChange={(value) => onChange(draft.updateResourceField(index, key, value))} />}
               </td>
             </tr>
           ))}
@@ -77,7 +74,7 @@ function StatCheckboxList({stats, options, onToggle}) {
 // stats - duplicates aren't blocked here (this editor does no validation
 // before saving, same as the ability editor), just left for the class's
 // eventual release-time validation to catch.
-function SecondaryStatsRanking({stats, dispatch}) {
+function SecondaryStatsRanking({stats, draft, onChange}) {
   const ranks = Array.from({length: 5}, (_, i) => stats[i] ?? "");
   return (
     <table>
@@ -86,14 +83,7 @@ function SecondaryStatsRanking({stats, dispatch}) {
           <tr key={i}>
             <th>Rank {i + 1}</th>
             <td>
-              <select
-                value={value}
-                onChange={(e) => {
-                  const next = [...ranks];
-                  next[i] = e.target.value;
-                  dispatch({type: "SET_FIELD", field: "secondaryStats", value: next});
-                }}
-              >
+              <select value={value} onChange={(e) => onChange(draft.setSecondaryStatRank(i, e.target.value))}>
                 <option value="">—</option>
                 {SECONDARY_STATS.map((stat) => <option key={stat} value={stat}>{humanize(stat)}</option>)}
               </select>
@@ -105,12 +95,8 @@ function SecondaryStatsRanking({stats, dispatch}) {
   );
 }
 
-function WieldsFields({wields, dispatch}) {
+function WieldsFields({wields, draft, onChange}) {
   const [main, off] = [wields[0] ?? "", wields[1] ?? ""];
-
-  function update(newMain, newOff) {
-    dispatch({type: "SET_FIELD", field: "wields", value: [newMain, newOff].filter(Boolean)});
-  }
 
   return (
     <table>
@@ -118,7 +104,7 @@ function WieldsFields({wields, dispatch}) {
         <tr>
           <th>Main hand</th>
           <td>
-            <select value={main} onChange={(e) => update(e.target.value, off)}>
+            <select value={main} onChange={(e) => onChange(draft.setWields(e.target.value, off))}>
               <option value="">—</option>
               {WIELD_TYPES.map((w) => <option key={w} value={w}>{humanize(w)}</option>)}
             </select>
@@ -127,7 +113,7 @@ function WieldsFields({wields, dispatch}) {
         <tr>
           <th>Off hand</th>
           <td>
-            <select value={off} onChange={(e) => update(main, e.target.value)}>
+            <select value={off} onChange={(e) => onChange(draft.setWields(main, e.target.value))}>
               <option value="">—</option>
               {WIELD_TYPES.map((w) => <option key={w} value={w}>{humanize(w)}</option>)}
             </select>
@@ -138,20 +124,11 @@ function WieldsFields({wields, dispatch}) {
   );
 }
 
-// Slot i is only pickable once slot i-1 is filled (see powerRefs.js -
+// Slot i is only pickable once slot i-1 is filled (see ClassDraft#setPowerSlot -
 // clearing a middle slot reflows the ones after it, rather than leaving a
 // gap the saved `powers` array has no way to represent).
-function PowerSlots({classKey, powers, availableAbilities, dispatch}) {
+function PowerSlots({powers, availableAbilities, draft, onChange}) {
   const abilityKeys = Object.keys(availableAbilities).sort();
-
-  function setSlot(index, abilityKey) {
-    const entry = {$ref: refForAbilityKey(classKey, abilityKey), referenceTo: "ability"};
-    if (index < powers.length) {
-      dispatch({type: "UPDATE_ENTRY_FIELDS", section: "powers", index, fields: entry});
-    } else {
-      dispatch({type: "ADD_ENTRY", section: "powers", entry});
-    }
-  }
 
   return (
     <table>
@@ -159,7 +136,7 @@ function PowerSlots({classKey, powers, availableAbilities, dispatch}) {
         {Array.from({length: SLOT_COUNT}, (_, i) => {
           const filled = i < powers.length;
           const disabled = i > powers.length;
-          const selectedKey = filled ? abilityKeyForRef(classKey, powers[i]) : "";
+          const selectedKey = draft.abilityKeyForPowerSlot(i);
           return (
             <tr key={i}>
               <th>Slot {i + 1}</th>
@@ -167,13 +144,13 @@ function PowerSlots({classKey, powers, availableAbilities, dispatch}) {
                 <select
                   value={selectedKey ?? ""}
                   disabled={disabled}
-                  onChange={(e) => setSlot(i, e.target.value)}
+                  onChange={(e) => onChange(draft.setPowerSlot(i, e.target.value))}
                 >
                   <option value="">{disabled ? "(fill earlier slots first)" : "— empty —"}</option>
                   {abilityKeys.map((key) => <option key={key} value={key}>{key}</option>)}
                 </select>
                 {filled && (
-                  <button type="button" className="remove-entry" onClick={() => dispatch({type: "REMOVE_ENTRY", section: "powers", index: i})}>
+                  <button type="button" className="remove-entry" onClick={() => onChange(draft.clearPowerSlot(i))}>
                     Clear
                   </button>
                 )}
@@ -186,25 +163,30 @@ function PowerSlots({classKey, powers, availableAbilities, dispatch}) {
   );
 }
 
-export default function ClassFieldsPanel({classKey, classData, availableAbilities, newAbilityUrl, dispatch}) {
+// Purely presentational - every domain rule (what a fresh resource starts
+// as, the power-slot fill-in-order/ref math, the secondary-stat ranking's
+// padding) lives on ClassDraft now; this just renders draft's current
+// values and calls its mutator methods.
+export default function ClassFieldsPanel({draft, availableAbilities, newAbilityUrl, onChange}) {
+  const classData = draft.data;
   return (
     <div className="fields-panel">
       <table>
         <tbody>
           <tr>
             <th>Name</th>
-            <td><TextField value={classData.name} onChange={(value) => dispatch({type: "SET_FIELD", field: "name", value})} /></td>
+            <td><TextField value={classData.name} onChange={(value) => onChange(draft.setField("name", value))} /></td>
           </tr>
           <tr>
             <th>Description</th>
-            <td><TextField value={classData.description} onChange={(value) => dispatch({type: "SET_FIELD", field: "description", value})} /></td>
+            <td><TextField value={classData.description} onChange={(value) => onChange(draft.setField("description", value))} /></td>
           </tr>
           <tr>
             <th>Major color</th>
             <td>
               <TextField
                 value={classData.colors?.major}
-                onChange={(value) => dispatch({type: "SET_FIELD", field: "colors", value: {...classData.colors, major: value}})}
+                onChange={(value) => onChange(draft.setColor("major", value))}
               />
             </td>
           </tr>
@@ -213,7 +195,7 @@ export default function ClassFieldsPanel({classKey, classData, availableAbilitie
             <td>
               <TextField
                 value={classData.colors?.minor}
-                onChange={(value) => dispatch({type: "SET_FIELD", field: "colors", value: {...classData.colors, minor: value}})}
+                onChange={(value) => onChange(draft.setColor("minor", value))}
               />
             </td>
           </tr>
@@ -223,11 +205,7 @@ export default function ClassFieldsPanel({classKey, classData, availableAbilitie
               <StatCheckboxList
                 stats={classData.primaryStats ?? []}
                 options={PRIMARY_STATS}
-                onToggle={(stat) => {
-                  const current = classData.primaryStats ?? [];
-                  const next = current.includes(stat) ? current.filter((s) => s !== stat) : [...current, stat];
-                  dispatch({type: "SET_FIELD", field: "primaryStats", value: next});
-                }}
+                onToggle={(stat) => onChange(draft.togglePrimaryStat(stat))}
               />
             </td>
           </tr>
@@ -235,18 +213,18 @@ export default function ClassFieldsPanel({classKey, classData, availableAbilitie
       </table>
 
       <h3>Secondary stats (ranked)</h3>
-      <SecondaryStatsRanking stats={classData.secondaryStats ?? []} dispatch={dispatch} />
+      <SecondaryStatsRanking stats={classData.secondaryStats ?? []} draft={draft} onChange={onChange} />
 
       <h3>Wields</h3>
-      <WieldsFields wields={classData.wields ?? []} dispatch={dispatch} />
+      <WieldsFields wields={classData.wields ?? []} draft={draft} onChange={onChange} />
 
       <div className="add-buttons-row">
-        <button type="button" className="add-entry" onClick={() => dispatch({type: "ADD_ENTRY", section: "resources", entry: BLANK_RESOURCE})}>
+        <button type="button" className="add-entry" onClick={() => onChange(draft.addResource())}>
           + Add Resource
         </button>
       </div>
       {(classData.resources ?? []).map((resource, index) => (
-        <ResourceEntry key={index} resource={resource} index={index} dispatch={dispatch} />
+        <ResourceEntry key={index} resource={resource} index={index} draft={draft} onChange={onChange} />
       ))}
 
       <h3>Powers</h3>
@@ -254,10 +232,10 @@ export default function ClassFieldsPanel({classKey, classData, availableAbilitie
         <a href={newAbilityUrl} target="_blank" rel="noreferrer">+ New ability</a>
       </p>
       <PowerSlots
-        classKey={classKey}
         powers={classData.powers ?? []}
         availableAbilities={availableAbilities}
-        dispatch={dispatch}
+        draft={draft}
+        onChange={onChange}
       />
     </div>
   );

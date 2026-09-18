@@ -2,5 +2,5 @@
 // its entry arrays (barriers/connections/units, added in later slices) fit
 // the same generic SET_FIELD/ADD_ENTRY/REMOVE_ENTRY/UPDATE_ENTRY_FIELD shape
 // abilityReducer already provides - nothing here is map-specific, so this
-// reuses it as-is, same as itemReducer.js/unitTypeReducer.js.
+// reuses it as-is.
 export {abilityReducer as mapReducer} from "../editor/abilityReducer";
