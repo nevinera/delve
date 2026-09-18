@@ -3,7 +3,7 @@
 # requires for FetchAbilityContentJob/FetchCharacterClassContentJob, rather
 # than re-implementing that (constantly-changing) schema a second time in JS.
 class Build::ValidatorsController < Build::BaseController
-  skip_authorization_check only: [:ability, :character_class, :unit_type, :item, :map, :zone]
+  skip_authorization_check only: [:ability, :character_class, :unit_type, :item, :map, :zone, :world]
 
   def ability
     validate_with(Validators::AbilityValidator)
@@ -45,6 +45,12 @@ class Build::ValidatorsController < Build::BaseController
   # $refs before validating.
   def zone
     validate_with(Validators::ZoneValidator)
+  end
+
+  # Worlds never inline their zones (see docs/schema/world.md) - no $ref
+  # handling needed, the draft is validated as-is, same as #item/#map.
+  def world
+    validate_with(Validators::WorldValidator)
   end
 
   private

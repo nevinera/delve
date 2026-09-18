@@ -38,6 +38,7 @@ Rails.application.routes.draw do
     # unrelated to content editing) lives under this `registration`
     # namespace instead, out of that name's way.
     resources :zones, only: [:index, :new, :create]
+    resources :worlds, only: [:index, :new, :create]
     namespace :registration do
       resources :zones, only: [:index, :show, :new, :create]
     end
@@ -47,6 +48,7 @@ Rails.application.routes.draw do
     post "validators/item", to: "validators#item"
     post "validators/map", to: "validators#map"
     post "validators/zone", to: "validators#zone"
+    post "validators/world", to: "validators#world"
   end
 
   # A glob segment, not a plain :id + regex constraint (and defined outside
@@ -67,6 +69,7 @@ Rails.application.routes.draw do
   get "build/items/*id/edit", to: "build/items#edit", as: "edit_build_item"
   get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
   get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
+  get "build/worlds/*id/edit", to: "build/worlds#edit", as: "edit_build_world"
 
   namespace :play do
     root to: "dashboard#index"

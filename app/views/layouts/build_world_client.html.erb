@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Delve - World Editor</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #editor-root { width: 100%; height: 100%; }
+      body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; }
+
+      /* Same two-pane layout every other editor uses: the graph fills the
+         big left-hand area, sidebar is the (non-collapsible, unlike the
+         zone editor's) right-hand column. */
+      .world-editor { display: flex; height: 100%; }
+      .world-editor-canvas-area { flex: 2; min-width: 0; display: flex; flex-direction: column; }
+      .world-editor-sidebar { flex: 1; min-width: 0; overflow-y: auto; padding: 14px; background: #1c2126; border-left: 1px solid #333; }
+
+      @media (max-width: 700px) {
+        .world-editor { flex-direction: column; }
+        .world-editor-canvas-area { flex: none; height: 38vh; }
+        .world-editor-sidebar { flex: 1; width: 100%; border-left: none; border-top: 1px solid #333; }
+      }
+
+      .world-editor-sidebar h3 { font-size: 15px; color: #cce; font-weight: 600; margin: 24px 0 10px; border-top: 1px solid #2a2f35; padding-top: 20px; }
+      .world-editor-sidebar h4 { font-size: 13px; color: #cce; font-weight: 600; }
+      .world-editor-sidebar table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+      .world-editor-sidebar th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; width: 100px; }
+      .world-editor-sidebar td { padding: 4px 0; word-break: break-word; }
+      .world-editor-sidebar input[type=text], .world-editor-sidebar input[type=number] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .world-editor-sidebar select { background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; margin-right: 6px; }
+      .world-editor-sidebar .range-field { display: inline-flex; align-items: center; gap: 6px; }
+      .world-editor-sidebar .range-field input[type=number] { width: 90px; }
+      .world-editor-sidebar .range-sep { color: #667; }
+
+      /* Same graph CSS the zone editor's canvas uses (see
+         build_zone_client.html.erb) - reused verbatim for
+         WorldGraphCanvas, one level up (zones instead of maps). */
+      .zone-graph-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px; }
+      .zone-graph-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex: 0 0 auto; }
+      .zone-graph-toolbar button {
+        background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600;
+        padding: 4px 10px; border-radius: 3px; cursor: pointer;
+      }
+      .zone-graph-toolbar button:hover { background: #345; }
+      .zone-graph-wrapper {
+        flex: 1; min-height: 0; border: 1px solid #333; border-radius: 4px; background: #0a0c0e;
+        background-image: linear-gradient(45deg, #101316 25%, transparent 25%), linear-gradient(-45deg, #101316 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #101316 75%), linear-gradient(-45deg, transparent 75%, #101316 75%);
+        background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        touch-action: none; cursor: grab; overflow: hidden;
+      }
+      .zone-graph-wrapper:active { cursor: grabbing; }
+      .zone-graph-node { fill: #1c2126; stroke: #457; stroke-width: 2; cursor: grab; }
+      .zone-graph-node:active { cursor: grabbing; }
+      .zone-graph-node-label { fill: #cce; font-size: 12px; text-anchor: middle; pointer-events: none; }
+      .zone-graph-node-thumb-placeholder { font-size: 22px; pointer-events: none; }
+      .zone-graph-port { cursor: crosshair; stroke: #000; stroke-width: 1; }
+      .zone-graph-edge { stroke: #59c; stroke-width: 2; }
+      .zone-graph-drag-line { stroke: #fd0; stroke-width: 2; stroke-dasharray: 4 3; }
+      .zone-graph-satellite { stroke: #000; stroke-width: 1; cursor: grab; }
+      .zone-graph-satellite:active { cursor: grabbing; }
+      .zone-graph-satellite-tether { stroke: #667; stroke-width: 1; stroke-dasharray: 3 3; }
+      .zone-graph-satellite-label { fill: #cce; font-size: 11px; text-anchor: middle; pointer-events: none; }
+
+      .world-editor .entry-block { margin: 8px 0; padding: 8px 10px; border: 1px solid #2a2f35; border-radius: 4px; }
+      .world-editor .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+      .world-editor .map-row-summary { display: flex; align-items: center; gap: 8px; }
+      .world-editor .zone-connection-name { font-size: 13px; color: #cce; font-weight: 600; }
+      .world-editor .zone-connection-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; color: #9ab; }
+      .world-editor .zone-connection-status input[type=text] { width: 160px; }
+      .world-editor .map-sidebar-hint { color: #987; font-size: 12px; margin: 4px 0 8px; }
+
+      .world-editor .add-buttons-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+      .world-editor button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      .world-editor button.add-entry:hover { background: #345; }
+      .world-editor button.add-entry:disabled { opacity: 0.4; cursor: default; }
+      .world-editor button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .world-editor button.remove-entry:hover { background: #533; }
+
+      .save-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .save-bar .validate-button { background: #245; border: 1px solid #47a; color: #dee; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .validate-button:hover:not(:disabled) { background: #356; }
+      .save-bar .validate-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .save-button:hover:not(:disabled) { background: #3b5; }
+      .save-bar .save-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-message { font-size: 12px; }
+      .save-bar .save-success { color: #7c7; }
+      .save-bar .save-error { color: #e79; }
+
+      a.back-link { position: absolute; top: 10px; left: 10px; color: #9ab; font-size: 13px; z-index: 1; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 3px; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <%= yield %>
+    <%= vite_script_tags("src/worldEditor/main.jsx", "/client/worldEditor.js") %>
+  </body>
+</html>

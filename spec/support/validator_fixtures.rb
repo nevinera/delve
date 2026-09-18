@@ -20,6 +20,10 @@ module ValidatorFixtures
   def character_class_fixture
     @character_class_fixture ||= JSON.parse(File.read(FIXTURES.join("classes", "puncher.full.json")))
   end
+
+  def world_fixture
+    @world_fixture ||= JSON.parse(File.read(FIXTURES.join("worlds", "northern-barrens.json")))
+  end
 end
 
 RSpec.configure do |config|

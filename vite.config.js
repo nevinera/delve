@@ -24,6 +24,7 @@ export default defineConfig({
         itemEditor: resolve(__dirname, "client/src/itemEditor/main.jsx"),
         mapEditor: resolve(__dirname, "client/src/mapEditor/main.jsx"),
         zoneEditor: resolve(__dirname, "client/src/zoneEditor/main.jsx"),
+        worldEditor: resolve(__dirname, "client/src/worldEditor/main.jsx"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",

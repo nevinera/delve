@@ -1,0 +1,29 @@
+{
+    "name": "Northern Barrens",
+    "description": "A dusty region of quillboar mountains, oases, and goblin outposts.",
+    "thumbnailUrl": "../../assets/worlds/northern-barrens-thumb.webp",
+    "elevationRange": [0, 800],
+    "zones": {
+        "goblin_cave": {
+            "path": "./zones/goblin-cave.json",
+            "name": "Goblin Cave",
+            "description": "A damp cave carved out by generations of goblin raiders."
+        },
+        "stagnant_oasis": {
+            "path": "./zones/stagnant-oasis.json",
+            "name": "Stagnant Oasis",
+            "description": "A murky watering hole ringed by dead trees."
+        }
+    },
+    "worldLinks": [
+        {
+            "zoneA": {"zone": "goblin_cave", "kind": "open", "connection": "cliff_above"},
+            "zoneB": {"zone": "stagnant_oasis", "kind": "open", "connection": "goblin_trailhead"},
+            "oneWay": false,
+            "requiredKey": null
+        }
+    ],
+    "entryPoints": {
+        "stagnant_oasis/clearing_entrance/clearing": null
+    }
+}
