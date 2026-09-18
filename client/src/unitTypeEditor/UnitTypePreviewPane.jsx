@@ -67,6 +67,14 @@ export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availabl
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
+  const fireTimeoutRef = useRef(null);
+
+  // Clears the "firing" timeout on unmount - without this, a test that
+  // clicks an ability and unmounts before castMs+50 elapses leaves a real
+  // setTimeout callback that fires into a torn-down jsdom environment
+  // (ReferenceError: window is not defined), crashing an unrelated later
+  // test.
+  useEffect(() => () => clearTimeout(fireTimeoutRef.current), []);
 
   // Re-rolled only when the actual token list content changes, not on every
   // render - JSON.stringify as the dependency key avoids re-picking a token
@@ -102,7 +110,7 @@ export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availabl
     const positions = canvasRef.current?.positions();
     firePowerEffects(resolvedAbility, {positions, baseUrl: window.location.href, sceneManager: canvasRef.current});
     const castMs = (resolvedAbility.castTime ?? 0) * 1000;
-    setTimeout(() => setFiring(false), castMs + 50);
+    fireTimeoutRef.current = setTimeout(() => setFiring(false), castMs + 50);
   }
 
   return (

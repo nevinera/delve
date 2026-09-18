@@ -24,6 +24,14 @@ export default function AbilityPreviewPane({ability, assetMap, assetOverrides, s
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
+  const fireTimeoutRef = useRef(null);
+
+  // Clears the "firing" timeout on unmount - without this, a test that
+  // clicks an ability and unmounts before castMs+50 elapses leaves a real
+  // setTimeout callback that fires into a torn-down jsdom environment
+  // (ReferenceError: window is not defined), crashing an unrelated later
+  // test.
+  useEffect(() => () => clearTimeout(fireTimeoutRef.current), []);
   // Preview-only controls - neither is saved into the ability. "Swap
   // tokens" previews the ability as its target would see it (e.g. a
   // monster's power aimed at the player) instead of always casting from
@@ -55,7 +63,7 @@ export default function AbilityPreviewPane({ability, assetMap, assetOverrides, s
     const positions = canvasRef.current?.positions();
     firePowerEffects(resolvedAbility, {positions, baseUrl: window.location.href, sceneManager: canvasRef.current});
     const castMs = (ability.castTime ?? 0) * 1000;
-    setTimeout(() => setFiring(false), castMs + 50);
+    fireTimeoutRef.current = setTimeout(() => setFiring(false), castMs + 50);
   }
 
   useEffect(() => {

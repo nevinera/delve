@@ -56,6 +56,14 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
+  const fireTimeoutRef = useRef(null);
+
+  // Clears the "firing" timeout on unmount - without this, a test that
+  // clicks an ability and unmounts before castMs+50 elapses leaves a real
+  // setTimeout callback that fires into a torn-down jsdom environment
+  // (ReferenceError: window is not defined), crashing an unrelated later
+  // test.
+  useEffect(() => () => clearTimeout(fireTimeoutRef.current), []);
 
   const resolvedSlots = useMemo(
     () => resolveSlots(classKey, powers, availableAbilities, stockAssets),
@@ -87,7 +95,7 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
     const positions = canvasRef.current?.positions();
     firePowerEffects(resolvedAbility, {positions, baseUrl: window.location.href, sceneManager: canvasRef.current});
     const castMs = (resolvedAbility.castTime ?? 0) * 1000;
-    setTimeout(() => setFiring(false), castMs + 50);
+    fireTimeoutRef.current = setTimeout(() => setFiring(false), castMs + 50);
   }
 
   return (
