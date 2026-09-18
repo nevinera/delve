@@ -1,5 +1,5 @@
-import {useEffect, useReducer, useRef, useState} from "react";
-import {zoneReducer} from "./zoneReducer";
+import {useEffect, useRef, useState} from "react";
+import {ZoneDraft} from "./ZoneDraft";
 import ZoneMapsPanel from "./ZoneMapsPanel";
 import ZoneItemsPanel from "./ZoneItemsPanel";
 import ZoneUnitTypesPanel from "./ZoneUnitTypesPanel";
@@ -31,7 +31,7 @@ import {GithubClient, GithubAuthError} from "../github/delve-github";
 // listing (bare keys, no file opens) "Add Map" offers candidates from.
 // Picking one fetches just that map's detail lazily (see handleAddMap).
 export default function ZoneEditor({zoneKey, newMapUrl}) {
-  const [zoneData, rawDispatch] = useReducer(zoneReducer, null);
+  const [draft, setDraft] = useState(null);
   const [availableMapKeys, setAvailableMapKeys] = useState([]);
   const [mapDetailsByKey, setMapDetailsByKey] = useState({});
   const [refreshStatus, setRefreshStatus] = useState("");
@@ -50,7 +50,7 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
       try {
         const [data, positions] = await Promise.all([loadZone(client.current, zoneKey), loadLayoutPositions(client.current, zoneKey)]);
         if (cancelled) return;
-        rawDispatch({type: "LOAD", data});
+        setDraft(new ZoneDraft(data));
         setGraphPositions(positions);
 
         const mapKeys = await listZoneMapKeys(client.current, zoneKey);
@@ -77,9 +77,44 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
     };
   }, [zoneKey]);
 
+  const zoneData = draft?.data;
+
+  // Translates every action shape ZoneMapsPanel/ZoneMapConnectionsPanel/
+  // ZoneGraphCanvas (still)/this component's own field inputs send into
+  // ZoneDraft method calls - keeps every one of those components exactly as
+  // they were, same "dispatch shim" MapEditor.jsx's own rewrite uses.
   function dispatch(action) {
     markDirty();
-    rawDispatch(action);
+    setDraft((d) => {
+      switch (action.type) {
+        case "SET_FIELD":
+          return d.setField(action.field, action.value);
+        case "ADD_ENTRY":
+          return d.addEntry(action.section, action.entry);
+        case "REMOVE_ENTRY":
+          return d.removeEntry(action.section, action.index);
+        case "UPDATE_ENTRY_FIELD":
+          return d.updateEntryField(action.section, action.index, action.field, action.value);
+        case "UPDATE_ENTRY_FIELDS":
+          return d.updateEntryFields(action.section, action.index, action.fields);
+        case "REMOVE_MAP":
+          return d.removeMap(action.index, action.mapIdentifier);
+        case "SET_ENTRY_POINT":
+          return d.setEntryPoint(action.key, action.requiredKey);
+        case "REMOVE_ENTRY_POINT":
+          return d.removeEntryPoint(action.key);
+        case "SET_OPEN_CONNECTION":
+          return d.setOpenConnection(action.key, action.name);
+        case "REMOVE_OPEN_CONNECTION":
+          return d.removeOpenConnection(action.key);
+        case "REMOVE_ZONE_LINK":
+          return d.removeZoneLink(action.index);
+        case "ADD_ZONE_LINK":
+          return d.addZoneLink(action.connectionA, action.connectionB);
+        default:
+          throw new Error(`Unknown action type: ${action.type}`);
+      }
+    });
   }
 
   // Picks up a map created in another tab (via the "Create Map ↗" link)
