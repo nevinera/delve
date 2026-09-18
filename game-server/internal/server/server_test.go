@@ -122,6 +122,13 @@ func TestAuth(t *testing.T) {
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
+			name:       "dps-sim requires auth",
+			method:     http.MethodPost,
+			path:       "/dps-sim",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
 			name:       "connect is public but rejects missing token",
 			path:       "/instances/00000000-0000-0000-0000-000000000001/slots/00000000-0000-0000-0000-000000000002/connect",
 			authHeader: "",
