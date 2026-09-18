@@ -70,4 +70,7 @@ group :development do
   gem "web-console"
 
   gem "sinatra", require: false
+
+  # Runs bin/dev's Procfile.dev [https://github.com/ddollar/foreman]
+  gem "foreman", require: false
 end
