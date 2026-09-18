@@ -1,0 +1,19 @@
+<h1>Worlds</h1>
+
+<p><%= link_to "New World", new_build_world_path %></p>
+
+<table>
+  <thead>
+    <tr><th>Key</th></tr>
+  </thead>
+  <tbody>
+    <% @worlds.each do |entry| %>
+      <% identifier = entry["path"].delete_prefix("worlds/").delete_suffix(".json") %>
+      <tr>
+        <td><%= link_to identifier, edit_build_world_path(id: identifier) %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to Build", build_root_path %>
