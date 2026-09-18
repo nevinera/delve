@@ -7,6 +7,12 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
+      validate_optional_fields!(data, path: path)
+    end
+
+    private
+
+    def validate_optional_fields!(data, path:)
       validate_elvl!(data, path: path) if given?(data, "elvl")
       validate_lighting!(data, path: path) if given?(data, "lighting")
       require_string!(data, "thumbnailUrl", path: path) if given?(data, "thumbnailUrl")
@@ -14,8 +20,6 @@ module Validators
       validate_connections!(data, path: path) if given?(data, "connections")
       validate_units!(data, path: path) if given?(data, "units")
     end
-
-    private
 
     def validate_fixed_fields!(data, path:)
       require_string!(data, "identifier", path: path)
