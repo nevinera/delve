@@ -1,5 +1,6 @@
 class Build::WorldsController < Build::BaseController
   skip_authorization_check only: [:index, :new, :create, :edit]
+  layout "build_world_client", only: :edit
 
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
 

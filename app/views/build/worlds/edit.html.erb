@@ -1,2 +1,6 @@
 <%= link_to "← Back", build_worlds_path, class: "back-link" %>
-<div id="editor-root" data-key="<%= params[:id] %>"></div>
+<div
+  id="editor-root"
+  data-key="<%= params[:id] %>"
+  data-new-zone-url="<%= new_build_zone_path %>"
+></div>

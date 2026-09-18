@@ -51,3 +51,10 @@ export function validateMap(map) {
 export function validateZone(fullZone) {
   return postValidation("/build/validators/zone", fullZone);
 }
+
+// A world never inlines its zones at all (see docs/schema/world.md), so
+// there's no abstract/resolved distinction here either - the draft is
+// validated as-is, same as validateItem/validateMap.
+export function validateWorld(world) {
+  return postValidation("/build/validators/world", world);
+}

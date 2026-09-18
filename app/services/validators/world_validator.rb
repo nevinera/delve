@@ -73,9 +73,12 @@ module Validators
       raise ValidationError.new("requiredKey must be a string or null", path: child_path(path, "requiredKey"))
     end
 
+    KINDS = %w[open entryPoint].freeze
+
     def validate_zone_reference!(data, path:)
       require_object!(data, path: path)
       require_string!(data, "zone", path: path)
+      require_one_of!(data["kind"], KINDS, path: child_path(path, "kind"))
       require_string!(data, "connection", path: path)
     end
 

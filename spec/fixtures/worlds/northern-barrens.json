@@ -17,13 +17,13 @@
     },
     "worldLinks": [
         {
-            "zoneA": {"zone": "goblin_cave", "connection": "cliff_above"},
-            "zoneB": {"zone": "stagnant_oasis", "connection": "goblin_trailhead"},
+            "zoneA": {"zone": "goblin_cave", "kind": "open", "connection": "cliff_above"},
+            "zoneB": {"zone": "stagnant_oasis", "kind": "open", "connection": "goblin_trailhead"},
             "oneWay": false,
             "requiredKey": null
         }
     ],
     "entryPoints": {
-        "stagnant_oasis": null
+        "stagnant_oasis/clearing_entrance/clearing": null
     }
 }

@@ -69,6 +69,12 @@ RSpec.describe Validators::WorldValidator, type: :validator do
           }
       end
 
+      it "raises when a zone entry is not an object" do
+        zones = world_fixture["zones"].merge("goblin_cave" => "zones/goblin-cave.json")
+        expect { described_class.validate!(world_fixture.merge("zones" => zones)) }
+          .to raise_error(Validators::ValidationError, /must be an object/)
+      end
+
       it "raises when a zone entry is missing name" do
         zones = world_fixture["zones"].dup
         zones["goblin_cave"] = zones["goblin_cave"].except("name")
@@ -117,6 +123,31 @@ RSpec.describe Validators::WorldValidator, type: :validator do
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /must be a boolean/)
       end
+
+      it "raises when zoneA is missing kind" do
+        link = world_fixture["worldLinks"][0].merge("zoneA" => {"zone" => "goblin_cave", "connection" => "cliff_above"})
+        data = world_fixture.merge("worldLinks" => [link])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "raises when zoneA's kind is not open or entryPoint" do
+        link = world_fixture["worldLinks"][0].merge("zoneA" => {"zone" => "goblin_cave", "kind" => "other", "connection" => "cliff_above"})
+        data = world_fixture.merge("worldLinks" => [link])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "accepts a zoneA/zoneB with kind entryPoint" do
+        link = {
+          "zoneA" => {"zone" => "goblin_cave", "kind" => "entryPoint", "connection" => "cave_entrance/cave_mouth"},
+          "zoneB" => {"zone" => "stagnant_oasis", "kind" => "open", "connection" => "goblin_trailhead"},
+          "oneWay" => false,
+          "requiredKey" => nil
+        }
+        data = world_fixture.merge("worldLinks" => [link])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
     end
 
     context "entryPoints" do
@@ -137,13 +168,13 @@ RSpec.describe Validators::WorldValidator, type: :validator do
       end
 
       it "raises when an entryPoint value is not a string or null" do
-        data = world_fixture.merge("entryPoints" => {"stagnant_oasis" => 42})
+        data = world_fixture.merge("entryPoints" => {"stagnant_oasis/clearing_entrance/clearing" => 42})
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /must be a string or null/)
       end
 
       it "allows an entryPoint value to be a required key string" do
-        data = world_fixture.merge("entryPoints" => {"stagnant_oasis" => "barrens_pass"})
+        data = world_fixture.merge("entryPoints" => {"stagnant_oasis/clearing_entrance/clearing" => "barrens_pass"})
         expect { described_class.validate!(data) }.not_to raise_error
       end
     end
