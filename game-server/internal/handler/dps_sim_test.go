@@ -20,52 +20,106 @@ func mountDPSSim(h *handler.DPSSim) http.Handler {
 	return r
 }
 
-func TestDPSSim_Simulate_ReturnsDPSAndBreakdown(t *testing.T) {
+func dummyEnemy() map[string]any {
+	return map[string]any{
+		"name":        "Training Dummy Attacker",
+		"tokenRadius": 2.0,
+		"maxHP":       100,
+		"dps":         10.0,
+		"attackSpeed": 1.0,
+		"resource":    map[string]any{"name": "none", "max": 0, "defaultValue": 0, "isFluid": false},
+	}
+}
+
+func TestDPSSim_Simulate_ReturnsNineCellsCoveringEveryPlanAndElevation(t *testing.T) {
 	router := mountDPSSim(handler.NewDPSSim())
 
-	body := map[string]any{
-		"enemy": map[string]any{
-			"name":        "Training Dummy Attacker",
-			"tokenRadius": 2.0,
-			"maxHP":       100,
-			"dps":         10.0,
-			"attackSpeed": 1.0,
-			"resource":    map[string]any{"name": "none", "max": 0, "defaultValue": 0, "isFluid": false},
-		},
-		"target":          map[string]any{},
+	body, err := json.Marshal(map[string]any{
+		"enemy":           dummyEnemy(),
 		"durationSeconds": 100.0,
 		"seed":            1,
-	}
-	data, err := json.Marshal(body)
+	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/dps-sim", bytes.NewReader(data))
+	req := httptest.NewRequest(http.MethodPost, "/dps-sim", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	var resp map[string]any
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Len(t, resp.Results, 9)
+
+	seen := map[string]bool{}
+	for _, cell := range resp.Results {
+		key := cell["gearingPlan"].(string) + "@" + jsonNum(cell["elevation"])
+		assert.False(t, seen[key], "duplicate cell %s", key)
+		seen[key] = true
+		assert.Greater(t, cell["dps"], 0.0)
+	}
+	for _, plan := range []string{"offense", "offenseWithDefense", "defense"} {
+		for _, ee := range []string{"-10", "-5", "0"} {
+			assert.True(t, seen[plan+"@"+ee], "missing cell %s@%s", plan, ee)
+		}
+	}
+}
+
+func jsonNum(v any) string {
+	f := v.(float64)
+	switch f {
+	case -10:
+		return "-10"
+	case -5:
+		return "-5"
+	case 0:
+		return "0"
+	default:
+		return "?"
+	}
+}
+
+func TestDPSSim_Simulate_TankCellMitigatesMoreThanOffenseCellAtSameElevation(t *testing.T) {
+	router := mountDPSSim(handler.NewDPSSim())
+
+	body, err := json.Marshal(map[string]any{
+		"enemy":           dummyEnemy(),
+		"durationSeconds": 3600.0,
+		"seed":            2,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/dps-sim", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 
-	assert.Equal(t, 100.0, resp["durationSeconds"])
-	assert.Greater(t, resp["dps"], 0.0)
-	assert.Equal(t, resp["dps"], resp["basicAttackDamage"].(float64)/100.0)
-	assert.Equal(t, 0.0, resp["ttdSeconds"], "no maxHealth given, so TTD (MaxHealth/DPS) is 0")
+	var offenseDPS, defenseDPS float64
+	for _, cell := range resp.Results {
+		if cell["elevation"].(float64) != 0 {
+			continue
+		}
+		switch cell["gearingPlan"] {
+		case "offense":
+			offenseDPS = cell["dps"].(float64)
+		case "defense":
+			defenseDPS = cell["dps"].(float64)
+		}
+	}
+	assert.Greater(t, offenseDPS, defenseDPS)
 }
 
 func TestDPSSim_Simulate_SameSeedIsDeterministic(t *testing.T) {
 	router := mountDPSSim(handler.NewDPSSim())
 
 	body, err := json.Marshal(map[string]any{
-		"enemy": map[string]any{
-			"name":        "Dummy",
-			"tokenRadius": 2.0,
-			"maxHP":       100,
-			"dps":         10.0,
-			"attackSpeed": 1.0,
-			"resource":    map[string]any{"name": "none", "max": 0, "defaultValue": 0, "isFluid": false},
-		},
-		"target":          map[string]any{},
+		"enemy":           dummyEnemy(),
 		"durationSeconds": 50.0,
 		"seed":            7,
 	})
@@ -87,7 +141,6 @@ func TestDPSSim_Simulate_TTDNullWhenEnemyDealsNoDamage(t *testing.T) {
 
 	body, err := json.Marshal(map[string]any{
 		"enemy":           map[string]any{}, // no attackSpeed, no powers -> deals 0 damage
-		"target":          map[string]any{"maxHealth": 200.0},
 		"durationSeconds": 10.0,
 	})
 	require.NoError(t, err)
@@ -97,39 +150,14 @@ func TestDPSSim_Simulate_TTDNullWhenEnemyDealsNoDamage(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	var resp map[string]any
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, 0.0, resp["dps"])
-	assert.Nil(t, resp["ttdSeconds"], "a target that takes no damage has an undefined (null) TTD, not 0 or +Inf")
-}
-
-func TestDPSSim_Simulate_TTDPresentWhenTargetHasHealthAndTakesDamage(t *testing.T) {
-	router := mountDPSSim(handler.NewDPSSim())
-
-	body, err := json.Marshal(map[string]any{
-		"enemy": map[string]any{
-			"name":        "Dummy",
-			"tokenRadius": 2.0,
-			"maxHP":       100,
-			"dps":         10.0,
-			"attackSpeed": 1.0,
-			"resource":    map[string]any{"name": "none", "max": 0, "defaultValue": 0, "isFluid": false},
-		},
-		"target":          map[string]any{"maxHealth": 200.0},
-		"durationSeconds": 100.0,
-		"seed":            3,
-	})
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(http.MethodPost, "/dps-sim", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.NotNil(t, resp["ttdSeconds"])
-	assert.InDelta(t, 200.0/resp["dps"].(float64), resp["ttdSeconds"].(float64), 0.001)
+	for _, cell := range resp.Results {
+		assert.Equal(t, 0.0, cell["dps"])
+		assert.Nil(t, cell["ttdSeconds"])
+	}
 }
 
 func TestDPSSim_Simulate_InvalidBody(t *testing.T) {
@@ -147,8 +175,7 @@ func TestDPSSim_Simulate_DurationOutOfBoundsRejected(t *testing.T) {
 
 	for _, duration := range []float64{0, -1, 3601} {
 		body, err := json.Marshal(map[string]any{
-			"enemy":           map[string]any{},
-			"target":          map[string]any{},
+			"enemy":           dummyEnemy(),
 			"durationSeconds": duration,
 		})
 		require.NoError(t, err)
@@ -165,8 +192,7 @@ func TestDPSSim_Simulate_DefaultDurationAppliedWhenOmitted(t *testing.T) {
 	router := mountDPSSim(handler.NewDPSSim())
 
 	body, err := json.Marshal(map[string]any{
-		"enemy":  map[string]any{},
-		"target": map[string]any{},
+		"enemy": dummyEnemy(),
 	})
 	require.NoError(t, err)
 
@@ -175,7 +201,9 @@ func TestDPSSim_Simulate_DefaultDurationAppliedWhenOmitted(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	var resp map[string]any
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, handler.DefaultDPSSimDuration, resp["durationSeconds"])
+	require.NotEmpty(t, resp.Results)
 }

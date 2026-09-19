@@ -8,23 +8,29 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/delve-mmo/game-server/internal/dpssim"
+	"github.com/delve-mmo/game-server/internal/dpsspread"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
-// DefaultDPSSimDuration is how long a run lasts when the request omits
-// durationSeconds - long enough for the Monte Carlo average to converge
-// tightly (see internal/dpssim's tests for the convergence this relies on).
+// DefaultDPSSimDuration is how long each (gearing plan x elevation) cell
+// runs when the request omits durationSeconds - long enough for the Monte
+// Carlo average to converge tightly (see internal/dpssim's tests for the
+// convergence this relies on).
 const DefaultDPSSimDuration = 300.0 // seconds
 
-// MaxDPSSimDuration bounds durationSeconds, so a single request can't tie up
-// the handler for an unreasonable amount of wall-clock time. dpssim.Simulate
-// is an in-memory event loop (no I/O, no sleeping), so even the max here
-// runs in well under a second - this is a sanity ceiling, not a performance
+// MaxDPSSimDuration bounds durationSeconds, so a single request can't tie
+// up the handler for an unreasonable amount of wall-clock time.
+// dpsspread.Spread is an in-memory event loop (no I/O, no sleeping) run
+// dpsspread.Plans x dpsspread.Elevations times, so even the max here runs
+// in well under a second - this is a sanity ceiling, not a performance
 // necessity.
 const MaxDPSSimDuration = 3600.0 // seconds
 
-// DPSSim handles the enemy DPS calculator endpoint (issue #72).
+// DPSSim handles the enemy DPS calculator endpoint (issue #72). It only
+// takes an enemy UnitType - the target side is dpsspread's own mocked-up
+// gearing plans x elevations, not something a caller hand-picks (that
+// lower layer, dpssim.Simulate/TargetStats, is an internal Go primitive
+// with no HTTP surface of its own).
 type DPSSim struct{}
 
 func NewDPSSim() *DPSSim { return &DPSSim{} }
@@ -34,37 +40,15 @@ func NewDPSSim() *DPSSim { return &DPSSim{} }
 // config or the unit-type editor already authors - rather than a bespoke
 // subset.
 type dpsSimRequest struct {
-	Enemy    instanceconfig.UnitType `json:"enemy"`  // Required
-	Target   dpsSimTargetRequest     `json:"target"` // Required
+	Enemy    instanceconfig.UnitType `json:"enemy"` // Required
 	Duration float64                 `json:"durationSeconds,omitempty"`
 	Seed     *int64                  `json:"seed,omitempty"` // omitted: a fresh, non-reproducible run
 }
 
-// dpsSimTargetRequest mirrors dpssim.TargetStats' fields - see that type's
-// doc: already-resolved final stats, not equipped items.
-type dpsSimTargetRequest struct {
-	Strength      float64 `json:"strength"`
-	Agility       float64 `json:"agility"`
-	Intellect     float64 `json:"intellect"`
-	DefenceRating float64 `json:"defenceRating"`
-	MaxHealth     float64 `json:"maxHealth"`
-}
-
-func (t dpsSimTargetRequest) toTargetStats() dpssim.TargetStats {
-	return dpssim.TargetStats{
-		Strength:      t.Strength,
-		Agility:       t.Agility,
-		Intellect:     t.Intellect,
-		DefenceRating: t.DefenceRating,
-		MaxHealth:     t.MaxHealth,
-	}
-}
-
-// dpsSimResponse mirrors dpssim.Result. TTDSeconds is a pointer since
-// Result.TTD can be +Inf (a target dealt no damage at all) - encoding/json
-// can't marshal that as a float, so it's null instead.
-type dpsSimResponse struct {
-	DurationSeconds   float64  `json:"durationSeconds"`
+// dpsSimCellResponse is one (gearing plan x elevation) result.
+type dpsSimCellResponse struct {
+	GearingPlan       string   `json:"gearingPlan"`
+	Elevation         float64  `json:"elevation"`
 	DPS               float64  `json:"dps"`
 	TTDSeconds        *float64 `json:"ttdSeconds"`
 	BasicAttackDamage float64  `json:"basicAttackDamage"`
@@ -73,25 +57,26 @@ type dpsSimResponse struct {
 	TotalDamage       float64  `json:"totalDamage"`
 }
 
-func resultToResponse(res dpssim.Result) dpsSimResponse {
-	resp := dpsSimResponse{
-		DurationSeconds:   res.Duration,
-		DPS:               res.DPS,
-		BasicAttackDamage: res.BasicAttackDamage,
-		PowerDamage:       res.PowerDamage,
-		StatusTickDamage:  res.StatusTickDamage,
-		TotalDamage:       res.TotalDamage,
+func cellToResponse(c dpsspread.Cell) dpsSimCellResponse {
+	resp := dpsSimCellResponse{
+		GearingPlan:       string(c.GearingPlan),
+		Elevation:         c.Elevation,
+		DPS:               c.Result.DPS,
+		BasicAttackDamage: c.Result.BasicAttackDamage,
+		PowerDamage:       c.Result.PowerDamage,
+		StatusTickDamage:  c.Result.StatusTickDamage,
+		TotalDamage:       c.Result.TotalDamage,
 	}
-	if !math.IsInf(res.TTD, 1) {
-		resp.TTDSeconds = &res.TTD
+	if !math.IsInf(c.Result.TTD, 1) {
+		resp.TTDSeconds = &c.Result.TTD
 	}
 	return resp
 }
 
-// Simulate handles POST /dps-sim: runs dpssim.Simulate once against the
-// posted enemy/target and returns the result. Protected by the same
-// Bearer-token auth as the rest of the API - only the Rails server should
-// be calling this.
+// Simulate handles POST /dps-sim: runs dpsspread.Spread once against the
+// posted enemy and returns the full gearing-plan x elevation matrix.
+// Protected by the same Bearer-token auth as the rest of the API - only
+// the Rails server should be calling this.
 func (h *DPSSim) Simulate(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, MaxRequestBytes+1))
 	if err != nil {
@@ -120,6 +105,10 @@ func (h *DPSSim) Simulate(w http.ResponseWriter, r *http.Request) {
 	}
 	rng := rand.New(rand.NewSource(seed))
 
-	res := dpssim.Simulate(req.Enemy, req.Target.toTargetStats(), req.Duration, rng)
-	writeJSON(w, r, http.StatusOK, resultToResponse(res))
+	cells := dpsspread.Spread(req.Enemy, req.Duration, rng)
+	resp := make([]dpsSimCellResponse, len(cells))
+	for i, c := range cells {
+		resp[i] = cellToResponse(c)
+	}
+	writeJSON(w, r, http.StatusOK, map[string]any{"results": resp})
 }

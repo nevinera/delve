@@ -17,37 +17,54 @@ RSpec.describe GameApi::DpsSimClient do
       "resource" => {"name" => "none", "max" => 0, "defaultValue" => 0, "isFluid" => false}
     }
   end
-  let(:target) { {strength: 50.0, agility: 10.0, intellect: 0.0, defenceRating: 20.0, maxHealth: 200.0} }
-  let(:valid_attrs) { {enemy: enemy, target: target} }
+  let(:valid_attrs) { {enemy: enemy} }
 
   let(:result_body) do
     {
-      durationSeconds: 300.0, dps: 6.98, ttdSeconds: 28.65,
-      basicAttackDamage: 2094.0, powerDamage: 0.0, statusTickDamage: 0.0, totalDamage: 2094.0
+      results: [
+        {gearingPlan: "offense", elevation: 0, dps: 9.5, ttdSeconds: 21.0,
+         basicAttackDamage: 2850.0, powerDamage: 0.0, statusTickDamage: 0.0, totalDamage: 2850.0},
+        {gearingPlan: "defense", elevation: 0, dps: 4.2, ttdSeconds: nil,
+         basicAttackDamage: 1260.0, powerDamage: 0.0, statusTickDamage: 0.0, totalDamage: 1260.0}
+      ]
     }.to_json
   end
 
   describe "#simulate" do
-    it "POSTs to /dps-sim and returns the DPS result" do
+    it "POSTs to /dps-sim and returns the gearing-plan x elevation matrix" do
       stub_request(:post, "#{base_url}/dps-sim")
         .to_return(status: 200, body: result_body, headers: json_headers)
 
       result = client.simulate(valid_attrs)
-      expect(result["dps"]).to eq(6.98)
-      expect(result["ttdSeconds"]).to eq(28.65)
-      expect(result["basicAttackDamage"]).to eq(2094.0)
+      expect(result["results"].length).to eq(2)
+      expect(result["results"].first["gearingPlan"]).to eq("offense")
+      expect(result["results"].first["dps"]).to eq(9.5)
     end
 
-    it "sends enemy and target in the request body" do
+    it "returns a nil ttdSeconds for a cell that took no damage" do
+      stub_request(:post, "#{base_url}/dps-sim")
+        .to_return(status: 200, body: result_body, headers: json_headers)
+
+      result = client.simulate(valid_attrs)
+      expect(result["results"].last["ttdSeconds"]).to be_nil
+    end
+
+    it "sends enemy in the request body" do
       stub_request(:post, "#{base_url}/dps-sim")
         .to_return(status: 200, body: result_body, headers: json_headers)
 
       client.simulate(valid_attrs)
       expect(WebMock).to have_requested(:post, "#{base_url}/dps-sim")
-        .with { |req|
-          body = JSON.parse(req.body)
-          body["enemy"] == enemy && body["target"] == JSON.parse(target.to_json)
-        }
+        .with { |req| JSON.parse(req.body)["enemy"] == enemy }
+    end
+
+    it "does not send a target - the server mocks up its own gearing plans" do
+      stub_request(:post, "#{base_url}/dps-sim")
+        .to_return(status: 200, body: result_body, headers: json_headers)
+
+      client.simulate(valid_attrs)
+      expect(WebMock).to have_requested(:post, "#{base_url}/dps-sim")
+        .with { |req| !JSON.parse(req.body).key?("target") }
     end
 
     it "sends the Bearer token" do
@@ -68,16 +85,6 @@ RSpec.describe GameApi::DpsSimClient do
       }.not_to raise_error
     end
 
-    it "returns a nil ttdSeconds when the response has none" do
-      stub_request(:post, "#{base_url}/dps-sim")
-        .to_return(status: 200, body: {durationSeconds: 10.0, dps: 0.0, ttdSeconds: nil,
-                                       basicAttackDamage: 0.0, powerDamage: 0.0,
-                                       statusTickDamage: 0.0, totalDamage: 0.0}.to_json, headers: json_headers)
-
-      result = client.simulate(valid_attrs)
-      expect(result["ttdSeconds"]).to be_nil
-    end
-
     it "raises UnprocessableError when durationSeconds is out of bounds" do
       stub_request(:post, "#{base_url}/dps-sim")
         .to_return(status: 422, body: '{"error":"durationSeconds must be > 0 and <= 3600"}', headers: json_headers)
@@ -88,18 +95,13 @@ RSpec.describe GameApi::DpsSimClient do
 
     context "attr validation" do
       it "raises InvalidAttrsError when enemy is missing" do
-        expect { client.simulate(target: target) }
+        expect { client.simulate({}) }
           .to raise_error(GameApi::InvalidAttrsError, /missing required keys: enemy/)
       end
 
-      it "raises InvalidAttrsError when target is missing" do
-        expect { client.simulate(enemy: enemy) }
-          .to raise_error(GameApi::InvalidAttrsError, /missing required keys: target/)
-      end
-
       it "raises InvalidAttrsError for unsupported keys" do
-        expect { client.simulate(valid_attrs.merge(bogus: "nope")) }
-          .to raise_error(GameApi::InvalidAttrsError, /unsupported keys: bogus/)
+        expect { client.simulate(valid_attrs.merge(target: {}, bogus: "nope")) }
+          .to raise_error(GameApi::InvalidAttrsError, /unsupported keys:.*target.*bogus|unsupported keys:.*bogus.*target/)
       end
     end
   end
