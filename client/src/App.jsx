@@ -13,6 +13,8 @@ import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
+import SettingsDialog from "./SettingsDialog";
+import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
 
 // W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
 const KEY_MAP = {
@@ -2678,6 +2680,8 @@ export default function App({
   equippedItems: initialEquippedItems = {},
   characterItemsUrl,
   equippedItemsUrl,
+  characterSettings,
+  characterSettingsUrl,
   stockAssets,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
@@ -2710,6 +2714,11 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [charSheetOpen, setCharSheetOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsError, setSettingsError] = useState(null);
+  const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
+  const buttonLayoutRef = useRef(buttonLayout);
+  buttonLayoutRef.current = buttonLayout;
   // The canvas is letterboxed/pillarboxed (centered, fixed 4:3) within its
   // wrapper - this is its actual on-screen rect, reported by scene.js's
   // handleResize(), for UI meant to sit "inside the canvas" rather than
@@ -2865,6 +2874,20 @@ export default function App({
     });
   }, []);
 
+  // Optimistically applies a new button layout, then saves it; reverts on failure.
+  const updateButtonLayout = useCallback(async (next) => {
+    const previous = buttonLayoutRef.current;
+    setButtonLayout(next);
+    setSettingsError(null);
+    if (!characterSettingsUrl) return;
+    try {
+      await saveCharacterSettings(characterSettingsUrl, { ability_button_map: layoutToMap(next) });
+    } catch (err) {
+      setButtonLayout(previous);
+      setSettingsError(err.message);
+    }
+  }, [characterSettingsUrl]);
+
   const usePower = useCallback((slot) => {
     const selfEntryForPower = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
     const selfUnitIdForPower = selfEntryForPower?.[0];
@@ -3011,6 +3034,7 @@ export default function App({
       if (e.code === "Escape") {
         setLootWindowUnitId(null);
         setCharSheetOpen(false);
+        setSettingsOpen(false);
         return;
       }
       if (e.code === "KeyP") {
@@ -3038,7 +3062,7 @@ export default function App({
       const slotKey = e.code.match(/^Digit(\d)$/)?.[1];
       if (slotKey !== undefined) {
         const slot = slotKey === "0" ? 9 : parseInt(slotKey, 10) - 1;
-        usePower(slot);
+        usePower(buttonLayoutRef.current[slot]);
         return;
       }
       const action = KEY_MAP[e.code];
@@ -3438,9 +3462,10 @@ export default function App({
     );
   }
 
-  function renderActionSlot(i, extraStyle) {
-    const slot = i + 1;
+  function renderActionSlot(button, extraStyle) {
+    const slot = button + 1;
     const key = slot === 10 ? "0" : String(slot);
+    const i = buttonLayout[button]; // power index shown on this button
     const power = powers[i];
     const iconUrl = power?.iconURL
       ? (resolveStockAssetUrl(power.iconURL, "icons", stockAssets) ?? new URL(power.iconURL, classConfigUrl).href)
@@ -3544,6 +3569,15 @@ export default function App({
         onClose={() => setLootWindowUnitId(null)}
         localElvl={localElvl}
       />
+      <SettingsDialog
+        open={settingsOpen}
+        powers={powers}
+        layout={buttonLayout}
+        onAssign={(button, power) => updateButtonLayout(assignPowerToButton(buttonLayout, button, power))}
+        onReset={() => updateButtonLayout(resolveButtonLayout(null))}
+        onClose={() => setSettingsOpen(false)}
+        error={settingsError}
+      />
       <CharacterSheet
         open={charSheetOpen}
         equippedItems={equippedItems}
@@ -3583,6 +3617,12 @@ export default function App({
             onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
           >
             Character
+          </button>
+          <button
+            style={styles.menuDialogButton}
+            onClick={() => { setSettingsOpen(true); setMenuOpen(false); }}
+          >
+            Settings
           </button>
           <button
             style={styles.menuDialogButton}
@@ -3841,6 +3881,13 @@ export default function App({
             onClick={() => setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current))}
           >
             Latency
+          </button>
+          <button
+            style={styles.utilityButton}
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Settings
           </button>
           <button
             style={styles.utilityButton}
