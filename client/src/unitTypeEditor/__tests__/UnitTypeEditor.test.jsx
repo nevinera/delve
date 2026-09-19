@@ -5,6 +5,7 @@ import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../githu
 import {GithubClient} from "../../github/delve-github";
 import {loadAvailableAbilities} from "../loadAvailableAbilities";
 import {validateUnitType} from "../../validators/validateContent";
+import {estimateDamage} from "../estimateDamage";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
@@ -22,6 +23,10 @@ vi.mock("../loadAvailableAbilities", () => ({
 
 vi.mock("../../validators/validateContent", () => ({
   validateUnitType: vi.fn(),
+}));
+
+vi.mock("../estimateDamage", () => ({
+  estimateDamage: vi.fn(),
 }));
 
 // UnitTypePreviewPane mounts a real Three.js WebGLRenderer via
@@ -247,6 +252,40 @@ describe("UnitTypeEditor", () => {
       await waitFor(() => expect(screen.getByText(/No ability loaded/)).toBeInTheDocument());
       expect(validateUnitType).not.toHaveBeenCalled();
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+    });
+  });
+
+  describe("estimating damage", () => {
+    const matrix = {results: [{gearingPlan: "offense", elevation: 0, dps: 3.9, ttdSeconds: 40.0}]};
+
+    it("posts the resolved unit type and shows the matrix when 'Estimate damage' is clicked", async () => {
+      estimateDamage.mockResolvedValue(matrix);
+      await renderReady();
+
+      fireEvent.click(screen.getByRole("button", {name: "Estimate damage"}));
+
+      await screen.findByText("3.9 dps");
+      expect(estimateDamage).toHaveBeenCalledWith(expect.objectContaining({name: "Goblin Raider"}));
+    });
+
+    it("shows the error when the estimate fails", async () => {
+      estimateDamage.mockRejectedValue(new Error("game server unavailable"));
+      await renderReady();
+
+      fireEvent.click(screen.getByRole("button", {name: "Estimate damage"}));
+
+      await screen.findByText("game server unavailable");
+    });
+
+    it("drops a shown estimate once the draft is edited", async () => {
+      estimateDamage.mockResolvedValue(matrix);
+      await renderReady();
+      fireEvent.click(screen.getByRole("button", {name: "Estimate damage"}));
+      await screen.findByText("3.9 dps");
+
+      fireEvent.change(screen.getByDisplayValue("Goblin Raider"), {target: {value: "Goblin Brute"}});
+
+      expect(screen.queryByText("3.9 dps")).not.toBeInTheDocument();
     });
   });
 });

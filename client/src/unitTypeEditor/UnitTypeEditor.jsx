@@ -4,6 +4,8 @@ import {blankUnitType} from "./blankUnitType";
 import {loadAvailableAbilities} from "./loadAvailableAbilities";
 import UnitTypePreviewPane from "./UnitTypePreviewPane";
 import UnitTypeFieldsPanel from "./UnitTypeFieldsPanel";
+import DamageEstimatePanel from "./DamageEstimatePanel";
+import {estimateDamage} from "./estimateDamage";
 import {saveUnitType} from "./saveUnitType";
 import {resolveFullUnitType} from "./resolveFullUnitType";
 import {validateUnitType} from "../validators/validateContent";
@@ -30,6 +32,9 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
   const [availableAbilities, setAvailableAbilities] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [refreshStatus, setRefreshStatus] = useState("");
+  const [estimate, setEstimate] = useState(null);
+  const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState(null);
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
   const client = useRef(new GithubClient());
 
@@ -60,8 +65,11 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
 
   // Every draft edit drops a prior "valid" (or "invalid") result - see
   // useValidateThenSave.
+  // It also drops any damage estimate, which no longer describes the draft.
   function handleChange(nextDraft) {
     markDirty();
+    setEstimate(null);
+    setEstimateError(null);
     setDraft(nextDraft);
   }
 
@@ -94,6 +102,20 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
     }
   }
 
+  async function handleEstimate() {
+    setEstimating(true);
+    setEstimateError(null);
+    try {
+      const fullUnitType = await resolveFullUnitType(unitTypeKey, draft.data, availableAbilities);
+      setEstimate(await estimateDamage(fullUnitType));
+    } catch (error) {
+      setEstimate(null);
+      setEstimateError(error.message);
+    } finally {
+      setEstimating(false);
+    }
+  }
+
   async function handleSave() {
     setSaving();
     try {
@@ -123,6 +145,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
       </div>
       <div className="unit-type-editor-fields">
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <DamageEstimatePanel estimate={estimate} estimating={estimating} error={estimateError} onEstimate={handleEstimate} />
         <UnitTypeFieldsPanel
           draft={draft}
           availableAbilities={availableAbilities}

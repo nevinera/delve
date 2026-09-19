@@ -28,6 +28,7 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 
 	instances := handler.NewInstances(registry, cfg.MaxSlots)
 	slots := handler.NewSlots(registry, cfg.MaxInstances, cfg.MaxSlots, railsclient.FromEnv())
+	dpsSim := handler.NewDPSSim()
 
 	// Slot WebSocket — authenticated by slot token query param, not Bearer.
 	r.Get("/instances/{instanceID}/slots/{slotID}/connect", slots.Connect)
@@ -37,6 +38,7 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 		r.Use(middleware.TokenAuth(cfg.AuthTokens))
 		r.Get("/slots/active", slots.Active)
 		r.Post("/slots/request", slots.Request)
+		r.Post("/dps-sim", dpsSim.Simulate)
 		r.Route("/instances", func(r chi.Router) {
 			r.Get("/", instances.List)
 			r.Post("/", instances.Create)
