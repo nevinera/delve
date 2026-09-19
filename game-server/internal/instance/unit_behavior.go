@@ -62,6 +62,7 @@ type CombatEvent = instancestate.CombatEvent
 // dispatches to the appropriate movement routine.
 func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, pathGraph *pathing.Graph) []CombatEvent {
 	cfgByID := buildNPCConfigByID(zone)
+	budget := &pathBudget{remaining: maxPathSearchesPerTick}
 
 	// Index live players by map for O(1) aggro checks.
 	playersByMap := make(map[string][]playerRef)
@@ -91,7 +92,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, groupByID, dt, pathGraph, &events)
+		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, groupByID, dt, pathGraph, budget, &events)
 	}
 
 	applyNPCSeparation(state, zone, dt)
@@ -109,6 +110,7 @@ func applyUnitBehavior(
 	groupByID map[string][]string,
 	dt float64,
 	pathGraph *pathing.Graph,
+	budget *pathBudget,
 	events *[]CombatEvent,
 ) {
 	sf := e.unitType.SpeedFactor
@@ -181,7 +183,7 @@ func applyUnitBehavior(
 				// corner for this body to fit past) - detour around
 				// obstacles rather than walking into (or grinding along)
 				// whatever's in the way.
-				chaseAlongPath(unit, target, speed, dt, pathGraph)
+				chaseAlongPath(unit, target, speed, dt, pathGraph, budget)
 			}
 			now := time.Now()
 			if losClear {
@@ -193,7 +195,7 @@ func applyUnitBehavior(
 		} else {
 			// Target crossed to another map. Head for whichever connection
 			// leads there so we cross it too on a future tick.
-			chaseAcrossMap(unit, target.MapIdentifier, speed, dt, pathGraph)
+			chaseAcrossMap(unit, target.MapIdentifier, speed, dt, pathGraph, budget)
 		}
 
 	case instancestate.UnitStatusLeashing:
@@ -406,11 +408,39 @@ func chaseTarget(unit, target *instancestate.UnitState, speed, dt, attackRange f
 	unit.Position.Y += (dy / dist) * move
 }
 
-// pathRecalcInterval limits how often a blocked-LOS chase recomputes its
-// waypoint path. The target moves a little every tick, but rerunning the
-// visibility-graph query for that is unnecessary; the existing path stays
+// pathRecalcInterval limits how often a blocked-LOS chase even considers
+// recomputing its waypoint path. The target moves a little every tick, but
+// rerunning the search for that is unnecessary; the existing path stays
 // good enough between recalculations.
 const pathRecalcInterval = 0.75 // seconds
+
+// pathGoalMoveThreshold is how far (feet) a chase target must have moved
+// since the cached path was planned before an expired recalc timer actually
+// triggers a new search. A target standing still, or drifting a little, keeps
+// its chasers on their cached paths for free.
+const pathGoalMoveThreshold = 3.0
+
+// maxPathSearchesPerTick caps how many path searches one instance runs in a
+// single tick, as a safety valve against many units all needing a path at
+// once (a whole pack aggroing together, say) on a lightly-provisioned
+// machine. Units beyond the cap keep following their cached path and simply
+// retry next tick; there's no fairness bookkeeping since unit iteration
+// order is already randomized.
+const maxPathSearchesPerTick = 16
+
+// pathBudget is one tick's remaining path-search allowance for an instance.
+type pathBudget struct {
+	remaining int
+}
+
+// take spends one search from the budget, reporting whether one was left.
+func (b *pathBudget) take() bool {
+	if b.remaining <= 0 {
+		return false
+	}
+	b.remaining--
+	return true
+}
 
 // waypointArriveDist is how close (feet) a unit must get to its current
 // waypoint before advancing to the next one.
@@ -447,7 +477,7 @@ func moveStraightToward(unit *instancestate.UnitState, destX, destY, speed, dt f
 // Shared by chaseAlongPath (chasing a same-map target around a corner) and
 // chaseAcrossMap (heading for whichever connection leads to the map the
 // target crossed to).
-func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph, computePath func() ([]pathing.Point, bool), fallback func()) {
+func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph, budget *pathBudget, goal *pathing.Point, computePath func() ([]pathing.Point, bool), fallback func()) {
 	if pathGraph == nil {
 		fallback()
 		return
@@ -455,19 +485,41 @@ func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, path
 
 	b := &unit.Behavior
 	b.PathRecalcIn -= dt
-	needsRecalc := len(b.PathWaypoints) == 0 || b.PathRecalcIn <= 0
+	needsRecalc := len(b.PathWaypoints) == 0
 	if !needsRecalc {
 		next := b.PathWaypoints[0]
 		if !pathGraph.SegmentClear(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, next.X, next.Y) {
 			needsRecalc = true
 		}
 	}
-	if needsRecalc {
-		b.PathRecalcIn = pathRecalcInterval
-		if wps, ok := computePath(); ok {
-			b.PathWaypoints = wps
+	if !needsRecalc && b.PathRecalcIn <= 0 {
+		// Timer expired with a still-usable path: only worth a search if the
+		// destination has actually moved. A nil goal is a fixed destination
+		// (a map connection), which never goes stale on its own.
+		if goal != nil && math.Hypot(goal.X-b.PathGoalX, goal.Y-b.PathGoalY) > pathGoalMoveThreshold {
+			needsRecalc = true
 		} else {
-			b.PathWaypoints = nil
+			b.PathRecalcIn = pathRecalcInterval
+		}
+	}
+	if needsRecalc {
+		if !budget.take() {
+			// Out of searches this tick. Follow whatever cached path is
+			// still safe; with none (or a blocked one), hold rather than
+			// grind into whatever's in the way. Retried next tick.
+			if len(b.PathWaypoints) == 0 || !pathGraph.SegmentClear(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, b.PathWaypoints[0].X, b.PathWaypoints[0].Y) {
+				return
+			}
+		} else {
+			b.PathRecalcIn = pathRecalcInterval
+			if goal != nil {
+				b.PathGoalX, b.PathGoalY = goal.X, goal.Y
+			}
+			if wps, ok := computePath(); ok {
+				b.PathWaypoints = wps
+			} else {
+				b.PathWaypoints = nil
+			}
 		}
 	}
 
@@ -500,8 +552,9 @@ func moveAlongPlannedPath(unit *instancestate.UnitState, speed, dt float64, path
 // chaseAlongPath moves unit toward target when a direct line is blocked,
 // detouring around obstacles instead of chaseTarget's straight line (which
 // would walk it into whatever's in the way).
-func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph) {
-	moveAlongPlannedPath(unit, speed, dt, pathGraph,
+func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph, budget *pathBudget) {
+	goal := pathing.Point{X: target.Position.X, Y: target.Position.Y}
+	moveAlongPlannedPath(unit, speed, dt, pathGraph, budget, &goal,
 		func() ([]pathing.Point, bool) {
 			return pathGraph.FindPath(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 		},
@@ -520,8 +573,8 @@ func chaseAlongPath(unit, target *instancestate.UnitState, speed, dt float64, pa
 // the connection itself (which FindPathTowardMap already knows the exact
 // position of) is what reliably completes the follow, instead of almost
 // always landing just short of it.
-func chaseAcrossMap(unit *instancestate.UnitState, targetMapID string, speed, dt float64, pathGraph *pathing.Graph) {
-	moveAlongPlannedPath(unit, speed, dt, pathGraph,
+func chaseAcrossMap(unit *instancestate.UnitState, targetMapID string, speed, dt float64, pathGraph *pathing.Graph, budget *pathBudget) {
+	moveAlongPlannedPath(unit, speed, dt, pathGraph, budget, nil,
 		func() ([]pathing.Point, bool) {
 			return pathGraph.FindPathTowardMap(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, targetMapID)
 		},

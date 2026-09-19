@@ -107,3 +107,5 @@ func ExpireStatusEffectsForTest(state *instancestate.InstanceState, now time.Tim
 func TickStatusEffectsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
 	tickStatusEffects(state, zone, dt)
 }
+
+const MaxPathSearchesPerTickForTest = maxPathSearchesPerTick

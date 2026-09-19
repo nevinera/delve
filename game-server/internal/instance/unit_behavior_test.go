@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -855,6 +856,101 @@ func TestUnitBehavior_Chase_RecomputesPathWhenShovedOffStaleWaypoint(t *testing.
 	require.NotEmpty(t, u.Behavior.PathWaypoints)
 	assert.NotEqual(t, pathing.Point{X: 0, Y: 10}, u.Behavior.PathWaypoints[0],
 		"stale waypoint straight through the wall should have been discarded and recomputed")
+}
+
+// wallZoneAndChaser sets up a goblin at (0,0) engaged with a player at
+// (0,10) on the far side of a short wall, with a pathing graph.
+func wallZoneAndChaser(t *testing.T) (*instancestate.UnitState, *instancestate.InstanceState, instanceconfig.Zone, *pathing.Graph) {
+	t.Helper()
+	zone := basicAttackZone(4.0, 1.0)
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type:      "wall",
+		Locations: []instanceconfig.Location{{X: -3, Y: 5}, {X: 3, Y: 5}},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 10)
+	manualEngage(u, playerID)
+	return u, s, zone, graph
+}
+
+func TestUnitBehavior_Chase_ExpiredTimerKeepsCachedPathWhileTargetHasNotMoved(t *testing.T) {
+	u, s, zone, graph := wallZoneAndChaser(t)
+
+	cached := pathing.Point{X: 8, Y: 3} // clear from (0,0), and not what a fresh search would pick
+	u.Behavior.PathWaypoints = []pathing.Point{cached}
+	u.Behavior.PathRecalcIn = 0 // timer expired
+	u.Behavior.PathGoalX, u.Behavior.PathGoalY = 0, 10
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.Equal(t, cached, u.Behavior.PathWaypoints[0], "target hasn't moved, so no new search")
+}
+
+func TestUnitBehavior_Chase_ExpiredTimerReplansOnceTargetHasMoved(t *testing.T) {
+	u, s, zone, graph := wallZoneAndChaser(t)
+
+	cached := pathing.Point{X: 8, Y: 3}
+	u.Behavior.PathWaypoints = []pathing.Point{cached}
+	u.Behavior.PathRecalcIn = 0
+	u.Behavior.PathGoalX, u.Behavior.PathGoalY = 0, 25 // planned when the target was well away from (0,10)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.NotEqual(t, cached, u.Behavior.PathWaypoints[0])
+	assert.Equal(t, 10.0, u.Behavior.PathGoalY, "records where the target was for this plan")
+}
+
+func TestUnitBehavior_Chase_PathSearchesPerTickAreCapped(t *testing.T) {
+	const chasers = 40
+	zone := basicAttackZone(4.0, 1.0)
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type:      "wall",
+		Locations: []instanceconfig.Location{{X: -100, Y: 5}, {X: 100, Y: 5}}, // long: every chaser is blocked from the player
+	}}
+	zone.Maps[0].Units = nil
+	_, s := npcState("unused", pos(0, 0))
+	s.Units = map[uuid.UUID]*instancestate.UnitState{}
+	playerID, _ := addPlayer(s, "map1", 0, 10)
+
+	var units []*instancestate.UnitState
+	for i := range chasers {
+		id := fmt.Sprintf("g%d", i)
+		// Spaced on a grid wider than two radii so crowd separation leaves them be.
+		at := pos(float64(i%9-4)*5, -float64(i/9)*5)
+		zone.Maps[0].Units = append(zone.Maps[0].Units, instanceconfig.Unit{
+			Identifier: id, UnitType: "goblin", Position: at, Hostility: "hostile",
+		})
+		u, _ := npcState(id, at)
+		u.Radius = 2.0
+		manualEngage(u, playerID)
+		s.Units[uuid.New()] = u
+		units = append(units, u)
+	}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	planned := 0
+	for _, u := range units {
+		if len(u.Behavior.PathWaypoints) > 0 {
+			planned++
+		}
+	}
+	assert.Equal(t, instance.MaxPathSearchesPerTickForTest, planned, "only the per-tick budget of units gets a fresh path")
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+	planned = 0
+	for _, u := range units {
+		if len(u.Behavior.PathWaypoints) > 0 {
+			planned++
+		}
+	}
+	assert.Equal(t, 2*instance.MaxPathSearchesPerTickForTest, planned, "the rest catch up on later ticks")
 }
 
 func TestUnitBehavior_Chase_StopsShortOfBasicAttackRange(t *testing.T) {
