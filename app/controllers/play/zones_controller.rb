@@ -14,6 +14,8 @@ class Play::ZonesController < Play::BaseController
     @result = JoinZone.call(character: @character, zone: @zone)
     @owned_zone_items = owned_zone_items_map
     @equipped_items = EquippedItems::ForCharacter.call(character: @character)
+    @character_settings = @character.setting_or_default.as_client_json
+    @character_settings_url = play_character_setting_path(@character)
     assign_equipment_urls
     assign_stock_assets
   end

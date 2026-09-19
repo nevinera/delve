@@ -112,6 +112,19 @@ RSpec.describe "Play::Zones", type: :request do
         expect(response.body).to include(CGI.escapeHTML(play_character_equipped_items_path(character)))
       end
 
+      it "exposes the character's settings and their URL as data attributes" do
+        create(:character_setting, character: character, joystick_sensitivity: 2.5, custom_hotkeys: {"L" => "ability_1"})
+
+        get "/play/characters/#{character.id}/zones/#{zone.id}"
+        expect(response.body).to include(CGI.escapeHTML(character.reload.character_setting.as_client_json.to_json))
+        expect(response.body).to include(CGI.escapeHTML(play_character_setting_path(character)))
+      end
+
+      it "exposes default settings when none are saved" do
+        get "/play/characters/#{character.id}/zones/#{zone.id}"
+        expect(response.body).to include(CGI.escapeHTML(CharacterSetting.new.as_client_json.to_json))
+      end
+
       it "exposes the stock asset list as a data attribute" do
         get "/play/characters/#{character.id}/zones/#{zone.id}"
         expect(response.body).to include(CGI.escapeHTML({"duration" => 0.12, "url" => "/abilities/sounds/twang.ogg"}.to_json))
