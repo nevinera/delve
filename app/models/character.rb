@@ -22,6 +22,8 @@ class Character < ApplicationRecord
       end
   end
 
+  def setting_or_default = character_setting || build_character_setting
+
   private
 
   def enqueue_grant_trainee_gear
