@@ -15,6 +15,8 @@ const styles = {
   row: { display: "flex", justifyContent: "space-between", alignItems: "center", margin: "4px 0", gap: 8 },
   select: { flex: 1, maxWidth: 200, background: "#111", color: "#eee", border: "1px solid #444", borderRadius: 4, padding: 4 },
   button: { background: "#1c1c1c", border: "1px solid #444", borderRadius: 4, color: "#eee", padding: "4px 10px", cursor: "pointer" },
+  menu: { display: "flex", flexDirection: "column", gap: 6 },
+  menuButton: { background: "#1c1c1c", border: "1px solid #444", borderRadius: 4, color: "#eee", padding: "8px 10px", cursor: "pointer" },
   error: { color: "#ff6666", marginTop: 8 },
 };
 
@@ -44,10 +46,11 @@ function RemapAbilitiesPane({ powers, layout, onAssign, onReset, error }) {
 }
 
 // In-game settings: a menu of panes. The pane replaces the menu in the same
-// dialog, with a Back button to return. Panes so far: remap abilities (one
+// dialog, with a Back button to return; it also holds the latency toggle and
+// reload actions. Panes so far: remap abilities (one
 // select per action bar button choosing which power sits there; picking a
 // power already on another button swaps the two).
-export default function SettingsDialog({ open, powers, layout, onAssign, onReset, onClose, error }) {
+export default function SettingsDialog({ open, powers, layout, onAssign, onReset, onToggleLatency, onReload, onClose, error }) {
   const [pane, setPane] = useState(null);
   useEffect(() => { if (!open) setPane(null); }, [open]);
   if (!open) return null;
@@ -66,9 +69,17 @@ export default function SettingsDialog({ open, powers, layout, onAssign, onReset
         {pane === "abilities" ? (
           <RemapAbilitiesPane powers={powers} layout={layout} onAssign={onAssign} onReset={onReset} error={error} />
         ) : (
-          <button type="button" style={{ ...styles.button, width: "100%", padding: "8px 10px" }} onClick={() => setPane("abilities")}>
-            Remap abilities
-          </button>
+          <div style={styles.menu}>
+            <button type="button" style={styles.menuButton} onClick={() => setPane("abilities")}>
+              Remap abilities
+            </button>
+            <button type="button" style={styles.menuButton} onClick={onToggleLatency}>
+              Toggle latency display (L)
+            </button>
+            <button type="button" style={styles.menuButton} onClick={onReload}>
+              Reload
+            </button>
+          </div>
         )}
       </div>
     </div>

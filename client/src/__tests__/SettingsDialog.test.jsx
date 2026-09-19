@@ -6,7 +6,7 @@ const powers = Array.from({ length: 10 }, (_, i) => ({ name: `Power ${i + 1}` })
 const layout = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 function renderDialog(props = {}) {
-  const handlers = { onAssign: vi.fn(), onReset: vi.fn(), onClose: vi.fn() };
+  const handlers = { onAssign: vi.fn(), onReset: vi.fn(), onClose: vi.fn(), onToggleLatency: vi.fn(), onReload: vi.fn() };
   render(<SettingsDialog open powers={powers} layout={layout} {...handlers} {...props} />);
   return handlers;
 }
@@ -24,6 +24,14 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
     expect(screen.getByText("Remap abilities")).toBeTruthy();
     expect(screen.queryAllByRole("combobox")).toHaveLength(0);
+  });
+
+  it("offers latency toggle and reload actions on the menu", () => {
+    const { onToggleLatency, onReload } = renderDialog();
+    fireEvent.click(screen.getByText("Toggle latency display (L)"));
+    fireEvent.click(screen.getByText("Reload"));
+    expect(onToggleLatency).toHaveBeenCalled();
+    expect(onReload).toHaveBeenCalled();
   });
 
   it("replaces the menu with the remap pane, and Back returns to it", () => {

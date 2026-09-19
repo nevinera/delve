@@ -3575,6 +3575,11 @@ export default function App({
         layout={buttonLayout}
         onAssign={(button, power) => updateButtonLayout(assignPowerToButton(buttonLayout, button, power))}
         onReset={() => updateButtonLayout(resolveButtonLayout(null))}
+        onToggleLatency={() => {
+          setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
+          setSettingsOpen(false);
+        }}
+        onReload={() => window.location.reload()}
         onClose={() => setSettingsOpen(false)}
         error={settingsError}
       />
@@ -3608,12 +3613,6 @@ export default function App({
         <div style={styles.menuDialogLandscape}>
           <button
             style={styles.menuDialogButton}
-            onClick={() => { window.location.reload(); }}
-          >
-            Reload
-          </button>
-          <button
-            style={styles.menuDialogButton}
             onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
           >
             Character
@@ -3623,15 +3622,6 @@ export default function App({
             onClick={() => { setSettingsOpen(true); setMenuOpen(false); }}
           >
             Settings
-          </button>
-          <button
-            style={styles.menuDialogButton}
-            onClick={() => {
-              setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
-              setMenuOpen(false);
-            }}
-          >
-            Show Latency
           </button>
         </div>
       )}
@@ -3877,24 +3867,10 @@ export default function App({
           </button>
           <button
             style={styles.utilityButton}
-            title="Toggle latency display (L)"
-            onClick={() => setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current))}
-          >
-            Latency
-          </button>
-          <button
-            style={styles.utilityButton}
             title="Settings"
             onClick={() => setSettingsOpen(true)}
           >
             Settings
-          </button>
-          <button
-            style={styles.utilityButton}
-            title="Reload"
-            onClick={() => window.location.reload()}
-          >
-            Reload
           </button>
         </div>
       )}
