@@ -3,6 +3,7 @@ class Character < ApplicationRecord
   belongs_to :character_class
   has_many :character_items, dependent: :destroy
   has_many :equipped_items, dependent: :destroy
+  has_one :character_setting, dependent: :destroy
 
   validates :name, presence: true,
     uniqueness: true,
@@ -20,6 +21,8 @@ class Character < ApplicationRecord
         hash[item.identifier] = item.version == zone.version
       end
   end
+
+  def setting_or_default = character_setting || build_character_setting
 
   private
 

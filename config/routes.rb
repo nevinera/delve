@@ -78,6 +78,7 @@ Rails.application.routes.draw do
       resources :zones, only: [:index, :show]
       resources :character_items, only: [:index, :show]
       resources :equipped_items, only: [:index, :update], param: :equipped_slot
+      resource :setting, only: [:show, :update], controller: "character_settings"
     end
   end
   namespace :internal_api do

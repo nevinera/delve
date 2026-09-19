@@ -13,18 +13,10 @@ import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
+import SettingsDialog from "./SettingsDialog";
+import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
+import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
 
-// W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
-const KEY_MAP = {
-  KeyW: "forward",
-  KeyS: "backward",
-  KeyQ: "strafe_left",
-  KeyE: "strafe_right",
-  KeyA: "turn_left",
-  KeyD: "turn_right",
-};
-const MOVEMENT_KEYS = new Set(["forward", "backward", "strafe_left", "strafe_right"]);
-const TURN_KEYS = new Set(["turn_left", "turn_right"]);
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
 // screen instead of a compact corner grid (there's no side panel in
@@ -1659,6 +1651,13 @@ export function isLatencyVisible(override, autoShow) {
 // happens to be auto-shown turns it off (and that off sticks), and hitting
 // it while auto-hidden turns it on (and that sticks too), regardless of
 // whether a previous override was ever set.
+// What Escape does: dismiss whatever is open first, else drop the target, else
+// (nothing to dismiss) open the settings menu.
+export function escapeAction({ overlayOpen, hasTarget }) {
+  if (overlayOpen) return "close";
+  return hasTarget ? "detarget" : "settings";
+}
+
 export function nextLatencyOverride(override, autoShow) {
   return !isLatencyVisible(override, autoShow);
 }
@@ -2678,6 +2677,8 @@ export default function App({
   equippedItems: initialEquippedItems = {},
   characterItemsUrl,
   equippedItemsUrl,
+  characterSettings,
+  characterSettingsUrl,
   stockAssets,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
@@ -2710,6 +2711,19 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [charSheetOpen, setCharSheetOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsError, setSettingsError] = useState(null);
+  const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
+  const [cameraSensitivity, setCameraSensitivity] = useState(characterSettings?.cameraSensitivity ?? 1);
+  const cameraSensitivityRef = useRef(cameraSensitivity); // read by the scene every frame/drag
+  cameraSensitivityRef.current = cameraSensitivity;
+  const sensitivitySaveTimerRef = useRef(null);
+  const [hotkeys, setHotkeys] = useState(() => resolveHotkeys(characterSettings?.customHotkeys));
+  const bindingIndexRef = useRef(buildBindingIndex(hotkeys)); // read by the key handlers so they never go stale
+  bindingIndexRef.current = buildBindingIndex(hotkeys);
+  const overlayOpenRef = useRef(false); // any loot/char sheet/settings/phone menu open; read by the Escape handler
+  const buttonLayoutRef = useRef(buttonLayout);
+  buttonLayoutRef.current = buttonLayout;
   // The canvas is letterboxed/pillarboxed (centered, fixed 4:3) within its
   // wrapper - this is its actual on-screen rect, reported by scene.js's
   // handleResize(), for UI meant to sit "inside the canvas" rather than
@@ -2865,6 +2879,48 @@ export default function App({
     });
   }, []);
 
+  // Optimistically applies a new button layout, then saves it; reverts on failure.
+  const updateButtonLayout = useCallback(async (next) => {
+    const previous = buttonLayoutRef.current;
+    setButtonLayout(next);
+    setSettingsError(null);
+    if (!characterSettingsUrl) return;
+    try {
+      await saveCharacterSettings(characterSettingsUrl, { ability_button_map: layoutToMap(next) });
+    } catch (err) {
+      setButtonLayout(previous);
+      setSettingsError(err.message);
+    }
+  }, [characterSettingsUrl]);
+
+  // Applies immediately; the save is debounced so dragging the slider sends one request.
+  const updateCameraSensitivity = useCallback((value) => {
+    setCameraSensitivity(value);
+    setSettingsError(null);
+    if (!characterSettingsUrl) return;
+    clearTimeout(sensitivitySaveTimerRef.current);
+    sensitivitySaveTimerRef.current = setTimeout(async () => {
+      try {
+        await saveCharacterSettings(characterSettingsUrl, { camera_sensitivity: value });
+      } catch (err) {
+        setSettingsError(err.message);
+      }
+    }, 400);
+  }, [characterSettingsUrl]);
+
+  // Saves a complete set of bindings (as overrides of the defaults) and applies
+  // it. Resolves to null on success or an error message.
+  const saveHotkeys = useCallback(async (next) => {
+    if (!characterSettingsUrl) return "Settings endpoint unavailable.";
+    try {
+      const saved = await saveCharacterSettings(characterSettingsUrl, { custom_hotkeys: customOverrides(next) });
+      setHotkeys(resolveHotkeys(saved.customHotkeys));
+      return null;
+    } catch (err) {
+      return err.message;
+    }
+  }, [characterSettingsUrl]);
+
   const usePower = useCallback((slot) => {
     const selfEntryForPower = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
     const selfUnitIdForPower = selfEntryForPower?.[0];
@@ -3009,23 +3065,30 @@ export default function App({
     const onKeyDown = (e) => {
       if (e.repeat) return;
       if (e.code === "Escape") {
-        setLootWindowUnitId(null);
-        setCharSheetOpen(false);
+        const action = escapeAction({ overlayOpen: overlayOpenRef.current, hasTarget: !!targetIdRef.current });
+        if (action === "close") {
+          setLootWindowUnitId(null);
+          setCharSheetOpen(false);
+          setSettingsOpen(false);
+          setMenuOpen(false);
+        } else if (action === "detarget") {
+          handleTargetUnit(null);
+        } else {
+          setSettingsOpen(true);
+        }
         return;
       }
-      if (e.code === "KeyP") {
+      const action = actionForEvent(bindingIndexRef.current, e);
+      if (!action) return;
+      if (action === "toggle_character_sheet") {
         setCharSheetOpen(o => !o);
-        return;
-      }
-      if (e.code === "KeyL") {
+      } else if (action === "toggle_latency") {
         setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
-        return;
-      }
-      if (e.code === "KeyT") {
-        if (e.shiftKey) handleStopAttacking(); else handleStartAttacking();
-        return;
-      }
-      if (e.code === "Tab") {
+      } else if (action === "attack_start") {
+        handleStartAttacking();
+      } else if (action === "attack_stop") {
+        handleStopAttacking();
+      } else if (action === "target_next") {
         e.preventDefault();
         handleTabTarget(
           // capture current values via refs to avoid stale closure
@@ -3033,33 +3096,27 @@ export default function App({
           targetIdRef.current,
           selfIdentifier,
         );
-        return;
-      }
-      const slotKey = e.code.match(/^Digit(\d)$/)?.[1];
-      if (slotKey !== undefined) {
-        const slot = slotKey === "0" ? 9 : parseInt(slotKey, 10) - 1;
-        usePower(slot);
-        return;
-      }
-      const action = KEY_MAP[e.code];
-      if (!action) return;
-      const selfForInput = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
-      if (selfForInput?.status === "dead") return;
-      if (MOVEMENT_KEYS.has(action)) {
-        movementKeysRef.current.add(action);
-        sendMove();
-      } else if (TURN_KEYS.has(action)) {
-        turnKeysRef.current.add(action);
+      } else if (action.startsWith("ability_")) {
+        usePower(buttonLayoutRef.current[Number(action.slice("ability_".length)) - 1]);
+      } else {
+        const selfForInput = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+        if (selfForInput?.status === "dead") return;
+        if (MOVEMENT_ACTIONS[action]) {
+          movementKeysRef.current.add(MOVEMENT_ACTIONS[action]);
+          sendMove();
+        } else if (TURN_ACTIONS[action]) {
+          turnKeysRef.current.add(TURN_ACTIONS[action]);
+        }
       }
     };
     const onKeyUp = (e) => {
-      const action = KEY_MAP[e.code];
+      const action = actionForKeyUp(bindingIndexRef.current, e);
       if (!action) return;
-      if (MOVEMENT_KEYS.has(action)) {
-        movementKeysRef.current.delete(action);
+      if (MOVEMENT_ACTIONS[action]) {
+        movementKeysRef.current.delete(MOVEMENT_ACTIONS[action]);
         sendMove();
-      } else if (TURN_KEYS.has(action)) {
-        turnKeysRef.current.delete(action);
+      } else if (TURN_ACTIONS[action]) {
+        turnKeysRef.current.delete(TURN_ACTIONS[action]);
       }
     };
     const onBlur = () => {
@@ -3075,7 +3132,7 @@ export default function App({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [sendMove, usePower, handleTabTarget, handleStartAttacking, handleStopAttacking]);
+  }, [sendMove, usePower, handleTabTarget, handleTargetUnit, handleStartAttacking, handleStopAttacking]);
 
   useEffect(() => {
     // Dev/QA aid for reproducing latency-dependent bugs (e.g. movement
@@ -3366,6 +3423,7 @@ export default function App({
         : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
 
+  overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
   // stacked (portrait and landscape both use this now): bar+name header
@@ -3438,9 +3496,10 @@ export default function App({
     );
   }
 
-  function renderActionSlot(i, extraStyle) {
-    const slot = i + 1;
-    const key = slot === 10 ? "0" : String(slot);
+  function renderActionSlot(button, extraStyle) {
+    const slot = button + 1;
+    const key = bindingLabel(hotkeys[`ability_${slot}`]);
+    const i = buttonLayout[button]; // power index shown on this button
     const power = powers[i];
     const iconUrl = power?.iconURL
       ? (resolveStockAssetUrl(power.iconURL, "icons", stockAssets) ?? new URL(power.iconURL, classConfigUrl).href)
@@ -3513,6 +3572,7 @@ export default function App({
         movementKeysRef={movementKeysRef}
         turnKeysRef={turnKeysRef}
         cameraStickRef={cameraStickRef}
+        cameraSensitivityRef={cameraSensitivityRef}
         onFacingChange={handleFacingChange}
         onCanvasResize={setCanvasRect}
         onSelfPosition={handleSelfPosition}
@@ -3544,6 +3604,25 @@ export default function App({
         onClose={() => setLootWindowUnitId(null)}
         localElvl={localElvl}
       />
+      <SettingsDialog
+        open={settingsOpen}
+        powers={powers}
+        layout={buttonLayout}
+        onAssign={(button, power) => updateButtonLayout(assignPowerToButton(buttonLayout, button, power))}
+        onReset={() => updateButtonLayout(resolveButtonLayout(null))}
+        onToggleLatency={() => {
+          setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
+          setSettingsOpen(false);
+        }}
+        onReload={() => window.location.reload()}
+        hotkeys={hotkeys}
+        onSaveHotkeys={saveHotkeys}
+        showHotkeys={!viewportMode.isPhoneLayout}
+        cameraSensitivity={cameraSensitivity}
+        onCameraSensitivityChange={updateCameraSensitivity}
+        onClose={() => setSettingsOpen(false)}
+        error={settingsError}
+      />
       <CharacterSheet
         open={charSheetOpen}
         equippedItems={equippedItems}
@@ -3574,24 +3653,15 @@ export default function App({
         <div style={styles.menuDialogLandscape}>
           <button
             style={styles.menuDialogButton}
-            onClick={() => { window.location.reload(); }}
-          >
-            Reload
-          </button>
-          <button
-            style={styles.menuDialogButton}
             onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
           >
             Character
           </button>
           <button
             style={styles.menuDialogButton}
-            onClick={() => {
-              setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
-              setMenuOpen(false);
-            }}
+            onClick={() => { setSettingsOpen(true); setMenuOpen(false); }}
           >
-            Show Latency
+            Settings
           </button>
         </div>
       )}
@@ -3837,17 +3907,10 @@ export default function App({
           </button>
           <button
             style={styles.utilityButton}
-            title="Toggle latency display (L)"
-            onClick={() => setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current))}
+            title="Settings"
+            onClick={() => setSettingsOpen(true)}
           >
-            Latency
-          </button>
-          <button
-            style={styles.utilityButton}
-            title="Reload"
-            onClick={() => window.location.reload()}
-          >
-            Reload
+            Settings
           </button>
         </div>
       )}

@@ -18,6 +18,8 @@ createRoot(el).render(
       equippedItems={JSON.parse(el.dataset.equippedItems || "{}")}
       characterItemsUrl={el.dataset.characterItemsUrl}
       equippedItemsUrl={el.dataset.equippedItemsUrl}
+      characterSettings={JSON.parse(el.dataset.characterSettings || "{}")}
+      characterSettingsUrl={el.dataset.characterSettingsUrl}
       stockAssets={JSON.parse(el.dataset.stockAssets || "{}")}
     />
   </StrictMode>
