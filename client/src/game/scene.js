@@ -368,11 +368,12 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, cameraStickRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onCanvasResize } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onCanvasResize } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
     this._cameraStickRef = cameraStickRef;
+    this._cameraSensitivityRef = cameraSensitivityRef; // {current: multiplier} on mouse/touch drag and right-stick look
     this._onCanvasResize = onCanvasResize;
     this._onFacingChange = onFacingChange;
     this._onSelfPosition = onSelfPosition;
@@ -577,7 +578,8 @@ export class SceneManager {
       if (e.pointerId !== activePointerId || lastX === null) return;
       const dx = e.clientX - downX, dy = e.clientY - downY;
       if (!isTap(dx, dy)) clearLongPress();
-      const orbit = orbitFromDrag(this._camFacing, this._camPitch, e.clientX - lastX, e.clientY - lastY);
+      const k = this._cameraSensitivityRef?.current ?? 1;
+      const orbit = orbitFromDrag(this._camFacing, this._camPitch, (e.clientX - lastX) * k, (e.clientY - lastY) * k);
       this._camFacing = orbit.facing;
       this._camPitch = orbit.pitch;
       lastX = e.clientX;
@@ -985,7 +987,8 @@ export class SceneManager {
       // even though nipplejs only fires "move" while the finger itself moves.
       const camStick = this._cameraStickRef?.current;
       if (camStick && (camStick.x || camStick.y)) {
-        const orbit = orbitFromStick(this._camFacing, this._camPitch, camStick.x, camStick.y, elapsed);
+        const k = this._cameraSensitivityRef?.current ?? 1;
+        const orbit = orbitFromStick(this._camFacing, this._camPitch, camStick.x * k, camStick.y * k, elapsed);
         this._camFacing = orbit.facing;
         this._camPitch = orbit.pitch;
         this._onFacingChange?.(this._camFacing / DEG);

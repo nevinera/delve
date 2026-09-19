@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import SettingsDialog from "../SettingsDialog";
+import SettingsDialog, { sensitivityToSlider, sliderToSensitivity } from "../SettingsDialog";
 
 const powers = Array.from({ length: 10 }, (_, i) => ({ name: `Power ${i + 1}` }));
 const layout = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -67,21 +67,32 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("nope")).toBeTruthy();
   });
 
-  it("hides the joystick pane unless joystick settings are enabled", () => {
-    renderDialog();
-    expect(screen.queryByText("Joystick sensitivity")).toBeNull();
+  it("edits camera sensitivity from its own pane, with 1x at the slider's center", () => {
+    const onCameraSensitivityChange = vi.fn();
+    renderDialog({ cameraSensitivity: 1, onCameraSensitivityChange });
+    fireEvent.click(screen.getByText("Camera sensitivity"));
+    expect(screen.getByRole("dialog", { name: "Camera sensitivity" })).toBeTruthy();
+    expect(Number(screen.getByRole("slider").value)).toBe(0);
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "1" } });
+    expect(onCameraSensitivityChange).toHaveBeenCalledWith(2);
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "-1" } });
+    expect(onCameraSensitivityChange).toHaveBeenCalledWith(0.5);
+    fireEvent.click(screen.getByText("Reset to default"));
+    expect(onCameraSensitivityChange).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("sensitivity slider mapping", () => {
+  it("maps 0.5x/1x/2x to -1/0/1 and round-trips", () => {
+    expect(sensitivityToSlider(0.5)).toBe(-1);
+    expect(sensitivityToSlider(1)).toBe(0);
+    expect(sensitivityToSlider(2)).toBe(1);
+    expect(sliderToSensitivity(sensitivityToSlider(1.5))).toBe(1.5);
   });
 
-  it("edits joystick sensitivity from its own pane", () => {
-    const onJoystickSensitivityChange = vi.fn();
-    renderDialog({ showJoystickSettings: true, joystickSensitivity: 1.5, onJoystickSensitivityChange });
-    fireEvent.click(screen.getByText("Joystick sensitivity"));
-    expect(screen.getByRole("dialog", { name: "Joystick sensitivity" })).toBeTruthy();
-    expect(screen.getByRole("slider").value).toBe("1.5");
-
-    fireEvent.change(screen.getByRole("slider"), { target: { value: "2" } });
-    expect(onJoystickSensitivityChange).toHaveBeenCalledWith(2);
-    fireEvent.click(screen.getByText("Reset to default"));
-    expect(onJoystickSensitivityChange).toHaveBeenCalledWith(1);
+  it("clamps out-of-range saved values", () => {
+    expect(sensitivityToSlider(3)).toBe(1);
+    expect(sensitivityToSlider(0.1)).toBe(-1);
   });
 });

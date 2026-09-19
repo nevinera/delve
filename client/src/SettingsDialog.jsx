@@ -50,27 +50,33 @@ function RemapAbilitiesPane({ powers, layout, onAssign, onReset, error }) {
 // reload actions. Panes so far: remap abilities (one
 // select per action bar button choosing which power sits there; picking a
 // power already on another button swaps the two).
-export const JOYSTICK_SENSITIVITY_MIN = 0.25;
-export const JOYSTICK_SENSITIVITY_MAX = 3;
-export const JOYSTICK_SENSITIVITY_STEP = 0.25;
+export const CAMERA_SENSITIVITY_MIN = 0.5;
+export const CAMERA_SENSITIVITY_MAX = 2;
 
-function JoystickPane({ value, onChange, error }) {
+// The slider is logarithmic (position -1..1 maps to 0.5x..2x) so the default
+// 1x sits exactly in the middle.
+export const sensitivityToSlider = (value) =>
+  Math.log2(Math.min(CAMERA_SENSITIVITY_MAX, Math.max(CAMERA_SENSITIVITY_MIN, value)));
+export const sliderToSensitivity = (position) => Math.round(2 ** position * 100) / 100;
+
+function CameraPane({ value, onChange, error }) {
   return (
     <>
       <label style={styles.row}>
-        <span>Camera stick</span>
+        <span>Camera</span>
         <input
           type="range"
-          aria-label="Joystick sensitivity"
+          aria-label="Camera sensitivity"
           style={{ flex: 1 }}
-          min={JOYSTICK_SENSITIVITY_MIN}
-          max={JOYSTICK_SENSITIVITY_MAX}
-          step={JOYSTICK_SENSITIVITY_STEP}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          min={-1}
+          max={1}
+          step={0.05}
+          value={sensitivityToSlider(value)}
+          onChange={(e) => onChange(sliderToSensitivity(Number(e.target.value)))}
         />
         <span>{value.toFixed(2)}x</span>
       </label>
+      <div style={{ color: "#aaa", marginTop: 6 }}>Applies to mouse/touch drag and the camera stick.</div>
       <div style={{ marginTop: 8 }}>
         <button type="button" style={styles.button} onClick={() => onChange(1)}>Reset to default</button>
       </div>
@@ -81,13 +87,13 @@ function JoystickPane({ value, onChange, error }) {
 
 export default function SettingsDialog({
   open, powers, layout, onAssign, onReset, onToggleLatency, onReload, onClose, error,
-  showJoystickSettings = false, joystickSensitivity = 1, onJoystickSensitivityChange,
+  cameraSensitivity = 1, onCameraSensitivityChange,
 }) {
   const [pane, setPane] = useState(null);
   useEffect(() => { if (!open) setPane(null); }, [open]);
   if (!open) return null;
 
-  const title = { abilities: "Remap abilities", joystick: "Joystick sensitivity" }[pane] ?? "Settings";
+  const title = { abilities: "Remap abilities", camera: "Camera sensitivity" }[pane] ?? "Settings";
   return (
     <div style={styles.backdrop} onClick={onClose}>
       <div style={styles.dialog} role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
@@ -100,18 +106,16 @@ export default function SettingsDialog({
         </div>
         {pane === "abilities" ? (
           <RemapAbilitiesPane powers={powers} layout={layout} onAssign={onAssign} onReset={onReset} error={error} />
-        ) : pane === "joystick" ? (
-          <JoystickPane value={joystickSensitivity} onChange={onJoystickSensitivityChange} error={error} />
+        ) : pane === "camera" ? (
+          <CameraPane value={cameraSensitivity} onChange={onCameraSensitivityChange} error={error} />
         ) : (
           <div style={styles.menu}>
             <button type="button" style={styles.menuButton} onClick={() => setPane("abilities")}>
               Remap abilities
             </button>
-            {showJoystickSettings && (
-              <button type="button" style={styles.menuButton} onClick={() => setPane("joystick")}>
-                Joystick sensitivity
-              </button>
-            )}
+            <button type="button" style={styles.menuButton} onClick={() => setPane("camera")}>
+              Camera sensitivity
+            </button>
             <button type="button" style={styles.menuButton} onClick={onToggleLatency}>
               Toggle latency display (L)
             </button>

@@ -2724,9 +2724,9 @@ export default function App({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
   const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
-  const [joystickSensitivity, setJoystickSensitivity] = useState(characterSettings?.joystickSensitivity ?? 1);
-  const joystickSensitivityRef = useRef(joystickSensitivity); // read by the stick handler so it stays referentially stable
-  joystickSensitivityRef.current = joystickSensitivity;
+  const [cameraSensitivity, setCameraSensitivity] = useState(characterSettings?.joystickSensitivity ?? 1);
+  const cameraSensitivityRef = useRef(cameraSensitivity); // read by the scene every frame/drag
+  cameraSensitivityRef.current = cameraSensitivity;
   const sensitivitySaveTimerRef = useRef(null);
   const overlayOpenRef = useRef(false); // any loot/char sheet/settings/phone menu open; read by the Escape handler
   const buttonLayoutRef = useRef(buttonLayout);
@@ -2901,8 +2901,8 @@ export default function App({
   }, [characterSettingsUrl]);
 
   // Applies immediately; the save is debounced so dragging the slider sends one request.
-  const updateJoystickSensitivity = useCallback((value) => {
-    setJoystickSensitivity(value);
+  const updateCameraSensitivity = useCallback((value) => {
+    setCameraSensitivity(value);
     setSettingsError(null);
     if (!characterSettingsUrl) return;
     clearTimeout(sensitivitySaveTimerRef.current);
@@ -3007,8 +3007,7 @@ export default function App({
   }, [sendMove]);
 
   const handleCameraStickMove = useCallback((data) => {
-    const k = joystickSensitivityRef.current;
-    cameraStickRef.current = { x: data.vector.x * k, y: data.vector.y * k };
+    cameraStickRef.current = { x: data.vector.x, y: data.vector.y };
   }, []);
 
   const handleCameraStickEnd = useCallback(() => {
@@ -3575,6 +3574,7 @@ export default function App({
         movementKeysRef={movementKeysRef}
         turnKeysRef={turnKeysRef}
         cameraStickRef={cameraStickRef}
+        cameraSensitivityRef={cameraSensitivityRef}
         onFacingChange={handleFacingChange}
         onCanvasResize={setCanvasRect}
         onSelfPosition={handleSelfPosition}
@@ -3617,9 +3617,8 @@ export default function App({
           setSettingsOpen(false);
         }}
         onReload={() => window.location.reload()}
-        showJoystickSettings={viewportMode.isPhoneLayout}
-        joystickSensitivity={joystickSensitivity}
-        onJoystickSensitivityChange={updateJoystickSensitivity}
+        cameraSensitivity={cameraSensitivity}
+        onCameraSensitivityChange={updateCameraSensitivity}
         onClose={() => setSettingsOpen(false)}
         error={settingsError}
       />
