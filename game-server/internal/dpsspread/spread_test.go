@@ -2,6 +2,7 @@ package dpsspread_test
 
 import (
 	"math/rand"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,15 +93,4 @@ func TestSpread_SameSeedIsDeterministic(t *testing.T) {
 	assert.Equal(t, a, b)
 }
 
-func formatFloat(f float64) string {
-	switch {
-	case f == -10:
-		return "-10"
-	case f == -5:
-		return "-5"
-	case f == 0:
-		return "0"
-	default:
-		return "?"
-	}
-}
+func formatFloat(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
