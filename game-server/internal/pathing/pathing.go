@@ -73,9 +73,17 @@ func bucketRadius(r float64) float64 {
 // fit a larger bucket's agent size simply doesn't appear in that bucket's
 // graph, while smaller buckets route through it normally.
 func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
+	indexes := make(map[string]*barrierIndex, len(zone.Maps))
+	for _, m := range zone.Maps {
+		if err := validateGeometry(m); err != nil {
+			return nil, err
+		}
+		indexes[m.Identifier] = newBarrierIndex(m.Barriers)
+	}
+
 	g := &Graph{buckets: make(map[float64]*zoneGraph)}
 	for _, radius := range neededBucketRadii(zone, fallbackRadius) {
-		zg, err := buildZoneGraph(zone, radius)
+		zg, err := buildZoneGraph(zone, indexes, radius)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +118,7 @@ func neededBucketRadii(zone instanceconfig.Zone, fallbackRadius float64) []float
 
 // buildZoneGraph builds one size bucket's worth of per-map graphs and
 // stitches their connection nodes into a cross-map meta-graph.
-func buildZoneGraph(zone instanceconfig.Zone, agentRadius float64) (*zoneGraph, error) {
+func buildZoneGraph(zone instanceconfig.Zone, indexes map[string]*barrierIndex, agentRadius float64) (*zoneGraph, error) {
 	zg := &zoneGraph{
 		maps:      make(map[string]*MapGraph, len(zone.Maps)),
 		metaIndex: make(map[mapNode]int),
@@ -129,7 +137,7 @@ func buildZoneGraph(zone instanceconfig.Zone, agentRadius float64) (*zoneGraph, 
 			anchorConnIDs = append(anchorConnIDs, c.Identifier)
 		}
 
-		mg, anchorIdx, err := BuildMapGraph(m, agentRadius, anchors)
+		mg, anchorIdx, err := buildMapGraph(m, indexes[m.Identifier], agentRadius, anchors)
 		if err != nil {
 			return nil, err
 		}
@@ -153,7 +161,7 @@ func buildZoneGraph(zone instanceconfig.Zone, agentRadius float64) (*zoneGraph, 
 			if i == j || mi.mapID != mj.mapID {
 				continue
 			}
-			if d := mg.dist[mi.node][mj.node]; d != math.Inf(1) {
+			if d, ok := mg.anchorDistance(mi.node, mj.node); ok {
 				zg.metaAdj[i] = append(zg.metaAdj[i], metaEdge{to: j, cost: d})
 			}
 		}

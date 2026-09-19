@@ -20,6 +20,18 @@ func TestSegToSegDist(t *testing.T) {
 	assert.InDelta(t, 5, segToSegDist(0, 0, 0, 10, 5, 0, 5, 10), 1e-9, "parallel, non-overlapping in the perpendicular sense")
 }
 
+func segmentBlockedByBarriers(x1, y1, x2, y2, radius float64, barriers []instanceconfig.Barrier) bool {
+	return newBarrierIndex(barriers).segmentBlocked(x1, y1, x2, y2, radius)
+}
+
+func travelBlockedByBarriers(x1, y1, x2, y2, radius float64, barriers []instanceconfig.Barrier) bool {
+	return newBarrierIndex(barriers).travelBlocked(x1, y1, x2, y2, radius)
+}
+
+func pointBlockedByBarriers(x, y, radius float64, barriers []instanceconfig.Barrier) bool {
+	return newBarrierIndex(barriers).pointBlocked(x, y, radius)
+}
+
 func wallBarrier(locations ...instanceconfig.Location) instanceconfig.Barrier {
 	return instanceconfig.Barrier{Type: "wall", Locations: locations}
 }

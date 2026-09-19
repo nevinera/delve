@@ -140,6 +140,10 @@ type BehaviorState struct {
 	// visibility-graph query only reruns periodically, not every tick.
 	PathWaypoints []pathing.Point
 	PathRecalcIn  float64
+	// where the chase target was when PathWaypoints was planned; an expired
+	// PathRecalcIn only triggers a new search if the target has moved.
+	PathGoalX float64
+	PathGoalY float64
 
 	// phased tactics
 	PhaseIndex   int
