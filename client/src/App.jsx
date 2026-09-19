@@ -2724,7 +2724,7 @@ export default function App({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
   const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
-  const [cameraSensitivity, setCameraSensitivity] = useState(characterSettings?.joystickSensitivity ?? 1);
+  const [cameraSensitivity, setCameraSensitivity] = useState(characterSettings?.cameraSensitivity ?? 1);
   const cameraSensitivityRef = useRef(cameraSensitivity); // read by the scene every frame/drag
   cameraSensitivityRef.current = cameraSensitivity;
   const sensitivitySaveTimerRef = useRef(null);
@@ -2908,7 +2908,7 @@ export default function App({
     clearTimeout(sensitivitySaveTimerRef.current);
     sensitivitySaveTimerRef.current = setTimeout(async () => {
       try {
-        await saveCharacterSettings(characterSettingsUrl, { joystick_sensitivity: value });
+        await saveCharacterSettings(characterSettingsUrl, { camera_sensitivity: value });
       } catch (err) {
         setSettingsError(err.message);
       }

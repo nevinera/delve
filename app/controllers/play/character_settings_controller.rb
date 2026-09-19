@@ -24,6 +24,6 @@ class Play::CharacterSettingsController < Play::BaseController
   end
 
   def setting_params
-    params.expect(setting: [:joystick_sensitivity, ability_button_map: {}, custom_hotkeys: {}])
+    params.expect(setting: [:camera_sensitivity, ability_button_map: {}, custom_hotkeys: {}])
   end
 end

@@ -4,13 +4,13 @@ class CharacterSetting < ApplicationRecord
   belongs_to :character
 
   validates :character_id, uniqueness: true
-  validates :joystick_sensitivity, numericality: {greater_than: 0}
+  validates :camera_sensitivity, numericality: {greater_than: 0}
   validate :ability_button_map_is_integer_to_integer
   validate :custom_hotkeys_is_string_to_string
 
   def as_client_json
     {
-      joystickSensitivity: joystick_sensitivity,
+      cameraSensitivity: camera_sensitivity,
       abilityButtonMap: ability_button_map,
       customHotkeys: custom_hotkeys
     }

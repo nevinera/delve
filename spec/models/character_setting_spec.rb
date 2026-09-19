@@ -3,7 +3,7 @@ require "rails_helper"
 RSpec.describe CharacterSetting, type: :model do
   it "is valid with defaults" do
     setting = create(:character_setting)
-    expect(setting.joystick_sensitivity).to eq(1.0)
+    expect(setting.camera_sensitivity).to eq(1.0)
     expect(setting.ability_button_map).to eq({})
     expect(setting.custom_hotkeys).to eq({})
   end
@@ -13,10 +13,10 @@ RSpec.describe CharacterSetting, type: :model do
     expect(build(:character_setting, character: setting.character)).not_to be_valid
   end
 
-  it "requires a positive joystick_sensitivity" do
-    expect(build(:character_setting, joystick_sensitivity: 0)).not_to be_valid
-    expect(build(:character_setting, joystick_sensitivity: nil)).not_to be_valid
-    expect(build(:character_setting, joystick_sensitivity: 1.5)).to be_valid
+  it "requires a positive camera_sensitivity" do
+    expect(build(:character_setting, camera_sensitivity: 0)).not_to be_valid
+    expect(build(:character_setting, camera_sensitivity: nil)).not_to be_valid
+    expect(build(:character_setting, camera_sensitivity: 1.5)).to be_valid
   end
 
   it "accepts an integer-to-integer ability_button_map" do

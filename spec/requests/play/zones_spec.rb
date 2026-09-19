@@ -113,7 +113,7 @@ RSpec.describe "Play::Zones", type: :request do
       end
 
       it "exposes the character's settings and their URL as data attributes" do
-        create(:character_setting, character: character, joystick_sensitivity: 2.5, custom_hotkeys: {"L" => "ability_1"})
+        create(:character_setting, character: character, camera_sensitivity: 2.5, custom_hotkeys: {"L" => "ability_1"})
 
         get "/play/characters/#{character.id}/zones/#{zone.id}"
         expect(response.body).to include(CGI.escapeHTML(character.reload.character_setting.as_client_json.to_json))

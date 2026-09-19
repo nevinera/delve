@@ -21,19 +21,19 @@ RSpec.describe "Play::CharacterSettings", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body).to eq(
-        "joystickSensitivity" => 1.0, "abilityButtonMap" => {}, "customHotkeys" => {}
+        "cameraSensitivity" => 1.0, "abilityButtonMap" => {}, "customHotkeys" => {}
       )
       expect(CharacterSetting.count).to eq(0)
     end
 
     it "creates the row on first update and returns the saved values" do
-      body = {setting: {joystick_sensitivity: 2.5, ability_button_map: {"0" => 3}, custom_hotkeys: {"shift+2" => "ability_9"}}}
+      body = {setting: {camera_sensitivity: 2.5, ability_button_map: {"0" => 3}, custom_hotkeys: {"shift+2" => "ability_9"}}}
 
       patch path, params: body.to_json, headers: json_headers
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body).to eq(
-        "joystickSensitivity" => 2.5, "abilityButtonMap" => {"0" => 3}, "customHotkeys" => {"shift+2" => "ability_9"}
+        "cameraSensitivity" => 2.5, "abilityButtonMap" => {"0" => 3}, "customHotkeys" => {"shift+2" => "ability_9"}
       )
       expect(character.reload.character_setting.custom_hotkeys).to eq({"shift+2" => "ability_9"})
     end
@@ -41,11 +41,11 @@ RSpec.describe "Play::CharacterSettings", type: :request do
     it "leaves unspecified settings alone on a partial update" do
       create(:character_setting, character: character, custom_hotkeys: {"L" => "ability_1"})
 
-      patch path, params: {setting: {joystick_sensitivity: 0.5}}.to_json, headers: json_headers
+      patch path, params: {setting: {camera_sensitivity: 0.5}}.to_json, headers: json_headers
 
       expect(response).to have_http_status(:ok)
       expect(character.reload.character_setting.custom_hotkeys).to eq({"L" => "ability_1"})
-      expect(character.character_setting.joystick_sensitivity).to eq(0.5)
+      expect(character.character_setting.camera_sensitivity).to eq(0.5)
     end
 
     it "returns 422 with errors for invalid values" do
