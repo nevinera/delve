@@ -14,7 +14,7 @@ import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
 import SettingsDialog from "./SettingsDialog";
-import { actionForEvent, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
+import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
 
 
@@ -2718,7 +2718,7 @@ export default function App({
   const cameraSensitivityRef = useRef(cameraSensitivity); // read by the scene every frame/drag
   cameraSensitivityRef.current = cameraSensitivity;
   const sensitivitySaveTimerRef = useRef(null);
-  const hotkeys = useMemo(() => resolveHotkeys(characterSettings?.customHotkeys), [characterSettings]);
+  const [hotkeys, setHotkeys] = useState(() => resolveHotkeys(characterSettings?.customHotkeys));
   const bindingIndexRef = useRef(buildBindingIndex(hotkeys)); // read by the key handlers so they never go stale
   bindingIndexRef.current = buildBindingIndex(hotkeys);
   const overlayOpenRef = useRef(false); // any loot/char sheet/settings/phone menu open; read by the Escape handler
@@ -2906,6 +2906,19 @@ export default function App({
         setSettingsError(err.message);
       }
     }, 400);
+  }, [characterSettingsUrl]);
+
+  // Saves a complete set of bindings (as overrides of the defaults) and applies
+  // it. Resolves to null on success or an error message.
+  const saveHotkeys = useCallback(async (next) => {
+    if (!characterSettingsUrl) return "Settings endpoint unavailable.";
+    try {
+      const saved = await saveCharacterSettings(characterSettingsUrl, { custom_hotkeys: customOverrides(next) });
+      setHotkeys(resolveHotkeys(saved.customHotkeys));
+      return null;
+    } catch (err) {
+      return err.message;
+    }
   }, [characterSettingsUrl]);
 
   const usePower = useCallback((slot) => {
@@ -3602,6 +3615,8 @@ export default function App({
           setSettingsOpen(false);
         }}
         onReload={() => window.location.reload()}
+        hotkeys={hotkeys}
+        onSaveHotkeys={saveHotkeys}
         cameraSensitivity={cameraSensitivity}
         onCameraSensitivityChange={updateCameraSensitivity}
         onClose={() => setSettingsOpen(false)}

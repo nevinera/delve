@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACTIONS, DEFAULT_HOTKEYS, actionForEvent, actionForKeyUp, bindingFromEvent, bindingLabel,
-  buildBindingIndex, keyToken, resolveHotkeys,
+  buildBindingIndex, customOverrides, duplicateBindings, keyToken, resolveHotkeys,
 } from "../hotkeys";
 
 const key = (code, shiftKey = false) => ({ code, shiftKey });
@@ -88,5 +88,26 @@ describe("bindingLabel", () => {
     expect(bindingLabel("s+2")).toBe("Shift+2");
     expect(bindingLabel("tab")).toBe("tab");
     expect(bindingLabel(null)).toBe("");
+  });
+});
+
+describe("customOverrides", () => {
+  it("is empty for the defaults and holds only changed actions otherwise", () => {
+    expect(customOverrides(resolveHotkeys(null))).toEqual({});
+    expect(customOverrides(resolveHotkeys({ move_forward: "up" }))).toEqual({ move_forward: "up" });
+  });
+});
+
+describe("duplicateBindings", () => {
+  it("is empty for the defaults", () => {
+    expect(duplicateBindings(resolveHotkeys(null))).toEqual({});
+  });
+
+  it("reports actions sharing a binding", () => {
+    expect(duplicateBindings(resolveHotkeys({ ability_2: "1" }))).toEqual({ 1: ["ability_1", "ability_2"] });
+  });
+
+  it("does not treat shifted and plain versions of a key as duplicates", () => {
+    expect(duplicateBindings(resolveHotkeys({ ability_2: "s+1" }))).toEqual({});
   });
 });

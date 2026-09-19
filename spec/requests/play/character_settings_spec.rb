@@ -55,6 +55,15 @@ RSpec.describe "Play::CharacterSettings", type: :request do
       expect(response.parsed_body["errors"]).to have_key("ability_button_map")
     end
 
+    it "clears custom hotkeys when an empty map is sent" do
+      create(:character_setting, character: character, custom_hotkeys: {"toggle_latency" => "k"})
+
+      patch path, params: {setting: {custom_hotkeys: {}}}.to_json, headers: json_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(character.reload.character_setting.custom_hotkeys).to eq({})
+    end
+
     it "returns 422 for an unknown hotkey action" do
       patch path, params: {setting: {custom_hotkeys: {"fly" => "f"}}}.to_json, headers: json_headers
 

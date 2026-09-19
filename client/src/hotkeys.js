@@ -116,3 +116,25 @@ export function bindingLabel(binding) {
   const key = shift ? binding.slice(2) : binding;
   return `${shift ? "Shift+" : ""}${key.length === 1 ? key.toUpperCase() : key}`;
 }
+
+// Only the bindings that differ from the defaults: what gets saved as
+// custom_hotkeys, so future changes to a default still reach characters that
+// never touched that action.
+export function customOverrides(hotkeys) {
+  const overrides = {};
+  for (const { id } of ACTIONS) {
+    if (hotkeys[id] !== DEFAULT_HOTKEYS[id]) overrides[id] = hotkeys[id];
+  }
+  return overrides;
+}
+
+// {binding: [actionId, ...]} for every binding used by more than one action.
+// Saving is blocked while this is non-empty.
+export function duplicateBindings(hotkeys) {
+  const byBinding = {};
+  for (const { id } of ACTIONS) {
+    const binding = hotkeys[id];
+    if (binding) (byBinding[binding] ??= []).push(id);
+  }
+  return Object.fromEntries(Object.entries(byBinding).filter(([, ids]) => ids.length > 1));
+}

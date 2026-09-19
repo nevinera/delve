@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ABILITY_BUTTON_COUNT } from "./abilityButtons";
+import { ACTIONS, DEFAULT_HOTKEYS, bindingFromEvent, bindingLabel, duplicateBindings } from "./hotkeys";
 
 const styles = {
   backdrop: {
@@ -50,6 +51,80 @@ function RemapAbilitiesPane({ powers, layout, onAssign, onReset, error }) {
 // reload actions. Panes so far: remap abilities (one
 // select per action bar button choosing which power sits there; picking a
 // power already on another button swaps the two).
+// Edits a draft of the bindings; nothing applies until Save, which is blocked
+// while two actions share a key. Click an action, then press the key to bind
+// (so only keys the browser actually delivers can be chosen); Escape cancels
+// the capture.
+function HotkeysPane({ hotkeys, onSave, onSaved }) {
+  const [draft, setDraft] = useState(hotkeys);
+  const [capturing, setCapturing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  useEffect(() => {
+    if (!capturing) return undefined;
+    // Capture phase + stopImmediatePropagation: the game's own key handler
+    // must not also react to the key being bound (or to Escape).
+    const onKeyDown = (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.repeat) return;
+      if (e.code === "Escape") { setCapturing(null); return; }
+      const binding = bindingFromEvent(e);
+      if (!binding) return; // a lone modifier or a key we can't bind: keep waiting
+      setDraft((d) => ({ ...d, [capturing]: binding }));
+      setCapturing(null);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [capturing]);
+
+  const duplicates = duplicateBindings(draft);
+  const conflictsWith = (id) => (duplicates[draft[id]] ?? []).filter((other) => other !== id);
+  const changed = ACTIONS.some(({ id }) => draft[id] !== hotkeys[id]);
+  const blocked = Object.keys(duplicates).length > 0;
+
+  async function save() {
+    setSaving(true);
+    setSaveError(null);
+    const error = await onSave(draft);
+    setSaving(false);
+    if (error) setSaveError(error); else onSaved();
+  }
+
+  return (
+    <>
+      {ACTIONS.map(({ id, label }) => {
+        const others = conflictsWith(id);
+        return (
+          <div key={id} style={styles.row}>
+            <span>{label}</span>
+            <span>
+              {others.length > 0 && <span style={{ ...styles.error, marginRight: 6 }}>also {others.join(", ")}</span>}
+              <button
+                type="button"
+                aria-label={`Bind ${label}`}
+                style={{ ...styles.button, minWidth: 90, ...(capturing === id ? { borderColor: "#ffcc00" } : {}) }}
+                onClick={() => setCapturing(capturing === id ? null : id)}
+              >
+                {capturing === id ? "Press a key..." : bindingLabel(draft[id])}
+              </button>
+            </span>
+          </div>
+        );
+      })}
+      <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+        <button type="button" style={styles.button} disabled={!changed || blocked || saving} onClick={save}>Save</button>
+        <button type="button" style={styles.button} onClick={() => { setCapturing(null); setDraft({ ...DEFAULT_HOTKEYS }); }}>
+          Reset to default
+        </button>
+      </div>
+      {blocked && <div style={styles.error}>Each action needs its own key.</div>}
+      {saveError && <div style={styles.error}>{saveError}</div>}
+    </>
+  );
+}
+
 export const CAMERA_SENSITIVITY_MIN = 0.5;
 export const CAMERA_SENSITIVITY_MAX = 2;
 
@@ -87,13 +162,13 @@ function CameraPane({ value, onChange, error }) {
 
 export default function SettingsDialog({
   open, powers, layout, onAssign, onReset, onToggleLatency, onReload, onClose, error,
-  cameraSensitivity = 1, onCameraSensitivityChange,
+  cameraSensitivity = 1, onCameraSensitivityChange, hotkeys = DEFAULT_HOTKEYS, onSaveHotkeys,
 }) {
   const [pane, setPane] = useState(null);
   useEffect(() => { if (!open) setPane(null); }, [open]);
   if (!open) return null;
 
-  const title = { abilities: "Remap abilities", camera: "Camera sensitivity" }[pane] ?? "Settings";
+  const title = { abilities: "Remap abilities", camera: "Camera sensitivity", hotkeys: "Hotkeys" }[pane] ?? "Settings";
   return (
     <div style={styles.backdrop} onClick={onClose}>
       <div style={styles.dialog} role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
@@ -106,12 +181,17 @@ export default function SettingsDialog({
         </div>
         {pane === "abilities" ? (
           <RemapAbilitiesPane powers={powers} layout={layout} onAssign={onAssign} onReset={onReset} error={error} />
+        ) : pane === "hotkeys" ? (
+          <HotkeysPane hotkeys={hotkeys} onSave={onSaveHotkeys} onSaved={() => setPane(null)} />
         ) : pane === "camera" ? (
           <CameraPane value={cameraSensitivity} onChange={onCameraSensitivityChange} error={error} />
         ) : (
           <div style={styles.menu}>
             <button type="button" style={styles.menuButton} onClick={() => setPane("abilities")}>
               Remap abilities
+            </button>
+            <button type="button" style={styles.menuButton} onClick={() => setPane("hotkeys")}>
+              Hotkeys
             </button>
             <button type="button" style={styles.menuButton} onClick={() => setPane("camera")}>
               Camera sensitivity

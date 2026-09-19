@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { DEFAULT_HOTKEYS } from "../hotkeys";
 import SettingsDialog, { sensitivityToSlider, sliderToSensitivity } from "../SettingsDialog";
 
 const powers = Array.from({ length: 10 }, (_, i) => ({ name: `Power ${i + 1}` }));
 const layout = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 function renderDialog(props = {}) {
-  const handlers = { onAssign: vi.fn(), onReset: vi.fn(), onClose: vi.fn(), onToggleLatency: vi.fn(), onReload: vi.fn() };
+  const handlers = { onAssign: vi.fn(), onReset: vi.fn(), onClose: vi.fn(), onToggleLatency: vi.fn(), onReload: vi.fn(), onSaveHotkeys: vi.fn().mockResolvedValue(null) };
   render(<SettingsDialog open powers={powers} layout={layout} {...handlers} {...props} />);
   return handlers;
 }
@@ -80,6 +81,84 @@ describe("SettingsDialog", () => {
     expect(onCameraSensitivityChange).toHaveBeenCalledWith(0.5);
     fireEvent.click(screen.getByText("Reset to default"));
     expect(onCameraSensitivityChange).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("SettingsDialog hotkeys pane", () => {
+  function openHotkeys(props = {}) {
+    const handlers = renderWith(props);
+    fireEvent.click(screen.getByText("Hotkeys"));
+    return handlers;
+  }
+  function renderWith(props) {
+    const handlers = { onAssign: vi.fn(), onReset: vi.fn(), onClose: vi.fn(), onSaveHotkeys: vi.fn().mockResolvedValue(null) };
+    render(<SettingsDialog open powers={powers} layout={layout} hotkeys={{ ...DEFAULT_HOTKEYS }} {...handlers} {...props} />);
+    return handlers;
+  }
+  const press = (code, extra = {}) => fireEvent.keyDown(window, { code, ...extra });
+
+  it("lists every action with its binding, and starts with Save disabled", () => {
+    openHotkeys();
+    expect(screen.getByLabelText("Bind Move forward").textContent).toBe("W");
+    expect(screen.getByLabelText("Bind Stop attacking").textContent).toBe("Shift+T");
+    expect(screen.getByText("Save").disabled).toBe(true);
+  });
+
+  it("captures the next keypress as the new binding", () => {
+    openHotkeys();
+    fireEvent.click(screen.getByLabelText("Bind Move forward"));
+    expect(screen.getByLabelText("Bind Move forward").textContent).toBe("Press a key...");
+    press("ArrowUp");
+    expect(screen.getByLabelText("Bind Move forward").textContent).toBe("up");
+    expect(screen.getByText("Save").disabled).toBe(false);
+  });
+
+  it("captures shift as an s+ prefix and ignores lone modifiers", () => {
+    openHotkeys();
+    fireEvent.click(screen.getByLabelText("Bind Toggle latency display"));
+    press("ShiftLeft", { shiftKey: true });
+    expect(screen.getByLabelText("Bind Toggle latency display").textContent).toBe("Press a key...");
+    press("KeyK", { shiftKey: true });
+    expect(screen.getByLabelText("Bind Toggle latency display").textContent).toBe("Shift+K");
+  });
+
+  it("cancels a capture on Escape without changing anything", () => {
+    openHotkeys();
+    fireEvent.click(screen.getByLabelText("Bind Move forward"));
+    press("Escape");
+    expect(screen.getByLabelText("Bind Move forward").textContent).toBe("W");
+  });
+
+  it("blocks saving while two actions share a key", () => {
+    openHotkeys();
+    fireEvent.click(screen.getByLabelText("Bind Ability button 2"));
+    press("Digit1");
+    expect(screen.getByText("Each action needs its own key.")).toBeTruthy();
+    expect(screen.getByText("Save").disabled).toBe(true);
+  });
+
+  it("saves the whole draft, then returns to the menu", async () => {
+    const { onSaveHotkeys } = openHotkeys();
+    fireEvent.click(screen.getByLabelText("Bind Move forward"));
+    press("ArrowUp");
+    fireEvent.click(screen.getByText("Save"));
+    await screen.findByRole("dialog", { name: "Settings" });
+    expect(onSaveHotkeys).toHaveBeenCalledWith({ ...DEFAULT_HOTKEYS, move_forward: "up" });
+  });
+
+  it("shows a save error and stays on the pane", async () => {
+    openHotkeys({ onSaveHotkeys: vi.fn().mockResolvedValue("Failed to save settings (422)") });
+    fireEvent.click(screen.getByLabelText("Bind Move forward"));
+    press("ArrowUp");
+    fireEvent.click(screen.getByText("Save"));
+    expect(await screen.findByText("Failed to save settings (422)")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Hotkeys" })).toBeTruthy();
+  });
+
+  it("resets the draft to the defaults", () => {
+    openHotkeys({ hotkeys: { ...DEFAULT_HOTKEYS, move_forward: "up" } });
+    fireEvent.click(screen.getByText("Reset to default"));
+    expect(screen.getByLabelText("Bind Move forward").textContent).toBe("W");
   });
 });
 
