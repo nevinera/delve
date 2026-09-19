@@ -1,3 +1,5 @@
+import actions from "../../config/hotkey_actions.json";
+
 // Keyboard bindings, as the {action: binding} object stored per character
 // (CharacterSetting#custom_hotkeys). The effective bindings are
 // DEFAULT_HOTKEYS with the character's saved ones merged on top; a saved
@@ -10,20 +12,9 @@
 // claim too many of those combinations.
 //
 // Escape is deliberately not an action: it is the fixed way out of menus.
-export const ACTIONS = [
-  { id: "move_forward", label: "Move forward" },
-  { id: "move_backward", label: "Move backward" },
-  { id: "strafe_left", label: "Strafe left" },
-  { id: "strafe_right", label: "Strafe right" },
-  { id: "turn_left", label: "Turn left" },
-  { id: "turn_right", label: "Turn right" },
-  ...Array.from({ length: 10 }, (_, i) => ({ id: `ability_${i + 1}`, label: `Ability button ${i + 1}` })),
-  { id: "target_next", label: "Target next enemy" },
-  { id: "attack_start", label: "Start attacking" },
-  { id: "attack_stop", label: "Stop attacking" },
-  { id: "toggle_character_sheet", label: "Character sheet" },
-  { id: "toggle_latency", label: "Toggle latency display" },
-];
+// The list of actions lives in config/hotkey_actions.json, shared with Rails
+// (HotkeyActions) so both sides validate against the same names.
+export const ACTIONS = actions;
 
 export const DEFAULT_HOTKEYS = {
   move_forward: "w",
