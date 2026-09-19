@@ -163,6 +163,7 @@ function CameraPane({ value, onChange, error }) {
 export default function SettingsDialog({
   open, powers, layout, onAssign, onReset, onToggleLatency, onReload, onClose, error,
   cameraSensitivity = 1, onCameraSensitivityChange, hotkeys = DEFAULT_HOTKEYS, onSaveHotkeys,
+  showHotkeys = true,
 }) {
   const [pane, setPane] = useState(null);
   useEffect(() => { if (!open) setPane(null); }, [open]);
@@ -190,9 +191,11 @@ export default function SettingsDialog({
             <button type="button" style={styles.menuButton} onClick={() => setPane("abilities")}>
               Remap abilities
             </button>
-            <button type="button" style={styles.menuButton} onClick={() => setPane("hotkeys")}>
-              Hotkeys
-            </button>
+            {showHotkeys && (
+              <button type="button" style={styles.menuButton} onClick={() => setPane("hotkeys")}>
+                Hotkeys
+              </button>
+            )}
             <button type="button" style={styles.menuButton} onClick={() => setPane("camera")}>
               Camera sensitivity
             </button>

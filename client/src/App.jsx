@@ -3617,6 +3617,7 @@ export default function App({
         onReload={() => window.location.reload()}
         hotkeys={hotkeys}
         onSaveHotkeys={saveHotkeys}
+        showHotkeys={!viewportMode.isPhoneLayout}
         cameraSensitivity={cameraSensitivity}
         onCameraSensitivityChange={updateCameraSensitivity}
         onClose={() => setSettingsOpen(false)}

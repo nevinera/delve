@@ -122,6 +122,11 @@ describe("SettingsDialog hotkeys pane", () => {
     expect(screen.getByLabelText("Bind Toggle latency display").textContent).toBe("Shift+K");
   });
 
+  it("is not offered on the menu when hotkeys are hidden (phone layouts)", () => {
+    renderWith({ showHotkeys: false });
+    expect(screen.queryByText("Hotkeys")).toBeNull();
+  });
+
   it("cancels a capture on Escape without changing anything", () => {
     openHotkeys();
     fireEvent.click(screen.getByLabelText("Bind Move forward"));
