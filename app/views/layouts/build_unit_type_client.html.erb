@@ -39,6 +39,16 @@
       .save-bar .save-success { color: #7c7; }
       .save-bar .save-error { color: #e79; }
 
+      .damage-estimate { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
+      .damage-estimate-header { display: flex; align-items: center; gap: 10px; }
+      .damage-estimate .estimate-damage-button { background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .damage-estimate .estimate-damage-button:hover:not(:disabled) { background: #345; }
+      .damage-estimate .estimate-damage-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .damage-estimate-error { font-size: 12px; color: #e79; }
+      .unit-type-editor-fields .damage-estimate-table { margin-top: 10px; margin-bottom: 0; font-size: 12px; }
+      .unit-type-editor-fields .damage-estimate-table th, .unit-type-editor-fields .damage-estimate-table td { padding: 4px 8px 4px 0; }
+      .damage-estimate-ttd { font-size: 11px; color: #9ab; }
+
       .unit-type-editor-fields .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
       .unit-type-editor-fields button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
       .unit-type-editor-fields button.add-entry:hover { background: #345; }
