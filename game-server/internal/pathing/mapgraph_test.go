@@ -129,27 +129,32 @@ func TestFindPath_SucceedsFromPositionRestingAtRealCollisionDistance(t *testing.
 	g, _, err := BuildMapGraph(m, 2.0, nil)
 	require.NoError(t, err)
 
-	require.NotEmpty(t, g.visibleNodes(0, 3), "must see at least one node from a real, if tight, resting position")
+	require.NotEmpty(t, g.attach(0, 3, 1), "must reach at least one cell from a real, if tight, resting position")
 
 	path, ok := g.FindPath(0, 3, 0, 10)
 	require.True(t, ok)
 	assert.Equal(t, Point{X: 0, Y: 10}, path[len(path)-1])
 }
 
-func TestBuildMapGraph_NodesRespectFullPaddedClearance(t *testing.T) {
-	// The leniency in travelBlockedByBarriers must be confined to querying
-	// FROM a live position - it must never weaken which positions actually
-	// get validated in as safe graph nodes in the first place.
+func TestBuildMapGraph_FreeCellsRespectFullPaddedClearance(t *testing.T) {
+	// The leniency in travelBlocked must be confined to querying FROM a live
+	// position - it must never weaken which grid cells count as free.
 	barrier := wallBarrier(instanceconfig.Location{X: -3, Y: 5}, instanceconfig.Location{X: 3, Y: 5})
 	m := instanceconfig.Map{Identifier: "m", Barriers: []instanceconfig.Barrier{barrier}}
 	g, _, err := BuildMapGraph(m, 2.0, nil)
 	require.NoError(t, err)
-	require.NotEmpty(t, g.nodes)
 
-	for _, n := range g.nodes {
-		d := distanceToBarrierClearance(n.X, n.Y, barrier)
-		assert.GreaterOrEqual(t, d, g.agentRadius-1e-6, "node (%v,%v) has only %.4f ft clearance, wanted the full padded %.4f", n.X, n.Y, d, g.agentRadius)
+	free := 0
+	for i := range g.grid.w * g.grid.h {
+		if g.blocked.get(i) {
+			continue
+		}
+		free++
+		x, y := g.grid.centerX(i%g.grid.w), g.grid.centerY(i/g.grid.w)
+		d := newBarrierIndex(m.Barriers).prims[0].clearance(x, y)
+		assert.GreaterOrEqual(t, d, g.agentRadius-1e-6, "free cell (%v,%v) has only %.4f ft clearance, wanted the full padded %.4f", x, y, d, g.agentRadius)
 	}
+	assert.NotZero(t, free)
 }
 
 func TestMapGraph_SegmentClear(t *testing.T) {
@@ -164,16 +169,14 @@ func TestMapGraph_SegmentClear(t *testing.T) {
 	assert.False(t, g.SegmentClear(0, 0, 10, 0), "straight through the circle")
 }
 
-func TestBuildMapGraph_TooManyNodesErrors(t *testing.T) {
-	var barriers []instanceconfig.Barrier
-	for i := range 30 {
-		barriers = append(barriers, circleBarrier(float64(i)*100, 0, 1))
+func TestBuildMapGraph_NonFiniteCoordinateErrors(t *testing.T) {
+	m := instanceconfig.Map{
+		Identifier: "broken",
+		Barriers:   []instanceconfig.Barrier{wallBarrier(instanceconfig.Location{X: 0, Y: 0}, instanceconfig.Location{X: math.NaN(), Y: 1})},
 	}
-	m := instanceconfig.Map{Identifier: "crowded", Barriers: barriers}
-
-	_, _, err := BuildMapGraph(m, 0, nil)
+	_, _, err := BuildMapGraph(m, 1, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "crowded")
+	assert.Contains(t, err.Error(), "broken")
 }
 
 // assertPathClear checks that every leg of path (starting from (sx,sy)) is

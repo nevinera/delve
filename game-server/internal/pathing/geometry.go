@@ -11,104 +11,67 @@ import (
 // barrier's clearance boundary isn't spuriously rejected as blocked.
 const clearanceEpsilon = 1e-6
 
-// segmentBlockedByBarriers reports whether a unit of the given radius can
-// travel in a straight line from (x1,y1) to (x2,y2) without its body coming
-// within radius of any barrier.
-func segmentBlockedByBarriers(x1, y1, x2, y2, radius float64, barriers []instanceconfig.Barrier) bool {
+// prim is one indexed barrier primitive: a single wall segment
+// (x1,y1)-(x2,y2), or a circle centered (x1,y1) with radius r. Walls are
+// flattened to their segments so a spatial index can hand back just the few
+// segments near a query instead of whole multi-hundred-segment polylines.
+type prim struct {
+	circle         bool
+	x1, y1, x2, y2 float64
+	r              float64
+}
+
+func flatten(barriers []instanceconfig.Barrier) []prim {
+	var out []prim
 	for _, b := range barriers {
-		if segmentBlockedByBarrier(x1, y1, x2, y2, radius, b) {
-			return true
-		}
-	}
-	return false
-}
-
-func segmentBlockedByBarrier(x1, y1, x2, y2, radius float64, b instanceconfig.Barrier) bool {
-	switch b.Type {
-	case "wall":
-		for i := 0; i+1 < len(b.Locations); i++ {
-			a, c := b.Locations[i], b.Locations[i+1]
-			if segToSegDist(x1, y1, x2, y2, a.X, a.Y, c.X, c.Y) < radius-clearanceEpsilon {
-				return true
+		switch b.Type {
+		case "wall":
+			for i := 0; i+1 < len(b.Locations); i++ {
+				a, c := b.Locations[i], b.Locations[i+1]
+				out = append(out, prim{x1: a.X, y1: a.Y, x2: c.X, y2: c.Y})
 			}
-		}
-	case "circle":
-		if b.Location != nil {
-			threshold := b.Radius + radius
-			if segToPointDist(x1, y1, x2, y2, b.Location.X, b.Location.Y) < threshold-clearanceEpsilon {
-				return true
+		case "circle":
+			if b.Location != nil {
+				out = append(out, prim{circle: true, x1: b.Location.X, y1: b.Location.Y, r: b.Radius})
 			}
 		}
 	}
-	return false
+	return out
 }
 
-// pointBlockedByBarriers reports whether a unit of the given radius standing
-// centered at (x,y) would overlap any barrier.
-func pointBlockedByBarriers(x, y, radius float64, barriers []instanceconfig.Barrier) bool {
-	return segmentBlockedByBarriers(x, y, x, y, radius, barriers)
-}
-
-// travelBlockedByBarriers is like segmentBlockedByBarriers, but for
-// checking travel FROM a live, arbitrary point (x1,y1) - a unit's actual
-// current position, not a precomputed graph node - rather than between two
-// already-validated nodes.
-//
-// A real unit's position is a given fact, not a choice: collision
-// resolution rests it at its own true radius from a wall, which is less
-// than this package's padded clearance radius (see cornerClearancePadding)
-// by design. Using the strict check here would mean any unit resting
-// against a wall - a completely normal thing - reads every single
-// direction as blocked (the segment's minimum distance to that wall is
-// already close at t=0, regardless of which way the segment points),
-// leaving it unable to find a single visible node and thus unable to ever
-// plan a route away again.
-//
-// So for each barrier, the required clearance is capped at however close
-// (x1,y1) already legitimately is to it: the barrier only blocks the
-// segment if some point along it comes CLOSER than the start already is,
-// never merely for matching the start's own existing distance. For a
-// start point that already has full clearance from every barrier (the
-// common case, and always true for a precomputed graph node, whose own
-// validation already required full clearance) this is identical to
-// segmentBlockedByBarriers - the leniency only ever kicks in exactly where
-// it's needed.
-func travelBlockedByBarriers(x1, y1, x2, y2, radius float64, barriers []instanceconfig.Barrier) bool {
-	for _, b := range barriers {
-		effectiveRadius := radius
-		if d0 := distanceToBarrierClearance(x1, y1, b); d0 < effectiveRadius {
-			effectiveRadius = d0
-		}
-		if segmentBlockedByBarrier(x1, y1, x2, y2, effectiveRadius, b) {
-			return true
-		}
+// bounds returns the primitive's own axis-aligned bounding box.
+func (p prim) bounds() (minX, minY, maxX, maxY float64) {
+	if p.circle {
+		return p.x1 - p.r, p.y1 - p.r, p.x1 + p.r, p.y1 + p.r
 	}
-	return false
+	return math.Min(p.x1, p.x2), math.Min(p.y1, p.y2), math.Max(p.x1, p.x2), math.Max(p.y1, p.y2)
 }
 
-// distanceToBarrierClearance returns the distance from (x,y) to a
-// barrier's own true (unpadded) geometry: perpendicular distance to the
-// nearest wall segment, or distance to a circle's edge (negative if
-// already inside it).
-func distanceToBarrierClearance(x, y float64, b instanceconfig.Barrier) float64 {
-	switch b.Type {
-	case "wall":
-		min := math.Inf(1)
-		for i := 0; i+1 < len(b.Locations); i++ {
-			a, c := b.Locations[i], b.Locations[i+1]
-			if d := segToPointDist(a.X, a.Y, c.X, c.Y, x, y); d < min {
-				min = d
-			}
-		}
-		return min
-	case "circle":
-		if b.Location == nil {
-			return math.Inf(1)
-		}
-		return math.Hypot(x-b.Location.X, y-b.Location.Y) - b.Radius
-	default:
-		return math.Inf(1)
+// blocked reports whether a unit of the given radius travelling in a
+// straight line from (x1,y1) to (x2,y2) would come within radius of p.
+func (p prim) blocked(x1, y1, x2, y2, radius float64) bool {
+	if p.circle {
+		return segToPointDist(x1, y1, x2, y2, p.x1, p.y1) < p.r+radius-clearanceEpsilon
 	}
+	return segToSegDist(x1, y1, x2, y2, p.x1, p.y1, p.x2, p.y2) < radius-clearanceEpsilon
+}
+
+// clearance returns the distance from (x,y) to p's own true (unpadded)
+// geometry: to the segment, or to a circle's edge (negative if inside it).
+func (p prim) clearance(x, y float64) float64 {
+	if p.circle {
+		return math.Hypot(x-p.x1, y-p.y1) - p.r
+	}
+	return segToPointDist(p.x1, p.y1, p.x2, p.y2, x, y)
+}
+
+// travelBlocked is blocked, but lenient about a start point that is
+// already closer to p than radius. See barrierIndex.travelBlocked for why.
+func (p prim) travelBlocked(x1, y1, x2, y2, radius float64) bool {
+	if d0 := p.clearance(x1, y1); d0 < radius {
+		radius = d0
+	}
+	return p.blocked(x1, y1, x2, y2, radius)
 }
 
 // segToPointDist returns the minimum distance between segment (x1,y1)-(x2,y2)

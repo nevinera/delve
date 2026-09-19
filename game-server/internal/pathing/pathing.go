@@ -153,7 +153,7 @@ func buildZoneGraph(zone instanceconfig.Zone, agentRadius float64) (*zoneGraph, 
 			if i == j || mi.mapID != mj.mapID {
 				continue
 			}
-			if d := mg.dist[mi.node][mj.node]; d != math.Inf(1) {
+			if d, ok := mg.anchorDistance(mi.node, mj.node); ok {
 				zg.metaAdj[i] = append(zg.metaAdj[i], metaEdge{to: j, cost: d})
 			}
 		}
