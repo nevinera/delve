@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_19_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -50,6 +50,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
     t.index ["character_id", "source_key"], name: "index_character_items_on_character_id_and_source_key", unique: true
     t.index ["character_id"], name: "index_character_items_on_character_id"
     t.index ["provenance_zone_id"], name: "index_character_items_on_provenance_zone_id"
+  end
+
+  create_table "character_settings", force: :cascade do |t|
+    t.json "ability_button_map", default: {}, null: false
+    t.integer "character_id", null: false
+    t.datetime "created_at", null: false
+    t.json "custom_hotkeys", default: {}, null: false
+    t.float "joystick_sensitivity", default: 1.0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["character_id"], name: "index_character_settings_on_character_id", unique: true
   end
 
   create_table "characters", force: :cascade do |t|
@@ -144,6 +154,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
   add_foreign_key "character_classes", "users"
   add_foreign_key "character_items", "characters"
   add_foreign_key "character_items", "zones", column: "provenance_zone_id"
+  add_foreign_key "character_settings", "characters"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
   add_foreign_key "equipped_items", "character_items"
