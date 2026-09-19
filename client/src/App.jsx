@@ -1661,6 +1661,13 @@ export function isLatencyVisible(override, autoShow) {
 // happens to be auto-shown turns it off (and that off sticks), and hitting
 // it while auto-hidden turns it on (and that sticks too), regardless of
 // whether a previous override was ever set.
+// What Escape does: dismiss whatever is open first, else drop the target, else
+// (nothing to dismiss) open the settings menu.
+export function escapeAction({ overlayOpen, hasTarget }) {
+  if (overlayOpen) return "close";
+  return hasTarget ? "detarget" : "settings";
+}
+
 export function nextLatencyOverride(override, autoShow) {
   return !isLatencyVisible(override, autoShow);
 }
@@ -2717,6 +2724,7 @@ export default function App({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
   const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
+  const overlayOpenRef = useRef(false); // any loot/char sheet/settings/phone menu open; read by the Escape handler
   const buttonLayoutRef = useRef(buttonLayout);
   buttonLayoutRef.current = buttonLayout;
   // The canvas is letterboxed/pillarboxed (centered, fixed 4:3) within its
@@ -3032,9 +3040,17 @@ export default function App({
     const onKeyDown = (e) => {
       if (e.repeat) return;
       if (e.code === "Escape") {
-        setLootWindowUnitId(null);
-        setCharSheetOpen(false);
-        setSettingsOpen(false);
+        const action = escapeAction({ overlayOpen: overlayOpenRef.current, hasTarget: !!targetIdRef.current });
+        if (action === "close") {
+          setLootWindowUnitId(null);
+          setCharSheetOpen(false);
+          setSettingsOpen(false);
+          setMenuOpen(false);
+        } else if (action === "detarget") {
+          handleTargetUnit(null);
+        } else {
+          setSettingsOpen(true);
+        }
         return;
       }
       if (e.code === "KeyP") {
@@ -3099,7 +3115,7 @@ export default function App({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [sendMove, usePower, handleTabTarget, handleStartAttacking, handleStopAttacking]);
+  }, [sendMove, usePower, handleTabTarget, handleTargetUnit, handleStartAttacking, handleStopAttacking]);
 
   useEffect(() => {
     // Dev/QA aid for reproducing latency-dependent bugs (e.g. movement
@@ -3390,6 +3406,7 @@ export default function App({
         : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
 
+  overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
   // stacked (portrait and landscape both use this now): bar+name header
