@@ -66,4 +66,22 @@ describe("SettingsDialog", () => {
     expect(onClose).toHaveBeenCalled();
     expect(screen.getByText("nope")).toBeTruthy();
   });
+
+  it("hides the joystick pane unless joystick settings are enabled", () => {
+    renderDialog();
+    expect(screen.queryByText("Joystick sensitivity")).toBeNull();
+  });
+
+  it("edits joystick sensitivity from its own pane", () => {
+    const onJoystickSensitivityChange = vi.fn();
+    renderDialog({ showJoystickSettings: true, joystickSensitivity: 1.5, onJoystickSensitivityChange });
+    fireEvent.click(screen.getByText("Joystick sensitivity"));
+    expect(screen.getByRole("dialog", { name: "Joystick sensitivity" })).toBeTruthy();
+    expect(screen.getByRole("slider").value).toBe("1.5");
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "2" } });
+    expect(onJoystickSensitivityChange).toHaveBeenCalledWith(2);
+    fireEvent.click(screen.getByText("Reset to default"));
+    expect(onJoystickSensitivityChange).toHaveBeenCalledWith(1);
+  });
 });

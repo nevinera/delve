@@ -50,12 +50,44 @@ function RemapAbilitiesPane({ powers, layout, onAssign, onReset, error }) {
 // reload actions. Panes so far: remap abilities (one
 // select per action bar button choosing which power sits there; picking a
 // power already on another button swaps the two).
-export default function SettingsDialog({ open, powers, layout, onAssign, onReset, onToggleLatency, onReload, onClose, error }) {
+export const JOYSTICK_SENSITIVITY_MIN = 0.25;
+export const JOYSTICK_SENSITIVITY_MAX = 3;
+export const JOYSTICK_SENSITIVITY_STEP = 0.25;
+
+function JoystickPane({ value, onChange, error }) {
+  return (
+    <>
+      <label style={styles.row}>
+        <span>Camera stick</span>
+        <input
+          type="range"
+          aria-label="Joystick sensitivity"
+          style={{ flex: 1 }}
+          min={JOYSTICK_SENSITIVITY_MIN}
+          max={JOYSTICK_SENSITIVITY_MAX}
+          step={JOYSTICK_SENSITIVITY_STEP}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        <span>{value.toFixed(2)}x</span>
+      </label>
+      <div style={{ marginTop: 8 }}>
+        <button type="button" style={styles.button} onClick={() => onChange(1)}>Reset to default</button>
+      </div>
+      {error && <div style={styles.error}>{error}</div>}
+    </>
+  );
+}
+
+export default function SettingsDialog({
+  open, powers, layout, onAssign, onReset, onToggleLatency, onReload, onClose, error,
+  showJoystickSettings = false, joystickSensitivity = 1, onJoystickSensitivityChange,
+}) {
   const [pane, setPane] = useState(null);
   useEffect(() => { if (!open) setPane(null); }, [open]);
   if (!open) return null;
 
-  const title = pane === "abilities" ? "Remap abilities" : "Settings";
+  const title = { abilities: "Remap abilities", joystick: "Joystick sensitivity" }[pane] ?? "Settings";
   return (
     <div style={styles.backdrop} onClick={onClose}>
       <div style={styles.dialog} role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
@@ -68,11 +100,18 @@ export default function SettingsDialog({ open, powers, layout, onAssign, onReset
         </div>
         {pane === "abilities" ? (
           <RemapAbilitiesPane powers={powers} layout={layout} onAssign={onAssign} onReset={onReset} error={error} />
+        ) : pane === "joystick" ? (
+          <JoystickPane value={joystickSensitivity} onChange={onJoystickSensitivityChange} error={error} />
         ) : (
           <div style={styles.menu}>
             <button type="button" style={styles.menuButton} onClick={() => setPane("abilities")}>
               Remap abilities
             </button>
+            {showJoystickSettings && (
+              <button type="button" style={styles.menuButton} onClick={() => setPane("joystick")}>
+                Joystick sensitivity
+              </button>
+            )}
             <button type="button" style={styles.menuButton} onClick={onToggleLatency}>
               Toggle latency display (L)
             </button>

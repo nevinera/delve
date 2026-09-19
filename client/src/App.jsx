@@ -2724,6 +2724,10 @@ export default function App({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
   const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
+  const [joystickSensitivity, setJoystickSensitivity] = useState(characterSettings?.joystickSensitivity ?? 1);
+  const joystickSensitivityRef = useRef(joystickSensitivity); // read by the stick handler so it stays referentially stable
+  joystickSensitivityRef.current = joystickSensitivity;
+  const sensitivitySaveTimerRef = useRef(null);
   const overlayOpenRef = useRef(false); // any loot/char sheet/settings/phone menu open; read by the Escape handler
   const buttonLayoutRef = useRef(buttonLayout);
   buttonLayoutRef.current = buttonLayout;
@@ -2896,6 +2900,21 @@ export default function App({
     }
   }, [characterSettingsUrl]);
 
+  // Applies immediately; the save is debounced so dragging the slider sends one request.
+  const updateJoystickSensitivity = useCallback((value) => {
+    setJoystickSensitivity(value);
+    setSettingsError(null);
+    if (!characterSettingsUrl) return;
+    clearTimeout(sensitivitySaveTimerRef.current);
+    sensitivitySaveTimerRef.current = setTimeout(async () => {
+      try {
+        await saveCharacterSettings(characterSettingsUrl, { joystick_sensitivity: value });
+      } catch (err) {
+        setSettingsError(err.message);
+      }
+    }, 400);
+  }, [characterSettingsUrl]);
+
   const usePower = useCallback((slot) => {
     const selfEntryForPower = Object.entries(unitsRef.current).find(([, u]) => u.zone_unit_identifier === selfIdentifierRef.current);
     const selfUnitIdForPower = selfEntryForPower?.[0];
@@ -2988,7 +3007,8 @@ export default function App({
   }, [sendMove]);
 
   const handleCameraStickMove = useCallback((data) => {
-    cameraStickRef.current = { x: data.vector.x, y: data.vector.y };
+    const k = joystickSensitivityRef.current;
+    cameraStickRef.current = { x: data.vector.x * k, y: data.vector.y * k };
   }, []);
 
   const handleCameraStickEnd = useCallback(() => {
@@ -3597,6 +3617,9 @@ export default function App({
           setSettingsOpen(false);
         }}
         onReload={() => window.location.reload()}
+        showJoystickSettings={viewportMode.isPhoneLayout}
+        joystickSensitivity={joystickSensitivity}
+        onJoystickSensitivityChange={updateJoystickSensitivity}
         onClose={() => setSettingsOpen(false)}
         error={settingsError}
       />

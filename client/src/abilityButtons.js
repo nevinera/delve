@@ -40,8 +40,7 @@ function csrfToken() {
   return document.querySelector('meta[name="csrf-token"]')?.content;
 }
 
-// PATCHes part of the character's settings (camelCase-free: the Rails param
-// names). Resolves to the server's saved settings, or throws an Error.
+// PATCHes part of the character's settings (using the Rails param names). Resolves to the server's saved settings, or throws an Error.
 export async function saveCharacterSettings(url, setting) {
   const token = csrfToken();
   const res = await fetch(url, {
