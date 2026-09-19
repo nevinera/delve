@@ -14,19 +14,9 @@ import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
 import SettingsDialog from "./SettingsDialog";
+import { actionForEvent, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
 
-// W/S/Q/E → movement keys sent to server; A/D → turning handled by SceneManager
-const KEY_MAP = {
-  KeyW: "forward",
-  KeyS: "backward",
-  KeyQ: "strafe_left",
-  KeyE: "strafe_right",
-  KeyA: "turn_left",
-  KeyD: "turn_right",
-};
-const MOVEMENT_KEYS = new Set(["forward", "backward", "strafe_left", "strafe_right"]);
-const TURN_KEYS = new Set(["turn_left", "turn_right"]);
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
 // screen instead of a compact corner grid (there's no side panel in
@@ -2728,6 +2718,9 @@ export default function App({
   const cameraSensitivityRef = useRef(cameraSensitivity); // read by the scene every frame/drag
   cameraSensitivityRef.current = cameraSensitivity;
   const sensitivitySaveTimerRef = useRef(null);
+  const hotkeys = useMemo(() => resolveHotkeys(characterSettings?.customHotkeys), [characterSettings]);
+  const bindingIndexRef = useRef(buildBindingIndex(hotkeys)); // read by the key handlers so they never go stale
+  bindingIndexRef.current = buildBindingIndex(hotkeys);
   const overlayOpenRef = useRef(false); // any loot/char sheet/settings/phone menu open; read by the Escape handler
   const buttonLayoutRef = useRef(buttonLayout);
   buttonLayoutRef.current = buttonLayout;
@@ -3072,19 +3065,17 @@ export default function App({
         }
         return;
       }
-      if (e.code === "KeyP") {
+      const action = actionForEvent(bindingIndexRef.current, e);
+      if (!action) return;
+      if (action === "toggle_character_sheet") {
         setCharSheetOpen(o => !o);
-        return;
-      }
-      if (e.code === "KeyL") {
+      } else if (action === "toggle_latency") {
         setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
-        return;
-      }
-      if (e.code === "KeyT") {
-        if (e.shiftKey) handleStopAttacking(); else handleStartAttacking();
-        return;
-      }
-      if (e.code === "Tab") {
+      } else if (action === "attack_start") {
+        handleStartAttacking();
+      } else if (action === "attack_stop") {
+        handleStopAttacking();
+      } else if (action === "target_next") {
         e.preventDefault();
         handleTabTarget(
           // capture current values via refs to avoid stale closure
@@ -3092,33 +3083,27 @@ export default function App({
           targetIdRef.current,
           selfIdentifier,
         );
-        return;
-      }
-      const slotKey = e.code.match(/^Digit(\d)$/)?.[1];
-      if (slotKey !== undefined) {
-        const slot = slotKey === "0" ? 9 : parseInt(slotKey, 10) - 1;
-        usePower(buttonLayoutRef.current[slot]);
-        return;
-      }
-      const action = KEY_MAP[e.code];
-      if (!action) return;
-      const selfForInput = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
-      if (selfForInput?.status === "dead") return;
-      if (MOVEMENT_KEYS.has(action)) {
-        movementKeysRef.current.add(action);
-        sendMove();
-      } else if (TURN_KEYS.has(action)) {
-        turnKeysRef.current.add(action);
+      } else if (action.startsWith("ability_")) {
+        usePower(buttonLayoutRef.current[Number(action.slice("ability_".length)) - 1]);
+      } else {
+        const selfForInput = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+        if (selfForInput?.status === "dead") return;
+        if (MOVEMENT_ACTIONS[action]) {
+          movementKeysRef.current.add(MOVEMENT_ACTIONS[action]);
+          sendMove();
+        } else if (TURN_ACTIONS[action]) {
+          turnKeysRef.current.add(TURN_ACTIONS[action]);
+        }
       }
     };
     const onKeyUp = (e) => {
-      const action = KEY_MAP[e.code];
+      const action = actionForKeyUp(bindingIndexRef.current, e);
       if (!action) return;
-      if (MOVEMENT_KEYS.has(action)) {
-        movementKeysRef.current.delete(action);
+      if (MOVEMENT_ACTIONS[action]) {
+        movementKeysRef.current.delete(MOVEMENT_ACTIONS[action]);
         sendMove();
-      } else if (TURN_KEYS.has(action)) {
-        turnKeysRef.current.delete(action);
+      } else if (TURN_ACTIONS[action]) {
+        turnKeysRef.current.delete(TURN_ACTIONS[action]);
       }
     };
     const onBlur = () => {
@@ -3500,7 +3485,7 @@ export default function App({
 
   function renderActionSlot(button, extraStyle) {
     const slot = button + 1;
-    const key = slot === 10 ? "0" : String(slot);
+    const key = bindingLabel(hotkeys[`ability_${slot}`]);
     const i = buttonLayout[button]; // power index shown on this button
     const power = powers[i];
     const iconUrl = power?.iconURL
