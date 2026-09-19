@@ -85,9 +85,15 @@ func BuildMapGraph(m instanceconfig.Map, agentRadius float64, anchors []Point) (
 	if err := validateGeometry(m); err != nil {
 		return nil, nil, err
 	}
+	return buildMapGraph(m, newBarrierIndex(m.Barriers), agentRadius, anchors)
+}
+
+// buildMapGraph is BuildMapGraph over an already-built barrier index for m.
+// The index doesn't depend on agent size, so a zone building several size
+// buckets of the same map builds it once and shares it.
+func buildMapGraph(m instanceconfig.Map, idx *barrierIndex, agentRadius float64, anchors []Point) (*MapGraph, []int, error) {
 	agentRadius += cornerClearancePadding
 
-	idx := newBarrierIndex(m.Barriers)
 	g := &MapGraph{agentRadius: agentRadius, idx: idx}
 	g.grid = chooseGrid(m, idx, agentRadius, anchors)
 	g.blocked = newBitGrid(g.grid.w * g.grid.h)
@@ -188,7 +194,9 @@ func (g *MapGraph) markBlocked() {
 				return
 			}
 			x, y := g.grid.centerX(cx), g.grid.centerY(cy)
-			if p.blocked(x, y, x, y, g.agentRadius) {
+			// Same test as p.blocked(x, y, x, y, R) for a point, minus the
+			// general segment-vs-segment machinery.
+			if p.clearance(x, y) < g.agentRadius-clearanceEpsilon {
 				g.blocked.set(i)
 			}
 		}
