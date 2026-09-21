@@ -1840,17 +1840,23 @@ function UnitBar({ label, current, max }) {
   );
 }
 
-// numbersAlign positions the "current/max" label directly above one end of
-// the bar - "end" (self's frame) sits above its right end, "start"
+// numbersAlign positions the "HP: current/max" label directly above one end
+// of the bar - "end" (self's frame) sits above its right end, "start"
 // (target's frame) above its left end, so on-screen both labels land near
 // the center of the frames row, next to each other. Omitted entirely
 // (rather than defaulting to a side) when the caller doesn't want it shown.
+// resourceLabel (e.g. "Energy: 100/100"), when given, sits on the *other*
+// end of the same line - always the line's outer edge (self's HP already
+// sits at the right, so its resource label ends up at the left; target's
+// HP sits at the left, so its resource label lands at the right, matching
+// "right-aligned" for the common goblins-as-target case this was written
+// for).
 // landscape swaps to the big top-of-screen bar instead, with a plain
 // percentage (no numbersAlign label) inside its own right edge.
 // mirrored (target's landscape bar): fill anchors from the right instead of
 // the left, so it empties toward the left (center) rather than the right -
 // paired with the percentage text also moving to the bar's left edge.
-function HealthBar({ current, max, numbersAlign, landscape, mirrored }) {
+function HealthBar({ current, max, numbersAlign, landscape, mirrored, resourceLabel }) {
   const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
   return (
     <div style={landscape ? styles.healthBarTrackLandscape : styles.healthBarTrack}>
@@ -1865,7 +1871,21 @@ function HealthBar({ current, max, numbersAlign, landscape, mirrored }) {
           whiteSpace: "nowrap",
           textShadow: "0 1px 2px #000",
         }}>
-          {Math.round(current)}/{Math.round(max)}
+          HP: {Math.round(current)}/{Math.round(max)}
+        </div>
+      )}
+      {!landscape && resourceLabel && (
+        <div style={{
+          position: "absolute",
+          bottom: "100%",
+          marginBottom: 2,
+          [numbersAlign === "start" ? "right" : "left"]: 0,
+          fontSize: 11,
+          color: "#ccc",
+          whiteSpace: "nowrap",
+          textShadow: "0 1px 2px #000",
+        }}>
+          {resourceLabel}
         </div>
       )}
       <div style={mirrored ? {
@@ -1900,6 +1920,16 @@ function powerMaxRange(power) {
     return Array.isArray(r) ? r[1] : r;
   }
   return null;
+}
+
+// "Energy: 100/100" - the label for HealthBar's resourceLabel prop. null
+// when there's nothing to show (no resource at all, matching ResourceBar's
+// own max<=0 guard). Falls back to a generic "Resource" name when the
+// resource's own name isn't known client-side (see targetResource).
+function resourceMeterLabel(resource, current, max) {
+  if (!(max > 0)) return null;
+  const name = resource?.name ? resource.name.charAt(0).toUpperCase() + resource.name.slice(1) : "Resource";
+  return `${name}: ${Math.round(current ?? 0)}/${Math.round(max)}`;
 }
 
 function formatUnitName(unit) {
@@ -2801,7 +2831,7 @@ export default function App({
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
   const [primaryStats, setPrimaryStats] = useState([]);
-  const [primaryResourceColor, setPrimaryResourceColor] = useState(null);
+  const [primaryResource, setPrimaryResource] = useState(null); // {name, color} | null
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
@@ -2811,7 +2841,7 @@ export default function App({
   const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
   const npcBasicAttackStyleByZoneIdRef = useRef({});  // { [zoneUnitId]: basicAttackStyle | undefined }
   const npcTokenUrlByZoneIdRef = useRef({});          // { [zoneUnitId]: resolved absolute tokenImageUrl }
-  const npcResourceColorByZoneIdRef = useRef({});     // { [zoneUnitId]: ResourceType.color (bare hex) | undefined }
+  const npcResourceByZoneIdRef = useRef({});          // { [zoneUnitId]: {name, color} | undefined }
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
@@ -2841,7 +2871,8 @@ export default function App({
       .then(cfg => {
         setPowers(cfg.powers ?? []);
         setPrimaryStats(cfg.primaryStats ?? []);
-        setPrimaryResourceColor(cfg.resources?.[0]?.color ?? null);
+        const resource = cfg.resources?.[0];
+        setPrimaryResource(resource ? {name: resource.name, color: resource.color} : null);
       })
       .catch(() => {});
   }, [classConfigUrl]);
@@ -2856,7 +2887,7 @@ export default function App({
         const basicAttackSchoolById = {};
         const basicAttackStyleById = {};
         const tokenUrlById = {};
-        const resourceColorById = {};
+        const resourceById = {};
         const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
@@ -2877,7 +2908,7 @@ export default function App({
             // to track which variant a given spawn actually rendered with).
             const rawTokenUrl = Array.isArray(ut.tokenImageUrl) ? ut.tokenImageUrl[0] : ut.tokenImageUrl;
             tokenUrlById[unit.identifier] = rawTokenUrl ? new URL(rawTokenUrl, zoneSourceUrl).href : null;
-            resourceColorById[unit.identifier] = ut.resource?.color;
+            resourceById[unit.identifier] = ut.resource ? {name: ut.resource.name, color: ut.resource.color} : null;
           }
           barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
@@ -2887,7 +2918,7 @@ export default function App({
         npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
         npcBasicAttackStyleByZoneIdRef.current = basicAttackStyleById;
         npcTokenUrlByZoneIdRef.current = tokenUrlById;
-        npcResourceColorByZoneIdRef.current = resourceColorById;
+        npcResourceByZoneIdRef.current = resourceById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
         // Every unit type's powers, not just spawned units' - a status
@@ -3474,13 +3505,13 @@ export default function App({
         ? characterTokenUrl
         : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
-  // Same reasoning as targetTokenUrl - another player's resource color
-  // isn't known client-side, so their resource bar just falls back to
-  // ResourceBar's own default gray rather than guessing.
-  const targetResourceColor = targetUnit
+  // Same reasoning as targetTokenUrl - another player's resource
+  // name/color isn't known client-side, so their resource bar/meter just
+  // falls back to ResourceBar's own default gray and no meter label.
+  const targetResource = targetUnit
     ? (targetUnit.zone_unit_identifier === selfIdentifier
-        ? primaryResourceColor
-        : npcResourceColorByZoneIdRef.current[targetUnit.zone_unit_identifier])
+        ? primaryResource
+        : npcResourceByZoneIdRef.current[targetUnit.zone_unit_identifier])
     : null;
 
   overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
@@ -3514,8 +3545,11 @@ export default function App({
           <strong>{characterName ?? "—"}</strong>
           {selfUnit && (
             <div style={styles.healthResourceStack}>
-              <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
-              <ResourceBar current={selfUnit.resource} max={selfUnit.max_resource} color={primaryResourceColor} />
+              <HealthBar
+                current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end"
+                resourceLabel={resourceMeterLabel(primaryResource, selfUnit.resource, selfUnit.max_resource)}
+              />
+              <ResourceBar current={selfUnit.resource} max={selfUnit.max_resource} color={primaryResource?.color} />
             </div>
           )}
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
@@ -3533,7 +3567,7 @@ export default function App({
         <>
           <div style={styles.frameHudHeader}>
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
-            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} landscape />}
+            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResource?.color} landscape />}
           </div>
           <div style={styles.frameImageNameRowRight}>
             {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
@@ -3552,8 +3586,11 @@ export default function App({
           <strong>{formatUnitName(targetUnit)}</strong>
           {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
           <div style={styles.healthResourceStack}>
-            <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
-            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} />}
+            <HealthBar
+              current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start"
+              resourceLabel={resourceMeterLabel(targetResource, targetUnit.resource, targetUnit.max_resource)}
+            />
+            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResource?.color} />}
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
