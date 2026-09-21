@@ -30,13 +30,17 @@
 //     "recurring" StatusEffects are simulated, matching what
 //     tickStatusEffects actually does.
 //
-// Unlike the above, this one is a real gap, not a match to the engine:
-// Power.CostType/CostAmount and UnitType.Resource.ReturnRate. The real
-// engine now gates/spends/regens resource (command.PowerUsable/
-// ClampResource, instance.tickResourceRegen), but this simulation still
-// doesn't - every NPC here is simulated as if it has unlimited resource.
-// Modeling it would add a balance check before pickPower fires and a regen
-// step in Simulate's event loop; see issue #58.
+// Power.CostType/CostAmount and UnitType.Resource.ReturnRate/DefaultValue
+// are modeled too, mirroring the real engine's command.PowerUsable/
+// ClampResource and instance.tickResourceRegen: pickPower only picks among
+// powers the enemy can currently afford, a successful cast spends
+// CostAmount, a "resource" effect applies its own delta, and resource
+// regenerates continuously toward DefaultValue at ReturnRate (see
+// resource.go). Unlike the real tick loop, which only checks every 100ms,
+// Simulate's event loop can afford to poll on the same cadence
+// (resourceRetryInterval) purely to decide when to retry a momentarily
+// unaffordable power - the regen itself is computed continuously from
+// elapsed time, not quantized to that interval.
 //
 // Also out of scope, by the nature of a target dummy rather than a real
 // fight: range/line-of-sight/facing-arc checks (the target is always in

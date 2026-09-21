@@ -94,6 +94,63 @@ func TestSimulate_RecurringStatusTicksContributeDamageWhileActive(t *testing.T) 
 	assert.Equal(t, res.StatusTickDamage, res.TotalDamage)
 }
 
+func TestSimulate_UnaffordablePowerNeverFires(t *testing.T) {
+	amount := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Resource: instanceconfig.ResourceType{Max: 50, DefaultValue: 50},
+		Powers: []instanceconfig.Power{{
+			Name: "Overcharge", GlobalCooldown: 1, CostType: "energy", CostAmount: 100, // more than Max: never affordable
+			Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 50, seeded(9))
+
+	assert.Zero(t, res.TotalDamage)
+}
+
+func TestSimulate_PowerCadenceIsRateLimitedByResourceReturnRateNotJustGCD(t *testing.T) {
+	amount := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Resource: instanceconfig.ResourceType{Max: 100, DefaultValue: 100, ReturnRate: 10},
+		Powers: []instanceconfig.Power{{
+			Name: "Overcharge", GlobalCooldown: 1, CostType: "energy", CostAmount: 50,
+			Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 30000, seeded(10))
+
+	// GCD (1s) alone would allow a cast every second, but each cast spends
+	// 50 and only 10/s regenerates back in - sustained cadence is one cast
+	// every 5s (cost/returnRate), not every 1s (GCD):
+	// (50 * 0.9975) / 5 = 9.975
+	assert.InEpsilon(t, 9.975, res.DPS, 0.05)
+	assert.Equal(t, res.PowerDamage, res.TotalDamage)
+}
+
+func TestSimulate_ResourceEffectReplenishesResourceEnablingRepeatedCasts(t *testing.T) {
+	amount := instanceconfig.ValueRange{10, 10}
+	enemy := instanceconfig.UnitType{
+		Resource: instanceconfig.ResourceType{Max: 100, DefaultValue: 20}, // ReturnRate 0: no passive regen at all
+		Powers: []instanceconfig.Power{{
+			Name: "SelfFund", GlobalCooldown: 1, CostType: "energy", CostAmount: 20,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Amount: &amount},
+				{Type: "resource", Affects: "self", ResourceName: "energy", Delta: 30},
+			},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 20, seeded(11))
+
+	// Without the resource effect actually applying, only the first cast
+	// (resource starts at exactly the 20 cost) could ever land - ReturnRate
+	// is 0, so resource would sit at 0 forever after. Each cast here nets
+	// +10 resource (delta 30, cost 20), so it should keep firing every GCD
+	// instead of stopping after one - assert well more landed than a single
+	// cast's worth of damage.
+	avgDamagePerCast := 10.0 * 0.9975
+	assert.Greater(t, res.PowerDamage, avgDamagePerCast*5)
+}
+
 func TestSimulate_NoBasicAttackNoPowersDealsNoDamage(t *testing.T) {
 	res := dpssim.Simulate(instanceconfig.UnitType{}, dpssim.TargetStats{}, 100, seeded(7))
 

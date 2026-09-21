@@ -29,14 +29,17 @@ func basicAttackDamage(enemy instanceconfig.UnitType, rng *rand.Rand) float64 {
 
 // npcEffectUsable mirrors tryNPCAttack's same-named helper: reports whether
 // eff is a type/shape this simulation knows how to fire at all (a harm with
-// an amount, or a status with a status) - range/LOS/facing are assumed
-// always satisfied against a stationary dummy (see package doc).
+// an amount, a status with a status, or a resource with a resourceName) -
+// range/LOS/facing are assumed always satisfied against a stationary dummy
+// (see package doc).
 func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
 	switch eff.Type {
 	case "harm":
 		return eff.Amount != nil
 	case "status":
 		return eff.Status != nil
+	case "resource":
+		return eff.ResourceName != ""
 	default:
 		return false
 	}
@@ -68,13 +71,17 @@ func statusTickDamage(eff instanceconfig.StatusEffect, rng *rand.Rand) float64 {
 }
 
 // pickPower mirrors tryNPCAttack's selection: a power is a candidate if any
-// of its effects is npcEffectUsable, then one candidate is chosen uniformly
-// at random - matching the real engine's current behavior of ignoring
-// UnitType.Tactics entirely (see package doc). Returns false if no power
-// has any usable effect.
-func pickPower(powers []instanceconfig.Power, rng *rand.Rand) (instanceconfig.Power, bool) {
+// of its effects is npcEffectUsable and its CostAmount doesn't exceed
+// resource, then one candidate is chosen uniformly at random - matching the
+// real engine's current behavior of ignoring UnitType.Tactics entirely (see
+// package doc). Returns false if no power is both usable and affordable
+// right now.
+func pickPower(powers []instanceconfig.Power, resource float64, rng *rand.Rand) (instanceconfig.Power, bool) {
 	var available []instanceconfig.Power
 	for _, p := range powers {
+		if p.CostAmount > resource {
+			continue
+		}
 		for _, eff := range p.Effects {
 			if npcEffectUsable(eff) {
 				available = append(available, p)
