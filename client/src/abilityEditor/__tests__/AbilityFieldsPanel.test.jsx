@@ -80,6 +80,25 @@ describe("AbilityFieldsPanel", () => {
     expect(onChange.mock.calls[0][0].data.iconURL).toBe("../graphics/icons/new.svg");
   });
 
+  it("renders costType/costAmount even when the ability lacks them, both freeform", () => {
+    renderPanel(ability);
+    expect(screen.getByText("Cost type")).toBeInTheDocument();
+    expect(screen.getByText("Cost amount")).toBeInTheDocument();
+  });
+
+  it("calls onChange with the cost fields when they're edited", () => {
+    const onChange = renderPanel(ability);
+    const rows = screen.getAllByRole("row");
+    const costTypeInput = rows.find((r) => r.textContent.startsWith("Cost type")).querySelector("input");
+    const costAmountInput = rows.find((r) => r.textContent.startsWith("Cost amount")).querySelector("input");
+
+    fireEvent.change(costTypeInput, {target: {value: "energy"}});
+    expect(onChange.mock.calls[0][0].data.costType).toBe("energy");
+
+    fireEvent.change(costAmountInput, {target: {value: "20"}});
+    expect(onChange.mock.calls[1][0].data.costAmount).toBe(20);
+  });
+
   it("calls onChange with a parsed number when an editable number field changes", () => {
     const onChange = renderPanel(ability);
     fireEvent.change(screen.getByDisplayValue("60"), {target: {value: "75"}});

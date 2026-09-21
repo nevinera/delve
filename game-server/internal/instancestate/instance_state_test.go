@@ -18,6 +18,7 @@ var testUnitType = instanceconfig.UnitType{
 		Name:         "Energy",
 		Max:          50,
 		DefaultValue: 25,
+		ReturnRate:   5,
 	},
 	Targeting: instanceconfig.UnitTargeting{Type: "nearest"},
 	Tactics:   instanceconfig.UnitTactics{Type: "randomAvailable"},
@@ -143,6 +144,8 @@ func TestNewInstanceState_UnitFields(t *testing.T) {
 	assert.Equal(t, 100.0, u.MaxHealth)
 	assert.Equal(t, 25.0, u.Resource) // Resource.DefaultValue
 	assert.Equal(t, 50.0, u.MaxResource)
+	assert.Equal(t, 25.0, u.ResourceDefaultValue)
+	assert.Equal(t, 5.0, u.ResourceReturnRate)
 	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
 	assert.Nil(t, u.Target)
 	assert.Empty(t, u.ActiveStatusEffects)

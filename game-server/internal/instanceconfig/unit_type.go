@@ -14,7 +14,7 @@ type UnitType struct {
 	BasicAttackRange  float64       `json:"basicAttackRange,omitempty"`  // Feet; omitted/0 defaults to 5.0 (melee)
 	BasicAttackSchool string        `json:"basicAttackSchool,omitempty"` // "physical" (default) or "magic"; client-only, affects basic-attack visuals only
 	BasicAttackStyle  string        `json:"basicAttackStyle,omitempty"`  // one of BasicAttackStyles; client-only, picks the basic-attack graphic/sound
-	Resource          ResourceType  `json:"resource"`                    // Required
+	Resource          ResourceType  `json:"resource,omitempty"`          // Optional; zero value means no resource
 	Powers            []Power       `json:"powers,omitempty"`
 	Targeting         UnitTargeting `json:"targeting,omitempty"`
 	Tactics           UnitTactics   `json:"tactics,omitempty"`

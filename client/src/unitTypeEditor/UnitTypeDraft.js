@@ -1,4 +1,5 @@
 import {refForAbilityKey, abilityKeyForRef} from "./abilityRefs";
+import {resourceTypeById} from "../resourceTypes";
 
 // Starter shape for a freshly-picked tactics type (see
 // Validators::TacticsValidator) - mirrors ClassDraft/AbilityDraft's own
@@ -60,8 +61,19 @@ export class UnitTypeDraft {
     return this.setField("tokenImageUrl", this.tokenImageUrls.map((u, i) => (i === index ? url : u)));
   }
 
-  updateResourceField(field, value) {
-    return this.setField("resource", {...(this.data.resource ?? {}), [field]: value});
+  // The resource picker (RESOURCE_TYPES, i.e. config/resource_types.json)
+  // offers a fixed list plus "none" (id null/""); picking one replaces the
+  // whole resource with that preset's full details rather than editing
+  // fields in place, since unit types no longer hand-author them.
+  setResourceType(id) {
+    if (!id) {
+      const {resource: _dropped, ...rest} = this.data;
+      return new UnitTypeDraft(rest, this.unitTypeKey);
+    }
+    const preset = resourceTypeById(id);
+    if (!preset) return this;
+    const {id: _presetId, ...resource} = preset;
+    return this.setField("resource", resource);
   }
 
   setTargetingType(type) {

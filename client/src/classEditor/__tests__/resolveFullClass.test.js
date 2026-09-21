@@ -17,6 +17,28 @@ describe("resolveFullClass", () => {
     expect(result).toEqual({name: "Puncher", powers: [{name: "Punch", castTime: null}]});
   });
 
+  it("rebases the inlined ability's own asset URLs from abilities/classes/<key>/ to classes/", async () => {
+    const abilities = {
+      "classes/puncher/punch": {
+        ability: {
+          name: "Punch",
+          iconURL: "../../../graphics/icons/punch.svg",
+          graphicEffects: [{sourceURL: "../../../graphics/effects/punch-impact.webp"}],
+        },
+        assetMap: {},
+      },
+    };
+    const classData = {powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
+
+    const result = await resolveFullClass("puncher", classData, abilities);
+
+    expect(result.powers[0]).toEqual({
+      name: "Punch",
+      iconURL: "../graphics/icons/punch.svg",
+      graphicEffects: [{sourceURL: "../graphics/effects/punch-impact.webp"}],
+    });
+  });
+
   it("leaves non-reference fields untouched", async () => {
     const classData = {name: "Puncher", colors: {major: "AA2200", minor: "FFCC88"}, powers: []};
 

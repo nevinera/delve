@@ -90,6 +90,21 @@ describe("entryFieldsFor", () => {
     expect(fields.filter((f) => f === "status")).toEqual(["status"]);
     expect(fields.filter((f) => f === "duration")).toEqual(["duration"]);
   });
+
+  it("forces resourceName/delta/range into a fresh resource-type effect's field list", () => {
+    const entry = {type: "resource", affects: "self"};
+    const fields = entryFieldsFor("effects", entry);
+    expect(fields).toContain("resourceName");
+    expect(fields).toContain("delta");
+    expect(fields).toContain("range");
+  });
+
+  it("doesn't duplicate resource fields when a resource-type effect already has them", () => {
+    const entry = {type: "resource", affects: "bTarget", resourceName: "energy", delta: -10, range: 5.0};
+    const fields = entryFieldsFor("effects", entry);
+    expect(fields.filter((f) => f === "resourceName")).toEqual(["resourceName"]);
+    expect(fields).toEqual(["type", "affects", "resourceName", "delta", "range"]);
+  });
 });
 
 describe("placeholderEntry", () => {

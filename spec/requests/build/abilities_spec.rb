@@ -152,7 +152,7 @@ RSpec.describe "Build::Abilities", type: :request do
 
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('<div id="editor-root"')
-          expect(response.body).to match(%r{src="/client/editor[^"]*\.js"})
+          expect(response.body).to match(%r{src="/client/abilityEditor[^"]*\.js"})
           expect(response.body).to include('data-key="punch"')
           expect(response.body).to include(CGI.escapeHTML({"duration" => 0.12, "url" => "/abilities/sounds/twang.ogg"}.to_json))
           # The point of this move: Rails never opens the ability file (or

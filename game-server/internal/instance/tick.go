@@ -98,6 +98,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds())
+			tickResourceRegen(state, TickInterval.Seconds())
 			expireStatusEffects(state, now)
 			resolveCollisions(state, inst.ZoneConfig)
 			restoreUnitsThatCrossedBarriers(state, prevState, inst.ZoneConfig)

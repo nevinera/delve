@@ -1,4 +1,4 @@
-import {entryHeading, humanize} from "../editor/abilityFormatting";
+import {entryHeading, humanize} from "../abilityEditor/abilityFormatting";
 import {PRIMARY_STATS, SECONDARY_STATS, SLOT_COUNT, WIELD_TYPES} from "./classFieldOptions";
 
 const RESOURCE_FIELDS = [

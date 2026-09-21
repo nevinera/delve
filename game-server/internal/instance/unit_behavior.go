@@ -251,6 +251,9 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	// effect of the power a player casts.
 	var available []instanceconfig.Power
 	for _, p := range powers {
+		if !command.PowerUsable(unit, p, now) {
+			continue
+		}
 		for _, eff := range p.Effects {
 			if npcEffectUsable(eff) && npcEffectInRange(eff, dist, unit, target) {
 				available = append(available, p)
@@ -297,9 +300,24 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 				target.Target = nil
 				instancestate.RollAndRecordLoot(targetID, target, state)
 			}
+		case "resource":
+			recipient := target
+			if eff.Affects == "self" {
+				recipient = unit
+			}
+			recipient.Resource = command.ClampResource(recipient.Resource+eff.Delta, recipient.MaxResource)
 		}
 	}
+	if power.CostAmount > 0 {
+		unit.Resource = command.ClampResource(unit.Resource-power.CostAmount, unit.MaxResource)
+	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
+	if power.Cooldown > 0 {
+		if unit.PowerCooldowns == nil {
+			unit.PowerCooldowns = make(map[string]time.Time)
+		}
+		unit.PowerCooldowns[power.Name] = now.Add(time.Duration(power.Cooldown * float64(time.Second)))
+	}
 	*events = append(*events, CombatEvent{
 		AttackerID: attackerID.String(),
 		TargetID:   targetID.String(),
@@ -308,13 +326,16 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 }
 
 // npcEffectUsable reports whether eff is a type/shape tryNPCAttack knows how
-// to fire at all (a harm with an amount, or a status with a status).
+// to fire at all (a harm with an amount, a status with a status, or a
+// resource with a resourceName).
 func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
 	switch eff.Type {
 	case "harm":
 		return eff.Amount != nil
 	case "status":
 		return eff.Status != nil
+	case "resource":
+		return eff.ResourceName != ""
 	default:
 		return false
 	}

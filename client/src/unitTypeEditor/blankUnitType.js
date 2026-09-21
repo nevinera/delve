@@ -17,7 +17,6 @@ export function blankUnitType(key) {
     maxHP: 20,
     dps: 4.0,
     attackSpeed: 1.0,
-    resource: {name: "energy", color: "888888", max: 100.0, defaultValue: 100.0, returnRate: 0.0, isFluid: true},
     targeting: {type: "aggroTable"},
     tactics: {type: "randomAvailable"},
     powers: [],

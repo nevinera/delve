@@ -8,7 +8,7 @@ vi.mock("../../game/effectPlayback", () => ({firePowerEffects: vi.fn()}));
 
 // A real WebGLRenderer needs a canvas jsdom can't back - stub it the same
 // way AbilityEditor.test.jsx stubs AbilityPreviewPane, just one level lower.
-vi.mock("../../editor/AbilityPreviewCanvas", () => ({
+vi.mock("../../abilityEditor/AbilityPreviewCanvas", () => ({
   default: forwardRef((props, ref) => {
     useImperativeHandle(ref, () => ({positions: () => ({})}));
     return <div data-testid="canvas" />;

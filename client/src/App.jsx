@@ -16,6 +16,7 @@ import { AbilityTooltip } from "./AbilityTooltip";
 import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
+import { darkenHexColor } from "./darkenColor";
 
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
@@ -500,24 +501,44 @@ const styles = {
     flex: 1,
     minWidth: 0,
   },
-  healthBarTrack: {
+  // Wraps HealthBar + ResourceBar as a flex column so ResourceBar always
+  // ends up immediately below HealthBar, the same length (both stretch to
+  // this wrapper's width) and half as thick, with no gap between them -
+  // pinned where healthBarTrack alone used to be pinned.
+  healthResourceStack: {
     position: "absolute",
     bottom: 6,
     left: 6,
     right: 6,
+    display: "flex",
+    flexDirection: "column",
+  },
+  healthBarTrack: {
+    position: "relative",
     height: 9,
     border: "1px solid #3a8a3a",
     borderRadius: 2,
     background: "#5a1010",
   },
-  // Landscape phone: pinned to the top of frameInfo (which itself sits a
+  resourceBarTrack: {
+    position: "relative",
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  resourceBarTrackLandscape: {
+    position: "relative",
+    height: 9,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  // Landscape phone: sits at the top of frameHudHeader (which itself sits a
   // couple px from the top of the screen), twice the height/length of the
-  // desktop bar (no left/right margin, full frameInfo width).
+  // desktop bar (no left/right margin, full frameHudHeader width). A flex
+  // child of frameHudHeader now rather than self-positioned, so an optional
+  // ResourceBar can stack immediately below it instead of overlapping.
   healthBarTrackLandscape: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+    position: "relative",
     height: 18,
     // Black instead of the desktop bar's green border - green blends into
     // grass/foliage scenery now that the frame has no background box.
@@ -548,11 +569,13 @@ const styles = {
     pointerEvents: "none",
   },
   // Bar+name HUD (portrait and landscape both use this now): the header
-  // holds just the health bar; the name moved down next to the token image
-  // instead of living in this header.
+  // holds the health bar (and, for a target with one, its resource bar
+  // immediately below); the name moved down next to the token image
+  // instead of living in this header. flex column, not a fixed height, so
+  // it grows to fit an optional second (resource) bar without overlap.
   frameHudHeader: {
-    position: "relative",
-    height: 18,
+    display: "flex",
+    flexDirection: "column",
     flexShrink: 0,
   },
   // Image + name side by side, below the header ("moved down" to clear
@@ -1786,6 +1809,28 @@ export function StatusBar({ statuses, now, side = "left", landscape }) {
   );
 }
 
+// A unit's resource (energy/mana/rage/...) rendered as its own bar rather
+// than a text readout - half the height of the health bar it sits under.
+// color is the resource's own ResourceType.color (a bare hex string, e.g.
+// "AADD00" - see docs/schema/resource_type.md); the filled (current) portion
+// uses it at full brightness, and the track behind it (the already-spent
+// portion) is a darkened version of that same color via darkenHexColor,
+// rather than a fixed dark background - so different resources still read
+// as visually distinct from each other and from HP. Renders nothing when
+// max isn't positive (a unit with no resource at all).
+function ResourceBar({ current, max, color, landscape }) {
+  if (!(max > 0)) return null;
+  const pct = Math.max(0, Math.min(1, (current ?? 0) / max));
+  return (
+    <div style={{
+      ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
+      background: darkenHexColor(color),
+    }}>
+      <div style={{ width: `${pct * 100}%`, height: "100%", background: color ? `#${color}` : "#888" }} />
+    </div>
+  );
+}
+
 function UnitBar({ label, current, max }) {
   const pct = max > 0 ? Math.round((current / max) * 100) : 0;
   return (
@@ -1795,17 +1840,23 @@ function UnitBar({ label, current, max }) {
   );
 }
 
-// numbersAlign positions the "current/max" label directly above one end of
-// the bar - "end" (self's frame) sits above its right end, "start"
+// numbersAlign positions the "HP: current/max" label directly above one end
+// of the bar - "end" (self's frame) sits above its right end, "start"
 // (target's frame) above its left end, so on-screen both labels land near
 // the center of the frames row, next to each other. Omitted entirely
 // (rather than defaulting to a side) when the caller doesn't want it shown.
+// resourceLabel (e.g. "Energy: 100/100"), when given, sits on the *other*
+// end of the same line - always the line's outer edge (self's HP already
+// sits at the right, so its resource label ends up at the left; target's
+// HP sits at the left, so its resource label lands at the right, matching
+// "right-aligned" for the common goblins-as-target case this was written
+// for).
 // landscape swaps to the big top-of-screen bar instead, with a plain
 // percentage (no numbersAlign label) inside its own right edge.
 // mirrored (target's landscape bar): fill anchors from the right instead of
 // the left, so it empties toward the left (center) rather than the right -
 // paired with the percentage text also moving to the bar's left edge.
-function HealthBar({ current, max, numbersAlign, landscape, mirrored }) {
+function HealthBar({ current, max, numbersAlign, landscape, mirrored, resourceLabel }) {
   const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
   return (
     <div style={landscape ? styles.healthBarTrackLandscape : styles.healthBarTrack}>
@@ -1820,7 +1871,21 @@ function HealthBar({ current, max, numbersAlign, landscape, mirrored }) {
           whiteSpace: "nowrap",
           textShadow: "0 1px 2px #000",
         }}>
-          {Math.round(current)}/{Math.round(max)}
+          HP: {Math.round(current)}/{Math.round(max)}
+        </div>
+      )}
+      {!landscape && resourceLabel && (
+        <div style={{
+          position: "absolute",
+          bottom: "100%",
+          marginBottom: 2,
+          [numbersAlign === "start" ? "right" : "left"]: 0,
+          fontSize: 11,
+          color: "#ccc",
+          whiteSpace: "nowrap",
+          textShadow: "0 1px 2px #000",
+        }}>
+          {resourceLabel}
         </div>
       )}
       <div style={mirrored ? {
@@ -1855,6 +1920,16 @@ function powerMaxRange(power) {
     return Array.isArray(r) ? r[1] : r;
   }
   return null;
+}
+
+// "Energy: 100/100" - the label for HealthBar's resourceLabel prop. null
+// when there's nothing to show (no resource at all, matching ResourceBar's
+// own max<=0 guard). Falls back to a generic "Resource" name when the
+// resource's own name isn't known client-side (see targetResource).
+function resourceMeterLabel(resource, current, max) {
+  if (!(max > 0)) return null;
+  const name = resource?.name ? resource.name.charAt(0).toUpperCase() + resource.name.slice(1) : "Resource";
+  return `${name}: ${Math.round(current ?? 0)}/${Math.round(max)}`;
 }
 
 function formatUnitName(unit) {
@@ -2756,6 +2831,7 @@ export default function App({
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
   const [primaryStats, setPrimaryStats] = useState([]);
+  const [primaryResource, setPrimaryResource] = useState(null); // {name, color} | null
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
@@ -2765,6 +2841,7 @@ export default function App({
   const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
   const npcBasicAttackStyleByZoneIdRef = useRef({});  // { [zoneUnitId]: basicAttackStyle | undefined }
   const npcTokenUrlByZoneIdRef = useRef({});          // { [zoneUnitId]: resolved absolute tokenImageUrl }
+  const npcResourceByZoneIdRef = useRef({});          // { [zoneUnitId]: {name, color} | undefined }
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
@@ -2794,6 +2871,8 @@ export default function App({
       .then(cfg => {
         setPowers(cfg.powers ?? []);
         setPrimaryStats(cfg.primaryStats ?? []);
+        const resource = cfg.resources?.[0];
+        setPrimaryResource(resource ? {name: resource.name, color: resource.color} : null);
       })
       .catch(() => {});
   }, [classConfigUrl]);
@@ -2808,6 +2887,7 @@ export default function App({
         const basicAttackSchoolById = {};
         const basicAttackStyleById = {};
         const tokenUrlById = {};
+        const resourceById = {};
         const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
@@ -2828,6 +2908,7 @@ export default function App({
             // to track which variant a given spawn actually rendered with).
             const rawTokenUrl = Array.isArray(ut.tokenImageUrl) ? ut.tokenImageUrl[0] : ut.tokenImageUrl;
             tokenUrlById[unit.identifier] = rawTokenUrl ? new URL(rawTokenUrl, zoneSourceUrl).href : null;
+            resourceById[unit.identifier] = ut.resource ? {name: ut.resource.name, color: ut.resource.color} : null;
           }
           barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
@@ -2837,6 +2918,7 @@ export default function App({
         npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
         npcBasicAttackStyleByZoneIdRef.current = basicAttackStyleById;
         npcTokenUrlByZoneIdRef.current = tokenUrlById;
+        npcResourceByZoneIdRef.current = resourceById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
         // Every unit type's powers, not just spawned units' - a status
@@ -2933,6 +3015,7 @@ export default function App({
       const cdEndsAt = selfUnit?.power_cooldowns?.[power.name] ?? 0;
       if (Date.now() < cdEndsAt) return;
     }
+    if (power.costAmount > 0 && (selfUnit?.resource ?? 0) < power.costAmount) return;
     // Mirror server-side rejection checks so we don't set GCD on commands that
     // will certainly be rejected (target missing, dead, or out of range).
     const range = powerMaxRange(power);
@@ -3422,6 +3505,14 @@ export default function App({
         ? characterTokenUrl
         : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
+  // Same reasoning as targetTokenUrl - another player's resource
+  // name/color isn't known client-side, so their resource bar/meter just
+  // falls back to ResourceBar's own default gray and no meter label.
+  const targetResource = targetUnit
+    ? (targetUnit.zone_unit_identifier === selfIdentifier
+        ? primaryResource
+        : npcResourceByZoneIdRef.current[targetUnit.zone_unit_identifier])
+    : null;
 
   overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
@@ -3453,10 +3544,13 @@ export default function App({
         <div style={styles.frameInfo}>
           <strong>{characterName ?? "—"}</strong>
           {selfUnit && (
-            <>
-              <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
-              <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
-            </>
+            <div style={styles.healthResourceStack}>
+              <HealthBar
+                current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end"
+                resourceLabel={resourceMeterLabel(primaryResource, selfUnit.resource, selfUnit.max_resource)}
+              />
+              <ResourceBar current={selfUnit.resource} max={selfUnit.max_resource} color={primaryResource?.color} />
+            </div>
           )}
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
@@ -3466,12 +3560,14 @@ export default function App({
 
   function renderTargetFrameContent(stacked, portrait) {
     if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
+    const hasResource = targetUnit.max_resource > 0;
     if (stacked) {
       const nameStyle = { ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline), ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) };
       return (
         <>
           <div style={styles.frameHudHeader}>
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
+            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResource?.color} landscape />}
           </div>
           <div style={styles.frameImageNameRowRight}>
             {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
@@ -3489,7 +3585,13 @@ export default function App({
         <div style={styles.frameInfo}>
           <strong>{formatUnitName(targetUnit)}</strong>
           {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-          <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+          <div style={styles.healthResourceStack}>
+            <HealthBar
+              current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start"
+              resourceLabel={resourceMeterLabel(targetResource, targetUnit.resource, targetUnit.max_resource)}
+            />
+            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResource?.color} />}
+          </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
       </>
@@ -3521,6 +3623,7 @@ export default function App({
         }
       }
     }
+    const affordable = !power || !(power.costAmount > 0) || (selfUnit?.resource ?? 0) >= power.costAmount;
     const now = Date.now();
     const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
     // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
@@ -3540,7 +3643,7 @@ export default function App({
     return (
       <AbilityTooltip key={slot} ability={power} style={extraStyle}>
         <div
-          style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
+          style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing && affordable) ? 1 : 0.3}}
           onClick={power ? () => usePower(i) : undefined}
         >
           {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}

@@ -81,6 +81,44 @@ describe("resolveZoneRefs", () => {
     expect(result.unitTypes.goblin).toEqual({name: "Goblin", powers: [{name: "Enrage"}]});
   });
 
+  it("rebases a map's own-directory-relative imageUrl/thumbnailUrl into the zone's directory", async () => {
+    const zone = {maps: [{$ref: "./gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json", referenceTo: "map"}]};
+    fetchFilesBatch.mockResolvedValue({
+      "zones/goblin-cave/gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.json":
+        '{"identifier":"gc1","imageUrl":"./gc1-goblin-cave-entrance.webp","thumbnailUrl":"gc1-goblin-cave-entrance.thumb.webp"}',
+    });
+
+    const result = await resolveZoneRefs(zone, "zones/goblin-cave");
+
+    expect(result.maps[0]).toEqual({
+      identifier: "gc1",
+      imageUrl: "gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.webp",
+      thumbnailUrl: "gc1-goblin-cave-entrance/gc1-goblin-cave-entrance.thumb.webp",
+    });
+  });
+
+  it("rebases a unit type's tokenImageUrl (one directory shallower than the zone) with extra ../", async () => {
+    const zone = {unitTypes: {goblin: {$ref: "../../unit_types/goblin.json", referenceTo: "unit_type"}}};
+    fetchFilesBatch.mockResolvedValue({
+      "unit_types/goblin.json": '{"name":"Goblin","tokenImageUrl":["../tokens/unit/goblin-1.webp"]}',
+    });
+
+    const result = await resolveZoneRefs(zone, "zones/goblin-cave");
+
+    expect(result.unitTypes.goblin.tokenImageUrl).toEqual(["../../tokens/unit/goblin-1.webp"]);
+  });
+
+  it("rebases a nested ability's sourceURL through two levels of $ref (unit type, then power)", async () => {
+    const zone = {unitTypes: {goblin: {$ref: "../../unit_types/goblin.json", referenceTo: "unit_type"}}};
+    fetchFilesBatch
+      .mockResolvedValueOnce({"unit_types/goblin.json": '{"name":"Goblin","powers":[{"$ref":"../abilities/units/goblins/enrage.json","referenceTo":"ability"}]}'})
+      .mockResolvedValueOnce({"abilities/units/goblins/enrage.json": '{"name":"Enrage","soundEffects":[{"sourceURL":"../../../audio/whoomph.ogg"}]}'});
+
+    const result = await resolveZoneRefs(zone, "zones/goblin-cave");
+
+    expect(result.unitTypes.goblin.powers[0].soundEffects[0].sourceURL).toBe("../../audio/whoomph.ogg");
+  });
+
   it("throws a clear error when a $ref target doesn't exist", async () => {
     const zone = {maps: [{$ref: "./missing/missing.json", referenceTo: "map"}]};
     fetchFilesBatch.mockResolvedValue({"zones/goblin-cave/missing/missing.json": null});

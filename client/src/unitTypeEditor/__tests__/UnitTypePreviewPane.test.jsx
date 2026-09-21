@@ -9,7 +9,7 @@ vi.mock("../../game/effectPlayback", () => ({firePowerEffects: vi.fn()}));
 // A real WebGLRenderer needs a canvas jsdom can't back - stub it the same
 // way ClassPreviewPane.test.jsx does, and expose the token props it was
 // given so tests can assert on self/target token selection.
-vi.mock("../../editor/AbilityPreviewCanvas", () => ({
+vi.mock("../../abilityEditor/AbilityPreviewCanvas", () => ({
   default: forwardRef(({selfTokenUrl, targetTokenUrl}, ref) => {
     useImperativeHandle(ref, () => ({positions: () => ({})}));
     return <div data-testid="canvas" data-self={selfTokenUrl} data-target={targetTokenUrl} />;

@@ -404,6 +404,164 @@ func poundZone(status instanceconfig.Status) instanceconfig.Zone {
 	}
 }
 
+// cooldownStabZone is stabZone with a per-power Cooldown added to Stab.
+func cooldownStabZone(cooldown float64) instanceconfig.Zone {
+	zone := stabZone()
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].Cooldown = cooldown
+	zone.UnitTypes["goblin"] = ut
+	return zone
+}
+
+func TestUnitBehavior_Attack_SetsPowerCooldown(t *testing.T) {
+	zone := cooldownStabZone(20.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	require.Contains(t, u.PowerCooldowns, "Stab")
+	assert.True(t, u.PowerCooldowns["Stab"].After(time.Now().Add(19*time.Second)))
+}
+
+func TestUnitBehavior_Attack_PowerCooldownBlocksRepeatUseEvenOffGCD(t *testing.T) {
+	zone := cooldownStabZone(20.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.PowerCooldowns = map[string]time.Time{"Stab": time.Now().Add(19 * time.Second)}
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	// GCD is off (zero value), so only the power's own cooldown could be
+	// blocking this - the bug this guards against: PowerUsable checks
+	// PowerCooldowns, but nothing ever set it for an NPC, so it never
+	// actually gated anything.
+	require.True(t, u.GlobalCooldownEndsAt.IsZero())
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_Attack_FiresAgainOncePowerCooldownExpires(t *testing.T) {
+	zone := cooldownStabZone(20.0)
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		u.PowerCooldowns = map[string]time.Time{"Stab": time.Now().Add(-time.Second)}
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			return
+		}
+	}
+	t.Fatal("Stab missed 200 times in a row - miss chance may be miscalibrated")
+}
+
+// costlyStabZone is stabZone with a resource cost added to Stab.
+func costlyStabZone(costAmount float64) instanceconfig.Zone {
+	zone := stabZone()
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].CostType = "energy"
+	ut.Powers[0].CostAmount = costAmount
+	zone.UnitTypes["goblin"] = ut
+	return zone
+}
+
+// selfResourceZone builds a zone with a single hostile goblin whose only
+// power restores/drains its own resource.
+func selfResourceZone(delta float64) instanceconfig.Zone {
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				Powers: []instanceconfig.Power{{
+					Name: "Focus", GlobalCooldown: 1.5,
+					Effects: []instanceconfig.PowerEffect{
+						{Type: "resource", Affects: "self", ResourceName: "energy", Delta: delta},
+					},
+				}},
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_Attack_InsufficientResourceIsNoOp(t *testing.T) {
+	zone := costlyStabZone(30.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.Resource = 10.0
+	u.MaxResource = 100.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+	assert.Equal(t, 10.0, u.Resource, "an unaffordable attack shouldn't spend anything either")
+	assert.True(t, u.GlobalCooldownEndsAt.IsZero())
+}
+
+func TestUnitBehavior_Attack_SufficientResourceSpendsCost(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		zone := costlyStabZone(30.0)
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		u.Resource = 100.0
+		u.MaxResource = 100.0
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			assert.Equal(t, 70.0, u.Resource)
+			return
+		}
+	}
+	t.Fatal("Stab missed 200 times in a row - miss chance may be miscalibrated")
+}
+
+func TestUnitBehavior_Attack_ResourceEffectRestoresSelfResource(t *testing.T) {
+	zone := selfResourceZone(15.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.Resource = 10.0
+	u.MaxResource = 100.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 25.0, u.Resource)
+}
+
+func TestUnitBehavior_Attack_ResourceEffectClampsAtMax(t *testing.T) {
+	zone := selfResourceZone(50.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.Resource = 90.0
+	u.MaxResource = 100.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, u.Resource)
+}
+
 func TestUnitBehavior_Attack_FiresEveryEffectOfTheChosenPowerTogether(t *testing.T) {
 	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
 

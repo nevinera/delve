@@ -43,26 +43,31 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 			}
 			maxResource := playerBaseMaxResource
 			resource := playerBaseResource
+			var resourceDefaultValue, resourceReturnRate float64
 			if len(spawn.class.Resources) > 0 {
 				r := spawn.class.Resources[0]
 				maxResource = r.Max
 				resource = r.DefaultValue
+				resourceDefaultValue = r.DefaultValue
+				resourceReturnRate = r.ReturnRate
 			}
 			unit := &instancestate.UnitState{
-				ZoneUnitIdentifier:  "player:" + spawn.characterName,
-				UnitTypeIdentifier:  "",
-				MapIdentifier:       mapID,
-				Position:            pos,
-				SpawnPoint:          pos,
-				SpawnMapIdentifier:  mapID,
-				Resource:            resource,
-				MaxResource:         maxResource,
-				Speed:               BasePlayerSpeed,
-				Radius:              BasePlayerRadius,
-				Status:              instancestate.UnitStatusIdle,
-				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
-				EquippedItems:       spawn.equippedItems,
-				DamageStatKey:       spawn.class.DamageStatKey(),
+				ZoneUnitIdentifier:   "player:" + spawn.characterName,
+				UnitTypeIdentifier:   "",
+				MapIdentifier:        mapID,
+				Position:             pos,
+				SpawnPoint:           pos,
+				SpawnMapIdentifier:   mapID,
+				Resource:             resource,
+				MaxResource:          maxResource,
+				ResourceDefaultValue: resourceDefaultValue,
+				ResourceReturnRate:   resourceReturnRate,
+				Speed:                BasePlayerSpeed,
+				Radius:               BasePlayerRadius,
+				Status:               instancestate.UnitStatusIdle,
+				ActiveStatusEffects:  []instancestate.ActiveStatusEffect{},
+				EquippedItems:        spawn.equippedItems,
+				DamageStatKey:        spawn.class.DamageStatKey(),
 			}
 			// Spawn at full health against the real (Stamina-scaled) cap,
 			// not a flat placeholder - updatePlayerMaxHealth keeps this in

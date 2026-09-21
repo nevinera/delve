@@ -13,8 +13,8 @@ module Validators
 
     # True when `key` is present with a non-blank value: not nil, and not an
     # empty/whitespace-only string. Every editor (see
-    # client/src/editor/AbilityFieldsPanel.jsx's EditableField/EntryField,
-    # client/src/editor/StatusEditor.jsx's AuraEffectFields, and the
+    # client/src/abilityEditor/AbilityFieldsPanel.jsx's EditableField/EntryField,
+    # client/src/abilityEditor/StatusEditor.jsx's AuraEffectFields, and the
     # generic abilityReducer they both dispatch through) clears an optional
     # field to null rather than deleting its key - so "was this optional
     # field actually given" means this, not data.key?(key), which would

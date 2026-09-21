@@ -1,4 +1,4 @@
-import {collectAssetUrls} from "../editor/collectAssetUrls";
+import {collectAssetUrls} from "../abilityEditor/collectAssetUrls";
 
 // Resolves a relative asset path (e.g. "../graphics/icons/x.svg") against
 // the ability file's own path, not the class's - same URL trick

@@ -1,4 +1,4 @@
-import {humanize} from "../editor/abilityFormatting";
+import {humanize} from "../abilityEditor/abilityFormatting";
 import {SLOT_VALUES, WEAPON_TYPES, PRIMARY_STATS, SECONDARY_STATS} from "./itemFieldOptions";
 
 function TextField({value, onChange, placeholder}) {
