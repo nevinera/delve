@@ -48,9 +48,10 @@ export function selectOptions(field) {
 // entry happens to have them set - otherwise there'd be no way to e.g. add
 // spriteColumns/spriteRows to a graphicEffect that was previously a plain,
 // non-animated image. "effects" is polymorphic on "type" (harm/heal/
-// resource/status each have a different field set) and isn't covered yet
-// except for status (forced below), so it otherwise stays purely
-// data-driven.
+// resource/status each have a different field set) and isn't fully covered
+// yet - status and resource are forced below (otherwise there'd be no way
+// to add resourceName/delta to an effect just switched to "resource"), harm
+// and heal still stay purely data-driven.
 const ENTRY_FIELDS = {
   graphicEffects: [
     "sourceURL", "duration", "from", "to", "when", "condition",
@@ -59,11 +60,24 @@ const ENTRY_FIELDS = {
   soundEffects: ["sourceURL", "duration", "location", "when", "condition", "impactTiming", "volumeScale"],
 };
 
+// resourceName is deliberately freeform (see widgetFor's default), same
+// reasoning as costType on the ability itself - it just needs to match
+// whatever resource name the affected unit/class actually has, not a fixed
+// list.
+const RESOURCE_EFFECT_FIELDS = ["type", "affects", "resourceName", "delta", "range"];
+
 export function entryFieldsFor(section, entry) {
   if (section === "effects" && entry.type === "status") {
     const fields = Object.keys(entry);
     if (!fields.includes("status")) fields.push("status");
     if (!fields.includes("duration")) fields.push("duration");
+    return fields;
+  }
+  if (section === "effects" && entry.type === "resource") {
+    const fields = Object.keys(entry);
+    for (const field of RESOURCE_EFFECT_FIELDS) {
+      if (!fields.includes(field)) fields.push(field);
+    }
     return fields;
   }
   return ENTRY_FIELDS[section] ?? Object.keys(entry);

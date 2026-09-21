@@ -20,6 +20,11 @@ const TOP_LEVEL_FIELDS = [
   {key: "cooldown", type: "number", editable: true},
   {key: "maxRange", type: "number", editable: true},
   {key: "speed", type: "number", editable: true},
+  // Freeform, not a select over resourceTypes.js's fixed unit-type list -
+  // an ability can be used by classes too, and costType only needs to
+  // match whatever resource name the using unit/class actually has.
+  {key: "costType", type: "text", editable: true},
+  {key: "costAmount", type: "number", editable: true},
   {key: "tags", type: "tags", editable: true},
 ];
 
