@@ -2933,6 +2933,7 @@ export default function App({
       const cdEndsAt = selfUnit?.power_cooldowns?.[power.name] ?? 0;
       if (Date.now() < cdEndsAt) return;
     }
+    if (power.costAmount > 0 && (selfUnit?.resource ?? 0) < power.costAmount) return;
     // Mirror server-side rejection checks so we don't set GCD on commands that
     // will certainly be rejected (target missing, dead, or out of range).
     const range = powerMaxRange(power);
@@ -3521,6 +3522,7 @@ export default function App({
         }
       }
     }
+    const affordable = !power || !(power.costAmount > 0) || (selfUnit?.resource ?? 0) >= power.costAmount;
     const now = Date.now();
     const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
     // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
@@ -3540,7 +3542,7 @@ export default function App({
     return (
       <AbilityTooltip key={slot} ability={power} style={extraStyle}>
         <div
-          style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing) ? 1 : 0.3}}
+          style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing && affordable) ? 1 : 0.3}}
           onClick={power ? () => usePower(i) : undefined}
         >
           {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}

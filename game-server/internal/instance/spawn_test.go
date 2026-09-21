@@ -269,6 +269,52 @@ func TestPlayerSpawn_CachesEquippedItemsAndDamageStatKeyForCombatMath(t *testing
 	assert.Equal(t, "strength", unit.DamageStatKey)
 }
 
+func TestPlayerSpawn_CachesResourceDefaultAndReturnRateFromClass(t *testing.T) {
+	inst := makeInstance()
+	class := instanceconfig.CharacterClass{
+		Name:         "Puncher",
+		PrimaryStats: []string{"strength"},
+		Resources: []instanceconfig.ResourceType{
+			{Name: "energy", Max: 100, DefaultValue: 100, ReturnRate: 10, IsFluid: true},
+		},
+	}
+	slot, err := inst.AddSlot("Aldric", "42", class, nil, nil)
+	require.NoError(t, err)
+
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	inst.DrainPlayerSpawnsForTest(context.Background(), state)
+
+	unit := state.Units[slot.CharacterUnitID]
+	require.NotNil(t, unit)
+	assert.Equal(t, 100.0, unit.Resource)
+	assert.Equal(t, 100.0, unit.MaxResource)
+	assert.Equal(t, 100.0, unit.ResourceDefaultValue)
+	assert.Equal(t, 10.0, unit.ResourceReturnRate)
+}
+
+func TestPlayerSpawn_NoClassResourceLeavesRegenFieldsZero(t *testing.T) {
+	inst := makeInstance()
+	class := instanceconfig.CharacterClass{Name: "Puncher", PrimaryStats: []string{"strength"}}
+	slot, err := inst.AddSlot("Aldric", "42", class, nil, nil)
+	require.NoError(t, err)
+
+	_, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	inst.DrainPlayerSpawnsForTest(context.Background(), state)
+
+	unit := state.Units[slot.CharacterUnitID]
+	require.NotNil(t, unit)
+	assert.Equal(t, 0.0, unit.ResourceDefaultValue)
+	assert.Equal(t, 0.0, unit.ResourceReturnRate)
+}
+
 func TestPlayerSpawn_ReconnectDoesNotDuplicate(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := startedInstance(t, reg)

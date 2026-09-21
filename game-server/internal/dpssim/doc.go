@@ -25,15 +25,18 @@
 //     below does the same. Tactics-driven (rotation/priorityRotation/
 //     scripted/phased) selection would replace pickPower once the real
 //     engine implements it.
-//   - Power.CostType/CostAmount and UnitType.Resource.ReturnRate: no
-//     resource gating exists for NPCs (or players) yet - CostAmount/
-//     ReturnRate are schema-only. This simulation never checks or spends
-//     resource. Resource gating would add a balance check before pickPower
-//     fires and a regen step in Simulate's event loop.
 //   - StatusEffect{Type: "stat"}: stat-modifying buffs/debuffs (e.g. a
 //     self-haste enrage) are schema-only too - never read anywhere. Only
 //     "recurring" StatusEffects are simulated, matching what
 //     tickStatusEffects actually does.
+//
+// Unlike the above, this one is a real gap, not a match to the engine:
+// Power.CostType/CostAmount and UnitType.Resource.ReturnRate. The real
+// engine now gates/spends/regens resource (command.PowerUsable/
+// ClampResource, instance.tickResourceRegen), but this simulation still
+// doesn't - every NPC here is simulated as if it has unlimited resource.
+// Modeling it would add a balance check before pickPower fires and a regen
+// step in Simulate's event loop; see issue #58.
 //
 // Also out of scope, by the nature of a target dummy rather than a real
 // fight: range/line-of-sight/facing-arc checks (the target is always in

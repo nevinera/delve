@@ -27,13 +27,8 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 		return nil
 	}
 	now := time.Now()
-	if now.Before(unit.GlobalCooldownEndsAt) {
+	if !PowerUsable(unit, p.Power, now) {
 		return nil
-	}
-	if p.Power.Cooldown > 0 {
-		if cd, ok := unit.PowerCooldowns[p.Power.Name]; ok && now.Before(cd) {
-			return nil
-		}
 	}
 
 	// Only validate and look up the target when at least one effect needs one.
@@ -143,9 +138,24 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 			if recipient.Health > recipient.MaxHealth {
 				recipient.Health = recipient.MaxHealth
 			}
+		case "resource":
+			recipient := unit
+			if effect.Affects != "self" {
+				if target == nil {
+					continue
+				}
+				if !inRangeAndLOS(unit, target, zone, effect.Range) {
+					return nil
+				}
+				recipient = target
+			}
+			recipient.Resource = ClampResource(recipient.Resource+effect.Delta, recipient.MaxResource)
 		}
 	}
 
+	if p.Power.CostAmount > 0 {
+		unit.Resource = ClampResource(unit.Resource-p.Power.CostAmount, unit.MaxResource)
+	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(p.Power.GlobalCooldown * float64(time.Second)))
 	if p.Power.Cooldown > 0 {
 		if unit.PowerCooldowns == nil {

@@ -696,3 +696,118 @@ func TestUsePowerHandler_DebuffStatusCastAtAFriendlyTargetIsNeverResisted(t *tes
 		require.Len(t, state.Units[targetID].ActiveStatusEffects, 1, "a friendly-targeted status should never be resisted")
 	}
 }
+
+// costlyPunchPower is punchPower with a 30-energy cost, otherwise identical
+// (same range/amount), for cost-gating and resource-spend tests.
+func costlyPunchPower() command.UsePowerPayload {
+	p := punchPower()
+	p.Power.Name = "Costly Punch"
+	p.Power.CostType = "energy"
+	p.Power.CostAmount = 30.0
+	return p
+}
+
+func selfResourcePower(delta float64) command.UsePowerPayload {
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "resource", Affects: "self", ResourceName: "energy", Delta: delta},
+			},
+		},
+	}
+}
+
+func targetResourcePower(delta float64) command.UsePowerPayload {
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return command.UsePowerPayload{
+		Power: instanceconfig.Power{
+			GlobalCooldown: 1.5,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "resource", Affects: "bTarget", Range: &rng, ResourceName: "energy", Delta: delta},
+			},
+		},
+	}
+}
+
+func TestUsePowerHandler_InsufficientResourceIsNoOp(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
+	state.Units[playerID].Resource = 10.0
+	state.Units[playerID].MaxResource = 100.0
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, costlyPunchPower(), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, before, state.Units[targetID].Health)
+	assert.Equal(t, 10.0, state.Units[playerID].Resource, "an unaffordable cast shouldn't spend anything either")
+	assert.True(t, state.Units[playerID].GlobalCooldownEndsAt.IsZero(), "an unaffordable cast shouldn't trigger the GCD")
+}
+
+func TestUsePowerHandler_SufficientResourceSpendsCost(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	state := retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, costlyPunchPower(), func() *instancestate.InstanceState {
+		s := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
+		s.Units[playerID].Resource = 100.0
+		s.Units[playerID].MaxResource = 100.0
+		return s
+	})
+
+	assert.Equal(t, 70.0, state.Units[playerID].Resource)
+}
+
+func TestUsePowerHandler_SpendClampsAtZero(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
+	state.Units[playerID].Resource = 30.0
+	state.Units[playerID].MaxResource = 100.0
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, costlyPunchPower(), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, 0.0, state.Units[playerID].Resource)
+}
+
+func TestUsePowerHandler_ZeroCostPowerDoesNotTouchResource(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
+	state.Units[playerID].Resource = 42.0
+	state.Units[playerID].MaxResource = 100.0
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, 42.0, state.Units[playerID].Resource)
+}
+
+func TestUsePowerHandler_ResourceEffectRestoresSelfResource(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[playerID].Resource = 10.0
+	state.Units[playerID].MaxResource = 100.0
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfResourcePower(15.0), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, 25.0, state.Units[playerID].Resource)
+}
+
+func TestUsePowerHandler_ResourceEffectClampsAtMax(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[playerID].Resource = 90.0
+	state.Units[playerID].MaxResource = 100.0
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfResourcePower(50.0), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, 100.0, state.Units[playerID].Resource)
+}
+
+func TestUsePowerHandler_ResourceEffectCanDrainATarget(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
+	state.Units[targetID].Resource = 50.0
+	state.Units[targetID].MaxResource = 100.0
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetResourcePower(-20.0), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, 30.0, state.Units[targetID].Resource)
+}
