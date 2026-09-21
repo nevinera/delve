@@ -71,15 +71,19 @@ func statusTickDamage(eff instanceconfig.StatusEffect, rng *rand.Rand) float64 {
 }
 
 // pickPower mirrors tryNPCAttack's selection: a power is a candidate if any
-// of its effects is npcEffectUsable and its CostAmount doesn't exceed
-// resource, then one candidate is chosen uniformly at random - matching the
-// real engine's current behavior of ignoring UnitType.Tactics entirely (see
-// package doc). Returns false if no power is both usable and affordable
-// right now.
-func pickPower(powers []instanceconfig.Power, resource float64, rng *rand.Rand) (instanceconfig.Power, bool) {
+// of its effects is npcEffectUsable, its CostAmount doesn't exceed resource,
+// and it's off its own per-power cooldown (readyAt, keyed by power name -
+// absent or <= now means ready), then one candidate is chosen uniformly at
+// random - matching the real engine's current behavior of ignoring
+// UnitType.Tactics entirely (see package doc). Returns false if no power is
+// usable, affordable, and off cooldown right now.
+func pickPower(powers []instanceconfig.Power, resource float64, readyAt map[string]float64, now float64, rng *rand.Rand) (instanceconfig.Power, bool) {
 	var available []instanceconfig.Power
 	for _, p := range powers {
 		if p.CostAmount > resource {
+			continue
+		}
+		if t, onCooldown := readyAt[p.Name]; onCooldown && t > now {
 			continue
 		}
 		for _, eff := range p.Effects {

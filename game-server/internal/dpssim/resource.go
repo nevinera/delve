@@ -5,9 +5,9 @@ import "math"
 // resourceRetryInterval mirrors instance.TickInterval (duplicated rather
 // than imported - see package doc: this package mirrors the real engine's
 // math/constants rather than importing it). When every shape-usable power
-// is momentarily unaffordable, Simulate retries at this cadence rather than
-// giving up for the rest of the run, since the resource will keep
-// regenerating in the meantime.
+// is momentarily unaffordable or on cooldown, Simulate retries at this
+// cadence rather than giving up for the rest of the run, since both
+// resource and cooldowns change with time.
 const resourceRetryInterval = 0.1
 
 // clampResource bounds a resource value to [0, max] - mirrors

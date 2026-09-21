@@ -43,6 +43,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 
 	resource := enemy.Resource.DefaultValue
 	lastResourceAt := 0.0
+	powerReadyAt := map[string]float64{} // power name -> sim time it's next off cooldown
 
 	var statuses []*activeStatus
 
@@ -82,7 +83,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 		}
 
 		if now == nextPowerCheck {
-			if power, ok := pickPower(enemy.Powers, resource, rng); ok {
+			if power, ok := pickPower(enemy.Powers, resource, powerReadyAt, now, rng); ok {
 				for _, eff := range power.Effects {
 					if !npcEffectUsable(eff) {
 						continue
@@ -102,11 +103,15 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 				if power.CostAmount > 0 {
 					resource = clampResource(resource-power.CostAmount, enemy.Resource.Max)
 				}
+				if power.Cooldown > 0 {
+					powerReadyAt[power.Name] = now + power.Cooldown
+				}
 				nextPowerCheck = now + effectGlobalCooldown(power)
 			} else if hasUsablePower(enemy.Powers) {
 				// At least one power is the right shape to fire, just not
-				// affordable this instant - resource keeps regenerating, so
-				// retry rather than parking nextPowerCheck at +Inf forever.
+				// affordable or off cooldown this instant - both change with
+				// time, so retry rather than parking nextPowerCheck at +Inf
+				// forever.
 				nextPowerCheck = now + resourceRetryInterval
 			} else {
 				nextPowerCheck = math.Inf(1)

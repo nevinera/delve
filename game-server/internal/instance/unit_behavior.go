@@ -312,6 +312,12 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		unit.Resource = command.ClampResource(unit.Resource-power.CostAmount, unit.MaxResource)
 	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
+	if power.Cooldown > 0 {
+		if unit.PowerCooldowns == nil {
+			unit.PowerCooldowns = make(map[string]time.Time)
+		}
+		unit.PowerCooldowns[power.Name] = now.Add(time.Duration(power.Cooldown * float64(time.Second)))
+	}
 	*events = append(*events, CombatEvent{
 		AttackerID: attackerID.String(),
 		TargetID:   targetID.String(),

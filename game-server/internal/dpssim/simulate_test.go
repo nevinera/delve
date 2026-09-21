@@ -151,6 +151,47 @@ func TestSimulate_ResourceEffectReplenishesResourceEnablingRepeatedCasts(t *test
 	assert.Greater(t, res.PowerDamage, avgDamagePerCast*5)
 }
 
+func TestSimulate_PowerCadenceIsRateLimitedByItsOwnCooldownNotJustGCD(t *testing.T) {
+	amount := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Powers: []instanceconfig.Power{{
+			Name: "Pound", GlobalCooldown: 1, Cooldown: 20,
+			Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 20000, seeded(12))
+
+	// GCD (1s) alone would allow a cast every second, but Cooldown (20s)
+	// gates the power itself, same as command.PowerUsable: (50*0.9975)/20 =
+	// 2.49375
+	assert.InEpsilon(t, 2.49375, res.DPS, 0.05)
+	assert.Equal(t, res.PowerDamage, res.TotalDamage)
+}
+
+func TestSimulate_TwoPowersOnCooldownStillLetsTheOtherFire(t *testing.T) {
+	amountA := instanceconfig.ValueRange{10, 10}
+	amountB := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Powers: []instanceconfig.Power{
+			{
+				Name: "Jab", GlobalCooldown: 1,
+				Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountA}},
+			},
+			{
+				Name: "Pound", GlobalCooldown: 1, Cooldown: 20,
+				Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountB}},
+			},
+		},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 40, seeded(13))
+
+	// Pound only lands once (its own 20s cooldown, well within the 40s run);
+	// Jab has no cooldown of its own and keeps firing every GCD once Pound
+	// is unavailable - so total power casts should be well more than one.
+	avgJabDamage := 10.0 * 0.9975
+	assert.Greater(t, res.PowerDamage, avgJabDamage*5)
+}
+
 func TestSimulate_NoBasicAttackNoPowersDealsNoDamage(t *testing.T) {
 	res := dpssim.Simulate(instanceconfig.UnitType{}, dpssim.TargetStats{}, 100, seeded(7))
 

@@ -404,6 +404,65 @@ func poundZone(status instanceconfig.Status) instanceconfig.Zone {
 	}
 }
 
+// cooldownStabZone is stabZone with a per-power Cooldown added to Stab.
+func cooldownStabZone(cooldown float64) instanceconfig.Zone {
+	zone := stabZone()
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].Cooldown = cooldown
+	zone.UnitTypes["goblin"] = ut
+	return zone
+}
+
+func TestUnitBehavior_Attack_SetsPowerCooldown(t *testing.T) {
+	zone := cooldownStabZone(20.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	require.Contains(t, u.PowerCooldowns, "Stab")
+	assert.True(t, u.PowerCooldowns["Stab"].After(time.Now().Add(19*time.Second)))
+}
+
+func TestUnitBehavior_Attack_PowerCooldownBlocksRepeatUseEvenOffGCD(t *testing.T) {
+	zone := cooldownStabZone(20.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.PowerCooldowns = map[string]time.Time{"Stab": time.Now().Add(19 * time.Second)}
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	// GCD is off (zero value), so only the power's own cooldown could be
+	// blocking this - the bug this guards against: PowerUsable checks
+	// PowerCooldowns, but nothing ever set it for an NPC, so it never
+	// actually gated anything.
+	require.True(t, u.GlobalCooldownEndsAt.IsZero())
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
+func TestUnitBehavior_Attack_FiresAgainOncePowerCooldownExpires(t *testing.T) {
+	zone := cooldownStabZone(20.0)
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		u.PowerCooldowns = map[string]time.Time{"Stab": time.Now().Add(-time.Second)}
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			return
+		}
+	}
+	t.Fatal("Stab missed 200 times in a row - miss chance may be miscalibrated")
+}
+
 // costlyStabZone is stabZone with a resource cost added to Stab.
 func costlyStabZone(costAmount float64) instanceconfig.Zone {
 	zone := stabZone()
