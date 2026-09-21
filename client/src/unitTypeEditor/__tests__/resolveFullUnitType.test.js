@@ -17,6 +17,20 @@ describe("resolveFullUnitType", () => {
     expect(result).toEqual({name: "Goblin Raider", powers: [{name: "Slash", castTime: null}]});
   });
 
+  it("rebases the inlined ability's own asset URLs from abilities/units/<key>/ to unit_types/", async () => {
+    const abilities = {
+      "units/goblin-raider/slash": {
+        ability: {name: "Slash", iconURL: "../../../graphics/icons/slash.svg"},
+        assetMap: {},
+      },
+    };
+    const unitTypeData = {powers: [{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]};
+
+    const result = await resolveFullUnitType("goblin-raider", unitTypeData, abilities);
+
+    expect(result.powers[0]).toEqual({name: "Slash", iconURL: "../graphics/icons/slash.svg"});
+  });
+
   it("leaves non-reference fields untouched", async () => {
     const unitTypeData = {name: "Goblin Raider", tokenRadius: 1.5, powers: []};
 

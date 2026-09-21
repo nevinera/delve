@@ -1,15 +1,11 @@
 import {fetchFilesBatch} from "../github/fetchFilesBatch";
+import {dirname, rebaseRelativeUrls} from "../content/rebaseRelativeUrls";
 
 // True for an AssetReference shape (see docs/schema/common.md) - a $ref
 // plus its referenceTo tag, as used by a zone's `maps`/`unitTypes` entries,
 // or a unit_type's own `powers` entries.
 function isRef(value) {
   return Boolean(value) && typeof value === "object" && typeof value.$ref === "string";
-}
-
-function dirname(path) {
-  const i = path.lastIndexOf("/");
-  return i === -1 ? "" : path.slice(0, i);
 }
 
 // Resolves a $ref string against the directory of the file *containing*
@@ -61,10 +57,16 @@ export async function resolveZoneRefs(zoneData, zoneDirPath) {
     for (const ref of frontier) {
       const raw = contents[ref.path];
       if (raw == null) throw new Error(`Could not resolve $ref: ${ref.path}`);
-      const resolved = JSON.parse(raw);
+      // Every asset-URL field in this file needs rewriting now that it's
+      // about to live at zoneDirPath instead of its own directory (see
+      // rebaseRelativeUrls.js) - rebase first, then splice and collect
+      // further $refs from that same (rebased) object, so nextFrontier's
+      // parent/key pairs point into what's actually in the tree.
+      // rebaseRelativeUrls never touches $ref fields, so the refs
+      // themselves are unaffected and still resolve relative to *this*
+      // file's own directory, not the zone's.
+      const resolved = rebaseRelativeUrls(JSON.parse(raw), dirname(ref.path), zoneDirPath);
       ref.parent[ref.key] = resolved;
-      // Whatever this file itself references resolves relative to *its*
-      // directory, not the zone's.
       collectRefs(resolved, dirname(ref.path), nextFrontier);
     }
     frontier = nextFrontier;
