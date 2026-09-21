@@ -16,6 +16,7 @@ import { AbilityTooltip } from "./AbilityTooltip";
 import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
+import { darkenHexColor } from "./darkenColor";
 
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
@@ -509,6 +510,24 @@ const styles = {
     border: "1px solid #3a8a3a",
     borderRadius: 2,
     background: "#5a1010",
+  },
+  // ResourceBar - half the height of the corresponding HealthBar track,
+  // sitting in normal document flow (not absolutely positioned) right
+  // below wherever it's placed, since it's not one of the fixed-position
+  // HUD overlays HealthBar's two variants are.
+  resourceBarTrack: {
+    position: "relative",
+    marginTop: 4,
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  resourceBarTrackLandscape: {
+    position: "relative",
+    marginTop: 2,
+    height: 9,
+    borderRadius: 2,
+    overflow: "hidden",
   },
   // Landscape phone: pinned to the top of frameInfo (which itself sits a
   // couple px from the top of the screen), twice the height/length of the
@@ -1786,6 +1805,28 @@ export function StatusBar({ statuses, now, side = "left", landscape }) {
   );
 }
 
+// A unit's resource (energy/mana/rage/...) rendered as its own bar rather
+// than a text readout - half the height of the health bar it sits under.
+// color is the resource's own ResourceType.color (a bare hex string, e.g.
+// "AADD00" - see docs/schema/resource_type.md); the filled (current) portion
+// uses it at full brightness, and the track behind it (the already-spent
+// portion) is a darkened version of that same color via darkenHexColor,
+// rather than a fixed dark background - so different resources still read
+// as visually distinct from each other and from HP. Renders nothing when
+// max isn't positive (a unit with no resource at all).
+function ResourceBar({ current, max, color, landscape }) {
+  if (!(max > 0)) return null;
+  const pct = Math.max(0, Math.min(1, (current ?? 0) / max));
+  return (
+    <div style={{
+      ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
+      background: darkenHexColor(color),
+    }}>
+      <div style={{ width: `${pct * 100}%`, height: "100%", background: color ? `#${color}` : "#888" }} />
+    </div>
+  );
+}
+
 function UnitBar({ label, current, max }) {
   const pct = max > 0 ? Math.round((current / max) * 100) : 0;
   return (
@@ -2756,6 +2797,7 @@ export default function App({
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
   const [primaryStats, setPrimaryStats] = useState([]);
+  const [primaryResourceColor, setPrimaryResourceColor] = useState(null);
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
@@ -2765,6 +2807,7 @@ export default function App({
   const npcBasicAttackSchoolByZoneIdRef = useRef({}); // { [zoneUnitId]: "physical" | "magic" }
   const npcBasicAttackStyleByZoneIdRef = useRef({});  // { [zoneUnitId]: basicAttackStyle | undefined }
   const npcTokenUrlByZoneIdRef = useRef({});          // { [zoneUnitId]: resolved absolute tokenImageUrl }
+  const npcResourceColorByZoneIdRef = useRef({});     // { [zoneUnitId]: ResourceType.color (bare hex) | undefined }
   const mapBarriersByIdRef = useRef({});             // { [mapIdentifier]: barriers }
   const nextBasicAttackAtRef = useRef(0);           // epoch ms; local prediction of next allowed swing
   const [mapElvls, setMapElvls] = useState({});     // { [mapIdentifier]: elvl }
@@ -2794,6 +2837,7 @@ export default function App({
       .then(cfg => {
         setPowers(cfg.powers ?? []);
         setPrimaryStats(cfg.primaryStats ?? []);
+        setPrimaryResourceColor(cfg.resources?.[0]?.color ?? null);
       })
       .catch(() => {});
   }, [classConfigUrl]);
@@ -2808,6 +2852,7 @@ export default function App({
         const basicAttackSchoolById = {};
         const basicAttackStyleById = {};
         const tokenUrlById = {};
+        const resourceColorById = {};
         const barriersByMapId = {};
         const elvls = {};
         for (const map of zone.maps ?? []) {
@@ -2828,6 +2873,7 @@ export default function App({
             // to track which variant a given spawn actually rendered with).
             const rawTokenUrl = Array.isArray(ut.tokenImageUrl) ? ut.tokenImageUrl[0] : ut.tokenImageUrl;
             tokenUrlById[unit.identifier] = rawTokenUrl ? new URL(rawTokenUrl, zoneSourceUrl).href : null;
+            resourceColorById[unit.identifier] = ut.resource?.color;
           }
           barriersByMapId[map.identifier] = map.barriers ?? [];
           elvls[map.identifier] = map.elvl ?? zone.elvl;
@@ -2837,6 +2883,7 @@ export default function App({
         npcBasicAttackSchoolByZoneIdRef.current = basicAttackSchoolById;
         npcBasicAttackStyleByZoneIdRef.current = basicAttackStyleById;
         npcTokenUrlByZoneIdRef.current = tokenUrlById;
+        npcResourceColorByZoneIdRef.current = resourceColorById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
         // Every unit type's powers, not just spawned units' - a status
@@ -3423,6 +3470,14 @@ export default function App({
         ? characterTokenUrl
         : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
+  // Same reasoning as targetTokenUrl - another player's resource color
+  // isn't known client-side, so their resource bar just falls back to
+  // ResourceBar's own default gray rather than guessing.
+  const targetResourceColor = targetUnit
+    ? (targetUnit.zone_unit_identifier === selfIdentifier
+        ? primaryResourceColor
+        : npcResourceColorByZoneIdRef.current[targetUnit.zone_unit_identifier])
+    : null;
 
   overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
@@ -3455,7 +3510,7 @@ export default function App({
           <strong>{characterName ?? "—"}</strong>
           {selfUnit && (
             <>
-              <UnitBar label="MP" current={selfUnit.resource} max={selfUnit.max_resource} />
+              <ResourceBar current={selfUnit.resource} max={selfUnit.max_resource} color={primaryResourceColor} />
               <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
             </>
           )}
@@ -3481,7 +3536,7 @@ export default function App({
               {formatUnitName(targetUnit)}
             </div>
           </div>
-          {hasResource && <UnitBar label="MP" current={targetUnit.resource} max={targetUnit.max_resource} />}
+          {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} landscape />}
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </>
       );
@@ -3492,7 +3547,7 @@ export default function App({
         <div style={styles.frameInfo}>
           <strong>{formatUnitName(targetUnit)}</strong>
           {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-          {hasResource && <UnitBar label="MP" current={targetUnit.resource} max={targetUnit.max_resource} />}
+          {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} />}
           <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
