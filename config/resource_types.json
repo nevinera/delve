@@ -1,0 +1,20 @@
+[
+  {
+    "id": "energy",
+    "name": "energy",
+    "color": "F3E36B",
+    "max": 100.0,
+    "defaultValue": 100.0,
+    "returnRate": 10.0,
+    "isFluid": true
+  },
+  {
+    "id": "mana",
+    "name": "mana",
+    "color": "4488FF",
+    "max": 100.0,
+    "defaultValue": 100.0,
+    "returnRate": 2.0,
+    "isFluid": true
+  }
+]
