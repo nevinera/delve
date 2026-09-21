@@ -2,8 +2,8 @@ import {useEffect, useMemo, useRef, useState} from "react";
 import {firePowerEffects} from "../game/effectPlayback";
 import {AbilityTooltip} from "../AbilityTooltip";
 import AbilityIcon from "../AbilityIcon";
-import AbilityPreviewCanvas from "../editor/AbilityPreviewCanvas";
-import {resolveAbilityForPlayback} from "../editor/resolveAbilityForPlayback";
+import AbilityPreviewCanvas from "../abilityEditor/AbilityPreviewCanvas";
+import {resolveAbilityForPlayback} from "../abilityEditor/resolveAbilityForPlayback";
 import {abilityKeyForRef} from "./powerRefs";
 import {SLOT_COUNT} from "./classFieldOptions";
 

@@ -29,7 +29,7 @@ class Build::AbilitiesController < Build::BaseController
   # No ability content (or its asset URLs) is fetched here - the editor
   # fetches its own content client-side on mount, and resolves asset URLs
   # to raw.githubusercontent.com links with no fetch at all (see
-  # client/src/editor/AbilityEditor.jsx and plans/editor-git.md). Still
+  # client/src/abilityEditor/AbilityEditor.jsx and plans/editor-git.md). Still
   # checks for a connected repo up front, the same way #new does.
   # Content::StockAssets isn't GitHub-backed at all, so it stays exactly
   # as it was.

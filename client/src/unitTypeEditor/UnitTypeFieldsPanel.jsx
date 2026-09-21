@@ -1,4 +1,4 @@
-import {humanize} from "../editor/abilityFormatting";
+import {humanize} from "../abilityEditor/abilityFormatting";
 
 const RESOURCE_FIELDS = [
   {key: "name", type: "text"},

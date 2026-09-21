@@ -1,4 +1,4 @@
-# Lets the browser-side editors (see client/src/editor, client/src/classEditor)
+# Lets the browser-side editors (see client/src/abilityEditor, client/src/classEditor)
 # check a draft against the same Validators::* classes the server already
 # requires for FetchAbilityContentJob/FetchCharacterClassContentJob, rather
 # than re-implementing that (constantly-changing) schema a second time in JS.
