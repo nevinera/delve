@@ -22,6 +22,9 @@ module Validators
       validate_positive_numeric!(data, "basicAttackRange", path: path) if given?(data, "basicAttackRange")
       validate_basic_attack_school!(data, path: path) if given?(data, "basicAttackSchool")
       validate_basic_attack_style!(data, path: path) if given?(data, "basicAttackStyle")
+      if given?(data, "resource")
+        ResourceTypeValidator.validate!(require_hash!(data, "resource", path: path), path: child_path(path, "resource"))
+      end
     end
 
     def validate_fixed_fields!(data, path:)
@@ -31,7 +34,6 @@ module Validators
       require_integer!(data, "maxHP", path: path)
       validate_positive_numeric!(data, "dps", path: path)
       validate_positive_numeric!(data, "attackSpeed", path: path)
-      ResourceTypeValidator.validate!(require_hash!(data, "resource", path: path), path: child_path(path, "resource"))
     end
 
     def validate_basic_attack_school!(data, path:)

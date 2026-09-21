@@ -1,13 +1,5 @@
 import {humanize} from "../abilityEditor/abilityFormatting";
-
-const RESOURCE_FIELDS = [
-  {key: "name", type: "text"},
-  {key: "color", type: "text"},
-  {key: "max", type: "number"},
-  {key: "defaultValue", type: "number"},
-  {key: "returnRate", type: "number"},
-  {key: "isFluid", type: "checkbox"},
-];
+import {RESOURCE_TYPES} from "../resourceTypes";
 
 const TARGETING_TYPES = ["aggroTable", "nearest", "healerAggro"];
 const BASIC_ATTACK_SCHOOLS = ["physical", "magic"];
@@ -62,26 +54,16 @@ function TokenImageUrlField({draft, onChange}) {
   );
 }
 
-function ResourceFields({resource, draft, onChange}) {
-  const value = resource ?? {};
-
+// A fixed list of resource types (see resourceTypes.js) plus "none" - the
+// unit type just picks one and gets that preset's full ResourceType details
+// (color/max/defaultValue/returnRate/isFluid), rather than hand-authoring
+// them.
+function ResourceTypeField({resource, draft, onChange}) {
   return (
-    <table>
-      <tbody>
-        {RESOURCE_FIELDS.map(({key, type}) => (
-          <tr key={key}>
-            <th>{humanize(key)}</th>
-            <td>
-              {type === "checkbox"
-                ? <input type="checkbox" checked={Boolean(value[key])} onChange={(e) => onChange(draft.updateResourceField(key, e.target.checked))} />
-                : type === "number"
-                  ? <NumberField value={value[key]} onChange={(v) => onChange(draft.updateResourceField(key, v))} />
-                  : <TextField value={value[key]} onChange={(v) => onChange(draft.updateResourceField(key, v))} />}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <select value={resource?.name ?? ""} onChange={(e) => onChange(draft.setResourceType(e.target.value))}>
+      <option value="">None</option>
+      {RESOURCE_TYPES.map((r) => <option key={r.id} value={r.id}>{humanize(r.name)}</option>)}
+    </select>
   );
 }
 
@@ -246,7 +228,7 @@ export default function UnitTypeFieldsPanel({draft, availableAbilities, newAbili
       <TokenImageUrlField draft={draft} onChange={onChange} />
 
       <h3>Resource</h3>
-      <ResourceFields resource={unitTypeData.resource} draft={draft} onChange={onChange} />
+      <ResourceTypeField resource={unitTypeData.resource} draft={draft} onChange={onChange} />
 
       <h3>Tactics</h3>
       <TacticsFields tactics={unitTypeData.tactics} currentNames={names} draft={draft} onChange={onChange} />

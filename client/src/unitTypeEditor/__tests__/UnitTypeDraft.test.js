@@ -41,16 +41,22 @@ describe("UnitTypeDraft", () => {
     });
   });
 
-  describe("updateResourceField", () => {
-    it("merges the field into the existing resource", () => {
-      const result = new UnitTypeDraft(base, "goblin-raider").updateResourceField("max", 200);
-      expect(result.data.resource).toEqual({...base.resource, max: 200});
+  describe("setResourceType", () => {
+    it("replaces resource with the preset's full details", () => {
+      const result = new UnitTypeDraft(base, "goblin-raider").setResourceType("mana");
+      expect(result.data.resource).toEqual({name: "mana", color: "4488FF", max: 100.0, defaultValue: 100.0, returnRate: 2.0, isFluid: true});
     });
 
-    it("works even when there's no resource yet", () => {
-      const draft = new UnitTypeDraft({...base, resource: undefined}, "goblin-raider");
-      const result = draft.updateResourceField("name", "rage");
-      expect(result.data.resource).toEqual({name: "rage"});
+    it("drops resource entirely for a falsy id (none)", () => {
+      const result = new UnitTypeDraft(base, "goblin-raider").setResourceType("");
+      expect(result.data.resource).toBeUndefined();
+      expect(result.data).not.toHaveProperty("resource");
+    });
+
+    it("leaves the draft unchanged for an unknown id", () => {
+      const draft = new UnitTypeDraft(base, "goblin-raider");
+      const result = draft.setResourceType("rage");
+      expect(result).toBe(draft);
     });
   });
 
