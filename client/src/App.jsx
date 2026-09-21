@@ -501,42 +501,44 @@ const styles = {
     flex: 1,
     minWidth: 0,
   },
-  healthBarTrack: {
+  // Wraps HealthBar + ResourceBar as a flex column so ResourceBar always
+  // ends up immediately below HealthBar, the same length (both stretch to
+  // this wrapper's width) and half as thick, with no gap between them -
+  // pinned where healthBarTrack alone used to be pinned.
+  healthResourceStack: {
     position: "absolute",
     bottom: 6,
     left: 6,
     right: 6,
+    display: "flex",
+    flexDirection: "column",
+  },
+  healthBarTrack: {
+    position: "relative",
     height: 9,
     border: "1px solid #3a8a3a",
     borderRadius: 2,
     background: "#5a1010",
   },
-  // ResourceBar - half the height of the corresponding HealthBar track,
-  // sitting in normal document flow (not absolutely positioned) right
-  // below wherever it's placed, since it's not one of the fixed-position
-  // HUD overlays HealthBar's two variants are.
   resourceBarTrack: {
     position: "relative",
-    marginTop: 4,
     height: 4,
     borderRadius: 2,
     overflow: "hidden",
   },
   resourceBarTrackLandscape: {
     position: "relative",
-    marginTop: 2,
     height: 9,
     borderRadius: 2,
     overflow: "hidden",
   },
-  // Landscape phone: pinned to the top of frameInfo (which itself sits a
+  // Landscape phone: sits at the top of frameHudHeader (which itself sits a
   // couple px from the top of the screen), twice the height/length of the
-  // desktop bar (no left/right margin, full frameInfo width).
+  // desktop bar (no left/right margin, full frameHudHeader width). A flex
+  // child of frameHudHeader now rather than self-positioned, so an optional
+  // ResourceBar can stack immediately below it instead of overlapping.
   healthBarTrackLandscape: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+    position: "relative",
     height: 18,
     // Black instead of the desktop bar's green border - green blends into
     // grass/foliage scenery now that the frame has no background box.
@@ -567,11 +569,13 @@ const styles = {
     pointerEvents: "none",
   },
   // Bar+name HUD (portrait and landscape both use this now): the header
-  // holds just the health bar; the name moved down next to the token image
-  // instead of living in this header.
+  // holds the health bar (and, for a target with one, its resource bar
+  // immediately below); the name moved down next to the token image
+  // instead of living in this header. flex column, not a fixed height, so
+  // it grows to fit an optional second (resource) bar without overlap.
   frameHudHeader: {
-    position: "relative",
-    height: 18,
+    display: "flex",
+    flexDirection: "column",
     flexShrink: 0,
   },
   // Image + name side by side, below the header ("moved down" to clear
@@ -3509,10 +3513,10 @@ export default function App({
         <div style={styles.frameInfo}>
           <strong>{characterName ?? "—"}</strong>
           {selfUnit && (
-            <>
-              <ResourceBar current={selfUnit.resource} max={selfUnit.max_resource} color={primaryResourceColor} />
+            <div style={styles.healthResourceStack}>
               <HealthBar current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end" />
-            </>
+              <ResourceBar current={selfUnit.resource} max={selfUnit.max_resource} color={primaryResourceColor} />
+            </div>
           )}
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
@@ -3529,6 +3533,7 @@ export default function App({
         <>
           <div style={styles.frameHudHeader}>
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
+            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} landscape />}
           </div>
           <div style={styles.frameImageNameRowRight}>
             {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
@@ -3536,7 +3541,6 @@ export default function App({
               {formatUnitName(targetUnit)}
             </div>
           </div>
-          {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} landscape />}
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </>
       );
@@ -3547,8 +3551,10 @@ export default function App({
         <div style={styles.frameInfo}>
           <strong>{formatUnitName(targetUnit)}</strong>
           {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-          {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} />}
-          <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+          <div style={styles.healthResourceStack}>
+            <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
+            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResourceColor} />}
+          </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
       </>
