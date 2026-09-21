@@ -3467,6 +3467,7 @@ export default function App({
 
   function renderTargetFrameContent(stacked, portrait) {
     if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
+    const hasResource = targetUnit.max_resource > 0;
     if (stacked) {
       const nameStyle = { ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline), ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) };
       return (
@@ -3480,6 +3481,7 @@ export default function App({
               {formatUnitName(targetUnit)}
             </div>
           </div>
+          {hasResource && <UnitBar label="MP" current={targetUnit.resource} max={targetUnit.max_resource} />}
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </>
       );
@@ -3490,6 +3492,7 @@ export default function App({
         <div style={styles.frameInfo}>
           <strong>{formatUnitName(targetUnit)}</strong>
           {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
+          {hasResource && <UnitBar label="MP" current={targetUnit.resource} max={targetUnit.max_resource} />}
           <HealthBar current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start" />
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
