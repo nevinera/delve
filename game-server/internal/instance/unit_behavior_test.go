@@ -463,6 +463,108 @@ func TestUnitBehavior_Attack_FiresAgainOncePowerCooldownExpires(t *testing.T) {
 	t.Fatal("Stab missed 200 times in a row - miss chance may be miscalibrated")
 }
 
+// twoStabsZone is a goblin with two harm powers (Stab, Slash), both with a
+// long enough Cooldown that "which one just fired" is unambiguous from
+// PowerCooldowns afterward - and tactics set by the caller.
+func twoStabsZone(tactics instanceconfig.UnitTactics) instanceconfig.Zone {
+	amount := instanceconfig.ValueRange{2.0, 3.0}
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				Tactics: tactics,
+				Powers: []instanceconfig.Power{
+					{Name: "Stab", GlobalCooldown: 1.5, Cooldown: 100, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount, Range: &rng}}},
+					{Name: "Slash", GlobalCooldown: 1.5, Cooldown: 100, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount, Range: &rng}}},
+				},
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_Tactics_RotationCyclesInOrder(t *testing.T) {
+	zone := twoStabsZone(instanceconfig.UnitTactics{Type: "rotation", Powers: []string{"Stab", "Slash"}})
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	require.Contains(t, u.PowerCooldowns, "Stab", "rotation should fire the first listed power first")
+	assert.NotContains(t, u.PowerCooldowns, "Slash")
+
+	// Simulate the next decision point.
+	u.GlobalCooldownEndsAt = time.Time{}
+	u.PowerCooldowns = map[string]time.Time{}
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	assert.Contains(t, u.PowerCooldowns, "Slash", "rotation should advance to the next power in order")
+}
+
+func TestUnitBehavior_Tactics_RotationWaitsForCurrentPowerRatherThanSkippingAhead(t *testing.T) {
+	zone := twoStabsZone(instanceconfig.UnitTactics{Type: "rotation", Powers: []string{"Stab", "Slash"}})
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.PowerCooldowns = map[string]time.Time{"Stab": time.Now().Add(50 * time.Second)} // Stab not ready yet
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health, "should wait for Stab rather than firing Slash instead")
+	assert.NotContains(t, u.PowerCooldowns, "Slash")
+}
+
+func TestUnitBehavior_Tactics_PriorityRotationUsesHighestPriorityUsable(t *testing.T) {
+	zone := twoStabsZone(instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"Slash", "Stab"}})
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Contains(t, u.PowerCooldowns, "Slash")
+	assert.NotContains(t, u.PowerCooldowns, "Stab")
+}
+
+func TestUnitBehavior_Tactics_PriorityRotationFallsBackWhenTopPriorityUnavailable(t *testing.T) {
+	zone := twoStabsZone(instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"Slash", "Stab"}})
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.PowerCooldowns = map[string]time.Time{"Slash": time.Now().Add(50 * time.Second)}
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Contains(t, u.PowerCooldowns, "Stab")
+}
+
+func TestUnitBehavior_Tactics_PriorityRotationFiresNothingWhenNoListedPowerIsUsable(t *testing.T) {
+	zone := twoStabsZone(instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"Slash", "Stab"}})
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.PowerCooldowns = map[string]time.Time{
+		"Slash": time.Now().Add(50 * time.Second),
+		"Stab":  time.Now().Add(50 * time.Second),
+	}
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+}
+
 // costlyStabZone is stabZone with a resource cost added to Stab.
 func costlyStabZone(costAmount float64) instanceconfig.Zone {
 	zone := stabZone()

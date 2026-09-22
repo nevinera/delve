@@ -189,7 +189,7 @@ func applyUnitBehavior(
 			if losClear {
 				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
 				if target.Status != instancestate.UnitStatusDead {
-					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType.Powers, zone, now, events, state)
+					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
 				}
 			}
 		} else {
@@ -231,10 +231,11 @@ func applyUnitBehavior(
 	}
 }
 
-// tryNPCAttack fires a randomly-chosen available harm power at the target if
-// the unit is off GCD and at least one power is in range. Appends a CombatEvent
-// to events if an attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, powers []instanceconfig.Power, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+// tryNPCAttack fires a Tactics-selected available power (docs/schema/
+// unit_type.md's UnitTactics) at the target if the unit is off GCD and at
+// least one power is in range. Appends a CombatEvent to events if an
+// attack fires.
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
 	if now.Before(unit.GlobalCooldownEndsAt) {
 		return
 	}
@@ -243,12 +244,11 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	available := usablePowers(unit, powers, dist, target, now)
-	if len(available) == 0 {
+	available := usablePowers(unit, unitType.Powers, dist, target, now)
+	power, ok := selectFromLeafTactics(unit, unitType.Tactics, available)
+	if !ok {
 		return
 	}
-
-	power := available[rand.Intn(len(available))]
 	for _, eff := range power.Effects {
 		if !npcEffectUsable(eff) || !npcEffectInRange(eff, dist, unit, target) {
 			continue
@@ -332,6 +332,69 @@ func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, 
 		}
 	}
 	return available
+}
+
+// selectFromLeafTactics picks which of available should fire this tick,
+// per tactics.Type (docs/schema/unit_type.md's UnitTactics) - "leaf" since
+// "phased" isn't handled here (see selectFromTactics/advancePhase); a
+// phase's own tactics is never itself "phased" either, so this only ever
+// sees the four non-phased types.
+func selectFromLeafTactics(unit *instancestate.UnitState, tactics instanceconfig.UnitTactics, available []instanceconfig.Power) (instanceconfig.Power, bool) {
+	switch tactics.Type {
+	case "rotation":
+		return selectRotation(unit, tactics.Powers, available)
+	case "priorityRotation":
+		return selectPriorityRotation(tactics.Powers, available)
+	case "scripted":
+		// Not implemented yet - see nevinera/delve#109. A documented no-op,
+		// not a crash: this unit simply never fires a power via tryNPCAttack
+		// (its basic attack, if any, is unaffected - Tactics only governs
+		// power selection).
+		return instanceconfig.Power{}, false
+	default: // "" or "randomAvailable"
+		if len(available) == 0 {
+			return instanceconfig.Power{}, false
+		}
+		return available[rand.Intn(len(available))], true
+	}
+}
+
+// selectRotation cycles through order (power names) - unit.Behavior.
+// RotationIndex points at whichever one is "up next". If that power isn't
+// in available this tick, nothing fires - the unit waits for it rather
+// than skipping ahead to a later entry (docs/schema/unit_type.md: "waiting
+// for each to become usable before proceeding"). Only advances the index
+// once the pointed-at power is actually available to fire.
+func selectRotation(unit *instancestate.UnitState, order []string, available []instanceconfig.Power) (instanceconfig.Power, bool) {
+	if len(order) == 0 {
+		return instanceconfig.Power{}, false
+	}
+	if unit.Behavior.RotationIndex >= len(order) {
+		unit.Behavior.RotationIndex = 0
+	}
+	name := order[unit.Behavior.RotationIndex]
+	for _, p := range available {
+		if p.Name == name {
+			unit.Behavior.RotationIndex = (unit.Behavior.RotationIndex + 1) % len(order)
+			return p, true
+		}
+	}
+	return instanceconfig.Power{}, false
+}
+
+// selectPriorityRotation returns the earliest power in order (power names,
+// highest priority first) that's currently available - no persistent state,
+// recomputed fresh every call. Nothing fires if none of order's powers are
+// available right now, even if other (unlisted) powers are.
+func selectPriorityRotation(order []string, available []instanceconfig.Power) (instanceconfig.Power, bool) {
+	for _, name := range order {
+		for _, p := range available {
+			if p.Name == name {
+				return p, true
+			}
+		}
+	}
+	return instanceconfig.Power{}, false
 }
 
 // npcEffectUsable reports whether eff is a type/shape tryNPCAttack knows how
