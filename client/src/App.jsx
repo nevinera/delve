@@ -1974,6 +1974,23 @@ function resourceMeterLabel(resource, current, max) {
   return `${name}: ${Math.round(current ?? 0)}/${Math.round(max)}`;
 }
 
+// Target frame color by relationship - mirrors scene.js's HOSTILITY_COLORS
+// palette (hostile red / neutral orange / friendly blue, the tint given to
+// an NPC's token on the map) for an NPC target, plus a fourth case (green,
+// matching selfFrame's own color) for a player character target - Hostility
+// is "" for players, so it isn't one of the three NPC hostility values.
+// No target selected at all keeps the frame's original static red.
+const RELATIONSHIP_COLORS = {
+  hostile: { background: "#2b0d0d", borderColor: "#6a2a2a", text: "#ff6b6b" },
+  neutral: { background: "#2b1d0d", borderColor: "#6a4a2a", text: "#ffcc80" },
+  friendly: { background: "#0d1a2b", borderColor: "#2a4a6a", text: "#90caf9" },
+  player: { background: "#0d2b0d", borderColor: "#2a6a2a", text: "#8bd98b" },
+};
+function targetRelationshipColors(unit) {
+  if (!unit) return RELATIONSHIP_COLORS.hostile;
+  return RELATIONSHIP_COLORS[unit.hostility || "player"] ?? RELATIONSHIP_COLORS.hostile;
+}
+
 function formatUnitName(unit) {
   const raw = unit?.unit_type_identifier || unit?.zone_unit_identifier;
   if (!raw) return "Unknown";
@@ -3622,7 +3639,10 @@ export default function App({
     const targetPrimaryMax = resourceMax(targetUnit, targetResource?.name);
     const hasResource = targetPrimaryMax > 0;
     if (stacked) {
-      const nameStyle = { ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline), ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) };
+      const nameStyle = {
+        ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline),
+        color: targetRelationshipColors(targetUnit).text,
+      };
       return (
         <>
           <div style={styles.frameHudHeader}>
@@ -4050,7 +4070,11 @@ export default function App({
         <>
           <div style={styles.frames}>
             <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
-            <div style={styles.targetFrame}>{renderTargetFrameContent()}</div>
+            <div style={{
+              ...styles.targetFrame,
+              background: targetRelationshipColors(targetUnit).background,
+              border: `1px solid ${targetRelationshipColors(targetUnit).borderColor}`,
+            }}>{renderTargetFrameContent()}</div>
           </div>
           <div style={styles.canvasWrapper}>
             {sceneContent}
