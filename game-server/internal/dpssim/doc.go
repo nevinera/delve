@@ -16,19 +16,23 @@
 // 5% and Haste% to 0% for every NPC attacker, regardless of formula
 // branch or school. Keep this package in sync if that math changes.
 //
-// Deliberately unimplemented, matching the real engine today (confirmed by
-// grep - neither is consulted anywhere in internal/instance or
-// internal/command):
+// UnitType.Tactics now drives power selection here too (pickPower), mirroring
+// instance.selectFromLeafTactics/advancePhase: rotation/priorityRotation/
+// phased are modeled; "scripted" (top-level or a phased sub-phase) isn't -
+// see nevinera/delve#109 - and never selects anything, same as the real
+// engine. phased's HealthBelow transition also never fires here, since
+// Simulate never models the attacking enemy taking damage of its own (see
+// the target-dummy scope below) - only TimeElapsed transitions apply.
 //
-//   - UnitType.Tactics: real NPCs pick a uniformly random usable power once
-//     off GCD, ignoring Tactics.Type entirely (see tryNPCAttack). pickPower
-//     below does the same. Tactics-driven (rotation/priorityRotation/
-//     scripted/phased) selection would replace pickPower once the real
-//     engine implements it.
+// Deliberately unimplemented, matching the real engine today (confirmed by
+// grep - never consulted anywhere in internal/instance or internal/command):
+//
 //   - StatusEffect{Type: "stat"}: stat-modifying buffs/debuffs (e.g. a
-//     self-haste enrage) are schema-only too - never read anywhere. Only
-//     "recurring" StatusEffects are simulated, matching what
-//     tickStatusEffects actually does.
+//     self-haste enrage) are schema-only too - never read anywhere here.
+//     Only "recurring" StatusEffects are simulated. Note this one's now
+//     stale relative to the *real* engine, which implemented "stat"
+//     StatusEffects in nevinera/delve#108 - dpssim hasn't been updated to
+//     match yet.
 //
 // Power.CostType/CostAmount and UnitType.Resource.ReturnRate/DefaultValue
 // are modeled too, mirroring the real engine's command.PowerUsable/

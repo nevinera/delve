@@ -70,14 +70,38 @@ func statusTickDamage(eff instanceconfig.StatusEffect, rng *rand.Rand) float64 {
 	return math.Round(eff.Amount * multiplier)
 }
 
+// tacticsState mirrors instancestate.BehaviorState's Tactics-relevant
+// fields (RotationIndex, PhaseIndex, PhaseElapsed) - Simulate keeps its own
+// local copy since it simulates one enemy over one continuous timeline
+// rather than a live UnitState.
+type tacticsState struct {
+	rotationIndex int
+	phaseIndex    int
+	phaseElapsed  float64
+}
+
 // pickPower mirrors tryNPCAttack's selection: a power is a candidate if any
 // of its effects is npcEffectUsable, its CostAmount doesn't exceed resource,
 // and it's off its own per-power cooldown (readyAt, keyed by power name -
-// absent or <= now means ready), then one candidate is chosen uniformly at
-// random - matching the real engine's current behavior of ignoring
-// UnitType.Tactics entirely (see package doc). Returns false if no power is
-// usable, affordable, and off cooldown right now.
-func pickPower(powers []instanceconfig.Power, resource float64, readyAt map[string]float64, now float64, rng *rand.Rand) (instanceconfig.Power, bool) {
+// absent or <= now means ready); which candidate fires is then driven by
+// tactics (docs/schema/unit_type.md's UnitTactics), same as the real
+// engine's instance.selectFromLeafTactics/advancePhase. dt is the elapsed
+// time since this was last called, for phased's PhaseElapsed tracking -
+// mirrors advancePhase running every real-engine tick regardless of GCD;
+// here it's every time the event loop re-checks power selection, which is
+// as fine-grained as this event-driven (not fixed-tick) simulation gets.
+//
+// "scripted" (top-level or a phased sub-phase) is still unimplemented -
+// see package doc and nevinera/delve#109 - and never selects anything, same
+// as the real engine. A "phased" HealthBelow transition also never fires
+// here: Simulate never models the attacking enemy taking any damage of its
+// own (see package doc's target-dummy scope), so its health never changes.
+func pickPower(tactics instanceconfig.UnitTactics, state *tacticsState, powers []instanceconfig.Power, resource float64, readyAt map[string]float64, now, dt float64, rng *rand.Rand) (instanceconfig.Power, bool) {
+	leaf := tactics
+	if tactics.Type == "phased" {
+		leaf = advancePhase(state, tactics.Phases, dt).Tactics
+	}
+
 	var available []instanceconfig.Power
 	for _, p := range powers {
 		if p.CostAmount > resource {
@@ -93,10 +117,72 @@ func pickPower(powers []instanceconfig.Power, resource float64, readyAt map[stri
 			}
 		}
 	}
-	if len(available) == 0 {
+	return selectFromLeafTactics(state, leaf, available, rng)
+}
+
+// advancePhase mirrors instance.advancePhase, minus HealthBelow support
+// (see pickPower's doc comment) - only TimeElapsed transitions apply here.
+// The last phase has no Transition and runs forever.
+func advancePhase(state *tacticsState, phases []instanceconfig.Phase, dt float64) instanceconfig.Phase {
+	if state.phaseIndex >= len(phases) {
+		state.phaseIndex = 0
+	}
+	state.phaseElapsed += dt
+	phase := phases[state.phaseIndex]
+	t := phase.Transition
+	if state.phaseIndex < len(phases)-1 && t != nil && t.TimeElapsed != nil && state.phaseElapsed >= *t.TimeElapsed {
+		state.phaseIndex++
+		state.phaseElapsed = 0
+		phase = phases[state.phaseIndex]
+	}
+	return phase
+}
+
+// selectFromLeafTactics mirrors instance.selectFromLeafTactics.
+func selectFromLeafTactics(state *tacticsState, tactics instanceconfig.UnitTactics, available []instanceconfig.Power, rng *rand.Rand) (instanceconfig.Power, bool) {
+	switch tactics.Type {
+	case "rotation":
+		return selectRotation(state, tactics.Powers, available)
+	case "priorityRotation":
+		return selectPriorityRotation(tactics.Powers, available)
+	case "scripted":
+		return instanceconfig.Power{}, false
+	default: // "" or "randomAvailable"
+		if len(available) == 0 {
+			return instanceconfig.Power{}, false
+		}
+		return available[rng.Intn(len(available))], true
+	}
+}
+
+// selectRotation mirrors instance.selectRotation.
+func selectRotation(state *tacticsState, order []string, available []instanceconfig.Power) (instanceconfig.Power, bool) {
+	if len(order) == 0 {
 		return instanceconfig.Power{}, false
 	}
-	return available[rng.Intn(len(available))], true
+	if state.rotationIndex >= len(order) {
+		state.rotationIndex = 0
+	}
+	name := order[state.rotationIndex]
+	for _, p := range available {
+		if p.Name == name {
+			state.rotationIndex = (state.rotationIndex + 1) % len(order)
+			return p, true
+		}
+	}
+	return instanceconfig.Power{}, false
+}
+
+// selectPriorityRotation mirrors instance.selectPriorityRotation.
+func selectPriorityRotation(order []string, available []instanceconfig.Power) (instanceconfig.Power, bool) {
+	for _, name := range order {
+		for _, p := range available {
+			if p.Name == name {
+				return p, true
+			}
+		}
+	}
+	return instanceconfig.Power{}, false
 }
 
 // hasUsablePower reports whether enemy has at least one power this

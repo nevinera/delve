@@ -192,6 +192,99 @@ func TestSimulate_TwoPowersOnCooldownStillLetsTheOtherFire(t *testing.T) {
 	assert.Greater(t, res.PowerDamage, avgJabDamage*5)
 }
 
+func TestSimulate_PriorityRotationAlwaysUsesTheHigherPriorityAvailablePower(t *testing.T) {
+	amountA := instanceconfig.ValueRange{10, 10}
+	amountB := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Tactics: instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"A", "B"}},
+		Powers: []instanceconfig.Power{
+			{Name: "A", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountA}}},
+			{Name: "B", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountB}}},
+		},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6000, seeded(20))
+
+	// "A" (priority 1, no cooldown, always available) should be the only
+	// power that ever fires - "B" is never reached. If selection were
+	// uniform random between the two instead, DPS would converge to
+	// ((10+50)/2 * 0.9975)/1 = 29.925 - clearly distinguishable from A alone.
+	assert.InEpsilon(t, 9.975, res.DPS, 0.05)
+}
+
+func TestSimulate_RotationWaitsForItsCurrentPowerRatherThanReusingTheOther(t *testing.T) {
+	amountA := instanceconfig.ValueRange{10, 10}
+	amountB := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Tactics: instanceconfig.UnitTactics{Type: "rotation", Powers: []string{"A", "B"}},
+		Powers: []instanceconfig.Power{
+			{Name: "A", GlobalCooldown: 1, Cooldown: 100, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountA}}},
+			{Name: "B", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountB}}},
+		},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 150, seeded(21))
+
+	// Expected sequence: A fires (t~0), advance to B; B fires (t~1),
+	// advance to A; A is on its own 100s cooldown, so rotation *waits*
+	// there rather than reusing B again - nothing fires again until A's
+	// cooldown clears (~t=100), then A, then B once more before the 150s
+	// run ends. ~4 total casts. If rotation instead skipped ahead and kept
+	// reusing B (as priorityRotation or random selection would, since B has
+	// no cooldown and is always available), this would be ~150 casts of B
+	// alone - two clearly separated orders of magnitude.
+	assert.Greater(t, res.PowerDamage, 0.0)
+	assert.Less(t, res.PowerDamage, 1000.0)
+}
+
+func TestSimulate_PhasedUsesFirstPhaseTacticsInitially(t *testing.T) {
+	amountA := instanceconfig.ValueRange{10, 10}
+	amountB := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Tactics: instanceconfig.UnitTactics{
+			Type: "phased",
+			Phases: []instanceconfig.Phase{
+				{
+					Tactics:    instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"A"}},
+					Transition: &instanceconfig.PhaseTransition{TimeElapsed: floatPtr(10000)}, // never, within this run
+				},
+				{Tactics: instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"B"}}},
+			},
+		},
+		Powers: []instanceconfig.Power{
+			{Name: "A", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountA}}},
+			{Name: "B", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountB}}},
+		},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6000, seeded(22))
+
+	assert.InEpsilon(t, 9.975, res.DPS, 0.05) // A's rate (10*0.9975)/1 - B never reached
+}
+
+func TestSimulate_PhasedTransitionsToNextPhaseAfterTimeElapsed(t *testing.T) {
+	amountA := instanceconfig.ValueRange{10, 10}
+	amountB := instanceconfig.ValueRange{50, 50}
+	enemy := instanceconfig.UnitType{
+		Tactics: instanceconfig.UnitTactics{
+			Type: "phased",
+			Phases: []instanceconfig.Phase{
+				{
+					Tactics:    instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"A"}},
+					Transition: &instanceconfig.PhaseTransition{TimeElapsed: floatPtr(1)}, // negligible against the 6000s run below
+				},
+				{Tactics: instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"B"}}},
+			},
+		},
+		Powers: []instanceconfig.Power{
+			{Name: "A", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountA}}},
+			{Name: "B", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountB}}},
+		},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6000, seeded(23))
+
+	assert.InEpsilon(t, 49.875, res.DPS, 0.05) // B's rate (50*0.9975)/1 - the first 1s of A is negligible over 6000s
+}
+
+func floatPtr(f float64) *float64 { return &f }
+
 func TestSimulate_NoBasicAttackNoPowersDealsNoDamage(t *testing.T) {
 	res := dpssim.Simulate(instanceconfig.UnitType{}, dpssim.TargetStats{}, 100, seeded(7))
 

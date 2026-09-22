@@ -44,6 +44,8 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 	resource := enemy.Resource.DefaultValue
 	lastResourceAt := 0.0
 	powerReadyAt := map[string]float64{} // power name -> sim time it's next off cooldown
+	tactics := &tacticsState{}
+	lastPickAt := 0.0
 
 	var statuses []*activeStatus
 
@@ -83,7 +85,9 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 		}
 
 		if now == nextPowerCheck {
-			if power, ok := pickPower(enemy.Powers, resource, powerReadyAt, now, rng); ok {
+			pickDt := now - lastPickAt
+			lastPickAt = now
+			if power, ok := pickPower(enemy.Tactics, tactics, enemy.Powers, resource, powerReadyAt, now, pickDt, rng); ok {
 				for _, eff := range power.Effects {
 					if !npcEffectUsable(eff) {
 						continue
