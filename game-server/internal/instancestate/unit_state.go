@@ -169,6 +169,12 @@ type BehaviorState struct {
 	PathGoalX float64
 	PathGoalY float64
 
+	// rotation tactics: index into UnitTactics.Powers of the power currently
+	// "up next" - advances only once that specific power actually fires,
+	// per docs/schema/unit_type.md's "waiting for each to become usable
+	// before proceeding" (not skipped ahead if it isn't usable yet).
+	RotationIndex int
+
 	// phased tactics
 	PhaseIndex   int
 	PhaseElapsed float64 // seconds elapsed in the current phase

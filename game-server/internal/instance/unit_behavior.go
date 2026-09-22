@@ -243,24 +243,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	// A power is a candidate if at least one of its effects is currently
-	// usable (right type, right shape, in range if not self-affecting) -
-	// once chosen, every one of its usable effects fires together (see
-	// npcEffectInRange/firing loop below), not just the one that made it
-	// eligible. This matches UsePowerHandler, which already applies every
-	// effect of the power a player casts.
-	var available []instanceconfig.Power
-	for _, p := range powers {
-		if !command.PowerUsable(unit, p, now) {
-			continue
-		}
-		for _, eff := range p.Effects {
-			if npcEffectUsable(eff) && npcEffectInRange(eff, dist, unit, target) {
-				available = append(available, p)
-				break
-			}
-		}
-	}
+	available := usablePowers(unit, powers, dist, target, now)
 	if len(available) == 0 {
 		return
 	}
@@ -323,6 +306,32 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		TargetID:   targetID.String(),
 		PowerName:  power.Name,
 	})
+}
+
+// usablePowers filters powers down to the ones unit could fire right now
+// against target at dist: off cooldown/affordable (command.PowerUsable) and
+// with at least one effect that's a type/shape tryNPCAttack knows how to
+// fire, in range (npcEffectUsable/npcEffectInRange). Once one is chosen,
+// every one of its usable effects fires together (see the firing loop in
+// tryNPCAttack), not just the one that made it eligible here - matches
+// UsePowerHandler, which already applies every effect of the power a
+// player casts. This is the same "could I use this at all" filter
+// regardless of UnitTactics.Type - Tactics only decides *which* of these
+// gets picked, never what counts as a candidate.
+func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, dist float64, target *instancestate.UnitState, now time.Time) []instanceconfig.Power {
+	var available []instanceconfig.Power
+	for _, p := range powers {
+		if !command.PowerUsable(unit, p, now) {
+			continue
+		}
+		for _, eff := range p.Effects {
+			if npcEffectUsable(eff) && npcEffectInRange(eff, dist, unit, target) {
+				available = append(available, p)
+				break
+			}
+		}
+	}
+	return available
 }
 
 // npcEffectUsable reports whether eff is a type/shape tryNPCAttack knows how
