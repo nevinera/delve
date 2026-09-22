@@ -1,6 +1,8 @@
 package instance
 
 import (
+	"github.com/delve-mmo/game-server/internal/command"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
@@ -12,12 +14,23 @@ import (
 // it. Dead units don't regen - a corpse's resource doesn't matter, and this
 // avoids a live unit's spend/regen ever timing against one currently
 // resolving death effects.
-func tickResourceRegen(state *instancestate.InstanceState, dt float64) {
+//
+// When ResourceHasteAffected is set (docs/schema/resource_type.md), the
+// step is additionally scaled by the unit's Haste% - the same
+// DamageStatKey-keyed physical/magic pool command.UnitCombatStats uses for
+// basic attacks (only meaningful for players; NPCs have no gear/Haste, so
+// this is a no-op for them regardless of the flag).
+func tickResourceRegen(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
 	for _, unit := range state.Units {
 		if unit.Status == instancestate.UnitStatusDead || unit.ResourceReturnRate == 0 {
 			continue
 		}
-		step := unit.ResourceReturnRate * dt
+		rate := unit.ResourceReturnRate
+		if unit.ResourceHasteAffected {
+			hastePct, _, _ := command.UnitCombatStats(unit, zone)
+			rate *= 1 + hastePct/100
+		}
+		step := rate * dt
 		if unit.Resource < unit.ResourceDefaultValue {
 			unit.Resource = min(unit.Resource+step, unit.ResourceDefaultValue)
 		} else if unit.Resource > unit.ResourceDefaultValue {

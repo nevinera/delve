@@ -108,8 +108,8 @@ func TickStatusEffectsForTest(state *instancestate.InstanceState, zone instancec
 	tickStatusEffects(state, zone, dt)
 }
 
-func TickResourceRegenForTest(state *instancestate.InstanceState, dt float64) {
-	tickResourceRegen(state, dt)
+func TickResourceRegenForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	tickResourceRegen(state, zone, dt)
 }
 
 const MaxPathSearchesPerTickForTest = maxPathSearchesPerTick

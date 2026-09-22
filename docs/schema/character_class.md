@@ -12,7 +12,7 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 | `name` | string | yes | Display name. |
 | `description` | string | no | Short description shown in UI. |
 | `colors` | Colors | yes | Two display colors used for this class's tokens and UI elements. |
-| `resources` | array of ResourceType | no | Resources available to this class. Most classes have one; some may have multiple. |
+| `resources` | array of ResourceType | yes | Resources available to this class. Most classes have one; some may have multiple. Exactly one entry must set `displayType: "primary"` (see [resource_type.md](resource_type.md)) - that's the one displayed, regenerated, and spent by ability costs. |
 | `powers` | array of Ability \| AssetReference(`referenceTo: "ability"`) | no | Abilities available to this class. Inline Ability objects or references to external ability files. A class containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `primaryStats` | array of string | yes | One or more of `strength`, `agility`, `intellect`, no duplicates. Hybrid classes may list more than one. Used to synthesize Trainee Gear (see [stats.md](../stats.md)) for this class's empty equipment slots. |
 | `secondaryStats` | array of string | yes | Exactly 5 secondary stats, ranked highest to lowest priority, no duplicates. Each must be one of `stamina`, `crit_rating`, `haste_rating`, `mastery_rating`, `versatility_rating`, `defence_rating`, `recovery_rating`. Used alongside `primaryStat` to synthesize Trainee Gear. |
@@ -52,7 +52,8 @@ Two display colors for this class, used for token rendering and UI theming.
       "max": 100.0,
       "defaultValue": 0.0,
       "returnRate": 5.0,
-      "isFluid": true
+      "isFluid": true,
+      "displayType": "primary"
     }
   ],
   "powers": [

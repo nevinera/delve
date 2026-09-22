@@ -5,7 +5,7 @@ module Validators
       require_string!(data, "name", path: path)
       validate_description!(data, path: path) if given?(data, "description")
       validate_colors!(require_hash!(data, "colors", path: path), path: child_path(path, "colors"))
-      validate_resources!(data, path: path) if given?(data, "resources")
+      validate_resources!(data, path: path)
       validate_powers!(data, path: path) if given?(data, "powers")
       validate_primary_stats!(data, path: path)
       validate_secondary_stats!(data, path: path)
@@ -26,10 +26,14 @@ module Validators
     end
 
     def validate_resources!(data, path:)
-      resources = data["resources"]
-      raise ValidationError.new("resources must be an array", path: child_path(path, "resources")) unless resources.is_a?(Array)
+      resources_path = child_path(path, "resources")
+      resources = require_array!(data, "resources", path: path, min: 1)
       resources.each_with_index do |resource, i|
-        ResourceTypeValidator.validate!(resource, path: index_path(child_path(path, "resources"), i))
+        ResourceTypeValidator.validate!(resource, path: index_path(resources_path, i))
+      end
+      primary_count = resources.count { |r| r.is_a?(Hash) && r["displayType"] == "primary" }
+      if primary_count != 1
+        raise ValidationError.new("exactly one resource must set displayType: \"primary\"", path: resources_path)
       end
     end
 

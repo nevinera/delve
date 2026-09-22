@@ -2871,7 +2871,7 @@ export default function App({
       .then(cfg => {
         setPowers(cfg.powers ?? []);
         setPrimaryStats(cfg.primaryStats ?? []);
-        const resource = cfg.resources?.[0];
+        const resource = (cfg.resources ?? []).find(r => r.displayType === "primary");
         setPrimaryResource(resource ? {name: resource.name, color: resource.color} : null);
       })
       .catch(() => {});

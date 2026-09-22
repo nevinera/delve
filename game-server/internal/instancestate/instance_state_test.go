@@ -146,6 +146,7 @@ func TestNewInstanceState_UnitFields(t *testing.T) {
 	assert.Equal(t, 50.0, u.MaxResource)
 	assert.Equal(t, 25.0, u.ResourceDefaultValue)
 	assert.Equal(t, 5.0, u.ResourceReturnRate)
+	assert.False(t, u.ResourceHasteAffected)
 	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
 	assert.Nil(t, u.Target)
 	assert.Empty(t, u.ActiveStatusEffects)

@@ -12,6 +12,8 @@ A ResourceType defines the class or unit-type specific resource used to power ab
 | `defaultValue` | float | yes | | Starting value, and the value the resource passively returns toward. |
 | `returnRate` | float | no | `0.0` | Rate per second at which the resource moves toward `defaultValue`. Must be non-negative. |
 | `isFluid` | boolean | yes | | `true` for quantitative resources (mana, energy); `false` for discrete ones (combo points, souls). |
+| `displayType` | string | no | | Only legal value is `"primary"`. Meaningful only in [CharacterClass](character_class.md#fields)'s `resources` array (which may list several): marks the one resource that's displayed, regenerated, and spent by ability costs. Exactly one entry in a class's `resources` must set this. Not used on [UnitType](unit_type.md#fields)'s single `resource` - it's implicitly the only one. |
+| `hasteAffected` | boolean | no | `false` | When `true`, `returnRate` is scaled up by the unit's Haste% (the same physical/magic pool its basic attack uses, per [stats.md](../stats.md#haste-rating)) before being applied each tick. |
 
 ## Examples
 

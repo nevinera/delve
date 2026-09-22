@@ -168,14 +168,18 @@ type UnitState struct {
 	Resource    float64 // current resource value
 	MaxResource float64 // cached from UnitType.Resource.Max at spawn
 	// ResourceDefaultValue/ResourceReturnRate are cached from
-	// UnitType.Resource (or CharacterClass.Resources[0] for a player) at
+	// UnitType.Resource (or CharacterClass.PrimaryResource() for a player) at
 	// spawn, same as MaxResource - the passive regen tick moves Resource
 	// toward ResourceDefaultValue at ResourceReturnRate/sec. Both stay 0 for
 	// a unit with no resource, which is a no-op regen.
 	ResourceDefaultValue float64
 	ResourceReturnRate   float64
-	Speed                float64 // movement speed in feet per second
-	Radius               float64 // collision radius in feet; 0 means no collision (NPCs for now)
+	// ResourceHasteAffected mirrors ResourceType.HasteAffected - when true,
+	// the regen tick scales ResourceReturnRate by the unit's Haste% (see
+	// command.UnitCombatStats) before applying it.
+	ResourceHasteAffected bool
+	Speed                 float64 // movement speed in feet per second
+	Radius                float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
 	// Player-only combat inputs, cached from the InstanceSlot at spawn; nil/""
 	// for NPCs. EquippedItems carries each item's own elvl so combat math can

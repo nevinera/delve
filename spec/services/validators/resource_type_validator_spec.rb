@@ -50,5 +50,31 @@ RSpec.describe Validators::ResourceTypeValidator, type: :validator do
       expect { described_class.validate!(valid_resource.merge("isFluid" => "yes")) }
         .to raise_error(Validators::ValidationError, /must be a boolean/)
     end
+
+    it "accepts a resource without displayType" do
+      expect { described_class.validate!(valid_resource.except("displayType")) }.not_to raise_error
+    end
+
+    it "accepts displayType: primary" do
+      expect { described_class.validate!(valid_resource.merge("displayType" => "primary")) }.not_to raise_error
+    end
+
+    it "raises when displayType is not a recognized value" do
+      expect { described_class.validate!(valid_resource.merge("displayType" => "secondary")) }
+        .to raise_error(Validators::ValidationError, /must be one of/)
+    end
+
+    it "accepts a resource without hasteAffected" do
+      expect { described_class.validate!(valid_resource.except("hasteAffected")) }.not_to raise_error
+    end
+
+    it "accepts hasteAffected: true" do
+      expect { described_class.validate!(valid_resource.merge("hasteAffected" => true)) }.not_to raise_error
+    end
+
+    it "raises when hasteAffected is not a boolean" do
+      expect { described_class.validate!(valid_resource.merge("hasteAffected" => "yes")) }
+        .to raise_error(Validators::ValidationError, /must be a boolean/)
+    end
   end
 end

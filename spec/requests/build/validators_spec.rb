@@ -52,7 +52,10 @@ RSpec.describe "Build::Validators", type: :request do
           name: "Puncher", colors: {major: "8B4513", minor: "F4A460"},
           primaryStats: ["strength"],
           secondaryStats: %w[crit_rating haste_rating mastery_rating versatility_rating recovery_rating],
-          wields: ["axe", "dagger"]
+          wields: ["axe", "dagger"],
+          resources: [
+            {name: "energy", color: "FFDD00", max: 100.0, defaultValue: 100.0, returnRate: 10.0, isFluid: true, displayType: "primary"}
+          ]
         }
       end
 

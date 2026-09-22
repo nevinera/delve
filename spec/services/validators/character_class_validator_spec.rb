@@ -56,10 +56,30 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
     end
 
     it "propagates resource validation errors with path context" do
-      bad_resource = {"name" => "Rage", "color" => "CC0000", "max" => 100.0, "defaultValue" => 0.0, "isFluid" => true, "returnRate" => -1}
+      bad_resource = {"name" => "Rage", "color" => "CC0000", "max" => 100.0, "defaultValue" => 0.0, "isFluid" => true, "returnRate" => -1, "displayType" => "primary"}
       data = character_class_fixture.merge("resources" => [bad_resource])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/resources\[0\]/) }
+    end
+
+    it "raises when resources is empty" do
+      data = character_class_fixture.merge("resources" => [])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /at least 1 element/)
+    end
+
+    it "raises when no resource is marked primary" do
+      resource = character_class_fixture["resources"][0].except("displayType")
+      data = character_class_fixture.merge("resources" => [resource])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /exactly one resource must set displayType/)
+    end
+
+    it "raises when more than one resource is marked primary" do
+      resource = character_class_fixture["resources"][0]
+      data = character_class_fixture.merge("resources" => [resource, resource.merge("name" => "focus")])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /exactly one resource must set displayType/)
     end
 
     it "raises when powers is not an array" do
@@ -91,12 +111,13 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       expect { described_class.validate!(character_class_fixture.except("powers")) }.not_to raise_error
     end
 
-    it "accepts a class with no resources" do
-      expect { described_class.validate!(character_class_fixture.except("resources")) }.not_to raise_error
+    it "raises when resources is missing" do
+      expect { described_class.validate!(character_class_fixture.except("resources")) }
+        .to raise_error(Validators::ValidationError, /resources is required/)
     end
 
-    it "accepts resources and powers explicitly null, same as omitted" do
-      data = character_class_fixture.merge("resources" => nil, "powers" => nil)
+    it "accepts powers explicitly null, same as omitted" do
+      data = character_class_fixture.merge("powers" => nil)
       expect { described_class.validate!(data) }.not_to raise_error
     end
 
