@@ -48,3 +48,12 @@ func (m StatModifiers) Get(statName string) (add, multiply float64) {
 	}
 	return m.add[statName], multiply
 }
+
+// applyTier2SchoolPct folds status-effect bonuses for a school-scoped Tier 2
+// percentage stat (docs/schema/status.md's physicalHaste/magicHaste,
+// physicalCritChance/magicCritChance) into pct - statName is school+kind,
+// e.g. school "physical" + kind "Haste" -> "physicalHaste".
+func applyTier2SchoolPct(mods StatModifiers, school, kind string, pct float64) float64 {
+	add, multiply := mods.Get(school + kind)
+	return (pct + add) * multiply
+}

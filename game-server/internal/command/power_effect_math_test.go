@@ -60,6 +60,30 @@ func TestEffectSchoolStats_MagicCritAndHasteComeFromIntellectAndItemizedRatingOn
 	assert.InDelta(t, 29.0/11.71, hastePct, 0.001)
 }
 
+func TestEffectSchoolStats_ActiveStatStatusAddsPhysicalHaste(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
+	}
+	hastePct, _, _ := effectSchoolStats(unit, instanceconfig.Zone{}, "physical")
+	assert.InDelta(t, 20.0, hastePct, 0.001)
+}
+
+func TestEffectSchoolStats_PhysicalHasteStatusDoesNotAffectMagic(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
+	}
+	hastePct, _, _ := effectSchoolStats(unit, instanceconfig.Zone{}, "magic")
+	assert.Zero(t, hastePct)
+}
+
+func TestEffectSchoolStats_ActiveStatStatusAddsMagicCritChance(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("magicCritChance", "add", 10)},
+	}
+	_, critChancePct, _ := effectSchoolStats(unit, instanceconfig.Zone{}, "magic")
+	assert.InDelta(t, 15.0, critChancePct, 0.001) // 5 base + 10 status
+}
+
 func TestPowerEffectTimeBudget_UsesCastTimeWhenSetAndPositive(t *testing.T) {
 	castTime := 2.5
 	power := instanceconfig.Power{CastTime: &castTime, GlobalCooldown: 1.0}

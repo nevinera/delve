@@ -85,6 +85,26 @@ func TestUnitEffectiveStats_ActiveStatStatusOnANakedUnit(t *testing.T) {
 	assert.Equal(t, 200.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
 }
 
+func TestUnitCombatStats_ActiveStatStatusGrantsPhysicalHasteBuff(t *testing.T) {
+	// Mirrors Frenzy's own buff exactly (statName: "physicalHaste",
+	// modifierType: "add", amount: 20) - the concrete case #108 exists for.
+	unit := &instancestate.UnitState{
+		DamageStatKey:       "strength",
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
+	}
+	hastePct, _, _ := UnitCombatStats(unit, instanceconfig.Zone{})
+	assert.InDelta(t, 20.0, hastePct, 0.001)
+}
+
+func TestUnitCombatStats_PhysicalHasteStatusDoesNotAffectAMagicCharacter(t *testing.T) {
+	unit := &instancestate.UnitState{
+		DamageStatKey:       "intellect",
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
+	}
+	hastePct, _, _ := UnitCombatStats(unit, instanceconfig.Zone{})
+	assert.Zero(t, hastePct)
+}
+
 func TestUnitCombatStats_ActiveStatStatusIncreasesHasteRating(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("hasteRating", "add", 11.71)},

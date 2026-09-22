@@ -18,12 +18,16 @@ import (
 func effectSchoolStats(unit *instancestate.UnitState, zone instanceconfig.Zone, school string) (hastePct, critChancePct, statContribution float64) {
 	strength, agility, intellect, _, stats := unitEffectiveStats(unit, zone)
 
+	mods := ActiveStatModifiers(unit)
+
 	if school == "magic" {
 		// Intellect is always the magic-power driver, regardless of the
 		// caster's own DamageStatKey - matches basic attack's magic branch
 		// and healing always being treated as magic (see docs/stats.md).
 		hastePct = (stats["haste_rating"] + intellect*magicHasteRatingPerIntellect) / 11.71
 		critChancePct = 5 + (stats["crit_rating"]+intellect*magicCritRatingPerIntellect)/15
+		hastePct = applyTier2SchoolPct(mods, "magic", "Haste", hastePct)
+		critChancePct = applyTier2SchoolPct(mods, "magic", "CritChance", critChancePct)
 		return hastePct, critChancePct, intellect
 	}
 
@@ -39,6 +43,8 @@ func effectSchoolStats(unit *instancestate.UnitState, zone instanceconfig.Zone, 
 	case "agility":
 		statContribution = agility
 	}
+	hastePct = applyTier2SchoolPct(mods, "physical", "Haste", hastePct)
+	critChancePct = applyTier2SchoolPct(mods, "physical", "CritChance", critChancePct)
 	return hastePct, critChancePct, statContribution
 }
 

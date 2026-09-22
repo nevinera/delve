@@ -152,6 +152,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 func UnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
 	strength, agility, intellect, _, stats := unitEffectiveStats(unit, zone)
 
+	school := "physical"
 	switch unit.DamageStatKey {
 	case "strength", "agility":
 		// Strength always grants physical Crit, Agility always grants
@@ -165,6 +166,7 @@ func UnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (h
 			statDPS = agility / basicAttackStatDPSDivisor
 		}
 	case "intellect":
+		school = "magic"
 		hastePct = (stats["haste_rating"] + intellect*magicHasteRatingPerIntellect) / 11.71
 		critChancePct = 5 + (stats["crit_rating"]+intellect*magicCritRatingPerIntellect)/15
 		statDPS = intellect / basicAttackStatDPSDivisor
@@ -172,6 +174,10 @@ func UnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (h
 		hastePct = stats["haste_rating"] / 11.71
 		critChancePct = 5 + stats["crit_rating"]/15
 	}
+
+	mods := ActiveStatModifiers(unit)
+	hastePct = applyTier2SchoolPct(mods, school, "Haste", hastePct)
+	critChancePct = applyTier2SchoolPct(mods, school, "CritChance", critChancePct)
 	return hastePct, critChancePct, statDPS
 }
 
