@@ -643,8 +643,11 @@ export class SceneManager {
     raycaster.setFromCamera(ndc, this._camera);
     const meshes = [];
     const meshToID = new Map();
-    for (const [id, { group, isSelf }] of this._tokenMap) {
-      if (isSelf) continue;
+    // Self's own token is a valid click/hover/right-click target too -
+    // canTargetUnit already allows it (distance to yourself is 0), and the
+    // target frame is the only way to see your own resources rendered in
+    // that layout (e.g. to sanity-check a secondary resource meter).
+    for (const [id, { group }] of this._tokenMap) {
       group.traverse((obj) => {
         if (obj.isMesh) { meshes.push(obj); meshToID.set(obj.uuid, id); }
       });
