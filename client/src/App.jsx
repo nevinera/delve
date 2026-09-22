@@ -1859,14 +1859,20 @@ function SecondaryResourceBar({ current, max, color, isFluid, landscape }) {
   return (
     <div style={{
       ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
+      // A neutral dark track (rather than a darkened tint of the resource's
+      // own color) plus a visible gap between segments - the previous
+      // darkened-same-hue-with-1px-gap version read as a continuous
+      // fractional bar, not distinct pips.
+      background: "#1a1a1a",
       display: "flex",
-      gap: 1,
+      gap: 2,
     }}>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} style={{
           flex: 1,
           height: "100%",
-          background: i < filled ? (color ? `#${color}` : "#888") : darkenHexColor(color),
+          borderRadius: 1,
+          background: i < filled ? (color ? `#${color}` : "#888") : "transparent",
         }} />
       ))}
     </div>
