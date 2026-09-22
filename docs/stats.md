@@ -313,6 +313,41 @@ future passives/talents rather than gear alone.
 **Implementation:** same as Avoidance above - wired server-side into basic attacks and powers,
 applied after the Avoidance roll, only reduces damage landing on a player target.
 
+## Recovery Rating
+
+Recovery Rating grants a percentage bonus to all healing the character *receives* - a property of
+the recipient, not whoever's casting the heal:
+
+```
+HealingTaken% = 170 * r / (r + 310)
+```
+
+Where `r` is itemized `recovery_rating` (no other stat feeds into it, unlike Crit/Haste/Avoidance).
+Same asymptotic shape as Mastery/Defence Rating/Avoidance: a fully-itemized single-stat investment
+(`r = 445`, the same ceiling every other secondary stat uses) lands right at **+100%** (roughly
+doubling healing received); a small, unprioritized ("scattered" - e.g. ranked last of a class's 5
+secondary stats) investment (`r ~= 30`) lands around **+15%**.
+
+Applies to every kind of healing a unit receives: a `heal` PowerEffect, a recurring-heal
+StatusEffect tick, and passive HP regen (below) - evaluated fresh each time healing is applied
+(current gear/buffs at that moment), not snapshotted when a HoT or regen started.
+
+A resource can also opt into scaling its passive regen by this (`ResourceType.recoveryAffected` -
+see [resource_type.md](schema/resource_type.md)), the way a resource can already opt into scaling
+by Haste (`hasteAffected`) - meant for mana-like resources that should recover faster on a
+Recovery-itemized character, alongside (not instead of) any Haste scaling the same resource has.
+
+**Implementation:** `command.HealingTakenPct` (game server), mirrored client-side for the character
+sheet's stat tooltips.
+
+## Passive HP Regen
+
+Every living player regenerates **0.5% of max HP per second**, always - not gated on being out of
+combat. The rate is deliberately small (200s to heal fully from empty) so it's a non-factor next to
+any actual healing, which is why no in/out-of-combat tracking was needed to gate it. Scaled by the
+player's own Recovery Rating like any other healing they receive (see above). NPCs don't get this -
+they already fully heal via the existing leash-return mechanic instead.
+
 ## Miss Chance
 
 Every attack and spell has a flat **5% chance to miss**, independent of and applied before any of
@@ -443,7 +478,7 @@ the rest are marked TBD pending the attack-math writeup.
 | Mastery rating | 20 | Mastery 13.1 |
 | Versatility rating | 37.3 | see note above |
 | Defence rating | 7.5 | 6.4% physical DR, 2.5% magic DR |
-| Recovery rating | 0 | TBD |
+| Recovery rating | 0 | 0% healing taken |
 
 Combined avoidance (Dodge + Parry, stacking): **28.1%**.
 

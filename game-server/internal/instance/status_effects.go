@@ -55,7 +55,8 @@ func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState
 	}
 	switch eff.OnTick {
 	case "heal":
-		target.Health += command.StatusTickAmount(applier, zone, eff, eff.TickRate, true)
+		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, true)
+		target.Health += amount * (1 + command.HealingTakenPct(target, zone)/100)
 		if target.Health > target.MaxHealth {
 			target.Health = target.MaxHealth
 		}

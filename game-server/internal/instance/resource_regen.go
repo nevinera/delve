@@ -20,14 +20,17 @@ import (
 // step is additionally scaled by the unit's Haste% - the same
 // DamageStatKey-keyed physical/magic pool command.UnitCombatStats uses for
 // basic attacks (only meaningful for players; NPCs have no gear/Haste, so
-// this is a no-op for them regardless of the flag).
+// this is a no-op for them regardless of the flag). RecoveryAffected scales
+// it by the unit's Recovery Rating-derived healing-taken% instead
+// (command.HealingTakenPct) - independent of, and stacking with,
+// HasteAffected.
 func tickResourceRegen(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
 	for _, unit := range state.Units {
 		if unit.Status == instancestate.UnitStatusDead {
 			continue
 		}
-		var hastePct float64
-		hasteComputed := false
+		var hastePct, healingTakenPct float64
+		hasteComputed, healingTakenComputed := false, false
 		for _, r := range unit.Resources {
 			if r.ReturnRate == 0 {
 				continue
@@ -39,6 +42,13 @@ func tickResourceRegen(state *instancestate.InstanceState, zone instanceconfig.Z
 					hasteComputed = true
 				}
 				rate *= 1 + hastePct/100
+			}
+			if r.RecoveryAffected {
+				if !healingTakenComputed {
+					healingTakenPct = command.HealingTakenPct(unit, zone)
+					healingTakenComputed = true
+				}
+				rate *= 1 + healingTakenPct/100
 			}
 			step := rate * dt
 			if r.Current < r.DefaultValue {

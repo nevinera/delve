@@ -338,6 +338,32 @@ func TestUsePowerHandler_HealsSelf(t *testing.T) {
 	t.Fatal("recover crit 200 times in a row - crit chance may be miscalibrated")
 }
 
+func TestUsePowerHandler_HealScalesWithRecipientsRecoveryRating(t *testing.T) {
+	strength := "strength"
+	playerID := uuid.New()
+	for i := 0; i < 200; i++ {
+		state := stateWithInjuredPlayer(playerID)
+		state.Units[playerID].EquippedItems = map[string]instanceconfig.EquippedItem{
+			"main_hand": {
+				Slot: "main_hand", PrimaryStat: &strength,
+				SecondaryStats: []string{"stamina", "crit_rating", "recovery_rating"},
+			},
+		}
+		// effective recovery_rating 20 (base secondary 10 * main_hand's 2.0
+		// factor) -> healingTakenCeiling(170)*20/(20+310) = 10.30% bonus.
+
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
+
+		gained := state.Units[playerID].Health - 40.0
+		if gained == 20.0 {
+			continue // landed crit - retry past it, same as TestUsePowerHandler_HealsSelf
+		}
+		assert.InDelta(t, 22.06, gained, 0.01) // 20 * 1.1030
+		return
+	}
+	t.Fatal("recover crit 200 times in a row - crit chance may be miscalibrated")
+}
+
 func TestUsePowerHandler_HealDoesNotExceedMaxHealth(t *testing.T) {
 	playerID := uuid.New()
 	state := stateWithInjuredPlayer(playerID)

@@ -112,4 +112,8 @@ func TickResourceRegenForTest(state *instancestate.InstanceState, zone instancec
 	tickResourceRegen(state, zone, dt)
 }
 
+func TickHealthRegenForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	tickHealthRegen(state, zone, dt)
+}
+
 const MaxPathSearchesPerTickForTest = maxPathSearchesPerTick

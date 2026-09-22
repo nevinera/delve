@@ -132,3 +132,48 @@ func TestTickResourceRegen_NotHasteAffectedIgnoresHaste(t *testing.T) {
 
 	assert.Equal(t, 60.0, energy(u))
 }
+
+func TestTickResourceRegen_RecoveryAffectedScalesRegenByHealingTakenPct(t *testing.T) {
+	u, s := stateWithResourceUnit(50.0, 100.0, 10.0)
+	u.Resources["energy"].RecoveryAffected = true
+	strength := "strength"
+	u.EquippedItems = map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "main_hand", PrimaryStat: &strength, SecondaryStats: []string{"stamina", "crit_rating", "recovery_rating"}},
+	}
+
+	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
+
+	// effective recovery_rating 20 -> healingTakenPct 10.30% (see
+	// command.TestHealingTakenPct_ScalesWithRecoveryRating); step = 10 * 1.1030
+	assert.InDelta(t, 50.0+10.0*1.1030, energy(u), 0.001)
+}
+
+func TestTickResourceRegen_HasteAndRecoveryAffectedStackMultiplicatively(t *testing.T) {
+	u, s := stateWithResourceUnit(50.0, 100.0, 10.0)
+	u.Resources["energy"].HasteAffected = true
+	u.Resources["energy"].RecoveryAffected = true
+	u.DamageStatKey = "strength"
+	strength := "strength"
+	u.EquippedItems = map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "main_hand", PrimaryStat: &strength, SecondaryStats: []string{"haste_rating", "crit_rating", "recovery_rating"}},
+	}
+
+	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
+
+	hastePct := 20.0 / 11.71
+	healingTakenPct := 10.30
+	step := 10.0 * (1 + hastePct/100) * (1 + healingTakenPct/100)
+	assert.InDelta(t, 50.0+step, energy(u), 0.01)
+}
+
+func TestTickResourceRegen_NotRecoveryAffectedIgnoresRecovery(t *testing.T) {
+	u, s := stateWithResourceUnit(50.0, 100.0, 10.0)
+	strength := "strength"
+	u.EquippedItems = map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "main_hand", PrimaryStat: &strength, SecondaryStats: []string{"stamina", "crit_rating", "recovery_rating"}},
+	}
+
+	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
+
+	assert.Equal(t, 60.0, energy(u))
+}

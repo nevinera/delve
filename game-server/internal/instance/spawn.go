@@ -87,11 +87,12 @@ func playerResources(class instanceconfig.CharacterClass) (map[string]*instances
 	resources := make(map[string]*instancestate.ResourceState, len(class.Resources))
 	for _, r := range class.Resources {
 		resources[r.Name] = &instancestate.ResourceState{
-			Current:       r.DefaultValue,
-			Max:           r.Max,
-			DefaultValue:  r.DefaultValue,
-			ReturnRate:    r.ReturnRate,
-			HasteAffected: r.HasteAffected,
+			Current:          r.DefaultValue,
+			Max:              r.Max,
+			DefaultValue:     r.DefaultValue,
+			ReturnRate:       r.ReturnRate,
+			HasteAffected:    r.HasteAffected,
+			RecoveryAffected: r.RecoveryAffected,
 		}
 	}
 	return resources, class.PrimaryResource().Name

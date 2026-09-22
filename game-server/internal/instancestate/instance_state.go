@@ -133,11 +133,12 @@ func npcResources(ut instanceconfig.UnitType) (map[string]*ResourceState, string
 	}
 	return map[string]*ResourceState{
 		ut.Resource.Name: {
-			Current:       ut.Resource.DefaultValue,
-			Max:           ut.Resource.Max,
-			DefaultValue:  ut.Resource.DefaultValue,
-			ReturnRate:    ut.Resource.ReturnRate,
-			HasteAffected: ut.Resource.HasteAffected,
+			Current:          ut.Resource.DefaultValue,
+			Max:              ut.Resource.Max,
+			DefaultValue:     ut.Resource.DefaultValue,
+			ReturnRate:       ut.Resource.ReturnRate,
+			HasteAffected:    ut.Resource.HasteAffected,
+			RecoveryAffected: ut.Resource.RecoveryAffected,
 		},
 	}, ut.Resource.Name
 }

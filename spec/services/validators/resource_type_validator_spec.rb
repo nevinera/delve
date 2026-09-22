@@ -76,5 +76,18 @@ RSpec.describe Validators::ResourceTypeValidator, type: :validator do
       expect { described_class.validate!(valid_resource.merge("hasteAffected" => "yes")) }
         .to raise_error(Validators::ValidationError, /must be a boolean/)
     end
+
+    it "accepts a resource without recoveryAffected" do
+      expect { described_class.validate!(valid_resource.except("recoveryAffected")) }.not_to raise_error
+    end
+
+    it "accepts recoveryAffected: true" do
+      expect { described_class.validate!(valid_resource.merge("recoveryAffected" => true)) }.not_to raise_error
+    end
+
+    it "raises when recoveryAffected is not a boolean" do
+      expect { described_class.validate!(valid_resource.merge("recoveryAffected" => "yes")) }
+        .to raise_error(Validators::ValidationError, /must be a boolean/)
+    end
   end
 end

@@ -143,6 +143,32 @@ func TestTickStatusEffects_FiresMultipleTicksWhenIntervalIsShort(t *testing.T) {
 	assert.InDelta(t, 0.05, e.TimeUntilNextTick[0], 0.0001)
 }
 
+func TestTickStatusEffects_HealTickScalesWithTargetsRecoveryRating(t *testing.T) {
+	targetID, applierID, state := twoUnitState(t)
+	status := instanceconfig.Status{
+		Name: "Regen", ShortName: "Regen", TreatAs: "buff", Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{Type: "recurring", TickRate: 1.0, OnTick: "heal", Amount: 10.0},
+		},
+	}
+	state.Units[targetID].Health = 50
+	strength := "strength"
+	state.Units[targetID].EquippedItems = map[string]instanceconfig.EquippedItem{
+		// effective recovery_rating 20 (base secondary 10 * main_hand's 2.0
+		// factor) -> +10.30% healing taken - a property of the *target*
+		// receiving the tick, not the applier casting the status.
+		"main_hand": {Slot: "main_hand", PrimaryStat: &strength, SecondaryStats: []string{"stamina", "crit_rating", "recovery_rating"}},
+	}
+	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 100.0, instanceconfig.Zone{}, time.Now())
+
+	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 1.0)
+
+	// One tick of base Amount 10, scaled by +10.30% - unless it crits (5%
+	// base chance), which only ever adds, so a >=61.03 floor (50 +
+	// 10*1.103) is deterministic even accounting for that.
+	assert.GreaterOrEqual(t, state.Units[targetID].Health, 61.03)
+}
+
 func TestTickStatusEffects_HasteShortensTheFirstIntervalToo(t *testing.T) {
 	// A recurring effect's interval-to-next-tick is decided fresh each time
 	// a tick is *scheduled* - at application, and again each time a tick

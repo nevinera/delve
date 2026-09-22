@@ -134,7 +134,8 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 				}
 				recipient = target
 			}
-			recipient.Health += PowerEffectAmount(unit, zone, effect, timeBudget, true, false)
+			amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false)
+			recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
 			if recipient.Health > recipient.MaxHealth {
 				recipient.Health = recipient.MaxHealth
 			}

@@ -68,6 +68,11 @@ type ResourceState struct {
 	// tick scales ReturnRate by the unit's Haste% (see command.UnitCombatStats)
 	// before applying it.
 	HasteAffected bool
+	// RecoveryAffected mirrors ResourceType.RecoveryAffected - when true, the
+	// regen tick scales ReturnRate by the unit's Recovery Rating-derived
+	// healing-taken% (see command.HealingTakenPct) before applying it,
+	// independent of (and stacking with) HasteAffected.
+	RecoveryAffected bool
 }
 
 // UnitStatus is the lifecycle/combat state of a unit.

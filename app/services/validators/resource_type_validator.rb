@@ -12,6 +12,7 @@ module Validators
       require_boolean!(data, "isFluid", path: path)
       validate_display_type!(data, path: path) if given?(data, "displayType")
       require_boolean!(data, "hasteAffected", path: path) if given?(data, "hasteAffected")
+      require_boolean!(data, "recoveryAffected", path: path) if given?(data, "recoveryAffected")
     end
 
     private

@@ -42,6 +42,11 @@ type ResourceType struct {
 	// HasteAffected, when true, scales ReturnRate by the unit's Haste% (see
 	// command.UnitCombatStats) before it's applied each regen tick.
 	HasteAffected bool `json:"hasteAffected,omitempty"`
+	// RecoveryAffected, when true, scales ReturnRate by the unit's Recovery
+	// Rating-derived healing-taken% (see command.HealingTakenPct) before it's
+	// applied each regen tick - independent of, and stacks with,
+	// HasteAffected.
+	RecoveryAffected bool `json:"recoveryAffected,omitempty"`
 }
 
 // UnitTargeting determines how a unit selects its target once aggro'd.

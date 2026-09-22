@@ -83,7 +83,7 @@ Valid entries for `secondaries`:
 | `mastery_rating` | Class-specific mastery bonus. |
 | `versatility_rating` | Adds a fraction of itself to each primary stat and to Defence Rating. |
 | `defence_rating` | Direct percentage reduction to incoming damage (physical more than magic); see [stats.md](../stats.md). |
-| `recovery_rating` | Base resource regen; most resource-recovery powers scale off it. Moderately increases healing taken. |
+| `recovery_rating` | Increases healing taken (see [stats.md](../stats.md#recovery-rating)); also scales the passive regen of any resource that opts in (`ResourceType.recoveryAffected`, see [resource_type.md](resource_type.md)). |
 
 ---
 
