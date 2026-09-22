@@ -142,11 +142,13 @@ func TestNewInstanceState_UnitFields(t *testing.T) {
 	assert.Equal(t, pos, u.SpawnPoint)
 	assert.Equal(t, 50.0, u.Health) // 100 * 0.5
 	assert.Equal(t, 100.0, u.MaxHealth)
-	assert.Equal(t, 25.0, u.Resource) // Resource.DefaultValue
-	assert.Equal(t, 50.0, u.MaxResource)
-	assert.Equal(t, 25.0, u.ResourceDefaultValue)
-	assert.Equal(t, 5.0, u.ResourceReturnRate)
-	assert.False(t, u.ResourceHasteAffected)
+	assert.Equal(t, "Energy", u.PrimaryResourceName)
+	require.Contains(t, u.Resources, "Energy")
+	assert.Equal(t, 25.0, u.Resources["Energy"].Current) // Resource.DefaultValue
+	assert.Equal(t, 50.0, u.Resources["Energy"].Max)
+	assert.Equal(t, 25.0, u.Resources["Energy"].DefaultValue)
+	assert.Equal(t, 5.0, u.Resources["Energy"].ReturnRate)
+	assert.False(t, u.Resources["Energy"].HasteAffected)
 	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
 	assert.Nil(t, u.Target)
 	assert.Empty(t, u.ActiveStatusEffects)

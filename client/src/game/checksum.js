@@ -8,6 +8,12 @@ function canonicalEffects(unit) {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
+function canonicalResources(unit) {
+  return Object.entries(unit.resources ?? {})
+    .map(([name, r]) => ({name, current: r.current, max: r.max}))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function canonicalUnit(unit) {
   const pos = unit.position;
   return {
@@ -18,8 +24,7 @@ export function canonicalUnit(unit) {
     angle: pos.angle,
     health: unit.health,
     maxHealth: unit.max_health,
-    resource: unit.resource,
-    maxResource: unit.max_resource,
+    resources: canonicalResources(unit),
     status: unit.status,
     effects: canonicalEffects(unit),
   };

@@ -502,15 +502,14 @@ func TestUnitBehavior_Attack_InsufficientResourceIsNoOp(t *testing.T) {
 	zone := costlyStabZone(30.0)
 	u, s := npcState("g1", pos(0, 0))
 	u.Radius = 2.0
-	u.Resource = 10.0
-	u.MaxResource = 100.0
+	setEnergy(u, 10.0, 100.0)
 	playerID, p := addPlayer(s, "map1", 0, 4)
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
 	assert.Equal(t, 100.0, p.Health)
-	assert.Equal(t, 10.0, u.Resource, "an unaffordable attack shouldn't spend anything either")
+	assert.Equal(t, 10.0, energy(u), "an unaffordable attack shouldn't spend anything either")
 	assert.True(t, u.GlobalCooldownEndsAt.IsZero())
 }
 
@@ -519,15 +518,14 @@ func TestUnitBehavior_Attack_SufficientResourceSpendsCost(t *testing.T) {
 		zone := costlyStabZone(30.0)
 		u, s := npcState("g1", pos(0, 0))
 		u.Radius = 2.0
-		u.Resource = 100.0
-		u.MaxResource = 100.0
+		setEnergy(u, 100.0, 100.0)
 		playerID, p := addPlayer(s, "map1", 0, 4)
 		manualEngage(u, playerID)
 
 		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
 		if p.Health < 100.0 {
-			assert.Equal(t, 70.0, u.Resource)
+			assert.Equal(t, 70.0, energy(u))
 			return
 		}
 	}
@@ -538,28 +536,26 @@ func TestUnitBehavior_Attack_ResourceEffectRestoresSelfResource(t *testing.T) {
 	zone := selfResourceZone(15.0)
 	u, s := npcState("g1", pos(0, 0))
 	u.Radius = 2.0
-	u.Resource = 10.0
-	u.MaxResource = 100.0
+	setEnergy(u, 10.0, 100.0)
 	playerID, _ := addPlayer(s, "map1", 0, 4)
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	assert.Equal(t, 25.0, u.Resource)
+	assert.Equal(t, 25.0, energy(u))
 }
 
 func TestUnitBehavior_Attack_ResourceEffectClampsAtMax(t *testing.T) {
 	zone := selfResourceZone(50.0)
 	u, s := npcState("g1", pos(0, 0))
 	u.Radius = 2.0
-	u.Resource = 90.0
-	u.MaxResource = 100.0
+	setEnergy(u, 90.0, 100.0)
 	playerID, _ := addPlayer(s, "map1", 0, 4)
 	manualEngage(u, playerID)
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	assert.Equal(t, 100.0, u.Resource)
+	assert.Equal(t, 100.0, energy(u))
 }
 
 func TestUnitBehavior_Attack_FiresEveryEffectOfTheChosenPowerTogether(t *testing.T) {

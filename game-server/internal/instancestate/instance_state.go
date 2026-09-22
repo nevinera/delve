@@ -98,30 +98,46 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 			if u.LootCount != nil {
 				lootCount = [2]float64{u.LootCount.Min(), u.LootCount.Max()}
 			}
+			resources, primaryResourceName := npcResources(ut)
 			id := uuid.New()
 			state.Units[id] = &UnitState{
-				ZoneUnitIdentifier:    u.Identifier,
-				UnitTypeIdentifier:    u.UnitType,
-				MapIdentifier:         m.Identifier,
-				Hostility:             u.Hostility,
-				Position:              u.Position,
-				SpawnPoint:            u.Position,
-				Health:                float64(ut.MaxHP) * hpFraction,
-				MaxHealth:             float64(ut.MaxHP),
-				Resource:              ut.Resource.DefaultValue,
-				MaxResource:           ut.Resource.Max,
-				ResourceDefaultValue:  ut.Resource.DefaultValue,
-				ResourceReturnRate:    ut.Resource.ReturnRate,
-				ResourceHasteAffected: ut.Resource.HasteAffected,
-				Radius:                ut.TokenRadius,
-				LootTable:             u.LootTable,
-				LootCount:             lootCount,
-				Status:                UnitStatusIdle,
-				Target:                nil,
-				ActiveStatusEffects:   []ActiveStatusEffect{},
-				Behavior:              BehaviorState{},
+				ZoneUnitIdentifier:  u.Identifier,
+				UnitTypeIdentifier:  u.UnitType,
+				MapIdentifier:       m.Identifier,
+				Hostility:           u.Hostility,
+				Position:            u.Position,
+				SpawnPoint:          u.Position,
+				Health:              float64(ut.MaxHP) * hpFraction,
+				MaxHealth:           float64(ut.MaxHP),
+				Resources:           resources,
+				PrimaryResourceName: primaryResourceName,
+				Radius:              ut.TokenRadius,
+				LootTable:           u.LootTable,
+				LootCount:           lootCount,
+				Status:              UnitStatusIdle,
+				Target:              nil,
+				ActiveStatusEffects: []ActiveStatusEffect{},
+				Behavior:            BehaviorState{},
 			}
 		}
 	}
 	return state, nil
+}
+
+// npcResources builds the Resources map/PrimaryResourceName pair for a fresh
+// NPC unit from its UnitType's single Resource field - empty/"" for a unit
+// type with no resource (ResourceType's zero value has an empty Name).
+func npcResources(ut instanceconfig.UnitType) (map[string]*ResourceState, string) {
+	if ut.Resource.Name == "" {
+		return nil, ""
+	}
+	return map[string]*ResourceState{
+		ut.Resource.Name: {
+			Current:       ut.Resource.DefaultValue,
+			Max:           ut.Resource.Max,
+			DefaultValue:  ut.Resource.DefaultValue,
+			ReturnRate:    ut.Resource.ReturnRate,
+			HasteAffected: ut.Resource.HasteAffected,
+		},
+	}, ut.Resource.Name
 }

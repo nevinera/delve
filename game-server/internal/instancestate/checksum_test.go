@@ -80,8 +80,7 @@ func TestChecksum_UnitOrderIndependent(t *testing.T) {
 				MapIdentifier:       "m1",
 				Health:              100,
 				MaxHealth:           100,
-				Resource:            25,
-				MaxResource:         50,
+				Resources:           map[string]*instancestate.ResourceState{"energy": {Current: 25, Max: 50}},
 				Status:              instancestate.UnitStatusIdle,
 				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
 			}
@@ -116,8 +115,7 @@ func TestChecksum_EffectsOrderIndependent(t *testing.T) {
 					MapIdentifier:       "m1",
 					Health:              100,
 					MaxHealth:           100,
-					Resource:            25,
-					MaxResource:         50,
+					Resources:           map[string]*instancestate.ResourceState{"energy": {Current: 25, Max: 50}},
 					Status:              instancestate.UnitStatusIdle,
 					ActiveStatusEffects: effects,
 				},
@@ -155,11 +153,13 @@ func TestChecksumParity(t *testing.T) {
 				Y     float64 `json:"y"`
 				Angle float64 `json:"angle"`
 			} `json:"position"`
-			Health              float64 `json:"health"`
-			MaxHealth           float64 `json:"max_health"`
-			Resource            float64 `json:"resource"`
-			MaxResource         float64 `json:"max_resource"`
-			Status              string  `json:"status"`
+			Health    float64 `json:"health"`
+			MaxHealth float64 `json:"max_health"`
+			Resources map[string]struct {
+				Current float64 `json:"current"`
+				Max     float64 `json:"max"`
+			} `json:"resources"`
+			Status              string `json:"status"`
 			ActiveStatusEffects []struct {
 				StatusName string `json:"status_name"`
 				ApplierID  string `json:"applier_id"`
@@ -185,14 +185,17 @@ func TestChecksumParity(t *testing.T) {
 				ExpiresAt: time.UnixMilli(e.ExpiresAt),
 			}
 		}
+		resources := make(map[string]*instancestate.ResourceState, len(u.Resources))
+		for name, r := range u.Resources {
+			resources[name] = &instancestate.ResourceState{Current: r.Current, Max: r.Max}
+		}
 		state.Units[id] = &instancestate.UnitState{
 			ZoneUnitIdentifier:  u.ZoneUnitIdentifier,
 			MapIdentifier:       u.MapIdentifier,
 			Position:            instanceconfig.Position{X: u.Position.X, Y: u.Position.Y, Angle: u.Position.Angle},
 			Health:              u.Health,
 			MaxHealth:           u.MaxHealth,
-			Resource:            u.Resource,
-			MaxResource:         u.MaxResource,
+			Resources:           resources,
 			Status:              instancestate.UnitStatus(u.Status),
 			ActiveStatusEffects: effects,
 		}

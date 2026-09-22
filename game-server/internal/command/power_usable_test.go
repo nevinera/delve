@@ -34,15 +34,21 @@ func TestPowerUsable_TrueOncePowerCooldownExpires(t *testing.T) {
 }
 
 func TestPowerUsable_FalseWhenResourceBelowCost(t *testing.T) {
-	unit := &instancestate.UnitState{Resource: 10.0}
-	power := instanceconfig.Power{CostAmount: 30.0}
+	unit := &instancestate.UnitState{Resources: map[string]*instancestate.ResourceState{"energy": {Current: 10.0, Max: 100.0}}}
+	power := instanceconfig.Power{CostType: "energy", CostAmount: 30.0}
 	assert.False(t, command.PowerUsable(unit, power, time.Now()))
 }
 
 func TestPowerUsable_TrueWhenResourceMeetsCostExactly(t *testing.T) {
-	unit := &instancestate.UnitState{Resource: 30.0}
-	power := instanceconfig.Power{CostAmount: 30.0}
+	unit := &instancestate.UnitState{Resources: map[string]*instancestate.ResourceState{"energy": {Current: 30.0, Max: 100.0}}}
+	power := instanceconfig.Power{CostType: "energy", CostAmount: 30.0}
 	assert.True(t, command.PowerUsable(unit, power, time.Now()))
+}
+
+func TestPowerUsable_FalseWhenUnitHasNoSuchResourceAtAll(t *testing.T) {
+	unit := &instancestate.UnitState{Resources: map[string]*instancestate.ResourceState{"mana": {Current: 100.0, Max: 100.0}}}
+	power := instanceconfig.Power{CostType: "energy", CostAmount: 30.0}
+	assert.False(t, command.PowerUsable(unit, power, time.Now()))
 }
 
 func TestClampResource_ClampsBelowZero(t *testing.T) {
@@ -55,4 +61,22 @@ func TestClampResource_ClampsAboveMax(t *testing.T) {
 
 func TestClampResource_PassesThroughInRangeValues(t *testing.T) {
 	assert.Equal(t, 42.0, command.ClampResource(42.0, 100.0))
+}
+
+func TestAdjustResource_AddsAndClampsToMax(t *testing.T) {
+	unit := &instancestate.UnitState{Resources: map[string]*instancestate.ResourceState{"combo points": {Current: 4, Max: 5}}}
+	command.AdjustResource(unit, "combo points", 3)
+	assert.Equal(t, 5.0, unit.Resources["combo points"].Current)
+}
+
+func TestAdjustResource_SubtractsAndClampsToZero(t *testing.T) {
+	unit := &instancestate.UnitState{Resources: map[string]*instancestate.ResourceState{"energy": {Current: 10, Max: 100}}}
+	command.AdjustResource(unit, "energy", -30)
+	assert.Equal(t, 0.0, unit.Resources["energy"].Current)
+}
+
+func TestAdjustResource_NoOpWhenUnitHasNoSuchResource(t *testing.T) {
+	unit := &instancestate.UnitState{}
+	assert.NotPanics(t, func() { command.AdjustResource(unit, "energy", 30) })
+	assert.Empty(t, unit.Resources)
 }

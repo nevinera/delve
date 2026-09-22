@@ -13,14 +13,21 @@ import (
 
 func stateWithResourceUnit(resource, defaultValue, returnRate float64) (*instancestate.UnitState, *instancestate.InstanceState) {
 	u := &instancestate.UnitState{
-		Status:               instancestate.UnitStatusIdle,
-		Resource:             resource,
-		MaxResource:          100.0,
-		ResourceDefaultValue: defaultValue,
-		ResourceReturnRate:   returnRate,
+		Status: instancestate.UnitStatusIdle,
+		Resources: map[string]*instancestate.ResourceState{
+			"energy": {Current: resource, Max: 100.0, DefaultValue: defaultValue, ReturnRate: returnRate},
+		},
 	}
 	s := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{uuid.New(): u}}
 	return u, s
+}
+
+func energy(u *instancestate.UnitState) float64 { return u.Resources["energy"].Current }
+
+// setEnergy gives unit an "energy" resource with the given current/max -
+// shared by resource_regen_test.go and unit_behavior_test.go (same package).
+func setEnergy(u *instancestate.UnitState, current, max float64) {
+	u.Resources = map[string]*instancestate.ResourceState{"energy": {Current: current, Max: max}}
 }
 
 // fullyItemizedMainHand mirrors command's own test helper of the same name
@@ -40,7 +47,7 @@ func TestTickResourceRegen_RegeneratesUpTowardDefault(t *testing.T) {
 
 	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
 
-	assert.Equal(t, 60.0, u.Resource)
+	assert.Equal(t, 60.0, energy(u))
 }
 
 func TestTickResourceRegen_DecaysDownTowardDefault(t *testing.T) {
@@ -48,7 +55,7 @@ func TestTickResourceRegen_DecaysDownTowardDefault(t *testing.T) {
 
 	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
 
-	assert.Equal(t, 40.0, u.Resource)
+	assert.Equal(t, 40.0, energy(u))
 }
 
 func TestTickResourceRegen_StopsExactlyAtDefaultValue(t *testing.T) {
@@ -56,7 +63,7 @@ func TestTickResourceRegen_StopsExactlyAtDefaultValue(t *testing.T) {
 
 	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
 
-	assert.Equal(t, 100.0, u.Resource)
+	assert.Equal(t, 100.0, energy(u))
 }
 
 func TestTickResourceRegen_NoOpAtDefaultValue(t *testing.T) {
@@ -64,7 +71,7 @@ func TestTickResourceRegen_NoOpAtDefaultValue(t *testing.T) {
 
 	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
 
-	assert.Equal(t, 100.0, u.Resource)
+	assert.Equal(t, 100.0, energy(u))
 }
 
 func TestTickResourceRegen_NoOpWithZeroReturnRate(t *testing.T) {
@@ -72,7 +79,7 @@ func TestTickResourceRegen_NoOpWithZeroReturnRate(t *testing.T) {
 
 	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
 
-	assert.Equal(t, 0.0, u.Resource)
+	assert.Equal(t, 0.0, energy(u))
 }
 
 func TestTickResourceRegen_DeadUnitDoesNotRegen(t *testing.T) {
@@ -81,12 +88,30 @@ func TestTickResourceRegen_DeadUnitDoesNotRegen(t *testing.T) {
 
 	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
 
-	assert.Equal(t, 50.0, u.Resource)
+	assert.Equal(t, 50.0, energy(u))
+}
+
+func TestTickResourceRegen_EachResourceOnAUnitRegensIndependently(t *testing.T) {
+	u := &instancestate.UnitState{
+		Status: instancestate.UnitStatusIdle,
+		Resources: map[string]*instancestate.ResourceState{
+			"energy":       {Current: 50, Max: 100, DefaultValue: 100, ReturnRate: 10},
+			"combo points": {Current: 3, Max: 5, DefaultValue: 0, ReturnRate: 0},
+		},
+	}
+	s := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{uuid.New(): u}}
+
+	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
+
+	assert.Equal(t, 60.0, u.Resources["energy"].Current)
+	// returnRate 0 (e.g. a discrete resource like combo points) never
+	// passively changes, regardless of DefaultValue.
+	assert.Equal(t, 3.0, u.Resources["combo points"].Current)
 }
 
 func TestTickResourceRegen_HasteAffectedScalesRegenByHastePct(t *testing.T) {
 	u, s := stateWithResourceUnit(50.0, 100.0, 10.0)
-	u.ResourceHasteAffected = true
+	u.Resources["energy"].HasteAffected = true
 	u.DamageStatKey = "strength"
 	u.EquippedItems = map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength")}
 
@@ -95,7 +120,7 @@ func TestTickResourceRegen_HasteAffectedScalesRegenByHastePct(t *testing.T) {
 	// hastePct = 20/11.71 (see command.TestUnitCombatStats_HasteRatingIncreasesHastePct);
 	// step = 10 * (1 + hastePct/100)
 	hastePct := 20.0 / 11.71
-	assert.InDelta(t, 50.0+10.0*(1+hastePct/100), u.Resource, 0.001)
+	assert.InDelta(t, 50.0+10.0*(1+hastePct/100), energy(u), 0.001)
 }
 
 func TestTickResourceRegen_NotHasteAffectedIgnoresHaste(t *testing.T) {
@@ -105,5 +130,5 @@ func TestTickResourceRegen_NotHasteAffectedIgnoresHaste(t *testing.T) {
 
 	instance.TickResourceRegenForTest(s, instanceconfig.Zone{}, 1.0)
 
-	assert.Equal(t, 60.0, u.Resource)
+	assert.Equal(t, 60.0, energy(u))
 }

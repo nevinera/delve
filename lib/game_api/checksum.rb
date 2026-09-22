@@ -16,8 +16,14 @@ module GameApi
       {"id" => u["zone_unit_identifier"], "map" => u["map_identifier"],
        "x" => pos["x"], "y" => pos["y"], "angle" => pos["angle"],
        "health" => u["health"], "maxHealth" => u["max_health"],
-       "resource" => u["resource"], "maxResource" => u["max_resource"],
+       "resources" => canonical_resources(u),
        "status" => u["status"], "effects" => canonical_effects(u)}
+    end
+
+    def canonical_resources(u)
+      (u["resources"] || {})
+        .map { |name, r| {"name" => name, "current" => r["current"], "max" => r["max"]} }
+        .sort_by { |r| r["name"] }
     end
 
     def canonical_effects(u)

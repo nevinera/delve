@@ -8,8 +8,7 @@ const parityUnits = {
     position: { x: 111.9, y: 66.5, angle: 160 },
     health: 20,
     max_health: 20,
-    resource: 100,
-    max_resource: 100,
+    resources: { energy: { current: 100, max: 100 } },
     status: "idle",
     target: null,
     active_status_effects: [
@@ -27,8 +26,7 @@ const parityUnits = {
     position: { x: 35, y: 45, angle: 0 },
     health: 20,
     max_health: 20,
-    resource: 100,
-    max_resource: 100,
+    resources: { energy: { current: 100, max: 100 }, focus: { current: 3, max: 5 } },
     status: "idle",
     target: null,
     active_status_effects: [],
@@ -36,7 +34,7 @@ const parityUnits = {
 };
 
 const PARITY_CHECKSUM =
-  "0ce5b46d994b057cb8c9e6c81c2ac1f8dfd04eacd86080fa5d5e9c524aa20f93";
+  "2593bfcf2c1302acb08990dc44eb3c56a76ec4e00e313a5cc9b126c1bbe49860";
 
 describe("computeChecksum", () => {
   it("matches the parity fixture shared with Go and Ruby", async () => {

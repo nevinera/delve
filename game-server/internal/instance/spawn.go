@@ -13,11 +13,6 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-const (
-	playerBaseMaxResource = 100.0
-	playerBaseResource    = 0.0
-)
-
 type playerSpawn struct {
 	unitID        uuid.UUID
 	characterName string
@@ -41,35 +36,22 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				mapID = m.Identifier
 				pos = entryPosition(inst.ZoneConfig, m)
 			}
-			maxResource := playerBaseMaxResource
-			resource := playerBaseResource
-			var resourceDefaultValue, resourceReturnRate float64
-			var resourceHasteAffected bool
-			if r := spawn.class.PrimaryResource(); r.Name != "" {
-				maxResource = r.Max
-				resource = r.DefaultValue
-				resourceDefaultValue = r.DefaultValue
-				resourceReturnRate = r.ReturnRate
-				resourceHasteAffected = r.HasteAffected
-			}
+			resources, primaryResourceName := playerResources(spawn.class)
 			unit := &instancestate.UnitState{
-				ZoneUnitIdentifier:    "player:" + spawn.characterName,
-				UnitTypeIdentifier:    "",
-				MapIdentifier:         mapID,
-				Position:              pos,
-				SpawnPoint:            pos,
-				SpawnMapIdentifier:    mapID,
-				Resource:              resource,
-				MaxResource:           maxResource,
-				ResourceDefaultValue:  resourceDefaultValue,
-				ResourceReturnRate:    resourceReturnRate,
-				ResourceHasteAffected: resourceHasteAffected,
-				Speed:                 BasePlayerSpeed,
-				Radius:                BasePlayerRadius,
-				Status:                instancestate.UnitStatusIdle,
-				ActiveStatusEffects:   []instancestate.ActiveStatusEffect{},
-				EquippedItems:         spawn.equippedItems,
-				DamageStatKey:         spawn.class.DamageStatKey(),
+				ZoneUnitIdentifier:  "player:" + spawn.characterName,
+				UnitTypeIdentifier:  "",
+				MapIdentifier:       mapID,
+				Position:            pos,
+				SpawnPoint:          pos,
+				SpawnMapIdentifier:  mapID,
+				Resources:           resources,
+				PrimaryResourceName: primaryResourceName,
+				Speed:               BasePlayerSpeed,
+				Radius:              BasePlayerRadius,
+				Status:              instancestate.UnitStatusIdle,
+				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
+				EquippedItems:       spawn.equippedItems,
+				DamageStatKey:       spawn.class.DamageStatKey(),
 			}
 			// Spawn at full health against the real (Stamina-scaled) cap,
 			// not a flat placeholder - updatePlayerMaxHealth keeps this in
@@ -89,6 +71,30 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 			return
 		}
 	}
+}
+
+// playerResources builds the Resources map/PrimaryResourceName pair for a
+// freshly spawned player unit from their class's own Resources array
+// (docs/schema/character_class.md - every entry, not just the primary one;
+// [[character-resources]]/[[character-secondary-resources]]). Empty/"" for a
+// class with no resources at all (shouldn't happen once Rails validation
+// requires at least one, but the game server doesn't itself re-validate
+// content it's handed).
+func playerResources(class instanceconfig.CharacterClass) (map[string]*instancestate.ResourceState, string) {
+	if len(class.Resources) == 0 {
+		return nil, ""
+	}
+	resources := make(map[string]*instancestate.ResourceState, len(class.Resources))
+	for _, r := range class.Resources {
+		resources[r.Name] = &instancestate.ResourceState{
+			Current:       r.DefaultValue,
+			Max:           r.Max,
+			DefaultValue:  r.DefaultValue,
+			ReturnRate:    r.ReturnRate,
+			HasteAffected: r.HasteAffected,
+		}
+	}
+	return resources, class.PrimaryResource().Name
 }
 
 // entryPosition returns the spawn position for the first entry point found on

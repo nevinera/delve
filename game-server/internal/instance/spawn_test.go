@@ -290,11 +290,13 @@ func TestPlayerSpawn_CachesResourceDefaultAndReturnRateFromClass(t *testing.T) {
 
 	unit := state.Units[slot.CharacterUnitID]
 	require.NotNil(t, unit)
-	assert.Equal(t, 100.0, unit.Resource)
-	assert.Equal(t, 100.0, unit.MaxResource)
-	assert.Equal(t, 100.0, unit.ResourceDefaultValue)
-	assert.Equal(t, 10.0, unit.ResourceReturnRate)
-	assert.True(t, unit.ResourceHasteAffected)
+	assert.Equal(t, "energy", unit.PrimaryResourceName)
+	require.Contains(t, unit.Resources, "energy")
+	assert.Equal(t, 100.0, unit.Resources["energy"].Current)
+	assert.Equal(t, 100.0, unit.Resources["energy"].Max)
+	assert.Equal(t, 100.0, unit.Resources["energy"].DefaultValue)
+	assert.Equal(t, 10.0, unit.Resources["energy"].ReturnRate)
+	assert.True(t, unit.Resources["energy"].HasteAffected)
 }
 
 func TestPlayerSpawn_PicksTheDisplayTypePrimaryResourceNotJustTheFirst(t *testing.T) {
@@ -319,11 +321,16 @@ func TestPlayerSpawn_PicksTheDisplayTypePrimaryResourceNotJustTheFirst(t *testin
 
 	unit := state.Units[slot.CharacterUnitID]
 	require.NotNil(t, unit)
-	assert.Equal(t, 100.0, unit.Resource)
-	assert.Equal(t, 100.0, unit.MaxResource)
+	assert.Equal(t, "energy", unit.PrimaryResourceName)
+	require.Contains(t, unit.Resources, "energy")
+	require.Contains(t, unit.Resources, "combo points")
+	assert.Equal(t, 100.0, unit.Resources["energy"].Current)
+	assert.Equal(t, 100.0, unit.Resources["energy"].Max)
+	assert.Equal(t, 0.0, unit.Resources["combo points"].Current)
+	assert.Equal(t, 5.0, unit.Resources["combo points"].Max)
 }
 
-func TestPlayerSpawn_NoClassResourceLeavesRegenFieldsZero(t *testing.T) {
+func TestPlayerSpawn_NoClassResourceLeavesResourcesEmpty(t *testing.T) {
 	inst := makeInstance()
 	class := instanceconfig.CharacterClass{Name: "Puncher", PrimaryStats: []string{"strength"}}
 	slot, err := inst.AddSlot("Aldric", "42", class, nil, nil)
@@ -338,8 +345,8 @@ func TestPlayerSpawn_NoClassResourceLeavesRegenFieldsZero(t *testing.T) {
 
 	unit := state.Units[slot.CharacterUnitID]
 	require.NotNil(t, unit)
-	assert.Equal(t, 0.0, unit.ResourceDefaultValue)
-	assert.Equal(t, 0.0, unit.ResourceReturnRate)
+	assert.Empty(t, unit.Resources)
+	assert.Empty(t, unit.PrimaryResourceName)
 }
 
 func TestPlayerSpawn_ReconnectDoesNotDuplicate(t *testing.T) {
