@@ -189,7 +189,7 @@ func applyUnitBehavior(
 			if losClear {
 				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
 				if target.Status != instancestate.UnitStatusDead {
-					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
+					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, dt, events, state)
 				}
 			}
 		} else {
@@ -235,7 +235,15 @@ func applyUnitBehavior(
 // unit_type.md's UnitTactics) at the target if the unit is off GCD and at
 // least one power is in range. Appends a CombatEvent to events if an
 // attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, dt float64, events *[]CombatEvent, state *instancestate.InstanceState) {
+	// Phase advancement runs every call, GCD or not - a "phased" unit's
+	// timeElapsed transition shouldn't lag behind while the unit happens to
+	// be mid-GCD (see advancePhase).
+	leafTactics := unitType.Tactics
+	if leafTactics.Type == "phased" {
+		leafTactics = advancePhase(unit, leafTactics.Phases, dt).Tactics
+	}
+
 	if now.Before(unit.GlobalCooldownEndsAt) {
 		return
 	}
@@ -245,7 +253,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dist := math.Sqrt(dx*dx + dy*dy)
 
 	available := usablePowers(unit, unitType.Powers, dist, target, now)
-	power, ok := selectFromLeafTactics(unit, unitType.Tactics, available)
+	power, ok := selectFromLeafTactics(unit, leafTactics, available)
 	if !ok {
 		return
 	}
@@ -332,6 +340,43 @@ func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, 
 		}
 	}
 	return available
+}
+
+// advancePhase increments unit.Behavior.PhaseElapsed by dt, advances
+// PhaseIndex to the next phase if the active phase's Transition condition
+// is met, and returns the (possibly just-advanced-to) active phase - the
+// last phase in phases has no Transition and runs forever, per docs/
+// schema/unit_type.md's "phased" section. PhaseIndex/PhaseElapsed already
+// existed on BehaviorState (reserved for exactly this) before this was
+// ever wired up.
+func advancePhase(unit *instancestate.UnitState, phases []instanceconfig.Phase, dt float64) instanceconfig.Phase {
+	if unit.Behavior.PhaseIndex >= len(phases) {
+		unit.Behavior.PhaseIndex = 0 // defensive - phases shouldn't shrink under a live unit
+	}
+	unit.Behavior.PhaseElapsed += dt
+	phase := phases[unit.Behavior.PhaseIndex]
+	if unit.Behavior.PhaseIndex < len(phases)-1 && phaseTransitioned(unit, phase.Transition) {
+		unit.Behavior.PhaseIndex++
+		unit.Behavior.PhaseElapsed = 0
+		phase = phases[unit.Behavior.PhaseIndex]
+	}
+	return phase
+}
+
+// phaseTransitioned reports whether t's condition (exactly one of
+// TimeElapsed/HealthBelow set, per the schema) currently holds for unit.
+// A nil Transition (the last phase) never transitions.
+func phaseTransitioned(unit *instancestate.UnitState, t *instanceconfig.PhaseTransition) bool {
+	if t == nil {
+		return false
+	}
+	if t.TimeElapsed != nil && unit.Behavior.PhaseElapsed >= *t.TimeElapsed {
+		return true
+	}
+	if t.HealthBelow != nil && unit.MaxHealth > 0 && unit.Health/unit.MaxHealth < *t.HealthBelow {
+		return true
+	}
+	return false
 }
 
 // selectFromLeafTactics picks which of available should fire this tick,

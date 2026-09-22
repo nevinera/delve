@@ -565,6 +565,141 @@ func TestUnitBehavior_Tactics_PriorityRotationFiresNothingWhenNoListedPowerIsUsa
 	assert.Equal(t, 100.0, p.Health)
 }
 
+func floatPtr(f float64) *float64 { return &f }
+
+// phasedZone is a goblin whose Tactics is "phased": phase 0 (rotation,
+// Stab only) transitions to phase 1 (priorityRotation, Slash only) after
+// timeElapsedSecs seconds; phase 1 is last, so it never transitions
+// further. Same two-power, long-cooldown shape as twoStabsZone, so which
+// power fired is unambiguous from PowerCooldowns afterward.
+func phasedZone(timeElapsedSecs float64) instanceconfig.Zone {
+	amount := instanceconfig.ValueRange{2.0, 3.0}
+	rng := instanceconfig.ZeroBasedValueRange{0, 5.0}
+	return instanceconfig.Zone{
+		UnitTypes: map[string]instanceconfig.UnitType{
+			"goblin": {
+				Name: "Goblin", SpeedFactor: 1.0, MaxHP: 10, TokenRadius: 2.0,
+				Tactics: instanceconfig.UnitTactics{
+					Type: "phased",
+					Phases: []instanceconfig.Phase{
+						{
+							Tactics:    instanceconfig.UnitTactics{Type: "rotation", Powers: []string{"Stab"}},
+							Transition: &instanceconfig.PhaseTransition{TimeElapsed: floatPtr(timeElapsedSecs)},
+						},
+						{
+							Tactics: instanceconfig.UnitTactics{Type: "priorityRotation", Powers: []string{"Slash"}},
+						},
+					},
+				},
+				Powers: []instanceconfig.Power{
+					{Name: "Stab", GlobalCooldown: 1.5, Cooldown: 100, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount, Range: &rng}}},
+					{Name: "Slash", GlobalCooldown: 1.5, Cooldown: 100, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount, Range: &rng}}},
+				},
+			},
+		},
+		Maps: []instanceconfig.Map{{
+			Identifier: "map1",
+			Units: []instanceconfig.Unit{{
+				Identifier: "g1", UnitType: "goblin",
+				Position: pos(0, 0), Hostility: "hostile",
+			}},
+		}},
+	}
+}
+
+func TestUnitBehavior_Tactics_PhasedUsesFirstPhaseInitially(t *testing.T) {
+	zone := phasedZone(100.0) // won't transition within this test
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Contains(t, u.PowerCooldowns, "Stab")
+	assert.NotContains(t, u.PowerCooldowns, "Slash")
+	assert.Equal(t, 0, u.Behavior.PhaseIndex)
+}
+
+func TestUnitBehavior_Tactics_PhasedTransitionsOnTimeElapsed(t *testing.T) {
+	zone := phasedZone(0.5) // 5 ticks at dt=0.1
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	// PhaseElapsed accumulates every call regardless of GCD/cooldown state -
+	// no need to reset either between ticks.
+	for i := 0; i < 5; i++ {
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	}
+
+	assert.Equal(t, 1, u.Behavior.PhaseIndex, "should have transitioned to phase 1 after 0.5s elapsed")
+	assert.Equal(t, 0.0, u.Behavior.PhaseElapsed, "PhaseElapsed resets on transition")
+}
+
+func TestUnitBehavior_Tactics_PhasedLastPhaseNeverTransitionsFurther(t *testing.T) {
+	zone := phasedZone(0.2) // 2 ticks
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	for i := 0; i < 50; i++ { // well past the transition and beyond
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	}
+
+	assert.Equal(t, 1, u.Behavior.PhaseIndex, "the last phase should never advance past itself")
+}
+
+func TestUnitBehavior_Tactics_PhasedDelegatesToActivePhasesOwnTactics(t *testing.T) {
+	zone := phasedZone(0.2)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	// First tick: still phase 0 (rotation, Stab only).
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	assert.Contains(t, u.PowerCooldowns, "Stab")
+
+	// Advance past the transition, then reset cooldowns/GCD to give the new
+	// phase's tactics (priorityRotation, Slash only) a clean shot.
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	require.Equal(t, 1, u.Behavior.PhaseIndex)
+	u.GlobalCooldownEndsAt = time.Time{}
+	u.PowerCooldowns = map[string]time.Time{}
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	assert.Contains(t, u.PowerCooldowns, "Slash", "phase 1's own priorityRotation tactics should now be in effect")
+}
+
+func TestUnitBehavior_Tactics_PhasedTransitionsOnHealthBelow(t *testing.T) {
+	zone := phasedZone(1000.0) // time-based transition never fires in this test
+	zone.UnitTypes["goblin"].Tactics.Phases[0].Transition = &instanceconfig.PhaseTransition{HealthBelow: floatPtr(0.5)}
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	u.Health = 4 // 4/10 = 0.4, already below 0.5
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 1, u.Behavior.PhaseIndex)
+}
+
+func TestUnitBehavior_Tactics_PhasedScriptedSubPhaseIsANoOpNotACrash(t *testing.T) {
+	zone := phasedZone(100.0)
+	zone.UnitTypes["goblin"].Tactics.Phases[0].Tactics = instanceconfig.UnitTactics{Type: "scripted", Duration: 10.0}
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	assert.NotPanics(t, func() { instance.ApplyUnitBehaviorsForTest(s, zone, dt) })
+	assert.Equal(t, 100.0, p.Health)
+}
+
 // costlyStabZone is stabZone with a resource cost added to Stab.
 func costlyStabZone(costAmount float64) instanceconfig.Zone {
 	zone := stabZone()
