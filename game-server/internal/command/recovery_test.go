@@ -38,6 +38,30 @@ func TestHealingTakenPct_ScalesWithRecoveryRating(t *testing.T) {
 	assert.InDelta(t, 10.30, HealingTakenPct(unit, instanceconfig.Zone{}), 0.01)
 }
 
+func TestHealingTakenPct_ActiveStatStatusAddsOnTopOfRecoveryRating(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": mainHandWithRecovery()},
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingTaken", "add", 25)},
+	}
+	// 10.30% from Recovery Rating (see TestHealingTakenPct_ScalesWithRecoveryRating) + 25 flat.
+	assert.InDelta(t, 35.30, HealingTakenPct(unit, instanceconfig.Zone{}), 0.01)
+}
+
+func TestHealingTakenPct_ActiveStatStatusMultipliesRecoveryRatingToo(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": mainHandWithRecovery()},
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingTaken", "multiply", 2.0)},
+	}
+	assert.InDelta(t, 20.60, HealingTakenPct(unit, instanceconfig.Zone{}), 0.01)
+}
+
+func TestHealingTakenPct_ActiveStatStatusWorksWithNoItemizedRecovery(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingTaken", "add", 40)},
+	}
+	assert.InDelta(t, 40.0, HealingTakenPct(unit, instanceconfig.Zone{}), 0.001)
+}
+
 // The calibration itself (445 -> ~100%, ~30 -> ~15%, per docs/stats.md's
 // Recovery Rating section) is a property of the constants, not the gear
 // pipeline - checked directly here rather than via a contrived itemization
