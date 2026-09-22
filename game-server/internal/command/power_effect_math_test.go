@@ -60,6 +60,42 @@ func TestEffectSchoolStats_MagicCritAndHasteComeFromIntellectAndItemizedRatingOn
 	assert.InDelta(t, 29.0/11.71, hastePct, 0.001)
 }
 
+func TestPowerEffectAmount_ActiveStatStatusScalesDamageDone(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("damageDone", "multiply", 1.5)},
+	}
+	amount := instanceconfig.ValueRange{10.0, 10.0}
+	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
+
+	retryUntilAmount(t, func() float64 {
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false)
+	}, 15.0)
+}
+
+func TestPowerEffectAmount_SchoolScopedDamageDoneOnlyAppliesToThatSchool(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("magicDamageDone", "multiply", 1.5)},
+	}
+	amount := instanceconfig.ValueRange{10.0, 10.0}
+	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
+
+	retryUntilAmount(t, func() float64 {
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false)
+	}, 10.0)
+}
+
+func TestPowerEffectAmount_ActiveStatStatusScalesHealingDone(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingDone", "multiply", 1.5)},
+	}
+	amount := instanceconfig.ValueRange{10.0, 10.0}
+	effect := instanceconfig.PowerEffect{Amount: &amount}
+
+	retryUntilAmount(t, func() float64 {
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 0, true, false)
+	}, 15.0)
+}
+
 func TestEffectSchoolStats_ActiveStatStatusAddsPhysicalHaste(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},

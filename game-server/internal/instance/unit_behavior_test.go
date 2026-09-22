@@ -1206,6 +1206,37 @@ func TestUnitBehavior_BasicAttack_DefenceRatingReducesDamageToPlayer(t *testing.
 	t.Fatal("NPC attack missed 200 times in a row - miss chance may be miscalibrated")
 }
 
+func TestUnitBehavior_BasicAttack_ActiveStatStatusScalesDamageDone(t *testing.T) {
+	// Mirrors goblin-cave content's own Enrage status (damageDone multiply
+	// 1.1) - #108's concrete NPC-side case.
+	zone := basicAttackZone(4.0, 1.0) // same as TestUnitBehavior_BasicAttack_DamagesPlayerInRange
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		u.ActiveStatusEffects = []instancestate.ActiveStatusEffect{
+			{Status: instanceconfig.Status{Effects: []instanceconfig.StatusEffect{
+				{Type: "stat", StatName: "damageDone", ModifierType: "multiply", Amount: 5.0},
+			}}},
+		}
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health == 100.0 {
+			continue // missed - retry
+		}
+		// Unbuffed, a 4-dps hit leaves health around [95.4, 96.6] (+/-15%
+		// variance on a mean-4 hit). A 5x damageDone multiplier should pull
+		// that well below 90 - a clean discriminator without risking the
+		// health-can't-go-negative clamp at very high multipliers.
+		assert.Less(t, p.Health, 90.0)
+		return
+	}
+	t.Fatal("NPC attack missed 200 times in a row - miss chance may be miscalibrated")
+}
+
 func TestUnitBehavior_BasicAttack_NotAttackingIsNoOp(t *testing.T) {
 	zone := basicAttackZone(4.0, 1.0)
 	u, s := npcState("g1", pos(0, 0))

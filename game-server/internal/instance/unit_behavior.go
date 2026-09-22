@@ -383,10 +383,12 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 	// fires) but deals no damage, same as a player's missed swing.
 	_, critChancePct, _ := command.UnitCombatStats(unit, zone)
 	if missed, multiplier := command.RollAttackOutcome(critChancePct); !missed {
+		physical := unitType.BasicAttackSchool != "magic"
 		mean := unitType.DPS / unitType.AttackSpeed
 		lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
 		raw := math.Round((lo + rand.Float64()*(hi-lo)) * multiplier)
-		target.Health -= command.IncomingDamage(target, zone, raw, unitType.BasicAttackSchool != "magic")
+		raw = command.ApplyDamageDoneBonus(unit, physical, raw)
+		target.Health -= command.IncomingDamage(target, zone, raw, physical)
 		if target.Health < 0 {
 			target.Health = 0
 		}

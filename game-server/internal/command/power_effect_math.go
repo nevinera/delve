@@ -182,5 +182,13 @@ func effectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, schoo
 		bonus *= 2
 	}
 
-	return math.Round((rolled + bonus) * multiplier)
+	amount := (rolled + bonus) * multiplier
+	mods := ActiveStatModifiers(unit)
+	if isHeal {
+		add, mult := mods.Get("healingDone")
+		amount = (amount + add) * mult
+	} else {
+		amount = applySchoolStatBonus(mods, "damageDone", school+"DamageDone", amount)
+	}
+	return math.Round(amount)
 }

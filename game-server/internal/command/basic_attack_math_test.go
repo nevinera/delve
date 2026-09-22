@@ -299,6 +299,67 @@ func TestIncomingDamage_StrengthGrantsOnlyPhysicalAvoidance(t *testing.T) {
 	assert.Equal(t, 0, magicAvoided, "strength grants no magic avoidance")
 }
 
+func TestIncomingDamage_ActiveStatStatusIncreasesPhysicalAvoidance(t *testing.T) {
+	target := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalAvoidance", "add", 100)},
+	}
+	var avoided int
+	for i := 0; i < 200; i++ {
+		if IncomingDamage(target, instanceconfig.Zone{}, 100, true) == 0 {
+			avoided++
+		}
+	}
+	assert.Equal(t, 200, avoided, "100 percentage points of avoidance should avoid every hit")
+}
+
+func TestIncomingDamage_ActiveStatStatusIncreasesPhysicalMitigation(t *testing.T) {
+	target := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalMitigation", "add", 50)},
+	}
+	assert.InDelta(t, 50.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
+}
+
+func TestIncomingDamage_MitigationStatusDoesNotAffectTheOtherSchool(t *testing.T) {
+	target := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalMitigation", "add", 50)},
+	}
+	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false))
+}
+
+func TestIncomingDamage_ActiveStatStatusScalesDamageTaken(t *testing.T) {
+	target := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("damageTaken", "multiply", 1.5)},
+	}
+	assert.InDelta(t, 150.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
+}
+
+func TestIncomingDamage_SchoolScopedDamageTakenStacksWithGeneral(t *testing.T) {
+	target := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{
+			statusWithStatEffect("damageTaken", "multiply", 1.1),
+			statusWithStatEffect("physicalDamageTaken", "multiply", 1.1),
+		},
+	}
+	assert.InDelta(t, 121.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
+	assert.InDelta(t, 110.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false), 0.001) // only the general term applies to magic
+}
+
+func TestApplyDamageDoneBonus_ScalesRawDamage(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("damageDone", "multiply", 1.1)},
+	}
+	assert.InDelta(t, 110.0, ApplyDamageDoneBonus(unit, true, 100), 0.001)
+	assert.InDelta(t, 110.0, ApplyDamageDoneBonus(unit, false, 100), 0.001)
+}
+
+func TestApplyDamageDoneBonus_SchoolScopedOnlyAppliesToThatSchool(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalDamageDone", "multiply", 1.1)},
+	}
+	assert.InDelta(t, 110.0, ApplyDamageDoneBonus(unit, true, 100), 0.001)
+	assert.Equal(t, 100.0, ApplyDamageDoneBonus(unit, false, 100))
+}
+
 func TestBasicAttackDamage_NeverNegative(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		assert.GreaterOrEqual(t, basicAttackDamage(50, 10), 0.0)

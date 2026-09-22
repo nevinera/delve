@@ -57,3 +57,31 @@ func applyTier2SchoolPct(mods StatModifiers, school, kind string, pct float64) f
 	add, multiply := mods.Get(school + kind)
 	return (pct + add) * multiply
 }
+
+// applySchoolStatBonus folds both a general stat name's bonus and a
+// school-scoped variant's bonus into value in one step (docs/schema/
+// status.md's damageDone/physicalDamageDone/magicDamageDone,
+// damageTaken/physicalDamageTaken/magicDamageTaken) - both add terms sum
+// in, both multiply terms multiply in, so e.g. a general +10% damageDone
+// buff and a physical-only +10% physicalDamageDone buff both apply
+// together against a physical hit.
+func applySchoolStatBonus(mods StatModifiers, generalName, schoolName string, value float64) float64 {
+	addGeneral, multiplyGeneral := mods.Get(generalName)
+	addSchool, multiplySchool := mods.Get(schoolName)
+	return (value + addGeneral + addSchool) * multiplyGeneral * multiplySchool
+}
+
+// ApplyDamageDoneBonus folds unit's "damageDone" stat-effect bonus (plus the
+// school-scoped physicalDamageDone/magicDamageDone variant) into raw - the
+// caster-side counterpart to IncomingDamage's defender-side damageTaken
+// handling. Exported since basic-attack damage is computed in both this
+// package (players) and internal/instance (NPCs) - effectAmount (power
+// effects, shared by both players and NPCs) uses the unexported
+// applySchoolStatBonus directly instead, being in this package already.
+func ApplyDamageDoneBonus(unit *instancestate.UnitState, physical bool, raw float64) float64 {
+	school := "physical"
+	if !physical {
+		school = "magic"
+	}
+	return applySchoolStatBonus(ActiveStatModifiers(unit), "damageDone", school+"DamageDone", raw)
+}

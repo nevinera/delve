@@ -127,8 +127,10 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 		target.TaggedBy = &unitID
 	}
 	EngageOnAttack(target, unitID, zone, next)
+	physical := unit.DamageStatKey != "intellect"
 	raw := basicAttackDamage(critChancePct, statDPS)
-	target.Health -= IncomingDamage(target, zone, raw, unit.DamageStatKey != "intellect")
+	raw = ApplyDamageDoneBonus(unit, physical, raw)
+	target.Health -= IncomingDamage(target, zone, raw, physical)
 	if target.Health < 0 {
 		target.Health = 0
 	}
@@ -262,6 +264,11 @@ func PlayerMaxHealth(unit *instancestate.UnitState, zone instanceconfig.Zone) fl
 // - only players currently have any incoming-damage mitigation.
 func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, rawDamage float64, physical bool) float64 {
 	strength, agility, intellect, defenceRating, _ := unitEffectiveStats(target, zone)
+	mods := ActiveStatModifiers(target)
+	school := "physical"
+	if !physical {
+		school = "magic"
+	}
 
 	var effectiveAvoidanceStat float64
 	if physical {
@@ -269,8 +276,9 @@ func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, r
 	} else {
 		effectiveAvoidanceStat = intellect + agility*agilityMagicAvoidanceWeight
 	}
-	avoidance := avoidanceAsymptote * effectiveAvoidanceStat / (effectiveAvoidanceStat + avoidanceHalfPoint)
-	if rand.Float64() < avoidance {
+	avoidancePct := 100 * avoidanceAsymptote * effectiveAvoidanceStat / (effectiveAvoidanceStat + avoidanceHalfPoint)
+	avoidancePct = applyTier2SchoolPct(mods, school, "Avoidance", avoidancePct)
+	if rand.Float64() < avoidancePct/100 {
 		return 0
 	}
 
@@ -278,8 +286,12 @@ func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, r
 	if !physical {
 		drAsymptote = magicDRAsymptote
 	}
-	dr := drAsymptote * defenceRating / (defenceRating + defenceRatingHalfPoint)
-	return rawDamage * (1 - dr)
+	drPct := 100 * drAsymptote * defenceRating / (defenceRating + defenceRatingHalfPoint)
+	drPct = applyTier2SchoolPct(mods, school, "Mitigation", drPct)
+	dr := drPct / 100
+
+	damage := rawDamage * (1 - dr)
+	return applySchoolStatBonus(mods, "damageTaken", school+"DamageTaken", damage)
 }
 
 // RollAttackOutcome applies the universal miss/crit roll shared by every
