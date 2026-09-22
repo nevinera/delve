@@ -2047,6 +2047,7 @@ const STAT_LABELS = {
   mastery_rating: "Mastery Rating",
   versatility_rating: "Versatility Rating",
   defence_rating: "Defence Rating",
+  recovery_rating: "Recovery Rating",
   basic_attack_dps: "Basic Attack DPS",
 };
 
@@ -2223,6 +2224,14 @@ function itemSlotsFor(equippedSlot) {
 const PHYSICAL_DR_ASYMPTOTE = 0.6;
 const MAGIC_DR_ASYMPTOTE = 0.4 * PHYSICAL_DR_ASYMPTOTE;
 
+// Recovery Rating's healing-taken% conversion - see docs/stats.md's
+// "Recovery Rating" section / command.HealingTakenPct (game server).
+const HEALING_TAKEN_CEILING = 170;
+const HEALING_TAKEN_K = 310;
+function healingTakenPct(value) {
+  return HEALING_TAKEN_CEILING * value / (value + HEALING_TAKEN_K);
+}
+
 function secondaryStatEffectLines(key, value) {
   switch (key) {
     case "crit_rating":
@@ -2238,6 +2247,8 @@ function secondaryStatEffectLines(key, value) {
         `${(PHYSICAL_DR_ASYMPTOTE * 100 * value / (value + 98)).toFixed(1)}% physical damage reduction`,
         `${(MAGIC_DR_ASYMPTOTE * 100 * value / (value + 98)).toFixed(1)}% magic damage reduction`,
       ];
+    case "recovery_rating":
+      return [`+${healingTakenPct(value).toFixed(1)}% healing taken`];
     default:
       return [];
   }
@@ -2380,7 +2391,7 @@ function basicAttackDps(stats, primaryStats) {
 
 const STAT_GROUPS = [
   { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "basic_attack_dps"] },
-  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "defence_rating"] },
+  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "defence_rating", "recovery_rating"] },
 ];
 
 // Fallback label derived from an item's identifier, for the rare case a

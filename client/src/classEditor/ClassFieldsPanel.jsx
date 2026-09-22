@@ -9,6 +9,7 @@ const RESOURCE_FIELDS = [
   {key: "returnRate", type: "number"},
   {key: "isFluid", type: "checkbox"},
   {key: "hasteAffected", type: "checkbox"},
+  {key: "recoveryAffected", type: "checkbox"},
 ];
 
 function TextField({value, onChange}) {
