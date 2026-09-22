@@ -140,6 +140,44 @@ func TestClone_MutatingPowerCooldownsDoesNotAffectOriginal(t *testing.T) {
 	}
 }
 
+func TestClone_MutatingResourcesDoesNotAffectOriginal(t *testing.T) {
+	state, err := instancestate.NewInstanceState(zoneWith(
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+	))
+	require.NoError(t, err)
+
+	clone := state.Clone()
+	for _, u := range clone.Units {
+		u.Resources["Energy"].Current = 999
+	}
+
+	for _, u := range state.Units {
+		assert.Equal(t, 25.0, u.Resources["Energy"].Current) // testUnitType's Resource.DefaultValue
+	}
+}
+
+// This is the scenario the tick loop actually relies on: prevState is
+// cloned BEFORE a tick's mutations, then diffed against the (mutated)
+// current state afterward (see instance/messages.go's resourcesEqual) - a
+// shallow-shared *ResourceState pointer between the two would make every
+// resource change invisible to that diff, since "before" and "after" would
+// always read the same underlying value.
+func TestClone_MutatingOriginalAfterCloneDoesNotAffectClone(t *testing.T) {
+	state, err := instancestate.NewInstanceState(zoneWith(
+		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
+	))
+	require.NoError(t, err)
+
+	clone := state.Clone()
+	for _, u := range state.Units {
+		u.Resources["Energy"].Current = 999
+	}
+
+	for _, u := range clone.Units {
+		assert.Equal(t, 25.0, u.Resources["Energy"].Current)
+	}
+}
+
 func TestClone_NilTargetCopiedAsNil(t *testing.T) {
 	state, err := instancestate.NewInstanceState(zoneWith(
 		instanceconfig.Unit{Identifier: "goblin_a", UnitType: "goblin"},
