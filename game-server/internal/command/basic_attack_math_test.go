@@ -60,6 +60,20 @@ func TestPlayerMaxHealth_VersatilityDoesNotFeedStamina(t *testing.T) {
 	assert.Equal(t, 100.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), "versatility spreads into Strength/Agility/Intellect/Defence Rating only, not Stamina")
 }
 
+func TestPlayerMaxHealth_ActiveStatStatusAddsFlatMaxHealth(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("maxHealth", "add", 50)},
+	}
+	assert.Equal(t, 150.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+}
+
+func TestPlayerMaxHealth_ActiveStatStatusMultipliesMaxHealth(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("maxHealth", "multiply", 1.5)},
+	}
+	assert.Equal(t, 150.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+}
+
 func TestUnitEffectiveStats_ActiveStatStatusAddsToGearDerivedStat(t *testing.T) {
 	unit := &instancestate.UnitState{
 		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},

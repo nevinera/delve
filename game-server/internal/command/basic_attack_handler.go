@@ -248,7 +248,9 @@ func applyTier1StatusModifiers(unit *instancestate.UnitState, stats map[string]f
 // whenever gear or map elevation changes - it's not a one-time spawn value.
 func PlayerMaxHealth(unit *instancestate.UnitState, zone instanceconfig.Zone) float64 {
 	_, _, _, _, stats := unitEffectiveStats(unit, zone)
-	return playerBaseMaxHealth + stats["stamina"]*maxHealthPerStamina
+	base := playerBaseMaxHealth + stats["stamina"]*maxHealthPerStamina
+	add, multiply := ActiveStatModifiers(unit).Get("maxHealth")
+	return (base + add) * multiply
 }
 
 // IncomingDamage rolls target's Avoidance for an attack of the given school,
