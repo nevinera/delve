@@ -60,6 +60,50 @@ func TestPlayerMaxHealth_VersatilityDoesNotFeedStamina(t *testing.T) {
 	assert.Equal(t, 100.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), "versatility spreads into Strength/Agility/Intellect/Defence Rating only, not Stamina")
 }
 
+func TestUnitEffectiveStats_ActiveStatStatusAddsToGearDerivedStat(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "add", 30)},
+	}
+	// raw stamina 20 (itemized) + 30 (status) -> 100 + 50*10.
+	assert.InDelta(t, 600.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
+}
+
+func TestUnitEffectiveStats_ActiveStatStatusMultipliesGearDerivedStat(t *testing.T) {
+	unit := &instancestate.UnitState{
+		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "multiply", 2.0)},
+	}
+	// raw stamina 20 (itemized) * 2.0 (status) -> 100 + 40*10.
+	assert.InDelta(t, 500.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
+}
+
+func TestUnitEffectiveStats_ActiveStatStatusOnANakedUnit(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "add", 10)},
+	}
+	assert.Equal(t, 200.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+}
+
+func TestUnitCombatStats_ActiveStatStatusIncreasesHasteRating(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("hasteRating", "add", 11.71)},
+	}
+	hastePct, _, _ := UnitCombatStats(unit, instanceconfig.Zone{})
+	assert.InDelta(t, 1.0, hastePct, 0.001)
+}
+
+func TestUnitEffectiveStats_ActiveStatStatusOnVersatilityRatingSpreadsToo(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("versatilityRating", "add", 100)},
+	}
+	unit.DamageStatKey = "strength"
+	_, _, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	// status-granted versatility_rating (100) spreads 0.2x into Strength
+	// (20) same as itemized versatility would - statDPS = 20/90.
+	assert.InDelta(t, 20.0/90.0, statDPS, 0.001)
+}
+
 func TestUnitCombatStats_NakedUnitHasBaseCritOnlyAndNoStatDPS(t *testing.T) {
 	unit := &instancestate.UnitState{}
 	hastePct, critChancePct, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})

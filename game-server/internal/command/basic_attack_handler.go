@@ -191,6 +191,7 @@ func unitEffectiveStats(unit *instancestate.UnitState, zone instanceconfig.Zone)
 		})
 	}
 	stats = itemstats.ScaledSum(allocations, zone.MapElvl(unit.MapIdentifier))
+	applyTier1StatusModifiers(unit, stats)
 
 	versatility := stats["versatility_rating"]
 	strength = stats["strength"] + versatility*versatilityStatWeight
@@ -198,6 +199,38 @@ func unitEffectiveStats(unit *instancestate.UnitState, zone instanceconfig.Zone)
 	intellect = stats["intellect"] + versatility*versatilityStatWeight
 	defenceRating = stats["defence_rating"] + versatility*versatilityStatWeight
 	return strength, agility, intellect, defenceRating, stats
+}
+
+// tier1StatNames maps docs/schema/status.md's Tier 1 "stat" StatusEffect
+// statName values (camelCase, matching the status schema) to the
+// snake_case keys used throughout this package's stats map (matching
+// itemized-gear JSON field names) - the two conventions come from
+// different places and were never unified.
+var tier1StatNames = map[string]string{
+	"strength":          "strength",
+	"agility":           "agility",
+	"intellect":         "intellect",
+	"stamina":           "stamina",
+	"critRating":        "crit_rating",
+	"hasteRating":       "haste_rating",
+	"masteryRating":     "mastery_rating",
+	"versatilityRating": "versatility_rating",
+	"defenceRating":     "defence_rating",
+}
+
+// applyTier1StatusModifiers folds every active "stat" StatusEffect
+// targeting a Tier 1 stat (docs/stats.md) into stats, in place - see
+// ActiveStatModifiers. Applied before the Versatility spread below, so a
+// status-boosted versatility_rating spreads its boosted share too.
+func applyTier1StatusModifiers(unit *instancestate.UnitState, stats map[string]float64) {
+	mods := ActiveStatModifiers(unit)
+	for statusName, key := range tier1StatNames {
+		add, multiply := mods.Get(statusName)
+		if add == 0 && multiply == 1 {
+			continue
+		}
+		stats[key] = (stats[key] + add) * multiply
+	}
 }
 
 // PlayerMaxHealth computes a player's MaxHealth from their currently
