@@ -19,6 +19,35 @@ type downBase struct {
 	Checksum  string `json:"checksum"`
 }
 
+type resourceJSON struct {
+	Current float64 `json:"current"`
+	Max     float64 `json:"max"`
+}
+
+func resourcesJSON(resources map[string]*instancestate.ResourceState) map[string]resourceJSON {
+	out := make(map[string]resourceJSON, len(resources))
+	for name, r := range resources {
+		out[name] = resourceJSON{Current: r.Current, Max: r.Max}
+	}
+	return out
+}
+
+// resourcesEqual reports whether two units' resource maps have the same set
+// of names with the same current/max values - used to decide whether a
+// delta patch needs to resend the (whole) resources map for a unit.
+func resourcesEqual(a, b map[string]*instancestate.ResourceState) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for name, ar := range a {
+		br, ok := b[name]
+		if !ok || ar.Current != br.Current || ar.Max != br.Max {
+			return false
+		}
+	}
+	return true
+}
+
 type unitJSON struct {
 	ZoneUnitIdentifier   string                   `json:"zone_unit_identifier"`
 	UnitTypeIdentifier   string                   `json:"unit_type_identifier,omitempty"`
@@ -27,8 +56,7 @@ type unitJSON struct {
 	Position             instanceconfig.Position  `json:"position"`
 	Health               float64                  `json:"health"`
 	MaxHealth            float64                  `json:"max_health"`
-	Resource             float64                  `json:"resource"`
-	MaxResource          float64                  `json:"max_resource"`
+	Resources            map[string]resourceJSON  `json:"resources"`
 	Speed                float64                  `json:"speed"`
 	Radius               float64                  `json:"radius"`
 	Status               instancestate.UnitStatus `json:"status"`
@@ -192,8 +220,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Position:             u.Position,
 			Health:               u.Health,
 			MaxHealth:            u.MaxHealth,
-			Resource:             u.Resource,
-			MaxResource:          u.MaxResource,
+			Resources:            resourcesJSON(u.Resources),
 			Speed:                u.Speed,
 			Radius:               u.Radius,
 			Status:               u.Status,
@@ -258,8 +285,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				"position":             cu.Position,
 				"health":               cu.Health,
 				"max_health":           cu.MaxHealth,
-				"resource":             cu.Resource,
-				"max_resource":         cu.MaxResource,
+				"resources":            resourcesJSON(cu.Resources),
 				"speed":                cu.Speed,
 				"radius":               cu.Radius,
 				"status":               string(cu.Status),
@@ -306,11 +332,8 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		if cu.MaxHealth != pu.MaxHealth {
 			patch["max_health"] = cu.MaxHealth
 		}
-		if cu.Resource != pu.Resource {
-			patch["resource"] = cu.Resource
-		}
-		if cu.MaxResource != pu.MaxResource {
-			patch["max_resource"] = cu.MaxResource
+		if !resourcesEqual(cu.Resources, pu.Resources) {
+			patch["resources"] = resourcesJSON(cu.Resources)
 		}
 		if cu.Speed != pu.Speed {
 			patch["speed"] = cu.Speed

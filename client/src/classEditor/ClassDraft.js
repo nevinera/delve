@@ -74,6 +74,17 @@ export class ClassDraft {
     return this.updateEntryFields("resources", index, {[field]: value});
   }
 
+  // Exactly one resource may be "primary" (docs/schema/character_class.md) -
+  // marking one clears it from every other entry, rather than leaving it
+  // possible to end up with two (or zero, once set).
+  setPrimaryResource(index) {
+    const resources = this.data.resources ?? [];
+    const next = resources.map((resource, i) =>
+      i === index ? {...resource, displayType: "primary"} : {...resource, displayType: null}
+    );
+    return this.setField("resources", next);
+  }
+
   get powers() {
     return this.data.powers ?? [];
   }

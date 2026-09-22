@@ -32,6 +32,20 @@ func (c *CharacterClass) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*plain)(c))
 }
 
+// PrimaryResource returns the one entry in Resources whose DisplayType is
+// "primary" - the resource that's displayed, regenerated, and spent by
+// ability costs (docs/schema/character_class.md requires exactly one).
+// Returns the zero ResourceType if none is marked (e.g. an incompletely
+// authored class reaching the game server outside Rails validation).
+func (c CharacterClass) PrimaryResource() ResourceType {
+	for _, r := range c.Resources {
+		if r.DisplayType == "primary" {
+			return r
+		}
+	}
+	return ResourceType{}
+}
+
 // DamageStatKey returns whichever of "strength"/"agility"/"intellect" is
 // this class's designated basic-attack damage stat - the first one listed in
 // PrimaryStats (docs/stats.md: "whichever primary stat a class calls its

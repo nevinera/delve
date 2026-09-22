@@ -305,11 +305,11 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 			if eff.Affects == "self" {
 				recipient = unit
 			}
-			recipient.Resource = command.ClampResource(recipient.Resource+eff.Delta, recipient.MaxResource)
+			command.AdjustResource(recipient, eff.ResourceName, eff.Delta)
 		}
 	}
 	if power.CostAmount > 0 {
-		unit.Resource = command.ClampResource(unit.Resource-power.CostAmount, unit.MaxResource)
+		command.AdjustResource(unit, power.CostType, -power.CostAmount)
 	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
 	if power.Cooldown > 0 {

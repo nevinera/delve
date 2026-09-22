@@ -1831,6 +1831,54 @@ function ResourceBar({ current, max, color, landscape }) {
   );
 }
 
+// A unit's resources arrive keyed by name (see instance/messages.go's
+// unitJSON.Resources) - these just read one out, defaulting to undefined
+// (not 0) when the unit has no such resource, so ResourceBar/SecondaryResourceBar's
+// own max<=0 guards correctly render nothing rather than a phantom empty bar.
+function resourceCurrent(unit, name) {
+  return name ? unit?.resources?.[name]?.current : undefined;
+}
+function resourceMax(unit, name) {
+  return name ? unit?.resources?.[name]?.max : undefined;
+}
+
+// A class's secondary resource(s) (everything but the primary - see
+// [[character-secondary-resources]]), rendered immediately below the
+// primary ResourceBar, at the *same* track height (no taller) so the fixed
+// unit-frame doesn't grow. isFluid: true reuses ResourceBar's own continuous
+// fill; isFluid: false (the common case - combo points, holy charges) renders
+// `max` evenly-sized pips instead, `current` of them filled - a shape that
+// reads as "how many do I have" rather than implying a continuous quantity.
+// Units never have a secondary resource (only classes do), so this is only
+// ever wired up for a player (self, or a target that happens to be self).
+function SecondaryResourceBar({ current, max, color, isFluid, landscape }) {
+  if (!(max > 0)) return null;
+  if (isFluid) return <ResourceBar current={current} max={max} color={color} landscape={landscape} />;
+  const count = Math.round(max);
+  const filled = Math.max(0, Math.min(count, Math.round(current ?? 0)));
+  return (
+    <div style={{
+      ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
+      // A neutral dark track (rather than a darkened tint of the resource's
+      // own color) plus a visible gap between segments - the previous
+      // darkened-same-hue-with-1px-gap version read as a continuous
+      // fractional bar, not distinct pips.
+      background: "#1a1a1a",
+      display: "flex",
+      gap: 2,
+    }}>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} style={{
+          flex: 1,
+          height: "100%",
+          borderRadius: 1,
+          background: i < filled ? (color ? `#${color}` : "#888") : "transparent",
+        }} />
+      ))}
+    </div>
+  );
+}
+
 function UnitBar({ label, current, max }) {
   const pct = max > 0 ? Math.round((current / max) * 100) : 0;
   return (
@@ -1930,6 +1978,23 @@ function resourceMeterLabel(resource, current, max) {
   if (!(max > 0)) return null;
   const name = resource?.name ? resource.name.charAt(0).toUpperCase() + resource.name.slice(1) : "Resource";
   return `${name}: ${Math.round(current ?? 0)}/${Math.round(max)}`;
+}
+
+// Target frame color by relationship - mirrors scene.js's HOSTILITY_COLORS
+// palette (hostile red / neutral orange / friendly blue, the tint given to
+// an NPC's token on the map) for an NPC target, plus a fourth case (green,
+// matching selfFrame's own color) for a player character target - Hostility
+// is "" for players, so it isn't one of the three NPC hostility values.
+// No target selected at all keeps the frame's original static red.
+const RELATIONSHIP_COLORS = {
+  hostile: { background: "#2b0d0d", borderColor: "#6a2a2a", text: "#ff6b6b" },
+  neutral: { background: "#2b1d0d", borderColor: "#6a4a2a", text: "#ffcc80" },
+  friendly: { background: "#0d1a2b", borderColor: "#2a4a6a", text: "#90caf9" },
+  player: { background: "#0d2b0d", borderColor: "#2a6a2a", text: "#8bd98b" },
+};
+function targetRelationshipColors(unit) {
+  if (!unit) return RELATIONSHIP_COLORS.hostile;
+  return RELATIONSHIP_COLORS[unit.hostility || "player"] ?? RELATIONSHIP_COLORS.hostile;
 }
 
 function formatUnitName(unit) {
@@ -2832,6 +2897,7 @@ export default function App({
   const [powers, setPowers] = useState([]);
   const [primaryStats, setPrimaryStats] = useState([]);
   const [primaryResource, setPrimaryResource] = useState(null); // {name, color} | null
+  const [secondaryResources, setSecondaryResources] = useState([]); // [{name, color, max, isFluid}] - units never have these, only classes
   const [flashSlot, setFlashSlot] = useState(null);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
@@ -2871,8 +2937,14 @@ export default function App({
       .then(cfg => {
         setPowers(cfg.powers ?? []);
         setPrimaryStats(cfg.primaryStats ?? []);
-        const resource = cfg.resources?.[0];
+        const resources = cfg.resources ?? [];
+        const resource = resources.find(r => r.displayType === "primary");
         setPrimaryResource(resource ? {name: resource.name, color: resource.color} : null);
+        setSecondaryResources(
+          resources
+            .filter(r => r.displayType !== "primary")
+            .map(r => ({name: r.name, color: r.color, max: r.max, isFluid: r.isFluid}))
+        );
       })
       .catch(() => {});
   }, [classConfigUrl]);
@@ -3015,7 +3087,7 @@ export default function App({
       const cdEndsAt = selfUnit?.power_cooldowns?.[power.name] ?? 0;
       if (Date.now() < cdEndsAt) return;
     }
-    if (power.costAmount > 0 && (selfUnit?.resource ?? 0) < power.costAmount) return;
+    if (power.costAmount > 0 && (selfUnit?.resources?.[power.costType]?.current ?? 0) < power.costAmount) return;
     // Mirror server-side rejection checks so we don't set GCD on commands that
     // will certainly be rejected (target missing, dead, or out of range).
     const range = powerMaxRange(power);
@@ -3513,6 +3585,10 @@ export default function App({
         ? primaryResource
         : npcResourceByZoneIdRef.current[targetUnit.zone_unit_identifier])
     : null;
+  // Secondary (e.g. combo points) resources are class-only - units never
+  // have one, and another player's class isn't known client-side - so this
+  // is only ever non-empty when the target happens to be self.
+  const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
   overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
@@ -3547,9 +3623,14 @@ export default function App({
             <div style={styles.healthResourceStack}>
               <HealthBar
                 current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end"
-                resourceLabel={resourceMeterLabel(primaryResource, selfUnit.resource, selfUnit.max_resource)}
+                resourceLabel={resourceMeterLabel(primaryResource, resourceCurrent(selfUnit, primaryResource?.name), resourceMax(selfUnit, primaryResource?.name))}
               />
-              <ResourceBar current={selfUnit.resource} max={selfUnit.max_resource} color={primaryResource?.color} />
+              <ResourceBar current={resourceCurrent(selfUnit, primaryResource?.name)} max={resourceMax(selfUnit, primaryResource?.name)} color={primaryResource?.color} />
+              {secondaryResources.map((r) => (
+                <SecondaryResourceBar
+                  key={r.name} current={resourceCurrent(selfUnit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid}
+                />
+              ))}
             </div>
           )}
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
@@ -3560,14 +3641,24 @@ export default function App({
 
   function renderTargetFrameContent(stacked, portrait) {
     if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
-    const hasResource = targetUnit.max_resource > 0;
+    const targetPrimaryCurrent = resourceCurrent(targetUnit, targetResource?.name);
+    const targetPrimaryMax = resourceMax(targetUnit, targetResource?.name);
+    const hasResource = targetPrimaryMax > 0;
     if (stacked) {
-      const nameStyle = { ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline), ...(targetUnit.hostility === "hostile" ? { color: "#ff6b6b" } : {}) };
+      const nameStyle = {
+        ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline),
+        color: targetRelationshipColors(targetUnit).text,
+      };
       return (
         <>
           <div style={styles.frameHudHeader}>
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
-            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResource?.color} landscape />}
+            {hasResource && <ResourceBar current={targetPrimaryCurrent} max={targetPrimaryMax} color={targetResource?.color} landscape />}
+            {targetSecondaryResources.map((r) => (
+              <SecondaryResourceBar
+                key={r.name} current={resourceCurrent(targetUnit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid} landscape
+              />
+            ))}
           </div>
           <div style={styles.frameImageNameRowRight}>
             {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
@@ -3588,9 +3679,14 @@ export default function App({
           <div style={styles.healthResourceStack}>
             <HealthBar
               current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start"
-              resourceLabel={resourceMeterLabel(targetResource, targetUnit.resource, targetUnit.max_resource)}
+              resourceLabel={resourceMeterLabel(targetResource, targetPrimaryCurrent, targetPrimaryMax)}
             />
-            {hasResource && <ResourceBar current={targetUnit.resource} max={targetUnit.max_resource} color={targetResource?.color} />}
+            {hasResource && <ResourceBar current={targetPrimaryCurrent} max={targetPrimaryMax} color={targetResource?.color} />}
+            {targetSecondaryResources.map((r) => (
+              <SecondaryResourceBar
+                key={r.name} current={resourceCurrent(targetUnit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid}
+              />
+            ))}
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
@@ -3623,7 +3719,7 @@ export default function App({
         }
       }
     }
-    const affordable = !power || !(power.costAmount > 0) || (selfUnit?.resource ?? 0) >= power.costAmount;
+    const affordable = !power || !(power.costAmount > 0) || (selfUnit?.resources?.[power.costType]?.current ?? 0) >= power.costAmount;
     const now = Date.now();
     const pcEndsAt = power?.name ? (selfUnit?.power_cooldowns?.[power.name] ?? 0) : 0;
     // Show whichever cooldown ends later; GCD total is used when GCD is dominant.
@@ -3980,7 +4076,11 @@ export default function App({
         <>
           <div style={styles.frames}>
             <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
-            <div style={styles.targetFrame}>{renderTargetFrameContent()}</div>
+            <div style={{
+              ...styles.targetFrame,
+              background: targetRelationshipColors(targetUnit).background,
+              border: `1px solid ${targetRelationshipColors(targetUnit).borderColor}`,
+            }}>{renderTargetFrameContent()}</div>
           </div>
           <div style={styles.canvasWrapper}>
             {sceneContent}

@@ -51,6 +51,25 @@ type PendingLootItem struct {
 	Claims  []CharacterLootClaim // one per character present at loot roll
 }
 
+// ResourceState is the runtime state of one of a unit's resources (see
+// UnitState.Resources) - a class or unit_type can define several
+// (docs/schema/character_class.md/unit_type.md), each tracked independently.
+type ResourceState struct {
+	Current float64
+	Max     float64 // cached from ResourceType.Max at spawn
+	// DefaultValue/ReturnRate are cached from the ResourceType at spawn - the
+	// passive regen tick moves Current toward DefaultValue at ReturnRate/sec.
+	// ReturnRate 0 (the schema default) is a no-op regen - e.g. a discrete
+	// resource like combo points that only ever changes via a power's
+	// "resource" effect.
+	DefaultValue float64
+	ReturnRate   float64
+	// HasteAffected mirrors ResourceType.HasteAffected - when true, the regen
+	// tick scales ReturnRate by the unit's Haste% (see command.UnitCombatStats)
+	// before applying it.
+	HasteAffected bool
+}
+
 // UnitStatus is the lifecycle/combat state of a unit.
 type UnitStatus string
 
@@ -163,19 +182,25 @@ type UnitState struct {
 	SpawnPoint         instanceconfig.Position // initial position; used for respawn
 	SpawnMapIdentifier string                  // map the unit spawned into; used for respawn
 
-	Health      float64
-	MaxHealth   float64 // cached from UnitType.MaxHP at spawn
-	Resource    float64 // current resource value
-	MaxResource float64 // cached from UnitType.Resource.Max at spawn
-	// ResourceDefaultValue/ResourceReturnRate are cached from
-	// UnitType.Resource (or CharacterClass.Resources[0] for a player) at
-	// spawn, same as MaxResource - the passive regen tick moves Resource
-	// toward ResourceDefaultValue at ResourceReturnRate/sec. Both stay 0 for
-	// a unit with no resource, which is a no-op regen.
-	ResourceDefaultValue float64
-	ResourceReturnRate   float64
-	Speed                float64 // movement speed in feet per second
-	Radius               float64 // collision radius in feet; 0 means no collision (NPCs for now)
+	Health    float64
+	MaxHealth float64 // cached from UnitType.MaxHP at spawn
+
+	// Resources holds one entry per resource this unit has, keyed by
+	// ResourceType.Name - an NPC has at most one (UnitType.Resource, singular);
+	// a player has one per CharacterClass.Resources (docs/schema/
+	// character_class.md - a class's own resources array, not just its primary).
+	// A unit with no resources at all has a nil/empty map. Costs and "resource"
+	// PowerEffects are always looked up here by name - there's no bare "the
+	// resource" field anymore, since a class can have several.
+	Resources map[string]*ResourceState
+	// PrimaryResourceName is the key into Resources that's displayed and
+	// regenerated as "the" resource in the HUD - CharacterClass.
+	// PrimaryResource().Name for a player, or the single UnitType.Resource's
+	// own name for an NPC. "" for a unit with no resources.
+	PrimaryResourceName string
+
+	Speed  float64 // movement speed in feet per second
+	Radius float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
 	// Player-only combat inputs, cached from the InstanceSlot at spawn; nil/""
 	// for NPCs. EquippedItems carries each item's own elvl so combat math can

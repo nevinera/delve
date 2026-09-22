@@ -34,6 +34,14 @@ type ResourceType struct {
 	DefaultValue float64 `json:"defaultValue"` // Required: starting value and passive return target
 	ReturnRate   float64 `json:"returnRate"`   // Default 0.0: units per second toward defaultValue
 	IsFluid      bool    `json:"isFluid"`      // Required: true=quantitative, false=discrete
+	// DisplayType is only meaningful on a CharacterClass's Resources (which
+	// may list several) - "primary" marks the one that's displayed,
+	// regenerated, and spent by ability costs. A UnitType's single Resource
+	// is implicitly the only one and never sets this.
+	DisplayType string `json:"displayType,omitempty"`
+	// HasteAffected, when true, scales ReturnRate by the unit's Haste% (see
+	// command.UnitCombatStats) before it's applied each regen tick.
+	HasteAffected bool `json:"hasteAffected,omitempty"`
 }
 
 // UnitTargeting determines how a unit selects its target once aggro'd.

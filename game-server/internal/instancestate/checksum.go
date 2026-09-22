@@ -13,18 +13,23 @@ type canonicalEffect struct {
 	ExpiresAt int64  `json:"expiresAt"`
 }
 
+type canonicalResource struct {
+	Name    string  `json:"name"`
+	Current float64 `json:"current"`
+	Max     float64 `json:"max"`
+}
+
 type canonicalUnit struct {
-	ID          string            `json:"id"`
-	Map         string            `json:"map"`
-	X           float64           `json:"x"`
-	Y           float64           `json:"y"`
-	Angle       float64           `json:"angle"`
-	Health      float64           `json:"health"`
-	MaxHealth   float64           `json:"maxHealth"`
-	Resource    float64           `json:"resource"`
-	MaxResource float64           `json:"maxResource"`
-	Status      UnitStatus        `json:"status"`
-	Effects     []canonicalEffect `json:"effects"`
+	ID        string              `json:"id"`
+	Map       string              `json:"map"`
+	X         float64             `json:"x"`
+	Y         float64             `json:"y"`
+	Angle     float64             `json:"angle"`
+	Health    float64             `json:"health"`
+	MaxHealth float64             `json:"maxHealth"`
+	Resources []canonicalResource `json:"resources"`
+	Status    UnitStatus          `json:"status"`
+	Effects   []canonicalEffect   `json:"effects"`
 }
 
 // Checksum returns a SHA256 hex digest of the instance state in a canonical
@@ -44,18 +49,23 @@ func (s *InstanceState) Checksum() string {
 		}
 		sort.Slice(effects, func(i, j int) bool { return effects[i].ID < effects[j].ID })
 
+		resources := make([]canonicalResource, 0, len(u.Resources))
+		for name, r := range u.Resources {
+			resources = append(resources, canonicalResource{Name: name, Current: r.Current, Max: r.Max})
+		}
+		sort.Slice(resources, func(i, j int) bool { return resources[i].Name < resources[j].Name })
+
 		units = append(units, canonicalUnit{
-			ID:          u.ZoneUnitIdentifier,
-			Map:         u.MapIdentifier,
-			X:           u.Position.X,
-			Y:           u.Position.Y,
-			Angle:       u.Position.Angle,
-			Health:      u.Health,
-			MaxHealth:   u.MaxHealth,
-			Resource:    u.Resource,
-			MaxResource: u.MaxResource,
-			Status:      u.Status,
-			Effects:     effects,
+			ID:        u.ZoneUnitIdentifier,
+			Map:       u.MapIdentifier,
+			X:         u.Position.X,
+			Y:         u.Position.Y,
+			Angle:     u.Position.Angle,
+			Health:    u.Health,
+			MaxHealth: u.MaxHealth,
+			Resources: resources,
+			Status:    u.Status,
+			Effects:   effects,
 		})
 	}
 	sort.Slice(units, func(i, j int) bool { return units[i].ID < units[j].ID })

@@ -730,17 +730,25 @@ func targetResourcePower(delta float64) command.UsePowerPayload {
 	}
 }
 
+// setEnergy gives unit an "energy" resource with the given current/max - the
+// resource name costlyPunchPower/selfResourcePower/targetResourcePower all
+// key off.
+func setEnergy(unit *instancestate.UnitState, current, max float64) {
+	unit.Resources = map[string]*instancestate.ResourceState{"energy": {Current: current, Max: max}}
+}
+
+func energyOf(unit *instancestate.UnitState) float64 { return unit.Resources["energy"].Current }
+
 func TestUsePowerHandler_InsufficientResourceIsNoOp(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
-	state.Units[playerID].Resource = 10.0
-	state.Units[playerID].MaxResource = 100.0
+	setEnergy(state.Units[playerID], 10.0, 100.0)
 	before := state.Units[targetID].Health
 
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, costlyPunchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
-	assert.Equal(t, 10.0, state.Units[playerID].Resource, "an unaffordable cast shouldn't spend anything either")
+	assert.Equal(t, 10.0, energyOf(state.Units[playerID]), "an unaffordable cast shouldn't spend anything either")
 	assert.True(t, state.Units[playerID].GlobalCooldownEndsAt.IsZero(), "an unaffordable cast shouldn't trigger the GCD")
 }
 
@@ -749,65 +757,59 @@ func TestUsePowerHandler_SufficientResourceSpendsCost(t *testing.T) {
 
 	state := retryUntilPowerLands(t, playerID, targetID, instanceconfig.Zone{}, costlyPunchPower(), func() *instancestate.InstanceState {
 		s := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
-		s.Units[playerID].Resource = 100.0
-		s.Units[playerID].MaxResource = 100.0
+		setEnergy(s.Units[playerID], 100.0, 100.0)
 		return s
 	})
 
-	assert.Equal(t, 70.0, state.Units[playerID].Resource)
+	assert.Equal(t, 70.0, energyOf(state.Units[playerID]))
 }
 
 func TestUsePowerHandler_SpendClampsAtZero(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
-	state.Units[playerID].Resource = 30.0
-	state.Units[playerID].MaxResource = 100.0
+	setEnergy(state.Units[playerID], 30.0, 100.0)
 
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, costlyPunchPower(), instanceconfig.Zone{}, state))
 
-	assert.Equal(t, 0.0, state.Units[playerID].Resource)
+	assert.Equal(t, 0.0, energyOf(state.Units[playerID]))
 }
 
 func TestUsePowerHandler_ZeroCostPowerDoesNotTouchResource(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
-	state.Units[playerID].Resource = 42.0
-	state.Units[playerID].MaxResource = 100.0
+	setEnergy(state.Units[playerID], 42.0, 100.0)
 
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
-	assert.Equal(t, 42.0, state.Units[playerID].Resource)
+	assert.Equal(t, 42.0, energyOf(state.Units[playerID]))
 }
 
 func TestUsePowerHandler_ResourceEffectRestoresSelfResource(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
-	state.Units[playerID].Resource = 10.0
-	state.Units[playerID].MaxResource = 100.0
+	setEnergy(state.Units[playerID], 10.0, 100.0)
 
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfResourcePower(15.0), instanceconfig.Zone{}, state))
 
-	assert.Equal(t, 25.0, state.Units[playerID].Resource)
+	assert.Equal(t, 25.0, energyOf(state.Units[playerID]))
 }
 
 func TestUsePowerHandler_ResourceEffectClampsAtMax(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
-	state.Units[playerID].Resource = 90.0
-	state.Units[playerID].MaxResource = 100.0
+	setEnergy(state.Units[playerID], 90.0, 100.0)
 
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, selfResourcePower(50.0), instanceconfig.Zone{}, state))
 
-	assert.Equal(t, 100.0, state.Units[playerID].Resource)
+	assert.Equal(t, 100.0, energyOf(state.Units[playerID]))
 }
 
 func TestUsePowerHandler_ResourceEffectCanDrainATarget(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
-	state.Units[targetID].Resource = 50.0
-	state.Units[targetID].MaxResource = 100.0
+	setEnergy(state.Units[targetID], 50.0, 100.0)
 
 	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, targetResourcePower(-20.0), instanceconfig.Zone{}, state))
 
-	assert.Equal(t, 30.0, state.Units[targetID].Resource)
+	assert.Equal(t, 30.0, energyOf(state.Units[targetID]))
 }

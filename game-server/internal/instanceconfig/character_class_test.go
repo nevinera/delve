@@ -84,3 +84,22 @@ func TestCharacterClass_MalformedJSON(t *testing.T) {
 	err := json.Unmarshal([]byte(`{not json`), &c)
 	assert.Error(t, err)
 }
+
+func TestCharacterClass_PrimaryResource(t *testing.T) {
+	energy := instanceconfig.ResourceType{Name: "energy", Max: 100, DisplayType: "primary"}
+	comboPoints := instanceconfig.ResourceType{Name: "combo points", Max: 5}
+	c := instanceconfig.CharacterClass{Resources: []instanceconfig.ResourceType{comboPoints, energy}}
+
+	assert.Equal(t, energy, c.PrimaryResource())
+}
+
+func TestCharacterClass_PrimaryResourceZeroValueWhenNoneMarked(t *testing.T) {
+	c := instanceconfig.CharacterClass{
+		Resources: []instanceconfig.ResourceType{{Name: "combo points", Max: 5}},
+	}
+	assert.Equal(t, instanceconfig.ResourceType{}, c.PrimaryResource())
+}
+
+func TestCharacterClass_PrimaryResourceZeroValueWithNoResources(t *testing.T) {
+	assert.Equal(t, instanceconfig.ResourceType{}, instanceconfig.CharacterClass{}.PrimaryResource())
+}

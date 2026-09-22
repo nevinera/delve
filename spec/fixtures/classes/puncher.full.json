@@ -8,6 +8,18 @@
   "primaryStats": ["strength"],
   "secondaryStats": ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"],
   "wields": ["dagger", "dagger"],
+  "resources": [
+    {
+      "name": "energy",
+      "color": "FFDD00",
+      "max": 100.0,
+      "defaultValue": 100.0,
+      "returnRate": 10.0,
+      "isFluid": true,
+      "displayType": "primary",
+      "hasteAffected": true
+    }
+  ],
   "powers": [
     {
       "name": "Punch",

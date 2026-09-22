@@ -8,6 +8,7 @@ const RESOURCE_FIELDS = [
   {key: "defaultValue", type: "number"},
   {key: "returnRate", type: "number"},
   {key: "isFluid", type: "checkbox"},
+  {key: "hasteAffected", type: "checkbox"},
 ];
 
 function TextField({value, onChange}) {
@@ -34,6 +35,15 @@ function ResourceEntry({resource, index, draft, onChange}) {
       </div>
       <table>
         <tbody>
+          <tr>
+            <th>Primary</th>
+            <td>
+              <input
+                type="radio" name="primary-resource" checked={resource.displayType === "primary"}
+                onChange={() => onChange(draft.setPrimaryResource(index))}
+              />
+            </td>
+          </tr>
           {RESOURCE_FIELDS.map(({key, type}) => (
             <tr key={key}>
               <th>{humanize(key)}</th>

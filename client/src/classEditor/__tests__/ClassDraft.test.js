@@ -82,6 +82,27 @@ describe("ClassDraft", () => {
       const result = draft.updateResourceField(1, "max", 75);
       expect(result.data.resources).toEqual([{name: "energy", max: 100}, {name: "mana", max: 75}]);
     });
+
+    it("setPrimaryResource marks only the entry at the given index as primary", () => {
+      const draft = new ClassDraft({...base, resources: [{name: "energy"}, {name: "mana"}]}, "puncher");
+      const result = draft.setPrimaryResource(1);
+      expect(result.data.resources).toEqual([
+        {name: "energy", displayType: null},
+        {name: "mana", displayType: "primary"},
+      ]);
+    });
+
+    it("setPrimaryResource clears displayType from whichever entry previously held it", () => {
+      const draft = new ClassDraft(
+        {...base, resources: [{name: "energy", displayType: "primary"}, {name: "mana"}]},
+        "puncher"
+      );
+      const result = draft.setPrimaryResource(1);
+      expect(result.data.resources).toEqual([
+        {name: "energy", displayType: null},
+        {name: "mana", displayType: "primary"},
+      ]);
+    });
   });
 
   describe("power slots", () => {

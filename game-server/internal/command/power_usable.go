@@ -23,8 +23,11 @@ func PowerUsable(unit *instancestate.UnitState, power instanceconfig.Power, now 
 			return false
 		}
 	}
-	if power.CostAmount > 0 && unit.Resource < power.CostAmount {
-		return false
+	if power.CostAmount > 0 {
+		r, ok := unit.Resources[power.CostType]
+		if !ok || r.Current < power.CostAmount {
+			return false
+		}
 	}
 	return true
 }
@@ -38,4 +41,18 @@ func ClampResource(value, max float64) float64 {
 		return max
 	}
 	return value
+}
+
+// AdjustResource applies delta to unit's named resource (positive or
+// negative - a power's "resource" effect and a power's own cost spend both
+// go through this), clamped to [0, Max]. A no-op if unit has no resource by
+// that name - the "resource" effect/cost referencing a resource this unit
+// doesn't have is a content-authoring mismatch, not something to crash or
+// silently invent a pool for.
+func AdjustResource(unit *instancestate.UnitState, name string, delta float64) {
+	r, ok := unit.Resources[name]
+	if !ok {
+		return
+	}
+	r.Current = ClampResource(r.Current+delta, r.Max)
 }

@@ -149,12 +149,12 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 				}
 				recipient = target
 			}
-			recipient.Resource = ClampResource(recipient.Resource+effect.Delta, recipient.MaxResource)
+			AdjustResource(recipient, effect.ResourceName, effect.Delta)
 		}
 	}
 
 	if p.Power.CostAmount > 0 {
-		unit.Resource = ClampResource(unit.Resource-p.Power.CostAmount, unit.MaxResource)
+		AdjustResource(unit, p.Power.CostType, -p.Power.CostAmount)
 	}
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(p.Power.GlobalCooldown * float64(time.Second)))
 	if p.Power.Cooldown > 0 {
