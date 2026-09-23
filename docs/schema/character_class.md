@@ -4,6 +4,7 @@ A CharacterClass defines the abilities, resources, and appearance of a player ch
 
 See [resource_type.md](resource_type.md) for the `ResourceType` type embedded in `resources`.
 See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
+See [status.md](status.md) for the `Status` type embedded in `passives`.
 
 ## Fields
 
@@ -14,6 +15,7 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 | `colors` | Colors | yes | Two display colors used for this class's tokens and UI elements. |
 | `resources` | array of ResourceType | yes | Resources available to this class. Most classes have one; some may have multiple. Exactly one entry must set `displayType: "primary"` (see [resource_type.md](resource_type.md)) - that's the one displayed, regenerated, and spent by ability costs. |
 | `powers` | array of Ability \| AssetReference(`referenceTo: "ability"`) | no | Abilities available to this class. Inline Ability objects or references to external ability files. A class containing any AssetReferences is abstract (see [common.md](common.md)). |
+| `passives` | array of Status | no | Hidden, permanent buffs granted just by playing this class - applied once at spawn and never expire. At most 6, no duplicate `name`s, and each must set `treatAs: "inherent"` (nothing else would stay hidden - see [status.md](status.md)). |
 | `primaryStats` | array of string | yes | One or more of `strength`, `agility`, `intellect`, no duplicates. Hybrid classes may list more than one. Used to synthesize Trainee Gear (see [stats.md](../stats.md)) for this class's empty equipment slots. |
 | `secondaryStats` | array of string | yes | Exactly 5 secondary stats, ranked highest to lowest priority, no duplicates. Each must be one of `stamina`, `crit_rating`, `haste_rating`, `mastery_rating`, `versatility_rating`, `defence_rating`, `recovery_rating`. Used alongside `primaryStat` to synthesize Trainee Gear. |
 | `wields` | array of string | yes | 1-2 entries, each one of `axe`, `sword`, `staff`, `wand`, `dagger`, `shield`, `totem`, `book`, `spear`, `bow`, `crossbow`, `gun`, `orb`. A single entry is two-handed. Two entries put the first in `main_hand` and the second in `off_hand`. Only used to pick weapon types for Trainee Gear (see [stats.md](../stats.md)) — weapon-type restrictions on real items aren't implemented yet. |
@@ -72,6 +74,18 @@ Two display colors for this class, used for token rendering and UI theming.
           "amount": [8.0, 12.0],
           "tags": ["physical", "melee"]
         }
+      ]
+    }
+  ],
+  "passives": [
+    {
+      "name": "Thick Hide",
+      "description": "Years of brawling have toughened your skin.",
+      "shortName": "Hide",
+      "treatAs": "inherent",
+      "stacking": "replace",
+      "effects": [
+        { "type": "stat", "statName": "physicalMitigation", "modifierType": "add", "amount": 5.0 }
       ]
     }
   ]
