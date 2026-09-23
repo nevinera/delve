@@ -10,13 +10,15 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_19_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
+    t.string "description"
     t.integer "file_size"
     t.string "identifier", null: false
     t.string "location", null: false
+    t.string "name"
     t.json "primary_stats", default: [], null: false
     t.json "secondary_stats", default: [], null: false
     t.string "state", default: "provided", null: false
@@ -74,6 +76,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_19_130000) do
     t.index ["character_class_id"], name: "index_characters_on_character_class_id"
     t.index ["name"], name: "index_characters_on_name", unique: true
     t.index ["user_id"], name: "index_characters_on_user_id"
+  end
+
+  create_table "class_abilities", force: :cascade do |t|
+    t.float "cast_time"
+    t.integer "character_class_id", null: false
+    t.float "cooldown"
+    t.float "cost_amount"
+    t.string "cost_type"
+    t.datetime "created_at", null: false
+    t.string "description"
+    t.float "global_cooldown"
+    t.string "icon_url"
+    t.float "max_range"
+    t.string "name", null: false
+    t.integer "position", null: false
+    t.json "source_json", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.index ["character_class_id", "position"], name: "index_class_abilities_on_character_class_id_and_position", unique: true
+    t.index ["character_class_id"], name: "index_class_abilities_on_character_class_id"
   end
 
   create_table "equipped_items", force: :cascade do |t|
@@ -157,6 +178,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_19_130000) do
   add_foreign_key "character_settings", "characters"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
+  add_foreign_key "class_abilities", "character_classes"
   add_foreign_key "equipped_items", "character_items"
   add_foreign_key "equipped_items", "characters"
   add_foreign_key "github_installations", "users"
