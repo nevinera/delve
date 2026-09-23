@@ -4,10 +4,12 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
   let(:user) { create(:user) }
   let(:character_class) { create(:character_class, user: user) }
   let(:content) do
-    '{"name":"Puncher","colors":{"major":"8B4513","minor":"F4A460"},' \
+    '{"name":"Puncher","description":"Hits things","colors":{"major":"8B4513","minor":"F4A460"},' \
       '"primaryStats":["strength"],"secondaryStats":["stamina","crit_rating","haste_rating","mastery_rating","versatility_rating"],' \
       '"wields":["dagger","dagger"],' \
-      '"resources":[{"name":"energy","color":"FFDD00","max":100,"defaultValue":100,"isFluid":true,"displayType":"primary"}]}'
+      '"resources":[{"name":"energy","color":"FFDD00","max":100,"defaultValue":100,"isFluid":true,"displayType":"primary"}],' \
+      '"powers":[{"name":"Punch","iconURL":"../icons/punch.svg","castTime":null,"globalCooldown":0.5,' \
+      '"effects":[{"type":"harm","affects":"bTarget","amount":10,"range":5}]}]}'
   end
 
   before do
@@ -39,6 +41,42 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
   it "stores wields from the fetched content" do
     described_class.perform_now(character_class.id)
     expect(character_class.reload.wields).to eq(%w[dagger dagger])
+  end
+
+  it "stores name and description from the fetched content" do
+    described_class.perform_now(character_class.id)
+    character_class.reload
+    expect(character_class.name).to eq("Puncher")
+    expect(character_class.description).to eq("Hits things")
+  end
+
+  it "extracts class abilities from the fetched powers" do
+    described_class.perform_now(character_class.id)
+    expect(character_class.reload.class_abilities.map(&:name)).to eq(["Punch"])
+  end
+
+  it "clears a previous validity error" do
+    character_class.update!(state: :validation_failed, validity_error: "old")
+    described_class.perform_now(character_class.id)
+    expect(character_class.reload.validity_error).to be_nil
+  end
+
+  context "when the content fails validation" do
+    before { stub_request(:get, character_class.location).to_return(body: "not json") }
+
+    it "marks a new class validation_failed" do
+      described_class.perform_now(character_class.id)
+      expect(character_class.reload).to have_attributes(state: "validation_failed", validity_error: /invalid JSON/)
+    end
+
+    it "keeps an already-fetched class fetched, with its abilities, and records the error" do
+      character_class.update!(state: :fetched)
+      create(:class_ability, character_class: character_class, name: "Punch")
+      described_class.perform_now(character_class.id)
+      character_class.reload
+      expect(character_class).to have_attributes(state: "fetched", validity_error: /invalid JSON/)
+      expect(character_class.class_abilities.map(&:name)).to eq(["Punch"])
+    end
   end
 
   it "raises when the URL returns a non-success response" do

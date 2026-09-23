@@ -5,6 +5,7 @@ class CharacterClass < ApplicationRecord
   ].freeze
 
   belongs_to :user
+  has_many :class_abilities, -> { order(:position) }, dependent: :destroy, inverse_of: :character_class
 
   enum :state, {provided: "provided", fetched: "fetched", validation_failed: "validation_failed"}
 

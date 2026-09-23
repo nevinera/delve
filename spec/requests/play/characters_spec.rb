@@ -57,6 +57,30 @@ RSpec.describe "Play::Characters", type: :request do
         get "/play/characters/#{character.id}"
         expect(response.body).to include(play_character_zones_path(character))
       end
+
+      context "with class details" do
+        before do
+          character_class.update!(name: "Puncher", description: "A demo class")
+          create(:class_ability, character_class: character_class, position: 0, name: "Punch",
+            description: "Hits hard.", icon_url: "https://example.com/icons/punch.svg",
+            cost_type: "energy", cost_amount: 30)
+        end
+
+        it "shows the class name and description" do
+          get "/play/characters/#{character.id}"
+          expect(response.body).to include("Puncher", "A demo class")
+        end
+
+        it "shows each ability with its icon, stats, and description" do
+          get "/play/characters/#{character.id}"
+          expect(response.body).to include("Punch", "Hits hard.", "https://example.com/icons/punch.svg", "30 energy")
+        end
+      end
+
+      it "notes when the class has no abilities" do
+        get "/play/characters/#{character.id}"
+        expect(response.body).to include("No abilities.")
+      end
     end
 
     describe "GET /play/characters/new" do

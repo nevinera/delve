@@ -1,0 +1,30 @@
+<section>
+  <h2><%= character_class.name.presence || character_class.identifier %></h2>
+  <% if character_class.description.present? %>
+    <p><%= character_class.description %></p>
+  <% end %>
+
+  <h3>Abilities</h3>
+  <% if character_class.class_abilities.any? %>
+    <ul style="list-style: none; padding: 0;">
+      <% character_class.class_abilities.each do |ability| %>
+        <li style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px;">
+          <% if ability.icon_url.present? %>
+            <%= image_tag ability.icon_url, alt: ability.name, style: "width: 40px; height: 40px; flex-shrink: 0;" %>
+          <% else %>
+            <span style="width: 40px; height: 40px; flex-shrink: 0;"></span>
+          <% end %>
+          <div>
+            <strong><%= ability.name %></strong>
+            <div><small><%= ability.stat_summary %></small></div>
+            <% if ability.description.present? %>
+              <div><%= ability.description %></div>
+            <% end %>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p><em>No abilities.</em></p>
+  <% end %>
+</section>

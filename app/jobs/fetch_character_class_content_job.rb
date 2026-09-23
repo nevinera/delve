@@ -8,23 +8,37 @@ class FetchCharacterClassContentJob < ApplicationJob
     body = fetch_body!(character_class)
     data = JSON.parse(body)
     Validators::CharacterClassValidator.validate!(data)
-    character_class.update!(fetched_attrs(body, data))
+    CharacterClass.transaction do
+      character_class.update!(fetched_attrs(body, data))
+      CharacterClasses::ExtractAbilities.call(character_class: character_class, data: data)
+    end
   rescue JSON::ParserError => e
-    character_class.update!(state: :validation_failed, validity_error: "invalid JSON: #{e.message}")
+    record_failure(character_class, "invalid JSON: #{e.message}")
   rescue Validators::ValidationError => e
-    character_class.update!(state: :validation_failed, validity_error: e.message)
+    record_failure(character_class, e.message)
   end
 
   private
+
+  # A class that already fetched successfully stays playable with its
+  # previously extracted content - a failed refetch only records the error.
+  def record_failure(character_class, message)
+    attrs = {validity_error: message}
+    attrs[:state] = :validation_failed unless character_class.fetched?
+    character_class.update!(attrs)
+  end
 
   def fetched_attrs(body, data)
     {
       content_sha: Digest::SHA1.hexdigest(body),
       file_size: body.bytesize,
+      name: data["name"],
+      description: data["description"],
       primary_stats: data["primaryStats"],
       secondary_stats: data["secondaryStats"],
       wields: data["wields"],
-      state: :fetched
+      state: :fetched,
+      validity_error: nil
     }
   end
 
