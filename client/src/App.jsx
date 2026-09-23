@@ -1546,6 +1546,23 @@ const styles = {
     gap: 4,
     pointerEvents: "none",
   },
+  abilityErrorBanner: {
+    position: "absolute",
+    left: "50%",
+    top: 64,
+    transform: "translateX(-50%)",
+    padding: "6px 14px",
+    borderRadius: 4,
+    background: "rgba(20, 20, 20, 0.75)",
+    color: "#ff4040",
+    fontSize: 15,
+    fontWeight: 600,
+    textShadow: "0 1px 3px #000",
+    whiteSpace: "nowrap",
+    pointerEvents: "none",
+    transitionProperty: "opacity",
+    transitionTimingFunction: "ease-out",
+  },
   castBarTop: {
     position: "absolute",
     left: "50%",
@@ -1926,6 +1943,41 @@ export function CastBar({ unit, position = "top", inline = false }) {
   );
 }
 
+// How long an AbilityErrorBanner stays fully visible before it starts
+// fading, and how long the fade itself takes - WoW's UIErrorsFrame ("Not
+// enough energy", "Out of range", ...) is the reference point: message
+// appears instantly (no fade-in), holds, then fades out on its own.
+const ABILITY_ERROR_HOLD_MS = 2200;
+const ABILITY_ERROR_FADE_MS = 800;
+
+// A transient "why didn't that work" banner, top-center over the canvas.
+// Always remounted by its caller (via a changing `key`, see the
+// abilityError state in the component that renders this) even for a
+// repeated identical message, so mashing a button you can't afford resets
+// the hold/fade cycle instead of leaving a half-faded banner hanging.
+// Calls onDone once the fade completes so the caller can drop it from the
+// DOM entirely rather than leaving an invisible-but-present node behind.
+export function AbilityErrorBanner({ message, onDone }) {
+  const [fading, setFading] = useState(false);
+  useEffect(() => {
+    const fadeTimer = setTimeout(() => setFading(true), ABILITY_ERROR_HOLD_MS);
+    const doneTimer = setTimeout(() => onDone(), ABILITY_ERROR_HOLD_MS + ABILITY_ERROR_FADE_MS);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(doneTimer);
+    };
+  }, [onDone]);
+
+  return (
+    <div
+      style={{ ...styles.abilityErrorBanner, opacity: fading ? 0 : 1, transitionDuration: `${ABILITY_ERROR_FADE_MS}ms` }}
+      data-testid="ability-error-banner"
+    >
+      {message}
+    </div>
+  );
+}
+
 // A unit's resource (energy/mana/rage/...) rendered as its own bar rather
 // than a text readout - half the height of the health bar it sits under.
 // color is the resource's own ResourceType.color (a bare hex string, e.g.
@@ -2111,13 +2163,17 @@ function powerMaxRange(power) {
   return null;
 }
 
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
 // "Energy: 100/100" - the label for HealthBar's resourceLabel prop. null
 // when there's nothing to show (no resource at all, matching ResourceBar's
 // own max<=0 guard). Falls back to a generic "Resource" name when the
 // resource's own name isn't known client-side (see targetResource).
 function resourceMeterLabel(resource, current, max) {
   if (!(max > 0)) return null;
-  const name = resource?.name ? resource.name.charAt(0).toUpperCase() + resource.name.slice(1) : "Resource";
+  const name = resource?.name ? capitalize(resource.name) : "Resource";
   return `${name}: ${Math.round(current ?? 0)}/${Math.round(max)}`;
 }
 
@@ -3051,6 +3107,9 @@ export default function App({
   const [primaryResource, setPrimaryResource] = useState(null); // {name, color} | null
   const [secondaryResources, setSecondaryResources] = useState([]); // [{name, color, max, isFluid}] - units never have these, only classes
   const [flashSlot, setFlashSlot] = useState(null);
+  const [abilityError, setAbilityError] = useState(null); // {message, key} | null - see AbilityErrorBanner
+  const clearAbilityError = useCallback(() => setAbilityError(null), []);
+  const showAbilityError = useCallback((message) => setAbilityError({ message, key: Date.now() }), []);
   const [gcdEndsAt, setGcdEndsAt] = useState(0);   // epoch ms; drives cooldown display
   const gcdEndsAtRef = useRef(0);                   // same value, safe to read in callbacks
   const gcdTotalMsRef = useRef(0);                  // duration of the current GCD window
@@ -3239,7 +3298,10 @@ export default function App({
       const cdEndsAt = selfUnit?.power_cooldowns?.[power.name] ?? 0;
       if (Date.now() < cdEndsAt) return;
     }
-    if (power.costAmount > 0 && (selfUnit?.resources?.[power.costType]?.current ?? 0) < power.costAmount) return;
+    if (power.costAmount > 0 && (selfUnit?.resources?.[power.costType]?.current ?? 0) < power.costAmount) {
+      showAbilityError(`Not enough ${capitalize(power.costType)}`);
+      return;
+    }
     // Mirror server-side rejection checks so we don't set GCD on commands that
     // will certainly be rejected (target missing, dead, or out of range).
     const range = powerMaxRange(power);
@@ -3300,7 +3362,7 @@ export default function App({
         stockAssets,
       });
     }
-  }, [powers, setGcd, classConfigUrl, handleTargetUnit, stockAssets]);
+  }, [powers, setGcd, classConfigUrl, handleTargetUnit, stockAssets, showAbilityError]);
 
   const sendMove = useCallback(() => {
     const pos = selfPosRef.current;
@@ -3941,6 +4003,7 @@ export default function App({
       <StatusBar statuses={selfStatuses} now={Date.now()} side="left" landscape={viewportMode.isPhoneLayout} />
       <StatusBar statuses={targetStatuses} now={Date.now()} side="right" landscape={viewportMode.isPhoneLayout} />
       <CastBar unit={selfUnit} position="bottom" />
+      {abilityError && <AbilityErrorBanner key={abilityError.key} message={abilityError.message} onDone={clearAbilityError} />}
       <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
       <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
       <LootWindow
