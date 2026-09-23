@@ -34,6 +34,15 @@
 //     StatusEffects in nevinera/delve#108 - dpssim hasn't been updated to
 //     match yet.
 //
+//   - StatusEffectCondition{Type: "selfHealthPct" | "targetHealthPct"}
+//     (nevinera/delve#62): always false here. This package tracks no live
+//     HP for either side - TargetStats is a static resolved-stats profile,
+//     not a mutable unit, and Simulate never models the enemy taking
+//     damage back, only measures its output. "hasStatus" and
+//     "casterResource" conditions ARE modeled (see statuses.go's
+//     conditionMet) - only the two HP-based variants need real unit state
+//     this package doesn't have.
+//
 // Power.CostType/CostAmount and UnitType.Resource.ReturnRate/DefaultValue
 // are modeled too, mirroring the real engine's command.PowerUsable/
 // ClampResource and instance.tickResourceRegen: pickPower only picks among

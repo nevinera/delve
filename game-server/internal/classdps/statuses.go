@@ -25,7 +25,12 @@ func tickActiveStatuses(owner, applier *instancestate.UnitState, zone instanceco
 			}
 			e.TimeUntilNextTick[j] -= dt
 			for e.TimeUntilNextTick[j] <= 0 {
-				fireStatusTick(owner, applier, eff, zone, addStatusTickDamage)
+				// A tick that comes due while its condition is unmet is
+				// simply skipped, not deferred - mirrors
+				// instance.tickStatusEffects.
+				if j >= len(e.ConditionsMet) || e.ConditionsMet[j] {
+					fireStatusTick(owner, applier, eff, zone, addStatusTickDamage)
+				}
 				e.TimeUntilNextTick[j] += command.RecurringTickInterval(applier, zone, eff)
 			}
 		}
@@ -38,6 +43,28 @@ func tickActiveStatuses(owner, applier *instancestate.UnitState, zone instanceco
 		}
 	}
 	owner.ActiveStatusEffects = kept
+}
+
+// refreshStatusConditions re-evaluates every StatusEffectCondition on
+// owner's active statuses against this instant's state, caching the result
+// in ActiveStatusEffect.ConditionsMet - mirrors
+// instance.refreshStatusEffectConditions (unexported and specific to this
+// package's fixed 2-unit model, so reimplemented here). target is whoever
+// owner's own "current target" resolves to for the purposes of a
+// targetHealthPct condition: the simulated dummy fight is a fixed 1v1, so
+// Simulate's caller passes the *other* unit regardless of whether owner is
+// the character (target = the dummy) or the dummy (target = the
+// character) - there's no real targeting system to consult here.
+func refreshStatusConditions(owner, applier, target *instancestate.UnitState) {
+	for i := range owner.ActiveStatusEffects {
+		e := &owner.ActiveStatusEffects[i]
+		if len(e.ConditionsMet) != len(e.Status.Effects) {
+			e.ConditionsMet = make([]bool, len(e.Status.Effects))
+		}
+		for j, eff := range e.Status.Effects {
+			e.ConditionsMet[j] = command.ConditionMet(owner, applier, target, eff.Condition)
+		}
+	}
 }
 
 // fireStatusTick applies one recurring StatusEffect tick to owner - mirrors

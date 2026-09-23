@@ -137,7 +137,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 			}
 		}
 
-		tickStatuses(statuses, now, target, rng, add(&res.StatusTickDamage))
+		tickStatuses(statuses, now, target, resource, enemy.Resource.Name, rng, add(&res.StatusTickDamage))
 		statuses = expireStatuses(statuses, now)
 	}
 

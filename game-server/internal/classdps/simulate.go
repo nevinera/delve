@@ -126,6 +126,9 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 			nextStatsRecalcAt = now + resourceStatsRecalcInterval
 		}
 
+		refreshStatusConditions(unit, unit, target)
+		refreshStatusConditions(target, unit, unit)
+
 		tickResourceRegen(unit, hastePctForRegen, healingTakenPctForRegen, simTickInterval)
 		tickActiveStatuses(unit, unit, zone, nowTime, simTickInterval, addStatusTickDamage)
 		tickActiveStatuses(target, unit, zone, nowTime, simTickInterval, addStatusTickDamage)

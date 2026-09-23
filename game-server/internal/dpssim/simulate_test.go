@@ -139,6 +139,100 @@ func TestSimulate_RecurringStatusTicksContributeDamageWhileActive(t *testing.T) 
 	assert.Equal(t, res.StatusTickDamage, res.TotalDamage)
 }
 
+func TestSimulate_ConditionalStatusDoTNeverTicksWhenConditionNeverHolds(t *testing.T) {
+	status := instanceconfig.Status{
+		Name:     "Bleed",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 2, OnTick: "harm", Amount: 20,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "hasStatus", StatusName: "Weakened"}, // never applied by this enemy
+			},
+		},
+	}
+	enemy := instanceconfig.UnitType{
+		Powers: []instanceconfig.Power{{
+			Name: "Rend", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{{Type: "status", Duration: 9, Status: &status}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6600, seeded(7))
+
+	assert.Zero(t, res.StatusTickDamage, "the DoT's condition is never met, so it should never tick")
+}
+
+func TestSimulate_ConditionalStatusDoTTicksWhenConditionHolds(t *testing.T) {
+	weakened := instanceconfig.Status{Name: "Weakened", Stacking: "replace"}
+	status := instanceconfig.Status{
+		Name:     "Bleed",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 2, OnTick: "harm", Amount: 20,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "hasStatus", StatusName: "Weakened"},
+			},
+		},
+	}
+	enemy := instanceconfig.UnitType{
+		Powers: []instanceconfig.Power{{
+			Name: "Rend", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Duration: 9, Status: &weakened},
+				{Type: "status", Duration: 9, Status: &status},
+			},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6600, seeded(8))
+
+	assert.Greater(t, res.StatusTickDamage, 0.0, "Weakened is applied alongside the DoT, so its condition should hold and it should tick")
+}
+
+func TestSimulate_ConditionalStatusDoTOnlyTicksOnceCasterResourceCrossesThreshold(t *testing.T) {
+	status := instanceconfig.Status{
+		Name:     "Bleed",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 2, OnTick: "harm", Amount: 20,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "casterResource", ResourceName: "fury", Comparison: "above", Threshold: 3},
+			},
+		},
+	}
+	enemy := instanceconfig.UnitType{
+		Resource: instanceconfig.ResourceType{Name: "fury", Max: 10, DefaultValue: 0, ReturnRate: 0}, // never regenerates - stays at 0
+		Powers: []instanceconfig.Power{{
+			Name: "Rend", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{{Type: "status", Duration: 9, Status: &status}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6600, seeded(9))
+
+	assert.Zero(t, res.StatusTickDamage, "fury never rises above 3, so the condition should never hold")
+}
+
+func TestSimulate_ConditionalStatusDoTTicksOnceCasterResourceStartsAboveThreshold(t *testing.T) {
+	status := instanceconfig.Status{
+		Name:     "Bleed",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 2, OnTick: "harm", Amount: 20,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "casterResource", ResourceName: "fury", Comparison: "above", Threshold: 3},
+			},
+		},
+	}
+	enemy := instanceconfig.UnitType{
+		Resource: instanceconfig.ResourceType{Name: "fury", Max: 10, DefaultValue: 10, ReturnRate: 0},
+		Powers: []instanceconfig.Power{{
+			Name: "Rend", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{{Type: "status", Duration: 9, Status: &status}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6600, seeded(10))
+
+	assert.Greater(t, res.StatusTickDamage, 0.0, "fury starts at 10, well above the threshold of 3")
+}
+
 func TestSimulate_UnaffordablePowerNeverFires(t *testing.T) {
 	amount := instanceconfig.ValueRange{50, 50}
 	enemy := instanceconfig.UnitType{
