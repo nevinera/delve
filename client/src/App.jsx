@@ -1822,7 +1822,7 @@ function ResourceBar({ current, max, color, landscape }) {
   if (!(max > 0)) return null;
   const pct = Math.max(0, Math.min(1, (current ?? 0) / max));
   return (
-    <div style={{
+    <div data-testid="resource-bar" style={{
       ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
       background: darkenHexColor(color),
     }}>
@@ -1857,7 +1857,7 @@ function SecondaryResourceBar({ current, max, color, isFluid, landscape }) {
   const count = Math.round(max);
   const filled = Math.max(0, Math.min(count, Math.round(current ?? 0)));
   return (
-    <div style={{
+    <div data-testid="resource-bar" style={{
       ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
       // A neutral dark track (rather than a darkened tint of the resource's
       // own color) plus a visible gap between segments - the previous
@@ -1876,6 +1876,28 @@ function SecondaryResourceBar({ current, max, color, isFluid, landscape }) {
         }} />
       ))}
     </div>
+  );
+}
+
+// A unit frame's primary ResourceBar plus any secondary resources beneath it
+// - shared by the self and target frames in every layout (desktop, landscape,
+// portrait) so none of them can drift out of sync. primaryResource is
+// {name, color} or null (another player's resource isn't known client-side,
+// so theirs falls back to ResourceBar's default gray).
+export function UnitResourceBars({ unit, primaryResource, secondaryResources = [], landscape }) {
+  return (
+    <>
+      <ResourceBar
+        current={resourceCurrent(unit, primaryResource?.name)} max={resourceMax(unit, primaryResource?.name)}
+        color={primaryResource?.color} landscape={landscape}
+      />
+      {secondaryResources.map((r) => (
+        <SecondaryResourceBar
+          key={r.name} current={resourceCurrent(unit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid}
+          landscape={landscape}
+        />
+      ))}
+    </>
   );
 }
 
@@ -3616,6 +3638,9 @@ export default function App({
         <>
           <div style={styles.frameHudHeader}>
             {selfUnit && <HealthBar current={selfUnit.health} max={selfUnit.max_health} landscape />}
+            {selfUnit && (
+              <UnitResourceBars unit={selfUnit} primaryResource={primaryResource} secondaryResources={secondaryResources} landscape />
+            )}
           </div>
           <div style={styles.frameImageNameRow}>
             {characterTokenUrl && <img src={characterTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
@@ -3636,12 +3661,7 @@ export default function App({
                 current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end"
                 resourceLabel={resourceMeterLabel(primaryResource, resourceCurrent(selfUnit, primaryResource?.name), resourceMax(selfUnit, primaryResource?.name))}
               />
-              <ResourceBar current={resourceCurrent(selfUnit, primaryResource?.name)} max={resourceMax(selfUnit, primaryResource?.name)} color={primaryResource?.color} />
-              {secondaryResources.map((r) => (
-                <SecondaryResourceBar
-                  key={r.name} current={resourceCurrent(selfUnit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid}
-                />
-              ))}
+              <UnitResourceBars unit={selfUnit} primaryResource={primaryResource} secondaryResources={secondaryResources} />
             </div>
           )}
           {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
@@ -3654,7 +3674,6 @@ export default function App({
     if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
     const targetPrimaryCurrent = resourceCurrent(targetUnit, targetResource?.name);
     const targetPrimaryMax = resourceMax(targetUnit, targetResource?.name);
-    const hasResource = targetPrimaryMax > 0;
     if (stacked) {
       const nameStyle = {
         ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline),
@@ -3664,12 +3683,9 @@ export default function App({
         <>
           <div style={styles.frameHudHeader}>
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
-            {hasResource && <ResourceBar current={targetPrimaryCurrent} max={targetPrimaryMax} color={targetResource?.color} landscape />}
-            {targetSecondaryResources.map((r) => (
-              <SecondaryResourceBar
-                key={r.name} current={resourceCurrent(targetUnit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid} landscape
-              />
-            ))}
+            <UnitResourceBars
+              unit={targetUnit} primaryResource={targetResource} secondaryResources={targetSecondaryResources} landscape
+            />
           </div>
           <div style={styles.frameImageNameRowRight}>
             {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
@@ -3692,12 +3708,7 @@ export default function App({
               current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start"
               resourceLabel={resourceMeterLabel(targetResource, targetPrimaryCurrent, targetPrimaryMax)}
             />
-            {hasResource && <ResourceBar current={targetPrimaryCurrent} max={targetPrimaryMax} color={targetResource?.color} />}
-            {targetSecondaryResources.map((r) => (
-              <SecondaryResourceBar
-                key={r.name} current={resourceCurrent(targetUnit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid}
-              />
-            ))}
+            <UnitResourceBars unit={targetUnit} primaryResource={targetResource} secondaryResources={targetSecondaryResources} />
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
