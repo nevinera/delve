@@ -90,7 +90,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			return
 		case now := <-ticker.C:
 			tickCount++
-			inst.drainPlayerSpawns(ctx, state)
+			inst.drainPlayerSpawns(ctx, state, now)
 			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
 			var combatEvents []CombatEvent
 			tickCasts(state, inst.ZoneConfig, now, &combatEvents)

@@ -124,6 +124,51 @@ func TestPlayerSpawn_MaxHealthReflectsEquippedStamina(t *testing.T) {
 	t.Fatal("player unit not found in full state")
 }
 
+// TestPlayerSpawn_AppliesClassPassives guards docs/schema/character_class.md's
+// passives (issue #63): each one should land on the freshly spawned player
+// as a self-applied, effectively-permanent ActiveStatusEffect - so its
+// mechanical effect (here, physicalMitigation) is live from the start,
+// with an ExpiresAt far enough out it will never lapse mid-session.
+func TestPlayerSpawn_AppliesClassPassives(t *testing.T) {
+	classWithPassive := puncherClass
+	classWithPassive.Passives = []instanceconfig.Status{
+		{
+			Name: "Thick Hide", ShortName: "Hide", TreatAs: "inherent", Stacking: "replace",
+			Effects: []instanceconfig.StatusEffect{
+				{Type: "stat", StatName: "physicalMitigation", ModifierType: "add", Amount: 5.0},
+			},
+		},
+	}
+
+	reg := instance.NewRegistry()
+	inst := startedInstance(t, reg)
+	t.Cleanup(inst.Stop)
+
+	slot, err := inst.AddSlot("Aldric", "42", classWithPassive, nil, nil)
+	require.NoError(t, err)
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	units := receiveFullState(t, writeCh)
+
+	for _, u := range units {
+		if u["zone_unit_identifier"] != "player:Aldric" {
+			continue
+		}
+		effects, ok := u["active_status_effects"].([]any)
+		require.True(t, ok, "active_status_effects should be present")
+		require.Len(t, effects, 1)
+		effect := effects[0].(map[string]any)
+		assert.Equal(t, "Thick Hide", effect["status_name"])
+		expiresAt := time.UnixMilli(int64(effect["expires_at"].(float64)))
+		assert.True(t, expiresAt.After(time.Now().AddDate(50, 0, 0)), "passive should expire far in the future, got %s", expiresAt)
+		return
+	}
+	t.Fatal("player unit not found in full state")
+}
+
 func TestPlayerSpawn_UsesFirstMapCenter(t *testing.T) {
 	reg := instance.NewRegistry()
 	inst := instance.NewInstance(
