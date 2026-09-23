@@ -1546,6 +1546,65 @@ const styles = {
     gap: 4,
     pointerEvents: "none",
   },
+  castBarTop: {
+    position: "absolute",
+    left: "50%",
+    top: 8,
+    transform: "translateX(-50%)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 2,
+    pointerEvents: "none",
+  },
+  castBarBottom: {
+    position: "absolute",
+    left: "50%",
+    bottom: 90,
+    transform: "translateX(-50%)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 2,
+    pointerEvents: "none",
+  },
+  castBarTrack: {
+    width: 180,
+    height: 10,
+    borderRadius: 3,
+    background: "#1a1a1a",
+    border: "1px solid #444",
+    overflow: "hidden",
+  },
+  castBarFill: {
+    height: "100%",
+    background: "#e0c250",
+    transitionProperty: "width",
+    transitionTimingFunction: "linear",
+  },
+  castBarLabel: {
+    fontSize: 11,
+    color: "#eee",
+    textShadow: "0 1px 3px #000",
+  },
+  castBarInline: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+    marginTop: 2,
+  },
+  castBarInlineTrack: {
+    width: "100%",
+    height: 6,
+    borderRadius: 2,
+    background: "#1a1a1a",
+    border: "1px solid #444",
+    overflow: "hidden",
+  },
+  castBarInlineLabel: {
+    fontSize: 9,
+    color: "#ccc",
+  },
   // width: max-content makes each block's box size deterministic from its
   // own content instead of leaning on flex shrink-to-fit - without it, the
   // right-anchored (target) column could end up a hair wider than its text
@@ -1805,6 +1864,64 @@ export function StatusBar({ statuses, now, side = "left", landscape }) {
     <div style={containerStyle}>
       <StatusColumn entries={buffs} color="#5ec95e" landscape={landscape} align={align} />
       <StatusColumn entries={debuffs} color="#ff5c5c" landscape={landscape} align={align} />
+    </div>
+  );
+}
+
+// A unit's in-progress cast (see instance/messages.go's unitJSON casting_*
+// fields), rendered as a filling progress bar with the power's name - driven
+// entirely by server-pushed state, same as every other live combat overlay
+// here (StatusBar, UnitResourceBars). Renders nothing when the unit isn't
+// casting; unmounts naturally (no special cancel handling needed) the
+// instant the server stops reporting casting_power - whether the cast
+// completed, was cancelled by movement, or aborted on the target's death.
+//
+// The fill animates via a CSS width transition kicked off on mount (0% ->
+// 100% over however long is left) rather than a per-frame/per-second JS
+// tick recomputing a percentage - cheaper, and smoother than the 1s
+// countdown granularity StatusBar's own re-render tick uses. Keyed by
+// cast_started_at so a *new* cast (even of the same power) restarts the
+// animation instead of jumping.
+// inline: renders in-flow (no absolute positioning) at full width, for
+// embedding directly in a unit frame next to HealthBar/UnitResourceBars -
+// the target's cast bar in particular needs to live there so it's legible
+// as "this specific unit is casting", rather than an ambiguous screen-edge
+// element. Unlike the floating variant (which mounts/unmounts with
+// power/startedAt/endsAt present or not - fine, since position:absolute
+// never affects layout either way), inline *always* renders its full-size
+// container, whether or not the unit is currently casting: the frame's
+// other rows (health, resources) sit in normal document flow, so an inline
+// cast bar popping in and out of the DOM would shove them up and down every
+// time a cast starts or ends. Instead it just fades to fully transparent
+// (not `visibility: hidden`, which would still reserve space but is a less
+// direct way to say "blend into the background") while idle, keeping its
+// box present at all times.
+export function CastBar({ unit, position = "top", inline = false }) {
+  const power = unit?.casting_power;
+  const startedAt = unit?.cast_started_at;
+  const endsAt = unit?.cast_ends_at;
+  const casting = !!(power && startedAt && endsAt);
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    setFilled(false);
+    if (!casting) return undefined;
+    const id = requestAnimationFrame(() => setFilled(true));
+    return () => cancelAnimationFrame(id);
+  }, [startedAt, endsAt, casting]);
+
+  if (!inline && !casting) return null; // floating variant: absolutely positioned, so absent-when-idle costs nothing
+
+  const remainingMs = casting ? Math.max(0, endsAt - Date.now()) : 0;
+  const containerStyle = inline ? styles.castBarInline : (position === "top" ? styles.castBarTop : styles.castBarBottom);
+  const trackStyle = inline ? styles.castBarInlineTrack : styles.castBarTrack;
+  const labelStyle = inline ? styles.castBarInlineLabel : styles.castBarLabel;
+
+  return (
+    <div style={{ ...containerStyle, opacity: inline && !casting ? 0 : 1 }} data-testid="cast-bar">
+      <div style={trackStyle}>
+        <div style={{ ...styles.castBarFill, width: casting && filled ? "100%" : "0%", transitionDuration: `${remainingMs}ms` }} />
+      </div>
+      <div style={labelStyle}>{casting ? power : " "}</div>
     </div>
   );
 }
@@ -3169,7 +3286,12 @@ export default function App({
     connRef.current?.send({ direction: "up", type: "use_power", slot });
     setFlashSlot(slot);
     setTimeout(() => setFlashSlot(null), 150);
-    if (power.graphicEffects?.length || power.soundEffects?.length) {
+    // A cast-time power's effects don't land until the server resolves the
+    // cast (see CastBar) - playing them here as if instant would show the
+    // graphic/sound firing at the wrong moment (cast start, not
+    // completion), so skip the optimistic playback and let the server's own
+    // delta trigger it for real when the cast actually finishes.
+    if (!power.castTime && (power.graphicEffects?.length || power.soundEffects?.length)) {
       const targetUnit = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
       firePowerEffects(power, {
         positions: { self: selfPosRef.current, target: targetUnit?.position, selfId: selfUnitIdForPower, targetId: targetIdRef.current },
@@ -3688,6 +3810,7 @@ export default function App({
             <UnitResourceBars
               unit={targetUnit} primaryResource={targetResource} secondaryResources={targetSecondaryResources} landscape
             />
+            <CastBar unit={targetUnit} inline />
           </div>
           <div style={styles.frameImageNameRowRight}>
             {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
@@ -3711,6 +3834,7 @@ export default function App({
               resourceLabel={resourceMeterLabel(targetResource, targetPrimaryCurrent, targetPrimaryMax)}
             />
             <UnitResourceBars unit={targetUnit} primaryResource={targetResource} secondaryResources={targetSecondaryResources} />
+            <CastBar unit={targetUnit} inline />
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
         </div>
@@ -3816,6 +3940,7 @@ export default function App({
           share too. */}
       <StatusBar statuses={selfStatuses} now={Date.now()} side="left" landscape={viewportMode.isPhoneLayout} />
       <StatusBar statuses={targetStatuses} now={Date.now()} side="right" landscape={viewportMode.isPhoneLayout} />
+      <CastBar unit={selfUnit} position="bottom" />
       <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
       <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
       <LootWindow
