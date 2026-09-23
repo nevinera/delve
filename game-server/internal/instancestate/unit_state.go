@@ -255,4 +255,8 @@ type CastState struct {
 	TargetID  *uuid.UUID // snapshot of unit.Target at cast start; nil for self-only powers
 	StartedAt time.Time
 	EndsAt    time.Time
+
+	// PushbackHits counts how many times a landed hit has extended EndsAt -
+	// see command.ApplyCastPushback.
+	PushbackHits int
 }

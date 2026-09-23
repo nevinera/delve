@@ -575,9 +575,13 @@ func castingJSON(c *instancestate.CastState) (power *string, startedAt, endsAt *
 }
 
 // castStateEqual reports whether two casting states represent the same
-// in-progress cast - StartedAt uniquely identifies one, so this is also
-// false whenever a cast starts, completes, or is cancelled (nil on one
-// side), prompting a delta patch either way.
+// in-progress cast with the same completion time - StartedAt alone
+// uniquely identifies *which* cast this is (so this is also false whenever
+// a cast starts, completes, or is cancelled - nil on one side - prompting a
+// delta patch either way), but EndsAt must be compared too: a pushback hit
+// (command.ApplyCastPushback) extends the same cast's EndsAt without
+// touching StartedAt, and that change needs to reach the client (see
+// cast_ends_at) for its cast bar to reflect the extension.
 func castStateEqual(a, b *instancestate.CastState) bool {
 	if a == nil && b == nil {
 		return true
@@ -585,5 +589,5 @@ func castStateEqual(a, b *instancestate.CastState) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.StartedAt.Equal(b.StartedAt)
+	return a.StartedAt.Equal(b.StartedAt) && a.EndsAt.Equal(b.EndsAt)
 }

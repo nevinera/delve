@@ -425,6 +425,29 @@ func TestDeltaMsg_CastingUnchanged_NotInPatch(t *testing.T) {
 	assert.Empty(t, msg["unit_updates"])
 }
 
+// TestDeltaMsg_CastingPushedBack covers command.ApplyCastPushback's effect
+// on the wire: a pushback hit extends EndsAt without touching StartedAt, and
+// that alone must still trigger a patch resending cast_ends_at, or the
+// client's cast bar would never see the extension (see castStateEqual).
+func TestDeltaMsg_CastingPushedBack(t *testing.T) {
+	prev := stateWithUnit(t)
+	for _, u := range prev.Units {
+		u.Casting = castState()
+	}
+	curr := prev.Clone()
+	for _, u := range curr.Units {
+		u.Casting.EndsAt = u.Casting.EndsAt.Add(500 * time.Millisecond)
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Equal(t, float64(3500), p["cast_ends_at"])
+	}
+}
+
 func TestFullStateMsg_UnitWithTaggedBy(t *testing.T) {
 	s := stateWithUnit(t)
 	taggerID := uuid.New()

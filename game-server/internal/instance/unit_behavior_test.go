@@ -2057,3 +2057,98 @@ func TestUnitBehavior_Leash_CrossMapSnapsBack_ClearsTag(t *testing.T) {
 
 	assert.Nil(t, u.TaggedBy)
 }
+
+// ---------------------------------------------------------------------------
+// cast pushback (see command.ApplyCastPushback)
+// ---------------------------------------------------------------------------
+
+func castingPlayer(s *instancestate.InstanceState, mapID string, x, y float64) (uuid.UUID, *instancestate.UnitState, time.Time) {
+	playerID, p := addPlayer(s, mapID, x, y)
+	endsAt := time.Now().Add(2 * time.Second)
+	p.Casting = &instancestate.CastState{
+		Power:     instanceconfig.Power{Name: "Heal"},
+		StartedAt: time.Now(),
+		EndsAt:    endsAt,
+	}
+	return playerID, p, endsAt
+}
+
+func TestUnitBehavior_NPCPowerHarm_LandedHitPushesBackTargetsCast(t *testing.T) {
+	zone := stabZone()
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p, endsAt := castingPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			require.NotNil(t, p.Casting)
+			assert.True(t, p.Casting.EndsAt.After(endsAt))
+			return
+		}
+	}
+	t.Fatal("Stab missed 200 times in a row - miss chance may be miscalibrated")
+}
+
+func TestUnitBehavior_NPCPowerHarm_MissedHitDoesNotPushBackTargetsCast(t *testing.T) {
+	zone := stabZone()
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p, endsAt := castingPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health == 100.0 {
+			require.NotNil(t, p.Casting)
+			assert.Equal(t, endsAt, p.Casting.EndsAt)
+			return
+		}
+	}
+	t.Fatal("Stab landed 200 times in a row - miss chance may be miscalibrated")
+}
+
+func TestUnitBehavior_NPCBasicAttack_LandedHitPushesBackTargetsCast(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p, endsAt := castingPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health < 100.0 {
+			require.NotNil(t, p.Casting)
+			assert.True(t, p.Casting.EndsAt.After(endsAt))
+			return
+		}
+	}
+	t.Fatal("NPC basic attack missed 200 times in a row - miss chance may be miscalibrated")
+}
+
+func TestUnitBehavior_NPCBasicAttack_MissedHitDoesNotPushBackTargetsCast(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p, endsAt := castingPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+		if p.Health == 100.0 {
+			require.NotNil(t, p.Casting)
+			assert.Equal(t, endsAt, p.Casting.EndsAt)
+			return
+		}
+	}
+	t.Fatal("NPC basic attack landed 200 times in a row - miss chance may be miscalibrated")
+}
