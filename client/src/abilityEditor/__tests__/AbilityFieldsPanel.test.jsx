@@ -236,6 +236,31 @@ describe("AbilityFieldsPanel", () => {
       expect(onChange.mock.calls[0][0].data.effects[0].amount).toEqual([50, 140]);
     });
 
+    describe("a bare-scalar 'range' field (zero-based, unlike 'amount')", () => {
+      const rangeAbility = {
+        ...ability,
+        effects: [{type: "harm", affects: "bTarget", amount: 10.0, range: 25.0}],
+      };
+
+      it("displays it as 0 to the value, not value to value", () => {
+        renderPanel(rangeAbility);
+        expect(screen.getByDisplayValue("0")).toBeInTheDocument();
+        expect(screen.getByDisplayValue("25")).toBeInTheDocument();
+      });
+
+      it("stays a collapsed scalar when the max changes but min is still 0", () => {
+        const onChange = renderPanel(rangeAbility);
+        fireEvent.change(screen.getByDisplayValue("25"), {target: {value: "40"}});
+        expect(onChange.mock.calls[0][0].data.effects[0].range).toBe(40);
+      });
+
+      it("becomes an explicit [min, max] array once min is no longer 0", () => {
+        const onChange = renderPanel(rangeAbility);
+        fireEvent.change(screen.getByDisplayValue("0"), {target: {value: "5"}});
+        expect(onChange.mock.calls[0][0].data.effects[0].range).toEqual([5, 25]);
+      });
+    });
+
     it("calls onChange with a parsed tag array when tags changes", () => {
       const onChange = renderPanel(ability);
       fireEvent.change(screen.getByDisplayValue("magic, ranged"), {target: {value: "magic, ranged, aoe"}});

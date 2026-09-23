@@ -114,11 +114,18 @@ function SelectField({field, value, onChange}) {
   );
 }
 
-// amount/range may be a single number or a [min, max] pair - edited as two
-// number inputs, collapsing back to a scalar when they're equal (same
-// approach as Content::FloatOrRange server-side).
-function RangeField({value, onChange}) {
-  const min = Array.isArray(value) ? value[0] : value;
+// amount/range may be a single number or a [min, max] pair, edited as two
+// number inputs - but a bare scalar means something different depending on
+// which field it is (see instanceconfig.ValueRange vs ZeroBasedValueRange
+// server-side, and entryFieldSchema.js's RANGE_FIELDS): "amount" collapses
+// a bare scalar to a *fixed* value (min === max === that number), while
+// "range" (zeroBased) zero-bases it (min is implicitly 0, the number is
+// just the max) - a bare `"range": 25` means "0 to 25 feet", not "exactly
+// 25 feet". Collapsing back to a bare scalar on save mirrors each type's
+// own reading: "amount" collapses when min===max, "range" collapses only
+// when min is exactly 0 (its only representable-as-scalar shape).
+function RangeField({value, onChange, zeroBased}) {
+  const min = Array.isArray(value) ? value[0] : (zeroBased ? 0 : value);
   const max = Array.isArray(value) ? value[1] : value;
 
   function update(newMin, newMax) {
@@ -126,7 +133,11 @@ function RangeField({value, onChange}) {
       onChange(newMin ?? newMax ?? null);
       return;
     }
-    onChange(newMin === newMax ? newMin : [newMin, newMax]);
+    if (zeroBased) {
+      onChange(newMin === 0 ? newMax : [newMin, newMax]);
+    } else {
+      onChange(newMin === newMax ? newMin : [newMin, newMax]);
+    }
   }
 
   return (
@@ -179,7 +190,7 @@ function EntryField({field, value, onChange, stockAssets}) {
     case "select":
       return <SelectField field={field} value={value} onChange={onChange} />;
     case "range":
-      return <RangeField value={value} onChange={onChange} />;
+      return <RangeField value={value} onChange={onChange} zeroBased={field === "range"} />;
     case "tags":
       return <TagsField value={value} onChange={onChange} />;
     case "number":
