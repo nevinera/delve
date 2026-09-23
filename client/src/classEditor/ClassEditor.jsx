@@ -4,6 +4,9 @@ import {blankClass} from "./blankClass";
 import {loadAvailableAbilities} from "./loadAvailableAbilities";
 import ClassPreviewPane from "./ClassPreviewPane";
 import ClassFieldsPanel from "./ClassFieldsPanel";
+import ClassDpsEstimatePanel from "./ClassDpsEstimatePanel";
+import {estimateClassDps} from "./estimateClassDps";
+import {abilityKeyForRef} from "./powerRefs";
 import {saveClass} from "./saveClass";
 import {resolveFullClass} from "./resolveFullClass";
 import {validateCharacterClass} from "../validators/validateContent";
@@ -20,6 +23,10 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
   const [draft, setDraft] = useState(null);
   const [availableAbilities, setAvailableAbilities] = useState({});
   const [loadError, setLoadError] = useState(null);
+  const [strategy, setStrategy] = useState([]);
+  const [estimate, setEstimate] = useState(null);
+  const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState(null);
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
   const client = useRef(new GithubClient());
 
@@ -48,9 +55,12 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
   }, [classKey]);
 
   // Every draft edit drops a prior "valid" (or "invalid") result - see
-  // useValidateThenSave.
+  // useValidateThenSave. It also drops any DPS estimate, which no longer
+  // describes the draft.
   function handleChange(nextDraft) {
     markDirty();
+    setEstimate(null);
+    setEstimateError(null);
     setDraft(nextDraft);
   }
 
@@ -66,6 +76,20 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
       }
     } catch (error) {
       setInvalid(error.message);
+    }
+  }
+
+  async function handleEstimate() {
+    setEstimating(true);
+    setEstimateError(null);
+    try {
+      const fullClass = await resolveFullClass(classKey, draft.data, availableAbilities);
+      setEstimate(await estimateClassDps(fullClass, strategy));
+    } catch (error) {
+      setEstimate(null);
+      setEstimateError(error.message);
+    } finally {
+      setEstimating(false);
     }
   }
 
@@ -86,6 +110,10 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
   if (loadError) return <div className="class-editor-load-error">Failed to load: {loadError}</div>;
   if (draft === null) return <div className="class-editor-loading">Loading…</div>;
 
+  const powerNames = (draft.data.powers ?? [])
+    .map((entry) => availableAbilities[abilityKeyForRef(classKey, entry)]?.ability?.name)
+    .filter(Boolean);
+
   return (
     <div className="class-editor">
       <div className="class-editor-preview">
@@ -93,6 +121,15 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
       </div>
       <div className="class-editor-fields">
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ClassDpsEstimatePanel
+          strategy={strategy}
+          onStrategyChange={setStrategy}
+          powerNames={powerNames}
+          estimate={estimate}
+          estimating={estimating}
+          error={estimateError}
+          onEstimate={handleEstimate}
+        />
         <ClassFieldsPanel
           draft={draft}
           availableAbilities={availableAbilities}
