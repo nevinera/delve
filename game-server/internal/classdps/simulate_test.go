@@ -53,6 +53,45 @@ func TestSimulate_StrategyPowerContributesPowerDamage(t *testing.T) {
 	assert.InDelta(t, res.TotalDamage, res.BasicAttackDamage+res.PowerDamage+res.StatusTickDamage, 0.01)
 }
 
+func TestSimulate_CastTimePowerCadenceIsBoundByCastTimeNotJustGCD(t *testing.T) {
+	amount := instanceconfig.ValueRange{50.0, 50.0}
+	castTime := 3.0
+	class := instanceconfig.CharacterClass{
+		Powers: []instanceconfig.Power{{
+			Name: "Fireball", GlobalCooldown: 1.5, CastTime: &castTime,
+			Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
+		}},
+	}
+	const duration = 6000.0
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Fireball"}}, duration)
+
+	// One 50-damage cast every 3s cast time (longer than the 1.5s GCD, so
+	// cast time - not GCD - is what actually bounds cadence here), each
+	// independently missing/critting: (50 * 0.9975) / 3 = 16.625 DPS.
+	assert.InEpsilon(t, 16.625*duration, res.PowerDamage, 0.05)
+}
+
+func TestSimulate_BasicAttacksHeldDuringAnInProgressCast(t *testing.T) {
+	amount := instanceconfig.ValueRange{50.0, 50.0}
+	castTime := 100.0 // longer than the whole simulated duration below
+	class := instanceconfig.CharacterClass{
+		Powers: []instanceconfig.Power{{
+			Name: "LongCast", GlobalCooldown: 1.5, CastTime: &castTime,
+			Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
+		}},
+	}
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "LongCast"}}, 60)
+
+	assert.Zero(t, res.PowerDamage, "cast never completes within the simulated duration")
+	// The very first basic-attack check and the cast selection are both due
+	// at simulated t=0 - the swing (already due) fires before the cast
+	// starts that same instant, same ordering the real engine uses (basic
+	// attack, then power selection, within one tick) - so at most one swing
+	// lands, not the ~30 an uninterrupted naked class's basic attack would
+	// land over 60s (roughly one every 2s).
+	assert.Less(t, res.BasicAttackDamage, 5.0, "only the simultaneous first-instant swing should land, not a full stream")
+}
+
 func TestSimulate_UnaffordablePowerNeverFires(t *testing.T) {
 	amount := instanceconfig.ValueRange{50.0, 50.0}
 	class := instanceconfig.CharacterClass{

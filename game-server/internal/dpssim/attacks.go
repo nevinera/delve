@@ -209,3 +209,34 @@ func effectGlobalCooldown(power instanceconfig.Power) float64 {
 	}
 	return power.GlobalCooldown
 }
+
+// pendingCastEvent tracks a selected cast-time power between selection and
+// completion - see Simulate's pendingCast.
+type pendingCastEvent struct {
+	power  instanceconfig.Power
+	endsAt float64 // simulated seconds
+}
+
+// applyPowerEffects applies power's effects (mirrors tryNPCAttack's effect
+// loop) and returns the updated statuses slice. Used both for an instant
+// power (called immediately at selection) and a cast-time power (called at
+// pendingCast.endsAt) - see Simulate.
+func applyPowerEffects(power instanceconfig.Power, target TargetStats, statuses []*activeStatus, resource *float64, maxResource float64, now float64, rng *rand.Rand, addPowerDamage func(float64)) []*activeStatus {
+	for _, eff := range power.Effects {
+		if !npcEffectUsable(eff) {
+			continue
+		}
+		switch eff.Type {
+		case "harm":
+			dmg := harmEffectDamage(eff, rng)
+			addPowerDamage(incomingDamage(target, dmg, eff.School != "magic", rng))
+		case "status":
+			statuses = applyStatus(statuses, *eff.Status, eff.Duration, now)
+		case "resource":
+			if eff.Affects == "self" {
+				*resource = clampResource(*resource+eff.Delta, maxResource)
+			}
+		}
+	}
+	return statuses
+}

@@ -49,6 +49,15 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 
 	var statuses []*activeStatus
 
+	// pendingCast tracks a selected cast-time power between selection and
+	// completion (see docs/... issue #111): cost/cooldown are committed at
+	// selection time, but effects apply endsAt, not immediately. Basic
+	// attacks and further power selection are held while set - see the
+	// candidacy guards below, which is also how this event loop avoids
+	// re-proposing now == nextBasicAttack (or nextPowerCheck) forever
+	// instead of advancing past it.
+	var pendingCast *pendingCastEvent
+
 	add := func(field *float64) func(float64) {
 		return func(dmg float64) {
 			*field += dmg
@@ -57,9 +66,14 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 	}
 
 	for {
-		now := nextBasicAttack
-		if nextPowerCheck < now {
-			now = nextPowerCheck
+		now := math.Inf(1)
+		if pendingCast == nil {
+			now = nextBasicAttack
+			if nextPowerCheck < now {
+				now = nextPowerCheck
+			}
+		} else if pendingCast.endsAt < now {
+			now = pendingCast.endsAt
 		}
 		for _, e := range statuses {
 			if e.expiresAt < now {
@@ -78,39 +92,40 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 		resource = regenResource(resource, enemy.Resource.DefaultValue, enemy.Resource.ReturnRate, now-lastResourceAt)
 		lastResourceAt = now
 
-		if now == nextBasicAttack {
+		if pendingCast == nil && now == nextBasicAttack {
 			dmg := basicAttackDamage(enemy, rng)
 			add(&res.BasicAttackDamage)(incomingDamage(target, dmg, enemy.BasicAttackSchool != "magic", rng))
 			nextBasicAttack = now + 1/enemy.AttackSpeed
 		}
 
-		if now == nextPowerCheck {
+		if pendingCast != nil && now == pendingCast.endsAt {
+			if pendingCast.power.CostAmount > 0 {
+				resource = clampResource(resource-pendingCast.power.CostAmount, enemy.Resource.Max)
+			}
+			statuses = applyPowerEffects(pendingCast.power, target, statuses, &resource, enemy.Resource.Max, now, rng, add(&res.PowerDamage))
+			pendingCast = nil
+		}
+
+		if pendingCast == nil && now == nextPowerCheck {
 			pickDt := now - lastPickAt
 			lastPickAt = now
 			if power, ok := pickPower(enemy.Tactics, tactics, enemy.Powers, resource, powerReadyAt, now, pickDt, rng); ok {
-				for _, eff := range power.Effects {
-					if !npcEffectUsable(eff) {
-						continue
-					}
-					switch eff.Type {
-					case "harm":
-						dmg := harmEffectDamage(eff, rng)
-						add(&res.PowerDamage)(incomingDamage(target, dmg, eff.School != "magic", rng))
-					case "status":
-						statuses = applyStatus(statuses, *eff.Status, eff.Duration, now)
-					case "resource":
-						if eff.Affects == "self" {
-							resource = clampResource(resource+eff.Delta, enemy.Resource.Max)
-						}
-					}
-				}
-				if power.CostAmount > 0 {
-					resource = clampResource(resource-power.CostAmount, enemy.Resource.Max)
-				}
 				if power.Cooldown > 0 {
 					powerReadyAt[power.Name] = now + power.Cooldown
 				}
-				nextPowerCheck = now + effectGlobalCooldown(power)
+				if castTime := power.CastTime; castTime != nil && *castTime > 0 {
+					// Cost is only spent on successful completion (above),
+					// not here - selecting a cast only requires affording it
+					// (pickPower's own resource check), not committing it.
+					pendingCast = &pendingCastEvent{power: power, endsAt: now + *castTime}
+					nextPowerCheck = now + math.Max(*castTime, effectGlobalCooldown(power))
+				} else {
+					if power.CostAmount > 0 {
+						resource = clampResource(resource-power.CostAmount, enemy.Resource.Max)
+					}
+					statuses = applyPowerEffects(power, target, statuses, &resource, enemy.Resource.Max, now, rng, add(&res.PowerDamage))
+					nextPowerCheck = now + effectGlobalCooldown(power)
+				}
 			} else if hasUsablePower(enemy.Powers) {
 				// At least one power is the right shape to fire, just not
 				// affordable or off cooldown this instant - both change with
