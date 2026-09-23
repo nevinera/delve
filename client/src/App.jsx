@@ -1883,7 +1883,9 @@ function SecondaryResourceBar({ current, max, color, isFluid, landscape }) {
 // - shared by the self and target frames in every layout (desktop, landscape,
 // portrait) so none of them can drift out of sync. primaryResource is
 // {name, color} or null (another player's resource isn't known client-side,
-// so theirs falls back to ResourceBar's default gray).
+// so theirs falls back to ResourceBar's default gray). Every bar's max comes
+// from the unit's own resources, not the class config, so a unit without a
+// given resource renders no bar for it.
 export function UnitResourceBars({ unit, primaryResource, secondaryResources = [], landscape }) {
   return (
     <>
@@ -1893,8 +1895,8 @@ export function UnitResourceBars({ unit, primaryResource, secondaryResources = [
       />
       {secondaryResources.map((r) => (
         <SecondaryResourceBar
-          key={r.name} current={resourceCurrent(unit, r.name)} max={r.max} color={r.color} isFluid={r.isFluid}
-          landscape={landscape}
+          key={r.name} current={resourceCurrent(unit, r.name)} max={resourceMax(unit, r.name)} color={r.color}
+          isFluid={r.isFluid} landscape={landscape}
         />
       ))}
     </>

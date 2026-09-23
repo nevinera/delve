@@ -9,7 +9,7 @@ const unit = {
   },
 };
 const energy = { name: "energy", color: "FFDD00" };
-const comboPoints = { name: "combo points", color: "CC3333", max: 5, isFluid: false };
+const comboPoints = { name: "combo points", color: "CC3333", isFluid: false };
 
 describe("UnitResourceBars", () => {
   for (const landscape of [false, true]) {
@@ -31,8 +31,8 @@ describe("UnitResourceBars", () => {
     expect(screen.getByTestId("resource-bar").children).toHaveLength(5);
   });
 
-  it("renders no primary bar for a unit without that resource", () => {
-    render(<UnitResourceBars unit={{ resources: {} }} primaryResource={energy} />);
+  it("renders nothing for a unit without those resources", () => {
+    render(<UnitResourceBars unit={{ resources: {} }} primaryResource={energy} secondaryResources={[comboPoints]} />);
     expect(screen.queryAllByTestId("resource-bar")).toHaveLength(0);
   });
 });
