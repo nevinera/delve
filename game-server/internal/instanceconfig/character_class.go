@@ -16,6 +16,7 @@ type CharacterClass struct {
 	Colors         Colors         `json:"colors"`
 	Resources      []ResourceType `json:"resources,omitempty"`
 	Powers         []Power        `json:"powers,omitempty"`
+	Passives       []Status       `json:"passives,omitempty"` // Hidden, permanent buffs - see docs/schema/character_class.md
 	PrimaryStats   []string       `json:"primaryStats"`
 	SecondaryStats []string       `json:"secondaryStats"`
 	Wields         []string       `json:"wields"`

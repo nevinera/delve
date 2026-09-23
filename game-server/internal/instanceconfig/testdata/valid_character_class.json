@@ -73,5 +73,16 @@
         }
       ]
     }
+  ],
+  "passives": [
+    {
+      "name": "Thick Hide",
+      "shortName": "Hide",
+      "treatAs": "inherent",
+      "stacking": "replace",
+      "effects": [
+        { "type": "stat", "statName": "physicalMitigation", "modifierType": "add", "amount": 5.0 }
+      ]
+    }
   ]
 }
