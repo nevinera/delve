@@ -108,6 +108,10 @@ func TickStatusEffectsForTest(state *instancestate.InstanceState, zone instancec
 	tickStatusEffects(state, zone, dt)
 }
 
+func RefreshStatusEffectConditionsForTest(state *instancestate.InstanceState) {
+	refreshStatusEffectConditions(state)
+}
+
 func TickResourceRegenForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
 	tickResourceRegen(state, zone, dt)
 }

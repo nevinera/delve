@@ -72,6 +72,50 @@ func TestActiveStatModifiers_DifferentStatNamesAreIndependent(t *testing.T) {
 	assert.Equal(t, 1.0, multiply)
 }
 
+func TestActiveStatModifiers_SkipsAStatEffectWhoseConditionIsUnmet(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{
+			{
+				Status: instanceconfig.Status{Effects: []instanceconfig.StatusEffect{
+					{Type: "stat", StatName: "damageDone", ModifierType: "add", Amount: 10},
+				}},
+				ConditionsMet: []bool{false},
+			},
+		},
+	}
+	add, multiply := ActiveStatModifiers(unit).Get("damageDone")
+	assert.Zero(t, add, "the effect's condition is unmet, so it shouldn't contribute at all")
+	assert.Equal(t, 1.0, multiply)
+}
+
+func TestActiveStatModifiers_AppliesAStatEffectWhoseConditionIsMet(t *testing.T) {
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{
+			{
+				Status: instanceconfig.Status{Effects: []instanceconfig.StatusEffect{
+					{Type: "stat", StatName: "damageDone", ModifierType: "add", Amount: 10},
+				}},
+				ConditionsMet: []bool{true},
+			},
+		},
+	}
+	add, _ := ActiveStatModifiers(unit).Get("damageDone")
+	assert.Equal(t, 10.0, add)
+}
+
+func TestActiveStatModifiers_MissingConditionsMetTreatsEveryEffectAsMet(t *testing.T) {
+	// statusWithStatEffect (and any pre-existing content applied before
+	// this feature) leaves ConditionsMet nil/empty - that must not
+	// silently mask every stat effect as "unmet".
+	unit := &instancestate.UnitState{
+		ActiveStatusEffects: []instancestate.ActiveStatusEffect{
+			statusWithStatEffect("damageDone", "add", 10),
+		},
+	}
+	add, _ := ActiveStatModifiers(unit).Get("damageDone")
+	assert.Equal(t, 10.0, add)
+}
+
 func TestActiveStatModifiers_MultipleStatusesEachContributeIndependently(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{

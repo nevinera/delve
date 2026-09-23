@@ -80,18 +80,71 @@ func applyStatus(statuses []*activeStatus, status instanceconfig.Status, duratio
 // DPS - onTick: "heal" ticks don't damage the target and are skipped).
 // Firing at exactly now, then rescheduling, mirrors the real per-tick
 // countdown-and-refire loop without needing a discrete tick rate of our own.
-func tickStatuses(statuses []*activeStatus, now float64, target TargetStats, rng *rand.Rand, onDamage func(float64)) {
+//
+// resource/resourceName back a casterResource StatusEffectCondition (see
+// conditionMet) - this package tracks only the one enemy resource
+// UnitType.Resource describes, matching Simulate's own `resource float64`
+// local.
+func tickStatuses(statuses []*activeStatus, now float64, target TargetStats, resource float64, resourceName string, rng *rand.Rand, onDamage func(float64)) {
 	for _, e := range statuses {
 		for i := range e.ticks {
 			t := &e.ticks[i]
 			for t.nextTick <= now {
-				if t.effect.OnTick == "harm" {
+				// A tick that comes due while its condition is unmet is
+				// simply skipped, not deferred - mirrors
+				// instance.tickStatusEffects.
+				if t.effect.OnTick == "harm" && conditionMet(t.effect.Condition, statuses, resource, resourceName) {
 					dmg := statusTickDamage(t.effect, rng)
 					onDamage(incomingDamage(target, dmg, t.effect.School != "magic", rng))
 				}
 				t.nextTick += t.effect.TickRate
 			}
 		}
+	}
+}
+
+// conditionMet evaluates a StatusEffectCondition against what this package
+// actually tracks - only hasStatus and casterResource are modelable here:
+// unlike command.ConditionMet's full instancestate.UnitState, this
+// package's Simulate never tracks a live HP for either the target dummy
+// (TargetStats is a static resolved-stats profile, not a mutable unit -
+// see target.go) or the enemy itself (Simulate only measures the enemy's
+// damage OUTPUT; it never models the enemy taking damage back - see
+// package doc). selfHealthPct/targetHealthPct therefore always evaluate
+// false here, the same deliberate staleness this package already
+// documents for StatusEffect{Type: "stat"} - not a bug, just something an
+// HP-gated conditional effect can't be exercised through unit-dps-sim
+// until/unless this package's scope grows to model that.
+func conditionMet(cond *instanceconfig.StatusEffectCondition, statuses []*activeStatus, resource float64, resourceName string) bool {
+	if cond == nil {
+		return true
+	}
+	switch cond.Type {
+	case "hasStatus":
+		for _, e := range statuses {
+			if e.status.Name == cond.StatusName {
+				return true
+			}
+		}
+		return false
+	case "casterResource":
+		if cond.ResourceName != resourceName {
+			return false
+		}
+		return compareThreshold(resource, cond)
+	default:
+		return false
+	}
+}
+
+func compareThreshold(value float64, cond *instanceconfig.StatusEffectCondition) bool {
+	switch cond.Comparison {
+	case "above":
+		return value > cond.Threshold
+	case "below":
+		return value < cond.Threshold
+	default:
+		return false
 	}
 }
 

@@ -129,6 +129,58 @@ func TestApplyStatus_SeedsTickTimersForRecurringEffectsOnly(t *testing.T) {
 	assert.Equal(t, 2.5, timers[1], "a naked applier has 0% Haste, so this is just the base tickRate")
 }
 
+func TestApplyStatus_SeedsConditionsMetTrueForUnconditionalAndFalseForConditional(t *testing.T) {
+	target := &instancestate.UnitState{}
+	status := instanceconfig.Status{
+		Name:     "regen",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{Type: "stat", StatName: "movementSpeed", ModifierType: "multiply", Amount: 0.8},
+			{
+				Type: "stat", StatName: "damageDone", ModifierType: "multiply", Amount: 1.1,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "selfHealthPct", Comparison: "below", Threshold: 30},
+			},
+		},
+	}
+
+	command.ApplyStatus(target, nakedApplier(), uuid.New(), status, 5.0, instanceconfig.Zone{}, time.Now())
+
+	require.Len(t, target.ActiveStatusEffects, 1)
+	met := target.ActiveStatusEffects[0].ConditionsMet
+	require.Len(t, met, 2)
+	assert.True(t, met[0], "no Condition means always live, immediately - no waiting on the first per-tick refresh")
+	assert.False(t, met[1], "a conditional effect starts unmet until the next per-tick refresh evaluates it for real")
+}
+
+func TestApplyStatus_ReplaceReseedsConditionsMet_ExtendAndStackLeaveItAlone(t *testing.T) {
+	status := instanceconfig.Status{
+		Name: "curse",
+		Effects: []instanceconfig.StatusEffect{
+			{Type: "stat", StatName: "damageDone", ModifierType: "add", Amount: 1, Condition: &instanceconfig.StatusEffectCondition{Type: "hasStatus", StatusName: "x"}},
+		},
+	}
+	applierID := uuid.New()
+	now := time.Now()
+
+	for _, stacking := range []string{"extend", "stack"} {
+		target := &instancestate.UnitState{}
+		s := status
+		s.Stacking = stacking
+		command.ApplyStatus(target, nakedApplier(), applierID, s, 5.0, instanceconfig.Zone{}, now)
+		target.ActiveStatusEffects[0].ConditionsMet[0] = true // simulate a prior refresh having found it true
+		command.ApplyStatus(target, nakedApplier(), applierID, s, 5.0, instanceconfig.Zone{}, now)
+		assert.True(t, target.ActiveStatusEffects[0].ConditionsMet[0], "%s should leave ConditionsMet undisturbed", stacking)
+	}
+
+	target := &instancestate.UnitState{}
+	s := status
+	s.Stacking = "replace"
+	command.ApplyStatus(target, nakedApplier(), applierID, s, 5.0, instanceconfig.Zone{}, now)
+	target.ActiveStatusEffects[0].ConditionsMet[0] = true
+	command.ApplyStatus(target, nakedApplier(), applierID, s, 5.0, instanceconfig.Zone{}, now)
+	assert.False(t, target.ActiveStatusEffects[0].ConditionsMet[0], "replace should reseed ConditionsMet from scratch")
+}
+
 func TestApplyStatus_FirstTickIntervalIsHasteScaledAtApplicationToo(t *testing.T) {
 	// Application is itself the first "scheduling" event for a recurring
 	// effect's tick timer - it should use the applier's Haste right then,

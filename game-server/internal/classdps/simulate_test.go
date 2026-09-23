@@ -152,6 +152,58 @@ func TestSimulate_StatusDoTContributesStatusTickDamage(t *testing.T) {
 	assert.Greater(t, res.StatusTickDamage, res.PowerDamage)
 }
 
+func TestSimulate_ConditionalStatusDoTNeverTicksWhenConditionNeverHolds(t *testing.T) {
+	amount := instanceconfig.ValueRange{1.0, 1.0}
+	status := instanceconfig.Status{
+		Name: "Burn", ShortName: "Burn", TreatAs: "debuff", Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 2, OnTick: "harm", Amount: 20,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "hasStatus", StatusName: "Enrage"}, // never applied by this class
+			},
+		},
+	}
+	class := instanceconfig.CharacterClass{
+		Powers: []instanceconfig.Power{{
+			Name: "Ignite", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Amount: &amount},
+				{Type: "status", Affects: "bTarget", Duration: 9, Status: &status},
+			},
+		}},
+	}
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+
+	assert.Zero(t, res.StatusTickDamage, "the DoT's condition is never met, so it should never tick")
+}
+
+func TestSimulate_ConditionalStatusDoTTicksWhenConditionHolds(t *testing.T) {
+	amount := instanceconfig.ValueRange{1.0, 1.0}
+	enrage := instanceconfig.Status{Name: "Enrage", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
+	status := instanceconfig.Status{
+		Name: "Burn", ShortName: "Burn", TreatAs: "debuff", Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 2, OnTick: "harm", Amount: 20,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "hasStatus", StatusName: "Enrage"},
+			},
+		},
+	}
+	class := instanceconfig.CharacterClass{
+		Powers: []instanceconfig.Power{{
+			Name: "Ignite", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Amount: &amount},
+				{Type: "status", Affects: "bTarget", Duration: 9, Status: &enrage},
+				{Type: "status", Affects: "bTarget", Duration: 9, Status: &status},
+			},
+		}},
+	}
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+
+	assert.Greater(t, res.StatusTickDamage, 0.0, "Enrage is applied to the same target as the DoT, so its condition should hold and it should tick")
+}
+
 func TestSimulate_StrategyPrefersHigherPriorityUsablePower(t *testing.T) {
 	amountA := instanceconfig.ValueRange{10.0, 10.0}
 	amountB := instanceconfig.ValueRange{50.0, 50.0}

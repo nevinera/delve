@@ -97,4 +97,27 @@ type StatusEffect struct {
 	// Rating pools mitigates each tick. Ignored (always magic) for
 	// onTick: "heal", same as a heal PowerEffect.
 	School string `json:"school,omitempty"`
+
+	// Condition gates whether this effect is mechanically live right now -
+	// nil means always live. See docs/schema/status.md#statuseffectcondition.
+	Condition *StatusEffectCondition `json:"condition,omitempty"`
+}
+
+// StatusEffectCondition gates a single StatusEffect on live combat state.
+// Type discriminator: "hasStatus", "selfHealthPct", "targetHealthPct", or
+// "casterResource". Evaluated by command.ConditionMet, cached once per
+// server tick on ActiveStatusEffect.ConditionsMet rather than recomputed on
+// every read (see instance/status_conditions.go).
+type StatusEffectCondition struct {
+	Type string `json:"type"` // Required
+
+	// hasStatus
+	StatusName string `json:"statusName,omitempty"` // Required for hasStatus
+
+	// selfHealthPct, targetHealthPct, casterResource
+	Comparison string  `json:"comparison,omitempty"` // Required: "above" or "below"
+	Threshold  float64 `json:"threshold,omitempty"`  // Required: 0-100 for the healthPct variants; a raw resource value for casterResource
+
+	// casterResource
+	ResourceName string `json:"resourceName,omitempty"` // Required for casterResource
 }

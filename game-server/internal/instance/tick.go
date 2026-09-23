@@ -91,6 +91,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 		case now := <-ticker.C:
 			tickCount++
 			inst.drainPlayerSpawns(ctx, state, now)
+			refreshStatusEffectConditions(state)
 			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
 			var combatEvents []CombatEvent
 			tickCasts(state, inst.ZoneConfig, now, &combatEvents)

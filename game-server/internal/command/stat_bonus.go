@@ -16,12 +16,17 @@ type StatModifiers struct {
 // every "stat" sub-effect by StatName - every "add" amount summed, every
 // "multiply" amount multiplied together (two +10% buffs compound to 1.21,
 // not 1.2, matching how percentage buffs normally stack elsewhere in this
-// engine).
+// engine). A sub-effect whose ConditionsMet entry is false (its
+// StatusEffectCondition currently doesn't hold - see ConditionMet) is
+// skipped, same as if it weren't present at all.
 func ActiveStatModifiers(unit *instancestate.UnitState) StatModifiers {
 	m := StatModifiers{add: map[string]float64{}, multiply: map[string]float64{}}
 	for _, e := range unit.ActiveStatusEffects {
-		for _, eff := range e.Status.Effects {
+		for i, eff := range e.Status.Effects {
 			if eff.Type != "stat" {
+				continue
+			}
+			if i < len(e.ConditionsMet) && !e.ConditionsMet[i] {
 				continue
 			}
 			switch eff.ModifierType {
