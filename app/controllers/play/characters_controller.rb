@@ -5,7 +5,7 @@ class Play::CharactersController < Play::BaseController
   end
 
   def show
-    @character = current_user.characters.find(params[:id])
+    @character = current_user.characters.includes(character_class: :class_abilities).find(params[:id])
     authorize! :read, @character
   end
 

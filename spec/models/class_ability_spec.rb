@@ -30,4 +30,22 @@ RSpec.describe ClassAbility, type: :model do
     create(:class_ability, character_class: character_class)
     expect { character_class.destroy }.to change(described_class, :count).by(-1)
   end
+
+  describe "#stat_summary" do
+    it "lists cost, cast time, GCD, cooldown, and range" do
+      ability = build(:class_ability, cost_type: "energy", cost_amount: 30.0, cast_time: 1.5,
+        global_cooldown: 1.0, cooldown: 3.0, max_range: 5.0)
+      expect(ability.stat_summary).to eq("30 energy · 1.5s cast · 1s GCD · 3s cooldown · 5 range")
+    end
+
+    it "calls a nil cast time instant and omits missing fields" do
+      ability = build(:class_ability, cast_time: nil, global_cooldown: 0.5)
+      expect(ability.stat_summary).to eq("Instant · 0.5s GCD")
+    end
+
+    it "keeps fields that share a value" do
+      ability = build(:class_ability, global_cooldown: 1.5, cooldown: 1.5)
+      expect(ability.stat_summary).to eq("Instant · 1.5s GCD · 1.5s cooldown")
+    end
+  end
 end
