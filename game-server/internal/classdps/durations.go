@@ -24,3 +24,39 @@ func Matrix(class instanceconfig.CharacterClass, strategy Strategy) []DurationRo
 	}
 	return rows
 }
+
+// FlatCell is one (duration x elevation) Matrix result, flattened for
+// serialization - the shared JSON shape both the POST /class-dps-sim
+// handler and the class-dps-sim CLI print.
+type FlatCell struct {
+	DurationSeconds   float64 `json:"durationSeconds"`
+	Elevation         int     `json:"elevation"`
+	ElevationLabel    string  `json:"elevationLabel"`
+	DPS               float64 `json:"dps"`
+	BasicAttackDamage float64 `json:"basicAttackDamage"`
+	PowerDamage       float64 `json:"powerDamage"`
+	StatusTickDamage  float64 `json:"statusTickDamage"`
+	TotalDamage       float64 `json:"totalDamage"`
+}
+
+// Flatten converts Matrix's nested (duration -> elevation cells) rows into
+// a single flat list, in the same (durations outer, elevations inner)
+// order Matrix produces.
+func Flatten(rows []DurationRow) []FlatCell {
+	cells := make([]FlatCell, 0, len(rows)*len(Elevations))
+	for _, row := range rows {
+		for _, cell := range row.Cells {
+			cells = append(cells, FlatCell{
+				DurationSeconds:   row.Duration,
+				Elevation:         cell.Elevation,
+				ElevationLabel:    cell.Label,
+				DPS:               cell.Result.DPS,
+				BasicAttackDamage: cell.Result.BasicAttackDamage,
+				PowerDamage:       cell.Result.PowerDamage,
+				StatusTickDamage:  cell.Result.StatusTickDamage,
+				TotalDamage:       cell.Result.TotalDamage,
+			})
+		}
+	}
+	return cells
+}

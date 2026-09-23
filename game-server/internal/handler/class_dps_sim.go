@@ -27,39 +27,6 @@ type classDPSSimRequest struct {
 	Strategy classdps.Strategy             `json:"strategy"` // Required (empty = basic attack only)
 }
 
-// classDPSSimCellResponse is one (duration x elevation) result, flattened
-// into a single list per response - mirrors dpsSimCellResponse's own flat
-// "results" shape.
-type classDPSSimCellResponse struct {
-	DurationSeconds   float64 `json:"durationSeconds"`
-	Elevation         int     `json:"elevation"`
-	ElevationLabel    string  `json:"elevationLabel"`
-	DPS               float64 `json:"dps"`
-	BasicAttackDamage float64 `json:"basicAttackDamage"`
-	PowerDamage       float64 `json:"powerDamage"`
-	StatusTickDamage  float64 `json:"statusTickDamage"`
-	TotalDamage       float64 `json:"totalDamage"`
-}
-
-func rowsToResponse(rows []classdps.DurationRow) []classDPSSimCellResponse {
-	resp := make([]classDPSSimCellResponse, 0, len(rows)*len(classdps.Elevations))
-	for _, row := range rows {
-		for _, cell := range row.Cells {
-			resp = append(resp, classDPSSimCellResponse{
-				DurationSeconds:   row.Duration,
-				Elevation:         cell.Elevation,
-				ElevationLabel:    cell.Label,
-				DPS:               cell.Result.DPS,
-				BasicAttackDamage: cell.Result.BasicAttackDamage,
-				PowerDamage:       cell.Result.PowerDamage,
-				StatusTickDamage:  cell.Result.StatusTickDamage,
-				TotalDamage:       cell.Result.TotalDamage,
-			})
-		}
-	}
-	return resp
-}
-
 // Simulate handles POST /class-dps-sim: runs classdps.Matrix (every
 // Durations x Elevations cell, per the plan's decision to always show
 // 1m/5m/20m rather than take a caller-chosen duration) against the posted
@@ -84,5 +51,5 @@ func (h *ClassDPSSim) Simulate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows := classdps.Matrix(req.Class, req.Strategy)
-	writeJSON(w, r, http.StatusOK, map[string]any{"results": rowsToResponse(rows)})
+	writeJSON(w, r, http.StatusOK, map[string]any{"results": classdps.Flatten(rows)})
 }
