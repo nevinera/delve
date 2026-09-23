@@ -839,3 +839,130 @@ func TestUsePowerHandler_ResourceEffectCanDrainATarget(t *testing.T) {
 
 	assert.Equal(t, 30.0, energyOf(state.Units[targetID]))
 }
+
+// --- cast-time powers ---
+
+func punchPowerWithCastTime(castTime float64) command.UsePowerPayload {
+	p := punchPower()
+	p.Power.CastTime = &castTime
+	return p
+}
+
+func TestUsePowerHandler_CastTimePowerDoesNotApplyEffectsImmediately(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
+
+	assert.Equal(t, before, state.Units[targetID].Health)
+}
+
+func TestUsePowerHandler_CastTimePowerSetsCastingState(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	before := time.Now()
+
+	payload := punchPowerWithCastTime(2.0)
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, payload, instanceconfig.Zone{}, state))
+
+	cast := state.Units[playerID].Casting
+	require.NotNil(t, cast)
+	assert.Equal(t, payload.Power.Name, cast.Power.Name)
+	require.NotNil(t, cast.TargetID)
+	assert.Equal(t, targetID, *cast.TargetID)
+	assert.True(t, cast.StartedAt.After(before) || cast.StartedAt.Equal(before))
+	assert.WithinDuration(t, cast.StartedAt.Add(2*time.Second), cast.EndsAt, time.Millisecond)
+}
+
+func TestUsePowerHandler_CastTimePowerCommitsGCDAtCastStart(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	before := time.Now()
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
+
+	assert.True(t, state.Units[playerID].GlobalCooldownEndsAt.After(before.Add(time.Second)))
+}
+
+func TestUsePowerHandler_CastTimePowerDoesNotSpendCostAtCastStart(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	setEnergy(state.Units[playerID], 100.0, 100.0)
+	payload := punchPowerWithCastTime(2.0)
+	payload.Power.CostType = "energy"
+	payload.Power.CostAmount = 30.0
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, payload, instanceconfig.Zone{}, state))
+
+	// Starting a cast only requires affording it (PowerUsable already
+	// checked that) - the cost itself isn't spent until the cast actually
+	// completes (see command.SpendPowerCost, called from instance.tickCasts).
+	assert.Equal(t, 100.0, energyOf(state.Units[playerID]))
+}
+
+func TestSpendPowerCost_DeductsCostAmount(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithUnit(playerID)
+	setEnergy(state.Units[playerID], 100.0, 100.0)
+
+	command.SpendPowerCost(state.Units[playerID], instanceconfig.Power{CostType: "energy", CostAmount: 30.0})
+
+	assert.Equal(t, 70.0, energyOf(state.Units[playerID]))
+}
+
+func TestSpendPowerCost_ZeroCostDoesNotTouchResource(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithUnit(playerID)
+	setEnergy(state.Units[playerID], 100.0, 100.0)
+
+	command.SpendPowerCost(state.Units[playerID], instanceconfig.Power{})
+
+	assert.Equal(t, 100.0, energyOf(state.Units[playerID]))
+}
+
+func TestUsePowerHandler_RejectsUseWhileCasting(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
+	firstCast := state.Units[playerID].Casting
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
+
+	assert.Same(t, firstCast, state.Units[playerID].Casting)
+}
+
+func TestResolveCastTarget_SelfOnlyPowerNeedsNoTarget(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithUnit(playerID)
+	power := instanceconfig.Power{
+		Effects: []instanceconfig.PowerEffect{{Type: "resource", Affects: "self"}},
+	}
+
+	target, ok := command.ResolveCastTarget(state.Units[playerID], nil, power, state)
+
+	assert.True(t, ok)
+	assert.Nil(t, target)
+}
+
+func TestResolveCastTarget_MissingTargetIsRejected(t *testing.T) {
+	playerID := uuid.New()
+	state := stateWithUnit(playerID)
+
+	target, ok := command.ResolveCastTarget(state.Units[playerID], nil, punchPower().Power, state)
+
+	assert.False(t, ok)
+	assert.Nil(t, target)
+}
+
+func TestResolveCastTarget_DeadTargetIsRejected(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Status = instancestate.UnitStatusDead
+
+	target, ok := command.ResolveCastTarget(state.Units[playerID], state.Units[playerID].Target, punchPower().Power, state)
+
+	assert.False(t, ok)
+	assert.Nil(t, target)
+}

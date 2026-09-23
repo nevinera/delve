@@ -158,6 +158,38 @@ func TestBasicAttackHandler_BlockedBySwingTimer(t *testing.T) {
 	assert.Equal(t, before, state.Units[targetID].Health)
 }
 
+func TestBasicAttackHandler_HeldWhileCasting(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+	swingDueAt := time.Now().Add(-time.Second) // already due
+	state.Units[playerID].NextBasicAttackAt = swingDueAt
+	state.Units[playerID].Casting = &instancestate.CastState{
+		Power:     instanceconfig.Power{Name: "Fireball"},
+		StartedAt: time.Now(),
+		EndsAt:    time.Now().Add(2 * time.Second),
+	}
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+
+	assert.Equal(t, before, state.Units[targetID].Health)
+	// Held, not reset - the swing is still due the instant casting ends.
+	assert.Equal(t, swingDueAt, state.Units[playerID].NextBasicAttackAt)
+}
+
+func TestBasicAttackHandler_FiresImmediatelyAfterCastEnds(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		s := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		s.Units[playerID].NextBasicAttackAt = time.Now().Add(-time.Second) // already due
+		s.Units[playerID].Casting = nil                                    // cast just ended this tick
+		return s
+	})
+
+	assert.True(t, state.Units[playerID].NextBasicAttackAt.After(time.Now()))
+}
+
 func TestBasicAttackHandler_DamagesTargetAndSetsSwingTimer(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 

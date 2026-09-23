@@ -47,6 +47,14 @@ func (u *UnitState) clone() *UnitState {
 			c.PowerCooldowns[k] = v
 		}
 	}
+	if u.Casting != nil {
+		cast := *u.Casting
+		if u.Casting.TargetID != nil {
+			t := *u.Casting.TargetID
+			cast.TargetID = &t
+		}
+		c.Casting = &cast
+	}
 
 	return &c
 }

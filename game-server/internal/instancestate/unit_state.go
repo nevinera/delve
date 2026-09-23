@@ -242,4 +242,17 @@ type UnitState struct {
 	// far that position can feasibly have moved since - zero until the first
 	// such move.
 	LastMoveAt time.Time
+
+	// Casting is non-nil while the unit is mid-cast on a power with a
+	// non-zero CastTime - nil means "not casting". See command.UsePowerHandler
+	// and instance.tryNPCAttack (cast start), instance.tickCasts (resolution).
+	Casting *CastState
+}
+
+// CastState tracks a unit's in-progress cast-time power - see UnitState.Casting.
+type CastState struct {
+	Power     instanceconfig.Power
+	TargetID  *uuid.UUID // snapshot of unit.Target at cast start; nil for self-only powers
+	StartedAt time.Time
+	EndsAt    time.Time
 }

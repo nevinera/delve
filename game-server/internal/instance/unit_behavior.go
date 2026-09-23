@@ -175,7 +175,12 @@ func applyUnitBehavior(
 			if pathGraph != nil {
 				canWalkStraight = losClear && pathGraph.SegmentClear(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, target.Position.X, target.Position.Y)
 			}
-			if canWalkStraight {
+			if unit.Casting != nil {
+				// Root while casting - an NPC doesn't reposition mid-cast.
+				// (Unlike a player's own move command, which cancels its
+				// cast, this is AI-driven movement the unit simply doesn't
+				// issue while busy.)
+			} else if canWalkStraight {
 				unit.Behavior.PathWaypoints = nil // no longer detouring around anything
 				chaseTarget(unit, target, speed, dt, effectiveBasicAttackRange(e.unitType))
 			} else {
@@ -244,6 +249,9 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		leafTactics = advancePhase(unit, leafTactics.Phases, dt).Tactics
 	}
 
+	if unit.Casting != nil {
+		return
+	}
 	if now.Before(unit.GlobalCooldownEndsAt) {
 		return
 	}
@@ -257,6 +265,44 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	if !ok {
 		return
 	}
+
+	if castTime := power.CastTime; castTime != nil && *castTime > 0 {
+		tid := targetID
+		unit.Casting = &instancestate.CastState{
+			Power:     power,
+			TargetID:  &tid,
+			StartedAt: now,
+			EndsAt:    now.Add(time.Duration(*castTime * float64(time.Second))),
+		}
+		commitNPCCooldowns(unit, power, now)
+		return
+	}
+
+	applyNPCPowerEffects(attackerID, targetID, unit, target, power, zone, now, state)
+	spendNPCPowerCost(unit, power)
+	commitNPCCooldowns(unit, power, now)
+	*events = append(*events, CombatEvent{
+		AttackerID: attackerID.String(),
+		TargetID:   targetID.String(),
+		PowerName:  power.Name,
+	})
+}
+
+// applyNPCPowerEffects applies every one of power's effects from unit
+// against target, per-effect range-checked against unit/target's *current*
+// positions (recomputed here rather than passed in, since a cast-time
+// power's completion - instance.tickCasts - calls this well after the
+// distance tryNPCAttack originally computed at cast start may be stale).
+//
+// Exported for use by tickCasts; unlike command.ApplyPowerEffects (the
+// player equivalent), there's no whole-cast abort on an out-of-range
+// effect - each effect independently no-ops via npcEffectInRange, matching
+// NPC attacks' existing per-effect (not all-or-nothing) validation.
+func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState) {
+	dx := target.Position.X - unit.Position.X
+	dy := target.Position.Y - unit.Position.Y
+	dist := math.Sqrt(dx*dx + dy*dy)
+
 	for _, eff := range power.Effects {
 		if !npcEffectUsable(eff) || !npcEffectInRange(eff, dist, unit, target) {
 			continue
@@ -299,9 +345,14 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 			command.AdjustResource(recipient, eff.ResourceName, eff.Delta)
 		}
 	}
-	if power.CostAmount > 0 {
-		command.AdjustResource(unit, power.CostType, -power.CostAmount)
-	}
+}
+
+// commitNPCCooldowns starts power's GCD/own cooldown - for an instant power,
+// called right after spendNPCPowerCost; for a cast-time power, called at
+// cast *start* (tryNPCAttack), locking in the timing commitment regardless
+// of whether the cast ultimately resolves. Mirrors command.commitCooldowns'
+// player-side equivalent.
+func commitNPCCooldowns(unit *instancestate.UnitState, power instanceconfig.Power, now time.Time) {
 	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
 	if power.Cooldown > 0 {
 		if unit.PowerCooldowns == nil {
@@ -309,11 +360,15 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		}
 		unit.PowerCooldowns[power.Name] = now.Add(time.Duration(power.Cooldown * float64(time.Second)))
 	}
-	*events = append(*events, CombatEvent{
-		AttackerID: attackerID.String(),
-		TargetID:   targetID.String(),
-		PowerName:  power.Name,
-	})
+}
+
+// spendNPCPowerCost deducts power's resource cost, if any - for a cast-time
+// power, charged only on successful completion (instance.tickCasts), not at
+// cast start, mirroring command.SpendPowerCost's player-side equivalent.
+func spendNPCPowerCost(unit *instancestate.UnitState, power instanceconfig.Power) {
+	if power.CostAmount > 0 {
+		command.AdjustResource(unit, power.CostType, -power.CostAmount)
+	}
 }
 
 // usablePowers filters powers down to the ones unit could fire right now
@@ -480,6 +535,9 @@ func npcEffectInRange(eff instanceconfig.PowerEffect, dist float64, unit, target
 func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
 	if !unit.Attacking || unitType.AttackSpeed <= 0 {
 		return
+	}
+	if unit.Casting != nil {
+		return // swing timer keeps accruing in the background; held, not reset
 	}
 	if now.Before(unit.NextBasicAttackAt) {
 		return

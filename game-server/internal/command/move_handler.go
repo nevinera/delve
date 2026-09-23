@@ -36,11 +36,15 @@ func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanc
 			elapsed = now.Sub(unit.LastMoveAt).Seconds()
 		}
 		barriers := barriersForMap(zone, unit.MapIdentifier)
+		prevX, prevY := unit.Position.X, unit.Position.Y
 		unit.Position.X, unit.Position.Y = clampFeasibleMove(
 			unit.Position.X, unit.Position.Y, *p.X, *p.Y, unit.Speed, elapsed, barriers,
 		)
 		unit.MovementIntent = instancestate.MovementIntent{}
 		unit.LastMoveAt = now
+		if unit.Position.X != prevX || unit.Position.Y != prevY {
+			unit.Casting = nil // moving cancels an in-progress cast; a facing-only update does not
+		}
 		return nil
 	}
 	// Fallback (no position from client): derive movement from key intent.
@@ -57,6 +61,9 @@ func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanc
 		case MoveKeyStrafeRight:
 			unit.MovementIntent.StrafeRight = true
 		}
+	}
+	if len(p.Keys) > 0 {
+		unit.Casting = nil // moving cancels an in-progress cast; a facing-only update does not
 	}
 	return nil
 }

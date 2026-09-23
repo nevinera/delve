@@ -95,6 +95,9 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	if !unit.Attacking || unit.Target == nil {
 		return nil
 	}
+	if unit.Casting != nil {
+		return nil // swing timer keeps accruing in the background; held, not reset
+	}
 	now := time.Now()
 	if now.Before(unit.NextBasicAttackAt) {
 		return nil

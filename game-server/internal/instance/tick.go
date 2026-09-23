@@ -92,10 +92,12 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			tickCount++
 			inst.drainPlayerSpawns(ctx, state)
 			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
+			var combatEvents []CombatEvent
+			tickCasts(state, inst.ZoneConfig, now, &combatEvents)
 			updatePlayerMaxHealth(state, inst.ZoneConfig)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
-			combatEvents := applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph)
+			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph)...)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds())
 			tickResourceRegen(state, inst.ZoneConfig, TickInterval.Seconds())
