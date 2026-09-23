@@ -55,6 +55,12 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
     expect(character_class.reload.class_abilities.map(&:name)).to eq(["Punch"])
   end
 
+  it "clears a previous validity error" do
+    character_class.update!(state: :validation_failed, validity_error: "old")
+    described_class.perform_now(character_class.id)
+    expect(character_class.reload.validity_error).to be_nil
+  end
+
   it "raises when the URL returns a non-success response" do
     stub_request(:get, character_class.location).to_return(status: 404)
     expect { described_class.perform_now(character_class.id) }.to raise_error(RuntimeError, /HTTP 404/)

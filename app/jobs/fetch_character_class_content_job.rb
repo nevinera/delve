@@ -29,7 +29,8 @@ class FetchCharacterClassContentJob < ApplicationJob
       primary_stats: data["primaryStats"],
       secondary_stats: data["secondaryStats"],
       wields: data["wields"],
-      state: :fetched
+      state: :fetched,
+      validity_error: nil
     }
   end
 
