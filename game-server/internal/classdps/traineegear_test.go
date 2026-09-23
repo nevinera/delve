@@ -49,6 +49,16 @@ func TestMatrix_ProducesOneRowPerDurationEachWithFullElevationSpread(t *testing.
 	}
 }
 
+func TestSpread_ClassWithNoWieldsDoesNotPanic(t *testing.T) {
+	class := instanceconfig.CharacterClass{
+		PrimaryStats:   []string{"intellect"},
+		SecondaryStats: []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"},
+	}
+	assert.NotPanics(t, func() {
+		classdps.Spread(class, nil, 60)
+	})
+}
+
 func TestSpread_TwoHandedClassSkipsOffHand(t *testing.T) {
 	class := instanceconfig.CharacterClass{
 		PrimaryStats:   []string{"strength"},

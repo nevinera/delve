@@ -18,8 +18,8 @@ type Strategy []StrategyEntry
 
 // StrategyEntry is one priority-list entry.
 type StrategyEntry struct {
-	Power     string
-	Condition *StrategyCondition // nil = always eligible once usable
+	Power     string             `json:"power"`
+	Condition *StrategyCondition `json:"condition,omitempty"` // nil = always eligible once usable
 }
 
 // StrategyCondition gates a StrategyEntry beyond plain usability - v1
@@ -28,9 +28,9 @@ type StrategyEntry struct {
 // On: "target", Status: "Moonfire"). More condition Types are additive
 // later without changing this shape.
 type StrategyCondition struct {
-	Type   string // "missingStatus" | "hasStatus"
-	On     string // "target" | "self"
-	Status string // Status.Name to check for
+	Type   string `json:"type"`   // "missingStatus" | "hasStatus"
+	On     string `json:"on"`     // "target" | "self"
+	Status string `json:"status"` // Status.Name to check for
 }
 
 // conditionHolds reports whether cond currently holds for the simulated

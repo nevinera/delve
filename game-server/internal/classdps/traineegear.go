@@ -81,7 +81,10 @@ func newTraineeGear(class instanceconfig.CharacterClass, ee int) map[string]inst
 
 func traineeGearItemFor(class instanceconfig.CharacterClass, equippedSlot string, ee int, twoHanded bool) instanceconfig.EquippedItem {
 	if equippedSlot == "main_hand" || equippedSlot == "off_hand" {
-		return traineeWeaponItemFor(class, equippedSlot, ee, twoHanded)
+		if item, ok := traineeWeaponItemFor(class, equippedSlot, ee, twoHanded); ok {
+			return item
+		}
+		return instanceconfig.EquippedItem{}
 	}
 
 	item := instanceconfig.EquippedItem{
@@ -95,14 +98,22 @@ func traineeGearItemFor(class instanceconfig.CharacterClass, equippedSlot string
 	return item
 }
 
-func traineeWeaponItemFor(class instanceconfig.CharacterClass, equippedSlot string, ee int, twoHanded bool) instanceconfig.EquippedItem {
-	wield := class.Wields[0]
+// traineeWeaponItemFor mirrors weapon_item_for - returns ok=false (a
+// malformed class with too few Wields entries for the slot it's asked
+// about) rather than panicking, so a bad request body fails gracefully
+// instead of crashing the handler.
+func traineeWeaponItemFor(class instanceconfig.CharacterClass, equippedSlot string, ee int, twoHanded bool) (item instanceconfig.EquippedItem, ok bool) {
+	wieldIndex := 0
 	if equippedSlot == "off_hand" {
-		wield = class.Wields[1]
+		wieldIndex = 1
 	}
+	if wieldIndex >= len(class.Wields) {
+		return instanceconfig.EquippedItem{}, false
+	}
+	wield := class.Wields[wieldIndex]
 	shield := wield == "shield"
 
-	item := instanceconfig.EquippedItem{
+	item = instanceconfig.EquippedItem{
 		Slot:           weaponSlotFor(equippedSlot, twoHanded),
 		Elvl:           ee,
 		Shield:         shield,
@@ -117,7 +128,7 @@ func traineeWeaponItemFor(class instanceconfig.CharacterClass, equippedSlot stri
 		w := wield
 		item.WeaponType = &w
 	}
-	return item
+	return item, true
 }
 
 func weaponSlotFor(equippedSlot string, twoHanded bool) string {
