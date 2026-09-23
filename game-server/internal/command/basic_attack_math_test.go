@@ -10,7 +10,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-// Internal-package tests for UnitCombatStats and basicAttackDamage - the
+// Internal-package tests for UnitCombatStats and BasicAttackDamage - the
 // pure (non-random) combat math, and the miss/crit roll that sits on top of
 // it. Kept separate from basic_attack_handler_test.go (package
 // command_test) since these exercise unexported helpers directly.
@@ -362,7 +362,7 @@ func TestApplyDamageDoneBonus_SchoolScopedOnlyAppliesToThatSchool(t *testing.T) 
 
 func TestBasicAttackDamage_NeverNegative(t *testing.T) {
 	for i := 0; i < 1000; i++ {
-		assert.GreaterOrEqual(t, basicAttackDamage(50, 10), 0.0)
+		assert.GreaterOrEqual(t, BasicAttackDamage(50, 10), 0.0)
 	}
 }
 
@@ -374,7 +374,7 @@ func TestBasicAttackDamage_NonCritHitsVaryWithinPlusOrMinus10PercentOfNominal(t 
 	const statDPS = 40.0 // nominal = (1+40)*2 = 82, +/-10% = [73.8, 90.2]
 	seen := map[float64]bool{}
 	for i := 0; i < 2000; i++ {
-		d := basicAttackDamage(0, statDPS)
+		d := BasicAttackDamage(0, statDPS)
 		if d == 0 {
 			continue // miss
 		}
@@ -393,7 +393,7 @@ func TestBasicAttackDamage_MissesAtTheDocumentedRateAndAveragesToTheExpectedDPS(
 	var total float64
 	var missCount int
 	for i := 0; i < trials; i++ {
-		d := basicAttackDamage(critChancePct, statDPS)
+		d := BasicAttackDamage(critChancePct, statDPS)
 		if d == 0 {
 			missCount++
 		}

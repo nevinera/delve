@@ -1,0 +1,68 @@
+package classdps
+
+import (
+	"time"
+
+	"github.com/delve-mmo/game-server/internal/command"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
+)
+
+// tickActiveStatuses counts down every recurring StatusEffect on owner's
+// active statuses by dt (mirrors instance.tickStatusEffects's per-unit
+// shape - unexported and tick-loop-specific, so reimplemented here) and
+// expires anything past its ExpiresAt. applier is always the simulated
+// character (the only caster in this simulation), regardless of whether
+// owner is the character itself (a self-buff) or the target dummy (a
+// debuff/DoT) - matches RecurringTickInterval's "whoever cast this, whose
+// Haste matters" semantics.
+func tickActiveStatuses(owner, applier *instancestate.UnitState, zone instanceconfig.Zone, now time.Time, dt float64, addStatusTickDamage func(float64)) {
+	for i := range owner.ActiveStatusEffects {
+		e := &owner.ActiveStatusEffects[i]
+		for j, eff := range e.Status.Effects {
+			if eff.Type != "recurring" {
+				continue
+			}
+			e.TimeUntilNextTick[j] -= dt
+			for e.TimeUntilNextTick[j] <= 0 {
+				fireStatusTick(owner, applier, eff, zone, addStatusTickDamage)
+				e.TimeUntilNextTick[j] += command.RecurringTickInterval(applier, zone, eff)
+			}
+		}
+	}
+
+	kept := owner.ActiveStatusEffects[:0]
+	for _, e := range owner.ActiveStatusEffects {
+		if now.Before(e.ExpiresAt) {
+			kept = append(kept, e)
+		}
+	}
+	owner.ActiveStatusEffects = kept
+}
+
+// fireStatusTick applies one recurring StatusEffect tick to owner - mirrors
+// instance.fireStatusTick, minus the TaggedBy/loot bookkeeping this
+// simulation has no use for. A "heal" tick isn't credited toward any
+// tracked Result total (see strategy.go/power.go - healing powers simply
+// aren't listed in a DPS Strategy, so a heal tick only ever fires here as a
+// side effect of a damage power's own status, e.g. a self-heal woven into
+// an offensive cooldown) - health/resource bookkeeping stays correct
+// either way.
+func fireStatusTick(owner, applier *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, addStatusTickDamage func(float64)) {
+	switch eff.OnTick {
+	case "heal":
+		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, true)
+		owner.Health += amount * (1 + command.HealingTakenPct(owner, zone)/100)
+		if owner.Health > owner.MaxHealth {
+			owner.Health = owner.MaxHealth
+		}
+	case "harm":
+		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, false)
+		dealt := command.IncomingDamage(owner, zone, amount, eff.School != "magic")
+		addStatusTickDamage(dealt)
+		owner.Health -= dealt
+		if owner.Health < 0 {
+			owner.Health = 0
+		}
+	}
+}
