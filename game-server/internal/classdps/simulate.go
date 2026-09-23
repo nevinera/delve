@@ -18,6 +18,21 @@ import (
 // tradeoff this represents.
 const simTickInterval = 0.01
 
+// resourceStatsRecalcInterval is how often Simulate recomputes
+// hastePct/healingTakenPct for resource regen - matches instance.TickInterval
+// (100ms), the granularity the real engine itself resolves this at (see
+// instance.tickResourceRegen). Gear-derived stats don't change tick to
+// tick, so recomputing them at simTickInterval's finer 10ms cadence (needed
+// only for status-tick countdown precision) was pure waste: a full
+// command.UnitCombatStats/HealingTakenPct call recomputes the attacker's
+// entire itemstats.ScaledSum from scratch, and doing that up to 624,000
+// times across one Matrix run (4 elevations x 3 durations, worst case
+// 1200s at 10ms steps) was the dominant cost of an "Estimate DPS" click -
+// several seconds of GC pressure from the resulting allocation churn.
+// Recomputing at the real engine's own 100ms cadence instead is both 10x
+// cheaper and more faithful to what the real engine actually does.
+const resourceStatsRecalcInterval = 0.1
+
 // simEpoch is an arbitrary zero point simulated time is measured from -
 // command's functions take time.Time (the real engine's convention), so
 // this package converts its own float64-seconds simulated clock to/from
@@ -80,10 +95,24 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 
 	nextBasicAttackAt := 0.0
 
+	needsHastePct, needsHealingTakenPct := resourceRegenNeedsStats(cfg.Class.Resources)
+	var hastePctForRegen, healingTakenPctForRegen float64
+	nextStatsRecalcAt := 0.0
+
 	for now := 0.0; now < duration; now += simTickInterval {
 		nowTime := simTime(now)
 
-		tickResourceRegen(unit, zone, simTickInterval)
+		if now >= nextStatsRecalcAt {
+			if needsHastePct {
+				hastePctForRegen, _, _ = command.UnitCombatStats(unit, zone)
+			}
+			if needsHealingTakenPct {
+				healingTakenPctForRegen = command.HealingTakenPct(unit, zone)
+			}
+			nextStatsRecalcAt = now + resourceStatsRecalcInterval
+		}
+
+		tickResourceRegen(unit, hastePctForRegen, healingTakenPctForRegen, simTickInterval)
 		tickActiveStatuses(unit, unit, zone, nowTime, simTickInterval, addStatusTickDamage)
 		tickActiveStatuses(target, unit, zone, nowTime, simTickInterval, addStatusTickDamage)
 
