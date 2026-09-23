@@ -98,7 +98,7 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 			nextBasicAttackAt = now + command.PlayerBasicAttackInterval(hastePct).Seconds()
 		}
 
-		if power, ok := selectPower(unit, strategy, powersByName, nowTime); ok {
+		if power, ok := selectPower(unit, target, strategy, powersByName, nowTime); ok {
 			castPower(unit, target, attackerID, power, zone, nowTime, addPowerDamage)
 		}
 	}
