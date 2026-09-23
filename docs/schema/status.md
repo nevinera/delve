@@ -32,6 +32,7 @@ A StatusEffect describes one mechanical outcome of a status being active on a un
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `type` | string | yes | `"stat"`, `"recurring"`, or `"none"`. |
+| `condition` | StatusEffectCondition | no | Gates whether this effect is mechanically live right now. Omitted means always live. See below. Re-evaluated roughly once per server tick (~100ms) - not instantaneous. |
 
 ---
 
@@ -105,6 +106,49 @@ Applies a heal or harm tick at a regular interval while the status is active.
 
 ```json
 { "type": "recurring", "tickRate": 2.0, "onTick": "harm", "amount": 5.0, "school": "magic" }
+```
+
+A `recurring` effect whose condition is unmet when a tick comes due just skips that tick - the tick-rate cadence keeps counting regardless, so it isn't "saved up" and doesn't catch up once the condition becomes true again.
+
+---
+
+## StatusEffectCondition
+
+Gates a single StatusEffect on live combat state, independent of the Status's own duration/expiry. Re-evaluated roughly once per server tick, so treat it as "current within ~100ms", not instantaneous.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `type` | string | yes | `"hasStatus"`, `"selfHealthPct"`, `"targetHealthPct"`, or `"casterResource"`. |
+
+### hasStatus
+
+True while another named status is active on the same unit holding this one (any applier).
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `statusName` | string | yes | The `Status.name` to check for. |
+
+### selfHealthPct / targetHealthPct
+
+True while the unit holding this status (`selfHealthPct`) or that unit's own current target (`targetHealthPct`) is above/below a health percentage. `targetHealthPct` is false if the holder has no target.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `comparison` | string | yes | `"above"` or `"below"` (strict, no equality). |
+| `threshold` | float | yes | 0-100. |
+
+### casterResource
+
+True while a named resource on whoever applied this status (not the holder, unless they applied it to themselves) is above/below a raw value. False if the applier has left the instance, or has no resource by that name.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `resourceName` | string | yes | Must match the applier's resource `name`. |
+| `comparison` | string | yes | `"above"` or `"below"`. |
+| `threshold` | float | yes | Compared against the resource's current value (not a percentage - resource maxes vary by class). |
+
+```json
+{ "type": "selfHealthPct", "comparison": "below", "threshold": 30.0 }
 ```
 
 ---

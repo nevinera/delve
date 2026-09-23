@@ -112,6 +112,90 @@ RSpec.describe Validators::StatusEffectValidator, type: :validator do
       end
     end
 
+    context "condition" do
+      it "accepts an effect with no condition" do
+        expect { described_class.validate!(stat_effect) }.not_to raise_error
+      end
+
+      it "raises when condition type is missing" do
+        data = stat_effect.merge("condition" => {})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /type is required/)
+      end
+
+      it "raises when condition type is invalid" do
+        data = stat_effect.merge("condition" => {"type" => "moonPhase"})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      context "hasStatus" do
+        it "accepts a valid hasStatus condition" do
+          data = stat_effect.merge("condition" => {"type" => "hasStatus", "statusName" => "Enrage"})
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+
+        it "raises when statusName is missing" do
+          data = stat_effect.merge("condition" => {"type" => "hasStatus"})
+          expect { described_class.validate!(data) }
+            .to raise_error(Validators::ValidationError, /statusName is required/)
+        end
+      end
+
+      context "selfHealthPct / targetHealthPct" do
+        it "accepts a valid selfHealthPct condition" do
+          data = stat_effect.merge("condition" => {"type" => "selfHealthPct", "comparison" => "below", "threshold" => 30.0})
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+
+        it "accepts a valid targetHealthPct condition" do
+          data = stat_effect.merge("condition" => {"type" => "targetHealthPct", "comparison" => "above", "threshold" => 50.0})
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+
+        it "raises when comparison is invalid" do
+          data = stat_effect.merge("condition" => {"type" => "selfHealthPct", "comparison" => "near", "threshold" => 30.0})
+          expect { described_class.validate!(data) }
+            .to raise_error(Validators::ValidationError, /must be one of/)
+        end
+
+        it "raises when threshold is missing" do
+          data = stat_effect.merge("condition" => {"type" => "selfHealthPct", "comparison" => "below"})
+          expect { described_class.validate!(data) }
+            .to raise_error(Validators::ValidationError, /threshold is required/)
+        end
+
+        it "raises when threshold is out of range" do
+          data = stat_effect.merge("condition" => {"type" => "selfHealthPct", "comparison" => "below", "threshold" => 101})
+          expect { described_class.validate!(data) }
+            .to raise_error(Validators::ValidationError, /threshold must be between 0 and 100/)
+        end
+      end
+
+      context "casterResource" do
+        it "accepts a valid casterResource condition" do
+          data = stat_effect.merge("condition" => {"type" => "casterResource", "resourceName" => "combo points", "comparison" => "above", "threshold" => 3.0})
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+
+        it "raises when resourceName is missing" do
+          data = stat_effect.merge("condition" => {"type" => "casterResource", "comparison" => "above", "threshold" => 3.0})
+          expect { described_class.validate!(data) }
+            .to raise_error(Validators::ValidationError, /resourceName is required/)
+        end
+
+        it "allows a threshold outside 0-100, unlike the health-pct conditions" do
+          data = stat_effect.merge("condition" => {"type" => "casterResource", "resourceName" => "energy", "comparison" => "above", "threshold" => 500.0})
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+      end
+
+      it "works on a recurring effect too" do
+        data = recurring_effect.merge("condition" => {"type" => "selfHealthPct", "comparison" => "below", "threshold" => 30.0})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+    end
+
     context "when data is an AssetReference" do
       it "raises with full JSON required message" do
         expect { described_class.validate!({"$ref" => "effects/foo.json", "referenceTo" => "status_effect"}) }

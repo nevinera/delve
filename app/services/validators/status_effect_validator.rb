@@ -1,6 +1,8 @@
 module Validators
   class StatusEffectValidator < Base
     TYPE_OPTIONS = %w[stat recurring none].freeze
+    CONDITION_TYPE_OPTIONS = %w[hasStatus selfHealthPct targetHealthPct casterResource].freeze
+    COMPARISON_OPTIONS = %w[above below].freeze
 
     # Tier 1: input stats - the same raw pools UnitCombatStats/
     # unitEffectiveStats sum from equipped items. "add" is flat rating
@@ -36,6 +38,7 @@ module Validators
       when "stat" then validate_stat!(data, path: path)
       when "recurring" then validate_recurring!(data, path: path)
       end
+      validate_condition!(data, path: path) if given?(data, "condition")
     end
 
     private
@@ -59,6 +62,40 @@ module Validators
     def validate_school!(data, path:)
       school = require_string!(data, "school", path: path)
       require_one_of!(school, PowerEffectValidator::DAMAGE_SCHOOLS, path: child_path(path, "school"))
+    end
+
+    def validate_condition!(data, path:)
+      condition = require_hash!(data, "condition", path: path)
+      condition_path = child_path(path, "condition")
+      type = require_string!(condition, "type", path: condition_path)
+      require_one_of!(type, CONDITION_TYPE_OPTIONS, path: child_path(condition_path, "type"))
+      case type
+      when "hasStatus" then validate_has_status_condition!(condition, path: condition_path)
+      when "selfHealthPct", "targetHealthPct" then validate_health_pct_condition!(condition, path: condition_path)
+      when "casterResource" then validate_caster_resource_condition!(condition, path: condition_path)
+      end
+    end
+
+    def validate_has_status_condition!(data, path:)
+      require_string!(data, "statusName", path: path)
+    end
+
+    def validate_health_pct_condition!(data, path:)
+      validate_comparison!(data, path: path)
+      threshold = require_numeric!(data, "threshold", path: path)
+      return if threshold.between?(0, 100)
+      raise ValidationError.new("threshold must be between 0 and 100", path: child_path(path, "threshold"))
+    end
+
+    def validate_caster_resource_condition!(data, path:)
+      require_string!(data, "resourceName", path: path)
+      validate_comparison!(data, path: path)
+      require_numeric!(data, "threshold", path: path)
+    end
+
+    def validate_comparison!(data, path:)
+      comparison = require_string!(data, "comparison", path: path)
+      require_one_of!(comparison, COMPARISON_OPTIONS, path: child_path(path, "comparison"))
     end
   end
 end
