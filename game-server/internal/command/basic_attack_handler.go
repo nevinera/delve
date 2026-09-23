@@ -115,7 +115,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	}
 
 	hastePct, critChancePct, statDPS := UnitCombatStats(unit, zone)
-	interval := time.Duration(float64(characterBasicAttackNominalInterval) / (1 + hastePct/100))
+	interval := PlayerBasicAttackInterval(hastePct)
 	unit.NextBasicAttackAt = now.Add(interval)
 	next.PendingCombatEvents = append(next.PendingCombatEvents, instancestate.CombatEvent{
 		AttackerID: unitID.String(),
@@ -128,7 +128,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	}
 	EngageOnAttack(target, unitID, zone, next)
 	physical := unit.DamageStatKey != "intellect"
-	raw := basicAttackDamage(critChancePct, statDPS)
+	raw := BasicAttackDamage(critChancePct, statDPS)
 	raw = ApplyDamageDoneBonus(unit, physical, raw)
 	target.Health -= IncomingDamage(target, zone, raw, physical)
 	if target.Health < 0 {
@@ -308,13 +308,15 @@ func RollAttackOutcome(critChancePct float64) (missed bool, multiplier float64) 
 	return false, 1.0
 }
 
-// basicAttackDamage rolls one swing's outcome - miss, normal hit, or crit -
+// BasicAttackDamage rolls one swing's outcome - miss, normal hit, or crit -
 // and returns the damage dealt (0 on a miss). See docs/stats.md's "Basic
 // Attack DPS" section: nominalSwingDamage is what DPS*nominalInterval would
 // deal every swing before the miss/crit/variance rolls are applied. A
 // landed hit varies uniformly within +/-10% of that nominal value, so
-// swings aren't all identical even absent a crit.
-func basicAttackDamage(critChancePct, statDPS float64) float64 {
+// swings aren't all identical even absent a crit. Exported (alongside
+// PlayerBasicAttackInterval) so a DPS simulator (internal/classdps) can
+// reuse the real formula instead of re-deriving it.
+func BasicAttackDamage(critChancePct, statDPS float64) float64 {
 	missed, multiplier := RollAttackOutcome(critChancePct)
 	if missed {
 		return 0
@@ -322,4 +324,10 @@ func basicAttackDamage(critChancePct, statDPS float64) float64 {
 	nominalSwingDamage := (characterBasicAttackBaseDPS + statDPS) * characterBasicAttackNominalInterval.Seconds()
 	variance := 1 + (rand.Float64()*2-1)*characterBasicAttackVariance
 	return math.Round(nominalSwingDamage * variance * multiplier)
+}
+
+// PlayerBasicAttackInterval is the time between a player's basic attacks at
+// hastePct - see docs/stats.md's "Basic Attack DPS" section.
+func PlayerBasicAttackInterval(hastePct float64) time.Duration {
+	return time.Duration(float64(characterBasicAttackNominalInterval) / (1 + hastePct/100))
 }
