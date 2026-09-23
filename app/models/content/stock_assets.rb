@@ -80,6 +80,10 @@ module Content
       SOUNDS.key?(name)
     end
 
+    def self.icon_url(name)
+      file_url("icons", ICONS.fetch(name).fetch("file"))
+    end
+
     # Shape injected into the ability editor page for the client's stock-asset
     # pulldowns (see Build::AbilitiesController#edit) - "file" becomes a
     # public URL, since the client only needs to point an <img>/<audio> at it.
@@ -92,8 +96,13 @@ module Content
     end
 
     def self.with_urls(entries, dir)
-      entries.transform_values { |meta| meta.except("file").merge("url" => "/abilities/#{dir}/#{meta.fetch("file")}") }
+      entries.transform_values { |meta| meta.except("file").merge("url" => file_url(dir, meta.fetch("file"))) }
     end
     private_class_method :with_urls
+
+    def self.file_url(dir, file)
+      "/abilities/#{dir}/#{file}"
+    end
+    private_class_method :file_url
   end
 end
