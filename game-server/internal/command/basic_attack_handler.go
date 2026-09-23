@@ -133,7 +133,11 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	physical := unit.DamageStatKey != "intellect"
 	raw := BasicAttackDamage(critChancePct, statDPS)
 	raw = ApplyDamageDoneBonus(unit, physical, raw)
-	target.Health -= IncomingDamage(target, zone, raw, physical)
+	dealt := IncomingDamage(target, zone, raw, physical)
+	target.Health -= dealt
+	if dealt > 0 {
+		ApplyCastPushback(target)
+	}
 	if target.Health < 0 {
 		target.Health = 0
 	}

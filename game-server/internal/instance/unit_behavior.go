@@ -328,7 +328,11 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 		case "harm":
 			timeBudget := command.PowerEffectTimeBudget(power)
 			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false)
-			target.Health -= command.IncomingDamage(target, zone, raw, eff.School != "magic")
+			dealt := command.IncomingDamage(target, zone, raw, eff.School != "magic")
+			target.Health -= dealt
+			if dealt > 0 {
+				command.ApplyCastPushback(target)
+			}
 			if target.Health < 0 {
 				target.Health = 0
 			}
@@ -563,7 +567,11 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 		lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
 		raw := math.Round((lo + rand.Float64()*(hi-lo)) * multiplier)
 		raw = command.ApplyDamageDoneBonus(unit, physical, raw)
-		target.Health -= command.IncomingDamage(target, zone, raw, physical)
+		dealt := command.IncomingDamage(target, zone, raw, physical)
+		target.Health -= dealt
+		if dealt > 0 {
+			command.ApplyCastPushback(target)
+		}
 		if target.Health < 0 {
 			target.Health = 0
 		}

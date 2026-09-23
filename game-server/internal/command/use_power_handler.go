@@ -139,7 +139,11 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				}
 				EngageOnAttack(target, unitID, zone, next)
 				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false)
-				target.Health -= IncomingDamage(target, zone, raw, effect.School != "magic")
+				dealt := IncomingDamage(target, zone, raw, effect.School != "magic")
+				target.Health -= dealt
+				if dealt > 0 {
+					ApplyCastPushback(target)
+				}
 				if target.Health < 0 {
 					target.Health = 0
 				}

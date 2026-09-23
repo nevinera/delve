@@ -310,3 +310,39 @@ func TestBasicAttackHandler_KillAggroesGroupedIdleUnitEvenIfItNeverAggroedItself
 	assert.Equal(t, playerID, *state.Units[linkedID].Target)
 	assert.True(t, state.Units[linkedID].Attacking)
 }
+
+// --- cast pushback (see command.ApplyCastPushback) ---
+
+func TestBasicAttackHandler_LandedHitPushesBackTargetsCast(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	endsAt := time.Now().Add(2 * time.Second)
+
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		s := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		s.Units[targetID].Casting = &instancestate.CastState{
+			Power:     instanceconfig.Power{Name: "Heal"},
+			StartedAt: time.Now(),
+			EndsAt:    endsAt,
+		}
+		return s
+	})
+
+	assert.True(t, state.Units[targetID].Casting.EndsAt.After(endsAt))
+}
+
+func TestBasicAttackHandler_MissedHitDoesNotPushBackTargetsCast(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	endsAt := time.Now().Add(2 * time.Second)
+
+	state := retryUntilMiss(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+		s := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+		s.Units[targetID].Casting = &instancestate.CastState{
+			Power:     instanceconfig.Power{Name: "Heal"},
+			StartedAt: time.Now(),
+			EndsAt:    endsAt,
+		}
+		return s
+	})
+
+	assert.Equal(t, endsAt, state.Units[targetID].Casting.EndsAt)
+}

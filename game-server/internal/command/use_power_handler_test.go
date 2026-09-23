@@ -966,3 +966,44 @@ func TestResolveCastTarget_DeadTargetIsRejected(t *testing.T) {
 	assert.False(t, ok)
 	assert.Nil(t, target)
 }
+
+// --- cast pushback (see command.ApplyCastPushback) ---
+
+func castingTargetState(playerID, targetID uuid.UUID) (*instancestate.InstanceState, time.Time) {
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	endsAt := time.Now().Add(2 * time.Second)
+	state.Units[targetID].Casting = &instancestate.CastState{
+		Power:     instanceconfig.Power{Name: "Heal"},
+		StartedAt: time.Now(),
+		EndsAt:    endsAt,
+	}
+	return state, endsAt
+}
+
+func TestUsePowerHandler_LandedHarmPushesBackTargetsCast(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	for i := 0; i < 200; i++ {
+		state, endsAt := castingTargetState(playerID, targetID)
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+		if state.Units[targetID].Health < 50.0 {
+			assert.True(t, state.Units[targetID].Casting.EndsAt.After(endsAt))
+			return
+		}
+	}
+	t.Fatal("punch missed 200 times in a row - miss chance may be miscalibrated")
+}
+
+func TestUsePowerHandler_MissedHarmDoesNotPushBackTargetsCast(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+
+	for i := 0; i < 200; i++ {
+		state, endsAt := castingTargetState(playerID, targetID)
+		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
+		if state.Units[targetID].Health == 50.0 {
+			assert.Equal(t, endsAt, state.Units[targetID].Casting.EndsAt)
+			return
+		}
+	}
+	t.Fatal("punch landed 200 times in a row - miss chance may be miscalibrated")
+}
