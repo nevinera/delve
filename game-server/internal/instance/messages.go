@@ -66,6 +66,9 @@ type unitJSON struct {
 	GlobalCooldownEndsAt *int64                   `json:"global_cooldown_ends_at,omitempty"`
 	NextBasicAttackAt    *int64                   `json:"next_basic_attack_at,omitempty"`
 	PowerCooldowns       map[string]int64         `json:"power_cooldowns,omitempty"`
+	CastingPower         *string                  `json:"casting_power,omitempty"`
+	CastStartedAt        *int64                   `json:"cast_started_at,omitempty"`
+	CastEndsAt           *int64                   `json:"cast_ends_at,omitempty"`
 	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
 	LootItems            []lootItemJSON           `json:"loot_items,omitempty"`
 
@@ -212,6 +215,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 		if seq, ok := moveSeqs[id]; ok {
 			moveSeq = &seq
 		}
+		castingPower, castStartedAt, castEndsAt := castingJSON(u.Casting)
 		units[id.String()] = unitJSON{
 			ZoneUnitIdentifier:   u.ZoneUnitIdentifier,
 			UnitTypeIdentifier:   u.UnitTypeIdentifier,
@@ -230,6 +234,9 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			GlobalCooldownEndsAt: gcdMs,
 			NextBasicAttackAt:    nextBasicAttackMs,
 			PowerCooldowns:       powerCooldownsJSON(u.PowerCooldowns),
+			CastingPower:         castingPower,
+			CastStartedAt:        castStartedAt,
+			CastEndsAt:           castEndsAt,
 			ActiveStatusEffects:  effects,
 			LootItems:            lootItemsToJSON(u.LootItems),
 			LastHeartbeatSeq:     hbSeq,
@@ -302,6 +309,12 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			if pcd := powerCooldownsJSON(cu.PowerCooldowns); pcd != nil {
 				update["power_cooldowns"] = pcd
 			}
+			if cu.Casting != nil {
+				power, startedAt, endsAt := castingJSON(cu.Casting)
+				update["casting_power"] = power
+				update["cast_started_at"] = startedAt
+				update["cast_ends_at"] = endsAt
+			}
 			if li := lootItemsToJSON(cu.LootItems); li != nil {
 				update["loot_items"] = li
 			}
@@ -368,6 +381,12 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		}
 		if !powerCooldownsEqual(cu.PowerCooldowns, pu.PowerCooldowns) {
 			patch["power_cooldowns"] = powerCooldownsJSON(cu.PowerCooldowns)
+		}
+		if !castStateEqual(cu.Casting, pu.Casting) {
+			power, startedAt, endsAt := castingJSON(cu.Casting)
+			patch["casting_power"] = power
+			patch["cast_started_at"] = startedAt
+			patch["cast_ends_at"] = endsAt
 		}
 		if !lootItemsEqual(cu.LootItems, pu.LootItems) {
 			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
@@ -541,4 +560,30 @@ func uuidPtrEqual(a, b *uuid.UUID) bool {
 		return false
 	}
 	return *a == *b
+}
+
+// castingJSON converts a UnitState.Casting into the three wire fields a
+// client needs to render a cast bar - all nil when c is nil (not casting).
+func castingJSON(c *instancestate.CastState) (power *string, startedAt, endsAt *int64) {
+	if c == nil {
+		return nil, nil, nil
+	}
+	name := c.Power.Name
+	started := c.StartedAt.UnixMilli()
+	ends := c.EndsAt.UnixMilli()
+	return &name, &started, &ends
+}
+
+// castStateEqual reports whether two casting states represent the same
+// in-progress cast - StartedAt uniquely identifies one, so this is also
+// false whenever a cast starts, completes, or is cancelled (nil on one
+// side), prompting a delta patch either way.
+func castStateEqual(a, b *instancestate.CastState) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.StartedAt.Equal(b.StartedAt)
 }

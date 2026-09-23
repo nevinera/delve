@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
@@ -461,6 +462,204 @@ func TestUnitBehavior_Attack_FiresAgainOncePowerCooldownExpires(t *testing.T) {
 		}
 	}
 	t.Fatal("Stab missed 200 times in a row - miss chance may be miscalibrated")
+}
+
+// castTimeStabZone is stabZone with a CastTime added to Stab.
+func castTimeStabZone(castTime float64) instanceconfig.Zone {
+	zone := stabZone()
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].CastTime = &castTime
+	zone.UnitTypes["goblin"] = ut
+	return zone
+}
+
+func TestUnitBehavior_Attack_CastTimePowerDoesNotDamageImmediately(t *testing.T) {
+	zone := castTimeStabZone(2.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 100.0, p.Health)
+	require.NotNil(t, u.Casting)
+	assert.Equal(t, "Stab", u.Casting.Power.Name)
+	require.NotNil(t, u.Casting.TargetID)
+	assert.Equal(t, playerID, *u.Casting.TargetID)
+}
+
+func TestUnitBehavior_Chase_RootedWhileCasting(t *testing.T) {
+	zone := stabZone()
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, _ := addPlayer(s, "map1", 0, 20) // far enough that, uncast, the goblin would chase
+	manualEngage(u, playerID)
+	u.Casting = &instancestate.CastState{
+		Power:     zone.UnitTypes["goblin"].Powers[0],
+		TargetID:  &playerID,
+		StartedAt: time.Now(),
+		EndsAt:    time.Now().Add(2 * time.Second),
+	}
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, 0.0, u.Position.X)
+	assert.Equal(t, 0.0, u.Position.Y)
+}
+
+func TestUnitBehavior_CastTimePowerResolvesAtCompletion(t *testing.T) {
+	zone := castTimeStabZone(2.0)
+
+	for i := 0; i < 200; i++ {
+		u, s := npcState("g1", pos(0, 0))
+		u.Radius = 2.0
+		playerID, p := addPlayer(s, "map1", 0, 4)
+		manualEngage(u, playerID)
+		instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+		require.NotNil(t, u.Casting)
+		endsAt := u.Casting.EndsAt
+
+		events := instance.TickCastsForTest(s, zone, endsAt.Add(time.Millisecond))
+
+		if p.Health < 100.0 {
+			assert.Nil(t, u.Casting)
+			require.Len(t, events, 1)
+			assert.Equal(t, "Stab", events[0].PowerName)
+			assert.Equal(t, playerID.String(), events[0].TargetID)
+			return
+		}
+	}
+	t.Fatal("cast-time Stab missed 200 times in a row - miss chance may be miscalibrated")
+}
+
+func TestUnitBehavior_CastTimePowerNotYetCompleteDoesNothing(t *testing.T) {
+	zone := castTimeStabZone(2.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	require.NotNil(t, u.Casting)
+
+	events := instance.TickCastsForTest(s, zone, u.Casting.EndsAt.Add(-time.Second))
+
+	assert.NotNil(t, u.Casting)
+	assert.Equal(t, 100.0, p.Health)
+	assert.Empty(t, events)
+}
+
+func TestUnitBehavior_CastTimePowerAbortsImmediatelyIfTargetDies(t *testing.T) {
+	zone := castTimeStabZone(2.0)
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	require.NotNil(t, u.Casting)
+
+	p.Status = instancestate.UnitStatusDead
+
+	events := instance.TickCastsForTest(s, zone, u.Casting.EndsAt.Add(-time.Second)) // well before completion
+
+	assert.Nil(t, u.Casting)
+	assert.Empty(t, events)
+}
+
+// selfHealPower is a self-only cast-time power with a resource cost -
+// avoids needing a target/range setup, isolating cost-timing tests to just
+// the cast start/completion split.
+func selfHealPower(castTime float64) instanceconfig.Power {
+	amount := instanceconfig.ValueRange{50.0, 50.0}
+	return instanceconfig.Power{
+		Name: "Mend", GlobalCooldown: castTime, CastTime: &castTime,
+		CostType: "energy", CostAmount: 30,
+		Effects: []instanceconfig.PowerEffect{{Type: "heal", Affects: "self", Amount: &amount}},
+	}
+}
+
+func TestUsePowerHandler_CastTimePowerDoesNotSpendPlayerCostAtCastStart(t *testing.T) {
+	s := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	playerID, unit := addPlayer(s, "m1", 0, 0)
+	setEnergy(unit, 100.0, 100.0)
+
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, command.UsePowerPayload{Power: selfHealPower(1.5)}, instanceconfig.Zone{}, s))
+
+	require.NotNil(t, unit.Casting)
+	assert.Equal(t, 100.0, energy(unit))
+}
+
+func TestUsePowerHandler_CastTimePowerSpendsPlayerCostOnSuccessfulCompletion(t *testing.T) {
+	s := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	playerID, unit := addPlayer(s, "m1", 0, 0)
+	setEnergy(unit, 100.0, 100.0)
+	require.NoError(t, command.UsePowerHandler{}.Handle(playerID, command.UsePowerPayload{Power: selfHealPower(1.5)}, instanceconfig.Zone{}, s))
+	endsAt := unit.Casting.EndsAt
+
+	instance.TickCastsForTest(s, instanceconfig.Zone{}, endsAt.Add(time.Millisecond))
+
+	assert.Nil(t, unit.Casting)
+	assert.Equal(t, 70.0, energy(unit))
+}
+
+func TestUnitBehavior_CastTimePowerDoesNotSpendCostAtCastStart(t *testing.T) {
+	zone := castTimeStabZone(2.0)
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].CostType = "energy"
+	ut.Powers[0].CostAmount = 30
+	zone.UnitTypes["goblin"] = ut
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	setEnergy(u, 100.0, 100.0)
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	require.NotNil(t, u.Casting)
+	assert.Equal(t, 100.0, energy(u))
+}
+
+func TestUnitBehavior_CastTimePowerSpendsCostOnSuccessfulCompletion(t *testing.T) {
+	zone := castTimeStabZone(2.0)
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].CostType = "energy"
+	ut.Powers[0].CostAmount = 30
+	zone.UnitTypes["goblin"] = ut
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	setEnergy(u, 100.0, 100.0)
+	playerID, _ := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	require.NotNil(t, u.Casting)
+	endsAt := u.Casting.EndsAt
+
+	instance.TickCastsForTest(s, zone, endsAt.Add(time.Millisecond))
+
+	assert.Nil(t, u.Casting)
+	assert.Equal(t, 70.0, energy(u))
+}
+
+func TestUnitBehavior_CastTimePowerAbortedByTargetDeathDoesNotSpendCost(t *testing.T) {
+	zone := castTimeStabZone(2.0)
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].CostType = "energy"
+	ut.Powers[0].CostAmount = 30
+	zone.UnitTypes["goblin"] = ut
+	u, s := npcState("g1", pos(0, 0))
+	u.Radius = 2.0
+	setEnergy(u, 100.0, 100.0)
+	playerID, p := addPlayer(s, "map1", 0, 4)
+	manualEngage(u, playerID)
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+	require.NotNil(t, u.Casting)
+
+	p.Status = instancestate.UnitStatusDead
+	instance.TickCastsForTest(s, zone, u.Casting.EndsAt.Add(-time.Second)) // well before completion
+
+	assert.Nil(t, u.Casting)
+	assert.Equal(t, 100.0, energy(u))
 }
 
 // twoStabsZone is a goblin with two harm powers (Stab, Slash), both with a

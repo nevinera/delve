@@ -67,6 +67,51 @@ func TestSimulate_PowerHarmEffectContributesDamageAtItsOwnGCDRate(t *testing.T) 
 	assert.Equal(t, res.PowerDamage, res.TotalDamage)
 }
 
+func TestSimulate_CastTimePowerCadenceIsBoundByCastTimeNotJustGCD(t *testing.T) {
+	amount := instanceconfig.ValueRange{50, 50}
+	castTime := 3.0
+	enemy := instanceconfig.UnitType{
+		Powers: []instanceconfig.Power{{
+			Name:           "Fireball",
+			GlobalCooldown: 1.5,
+			CastTime:       &castTime,
+			Effects:        []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6000, seeded(6))
+
+	// One 50-damage cast every 3s cast time (longer than the 1.5s GCD, so
+	// cast time - not GCD - is what actually bounds cadence here), each
+	// independently missing/critting: (50 * 0.9975) / 3 = 16.625
+	assert.InEpsilon(t, 16.625, res.DPS, 0.05)
+	assert.Zero(t, res.BasicAttackDamage)
+	assert.Equal(t, res.PowerDamage, res.TotalDamage)
+}
+
+func TestSimulate_BasicAttacksHeldDuringAnInProgressCast(t *testing.T) {
+	amount := instanceconfig.ValueRange{50, 50}
+	castTime := 100.0 // longer than the whole simulated duration below
+	enemy := instanceconfig.UnitType{
+		DPS: 10, AttackSpeed: 1,
+		Powers: []instanceconfig.Power{{
+			Name:           "LongCast",
+			GlobalCooldown: 1.5,
+			CastTime:       &castTime,
+			Effects:        []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 60, seeded(7))
+
+	assert.Zero(t, res.PowerDamage, "cast never completes within the simulated duration")
+	// Both the very first basic-attack swing and the cast selection are due
+	// at simulated t=0 - the swing (already due) fires before the cast
+	// starts that same instant, same ordering the real engine uses (basic
+	// attack, then power selection, within one tick) - so at most one swing
+	// lands, not the ~60 an uninterrupted AttackSpeed=1 enemy would land
+	// over 60s.
+	assert.Less(t, res.BasicAttackDamage, 20.0, "only the simultaneous first-instant swing should land, not a full stream")
+}
+
 func TestSimulate_RecurringStatusTicksContributeDamageWhileActive(t *testing.T) {
 	status := instanceconfig.Status{
 		Name:     "Bleed",

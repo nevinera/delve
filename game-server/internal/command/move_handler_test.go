@@ -3,6 +3,7 @@ package command_test
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -267,6 +268,73 @@ func TestMoveHandler_WithPosition_UpdatesLastMoveAt(t *testing.T) {
 	require.NoError(t, h.Handle(unitID, command.MovePayload{X: ptr(1.0), Y: ptr(1.0)}, instanceconfig.Zone{}, state))
 
 	assert.False(t, state.Units[unitID].LastMoveAt.IsZero())
+}
+
+// --- Cast cancellation (see UnitState.Casting) ---
+
+func castingUnit(unitID uuid.UUID) *instancestate.InstanceState {
+	state := stateWithUnit(unitID)
+	state.Units[unitID].Casting = &instancestate.CastState{
+		Power:     instanceconfig.Power{Name: "Fireball"},
+		StartedAt: time.Now(),
+		EndsAt:    time.Now().Add(2 * time.Second),
+	}
+	return state
+}
+
+func TestMoveHandler_FacingOnlyUpdateDoesNotCancelCast(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := castingUnit(unitID)
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 90.0}, instanceconfig.Zone{}, state))
+
+	assert.NotNil(t, state.Units[unitID].Casting)
+}
+
+func TestMoveHandler_MovementKeyCancelsCast(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := castingUnit(unitID)
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{
+		Facing: 0, Keys: []command.MoveKey{command.MoveKeyForward},
+	}, instanceconfig.Zone{}, state))
+
+	assert.Nil(t, state.Units[unitID].Casting)
+}
+
+func TestMoveHandler_EmptyKeysDoesNotCancelCast(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := castingUnit(unitID)
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 0, Keys: nil}, instanceconfig.Zone{}, state))
+
+	assert.NotNil(t, state.Units[unitID].Casting)
+}
+
+func TestMoveHandler_WithPositionChangeCancelsCast(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := castingUnit(unitID)
+	state.Units[unitID].Speed = 20.0
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{X: ptr(5.0), Y: ptr(0.0)}, instanceconfig.Zone{}, state))
+
+	assert.Nil(t, state.Units[unitID].Casting)
+}
+
+func TestMoveHandler_WithPositionUnchangedDoesNotCancelCast(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := castingUnit(unitID)
+	state.Units[unitID].Speed = 20.0
+
+	// Unit is already at 0,0 - requesting the same position is not movement.
+	require.NoError(t, h.Handle(unitID, command.MovePayload{X: ptr(0.0), Y: ptr(0.0)}, instanceconfig.Zone{}, state))
+
+	assert.NotNil(t, state.Units[unitID].Casting)
 }
 
 func TestMoveHandler_ExactDiagonalDistance(t *testing.T) {

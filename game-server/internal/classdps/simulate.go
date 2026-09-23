@@ -44,6 +44,13 @@ func simTime(seconds float64) time.Time {
 	return simEpoch.Add(time.Duration(seconds * float64(time.Second)))
 }
 
+// pendingCastState is a cast-time power selected but not yet resolved - see
+// Simulate's pendingCast.
+type pendingCastState struct {
+	power  instanceconfig.Power
+	endsAt float64 // simulated seconds
+}
+
 // Result is one Simulate run's output.
 type Result struct {
 	Duration float64 // seconds simulated
@@ -99,6 +106,13 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 	var hastePctForRegen, healingTakenPctForRegen float64
 	nextStatsRecalcAt := 0.0
 
+	// pendingCast tracks a cast-time power between selection and completion -
+	// see docs on castPower/applyPowerEffects. GCD/cooldown are already
+	// committed (commitCooldowns) by the time this is set; cost is only
+	// spent on successful completion (spendPowerCost), not selection -
+	// selecting a cast only requires affording it.
+	var pendingCast *pendingCastState
+
 	for now := 0.0; now < duration; now += simTickInterval {
 		nowTime := simTime(now)
 
@@ -116,7 +130,13 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 		tickActiveStatuses(unit, unit, zone, nowTime, simTickInterval, addStatusTickDamage)
 		tickActiveStatuses(target, unit, zone, nowTime, simTickInterval, addStatusTickDamage)
 
-		if now >= nextBasicAttackAt {
+		if pendingCast != nil && now >= pendingCast.endsAt {
+			applyPowerEffects(unit, target, attackerID, pendingCast.power, zone, nowTime, addPowerDamage)
+			spendPowerCost(unit, pendingCast.power)
+			pendingCast = nil
+		}
+
+		if pendingCast == nil && now >= nextBasicAttackAt {
 			hastePct, critChancePct, statDPS := command.UnitCombatStats(unit, zone)
 			physical := unit.DamageStatKey != "intellect"
 			raw := command.BasicAttackDamage(critChancePct, statDPS)
@@ -127,8 +147,15 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 			nextBasicAttackAt = now + command.PlayerBasicAttackInterval(hastePct).Seconds()
 		}
 
-		if power, ok := selectPower(unit, target, strategy, powersByName, nowTime); ok {
-			castPower(unit, target, attackerID, power, zone, nowTime, addPowerDamage)
+		if pendingCast == nil {
+			if power, ok := selectPower(unit, target, strategy, powersByName, nowTime); ok {
+				if castTime := power.CastTime; castTime != nil && *castTime > 0 {
+					commitCooldowns(unit, power, nowTime)
+					pendingCast = &pendingCastState{power: power, endsAt: now + *castTime}
+				} else {
+					castPower(unit, target, attackerID, power, zone, nowTime, addPowerDamage)
+				}
+			}
 		}
 	}
 

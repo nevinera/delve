@@ -116,4 +116,10 @@ func TickHealthRegenForTest(state *instancestate.InstanceState, zone instancecon
 	tickHealthRegen(state, zone, dt)
 }
 
+func TickCastsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time) []CombatEvent {
+	var events []CombatEvent
+	tickCasts(state, zone, now, &events)
+	return events
+}
+
 const MaxPathSearchesPerTickForTest = maxPathSearchesPerTick

@@ -338,6 +338,93 @@ func TestDeltaMsg_TargetUnchanged_NotInPatch(t *testing.T) {
 	assert.Empty(t, msg["unit_updates"])
 }
 
+func castState() *instancestate.CastState {
+	return &instancestate.CastState{
+		Power:     instanceconfig.Power{Name: "Fireball"},
+		StartedAt: time.UnixMilli(1000),
+		EndsAt:    time.UnixMilli(3000),
+	}
+}
+
+func TestFullStateMsg_UnitWithCasting(t *testing.T) {
+	s := stateWithUnit(t)
+	for _, u := range s.Units {
+		u.Casting = castState()
+	}
+
+	msg := fullState(t, s)
+	units := msg["units"].(map[string]any)
+	for _, u := range units {
+		unit := u.(map[string]any)
+		assert.Equal(t, "Fireball", unit["casting_power"])
+		assert.Equal(t, float64(1000), unit["cast_started_at"])
+		assert.Equal(t, float64(3000), unit["cast_ends_at"])
+	}
+}
+
+func TestFullStateMsg_UnitNotCasting_OmitsCastingFields(t *testing.T) {
+	s := stateWithUnit(t)
+
+	msg := fullState(t, s)
+	units := msg["units"].(map[string]any)
+	for _, u := range units {
+		unit := u.(map[string]any)
+		assert.NotContains(t, unit, "casting_power")
+		assert.NotContains(t, unit, "cast_started_at")
+		assert.NotContains(t, unit, "cast_ends_at")
+	}
+}
+
+func TestDeltaMsg_CastingSet(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	for _, u := range curr.Units {
+		u.Casting = castState()
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Equal(t, "Fireball", p["casting_power"])
+		assert.Equal(t, float64(1000), p["cast_started_at"])
+		assert.Equal(t, float64(3000), p["cast_ends_at"])
+	}
+}
+
+func TestDeltaMsg_CastingCleared(t *testing.T) {
+	prev := stateWithUnit(t)
+	for _, u := range prev.Units {
+		u.Casting = castState()
+	}
+	curr := prev.Clone()
+	for _, u := range curr.Units {
+		u.Casting = nil
+	}
+
+	msg := delta(t, prev, curr)
+	updates := msg["unit_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, patch := range updates {
+		p := patch.(map[string]any)
+		assert.Nil(t, p["casting_power"])
+		assert.Nil(t, p["cast_started_at"])
+		assert.Nil(t, p["cast_ends_at"])
+	}
+}
+
+func TestDeltaMsg_CastingUnchanged_NotInPatch(t *testing.T) {
+	prev := stateWithUnit(t)
+	for _, u := range prev.Units {
+		u.Casting = castState()
+	}
+	curr := prev.Clone()
+
+	msg := delta(t, prev, curr)
+	assert.Empty(t, msg["unit_updates"])
+}
+
 func TestFullStateMsg_UnitWithTaggedBy(t *testing.T) {
 	s := stateWithUnit(t)
 	taggerID := uuid.New()
