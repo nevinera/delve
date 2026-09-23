@@ -138,6 +138,40 @@ RSpec.describe Validators::MapValidator, type: :validator do
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /radius must be between/)
       end
+
+      def wall_with_locations(count)
+        {"type" => "wall", "locations" => Array.new(count) { |i| {"x" => i.to_f, "y" => 0.0} }}
+      end
+
+      it "accepts walls totaling exactly 3000 segments" do
+        data = cave_entrance_map.merge("barriers" => [wall_with_locations(3001)])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when walls total more than 3000 segments" do
+        data = cave_entrance_map.merge("barriers" => [wall_with_locations(3002)])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /3001 segments, more than the maximum of 3000/)
+      end
+
+      it "accepts 500 circles (3000 segments)" do
+        circle = {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 10.0}
+        data = cave_entrance_map.merge("barriers" => Array.new(500) { circle })
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when 501 circles exceed 3000 segments" do
+        circle = {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 10.0}
+        data = cave_entrance_map.merge("barriers" => Array.new(501) { circle })
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /3006 segments, more than the maximum of 3000/)
+      end
+
+      it "sums segments across mixed wall and circle barriers" do
+        data = cave_entrance_map.merge("barriers" => [wall_with_locations(2996), {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 10.0}])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /3001 segments, more than the maximum of 3000/)
+      end
     end
 
     context "connections" do

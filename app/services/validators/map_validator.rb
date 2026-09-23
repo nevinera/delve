@@ -1,6 +1,11 @@
 module Validators
   class MapValidator < Base
     BARRIER_TYPES = %w[wall circle].freeze
+    # Each wall contributes (locations.length - 1) segments; a circle is a
+    # fixed 6 (see docs/schema/map.md#barrier and issue #45) - caps how much
+    # collision/line-of-sight geometry the game server has to check per map.
+    MAX_BARRIER_SEGMENTS = 3000
+    CIRCLE_BARRIER_SEGMENTS = 6
     CONNECTION_TYPES = %w[point line].freeze
     LIGHTING_OPTIONS = %w[daylight torchlight].freeze
 
@@ -64,6 +69,21 @@ module Validators
       raise ValidationError.new("barriers must be an array", path: child_path(path, "barriers")) unless barriers.is_a?(Array)
       barriers.each_with_index do |barrier, i|
         validate_barrier!(barrier, path: index_path(child_path(path, "barriers"), i))
+      end
+      validate_barrier_segment_count!(barriers, path: child_path(path, "barriers"))
+    end
+
+    def validate_barrier_segment_count!(barriers, path:)
+      total = barriers.sum { |barrier| barrier_segment_count(barrier) }
+      return if total <= MAX_BARRIER_SEGMENTS
+      raise ValidationError.new("barriers use #{total} segments, more than the maximum of #{MAX_BARRIER_SEGMENTS}", path: path)
+    end
+
+    def barrier_segment_count(barrier)
+      case barrier["type"]
+      when "wall" then [(barrier["locations"] || []).length - 1, 0].max
+      when "circle" then CIRCLE_BARRIER_SEGMENTS
+      else 0
       end
     end
 
