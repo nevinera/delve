@@ -15,6 +15,7 @@ See [docs/goals.md](docs/goals.md) for the full design philosophy.
 | [docs/the-world.md](docs/the-world.md) | How zones, regions, and instances fit together |
 | [docs/classes-and-abilities.md](docs/classes-and-abilities.md) | Classes and powers: design philosophy and user contributions |
 | [docs/stats-and-equipment.md](docs/stats-and-equipment.md) | Stat system and item scoring |
+| [docs/unit-construction.md](docs/unit-construction.md) | Proposed encounter-tag vocabulary for unit types |
 
 ### Content Formats
 
