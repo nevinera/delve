@@ -35,15 +35,16 @@ func ApplyStatus(target, applier *instancestate.UnitState, applierID uuid.UUID, 
 		case "replace":
 			e.Stacks = 1
 			e.TimeUntilNextTick = initialTickTimers(applier, zone, status)
+			e.ConditionsMet = initialConditionsMet(status)
 		case "stack":
 			e.Stacks++
 			if status.MaxStacks > 0 && e.Stacks > status.MaxStacks {
 				e.Stacks = status.MaxStacks
 			}
 		}
-		// "extend" (and "stack"'s tick cadence) leaves TimeUntilNextTick
-		// undisturbed - only the shared ExpiresAt (and, for "stack", the
-		// stack count) moves.
+		// "extend" (and "stack"'s tick cadence/conditions) leaves
+		// TimeUntilNextTick and ConditionsMet undisturbed - only the shared
+		// ExpiresAt (and, for "stack", the stack count) moves.
 		return
 	}
 
@@ -53,7 +54,23 @@ func ApplyStatus(target, applier *instancestate.UnitState, applierID uuid.UUID, 
 		ExpiresAt:         expiresAt,
 		Stacks:            1,
 		TimeUntilNextTick: initialTickTimers(applier, zone, status),
+		ConditionsMet:     initialConditionsMet(status),
 	})
+}
+
+// initialConditionsMet seeds ConditionsMet for a freshly (re)applied status:
+// true for an effect with no Condition (so ordinary, unconditional
+// stat/recurring effects - the vast majority of existing content - work
+// immediately, with no gap), false for a conditional one, until the next
+// per-tick refresh evaluates it for real (see command.ConditionMet and
+// instance/status_conditions.go) - applying a status doesn't itself have
+// access to the full instance state a condition like targetHealthPct needs.
+func initialConditionsMet(status instanceconfig.Status) []bool {
+	met := make([]bool, len(status.Effects))
+	for i, effect := range status.Effects {
+		met[i] = effect.Condition == nil
+	}
+	return met
 }
 
 // initialTickTimers seeds TimeUntilNextTick for a freshly (re)applied

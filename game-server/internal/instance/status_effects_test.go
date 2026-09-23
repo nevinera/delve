@@ -216,6 +216,49 @@ func TestTickStatusEffects_NoApplierSkipsTheTick(t *testing.T) {
 	assert.Equal(t, 100.0, state.Units[targetID].Health, "no applier to compute a stat-scaled amount from - the tick is skipped")
 }
 
+func TestTickStatusEffects_UnmetConditionSkipsTheTickButStillReschedules(t *testing.T) {
+	targetID, applierID, state := twoUnitState(t)
+	status := instanceconfig.Status{
+		Name: "Execute DoT", ShortName: "Exec", TreatAs: "debuff", Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 1.0, OnTick: "harm", Amount: 50.0,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "selfHealthPct", Comparison: "below", Threshold: 20},
+			},
+		},
+	}
+	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
+	// ApplyStatus seeds a conditional effect's ConditionsMet false until the
+	// next real refresh - explicit here anyway so the test doesn't depend
+	// on that seeding default.
+	state.Units[targetID].ActiveStatusEffects[0].ConditionsMet[0] = false
+
+	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 1.0)
+
+	assert.Equal(t, 100.0, state.Units[targetID].Health, "condition unmet - the tick is skipped")
+	e := state.Units[targetID].ActiveStatusEffects[0]
+	assert.InDelta(t, 1.0, e.TimeUntilNextTick[0], 0.0001, "the cadence still reschedules even though the tick didn't fire")
+}
+
+func TestTickStatusEffects_MetConditionFiresTheTick(t *testing.T) {
+	targetID, applierID, state := twoUnitState(t)
+	status := instanceconfig.Status{
+		Name: "Execute DoT", ShortName: "Exec", TreatAs: "debuff", Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "recurring", TickRate: 1.0, OnTick: "harm", Amount: 50.0,
+				Condition: &instanceconfig.StatusEffectCondition{Type: "selfHealthPct", Comparison: "below", Threshold: 20},
+			},
+		},
+	}
+	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
+	state.Units[targetID].ActiveStatusEffects[0].ConditionsMet[0] = true
+
+	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 1.0)
+
+	assert.Less(t, state.Units[targetID].Health, 100.0, "condition met - the tick fires")
+}
+
 func TestTickStatusEffects_LethalTickKillsTarget(t *testing.T) {
 	status := instanceconfig.Status{
 		Name: "Poison", ShortName: "Poison", TreatAs: "debuff", Stacking: "replace",

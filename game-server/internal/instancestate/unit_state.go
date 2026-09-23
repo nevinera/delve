@@ -117,6 +117,18 @@ type ActiveStatusEffect struct {
 	// (see docs/stats.md's Haste and tmp/plan.md). Unused (0) for
 	// non-recurring entries.
 	TimeUntilNextTick []float64
+
+	// ConditionsMet is parallel to Status.Effects: whether each entry's
+	// StatusEffect.Condition currently holds (see command.ConditionMet).
+	// true for an entry with no Condition (always live). Seeded at
+	// application time (see command.ApplyStatus) and refreshed roughly once
+	// per server tick - not continuously re-evaluated on every read, since
+	// some conditions (targetHealthPct, casterResource) need the full
+	// instance state to resolve, which the many stat-math call sites that
+	// actually consume this (command.ActiveStatModifiers and friends) don't
+	// have. See instance/status_conditions.go (and classdps's mirror of it)
+	// for where the refresh happens.
+	ConditionsMet []bool
 }
 
 // MovementIntent holds the player-commanded movement keys for a unit.

@@ -32,7 +32,12 @@ func tickStatusEffects(state *instancestate.InstanceState, zone instanceconfig.Z
 				}
 				e.TimeUntilNextTick[j] -= dt
 				for e.TimeUntilNextTick[j] <= 0 {
-					fireStatusTick(targetID, unit, applier, e.ApplierID, zone, eff, state)
+					// A tick that comes due while its condition is unmet is
+					// simply skipped, not deferred - the cadence below keeps
+					// counting regardless (see docs/schema/status.md).
+					if j >= len(e.ConditionsMet) || e.ConditionsMet[j] {
+						fireStatusTick(targetID, unit, applier, e.ApplierID, zone, eff, state)
+					}
 					e.TimeUntilNextTick[j] += command.RecurringTickInterval(applier, zone, eff)
 					if unit.Status == instancestate.UnitStatusDead {
 						break
