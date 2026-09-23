@@ -97,7 +97,7 @@ func (inst *Instance) ProcessLootEventsForTest(ctx context.Context, state *insta
 }
 
 func (inst *Instance) DrainPlayerSpawnsForTest(ctx context.Context, state *instancestate.InstanceState) {
-	inst.drainPlayerSpawns(ctx, state)
+	inst.drainPlayerSpawns(ctx, state, time.Now())
 }
 
 func ExpireStatusEffectsForTest(state *instancestate.InstanceState, now time.Time) {

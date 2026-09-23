@@ -6,13 +6,18 @@ module Validators
       validate_description!(data, path: path) if given?(data, "description")
       validate_colors!(require_hash!(data, "colors", path: path), path: child_path(path, "colors"))
       validate_resources!(data, path: path)
-      validate_powers!(data, path: path) if given?(data, "powers")
+      validate_abilities!(data, path: path)
       validate_primary_stats!(data, path: path)
       validate_secondary_stats!(data, path: path)
       validate_wields!(data, path: path)
     end
 
     private
+
+    def validate_abilities!(data, path:)
+      validate_powers!(data, path: path) if given?(data, "powers")
+      validate_passives!(data, path: path) if given?(data, "passives")
+    end
 
     def validate_description!(data, path:)
       desc = data["description"]
@@ -46,6 +51,38 @@ module Validators
       powers.each_with_index do |power, i|
         AbilityValidator.validate!(power, path: index_path(child_path(path, "powers"), i))
       end
+    end
+
+    # Passives are hidden, permanent buffs (see docs/schema/character_class.md)
+    # - each must be a valid Status set to treatAs: "inherent", since that's
+    # the only treatAs the client's StatusBar renders nothing for (App.jsx's
+    # StatusBar only shows "buff"/"debuff"). Capped at 6, matching
+    # docs/classes-and-abilities.md's "six passive ones".
+    MAX_PASSIVES = 6
+
+    def validate_passives!(data, path:)
+      passives_path = child_path(path, "passives")
+      passives = data["passives"]
+      raise ValidationError.new("passives must be an array", path: passives_path) unless passives.is_a?(Array)
+      if passives.length > MAX_PASSIVES
+        raise ValidationError.new("passives may not exceed #{MAX_PASSIVES} entries", path: passives_path)
+      end
+      passives.each_with_index do |passive, i|
+        validate_passive!(passive, path: index_path(passives_path, i))
+      end
+      validate_passive_names_unique!(passives, path: passives_path)
+    end
+
+    def validate_passive!(data, path:)
+      StatusValidator.validate!(data, path: path)
+      return unless data.is_a?(Hash) && data["treatAs"] != "inherent"
+      raise ValidationError.new("passives must set treatAs: \"inherent\" to stay hidden", path: child_path(path, "treatAs"))
+    end
+
+    def validate_passive_names_unique!(passives, path:)
+      names = passives.filter_map { |p| p["name"] if p.is_a?(Hash) }
+      return if names.uniq.length == names.length
+      raise ValidationError.new("passives must not contain duplicate names", path: path)
     end
 
     def validate_primary_stats!(data, path:)

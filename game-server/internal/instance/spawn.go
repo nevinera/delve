@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -12,6 +13,16 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
+
+// permanentPassiveDurationSeconds is the "duration" (command.ApplyStatus
+// takes seconds) a class passive is applied with - long enough to outlast
+// any real instance, reusing the existing ActiveStatusEffect/ExpiresAt
+// machinery rather than inventing a separate "never expires" concept.
+// Passives must set treatAs: "inherent" (enforced by
+// Validators::CharacterClassValidator), which the client's StatusBar never
+// renders, so the absurdly long "remaining time" this implies is never
+// actually shown to anyone.
+const permanentPassiveDurationSeconds float64 = 100 * 365 * 24 * 60 * 60
 
 type playerSpawn struct {
 	unitID        uuid.UUID
@@ -22,7 +33,7 @@ type playerSpawn struct {
 
 // drainPlayerSpawns processes all pending player spawn requests. Called at the
 // start of each tick so spawned units are included in that tick's state snapshot.
-func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestate.InstanceState) {
+func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestate.InstanceState, now time.Time) {
 	for {
 		select {
 		case spawn := <-inst.playerSpawnCh:
@@ -60,6 +71,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 			unit.MaxHealth = command.PlayerMaxHealth(unit, inst.ZoneConfig)
 			unit.Health = unit.MaxHealth
 			state.Units[spawn.unitID] = unit
+			applyClassPassives(unit, spawn.unitID, spawn.class, inst.ZoneConfig, now)
 			slog.InfoContext(ctx, "player unit spawned",
 				"unit_id", spawn.unitID,
 				"character", spawn.characterName,
@@ -96,6 +108,20 @@ func playerResources(class instanceconfig.CharacterClass) (map[string]*instances
 		}
 	}
 	return resources, class.PrimaryResource().Name
+}
+
+// applyClassPassives self-applies every passive Status on a freshly spawned
+// player's class (docs/schema/character_class.md's passives - hidden,
+// permanent buffs), reusing command.ApplyStatus with a duration long enough
+// it will never expire within a real instance (see
+// permanentPassiveDurationSeconds), rather than a separate "never expires"
+// mechanism. unitID doubles as the ApplierID, matching every other
+// self-targeted status application (e.g. a power's "status" effect with
+// affects: "self").
+func applyClassPassives(unit *instancestate.UnitState, unitID uuid.UUID, class instanceconfig.CharacterClass, zone instanceconfig.Zone, now time.Time) {
+	for _, passive := range class.Passives {
+		command.ApplyStatus(unit, unit, unitID, passive, permanentPassiveDurationSeconds, zone, now)
+	}
 }
 
 // entryPosition returns the spawn position for the first entry point found on

@@ -111,6 +111,58 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       expect { described_class.validate!(character_class_fixture.except("powers")) }.not_to raise_error
     end
 
+    context "passives" do
+      let(:passive) do
+        {
+          "name" => "Thick Hide", "shortName" => "Hide", "treatAs" => "inherent", "stacking" => "replace",
+          "effects" => [{"type" => "stat", "statName" => "physicalMitigation", "modifierType" => "add", "amount" => 5.0}]
+        }
+      end
+
+      it "accepts a class with no passives" do
+        expect { described_class.validate!(character_class_fixture.except("passives")) }.not_to raise_error
+      end
+
+      it "accepts passives explicitly null, same as omitted" do
+        expect { described_class.validate!(character_class_fixture.merge("passives" => nil)) }.not_to raise_error
+      end
+
+      it "accepts a valid passive" do
+        data = character_class_fixture.merge("passives" => [passive])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when passives is not an array" do
+        expect { described_class.validate!(character_class_fixture.merge("passives" => {})) }
+          .to raise_error(Validators::ValidationError, /passives must be an array/)
+      end
+
+      it "raises when passives exceeds 6 entries" do
+        data = character_class_fixture.merge("passives" => Array.new(7) { |i| passive.merge("name" => "Passive #{i}") })
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /may not exceed 6/)
+      end
+
+      it "raises when a passive isn't treatAs: inherent" do
+        data = character_class_fixture.merge("passives" => [passive.merge("treatAs" => "buff")])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must set treatAs: "inherent"/)
+      end
+
+      it "raises when two passives share a name" do
+        data = character_class_fixture.merge("passives" => [passive, passive])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /duplicate names/)
+      end
+
+      it "propagates passive validation errors with path context" do
+        bad_passive = passive.except("stacking")
+        data = character_class_fixture.merge("passives" => [bad_passive])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/passives\[0\]/) }
+      end
+    end
+
     it "raises when resources is missing" do
       expect { described_class.validate!(character_class_fixture.except("resources")) }
         .to raise_error(Validators::ValidationError, /resources is required/)
