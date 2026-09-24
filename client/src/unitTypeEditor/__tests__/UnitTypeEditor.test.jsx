@@ -50,7 +50,11 @@ const availableAbilities = {
 
 function mockUnitTypeLoad(unitType, abilities = {}) {
   GithubClient.mockImplementation(function () {
-    return {fetchFile: vi.fn().mockResolvedValue(JSON.stringify(unitType)), listDirectory: vi.fn().mockResolvedValue([])};
+    return {
+      fetchFile: vi.fn().mockResolvedValue(JSON.stringify(unitType)),
+      listDirectory: vi.fn().mockResolvedValue([]),
+      assetUrl: vi.fn().mockImplementation((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
+    };
   });
   loadAvailableAbilities.mockResolvedValue(abilities);
 }
@@ -299,6 +303,7 @@ describe("UnitTypeEditor", () => {
         return {
           fetchFile: vi.fn().mockResolvedValue(JSON.stringify(initialUnitType)),
           listDirectory: vi.fn().mockResolvedValue(["tokens/unit/goblin-1.webp", "tokens/unit/goblin-2.webp"]),
+          assetUrl: vi.fn().mockImplementation((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
         };
       });
       loadAvailableAbilities.mockResolvedValue({});

@@ -36,9 +36,14 @@ const powers = [
   {$ref: "../abilities/units/goblin/long.json", referenceTo: "ability"},
 ];
 
-function renderPane(overrides = {}) {
+function renderPane(overrides = {}, resolvedTokenUrls = {}) {
   const unitTypeData = {tokenImageUrl: [], powers, ...overrides};
-  return render(<UnitTypePreviewPane unitTypeKey="goblin" unitTypeData={unitTypeData} availableAbilities={availableAbilities} stockAssets={{}} />);
+  return render(
+    <UnitTypePreviewPane
+      unitTypeKey="goblin" unitTypeData={unitTypeData} availableAbilities={availableAbilities}
+      stockAssets={{}} resolvedTokenUrls={resolvedTokenUrls}
+    />
+  );
 }
 
 describe("UnitTypePreviewPane", () => {
@@ -53,10 +58,19 @@ describe("UnitTypePreviewPane", () => {
     expect(screen.getByTestId("canvas")).toHaveAttribute("data-target", "/tokens/male-elf-guard.webp");
   });
 
-  it("uses the unit type's own supplied token as self when one is set", () => {
+  it("uses the unit type's own supplied token as self once it has resolved", () => {
+    renderPane(
+      {tokenImageUrl: ["../assets/tokens/my-goblin.webp"]},
+      {"../assets/tokens/my-goblin.webp": "https://raw.githubusercontent.com/mock/assets/tokens/my-goblin.webp"}
+    );
+
+    expect(screen.getByTestId("canvas")).toHaveAttribute("data-self", "https://raw.githubusercontent.com/mock/assets/tokens/my-goblin.webp");
+  });
+
+  it("falls back to the stock token when tokenImageUrl is set but hasn't resolved yet (e.g. a pending, unsaved upload)", () => {
     renderPane({tokenImageUrl: ["../assets/tokens/my-goblin.webp"]});
 
-    expect(screen.getByTestId("canvas")).toHaveAttribute("data-self", "../assets/tokens/my-goblin.webp");
+    expect(screen.getByTestId("canvas")).toHaveAttribute("data-self", "/tokens/goblin-1.webp");
   });
 
   it("starts the slider at the default melee basic attack range (5ft) when basicAttackRange is unset, not at any power's range", () => {

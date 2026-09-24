@@ -20,6 +20,14 @@ function tokensUnitPrefix(unitTypeKey) {
   return "../".repeat(unitTypeKey.split("/").length);
 }
 
+// tokenImageUrl entries are relative to unit_types/<key>.json (same as a
+// power's $ref) - resolve one to its real repo path so it can be fetched/
+// linked, same URL trick saveUnitType.js uses to find an upload's commit path.
+function resolveTokenRepoPath(unitTypeKey, relativeUrl) {
+  const url = new URL(relativeUrl, `https://_/unit_types/${unitTypeKey}.json`);
+  return url.pathname.replace(/^\//, "");
+}
+
 // tokenImageUrl is schema-legal as a bare string (see docs/schema/unit_type.md)
 // and real content uses that form - but this editor always edits/saves it as
 // an array (a one-entry array behaves identically for every consumer), so
@@ -38,6 +46,15 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
   const [draft, setDraft] = useState(null);
   const [availableAbilities, setAvailableAbilities] = useState({});
   const [existingTokenImages, setExistingTokenImages] = useState([]);
+  // Maps each raw tokenImageUrl entry to its real, displayable
+  // raw.githubusercontent.com URL, so the preview pane can actually show the
+  // unit's own token instead of always falling back to the stock goblin -
+  // resolved here (not in the preview pane) since only this component holds
+  // the GithubClient. Only covers already-committed images (picked from
+  // existingTokenImages, or saved in a prior session) - a just-uploaded,
+  // not-yet-saved file has no repo content to resolve yet (see
+  // pendingFilesRef), so it's left unresolved until the next save+reload.
+  const [resolvedTokenUrls, setResolvedTokenUrls] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [refreshStatus, setRefreshStatus] = useState("");
   const [estimate, setEstimate] = useState(null);
@@ -78,6 +95,30 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
       cancelled = true;
     };
   }, [unitTypeKey]);
+
+  // Re-resolves whenever the draft's own token list changes (upload, pick,
+  // remove, or a fresh load) - keyed by the raw url string so a url reused
+  // across slots is only resolved once. Skips any slot with a pending
+  // upload (see pendingFilesRef) - its path doesn't exist on GitHub yet, so
+  // resolving it would only produce a broken (404) raw.githubusercontent.com
+  // URL; the preview simply won't show that slot until it's saved.
+  const tokenImageUrlKey = JSON.stringify(draft?.data.tokenImageUrl ?? []);
+  useEffect(() => {
+    if (!draft) return undefined;
+    let cancelled = false;
+    const urls = (draft.data.tokenImageUrl ?? [])
+      .filter((url, i) => url && !pendingFilesRef.current[i]);
+    (async () => {
+      const entries = await Promise.all(
+        urls.map(async (url) => [url, await client.current.assetUrl(resolveTokenRepoPath(unitTypeKey, url))])
+      );
+      if (!cancelled) setResolvedTokenUrls(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitTypeKey, tokenImageUrlKey]);
 
   // "Uploads" a local file as a stand-in for a not-yet-saved token image -
   // sets the slot's own path immediately, unlike AbilityEditor's upload
@@ -187,6 +228,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
           unitTypeData={draft.data}
           availableAbilities={availableAbilities}
           stockAssets={stockAssets}
+          resolvedTokenUrls={resolvedTokenUrls}
         />
       </div>
       <div className="unit-type-editor-fields">
