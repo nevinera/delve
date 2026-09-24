@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import {
   createNpcToken,
+  createNcuToken,
   setTokenTagDimmed,
   computeTargetLineDots,
   targetLineColor,
@@ -27,6 +28,19 @@ describe("createNpcToken", () => {
   it("falls back to the hostile color for an unknown hostility", () => {
     const group = createNpcToken(2, "unknown", null, null);
     expect(group._baseColor).toBe(0xc62828);
+  });
+});
+
+describe("createNcuToken", () => {
+  it("builds a token without combat overlays", () => {
+    const group = createNcuToken(2, "Grizzle", null, null);
+    expect(group).toBeInstanceOf(THREE.Group);
+    expect(group._deadMarkers).toBeUndefined();
+    expect(group._bodyMaterial).toBeUndefined();
+  });
+
+  it("builds fine without a name", () => {
+    expect(() => createNcuToken(2, undefined, null, null)).not.toThrow();
   });
 });
 

@@ -246,3 +246,29 @@ describe("GameConnection simulated latency/jitter", () => {
     randomSpy.mockRestore();
   });
 });
+
+describe("GameConnection NCUs", () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    vi.stubGlobal("console", { ...console, warn: () => {} });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("passes NCUs from a full state, then applies ncu_updates from deltas", async () => {
+    const onStateChange = vi.fn();
+    const {ws} = connectAndOpen({onStateChange});
+    const grizzle = {zone_ncu_identifier: "grizzle", map_identifier: "m1", position: {x: 1, y: 2, angle: 0}, radius: 2};
+
+    await ws.onmessage({data: JSON.stringify({direction: "down", type: "instance-state", units: {}, ncus: {n1: grizzle}, checksum: "x"})});
+    await vi.waitFor(() => expect(onStateChange).toHaveBeenCalledTimes(1));
+    expect(onStateChange.mock.calls[0][0].ncus).toEqual({n1: grizzle});
+
+    await ws.onmessage({data: JSON.stringify({direction: "down", type: "delta", unit_updates: {}, unit_removals: [], ncu_updates: {n1: {position: {x: 5, y: 2, angle: 90}}}, checksum: "x"})});
+    await vi.waitFor(() => expect(onStateChange).toHaveBeenCalledTimes(2));
+    expect(onStateChange.mock.calls[1][0].ncus.n1).toEqual({...grizzle, position: {x: 5, y: 2, angle: 90}});
+  });
+});

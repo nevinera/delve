@@ -9,6 +9,8 @@ import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
 import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
+import { canKeepTalking, canTalkTo } from "./game/dialogue";
+import { DialogueWindow } from "./DialogueWindow";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
@@ -3058,6 +3060,9 @@ export default function App({
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
+  const [dialogueNcuId, setDialogueNcuId] = useState(null);
+  const [ncus, setNcus] = useState({});
+  const ncusRef = useRef({});
   const [charSheetOpen, setCharSheetOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
@@ -3442,6 +3447,7 @@ export default function App({
         const action = escapeAction({ overlayOpen: overlayOpenRef.current, hasTarget: !!targetIdRef.current });
         if (action === "close") {
           setLootWindowUnitId(null);
+          setDialogueNcuId(null);
           setCharSheetOpen(false);
           setSettingsOpen(false);
           setMenuOpen(false);
@@ -3528,9 +3534,11 @@ export default function App({
       simulatedJitterMs,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
       onClose: () => { setDisconnected(true); addLog("Disconnected."); },
-      onStateChange: ({ units: u, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
+      onStateChange: ({ units: u, ncus: n = {}, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
         unitsRef.current = u;
         setUnits(u);
+        ncusRef.current = n;
+        setNcus(n);
         const selfForHeartbeat = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
         const heartbeatSeq = selfForHeartbeat?.last_heartbeat_seq;
         if (heartbeatSeq != null && heartbeatSeq !== lastHeartbeatSeqRef.current) {
@@ -3747,6 +3755,13 @@ export default function App({
     }
   }, [handleTargetUnit, handleStartAttacking]);
 
+  const handleNcuRightClick = useCallback((id) => {
+    const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+    const ncu = ncusRef.current[id];
+    const dialogue = ncu && canvasRef.current?.ncuInfo(ncu.zone_ncu_identifier)?.dialogue;
+    if (canTalkTo(self, ncu, dialogue)) setDialogueNcuId(id);
+  }, []);
+
   const handleTakeItem = useCallback((targetUnitId, itemIndex) => {
     connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
   }, []);
@@ -3809,7 +3824,15 @@ export default function App({
   // is only ever non-empty when the target happens to be self.
   const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
-  overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
+  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || settingsOpen || menuOpen;
+
+  // Walking away (or dying) ends the conversation.
+  const dialogueNcu = dialogueNcuId ? ncus[dialogueNcuId] : null;
+  const dialogueStillOpen = canKeepTalking(selfUnit, dialogueNcu);
+  useEffect(() => {
+    if (dialogueNcuId && !dialogueStillOpen) setDialogueNcuId(null);
+  }, [dialogueNcuId, dialogueStillOpen]);
+  const dialogueInfo = dialogueNcu ? canvasRef.current?.ncuInfo(dialogueNcu.zone_ncu_identifier) : null;
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
   // stacked (portrait and landscape both use this now): bar+name header
@@ -3978,6 +4001,7 @@ export default function App({
         ref={canvasRef}
         zoneSourceUrl={zoneSourceUrl}
         units={units}
+        ncus={ncus}
         selfIdentifier={selfIdentifier}
         characterTokenUrl={characterTokenUrl}
         movementKeysRef={movementKeysRef}
@@ -3991,6 +4015,7 @@ export default function App({
         onUnitClick={handleTargetUnit}
         onUnitRightClick={handleUnitRightClick}
         onUnitHover={setHoveredUnitId}
+        onNcuRightClick={handleNcuRightClick}
         lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => i.claims?.find(c => c.character_unit_id === selfUnitId)?.state === "available")).map(([id]) => id))}
         targetId={targetId}
         attacking={attacking}
@@ -4008,6 +4033,14 @@ export default function App({
       {abilityError && <AbilityErrorBanner key={abilityError.key} message={abilityError.message} onDone={clearAbilityError} />}
       <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
       <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
+      {dialogueNcu && (
+        <DialogueWindow
+          key={dialogueNcuId}
+          name={dialogueInfo?.name ?? dialogueNcu.zone_ncu_identifier}
+          lines={dialogueInfo?.dialogue}
+          onClose={() => setDialogueNcuId(null)}
+        />
+      )}
       <LootWindow
         unitId={lootWindowUnitId}
         unitName={formatUnitName(units[lootWindowUnitId])}

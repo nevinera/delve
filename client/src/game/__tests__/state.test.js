@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyFullState, applyDelta, canTargetUnit, isUntargetableStatus } from "../state";
+import { applyFullState, applyDelta, applyFullNCUs, applyNCUDelta, canTargetUnit, isUntargetableStatus } from "../state";
 
 const unitA = {
   zone_unit_identifier: "goblin_a",
@@ -196,5 +196,31 @@ describe("applyDelta", () => {
         effect_removes: [],
       })
     ).not.toThrow();
+  });
+});
+
+describe("applyFullNCUs", () => {
+  it("returns the message's NCUs, or none", () => {
+    const n1 = { zone_ncu_identifier: "grizzle" };
+    expect(applyFullNCUs({ ncus: { n1 } })).toEqual({ n1 });
+    expect(applyFullNCUs({})).toEqual({});
+  });
+});
+
+describe("applyNCUDelta", () => {
+  const n1 = { zone_ncu_identifier: "grizzle", map_identifier: "m1", position: { x: 1, y: 1, angle: 0 }, radius: 2 };
+
+  it("merges a moved position into an existing NCU", () => {
+    const next = applyNCUDelta({ n1 }, { ncu_updates: { n1: { position: { x: 4, y: 1, angle: 0 } } } });
+    expect(next.n1).toEqual({ ...n1, position: { x: 4, y: 1, angle: 0 } });
+  });
+
+  it("adds a new NCU", () => {
+    expect(applyNCUDelta({}, { ncu_updates: { n1 } })).toEqual({ n1 });
+  });
+
+  it("returns the same object when nothing changed", () => {
+    const ncus = { n1 };
+    expect(applyNCUDelta(ncus, {})).toBe(ncus);
   });
 });

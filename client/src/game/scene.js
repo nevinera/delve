@@ -316,6 +316,63 @@ export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
   return group;
 }
 
+const NCU_BODY_COLOR = 0xb08a3e;
+const NCU_CONE_COLOR = 0xf0dca0;
+
+// Floating name above a token. Returns null where canvas 2D isn't available
+// (e.g. jsdom), in which case the token just goes unlabeled.
+function createNameLabel(text) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext?.("2d");
+  if (!ctx) return null;
+  canvas.width = 256;
+  canvas.height = 64;
+  ctx.font = "bold 30px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "rgba(0,0,0,0.85)";
+  ctx.strokeText(text, 128, 32);
+  ctx.fillStyle = "#f3e2b0";
+  ctx.fillText(text, 128, 32);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false }));
+  sprite.scale.set(8, 2, 1);
+  return sprite;
+}
+
+// Token for a non-combat unit: a muted gold body (distinct from every
+// hostility color) with its name floating above it.
+export function createNcuToken(radius, name, tokenImageUrl, zoneBaseUrl) {
+  const group = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, 0.3, 32),
+    new THREE.MeshLambertMaterial({ color: NCU_BODY_COLOR })
+  );
+  body.position.y = 0.15;
+  group.add(body);
+
+  const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat);
+  portrait.rotation.x = -Math.PI / 2;
+  portrait.position.y = 0.31;
+  group.add(portrait);
+  if (tokenImageUrl && zoneBaseUrl) {
+    new THREE.TextureLoader().load(new URL(tokenImageUrl, zoneBaseUrl).href, (texture) => {
+      portraitMat.map = texture;
+      portraitMat.needsUpdate = true;
+    });
+  }
+
+  addFacingArrow(group, radius, NCU_CONE_COLOR);
+  const label = name ? createNameLabel(name) : null;
+  if (label) {
+    label.position.set(0, 2.5, 0);
+    group.add(label);
+  }
+  return group;
+}
+
 // Creates the dead-state overlay (gray circle + red X) and attaches it to group,
 // hidden. Toggle group._deadMarkers.visible and group.position.y each tick.
 function attachLootBeam(group) {
@@ -369,7 +426,7 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onCanvasResize } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onNcuRightClick, onCanvasResize } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
@@ -382,6 +439,7 @@ export class SceneManager {
     this._onUnitClick = onUnitClick;
     this._onUnitRightClick = onUnitRightClick;
     this._onUnitHover = onUnitHover;
+    this._onNcuRightClick = onNcuRightClick;
     this._lastPosSendTime = 0;
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -397,6 +455,9 @@ export class SceneManager {
     this._camera = new THREE.PerspectiveCamera(34, 1, 0.1, 500);
 
     this._tokenMap = new Map();
+    this._ncuTokenMap = new Map(); // ncuId → { group, targetX, targetZ, targetRotY, lastRenderedMap }
+    this._ncuInfo = new Map();     // zone_ncu_identifier → the NCU's zone config
+    this._ncus = {};
     this._mapToWorldByMap = new Map(); // mapId → (x,y)=>[wx,wz]
     this._mapGroups = new Map();       // mapId → THREE.Group (visibility-toggled on map change)
     this._zoneBaseUrl = null;
@@ -623,9 +684,13 @@ export class SceneManager {
   }
 
   _handleRightClick(e) {
-    if (!this._onUnitRightClick) return;
     const id = this._unitUnderPointer(e);
-    if (id) this._onUnitRightClick(id);
+    if (id) {
+      this._onUnitRightClick?.(id);
+      return;
+    }
+    const ncuId = this._ncuUnderPointer(e);
+    if (ncuId) this._onNcuRightClick?.(ncuId);
   }
 
   _handleHover(e) {
@@ -635,6 +700,14 @@ export class SceneManager {
   }
 
   _unitUnderPointer(e) {
+    return this._tokenUnderPointer(e, this._tokenMap);
+  }
+
+  _ncuUnderPointer(e) {
+    return this._tokenUnderPointer(e, this._ncuTokenMap);
+  }
+
+  _tokenUnderPointer(e, tokenMap) {
     const rect = this._canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -648,7 +721,7 @@ export class SceneManager {
     // canTargetUnit already allows it (distance to yourself is 0), and the
     // target frame is the only way to see your own resources rendered in
     // that layout (e.g. to sanity-check a secondary resource meter).
-    for (const [id, { group }] of this._tokenMap) {
+    for (const [id, { group }] of tokenMap) {
       group.traverse((obj) => {
         if (obj.isMesh) { meshes.push(obj); meshToID.set(obj.uuid, id); }
       });
@@ -690,6 +763,12 @@ export class SceneManager {
             tokenRadius: utype.tokenRadius ?? TOKEN_RADIUS,
           });
         }
+      }
+    }
+
+    for (const m of json.maps) {
+      for (const ncu of m.ncus ?? []) {
+        if (ncu.identifier) this._ncuInfo.set(ncu.identifier, ncu);
       }
     }
 
@@ -1062,7 +1141,7 @@ export class SceneManager {
 
       // Interpolate NPC tokens toward their server-side target positions.
       const f = elapsed > 0 ? 1 - Math.exp(-20 * elapsed) : 0;
-      for (const { group, isSelf, targetX, targetZ, targetRotY } of this._tokenMap.values()) {
+      for (const { group, isSelf, targetX, targetZ, targetRotY } of [...this._tokenMap.values(), ...this._ncuTokenMap.values()]) {
         if (isSelf) continue;
         group.position.x += (targetX - group.position.x) * f;
         group.position.z += (targetZ - group.position.z) * f;
@@ -1223,6 +1302,49 @@ export class SceneManager {
       }
       return true;
     });
+  }
+
+  // An NCU's zone config (name, dialogue, token) - null until the zone has
+  // loaded.
+  ncuInfo(zoneNcuIdentifier) {
+    return this._ncuInfo.get(zoneNcuIdentifier) ?? null;
+  }
+
+  // Renders the NCUs on the self unit's current map. Called whenever NCUs
+  // or units change, since a map change (known from units) swaps which NCUs
+  // are shown.
+  updateNcus(ncus) {
+    this._ncus = ncus;
+    const currentMap = this._selfMapIdentifier;
+    if (!currentMap || !this._mapToWorldByMap.size) return;
+
+    const seen = new Set();
+    for (const [id, ncu] of Object.entries(ncus)) {
+      if (ncu.map_identifier !== currentMap) continue;
+      seen.add(id);
+      const [wx, wz] = this._toWorld(ncu.position.x, ncu.position.y);
+      const angle = -(ncu.position.angle * DEG);
+      const entry = this._ncuTokenMap.get(id);
+      if (entry) {
+        entry.targetX = wx;
+        entry.targetZ = wz;
+        entry.targetRotY = angle;
+        continue;
+      }
+      const info = this._ncuInfo.get(ncu.zone_ncu_identifier);
+      const group = createNcuToken(ncu.radius ?? info?.tokenRadius ?? TOKEN_RADIUS, info?.name, info?.tokenImageUrl, this._zoneBaseUrl);
+      group.position.set(wx, 0, wz);
+      group.rotation.y = angle;
+      this._scene.add(group);
+      this._ncuTokenMap.set(id, { group, targetX: wx, targetZ: wz, targetRotY: angle });
+    }
+
+    for (const [id, { group }] of this._ncuTokenMap) {
+      if (!seen.has(id)) {
+        this._scene.remove(group);
+        this._ncuTokenMap.delete(id);
+      }
+    }
   }
 
   isInView(mapX, mapY) {
