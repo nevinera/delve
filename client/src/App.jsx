@@ -7,7 +7,9 @@ import { Joystick } from "./Joystick";
 import { angleToMovementKeys } from "./joystickAngle";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
-import { canTargetUnit, isUntargetableStatus } from "./game/state";
+import { canTargetUnit, isTargetableUnit } from "./game/state";
+import { canTalkTo, hasDialogue, inTalkRange } from "./game/dialogue";
+import { DialogueWindow } from "./DialogueWindow";
 import { hasLineOfSight } from "./game/collision";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
@@ -2213,7 +2215,7 @@ const UNIT_STATUS_LABELS = {
 
 // Fixed to the upper-right corner of the canvas region, shown while
 // hovering any token other than the current character.
-export function UnitTooltip({ unit, selfUnitId }) {
+export function UnitTooltip({ unit, selfUnitId, talkable = false }) {
   if (!unit) return null;
 
   const tagLabel = unit.tagged_by == null
@@ -2225,10 +2227,16 @@ export function UnitTooltip({ unit, selfUnitId }) {
   return (
     <div style={styles.unitTooltip}>
       <div style={styles.unitTooltipName}>{formatUnitName(unit)}</div>
-      <UnitBar label="HP" current={unit.health} max={unit.max_health} />
-      <div style={styles.unitTooltipStatus}>
-        {UNIT_STATUS_LABELS[unit.status] || unit.status}
-      </div>
+      {unit.noncombat ? (
+        talkable && <div style={styles.unitTooltipStatus}>Right-click to talk</div>
+      ) : (
+        <>
+          <UnitBar label="HP" current={unit.health} max={unit.max_health} />
+          <div style={styles.unitTooltipStatus}>
+            {UNIT_STATUS_LABELS[unit.status] || unit.status}
+          </div>
+        </>
+      )}
       {tagLabel && <div style={styles.unitTooltipTag}>{tagLabel}</div>}
     </div>
   );
@@ -3058,6 +3066,7 @@ export default function App({
   const [disconnected, setDisconnected] = useState(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
+  const [dialogueUnitId, setDialogueUnitId] = useState(null);
   const [charSheetOpen, setCharSheetOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
@@ -3307,12 +3316,12 @@ export default function App({
     const range = powerMaxRange(power);
     if (range != null) {
       let target = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
-      if (!target || isUntargetableStatus(target.status)) {
+      if (!isTargetableUnit(target)) {
         const nearestId = Object.entries(unitsRef.current)
           .filter(([, u]) =>
             u.hostility === "hostile" &&
             u.map_identifier === selfUnit?.map_identifier &&
-            !isUntargetableStatus(u.status)
+            isTargetableUnit(u)
           )
           .map(([id, u]) => {
             const dx = u.position.x - (selfUnit?.position.x ?? 0);
@@ -3418,7 +3427,7 @@ export default function App({
       .filter(([, u]) =>
         u.hostility === "hostile" &&
         u.map_identifier === selfUnit.map_identifier &&
-        !isUntargetableStatus(u.status) &&
+        isTargetableUnit(u) &&
         (canvasRef.current?.isInView(u.position.x, u.position.y) ?? true)
       )
       .map(([id, u]) => {
@@ -3442,6 +3451,7 @@ export default function App({
         const action = escapeAction({ overlayOpen: overlayOpenRef.current, hasTarget: !!targetIdRef.current });
         if (action === "close") {
           setLootWindowUnitId(null);
+          setDialogueUnitId(null);
           setCharSheetOpen(false);
           setSettingsOpen(false);
           setMenuOpen(false);
@@ -3696,7 +3706,7 @@ export default function App({
       if (Date.now() < nextBasicAttackAtRef.current) return;
       const tId = targetIdRef.current;
       const target = tId ? unitsRef.current[tId] : null;
-      if (!target || isUntargetableStatus(target.status)) return;
+      if (!isTargetableUnit(target)) return;
       const self = selfPosRef.current;
       const selfRadius = selfUnit?.radius ?? 0;
       if (self) {
@@ -3739,6 +3749,11 @@ export default function App({
     const unit = unitsRef.current[id];
     if (unitHasLootClaim(unit?.loot_items, selfId)) {
       setLootWindowUnitId(id);
+      return;
+    }
+    if (unit?.noncombat) {
+      const dialogue = canvasRef.current?.unitInfo(unit.zone_unit_identifier)?.dialogue;
+      if (canTalkTo(selfEntry?.[1], unit, dialogue)) setDialogueUnitId(id);
       return;
     }
     if (unit?.hostility === "hostile" && canTargetUnit(selfEntry?.[1], unit)) {
@@ -3809,7 +3824,16 @@ export default function App({
   // is only ever non-empty when the target happens to be self.
   const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
-  overlayOpenRef.current = lootWindowUnitId != null || charSheetOpen || settingsOpen || menuOpen;
+  overlayOpenRef.current = lootWindowUnitId != null || dialogueUnitId != null || charSheetOpen || settingsOpen || menuOpen;
+
+  // Walking away (or the speaker vanishing) ends the conversation.
+  const dialogueUnit = dialogueUnitId ? units[dialogueUnitId] : null;
+  const dialogueStillInRange = !!dialogueUnit && inTalkRange(selfUnit, dialogueUnit);
+  useEffect(() => {
+    if (dialogueUnitId && !dialogueStillInRange) setDialogueUnitId(null);
+  }, [dialogueUnitId, dialogueStillInRange]);
+  const hoveredUnit = hoveredUnitId ? units[hoveredUnitId] : null;
+  const dialogueInfo = dialogueUnit ? canvasRef.current?.unitInfo(dialogueUnit.zone_unit_identifier) : null;
   const latencyVisible = isLatencyVisible(latencyOverride, autoShowLatency);
 
   // stacked (portrait and landscape both use this now): bar+name header
@@ -4006,8 +4030,20 @@ export default function App({
       <StatusBar statuses={targetStatuses} now={Date.now()} side="right" landscape={viewportMode.isPhoneLayout} />
       <CastBar unit={selfUnit} position="bottom" />
       {abilityError && <AbilityErrorBanner key={abilityError.key} message={abilityError.message} onDone={clearAbilityError} />}
-      <UnitTooltip unit={hoveredUnitId ? units[hoveredUnitId] : null} selfUnitId={selfUnitId} />
+      <UnitTooltip
+        unit={hoveredUnit}
+        selfUnitId={selfUnitId}
+        talkable={hasDialogue(hoveredUnit, hoveredUnit && canvasRef.current?.unitInfo(hoveredUnit.zone_unit_identifier)?.dialogue)}
+      />
       <RespawnOverlay deathTime={deathTime} onRespawn={handleRespawn} />
+      {dialogueUnit && (
+        <DialogueWindow
+          key={dialogueUnitId}
+          name={dialogueInfo?.name ?? formatUnitName(dialogueUnit)}
+          lines={dialogueInfo?.dialogue}
+          onClose={() => setDialogueUnitId(null)}
+        />
+      )}
       <LootWindow
         unitId={lootWindowUnitId}
         unitName={formatUnitName(units[lootWindowUnitId])}

@@ -688,6 +688,8 @@ export class SceneManager {
             tokenImageUrl: utype.tokenImageUrl,
             hostility: unit.hostility,
             tokenRadius: utype.tokenRadius ?? TOKEN_RADIUS,
+            name: utype.name,
+            dialogue: unit.dialogue ?? null,
           });
         }
       }
@@ -1223,6 +1225,12 @@ export class SceneManager {
       }
       return true;
     });
+  }
+
+  // Zone-config details for a unit (name, dialogue, token) - null until the
+  // zone has loaded or for players.
+  unitInfo(zoneUnitIdentifier) {
+    return this._unitInfo.get(zoneUnitIdentifier) ?? null;
   }
 
   isInView(mapX, mapY) {

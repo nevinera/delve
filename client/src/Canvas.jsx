@@ -28,6 +28,7 @@ const Canvas = forwardRef(function Canvas({
 
   useImperativeHandle(ref, () => ({
     isInView: (mapX, mapY) => managerRef.current?.isInView(mapX, mapY) ?? true,
+    unitInfo: (zoneUnitIdentifier) => managerRef.current?.unitInfo(zoneUnitIdentifier) ?? null,
     playGraphicEffects: (effects, positions, baseUrl, travelOverrideMs) =>
       managerRef.current?.playGraphicEffects(effects, positions, baseUrl, travelOverrideMs),
   }));

@@ -56,4 +56,15 @@ describe("UnitTooltip", () => {
     render(<UnitTooltip unit={player} selfUnitId="self-1" />);
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
+
+  it("hides HP and status for a noncombat unit, offering talk when it has dialogue", () => {
+    render(<UnitTooltip unit={{ ...GOBLIN, noncombat: true }} selfUnitId="self-1" talkable />);
+    expect(screen.queryByText(/45\/60/)).not.toBeInTheDocument();
+    expect(screen.getByText("Right-click to talk")).toBeInTheDocument();
+  });
+
+  it("offers no talk prompt for a noncombat unit without dialogue", () => {
+    render(<UnitTooltip unit={{ ...GOBLIN, noncombat: true }} selfUnitId="self-1" />);
+    expect(screen.queryByText("Right-click to talk")).not.toBeInTheDocument();
+  });
 });

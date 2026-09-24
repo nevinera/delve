@@ -5,11 +5,16 @@ export function isUntargetableStatus(status) {
   return status === "dead" || status === "respawning";
 }
 
-// Whether `tgt` is a valid attack target for `self`: not dead or respawning,
-// and (when self is known) within maxRange feet.
+// Whether `unit` could be attacked at all, ignoring range: matches the game
+// server's UnitState.IsTargetable (noncombat units never are).
+export function isTargetableUnit(unit) {
+  return !!unit && !unit.noncombat && !isUntargetableStatus(unit.status);
+}
+
+// Whether `tgt` is a valid attack target for `self`: targetable, and (when
+// self is known) within maxRange feet.
 export function canTargetUnit(self, tgt, maxRange = 60) {
-  if (!tgt) return false;
-  if (isUntargetableStatus(tgt.status)) return false;
+  if (!isTargetableUnit(tgt)) return false;
   if (self) {
     const dx = tgt.position.x - self.position.x;
     const dy = tgt.position.y - self.position.y;

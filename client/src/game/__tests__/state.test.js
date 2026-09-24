@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyFullState, applyDelta, canTargetUnit, isUntargetableStatus } from "../state";
+import { applyFullState, applyDelta, canTargetUnit, isTargetableUnit, isUntargetableStatus } from "../state";
 
 const unitA = {
   zone_unit_identifier: "goblin_a",
@@ -41,6 +41,10 @@ describe("canTargetUnit", () => {
     expect(canTargetUnit(self, dead)).toBe(false);
   });
 
+  it("rejects a noncombat target", () => {
+    expect(canTargetUnit(self, { ...near, noncombat: true })).toBe(false);
+  });
+
   it("rejects a respawning target regardless of range", () => {
     expect(canTargetUnit(self, respawning)).toBe(false);
   });
@@ -59,6 +63,18 @@ describe("canTargetUnit", () => {
 
   it("still rejects a dead target when self is unknown", () => {
     expect(canTargetUnit(null, dead)).toBe(false);
+  });
+});
+
+describe("isTargetableUnit", () => {
+  it("is true for a living combat unit", () => {
+    expect(isTargetableUnit({ status: "idle" })).toBe(true);
+  });
+
+  it("is false for noncombat, dead, or missing units", () => {
+    expect(isTargetableUnit({ status: "idle", noncombat: true })).toBe(false);
+    expect(isTargetableUnit({ status: "dead" })).toBe(false);
+    expect(isTargetableUnit(null)).toBe(false);
   });
 });
 
