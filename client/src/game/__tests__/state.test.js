@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyFullState, applyDelta, canTargetUnit } from "../state";
+import { applyFullState, applyDelta, canTargetUnit, isUntargetableStatus } from "../state";
 
 const unitA = {
   zone_unit_identifier: "goblin_a",
@@ -31,6 +31,7 @@ describe("canTargetUnit", () => {
   const near = { position: { x: 10, y: 0 }, status: "idle" };
   const far = { position: { x: 100, y: 0 }, status: "idle" };
   const dead = { position: { x: 10, y: 0 }, status: "dead" };
+  const respawning = { position: { x: 10, y: 0 }, status: "respawning" };
 
   it("rejects a null target", () => {
     expect(canTargetUnit(self, null)).toBe(false);
@@ -38,6 +39,10 @@ describe("canTargetUnit", () => {
 
   it("rejects a dead target regardless of range", () => {
     expect(canTargetUnit(self, dead)).toBe(false);
+  });
+
+  it("rejects a respawning target regardless of range", () => {
+    expect(canTargetUnit(self, respawning)).toBe(false);
   });
 
   it("rejects a target beyond maxRange", () => {
@@ -54,6 +59,19 @@ describe("canTargetUnit", () => {
 
   it("still rejects a dead target when self is unknown", () => {
     expect(canTargetUnit(null, dead)).toBe(false);
+  });
+});
+
+describe("isUntargetableStatus", () => {
+  it("is true for dead and respawning", () => {
+    expect(isUntargetableStatus("dead")).toBe(true);
+    expect(isUntargetableStatus("respawning")).toBe(true);
+  });
+
+  it("is false for idle, engaged, and leashing", () => {
+    expect(isUntargetableStatus("idle")).toBe(false);
+    expect(isUntargetableStatus("engaged")).toBe(false);
+    expect(isUntargetableStatus("leashing")).toBe(false);
   });
 });
 
