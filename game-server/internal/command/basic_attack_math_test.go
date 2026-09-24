@@ -1,6 +1,7 @@
 package command
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -258,12 +259,14 @@ func TestUnitCombatStats_MapElvlOverrideIsUsedOverZoneElvl(t *testing.T) {
 }
 
 func TestIncomingDamage_NakedTargetTakesFullDamage(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{}
-	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true))
-	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false))
+	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng))
+	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng))
 }
 
 func TestIncomingDamage_DefenceRatingReducesWhatAvoidanceDoesNotFullyAvoid(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	// Defence Rating alone (no Strength/Agility/Intellect), so Avoidance is 0
 	// and every trial lands - only DR's reduction is exercised.
 	target := &instancestate.UnitState{
@@ -276,11 +279,12 @@ func TestIncomingDamage_DefenceRatingReducesWhatAvoidanceDoesNotFullyAvoid(t *te
 	const r = 30.0
 	expectedPhysical := 100 * (1 - physicalDRAsymptote*r/(r+defenceRatingHalfPoint))
 	expectedMagic := 100 * (1 - magicDRAsymptote*r/(r+defenceRatingHalfPoint))
-	assert.InDelta(t, expectedPhysical, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
-	assert.InDelta(t, expectedMagic, IncomingDamage(target, instanceconfig.Zone{}, 100, false), 0.001)
+	assert.InDelta(t, expectedPhysical, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
+	assert.InDelta(t, expectedMagic, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng), 0.001)
 }
 
 func TestIncomingDamage_StrengthGrantsOnlyPhysicalAvoidance(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)}}
 	// raw strength 30 -> avoidance stat 30 -> avoidance = 0.6*30/280 ~= 6.4%,
 	// high enough that a few hundred trials reliably see at least one avoid,
@@ -288,10 +292,10 @@ func TestIncomingDamage_StrengthGrantsOnlyPhysicalAvoidance(t *testing.T) {
 	// defence_rating itemized) should never be avoided.
 	var physicalAvoided, magicAvoided int
 	for i := 0; i < 500; i++ {
-		if IncomingDamage(target, instanceconfig.Zone{}, 100, true) == 0 {
+		if IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng) == 0 {
 			physicalAvoided++
 		}
-		if IncomingDamage(target, instanceconfig.Zone{}, 100, false) == 0 {
+		if IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng) == 0 {
 			magicAvoided++
 		}
 	}
@@ -300,12 +304,13 @@ func TestIncomingDamage_StrengthGrantsOnlyPhysicalAvoidance(t *testing.T) {
 }
 
 func TestIncomingDamage_ActiveStatStatusIncreasesPhysicalAvoidance(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalAvoidance", "add", 100)},
 	}
 	var avoided int
 	for i := 0; i < 200; i++ {
-		if IncomingDamage(target, instanceconfig.Zone{}, 100, true) == 0 {
+		if IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng) == 0 {
 			avoided++
 		}
 	}
@@ -313,35 +318,39 @@ func TestIncomingDamage_ActiveStatStatusIncreasesPhysicalAvoidance(t *testing.T)
 }
 
 func TestIncomingDamage_ActiveStatStatusIncreasesPhysicalMitigation(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalMitigation", "add", 50)},
 	}
-	assert.InDelta(t, 50.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
+	assert.InDelta(t, 50.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
 }
 
 func TestIncomingDamage_MitigationStatusDoesNotAffectTheOtherSchool(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalMitigation", "add", 50)},
 	}
-	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false))
+	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng))
 }
 
 func TestIncomingDamage_ActiveStatStatusScalesDamageTaken(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("damageTaken", "multiply", 1.5)},
 	}
-	assert.InDelta(t, 150.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
+	assert.InDelta(t, 150.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
 }
 
 func TestIncomingDamage_SchoolScopedDamageTakenStacksWithGeneral(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{
 			statusWithStatEffect("damageTaken", "multiply", 1.1),
 			statusWithStatEffect("physicalDamageTaken", "multiply", 1.1),
 		},
 	}
-	assert.InDelta(t, 121.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true), 0.001)
-	assert.InDelta(t, 110.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false), 0.001) // only the general term applies to magic
+	assert.InDelta(t, 121.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
+	assert.InDelta(t, 110.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng), 0.001) // only the general term applies to magic
 }
 
 func TestApplyDamageDoneBonus_ScalesRawDamage(t *testing.T) {
@@ -361,12 +370,14 @@ func TestApplyDamageDoneBonus_SchoolScopedOnlyAppliesToThatSchool(t *testing.T) 
 }
 
 func TestBasicAttackDamage_NeverNegative(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	for i := 0; i < 1000; i++ {
-		assert.GreaterOrEqual(t, BasicAttackDamage(50, 10), 0.0)
+		assert.GreaterOrEqual(t, BasicAttackDamage(50, 10, rng), 0.0)
 	}
 }
 
 func TestBasicAttackDamage_NonCritHitsVaryWithinPlusOrMinus10PercentOfNominal(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	// 0 crit chance and 0 statDPS isolates the variance roll: nominal
 	// pre-crit damage is (1 + 0) * 2s = 2, so every landed swing should fall
 	// in round([1.8, 2.2]) = {2}... use a larger statDPS so the +/-10% band
@@ -374,7 +385,7 @@ func TestBasicAttackDamage_NonCritHitsVaryWithinPlusOrMinus10PercentOfNominal(t 
 	const statDPS = 40.0 // nominal = (1+40)*2 = 82, +/-10% = [73.8, 90.2]
 	seen := map[float64]bool{}
 	for i := 0; i < 2000; i++ {
-		d := BasicAttackDamage(0, statDPS)
+		d := BasicAttackDamage(0, statDPS, rng)
 		if d == 0 {
 			continue // miss
 		}
@@ -386,6 +397,7 @@ func TestBasicAttackDamage_NonCritHitsVaryWithinPlusOrMinus10PercentOfNominal(t 
 }
 
 func TestBasicAttackDamage_MissesAtTheDocumentedRateAndAveragesToTheExpectedDPS(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	const trials = 20000
 	const statDPS = 4.0
 	const critChancePct = 10.0
@@ -393,7 +405,7 @@ func TestBasicAttackDamage_MissesAtTheDocumentedRateAndAveragesToTheExpectedDPS(
 	var total float64
 	var missCount int
 	for i := 0; i < trials; i++ {
-		d := BasicAttackDamage(critChancePct, statDPS)
+		d := BasicAttackDamage(critChancePct, statDPS, rng)
 		if d == 0 {
 			missCount++
 		}

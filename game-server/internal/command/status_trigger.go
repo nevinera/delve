@@ -38,11 +38,11 @@ func TriggerHolds(holder *instancestate.UnitState, damageTaken, damageDealt bool
 // using the containing StatusEffect's own InternalCooldown as the timeBudget
 // (the closest analog this has to a power's GCD or a recurring effect's
 // TickRate - "roughly how often does this fire").
-func TriggeredEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, eff instanceconfig.StatusEffect, isHeal bool) float64 {
+func TriggeredEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, eff instanceconfig.StatusEffect, isHeal bool, rng *rand.Rand) float64 {
 	te := eff.TriggeredEffect
 	lo, hi := te.Amount.Min(), te.Amount.Max()
-	rolled := lo + rand.Float64()*(hi-lo)
-	return effectAmount(unit, zone, te.School, rolled, eff.InternalCooldown, isHeal, false)
+	rolled := lo + rng.Float64()*(hi-lo)
+	return effectAmount(unit, zone, te.School, rolled, eff.InternalCooldown, isHeal, false, rng)
 }
 
 // FireTriggeredEffect applies a "triggered" StatusEffect's payload from
@@ -61,7 +61,7 @@ func TriggeredEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zo
 // resolves to holder's own current Target (nil target/no such unit is a
 // no-op, not an error) - never the specific unit that caused the trigger to
 // fire, which this package doesn't track.
-func FireTriggeredEffect(holderID uuid.UUID, holder *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState) float64 {
+func FireTriggeredEffect(holderID uuid.UUID, holder *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) float64 {
 	te := eff.TriggeredEffect
 	if te == nil {
 		return 0
@@ -81,9 +81,9 @@ func FireTriggeredEffect(holderID uuid.UUID, holder *instancestate.UnitState, ef
 
 	switch te.Type {
 	case "harm":
-		return fireHarm(holderID, holder, recipientID, recipient, eff, zone, state)
+		return fireHarm(holderID, holder, recipientID, recipient, eff, zone, state, rng)
 	case "heal":
-		fireHeal(holder, recipient, eff, zone)
+		fireHeal(holder, recipient, eff, zone, rng)
 	case "resource":
 		AdjustResource(recipient, te.ResourceName, te.Delta)
 	case "status":
@@ -95,7 +95,7 @@ func FireTriggeredEffect(holderID uuid.UUID, holder *instancestate.UnitState, ef
 	return 0
 }
 
-func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID uuid.UUID, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, state *instancestate.InstanceState) float64 {
+func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID uuid.UUID, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, state *instancestate.InstanceState, rng *rand.Rand) float64 {
 	te := eff.TriggeredEffect
 	if te.Amount == nil {
 		return 0
@@ -103,8 +103,8 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 	if recipient.TaggedBy == nil && recipient.Hostility != "" {
 		recipient.TaggedBy = &holderID
 	}
-	raw := TriggeredEffectAmount(holder, zone, eff, false)
-	dealt := IncomingDamage(recipient, zone, raw, te.School != "magic")
+	raw := TriggeredEffectAmount(holder, zone, eff, false, rng)
+	dealt := IncomingDamage(recipient, zone, raw, te.School != "magic", rng)
 	recipient.Health -= dealt
 	if recipient.Health < 0 {
 		recipient.Health = 0
@@ -112,7 +112,7 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 	if recipient.Health == 0 {
 		recipient.Status = instancestate.UnitStatusDead
 		recipient.Target = nil
-		instancestate.RollAndRecordLoot(recipientID, recipient, state)
+		instancestate.RollAndRecordLoot(recipientID, recipient, state, rng)
 		if holder.Target != nil && *holder.Target == recipientID {
 			holder.Target = nil
 			holder.Attacking = false
@@ -121,11 +121,11 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 	return dealt
 }
 
-func fireHeal(holder, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone) {
+func fireHeal(holder, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, rng *rand.Rand) {
 	if eff.TriggeredEffect.Amount == nil {
 		return
 	}
-	amount := TriggeredEffectAmount(holder, zone, eff, true)
+	amount := TriggeredEffectAmount(holder, zone, eff, true, rng)
 	recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
 	if recipient.Health > recipient.MaxHealth {
 		recipient.Health = recipient.MaxHealth

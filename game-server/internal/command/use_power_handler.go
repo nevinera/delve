@@ -12,12 +12,18 @@ import (
 )
 
 // UsePowerHandler executes a player's resolved power against their current target.
-type UsePowerHandler struct{}
+type UsePowerHandler struct {
+	// Rng backs every random roll this handler makes (harm/heal crit-miss
+	// rolls, resist rolls) - set once at registration from Instance.Rand, so
+	// a test can inject a seeded source instead of math/rand's package-level
+	// global.
+	Rng *rand.Rand
+}
 
 func (UsePowerHandler) Type() string      { return "use_power" }
 func (UsePowerHandler) Deduplicate() bool { return false }
 
-func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error {
+func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error {
 	p, ok := payload.(UsePowerPayload)
 	if !ok {
 		return nil
@@ -50,7 +56,7 @@ func (UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone ins
 		return nil
 	}
 
-	if !ApplyPowerEffects(unitID, unit, target, unit.Target, p.Power, zone, now, next) {
+	if !ApplyPowerEffects(unitID, unit, target, unit.Target, p.Power, zone, now, next, h.Rng) {
 		return nil
 	}
 	commitPowerCostAndCooldowns(unit, p.Power, now)
@@ -121,7 +127,7 @@ func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power
 //
 // Exported so instance.tickCasts can resolve a completed cast-time power's
 // effects the same way an instant power applies them.
-func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState) bool {
+func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState, rng *rand.Rand) bool {
 	timeBudget := PowerEffectTimeBudget(power)
 	for _, effect := range power.Effects {
 		switch effect.Type {
@@ -138,8 +144,8 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 					target.TaggedBy = &unitID
 				}
 				EngageOnAttack(target, unitID, zone, next)
-				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false)
-				dealt := IncomingDamage(target, zone, raw, effect.School != "magic")
+				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false, rng)
+				dealt := IncomingDamage(target, zone, raw, effect.School != "magic", rng)
 				target.Health -= dealt
 				if dealt > 0 {
 					ApplyCastPushback(target)
@@ -152,7 +158,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				if target.Health == 0 {
 					target.Status = instancestate.UnitStatusDead
 					target.Target = nil
-					instancestate.RollAndRecordLoot(*targetID, target, next)
+					instancestate.RollAndRecordLoot(*targetID, target, next, rng)
 					if unit.Target != nil && *unit.Target == *targetID {
 						unit.Target = nil
 						unit.Attacking = false
@@ -177,7 +183,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				// Resistibility is a property of this cast (who it's aimed
 				// at), not of the Status itself - see IsHostileAffects.
 				EngageOnAttack(target, unitID, zone, next)
-				if IsHostileAffects(effect.Affects) && rand.Float64() < baseMissChance {
+				if IsHostileAffects(effect.Affects) && rng.Float64() < baseMissChance {
 					continue // resisted
 				}
 			}
@@ -196,7 +202,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				}
 				recipient = target
 			}
-			amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false)
+			amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)
 			recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
 			if recipient.Health > recipient.MaxHealth {
 				recipient.Health = recipient.MaxHealth

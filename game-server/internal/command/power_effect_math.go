@@ -98,10 +98,10 @@ func PowerEffectTimeBudget(power instanceconfig.Power) float64 {
 // spell's miss is narratively a "resist") - a miss returns 0 outright, same
 // as basicAttackDamage. heal effects aren't attacks, so they only roll
 // crit, never miss.
-func PowerEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, effect instanceconfig.PowerEffect, timeBudget float64, isHeal bool, isRecurring bool) float64 {
+func PowerEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, effect instanceconfig.PowerEffect, timeBudget float64, isHeal bool, isRecurring bool, rng *rand.Rand) float64 {
 	lo, hi := effect.Amount.Min(), effect.Amount.Max()
-	rolled := lo + rand.Float64()*(hi-lo)
-	return effectAmount(unit, zone, effect.School, rolled, timeBudget, isHeal, isRecurring)
+	rolled := lo + rng.Float64()*(hi-lo)
+	return effectAmount(unit, zone, effect.School, rolled, timeBudget, isHeal, isRecurring, rng)
 }
 
 // StatusTickAmount rolls one recurring StatusEffect's tick amount - the same
@@ -110,8 +110,8 @@ func PowerEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, 
 // true. timeBudget should be the effect's own (unhasted) TickRate - Haste
 // speeds up how *often* a tick fires (see EffectHastePct/tmp/plan.md step 6),
 // not the per-tick amount, so it isn't double-counted here.
-func StatusTickAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, effect instanceconfig.StatusEffect, timeBudget float64, isHeal bool) float64 {
-	return effectAmount(unit, zone, effect.School, effect.Amount, timeBudget, isHeal, true)
+func StatusTickAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, effect instanceconfig.StatusEffect, timeBudget float64, isHeal bool, rng *rand.Rand) float64 {
+	return effectAmount(unit, zone, effect.School, effect.Amount, timeBudget, isHeal, true, rng)
 }
 
 // EffectHastePct returns the Haste% that should scale a recurring status
@@ -153,7 +153,7 @@ func RecurringTickInterval(applier *instancestate.UnitState, zone instanceconfig
 // spell's miss is narratively a "resist") - a miss returns 0 outright, same
 // as basicAttackDamage. heal effects aren't attacks, so they only roll
 // crit, never miss.
-func effectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, school string, rolled float64, timeBudget float64, isHeal bool, isRecurring bool) float64 {
+func effectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, school string, rolled float64, timeBudget float64, isHeal bool, isRecurring bool, rng *rand.Rand) float64 {
 	if isHeal {
 		school = "magic"
 	}
@@ -162,11 +162,11 @@ func effectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, schoo
 	var multiplier float64
 	if isHeal {
 		multiplier = 1.0
-		if rand.Float64() < critChancePct/100 {
+		if rng.Float64() < critChancePct/100 {
 			multiplier = baseCritMultiplier
 		}
 	} else {
-		missed, m := RollAttackOutcome(critChancePct)
+		missed, m := RollAttackOutcome(critChancePct, rng)
 		if missed {
 			return 0
 		}

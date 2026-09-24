@@ -1,6 +1,7 @@
 package command
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -61,6 +62,7 @@ func TestEffectSchoolStats_MagicCritAndHasteComeFromIntellectAndItemizedRatingOn
 }
 
 func TestPowerEffectAmount_ActiveStatStatusScalesDamageDone(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("damageDone", "multiply", 1.5)},
 	}
@@ -68,11 +70,12 @@ func TestPowerEffectAmount_ActiveStatStatusScalesDamageDone(t *testing.T) {
 	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false)
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false, rng)
 	}, 15.0)
 }
 
 func TestPowerEffectAmount_SchoolScopedDamageDoneOnlyAppliesToThatSchool(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("magicDamageDone", "multiply", 1.5)},
 	}
@@ -80,11 +83,12 @@ func TestPowerEffectAmount_SchoolScopedDamageDoneOnlyAppliesToThatSchool(t *test
 	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false)
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false, rng)
 	}, 10.0)
 }
 
 func TestPowerEffectAmount_ActiveStatStatusScalesHealingDone(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingDone", "multiply", 1.5)},
 	}
@@ -92,7 +96,7 @@ func TestPowerEffectAmount_ActiveStatStatusScalesHealingDone(t *testing.T) {
 	effect := instanceconfig.PowerEffect{Amount: &amount}
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 0, true, false)
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 0, true, false, rng)
 	}, 15.0)
 }
 
@@ -149,6 +153,7 @@ func retryUntilAmount(t *testing.T, roll func() float64, want float64) {
 }
 
 func TestPowerEffectAmount_BonusScalesWithStatContributionTimeBudgetHealAndRecurring(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	// raw intellect 30 -> k = 30/90 = 1/3. Fixed [10,10] amount isolates the
 	// bonus math (no roll variance to account for).
 	unit := &instancestate.UnitState{
@@ -159,14 +164,21 @@ func TestPowerEffectAmount_BonusScalesWithStatContributionTimeBudgetHealAndRecur
 	const timeBudget = 6.0 // bonus = (1/3)*6 = 2
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, false, false)
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, false, false, rng)
 	}, 12.0) // harm: 10+2
-	retryUntilAmount(t, func() float64 { return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, true, false) }, 14.0) // heal: 10+2*2
-	retryUntilAmount(t, func() float64 { return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, false, true) }, 14.0) // recurring harm: 10+2*2
-	retryUntilAmount(t, func() float64 { return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, true, true) }, 18.0)  // recurring heal: 10+2*2*2
+	retryUntilAmount(t, func() float64 {
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, true, false, rng)
+	}, 14.0) // heal: 10+2*2
+	retryUntilAmount(t, func() float64 {
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, false, true, rng)
+	}, 14.0) // recurring harm: 10+2*2
+	retryUntilAmount(t, func() float64 {
+		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, true, true, rng)
+	}, 18.0) // recurring heal: 10+2*2*2
 }
 
 func TestPowerEffectAmount_HealIgnoresEffectSchoolAndAlwaysUsesIntellect(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	// DamageStatKey and School both say "physical" (strength) - a heal
 	// effect should still scale off Intellect, per "healing is always
 	// treated as magic."
@@ -177,5 +189,5 @@ func TestPowerEffectAmount_HealIgnoresEffectSchoolAndAlwaysUsesIntellect(t *test
 	amount := instanceconfig.ValueRange{10.0, 10.0}
 	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
 
-	retryUntilAmount(t, func() float64 { return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, true, false) }, 14.0)
+	retryUntilAmount(t, func() float64 { return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, true, false, rng) }, 14.0)
 }

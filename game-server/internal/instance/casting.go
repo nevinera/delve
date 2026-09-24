@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"math/rand"
 	"strings"
 	"time"
 
@@ -24,7 +25,7 @@ import (
 //     if the cast actually resolved - starting a cast requires having
 //     enough resources, but doesn't spend them until it completes
 //     successfully (see command.SpendPowerCost).
-func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent) {
+func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, rng *rand.Rand) {
 	for id, unit := range state.Units {
 		cast := unit.Casting
 		if cast == nil {
@@ -45,7 +46,7 @@ func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now
 
 		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
 			target, ok := command.ResolveCastTarget(unit, cast.TargetID, cast.Power, state)
-			if ok && command.ApplyPowerEffects(id, unit, target, cast.TargetID, cast.Power, zone, now, state) {
+			if ok && command.ApplyPowerEffects(id, unit, target, cast.TargetID, cast.Power, zone, now, state, rng) {
 				command.SpendPowerCost(unit, cast.Power)
 			}
 		} else {
@@ -55,7 +56,7 @@ func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now
 				target = state.Units[*cast.TargetID]
 				targetID = *cast.TargetID
 			}
-			applyNPCPowerEffects(id, targetID, unit, target, cast.Power, zone, now, state)
+			applyNPCPowerEffects(id, targetID, unit, target, cast.Power, zone, now, state, rng)
 			spendNPCPowerCost(unit, cast.Power)
 			*events = append(*events, CombatEvent{
 				AttackerID: id.String(),

@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -13,9 +14,15 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
-// makeInstance creates a minimal valid Instance for use in tests.
+// makeInstance creates a minimal valid Instance for use in tests. Rand is
+// overridden to a fixed seed (NewInstance's own default is time-seeded,
+// same as math/rand's old package-level behavior) - the shared factory
+// behind almost every instance-level test, so this one line makes that
+// whole slice of the suite reproducible run to run rather than flaky over
+// combat rolls, instead of needing every individual test to remember to
+// override it itself.
 func makeInstance() *instance.Instance {
-	return instance.NewInstance(
+	inst := instance.NewInstance(
 		uuid.New(),
 		"db-1",
 		"zone-goblin-cave",
@@ -24,6 +31,8 @@ func makeInstance() *instance.Instance {
 		instanceconfig.Zone{Name: "Goblin Cave", Private: true},
 		instance.DefaultMaxSlots,
 	)
+	inst.Rand = rand.New(rand.NewSource(1))
+	return inst
 }
 
 // --- NewInstance ---

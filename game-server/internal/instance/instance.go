@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"log/slog"
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,6 +60,19 @@ type Instance struct {
 	// Instances of the same zone.
 	PathGraph *pathing.Graph
 
+	// Rand is the source for every random roll this instance's tick loop
+	// and command handlers make (combat avoidance/miss/crit/variance, loot,
+	// NPC wander/patrol) - see docs on the individual functions that take
+	// it. Seeded from a real (time-based) source in NewInstance; a test can
+	// override it with a fixed-seed *rand.Rand for a fully reproducible run
+	// instead of math/rand's package-level global, which is what made a
+	// test like TestUsePowerHandler_HealScalesWithRecipientsRecoveryRating
+	// flaky before this field existed. Must be set before Start() if
+	// overridden, same as EmptyTimeout/SlotWaitTimeout below - the tick loop
+	// and BasicAttackHandler/UsePowerHandler (wired up in NewInstance) all
+	// capture it once, not read it fresh each use.
+	Rand *rand.Rand
+
 	Checksum string // SHA256 of canonical state JSON; updated every tick
 
 	// EmptyTimeout overrides EmptyInstanceTimeout when non-zero. Intended for
@@ -110,6 +124,7 @@ func NewInstance(
 		Status:              StatusLoading,
 		ZoneConfig:          zone,
 		CreatedAt:           time.Now(),
+		Rand:                rand.New(rand.NewSource(time.Now().UnixNano())),
 		slots:               make(map[uuid.UUID]*InstanceSlot),
 		playerSpawnCh:       make(chan playerSpawn, DefaultMaxSlots),
 		commandCh:           make(chan command.Command, DefaultMaxSlots*8),
@@ -120,8 +135,8 @@ func NewInstance(
 	inst.commandProcessor.Register(command.TargetHandler{})
 	inst.commandProcessor.Register(command.StartAttackingHandler{})
 	inst.commandProcessor.Register(command.StopAttackingHandler{})
-	inst.commandProcessor.Register(command.BasicAttackHandler{})
-	inst.commandProcessor.Register(command.UsePowerHandler{})
+	// BasicAttackHandler/UsePowerHandler are registered in Start instead,
+	// once inst.Rand is final - see its own comment.
 	inst.commandProcessor.Register(command.RespawnHandler{})
 	inst.commandProcessor.Register(command.LootItemHandler{})
 

@@ -34,6 +34,12 @@ func (inst *Instance) Start(registry *Registry) error {
 	if err != nil {
 		return err
 	}
+	// Registered here, not NewInstance, so a test that overrides inst.Rand
+	// after construction (same pattern as EmptyTimeout/SlotWaitTimeout) is
+	// picked up - these two handlers capture inst.Rand by value once, not
+	// read it fresh on every Handle call.
+	inst.commandProcessor.Register(command.BasicAttackHandler{Rng: inst.Rand})
+	inst.commandProcessor.Register(command.UsePowerHandler{Rng: inst.Rand})
 	ctx, cancel := context.WithCancel(context.Background())
 	inst.cancel = cancel
 	inst.done = make(chan struct{})
@@ -94,14 +100,14 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			refreshStatusEffectConditions(state)
 			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
 			var combatEvents []CombatEvent
-			tickCasts(state, inst.ZoneConfig, now, &combatEvents)
+			tickCasts(state, inst.ZoneConfig, now, &combatEvents, inst.Rand)
 			updatePlayerMaxHealth(state, inst.ZoneConfig)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
-			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph)...)
+			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph, inst.Rand)...)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
-			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds())
-			processTriggeredStatusEffects(state, inst.ZoneConfig, now, TickInterval.Seconds())
+			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds(), inst.Rand)
+			processTriggeredStatusEffects(state, inst.ZoneConfig, now, TickInterval.Seconds(), inst.Rand)
 			tickResourceRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			tickHealthRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			expireStatusEffects(state, now)
