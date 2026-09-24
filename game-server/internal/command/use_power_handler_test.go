@@ -351,12 +351,19 @@ func TestUsePowerHandler_HealScalesWithRecipientsRecoveryRating(t *testing.T) {
 		}
 		// effective recovery_rating 20 (base secondary 10 * main_hand's 2.0
 		// factor) -> healingTakenCeiling(170)*20/(20+310) = 10.30% bonus.
+		// Non-crit heal is 20*1.1030 = 22.06; a landed crit (5% base
+		// chance) doubles that to 44.12 - retry past it to keep this a
+		// check of the un-crit base roll (the equality check this used
+		// to have, "gained == 20.0", was copied from TestUsePowerHandler_
+		// HealsSelf's stat-less scenario and never matched either of
+		// *this* test's actual values, so a crit fell straight through
+		// to the assertion below instead of being skipped).
 
 		require.NoError(t, command.UsePowerHandler{}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 		gained := state.Units[playerID].Health - 40.0
-		if gained == 20.0 {
-			continue // landed crit - retry past it, same as TestUsePowerHandler_HealsSelf
+		if gained > 30.0 {
+			continue // landed crit - retry past it
 		}
 		assert.InDelta(t, 22.06, gained, 0.01) // 20 * 1.1030
 		return
