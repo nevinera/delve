@@ -65,6 +65,38 @@ RSpec.describe Validators::UnitValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /angle must be between 0 and 360/)
     end
 
+    context "noncombat" do
+      it "accepts true" do
+        expect { described_class.validate!(still_unit.merge("noncombat" => true)) }.not_to raise_error
+      end
+
+      it "raises when it isn't a boolean" do
+        expect { described_class.validate!(still_unit.merge("noncombat" => "yes")) }
+          .to raise_error(Validators::ValidationError, /noncombat must be a boolean/)
+      end
+    end
+
+    context "dialogue" do
+      it "accepts an array of lines" do
+        expect { described_class.validate!(still_unit.merge("dialogue" => ["Hello.", "Mind the goblins."])) }.not_to raise_error
+      end
+
+      it "raises when it isn't an array" do
+        expect { described_class.validate!(still_unit.merge("dialogue" => "Hello.")) }
+          .to raise_error(Validators::ValidationError, /dialogue must be an array/)
+      end
+
+      it "raises on a blank line" do
+        expect { described_class.validate!(still_unit.merge("dialogue" => ["Hello.", "  "])) }
+          .to raise_error(Validators::ValidationError, /non-empty strings/)
+      end
+
+      it "raises on a non-string line" do
+        expect { described_class.validate!(still_unit.merge("dialogue" => [3])) }
+          .to raise_error(Validators::ValidationError, /non-empty strings/)
+      end
+    end
+
     context "respawn" do
       it "accepts a unit with no respawn" do
         expect { described_class.validate!(still_unit.except("respawn")) }.not_to raise_error

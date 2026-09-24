@@ -7,13 +7,23 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_core_fields!(data, path: path)
+      validate_optional_fields!(data, path: path)
+      validate_noncombat_fields!(data, path: path)
+    end
+
+    private
+
+    def validate_optional_fields!(data, path:)
       validate_hp_fraction!(data, path: path) if given?(data, "currentHpFraction")
       validate_movement!(data["movement"], path: child_path(path, "movement")) if given?(data, "movement")
       validate_group_identifier!(data, path: path) if given?(data, "groupIdentifier")
       RespawnConfigValidator.validate!(data["respawn"], path: child_path(path, "respawn")) if given?(data, "respawn")
     end
 
-    private
+    def validate_noncombat_fields!(data, path:)
+      require_boolean!(data, "noncombat", path: path) if given?(data, "noncombat")
+      validate_dialogue!(data, path: path) if given?(data, "dialogue")
+    end
 
     def validate_core_fields!(data, path:)
       require_string!(data, "identifier", path: path)
@@ -21,6 +31,14 @@ module Validators
       validate_position!(require_hash!(data, "position", path: path), path: child_path(path, "position"))
       hostility = require_string!(data, "hostility", path: path)
       require_one_of!(hostility, HOSTILITY_OPTIONS, path: child_path(path, "hostility"))
+    end
+
+    def validate_dialogue!(data, path:)
+      lines = require_array!(data, "dialogue", path: path)
+      lines.each_with_index do |line, i|
+        next if line.is_a?(String) && !line.strip.empty?
+        raise ValidationError.new("dialogue lines must be non-empty strings", path: index_path(child_path(path, "dialogue"), i))
+      end
     end
 
     def validate_hp_fraction!(data, path:)

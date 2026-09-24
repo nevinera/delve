@@ -18,6 +18,8 @@ See [common.md](common.md) for `Location`, `Position`, and `RespawnConfig`.
 | `lootTable` | LootTable | no | | Items this unit can drop on death. See [zone.md](zone.md) for the LootTable type. All referenced identifiers must be defined in the zone's `items` map. |
 | `lootCount` | number \| [number, number] | no | `1` | Number of items to award from `lootTable` per kill. A range is resolved to a single value uniformly between min and max first. A resolved value >= 1 awards that many items (truncated to an integer); a resolved value between 0 and 1 is instead the *probability* of awarding exactly one item (0 otherwise) - e.g. `0.25` drops one item 25% of the time. Ignored if `lootTable` is absent. |
 | `respawn` | RespawnConfig | no | | Overrides the map's (or zone's) `respawn` for this specific unit. See [common.md](common.md#respawnconfig). |
+| `noncombat` | boolean | no | `false` | A noncombat unit (a talking NPC, for now) can't be targeted or damaged and never aggros. Its unitType's combat fields are ignored. |
+| `dialogue` | array of strings | no | | Lines a player clicks through, one at a time, when they interact with this unit (right-click, within 10 feet). Each must be non-empty. Units without dialogue can't be talked to. |
 
 ---
 
