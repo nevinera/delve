@@ -9,17 +9,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/delve-mmo/game-server/internal/classdps"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
-// request is the input document's shape - the same {class, strategy} body
-// POST /class-dps-sim takes, so the same JSON works against either.
+// request is the input document's shape - the same {class, strategy, seed}
+// body POST /class-dps-sim takes, so the same JSON works against either.
 type request struct {
 	Class    instanceconfig.CharacterClass `json:"class"`
 	Strategy classdps.Strategy             `json:"strategy"`
+	Seed     *int64                        `json:"seed,omitempty"` // omitted: a fresh, non-reproducible run
 }
 
 // Run is the entry point for the class-dps-sim CLI. It accepts args (the
@@ -43,7 +46,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	rows := classdps.Matrix(req.Class, req.Strategy)
+	seed := time.Now().UnixNano()
+	if req.Seed != nil {
+		seed = *req.Seed
+	}
+	rng := rand.New(rand.NewSource(seed))
+
+	rows := classdps.Matrix(req.Class, req.Strategy, rng)
 	out, err := json.MarshalIndent(map[string]any{"results": classdps.Flatten(rows)}, "", "  ")
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error encoding output: %v\n", err)

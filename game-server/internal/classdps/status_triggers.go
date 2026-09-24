@@ -1,6 +1,7 @@
 package classdps
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,7 +22,7 @@ import (
 // affects: "target" against owner's own Target (see Simulate, where
 // unit.Target/target.Target are fixed to each other for the life of the
 // run - a real "current target" doesn't otherwise exist in this package).
-func processTriggeredEffects(ownerID uuid.UUID, owner *instancestate.UnitState, zone instanceconfig.Zone, now time.Time, dt float64, state *instancestate.InstanceState, onDamage func(float64)) {
+func processTriggeredEffects(ownerID uuid.UUID, owner *instancestate.UnitState, zone instanceconfig.Zone, now time.Time, dt float64, state *instancestate.InstanceState, onDamage func(float64), rng *rand.Rand) {
 	for i := range owner.ActiveStatusEffects {
 		if len(owner.ActiveStatusEffects[i].TriggerCooldownsRemaining) != len(owner.ActiveStatusEffects[i].Status.Effects) {
 			owner.ActiveStatusEffects[i].TriggerCooldownsRemaining = make([]float64, len(owner.ActiveStatusEffects[i].Status.Effects))
@@ -42,7 +43,7 @@ func processTriggeredEffects(ownerID uuid.UUID, owner *instancestate.UnitState, 
 			if !command.TriggerHolds(owner, owner.DamageTakenThisTick, owner.DamageDealtThisTick, eff.Trigger) {
 				continue
 			}
-			onDamage(command.FireTriggeredEffect(ownerID, owner, eff, zone, now, state))
+			onDamage(command.FireTriggeredEffect(ownerID, owner, eff, zone, now, state, rng))
 			owner.ActiveStatusEffects[i].TriggerCooldownsRemaining[j] = eff.InternalCooldown
 		}
 	}

@@ -1,6 +1,7 @@
 package classdps_test
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,8 +11,9 @@ import (
 )
 
 func TestSimulate_NakedClassBasicAttackOnly(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	class := instanceconfig.CharacterClass{}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, nil, 6000)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, nil, 6000, rng)
 
 	// naked -> 0 statDPS, 0 hastePct, 5% base crit, 5% miss:
 	// (1+0) * (1+0.05*(2.0-1)) * (1-0.05) = 0.9975
@@ -22,6 +24,7 @@ func TestSimulate_NakedClassBasicAttackOnly(t *testing.T) {
 }
 
 func TestSimulate_GearedStrengthClassIncreasesBasicAttackDPS(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	strength := "strength"
 	class := instanceconfig.CharacterClass{PrimaryStats: []string{"strength"}}
 	cfg := classdps.AttackerConfig{
@@ -30,12 +33,13 @@ func TestSimulate_GearedStrengthClassIncreasesBasicAttackDPS(t *testing.T) {
 			"main_hand": {Slot: "main_hand", PrimaryStat: &strength, SecondaryStats: []string{"stamina", "crit_rating", "haste_rating"}},
 		},
 	}
-	res := classdps.Simulate(cfg, nil, 6000)
+	res := classdps.Simulate(cfg, nil, 6000, rng)
 
 	assert.Greater(t, res.DPS, 0.9975)
 }
 
 func TestSimulate_StrategyPowerContributesPowerDamage(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{50.0, 50.0}
 	class := instanceconfig.CharacterClass{
 		Powers: []instanceconfig.Power{{
@@ -44,7 +48,7 @@ func TestSimulate_StrategyPowerContributesPowerDamage(t *testing.T) {
 		}},
 	}
 	const duration = 6000.0
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Bolt"}}, duration)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Bolt"}}, duration, rng)
 
 	// One 50-damage cast every 1.5s GCD (no haste), each independently
 	// missing/critting: (50 * 0.9975) / 1.5 = 33.25 DPS - PowerDamage is
@@ -54,6 +58,7 @@ func TestSimulate_StrategyPowerContributesPowerDamage(t *testing.T) {
 }
 
 func TestSimulate_CastTimePowerCadenceIsBoundByCastTimeNotJustGCD(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{50.0, 50.0}
 	castTime := 3.0
 	class := instanceconfig.CharacterClass{
@@ -63,7 +68,7 @@ func TestSimulate_CastTimePowerCadenceIsBoundByCastTimeNotJustGCD(t *testing.T) 
 		}},
 	}
 	const duration = 6000.0
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Fireball"}}, duration)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Fireball"}}, duration, rng)
 
 	// One 50-damage cast every 3s cast time (longer than the 1.5s GCD, so
 	// cast time - not GCD - is what actually bounds cadence here), each
@@ -72,6 +77,7 @@ func TestSimulate_CastTimePowerCadenceIsBoundByCastTimeNotJustGCD(t *testing.T) 
 }
 
 func TestSimulate_BasicAttacksHeldDuringAnInProgressCast(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{50.0, 50.0}
 	castTime := 100.0 // longer than the whole simulated duration below
 	class := instanceconfig.CharacterClass{
@@ -80,7 +86,7 @@ func TestSimulate_BasicAttacksHeldDuringAnInProgressCast(t *testing.T) {
 			Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
 		}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "LongCast"}}, 60)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "LongCast"}}, 60, rng)
 
 	assert.Zero(t, res.PowerDamage, "cast never completes within the simulated duration")
 	// The very first basic-attack check and the cast selection are both due
@@ -93,6 +99,7 @@ func TestSimulate_BasicAttacksHeldDuringAnInProgressCast(t *testing.T) {
 }
 
 func TestSimulate_UnaffordablePowerNeverFires(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{50.0, 50.0}
 	class := instanceconfig.CharacterClass{
 		Resources: []instanceconfig.ResourceType{
@@ -103,12 +110,13 @@ func TestSimulate_UnaffordablePowerNeverFires(t *testing.T) {
 			Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amount}},
 		}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Overcharge"}}, 50)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Overcharge"}}, 50, rng)
 
 	assert.Zero(t, res.PowerDamage)
 }
 
 func TestSimulate_PowerCadenceIsRateLimitedByResourceReturnRateNotJustGCD(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{50.0, 50.0}
 	class := instanceconfig.CharacterClass{
 		Resources: []instanceconfig.ResourceType{
@@ -120,7 +128,7 @@ func TestSimulate_PowerCadenceIsRateLimitedByResourceReturnRateNotJustGCD(t *tes
 		}},
 	}
 	const duration = 30000.0
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Overcharge"}}, duration)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Overcharge"}}, duration, rng)
 
 	// GCD (1s) alone would allow a cast every second, but each cast spends
 	// 50 and only 10/s regenerates back in - sustained cadence is one cast
@@ -129,6 +137,7 @@ func TestSimulate_PowerCadenceIsRateLimitedByResourceReturnRateNotJustGCD(t *tes
 }
 
 func TestSimulate_StatusDoTContributesStatusTickDamage(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{1.0, 1.0} // negligible direct damage, isolates the DoT
 	status := instanceconfig.Status{
 		Name: "Burn", ShortName: "Burn", TreatAs: "debuff", Stacking: "replace",
@@ -145,7 +154,7 @@ func TestSimulate_StatusDoTContributesStatusTickDamage(t *testing.T) {
 			},
 		}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600, rng)
 
 	// 4 ticks (t=2,4,6,8) per 9s-active window, every 11s cycle - well more
 	// than the direct-hit damage alone (~600 casts * ~1 each).
@@ -153,6 +162,7 @@ func TestSimulate_StatusDoTContributesStatusTickDamage(t *testing.T) {
 }
 
 func TestSimulate_ConditionalStatusDoTNeverTicksWhenConditionNeverHolds(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{1.0, 1.0}
 	status := instanceconfig.Status{
 		Name: "Burn", ShortName: "Burn", TreatAs: "debuff", Stacking: "replace",
@@ -172,12 +182,13 @@ func TestSimulate_ConditionalStatusDoTNeverTicksWhenConditionNeverHolds(t *testi
 			},
 		}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600, rng)
 
 	assert.Zero(t, res.StatusTickDamage, "the DoT's condition is never met, so it should never tick")
 }
 
 func TestSimulate_ConditionalStatusDoTTicksWhenConditionHolds(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{1.0, 1.0}
 	enrage := instanceconfig.Status{Name: "Enrage", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
 	status := instanceconfig.Status{
@@ -199,12 +210,13 @@ func TestSimulate_ConditionalStatusDoTTicksWhenConditionHolds(t *testing.T) {
 			},
 		}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600, rng)
 
 	assert.Greater(t, res.StatusTickDamage, 0.0, "Enrage is applied to the same target as the DoT, so its condition should hold and it should tick")
 }
 
 func TestSimulate_SelfTriggeredEffectFiresOnDealsDamage(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{1.0, 1.0} // negligible direct damage, isolates the proc
 	proc := instanceconfig.Status{
 		Name: "Cleave", ShortName: "Cleave", TreatAs: "inherent", Stacking: "replace",
@@ -225,13 +237,14 @@ func TestSimulate_SelfTriggeredEffectFiresOnDealsDamage(t *testing.T) {
 			},
 		}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600, rng)
 
 	assert.Greater(t, res.TriggeredDamage, 0.0, "unit's own dealsDamage should be observable to a self-applied trigger")
 	assert.Equal(t, res.TotalDamage, res.BasicAttackDamage+res.PowerDamage+res.StatusTickDamage+res.TriggeredDamage)
 }
 
 func TestSimulate_TargetHeldDealsDamageTriggerNeverFires(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	// target never attacks in this simulation (see doc.go's Known gaps),
 	// so a dealsDamage trigger on a status applied *to* target should
 	// never hold, even though unit deals damage constantly.
@@ -255,12 +268,13 @@ func TestSimulate_TargetHeldDealsDamageTriggerNeverFires(t *testing.T) {
 			},
 		}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600, rng)
 
 	assert.Zero(t, res.TriggeredDamage)
 }
 
 func TestSimulate_StrategyPrefersHigherPriorityUsablePower(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amountA := instanceconfig.ValueRange{10.0, 10.0}
 	amountB := instanceconfig.ValueRange{50.0, 50.0}
 	class := instanceconfig.CharacterClass{
@@ -270,7 +284,7 @@ func TestSimulate_StrategyPrefersHigherPriorityUsablePower(t *testing.T) {
 		},
 	}
 	const duration = 6000.0
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "A"}, {Power: "B"}}, duration)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "A"}, {Power: "B"}}, duration, rng)
 
 	// "A" (priority 1, no cooldown, always usable) should be the only
 	// power that ever fires - if B were reached too, PowerDamage would
@@ -279,6 +293,7 @@ func TestSimulate_StrategyPrefersHigherPriorityUsablePower(t *testing.T) {
 }
 
 func TestSimulate_StrategyFallsBackToNextEntryWhenTopPriorityUnavailable(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amountA := instanceconfig.ValueRange{10.0, 10.0}
 	amountB := instanceconfig.ValueRange{50.0, 50.0}
 	class := instanceconfig.CharacterClass{
@@ -287,7 +302,7 @@ func TestSimulate_StrategyFallsBackToNextEntryWhenTopPriorityUnavailable(t *test
 			{Name: "B", GlobalCooldown: 1, Effects: []instanceconfig.PowerEffect{{Type: "harm", Amount: &amountB}}},
 		},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "A"}, {Power: "B"}}, 40)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "A"}, {Power: "B"}}, 40, rng)
 
 	// A only lands once (its own 20s cooldown); B (no cooldown of its own)
 	// should keep firing every GCD once A is unavailable, not leave a gap.
@@ -296,6 +311,7 @@ func TestSimulate_StrategyFallsBackToNextEntryWhenTopPriorityUnavailable(t *test
 }
 
 func TestSimulate_MissingStatusConditionMaintainsADoT(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	dotAmount := instanceconfig.ValueRange{0.0, 0.0} // isolates the DoT tick from any direct-hit noise
 	filler := instanceconfig.ValueRange{10.0, 10.0}
 	moonfire := instanceconfig.Status{
@@ -320,7 +336,7 @@ func TestSimulate_MissingStatusConditionMaintainsADoT(t *testing.T) {
 		{Power: "Moonfire", Condition: &classdps.StrategyCondition{Type: "missingStatus", On: "target", Status: "Moonfire"}},
 		{Power: "Wrath"},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, strategy, 6000)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, strategy, 6000, rng)
 
 	// Moonfire only recasts once its own DoT has expired (every ~12s, a
 	// small fraction of GCDs), so Wrath should fill nearly every other GCD -
@@ -334,6 +350,7 @@ func TestSimulate_MissingStatusConditionMaintainsADoT(t *testing.T) {
 }
 
 func TestSimulate_HasStatusConditionOnlyFiresWhileBuffIsActive(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	buffAmount := instanceconfig.ValueRange{0.0, 0.0}
 	finisherAmount := instanceconfig.ValueRange{100.0, 100.0}
 	readyStatus := instanceconfig.Status{
@@ -358,7 +375,7 @@ func TestSimulate_HasStatusConditionOnlyFiresWhileBuffIsActive(t *testing.T) {
 		{Power: "Finisher", Condition: &classdps.StrategyCondition{Type: "hasStatus", On: "self", Status: "Ready"}},
 		{Power: "Prepare"},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, strategy, 40)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, strategy, 40, rng)
 
 	// Finisher is only eligible for the 3s the buff is up out of each 20s
 	// cooldown cycle - it should fire far less often than every GCD would
@@ -368,6 +385,7 @@ func TestSimulate_HasStatusConditionOnlyFiresWhileBuffIsActive(t *testing.T) {
 }
 
 func TestSimulate_UnknownConditionTypeFailsClosed(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	amount := instanceconfig.ValueRange{50.0, 50.0}
 	class := instanceconfig.CharacterClass{
 		Powers: []instanceconfig.Power{
@@ -377,12 +395,13 @@ func TestSimulate_UnknownConditionTypeFailsClosed(t *testing.T) {
 	strategy := classdps.Strategy{
 		{Power: "Bolt", Condition: &classdps.StrategyCondition{Type: "notARealConditionType"}},
 	}
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, strategy, 60)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, strategy, 60, rng)
 
 	assert.Zero(t, res.PowerDamage, "an unrecognized condition type should never be treated as satisfied")
 }
 
 func TestSimulate_NonListedHealPowerIsNeverUsed(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	healAmount := instanceconfig.ValueRange{1000.0, 1000.0}
 	class := instanceconfig.CharacterClass{
 		Powers: []instanceconfig.Power{{
@@ -392,7 +411,7 @@ func TestSimulate_NonListedHealPowerIsNeverUsed(t *testing.T) {
 	}
 	// Empty strategy - "Recover" isn't a DPS power, so it's simply never
 	// listed (matches how a real player's rotation would build it).
-	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{}, 6000)
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{}, 6000, rng)
 
 	assert.Equal(t, res.BasicAttackDamage, res.TotalDamage)
 	assert.Zero(t, res.PowerDamage)

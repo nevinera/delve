@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/delve-mmo/game-server/internal/classdps"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
@@ -23,8 +25,9 @@ func NewClassDPSSim() *ClassDPSSim { return &ClassDPSSim{} }
 // reuses instanceconfig.CharacterClass's own JSON shape directly - the same
 // JSON the class editor already authors.
 type classDPSSimRequest struct {
-	Class    instanceconfig.CharacterClass `json:"class"`    // Required
-	Strategy classdps.Strategy             `json:"strategy"` // Required (empty = basic attack only)
+	Class    instanceconfig.CharacterClass `json:"class"`          // Required
+	Strategy classdps.Strategy             `json:"strategy"`       // Required (empty = basic attack only)
+	Seed     *int64                        `json:"seed,omitempty"` // omitted: a fresh, non-reproducible run
 }
 
 // Simulate handles POST /class-dps-sim: runs classdps.Matrix (every
@@ -50,6 +53,12 @@ func (h *ClassDPSSim) Simulate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows := classdps.Matrix(req.Class, req.Strategy)
+	seed := time.Now().UnixNano()
+	if req.Seed != nil {
+		seed = *req.Seed
+	}
+	rng := rand.New(rand.NewSource(seed))
+
+	rows := classdps.Matrix(req.Class, req.Strategy, rng)
 	writeJSON(w, r, http.StatusOK, map[string]any{"results": classdps.Flatten(rows)})
 }

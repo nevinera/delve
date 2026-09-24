@@ -1,6 +1,7 @@
 package classdps
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/delve-mmo/game-server/internal/command"
@@ -16,7 +17,7 @@ import (
 // owner is the character itself (a self-buff) or the target dummy (a
 // debuff/DoT) - matches RecurringTickInterval's "whoever cast this, whose
 // Haste matters" semantics.
-func tickActiveStatuses(owner, applier *instancestate.UnitState, zone instanceconfig.Zone, now time.Time, dt float64, addStatusTickDamage func(float64)) {
+func tickActiveStatuses(owner, applier *instancestate.UnitState, zone instanceconfig.Zone, now time.Time, dt float64, addStatusTickDamage func(float64), rng *rand.Rand) {
 	for i := range owner.ActiveStatusEffects {
 		e := &owner.ActiveStatusEffects[i]
 		for j, eff := range e.Status.Effects {
@@ -29,7 +30,7 @@ func tickActiveStatuses(owner, applier *instancestate.UnitState, zone instanceco
 				// simply skipped, not deferred - mirrors
 				// instance.tickStatusEffects.
 				if j >= len(e.ConditionsMet) || e.ConditionsMet[j] {
-					fireStatusTick(owner, applier, eff, zone, addStatusTickDamage)
+					fireStatusTick(owner, applier, eff, zone, addStatusTickDamage, rng)
 				}
 				e.TimeUntilNextTick[j] += command.RecurringTickInterval(applier, zone, eff)
 			}
@@ -75,17 +76,17 @@ func refreshStatusConditions(owner, applier, target *instancestate.UnitState) {
 // side effect of a damage power's own status, e.g. a self-heal woven into
 // an offensive cooldown) - health/resource bookkeeping stays correct
 // either way.
-func fireStatusTick(owner, applier *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, addStatusTickDamage func(float64)) {
+func fireStatusTick(owner, applier *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, addStatusTickDamage func(float64), rng *rand.Rand) {
 	switch eff.OnTick {
 	case "heal":
-		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, true)
+		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, true, rng)
 		owner.Health += amount * (1 + command.HealingTakenPct(owner, zone)/100)
 		if owner.Health > owner.MaxHealth {
 			owner.Health = owner.MaxHealth
 		}
 	case "harm":
-		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, false)
-		dealt := command.IncomingDamage(owner, zone, amount, eff.School != "magic")
+		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, false, rng)
+		dealt := command.IncomingDamage(owner, zone, amount, eff.School != "magic", rng)
 		addStatusTickDamage(dealt)
 		owner.Health -= dealt
 		if dealt > 0 {

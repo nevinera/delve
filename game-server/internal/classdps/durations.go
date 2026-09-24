@@ -1,6 +1,10 @@
 package classdps
 
-import "github.com/delve-mmo/game-server/internal/instanceconfig"
+import (
+	"math/rand"
+
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
+)
 
 // Durations is every fight length Matrix runs, in a fixed, stable order:
 // 1m, 5m, and 20m (the last one standing in for steady-state) - per the
@@ -17,10 +21,10 @@ type DurationRow struct {
 // Matrix runs Spread once per Durations entry - the full (elevation x
 // duration) result grid a single class-dps-sim request/CLI invocation
 // produces, in Durations' order (outer) x Elevations' order (inner).
-func Matrix(class instanceconfig.CharacterClass, strategy Strategy) []DurationRow {
+func Matrix(class instanceconfig.CharacterClass, strategy Strategy, rng *rand.Rand) []DurationRow {
 	rows := make([]DurationRow, 0, len(Durations))
 	for _, d := range Durations {
-		rows = append(rows, DurationRow{Duration: d, Cells: Spread(class, strategy, d)})
+		rows = append(rows, DurationRow{Duration: d, Cells: Spread(class, strategy, d, rng)})
 	}
 	return rows
 }
