@@ -48,6 +48,17 @@ export async function loadMapImageUrl(client, key, mapData) {
   return client.assetUrl(resolveRelativePath(`zones/${key}/${basename}.json`, mapData.imageUrl));
 }
 
+// An NCU's tokenImageUrl is relative to the map's own file, like its
+// imageUrl (see docs/schema/ncu.md). Resolves each distinct raw value to a
+// viewable URL, keyed by that raw value.
+export async function ncuTokenUrlsFor(client, key, rawUrls) {
+  const basename = key.split("/").pop();
+  const entries = await Promise.all(
+    rawUrls.map(async (raw) => [raw, await client.assetUrl(resolveRelativePath(`zones/${key}/${basename}.json`, raw))])
+  );
+  return Object.fromEntries(entries);
+}
+
 // Every unit_types/*.json key (unit types can nest in subdirectories) - a
 // directory listing only, same cheap-list intent as
 // Build::MapsController#list_unit_type_keys: a repo can hold far more unit

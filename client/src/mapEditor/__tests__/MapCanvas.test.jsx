@@ -830,6 +830,55 @@ describe("MapCanvas", () => {
       fireEvent.click(screen.getByRole("button", {name: "Fit"}));
     }
 
+    it("places an NCU on a single click with add-ncu, selects it, then reverts the tool to select", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      const onSelectNcu = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-ncu" onToolChange={onToolChange} onSelectNcu={onSelectNcu}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (10, 120)ft
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY", section: "ncus",
+        entry: {
+          identifier: expect.stringMatching(/^ncu-[a-z]{6}$/), name: "New NCU", tokenImageUrl: "", tokenRadius: 2,
+          position: {x: 10, y: 120, angle: 0}, movement: {type: "still"},
+        },
+      });
+      expect(onSelectNcu).toHaveBeenCalledWith(0);
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("dragging an NCU's token moves it within the ncus section", () => {
+      const dispatch = vi.fn();
+      const ncus = [{identifier: "grizzle", name: "Grizzle", tokenImageUrl: "", tokenRadius: 2, position: {x: 5, y: 5, angle: 90}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, ncus})}
+          dispatch={dispatch} onSelectBarrier={noop} onSelectNcu={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+      const marker = document.querySelector(".map-canvas-shapes circle");
+
+      fireEvent.pointerDown(marker, {pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 50, clientY: 575, pointerId: 1});
+
+      const call = dispatch.mock.calls[0][0];
+      expect(call).toMatchObject({type: "UPDATE_ENTRY_FIELD", section: "ncus", index: 0, field: "position"});
+      expect(call.value.x).toBeCloseTo(10, 5);
+      expect(call.value.angle).toBe(90);
+    });
+
     it("places a unit on a single click with the pending unit type, then reverts the tool to select", () => {
       const dispatch = vi.fn();
       const onToolChange = vi.fn();

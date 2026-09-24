@@ -175,4 +175,26 @@ describe("MapDraft", () => {
       expect(result.data.pixelDimensions).toEqual({width: 800, height: 600});
     });
   });
+
+  describe("NCU movement (section \"ncus\")", () => {
+    const ncuDraft = () => new MapDraft({units: [], ncus: [{identifier: "grizzle", position: {x: 1, y: 1, angle: 90}, movement: {type: "patrol", choose: "loop", steps: []}}]});
+
+    it("moves an NCU without touching units", () => {
+      const next = ncuDraft().setUnitPosition(0, {x: 5, y: 6}, "ncus");
+      expect(next.data.ncus[0].position).toEqual({x: 5, y: 6, angle: 90});
+      expect(next.data.units).toEqual([]);
+    });
+
+    it("inserts and edits an NCU's patrol steps", () => {
+      const inserted = ncuDraft().insertPatrolStep(0, 0, {x: 3, y: 4}, "ncus");
+      expect(inserted.data.ncus[0].movement.steps[0].position).toEqual({x: 3, y: 4, angle: 0});
+      const edited = inserted.setPatrolStep(0, 0, {x: 7, y: 8}, "ncus");
+      expect(edited.data.ncus[0].movement.steps[0].position).toEqual({x: 7, y: 8, angle: 0});
+    });
+
+    it("sets an NCU's wander location", () => {
+      const next = ncuDraft().setWanderLocation(0, {x: 2, y: 2}, "ncus");
+      expect(next.data.ncus[0].movement.location).toEqual({x: 2, y: 2});
+    });
+  });
 });

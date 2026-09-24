@@ -44,6 +44,18 @@ function nextUnitIdentifier(units, unitType) {
   return identifier;
 }
 
+const NCU_FALLBACK_COLOR = "#b08a3e";
+const DEFAULT_NCU_RADIUS_FEET = 2;
+
+// A freshly placed NCU (docs/schema/ncu.md) - name and token image are
+// left for the author to fill in; validation flags the empty token image.
+function newNcu(ncus, feet) {
+  return {
+    identifier: nextUnitIdentifier(ncus, "ncu"), name: "New NCU", tokenImageUrl: "", tokenRadius: DEFAULT_NCU_RADIUS_FEET,
+    position: {x: feet.x, y: feet.y, angle: 0}, movement: {type: "still"},
+  };
+}
+
 const MIN_ZOOM = 0.05;
 // Used before an image/wrapper size is available to compute the real cap
 // (see maxZoom below), and as a floor under it for a tiny map.
@@ -108,6 +120,7 @@ export default function MapCanvas({
   patrolStepPlacement, onPlacePatrolStep, onCancelPatrolStepPlacement,
   wanderLocationPlacement, onPlaceWanderLocation, onCancelWanderLocationPlacement,
   hoveredPatrolStep, expandedUnitIndices,
+  ncuTokenUrls = {}, selectedNcuIndex = null, onSelectNcu, hoveredNcuIndex = null, onHoverNcu, expandedNcuIndices,
   groupingMode, onToggleGroupMember, hoveredGroupIdentifier,
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   previewing = false, onTogglePreview,
@@ -143,6 +156,8 @@ export default function MapCanvas({
   const connectionDragRef = useRef(null);
   // {unitIndex} | null - a unit only ever moves as a whole (no sub-handles).
   const unitDragRef = useRef(null);
+  // {ncuIndex} | null - same whole-token drag as a unit's.
+  const ncuDragRef = useRef(null);
   const panKeysRef = useRef(new Set()); // currently-held WASD KeyboardEvent.code values
   const panKeysLoopRef = useRef(null); // pending requestAnimationFrame id while any pan key is held, or null
   const panKeysLastTimeRef = useRef(null);
@@ -437,7 +452,7 @@ export default function MapCanvas({
   // it (see commitCircle/commitLineConnection/commitUnit).
   useEffect(() => {
     const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection"
-      || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit);
+      || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit) || tool === "add-ncu";
     if (!armed) return;
 
     function onKeyDown(e) {
@@ -628,8 +643,27 @@ export default function MapCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
+  function startDragNcu(ncuIndex, e) {
+    e.stopPropagation();
+    if (simulating) return;
+    onSelectNcu?.(ncuIndex);
+    ncuDragRef.current = {ncuIndex};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
   function handlePointerDown(e) {
     if (!image) return;
+
+    if (tool === "add-ncu") {
+      // Single click, no facing drag - facing is a slider on the NCU's row.
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const ncus = mapData.ncus ?? [];
+      dispatch({type: "ADD_ENTRY", section: "ncus", entry: newNcu(ncus, feet)});
+      onSelectNcu?.(ncus.length);
+      onToolChange?.("select");
+      return;
+    }
     // No separate `simulating` guard needed here - MapEditor's
     // startSimulation already clears every placement state and forces
     // `tool` back to "select" before simulating starts (and the sidebar
@@ -775,6 +809,15 @@ export default function MapCanvas({
       return;
     }
 
+    if (ncuDragRef.current) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const {ncuIndex} = ncuDragRef.current;
+      const ncu = mapData.ncus[ncuIndex];
+      dispatch({type: "UPDATE_ENTRY_FIELD", section: "ncus", index: ncuIndex, field: "position", value: {...ncu.position, x: feet.x, y: feet.y}});
+      return;
+    }
+
     if (unitDragRef.current) {
       const feet = feetFromClient(e.clientX, e.clientY);
       if (!feet) return;
@@ -837,6 +880,7 @@ export default function MapCanvas({
     barrierDragRef.current = null;
     connectionDragRef.current = null;
     unitDragRef.current = null;
+    ncuDragRef.current = null;
     if (tool === "add-circle" && drawingCircle) commitCircle();
     if (tool === "add-line-connection" && drawingLine) commitLineConnection();
     if (tool === "add-unit" && drawingUnit) commitUnit();
@@ -889,7 +933,7 @@ export default function MapCanvas({
   // barrier/connection point the way those snap to each other).
   const patrolStepPreviewPositions = (() => {
     if (!patrolStepPlacement || !cursorPixel || !hasBothAxes(feetDimensions)) return null;
-    const unit = mapData.units[patrolStepPlacement.unitIndex];
+    const unit = (mapData[patrolStepPlacement.section ?? "units"] ?? [])[patrolStepPlacement.unitIndex];
     if (!unit || unit.movement?.type !== "patrol") return null;
     const positions = (unit.movement.steps ?? []).map((step) => step.position);
     const hoverFeet = pixelToFeet(cursorPixel.x, cursorPixel.y, image.pixelDimensions, feetDimensions);
@@ -915,6 +959,7 @@ export default function MapCanvas({
       "add-point-connection": "Placing Point Connection - click the map",
       "add-line-connection": "Placing Line Connection - drag on the map",
       "add-unit": "Placing Unit - click the map",
+      "add-ncu": "Placing NCU - click the map",
     }[tool];
   const isPlacing = !!placingStatusText;
 
@@ -1115,9 +1160,35 @@ export default function MapCanvas({
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
                 availableUnitTypes={availableUnitTypes}
-                hoveredPatrolStep={hoveredPatrolStep}
+                hoveredPatrolStep={hoveredPatrolStep?.section === "ncus" ? null : hoveredPatrolStep}
                 hoveredUnitIndex={hoveredUnitIndex}
                 expandedUnitIndices={expandedUnitIndices}
+              />
+            )}
+            {canDrawBarriers && mapData.ncus?.length > 0 && (
+              <MovementShapes
+                units={mapData.ncus}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                hoveredPatrolStep={hoveredPatrolStep?.section === "ncus" ? hoveredPatrolStep : null}
+                hoveredUnitIndex={hoveredNcuIndex}
+                expandedUnitIndices={expandedNcuIndices}
+              />
+            )}
+            {canDrawBarriers && mapData.ncus?.length > 0 && (
+              <UnitShapes
+                units={mapData.ncus}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                interactive={!isPlacing}
+                tokenInfoFor={(ncu) => ({tokenImageUrl: ncuTokenUrls[ncu.tokenImageUrl], tokenRadius: ncu.tokenRadius})}
+                fallbackColorFor={() => NCU_FALLBACK_COLOR}
+                idPrefix="map-ncu"
+                selectedIndex={selectedNcuIndex}
+                hoveredIndex={hoveredNcuIndex}
+                onSelect={onSelectNcu}
+                onStartDrag={startDragNcu}
+                onHoverUnit={onHoverNcu}
               />
             )}
             {canDrawBarriers && mapData.units.length > 0 && (

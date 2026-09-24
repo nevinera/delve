@@ -15,11 +15,12 @@ export class UiState {
     this.placement = fields.placement ?? null;
     // {connectionIndex, field: "position" | "start" | "end"} | null
     this.connectionPlacement = fields.connectionPlacement ?? null;
-    // {unitIndex} | null - re-placing an existing unit's position
+    // {unitIndex, section} | null - re-placing an existing unit's (or, with
+    // section "ncus", an NCU's) position
     this.unitPlacement = fields.unitPlacement ?? null;
-    // {unitIndex, stepIndex, mode: "insert" | "edit"} | null
+    // {unitIndex, stepIndex, mode: "insert" | "edit", section} | null
     this.patrolStepPlacement = fields.patrolStepPlacement ?? null;
-    // {unitIndex} | null - re-placing a wander zone's location
+    // {unitIndex, section} | null - re-placing a wander zone's location
     this.wanderLocationPlacement = fields.wanderLocationPlacement ?? null;
     // {groupIdentifier} | null - while active, clicking a unit toggles its
     // membership instead of that click's normal effect.
@@ -98,8 +99,8 @@ export class UiState {
     return this.with({connectionPlacement: null});
   }
 
-  startUnitPlacement(unitIndex) {
-    return this.clearModes().with({unitPlacement: {unitIndex}});
+  startUnitPlacement(unitIndex, section = "units") {
+    return this.clearModes().with({unitPlacement: {unitIndex, section}});
   }
 
   clearUnitPlacement() {
@@ -108,25 +109,25 @@ export class UiState {
 
   // Mirrors #startBarrierPlacement/#advanceBarrierPlacement exactly, for a
   // patrol step's position.
-  startPatrolStepPlacement(unitIndex, stepIndex, mode = "insert") {
-    return this.clearModes().with({patrolStepPlacement: {unitIndex, stepIndex, mode}});
+  startPatrolStepPlacement(unitIndex, stepIndex, mode = "insert", section = "units") {
+    return this.clearModes().with({patrolStepPlacement: {unitIndex, stepIndex, mode, section}});
   }
 
-  startPatrolStepEdit(unitIndex, stepIndex) {
-    return this.startPatrolStepPlacement(unitIndex, stepIndex, "edit");
+  startPatrolStepEdit(unitIndex, stepIndex, section = "units") {
+    return this.startPatrolStepPlacement(unitIndex, stepIndex, "edit", section);
   }
 
   advancePatrolStepPlacement() {
-    const {unitIndex, stepIndex} = this.patrolStepPlacement;
-    return this.with({patrolStepPlacement: {unitIndex, stepIndex: stepIndex + 1, mode: "insert"}});
+    const {unitIndex, stepIndex, section} = this.patrolStepPlacement;
+    return this.with({patrolStepPlacement: {unitIndex, stepIndex: stepIndex + 1, mode: "insert", section}});
   }
 
   clearPatrolStepPlacement() {
     return this.with({patrolStepPlacement: null});
   }
 
-  startWanderLocationPlacement(unitIndex) {
-    return this.clearModes().with({wanderLocationPlacement: {unitIndex}});
+  startWanderLocationPlacement(unitIndex, section = "units") {
+    return this.clearModes().with({wanderLocationPlacement: {unitIndex, section}});
   }
 
   clearWanderLocationPlacement() {

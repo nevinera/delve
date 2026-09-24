@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from "vitest";
-import {loadMap, loadMapImageUrl, listUnitTypeKeys, unitTypeDetailsFor, listItemKeys, itemDetailsFor} from "../mapContentLoaders";
+import {loadMap, loadMapImageUrl, listUnitTypeKeys, unitTypeDetailsFor, listItemKeys, itemDetailsFor, ncuTokenUrlsFor} from "../mapContentLoaders";
 
 function fakeClient({files = {}, dirs = {}, assetUrls = {}} = {}) {
   return {
@@ -139,5 +139,19 @@ describe("itemDetailsFor", () => {
     const result = await itemDetailsFor(client, ["deleted-item"]);
 
     expect(result).toEqual({});
+  });
+});
+
+describe("ncuTokenUrlsFor", () => {
+  it("resolves each raw token path against the map's own file", async () => {
+    const client = fakeClient({assetUrls: {"tokens/unit/goblin-2.webp": "https://raw.example/goblin-2.webp"}});
+
+    const result = await ncuTokenUrlsFor(client, "goblin-cave/gc1-entrance", ["../../../tokens/unit/goblin-2.webp"]);
+
+    expect(result).toEqual({"../../../tokens/unit/goblin-2.webp": "https://raw.example/goblin-2.webp"});
+  });
+
+  it("returns an empty map for no tokens", async () => {
+    expect(await ncuTokenUrlsFor(fakeClient(), "goblin-cave/gc1-entrance", [])).toEqual({});
   });
 });

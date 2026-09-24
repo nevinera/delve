@@ -23,7 +23,15 @@ const DEFAULT_TOKEN_RADIUS_FEET = 2; // used only if the unit's type is missing 
 // real pixels for the browser to rasterize the portrait from.
 const TOKEN_IMAGE_RASTER_PX = 256;
 
-export default function UnitShapes({units, pixelDimensions, feetDimensions, interactive, availableUnitTypes, selectedIndex, hoveredIndex, onSelect, onStartDrag, onHoverUnit}) {
+// NCUs render through here too (see MapCanvas): tokenInfoFor/fallbackColorFor
+// swap the unit-type lookup for an NCU's inline token, and idPrefix keeps
+// the two layers' clip-path ids from colliding.
+export default function UnitShapes({
+  units, pixelDimensions, feetDimensions, interactive, availableUnitTypes = {}, selectedIndex, hoveredIndex, onSelect, onStartDrag, onHoverUnit,
+  tokenInfoFor = (unit) => availableUnitTypes[unit.unitType],
+  fallbackColorFor = (unit) => HOSTILITY_COLORS[unit.hostility] ?? HOSTILITY_COLORS.hostile,
+  idPrefix = "map-unit",
+}) {
   // Only interactive (tool === "select" and no add-tool/placement of any
   // kind active - see MapCanvas's isPlacing) drags an existing unit on
   // click - otherwise a click landing on a token should fall through
@@ -33,14 +41,14 @@ export default function UnitShapes({units, pixelDimensions, feetDimensions, inte
   return (
     <svg className="map-canvas-shapes" width={pixelDimensions.width} height={pixelDimensions.height}>
       {units.map((unit, i) => {
-        const info = availableUnitTypes[unit.unitType];
+        const info = tokenInfoFor(unit);
         const tokenRadiusFeet = info?.tokenRadius ?? DEFAULT_TOKEN_RADIUS_FEET;
         const p = feetToPixel(unit.position.x, unit.position.y, pixelDimensions, feetDimensions);
         const radiusPx = feetSpacingToPixelsX(tokenRadiusFeet, pixelDimensions, feetDimensions);
         const selected = selectable && selectedIndex === i;
         const hovered = hoveredIndex === i;
         const ringColor = selected ? SELECTED_RING_COLOR : hovered ? HOVER_RING_COLOR : "#000";
-        const clipId = `map-unit-token-clip-${i}`;
+        const clipId = `${idPrefix}-token-clip-${i}`;
 
         return (
           <g
@@ -63,7 +71,7 @@ export default function UnitShapes({units, pixelDimensions, feetDimensions, inte
                   />
                 </g>
               )
-              : <circle cx={p.x} cy={p.y} r={radiusPx} fill={HOSTILITY_COLORS[unit.hostility] ?? HOSTILITY_COLORS.hostile} />}
+              : <circle cx={p.x} cy={p.y} r={radiusPx} fill={fallbackColorFor(unit)} />}
             {/* Proportional to the token's own radius, not a fixed pixel
                 width - a low-density map (few image-px per foot, e.g. an
                 SVG background whose pixelDimensions reflects its own
