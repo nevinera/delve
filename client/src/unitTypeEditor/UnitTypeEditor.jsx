@@ -13,6 +13,13 @@ import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
 
+// unitTypeKey's own "/"s each add a directory level beneath unit_types/, so
+// a relative path from unit_types/<key>.json back up to the repo root needs
+// one ".." per key segment - same reasoning as powerRefs.js's relativePrefix.
+function tokensUnitPrefix(unitTypeKey) {
+  return "../".repeat(unitTypeKey.split("/").length);
+}
+
 // tokenImageUrl is schema-legal as a bare string (see docs/schema/unit_type.md)
 // and real content uses that form - but this editor always edits/saves it as
 // an array (a one-entry array behaves identically for every consumer), so
@@ -30,11 +37,17 @@ function normalizeUnitType(unitType) {
 export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}) {
   const [draft, setDraft] = useState(null);
   const [availableAbilities, setAvailableAbilities] = useState({});
+  const [existingTokenImages, setExistingTokenImages] = useState([]);
   const [loadError, setLoadError] = useState(null);
   const [refreshStatus, setRefreshStatus] = useState("");
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState(null);
+  // The uploaded File objects pending a save, keyed by tokenImageUrl array
+  // index - GithubClient has no writable preview URL for an unsaved local
+  // file, so (unlike AbilityEditor's assetOverrides) there's no live
+  // preview here, just the slot's own path updating immediately on upload.
+  const pendingFilesRef = useRef({});
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
   const client = useRef(new GithubClient());
 
@@ -49,6 +62,9 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
 
         const abilities = await loadAvailableAbilities(client.current);
         if (!cancelled) setAvailableAbilities(abilities);
+
+        const tokenPaths = await client.current.listDirectory("tokens/unit");
+        if (!cancelled) setExistingTokenImages(tokenPaths.map((p) => p.replace(/^tokens\/unit\//, "")).sort());
       } catch (error) {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
@@ -62,6 +78,35 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
       cancelled = true;
     };
   }, [unitTypeKey]);
+
+  // "Uploads" a local file as a stand-in for a not-yet-saved token image -
+  // sets the slot's own path immediately, unlike AbilityEditor's upload
+  // flow (which requires a path to already be set, since an ability's
+  // assets can live at any relative path).
+  function uploadTokenImage(index, file) {
+    pendingFilesRef.current[index] = file;
+    handleChange(draft.updateTokenImage(index, `${tokensUnitPrefix(unitTypeKey)}tokens/unit/${file.name}`));
+  }
+
+  // Picking an existing tokens/unit/ file (see existingTokenImages) needs
+  // the same prefix as a fresh upload - just no pending file to track.
+  function pickTokenImage(index, filename) {
+    handleChange(draft.updateTokenImage(index, `${tokensUnitPrefix(unitTypeKey)}tokens/unit/${filename}`));
+  }
+
+  // Removing a slot shifts every later slot's index down by one (see
+  // UnitTypeDraft#removeTokenImage), so any pending upload keyed by index
+  // needs to move with it, same reasoning as AbilityEditor's reindexBySection.
+  function removeTokenImage(index) {
+    const next = {};
+    for (const [key, file] of Object.entries(pendingFilesRef.current)) {
+      const i = Number(key);
+      if (i === index) continue;
+      next[i > index ? i - 1 : i] = file;
+    }
+    pendingFilesRef.current = next;
+    handleChange(draft.removeTokenImage(index));
+  }
 
   // Every draft edit drops a prior "valid" (or "invalid") result - see
   // useValidateThenSave.
@@ -119,7 +164,8 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
   async function handleSave() {
     setSaving();
     try {
-      await saveUnitType(unitTypeKey, draft.data, availableAbilities);
+      await saveUnitType(unitTypeKey, draft.data, availableAbilities, pendingFilesRef.current);
+      pendingFilesRef.current = {};
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -153,6 +199,10 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
           onRefreshAbilities={handleRefreshAbilities}
           refreshStatus={refreshStatus}
           onChange={handleChange}
+          existingTokenImages={existingTokenImages}
+          onUploadTokenImage={uploadTokenImage}
+          onRemoveTokenImage={removeTokenImage}
+          onPickTokenImage={pickTokenImage}
         />
       </div>
     </div>

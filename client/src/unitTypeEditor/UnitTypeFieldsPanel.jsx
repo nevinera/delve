@@ -1,3 +1,4 @@
+import {useState} from "react";
 import {humanize} from "../abilityEditor/abilityFormatting";
 import {RESOURCE_TYPES} from "../resourceTypes";
 
@@ -34,15 +35,56 @@ function OptionalSelect({value, options, onChange, blankLabel = "— default —
   );
 }
 
-function TokenImageUrlField({draft, onChange}) {
+// Lets a slot's path be picked from an already-committed file under
+// tokens/unit/ (see UnitTypeEditor's existingTokenImages) instead of typed
+// or uploaded - same reset-after-pick pattern as AbilityFieldsPanel's
+// StockAssetPicker, since the picked value lives in the slot's own text
+// field, not in this dropdown's selection.
+function ExistingTokenImagePicker({options, onPick}) {
+  return (
+    <select
+      value=""
+      onChange={(e) => {
+        if (e.target.value) onPick(e.target.value);
+        e.target.value = "";
+      }}
+    >
+      <option value="">— existing token —</option>
+      {options.map((name) => <option key={name} value={name}>{name}</option>)}
+    </select>
+  );
+}
+
+// Each slot offers three ways to set its path: type it directly, upload a
+// new file (written to wherever the resulting path says at save time - see
+// UnitTypeEditor's uploadTokenImage/saveUnitType), or pick a file already
+// committed under tokens/unit/ from another unit's token (onPickTokenImage
+// builds the actual path - it alone knows this unit type's own key depth).
+// The file input is remounted (via `resetKey`) after each upload, since its
+// displayed filename can't otherwise be cleared programmatically.
+function TokenImageUrlField({draft, onChange, existingTokenImages, onUploadTokenImage, onRemoveTokenImage, onPickTokenImage}) {
   const list = draft.tokenImageUrls;
+  const [resetKeys, setResetKeys] = useState({});
 
   return (
     <div>
       {list.map((url, i) => (
-        <div key={i} style={{display: "flex", gap: 6, marginBottom: 4}}>
+        <div key={i} style={{display: "flex", gap: 6, marginBottom: 4, alignItems: "center"}}>
           <input type="text" value={url} onChange={(e) => onChange(draft.updateTokenImage(i, e.target.value))} />
-          <button type="button" className="remove-entry" onClick={() => onChange(draft.removeTokenImage(i))}>
+          <input
+            key={resetKeys[i] ?? 0}
+            type="file" accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) onUploadTokenImage(i, file);
+              setResetKeys((current) => ({...current, [i]: (current[i] ?? 0) + 1}));
+            }}
+          />
+          <ExistingTokenImagePicker
+            options={existingTokenImages ?? []}
+            onPick={(name) => onPickTokenImage(i, name)}
+          />
+          <button type="button" className="remove-entry" onClick={() => onRemoveTokenImage(i)}>
             Remove
           </button>
         </div>
@@ -191,7 +233,10 @@ function PowersList({powers, availableAbilities, draft, onChange}) {
 // power-ref math, rotation/scripted list editing) lives on UnitTypeDraft
 // now; this just renders draft's current values and calls its mutator
 // methods.
-export default function UnitTypeFieldsPanel({draft, availableAbilities, newAbilityUrl, onRefreshAbilities, refreshStatus, onChange}) {
+export default function UnitTypeFieldsPanel({
+  draft, availableAbilities, newAbilityUrl, onRefreshAbilities, refreshStatus, onChange,
+  existingTokenImages, onUploadTokenImage, onRemoveTokenImage, onPickTokenImage,
+}) {
   const unitTypeData = draft.data;
   const names = draft.currentPowerNames(availableAbilities);
 
@@ -225,7 +270,13 @@ export default function UnitTypeFieldsPanel({draft, availableAbilities, newAbili
       </table>
 
       <h3>Token images</h3>
-      <TokenImageUrlField draft={draft} onChange={onChange} />
+      <TokenImageUrlField
+        draft={draft} onChange={onChange}
+        existingTokenImages={existingTokenImages}
+        onUploadTokenImage={onUploadTokenImage}
+        onRemoveTokenImage={onRemoveTokenImage}
+        onPickTokenImage={onPickTokenImage}
+      />
 
       <h3>Resource</h3>
       <ResourceTypeField resource={unitTypeData.resource} draft={draft} onChange={onChange} />
