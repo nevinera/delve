@@ -19,6 +19,31 @@ function nextConnectionIdentifier(connections) {
   return `connection-${n}`;
 }
 
+const IDENTIFIER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+const IDENTIFIER_SUFFIX_LENGTH = 6;
+
+function randomIdentifierSuffix() {
+  let suffix = "";
+  for (let i = 0; i < IDENTIFIER_SUFFIX_LENGTH; i++) {
+    suffix += IDENTIFIER_SUFFIX_LETTERS[Math.floor(Math.random() * IDENTIFIER_SUFFIX_LETTERS.length)];
+  }
+  return suffix;
+}
+
+// Units need a default identifier the moment they're placed too (see
+// nextConnectionIdentifier above), but "type-N" would read oddly next to a
+// unit type's own name (e.g. "goblin-raider-1") - a random 6-letter suffix
+// instead (issue #46), re-rolled on the rare collision. Only checks this
+// map's own units, same scope nextConnectionIdentifier uses despite the
+// schema requiring zone-wide uniqueness - the map editor only has this
+// map's data to check against.
+function nextUnitIdentifier(units, unitType) {
+  const existing = new Set(units.map((u) => u.identifier));
+  let identifier = `${unitType}-${randomIdentifierSuffix()}`;
+  while (existing.has(identifier)) identifier = `${unitType}-${randomIdentifierSuffix()}`;
+  return identifier;
+}
+
 const MIN_ZOOM = 0.05;
 // Used before an image/wrapper size is available to compute the real cap
 // (see maxZoom below), and as a floor under it for a tiny map.
@@ -395,7 +420,10 @@ export default function MapCanvas({
       const angle = Math.hypot(dx, dy) >= MIN_FACING_DRAG_FEET ? facingDegrees(dx, dy) : 0;
       dispatch({
         type: "ADD_ENTRY", section: "units",
-        entry: {unitType: pendingUnitType, position: {x: position.x, y: position.y, angle}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
+        entry: {
+          identifier: nextUnitIdentifier(mapData.units, pendingUnitType), unitType: pendingUnitType,
+          position: {x: position.x, y: position.y, angle}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"},
+        },
       });
     }
     setDrawingUnit(null);

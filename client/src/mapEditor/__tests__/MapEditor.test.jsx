@@ -291,7 +291,9 @@ describe("MapEditor", () => {
     fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
     fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0});
 
-    expect(document.querySelector(".map-unit-row-name")).toHaveTextContent("Unit 1");
+    // A default identifier is assigned on placement (issue #46) - no more
+    // "Unit 1" placeholder fallback to check against.
+    expect(document.querySelector(".map-unit-row-name")).toHaveTextContent(/^goblin-raider-[a-z]{6}$/);
     // Choosing "goblin-raider" from the dropdown kicks off an async detail
     // fetch (see requestUnitTypeDetails) - the resolved name lands a tick
     // later, not synchronously.

@@ -848,7 +848,10 @@ describe("MapCanvas", () => {
 
       expect(dispatch).toHaveBeenCalledWith({
         type: "ADD_ENTRY", section: "units",
-        entry: {unitType: "goblin-raider", position: {x: 10, y: 120, angle: 0}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
+        entry: {
+          identifier: expect.stringMatching(/^goblin-raider-[a-z]{6}$/), unitType: "goblin-raider",
+          position: {x: 10, y: 120, angle: 0}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"},
+        },
       });
       expect(onToolChange).toHaveBeenCalledWith("select");
     });
@@ -872,6 +875,31 @@ describe("MapCanvas", () => {
       expect(dispatch.mock.calls[0][0].entry.position).toEqual({x: 11, y: 120, angle: 0});
     });
 
+    it("re-rolls the random suffix on a collision with an existing unit's identifier", () => {
+      const dispatch = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "goblin-raider-aaaaaa", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      // First attempt's 6 letters all roll index 0 ('a') - collides with the
+      // existing unit above; the retry rolls index 1 ('b') instead.
+      const randomSpy = vi.spyOn(Math, "random");
+      for (let i = 0; i < 6; i++) randomSpy.mockReturnValueOnce(0);
+      for (let i = 0; i < 6; i++) randomSpy.mockReturnValueOnce(1 / 26);
+
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-unit" pendingUnitType="goblin-raider" onToolChange={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
+      fireEvent.pointerUp(wrapper, {clientX: 50, clientY: 0});
+
+      expect(dispatch.mock.calls[0][0].entry.identifier).toBe("goblin-raider-bbbbbb");
+      randomSpy.mockRestore();
+    });
+
     it("sets facing from a drag of at least 3ft, released in that direction", () => {
       const dispatch = vi.fn();
       render(
@@ -890,7 +918,10 @@ describe("MapCanvas", () => {
 
       expect(dispatch).toHaveBeenCalledWith({
         type: "ADD_ENTRY", section: "units",
-        entry: {unitType: "goblin-raider", position: {x: 10, y: 120, angle: 90}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}},
+        entry: {
+          identifier: expect.stringMatching(/^goblin-raider-[a-z]{6}$/), unitType: "goblin-raider",
+          position: {x: 10, y: 120, angle: 90}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"},
+        },
       });
     });
 
