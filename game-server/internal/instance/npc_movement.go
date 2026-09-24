@@ -19,9 +19,8 @@ const (
 	mobPhaseTurning = "turning"
 )
 
-// initNPCMovement sets the initial movement state for a unit on its first tick.
-func initNPCMovement(unit *instancestate.UnitState, mv instanceconfig.UnitMovement, rng *rand.Rand) {
-	b := &unit.Behavior
+// initNPCMovement sets the initial movement state for a unit or NCU on its first tick.
+func initNPCMovement(pos *instanceconfig.Position, b *instancestate.MovementState, mv instanceconfig.UnitMovement, rng *rand.Rand) {
 	switch mv.Type {
 	case "patrol":
 		if len(mv.Steps) < 2 {
@@ -34,8 +33,8 @@ func initNPCMovement(unit *instancestate.UnitState, mv instanceconfig.UnitMoveme
 		b.TargetX = step.Position.X
 		b.TargetY = step.Position.Y
 		b.MoveRate = step.MovementRate
-		if dx, dy := step.Position.X-unit.Position.X, step.Position.Y-unit.Position.Y; dx*dx+dy*dy > 0.0001 {
-			unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, step.Position.X, step.Position.Y)
+		if dx, dy := step.Position.X-pos.X, step.Position.Y-pos.Y; dx*dx+dy*dy > 0.0001 {
+			pos.Angle = facingTowardDeg(pos.X, pos.Y, step.Position.X, step.Position.Y)
 		}
 		b.MovementPhase = mobPhaseMoving
 
@@ -47,16 +46,15 @@ func initNPCMovement(unit *instancestate.UnitState, mv instanceconfig.UnitMoveme
 		b.TargetX = tx
 		b.TargetY = ty
 		b.MoveRate = sampleRangePtr(mv.Speed, 1.0, rng)
-		if dx, dy := tx-unit.Position.X, ty-unit.Position.Y; dx*dx+dy*dy > 0.0001 {
-			unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, tx, ty)
+		if dx, dy := tx-pos.X, ty-pos.Y; dx*dx+dy*dy > 0.0001 {
+			pos.Angle = facingTowardDeg(pos.X, pos.Y, tx, ty)
 		}
 		b.MovementPhase = mobPhaseMoving
 	}
 }
 
 // tickNPCMovement advances one tick of the state machine for a single unit.
-func tickNPCMovement(unit *instancestate.UnitState, mv instanceconfig.UnitMovement, speed, dt float64, rng *rand.Rand) {
-	b := &unit.Behavior
+func tickNPCMovement(pos *instanceconfig.Position, b *instancestate.MovementState, mv instanceconfig.UnitMovement, speed, dt float64, rng *rand.Rand) {
 	switch b.MovementPhase {
 
 	case mobPhaseWaiting:
@@ -64,7 +62,7 @@ func tickNPCMovement(unit *instancestate.UnitState, mv instanceconfig.UnitMoveme
 		if b.WaitRemaining > 0 {
 			return
 		}
-		npcBeginTurn(unit, mv, rng)
+		npcBeginTurn(pos, b, mv, rng)
 
 	case mobPhaseTurning:
 		b.TurnElapsed += dt
@@ -72,34 +70,33 @@ func tickNPCMovement(unit *instancestate.UnitState, mv instanceconfig.UnitMoveme
 		if t > 1.0 {
 			t = 1.0
 		}
-		unit.Position.Angle = lerpAngleDeg(b.TurnStartAngle, b.TurnEndAngle, t)
+		pos.Angle = lerpAngleDeg(b.TurnStartAngle, b.TurnEndAngle, t)
 		if t >= 1.0 {
-			unit.Position.Angle = b.TurnEndAngle
+			pos.Angle = b.TurnEndAngle
 			b.PatrolStepIndex = b.PendingStepIndex
 			b.MovementPhase = mobPhaseMoving
 		}
 
 	case mobPhaseMoving:
-		dx := b.TargetX - unit.Position.X
-		dy := b.TargetY - unit.Position.Y
+		dx := b.TargetX - pos.X
+		dy := b.TargetY - pos.Y
 		dist := math.Sqrt(dx*dx + dy*dy)
 		move := speed * b.MoveRate * dt
 
 		if dist <= move || dist < 0.01 {
-			unit.Position.X = b.TargetX
-			unit.Position.Y = b.TargetY
-			npcArriveAtTarget(unit, mv, rng)
+			pos.X = b.TargetX
+			pos.Y = b.TargetY
+			npcArriveAtTarget(pos, b, mv, rng)
 		} else {
-			unit.Position.X += (dx / dist) * move
-			unit.Position.Y += (dy / dist) * move
+			pos.X += (dx / dist) * move
+			pos.Y += (dy / dist) * move
 		}
 	}
 }
 
 // npcBeginTurn starts a turning animation from the current facing toward (tx, ty).
 // pendingStepIndex is the patrol step to apply when the turn completes.
-func npcBeginTurn(unit *instancestate.UnitState, mv instanceconfig.UnitMovement, rng *rand.Rand) {
-	b := &unit.Behavior
+func npcBeginTurn(pos *instanceconfig.Position, b *instancestate.MovementState, mv instanceconfig.UnitMovement, rng *rand.Rand) {
 	var tx, ty, moveRate float64
 	var pendingStep int
 
@@ -124,8 +121,8 @@ func npcBeginTurn(unit *instancestate.UnitState, mv instanceconfig.UnitMovement,
 	b.TargetY = ty
 	b.MoveRate = moveRate
 	b.PendingStepIndex = pendingStep
-	b.TurnStartAngle = unit.Position.Angle
-	b.TurnEndAngle = facingTowardDeg(unit.Position.X, unit.Position.Y, tx, ty)
+	b.TurnStartAngle = pos.Angle
+	b.TurnEndAngle = facingTowardDeg(pos.X, pos.Y, tx, ty)
 	b.TurnElapsed = 0
 	b.MovementPhase = mobPhaseTurning
 }
@@ -133,15 +130,14 @@ func npcBeginTurn(unit *instancestate.UnitState, mv instanceconfig.UnitMovement,
 // npcArriveAtTarget is called when a unit reaches its movement target.
 // When wait == 0 it picks the next destination immediately (no turning phase).
 // When wait > 0 it enters the waiting phase.
-func npcArriveAtTarget(unit *instancestate.UnitState, mv instanceconfig.UnitMovement, rng *rand.Rand) {
-	b := &unit.Behavior
+func npcArriveAtTarget(pos *instanceconfig.Position, b *instancestate.MovementState, mv instanceconfig.UnitMovement, rng *rand.Rand) {
 	switch mv.Type {
 	case "patrol":
 		wait := sampleRange(mv.Steps[b.PatrolStepIndex].WaitTime, rng)
 		if wait <= 0 {
 			nextIdx := nextPatrolStep(b, len(mv.Steps), mv.Choose, rng)
 			step := mv.Steps[nextIdx]
-			unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, step.Position.X, step.Position.Y)
+			pos.Angle = facingTowardDeg(pos.X, pos.Y, step.Position.X, step.Position.Y)
 			b.PatrolStepIndex = nextIdx
 			b.TargetX = step.Position.X
 			b.TargetY = step.Position.Y
@@ -159,7 +155,7 @@ func npcArriveAtTarget(unit *instancestate.UnitState, mv instanceconfig.UnitMove
 		wait := sampleRangePtr(mv.WaitTime, 0, rng)
 		if wait <= 0 {
 			tx, ty := randInCircle(mv.Location.X, mv.Location.Y, mv.Radius, rng)
-			unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, tx, ty)
+			pos.Angle = facingTowardDeg(pos.X, pos.Y, tx, ty)
 			b.TargetX = tx
 			b.TargetY = ty
 			b.MoveRate = sampleRangePtr(mv.Speed, 1.0, rng)
@@ -172,7 +168,7 @@ func npcArriveAtTarget(unit *instancestate.UnitState, mv instanceconfig.UnitMove
 }
 
 // nextPatrolStep returns the next step index and updates PatrolDir for "return" mode.
-func nextPatrolStep(b *instancestate.BehaviorState, n int, choose string, rng *rand.Rand) int {
+func nextPatrolStep(b *instancestate.MovementState, n int, choose string, rng *rand.Rand) int {
 	switch choose {
 	case "loop":
 		return (b.PatrolStepIndex + 1) % n

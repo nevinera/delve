@@ -158,3 +158,7 @@ func ScheduleRespawnsForTest(state *instancestate.InstanceState, now time.Time) 
 func TickRespawnsForTest(state *instancestate.InstanceState, now time.Time) {
 	tickRespawns(state, now, testRng())
 }
+
+func TickNCUMovementForTest(state *instancestate.InstanceState, dt float64) {
+	tickNCUMovement(state, dt, testRng())
+}

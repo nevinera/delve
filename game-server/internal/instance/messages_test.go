@@ -122,6 +122,67 @@ func TestFullStateMsg_UnitFields(t *testing.T) {
 	}
 }
 
+func stateWithNCU(t *testing.T) *instancestate.InstanceState {
+	t.Helper()
+	zone := goblinZone()
+	zone.Maps[0].NCUs = []instanceconfig.NCU{{
+		Identifier: "grizzle", Name: "Grizzle", TokenRadius: 2,
+		Position: instanceconfig.Position{X: 5, Y: 6, Angle: 180},
+	}}
+	s, err := instancestate.NewInstanceState(zone)
+	require.NoError(t, err)
+	return s
+}
+
+func TestFullStateMsg_IncludesNCUs(t *testing.T) {
+	msg := fullState(t, stateWithNCU(t))
+	ncus := msg["ncus"].(map[string]any)
+	require.Len(t, ncus, 1)
+	for _, n := range ncus {
+		ncu := n.(map[string]any)
+		assert.Equal(t, "grizzle", ncu["zone_ncu_identifier"])
+		assert.Equal(t, "m1", ncu["map_identifier"])
+		assert.Equal(t, 2.0, ncu["radius"])
+		assert.Equal(t, 5.0, ncu["position"].(map[string]any)["x"])
+	}
+	for _, u := range msg["units"].(map[string]any) {
+		assert.NotEqual(t, "grizzle", u.(map[string]any)["zone_unit_identifier"], "NCUs aren't units")
+	}
+}
+
+func TestDeltaMsg_NewNCUIncludesAllFields(t *testing.T) {
+	curr := stateWithNCU(t)
+	prev := &instancestate.InstanceState{Units: curr.Clone().Units}
+	msg := delta(t, prev, curr)
+	updates := msg["ncu_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, n := range updates {
+		assert.Equal(t, "grizzle", n.(map[string]any)["zone_ncu_identifier"])
+	}
+}
+
+func TestDeltaMsg_MovedNCUSendsOnlyPosition(t *testing.T) {
+	prev := stateWithNCU(t)
+	curr := prev.Clone()
+	for _, n := range curr.NCUs {
+		n.Position.X = 7
+	}
+	msg := delta(t, prev, curr)
+	updates := msg["ncu_updates"].(map[string]any)
+	require.Len(t, updates, 1)
+	for _, n := range updates {
+		update := n.(map[string]any)
+		assert.Len(t, update, 1)
+		assert.Equal(t, 7.0, update["position"].(map[string]any)["x"])
+	}
+}
+
+func TestDeltaMsg_UnmovedNCUOmitsNCUUpdates(t *testing.T) {
+	prev := stateWithNCU(t)
+	msg := delta(t, prev, prev.Clone())
+	assert.NotContains(t, msg, "ncu_updates")
+}
+
 func TestFullStateMsg_EmptyState(t *testing.T) {
 	empty := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 	msg := fullState(t, empty)

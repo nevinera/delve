@@ -164,11 +164,10 @@ type MovementIntent struct {
 	StrafeRight bool
 }
 
-// BehaviorState tracks tick-loop progress for a unit's movement and tactics.
-// Zero value is valid for units with "still" movement and non-phased/scripted tactics.
-type BehaviorState struct {
-	// NPC movement state machine.
-	// MovementPhase == "" means still or not yet initialized.
+// MovementState is the idle patrol/wander state machine (see
+// instance/npc_movement.go), shared by units and NCUs.
+// MovementPhase == "" means still or not yet initialized.
+type MovementState struct {
 	MovementPhase    string  // "", "moving", "waiting", "turning"
 	PatrolStepIndex  int     // current waypoint index for patrol
 	PatrolDir        int     // 1 or -1; direction of travel for "return" patrol mode
@@ -180,6 +179,12 @@ type BehaviorState struct {
 	TurnElapsed      float64 // seconds elapsed in a turning animation
 	TurnStartAngle   float64 // degrees at turn start
 	TurnEndAngle     float64 // degrees at turn end
+}
+
+// BehaviorState tracks tick-loop progress for a unit's movement and tactics.
+// Zero value is valid for units with "still" movement and non-phased/scripted tactics.
+type BehaviorState struct {
+	MovementState
 
 	// last known position of the chase target, in this unit's map coordinates.
 	// Updated each tick the target is visible (same map). Used to navigate

@@ -143,12 +143,12 @@ func applyUnitBehavior(
 			return
 		}
 		if unit.Behavior.MovementPhase == "" {
-			initNPCMovement(unit, mv, rng)
+			initNPCMovement(&unit.Position, &unit.Behavior.MovementState, mv, rng)
 			if unit.Behavior.MovementPhase == "" {
 				return
 			}
 		}
-		tickNPCMovement(unit, mv, speed, dt, rng)
+		tickNPCMovement(&unit.Position, &unit.Behavior.MovementState, mv, speed, dt, rng)
 
 	case instancestate.UnitStatusEngaged:
 		if unit.Target == nil {

@@ -50,6 +50,7 @@ type CombatEvent struct {
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
 	Units                   map[uuid.UUID]*UnitState
+	NCUs                    map[uuid.UUID]*NCUState
 	Items                   map[string]instanceconfig.Item // identifier → item definition; shared across units
 	PendingLootEvents       []LootEvent                    // drained each tick by the tick loop
 	PendingLootClaims       []PendingLootClaim             // drained each tick; goroutines fired for each
@@ -65,6 +66,7 @@ type InstanceState struct {
 func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 	state := &InstanceState{
 		Units: make(map[uuid.UUID]*UnitState),
+		NCUs:  make(map[uuid.UUID]*NCUState),
 		Items: zone.Items,
 	}
 	seen := make(map[string]string) // identifier → map identifier where first seen
@@ -123,7 +125,41 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 			}
 		}
 	}
+	if err := addNCUs(state, zone); err != nil {
+		return nil, err
+	}
 	return state, nil
+}
+
+func addNCUs(state *InstanceState, zone instanceconfig.Zone) error {
+	seen := make(map[string]string)
+	for _, m := range zone.Maps {
+		for _, n := range m.NCUs {
+			if n.Identifier == "" {
+				return fmt.Errorf("NCU on map %q has no identifier", m.Identifier)
+			}
+			if first, dup := seen[n.Identifier]; dup {
+				return fmt.Errorf(
+					"NCU identifier %q appears on both map %q and map %q; identifiers must be unique across the zone",
+					n.Identifier, first, m.Identifier,
+				)
+			}
+			seen[n.Identifier] = m.Identifier
+			speedFactor := n.SpeedFactor
+			if speedFactor == 0 {
+				speedFactor = 1.0
+			}
+			state.NCUs[uuid.New()] = &NCUState{
+				ZoneNCUIdentifier: n.Identifier,
+				MapIdentifier:     m.Identifier,
+				Position:          n.Position,
+				Radius:            n.TokenRadius,
+				SpeedFactor:       speedFactor,
+				MovementConfig:    n.Movement,
+			}
+		}
+	}
+	return nil
 }
 
 // npcResources builds the Resources map/PrimaryResourceName pair for a fresh
