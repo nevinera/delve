@@ -11,6 +11,7 @@ type Unit struct {
 	GroupIdentifier   string         `json:"groupIdentifier,omitempty"` // units on the same map sharing this aggro together
 	LootTable         map[string]int `json:"lootTable,omitempty"`       // identifier → weight
 	LootCount         *ValueRange    `json:"lootCount,omitempty"`       // items to award per kill; default 1
+	Respawn           *RespawnConfig `json:"respawn,omitempty"`         // overrides the map's/zone's respawn for this unit - see Zone.UnitRespawn
 }
 
 // UnitMovement defines how an un-aggro'd unit moves.
