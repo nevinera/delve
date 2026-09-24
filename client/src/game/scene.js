@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { resolveBarrierCollisions } from "./collision.js";
 import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 import { loadSvgToCanvas } from "./svgRaster.js";
+import { isUntargetableStatus } from "./state.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -839,7 +840,7 @@ export class SceneManager {
             entry.lastRenderedMap = unit.map_identifier;
           }
         }
-        setTokenDead(entry.group, unit.status === "dead");
+        setTokenDead(entry.group, isUntargetableStatus(unit.status));
         if (!isSelf) {
           setTokenTagDimmed(entry.group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
         }
@@ -853,7 +854,7 @@ export class SceneManager {
         group.rotation.y = angle;
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
-        setTokenDead(group, unit.status === "dead");
+        setTokenDead(group, isUntargetableStatus(unit.status));
         if (!isSelf) {
           setTokenTagDimmed(group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
         }

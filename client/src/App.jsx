@@ -7,7 +7,7 @@ import { Joystick } from "./Joystick";
 import { angleToMovementKeys } from "./joystickAngle";
 import { GameConnection } from "./game/connection";
 import { firePowerEffects } from "./game/effectPlayback";
-import { canTargetUnit } from "./game/state";
+import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
@@ -3307,12 +3307,12 @@ export default function App({
     const range = powerMaxRange(power);
     if (range != null) {
       let target = targetIdRef.current ? unitsRef.current[targetIdRef.current] : null;
-      if (!target || target.status === "dead") {
+      if (!target || isUntargetableStatus(target.status)) {
         const nearestId = Object.entries(unitsRef.current)
           .filter(([, u]) =>
             u.hostility === "hostile" &&
             u.map_identifier === selfUnit?.map_identifier &&
-            u.status !== "dead"
+            !isUntargetableStatus(u.status)
           )
           .map(([id, u]) => {
             const dx = u.position.x - (selfUnit?.position.x ?? 0);
@@ -3418,7 +3418,7 @@ export default function App({
       .filter(([, u]) =>
         u.hostility === "hostile" &&
         u.map_identifier === selfUnit.map_identifier &&
-        u.status !== "dead" &&
+        !isUntargetableStatus(u.status) &&
         (canvasRef.current?.isInView(u.position.x, u.position.y) ?? true)
       )
       .map(([id, u]) => {
@@ -3696,7 +3696,7 @@ export default function App({
       if (Date.now() < nextBasicAttackAtRef.current) return;
       const tId = targetIdRef.current;
       const target = tId ? unitsRef.current[tId] : null;
-      if (!target || target.status === "dead") return;
+      if (!target || isUntargetableStatus(target.status)) return;
       const self = selfPosRef.current;
       const selfRadius = selfUnit?.radius ?? 0;
       if (self) {
@@ -3881,6 +3881,7 @@ export default function App({
             </div>
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          {targetUnit.status === "respawning" && <span style={styles.deadBadge}>RESPAWNING</span>}
         </>
       );
     }
@@ -3899,6 +3900,7 @@ export default function App({
             <CastBar unit={targetUnit} inline />
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          {targetUnit.status === "respawning" && <span style={styles.deadBadge}>RESPAWNING</span>}
         </div>
       </>
     );

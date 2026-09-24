@@ -11,6 +11,7 @@ type Map struct {
 	Barriers       []Barrier       `json:"barriers,omitempty"`
 	Connections    []MapConnection `json:"connections,omitempty"`
 	Units          []Unit          `json:"units,omitempty"`
+	Respawn        *RespawnConfig  `json:"respawn,omitempty"` // overrides the zone's respawn for every unit on this map - see Zone.UnitRespawn
 }
 
 // Dimensions holds the width and height of a map in feet.

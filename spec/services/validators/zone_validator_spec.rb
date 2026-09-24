@@ -67,6 +67,23 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /unitTypes must be an object/)
     end
 
+    context "respawn" do
+      it "accepts a zone with no respawn" do
+        expect { described_class.validate!(zone_fixture.except("respawn")) }.not_to raise_error
+      end
+
+      it "accepts a valid respawn" do
+        data = zone_fixture.merge("respawn" => {"type" => "timer", "delaySeconds" => 60})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "propagates respawn validation errors with path context" do
+        data = zone_fixture.merge("respawn" => {"type" => "bogus"})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/respawn/) }
+      end
+    end
+
     context "items" do
       let(:valid_item) do
         {

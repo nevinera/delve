@@ -34,7 +34,7 @@ func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now
 
 		if cast.TargetID != nil {
 			target, ok := state.Units[*cast.TargetID]
-			if !ok || target.Status == instancestate.UnitStatusDead {
+			if !ok || !target.Status.IsTargetable() {
 				unit.Casting = nil
 				continue
 			}

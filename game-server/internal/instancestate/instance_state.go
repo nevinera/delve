@@ -104,6 +104,8 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 				ZoneUnitIdentifier:  u.Identifier,
 				UnitTypeIdentifier:  u.UnitType,
 				MapIdentifier:       m.Identifier,
+				SpawnMapIdentifier:  m.Identifier,
+				Respawn:             zone.UnitRespawn(m, u),
 				Hostility:           u.Hostility,
 				Position:            u.Position,
 				SpawnPoint:          u.Position,

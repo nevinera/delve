@@ -2,7 +2,7 @@
 
 A Zone is a discrete location in the world, made up of one or more maps connected together.
 
-See [common.md](common.md) for `Location`, `Position`, and `floatRange`.
+See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `RespawnConfig`.
 See [map.md](map.md) for the `Map` type embedded in `maps`.
 See [item.md](item.md) for the `Item` type embedded in `items`.
 
@@ -15,6 +15,7 @@ See [item.md](item.md) for the `Item` type embedded in `items`.
 | `elvl` | integer | yes | Elevation. See [stats.md](../stats.md). Must be at least 0. |
 | `private` | boolean | yes | `true` for party-instanced zones (dungeons); `false` for shared zones (questing areas). |
 | `maps` | array of Map \| AssetReference(`referenceTo: "map"`) | yes | At least one. Inline Map objects or references to external map files. A zone containing any AssetReferences is abstract (see [common.md](common.md)). |
+| `respawn` | RespawnConfig | no | Zone-wide default for whether/how a dead unit respawns - overridable per-map and per-unit. See [common.md](common.md#respawnconfig). Absent (at every level) means no respawn. |
 | `unitTypes` | object | no | Maps local string identifiers to UnitType definitions or AssetReferences (`referenceTo: "unit_type"`). Referenced by `unitType` fields on map Units. |
 | `items` | object | no | Maps item identifier strings to Item definitions. Every identifier referenced in a unit's `lootTable` must appear here. |
 | `zoneLinks` | array of ZoneLink | no | Connections between pairs of MapConnections within this zone. |

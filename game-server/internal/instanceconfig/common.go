@@ -61,3 +61,18 @@ func (v *ZeroBasedValueRange) UnmarshalJSON(data []byte) error {
 
 func (v ZeroBasedValueRange) Min() float64 { return v[0] }
 func (v ZeroBasedValueRange) Max() float64 { return v[1] }
+
+// RespawnConfig controls whether/how a dead unit respawns - see
+// docs/schema/common.md#respawnconfig. Settable on Zone, Map, and Unit;
+// see Zone.UnitRespawn for how the most-specific-wins cascade resolves.
+// Type discriminator: "none" or "timer".
+type RespawnConfig struct {
+	Type string `json:"type"` // Required
+
+	// timer
+	DelaySeconds float64 `json:"delaySeconds,omitempty"` // Required for timer: seconds from death to respawn
+}
+
+// NoRespawn is the hardcoded fallback when no Zone/Map/Unit in the cascade
+// sets Respawn at all - see Zone.UnitRespawn.
+var NoRespawn = RespawnConfig{Type: "none"}

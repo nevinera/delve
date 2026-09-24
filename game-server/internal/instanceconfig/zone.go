@@ -23,6 +23,7 @@ type Zone struct {
 	EntryPoints map[string]*string `json:"entryPoints,omitempty"`
 	// OpenConnections maps "mapId/connectionId" to a zone-level name.
 	OpenConnections map[string]string `json:"openConnections,omitempty"`
+	Respawn         *RespawnConfig    `json:"respawn,omitempty"` // zone-wide default - see UnitRespawn
 }
 
 func (z *Zone) UnmarshalJSON(data []byte) error {
@@ -53,6 +54,26 @@ func (z *Zone) MapElvl(mapIdentifier string) float64 {
 		}
 	}
 	return float64(z.Elvl)
+}
+
+// UnitRespawn resolves the effective RespawnConfig for a unit placed on m:
+// u's own Respawn if set, else m's, else z's, else NoRespawn - the most
+// specific of Unit/Map/Zone that sets anything wins, independent of
+// whether the less-specific levels set anything at all (docs/schema/
+// common.md#respawnconfig). Mirrors MapElvl's cascade, but takes m/u
+// directly rather than an identifier to look up - every caller already has
+// them in hand (they're iterating m.Units).
+func (z *Zone) UnitRespawn(m Map, u Unit) RespawnConfig {
+	if u.Respawn != nil {
+		return *u.Respawn
+	}
+	if m.Respawn != nil {
+		return *m.Respawn
+	}
+	if z.Respawn != nil {
+		return *z.Respawn
+	}
+	return NoRespawn
 }
 
 // ZoneLink connects two MapConnections so that traversing one transports a

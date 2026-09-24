@@ -98,3 +98,20 @@ Used specifically for distance/range fields (e.g. `range` on PowerEffect, `radiu
 ```json
 5.0
 ```
+
+---
+
+## RespawnConfig
+
+Controls whether a dead unit comes back. Settable on [Zone](zone.md), [Map](map.md), and [Unit](unit.md) - the most specific one present wins (Unit, then Map, then Zone), independent of whether the less-specific levels set anything. Absent at all three levels means no respawn - that's the default, not something a value has to opt into.
+
+Once `delaySeconds` after death has passed, the unit doesn't just reappear: it teleports to its spawn point and spends a few (randomized) seconds visibly "respawning" - present, but not targetable and not yet acting - before it's truly back at full health.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `type` | string | yes | `"none"` or `"timer"`. |
+| `delaySeconds` | float | for `"timer"` | Seconds from death until the unit starts visibly respawning. Must be >= 0. |
+
+```json
+{ "type": "timer", "delaySeconds": 120.0 }
+```

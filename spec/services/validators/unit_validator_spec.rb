@@ -65,6 +65,23 @@ RSpec.describe Validators::UnitValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /angle must be between 0 and 360/)
     end
 
+    context "respawn" do
+      it "accepts a unit with no respawn" do
+        expect { described_class.validate!(still_unit.except("respawn")) }.not_to raise_error
+      end
+
+      it "accepts a valid respawn" do
+        data = still_unit.merge("respawn" => {"type" => "none"})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "propagates respawn validation errors with path context" do
+        data = still_unit.merge("respawn" => {"type" => "timer", "delaySeconds" => -5})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/respawn/) }
+      end
+    end
+
     context "wander movement" do
       it "raises when location is missing" do
         data = wander_unit.merge("movement" => wander_unit["movement"].except("location"))

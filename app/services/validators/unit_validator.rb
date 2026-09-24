@@ -10,6 +10,7 @@ module Validators
       validate_hp_fraction!(data, path: path) if given?(data, "currentHpFraction")
       validate_movement!(data["movement"], path: child_path(path, "movement")) if given?(data, "movement")
       validate_group_identifier!(data, path: path) if given?(data, "groupIdentifier")
+      RespawnConfigValidator.validate!(data["respawn"], path: child_path(path, "respawn")) if given?(data, "respawn")
     end
 
     private

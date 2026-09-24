@@ -91,7 +91,7 @@ func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power
 		return nil, false
 	}
 	target, ok := next.Units[*targetID]
-	if !ok || target.Status == instancestate.UnitStatusDead {
+	if !ok || !target.Status.IsTargetable() {
 		return nil, false
 	}
 

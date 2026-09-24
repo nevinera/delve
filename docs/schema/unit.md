@@ -2,7 +2,7 @@
 
 A Unit is a placed instance of a UnitType on a map. Units are defined in the `units` array of a Map, and reference UnitTypes defined on the enclosing Zone.
 
-See [common.md](common.md) for `Location` and `Position`.
+See [common.md](common.md) for `Location`, `Position`, and `RespawnConfig`.
 
 ## Fields
 
@@ -17,6 +17,7 @@ See [common.md](common.md) for `Location` and `Position`.
 | `groupIdentifier` | string | no | | Grouping label. Every unit on the *same map* sharing a non-empty `groupIdentifier` aggros together: when one engages, the rest idle-transition to engaged against the same target too, same as a kill does. Grouping never crosses maps, even if two maps happen to reuse the same string. |
 | `lootTable` | LootTable | no | | Items this unit can drop on death. See [zone.md](zone.md) for the LootTable type. All referenced identifiers must be defined in the zone's `items` map. |
 | `lootCount` | number \| [number, number] | no | `1` | Number of items to award from `lootTable` per kill. A range is resolved to a single value uniformly between min and max first. A resolved value >= 1 awards that many items (truncated to an integer); a resolved value between 0 and 1 is instead the *probability* of awarding exactly one item (0 otherwise) - e.g. `0.25` drops one item 25% of the time. Ignored if `lootTable` is absent. |
+| `respawn` | RespawnConfig | no | | Overrides the map's (or zone's) `respawn` for this specific unit. See [common.md](common.md#respawnconfig). |
 
 ---
 

@@ -174,6 +174,23 @@ RSpec.describe Validators::MapValidator, type: :validator do
       end
     end
 
+    context "respawn" do
+      it "accepts a map with no respawn" do
+        expect { described_class.validate!(cave_entrance_map.except("respawn")) }.not_to raise_error
+      end
+
+      it "accepts a valid respawn" do
+        data = cave_entrance_map.merge("respawn" => {"type" => "timer", "delaySeconds" => 120})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "propagates respawn validation errors with path context" do
+        data = cave_entrance_map.merge("respawn" => {"type" => "timer"})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/respawn/) }
+      end
+    end
+
     context "connections" do
       it "accepts a line connection from the fixture" do
         expect { described_class.validate!(cave_entrance_map) }.not_to raise_error

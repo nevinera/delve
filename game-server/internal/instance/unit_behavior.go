@@ -156,7 +156,7 @@ func applyUnitBehavior(
 			return
 		}
 		target, ok := state.Units[*unit.Target]
-		if !ok || target.Status == instancestate.UnitStatusDead {
+		if !ok || !target.Status.IsTargetable() {
 			startLeash(unit)
 			return
 		}
@@ -194,7 +194,7 @@ func applyUnitBehavior(
 			now := time.Now()
 			if losClear {
 				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state, rng)
-				if target.Status != instancestate.UnitStatusDead {
+				if target.Status.IsTargetable() {
 					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, dt, events, state, rng)
 				}
 			}
@@ -232,8 +232,9 @@ func applyUnitBehavior(
 		unit.Position.X += (dx / dist) * move
 		unit.Position.Y += (dy / dist) * move
 
-	case instancestate.UnitStatusDead:
-		// Nothing.
+	case instancestate.UnitStatusDead, instancestate.UnitStatusRespawning:
+		// Nothing - a respawning unit isn't real yet either (see
+		// instance/respawn.go), just present at its spawn point.
 	}
 }
 
@@ -863,7 +864,7 @@ func applyNPCSeparation(state *instancestate.InstanceState, zone instanceconfig.
 	}
 	var npcs []entry
 	for _, u := range state.Units {
-		if strings.HasPrefix(u.ZoneUnitIdentifier, "player:") || u.Status == instancestate.UnitStatusDead {
+		if strings.HasPrefix(u.ZoneUnitIdentifier, "player:") || !u.Status.IsTargetable() {
 			continue
 		}
 		npcs = append(npcs, entry{u, u.Position.X, u.Position.Y, u.MapIdentifier})
