@@ -41,4 +41,22 @@
 // vary on the defending side. The attacker's own gear/elevation is what
 // varies instead (see the Trainee Gear synthesis and spread layers built
 // on top of this package).
+//
+// # Known gaps
+//
+// Simulate never damages the simulated character (unit) itself - only
+// target's Health moves, over the course of a run. Both StatusEffectCondition
+// (nevinera/delve#62) and StatusTrigger (nevinera/delve#64) read live
+// unit state, so anything gated on unit's own HP or on unit taking damage
+// only ever evaluates correctly when it's *target* holding the
+// condition/trigger (a debuff), never when unit holds it (a self-buff):
+//
+//   - selfHealthPct/targetHealthPct conditions and healthAbove/healthBelow/
+//     takesDamage triggers on a status unit applies to itself: never hold,
+//     since unit.Health is set once (to MaxHealth) and never touched again.
+//   - The same conditions/triggers on a status applied to target: work
+//     correctly, since target.Health does move from unit's own attacks.
+//   - dealsDamage triggers: work for either side that can actually deal
+//     damage (unit, via its rotation) - target never attacks, so a
+//     dealsDamage trigger held by target never fires either.
 package classdps

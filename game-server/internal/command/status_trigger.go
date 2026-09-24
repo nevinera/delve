@@ -46,9 +46,13 @@ func TriggeredEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zo
 }
 
 // FireTriggeredEffect applies a "triggered" StatusEffect's payload from
-// holder (the unit the status is active on). holderID doubles as the
-// applier for any status it grants, and as the tag-setter for a lethal
-// harm - matching every other self-originated effect.
+// holder (the unit the status is active on), returning the harm damage
+// dealt (0 for every other effect type, or if it didn't fire) - purely for
+// a caller that wants to tally it (e.g. classdps's Result.TriggeredDamage);
+// the real engine's own call site ignores it, since a unit's Health is the
+// only bookkeeping that matters there. holderID doubles as the applier for
+// any status it grants, and as the tag-setter for a lethal harm - matching
+// every other self-originated effect.
 //
 // Deliberately simpler than ApplyPowerEffects: this fires reactively, from
 // combat that's already happening (a trigger only evaluates true because
@@ -57,43 +61,44 @@ func TriggeredEffectAmount(unit *instancestate.UnitState, zone instanceconfig.Zo
 // resolves to holder's own current Target (nil target/no such unit is a
 // no-op, not an error) - never the specific unit that caused the trigger to
 // fire, which this package doesn't track.
-func FireTriggeredEffect(holderID uuid.UUID, holder *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState) {
+func FireTriggeredEffect(holderID uuid.UUID, holder *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState) float64 {
 	te := eff.TriggeredEffect
 	if te == nil {
-		return
+		return 0
 	}
 
 	recipient, recipientID := holder, holderID
 	if te.Affects == "target" {
 		if holder.Target == nil {
-			return
+			return 0
 		}
 		recipient = state.Units[*holder.Target]
 		if recipient == nil {
-			return
+			return 0
 		}
 		recipientID = *holder.Target
 	}
 
 	switch te.Type {
 	case "harm":
-		fireHarm(holderID, holder, recipientID, recipient, eff, zone, state)
+		return fireHarm(holderID, holder, recipientID, recipient, eff, zone, state)
 	case "heal":
 		fireHeal(holder, recipient, eff, zone)
 	case "resource":
 		AdjustResource(recipient, te.ResourceName, te.Delta)
 	case "status":
 		if te.Status == nil {
-			return
+			return 0
 		}
 		ApplyStatus(recipient, holder, holderID, *te.Status, te.Duration, zone, now)
 	}
+	return 0
 }
 
-func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID uuid.UUID, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, state *instancestate.InstanceState) {
+func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID uuid.UUID, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, state *instancestate.InstanceState) float64 {
 	te := eff.TriggeredEffect
 	if te.Amount == nil {
-		return
+		return 0
 	}
 	if recipient.TaggedBy == nil && recipient.Hostility != "" {
 		recipient.TaggedBy = &holderID
@@ -113,6 +118,7 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 			holder.Attacking = false
 		}
 	}
+	return dealt
 }
 
 func fireHeal(holder, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone) {

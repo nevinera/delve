@@ -43,6 +43,10 @@ func applyPowerEffects(unit, target *instancestate.UnitState, attackerID uuid.UU
 			dealt := command.IncomingDamage(target, zone, raw, physical)
 			addPowerDamage(dealt)
 			target.Health -= dealt
+			if dealt > 0 {
+				unit.DamageDealtThisTick = true
+				target.DamageTakenThisTick = true
+			}
 			if target.Health < 0 {
 				target.Health = 0
 			}

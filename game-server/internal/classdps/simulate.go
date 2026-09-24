@@ -7,6 +7,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
 // simTickInterval is the fixed step Simulate's event loop advances by -
@@ -58,6 +59,7 @@ type Result struct {
 	BasicAttackDamage float64
 	PowerDamage       float64
 	StatusTickDamage  float64
+	TriggeredDamage   float64 // "triggered" StatusEffect harm procs (#64)
 	TotalDamage       float64
 
 	DPS float64 // TotalDamage / Duration
@@ -84,6 +86,16 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 	target := newTargetDummy()
 	zone := instanceconfig.Zone{}
 	attackerID := uuid.New()
+	targetID := uuid.New()
+	// A "triggered" StatusEffect with affects: "target" resolves against
+	// the holder's own current Target (command.FireTriggeredEffect) - this
+	// package's whole simulated fight is a fixed 1v1, so that's set once
+	// here rather than ever changing (no aggro/EngageOnAttack modeled -
+	// see package doc). state is the minimal instancestate.InstanceState
+	// FireTriggeredEffect needs to resolve that lookup.
+	unit.Target = &targetID
+	target.Target = &attackerID
+	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{attackerID: unit, targetID: target}}
 
 	powersByName := make(map[string]instanceconfig.Power, len(cfg.Class.Powers))
 	for _, p := range cfg.Class.Powers {
@@ -99,6 +111,7 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 	addBasicAttackDamage := add(&res.BasicAttackDamage)
 	addPowerDamage := add(&res.PowerDamage)
 	addStatusTickDamage := add(&res.StatusTickDamage)
+	addTriggeredDamage := add(&res.TriggeredDamage)
 
 	nextBasicAttackAt := 0.0
 
@@ -147,6 +160,10 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 			dealt := command.IncomingDamage(target, zone, raw, physical)
 			addBasicAttackDamage(dealt)
 			target.Health -= dealt
+			if dealt > 0 {
+				unit.DamageDealtThisTick = true
+				target.DamageTakenThisTick = true
+			}
 			nextBasicAttackAt = now + command.PlayerBasicAttackInterval(hastePct).Seconds()
 		}
 
@@ -160,6 +177,11 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 				}
 			}
 		}
+
+		processTriggeredEffects(attackerID, unit, zone, nowTime, simTickInterval, state, addTriggeredDamage)
+		processTriggeredEffects(targetID, target, zone, nowTime, simTickInterval, state, addTriggeredDamage)
+		unit.DamageTakenThisTick, unit.DamageDealtThisTick = false, false
+		target.DamageTakenThisTick, target.DamageDealtThisTick = false, false
 	}
 
 	if duration > 0 {

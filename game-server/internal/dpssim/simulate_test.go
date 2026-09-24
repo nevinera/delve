@@ -440,6 +440,63 @@ func TestSimulate_TTDIsMaxHealthOverDPS(t *testing.T) {
 	assert.InDelta(t, target.MaxHealth/res.DPS, res.TTD, 0.001)
 }
 
+func TestSimulate_TriggeredEffectFiresOnDealsDamage(t *testing.T) {
+	amount := instanceconfig.ValueRange{1.0, 1.0} // negligible direct damage, isolates the proc
+	triggeredStatus := instanceconfig.Status{
+		Name:     "Cleave",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "triggered", InternalCooldown: 1000, // large enough to fire at most once
+				Trigger:         &instanceconfig.StatusTrigger{Type: "dealsDamage"},
+				TriggeredEffect: &instanceconfig.TriggeredEffect{Type: "harm", Affects: "target", Amount: &instanceconfig.ValueRange{20.0, 20.0}},
+			},
+		},
+	}
+	enemy := instanceconfig.UnitType{
+		Powers: []instanceconfig.Power{{
+			Name: "Rend", GlobalCooldown: 11, // long enough not to reapply mid-run
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Amount: &amount},
+				{Type: "status", Duration: 9, Status: &triggeredStatus},
+			},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 6600, seeded(11))
+
+	assert.Greater(t, res.TriggeredDamage, 0.0)
+	assert.Equal(t, res.TotalDamage, res.BasicAttackDamage+res.PowerDamage+res.StatusTickDamage+res.TriggeredDamage)
+}
+
+func TestSimulate_TriggeredEffectNeverFiresWithoutDealingDamage(t *testing.T) {
+	// The status is applied by a "resource" PowerEffect (never deals
+	// damage), so its dealsDamage trigger should never hold.
+	triggeredStatus := instanceconfig.Status{
+		Name:     "Latent",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "triggered", InternalCooldown: 1.0,
+				Trigger:         &instanceconfig.StatusTrigger{Type: "dealsDamage"},
+				TriggeredEffect: &instanceconfig.TriggeredEffect{Type: "harm", Affects: "target", Amount: &instanceconfig.ValueRange{20.0, 20.0}},
+			},
+		},
+	}
+	enemy := instanceconfig.UnitType{
+		Resource: instanceconfig.ResourceType{Name: "fury", Max: 100, DefaultValue: 0},
+		Powers: []instanceconfig.Power{{
+			Name: "Focus", GlobalCooldown: 1,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "resource", Affects: "self", ResourceName: "fury", Delta: 10},
+				{Type: "status", Duration: 9, Status: &triggeredStatus},
+			},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 60, seeded(12))
+
+	assert.Zero(t, res.TriggeredDamage)
+}
+
 func TestSimulate_SameSeedIsDeterministic(t *testing.T) {
 	enemy := instanceconfig.UnitType{DPS: 10, AttackSpeed: 1}
 	a := dpssim.Simulate(enemy, dpssim.TargetStats{}, 500, seeded(42))
