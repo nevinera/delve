@@ -107,6 +107,7 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 				SpawnMapIdentifier:  m.Identifier,
 				Respawn:             zone.UnitRespawn(m, u),
 				Hostility:           u.Hostility,
+				Noncombat:           u.Noncombat,
 				Position:            u.Position,
 				SpawnPoint:          u.Position,
 				Health:              float64(ut.MaxHP) * hpFraction,

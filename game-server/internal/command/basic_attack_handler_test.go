@@ -122,6 +122,18 @@ func TestBasicAttackHandler_DeadTargetIsNoOp(t *testing.T) {
 	assert.Equal(t, before, state.Units[targetID].Health)
 }
 
+func TestBasicAttackHandler_NoncombatTargetIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	playerID, targetID := uuid.New(), uuid.New()
+	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
+	state.Units[targetID].Noncombat = true
+	before := state.Units[targetID].Health
+
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+
+	assert.Equal(t, before, state.Units[targetID].Health)
+}
+
 func TestBasicAttackHandler_OutOfRangeIsNoOp(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()

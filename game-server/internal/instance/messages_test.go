@@ -122,6 +122,29 @@ func TestFullStateMsg_UnitFields(t *testing.T) {
 	}
 }
 
+func TestFullStateMsg_NoncombatFlag(t *testing.T) {
+	s := stateWithUnit(t)
+	for _, u := range s.Units {
+		u.Noncombat = true
+	}
+	msg := fullState(t, s)
+	for _, u := range msg["units"].(map[string]any) {
+		assert.Equal(t, true, u.(map[string]any)["noncombat"])
+	}
+}
+
+func TestDeltaMsg_NewUnitIncludesNoncombat(t *testing.T) {
+	prev := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	curr := stateWithUnit(t)
+	for _, u := range curr.Units {
+		u.Noncombat = true
+	}
+	msg := delta(t, prev, curr)
+	for _, u := range msg["unit_updates"].(map[string]any) {
+		assert.Equal(t, true, u.(map[string]any)["noncombat"])
+	}
+}
+
 func TestFullStateMsg_EmptyState(t *testing.T) {
 	empty := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 	msg := fullState(t, empty)

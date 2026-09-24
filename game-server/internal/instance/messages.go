@@ -53,6 +53,7 @@ type unitJSON struct {
 	UnitTypeIdentifier   string                   `json:"unit_type_identifier,omitempty"`
 	MapIdentifier        string                   `json:"map_identifier"`
 	Hostility            string                   `json:"hostility,omitempty"`
+	Noncombat            bool                     `json:"noncombat,omitempty"`
 	Position             instanceconfig.Position  `json:"position"`
 	Health               float64                  `json:"health"`
 	MaxHealth            float64                  `json:"max_health"`
@@ -221,6 +222,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			UnitTypeIdentifier:   u.UnitTypeIdentifier,
 			MapIdentifier:        u.MapIdentifier,
 			Hostility:            u.Hostility,
+			Noncombat:            u.Noncombat,
 			Position:             u.Position,
 			Health:               u.Health,
 			MaxHealth:            u.MaxHealth,
@@ -289,6 +291,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				"unit_type_identifier": cu.UnitTypeIdentifier,
 				"map_identifier":       cu.MapIdentifier,
 				"hostility":            cu.Hostility,
+				"noncombat":            cu.Noncombat,
 				"position":             cu.Position,
 				"health":               cu.Health,
 				"max_health":           cu.MaxHealth,

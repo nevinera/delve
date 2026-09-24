@@ -35,7 +35,7 @@ func aggroGroupedUnits(zoneID string, attackerID uuid.UUID, zone instanceconfig.
 		groupSet[id] = struct{}{}
 	}
 	for _, u := range next.Units {
-		if _, ok := groupSet[u.ZoneUnitIdentifier]; !ok || u.Status != instancestate.UnitStatusIdle {
+		if _, ok := groupSet[u.ZoneUnitIdentifier]; !ok || u.Status != instancestate.UnitStatusIdle || u.Noncombat {
 			continue
 		}
 		engageIdleUnit(u, attackerID)

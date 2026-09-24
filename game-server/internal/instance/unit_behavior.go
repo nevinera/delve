@@ -125,7 +125,7 @@ func applyUnitBehavior(
 	if aggroRadius == 0 {
 		aggroRadius = 20.0
 	}
-	if unit.Status == instancestate.UnitStatusIdle && e.unit.Hostility == "hostile" {
+	if unit.Status == instancestate.UnitStatusIdle && e.unit.Hostility == "hostile" && !unit.Noncombat {
 		if targetID := nearestPlayerInRadius(unit, playersByMap[unit.MapIdentifier], aggroRadius); targetID != nil {
 			engageUnit(unit, *targetID)
 			for _, groupmate := range groupByID[e.unit.Identifier] {
@@ -156,7 +156,7 @@ func applyUnitBehavior(
 			return
 		}
 		target, ok := state.Units[*unit.Target]
-		if !ok || !target.Status.IsTargetable() {
+		if !ok || !target.IsTargetable() {
 			startLeash(unit)
 			return
 		}
@@ -194,7 +194,7 @@ func applyUnitBehavior(
 			now := time.Now()
 			if losClear {
 				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state, rng)
-				if target.Status.IsTargetable() {
+				if target.IsTargetable() {
 					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, dt, events, state, rng)
 				}
 			}

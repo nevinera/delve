@@ -154,6 +154,18 @@ func TestNewInstanceState_UnitFields(t *testing.T) {
 	assert.Empty(t, u.ActiveStatusEffects)
 }
 
+func TestNewInstanceState_Noncombat(t *testing.T) {
+	state, err := instancestate.NewInstanceState(zoneWith(
+		instanceconfig.Unit{Identifier: "u1", UnitType: "goblin", Noncombat: true},
+	))
+	require.NoError(t, err)
+
+	for _, u := range state.Units {
+		assert.True(t, u.Noncombat)
+		assert.False(t, u.IsTargetable())
+	}
+}
+
 func TestNewInstanceState_DefaultHPFraction(t *testing.T) {
 	// CurrentHPFraction is omitempty; a zero value means "use full health".
 	state, err := instancestate.NewInstanceState(zoneWith(

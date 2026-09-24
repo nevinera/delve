@@ -98,6 +98,12 @@ func (s UnitStatus) IsTargetable() bool {
 	return s != UnitStatusDead && s != UnitStatusRespawning
 }
 
+// IsTargetable reports whether this unit can be the recipient of an
+// attack/cast/power right now: its status allows it and it isn't noncombat.
+func (u *UnitState) IsTargetable() bool {
+	return !u.Noncombat && u.Status.IsTargetable()
+}
+
 // ActiveStatusEffect is one status currently applied to a unit, identified
 // by (Status.Name, ApplierID) - different appliers' copies of the
 // same-named status are tracked independently, so e.g. two casters' DoTs on
@@ -224,6 +230,7 @@ type UnitState struct {
 	UnitTypeIdentifier string // key into zone.UnitTypes
 	MapIdentifier      string
 	Hostility          string // "hostile", "neutral", "friendly", or "" for players
+	Noncombat          bool   // a talking NPC: never targetable, never aggros
 	Position           instanceconfig.Position
 	SpawnPoint         instanceconfig.Position // initial position; used for respawn
 	SpawnMapIdentifier string                  // map the unit spawned into; used for respawn

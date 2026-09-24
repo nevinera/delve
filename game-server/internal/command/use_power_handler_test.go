@@ -1030,6 +1030,17 @@ func TestResolveCastTarget_DeadTargetIsRejected(t *testing.T) {
 	assert.Nil(t, target)
 }
 
+func TestResolveCastTarget_NoncombatTargetIsRejected(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+	state.Units[targetID].Noncombat = true
+
+	target, ok := command.ResolveCastTarget(state.Units[playerID], state.Units[playerID].Target, punchPower().Power, state)
+
+	assert.False(t, ok)
+	assert.Nil(t, target)
+}
+
 // --- cast pushback (see command.ApplyCastPushback) ---
 
 func castingTargetState(playerID, targetID uuid.UUID) (*instancestate.InstanceState, time.Time) {

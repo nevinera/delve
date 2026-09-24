@@ -141,6 +141,17 @@ func TestUnitBehavior_Aggro_NeutralHostility_NeverAggros(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
 }
 
+func TestUnitBehavior_Aggro_NoncombatHostile_NeverAggros(t *testing.T) {
+	zone := behaviorZone(50.0, instanceconfig.UnitMovement{Type: "still"})
+	u, s := npcState("g1", pos(0, 0))
+	u.Noncombat = true
+	addPlayer(s, "map1", 5, 0)
+
+	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
+
+	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+}
+
 func TestUnitBehavior_Aggro_NearestPlayerChosen(t *testing.T) {
 	zone := behaviorZone(50.0, instanceconfig.UnitMovement{Type: "still"})
 	u, s := npcState("g1", pos(0, 0))
