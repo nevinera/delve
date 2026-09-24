@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,7 +22,7 @@ import (
 // enough to fit (the inner for loop catches up), and a tick still fires
 // even if the status will expire later this same server tick - expiry is
 // handled separately, after this.
-func tickStatusEffects(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+func tickStatusEffects(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, rng *rand.Rand) {
 	for targetID, unit := range state.Units {
 		for i := range unit.ActiveStatusEffects {
 			e := &unit.ActiveStatusEffects[i]
@@ -36,7 +37,7 @@ func tickStatusEffects(state *instancestate.InstanceState, zone instanceconfig.Z
 					// simply skipped, not deferred - the cadence below keeps
 					// counting regardless (see docs/schema/status.md).
 					if j >= len(e.ConditionsMet) || e.ConditionsMet[j] {
-						fireStatusTick(targetID, unit, applier, e.ApplierID, zone, eff, state)
+						fireStatusTick(targetID, unit, applier, e.ApplierID, zone, eff, state, rng)
 					}
 					e.TimeUntilNextTick[j] += command.RecurringTickInterval(applier, zone, eff)
 					if unit.Status == instancestate.UnitStatusDead {
@@ -54,13 +55,13 @@ func tickStatusEffects(state *instancestate.InstanceState, zone instanceconfig.Z
 // fireStatusTick applies one recurring StatusEffect tick from applier (nil
 // if they've left the instance since applying it, e.g. logged out - the
 // tick is skipped rather than guessing at a stat-scaled amount) to target.
-func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState, applierID uuid.UUID, zone instanceconfig.Zone, eff instanceconfig.StatusEffect, state *instancestate.InstanceState) {
+func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState, applierID uuid.UUID, zone instanceconfig.Zone, eff instanceconfig.StatusEffect, state *instancestate.InstanceState, rng *rand.Rand) {
 	if applier == nil {
 		return
 	}
 	switch eff.OnTick {
 	case "heal":
-		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, true)
+		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, true, rng)
 		target.Health += amount * (1 + command.HealingTakenPct(target, zone)/100)
 		if target.Health > target.MaxHealth {
 			target.Health = target.MaxHealth
@@ -70,8 +71,8 @@ func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState
 			id := applierID
 			target.TaggedBy = &id
 		}
-		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, false)
-		dealt := command.IncomingDamage(target, zone, amount, eff.School != "magic")
+		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, false, rng)
+		dealt := command.IncomingDamage(target, zone, amount, eff.School != "magic", rng)
 		target.Health -= dealt
 		if dealt > 0 {
 			applier.DamageDealtThisTick = true
@@ -83,7 +84,7 @@ func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState
 		if target.Health == 0 {
 			target.Status = instancestate.UnitStatusDead
 			target.Target = nil
-			instancestate.RollAndRecordLoot(targetID, target, state)
+			instancestate.RollAndRecordLoot(targetID, target, state, rng)
 		}
 	}
 }

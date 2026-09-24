@@ -1,6 +1,10 @@
 package classdps
 
-import "github.com/delve-mmo/game-server/internal/instanceconfig"
+import (
+	"math/rand"
+
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
+)
 
 // Elevations is every relative elevation (ee = item elvl - map elvl) Spread
 // runs, in a fixed, stable order - named after docs/stats.md's "Elevation"
@@ -29,14 +33,14 @@ func elevationLabel(ee int) string {
 // a freshly synthesized Trainee Gear kit (see traineegear.go) at that
 // elevation, for duration seconds. Returns len(Elevations) cells, in
 // Elevations' order.
-func Spread(class instanceconfig.CharacterClass, strategy Strategy, duration float64) []ElevationResult {
+func Spread(class instanceconfig.CharacterClass, strategy Strategy, duration float64, rng *rand.Rand) []ElevationResult {
 	cells := make([]ElevationResult, 0, len(Elevations))
 	for _, ee := range Elevations {
 		cfg := AttackerConfig{Class: class, EquippedItems: newTraineeGear(class, ee)}
 		cells = append(cells, ElevationResult{
 			Elevation: ee,
 			Label:     elevationLabel(ee),
-			Result:    Simulate(cfg, strategy, duration),
+			Result:    Simulate(cfg, strategy, duration, rng),
 		})
 	}
 	return cells

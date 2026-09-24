@@ -1,6 +1,7 @@
 package command_test
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -32,12 +33,12 @@ func wallZone(a, b instanceconfig.Location) instanceconfig.Zone {
 // retryUntilHit rebuilds and re-attacks (via build, a fresh-state factory)
 // until a swing actually lands, so tests that need a hit aren't flaky over
 // the 5% miss chance - P(200 consecutive misses) is astronomically small.
-func retryUntilHit(t *testing.T, playerID, targetID uuid.UUID, zone instanceconfig.Zone, build func() *instancestate.InstanceState) *instancestate.InstanceState {
+func retryUntilHit(t *testing.T, playerID, targetID uuid.UUID, zone instanceconfig.Zone, rng *rand.Rand, build func() *instancestate.InstanceState) *instancestate.InstanceState {
 	t.Helper()
 	for i := 0; i < 200; i++ {
 		state := build()
 		before := state.Units[targetID].Health
-		require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
+		require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
 		if state.Units[targetID].Health < before {
 			return state
 		}
@@ -49,12 +50,12 @@ func retryUntilHit(t *testing.T, playerID, targetID uuid.UUID, zone instanceconf
 // retryUntilMiss is retryUntilHit's mirror: rebuilds and re-attacks until a
 // swing actually misses (health unchanged), so a test asserting behavior on
 // a miss isn't flaky over the 95% hit chance.
-func retryUntilMiss(t *testing.T, playerID, targetID uuid.UUID, zone instanceconfig.Zone, build func() *instancestate.InstanceState) *instancestate.InstanceState {
+func retryUntilMiss(t *testing.T, playerID, targetID uuid.UUID, zone instanceconfig.Zone, rng *rand.Rand, build func() *instancestate.InstanceState) *instancestate.InstanceState {
 	t.Helper()
 	for i := 0; i < 200; i++ {
 		state := build()
 		before := state.Units[targetID].Health
-		require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
+		require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
 		if state.Units[targetID].Health == before {
 			return state
 		}
@@ -72,93 +73,103 @@ func TestBasicAttackHandler_DoesNotDeduplicate(t *testing.T) {
 }
 
 func TestBasicAttackHandler_MissingUnitIsNoOp(t *testing.T) {
-	require.NoError(t, command.BasicAttackHandler{}.Handle(uuid.New(), command.BasicAttackPayload{}, instanceconfig.Zone{}, emptyState()))
+	rng := rand.New(rand.NewSource(1))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(uuid.New(), command.BasicAttackPayload{}, instanceconfig.Zone{}, emptyState()))
 }
 
 func TestBasicAttackHandler_DeadPlayerIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	state.Units[playerID].Status = instancestate.UnitStatusDead
 	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
 }
 
 func TestBasicAttackHandler_NotAttackingIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	state.Units[playerID].Attacking = false
 	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
 }
 
 func TestBasicAttackHandler_NoTargetIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	unitID := uuid.New()
 	state := stateWithUnit(unitID)
 	state.Units[unitID].Attacking = true
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(unitID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(unitID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 }
 
 func TestBasicAttackHandler_DeadTargetIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	state.Units[targetID].Status = instancestate.UnitStatusDead
 	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
 }
 
 func TestBasicAttackHandler_OutOfRangeIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 10, 0) // 10ft away, range is 5ft
 	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
 }
 
 func TestBasicAttackHandler_WallBetweenAttackerAndTargetIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	zone := wallZone(instanceconfig.Location{X: 1.5, Y: -5}, instanceconfig.Location{X: 1.5, Y: 5})
 	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, zone, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
 	assert.True(t, state.Units[playerID].NextBasicAttackAt.IsZero()) // swing timer not consumed by a blocked attempt
 }
 
 func TestBasicAttackHandler_WallElsewhereDoesNotBlock(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	zone := wallZone(instanceconfig.Location{X: 20, Y: -5}, instanceconfig.Location{X: 20, Y: 5})
 
-	retryUntilHit(t, playerID, targetID, zone, func() *instancestate.InstanceState {
+	retryUntilHit(t, playerID, targetID, zone, rng, func() *instancestate.InstanceState {
 		return attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	})
 }
 
 func TestBasicAttackHandler_BlockedBySwingTimer(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	state.Units[playerID].NextBasicAttackAt = time.Now().Add(time.Minute)
 	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
 }
 
 func TestBasicAttackHandler_HeldWhileCasting(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	swingDueAt := time.Now().Add(-time.Second) // already due
@@ -170,7 +181,7 @@ func TestBasicAttackHandler_HeldWhileCasting(t *testing.T) {
 	}
 	before := state.Units[targetID].Health
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
 	// Held, not reset - the swing is still due the instant casting ends.
@@ -178,9 +189,10 @@ func TestBasicAttackHandler_HeldWhileCasting(t *testing.T) {
 }
 
 func TestBasicAttackHandler_FiresImmediatelyAfterCastEnds(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 
-	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		s := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		s.Units[playerID].NextBasicAttackAt = time.Now().Add(-time.Second) // already due
 		s.Units[playerID].Casting = nil                                    // cast just ended this tick
@@ -191,9 +203,10 @@ func TestBasicAttackHandler_FiresImmediatelyAfterCastEnds(t *testing.T) {
 }
 
 func TestBasicAttackHandler_DamagesTargetAndSetsSwingTimer(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 
-	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		return attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 	})
 
@@ -206,10 +219,11 @@ func TestBasicAttackHandler_DamagesTargetAndSetsSwingTimer(t *testing.T) {
 }
 
 func TestBasicAttackHandler_SwingTimerIsConsumedEvenOnAMiss(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 
-	require.NoError(t, command.BasicAttackHandler{}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
+	require.NoError(t, command.BasicAttackHandler{Rng: rng}.Handle(playerID, command.BasicAttackPayload{}, instanceconfig.Zone{}, state))
 
 	// Whether this particular swing hit or missed, the swing timer always
 	// advances - a miss is still a swing, just one that doesn't land.
@@ -217,9 +231,10 @@ func TestBasicAttackHandler_SwingTimerIsConsumedEvenOnAMiss(t *testing.T) {
 }
 
 func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 
-	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		state.Units[targetID].Health = 1
 		state.Units[targetID].Hostility = "hostile"
@@ -232,9 +247,10 @@ func TestBasicAttackHandler_KillClearsAttackerTargetAndAttacking(t *testing.T) {
 }
 
 func TestBasicAttackHandler_EngagesIdleHostileTargetOnHit(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 
-	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		state.Units[targetID].Hostility = "hostile"
 		return state
@@ -250,9 +266,10 @@ func TestBasicAttackHandler_EngagesIdleHostileTargetOnHit(t *testing.T) {
 }
 
 func TestBasicAttackHandler_EngagesIdleHostileTargetEvenOnAMiss(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 
-	state := retryUntilMiss(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilMiss(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		state.Units[targetID].Hostility = "hostile"
 		return state
@@ -267,9 +284,10 @@ func TestBasicAttackHandler_EngagesIdleHostileTargetEvenOnAMiss(t *testing.T) {
 }
 
 func TestBasicAttackHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 
-	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		state.Units[targetID].Hostility = "neutral"
 		return state
@@ -280,6 +298,7 @@ func TestBasicAttackHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
 }
 
 func TestBasicAttackHandler_KillAggroesGroupedIdleUnitEvenIfItNeverAggroedItself(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	linkedID := uuid.New()
 	zone := instanceconfig.Zone{
@@ -291,7 +310,7 @@ func TestBasicAttackHandler_KillAggroesGroupedIdleUnitEvenIfItNeverAggroedItself
 		}},
 	}
 
-	state := retryUntilHit(t, playerID, targetID, zone, func() *instancestate.InstanceState {
+	state := retryUntilHit(t, playerID, targetID, zone, rng, func() *instancestate.InstanceState {
 		state := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		state.Units[targetID].Health = 1
 		state.Units[targetID].Hostility = "hostile"
@@ -314,10 +333,11 @@ func TestBasicAttackHandler_KillAggroesGroupedIdleUnitEvenIfItNeverAggroedItself
 // --- cast pushback (see command.ApplyCastPushback) ---
 
 func TestBasicAttackHandler_LandedHitPushesBackTargetsCast(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	endsAt := time.Now().Add(2 * time.Second)
 
-	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilHit(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		s := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		s.Units[targetID].Casting = &instancestate.CastState{
 			Power:     instanceconfig.Power{Name: "Heal"},
@@ -331,10 +351,11 @@ func TestBasicAttackHandler_LandedHitPushesBackTargetsCast(t *testing.T) {
 }
 
 func TestBasicAttackHandler_MissedHitDoesNotPushBackTargetsCast(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	playerID, targetID := uuid.New(), uuid.New()
 	endsAt := time.Now().Add(2 * time.Second)
 
-	state := retryUntilMiss(t, playerID, targetID, instanceconfig.Zone{}, func() *instancestate.InstanceState {
+	state := retryUntilMiss(t, playerID, targetID, instanceconfig.Zone{}, rng, func() *instancestate.InstanceState {
 		s := attackingStateWithTarget(playerID, targetID, 0, 0, 3, 0)
 		s.Units[targetID].Casting = &instancestate.CastState{
 			Power:     instanceconfig.Power{Name: "Heal"},

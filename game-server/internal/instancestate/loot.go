@@ -10,11 +10,11 @@ import (
 
 // RollAndRecordLoot samples items from the dead unit's loot table and appends
 // a LootEvent to state.PendingLootEvents. No-ops if the unit has no loot table.
-func RollAndRecordLoot(unitID uuid.UUID, unit *UnitState, state *InstanceState) {
+func RollAndRecordLoot(unitID uuid.UUID, unit *UnitState, state *InstanceState, rng *rand.Rand) {
 	if len(unit.LootTable) == 0 || len(state.Items) == 0 {
 		return
 	}
-	pending := rollLoot(unit.LootTable, unit.LootCount, state.Items)
+	pending := rollLoot(unit.LootTable, unit.LootCount, state.Items, rng)
 	if len(pending) == 0 {
 		return
 	}
@@ -30,7 +30,7 @@ func RollAndRecordLoot(unitID uuid.UUID, unit *UnitState, state *InstanceState) 
 	})
 }
 
-func rollLoot(table map[string]int, count [2]float64, catalog map[string]instanceconfig.Item) []PendingLootItem {
+func rollLoot(table map[string]int, count [2]float64, catalog map[string]instanceconfig.Item, rng *rand.Rand) []PendingLootItem {
 	type entry struct {
 		id    string
 		cumul int
@@ -47,11 +47,11 @@ func rollLoot(table map[string]int, count [2]float64, catalog map[string]instanc
 		return nil
 	}
 
-	n := resolveLootCount(count)
+	n := resolveLootCount(count, rng)
 
 	var result []PendingLootItem
 	for range n {
-		r := rand.Intn(total)
+		r := rng.Intn(total)
 		for _, e := range entries {
 			if r < e.cumul {
 				if item, ok := catalog[e.id]; ok {
@@ -72,13 +72,13 @@ func rollLoot(table map[string]int, count [2]float64, catalog map[string]instanc
 // (truncated to an integer); a resolved value in [0, 1) is instead the
 // probability of awarding exactly one item (0 otherwise) - this lets a unit
 // be configured to drop its loot only some of the time.
-func resolveLootCount(count [2]float64) int {
+func resolveLootCount(count [2]float64, rng *rand.Rand) int {
 	value := count[0]
 	if count[1] > count[0] {
-		value = count[0] + rand.Float64()*(count[1]-count[0])
+		value = count[0] + rng.Float64()*(count[1]-count[0])
 	}
 	if value < 1 {
-		if rand.Float64() < value {
+		if rng.Float64() < value {
 			return 1
 		}
 		return 0

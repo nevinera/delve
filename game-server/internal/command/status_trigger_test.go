@@ -1,6 +1,7 @@
 package command_test
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ func TestTriggerHolds_TakesDamageDealsDamage(t *testing.T) {
 }
 
 func TestFireTriggeredEffect_SelfHeal(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	holder := &instancestate.UnitState{Health: 50, MaxHealth: 100}
 	eff := instanceconfig.StatusEffect{
 		Type: "triggered", InternalCooldown: 3,
@@ -41,12 +43,13 @@ func TestFireTriggeredEffect_SelfHeal(t *testing.T) {
 	}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 
-	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state)
+	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 
 	assert.Greater(t, holder.Health, 50.0)
 }
 
 func TestFireTriggeredEffect_HarmTarget(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	holderID, targetID := uuid.New(), uuid.New()
 	holder := &instancestate.UnitState{Health: 100, MaxHealth: 100, Target: &targetID}
 	target := &instancestate.UnitState{Health: 100, MaxHealth: 100, Hostility: "hostile"}
@@ -61,7 +64,7 @@ func TestFireTriggeredEffect_HarmTarget(t *testing.T) {
 	// flaky; any non-miss (an overwhelming majority within 10 tries) drops
 	// target's health.
 	for i := 0; i < 10 && target.Health == 100.0; i++ {
-		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state)
+		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 	}
 
 	assert.Less(t, target.Health, 100.0)
@@ -70,6 +73,7 @@ func TestFireTriggeredEffect_HarmTarget(t *testing.T) {
 }
 
 func TestFireTriggeredEffect_HarmTarget_NoTargetIsNoOp(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	holder := &instancestate.UnitState{Health: 100, MaxHealth: 100}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 	eff := instanceconfig.StatusEffect{
@@ -78,11 +82,12 @@ func TestFireTriggeredEffect_HarmTarget_NoTargetIsNoOp(t *testing.T) {
 	}
 
 	assert.NotPanics(t, func() {
-		command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state)
+		command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 	})
 }
 
 func TestFireTriggeredEffect_LethalHarmKillsAndClearsTarget(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	holderID, targetID := uuid.New(), uuid.New()
 	holder := &instancestate.UnitState{Health: 100, MaxHealth: 100, Target: &targetID}
 	target := &instancestate.UnitState{Health: 1, MaxHealth: 100, Hostility: "hostile"}
@@ -99,7 +104,7 @@ func TestFireTriggeredEffect_LethalHarmKillsAndClearsTarget(t *testing.T) {
 	// still kills it outright.
 	for i := 0; i < 10 && target.Status != instancestate.UnitStatusDead; i++ {
 		target.Health = 1
-		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state)
+		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 	}
 
 	assert.Equal(t, instancestate.UnitStatusDead, target.Status)
@@ -107,6 +112,7 @@ func TestFireTriggeredEffect_LethalHarmKillsAndClearsTarget(t *testing.T) {
 }
 
 func TestFireTriggeredEffect_Resource(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	holder := &instancestate.UnitState{
 		Resources: map[string]*instancestate.ResourceState{"fury": {Current: 0, Max: 10}},
 	}
@@ -116,12 +122,13 @@ func TestFireTriggeredEffect_Resource(t *testing.T) {
 	}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 
-	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state)
+	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 
 	assert.Equal(t, 5.0, holder.Resources["fury"].Current)
 }
 
 func TestFireTriggeredEffect_Status(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	holder := &instancestate.UnitState{Health: 100, MaxHealth: 100}
 	status := instanceconfig.Status{Name: "Combo", ShortName: "Combo", TreatAs: "inherent", Stacking: "replace"}
 	eff := instanceconfig.StatusEffect{
@@ -130,7 +137,7 @@ func TestFireTriggeredEffect_Status(t *testing.T) {
 	}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 
-	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state)
+	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 
 	require.Len(t, holder.ActiveStatusEffects, 1)
 	assert.Equal(t, "Combo", holder.ActiveStatusEffects[0].Status.Name)

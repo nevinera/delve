@@ -79,12 +79,18 @@ const (
 
 // BasicAttackHandler executes one swing of a player unit's basic attack
 // against its current target, gated by the swing timer.
-type BasicAttackHandler struct{}
+type BasicAttackHandler struct {
+	// Rng backs every random roll this handler makes (avoidance, miss/crit,
+	// swing variance) - set once at registration from Instance.Rand, so a
+	// test can inject a seeded source instead of math/rand's package-level
+	// global.
+	Rng *rand.Rand
+}
 
 func (BasicAttackHandler) Type() string      { return "basic_attack" }
 func (BasicAttackHandler) Deduplicate() bool { return false }
 
-func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error {
+func (h BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanceconfig.Zone, next *instancestate.InstanceState) error {
 	if _, ok := payload.(BasicAttackPayload); !ok {
 		return nil
 	}
@@ -131,9 +137,9 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	}
 	EngageOnAttack(target, unitID, zone, next)
 	physical := unit.DamageStatKey != "intellect"
-	raw := BasicAttackDamage(critChancePct, statDPS)
+	raw := BasicAttackDamage(critChancePct, statDPS, h.Rng)
 	raw = ApplyDamageDoneBonus(unit, physical, raw)
-	dealt := IncomingDamage(target, zone, raw, physical)
+	dealt := IncomingDamage(target, zone, raw, physical, h.Rng)
 	target.Health -= dealt
 	if dealt > 0 {
 		ApplyCastPushback(target)
@@ -146,7 +152,7 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	if target.Health == 0 {
 		target.Status = instancestate.UnitStatusDead
 		target.Target = nil
-		instancestate.RollAndRecordLoot(*unit.Target, target, next)
+		instancestate.RollAndRecordLoot(*unit.Target, target, next, h.Rng)
 		unit.Target = nil
 		unit.Attacking = false
 	}
@@ -271,7 +277,7 @@ func PlayerMaxHealth(unit *instancestate.UnitState, zone instanceconfig.Zone) fl
 // aren't applied to the same portion of damage twice (docs/stats.md's
 // "Miss Chance" section). NPCs have no EquippedItems, so both are 0 for them
 // - only players currently have any incoming-damage mitigation.
-func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, rawDamage float64, physical bool) float64 {
+func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, rawDamage float64, physical bool, rng *rand.Rand) float64 {
 	strength, agility, intellect, defenceRating, _ := unitEffectiveStats(target, zone)
 	mods := ActiveStatModifiers(target)
 	school := "physical"
@@ -287,7 +293,7 @@ func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, r
 	}
 	avoidancePct := 100 * avoidanceAsymptote * effectiveAvoidanceStat / (effectiveAvoidanceStat + avoidanceHalfPoint)
 	avoidancePct = applyTier2SchoolPct(mods, school, "Avoidance", avoidancePct)
-	if rand.Float64() < avoidancePct/100 {
+	if rng.Float64() < avoidancePct/100 {
 		return 0
 	}
 
@@ -307,11 +313,11 @@ func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, r
 // basic attack (player or NPC) and harmful power effect: baseMissChance to
 // miss outright (missed=true, multiplier meaningless), else a
 // critChancePct-based roll between 1.0 and baseCritMultiplier.
-func RollAttackOutcome(critChancePct float64) (missed bool, multiplier float64) {
-	if rand.Float64() < baseMissChance {
+func RollAttackOutcome(critChancePct float64, rng *rand.Rand) (missed bool, multiplier float64) {
+	if rng.Float64() < baseMissChance {
 		return true, 0
 	}
-	if rand.Float64() < critChancePct/100 {
+	if rng.Float64() < critChancePct/100 {
 		return false, baseCritMultiplier
 	}
 	return false, 1.0
@@ -325,13 +331,13 @@ func RollAttackOutcome(critChancePct float64) (missed bool, multiplier float64) 
 // swings aren't all identical even absent a crit. Exported (alongside
 // PlayerBasicAttackInterval) so a DPS simulator (internal/classdps) can
 // reuse the real formula instead of re-deriving it.
-func BasicAttackDamage(critChancePct, statDPS float64) float64 {
-	missed, multiplier := RollAttackOutcome(critChancePct)
+func BasicAttackDamage(critChancePct, statDPS float64, rng *rand.Rand) float64 {
+	missed, multiplier := RollAttackOutcome(critChancePct, rng)
 	if missed {
 		return 0
 	}
 	nominalSwingDamage := (characterBasicAttackBaseDPS + statDPS) * characterBasicAttackNominalInterval.Seconds()
-	variance := 1 + (rand.Float64()*2-1)*characterBasicAttackVariance
+	variance := 1 + (rng.Float64()*2-1)*characterBasicAttackVariance
 	return math.Round(nominalSwingDamage * variance * multiplier)
 }
 

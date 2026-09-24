@@ -1,6 +1,7 @@
 package classdps
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,8 +14,8 @@ import (
 // castPower applies power's effects then spends its cost and sets its
 // GCD/cooldown - the instant-power path (see simulate.go's pendingCast for
 // the cast-time-power split).
-func castPower(unit, target *instancestate.UnitState, attackerID uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, addPowerDamage func(float64)) {
-	applyPowerEffects(unit, target, attackerID, power, zone, now, addPowerDamage)
+func castPower(unit, target *instancestate.UnitState, attackerID uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, addPowerDamage func(float64), rng *rand.Rand) {
+	applyPowerEffects(unit, target, attackerID, power, zone, now, addPowerDamage, rng)
 	commitPowerCostAndCooldowns(unit, power, now)
 }
 
@@ -29,7 +30,7 @@ func castPower(unit, target *instancestate.UnitState, attackerID uuid.UUID, powe
 // Split out from castPower so a cast-time power (simulate.go's pendingCast)
 // can apply its effects at cast completion, separately from committing its
 // cost/GCD/cooldown at cast start (commitPowerCostAndCooldowns).
-func applyPowerEffects(unit, target *instancestate.UnitState, attackerID uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, addPowerDamage func(float64)) {
+func applyPowerEffects(unit, target *instancestate.UnitState, attackerID uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, addPowerDamage func(float64), rng *rand.Rand) {
 	timeBudget := command.PowerEffectTimeBudget(power)
 	for _, effect := range power.Effects {
 		switch effect.Type {
@@ -38,9 +39,9 @@ func applyPowerEffects(unit, target *instancestate.UnitState, attackerID uuid.UU
 				continue
 			}
 			physical := effect.School != "magic"
-			raw := command.PowerEffectAmount(unit, zone, effect, timeBudget, false, false)
+			raw := command.PowerEffectAmount(unit, zone, effect, timeBudget, false, false, rng)
 			raw = command.ApplyDamageDoneBonus(unit, physical, raw)
-			dealt := command.IncomingDamage(target, zone, raw, physical)
+			dealt := command.IncomingDamage(target, zone, raw, physical, rng)
 			addPowerDamage(dealt)
 			target.Health -= dealt
 			if dealt > 0 {
@@ -58,7 +59,7 @@ func applyPowerEffects(unit, target *instancestate.UnitState, attackerID uuid.UU
 			if effect.Affects == "self" {
 				recipient = unit
 			}
-			amount := command.PowerEffectAmount(unit, zone, effect, timeBudget, true, false)
+			amount := command.PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)
 			recipient.Health += amount * (1 + command.HealingTakenPct(recipient, zone)/100)
 			if recipient.Health > recipient.MaxHealth {
 				recipient.Health = recipient.MaxHealth
@@ -71,7 +72,7 @@ func applyPowerEffects(unit, target *instancestate.UnitState, attackerID uuid.UU
 			if effect.Affects == "self" {
 				recipient = unit
 			} else if command.IsHostileAffects(effect.Affects) {
-				if missed, _ := command.RollAttackOutcome(0); missed {
+				if missed, _ := command.RollAttackOutcome(0, rng); missed {
 					continue // resisted
 				}
 			}

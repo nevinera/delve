@@ -1,6 +1,7 @@
 package instancestate
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,22 +10,24 @@ import (
 )
 
 func TestResolveLootCount_IntegerAndRange(t *testing.T) {
-	require.Equal(t, 3, resolveLootCount([2]float64{3, 3}))
-	require.Equal(t, 0, resolveLootCount([2]float64{0, 0}))
+	rng := rand.New(rand.NewSource(1))
+	require.Equal(t, 3, resolveLootCount([2]float64{3, 3}, rng))
+	require.Equal(t, 0, resolveLootCount([2]float64{0, 0}, rng))
 
 	for i := 0; i < 50; i++ {
-		n := resolveLootCount([2]float64{2, 4})
+		n := resolveLootCount([2]float64{2, 4}, rng)
 		require.GreaterOrEqual(t, n, 2)
 		require.LessOrEqual(t, n, 4)
 	}
 }
 
 func TestResolveLootCount_FractionalIsProbability(t *testing.T) {
-	require.Equal(t, 0, resolveLootCount([2]float64{0, 0}), "0 never drops")
+	rng := rand.New(rand.NewSource(1))
+	require.Equal(t, 0, resolveLootCount([2]float64{0, 0}, rng), "0 never drops")
 
 	var got1 bool
 	for i := 0; i < 200; i++ {
-		n := resolveLootCount([2]float64{1, 1})
+		n := resolveLootCount([2]float64{1, 1}, rng)
 		require.Equal(t, 1, n)
 		got1 = true
 	}
@@ -32,7 +35,7 @@ func TestResolveLootCount_FractionalIsProbability(t *testing.T) {
 
 	sawZero, sawOne := false, false
 	for i := 0; i < 500; i++ {
-		n := resolveLootCount([2]float64{0.5, 0.5})
+		n := resolveLootCount([2]float64{0.5, 0.5}, rng)
 		require.Contains(t, []int{0, 1}, n)
 		if n == 0 {
 			sawZero = true
@@ -45,6 +48,7 @@ func TestResolveLootCount_FractionalIsProbability(t *testing.T) {
 }
 
 func TestRollLoot_FractionalCountEitherAllOrNothing(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
 	table := map[string]int{"trinket": 1}
 	catalog := map[string]instanceconfig.Item{
 		"trinket": {Identifier: "trinket", Name: "Trinket"},
@@ -52,7 +56,7 @@ func TestRollLoot_FractionalCountEitherAllOrNothing(t *testing.T) {
 
 	sawEmpty, sawOne := false, false
 	for i := 0; i < 500; i++ {
-		result := rollLoot(table, [2]float64{0.5, 0.5}, catalog)
+		result := rollLoot(table, [2]float64{0.5, 0.5}, catalog, rng)
 		require.LessOrEqual(t, len(result), 1)
 		if len(result) == 0 {
 			sawEmpty = true

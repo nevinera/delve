@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/delve-mmo/game-server/internal/command"
@@ -16,7 +17,7 @@ import (
 // tick still counts toward takesDamage/dealsDamage) and before
 // expireStatusEffects (so a status expiring this same tick still gets one
 // last chance to fire).
-func processTriggeredStatusEffects(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time, dt float64) {
+func processTriggeredStatusEffects(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time, dt float64, rng *rand.Rand) {
 	for unitID, unit := range state.Units {
 		for i := range unit.ActiveStatusEffects {
 			if len(unit.ActiveStatusEffects[i].TriggerCooldownsRemaining) != len(unit.ActiveStatusEffects[i].Status.Effects) {
@@ -40,7 +41,7 @@ func processTriggeredStatusEffects(state *instancestate.InstanceState, zone inst
 				if !command.TriggerHolds(unit, unit.DamageTakenThisTick, unit.DamageDealtThisTick, eff.Trigger) {
 					continue
 				}
-				command.FireTriggeredEffect(unitID, unit, eff, zone, now, state)
+				command.FireTriggeredEffect(unitID, unit, eff, zone, now, state, rng)
 				unit.ActiveStatusEffects[i].TriggerCooldownsRemaining[j] = eff.InternalCooldown
 			}
 		}

@@ -1,6 +1,7 @@
 package classdps
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -80,7 +81,7 @@ type Result struct {
 // deterministic replay ever actually matters (it would mean threading an
 // injectable rand.Source through internal/command's exported functions,
 // a much bigger change than this package).
-func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
+func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand.Rand) Result {
 	res := Result{Duration: duration}
 	unit := newAttacker(cfg)
 	target := newTargetDummy()
@@ -143,11 +144,11 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 		refreshStatusConditions(target, unit, unit)
 
 		tickResourceRegen(unit, hastePctForRegen, healingTakenPctForRegen, simTickInterval)
-		tickActiveStatuses(unit, unit, zone, nowTime, simTickInterval, addStatusTickDamage)
-		tickActiveStatuses(target, unit, zone, nowTime, simTickInterval, addStatusTickDamage)
+		tickActiveStatuses(unit, unit, zone, nowTime, simTickInterval, addStatusTickDamage, rng)
+		tickActiveStatuses(target, unit, zone, nowTime, simTickInterval, addStatusTickDamage, rng)
 
 		if pendingCast != nil && now >= pendingCast.endsAt {
-			applyPowerEffects(unit, target, attackerID, pendingCast.power, zone, nowTime, addPowerDamage)
+			applyPowerEffects(unit, target, attackerID, pendingCast.power, zone, nowTime, addPowerDamage, rng)
 			spendPowerCost(unit, pendingCast.power)
 			pendingCast = nil
 		}
@@ -155,9 +156,9 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 		if pendingCast == nil && now >= nextBasicAttackAt {
 			hastePct, critChancePct, statDPS := command.UnitCombatStats(unit, zone)
 			physical := unit.DamageStatKey != "intellect"
-			raw := command.BasicAttackDamage(critChancePct, statDPS)
+			raw := command.BasicAttackDamage(critChancePct, statDPS, rng)
 			raw = command.ApplyDamageDoneBonus(unit, physical, raw)
-			dealt := command.IncomingDamage(target, zone, raw, physical)
+			dealt := command.IncomingDamage(target, zone, raw, physical, rng)
 			addBasicAttackDamage(dealt)
 			target.Health -= dealt
 			if dealt > 0 {
@@ -173,13 +174,13 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64) Result {
 					commitCooldowns(unit, power, nowTime)
 					pendingCast = &pendingCastState{power: power, endsAt: now + *castTime}
 				} else {
-					castPower(unit, target, attackerID, power, zone, nowTime, addPowerDamage)
+					castPower(unit, target, attackerID, power, zone, nowTime, addPowerDamage, rng)
 				}
 			}
 		}
 
-		processTriggeredEffects(attackerID, unit, zone, nowTime, simTickInterval, state, addTriggeredDamage)
-		processTriggeredEffects(targetID, target, zone, nowTime, simTickInterval, state, addTriggeredDamage)
+		processTriggeredEffects(attackerID, unit, zone, nowTime, simTickInterval, state, addTriggeredDamage, rng)
+		processTriggeredEffects(targetID, target, zone, nowTime, simTickInterval, state, addTriggeredDamage, rng)
 		unit.DamageTakenThisTick, unit.DamageDealtThisTick = false, false
 		target.DamageTakenThisTick, target.DamageDealtThisTick = false, false
 	}

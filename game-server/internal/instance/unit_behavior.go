@@ -60,7 +60,7 @@ type CombatEvent = instancestate.CombatEvent
 // applyUnitBehaviors is the NPC brain, called once per tick for every
 // non-player unit. It handles aggro detection, status transitions, and
 // dispatches to the appropriate movement routine.
-func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, pathGraph *pathing.Graph) []CombatEvent {
+func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, pathGraph *pathing.Graph, rng *rand.Rand) []CombatEvent {
 	cfgByID := buildNPCConfigByID(zone)
 	budget := &pathBudget{remaining: maxPathSearchesPerTick}
 
@@ -92,7 +92,7 @@ func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.
 		if !ok {
 			continue
 		}
-		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, groupByID, dt, pathGraph, budget, &events)
+		applyUnitBehavior(id, unit, e, state, zone, playersByMap, stateByZoneID, groupByID, dt, pathGraph, budget, &events, rng)
 	}
 
 	applyNPCSeparation(state, zone, dt)
@@ -112,6 +112,7 @@ func applyUnitBehavior(
 	pathGraph *pathing.Graph,
 	budget *pathBudget,
 	events *[]CombatEvent,
+	rng *rand.Rand,
 ) {
 	sf := e.unitType.SpeedFactor
 	if sf == 0 {
@@ -142,12 +143,12 @@ func applyUnitBehavior(
 			return
 		}
 		if unit.Behavior.MovementPhase == "" {
-			initNPCMovement(unit, mv)
+			initNPCMovement(unit, mv, rng)
 			if unit.Behavior.MovementPhase == "" {
 				return
 			}
 		}
-		tickNPCMovement(unit, mv, speed, dt)
+		tickNPCMovement(unit, mv, speed, dt, rng)
 
 	case instancestate.UnitStatusEngaged:
 		if unit.Target == nil {
@@ -192,9 +193,9 @@ func applyUnitBehavior(
 			}
 			now := time.Now()
 			if losClear {
-				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state)
+				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state, rng)
 				if target.Status != instancestate.UnitStatusDead {
-					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, dt, events, state)
+					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, dt, events, state, rng)
 				}
 			}
 		} else {
@@ -240,7 +241,7 @@ func applyUnitBehavior(
 // unit_type.md's UnitTactics) at the target if the unit is off GCD and at
 // least one power is in range. Appends a CombatEvent to events if an
 // attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, dt float64, events *[]CombatEvent, state *instancestate.InstanceState) {
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, dt float64, events *[]CombatEvent, state *instancestate.InstanceState, rng *rand.Rand) {
 	// Phase advancement runs every call, GCD or not - a "phased" unit's
 	// timeElapsed transition shouldn't lag behind while the unit happens to
 	// be mid-GCD (see advancePhase).
@@ -261,7 +262,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dist := math.Sqrt(dx*dx + dy*dy)
 
 	available := usablePowers(unit, unitType.Powers, dist, target, now)
-	power, ok := selectFromLeafTactics(unit, leafTactics, available)
+	power, ok := selectFromLeafTactics(unit, leafTactics, available, rng)
 	if !ok {
 		return
 	}
@@ -278,7 +279,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		return
 	}
 
-	applyNPCPowerEffects(attackerID, targetID, unit, target, power, zone, now, state)
+	applyNPCPowerEffects(attackerID, targetID, unit, target, power, zone, now, state, rng)
 	spendNPCPowerCost(unit, power)
 	commitNPCCooldowns(unit, power, now)
 	*events = append(*events, CombatEvent{
@@ -298,7 +299,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 // player equivalent), there's no whole-cast abort on an out-of-range
 // effect - each effect independently no-ops via npcEffectInRange, matching
 // NPC attacks' existing per-effect (not all-or-nothing) validation.
-func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState) {
+func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) {
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
@@ -319,7 +320,7 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 				// at), not of the Status itself - see command.IsHostileAffects.
 				command.EngageOnAttack(target, attackerID, zone, state)
 				if command.IsHostileAffects(eff.Affects) {
-					if missed, _ := command.RollAttackOutcome(0); missed {
+					if missed, _ := command.RollAttackOutcome(0, rng); missed {
 						continue // resisted
 					}
 				}
@@ -327,8 +328,8 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 			command.ApplyStatus(recipient, unit, attackerID, *eff.Status, eff.Duration, zone, now)
 		case "harm":
 			timeBudget := command.PowerEffectTimeBudget(power)
-			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false)
-			dealt := command.IncomingDamage(target, zone, raw, eff.School != "magic")
+			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false, rng)
+			dealt := command.IncomingDamage(target, zone, raw, eff.School != "magic", rng)
 			target.Health -= dealt
 			if dealt > 0 {
 				command.ApplyCastPushback(target)
@@ -341,7 +342,7 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 			if target.Health == 0 {
 				target.Status = instancestate.UnitStatusDead
 				target.Target = nil
-				instancestate.RollAndRecordLoot(targetID, target, state)
+				instancestate.RollAndRecordLoot(targetID, target, state, rng)
 			}
 		case "resource":
 			recipient := target
@@ -445,7 +446,7 @@ func phaseTransitioned(unit *instancestate.UnitState, t *instanceconfig.PhaseTra
 // "phased" isn't handled here (see selectFromTactics/advancePhase); a
 // phase's own tactics is never itself "phased" either, so this only ever
 // sees the four non-phased types.
-func selectFromLeafTactics(unit *instancestate.UnitState, tactics instanceconfig.UnitTactics, available []instanceconfig.Power) (instanceconfig.Power, bool) {
+func selectFromLeafTactics(unit *instancestate.UnitState, tactics instanceconfig.UnitTactics, available []instanceconfig.Power, rng *rand.Rand) (instanceconfig.Power, bool) {
 	switch tactics.Type {
 	case "rotation":
 		return selectRotation(unit, tactics.Powers, available)
@@ -461,7 +462,7 @@ func selectFromLeafTactics(unit *instancestate.UnitState, tactics instanceconfig
 		if len(available) == 0 {
 			return instanceconfig.Power{}, false
 		}
-		return available[rand.Intn(len(available))], true
+		return available[rng.Intn(len(available))], true
 	}
 }
 
@@ -538,7 +539,7 @@ func npcEffectInRange(eff instanceconfig.PowerEffect, dist float64, unit, target
 // reduced by target's Avoidance/Defence Rating per UnitType.BasicAttackSchool
 // (see command.IncomingDamage) - a nonzero reduction only when target is a
 // player, since NPCs carry no itemized stats of their own.
-func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState) {
+func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, state *instancestate.InstanceState, rng *rand.Rand) {
 	if !unit.Attacking || unitType.AttackSpeed <= 0 {
 		return
 	}
@@ -563,13 +564,13 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 	// command.RollAttackOutcome. A miss still swings (the event still
 	// fires) but deals no damage, same as a player's missed swing.
 	_, critChancePct, _ := command.UnitCombatStats(unit, zone)
-	if missed, multiplier := command.RollAttackOutcome(critChancePct); !missed {
+	if missed, multiplier := command.RollAttackOutcome(critChancePct, rng); !missed {
 		physical := unitType.BasicAttackSchool != "magic"
 		mean := unitType.DPS / unitType.AttackSpeed
 		lo, hi := mean*(1-basicAttackVariance), mean*(1+basicAttackVariance)
-		raw := math.Round((lo + rand.Float64()*(hi-lo)) * multiplier)
+		raw := math.Round((lo + rng.Float64()*(hi-lo)) * multiplier)
 		raw = command.ApplyDamageDoneBonus(unit, physical, raw)
-		dealt := command.IncomingDamage(target, zone, raw, physical)
+		dealt := command.IncomingDamage(target, zone, raw, physical, rng)
 		target.Health -= dealt
 		if dealt > 0 {
 			command.ApplyCastPushback(target)
@@ -582,7 +583,7 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 		if target.Health == 0 {
 			target.Status = instancestate.UnitStatusDead
 			target.Target = nil
-			instancestate.RollAndRecordLoot(targetID, target, state)
+			instancestate.RollAndRecordLoot(targetID, target, state, rng)
 		}
 	}
 	*events = append(*events, CombatEvent{
