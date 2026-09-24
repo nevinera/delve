@@ -14,6 +14,7 @@ type Result struct {
 	BasicAttackDamage float64
 	PowerDamage       float64
 	StatusTickDamage  float64
+	TriggeredDamage   float64 // "triggered" StatusEffect harm procs (#64) - only trigger.type: "dealsDamage" is modeled here, see doc.go
 	TotalDamage       float64
 
 	DPS float64 // TotalDamage / Duration
@@ -92,9 +93,22 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 		resource = regenResource(resource, enemy.Resource.DefaultValue, enemy.Resource.ReturnRate, now-lastResourceAt)
 		lastResourceAt = now
 
+		// dealtDamageThisStep backs a "dealsDamage" StatusTrigger - true if
+		// whichever single action this event-driven iteration resolves
+		// below actually lands (not on a miss, which deals 0).
+		dealtDamageThisStep := false
+		trackDamage := func(add func(float64)) func(float64) {
+			return func(dmg float64) {
+				add(dmg)
+				if dmg > 0 {
+					dealtDamageThisStep = true
+				}
+			}
+		}
+
 		if pendingCast == nil && now == nextBasicAttack {
 			dmg := basicAttackDamage(enemy, rng)
-			add(&res.BasicAttackDamage)(incomingDamage(target, dmg, enemy.BasicAttackSchool != "magic", rng))
+			trackDamage(add(&res.BasicAttackDamage))(incomingDamage(target, dmg, enemy.BasicAttackSchool != "magic", rng))
 			nextBasicAttack = now + 1/enemy.AttackSpeed
 		}
 
@@ -102,7 +116,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 			if pendingCast.power.CostAmount > 0 {
 				resource = clampResource(resource-pendingCast.power.CostAmount, enemy.Resource.Max)
 			}
-			statuses = applyPowerEffects(pendingCast.power, target, statuses, &resource, enemy.Resource.Max, now, rng, add(&res.PowerDamage))
+			statuses = applyPowerEffects(pendingCast.power, target, statuses, &resource, enemy.Resource.Max, now, rng, trackDamage(add(&res.PowerDamage)))
 			pendingCast = nil
 		}
 
@@ -123,7 +137,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 					if power.CostAmount > 0 {
 						resource = clampResource(resource-power.CostAmount, enemy.Resource.Max)
 					}
-					statuses = applyPowerEffects(power, target, statuses, &resource, enemy.Resource.Max, now, rng, add(&res.PowerDamage))
+					statuses = applyPowerEffects(power, target, statuses, &resource, enemy.Resource.Max, now, rng, trackDamage(add(&res.PowerDamage)))
 					nextPowerCheck = now + effectGlobalCooldown(power)
 				}
 			} else if hasUsablePower(enemy.Powers) {
@@ -137,7 +151,8 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 			}
 		}
 
-		tickStatuses(statuses, now, target, resource, enemy.Resource.Name, rng, add(&res.StatusTickDamage))
+		tickStatuses(statuses, now, target, resource, enemy.Resource.Name, rng, trackDamage(add(&res.StatusTickDamage)))
+		statuses = tickTriggers(statuses, now, target, dealtDamageThisStep, &resource, enemy.Resource.Max, rng, add(&res.TriggeredDamage))
 		statuses = expireStatuses(statuses, now)
 	}
 

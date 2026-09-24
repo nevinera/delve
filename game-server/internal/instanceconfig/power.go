@@ -101,6 +101,48 @@ type StatusEffect struct {
 	// Condition gates whether this effect is mechanically live right now -
 	// nil means always live. See docs/schema/status.md#statuseffectcondition.
 	Condition *StatusEffectCondition `json:"condition,omitempty"`
+
+	// triggered
+	Trigger          *StatusTrigger   `json:"trigger,omitempty"`          // Required for triggered
+	InternalCooldown float64          `json:"internalCooldown,omitempty"` // Required for triggered: minimum seconds between fires
+	TriggeredEffect  *TriggeredEffect `json:"effect,omitempty"`           // Required for triggered
+}
+
+// StatusTrigger is what causes a "triggered" StatusEffect to fire. Type
+// discriminator: "healthAbove", "healthBelow", "takesDamage", or
+// "dealsDamage" - always evaluated against the unit holding the status (see
+// docs/schema/status.md#triggered).
+type StatusTrigger struct {
+	Type string `json:"type"` // Required
+
+	// healthAbove, healthBelow
+	Threshold float64 `json:"threshold,omitempty"` // Required for healthAbove/healthBelow: 0-100
+}
+
+// TriggeredEffect is what happens when a "triggered" StatusEffect fires.
+// Deliberately smaller than PowerEffect - no range/LOS check (this fires
+// reactively, from combat that's already happening, not a fresh cast), and
+// Affects is only "self" or "target" (the holder's own current target).
+// Type discriminator: "harm", "heal", "resource", or "status" - same
+// meanings as PowerEffect.
+type TriggeredEffect struct {
+	Type    string `json:"type"`    // Required
+	Affects string `json:"affects"` // Required: "self" or "target"
+
+	// harm, heal
+	Amount *ValueRange `json:"amount,omitempty"` // Required for harm/heal
+
+	// harm only: "physical" (default) or "magic" - same meaning as
+	// PowerEffect.School.
+	School string `json:"school,omitempty"`
+
+	// resource
+	ResourceName string  `json:"resourceName,omitempty"` // Required for resource
+	Delta        float64 `json:"delta,omitempty"`        // Required for resource; negative consumes
+
+	// status
+	Duration float64 `json:"duration,omitempty"` // Required for status: seconds
+	Status   *Status `json:"status,omitempty"`   // Required for status
 }
 
 // StatusEffectCondition gates a single StatusEffect on live combat state.

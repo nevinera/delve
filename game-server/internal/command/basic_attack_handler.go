@@ -137,6 +137,8 @@ func (BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone 
 	target.Health -= dealt
 	if dealt > 0 {
 		ApplyCastPushback(target)
+		unit.DamageDealtThisTick = true
+		target.DamageTakenThisTick = true
 	}
 	if target.Health < 0 {
 		target.Health = 0

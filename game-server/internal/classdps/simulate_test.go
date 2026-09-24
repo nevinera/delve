@@ -204,6 +204,62 @@ func TestSimulate_ConditionalStatusDoTTicksWhenConditionHolds(t *testing.T) {
 	assert.Greater(t, res.StatusTickDamage, 0.0, "Enrage is applied to the same target as the DoT, so its condition should hold and it should tick")
 }
 
+func TestSimulate_SelfTriggeredEffectFiresOnDealsDamage(t *testing.T) {
+	amount := instanceconfig.ValueRange{1.0, 1.0} // negligible direct damage, isolates the proc
+	proc := instanceconfig.Status{
+		Name: "Cleave", ShortName: "Cleave", TreatAs: "inherent", Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "triggered", InternalCooldown: 1000, // large enough to fire at most once
+				Trigger:         &instanceconfig.StatusTrigger{Type: "dealsDamage"},
+				TriggeredEffect: &instanceconfig.TriggeredEffect{Type: "harm", Affects: "target", Amount: &instanceconfig.ValueRange{20.0, 20.0}},
+			},
+		},
+	}
+	class := instanceconfig.CharacterClass{
+		Powers: []instanceconfig.Power{{
+			Name: "Ignite", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Amount: &amount},
+				{Type: "status", Affects: "self", Duration: 9, Status: &proc},
+			},
+		}},
+	}
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+
+	assert.Greater(t, res.TriggeredDamage, 0.0, "unit's own dealsDamage should be observable to a self-applied trigger")
+	assert.Equal(t, res.TotalDamage, res.BasicAttackDamage+res.PowerDamage+res.StatusTickDamage+res.TriggeredDamage)
+}
+
+func TestSimulate_TargetHeldDealsDamageTriggerNeverFires(t *testing.T) {
+	// target never attacks in this simulation (see doc.go's Known gaps),
+	// so a dealsDamage trigger on a status applied *to* target should
+	// never hold, even though unit deals damage constantly.
+	amount := instanceconfig.ValueRange{1.0, 1.0}
+	proc := instanceconfig.Status{
+		Name: "Retaliate", ShortName: "Retal", TreatAs: "debuff", Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{
+				Type: "triggered", InternalCooldown: 0.1,
+				Trigger:         &instanceconfig.StatusTrigger{Type: "dealsDamage"},
+				TriggeredEffect: &instanceconfig.TriggeredEffect{Type: "harm", Affects: "target", Amount: &instanceconfig.ValueRange{20.0, 20.0}},
+			},
+		},
+	}
+	class := instanceconfig.CharacterClass{
+		Powers: []instanceconfig.Power{{
+			Name: "Ignite", GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "harm", Amount: &amount},
+				{Type: "status", Affects: "bTarget", Duration: 9, Status: &proc},
+			},
+		}},
+	}
+	res := classdps.Simulate(classdps.AttackerConfig{Class: class}, classdps.Strategy{{Power: "Ignite"}}, 6600)
+
+	assert.Zero(t, res.TriggeredDamage)
+}
+
 func TestSimulate_StrategyPrefersHigherPriorityUsablePower(t *testing.T) {
 	amountA := instanceconfig.ValueRange{10.0, 10.0}
 	amountB := instanceconfig.ValueRange{50.0, 50.0}

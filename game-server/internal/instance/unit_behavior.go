@@ -332,6 +332,8 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 			target.Health -= dealt
 			if dealt > 0 {
 				command.ApplyCastPushback(target)
+				unit.DamageDealtThisTick = true
+				target.DamageTakenThisTick = true
 			}
 			if target.Health < 0 {
 				target.Health = 0
@@ -571,6 +573,8 @@ func tryNPCBasicAttack(attackerID, targetID uuid.UUID, unit, target *instancesta
 		target.Health -= dealt
 		if dealt > 0 {
 			command.ApplyCastPushback(target)
+			unit.DamageDealtThisTick = true
+			target.DamageTakenThisTick = true
 		}
 		if target.Health < 0 {
 			target.Health = 0

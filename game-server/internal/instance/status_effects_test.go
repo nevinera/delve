@@ -254,7 +254,11 @@ func TestTickStatusEffects_MetConditionFiresTheTick(t *testing.T) {
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 	state.Units[targetID].ActiveStatusEffects[0].ConditionsMet[0] = true
 
-	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 1.0)
+	// 10 ticks (TickRate 1.0, dt 10.0), each independently rolling harm's
+	// 5% miss chance - firing ten times and all ten missing is
+	// astronomically unlikely (0.05^10), so this is effectively
+	// deterministic without needing to seed rand.
+	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 10.0)
 
 	assert.Less(t, state.Units[targetID].Health, 100.0, "condition met - the tick fires")
 }

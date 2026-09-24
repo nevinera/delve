@@ -43,6 +43,18 @@
 //     conditionMet) - only the two HP-based variants need real unit state
 //     this package doesn't have.
 //
+//   - StatusTrigger{Type: "healthAbove" | "healthBelow" | "takesDamage"}
+//     (nevinera/delve#64): never fires here, same reasoning as the
+//     StatusEffectCondition gap above - no live HP anywhere to check or to
+//     have taken damage. "dealsDamage" IS modeled (see statuses.go's
+//     tickTriggers), since that's exactly what this package measures.
+//     TriggeredEffect support is also narrower than the real engine's:
+//     harm/status land against the shared statuses/target (this package
+//     doesn't distinguish "the enemy's own buffs" from "debuffs on the
+//     target" - applyPowerEffects already conflates them the same way),
+//     resource only honors affects: "self", and a "heal" TriggeredEffect
+//     is a no-op (no live HP for either side to heal).
+//
 // Power.CostType/CostAmount and UnitType.Resource.ReturnRate/DefaultValue
 // are modeled too, mirroring the real engine's command.PowerUsable/
 // ClampResource and instance.tickResourceRegen: pickPower only picks among

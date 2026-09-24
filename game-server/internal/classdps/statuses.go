@@ -88,6 +88,10 @@ func fireStatusTick(owner, applier *instancestate.UnitState, eff instanceconfig.
 		dealt := command.IncomingDamage(owner, zone, amount, eff.School != "magic")
 		addStatusTickDamage(dealt)
 		owner.Health -= dealt
+		if dealt > 0 {
+			applier.DamageDealtThisTick = true
+			owner.DamageTakenThisTick = true
+		}
 		if owner.Health < 0 {
 			owner.Health = 0
 		}

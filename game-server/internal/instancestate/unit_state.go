@@ -129,6 +129,16 @@ type ActiveStatusEffect struct {
 	// have. See instance/status_conditions.go (and classdps's mirror of it)
 	// for where the refresh happens.
 	ConditionsMet []bool
+
+	// TriggerCooldownsRemaining is parallel to Status.Effects: for each
+	// "triggered" entry, seconds remaining until it's next allowed to fire
+	// (StatusEffect.InternalCooldown - see command.FireTriggeredEffect).
+	// Seeded at 0 (ready immediately) on application - unlike
+	// TimeUntilNextTick's Haste-scaled first interval, a trigger's first
+	// possible fire isn't delayed by anything. Counts down by dt every
+	// server tick; reset to InternalCooldown whenever it fires. Unused (0)
+	// for non-triggered entries.
+	TriggerCooldownsRemaining []float64
 }
 
 // MovementIntent holds the player-commanded movement keys for a unit.
@@ -248,6 +258,16 @@ type UnitState struct {
 	ActiveStatusEffects  []ActiveStatusEffect
 	Behavior             BehaviorState
 	MovementIntent       MovementIntent
+
+	// DamageTakenThisTick/DamageDealtThisTick back a StatusTrigger
+	// {type: "takesDamage"/"dealsDamage"} (see command.TriggerHolds) - set
+	// wherever combat actually connects (a basic attack, a harm PowerEffect,
+	// or a recurring StatusEffect tick; not a miss/avoid, which deals 0) and
+	// cleared once per tick by instance.processTriggeredStatusEffects after
+	// triggers have had a chance to see them - so they mean "this happened
+	// sometime during the tick just processed", not an instantaneous flag.
+	DamageTakenThisTick bool
+	DamageDealtThisTick bool
 
 	// LastMoveAt is when the server last processed a client-submitted move
 	// with an explicit position (see command.MoveHandler), used to bound how

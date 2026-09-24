@@ -31,7 +31,7 @@ A StatusEffect describes one mechanical outcome of a status being active on a un
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `type` | string | yes | `"stat"`, `"recurring"`, or `"none"`. |
+| `type` | string | yes | `"stat"`, `"recurring"`, `"none"`, or `"triggered"`. |
 | `condition` | StatusEffectCondition | no | Gates whether this effect is mechanically live right now. Omitted means always live. See below. Re-evaluated roughly once per server tick (~100ms) - not instantaneous. |
 
 ---
@@ -109,6 +109,51 @@ Applies a heal or harm tick at a regular interval while the status is active.
 ```
 
 A `recurring` effect whose condition is unmet when a tick comes due just skips that tick - the tick-rate cadence keeps counting regardless, so it isn't "saved up" and doesn't catch up once the condition becomes true again.
+
+---
+
+### triggered
+
+Fires `effect` once whenever `trigger` currently holds, throttled by `internalCooldown`. Unlike `condition` (which gates whether another effect is continuously live), `triggered` fires a one-shot effect - and unlike `recurring`, it isn't on a fixed clock, it's reactive to combat. Not edge-triggered: as long as `trigger` keeps holding, it keeps refiring at the cooldown's pace, not just once at the moment it first becomes true.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `trigger` | StatusTrigger | yes | What causes this to fire. See below. |
+| `internalCooldown` | float | yes | Seconds between fires, minimum. `0` means unthrottled - fires every tick `trigger` holds. |
+| `effect` | TriggeredEffect | yes | What happens when it fires. See below. |
+
+```json
+{
+  "type": "triggered",
+  "trigger": { "type": "healthBelow", "threshold": 20.0 },
+  "internalCooldown": 3.0,
+  "effect": { "type": "heal", "affects": "self", "amount": 15.0 }
+}
+```
+
+#### StatusTrigger
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `type` | string | yes | `"healthAbove"`, `"healthBelow"`, `"takesDamage"`, or `"dealsDamage"`. |
+| `threshold` | float | for `healthAbove`/`healthBelow` | 0-100. The unit holding this status is what's checked - there's no separate "self vs target" choice here (compare [StatusEffectCondition](#statuseffectcondition)'s `selfHealthPct`, which does apply to whichever unit holds it too). |
+
+`takesDamage`/`dealsDamage` hold for the tick any harm - a basic attack, a power's `harm` effect, or a `recurring` StatusEffect tick - actually connects (0 mitigated by a miss/avoid doesn't count) with the unit holding this status as the target/attacker, respectively.
+
+#### TriggeredEffect
+
+Deliberately smaller than [PowerEffect](power_effect.md): no range/LOS check (this fires reactively, from combat that's already happening, not a fresh cast), and `affects` is only `"self"` or `"target"` (the holder's own current target) - never `bAll`/`gAll`/`gTarget`.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `type` | string | yes | `"harm"`, `"heal"`, `"resource"`, or `"status"` - same meanings as [PowerEffect](power_effect.md). |
+| `affects` | string | yes | `"self"` or `"target"`. A `"target"` effect is a no-op if the holder has no current target. |
+| `amount` | float \| floatRange | for `harm`/`heal` | |
+| `school` | string | no, default `"physical"` | `harm` only. |
+| `resourceName` | string | for `resource` | |
+| `delta` | float | for `resource` | |
+| `duration` | float | for `status` | |
+| `status` | Status | for `status` | May itself have `condition`/`triggered` effects - triggers can compose. |
 
 ---
 

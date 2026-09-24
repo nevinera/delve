@@ -1,8 +1,10 @@
 module Validators
   class StatusEffectValidator < Base
-    TYPE_OPTIONS = %w[stat recurring none].freeze
+    TYPE_OPTIONS = %w[stat recurring none triggered].freeze
     CONDITION_TYPE_OPTIONS = %w[hasStatus selfHealthPct targetHealthPct casterResource].freeze
     COMPARISON_OPTIONS = %w[above below].freeze
+    TRIGGER_TYPE_OPTIONS = %w[healthAbove healthBelow takesDamage dealsDamage].freeze
+    HEALTH_TRIGGER_TYPE_OPTIONS = %w[healthAbove healthBelow].freeze
 
     # Tier 1: input stats - the same raw pools UnitCombatStats/
     # unitEffectiveStats sum from equipped items. "add" is flat rating
@@ -37,6 +39,7 @@ module Validators
       case type
       when "stat" then validate_stat!(data, path: path)
       when "recurring" then validate_recurring!(data, path: path)
+      when "triggered" then validate_triggered!(data, path: path)
       end
       validate_condition!(data, path: path) if given?(data, "condition")
     end
@@ -62,6 +65,26 @@ module Validators
     def validate_school!(data, path:)
       school = require_string!(data, "school", path: path)
       require_one_of!(school, PowerEffectValidator::DAMAGE_SCHOOLS, path: child_path(path, "school"))
+    end
+
+    def validate_triggered!(data, path:)
+      trigger_data = require_hash!(data, "trigger", path: path)
+      validate_trigger!(trigger_data, path: child_path(path, "trigger"))
+      internal_cooldown = require_numeric!(data, "internalCooldown", path: path)
+      if internal_cooldown < 0
+        raise ValidationError.new("internalCooldown must be non-negative", path: child_path(path, "internalCooldown"))
+      end
+      effect_data = require_hash!(data, "effect", path: path)
+      TriggeredEffectValidator.validate!(effect_data, path: child_path(path, "effect"))
+    end
+
+    def validate_trigger!(data, path:)
+      type = require_string!(data, "type", path: path)
+      require_one_of!(type, TRIGGER_TYPE_OPTIONS, path: child_path(path, "type"))
+      return unless HEALTH_TRIGGER_TYPE_OPTIONS.include?(type)
+      threshold = require_numeric!(data, "threshold", path: path)
+      return if threshold.between?(0, 100)
+      raise ValidationError.new("threshold must be between 0 and 100", path: child_path(path, "threshold"))
     end
 
     def validate_condition!(data, path:)
