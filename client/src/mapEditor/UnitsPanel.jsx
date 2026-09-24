@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from "react";
 import {PATROL_CHOOSE_OPTIONS} from "./mapFieldOptions";
+import DialogueFields from "./DialogueFields";
 
 // "+ Add Unit" is two steps, unlike every other add-tool here: pick a unit
 // type from the dropdown (this panel's own local state - it's not written
@@ -484,6 +485,15 @@ function UnitRow({
                   <th>Movement</th>
                   <td><MovementTypeSelect unit={unit} unitIndex={index} dispatch={dispatch} /></td>
                 </tr>
+                <tr>
+                  <th>Noncombat</th>
+                  <td>
+                    <input
+                      type="checkbox" aria-label="Noncombat" checked={!!unit.noncombat}
+                      onChange={(e) => updateUnit(index, {noncombat: e.target.checked || undefined})}
+                    />
+                  </td>
+                </tr>
               </tbody>
             </table>
             <div className="map-unit-token-panel">
@@ -497,6 +507,9 @@ function UnitRow({
             wanderLocationPlacement={wanderLocationPlacement} onStartWanderLocationPlacement={onStartWanderLocationPlacement}
             onUpdateMovement={onUpdateMovement}
           />
+          {unit.noncombat && (
+            <DialogueFields lines={unit.dialogue} onChange={(v) => updateUnit(index, {dialogue: v})} />
+          )}
           <LootTableFields
             unit={unit} unitIndex={index}
             availableItemKeys={availableItemKeys} itemDetails={itemDetails} onChooseItem={onChooseItem}

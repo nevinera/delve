@@ -303,6 +303,57 @@ describe("UnitsPanel", () => {
     });
   });
 
+  it("toggles a unit's noncombat flag", () => {
+    const dispatch = vi.fn();
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "friendly", movement: {type: "still"}}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+    expandSection();
+    expandUnitRow();
+
+    expect(screen.queryByText("Dialogue")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Noncombat"));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "noncombat", value: true,
+    });
+  });
+
+  it("edits a noncombat unit's dialogue lines", () => {
+    const dispatch = vi.fn();
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "friendly", movement: {type: "still"}, noncombat: true, dialogue: ["Hi.", "Bye."]}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+    expandSection();
+    expandUnitRow();
+
+    fireEvent.change(screen.getByLabelText("Dialogue line 1"), {target: {value: "Hello."}});
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "dialogue", value: ["Hello.", "Bye."],
+    });
+
+    fireEvent.click(screen.getByLabelText("Move line 2 up"));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "dialogue", value: ["Bye.", "Hi."],
+    });
+
+    fireEvent.click(screen.getByText("+ Add Line"));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "dialogue", value: ["Hi.", "Bye.", ""],
+    });
+  });
+
+  it("drops dialogue entirely once its last line is removed", () => {
+    const dispatch = vi.fn();
+    const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "friendly", movement: {type: "still"}, noncombat: true, dialogue: ["Hi."]}];
+    render(<UnitsPanel {...DEFAULT_PROPS} units={units} dispatch={dispatch} />);
+    expandSection();
+    expandUnitRow();
+
+    fireEvent.click(screen.getByLabelText("Remove line 1"));
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "dialogue", value: undefined,
+    });
+  });
+
   it("edits a unit's HP via the slider", () => {
     const dispatch = vi.fn();
     const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
