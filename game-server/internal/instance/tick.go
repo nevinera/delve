@@ -101,6 +101,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph)...)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds())
+			processTriggeredStatusEffects(state, inst.ZoneConfig, now, TickInterval.Seconds())
 			tickResourceRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			tickHealthRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			expireStatusEffects(state, now)

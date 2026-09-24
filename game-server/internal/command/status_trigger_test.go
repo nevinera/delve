@@ -56,7 +56,13 @@ func TestFireTriggeredEffect_HarmTarget(t *testing.T) {
 		TriggeredEffect: &instanceconfig.TriggeredEffect{Type: "harm", Affects: "target", Amount: &instanceconfig.ValueRange{20, 20}},
 	}
 
-	command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state)
+	// A harm roll can miss (5% base chance) and deal 0 - retry a bounded
+	// number of times so that ~1-in-20 chance doesn't make this test
+	// flaky; any non-miss (an overwhelming majority within 10 tries) drops
+	// target's health.
+	for i := 0; i < 10 && target.Health == 100.0; i++ {
+		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state)
+	}
 
 	assert.Less(t, target.Health, 100.0)
 	require.NotNil(t, target.TaggedBy)
@@ -86,7 +92,15 @@ func TestFireTriggeredEffect_LethalHarmKillsAndClearsTarget(t *testing.T) {
 		TriggeredEffect: &instanceconfig.TriggeredEffect{Type: "harm", Affects: "target", Amount: &instanceconfig.ValueRange{100, 100}},
 	}
 
-	command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state)
+	// A harm roll can miss (5% base chance) and deal 0, which wouldn't kill
+	// a 1-HP target - retry a bounded number of times so that ~1-in-20
+	// chance doesn't make this test flaky; target.Health resets to 1 each
+	// miss, so any non-miss (an overwhelming majority within 10 tries)
+	// still kills it outright.
+	for i := 0; i < 10 && target.Status != instancestate.UnitStatusDead; i++ {
+		target.Health = 1
+		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state)
+	}
 
 	assert.Equal(t, instancestate.UnitStatusDead, target.Status)
 	assert.Nil(t, holder.Target, "holder should drop the dead target")

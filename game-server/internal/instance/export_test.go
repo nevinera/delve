@@ -108,6 +108,10 @@ func TickStatusEffectsForTest(state *instancestate.InstanceState, zone instancec
 	tickStatusEffects(state, zone, dt)
 }
 
+func ProcessTriggeredStatusEffectsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time, dt float64) {
+	processTriggeredStatusEffects(state, zone, now, dt)
+}
+
 func RefreshStatusEffectConditionsForTest(state *instancestate.InstanceState) {
 	refreshStatusEffectConditions(state)
 }

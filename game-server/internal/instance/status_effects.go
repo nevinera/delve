@@ -71,7 +71,12 @@ func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState
 			target.TaggedBy = &id
 		}
 		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, false)
-		target.Health -= command.IncomingDamage(target, zone, amount, eff.School != "magic")
+		dealt := command.IncomingDamage(target, zone, amount, eff.School != "magic")
+		target.Health -= dealt
+		if dealt > 0 {
+			applier.DamageDealtThisTick = true
+			target.DamageTakenThisTick = true
+		}
 		if target.Health < 0 {
 			target.Health = 0
 		}

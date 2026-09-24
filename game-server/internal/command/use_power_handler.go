@@ -143,6 +143,8 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				target.Health -= dealt
 				if dealt > 0 {
 					ApplyCastPushback(target)
+					unit.DamageDealtThisTick = true
+					target.DamageTakenThisTick = true
 				}
 				if target.Health < 0 {
 					target.Health = 0

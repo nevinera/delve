@@ -259,6 +259,16 @@ type UnitState struct {
 	Behavior             BehaviorState
 	MovementIntent       MovementIntent
 
+	// DamageTakenThisTick/DamageDealtThisTick back a StatusTrigger
+	// {type: "takesDamage"/"dealsDamage"} (see command.TriggerHolds) - set
+	// wherever combat actually connects (a basic attack, a harm PowerEffect,
+	// or a recurring StatusEffect tick; not a miss/avoid, which deals 0) and
+	// cleared once per tick by instance.processTriggeredStatusEffects after
+	// triggers have had a chance to see them - so they mean "this happened
+	// sometime during the tick just processed", not an instantaneous flag.
+	DamageTakenThisTick bool
+	DamageDealtThisTick bool
+
 	// LastMoveAt is when the server last processed a client-submitted move
 	// with an explicit position (see command.MoveHandler), used to bound how
 	// far that position can feasibly have moved since - zero until the first
