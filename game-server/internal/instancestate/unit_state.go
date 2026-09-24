@@ -83,7 +83,20 @@ const (
 	UnitStatusEngaged  UnitStatus = "engaged"
 	UnitStatusLeashing UnitStatus = "leashing"
 	UnitStatusDead     UnitStatus = "dead"
+	// UnitStatusRespawning is the brief (randomized) window between a dead
+	// unit's RespawnConfig delay elapsing and it actually becoming usable
+	// again (docs/schema/common.md#respawnconfig, issue #69) - present at
+	// its spawn point, but not targetable and not yet acting. See
+	// instance/respawn.go.
+	UnitStatusRespawning UnitStatus = "respawning"
 )
+
+// IsTargetable reports whether a unit in this status can be the recipient
+// of an attack/cast/power - false for dead (no target to hit) and
+// respawning (present, but not real yet - issue #69).
+func (s UnitStatus) IsTargetable() bool {
+	return s != UnitStatusDead && s != UnitStatusRespawning
+}
 
 // ActiveStatusEffect is one status currently applied to a unit, identified
 // by (Status.Name, ApplierID) - different appliers' copies of the
@@ -247,6 +260,23 @@ type UnitState struct {
 	// >= 1 awards that many items (truncated); a value in [0, 1)
 	// is the probability of awarding exactly one item.
 	LootItems []PendingLootItem // rolled at death; nil until the unit dies
+
+	// Respawn is the resolved RespawnConfig this unit spawned with (Zone.
+	// UnitRespawn's Unit>Map>Zone cascade, computed once at spawn) - nil/
+	// zero-value ({Type: ""}) for a player, who never uses this automatic
+	// path (see command.RespawnHandler instead). See instance/respawn.go.
+	Respawn instanceconfig.RespawnConfig
+	// RespawnAt is when a dead unit with Respawn.Type == "timer" starts
+	// visibly respawning - zero means "not scheduled" (not dead, Respawn is
+	// "none", or already consumed). Set once by instance.scheduleRespawns
+	// right after death; consumed (reset to zero) by instance.tickRespawns
+	// when it fires.
+	RespawnAt time.Time
+	// RespawningUntil is when a unit in UnitStatusRespawning finishes and
+	// becomes fully alive again - zero means "not currently respawning".
+	// Set by instance.tickRespawns to now + a random 2-5s window when
+	// RespawnAt fires; consumed (reset to zero) when it elapses.
+	RespawningUntil time.Time
 
 	Status               UnitStatus
 	Target               *uuid.UUID

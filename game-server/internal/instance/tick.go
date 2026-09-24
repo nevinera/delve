@@ -108,6 +108,8 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds(), inst.Rand)
 			processTriggeredStatusEffects(state, inst.ZoneConfig, now, TickInterval.Seconds(), inst.Rand)
+			scheduleRespawns(state, now)
+			tickRespawns(state, now, inst.Rand)
 			tickResourceRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			tickHealthRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			expireStatusEffects(state, now)

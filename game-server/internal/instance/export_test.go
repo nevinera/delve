@@ -150,3 +150,11 @@ func TickCastsForTest(state *instancestate.InstanceState, zone instanceconfig.Zo
 }
 
 const MaxPathSearchesPerTickForTest = maxPathSearchesPerTick
+
+func ScheduleRespawnsForTest(state *instancestate.InstanceState, now time.Time) {
+	scheduleRespawns(state, now)
+}
+
+func TickRespawnsForTest(state *instancestate.InstanceState, now time.Time) {
+	tickRespawns(state, now, testRng())
+}
