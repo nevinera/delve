@@ -36,25 +36,28 @@ func ApplyStatus(target, applier *instancestate.UnitState, applierID uuid.UUID, 
 			e.Stacks = 1
 			e.TimeUntilNextTick = initialTickTimers(applier, zone, status)
 			e.ConditionsMet = initialConditionsMet(status)
+			e.TriggerCooldownsRemaining = make([]float64, len(status.Effects))
 		case "stack":
 			e.Stacks++
 			if status.MaxStacks > 0 && e.Stacks > status.MaxStacks {
 				e.Stacks = status.MaxStacks
 			}
 		}
-		// "extend" (and "stack"'s tick cadence/conditions) leaves
-		// TimeUntilNextTick and ConditionsMet undisturbed - only the shared
-		// ExpiresAt (and, for "stack", the stack count) moves.
+		// "extend" (and "stack"'s tick cadence/conditions/cooldowns) leaves
+		// TimeUntilNextTick, ConditionsMet, and TriggerCooldownsRemaining
+		// undisturbed - only the shared ExpiresAt (and, for "stack", the
+		// stack count) moves.
 		return
 	}
 
 	target.ActiveStatusEffects = append(target.ActiveStatusEffects, instancestate.ActiveStatusEffect{
-		Status:            status,
-		ApplierID:         applierID,
-		ExpiresAt:         expiresAt,
-		Stacks:            1,
-		TimeUntilNextTick: initialTickTimers(applier, zone, status),
-		ConditionsMet:     initialConditionsMet(status),
+		Status:                    status,
+		ApplierID:                 applierID,
+		ExpiresAt:                 expiresAt,
+		Stacks:                    1,
+		TimeUntilNextTick:         initialTickTimers(applier, zone, status),
+		ConditionsMet:             initialConditionsMet(status),
+		TriggerCooldownsRemaining: make([]float64, len(status.Effects)),
 	})
 }
 

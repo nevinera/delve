@@ -129,6 +129,16 @@ type ActiveStatusEffect struct {
 	// have. See instance/status_conditions.go (and classdps's mirror of it)
 	// for where the refresh happens.
 	ConditionsMet []bool
+
+	// TriggerCooldownsRemaining is parallel to Status.Effects: for each
+	// "triggered" entry, seconds remaining until it's next allowed to fire
+	// (StatusEffect.InternalCooldown - see command.FireTriggeredEffect).
+	// Seeded at 0 (ready immediately) on application - unlike
+	// TimeUntilNextTick's Haste-scaled first interval, a trigger's first
+	// possible fire isn't delayed by anything. Counts down by dt every
+	// server tick; reset to InternalCooldown whenever it fires. Unused (0)
+	// for non-triggered entries.
+	TriggerCooldownsRemaining []float64
 }
 
 // MovementIntent holds the player-commanded movement keys for a unit.
