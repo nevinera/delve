@@ -53,13 +53,23 @@ module Validators
     end
 
     def valid_token_image_url?(value)
-      value.is_a?(String) || (value.is_a?(Array) && value.all? { |u| u.is_a?(String) })
+      case value
+      when String
+        !value.strip.empty?
+      when Array
+        value.any? && value.all? { |u| u.is_a?(String) && !u.strip.empty? }
+      else
+        false
+      end
     end
 
     def validate_token_image_url!(data, path:)
       token_url = require_key!(data, "tokenImageUrl", path: path)
       return if valid_token_image_url?(token_url)
-      raise ValidationError.new("tokenImageUrl must be a string or array of strings", path: child_path(path, "tokenImageUrl"))
+      raise ValidationError.new(
+        "tokenImageUrl must be a non-empty string, or an array with at least one non-empty string",
+        path: child_path(path, "tokenImageUrl")
+      )
     end
 
     def validate_token_radius!(data, path:)

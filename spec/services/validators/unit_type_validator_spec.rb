@@ -22,12 +22,32 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
 
     it "raises when tokenImageUrl is neither a string nor an array of strings" do
       expect { described_class.validate!(goblin_unit_type.merge("tokenImageUrl" => 42)) }
-        .to raise_error(Validators::ValidationError, /tokenImageUrl must be a string or array of strings/)
+        .to raise_error(Validators::ValidationError, /tokenImageUrl must be a non-empty string/)
     end
 
     it "accepts tokenImageUrl as a single string" do
       data = goblin_unit_type.merge("tokenImageUrl" => "https://example.com/token.webp")
       expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when tokenImageUrl is a blank string" do
+      expect { described_class.validate!(goblin_unit_type.merge("tokenImageUrl" => "   ")) }
+        .to raise_error(Validators::ValidationError, /tokenImageUrl must be a non-empty string/)
+    end
+
+    it "raises when tokenImageUrl is an empty array" do
+      expect { described_class.validate!(goblin_unit_type.merge("tokenImageUrl" => [])) }
+        .to raise_error(Validators::ValidationError, /tokenImageUrl must be a non-empty string/)
+    end
+
+    it "raises when tokenImageUrl is an array of only blank strings" do
+      expect { described_class.validate!(goblin_unit_type.merge("tokenImageUrl" => ["", "  "])) }
+        .to raise_error(Validators::ValidationError, /tokenImageUrl must be a non-empty string/)
+    end
+
+    it "raises when tokenImageUrl is an array mixing a valid entry with a blank one" do
+      expect { described_class.validate!(goblin_unit_type.merge("tokenImageUrl" => ["a.webp", ""])) }
+        .to raise_error(Validators::ValidationError, /tokenImageUrl must be a non-empty string/)
     end
 
     it "raises when tokenRadius is below 1.0" do

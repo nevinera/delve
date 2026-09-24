@@ -49,7 +49,13 @@ const availableAbilities = {
 };
 
 function mockUnitTypeLoad(unitType, abilities = {}) {
-  GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockResolvedValue(JSON.stringify(unitType))}; });
+  GithubClient.mockImplementation(function () {
+    return {
+      fetchFile: vi.fn().mockResolvedValue(JSON.stringify(unitType)),
+      listDirectory: vi.fn().mockResolvedValue([]),
+      assetUrl: vi.fn().mockImplementation((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
+    };
+  });
   loadAvailableAbilities.mockResolvedValue(abilities);
 }
 
@@ -64,7 +70,9 @@ describe("UnitTypeEditor", () => {
 
   it("shows a loading state, then the fields panel once the fetch resolves", async () => {
     let resolveFetch;
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)))}; });
+    GithubClient.mockImplementation(function () {
+      return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([])};
+    });
     loadAvailableAbilities.mockResolvedValue({});
 
     render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
@@ -75,7 +83,9 @@ describe("UnitTypeEditor", () => {
   });
 
   it("falls back to a blank unit type when the file doesn't exist yet (404 -> null)", async () => {
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockResolvedValue(null)}; });
+    GithubClient.mockImplementation(function () {
+      return {fetchFile: vi.fn().mockResolvedValue(null), listDirectory: vi.fn().mockResolvedValue([])};
+    });
     loadAvailableAbilities.mockResolvedValue({});
 
     render(<UnitTypeEditor unitTypeKey="goblin-archer" stockAssets={{}} />);
@@ -252,6 +262,89 @@ describe("UnitTypeEditor", () => {
       await waitFor(() => expect(screen.getByText(/No ability loaded/)).toBeInTheDocument());
       expect(validateUnitType).not.toHaveBeenCalled();
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+    });
+  });
+
+  describe("token images", () => {
+    beforeEach(() => {
+      commitFiles.mockReset();
+      validateUnitType.mockReset();
+    });
+
+    async function saveIt() {
+      validateUnitType.mockResolvedValue({valid: true});
+      commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+    }
+
+    it("uploading a file fills in the slot's path and commits the file alongside the JSON on save", async () => {
+      mockUnitTypeLoad(initialUnitType);
+      const {container} = render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+      await screen.findByDisplayValue("Goblin Raider");
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
+      const file = new File(["fake"], "raider.webp", {type: "image/webp"});
+      fireEvent.change(container.querySelector('input[type="file"]'), {target: {files: [file]}});
+
+      expect(screen.getByDisplayValue("../tokens/unit/raider.webp")).toBeInTheDocument();
+
+      await saveIt();
+      expect(commitFiles).toHaveBeenCalledWith(
+        expect.objectContaining({"tokens/unit/raider.webp": file}),
+        {message: "Update Goblin Raider"}
+      );
+    });
+
+    it("picking an existing token image sets the slot's path without staging an upload", async () => {
+      GithubClient.mockImplementation(function () {
+        return {
+          fetchFile: vi.fn().mockResolvedValue(JSON.stringify(initialUnitType)),
+          listDirectory: vi.fn().mockResolvedValue(["tokens/unit/goblin-1.webp", "tokens/unit/goblin-2.webp"]),
+          assetUrl: vi.fn().mockImplementation((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
+        };
+      });
+      loadAvailableAbilities.mockResolvedValue({});
+      render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+      await screen.findByDisplayValue("Goblin Raider");
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
+      fireEvent.change(screen.getByDisplayValue("— existing token —"), {target: {value: "goblin-1.webp"}});
+
+      expect(screen.getByDisplayValue("../tokens/unit/goblin-1.webp")).toBeInTheDocument();
+
+      await saveIt();
+      expect(commitFiles).toHaveBeenCalledWith(
+        {
+          "unit_types/goblin-raider.json": {...initialUnitType, tokenImageUrl: ["../tokens/unit/goblin-1.webp"]},
+          "unit_types/goblin-raider.full.json": {...initialUnitType, tokenImageUrl: ["../tokens/unit/goblin-1.webp"]},
+        },
+        {message: "Update Goblin Raider"}
+      );
+    });
+
+    it("keeps a pending upload matched to its own slot after an earlier slot is removed", async () => {
+      mockUnitTypeLoad({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
+      const {container} = render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+      await screen.findByDisplayValue("Goblin Raider");
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
+      const file = new File(["fake"], "second.webp", {type: "image/webp"});
+      const fileInputs = container.querySelectorAll('input[type="file"]');
+      fireEvent.change(fileInputs[1], {target: {files: [file]}});
+      expect(screen.getByDisplayValue("../tokens/unit/second.webp")).toBeInTheDocument();
+
+      // Remove slot 0 ("first.webp") - the pending upload for what was slot 1 needs to follow it down to slot 0.
+      fireEvent.click(screen.getAllByRole("button", {name: "Remove"})[0]);
+      expect(screen.getByDisplayValue("../tokens/unit/second.webp")).toBeInTheDocument();
+
+      await saveIt();
+      expect(commitFiles).toHaveBeenCalledWith(
+        expect.objectContaining({"tokens/unit/second.webp": file}),
+        {message: "Update Goblin Raider"}
+      );
     });
   });
 

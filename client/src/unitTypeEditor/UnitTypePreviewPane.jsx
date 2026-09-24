@@ -54,16 +54,20 @@ function resolvePowers(unitTypeKey, powers, availableAbilities, stockAssets) {
 
 // The unit's own tokenImageUrl entries are its actual saved appearance -
 // pick one at random, the same way the game server does when spawning a
-// unit from this type (see docs/schema/unit_type.md#tokenimageurl). Falls
-// back to the stock goblin token when none are set yet, so a brand new
-// draft is still previewable before any art is attached.
-function pickSelfToken(tokenImageUrl) {
-  const urls = (tokenImageUrl ?? []).filter(Boolean);
+// unit from this type (see docs/schema/unit_type.md#tokenimageurl). tokens
+// arrives here already resolved to real, displayable URLs (see
+// UnitTypeEditor's resolvedTokenUrls) - a raw tokenImageUrl entry that
+// hasn't resolved yet (e.g. a just-uploaded, not-yet-saved file) is dropped
+// rather than shown broken. Falls back to the stock goblin token when none
+// are available, so a brand new draft is still previewable before any art
+// is attached or has finished resolving.
+function pickSelfToken(tokens) {
+  const urls = (tokens ?? []).filter(Boolean);
   if (!urls.length) return FALLBACK_SELF_TOKEN_URL;
   return urls[Math.floor(Math.random() * urls.length)];
 }
 
-export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availableAbilities, stockAssets}) {
+export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availableAbilities, stockAssets, resolvedTokenUrls}) {
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
@@ -76,11 +80,15 @@ export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availabl
   // test.
   useEffect(() => () => clearTimeout(fireTimeoutRef.current), []);
 
-  // Re-rolled only when the actual token list content changes, not on every
-  // render - JSON.stringify as the dependency key avoids re-picking a token
-  // (and flickering the preview) for unrelated edits elsewhere in the form.
-  const tokenImageUrlKey = JSON.stringify(unitTypeData.tokenImageUrl ?? []);
-  const selfTokenUrl = useMemo(() => pickSelfToken(unitTypeData.tokenImageUrl), [tokenImageUrlKey]);
+  // Only entries that have actually resolved to a real URL are eligible -
+  // tokenImageUrl entries are the raw (unresolved) paths, so map through
+  // resolvedTokenUrls rather than picking from tokenImageUrl directly.
+  // Re-rolled only when the resolved set changes, not on every render -
+  // JSON.stringify as the dependency key avoids re-picking a token (and
+  // flickering the preview) for unrelated edits elsewhere in the form.
+  const resolvedTokens = (unitTypeData.tokenImageUrl ?? []).map((url) => resolvedTokenUrls?.[url]).filter(Boolean);
+  const tokenImageUrlKey = JSON.stringify(resolvedTokens);
+  const selfTokenUrl = useMemo(() => pickSelfToken(resolvedTokens), [tokenImageUrlKey]);
 
   const resolvedPowers = useMemo(
     () => resolvePowers(unitTypeKey, unitTypeData.powers, availableAbilities, stockAssets),
