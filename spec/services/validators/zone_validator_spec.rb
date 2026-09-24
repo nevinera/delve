@@ -194,6 +194,16 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
           .to raise_error(Validators::ValidationError, /goblin_2.*already used/)
       end
 
+      it "raises when two NCUs share an identifier across maps" do
+        ncu = ->(id) { {"identifier" => id, "name" => "N", "tokenImageUrl" => "./n.webp", "tokenRadius" => 2.0, "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}} }
+        maps = [
+          minimal_map("map_a", ["goblin_1"]).merge("ncus" => [ncu.call("grizzle")]),
+          minimal_map("map_b", ["goblin_2"]).merge("ncus" => [ncu.call("grizzle")])
+        ]
+        expect { described_class.validate!(zone_with_maps(maps)) }
+          .to raise_error(Validators::ValidationError, /ncu identifier "grizzle".*already used/)
+      end
+
       it "raises when the same identifier appears twice within one map" do
         maps = [minimal_map("map_a", ["goblin_1", "goblin_1"])]
         expect { described_class.validate!(zone_with_maps(maps)) }

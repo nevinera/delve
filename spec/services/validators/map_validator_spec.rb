@@ -174,6 +174,27 @@ RSpec.describe Validators::MapValidator, type: :validator do
       end
     end
 
+    context "ncus" do
+      let(:ncu) do
+        {"identifier" => "grizzle", "name" => "Grizzle", "tokenImageUrl" => "./g.webp", "tokenRadius" => 2.0,
+         "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
+      end
+
+      it "accepts a list of NCUs" do
+        expect { described_class.validate!(cave_entrance_map.merge("ncus" => [ncu])) }.not_to raise_error
+      end
+
+      it "raises when ncus isn't an array" do
+        expect { described_class.validate!(cave_entrance_map.merge("ncus" => ncu)) }
+          .to raise_error(Validators::ValidationError, /ncus must be an array/)
+      end
+
+      it "propagates NCU errors with path context" do
+        expect { described_class.validate!(cave_entrance_map.merge("ncus" => [ncu.except("name")])) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/ncus\[0\]/) }
+      end
+    end
+
     context "respawn" do
       it "accepts a map with no respawn" do
         expect { described_class.validate!(cave_entrance_map.except("respawn")) }.not_to raise_error

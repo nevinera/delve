@@ -21,6 +21,7 @@ All formats use **map coordinates**:
 | [schema/map.md](schema/map.md) | Map - one visual floor within a zone, with barriers and connections |
 | [schema/unit_type.md](schema/unit_type.md) | UnitType - a template for creating units (monsters, NPCs) |
 | [schema/unit.md](schema/unit.md) | Unit - a placed instance of a UnitType on a map |
+| [schema/ncu.md](schema/ncu.md) | NCU - a non-combat unit that can move and talk |
 | [schema/ability.md](schema/ability.md) | Ability - an active ability a unit or class can use in combat |
 | [schema/power_effect.md](schema/power_effect.md) | PowerEffect - a single mechanical outcome of a power |
 | [schema/resource_type.md](schema/resource_type.md) | ResourceType - a unit's combat resource (mana, energy, rage, etc.) |
