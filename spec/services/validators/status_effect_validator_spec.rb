@@ -112,6 +112,87 @@ RSpec.describe Validators::StatusEffectValidator, type: :validator do
       end
     end
 
+    context "for triggered effects" do
+      let(:triggered_effect) do
+        {
+          "type" => "triggered",
+          "trigger" => {"type" => "healthBelow", "threshold" => 20.0},
+          "internalCooldown" => 3.0,
+          "effect" => {"type" => "heal", "affects" => "self", "amount" => 15.0}
+        }
+      end
+
+      it "accepts a valid triggered effect" do
+        expect { described_class.validate!(triggered_effect) }.not_to raise_error
+      end
+
+      it "accepts every trigger type" do
+        Validators::StatusEffectValidator::TRIGGER_TYPE_OPTIONS.each do |type|
+          trigger = {"type" => type}
+          trigger["threshold"] = 20.0 if Validators::StatusEffectValidator::HEALTH_TRIGGER_TYPE_OPTIONS.include?(type)
+          data = triggered_effect.merge("trigger" => trigger)
+          expect { described_class.validate!(data) }.not_to raise_error
+        end
+      end
+
+      it "raises when trigger is missing" do
+        data = triggered_effect.except("trigger")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /trigger is required/)
+      end
+
+      it "raises when trigger type is invalid" do
+        data = triggered_effect.merge("trigger" => {"type" => "moonPhase"})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "raises when a health trigger is missing threshold" do
+        data = triggered_effect.merge("trigger" => {"type" => "healthBelow"})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /threshold is required/)
+      end
+
+      it "raises when a health trigger's threshold is out of range" do
+        data = triggered_effect.merge("trigger" => {"type" => "healthBelow", "threshold" => 150})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /threshold must be between 0 and 100/)
+      end
+
+      it "does not require a threshold for takesDamage/dealsDamage" do
+        data = triggered_effect.merge("trigger" => {"type" => "takesDamage"})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when internalCooldown is missing" do
+        data = triggered_effect.except("internalCooldown")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /internalCooldown is required/)
+      end
+
+      it "raises when internalCooldown is negative" do
+        data = triggered_effect.merge("internalCooldown" => -1)
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /internalCooldown must be non-negative/)
+      end
+
+      it "accepts internalCooldown of 0" do
+        expect { described_class.validate!(triggered_effect.merge("internalCooldown" => 0)) }.not_to raise_error
+      end
+
+      it "raises when effect is missing" do
+        data = triggered_effect.except("effect")
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /effect is required/)
+      end
+
+      it "propagates the nested effect's own validation errors" do
+        data = triggered_effect.merge("effect" => triggered_effect["effect"].except("amount"))
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /amount is required/)
+      end
+    end
+
     context "condition" do
       it "accepts an effect with no condition" do
         expect { described_class.validate!(stat_effect) }.not_to raise_error
