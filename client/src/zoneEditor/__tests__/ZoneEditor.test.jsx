@@ -128,7 +128,10 @@ describe("ZoneEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
 
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
-    expect(resolveZoneRefs).toHaveBeenCalledWith(initialZone, "zones/goblin-cave");
+    // syncZoneRefs fills in items/unitTypes (empty here - no maps in play)
+    // before validating, so it's this shape (not the bare initialZone) that
+    // gets resolved.
+    expect(resolveZoneRefs).toHaveBeenCalledWith({...initialZone, items: {}, unitTypes: {}}, "zones/goblin-cave");
   });
 
   it("shows the validator's error and keeps Save disabled when the resolved zone is invalid", async () => {
@@ -153,7 +156,8 @@ describe("ZoneEditor", () => {
 
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
-    await waitFor(() => expect(saveZone).toHaveBeenCalledWith("goblin-cave", initialZone, {}));
+    // Same syncZoneRefs fill-in as Validate - see above.
+    await waitFor(() => expect(saveZone).toHaveBeenCalledWith("goblin-cave", {...initialZone, items: {}, unitTypes: {}}, {}));
     await screen.findByText("Saved.");
   });
 
@@ -210,5 +214,53 @@ describe("ZoneEditor", () => {
 
     await waitFor(() => expect(mapDetailsFor).toHaveBeenCalledWith(expect.anything(), "goblin-cave", ["gc2-new-room"]));
     await waitFor(() => expect(document.querySelector(".zone-maps-panel").textContent).toContain("New Room"));
+  });
+
+  // Regression for the "references unknown unit type" game-server failure:
+  // a unit placed on a map (via the map editor, not here) whose type was
+  // never separately added to the zone's own unitTypes dict used to save
+  // successfully anyway, only failing later at instance-start time.
+  function demoZoneWithUnregisteredUnitType() {
+    const maps = [{$ref: "./woods/woods.json", referenceTo: "map"}];
+    const details = {
+      woods: {
+        identifier: "woods", name: "Woods", connections: [],
+        units: [{unitType: "demo/goblin-archer", itemKeys: []}], thumbnailUrl: null,
+      },
+    };
+    return {zone: {...initialZone, maps, unitTypes: {}}, mapDetails: details};
+  }
+
+  it("fills in a used-but-unregistered unit type into the draft as soon as it loads, before any Validate/Save", async () => {
+    await renderReady(demoZoneWithUnregisteredUnitType());
+
+    fireEvent.click(document.querySelector(".zone-unit-types-panel .map-sidebar-section-heading"));
+
+    // No ⚠ - the draft already has the entry, it was never left for the
+    // person to notice and separately fix.
+    expect(document.querySelector(".zone-unit-types-panel").textContent).not.toContain("⚠");
+  });
+
+  it("saves the auto-filled-in unit type", async () => {
+    resolveZoneRefs.mockResolvedValue({name: "Demo"});
+    validateZone.mockResolvedValue({valid: true});
+    saveZone.mockResolvedValue({commitSha: "abc", branch: "main"});
+    await renderReady(demoZoneWithUnregisteredUnitType());
+
+    // The auto-fill itself counts as a draft change (it genuinely differs
+    // from what's committed), so Validate/Save is still required before it
+    // actually gets written.
+    fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", {name: "Save"}));
+    await screen.findByText("Saved.");
+
+    expect(saveZone).toHaveBeenCalledWith(
+      "goblin-cave",
+      expect.objectContaining({
+        unitTypes: {"demo/goblin-archer": {$ref: "../../unit_types/demo/goblin-archer.json", referenceTo: "unit_type"}},
+      }),
+      {}
+    );
   });
 });

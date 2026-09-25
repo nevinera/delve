@@ -1,26 +1,15 @@
 import {useState} from "react";
-import {keyFromRef} from "./mapRef";
+import {aggregateUnitTypeUsage} from "./zoneRefUsage";
 
 // Every unitType key referenced by any unit, anywhere in this zone's
-// referenced-and-resolved maps - read-only (see plans/zone-editor.md step
-// 8). Same aggregation/validity pattern as ZoneItemsPanel, but simpler: no
-// per-map breakdown or token image (unlike the map editor's own unit
-// picker) - just a total count across the zone. Editing a unit's type
-// happens in the map editor, not here.
-function aggregateUnitTypeUsage(zoneData, mapDetailsByKey) {
-  const usage = {}; // unitType -> count
-  for (const entry of zoneData.maps) {
-    const key = entry?.$ref ? keyFromRef(entry.$ref) : null;
-    const detail = key ? mapDetailsByKey[key] : null;
-    if (!detail) continue;
-    for (const unit of detail.units ?? []) {
-      if (!unit.unitType) continue;
-      usage[unit.unitType] = (usage[unit.unitType] ?? 0) + 1;
-    }
-  }
-  return usage;
-}
-
+// referenced-and-resolved maps - same aggregation/validity pattern as
+// ZoneItemsPanel, but simpler: no per-map breakdown or token image (unlike
+// the map editor's own unit picker), just a total count across the zone.
+// Not directly editable here (see plans/zone-editor.md step 8) - a unit's
+// type is set in the map editor, and any key that isn't yet in the zone's
+// own `unitTypes` dict gets added automatically at save time instead (see
+// syncZoneRefs.js), so a key shown as invalid here is expected to only
+// ever be transient, between placing a unit and saving.
 export default function ZoneUnitTypesPanel({zoneData, mapDetailsByKey}) {
   const [collapsed, setCollapsed] = useState(true);
   const usage = aggregateUnitTypeUsage(zoneData, mapDetailsByKey);

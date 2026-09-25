@@ -1,28 +1,13 @@
 import {useState} from "react";
-import {keyFromRef, mapEditPath} from "./mapRef";
+import {mapEditPath} from "./mapRef";
+import {aggregateItemUsage} from "./zoneRefUsage";
 
 // Every item identifier referenced by any unit's lootTable, anywhere in
-// this zone's referenced-and-resolved maps - read-only (see
-// plans/zone-editor.md step 7). Editing a unit's lootTable happens in the
-// map editor, not here; this is purely "what's used, and is it valid".
-function aggregateItemUsage(zoneData, mapDetailsByKey) {
-  const usage = {}; // itemKey -> {count, mapKeys: Set<string>, mapNames: {[mapKey]: name}}
-  for (const entry of zoneData.maps) {
-    const key = entry?.$ref ? keyFromRef(entry.$ref) : null;
-    const detail = key ? mapDetailsByKey[key] : null;
-    if (!detail) continue;
-    for (const unit of detail.units ?? []) {
-      for (const itemKey of unit.itemKeys ?? []) {
-        if (!usage[itemKey]) usage[itemKey] = {count: 0, mapKeys: new Set(), mapNames: {}};
-        usage[itemKey].count += 1;
-        usage[itemKey].mapKeys.add(key);
-        usage[itemKey].mapNames[key] = detail.name ?? key;
-      }
-    }
-  }
-  return usage;
-}
-
+// this zone's referenced-and-resolved maps - not directly editable here
+// (see plans/zone-editor.md step 7); this is purely "what's used, and is
+// it valid". A key shown as invalid gets added to the zone's own `items`
+// dict automatically at save time instead (see syncZoneRefs.js), so it's
+// expected to only ever show briefly, between placing a unit and saving.
 export default function ZoneItemsPanel({zoneData, mapDetailsByKey, zoneKey}) {
   const [collapsed, setCollapsed] = useState(true);
   const usage = aggregateItemUsage(zoneData, mapDetailsByKey);

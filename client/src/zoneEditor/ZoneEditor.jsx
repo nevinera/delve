@@ -7,6 +7,8 @@ import ZoneGraphCanvas from "./ZoneGraphCanvas";
 import ZoneSidebar from "./ZoneSidebar";
 import {loadZone, loadLayoutPositions, listZoneMapKeys, referencedMapKeys, mapDetailsFor} from "./zoneContentLoaders";
 import {resolveZoneRefs} from "./resolveZoneRefs";
+import {syncZoneRefs} from "./syncZoneRefs";
+import {aggregateItemUsage, aggregateUnitTypeUsage} from "./zoneRefUsage";
 import {saveZone} from "./saveZone";
 import {validateZone} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
@@ -79,6 +81,32 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
 
   const zoneData = draft?.data;
 
+  // unitTypes/items aren't directly editable in this editor (see
+  // ZoneUnitTypesPanel.jsx/ZoneItemsPanel.jsx) - a unit's type/lootTable is
+  // set in the map editor, which has no reason to know about the
+  // zone-level dict that resolves it. Rather than only fixing this up at
+  // Validate/Save (which still happens too, defensively - see below), keep
+  // the draft itself in sync as soon as usage is known, so the sidebar's ⚠
+  // markers clear on their own - on load, or right after a map is added -
+  // instead of needing an explicit Validate+Save round trip first.
+  //
+  // unitTypeUsageKey/itemUsageKey (not zoneData/mapDetailsByKey directly)
+  // are the effect's real dependencies - stable strings that only change
+  // when actual *usage* changes, so setDraft below settles instead of
+  // looping (syncing never changes usage, only fills in what's missing).
+  const unitTypeUsageKey = zoneData ? JSON.stringify(Object.keys(aggregateUnitTypeUsage(zoneData, mapDetailsByKey)).sort()) : null;
+  const itemUsageKey = zoneData ? JSON.stringify(Object.keys(aggregateItemUsage(zoneData, mapDetailsByKey)).sort()) : null;
+  useEffect(() => {
+    if (!zoneData) return;
+    const synced = syncZoneRefs(zoneData, mapDetailsByKey);
+    const unitTypesGrew = Object.keys(synced.unitTypes).length > Object.keys(zoneData.unitTypes ?? {}).length;
+    const itemsGrew = Object.keys(synced.items).length > Object.keys(zoneData.items ?? {}).length;
+    if (!unitTypesGrew && !itemsGrew) return;
+    markDirty();
+    setDraft(new ZoneDraft(synced));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitTypeUsageKey, itemUsageKey]);
+
   // Translates every action shape ZoneMapsPanel/ZoneMapConnectionsPanel/
   // ZoneGraphCanvas (still)/this component's own field inputs send into
   // ZoneDraft method calls - keeps every one of those components exactly as
@@ -147,7 +175,10 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
   async function handleValidate() {
     setValidating();
     try {
-      const fullZone = await resolveZoneRefs(zoneData, `zones/${zoneKey}`);
+      // zoneData should already be synced (see the effect above) - this is
+      // just a defensive backstop against validating a stale snapshot.
+      const synced = syncZoneRefs(zoneData, mapDetailsByKey);
+      const fullZone = await resolveZoneRefs(synced, `zones/${zoneKey}`);
       const {valid, error} = await validateZone(fullZone);
       if (valid) setValid();
       else setInvalid(error.message);
@@ -159,7 +190,11 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
   async function handleSave() {
     setSaving();
     try {
-      await saveZone(zoneKey, zoneData, graphPositions);
+      // Same defensive backstop as handleValidate - zoneData should
+      // already be synced by the effect above.
+      const synced = syncZoneRefs(zoneData, mapDetailsByKey);
+      await saveZone(zoneKey, synced, graphPositions);
+      setDraft(new ZoneDraft(synced));
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
