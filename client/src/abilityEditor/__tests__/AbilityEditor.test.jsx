@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
+import {redirectTo} from "../../redirectTo";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import AbilityEditor from "../AbilityEditor";
 import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
@@ -15,6 +16,7 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
   return {...actual, GithubClient: vi.fn()};
 });
 
+vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateAbility: vi.fn(),
 }));
@@ -106,12 +108,10 @@ describe("AbilityEditor", () => {
         assetUrl: vi.fn(),
       };
     });
-    delete window.location;
-    window.location = {href: ""};
 
     render(<AbilityEditor abilityKey="firebolt" />);
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 
   it("flows an edit from the fields panel into the ability state passed to the preview", async () => {
@@ -317,18 +317,13 @@ describe("AbilityEditor", () => {
     it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
       validateAbility.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-      const originalLocation = window.location;
-      delete window.location;
-      window.location = {href: ""};
 
       await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
-      await waitFor(() => expect(window.location.href).toEqual("/github/reauth"));
-
-      window.location = originalLocation;
+      await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
     });
   });
 });

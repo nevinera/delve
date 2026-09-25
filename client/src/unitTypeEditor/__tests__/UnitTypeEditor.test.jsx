@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
+import {redirectTo} from "../../redirectTo";
 import {render, screen, fireEvent, waitFor, within} from "@testing-library/react";
 import UnitTypeEditor from "../UnitTypeEditor";
 import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
@@ -21,6 +22,7 @@ vi.mock("../loadAvailableAbilities", () => ({
   loadAvailableAbilities: vi.fn(),
 }));
 
+vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateUnitType: vi.fn(),
 }));
@@ -105,12 +107,10 @@ describe("UnitTypeEditor", () => {
   it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
     GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
     loadAvailableAbilities.mockResolvedValue({});
-    delete window.location;
-    window.location = {href: ""};
 
     render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 
   it("flows a name edit from the fields panel into the unit type state", async () => {
@@ -219,18 +219,13 @@ describe("UnitTypeEditor", () => {
     it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
       validateUnitType.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-      const originalLocation = window.location;
-      delete window.location;
-      window.location = {href: ""};
 
       await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
-      await waitFor(() => expect(window.location.href).toEqual("/github/reauth"));
-
-      window.location = originalLocation;
+      await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
     });
 
     it("validates the resolved (powers-inlined) form, not the raw $ref draft", async () => {

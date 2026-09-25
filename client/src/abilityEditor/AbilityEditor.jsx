@@ -10,6 +10,7 @@ import {validateAbility} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
+import {redirectTo} from "../redirectTo";
 
 // Resolves a relative asset path (as stored in the ability JSON, e.g.
 // "../graphics/icons/x.svg") against the ability's own location in the
@@ -78,7 +79,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
       .catch((error) => {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
-          window.location.href = error.redirectUrl;
+          redirectTo(error.redirectUrl);
           return;
         }
         setLoadError(error.message);
@@ -150,7 +151,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
-        window.location.href = error.redirectUrl;
+        redirectTo(error.redirectUrl);
         return;
       }
       setSaveError(error.message);

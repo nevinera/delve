@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, afterEach} from "vitest";
+import {redirectTo} from "../../redirectTo";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import WorldEditor from "../WorldEditor";
 import {commitFiles} from "../../github/commitFiles";
@@ -15,6 +16,7 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
   return {...actual, GithubClient: vi.fn()};
 });
 
+vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateWorld: vi.fn(),
 }));
@@ -108,12 +110,10 @@ describe("WorldEditor", () => {
     mockFetchFile(async () => {
       throw new GithubAuthError("reauth_required", "/github/reauth");
     });
-    delete window.location;
-    window.location = {href: ""};
 
     render(<WorldEditor worldKey="northern-barrens" />);
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 
   it("renders the world's zones with name/description synced in from the zone's own file, not typed by hand", async () => {

@@ -13,6 +13,7 @@ import {validateCharacterClass} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
+import {redirectTo} from "../redirectTo";
 
 // Neither the class's own content nor its available-abilities map is
 // bootstrapped from the server any more (see plans/editor-git.md) - both
@@ -43,7 +44,7 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
       } catch (error) {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
-          window.location.href = error.redirectUrl;
+          redirectTo(error.redirectUrl);
           return;
         }
         setLoadError(error.message);
@@ -100,7 +101,7 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
-        window.location.href = error.redirectUrl;
+        redirectTo(error.redirectUrl);
         return;
       }
       setSaveError(error.message);
