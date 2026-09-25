@@ -22,6 +22,23 @@ export function applyFullState(msg) {
   return { ...msg.units };
 }
 
+// NCUs (non-combat units) sync separately from units: a full map on
+// instance-state, then new/moved entries in a delta's ncu_updates. They're
+// never removed.
+export function applyFullNCUs(msg) {
+  return { ...(msg.ncus ?? {}) };
+}
+
+export function applyNCUDelta(ncus, msg) {
+  const updates = msg.ncu_updates;
+  if (!updates) return ncus;
+  const next = { ...ncus };
+  for (const [id, patch] of Object.entries(updates)) {
+    next[id] = { ...next[id], ...patch };
+  }
+  return next;
+}
+
 export function applyDelta(units, msg) {
   const next = { ...units };
 

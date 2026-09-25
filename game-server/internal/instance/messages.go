@@ -93,6 +93,48 @@ type effectJSON struct {
 type fullStateMsg struct {
 	downBase
 	Units map[string]unitJSON `json:"units"`
+	NCUs  map[string]ncuJSON  `json:"ncus"`
+}
+
+type ncuJSON struct {
+	ZoneNCUIdentifier string                  `json:"zone_ncu_identifier"`
+	MapIdentifier     string                  `json:"map_identifier"`
+	Position          instanceconfig.Position `json:"position"`
+	Radius            float64                 `json:"radius"`
+}
+
+func ncusJSON(ncus map[uuid.UUID]*instancestate.NCUState) map[string]ncuJSON {
+	out := make(map[string]ncuJSON, len(ncus))
+	for id, n := range ncus {
+		out[id.String()] = ncuJSON{
+			ZoneNCUIdentifier: n.ZoneNCUIdentifier,
+			MapIdentifier:     n.MapIdentifier,
+			Position:          n.Position,
+			Radius:            n.Radius,
+		}
+	}
+	return out
+}
+
+// ncuUpdates is the NCU part of a delta: every field for an NCU the client
+// hasn't seen, otherwise just a moved position. NCUs are never removed.
+func ncuUpdates(prev, curr map[uuid.UUID]*instancestate.NCUState) map[string]any {
+	out := map[string]any{}
+	for id, n := range curr {
+		p, existed := prev[id]
+		switch {
+		case !existed:
+			out[id.String()] = ncuJSON{
+				ZoneNCUIdentifier: n.ZoneNCUIdentifier,
+				MapIdentifier:     n.MapIdentifier,
+				Position:          n.Position,
+				Radius:            n.Radius,
+			}
+		case p.Position != n.Position:
+			out[id.String()] = map[string]any{"position": n.Position}
+		}
+	}
+	return out
 }
 
 type effectAddJSON struct {
@@ -173,6 +215,7 @@ type deltaMsg struct {
 	CombatEvents  []combatEventJSON         `json:"combat_events,omitempty"`
 	LootEvents    []lootEventJSON           `json:"loot_events,omitempty"`
 	LootFailures  []lootFailureJSON         `json:"loot_failures,omitempty"`
+	NCUUpdates    map[string]any            `json:"ncu_updates,omitempty"`
 }
 
 func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string) ([]byte, error) {
@@ -251,6 +294,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Checksum:  checksum,
 		},
 		Units: units,
+		NCUs:  ncusJSON(state.NCUs),
 	})
 }
 
@@ -432,6 +476,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			msg.UnitRemovals = append(msg.UnitRemovals, id.String())
 		}
 	}
+	msg.NCUUpdates = ncuUpdates(prev.NCUs, curr.NCUs)
 
 	for _, ev := range events {
 		msg.CombatEvents = append(msg.CombatEvents, combatEventJSON(ev))

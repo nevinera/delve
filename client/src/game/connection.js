@@ -1,5 +1,5 @@
 import { computeChecksum } from "./checksum";
-import { applyFullState, applyDelta } from "./state";
+import { applyFullState, applyDelta, applyFullNCUs, applyNCUDelta } from "./state";
 
 const HEARTBEAT_MS = 300;
 // How long to remember what we've sent, keyed by seq, for matching a server
@@ -40,6 +40,7 @@ export class GameConnection {
     this._ws = null;
     this._heartbeatTimer = null;
     this._units = {};
+    this._ncus = {};
     // Latest scheduled delivery time (epoch ms) for each direction, so
     // _scheduleOrdered can enforce in-order delivery - see its comment.
     this._nextSendAt = 0;
@@ -109,19 +110,21 @@ export class GameConnection {
 
     if (msg.type === "instance-state") {
       this._units = applyFullState(msg);
+      this._ncus = applyFullNCUs(msg);
       const local = await computeChecksum(this._units);
       if (local !== msg.checksum) {
         console.warn("checksum mismatch after full state", { server: msg.checksum, local });
       }
-      this._onStateChange?.({ units: this._units });
+      this._onStateChange?.({ units: this._units, ncus: this._ncus });
     } else if (msg.type === "delta") {
       this._units = applyDelta(this._units, msg);
+      this._ncus = applyNCUDelta(this._ncus, msg);
       const local = await computeChecksum(this._units);
       if (local !== msg.checksum) {
         console.warn("checksum mismatch after delta", { server: msg.checksum, local });
         this._send({ direction: "up", type: "full-state-request" });
       }
-      this._onStateChange?.({ units: this._units, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
+      this._onStateChange?.({ units: this._units, ncus: this._ncus, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
     }
   }
 

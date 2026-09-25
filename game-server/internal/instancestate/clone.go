@@ -14,7 +14,12 @@ func (s *InstanceState) Clone() *InstanceState {
 	for id, u := range s.Units {
 		units[id] = u.clone()
 	}
-	return &InstanceState{Units: units}
+	ncus := make(map[uuid.UUID]*NCUState, len(s.NCUs))
+	for id, n := range s.NCUs {
+		c := *n
+		ncus[id] = &c
+	}
+	return &InstanceState{Units: units, NCUs: ncus}
 }
 
 func (u *UnitState) clone() *UnitState {

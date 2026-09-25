@@ -79,41 +79,43 @@ export class MapDraft {
     return this.updateEntryField("connections", connectionIndex, field, feet);
   }
 
-  // ---- Units ----
+  // ---- Units and NCUs ----
+  // Position/movement edits apply the same way to a unit or an NCU (see
+  // docs/schema/ncu.md) - `section` picks which list, "units" or "ncus".
 
   removeUnit(index) {
     return this.removeEntry("units", index);
   }
 
-  // Keeps the unit's facing angle, only replaces x/y.
-  setUnitPosition(unitIndex, feet) {
-    const current = this.data.units[unitIndex].position;
-    return this.updateEntryField("units", unitIndex, "position", {...current, x: feet.x, y: feet.y});
+  // Keeps the entry's facing angle, only replaces x/y.
+  setUnitPosition(unitIndex, feet, section = "units") {
+    const current = this.data[section][unitIndex].position;
+    return this.updateEntryField(section, unitIndex, "position", {...current, x: feet.x, y: feet.y});
   }
 
   // `movement` is a single nested object (like `position`/`lootTable`), so
   // every field change here writes the whole updated object rather than a
   // deep-path update - same convention as those.
-  updateMovement(unitIndex, fields) {
-    const current = this.data.units[unitIndex].movement ?? {type: "still"};
-    return this.updateEntryField("units", unitIndex, "movement", {...current, ...fields});
+  updateMovement(unitIndex, fields, section = "units") {
+    const current = this.data[section][unitIndex].movement ?? {type: "still"};
+    return this.updateEntryField(section, unitIndex, "movement", {...current, ...fields});
   }
 
-  insertPatrolStep(unitIndex, stepIndex, feet) {
-    const steps = this.data.units[unitIndex].movement.steps;
+  insertPatrolStep(unitIndex, stepIndex, feet, section = "units") {
+    const steps = this.data[section][unitIndex].movement.steps;
     const newStep = {position: {x: feet.x, y: feet.y, angle: 0}, movementRate: 0.5, waitTime: 1};
     const next = [...steps.slice(0, stepIndex), newStep, ...steps.slice(stepIndex)];
-    return this.updateMovement(unitIndex, {steps: next});
+    return this.updateMovement(unitIndex, {steps: next}, section);
   }
 
-  setPatrolStep(unitIndex, stepIndex, feet) {
-    const steps = this.data.units[unitIndex].movement.steps;
+  setPatrolStep(unitIndex, stepIndex, feet, section = "units") {
+    const steps = this.data[section][unitIndex].movement.steps;
     const next = steps.map((step, i) => (i === stepIndex ? {...step, position: {x: feet.x, y: feet.y, angle: 0}} : step));
-    return this.updateMovement(unitIndex, {steps: next});
+    return this.updateMovement(unitIndex, {steps: next}, section);
   }
 
-  setWanderLocation(unitIndex, feet) {
-    return this.updateMovement(unitIndex, {location: {x: feet.x, y: feet.y}});
+  setWanderLocation(unitIndex, feet, section = "units") {
+    return this.updateMovement(unitIndex, {location: {x: feet.x, y: feet.y}}, section);
   }
 
   // ---- Groups ----

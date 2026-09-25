@@ -134,7 +134,7 @@ func TestTickRespawns_RespawningUnitBecomesIdleWithFullHealthOnceDone(t *testing
 	unit.Health = 0
 	unit.Target = &targetID
 	unit.Attacking = true
-	unit.Behavior = instancestate.BehaviorState{MovementPhase: "moving"}
+	unit.Behavior = instancestate.BehaviorState{MovementState: instancestate.MovementState{MovementPhase: "moving"}}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{uuid.New(): unit}}
 
 	instance.TickRespawnsForTest(state, now)

@@ -5,13 +5,14 @@ import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsPanel from "./UnitsPanel";
+import NcusPanel from "./NcusPanel";
 import HotkeyHelp from "./HotkeyHelp";
 import {MapDraft} from "./MapDraft";
 import {UiState} from "./UiState";
 import {PatrolSimState} from "./PatrolSimState";
 import {WalkSimState} from "./WalkSimState";
 import {saveMap} from "./saveMap";
-import {blankMap, loadMap, loadMapImageUrl, listUnitTypeKeys, listItemKeys, unitTypeDetailsFor, itemDetailsFor} from "./mapContentLoaders";
+import {blankMap, loadMap, loadMapImageUrl, listUnitTypeKeys, listItemKeys, unitTypeDetailsFor, itemDetailsFor, ncuTokenUrlsFor} from "./mapContentLoaders";
 import {validateMap} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
@@ -130,6 +131,22 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
   const setExpandedUnitIndices = useCallback((indices) => {
     setUiState((s) => s.with({expandedUnitIndices: indices}));
   }, []);
+
+  // NCU selection/hover/expansion is plain local state - unlike units,
+  // nothing else (grouping, simulation, focus-scrolling) reads it.
+  const [selectedNcuIndex, setSelectedNcuIndex] = useState(null);
+  const [hoveredNcuIndex, setHoveredNcuIndex] = useState(null);
+  const [expandedNcuIndices, setExpandedNcuIndices] = useState(() => new Set());
+
+  // Raw tokenImageUrl -> viewable URL, for every NCU on this map.
+  const [ncuTokenUrls, setNcuTokenUrls] = useState({});
+  const ncuTokenKey = [...new Set((mapData.ncus ?? []).map((n) => n.tokenImageUrl).filter(Boolean))].sort().join("|");
+  useEffect(() => {
+    const raw = ncuTokenKey ? ncuTokenKey.split("|") : [];
+    let cancelled = false;
+    ncuTokenUrlsFor(client.current, mapKey, raw).then((urls) => { if (!cancelled) setNcuTokenUrls(urls); });
+    return () => { cancelled = true; };
+  }, [mapKey, ncuTokenKey]);
 
   // The full list of unit_types/*.json keys (cheap - a directory listing,
   // see Build::MapsController#list_unit_type_keys) vs. {name, tokenRadius,
@@ -463,13 +480,13 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
 
   // Single-shot, like placeConnectionField above.
   function placeUnitPosition(feet) {
-    const {unitIndex} = uiState.unitPlacement;
-    handleChange(draft.setUnitPosition(unitIndex, feet));
+    const {unitIndex, section} = uiState.unitPlacement;
+    handleChange(draft.setUnitPosition(unitIndex, feet, section));
     setUiState(uiState.clearUnitPlacement());
   }
 
-  function updateMovement(unitIndex, fields) {
-    handleChange(draft.updateMovement(unitIndex, fields));
+  function updateMovement(unitIndex, fields, section = "units") {
+    handleChange(draft.updateMovement(unitIndex, fields, section));
   }
 
   // "insert" mode appends a new step at stepIndex and advances to
@@ -477,22 +494,22 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
   // as placePoint (wall points) above. "edit" mode replaces the existing
   // step's position (keeping its movementRate/waitTime) and exits.
   function placePatrolStep(feet) {
-    const {unitIndex, stepIndex, mode} = uiState.patrolStepPlacement;
+    const {unitIndex, stepIndex, mode, section} = uiState.patrolStepPlacement;
 
     if (mode === "edit") {
-      handleChange(draft.setPatrolStep(unitIndex, stepIndex, feet));
+      handleChange(draft.setPatrolStep(unitIndex, stepIndex, feet, section));
       setUiState(uiState.clearPatrolStepPlacement());
       return;
     }
 
-    handleChange(draft.insertPatrolStep(unitIndex, stepIndex, feet));
+    handleChange(draft.insertPatrolStep(unitIndex, stepIndex, feet, section));
     setUiState(uiState.advancePatrolStepPlacement());
   }
 
   // Single-shot, like placeConnectionField/placeUnitPosition above.
   function placeWanderLocation(feet) {
-    const {unitIndex} = uiState.wanderLocationPlacement;
-    handleChange(draft.setWanderLocation(unitIndex, feet));
+    const {unitIndex, section} = uiState.wanderLocationPlacement;
+    handleChange(draft.setWanderLocation(unitIndex, feet, section));
     setUiState(uiState.clearWanderLocationPlacement());
   }
 
@@ -645,6 +662,12 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
         onCancelWanderLocationPlacement={() => setUiState(uiState.clearWanderLocationPlacement())}
         hoveredPatrolStep={uiState.hoveredPatrolStep}
         expandedUnitIndices={uiState.expandedUnitIndices}
+        ncuTokenUrls={ncuTokenUrls}
+        selectedNcuIndex={selectedNcuIndex}
+        onSelectNcu={setSelectedNcuIndex}
+        hoveredNcuIndex={hoveredNcuIndex}
+        onHoverNcu={setHoveredNcuIndex}
+        expandedNcuIndices={expandedNcuIndices}
         groupingMode={uiState.groupingMode}
         onToggleGroupMember={toggleGroupMember}
         hoveredGroupIdentifier={uiState.hoveredGroupIdentifier}
@@ -739,6 +762,29 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
               pendingGroupNames={uiState.pendingGroupNames}
               onAddPendingGroup={(name) => setUiState(uiState.addPendingGroup(name))}
               onRenameGroup={renameGroup}
+              dispatch={dispatch}
+            />
+            <NcusPanel
+              ncus={mapData.ncus ?? []}
+              tokenUrls={ncuTokenUrls}
+              selectedIndex={selectedNcuIndex}
+              onSelect={setSelectedNcuIndex}
+              hoveredIndex={hoveredNcuIndex}
+              onHover={setHoveredNcuIndex}
+              onExpandedIndicesChange={setExpandedNcuIndices}
+              tool={uiState.tool}
+              placement={uiState.placement}
+              canPlaceOnMap={canPlaceOnMap}
+              onStartAddNcu={() => setUiState(uiState.startTool("add-ncu"))}
+              unitPlacement={uiState.unitPlacement}
+              onStartUnitPlacement={(i) => setUiState(uiState.startUnitPlacement(i, "ncus"))}
+              patrolStepPlacement={uiState.patrolStepPlacement}
+              onStartPatrolStepPlacement={(i, stepIndex, mode) => setUiState(uiState.startPatrolStepPlacement(i, stepIndex, mode, "ncus"))}
+              onStartPatrolStepEdit={(i, stepIndex) => setUiState(uiState.startPatrolStepEdit(i, stepIndex, "ncus"))}
+              onHoverPatrolStep={(p) => setUiState(uiState.with({hoveredPatrolStep: p && {...p, section: "ncus"}}))}
+              wanderLocationPlacement={uiState.wanderLocationPlacement}
+              onStartWanderLocationPlacement={(i) => setUiState(uiState.startWanderLocationPlacement(i, "ncus"))}
+              onUpdateMovement={(i, fields) => updateMovement(i, fields, "ncus")}
               dispatch={dispatch}
             />
           </>

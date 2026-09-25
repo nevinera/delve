@@ -19,6 +19,7 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `barriers` | array of Barrier | no | Impassable obstacles on this map. |
 | `connections` | array of MapConnection | no | Entry/exit points on this map. The zone defines how connections pair up and which are entry points. |
 | `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |
+| `ncus` | array of NCU | no | Non-combat units initially present on this map. See [ncu.md](ncu.md). |
 | `respawn` | RespawnConfig | no | Overrides the zone's `respawn` for every unit on this map, unless a unit overrides it again. See [common.md](common.md#respawnconfig). |
 
 ---

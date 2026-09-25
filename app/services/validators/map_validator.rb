@@ -28,6 +28,7 @@ module Validators
       validate_barriers!(data, path: path) if given?(data, "barriers")
       validate_connections!(data, path: path) if given?(data, "connections")
       validate_units!(data, path: path) if given?(data, "units")
+      validate_ncus!(data, path: path) if given?(data, "ncus")
       RespawnConfigValidator.validate!(data["respawn"], path: child_path(path, "respawn")) if given?(data, "respawn")
     end
 
@@ -105,6 +106,14 @@ module Validators
       raise ValidationError.new("units must be an array", path: child_path(path, "units")) unless units.is_a?(Array)
       units.each_with_index do |unit, i|
         UnitValidator.validate!(unit, path: index_path(child_path(path, "units"), i))
+      end
+    end
+
+    def validate_ncus!(data, path:)
+      ncus = data["ncus"]
+      raise ValidationError.new("ncus must be an array", path: child_path(path, "ncus")) unless ncus.is_a?(Array)
+      ncus.each_with_index do |ncu, i|
+        NcuValidator.validate!(ncu, path: index_path(child_path(path, "ncus"), i))
       end
     end
 

@@ -105,6 +105,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
 			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph, inst.Rand)...)
+			tickNCUMovement(state, TickInterval.Seconds(), inst.Rand)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds(), inst.Rand)
 			processTriggeredStatusEffects(state, inst.ZoneConfig, now, TickInterval.Seconds(), inst.Rand)

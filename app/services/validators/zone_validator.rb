@@ -54,27 +54,28 @@ module Validators
       maps.each_with_index do |map, i|
         MapValidator.validate!(map, path: index_path(child_path(path, "maps"), i))
       end
-      validate_unit_identifier_uniqueness!(maps, path: path)
+      validate_identifier_uniqueness!(maps, "units", "unit", path: path)
+      validate_identifier_uniqueness!(maps, "ncus", "ncu", path: path)
     end
 
-    def validate_unit_identifier_uniqueness!(maps, path:)
+    def validate_identifier_uniqueness!(maps, section, label, path:)
       seen = {}
-      maps.each { |map| check_map_unit_identifiers!(map, seen, path: path) }
+      maps.each { |map| check_map_identifiers!(map, section, label, seen, path: path) }
     end
 
-    def check_map_unit_identifiers!(map, seen, path:)
+    def check_map_identifiers!(map, section, label, seen, path:)
       return unless map.is_a?(Hash)
       map_id = map["identifier"]
-      Array(map["units"]).each do |unit|
-        next unless unit.is_a?(Hash) && unit["identifier"].is_a?(String)
-        register_unit_identifier!(unit["identifier"], map_id, seen, path: path)
+      Array(map[section]).each do |entry|
+        next unless entry.is_a?(Hash) && entry["identifier"].is_a?(String)
+        register_identifier!(entry["identifier"], label, map_id, seen, path: path)
       end
     end
 
-    def register_unit_identifier!(id, map_id, seen, path:)
+    def register_identifier!(id, label, map_id, seen, path:)
       if seen.key?(id)
         raise ValidationError.new(
-          "unit identifier #{id.inspect} is already used in map #{seen[id].inspect}",
+          "#{label} identifier #{id.inspect} is already used in map #{seen[id].inspect}",
           path: child_path(path, "maps")
         )
       end

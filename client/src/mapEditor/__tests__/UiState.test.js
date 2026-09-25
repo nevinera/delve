@@ -51,26 +51,33 @@ describe("UiState", () => {
     it("startUnitPlacement clears every other mode", () => {
       const state = new UiState().startBarrierPlacement(1, 0);
       const result = state.startUnitPlacement(3);
-      expect(result.unitPlacement).toEqual({unitIndex: 3});
+      expect(result.unitPlacement).toEqual({unitIndex: 3, section: "units"});
       expect(result.placement).toBeNull();
     });
 
     it("startPatrolStepPlacement/advancePatrolStepPlacement mirror the barrier-point pair", () => {
       const state = new UiState().startPatrolStepPlacement(0, 0);
-      expect(state.patrolStepPlacement).toEqual({unitIndex: 0, stepIndex: 0, mode: "insert"});
+      expect(state.patrolStepPlacement).toEqual({unitIndex: 0, stepIndex: 0, mode: "insert", section: "units"});
       const advanced = state.advancePatrolStepPlacement();
-      expect(advanced.patrolStepPlacement).toEqual({unitIndex: 0, stepIndex: 1, mode: "insert"});
+      expect(advanced.patrolStepPlacement).toEqual({unitIndex: 0, stepIndex: 1, mode: "insert", section: "units"});
     });
 
     it("startPatrolStepEdit sets mode: edit", () => {
       const result = new UiState().startPatrolStepEdit(0, 2);
-      expect(result.patrolStepPlacement).toEqual({unitIndex: 0, stepIndex: 2, mode: "edit"});
+      expect(result.patrolStepPlacement).toEqual({unitIndex: 0, stepIndex: 2, mode: "edit", section: "units"});
+    });
+
+    it("carries an ncus section through patrol placement and its advance", () => {
+      const state = new UiState().startPatrolStepPlacement(1, 0, "insert", "ncus");
+      expect(state.advancePatrolStepPlacement().patrolStepPlacement).toEqual({unitIndex: 1, stepIndex: 1, mode: "insert", section: "ncus"});
+      expect(new UiState().startUnitPlacement(2, "ncus").unitPlacement).toEqual({unitIndex: 2, section: "ncus"});
+      expect(new UiState().startWanderLocationPlacement(2, "ncus").wanderLocationPlacement).toEqual({unitIndex: 2, section: "ncus"});
     });
 
     it("startWanderLocationPlacement clears every other mode", () => {
       const state = new UiState().startTool("add-circle");
       const result = state.startWanderLocationPlacement(0);
-      expect(result.wanderLocationPlacement).toEqual({unitIndex: 0});
+      expect(result.wanderLocationPlacement).toEqual({unitIndex: 0, section: "units"});
       expect(result.tool).toBe("select");
     });
 

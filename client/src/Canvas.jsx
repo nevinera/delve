@@ -4,6 +4,7 @@ import { SceneManager } from "./game/scene";
 const Canvas = forwardRef(function Canvas({
   zoneSourceUrl,
   units,
+  ncus,
   selfIdentifier,
   characterTokenUrl,
   movementKeysRef,
@@ -17,6 +18,7 @@ const Canvas = forwardRef(function Canvas({
   onUnitClick,
   onUnitRightClick,
   onUnitHover,
+  onNcuRightClick,
   targetId,
   attacking,
   lootableUnitIds,
@@ -28,12 +30,13 @@ const Canvas = forwardRef(function Canvas({
 
   useImperativeHandle(ref, () => ({
     isInView: (mapX, mapY) => managerRef.current?.isInView(mapX, mapY) ?? true,
+    ncuInfo: (zoneNcuIdentifier) => managerRef.current?.ncuInfo(zoneNcuIdentifier) ?? null,
     playGraphicEffects: (effects, positions, baseUrl, travelOverrideMs) =>
       managerRef.current?.playGraphicEffects(effects, positions, baseUrl, travelOverrideMs),
   }));
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onCanvasResize, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover });
+    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onCanvasResize, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onNcuRightClick });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();
@@ -52,6 +55,10 @@ const Canvas = forwardRef(function Canvas({
     managerRef.current?.updateUnits(units, selfIdentifier, characterTokenUrl);
     managerRef.current?.syncStatusAuras(units, statusCatalog ?? {}, stockAssets);
   }, [units, statusCatalog, stockAssets]);
+
+  useEffect(() => {
+    managerRef.current?.updateNcus(ncus ?? {});
+  }, [ncus, units]);
 
   useEffect(() => {
     managerRef.current?.setTarget(targetId);
