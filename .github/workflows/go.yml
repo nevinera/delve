@@ -29,3 +29,30 @@ jobs:
 
       - run: go vet ./...
         working-directory: game-server
+
+  fmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: game-server/go.mod
+
+      - run: test -z "$(gofmt -l .)"
+        working-directory: game-server
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: game-server/go.mod
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          working-directory: game-server
