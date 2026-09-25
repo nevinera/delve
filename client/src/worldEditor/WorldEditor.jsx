@@ -11,6 +11,7 @@ import {validateWorld} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
+import {redirectTo} from "../redirectTo";
 
 // A world lives at worlds/<key>.json (see Build::WorldsController) - flat,
 // no subdirectory, and never inlines its zones (see docs/schema/world.md),
@@ -73,7 +74,7 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
       } catch (error) {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
-          window.location.href = error.redirectUrl;
+          redirectTo(error.redirectUrl);
           return;
         }
         setLoadError(error.message);
@@ -155,7 +156,7 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
-        window.location.href = error.redirectUrl;
+        redirectTo(error.redirectUrl);
         return;
       }
       setSaveError(error.message);

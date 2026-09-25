@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, afterEach} from "vitest";
+import {redirectTo} from "../../redirectTo";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import ZoneEditor from "../ZoneEditor";
 import {resolveZoneRefs} from "../resolveZoneRefs";
@@ -28,6 +29,7 @@ vi.mock("../zoneContentLoaders", async (importOriginal) => {
     mapDetailsFor: vi.fn(),
   };
 });
+vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateZone: vi.fn(),
 }));
@@ -78,12 +80,10 @@ describe("ZoneEditor", () => {
 
   it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
     loadZone.mockRejectedValue(new GithubAuthError("reauth_required", "/github/reauth"));
-    delete window.location;
-    window.location = {href: ""};
 
     render(<ZoneEditor zoneKey="goblin-cave" />);
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 
   it("flows a name edit from the field into the zone state", async () => {
@@ -165,15 +165,13 @@ describe("ZoneEditor", () => {
     resolveZoneRefs.mockResolvedValue({});
     validateZone.mockResolvedValue({valid: true});
     saveZone.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-    delete window.location;
-    window.location = {href: ""};
     await renderReady();
 
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 
   it("renders the maps panel, seeded from the resolved map details", async () => {

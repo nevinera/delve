@@ -8,6 +8,7 @@ import {validateItem} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
+import {redirectTo} from "../redirectTo";
 
 // The item's own content is no longer bootstrapped from the server (see
 // plans/editor-git.md) - it's fetched here, client-side, on mount, via
@@ -38,7 +39,7 @@ export default function ItemEditor({itemKey}) {
       .catch((error) => {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
-          window.location.href = error.redirectUrl;
+          redirectTo(error.redirectUrl);
           return;
         }
         setLoadError(error.message);
@@ -74,7 +75,7 @@ export default function ItemEditor({itemKey}) {
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
-        window.location.href = error.redirectUrl;
+        redirectTo(error.redirectUrl);
         return;
       }
       setSaveError(error.message);

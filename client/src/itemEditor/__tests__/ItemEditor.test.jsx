@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
+import {redirectTo} from "../../redirectTo";
 import {render, screen, fireEvent, waitFor} from "@testing-library/react";
 import ItemEditor from "../ItemEditor";
 import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
@@ -15,6 +16,7 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
   return {...actual, GithubClient: vi.fn()};
 });
 
+vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateItem: vi.fn(),
 }));
@@ -70,12 +72,10 @@ describe("ItemEditor", () => {
     mockFetchFile(async () => {
       throw new GithubAuthError("reauth_required", "/github/reauth");
     });
-    delete window.location;
-    window.location = {href: ""};
 
     render(<ItemEditor itemKey="sword-of-doom" />);
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 
   it("flows a name edit from the fields panel into the item state and the preview", async () => {
@@ -135,14 +135,12 @@ describe("ItemEditor", () => {
   it("redirects to the GitHub reauth URL on a GithubAuthError during save", async () => {
     validateItem.mockResolvedValue({valid: true});
     commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-    delete window.location;
-    window.location = {href: ""};
     await renderLoaded();
 
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 });

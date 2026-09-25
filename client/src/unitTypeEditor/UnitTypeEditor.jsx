@@ -12,6 +12,7 @@ import {validateUnitType} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
+import {redirectTo} from "../redirectTo";
 
 // unitTypeKey's own "/"s each add a directory level beneath unit_types/, so
 // a relative path from unit_types/<key>.json back up to the repo root needs
@@ -85,7 +86,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
       } catch (error) {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
-          window.location.href = error.redirectUrl;
+          redirectTo(error.redirectUrl);
           return;
         }
         setLoadError(error.message);
@@ -210,7 +211,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
-        window.location.href = error.redirectUrl;
+        redirectTo(error.redirectUrl);
         return;
       }
       setSaveError(error.message);

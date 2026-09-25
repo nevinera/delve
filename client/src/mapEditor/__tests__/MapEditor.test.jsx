@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
+import {redirectTo} from "../../redirectTo";
 import {render, screen, fireEvent, waitFor, act} from "@testing-library/react";
 import MapEditor from "../MapEditor";
 import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
@@ -29,6 +30,7 @@ vi.mock("../mapContentLoaders", async (importOriginal) => {
   };
 });
 
+vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateMap: vi.fn(),
 }));
@@ -114,12 +116,10 @@ describe("MapEditor", () => {
 
   it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
     loadMap.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-    delete window.location;
-    window.location = {href: ""};
 
     render(<MapEditor mapKey="goblin-cave/gc1-entrance" />);
 
-    await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
 
   it("shows a file picker with no image yet", async () => {
@@ -820,15 +820,13 @@ describe("MapEditor", () => {
     it("redirects to the GitHub reauth URL on a GithubAuthError during save", async () => {
       validateMap.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-      delete window.location;
-      window.location = {href: ""};
 
       await renderReady({mapKey: "goblin-cave/gc1-entrance", map: BLANK_MAP});
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
-      await waitFor(() => expect(window.location.href).toBe("/github/reauth"));
+      await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
     });
   });
 

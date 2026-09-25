@@ -17,6 +17,7 @@ import {validateMap} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
+import {redirectTo} from "../redirectTo";
 import {loadSvgToCanvas} from "../game/svgRaster";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
@@ -192,7 +193,7 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
       } catch (error) {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
-          window.location.href = error.redirectUrl;
+          redirectTo(error.redirectUrl);
           return;
         }
         setLoadError(error.message);
@@ -598,7 +599,7 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
-        window.location.href = error.redirectUrl;
+        redirectTo(error.redirectUrl);
         return;
       }
       setSaveError(error.message);
