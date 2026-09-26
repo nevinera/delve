@@ -1,12 +1,14 @@
 import { useState } from "react";
+import { pickEntryNodeId } from "./game/dialogue";
 
-// Steps through `lines` one at a time; the last line's button closes it.
-// Keyed by the speaking unit's id by the caller, so talking to someone new
-// starts from their first line.
-export function DialogueWindow({ name, lines, onClose }) {
-  const [index, setIndex] = useState(0);
-  if (!lines?.length) return null;
-  const last = index >= lines.length - 1;
+// Walks a branching dialogue tree (docs/schema/ncu.md#dialogue) node by
+// node. Keyed by the speaking unit's id by the caller (see App.jsx's
+// key={dialogueNcuId}), so talking to someone new remounts this component -
+// the lazy useState initializer below re-picks a random entry node each time.
+export function DialogueWindow({ name, dialogue, onClose }) {
+  const [currentNodeId, setCurrentNodeId] = useState(() => dialogue && pickEntryNodeId(dialogue));
+  const node = dialogue?.nodes?.[currentNodeId];
+  if (!node) return null;
 
   return (
     <div style={styles.window} role="dialog" aria-label={name}>
@@ -14,11 +16,23 @@ export function DialogueWindow({ name, lines, onClose }) {
         <span style={styles.title}>{name}</span>
         <button style={styles.close} onClick={onClose} aria-label="Close">✕</button>
       </div>
-      <p style={styles.line}>{lines[index]}</p>
+      <p style={styles.line}>{node.text}</p>
       <div style={styles.footer}>
-        <button style={styles.next} onClick={last ? onClose : () => setIndex(index + 1)}>
-          {last ? "Goodbye" : "Next"}
-        </button>
+        {node.choices?.length ? (
+          node.choices.map((choice, i) => (
+            <button
+              key={i}
+              style={styles.next}
+              onClick={choice.next ? () => setCurrentNodeId(choice.next) : onClose}
+            >
+              {choice.text}
+            </button>
+          ))
+        ) : (
+          <button style={styles.next} onClick={node.next ? () => setCurrentNodeId(node.next) : onClose}>
+            {node.next ? "Next" : "Goodbye"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -70,7 +84,9 @@ const styles = {
   },
   footer: {
     display: "flex",
-    justifyContent: "flex-end",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    gap: 6,
   },
   next: {
     background: "#3a2a14",

@@ -10,5 +10,7 @@ type NCU struct {
 	SpeedFactor   float64      `json:"speedFactor,omitempty"` // Default 1.0
 	Position      Position     `json:"position"`              // Required
 	Movement      UnitMovement `json:"movement,omitempty"`
-	Dialogue      []string     `json:"dialogue,omitempty"` // client-only
+	// dialogue is client-only content the server never reads - omitted
+	// here entirely rather than typed, so its shape can evolve freely;
+	// encoding/json silently ignores unknown JSON fields by default.
 }
