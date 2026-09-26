@@ -9,7 +9,7 @@ RSpec.describe Validators::NcuValidator, type: :validator do
       "tokenRadius" => 2.0,
       "position" => {"x" => 10.0, "y" => 10.0, "angle" => 180.0},
       "movement" => {"type" => "wander", "location" => {"x" => 10.0, "y" => 10.0}, "radius" => 4.0, "speed" => 0.3, "waitTime" => [4.0, 8.0]},
-      "dialogue" => ["Psst.", "Don't go in there."]
+      "dialogue" => {"entry" => [{"node" => "greet"}], "nodes" => {"greet" => {"text" => "Psst. Don't go in there."}}}
     }
   end
 
@@ -43,13 +43,8 @@ RSpec.describe Validators::NcuValidator, type: :validator do
       .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/movement/) }
   end
 
-  it "raises on a blank dialogue line" do
-    expect { described_class.validate!(ncu.merge("dialogue" => ["Hi.", " "])) }
-      .to raise_error(Validators::ValidationError, /non-empty strings/)
-  end
-
-  it "raises when dialogue isn't an array" do
-    expect { described_class.validate!(ncu.merge("dialogue" => "Hi.")) }
-      .to raise_error(Validators::ValidationError, /dialogue must be an array/)
+  it "validates dialogue like a standalone tree, surfacing the nested path" do
+    expect { described_class.validate!(ncu.merge("dialogue" => {"entry" => [{"node" => "missing"}], "nodes" => ncu["dialogue"]["nodes"]})) }
+      .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/dialogue/) }
   end
 end

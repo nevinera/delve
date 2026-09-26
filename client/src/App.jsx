@@ -4037,7 +4037,7 @@ export default function App({
         <DialogueWindow
           key={dialogueNcuId}
           name={dialogueInfo?.name ?? dialogueNcu.zone_ncu_identifier}
-          lines={dialogueInfo?.dialogue}
+          dialogue={dialogueInfo?.dialogue}
           onClose={() => setDialogueNcuId(null)}
         />
       )}

@@ -51,7 +51,7 @@ function NcuRow({
           <span className="map-sidebar-section-toggle">{expanded ? "▾" : "▸"}</span>
           <NcuTokenThumb tokenUrl={tokenUrl} className="map-unit-token-thumb map-unit-row-token" />
           <span className="map-unit-row-name">{ncu.name || ncu.identifier || `NCU ${index + 1}`}</span>
-          {ncu.dialogue?.length > 0 && <span className="map-ncu-row-talk-icon" title="Has dialogue">💬</span>}
+          {ncu.dialogue?.entry?.length > 0 && <span className="map-ncu-row-talk-icon" title="Has dialogue">💬</span>}
         </div>
         {expanded && (
           <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); onRemove(index); }}>
@@ -120,7 +120,7 @@ function NcuRow({
             wanderLocationPlacement={wanderLocationPlacement} onStartWanderLocationPlacement={onStartWanderLocationPlacement}
             onUpdateMovement={onUpdateMovement}
           />
-          <DialogueFields lines={ncu.dialogue} onChange={(v) => update(index, {dialogue: v})} />
+          <DialogueFields dialogue={ncu.dialogue} onChange={(v) => update(index, {dialogue: v})} />
         </>
       )}
     </div>

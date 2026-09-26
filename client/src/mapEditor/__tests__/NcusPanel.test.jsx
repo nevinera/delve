@@ -4,7 +4,8 @@ import NcusPanel from "../NcusPanel";
 
 const GRIZZLE = {
   identifier: "grizzle", name: "Grizzle", tokenImageUrl: "./g.webp", tokenRadius: 2,
-  position: {x: 1, y: 2, angle: 0}, movement: {type: "still"}, dialogue: ["Psst."],
+  position: {x: 1, y: 2, angle: 0}, movement: {type: "still"},
+  dialogue: {entry: [{node: "greet"}], nodes: {greet: {text: "Psst."}}},
 };
 
 function renderPanel(props = {}) {
@@ -54,8 +55,12 @@ describe("NcusPanel", () => {
     fireEvent.change(screen.getByLabelText("Token Radius"), {target: {value: "3"}});
     expect(dispatch).toHaveBeenLastCalledWith({type: "UPDATE_ENTRY_FIELD", section: "ncus", index: 0, field: "tokenRadius", value: 3});
 
-    fireEvent.change(screen.getByLabelText("Dialogue line 1"), {target: {value: "Hey."}});
-    expect(dispatch).toHaveBeenLastCalledWith({type: "UPDATE_ENTRY_FIELD", section: "ncus", index: 0, field: "dialogue", value: ["Hey."]});
+    fireEvent.click(screen.getByText("Psst."));
+    fireEvent.change(screen.getByLabelText("Node text"), {target: {value: "Hey."}});
+    expect(dispatch).toHaveBeenLastCalledWith({
+      type: "UPDATE_ENTRY_FIELD", section: "ncus", index: 0, field: "dialogue",
+      value: {entry: [{node: "greet"}], nodes: {greet: {text: "Hey."}}},
+    });
   });
 
   it("switches movement type within the ncus section", () => {

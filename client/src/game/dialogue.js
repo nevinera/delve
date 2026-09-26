@@ -5,7 +5,16 @@ import { isUntargetableStatus } from "./state";
 export const TALK_RANGE = 10;
 
 export function hasDialogue(dialogue) {
-  return Array.isArray(dialogue) && dialogue.length > 0;
+  return !!dialogue?.entry?.length && Object.keys(dialogue?.nodes ?? {}).length > 0;
+}
+
+// One of `dialogue.entry`'s candidate node ids, picked uniformly at random -
+// a fresh conversation with an NCU can open with any one of several
+// greetings. Each candidate is its own object ({node}, not a bare id
+// string) so a future flag condition has somewhere to land.
+export function pickEntryNodeId(dialogue) {
+  const {entry} = dialogue;
+  return entry[Math.floor(Math.random() * entry.length)].node;
 }
 
 export function inTalkRange(self, ncu) {

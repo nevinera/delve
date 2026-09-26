@@ -7,6 +7,7 @@ import UnitShapes from "./UnitShapes";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
 import MapPreviewCanvas from "./MapPreviewCanvas";
+import {randomIdentifierSuffix} from "./randomIdentifier";
 
 // Connections need a required, zone-unique `identifier` the moment they're
 // created (unlike barriers, which have none) - this picks the first unused
@@ -17,17 +18,6 @@ function nextConnectionIdentifier(connections) {
   let n = connections.length + 1;
   while (existing.has(`connection-${n}`)) n++;
   return `connection-${n}`;
-}
-
-const IDENTIFIER_SUFFIX_LETTERS = "abcdefghijklmnopqrstuvwxyz";
-const IDENTIFIER_SUFFIX_LENGTH = 6;
-
-function randomIdentifierSuffix() {
-  let suffix = "";
-  for (let i = 0; i < IDENTIFIER_SUFFIX_LENGTH; i++) {
-    suffix += IDENTIFIER_SUFFIX_LETTERS[Math.floor(Math.random() * IDENTIFIER_SUFFIX_LETTERS.length)];
-  }
-  return suffix;
 }
 
 // Units need a default identifier the moment they're placed too (see
