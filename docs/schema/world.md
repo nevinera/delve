@@ -17,6 +17,7 @@ See [zone.md](zone.md) for the `Zone` type referenced by `zones`.
 | `elevationRange` | ElevationRange | no | Recommended. Bounds the `elvl` of every zone (and transitively every map) within this world. |
 | `zones` | object | yes | Maps local zone-identifier strings to WorldZoneEntry. At least one. |
 | `worldLinks` | array of WorldLink | no | Connections between pairs of zone connection points (either an `openConnection` or an `entryPoint`) across zones in this world. |
+| `questChains` | object | no | Maps quest-chain identifier strings to WorldQuestChainEntry. |
 | `entryPoints` | object | yes | Maps serialized WorldEntryPointIdentifier keys (`"zoneId/entryPointKey"`) to required key strings (or `null`). At least one. |
 
 > Skipped for now, tracked separately: `allowedClasses` (blocked on ClassSets) and equipment
@@ -48,6 +49,17 @@ independent field to edit.
 | `path` | string | yes | Relative path to the zone's config file. |
 | `name` | string | yes | Cached display name, kept in sync with the referenced zone's own `name`. |
 | `description` | string | no | Cached description, kept in sync with the referenced zone's own `description`. |
+
+---
+
+## WorldQuestChainEntry
+
+A reference to a [QuestChain](quest_chain.md)'s own file. The key it's stored under must match the
+chain's own `identifier`.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `path` | string | yes | Relative path to the quest chain's file. |
 
 ---
 
@@ -124,6 +136,9 @@ traversing one transports a unit to the other.
       "name": "Stagnant Oasis",
       "description": "A murky watering hole ringed by dead trees."
     }
+  },
+  "questChains": {
+    "grizzles-troubles": { "path": "../quest_chains/grizzles-troubles.json" }
   },
   "worldLinks": [
     {
