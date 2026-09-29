@@ -45,6 +45,14 @@ describe("saveMap", () => {
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update goblin-cave/gc1-goblin-cave-entrance"});
   });
 
+  it("uses a given commit message instead of the default", async () => {
+    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+
+    await saveMap("goblin-cave/gc1-goblin-cave-entrance", {name: "Cave Entrance"}, null, "Custom message");
+
+    expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Custom message"});
+  });
+
   it("also commits a pending image file alongside the JSON, resolved against the map's own directory", async () => {
     commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
     const mapData = {name: "Goblin Cave Entrance", imageUrl: "gc1-goblin-cave-entrance.webp"};

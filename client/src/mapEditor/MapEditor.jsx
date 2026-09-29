@@ -592,10 +592,10 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
     }
   }
 
-  async function handleSave() {
+  async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveMap(mapKey, mapData, image?.file ?? null);
+      await saveMap(mapKey, mapData, image?.file ?? null, commitMessage);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -682,7 +682,7 @@ export default function MapEditor({mapKey, backUrl, newUnitTypeUrl, newItemUrl})
         onToolChange={(nextTool) => setUiState(uiState.with({tool: nextTool}))}
       />
       <MapSidebar>
-        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${mapData.name || mapKey}`} />
         {patrolSim.current.running ? (
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Simulating units - editing is disabled while this runs.</h3>

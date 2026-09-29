@@ -42,7 +42,7 @@ async function generateThumbnail(imageFile, feetDimensions) {
 // see MapEditor's `image.file`). A thumbnail (see generateThumbnail above)
 // is committed alongside it as `<basename>.thumb.webp`, only when the image
 // itself is being (re)saved this session.
-export async function saveMap(key, mapData, imageFile) {
+export async function saveMap(key, mapData, imageFile, commitMessage) {
   const basename = key.split("/").pop();
   const filesByPath = {};
   let data = mapData;
@@ -61,5 +61,5 @@ export async function saveMap(key, mapData, imageFile) {
 
   filesByPath[`zones/${key}/${basename}.json`] = data;
 
-  return commitFiles(filesByPath, {message: `Update ${mapData.name || key}`});
+  return commitFiles(filesByPath, {message: commitMessage || `Update ${mapData.name || key}`});
 }
