@@ -42,6 +42,14 @@ describe("saveClass", () => {
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update puncher"});
   });
 
+  it("uses a given commit message instead of the default", async () => {
+    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+
+    await saveClass("puncher", {name: "Puncher", powers: []}, availableAbilities, "Custom message");
+
+    expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Custom message"});
+  });
+
   it("commits a nested key's JSON at classes/<key>.json and .full.json", async () => {
     commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
     const classData = {name: "Druid", powers: []};
