@@ -20,7 +20,7 @@ function resolveRepoPath(key, relativePath) {
 // currently holds, since that's the only way to know where an uploaded
 // image/sound belongs. Throws if any pending upload's field is still
 // blank (nowhere to put it) rather than silently dropping it.
-export async function saveAbility(key, ability, pendingFiles) {
+export async function saveAbility(key, ability, pendingFiles, commitMessage) {
   const filesByPath = {[`abilities/${key}.json`]: ability};
   const missingPaths = [];
 
@@ -37,5 +37,5 @@ export async function saveAbility(key, ability, pendingFiles) {
     throw new Error(`Set a path before saving for: ${missingPaths.join(", ")}`);
   }
 
-  return commitFiles(filesByPath, {message: `Update ${ability.name || key}`});
+  return commitFiles(filesByPath, {message: commitMessage || `Update ${ability.name || key}`});
 }
