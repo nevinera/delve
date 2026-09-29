@@ -2,6 +2,8 @@ package instance
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,6 +73,7 @@ type unitJSON struct {
 	CastEndsAt           *int64                   `json:"cast_ends_at,omitempty"`
 	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
 	LootItems            []lootItemJSON           `json:"loot_items,omitempty"`
+	CombatStats          *combatStatsJSON         `json:"combat_stats,omitempty"`
 
 	// Set only for player-character units with a connected slot that has sent
 	// at least one heartbeat/move - see Instance.LastSeqsByUnit. Echoing the
@@ -81,6 +84,39 @@ type unitJSON struct {
 	// server actually accepted (see move_feasibility.go).
 	LastHeartbeatSeq *string `json:"last_heartbeat_seq,omitempty"`
 	LastMoveSeq      *string `json:"last_move_seq,omitempty"`
+}
+
+type schoolCombatStatsJSON struct {
+	HastePct         float64 `json:"haste_pct"`
+	CritChancePct    float64 `json:"crit_chance_pct"`
+	StatContribution float64 `json:"stat_contribution"`
+}
+
+// combatStatsJSON is a player's derived combat numbers - see
+// instancestate.CombatStats. Only sent for player units.
+type combatStatsJSON struct {
+	Stats       map[string]float64    `json:"stats"`
+	Physical    schoolCombatStatsJSON `json:"physical"`
+	Magic       schoolCombatStatsJSON `json:"magic"`
+	BasicAttack schoolCombatStatsJSON `json:"basic_attack"`
+}
+
+func schoolCombatStatsToJSON(s instancestate.SchoolCombatStats) schoolCombatStatsJSON {
+	return schoolCombatStatsJSON(s)
+}
+
+// combatStatsToJSON returns nil for non-player units and for units whose
+// stats haven't been computed yet.
+func combatStatsToJSON(u *instancestate.UnitState) *combatStatsJSON {
+	if u.CombatStats == nil || !strings.HasPrefix(u.ZoneUnitIdentifier, "player:") {
+		return nil
+	}
+	return &combatStatsJSON{
+		Stats:       u.CombatStats.Stats,
+		Physical:    schoolCombatStatsToJSON(u.CombatStats.Physical),
+		Magic:       schoolCombatStatsToJSON(u.CombatStats.Magic),
+		BasicAttack: schoolCombatStatsToJSON(u.CombatStats.BasicAttack),
+	}
 }
 
 type effectJSON struct {
@@ -282,6 +318,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			CastEndsAt:           castEndsAt,
 			ActiveStatusEffects:  effects,
 			LootItems:            lootItemsToJSON(u.LootItems),
+			CombatStats:          combatStatsToJSON(u),
 			LastHeartbeatSeq:     hbSeq,
 			LastMoveSeq:          moveSeq,
 		}
@@ -362,6 +399,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			if li := lootItemsToJSON(cu.LootItems); li != nil {
 				update["loot_items"] = li
 			}
+			if cs := combatStatsToJSON(cu); cs != nil {
+				update["combat_stats"] = cs
+			}
 			if seq, ok := currHeartbeatSeqs[id]; ok {
 				update["last_heartbeat_seq"] = seq
 			}
@@ -434,6 +474,11 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		}
 		if !lootItemsEqual(cu.LootItems, pu.LootItems) {
 			patch["loot_items"] = lootItemsToJSON(cu.LootItems)
+		}
+		if !reflect.DeepEqual(cu.CombatStats, pu.CombatStats) {
+			if cs := combatStatsToJSON(cu); cs != nil {
+				patch["combat_stats"] = cs
+			}
 		}
 		if seq, ok := currHeartbeatSeqs[id]; ok && seq != prevHeartbeatSeqs[id] {
 			patch["last_heartbeat_seq"] = seq
