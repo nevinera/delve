@@ -156,8 +156,10 @@ describe("ZoneEditor", () => {
 
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
+    fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
     // Same syncZoneRefs fill-in as Validate - see above.
-    await waitFor(() => expect(saveZone).toHaveBeenCalledWith("goblin-cave", {...initialZone, items: {}, unitTypes: {}}, {}));
+    await waitFor(() => expect(saveZone).toHaveBeenCalledWith("goblin-cave", {...initialZone, items: {}, unitTypes: {}}, {}, "Update Goblin Cave"));
     await screen.findByText("Saved.");
   });
 
@@ -170,6 +172,7 @@ describe("ZoneEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
+    fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
     await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });
@@ -251,6 +254,7 @@ describe("ZoneEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
+    fireEvent.click(screen.getByRole("button", {name: "Commit"}));
     await screen.findByText("Saved.");
 
     expect(saveZone).toHaveBeenCalledWith(
@@ -258,7 +262,8 @@ describe("ZoneEditor", () => {
       expect.objectContaining({
         unitTypes: {"demo/goblin-archer": {$ref: "../../unit_types/demo/goblin-archer.json", referenceTo: "unit_type"}},
       }),
-      {}
+      {},
+      "Update Goblin Cave"
     );
   });
 });

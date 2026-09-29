@@ -46,6 +46,14 @@ describe("saveZone", () => {
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update goblin-cave"});
   });
 
+  it("uses a given commit message instead of the default", async () => {
+    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+
+    await saveZone("goblin-cave", {name: "Goblin Cave"}, {}, "Custom message");
+
+    expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Custom message"});
+  });
+
   it("commits a nested key's files at zones/<key>/<basename>.*", async () => {
     commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
     resolveZoneRefs.mockResolvedValue({name: "Deep Cave"});
