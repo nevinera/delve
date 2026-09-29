@@ -15,7 +15,7 @@ import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
-import { AbilitiesSheet } from "./AbilitiesSheet";
+import { ClassSheet } from "./ClassSheet";
 import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
@@ -3039,7 +3039,7 @@ export default function App({
   const [ncus, setNcus] = useState({});
   const ncusRef = useRef({});
   const [charSheetOpen, setCharSheetOpen] = useState(false);
-  const [abilitiesOpen, setAbilitiesOpen] = useState(false);
+  const [classOpen, setClassOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
   const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
@@ -3084,6 +3084,7 @@ export default function App({
   const [menuOpen, setMenuOpen] = useState(false);
   const [equippedItems, setEquippedItems] = useState(initialEquippedItems);
   const [powers, setPowers] = useState([]);
+  const [classInfo, setClassInfo] = useState({});
   const [primaryStats, setPrimaryStats] = useState([]);
   const [primaryResource, setPrimaryResource] = useState(null); // {name, color} | null
   const [secondaryResources, setSecondaryResources] = useState([]); // [{name, color, max, isFluid}] - units never have these, only classes
@@ -3128,6 +3129,7 @@ export default function App({
       .then(r => r.json())
       .then(cfg => {
         setPowers(cfg.powers ?? []);
+        setClassInfo({name: cfg.name, description: cfg.description});
         setPrimaryStats(cfg.primaryStats ?? []);
         const resources = cfg.resources ?? [];
         const resource = resources.find(r => r.displayType === "primary");
@@ -3425,7 +3427,7 @@ export default function App({
           setLootWindowUnitId(null);
           setDialogueNcuId(null);
           setCharSheetOpen(false);
-          setAbilitiesOpen(false);
+          setClassOpen(false);
           setSettingsOpen(false);
           setMenuOpen(false);
         } else if (action === "detarget") {
@@ -3801,7 +3803,7 @@ export default function App({
   // is only ever non-empty when the target happens to be self.
   const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
-  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || abilitiesOpen || settingsOpen || menuOpen;
+  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || classOpen || settingsOpen || menuOpen;
 
   // Walking away (or dying) ends the conversation.
   const dialogueNcu = dialogueNcuId ? ncus[dialogueNcuId] : null;
@@ -4058,13 +4060,15 @@ export default function App({
         portrait={viewportMode.isPortraitPhone}
         landscape={viewportMode.isLandscapePhone}
       />
-      <AbilitiesSheet
-        open={abilitiesOpen}
+      <ClassSheet
+        open={classOpen}
         powers={powers}
+        className={classInfo.name}
+        classDescription={classInfo.description}
         combatStats={selfUnit?.combat_stats}
         classConfigUrl={classConfigUrl}
         stockAssets={stockAssets}
-        onClose={() => setAbilitiesOpen(false)}
+        onClose={() => setClassOpen(false)}
         portrait={viewportMode.isPortraitPhone}
         landscape={viewportMode.isLandscapePhone}
       />
@@ -4093,9 +4097,9 @@ export default function App({
           </button>
           <button
             style={styles.menuDialogButton}
-            onClick={() => { setAbilitiesOpen((o) => !o); setMenuOpen(false); }}
+            onClick={() => { setClassOpen((o) => !o); setMenuOpen(false); }}
           >
-            Abilities
+            Class
           </button>
           <button
             style={styles.menuDialogButton}
@@ -4351,10 +4355,10 @@ export default function App({
           </button>
           <button
             style={styles.utilityButton}
-            title="Abilities"
-            onClick={() => setAbilitiesOpen(o => !o)}
+            title="Class"
+            onClick={() => setClassOpen(o => !o)}
           >
-            Abilities
+            Class
           </button>
           <button
             style={styles.utilityButton}

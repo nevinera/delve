@@ -1,7 +1,7 @@
 import {combatStats} from "./combatStatsFixture";
 import {describe, it, expect, vi} from "vitest";
 import {render, screen, fireEvent} from "@testing-library/react";
-import {AbilitiesSheet, statSummary} from "../AbilitiesSheet";
+import {ClassSheet, statSummary} from "../ClassSheet";
 
 const bolt = {
   name: "Bolt",
@@ -27,16 +27,16 @@ describe("statSummary", () => {
   });
 });
 
-describe("AbilitiesSheet", () => {
+describe("ClassSheet", () => {
   const props = {powers: [bolt], combatStats: combatStats(), classConfigUrl: "http://x/classes/a.json", stockAssets: {}};
 
   it("renders nothing when closed", () => {
-    const {container} = render(<AbilitiesSheet open={false} {...props} onClose={() => {}} />);
+    const {container} = render(<ClassSheet open={false} {...props} onClose={() => {}} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("shows icon, name, summary, description and effects", () => {
-    render(<AbilitiesSheet open {...props} onClose={() => {}} />);
+    render(<ClassSheet open {...props} onClose={() => {}} />);
     expect(screen.getByAltText("Bolt")).toHaveAttribute("src", "http://x/icons/bolt.png");
     expect(screen.getByText("Bolt")).toBeInTheDocument();
     expect(screen.getByText("Zaps.")).toBeInTheDocument();
@@ -44,15 +44,23 @@ describe("AbilitiesSheet", () => {
     expect(screen.getByText("Deals 2-4 physical damage to the target (range 5)")).toBeInTheDocument();
   });
 
+  it("shows the class name and description above the abilities", () => {
+    render(<ClassSheet open {...props} className="Mage" classDescription="Casts spells." onClose={() => {}} />);
+    const text = document.body.textContent;
+    expect(screen.getByText("Mage")).toBeInTheDocument();
+    expect(text.indexOf("Casts spells.")).toBeLessThan(text.indexOf("Abilities"));
+    expect(text.indexOf("Abilities")).toBeLessThan(text.indexOf("Bolt"));
+  });
+
   it("says so when there are no abilities", () => {
-    render(<AbilitiesSheet open {...props} powers={[]} onClose={() => {}} />);
+    render(<ClassSheet open {...props} powers={[]} onClose={() => {}} />);
     expect(screen.getByText("No abilities.")).toBeInTheDocument();
   });
 
   it("calls onClose from the close button", () => {
     const onClose = vi.fn();
-    render(<AbilitiesSheet open {...props} onClose={onClose} />);
-    fireEvent.click(screen.getByLabelText("Close abilities"));
+    render(<ClassSheet open {...props} onClose={onClose} />);
+    fireEvent.click(screen.getByLabelText("Close class"));
     expect(onClose).toHaveBeenCalled();
   });
 });
