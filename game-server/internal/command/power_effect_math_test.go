@@ -20,7 +20,7 @@ func TestEffectSchoolStats_MagicUsesIntellectRegardlessOfDamageStatKey(t *testin
 		DamageStatKey: "strength", // not intellect - magic effects don't care
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("intellect", 0)},
 	}
-	_, _, statContribution := effectSchoolStats(unit, instanceconfig.Zone{}, "magic")
+	_, _, statContribution := effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "magic")
 	assert.InDelta(t, 30.0, statContribution, 0.001) // raw intellect from fullyItemizedMainHand
 }
 
@@ -29,11 +29,11 @@ func TestEffectSchoolStats_PhysicalStatContributionGatedByDamageStatKey(t *testi
 		DamageStatKey: "agility", // not strength
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
-	_, _, statContribution := effectSchoolStats(unit, instanceconfig.Zone{}, "physical")
+	_, _, statContribution := effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "physical")
 	assert.Equal(t, 0.0, statContribution, "strength is itemized, but agility is this unit's damage stat")
 
 	unit.DamageStatKey = "strength"
-	_, _, statContribution = effectSchoolStats(unit, instanceconfig.Zone{}, "physical")
+	_, _, statContribution = effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "physical")
 	assert.InDelta(t, 30.0, statContribution, 0.001)
 }
 
@@ -42,7 +42,7 @@ func TestEffectSchoolStats_PhysicalCritAndHasteAlwaysIncludeStrengthAgilityRegar
 		DamageStatKey: "intellect", // not strength/agility - crit/haste still get their contribution
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
-	hastePct, critChancePct, statContribution := effectSchoolStats(unit, instanceconfig.Zone{}, "physical")
+	hastePct, critChancePct, statContribution := effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "physical")
 	assert.Equal(t, 0.0, statContribution, "strength isn't this unit's damage stat")
 	// raw strength 30 -> +18 effective crit rating; raw crit_rating 20 itemized too -> 38 -> 5+38/15
 	assert.InDelta(t, 5+38.0/15, critChancePct, 0.001)
@@ -54,7 +54,7 @@ func TestEffectSchoolStats_MagicCritAndHasteComeFromIntellectAndItemizedRatingOn
 	unit := &instancestate.UnitState{
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("intellect", 0)},
 	}
-	hastePct, critChancePct, _ := effectSchoolStats(unit, instanceconfig.Zone{}, "magic")
+	hastePct, critChancePct, _ := effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "magic")
 	// raw intellect 30 -> +9 magic crit, +9 magic haste (0.3x each); raw
 	// crit_rating/haste_rating 20 itemized too.
 	assert.InDelta(t, 5+29.0/15, critChancePct, 0.001)
@@ -70,7 +70,7 @@ func TestPowerEffectAmount_ActiveStatStatusScalesDamageDone(t *testing.T) {
 	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false, rng)
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, 6.0, false, false, rng)
 	}, 15.0)
 }
 
@@ -83,7 +83,7 @@ func TestPowerEffectAmount_SchoolScopedDamageDoneOnlyAppliesToThatSchool(t *test
 	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, false, false, rng)
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, 6.0, false, false, rng)
 	}, 10.0)
 }
 
@@ -96,7 +96,7 @@ func TestPowerEffectAmount_ActiveStatStatusScalesHealingDone(t *testing.T) {
 	effect := instanceconfig.PowerEffect{Amount: &amount}
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 0, true, false, rng)
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, 0, true, false, rng)
 	}, 15.0)
 }
 
@@ -104,7 +104,7 @@ func TestEffectSchoolStats_ActiveStatStatusAddsPhysicalHaste(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
 	}
-	hastePct, _, _ := effectSchoolStats(unit, instanceconfig.Zone{}, "physical")
+	hastePct, _, _ := effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "physical")
 	assert.InDelta(t, 20.0, hastePct, 0.001)
 }
 
@@ -112,7 +112,7 @@ func TestEffectSchoolStats_PhysicalHasteStatusDoesNotAffectMagic(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
 	}
-	hastePct, _, _ := effectSchoolStats(unit, instanceconfig.Zone{}, "magic")
+	hastePct, _, _ := effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "magic")
 	assert.Zero(t, hastePct)
 }
 
@@ -120,7 +120,7 @@ func TestEffectSchoolStats_ActiveStatStatusAddsMagicCritChance(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("magicCritChance", "add", 10)},
 	}
-	_, critChancePct, _ := effectSchoolStats(unit, instanceconfig.Zone{}, "magic")
+	_, critChancePct, _ := effectSchoolStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, "magic")
 	assert.InDelta(t, 15.0, critChancePct, 0.001) // 5 base + 10 status
 }
 
@@ -164,16 +164,16 @@ func TestPowerEffectAmount_BonusScalesWithStatContributionTimeBudgetHealAndRecur
 	const timeBudget = 6.0 // bonus = (1/3)*6 = 2
 
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, false, false, rng)
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, timeBudget, false, false, rng)
 	}, 12.0) // harm: 10+2
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, true, false, rng)
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, timeBudget, true, false, rng)
 	}, 14.0) // heal: 10+2*2
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, false, true, rng)
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, timeBudget, false, true, rng)
 	}, 14.0) // recurring harm: 10+2*2
 	retryUntilAmount(t, func() float64 {
-		return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, timeBudget, true, true, rng)
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, timeBudget, true, true, rng)
 	}, 18.0) // recurring heal: 10+2*2*2
 }
 
@@ -189,5 +189,7 @@ func TestPowerEffectAmount_HealIgnoresEffectSchoolAndAlwaysUsesIntellect(t *test
 	amount := instanceconfig.ValueRange{10.0, 10.0}
 	effect := instanceconfig.PowerEffect{Amount: &amount, School: "physical"}
 
-	retryUntilAmount(t, func() float64 { return PowerEffectAmount(unit, instanceconfig.Zone{}, effect, 6.0, true, false, rng) }, 14.0)
+	retryUntilAmount(t, func() float64 {
+		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, 6.0, true, false, rng)
+	}, 14.0)
 }

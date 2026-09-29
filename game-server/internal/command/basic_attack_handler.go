@@ -167,7 +167,14 @@ func (h BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zon
 // and a magic one (Intellect) draw from separate Crit/Haste pools - see
 // docs/stats.md.
 func UnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
-	strength, agility, intellect, _, stats := unitEffectiveStats(unit, zone)
+	cs := unit.CombatStats
+	return cs.BasicAttack.HastePct, cs.BasicAttack.CritChancePct, cs.BasicAttack.StatContribution / basicAttackStatDPSDivisor
+}
+
+// computeUnitCombatStats is UnitCombatStats' from-scratch calculation, used
+// only to fill unit.CombatStats (see ComputeCombatStats).
+func computeUnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
+	strength, agility, intellect, _, stats := computeUnitEffectiveStats(unit, zone)
 
 	school := "physical"
 	switch unit.DamageStatKey {
@@ -203,6 +210,17 @@ func UnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (h
 // Agility, Intellect, and Defence Rating (docs/stats.md's "Versatility").
 // NPCs have no EquippedItems, so every return value is 0 for them.
 func unitEffectiveStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (strength, agility, intellect, defenceRating float64, stats map[string]float64) {
+	cs := unit.CombatStats
+	return cs.Stats["strength"], cs.Stats["agility"], cs.Stats["intellect"], cs.Stats["defence_rating"], cs.Stats
+}
+
+// computeUnitEffectiveStats is unitEffectiveStats' from-scratch calculation,
+// used only to fill unit.CombatStats (see ComputeCombatStats).
+// The returned map is a fresh copy of the gear+status totals with no
+// Versatility spread applied to its strength/agility/intellect/defence_rating
+// keys - the spread comes back in the named return values instead. (The
+// cached CombatStats.Stats map has the spread folded in.)
+func computeUnitEffectiveStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (strength, agility, intellect, defenceRating float64, stats map[string]float64) {
 	allocations := make([]itemstats.Allocation, 0, len(unit.EquippedItems))
 	for _, item := range unit.EquippedItems {
 		allocations = append(allocations, itemstats.Allocation{
@@ -261,8 +279,8 @@ func applyTier1StatusModifiers(unit *instancestate.UnitState, stats map[string]f
 // Strength/Agility/Intellect/Defence Rating, Stamina gets no Versatility
 // spread (see "Versatility"), so it's read straight off unitEffectiveStats'
 // stats map. Elvl-scaled the same way every other gear-derived stat is
-// (via unitEffectiveStats/itemstats.ScaledSum), so this needs recomputing
-// whenever gear or map elevation changes - it's not a one-time spawn value.
+// (via unitEffectiveStats/itemstats.ScaledSum). It reads the tick-start
+// CombatStats snapshot, so the unit must have one (spawn computes it).
 func PlayerMaxHealth(unit *instancestate.UnitState, zone instanceconfig.Zone) float64 {
 	_, _, _, _, stats := unitEffectiveStats(unit, zone)
 	base := playerBaseMaxHealth + stats["stamina"]*maxHealthPerStamina

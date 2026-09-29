@@ -65,9 +65,8 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				DamageStatKey:       spawn.class.DamageStatKey(),
 			}
 			// Spawn at full health against the real (Stamina-scaled) cap,
-			// not a flat placeholder - updatePlayerMaxHealth keeps this in
-			// sync every tick from here on, but a fresh spawn needs it set
-			// once up front so it doesn't start under-capped.
+			// derived from a full stats snapshot like every later tick's.
+			unit.CombatStats = command.ComputeCombatStats(unit, inst.ZoneConfig)
 			unit.MaxHealth = command.PlayerMaxHealth(unit, inst.ZoneConfig)
 			unit.Health = unit.MaxHealth
 			state.Units[spawn.unitID] = unit

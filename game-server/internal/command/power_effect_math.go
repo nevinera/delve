@@ -16,7 +16,17 @@ import (
 // see docs/stats.md's Crit Rating/Haste Rating/Strength/Agility/Intellect
 // sections and tmp/plan.md's status-implementation step 0.
 func effectSchoolStats(unit *instancestate.UnitState, zone instanceconfig.Zone, school string) (hastePct, critChancePct, statContribution float64) {
-	strength, agility, intellect, _, stats := unitEffectiveStats(unit, zone)
+	s := unit.CombatStats.Physical
+	if school == "magic" {
+		s = unit.CombatStats.Magic
+	}
+	return s.HastePct, s.CritChancePct, s.StatContribution
+}
+
+// computeEffectSchoolStats is effectSchoolStats' from-scratch calculation,
+// used only to fill unit.CombatStats (see ComputeCombatStats).
+func computeEffectSchoolStats(unit *instancestate.UnitState, zone instanceconfig.Zone, school string) (hastePct, critChancePct, statContribution float64) {
+	strength, agility, intellect, _, stats := computeUnitEffectiveStats(unit, zone)
 
 	mods := ActiveStatModifiers(unit)
 
@@ -115,9 +125,10 @@ func StatusTickAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, e
 }
 
 // EffectHastePct returns the Haste% that should scale a recurring status
-// tick's interval, for the tick's own school - the applier's *current*
-// stats, recomputed fresh every call (never snapshotted at apply time), so
-// a mid-duration Haste change speeds up the very next tick. Returns 0 if
+// tick's interval, for the tick's own school - the applier's stats as of the
+// start of the current game tick (see unit.CombatStats), read fresh every
+// call and never snapshotted at apply time, so a mid-duration Haste change
+// speeds up the very next tick. Returns 0 if
 // applier is nil (e.g. they've left the instance since applying it).
 func EffectHastePct(applier *instancestate.UnitState, zone instanceconfig.Zone, school string) float64 {
 	if applier == nil {

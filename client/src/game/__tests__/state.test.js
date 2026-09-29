@@ -76,6 +76,13 @@ describe("isUntargetableStatus", () => {
 });
 
 describe("applyDelta", () => {
+  it("replaces a player's combat_stats wholesale from a delta patch", () => {
+    const units = { u1: { name: "p", combat_stats: { stats: { strength: 1 } } } };
+    const next = applyDelta(units, { unit_updates: { u1: { combat_stats: { stats: { strength: 9 } } } } });
+    expect(next.u1.combat_stats).toEqual({ stats: { strength: 9 } });
+    expect(next.u1.name).toBe("p");
+  });
+
   const base = { "id-1": unitA };
 
   it("merges unit_updates into existing units", () => {

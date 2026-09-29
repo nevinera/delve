@@ -29,6 +29,7 @@ func TestProcessTriggeredStatusEffects_FiresImmediatelyOnApplicationWhenTriggerH
 	status := statusWithTrigger("Emergency Heal",
 		&instanceconfig.StatusTrigger{Type: "healthBelow", Threshold: 30},
 		3.0, &instanceconfig.TriggeredEffect{Type: "heal", Affects: "self", Amount: &instanceconfig.ValueRange{15, 15}})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.ProcessTriggeredStatusEffectsForTest(state, instanceconfig.Zone{}, time.Now(), 0.1)
@@ -42,6 +43,7 @@ func TestProcessTriggeredStatusEffects_DoesNotFireWhenTriggerDoesNotHold(t *test
 	status := statusWithTrigger("Emergency Heal",
 		&instanceconfig.StatusTrigger{Type: "healthBelow", Threshold: 30},
 		3.0, &instanceconfig.TriggeredEffect{Type: "heal", Affects: "self", Amount: &instanceconfig.ValueRange{15, 15}})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.ProcessTriggeredStatusEffectsForTest(state, instanceconfig.Zone{}, time.Now(), 0.1)
@@ -55,6 +57,7 @@ func TestProcessTriggeredStatusEffects_RespectsInternalCooldown(t *testing.T) {
 	status := statusWithTrigger("Emergency Heal",
 		&instanceconfig.StatusTrigger{Type: "healthBelow", Threshold: 100},
 		3.0, &instanceconfig.TriggeredEffect{Type: "heal", Affects: "self", Amount: &instanceconfig.ValueRange{5, 5}})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.ProcessTriggeredStatusEffectsForTest(state, instanceconfig.Zone{}, time.Now(), 0.1)
@@ -71,6 +74,7 @@ func TestProcessTriggeredStatusEffects_FiresAgainOnceCooldownElapses(t *testing.
 	status := statusWithTrigger("Emergency Heal",
 		&instanceconfig.StatusTrigger{Type: "healthBelow", Threshold: 100},
 		1.0, &instanceconfig.TriggeredEffect{Type: "heal", Affects: "self", Amount: &instanceconfig.ValueRange{5, 5}})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.ProcessTriggeredStatusEffectsForTest(state, instanceconfig.Zone{}, time.Now(), 0.1)
@@ -87,6 +91,7 @@ func TestProcessTriggeredStatusEffects_TakesDamageFiresOnlyWhenFlagSet(t *testin
 		&instanceconfig.StatusTrigger{Type: "takesDamage"},
 		3.0, &instanceconfig.TriggeredEffect{Type: "resource", Affects: "self", ResourceName: "fury", Delta: 5})
 	state.Units[holderID].Resources = map[string]*instancestate.ResourceState{"fury": {Current: 0, Max: 10}}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.ProcessTriggeredStatusEffectsForTest(state, instanceconfig.Zone{}, time.Now(), 0.1)
@@ -127,8 +132,10 @@ func TestProcessTriggeredStatusEffects_SelfAppliedStatusDoesNotCorruptLaterEffec
 	// new one is likely to force a real slice reallocation.
 	for i := 0; i < 8; i++ {
 		filler := instanceconfig.Status{Name: "Filler", ShortName: "F", TreatAs: "inherent", Stacking: "replace"}
+		instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 		command.ApplyStatus(state.Units[holderID], state.Units[applierID], uuid.New(), filler, 10.0, instanceconfig.Zone{}, time.Now())
 	}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.ProcessTriggeredStatusEffectsForTest(state, instanceconfig.Zone{}, time.Now(), 0.1)
