@@ -162,3 +162,7 @@ func TickRespawnsForTest(state *instancestate.InstanceState, now time.Time) {
 func TickNCUMovementForTest(state *instancestate.InstanceState, dt float64) {
 	tickNCUMovement(state, dt, testRng())
 }
+
+func UpdateCombatStatsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
+	updateCombatStats(state, zone)
+}

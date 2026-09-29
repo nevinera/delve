@@ -260,6 +260,12 @@ type UnitState struct {
 	EquippedItems map[string]instanceconfig.EquippedItem
 	DamageStatKey string // "strength", "agility", or "" - see CharacterClass.DamageStatKey
 
+	// CombatStats is recomputed for every unit at the start of each tick (after
+	// status conditions refresh, before commands run), so all combat math in a
+	// tick sees the same numbers whatever the order of execution. nil until a
+	// unit's first tick.
+	CombatStats *CombatStats
+
 	LootTable map[string]int // identifier → weight; nil means no loot
 	LootCount [2]float64     // [min, max]; both 1 when lootCount omitted. A resolved value
 	// >= 1 awards that many items (truncated); a value in [0, 1)
