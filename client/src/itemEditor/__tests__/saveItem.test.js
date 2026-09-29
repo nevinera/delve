@@ -29,6 +29,14 @@ describe("saveItem", () => {
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update sword-of-doom"});
   });
 
+  it("uses a given commit message instead of the default", async () => {
+    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+
+    await saveItem("sword-of-doom", {name: "Sword of Doom"}, "Buff the sword");
+
+    expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Buff the sword"});
+  });
+
   it("commits a nested key's JSON at items/<key>.json", async () => {
     commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
     const itemData = {name: "Bulwark", slot: "off_hand"};

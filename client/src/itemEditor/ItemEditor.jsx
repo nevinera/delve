@@ -68,10 +68,10 @@ export default function ItemEditor({itemKey}) {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveItem(itemKey, draft.data);
+      await saveItem(itemKey, draft.data, commitMessage);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -91,7 +91,7 @@ export default function ItemEditor({itemKey}) {
         <ItemPreviewPane itemData={draft.data} />
       </div>
       <div className="item-editor-fields">
-        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || itemKey}`} />
         <ItemFieldsPanel draft={draft} onChange={handleChange} />
       </div>
     </div>
