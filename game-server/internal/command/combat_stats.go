@@ -10,7 +10,7 @@ import (
 // it once per unit at the start of each tick and stores the result on
 // unit.CombatStats.
 func ComputeCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) *instancestate.CombatStats {
-	strength, agility, intellect, defenceRating, base := unitEffectiveStats(unit, zone)
+	strength, agility, intellect, defenceRating, base := computeUnitEffectiveStats(unit, zone)
 
 	stats := make(map[string]float64, len(base))
 	for k, v := range base {
@@ -24,7 +24,7 @@ func ComputeCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone)
 	physical := schoolCombatStats(unit, zone, "physical")
 	magic := schoolCombatStats(unit, zone, "magic")
 
-	basicHaste, basicCrit, basicStatDPS := UnitCombatStats(unit, zone)
+	basicHaste, basicCrit, basicStatDPS := computeUnitCombatStats(unit, zone)
 
 	return &instancestate.CombatStats{
 		Stats:    stats,
@@ -39,6 +39,6 @@ func ComputeCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone)
 }
 
 func schoolCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone, school string) instancestate.SchoolCombatStats {
-	haste, crit, contribution := effectSchoolStats(unit, zone, school)
+	haste, crit, contribution := computeEffectSchoolStats(unit, zone, school)
 	return instancestate.SchoolCombatStats{HastePct: haste, CritChancePct: crit, StatContribution: contribution}
 }
