@@ -26,6 +26,7 @@ func statusWithCondition(name string, cond *instanceconfig.StatusEffectCondition
 func TestRefreshStatusEffectConditions_SelfHealthPct(t *testing.T) {
 	targetID, applierID, state := twoUnitState(t)
 	status := statusWithCondition("Execute", &instanceconfig.StatusEffectCondition{Type: "selfHealthPct", Comparison: "below", Threshold: 30})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	state.Units[targetID].Health = 50
@@ -45,6 +46,7 @@ func TestRefreshStatusEffectConditions_TargetHealthPct(t *testing.T) {
 	state.Units[holderID].Target = &enemyID
 
 	status := statusWithCondition("Execute", &instanceconfig.StatusEffectCondition{Type: "targetHealthPct", Comparison: "below", Threshold: 20})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.RefreshStatusEffectConditionsForTest(state)
@@ -58,6 +60,7 @@ func TestRefreshStatusEffectConditions_TargetHealthPct(t *testing.T) {
 func TestRefreshStatusEffectConditions_NoTargetIsUnmet(t *testing.T) {
 	holderID, applierID, state := twoUnitState(t)
 	status := statusWithCondition("Execute", &instanceconfig.StatusEffectCondition{Type: "targetHealthPct", Comparison: "above", Threshold: 0})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.RefreshStatusEffectConditionsForTest(state)
@@ -69,6 +72,7 @@ func TestRefreshStatusEffectConditions_CasterResource(t *testing.T) {
 	holderID, applierID, state := twoUnitState(t)
 	state.Units[applierID].Resources = map[string]*instancestate.ResourceState{"combo points": {Current: 2}}
 	status := statusWithCondition("Finisher", &instanceconfig.StatusEffectCondition{Type: "casterResource", ResourceName: "combo points", Comparison: "above", Threshold: 3})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.RefreshStatusEffectConditionsForTest(state)
@@ -82,12 +86,14 @@ func TestRefreshStatusEffectConditions_CasterResource(t *testing.T) {
 func TestRefreshStatusEffectConditions_HasStatus(t *testing.T) {
 	holderID, applierID, state := twoUnitState(t)
 	conditional := statusWithCondition("Combo Finisher", &instanceconfig.StatusEffectCondition{Type: "hasStatus", StatusName: "Enrage"})
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, conditional, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.RefreshStatusEffectConditionsForTest(state)
 	assert.False(t, state.Units[holderID].ActiveStatusEffects[0].ConditionsMet[0])
 
 	enrage := instanceconfig.Status{Name: "Enrage", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, enrage, 10.0, instanceconfig.Zone{}, time.Now())
 	instance.RefreshStatusEffectConditionsForTest(state)
 
@@ -104,6 +110,7 @@ func TestRefreshStatusEffectConditions_HasStatus(t *testing.T) {
 func TestRefreshStatusEffectConditions_UnconditionalEffectStaysMet(t *testing.T) {
 	holderID, applierID, state := twoUnitState(t)
 	status := statusWithCondition("Passive", nil)
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[holderID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.RefreshStatusEffectConditionsForTest(state)

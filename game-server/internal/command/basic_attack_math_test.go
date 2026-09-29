@@ -33,7 +33,7 @@ func fullyItemizedMainHand(primary string, elvl int) instanceconfig.EquippedItem
 
 func TestPlayerMaxHealth_NakedUnitHasBaseOnly(t *testing.T) {
 	unit := &instancestate.UnitState{}
-	assert.Equal(t, 100.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+	assert.Equal(t, 100.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestPlayerMaxHealth_StaminaAddsToBase(t *testing.T) {
@@ -42,14 +42,14 @@ func TestPlayerMaxHealth_StaminaAddsToBase(t *testing.T) {
 	}
 	// raw stamina 20 (main_hand doesn't grant base stamina - see
 	// itemstats.Raw) -> 100 + 20*10.
-	assert.InDelta(t, 300.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
+	assert.InDelta(t, 300.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestPlayerMaxHealth_ArmorSlotGrantsBaseStaminaEvenWithNoneItemized(t *testing.T) {
 	unit := &instancestate.UnitState{
 		EquippedItems: map[string]instanceconfig.EquippedItem{"chest": {Slot: "chest"}},
 	}
-	assert.Greater(t, PlayerMaxHealth(unit, instanceconfig.Zone{}), 100.0, "chest grants base stamina even with nothing itemized on it")
+	assert.Greater(t, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 100.0, "chest grants base stamina even with nothing itemized on it")
 }
 
 func TestPlayerMaxHealth_VersatilityDoesNotFeedStamina(t *testing.T) {
@@ -58,21 +58,21 @@ func TestPlayerMaxHealth_VersatilityDoesNotFeedStamina(t *testing.T) {
 			"ring_1": {Slot: "ring", SecondaryStats: []string{"versatility_rating", "versatility_rating"}},
 		},
 	}
-	assert.Equal(t, 100.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), "versatility spreads into Strength/Agility/Intellect/Defence Rating only, not Stamina")
+	assert.Equal(t, 100.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), "versatility spreads into Strength/Agility/Intellect/Defence Rating only, not Stamina")
 }
 
 func TestPlayerMaxHealth_ActiveStatStatusAddsFlatMaxHealth(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("maxHealth", "add", 50)},
 	}
-	assert.Equal(t, 150.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+	assert.Equal(t, 150.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestPlayerMaxHealth_ActiveStatStatusMultipliesMaxHealth(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("maxHealth", "multiply", 1.5)},
 	}
-	assert.Equal(t, 150.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+	assert.Equal(t, 150.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestUnitEffectiveStats_ActiveStatStatusAddsToGearDerivedStat(t *testing.T) {
@@ -81,7 +81,7 @@ func TestUnitEffectiveStats_ActiveStatStatusAddsToGearDerivedStat(t *testing.T) 
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "add", 30)},
 	}
 	// raw stamina 20 (itemized) + 30 (status) -> 100 + 50*10.
-	assert.InDelta(t, 600.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
+	assert.InDelta(t, 600.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestUnitEffectiveStats_ActiveStatStatusMultipliesGearDerivedStat(t *testing.T) {
@@ -90,14 +90,14 @@ func TestUnitEffectiveStats_ActiveStatStatusMultipliesGearDerivedStat(t *testing
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "multiply", 2.0)},
 	}
 	// raw stamina 20 (itemized) * 2.0 (status) -> 100 + 40*10.
-	assert.InDelta(t, 500.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
+	assert.InDelta(t, 500.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestUnitEffectiveStats_ActiveStatStatusOnANakedUnit(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "add", 10)},
 	}
-	assert.Equal(t, 200.0, PlayerMaxHealth(unit, instanceconfig.Zone{}))
+	assert.Equal(t, 200.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestUnitCombatStats_ActiveStatStatusGrantsPhysicalHasteBuff(t *testing.T) {
@@ -107,7 +107,7 @@ func TestUnitCombatStats_ActiveStatStatusGrantsPhysicalHasteBuff(t *testing.T) {
 		DamageStatKey:       "strength",
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
 	}
-	hastePct, _, _ := UnitCombatStats(unit, instanceconfig.Zone{})
+	hastePct, _, _ := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.InDelta(t, 20.0, hastePct, 0.001)
 }
 
@@ -116,7 +116,7 @@ func TestUnitCombatStats_PhysicalHasteStatusDoesNotAffectAMagicCharacter(t *test
 		DamageStatKey:       "intellect",
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalHaste", "add", 20)},
 	}
-	hastePct, _, _ := UnitCombatStats(unit, instanceconfig.Zone{})
+	hastePct, _, _ := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.Zero(t, hastePct)
 }
 
@@ -124,7 +124,7 @@ func TestUnitCombatStats_ActiveStatStatusIncreasesHasteRating(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("hasteRating", "add", 11.71)},
 	}
-	hastePct, _, _ := UnitCombatStats(unit, instanceconfig.Zone{})
+	hastePct, _, _ := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.InDelta(t, 1.0, hastePct, 0.001)
 }
 
@@ -133,7 +133,7 @@ func TestUnitEffectiveStats_ActiveStatStatusOnVersatilityRatingSpreadsToo(t *tes
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("versatilityRating", "add", 100)},
 	}
 	unit.DamageStatKey = "strength"
-	_, _, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	_, _, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	// status-granted versatility_rating (100) spreads 0.2x into Strength
 	// (20) same as itemized versatility would - statDPS = 20/90.
 	assert.InDelta(t, 20.0/90.0, statDPS, 0.001)
@@ -141,7 +141,7 @@ func TestUnitEffectiveStats_ActiveStatStatusOnVersatilityRatingSpreadsToo(t *tes
 
 func TestUnitCombatStats_NakedUnitHasBaseCritOnlyAndNoStatDPS(t *testing.T) {
 	unit := &instancestate.UnitState{}
-	hastePct, critChancePct, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	hastePct, critChancePct, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.Equal(t, 0.0, hastePct)
 	assert.Equal(t, 5.0, critChancePct)
 	assert.Equal(t, 0.0, statDPS)
@@ -152,11 +152,11 @@ func TestUnitCombatStats_StrengthFeedsStatDPSOnlyWhenItIsTheDamageStat(t *testin
 		DamageStatKey: "strength",
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
-	_, _, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	_, _, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.InDelta(t, 30.0/90, statDPS, 0.001)
 
 	unit.DamageStatKey = "agility"
-	_, _, statDPS = UnitCombatStats(unit, instanceconfig.Zone{})
+	_, _, statDPS = UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.Equal(t, 0.0, statDPS, "strength is itemized, but agility is this class's damage stat")
 }
 
@@ -167,7 +167,7 @@ func TestUnitCombatStats_VersatilitySpreadsIntoTheDamageStat(t *testing.T) {
 			"ring_1": {Slot: "ring", SecondaryStats: []string{"versatility_rating", "versatility_rating"}},
 		},
 	}
-	_, _, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	_, _, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	// ring factor 1.0, both secondary slots filled -> raw versatility_rating
 	// 20; 0.2x of that spreads +4 into strength.
 	assert.InDelta(t, 4.0/90, statDPS, 0.001)
@@ -178,7 +178,7 @@ func TestUnitCombatStats_StrengthAlwaysFeedsPhysicalCritRegardlessOfDamageStat(t
 		DamageStatKey: "agility", // not strength - crit still gets strength's contribution
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
-	_, critChancePct, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	_, critChancePct, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.Equal(t, 0.0, statDPS, "strength isn't the damage stat here")
 	// raw strength 30 -> +18 effective crit rating; raw crit_rating 20 itemized
 	// directly too -> effectiveCritRating 38 -> 5 + 38/15
@@ -190,7 +190,7 @@ func TestUnitCombatStats_AgilityAlwaysFeedsPhysicalHasteRegardlessOfDamageStat(t
 		DamageStatKey: "strength", // not agility - haste still gets agility's contribution
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("agility", 0)},
 	}
-	hastePct, _, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	hastePct, _, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.Equal(t, 0.0, statDPS, "agility isn't the damage stat here")
 	// raw agility 30 -> +18 effective haste rating; raw haste_rating 20
 	// itemized directly too -> effectiveHasteRating 38 -> 38/11.71
@@ -202,7 +202,7 @@ func TestUnitCombatStats_IntellectFeedsStatDPSAndItsOwnMagicCritAndHaste(t *test
 		DamageStatKey: "intellect",
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("intellect", 0)},
 	}
-	hastePct, critChancePct, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	hastePct, critChancePct, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	// raw intellect 30 -> +9 magic crit, +9 magic haste (0.3x each); raw
 	// crit_rating/haste_rating 20 itemized directly too.
 	assert.InDelta(t, 30.0/90, statDPS, 0.001)
@@ -215,7 +215,7 @@ func TestUnitCombatStats_StrengthDoesNotFeedMagicCritForAnIntellectCharacter(t *
 		DamageStatKey: "intellect",
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
-	_, critChancePct, statDPS := UnitCombatStats(unit, instanceconfig.Zone{})
+	_, critChancePct, statDPS := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.Equal(t, 0.0, statDPS)
 	// only itemized crit_rating (20) applies - strength's physical bonus doesn't.
 	assert.InDelta(t, 5+20.0/15, critChancePct, 0.001)
@@ -225,7 +225,7 @@ func TestUnitCombatStats_HasteRatingIncreasesHastePct(t *testing.T) {
 	unit := &instancestate.UnitState{
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
-	hastePct, _, _ := UnitCombatStats(unit, instanceconfig.Zone{})
+	hastePct, _, _ := UnitCombatStats(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{})
 	assert.InDelta(t, 20.0/11.71, hastePct, 0.001)
 }
 
@@ -237,7 +237,7 @@ func TestUnitCombatStats_ElevationScalesEachItemAgainstTheCurrentMap(t *testing.
 	}
 	zone := instanceconfig.Zone{Elvl: 0, Maps: []instanceconfig.Map{{Identifier: "m"}}}
 
-	hastePct, critChancePct, statDPS := UnitCombatStats(unit, zone)
+	hastePct, critChancePct, statDPS := UnitCombatStats(withStats(unit, zone), zone)
 	// ee = -20 - 0 = -20 -> em = 0, zeroing every stat this item grants
 	assert.Equal(t, 0.0, hastePct)
 	assert.Equal(t, 5.0, critChancePct)
@@ -253,7 +253,7 @@ func TestUnitCombatStats_MapElvlOverrideIsUsedOverZoneElvl(t *testing.T) {
 	}
 	zone := instanceconfig.Zone{Elvl: 0, Maps: []instanceconfig.Map{{Identifier: "m", Elvl: &mapElvl}}}
 
-	_, _, statDPS := UnitCombatStats(unit, zone)
+	_, _, statDPS := UnitCombatStats(withStats(unit, zone), zone)
 	// item elvl 0 vs the map's overridden elvl -20 -> ee = 20 -> em = 2.0
 	assert.InDelta(t, (30.0*2.0)/90, statDPS, 0.001)
 }
@@ -261,8 +261,8 @@ func TestUnitCombatStats_MapElvlOverrideIsUsedOverZoneElvl(t *testing.T) {
 func TestIncomingDamage_NakedTargetTakesFullDamage(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	target := &instancestate.UnitState{}
-	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng))
-	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng))
+	assert.Equal(t, 100.0, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, true, rng))
+	assert.Equal(t, 100.0, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, false, rng))
 }
 
 func TestIncomingDamage_DefenceRatingReducesWhatAvoidanceDoesNotFullyAvoid(t *testing.T) {
@@ -279,8 +279,8 @@ func TestIncomingDamage_DefenceRatingReducesWhatAvoidanceDoesNotFullyAvoid(t *te
 	const r = 30.0
 	expectedPhysical := 100 * (1 - physicalDRAsymptote*r/(r+defenceRatingHalfPoint))
 	expectedMagic := 100 * (1 - magicDRAsymptote*r/(r+defenceRatingHalfPoint))
-	assert.InDelta(t, expectedPhysical, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
-	assert.InDelta(t, expectedMagic, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng), 0.001)
+	assert.InDelta(t, expectedPhysical, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, true, rng), 0.001)
+	assert.InDelta(t, expectedMagic, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, false, rng), 0.001)
 }
 
 func TestIncomingDamage_StrengthGrantsOnlyPhysicalAvoidance(t *testing.T) {
@@ -292,10 +292,10 @@ func TestIncomingDamage_StrengthGrantsOnlyPhysicalAvoidance(t *testing.T) {
 	// defence_rating itemized) should never be avoided.
 	var physicalAvoided, magicAvoided int
 	for i := 0; i < 500; i++ {
-		if IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng) == 0 {
+		if IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, true, rng) == 0 {
 			physicalAvoided++
 		}
-		if IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng) == 0 {
+		if IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, false, rng) == 0 {
 			magicAvoided++
 		}
 	}
@@ -310,7 +310,7 @@ func TestIncomingDamage_ActiveStatStatusIncreasesPhysicalAvoidance(t *testing.T)
 	}
 	var avoided int
 	for i := 0; i < 200; i++ {
-		if IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng) == 0 {
+		if IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, true, rng) == 0 {
 			avoided++
 		}
 	}
@@ -322,7 +322,7 @@ func TestIncomingDamage_ActiveStatStatusIncreasesPhysicalMitigation(t *testing.T
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalMitigation", "add", 50)},
 	}
-	assert.InDelta(t, 50.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
+	assert.InDelta(t, 50.0, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, true, rng), 0.001)
 }
 
 func TestIncomingDamage_MitigationStatusDoesNotAffectTheOtherSchool(t *testing.T) {
@@ -330,7 +330,7 @@ func TestIncomingDamage_MitigationStatusDoesNotAffectTheOtherSchool(t *testing.T
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("physicalMitigation", "add", 50)},
 	}
-	assert.Equal(t, 100.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng))
+	assert.Equal(t, 100.0, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, false, rng))
 }
 
 func TestIncomingDamage_ActiveStatStatusScalesDamageTaken(t *testing.T) {
@@ -338,7 +338,7 @@ func TestIncomingDamage_ActiveStatStatusScalesDamageTaken(t *testing.T) {
 	target := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("damageTaken", "multiply", 1.5)},
 	}
-	assert.InDelta(t, 150.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
+	assert.InDelta(t, 150.0, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, true, rng), 0.001)
 }
 
 func TestIncomingDamage_SchoolScopedDamageTakenStacksWithGeneral(t *testing.T) {
@@ -349,8 +349,8 @@ func TestIncomingDamage_SchoolScopedDamageTakenStacksWithGeneral(t *testing.T) {
 			statusWithStatEffect("physicalDamageTaken", "multiply", 1.1),
 		},
 	}
-	assert.InDelta(t, 121.0, IncomingDamage(target, instanceconfig.Zone{}, 100, true, rng), 0.001)
-	assert.InDelta(t, 110.0, IncomingDamage(target, instanceconfig.Zone{}, 100, false, rng), 0.001) // only the general term applies to magic
+	assert.InDelta(t, 121.0, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, true, rng), 0.001)
+	assert.InDelta(t, 110.0, IncomingDamage(withStats(target, instanceconfig.Zone{}), instanceconfig.Zone{}, 100, false, rng), 0.001) // only the general term applies to magic
 }
 
 func TestApplyDamageDoneBonus_ScalesRawDamage(t *testing.T) {

@@ -41,6 +41,7 @@ func newAttacker(cfg AttackerConfig) *instancestate.UnitState {
 		PrimaryResourceName: cfg.Class.PrimaryResource().Name,
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
 	}
+	unit.CombatStats = command.ComputeCombatStats(unit, instanceconfig.Zone{})
 	unit.MaxHealth = command.PlayerMaxHealth(unit, instanceconfig.Zone{})
 	unit.Health = unit.MaxHealth
 	return unit

@@ -16,7 +16,11 @@ import (
 // nakedApplier is a stat-less applier - used by tests that don't care about
 // Haste/stat scaling, so RecurringTickInterval/EffectHastePct fall back to
 // the base (unhasted) values.
-func nakedApplier() *instancestate.UnitState { return &instancestate.UnitState{} }
+func nakedApplier() *instancestate.UnitState {
+	u := &instancestate.UnitState{}
+	u.CombatStats = command.ComputeCombatStats(u, instanceconfig.Zone{})
+	return u
+}
 
 func TestApplyStatus_NewApplicationAddsAnEntryWithOneStack(t *testing.T) {
 	target := &instancestate.UnitState{}
@@ -202,6 +206,7 @@ func TestApplyStatus_FirstTickIntervalIsHasteScaledAtApplicationToo(t *testing.T
 		},
 	}
 
+	hastedApplier.CombatStats = command.ComputeCombatStats(hastedApplier, instanceconfig.Zone{})
 	command.ApplyStatus(target, hastedApplier, uuid.New(), status, 5.0, instanceconfig.Zone{}, time.Now())
 
 	require.Len(t, target.ActiveStatusEffects, 1)

@@ -42,13 +42,13 @@ func TestComputeCombatStats_SchoolFiguresMatchTheEffectMath(t *testing.T) {
 	zone := instanceconfig.Zone{}
 	cs := ComputeCombatStats(unit, zone)
 
-	haste, crit, contribution := effectSchoolStats(unit, zone, "physical")
+	haste, crit, contribution := computeEffectSchoolStats(unit, zone, "physical")
 	assert.Equal(t, haste, cs.Physical.HastePct)
 	assert.Equal(t, crit, cs.Physical.CritChancePct)
 	assert.Equal(t, contribution, cs.Physical.StatContribution)
 	assert.Greater(t, cs.Physical.HastePct, 20.0)
 
-	haste, crit, contribution = effectSchoolStats(unit, zone, "magic")
+	haste, crit, contribution = computeEffectSchoolStats(unit, zone, "magic")
 	assert.Equal(t, haste, cs.Magic.HastePct)
 	assert.Equal(t, crit, cs.Magic.CritChancePct)
 	assert.Equal(t, contribution, cs.Magic.StatContribution)
@@ -62,7 +62,7 @@ func TestComputeCombatStats_BasicAttackFollowsTheDamageStat(t *testing.T) {
 	zone := instanceconfig.Zone{}
 	cs := ComputeCombatStats(unit, zone)
 
-	haste, crit, statDPS := UnitCombatStats(unit, zone)
+	haste, crit, statDPS := computeUnitCombatStats(unit, zone)
 	assert.Equal(t, haste, cs.BasicAttack.HastePct)
 	assert.Equal(t, crit, cs.BasicAttack.CritChancePct)
 	assert.InDelta(t, statDPS, cs.BasicAttack.StatContribution/basicAttackStatDPSDivisor, 1e-9)
@@ -111,17 +111,13 @@ func TestUnitEffectiveStats_ReadsTheCachedSnapshot(t *testing.T) {
 }
 
 func TestHealingTakenPct_ReadsTheCachedRecoveryRating(t *testing.T) {
-	naked := HealingTakenPct(&instancestate.UnitState{}, instanceconfig.Zone{})
+	naked := HealingTakenPct(withStats(&instancestate.UnitState{}, instanceconfig.Zone{}), instanceconfig.Zone{})
 	cached := HealingTakenPct(snapshotOnly(&instancestate.CombatStats{Stats: map[string]float64{"recovery_rating": 500}}), instanceconfig.Zone{})
 	assert.Greater(t, cached, naked)
 }
 
-func TestPlayerMaxHealth_IgnoresTheCachedSnapshot(t *testing.T) {
-	// Runs after commands each tick, so an equip must show up immediately.
-	unit := &instancestate.UnitState{
-		CombatStats:   &instancestate.CombatStats{Stats: map[string]float64{"stamina": 9999}},
-		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
-	}
+func TestPlayerMaxHealth_ReadsTheCachedStamina(t *testing.T) {
+	unit := snapshotOnly(&instancestate.CombatStats{Stats: map[string]float64{"stamina": 20}})
 	assert.InDelta(t, 300.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
 }
 
@@ -130,4 +126,9 @@ func TestComputeCombatStats_DoesNotReadTheUnitsOwnStaleSnapshot(t *testing.T) {
 		CombatStats: &instancestate.CombatStats{Physical: instancestate.SchoolCombatStats{HastePct: 99}},
 	}
 	assert.Zero(t, ComputeCombatStats(unit, instanceconfig.Zone{}).Physical.HastePct)
+}
+
+func withStats(unit *instancestate.UnitState, zone instanceconfig.Zone) *instancestate.UnitState {
+	unit.CombatStats = ComputeCombatStats(unit, zone)
+	return unit
 }

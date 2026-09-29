@@ -167,15 +167,12 @@ func (h BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zon
 // and a magic one (Intellect) draw from separate Crit/Haste pools - see
 // docs/stats.md.
 func UnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
-	if cs := unit.CombatStats; cs != nil {
-		return cs.BasicAttack.HastePct, cs.BasicAttack.CritChancePct, cs.BasicAttack.StatContribution / basicAttackStatDPSDivisor
-	}
-	return computeUnitCombatStats(unit, zone)
+	cs := unit.CombatStats
+	return cs.BasicAttack.HastePct, cs.BasicAttack.CritChancePct, cs.BasicAttack.StatContribution / basicAttackStatDPSDivisor
 }
 
-// computeUnitCombatStats is UnitCombatStats' from-scratch calculation, used to
-// fill unit.CombatStats (see ComputeCombatStats) and as the fallback for a
-// unit that hasn't had its stats computed yet.
+// computeUnitCombatStats is UnitCombatStats' from-scratch calculation, used
+// only to fill unit.CombatStats (see ComputeCombatStats).
 func computeUnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (hastePct, critChancePct, statDPS float64) {
 	strength, agility, intellect, _, stats := computeUnitEffectiveStats(unit, zone)
 
@@ -213,13 +210,12 @@ func computeUnitCombatStats(unit *instancestate.UnitState, zone instanceconfig.Z
 // Agility, Intellect, and Defence Rating (docs/stats.md's "Versatility").
 // NPCs have no EquippedItems, so every return value is 0 for them.
 func unitEffectiveStats(unit *instancestate.UnitState, zone instanceconfig.Zone) (strength, agility, intellect, defenceRating float64, stats map[string]float64) {
-	if cs := unit.CombatStats; cs != nil {
-		return cs.Stats["strength"], cs.Stats["agility"], cs.Stats["intellect"], cs.Stats["defence_rating"], cs.Stats
-	}
-	return computeUnitEffectiveStats(unit, zone)
+	cs := unit.CombatStats
+	return cs.Stats["strength"], cs.Stats["agility"], cs.Stats["intellect"], cs.Stats["defence_rating"], cs.Stats
 }
 
-// computeUnitEffectiveStats is unitEffectiveStats' from-scratch calculation.
+// computeUnitEffectiveStats is unitEffectiveStats' from-scratch calculation,
+// used only to fill unit.CombatStats (see ComputeCombatStats).
 // The returned map is a fresh copy of the gear+status totals with no
 // Versatility spread applied to its strength/agility/intellect/defence_rating
 // keys - the spread comes back in the named return values instead. (The
@@ -283,12 +279,10 @@ func applyTier1StatusModifiers(unit *instancestate.UnitState, stats map[string]f
 // Strength/Agility/Intellect/Defence Rating, Stamina gets no Versatility
 // spread (see "Versatility"), so it's read straight off unitEffectiveStats'
 // stats map. Elvl-scaled the same way every other gear-derived stat is
-// (via unitEffectiveStats/itemstats.ScaledSum), so this needs recomputing
-// whenever gear or map elevation changes - it's not a one-time spawn value.
+// (via unitEffectiveStats/itemstats.ScaledSum). It reads the tick-start
+// CombatStats snapshot, so the unit must have one (spawn computes it).
 func PlayerMaxHealth(unit *instancestate.UnitState, zone instanceconfig.Zone) float64 {
-	// Deliberately from scratch, not the tick-start CombatStats: this runs
-	// after commands (so an equip takes effect this tick) and at spawn.
-	_, _, _, _, stats := computeUnitEffectiveStats(unit, zone)
+	_, _, _, _, stats := unitEffectiveStats(unit, zone)
 	base := playerBaseMaxHealth + stats["stamina"]*maxHealthPerStamina
 	add, multiply := ActiveStatModifiers(unit).Get("maxHealth")
 	return (base + add) * multiply

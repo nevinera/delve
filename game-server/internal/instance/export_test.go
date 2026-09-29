@@ -67,26 +67,32 @@ func PushOutOfCircleForTest(px, py, unitRadius, cx, cy, barrierRadius float64) (
 }
 
 func ResolveCollisionsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
+	updateCombatStats(state, zone)
 	resolveCollisions(state, zone)
 }
 
 func ApplyUnitBehaviorsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	updateCombatStats(state, zone)
 	applyUnitBehaviors(state, zone, dt, nil, testRng())
 }
 
 func ApplyUnitBehaviorsWithPathGraphForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, graph *pathing.Graph) {
+	updateCombatStats(state, zone)
 	applyUnitBehaviors(state, zone, dt, graph, testRng())
 }
 
 func ApplyMapTransitionsForTest(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
+	updateCombatStats(state, zone)
 	applyMapTransitions(state, prevState, zone)
 }
 
 func ApplyNPCSeparationForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	updateCombatStats(state, zone)
 	applyNPCSeparation(state, zone, dt)
 }
 
 func RestoreUnitsThatCrossedBarriersForTest(state, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
+	updateCombatStats(state, zone)
 	restoreUnitsThatCrossedBarriers(state, prevState, zone)
 }
 
@@ -124,10 +130,12 @@ func ExpireStatusEffectsForTest(state *instancestate.InstanceState, now time.Tim
 }
 
 func TickStatusEffectsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	updateCombatStats(state, zone)
 	tickStatusEffects(state, zone, dt, testRng())
 }
 
 func ProcessTriggeredStatusEffectsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time, dt float64) {
+	updateCombatStats(state, zone)
 	processTriggeredStatusEffects(state, zone, now, dt, testRng())
 }
 
@@ -136,14 +144,17 @@ func RefreshStatusEffectConditionsForTest(state *instancestate.InstanceState) {
 }
 
 func TickResourceRegenForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	updateCombatStats(state, zone)
 	tickResourceRegen(state, zone, dt)
 }
 
 func TickHealthRegenForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
+	updateCombatStats(state, zone)
 	tickHealthRegen(state, zone, dt)
 }
 
 func TickCastsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time) []CombatEvent {
+	updateCombatStats(state, zone)
 	var events []CombatEvent
 	tickCasts(state, zone, now, &events, testRng())
 	return events

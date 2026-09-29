@@ -20,13 +20,13 @@ func mainHandWithRecovery() instanceconfig.EquippedItem {
 
 func TestHealingTakenPct_ZeroWithNoRecoveryRating(t *testing.T) {
 	unit := &instancestate.UnitState{}
-	assert.Zero(t, HealingTakenPct(unit, instanceconfig.Zone{}))
+	assert.Zero(t, HealingTakenPct(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestHealingTakenPct_ZeroForNPC(t *testing.T) {
 	// NPCs carry no EquippedItems at all, so recovery_rating is always 0.
 	unit := &instancestate.UnitState{}
-	assert.Zero(t, HealingTakenPct(unit, instanceconfig.Zone{}))
+	assert.Zero(t, HealingTakenPct(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestHealingTakenPct_ScalesWithRecoveryRating(t *testing.T) {
@@ -35,7 +35,7 @@ func TestHealingTakenPct_ScalesWithRecoveryRating(t *testing.T) {
 	}
 	// base secondary (10) at main_hand's 2.0 factor -> effective 20.
 	// healingTakenCeiling(170) * 20 / (20 + 310) = 10.30.
-	assert.InDelta(t, 10.30, HealingTakenPct(unit, instanceconfig.Zone{}), 0.01)
+	assert.InDelta(t, 10.30, HealingTakenPct(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestHealingTakenPct_ActiveStatStatusAddsOnTopOfRecoveryRating(t *testing.T) {
@@ -44,7 +44,7 @@ func TestHealingTakenPct_ActiveStatStatusAddsOnTopOfRecoveryRating(t *testing.T)
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingTaken", "add", 25)},
 	}
 	// 10.30% from Recovery Rating (see TestHealingTakenPct_ScalesWithRecoveryRating) + 25 flat.
-	assert.InDelta(t, 35.30, HealingTakenPct(unit, instanceconfig.Zone{}), 0.01)
+	assert.InDelta(t, 35.30, HealingTakenPct(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestHealingTakenPct_ActiveStatStatusMultipliesRecoveryRatingToo(t *testing.T) {
@@ -52,14 +52,14 @@ func TestHealingTakenPct_ActiveStatStatusMultipliesRecoveryRatingToo(t *testing.
 		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": mainHandWithRecovery()},
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingTaken", "multiply", 2.0)},
 	}
-	assert.InDelta(t, 20.60, HealingTakenPct(unit, instanceconfig.Zone{}), 0.01)
+	assert.InDelta(t, 20.60, HealingTakenPct(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestHealingTakenPct_ActiveStatStatusWorksWithNoItemizedRecovery(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("healingTaken", "add", 40)},
 	}
-	assert.InDelta(t, 40.0, HealingTakenPct(unit, instanceconfig.Zone{}), 0.001)
+	assert.InDelta(t, 40.0, HealingTakenPct(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.001)
 }
 
 // The calibration itself (445 -> ~100%, ~30 -> ~15%, per docs/stats.md's

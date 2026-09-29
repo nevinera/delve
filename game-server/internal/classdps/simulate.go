@@ -131,6 +131,8 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand
 		nowTime := simTime(now)
 
 		if now >= nextStatsRecalcAt {
+			unit.CombatStats = command.ComputeCombatStats(unit, zone)
+			target.CombatStats = command.ComputeCombatStats(target, zone)
 			if needsHastePct {
 				hastePctForRegen, _, _ = command.UnitCombatStats(unit, zone)
 			}

@@ -32,7 +32,11 @@ func twoUnitState(t *testing.T) (targetID, applierID uuid.UUID, state *instances
 // nakedApplier is a stat-less applier - used by tests that don't care about
 // Haste/stat scaling, so RecurringTickInterval/EffectHastePct fall back to
 // the base (unhasted) values.
-func nakedApplier() *instancestate.UnitState { return &instancestate.UnitState{} }
+func nakedApplier() *instancestate.UnitState {
+	u := &instancestate.UnitState{}
+	u.CombatStats = command.ComputeCombatStats(u, instanceconfig.Zone{})
+	return u
+}
 
 func TestExpireStatusEffects_RemovesExpiredEntry(t *testing.T) {
 	state := stateWithUnit(t)
@@ -110,6 +114,7 @@ func TestTickStatusEffects_DoesNotFireBeforeIntervalElapses(t *testing.T) {
 			{Type: "recurring", TickRate: 1.0, OnTick: "harm", Amount: 5.0},
 		},
 	}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 0.5)
@@ -130,6 +135,7 @@ func TestTickStatusEffects_FiresMultipleTicksWhenIntervalIsShort(t *testing.T) {
 		},
 	}
 	state.Units[targetID].Health = 50
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 0.35)
@@ -159,6 +165,7 @@ func TestTickStatusEffects_HealTickScalesWithTargetsRecoveryRating(t *testing.T)
 		// receiving the tick, not the applier casting the status.
 		"main_hand": {Slot: "main_hand", PrimaryStat: &strength, SecondaryStats: []string{"stamina", "crit_rating", "recovery_rating"}},
 	}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 100.0, instanceconfig.Zone{}, time.Now())
 
 	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 1.0)
@@ -192,6 +199,7 @@ func TestTickStatusEffects_HasteShortensTheFirstIntervalToo(t *testing.T) {
 		// the base 1.0s interval to ~0.907s.
 		"two_hand": {Slot: "two_hand", PrimaryStat: &primary, SecondaryStats: []string{"haste_rating", "haste_rating", "haste_rating"}},
 	}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 100.0, instanceconfig.Zone{}, time.Now())
 
 	instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 0.95)
@@ -208,6 +216,7 @@ func TestTickStatusEffects_NoApplierSkipsTheTick(t *testing.T) {
 			{Type: "recurring", TickRate: 1.0, OnTick: "harm", Amount: 50.0},
 		},
 	}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 	delete(state.Units, applierID) // the applier left the instance
 
@@ -227,6 +236,7 @@ func TestTickStatusEffects_UnmetConditionSkipsTheTickButStillReschedules(t *test
 			},
 		},
 	}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 	// ApplyStatus seeds a conditional effect's ConditionsMet false until the
 	// next real refresh - explicit here anyway so the test doesn't depend
@@ -251,6 +261,7 @@ func TestTickStatusEffects_MetConditionFiresTheTick(t *testing.T) {
 			},
 		},
 	}
+	instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 	command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 	state.Units[targetID].ActiveStatusEffects[0].ConditionsMet[0] = true
 
@@ -273,6 +284,7 @@ func TestTickStatusEffects_LethalTickKillsTarget(t *testing.T) {
 
 	for i := 0; i < 200; i++ {
 		targetID, applierID, state := twoUnitState(t)
+		instance.UpdateCombatStatsForTest(state, instanceconfig.Zone{})
 		command.ApplyStatus(state.Units[targetID], state.Units[applierID], applierID, status, 10.0, instanceconfig.Zone{}, time.Now())
 
 		instance.TickStatusEffectsForTest(state, instanceconfig.Zone{}, 1.0)

@@ -54,6 +54,7 @@ func retryUntilPowerLands(t *testing.T, playerID, targetID uuid.UUID, zone insta
 		state := build()
 		before := state.Units[targetID].Health
 
+		stampStats(state, zone)
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, payload, zone, state))
 
 		if state.Units[targetID].Health != before {
@@ -84,6 +85,7 @@ func TestUsePowerHandler_DeadPlayerIsNoOp(t *testing.T) {
 	state.Units[playerID].Status = instancestate.UnitStatusDead
 	before := state.Units[targetID].Health
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
@@ -94,6 +96,7 @@ func TestUsePowerHandler_NoTargetIsNoOp(t *testing.T) {
 	unitID := uuid.New()
 	state := stateWithUnit(unitID)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(unitID, punchPower(), instanceconfig.Zone{}, state))
 }
 
@@ -104,6 +107,7 @@ func TestUsePowerHandler_DeadTargetIsNoOp(t *testing.T) {
 	state.Units[targetID].Status = instancestate.UnitStatusDead
 	before := state.Units[targetID].Health
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
@@ -115,6 +119,7 @@ func TestUsePowerHandler_OutOfRangeIsNoOp(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 10, 0) // 10ft away, range is 5ft
 	before := state.Units[targetID].Health
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
@@ -127,6 +132,7 @@ func TestUsePowerHandler_WallBetweenAttackerAndTargetIsNoOp(t *testing.T) {
 	zone := wallZone(instanceconfig.Location{X: 2, Y: -5}, instanceconfig.Location{X: 2, Y: 5})
 	before := state.Units[targetID].Health
 
+	stampStats(state, zone)
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), zone, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
@@ -156,6 +162,7 @@ func TestUsePowerHandler_SetsAttackingOnHarmInRange(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0) // 4ft away, within 5ft range
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.True(t, state.Units[playerID].Attacking)
@@ -166,6 +173,7 @@ func TestUsePowerHandler_OutOfRangeDoesNotSetAttacking(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 10, 0) // 10ft away, range is 5ft
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.False(t, state.Units[playerID].Attacking)
@@ -183,6 +191,7 @@ func TestUsePowerHandler_DamageWithinPowerAmountRange(t *testing.T) {
 		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 		before := state.Units[targetID].Health
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 		damage := before - state.Units[targetID].Health
@@ -200,6 +209,7 @@ func TestUsePowerHandler_SetsGlobalCooldown(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 
 	before := time.Now()
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	gcd := state.Units[playerID].GlobalCooldownEndsAt
@@ -211,10 +221,12 @@ func TestUsePowerHandler_GCDBlocksRepeatUse(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 	afterFirst := state.Units[targetID].Health
 
 	// Second use should be blocked by GCD.
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, afterFirst, state.Units[targetID].Health)
@@ -252,6 +264,7 @@ func TestUsePowerHandler_TagsHostileTargetOnFirstDamage(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	state.Units[targetID].Hostility = "hostile"
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	require.NotNil(t, state.Units[targetID].TaggedBy)
@@ -266,6 +279,7 @@ func TestUsePowerHandler_DoesNotRetagAlreadyTaggedTarget(t *testing.T) {
 	firstTagger := uuid.New()
 	state.Units[targetID].TaggedBy = &firstTagger
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, firstTagger, *state.Units[targetID].TaggedBy)
@@ -276,6 +290,7 @@ func TestUsePowerHandler_DoesNotTagNonHostileTarget(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0) // target Hostility is "" (player)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Nil(t, state.Units[targetID].TaggedBy)
@@ -289,6 +304,7 @@ func TestUsePowerHandler_FrontalBlocksWhenNotFacing(t *testing.T) {
 	state.Units[playerID].Position.Angle = 180
 	before := state.Units[targetID].Health
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
@@ -352,6 +368,7 @@ func TestUsePowerHandler_HealsSelf(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		state := stateWithInjuredPlayer(playerID)
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 		if state.Units[playerID].Health == 60.0 {
@@ -383,6 +400,7 @@ func TestUsePowerHandler_HealScalesWithRecipientsRecoveryRating(t *testing.T) {
 		// *this* test's actual values, so a crit fell straight through
 		// to the assertion below instead of being skipped).
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 		gained := state.Units[playerID].Health - 40.0
@@ -401,6 +419,7 @@ func TestUsePowerHandler_HealDoesNotExceedMaxHealth(t *testing.T) {
 	state := stateWithInjuredPlayer(playerID)
 	state.Units[playerID].Health = 90.0 // 20 heal would overshoot 100
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 100.0, state.Units[playerID].Health)
@@ -412,6 +431,7 @@ func TestUsePowerHandler_HealWorksWithoutTarget(t *testing.T) {
 	state := stateWithInjuredPlayer(playerID)
 	// No target set — self-heal should still fire.
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 	assert.Greater(t, state.Units[playerID].Health, 40.0)
@@ -423,6 +443,7 @@ func TestUsePowerHandler_HealSetsGCD(t *testing.T) {
 	state := stateWithInjuredPlayer(playerID)
 	before := time.Now()
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 	assert.True(t, state.Units[playerID].GlobalCooldownEndsAt.After(before.Add(time.Second)))
@@ -434,6 +455,7 @@ func TestUsePowerHandler_HealSetsPowerCooldown(t *testing.T) {
 	state := stateWithInjuredPlayer(playerID)
 	before := time.Now()
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 	cd := state.Units[playerID].PowerCooldowns["Recover"]
@@ -445,11 +467,13 @@ func TestUsePowerHandler_PowerCooldownBlocksRepeatUse(t *testing.T) {
 	playerID := uuid.New()
 	state := stateWithInjuredPlayer(playerID)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 	// Manually expire GCD so only the per-power cooldown is blocking.
 	state.Units[playerID].GlobalCooldownEndsAt = time.Time{}
 	afterFirst := state.Units[playerID].Health
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, recoverPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, afterFirst, state.Units[playerID].Health)
@@ -460,6 +484,7 @@ func TestUsePowerHandler_NoCooldownFieldDoesNotSetPowerCooldown(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Empty(t, state.Units[playerID].PowerCooldowns)
@@ -528,6 +553,7 @@ func retryUntilHarmHealth(t *testing.T, school string, wantHealth float64) {
 		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 		state.Units[targetID].EquippedItems = defendedTarget()
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, harmPower(20.0, school), instanceconfig.Zone{}, state))
 
 		if math.Abs(state.Units[targetID].Health-wantHealth) < 0.01 {
@@ -558,6 +584,7 @@ func TestUsePowerHandler_EngagesIdleHostileTargetOnHit(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	state.Units[targetID].Hostility = "hostile"
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	// The target should notice and fight back immediately, even though it
@@ -574,6 +601,7 @@ func TestUsePowerHandler_DoesNotEngageANonHostileTargetOnHit(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	state.Units[targetID].Hostility = "neutral"
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, instancestate.UnitStatusIdle, state.Units[targetID].Status)
@@ -601,6 +629,7 @@ func TestUsePowerHandler_KillAggroesGroupedIdleUnit(t *testing.T) {
 		}},
 	}
 
+	stampStats(state, zone)
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), zone, state))
 
 	assert.Equal(t, instancestate.UnitStatusEngaged, state.Units[linkedID].Status)
@@ -649,6 +678,7 @@ func TestUsePowerHandler_AppliesSelfStatus(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	status := instanceconfig.Status{Name: "Enraged", ShortName: "Enrage", TreatAs: "buff", Stacking: "replace"}
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, selfStatusPower(status), instanceconfig.Zone{}, state))
 
 	require.Len(t, state.Units[playerID].ActiveStatusEffects, 1)
@@ -668,6 +698,7 @@ func TestUsePowerHandler_AppliesStatusToTarget(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0) // 3ft away, within 5ft range
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
 
 		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
@@ -688,6 +719,7 @@ func TestUsePowerHandler_TargetStatusOutOfRangeIsNoOp(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 10, 0) // 10ft away, range is 5ft
 	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
 
 	assert.Empty(t, state.Units[targetID].ActiveStatusEffects)
@@ -701,6 +733,7 @@ func TestUsePowerHandler_DebuffStatusCanBeResisted(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
 
 		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
@@ -717,6 +750,7 @@ func TestUsePowerHandler_EngagesIdleHostileTargetOnDebuffStatusEvenWithNoHarm(t 
 	state.Units[targetID].Hostility = "hostile"
 	status := instanceconfig.Status{Name: "Dazed", ShortName: "Dazed", TreatAs: "debuff", Stacking: "replace"}
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
 
 	// Aggro fires before the resist roll, so this is deterministic even
@@ -731,6 +765,7 @@ func TestUsePowerHandler_BuffStatusNeverResisted(t *testing.T) {
 
 	for i := 0; i < 20; i++ {
 		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, selfStatusPower(status), instanceconfig.Zone{}, state))
 		require.Len(t, state.Units[playerID].ActiveStatusEffects, 1, "a self buff should never be resisted")
 	}
@@ -750,6 +785,7 @@ func TestUsePowerHandler_BuffStatusCastAtAHostileTargetCanBeResisted(t *testing.
 	for i := 0; i < 200; i++ {
 		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, targetStatusPower(status), instanceconfig.Zone{}, state))
 
 		if len(state.Units[targetID].ActiveStatusEffects) == 0 {
@@ -768,6 +804,7 @@ func TestUsePowerHandler_DebuffStatusCastAtAFriendlyTargetIsNeverResisted(t *tes
 	for i := 0; i < 20; i++ {
 		state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 3, 0)
 
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, friendlyTargetStatusPower(status), instanceconfig.Zone{}, state))
 
 		require.Len(t, state.Units[targetID].ActiveStatusEffects, 1, "a friendly-targeted status should never be resisted")
@@ -823,6 +860,7 @@ func TestUsePowerHandler_InsufficientResourceIsNoOp(t *testing.T) {
 	setEnergy(state.Units[playerID], 10.0, 100.0)
 	before := state.Units[targetID].Health
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, costlyPunchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
@@ -849,6 +887,7 @@ func TestUsePowerHandler_SpendClampsAtZero(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
 	setEnergy(state.Units[playerID], 30.0, 100.0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, costlyPunchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 0.0, energyOf(state.Units[playerID]))
@@ -860,6 +899,7 @@ func TestUsePowerHandler_ZeroCostPowerDoesNotTouchResource(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
 	setEnergy(state.Units[playerID], 42.0, 100.0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 42.0, energyOf(state.Units[playerID]))
@@ -871,6 +911,7 @@ func TestUsePowerHandler_ResourceEffectRestoresSelfResource(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	setEnergy(state.Units[playerID], 10.0, 100.0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, selfResourcePower(15.0), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 25.0, energyOf(state.Units[playerID]))
@@ -882,6 +923,7 @@ func TestUsePowerHandler_ResourceEffectClampsAtMax(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	setEnergy(state.Units[playerID], 90.0, 100.0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, selfResourcePower(50.0), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 100.0, energyOf(state.Units[playerID]))
@@ -893,6 +935,7 @@ func TestUsePowerHandler_ResourceEffectCanDrainATarget(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 4, 0)
 	setEnergy(state.Units[targetID], 50.0, 100.0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, targetResourcePower(-20.0), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, 30.0, energyOf(state.Units[targetID]))
@@ -912,6 +955,7 @@ func TestUsePowerHandler_CastTimePowerDoesNotApplyEffectsImmediately(t *testing.
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	before := state.Units[targetID].Health
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
 
 	assert.Equal(t, before, state.Units[targetID].Health)
@@ -924,6 +968,7 @@ func TestUsePowerHandler_CastTimePowerSetsCastingState(t *testing.T) {
 	before := time.Now()
 
 	payload := punchPowerWithCastTime(2.0)
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, payload, instanceconfig.Zone{}, state))
 
 	cast := state.Units[playerID].Casting
@@ -941,6 +986,7 @@ func TestUsePowerHandler_CastTimePowerCommitsGCDAtCastStart(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	before := time.Now()
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
 
 	assert.True(t, state.Units[playerID].GlobalCooldownEndsAt.After(before.Add(time.Second)))
@@ -955,6 +1001,7 @@ func TestUsePowerHandler_CastTimePowerDoesNotSpendCostAtCastStart(t *testing.T) 
 	payload.Power.CostType = "energy"
 	payload.Power.CostAmount = 30.0
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, payload, instanceconfig.Zone{}, state))
 
 	// Starting a cast only requires affording it (PowerUsable already
@@ -988,9 +1035,11 @@ func TestUsePowerHandler_RejectsUseWhileCasting(t *testing.T) {
 	playerID, targetID := uuid.New(), uuid.New()
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
 	firstCast := state.Units[playerID].Casting
 
+	stampStats(state, instanceconfig.Zone{})
 	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPowerWithCastTime(2.0), instanceconfig.Zone{}, state))
 
 	assert.Same(t, firstCast, state.Units[playerID].Casting)
@@ -1049,6 +1098,7 @@ func TestUsePowerHandler_LandedHarmPushesBackTargetsCast(t *testing.T) {
 
 	for i := 0; i < 200; i++ {
 		state, endsAt := castingTargetState(playerID, targetID)
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 		if state.Units[targetID].Health < 50.0 {
 			assert.True(t, state.Units[targetID].Casting.EndsAt.After(endsAt))
@@ -1064,6 +1114,7 @@ func TestUsePowerHandler_MissedHarmDoesNotPushBackTargetsCast(t *testing.T) {
 
 	for i := 0; i < 200; i++ {
 		state, endsAt := castingTargetState(playerID, targetID)
+		stampStats(state, instanceconfig.Zone{})
 		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, punchPower(), instanceconfig.Zone{}, state))
 		if state.Units[targetID].Health == 50.0 {
 			assert.Equal(t, endsAt, state.Units[targetID].Casting.EndsAt)

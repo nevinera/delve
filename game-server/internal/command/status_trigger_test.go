@@ -43,6 +43,7 @@ func TestFireTriggeredEffect_SelfHeal(t *testing.T) {
 	}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 
+	stampStats(state, instanceconfig.Zone{}, holder)
 	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 
 	assert.Greater(t, holder.Health, 50.0)
@@ -64,6 +65,7 @@ func TestFireTriggeredEffect_HarmTarget(t *testing.T) {
 	// flaky; any non-miss (an overwhelming majority within 10 tries) drops
 	// target's health.
 	for i := 0; i < 10 && target.Health == 100.0; i++ {
+		stampStats(state, instanceconfig.Zone{}, holder)
 		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 	}
 
@@ -82,6 +84,7 @@ func TestFireTriggeredEffect_HarmTarget_NoTargetIsNoOp(t *testing.T) {
 	}
 
 	assert.NotPanics(t, func() {
+		stampStats(state, instanceconfig.Zone{}, holder)
 		command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 	})
 }
@@ -104,6 +107,7 @@ func TestFireTriggeredEffect_LethalHarmKillsAndClearsTarget(t *testing.T) {
 	// still kills it outright.
 	for i := 0; i < 10 && target.Status != instancestate.UnitStatusDead; i++ {
 		target.Health = 1
+		stampStats(state, instanceconfig.Zone{}, holder)
 		command.FireTriggeredEffect(holderID, holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 	}
 
@@ -122,6 +126,7 @@ func TestFireTriggeredEffect_Resource(t *testing.T) {
 	}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 
+	stampStats(state, instanceconfig.Zone{}, holder)
 	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 
 	assert.Equal(t, 5.0, holder.Resources["fury"].Current)
@@ -137,6 +142,7 @@ func TestFireTriggeredEffect_Status(t *testing.T) {
 	}
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
 
+	stampStats(state, instanceconfig.Zone{}, holder)
 	command.FireTriggeredEffect(uuid.New(), holder, eff, instanceconfig.Zone{}, time.Now(), state, rng)
 
 	require.Len(t, holder.ActiveStatusEffects, 1)

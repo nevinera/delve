@@ -16,19 +16,15 @@ import (
 // see docs/stats.md's Crit Rating/Haste Rating/Strength/Agility/Intellect
 // sections and tmp/plan.md's status-implementation step 0.
 func effectSchoolStats(unit *instancestate.UnitState, zone instanceconfig.Zone, school string) (hastePct, critChancePct, statContribution float64) {
-	if cs := unit.CombatStats; cs != nil {
-		s := cs.Physical
-		if school == "magic" {
-			s = cs.Magic
-		}
-		return s.HastePct, s.CritChancePct, s.StatContribution
+	s := unit.CombatStats.Physical
+	if school == "magic" {
+		s = unit.CombatStats.Magic
 	}
-	return computeEffectSchoolStats(unit, zone, school)
+	return s.HastePct, s.CritChancePct, s.StatContribution
 }
 
 // computeEffectSchoolStats is effectSchoolStats' from-scratch calculation,
-// used to fill unit.CombatStats (see ComputeCombatStats) and as the fallback
-// for a unit that hasn't had its stats computed yet.
+// used only to fill unit.CombatStats (see ComputeCombatStats).
 func computeEffectSchoolStats(unit *instancestate.UnitState, zone instanceconfig.Zone, school string) (hastePct, critChancePct, statContribution float64) {
 	strength, agility, intellect, _, stats := computeUnitEffectiveStats(unit, zone)
 
