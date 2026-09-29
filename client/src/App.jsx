@@ -15,6 +15,7 @@ import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
+import { AbilitiesSheet } from "./AbilitiesSheet";
 import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
@@ -2561,19 +2562,11 @@ function avoidancePct(primaryValue, agility, agilityWeight) {
 // physical Crit, Agility feeds physical Haste, always - see docs/stats.md);
 // Intellect drives a magic one, splitting its bonus across both magic
 // secondaries instead.
-function basicAttackDps(stats, primaryStats) {
+function basicAttackDps(basicAttack, primaryStats) {
   const damageStatKey = primaryStats.find((s) => s === "strength" || s === "agility" || s === "intellect");
-  const damageStatValue = damageStatKey ? (stats[damageStatKey] || 0) : 0;
-  const statDps = damageStatKey ? damageStatValue / BASIC_ATTACK_STAT_DIVISOR : 0;
-
-  const isMagic = damageStatKey === "intellect";
-  const hastePct = isMagic
-    ? ((stats.haste_rating || 0) + (stats.intellect || 0) * MAGIC_HASTE_RATING_PER_INTELLECT) / 11.71
-    : ((stats.haste_rating || 0) + (stats.agility || 0) * PHYSICAL_HASTE_RATING_PER_AGILITY) / 11.71;
-  const effectiveCritRating = isMagic
-    ? (stats.crit_rating || 0) + (stats.intellect || 0) * MAGIC_CRIT_RATING_PER_INTELLECT
-    : (stats.crit_rating || 0) + (stats.strength || 0) * PHYSICAL_CRIT_RATING_PER_STRENGTH;
-  const critChancePct = 5 + effectiveCritRating / 15;
+  const statDps = basicAttack.stat_contribution / BASIC_ATTACK_STAT_DIVISOR;
+  const hastePct = basicAttack.haste_pct;
+  const critChancePct = basicAttack.crit_chance_pct;
 
   const value =
     (BASIC_ATTACK_BASE_DPS + statDps) *
@@ -2587,6 +2580,8 @@ function basicAttackDps(stats, primaryStats) {
 
   return {value, lines};
 }
+
+const ZERO_SCHOOL_STATS = { haste_pct: 0, crit_chance_pct: 5, stat_contribution: 0 };
 
 const STAT_GROUPS = [
   { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "basic_attack_dps"] },
@@ -2603,27 +2598,6 @@ export function formatItemName(identifier) {
     .filter(Boolean)
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
-}
-
-// Stats Versatility Rating grants a flat 0.2x share of itself into - see
-// docs/stats.md's Versatility section.
-const VERSATILITY_SPREAD_KEYS = ["strength", "agility", "intellect", "defence_rating"];
-const VERSATILITY_SPREAD_RATE = 0.2;
-
-function netStats(equippedItems) {
-  const total = {};
-  for (const item of Object.values(equippedItems || {})) {
-    for (const [key, value] of Object.entries(item.stats || {})) {
-      total[key] = (total[key] || 0) + value;
-    }
-  }
-  const versatility = total.versatility_rating || 0;
-  if (versatility) {
-    for (const key of VERSATILITY_SPREAD_KEYS) {
-      total[key] = (total[key] || 0) + versatility * VERSATILITY_SPREAD_RATE;
-    }
-  }
-  return total;
 }
 
 // Mirrors ItemStats::Raw::SLOT_SHAPES's factor (app/services/item_stats/raw.rb)
@@ -2722,7 +2696,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [], portrait = false, landscape = false }) {
+export function CharacterSheet({ open, equippedItems, combatStats, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [], portrait = false, landscape = false }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -2750,7 +2724,8 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
 
   if (!open) return null;
 
-  const stats = netStats(equippedItems);
+  const stats = combatStats?.stats ?? {};
+  const basicAttack = combatStats?.basic_attack ?? ZERO_SCHOOL_STATS;
   const gearElvl = gearElevation(equippedItems);
 
   const toggleSlot = (slot) => {
@@ -2835,7 +2810,7 @@ export function CharacterSheet({ open, equippedItems, characterItemsUrl, onEquip
             <ul style={styles.charSheetStatsList}>
               {group.keys.map(key => {
                 if (key === "basic_attack_dps") {
-                  const {value, lines} = basicAttackDps(stats, primaryStats);
+                  const {value, lines} = basicAttackDps(basicAttack, primaryStats);
                   return (
                     <li key={key} style={styles.charSheetStatRow}>
                       <StatEffectTooltip lines={lines}>
@@ -3064,6 +3039,7 @@ export default function App({
   const [ncus, setNcus] = useState({});
   const ncusRef = useRef({});
   const [charSheetOpen, setCharSheetOpen] = useState(false);
+  const [abilitiesOpen, setAbilitiesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
   const [buttonLayout, setButtonLayout] = useState(() => resolveButtonLayout(characterSettings?.abilityButtonMap));
@@ -3449,6 +3425,7 @@ export default function App({
           setLootWindowUnitId(null);
           setDialogueNcuId(null);
           setCharSheetOpen(false);
+          setAbilitiesOpen(false);
           setSettingsOpen(false);
           setMenuOpen(false);
         } else if (action === "detarget") {
@@ -3824,7 +3801,7 @@ export default function App({
   // is only ever non-empty when the target happens to be self.
   const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
-  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || settingsOpen || menuOpen;
+  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || abilitiesOpen || settingsOpen || menuOpen;
 
   // Walking away (or dying) ends the conversation.
   const dialogueNcu = dialogueNcuId ? ncus[dialogueNcuId] : null;
@@ -4072,11 +4049,22 @@ export default function App({
       <CharacterSheet
         open={charSheetOpen}
         equippedItems={equippedItems}
+        combatStats={selfUnit?.combat_stats}
         characterItemsUrl={characterItemsUrl}
         onEquip={handleEquipItem}
         onClose={() => setCharSheetOpen(false)}
         localElvl={localElvl}
         primaryStats={primaryStats}
+        portrait={viewportMode.isPortraitPhone}
+        landscape={viewportMode.isLandscapePhone}
+      />
+      <AbilitiesSheet
+        open={abilitiesOpen}
+        powers={powers}
+        combatStats={selfUnit?.combat_stats}
+        classConfigUrl={classConfigUrl}
+        stockAssets={stockAssets}
+        onClose={() => setAbilitiesOpen(false)}
         portrait={viewportMode.isPortraitPhone}
         landscape={viewportMode.isLandscapePhone}
       />
@@ -4102,6 +4090,12 @@ export default function App({
             onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
           >
             Character
+          </button>
+          <button
+            style={styles.menuDialogButton}
+            onClick={() => { setAbilitiesOpen((o) => !o); setMenuOpen(false); }}
+          >
+            Abilities
           </button>
           <button
             style={styles.menuDialogButton}
@@ -4354,6 +4348,13 @@ export default function App({
             onClick={() => setCharSheetOpen(o => !o)}
           >
             Char
+          </button>
+          <button
+            style={styles.utilityButton}
+            title="Abilities"
+            onClick={() => setAbilitiesOpen(o => !o)}
+          >
+            Abilities
           </button>
           <button
             style={styles.utilityButton}
