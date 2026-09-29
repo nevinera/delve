@@ -172,9 +172,9 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand
 
 		if pendingCast == nil {
 			if power, ok := selectPower(unit, target, strategy, powersByName, nowTime); ok {
-				if castTime := power.CastTime; castTime != nil && *castTime > 0 {
+				if castTime := command.HastedCastSeconds(unit, zone, power); castTime > 0 {
 					commitCooldowns(unit, power, nowTime)
-					pendingCast = &pendingCastState{power: power, endsAt: now + *castTime}
+					pendingCast = &pendingCastState{power: power, endsAt: now + castTime}
 				} else {
 					castPower(unit, target, attackerID, power, zone, nowTime, addPowerDamage, rng)
 				}

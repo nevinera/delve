@@ -45,12 +45,12 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 		return nil
 	}
 
-	if castTime := p.Power.CastTime; castTime != nil && *castTime > 0 {
+	if castTime := HastedCastSeconds(unit, zone, p.Power); castTime > 0 {
 		unit.Casting = &instancestate.CastState{
 			Power:     p.Power,
 			TargetID:  unit.Target,
 			StartedAt: now,
-			EndsAt:    now.Add(time.Duration(*castTime * float64(time.Second))),
+			EndsAt:    now.Add(time.Duration(castTime * float64(time.Second))),
 		}
 		commitCooldowns(unit, p.Power, now)
 		return nil

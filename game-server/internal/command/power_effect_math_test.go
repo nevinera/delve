@@ -193,3 +193,25 @@ func TestPowerEffectAmount_HealIgnoresEffectSchoolAndAlwaysUsesIntellect(t *test
 		return PowerEffectAmount(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}, effect, 6.0, true, false, rng)
 	}, 14.0)
 }
+
+func TestPowerSchool(t *testing.T) {
+	assert.Equal(t, "physical", PowerSchool(instanceconfig.Power{}))
+	assert.Equal(t, "physical", PowerSchool(instanceconfig.Power{Effects: []instanceconfig.PowerEffect{{Type: "harm"}}}))
+	assert.Equal(t, "magic", PowerSchool(instanceconfig.Power{Effects: []instanceconfig.PowerEffect{{Type: "harm"}, {Type: "harm", School: "magic"}}}))
+	assert.Equal(t, "magic", PowerSchool(instanceconfig.Power{Effects: []instanceconfig.PowerEffect{{Type: "heal"}}}))
+}
+
+func TestHastedCastSeconds(t *testing.T) {
+	cast := 2.0
+	unit := &instancestate.UnitState{CombatStats: &instancestate.CombatStats{
+		Physical: instancestate.SchoolCombatStats{HastePct: 25},
+		Magic:    instancestate.SchoolCombatStats{HastePct: 100},
+	}}
+	physical := instanceconfig.Power{CastTime: &cast, Effects: []instanceconfig.PowerEffect{{Type: "harm"}}}
+	magic := instanceconfig.Power{CastTime: &cast, Effects: []instanceconfig.PowerEffect{{Type: "harm", School: "magic"}}}
+
+	assert.InDelta(t, 1.6, HastedCastSeconds(unit, instanceconfig.Zone{}, physical), 1e-9)
+	assert.InDelta(t, 1.0, HastedCastSeconds(unit, instanceconfig.Zone{}, magic), 1e-9)
+	assert.Equal(t, 0.0, HastedCastSeconds(unit, instanceconfig.Zone{}, instanceconfig.Power{}))
+	assert.Equal(t, 2.0, HastedCastSeconds(&instancestate.UnitState{}, instanceconfig.Zone{}, magic))
+}

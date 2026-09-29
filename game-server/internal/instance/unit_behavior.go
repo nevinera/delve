@@ -268,13 +268,13 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		return
 	}
 
-	if castTime := power.CastTime; castTime != nil && *castTime > 0 {
+	if castTime := command.HastedCastSeconds(unit, zone, power); castTime > 0 {
 		tid := targetID
 		unit.Casting = &instancestate.CastState{
 			Power:     power,
 			TargetID:  &tid,
 			StartedAt: now,
-			EndsAt:    now.Add(time.Duration(*castTime * float64(time.Second))),
+			EndsAt:    now.Add(time.Duration(castTime * float64(time.Second))),
 		}
 		commitNPCCooldowns(unit, power, now)
 		return
