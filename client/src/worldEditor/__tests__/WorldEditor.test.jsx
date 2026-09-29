@@ -132,6 +132,7 @@ describe("WorldEditor", () => {
     fireEvent.click(screen.getByText("Validate"));
     await waitFor(() => expect(screen.getByText("Save")).not.toBeDisabled());
     fireEvent.click(screen.getByText("Save"));
+    fireEvent.click(screen.getByText("Commit"));
     await screen.findByText("Saved.");
 
     const [savedFiles] = commitFiles.mock.calls[0];
@@ -160,6 +161,23 @@ describe("WorldEditor", () => {
     expect(await screen.findByRole("heading", {level: 4, name: "Stagnant Oasis"})).toBeInTheDocument();
   });
 
+  it("commits with a custom message typed into the commit prompt", async () => {
+    validateWorld.mockResolvedValue({valid: true});
+    await renderLoaded();
+
+    fireEvent.click(screen.getByText("Validate"));
+    await waitFor(() => expect(screen.getByText("Save")).not.toBeDisabled());
+
+    commitFiles.mockResolvedValue({});
+    fireEvent.click(screen.getByText("Save"));
+    expect(screen.getByLabelText("Commit message")).toHaveValue("Update Northern Barrens");
+    fireEvent.change(screen.getByLabelText("Commit message"), {target: {value: "Rework the barrens"}});
+    fireEvent.click(screen.getByText("Commit"));
+    await screen.findByText("Saved.");
+
+    expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Rework the barrens"});
+  });
+
   it("validates then enables save once valid", async () => {
     validateWorld.mockResolvedValue({valid: true});
     await renderLoaded();
@@ -172,6 +190,7 @@ describe("WorldEditor", () => {
 
     commitFiles.mockResolvedValue({});
     fireEvent.click(saveButton);
+    fireEvent.click(screen.getByText("Commit"));
     await screen.findByText("Saved.");
     expect(commitFiles).toHaveBeenCalledWith(
       {
