@@ -42,6 +42,14 @@ describe("saveUnitType", () => {
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update goblin-raider"});
   });
 
+  it("uses a given commit message instead of the default", async () => {
+    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+
+    await saveUnitType("goblin-raider", {name: "Goblin Raider", powers: []}, availableAbilities, {}, "Custom message");
+
+    expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Custom message"});
+  });
+
   it("commits a nested key's JSON at unit_types/<key>.json and .full.json", async () => {
     commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
     const unitTypeData = {name: "Raider", powers: []};

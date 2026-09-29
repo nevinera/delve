@@ -13,7 +13,7 @@ import {resolveFullUnitType} from "./resolveFullUnitType";
 // time) - same "write wherever the field currently says" approach as
 // saveAbility.js, just keyed by index instead of field name since
 // tokenImageUrl has no other asset-bearing fields to disambiguate.
-export async function saveUnitType(key, unitTypeData, availableAbilities, pendingFiles = {}) {
+export async function saveUnitType(key, unitTypeData, availableAbilities, pendingFiles = {}, commitMessage) {
   const fullUnitType = await resolveFullUnitType(key, unitTypeData, availableAbilities);
   const filesByPath = {
     [`unit_types/${key}.json`]: unitTypeData,
@@ -37,5 +37,5 @@ export async function saveUnitType(key, unitTypeData, availableAbilities, pendin
     throw new Error(`Set a path before saving for: ${missingPaths.join(", ")}`);
   }
 
-  return commitFiles(filesByPath, {message: `Update ${unitTypeData.name || key}`});
+  return commitFiles(filesByPath, {message: commitMessage || `Update ${unitTypeData.name || key}`});
 }
