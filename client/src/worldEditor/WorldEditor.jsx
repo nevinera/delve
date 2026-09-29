@@ -149,10 +149,10 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveWorld(worldKey, draft.data, graphPositions);
+      await saveWorld(worldKey, draft.data, graphPositions, commitMessage);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -180,7 +180,7 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
         />
       </div>
       <div className="world-editor-sidebar">
-        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || worldKey}`} />
         <WorldFieldsPanel draft={draft} onChange={handleChange} />
         <ZonesPanel
           draft={draft}

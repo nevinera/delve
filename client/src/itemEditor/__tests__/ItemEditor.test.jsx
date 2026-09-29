@@ -115,6 +115,8 @@ describe("ItemEditor", () => {
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+    fireEvent.click(screen.getByRole("button", {name: "Commit"}));
     await waitFor(() => expect(commitFiles).toHaveBeenCalledWith(
       {"items/sword-of-doom.json": initialItem},
       {message: "Update Sword of Doom"}
@@ -140,6 +142,7 @@ describe("ItemEditor", () => {
     fireEvent.click(screen.getByRole("button", {name: "Validate"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", {name: "Save"}));
+    fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
     await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
   });

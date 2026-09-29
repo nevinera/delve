@@ -209,6 +209,8 @@ describe("UnitTypeEditor", () => {
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
       expect(commitFiles).toHaveBeenCalledWith(
         {"unit_types/goblin-raider.json": initialUnitType, "unit_types/goblin-raider.full.json": initialUnitType},
@@ -224,6 +226,7 @@ describe("UnitTypeEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
     });
@@ -272,6 +275,7 @@ describe("UnitTypeEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
     }
 

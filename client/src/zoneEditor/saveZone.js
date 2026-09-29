@@ -10,7 +10,7 @@ import {buildLayoutMetadata} from "./layoutMetadata";
 // must have a concrete .full.json alongside it), plus the graph's own
 // layout metadata (positions - see layoutMetadata.js), all in one atomic
 // commit.
-export async function saveZone(key, zoneData, positions) {
+export async function saveZone(key, zoneData, positions, commitMessage) {
   const basename = key.split("/").pop();
   const fullZone = await resolveZoneRefs(zoneData, `zones/${key}`);
   const layout = buildLayoutMetadata(positions);
@@ -21,6 +21,6 @@ export async function saveZone(key, zoneData, positions) {
       [`zones/${key}/${basename}.full.json`]: fullZone,
       [`zones/${key}/${basename}.layout.json`]: layout,
     },
-    {message: `Update ${zoneData.name || key}`}
+    {message: commitMessage || `Update ${zoneData.name || key}`}
   );
 }

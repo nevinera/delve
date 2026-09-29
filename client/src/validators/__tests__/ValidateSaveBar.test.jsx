@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from "vitest";
-import {render, screen} from "@testing-library/react";
+import {render, screen, fireEvent} from "@testing-library/react";
 import ValidateSaveBar from "../ValidateSaveBar";
 
 describe("ValidateSaveBar", () => {
@@ -46,5 +46,52 @@ describe("ValidateSaveBar", () => {
     render(<ValidateSaveBar validity="valid" activity={{status: "success"}} onValidate={vi.fn()} onSave={vi.fn()} />);
 
     expect(screen.getByText("Saved.")).toBeInTheDocument();
+  });
+
+  it("calls onSave straight away when there is no defaultMessage", () => {
+    const onSave = vi.fn();
+    render(<ValidateSaveBar validity="valid" activity={{status: "idle"}} onValidate={vi.fn()} onSave={onSave} />);
+
+    fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+    expect(onSave).toHaveBeenCalledWith();
+  });
+
+  it("asks for a commit message prefilled with the default, then saves with it", () => {
+    const onSave = vi.fn();
+    render(<ValidateSaveBar validity="valid" activity={{status: "idle"}} onValidate={vi.fn()} onSave={onSave} defaultMessage="Update Foo" />);
+
+    fireEvent.click(screen.getByRole("button", {name: "Save"}));
+    expect(onSave).not.toHaveBeenCalled();
+    const input = screen.getByLabelText("Commit message");
+    expect(input).toHaveValue("Update Foo");
+
+    fireEvent.change(input, {target: {value: "Tweak Foo"}});
+    fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
+    expect(onSave).toHaveBeenCalledWith("Tweak Foo");
+    expect(screen.queryByLabelText("Commit message")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the default when the message is blank", () => {
+    const onSave = vi.fn();
+    render(<ValidateSaveBar validity="valid" activity={{status: "idle"}} onValidate={vi.fn()} onSave={onSave} defaultMessage="Update Foo" />);
+
+    fireEvent.click(screen.getByRole("button", {name: "Save"}));
+    fireEvent.change(screen.getByLabelText("Commit message"), {target: {value: "  "}});
+    fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
+    expect(onSave).toHaveBeenCalledWith("Update Foo");
+  });
+
+  it("does not save when the prompt is cancelled", () => {
+    const onSave = vi.fn();
+    render(<ValidateSaveBar validity="valid" activity={{status: "idle"}} onValidate={vi.fn()} onSave={onSave} defaultMessage="Update Foo" />);
+
+    fireEvent.click(screen.getByRole("button", {name: "Save"}));
+    fireEvent.click(screen.getByRole("button", {name: "Cancel"}));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Commit message")).not.toBeInTheDocument();
   });
 });

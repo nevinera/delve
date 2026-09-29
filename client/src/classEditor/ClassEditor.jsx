@@ -94,10 +94,10 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveClass(classKey, draft.data, availableAbilities);
+      await saveClass(classKey, draft.data, availableAbilities, commitMessage);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -121,7 +121,7 @@ export default function ClassEditor({classKey, stockAssets, newAbilityUrl}) {
         <ClassPreviewPane classKey={classKey} powers={draft.data.powers ?? []} availableAbilities={availableAbilities} stockAssets={stockAssets} />
       </div>
       <div className="class-editor-fields">
-        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || classKey}`} />
         <ClassDpsEstimatePanel
           strategy={strategy}
           onStrategyChange={setStrategy}

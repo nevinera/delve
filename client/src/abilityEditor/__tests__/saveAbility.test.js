@@ -29,6 +29,14 @@ describe("saveAbility", () => {
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update firebolt"});
   });
 
+  it("uses a given commit message instead of the default", async () => {
+    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+
+    await saveAbility("firebolt", {name: "Firebolt"}, {}, "Custom message");
+
+    expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Custom message"});
+  });
+
   it("resolves a pending top-level upload's destination from the field's current relative path", async () => {
     commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
     const ability = {name: "Firebolt", iconURL: "../graphics/icons/firebolt.svg"};

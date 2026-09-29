@@ -203,10 +203,10 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
     }
   }
 
-  async function handleSave() {
+  async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveUnitType(unitTypeKey, draft.data, availableAbilities, pendingFilesRef.current);
+      await saveUnitType(unitTypeKey, draft.data, availableAbilities, pendingFilesRef.current, commitMessage);
       pendingFilesRef.current = {};
       setSaved();
     } catch (error) {
@@ -233,7 +233,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, newAbilityUrl}
         />
       </div>
       <div className="unit-type-editor-fields">
-        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || unitTypeKey}`} />
         <DamageEstimatePanel estimate={estimate} estimating={estimating} error={estimateError} onEstimate={handleEstimate} />
         <UnitTypeFieldsPanel
           draft={draft}

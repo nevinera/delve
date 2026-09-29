@@ -160,6 +160,8 @@ describe("ClassEditor", () => {
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
       expect(commitFiles).toHaveBeenCalledWith(
         {"classes/puncher.json": initialClass, "classes/puncher.full.json": initialClass},
@@ -176,6 +178,8 @@ describe("ClassEditor", () => {
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
       await waitFor(() => expect(screen.getByText("network exploded")).toBeInTheDocument());
       expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled();
     });
@@ -188,6 +192,7 @@ describe("ClassEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
     });

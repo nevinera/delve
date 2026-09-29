@@ -797,6 +797,8 @@ describe("MapEditor", () => {
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
       await waitFor(() => expect(commitFiles).toHaveBeenCalledWith(
         {
           "zones/goblin-cave/gc1-entrance/gc1-entrance.json": expect.objectContaining({imageUrl: "gc1-entrance.webp"}),
@@ -825,6 +827,7 @@ describe("MapEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
     });

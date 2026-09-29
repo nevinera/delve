@@ -188,13 +188,13 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(commitMessage) {
     setSaving();
     try {
       // Same defensive backstop as handleValidate - zoneData should
       // already be synced by the effect above.
       const synced = syncZoneRefs(zoneData, mapDetailsByKey);
-      await saveZone(zoneKey, synced, graphPositions);
+      await saveZone(zoneKey, synced, graphPositions, commitMessage);
       setDraft(new ZoneDraft(synced));
       setSaved();
     } catch (error) {
@@ -221,7 +221,7 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
         />
       </div>
       <ZoneSidebar>
-        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${zoneData.name || zoneKey}`} />
         <table>
           <tbody>
             <tr>

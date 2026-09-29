@@ -10,10 +10,10 @@ import {resolveFullClass} from "./resolveFullClass";
 // classes/<key>.full.json (every power inlined via resolveFullClass) in one
 // atomic commit - see docs/schema/common.md#assetreference: an abstract
 // config must have a concrete .full.json alongside it.
-export async function saveClass(key, classData, availableAbilities) {
+export async function saveClass(key, classData, availableAbilities, commitMessage) {
   const fullClass = await resolveFullClass(key, classData, availableAbilities);
   return commitFiles(
     {[`classes/${key}.json`]: classData, [`classes/${key}.full.json`]: fullClass},
-    {message: `Update ${classData.name || key}`}
+    {message: commitMessage || `Update ${classData.name || key}`}
   );
 }

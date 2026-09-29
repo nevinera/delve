@@ -144,10 +144,10 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
     }
   }
 
-  async function handleSave() {
+  async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveAbility(abilityKey, draft.data, pendingFilesRef.current);
+      await saveAbility(abilityKey, draft.data, pendingFilesRef.current, commitMessage);
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -167,7 +167,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
         <AbilityPreviewPane ability={draft.data} assetMap={assetMap} assetOverrides={assetOverrides} stockAssets={stockAssets} />
       </div>
       <div className="ability-editor-fields">
-        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} />
+        <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || abilityKey}`} />
         <AbilityFieldsPanel
           draft={draft}
           onChange={handleChange}

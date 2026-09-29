@@ -276,6 +276,8 @@ describe("AbilityEditor", () => {
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
       expect(commitFiles).toHaveBeenCalledWith(
         {"abilities/firebolt.json": initialAbility},
@@ -295,6 +297,8 @@ describe("AbilityEditor", () => {
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
       expect(screen.getByRole("button", {name: "Saving…"})).toBeDisabled();
 
       resolveCommit({commitSha: "x", branch: "main"});
@@ -310,6 +314,8 @@ describe("AbilityEditor", () => {
 
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
 
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+
       await waitFor(() => expect(screen.getByText("network exploded")).toBeInTheDocument());
       expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled();
     });
@@ -322,6 +328,7 @@ describe("AbilityEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
     });
