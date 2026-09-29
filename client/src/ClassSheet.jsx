@@ -29,6 +29,8 @@ const styles = {
   summary: {color: "#889", fontSize: 11},
   description: {color: "#aaa", fontSize: 12, marginTop: 2},
   effects: {margin: "4px 0 0", padding: 0, listStyle: "none", color: "#c9b98a", fontSize: 12},
+  classDescription: {color: "#aaa", fontSize: 12, marginBottom: 12},
+  sectionTitle: {color: "#d4a84b", fontSize: 12, fontWeight: "bold", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8},
   empty: {color: "#889", fontStyle: "italic"},
 };
 
@@ -51,7 +53,7 @@ export function statSummary(ability, combatStats) {
   return [cost, cast, ...timing].filter(Boolean).join(" · ");
 }
 
-export function AbilitiesSheet({open, powers = [], combatStats, classConfigUrl, stockAssets, onClose, portrait = false, landscape = false}) {
+export function ClassSheet({open, className, classDescription, powers = [], combatStats, classConfigUrl, stockAssets, onClose, portrait = false, landscape = false}) {
   if (!open) return null;
 
   function iconUrl(ability) {
@@ -63,9 +65,11 @@ export function AbilitiesSheet({open, powers = [], combatStats, classConfigUrl, 
     <div style={portrait ? styles.wrapperPortrait : landscape ? styles.wrapperLandscape : styles.wrapper}>
       <div style={(portrait || landscape) ? styles.scrollArea : styles.panel}>
         <div style={styles.header}>
-          <span style={styles.title}>Abilities</span>
-          <button style={styles.close} aria-label="Close abilities" onClick={onClose}>✕</button>
+          <span style={styles.title}>{className || "Class"}</span>
+          <button style={styles.close} aria-label="Close class" onClick={onClose}>✕</button>
         </div>
+        {classDescription && <div style={styles.classDescription}>{classDescription}</div>}
+        <div style={styles.sectionTitle}>Abilities</div>
         {powers.length === 0 ? (
           <div style={styles.empty}>No abilities.</div>
         ) : (
