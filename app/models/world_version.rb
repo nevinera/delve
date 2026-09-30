@@ -13,9 +13,13 @@ class WorldVersion < ApplicationRecord
 
   scope :available, -> { released.where("expires_at IS NULL OR expires_at > ?", Time.current) }
 
+  after_commit :import, on: :create
+
   def expired? = expires_at.present? && expires_at.past?
 
   def zone_url(zone) = "#{raw_base_url}#{zone.path}"
+
+  def import = ImportWorldVersionJob.perform_later(id)
 
   # Releases a tag version: every other released version of the world that
   # isn't already expiring gets EXPIRY_GRACE before it expires. Betas
