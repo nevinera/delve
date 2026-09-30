@@ -106,5 +106,37 @@ RSpec.describe Zone, type: :model do
         create(:zone, registering_user: user)
       }.to have_enqueued_job(FetchZoneContentJob)
     end
+
+    it "doesn't enqueue a FetchZoneContentJob for a world zone" do
+      expect { create(:zone, :in_world) }.not_to have_enqueued_job(FetchZoneContentJob)
+    end
+  end
+
+  describe "world zones" do
+    it "is valid without the legacy registration fields" do
+      expect(build(:zone, :in_world)).to be_valid
+    end
+
+    it "allows hyphenated world zone keys" do
+      expect(build(:zone, :in_world, identifier: "goblin-cave")).to be_valid
+    end
+
+    it "requires a path" do
+      expect(build(:zone, :in_world, path: nil)).not_to be_valid
+    end
+
+    it "requires identifier to be unique within a world version" do
+      existing = create(:zone, :in_world, identifier: "darkwood")
+      expect(build(:zone, :in_world, identifier: "darkwood", world_version: existing.world_version)).not_to be_valid
+      expect(build(:zone, :in_world, identifier: "darkwood")).to be_valid
+    end
+  end
+
+  describe ".legacy" do
+    it "excludes world zones" do
+      legacy = create(:zone)
+      create(:zone, :in_world)
+      expect(described_class.legacy).to eq([legacy])
+    end
   end
 end

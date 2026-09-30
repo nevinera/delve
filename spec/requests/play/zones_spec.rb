@@ -46,6 +46,12 @@ RSpec.describe "Play::Zones", type: :request do
         expect(response.body).not_to include(play_character_zone_path(character, validation_failed_zone))
       end
 
+      it "does not link to a zone imported as part of a world" do
+        world_zone = create(:zone, :in_world)
+        get "/play/characters/#{character.id}/zones"
+        expect(response.body).not_to include(play_character_zone_path(character, world_zone))
+      end
+
       it "renders the normal layout (with nav)" do
         get "/play/characters/#{character.id}/zones"
         expect(response.body).to include("<nav>")
@@ -128,6 +134,15 @@ RSpec.describe "Play::Zones", type: :request do
       it "exposes the stock asset list as a data attribute" do
         get "/play/characters/#{character.id}/zones/#{zone.id}"
         expect(response.body).to include(CGI.escapeHTML({"duration" => 0.12, "url" => "/abilities/sounds/twang.ogg"}.to_json))
+      end
+    end
+
+    context "with a zone imported as part of a world" do
+      before { sign_in user }
+
+      it "returns 404" do
+        get "/play/characters/#{character.id}/zones/#{create(:zone, :in_world).id}"
+        expect(response).to have_http_status(:not_found)
       end
     end
 

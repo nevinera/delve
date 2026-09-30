@@ -7,6 +7,8 @@ class Ability
     else
       can :manage, CharacterClass, user: user
       can :manage, Zone, registering_user: user
+      can :manage, World, owner: user
+      can :manage, WorldVersion, world: {owner: user}
       can :manage, Character, user: user
       can :read, CharacterItem, character: {user: user}
       can :manage, EquippedItem, character: {user: user}

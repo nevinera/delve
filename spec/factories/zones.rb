@@ -14,5 +14,18 @@ FactoryBot.define do
     name { "Test Zone" }
     config_url { "https://example.com/zones/test.json" }
     description { nil }
+
+    # An imported world zone: keyed by its world zone key, with no legacy
+    # registration fields.
+    trait :in_world do
+      world_version
+      registering_user { nil }
+      sequence(:identifier) { |n| "zone-#{n}" }
+      version { nil }
+      name { nil }
+      config_url { nil }
+      path { "zones/#{identifier}/#{identifier}.full.json" }
+      state { "fetched" }
+    end
   end
 end

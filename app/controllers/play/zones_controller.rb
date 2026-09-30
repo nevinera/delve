@@ -4,13 +4,13 @@ class Play::ZonesController < Play::BaseController
   def index
     @character = current_user.characters.find(params[:character_id])
     authorize! :read, @character
-    @zones = Zone.where(state: :fetched).order(:identifier, :version)
+    @zones = Zone.legacy.where(state: :fetched).order(:identifier, :version)
   end
 
   def show
     @character = current_user.characters.find(params[:character_id])
     authorize! :read, @character
-    @zone = Zone.find(params[:id])
+    @zone = Zone.legacy.find(params[:id])
     @result = JoinZone.call(character: @character, zone: @zone)
     @owned_zone_items = owned_zone_items_map
     assign_character_data

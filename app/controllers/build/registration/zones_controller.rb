@@ -1,11 +1,11 @@
 class Build::Registration::ZonesController < Build::BaseController
   def index
     authorize! :read, Zone
-    @pagy, @zones = pagy(:offset, Zone.order(:identifier, :version))
+    @pagy, @zones = pagy(:offset, Zone.legacy.order(:identifier, :version))
   end
 
   def show
-    @zone = Zone.find(params[:id])
+    @zone = Zone.legacy.find(params[:id])
     authorize! :read, @zone
   end
 
