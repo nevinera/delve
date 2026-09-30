@@ -56,3 +56,31 @@ scattered around, but connect it to zones for the bordering forest, a desert, a
 coast-line, etc, all places that could just be scattered onto the one map, but
 can be given much more detail as their own locations.
 
+
+## Publishing a World
+
+A World lives entirely in one public GitHub repo: its world file plus every zone it references.
+Delve stores only references to that content (the repo, file paths, commit SHAs, and checksums),
+never the content itself.
+
+A **World version** is the world as of one commit.
+- **Publish** in the world editor tags the default branch's latest commit (`<world-key>/v<N>` by
+  default) and imports that commit as a new version. A tag you made yourself can be imported
+  from the world's Versions page instead.
+- The **import** fetches the world file and each zone's `.full.json` at that commit, validates
+  them, and checks that every world link and entry point names a real connection. A failed import
+  shows its error on the Versions page, and can be retried with Reimport.
+- A successful import leaves the version **unreleased**. It's playable through its share link
+  (only the owner can see it), so it can be tested before anyone else sees it.
+- **Release** makes a version the one players get. Earlier released versions expire 24 hours
+  later.
+
+The tag is only for human reference. A version always reads its files by commit SHA, so moving
+or deleting the tag afterwards changes nothing.
+
+A **beta** is a version that follows a branch (usually the default branch) instead of a tag.
+It's pinned to the branch's latest commit each time it's imported, and **Reimport** moves it
+forward. Betas are never released and never expire. Like unreleased versions, they're playable
+by anyone with the owner's share link, which is useful for testing encounters that take a group.
+
+> Playing a world (entering it, travelling between its zones, and share links) isn't built yet.
