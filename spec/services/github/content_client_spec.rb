@@ -134,4 +134,37 @@ RSpec.describe Github::ContentClient do
       expect { described_class.new(user).file_content("abilities/missing.json") }.to raise_error(Github::NotFoundError)
     end
   end
+
+  describe "repository and ref helpers" do
+    let!(:installation) { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+    let(:client) { described_class.new(user) }
+    let(:api) { "https://api.github.com/repos/nevinera/delve-content" }
+
+    def stub_json(url, body)
+      stub_request(:get, url).to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: body.to_json)
+    end
+
+    it "reports the repo's visibility and default branch" do
+      stub_json(api, {private: false, default_branch: "master"})
+      expect(client.public_repo?).to be(true)
+      expect(client.default_branch).to eq("master")
+    end
+
+    it "treats a private repo as not public" do
+      stub_json(api, {private: true, default_branch: "main"})
+      expect(client.public_repo?).to be(false)
+    end
+
+    it "resolves branch and tag commit shas" do
+      stub_json("#{api}/git/ref/heads/master", {object: {type: "commit", sha: "b1"}})
+      stub_json("#{api}/git/ref/tags/demo/v1", {object: {type: "commit", sha: "t1"}})
+      expect(client.branch_sha("master")).to eq("b1")
+      expect(client.tag_sha("demo/v1")).to eq("t1")
+    end
+
+    it "lists tag names under a prefix" do
+      stub_json("#{api}/git/matching-refs/tags/demo/v", [{ref: "refs/tags/demo/v1"}])
+      expect(client.tag_names("demo/v")).to eq(["demo/v1"])
+    end
+  end
 end

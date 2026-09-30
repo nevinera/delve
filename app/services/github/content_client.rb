@@ -28,7 +28,33 @@ module Github
       Base64.decode64(data["content"])
     end
 
+    def repo = @installation.repo_full_name
+
+    def repository_info
+      @repository_info ||= api.repository(repo)
+    end
+
+    def public_repo? = repository_info["private"] == false
+
+    def default_branch = repository_info["default_branch"]
+
+    def branch_sha(branch) = api.commit_sha(repo, "heads/#{branch}")
+
+    def tag_sha(tag) = api.commit_sha(repo, "tags/#{tag}")
+
+    # Tag names (without "refs/tags/") starting with prefix.
+    def tag_names(prefix)
+      api.matching_refs(repo, "tags/#{prefix}").map { |ref| ref.delete_prefix("refs/tags/") }
+    end
+
+    def create_tag(tag, sha) = api.create_tag_ref(repo, tag, sha)
+
     private
+
+    def api
+      ensure_fresh_token!
+      Github::ApiClient.new(@installation.access_token)
+    end
 
     def contents(path)
       ensure_fresh_token!
