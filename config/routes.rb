@@ -85,6 +85,7 @@ Rails.application.routes.draw do
   get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
   get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
   get "build/worlds/*id/edit", to: "build/worlds#edit", as: "edit_build_world"
+  post "build/worlds/*id/publish", to: "build/worlds#publish", as: "publish_build_world"
 
   namespace :play do
     root to: "dashboard#index"

@@ -89,6 +89,15 @@
       .save-bar .save-success { color: #7c7; }
       .save-bar .save-error { color: #e79; }
 
+      .publish-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .publish-bar .publish-button { background: #524; border: 1px solid #a5a; color: #fdf; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .publish-bar .publish-button:hover:not(:disabled) { background: #636; }
+      .publish-bar .publish-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .publish-bar .publish-prompt { display: flex; gap: 6px; }
+      .publish-bar .publish-tag-input { background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .publish-bar .publish-message { font-size: 12px; color: #9ab; }
+      .publish-bar .publish-error { color: #e79; }
+
       a.back-link { position: absolute; top: 10px; left: 10px; color: #9ab; font-size: 13px; z-index: 1; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 3px; text-decoration: none; }
     </style>
   </head>
