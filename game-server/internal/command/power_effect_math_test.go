@@ -215,3 +215,16 @@ func TestHastedCastSeconds(t *testing.T) {
 	assert.Equal(t, 0.0, HastedCastSeconds(unit, instanceconfig.Zone{}, instanceconfig.Power{}))
 	assert.Equal(t, 2.0, HastedCastSeconds(&instancestate.UnitState{}, instanceconfig.Zone{}, magic))
 }
+
+func TestHastedGlobalCooldownSeconds(t *testing.T) {
+	unit := &instancestate.UnitState{CombatStats: &instancestate.CombatStats{
+		Physical: instancestate.SchoolCombatStats{HastePct: 25},
+		Magic:    instancestate.SchoolCombatStats{HastePct: 100},
+	}}
+	magic := []instanceconfig.PowerEffect{{Type: "heal"}}
+
+	assert.InDelta(t, 1.2, HastedGlobalCooldownSeconds(unit, instanceconfig.Power{GlobalCooldown: 1.5}), 1e-9)
+	assert.Equal(t, 1.0, HastedGlobalCooldownSeconds(unit, instanceconfig.Power{GlobalCooldown: 1.5, Effects: magic}))
+	assert.Equal(t, 0.5, HastedGlobalCooldownSeconds(unit, instanceconfig.Power{GlobalCooldown: 0.5}))
+	assert.Equal(t, 1.5, HastedGlobalCooldownSeconds(&instancestate.UnitState{}, instanceconfig.Power{GlobalCooldown: 1.5}))
+}

@@ -361,7 +361,7 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 // of whether the cast ultimately resolves. Mirrors command.commitCooldowns'
 // player-side equivalent.
 func commitNPCCooldowns(unit *instancestate.UnitState, power instanceconfig.Power, now time.Time) {
-	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(command.HastedGlobalCooldownSeconds(unit, power) * float64(time.Second)))
 	if power.Cooldown > 0 {
 		if unit.PowerCooldowns == nil {
 			unit.PowerCooldowns = make(map[string]time.Time)

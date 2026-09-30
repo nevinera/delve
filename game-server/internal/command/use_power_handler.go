@@ -240,7 +240,7 @@ func commitPowerCostAndCooldowns(unit *instancestate.UnitState, power instanceco
 // commitment (can't start another cast/power until it's done) independently
 // of whether the cast ultimately resolves.
 func commitCooldowns(unit *instancestate.UnitState, power instanceconfig.Power, now time.Time) {
-	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(HastedGlobalCooldownSeconds(unit, power) * float64(time.Second)))
 	if power.Cooldown > 0 {
 		if unit.PowerCooldowns == nil {
 			unit.PowerCooldowns = make(map[string]time.Time)

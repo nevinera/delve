@@ -107,3 +107,11 @@ export function hastedCastTime(ability, combatStats) {
   if (!(ability.castTime > 0)) return null;
   return hastedSeconds(ability.castTime, abilityHastePct(ability, combatStats));
 }
+
+// Haste shrinks the GCD down to a 1s floor; an authored GCD already under 1s
+// is left alone. Mirrors the server's HastedGlobalCooldownSeconds.
+export function hastedGlobalCooldown(ability, combatStats) {
+  const gcd = ability.globalCooldown ?? 0;
+  if (gcd <= 1) return gcd;
+  return Math.max(hastedSeconds(gcd, abilityHastePct(ability, combatStats)), 1);
+}

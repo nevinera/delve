@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {describeEffects, hastedCastTime, abilitySchool} from "../abilityEffectText";
+import {describeEffects, hastedCastTime, hastedGlobalCooldown, abilitySchool} from "../abilityEffectText";
 import {combatStats} from "./combatStatsFixture";
 
 const noStats = {combatStats: combatStats()};
@@ -62,5 +62,21 @@ describe("abilitySchool", () => {
   it("is magic if any effect is magic or a heal", () => {
     expect(abilitySchool({effects: [{type: "harm"}, {type: "heal"}]})).toBe("magic");
     expect(abilitySchool({effects: [{type: "harm"}]})).toBe("physical");
+  });
+});
+
+describe("hastedGlobalCooldown", () => {
+  it("shrinks by the ability's school haste", () => {
+    const ability = {globalCooldown: 1.5, effects: [{type: "harm"}]};
+    expect(hastedGlobalCooldown(ability, combatStats({physical: {haste_pct: 25}}))).toBeCloseTo(1.2);
+  });
+
+  it("floors at 1s", () => {
+    const ability = {globalCooldown: 1.5, effects: [{type: "heal"}]};
+    expect(hastedGlobalCooldown(ability, combatStats({magic: {haste_pct: 100}}))).toBe(1);
+  });
+
+  it("leaves an authored GCD under 1s alone", () => {
+    expect(hastedGlobalCooldown({globalCooldown: 0.5, effects: []}, combatStats({physical: {haste_pct: 50}}))).toBe(0.5);
   });
 });
