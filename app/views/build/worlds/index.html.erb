@@ -4,16 +4,25 @@
 
 <table>
   <thead>
-    <tr><th>Key</th></tr>
+    <tr><th>Key</th><th>Publishing</th></tr>
   </thead>
   <tbody>
     <% @worlds.each do |entry| %>
       <% identifier = entry["path"].delete_prefix("worlds/").delete_suffix(".json") %>
       <tr>
         <td><%= link_to identifier, edit_build_world_path(id: identifier) %></td>
+        <td>
+          <% if (published = @published_worlds[entry["path"]]) %>
+            <%= link_to "Versions", build_publishing_world_path(published) %>
+          <% else %>
+            <%= button_to "Set up publishing", build_publishing_worlds_path, params: {path: entry["path"]} %>
+          <% end %>
+        </td>
       </tr>
     <% end %>
   </tbody>
 </table>
+
+<p><%= link_to "Published worlds", build_publishing_worlds_path %></p>
 
 <%= link_to "Back to Build", build_root_path %>

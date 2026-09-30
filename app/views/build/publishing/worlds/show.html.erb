@@ -1,0 +1,55 @@
+<% if @versions.any?(&:importing?) %>
+  <% content_for :head do %><meta http-equiv="refresh" content="3"><% end %>
+<% end %>
+
+<h1><%= @world.key %></h1>
+
+<p>
+  <%= link_to "#{@world.repo}/#{@world.path}", "https://github.com/#{@world.repo}/blob/HEAD/#{@world.path}" %>
+  · <%= link_to "Edit", edit_build_world_path(id: @world.key) %>
+</p>
+
+<p>
+  <%= link_to "Add a version from an existing tag", new_build_publishing_world_version_path(@world, ref_kind: "tag") %>
+  · <%= link_to "Add a beta from a branch", new_build_publishing_world_version_path(@world, ref_kind: "branch") %>
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Ref</th><th>Kind</th><th>State</th><th>Commit</th>
+      <th>Imported</th><th>Released</th><th>Expires</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @versions.each do |version| %>
+      <tr>
+        <td><%= version.ref %></td>
+        <td><%= version.tag? ? "tag" : "beta" %></td>
+        <td><%= version.expired? ? "expired" : version.state %></td>
+        <td><%= version.commit_sha&.first(7) %></td>
+        <td><%= version.imported_at&.to_fs(:short) %></td>
+        <td><%= version.released_at&.to_fs(:short) %></td>
+        <td><%= version.expires_at&.to_fs(:short) %></td>
+        <td>
+          <% if version.tag? && version.unreleased? %>
+            <%= button_to "Release", release_build_publishing_world_version_path(@world, version),
+                  data: {confirm: "Release #{version.ref}? Earlier versions expire in 24 hours."} %>
+          <% end %>
+          <% if version.branch? || version.failed? %>
+            <%= button_to "Reimport", reimport_build_publishing_world_version_path(@world, version), disabled: version.importing? %>
+          <% end %>
+        </td>
+      </tr>
+      <% if version.validity_error.present? %>
+        <tr><td colspan="8"><strong>Import error:</strong> <%= version.validity_error %></td></tr>
+      <% end %>
+      <% if version.branch? || version.unreleased? %>
+        <%# Display only until worlds slice 3 adds the play route. %>
+        <tr><td colspan="8">Share link: <code>/play/worlds/beta/<%= version.share_token %></code></td></tr>
+      <% end %>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "All published worlds", build_publishing_worlds_path %>

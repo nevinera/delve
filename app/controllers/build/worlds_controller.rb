@@ -6,7 +6,8 @@ class Build::WorldsController < Build::BaseController
 
   def index
     entries = Github::ContentClient.new(current_user).list_directory_recursive("worlds")
-    @worlds = entries.select { |entry| entry["name"].end_with?(".json") }.sort_by { |entry| entry["path"] }
+    @worlds = entries.select { |entry| entry["name"].end_with?(".json") && !entry["name"].end_with?(".layout.json") }.sort_by { |entry| entry["path"] }
+    @published_worlds = current_user.worlds.where(path: @worlds.pluck("path")).index_by(&:path)
   end
 
   def new

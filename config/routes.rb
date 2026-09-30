@@ -42,6 +42,19 @@ Rails.application.routes.draw do
     namespace :registration do
       resources :zones, only: [:index, :show, :new, :create]
     end
+    # World records and their published versions (see plans/worlds.md),
+    # keyed by database id - the bare `worlds` resource above is the
+    # content editor, keyed by the world file's key.
+    namespace :publishing do
+      resources :worlds, only: [:index, :show, :create] do
+        resources :versions, only: [:new, :create] do
+          member do
+            post :release
+            post :reimport
+          end
+        end
+      end
+    end
     post "validators/ability", to: "validators#ability"
     post "validators/character_class", to: "validators#character_class"
     post "validators/unit_type", to: "validators#unit_type"

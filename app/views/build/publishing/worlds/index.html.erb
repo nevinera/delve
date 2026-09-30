@@ -1,0 +1,20 @@
+<h1>Published worlds</h1>
+
+<p>Worlds you've set up for publishing. Set one up from its row in <%= link_to "Worlds", build_worlds_path %>.</p>
+
+<table>
+  <thead>
+    <tr><th>Repo</th><th>World</th><th>Versions</th></tr>
+  </thead>
+  <tbody>
+    <% @worlds.each do |world| %>
+      <tr>
+        <td><%= world.repo %></td>
+        <td><%= link_to world.key, build_publishing_world_path(world) %></td>
+        <td><%= world.world_versions.size %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to Build", build_root_path %>
