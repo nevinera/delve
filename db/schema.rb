@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -48,10 +48,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
     t.string "source_key", null: false
     t.datetime "updated_at", null: false
     t.string "version", null: false
+    t.integer "world_id"
     t.string "zone_identifier", null: false
     t.index ["character_id", "source_key"], name: "index_character_items_on_character_id_and_source_key", unique: true
     t.index ["character_id"], name: "index_character_items_on_character_id"
     t.index ["provenance_zone_id"], name: "index_character_items_on_provenance_zone_id"
+    t.index ["world_id"], name: "index_character_items_on_world_id"
   end
 
   create_table "character_settings", force: :cascade do |t|
@@ -62,6 +64,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
     t.json "custom_hotkeys", default: {}, null: false
     t.datetime "updated_at", null: false
     t.index ["character_id"], name: "index_character_settings_on_character_id", unique: true
+  end
+
+  create_table "character_tags", force: :cascade do |t|
+    t.integer "character_world_id", null: false
+    t.datetime "created_at", null: false
+    t.string "granted_version", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["character_world_id", "name"], name: "index_character_tags_on_character_world_id_and_name", unique: true
+    t.index ["character_world_id"], name: "index_character_tags_on_character_world_id"
+  end
+
+  create_table "character_worlds", force: :cascade do |t|
+    t.integer "character_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "entered_at", null: false
+    t.string "map_id"
+    t.datetime "updated_at", null: false
+    t.integer "world_id", null: false
+    t.float "x"
+    t.float "y"
+    t.string "zone_key"
+    t.index ["character_id", "world_id"], name: "index_character_worlds_on_character_id_and_world_id", unique: true
+    t.index ["character_id"], name: "index_character_worlds_on_character_id"
+    t.index ["world_id"], name: "index_character_worlds_on_world_id"
   end
 
   create_table "characters", force: :cascade do |t|
@@ -153,6 +180,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
+  create_table "world_versions", force: :cascade do |t|
+    t.string "config_url", null: false
+    t.string "content_sha"
+    t.datetime "created_at", null: false
+    t.integer "registering_user_id", null: false
+    t.string "state", default: "provided", null: false
+    t.datetime "updated_at", null: false
+    t.string "validity_error"
+    t.string "version", null: false
+    t.integer "world_id", null: false
+    t.index ["registering_user_id"], name: "index_world_versions_on_registering_user_id"
+    t.index ["state"], name: "index_world_versions_on_state"
+    t.index ["world_id", "version"], name: "index_world_versions_on_world_id_and_version", unique: true
+    t.index ["world_id"], name: "index_world_versions_on_world_id"
+  end
+
+  create_table "worlds", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.string "identifier", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["identifier"], name: "index_worlds_on_identifier", unique: true
+  end
+
   create_table "zones", force: :cascade do |t|
     t.string "config_url", null: false
     t.string "content_sha"
@@ -161,21 +213,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
     t.integer "elvl"
     t.integer "file_size"
     t.string "identifier", null: false
+    t.string "key"
     t.string "name", null: false
     t.integer "registering_user_id", null: false
     t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
     t.string "validity_error"
     t.string "version", null: false
-    t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version", unique: true
+    t.integer "world_version_id"
+    t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version_legacy", unique: true, where: "world_version_id IS NULL"
     t.index ["registering_user_id"], name: "index_zones_on_registering_user_id"
     t.index ["state"], name: "index_zones_on_state"
+    t.index ["world_version_id", "key"], name: "index_zones_on_world_version_id_and_key", unique: true
+    t.index ["world_version_id"], name: "index_zones_on_world_version_id"
   end
 
   add_foreign_key "character_classes", "users"
   add_foreign_key "character_items", "characters"
+  add_foreign_key "character_items", "worlds"
   add_foreign_key "character_items", "zones", column: "provenance_zone_id"
   add_foreign_key "character_settings", "characters"
+  add_foreign_key "character_tags", "character_worlds"
+  add_foreign_key "character_worlds", "characters"
+  add_foreign_key "character_worlds", "worlds"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
   add_foreign_key "class_abilities", "character_classes"
@@ -184,5 +244,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
   add_foreign_key "github_installations", "users"
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"
+  add_foreign_key "world_versions", "users", column: "registering_user_id"
+  add_foreign_key "world_versions", "worlds"
   add_foreign_key "zones", "users", column: "registering_user_id"
+  add_foreign_key "zones", "world_versions"
 end

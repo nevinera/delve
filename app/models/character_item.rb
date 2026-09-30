@@ -5,6 +5,7 @@ class CharacterItem < ApplicationRecord
 
   belongs_to :character
   belongs_to :provenance_zone, class_name: "Zone", optional: true
+  belongs_to :world, optional: true
   has_one :equipped_item, dependent: :destroy
 
   validates :source_key, presence: true

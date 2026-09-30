@@ -4,6 +4,7 @@ class Character < ApplicationRecord
   has_many :character_items, dependent: :destroy
   has_many :equipped_items, dependent: :destroy
   has_one :character_setting, dependent: :destroy
+  has_many :character_worlds, dependent: :destroy
 
   validates :name, presence: true,
     uniqueness: true,
