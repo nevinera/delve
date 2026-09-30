@@ -99,7 +99,7 @@ func commitPowerCostAndCooldowns(unit *instancestate.UnitState, power instanceco
 
 // commitCooldowns starts power's GCD/own cooldown.
 func commitCooldowns(unit *instancestate.UnitState, power instanceconfig.Power, now time.Time) {
-	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(command.HastedGlobalCooldownSeconds(unit, power) * float64(time.Second)))
 	if power.Cooldown > 0 {
 		if unit.PowerCooldowns == nil {
 			unit.PowerCooldowns = make(map[string]time.Time)

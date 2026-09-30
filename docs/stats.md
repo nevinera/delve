@@ -253,6 +253,18 @@ A fully-itemized Haste build (445 Haste Rating, no primary-stat contribution) la
 `ee = 0`, and 19% at `ee = -10` (half the secondary pool, so exactly half the Haste%, since this
 formula has no base to break that proportionality).
 
+Every hasted duration is divided by `1 + Haste%/100`:
+
+| Timer | School used | Notes |
+|---|---|---|
+| Basic attack swing | The basic attack's school | |
+| Cast time | The power's school: magic if any effect is magic or a heal, else physical | Pushback extends the hasted cast. |
+| Global cooldown | The power's school, as for cast time | Floored at 1s. An authored GCD already under 1s is unchanged. |
+| Recurring status tick interval (DoT/HoT) | The tick effect's school, from the applier's current Haste | Rechecked as each tick is scheduled. The status's total duration is not hasted. |
+| Resource regen | The basic attack's school | Only resources with `hasteAffected` set. See **Recovery Rating**. |
+
+Power cooldowns are not hasted.
+
 ## Mastery
 
 Mastery Rating converts to a plain **Mastery** value ranging from 10 (0 rating) up to an asymptote

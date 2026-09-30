@@ -45,12 +45,12 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 		return nil
 	}
 
-	if castTime := p.Power.CastTime; castTime != nil && *castTime > 0 {
+	if castTime := HastedCastSeconds(unit, zone, p.Power); castTime > 0 {
 		unit.Casting = &instancestate.CastState{
 			Power:     p.Power,
 			TargetID:  unit.Target,
 			StartedAt: now,
-			EndsAt:    now.Add(time.Duration(*castTime * float64(time.Second))),
+			EndsAt:    now.Add(time.Duration(castTime * float64(time.Second))),
 		}
 		commitCooldowns(unit, p.Power, now)
 		return nil
@@ -240,7 +240,7 @@ func commitPowerCostAndCooldowns(unit *instancestate.UnitState, power instanceco
 // commitment (can't start another cast/power until it's done) independently
 // of whether the cast ultimately resolves.
 func commitCooldowns(unit *instancestate.UnitState, power instanceconfig.Power, now time.Time) {
-	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(HastedGlobalCooldownSeconds(unit, power) * float64(time.Second)))
 	if power.Cooldown > 0 {
 		if unit.PowerCooldowns == nil {
 			unit.PowerCooldowns = make(map[string]time.Time)

@@ -268,13 +268,13 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		return
 	}
 
-	if castTime := power.CastTime; castTime != nil && *castTime > 0 {
+	if castTime := command.HastedCastSeconds(unit, zone, power); castTime > 0 {
 		tid := targetID
 		unit.Casting = &instancestate.CastState{
 			Power:     power,
 			TargetID:  &tid,
 			StartedAt: now,
-			EndsAt:    now.Add(time.Duration(*castTime * float64(time.Second))),
+			EndsAt:    now.Add(time.Duration(castTime * float64(time.Second))),
 		}
 		commitNPCCooldowns(unit, power, now)
 		return
@@ -361,7 +361,7 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 // of whether the cast ultimately resolves. Mirrors command.commitCooldowns'
 // player-side equivalent.
 func commitNPCCooldowns(unit *instancestate.UnitState, power instanceconfig.Power, now time.Time) {
-	unit.GlobalCooldownEndsAt = now.Add(time.Duration(power.GlobalCooldown * float64(time.Second)))
+	unit.GlobalCooldownEndsAt = now.Add(time.Duration(command.HastedGlobalCooldownSeconds(unit, power) * float64(time.Second)))
 	if power.Cooldown > 0 {
 		if unit.PowerCooldowns == nil {
 			unit.PowerCooldowns = make(map[string]time.Time)

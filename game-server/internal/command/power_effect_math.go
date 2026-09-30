@@ -203,3 +203,49 @@ func effectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, schoo
 	}
 	return math.Round(amount)
 }
+
+// PowerSchool is the school whose Haste scales power's cast time: "magic" if
+// any effect is magic or a heal (healing is always magic), else "physical".
+// Mirrors the client's abilitySchool.
+func PowerSchool(power instanceconfig.Power) string {
+	for _, e := range power.Effects {
+		if e.Type == "heal" || e.School == "magic" {
+			return "magic"
+		}
+	}
+	return "physical"
+}
+
+// HastedCastSeconds is power's authored CastTime divided by (1 + Haste%) for
+// the power's school, or 0 for an instant power. A unit with no CombatStats
+// snapshot yet casts unhasted. Pushback (ApplyCastPushback)
+// extends the resulting EndsAt, so it builds on the hasted duration.
+func HastedCastSeconds(unit *instancestate.UnitState, zone instanceconfig.Zone, power instanceconfig.Power) float64 {
+	if power.CastTime == nil || *power.CastTime <= 0 {
+		return 0
+	}
+	if unit.CombatStats == nil {
+		return *power.CastTime
+	}
+	hastePct, _, _ := effectSchoolStats(unit, zone, PowerSchool(power))
+	return *power.CastTime / (1 + hastePct/100)
+}
+
+// minHastedGlobalCooldown is the floor Haste can shrink a GCD to. An authored
+// GCD already below it is left alone.
+const minHastedGlobalCooldown = 1.0
+
+// HastedGlobalCooldownSeconds is power's authored GlobalCooldown divided by
+// (1 + Haste%) for the power's school, floored at 1s (or at the authored
+// value, if that's already shorter).
+func HastedGlobalCooldownSeconds(unit *instancestate.UnitState, power instanceconfig.Power) float64 {
+	gcd := power.GlobalCooldown
+	if gcd <= minHastedGlobalCooldown || unit.CombatStats == nil {
+		return gcd
+	}
+	s := unit.CombatStats.Physical
+	if PowerSchool(power) == "magic" {
+		s = unit.CombatStats.Magic
+	}
+	return math.Max(gcd/(1+s.HastePct/100), minHastedGlobalCooldown)
+}

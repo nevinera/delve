@@ -15,6 +15,7 @@ import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
+import { hastedGlobalCooldown } from "./abilityEffectText";
 import { ClassSheet } from "./ClassSheet";
 import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
@@ -3325,7 +3326,7 @@ export default function App({
         }
       }
     }
-    const totalMs = power.globalCooldown * 1000;
+    const totalMs = hastedGlobalCooldown(power, selfUnit?.combat_stats) * 1000;
     gcdTotalMsRef.current = totalMs;
     setGcd(Date.now() + totalMs);
     connRef.current?.send({ direction: "up", type: "use_power", slot });
