@@ -23,9 +23,32 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
 
     it "allows unitTypes, items, zoneLinks, entryPoints, and openConnections explicitly null, same as omitted" do
       data = zone_fixture.merge(
+        "maps" => zone_fixture["maps"].map { |map| map.merge("units" => []) },
         "unitTypes" => nil, "items" => nil, "zoneLinks" => nil, "entryPoints" => nil, "openConnections" => nil
       )
       expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    describe "unit type references" do
+      let(:unit) { zone_fixture["maps"][0]["units"][0] }
+
+      it "accepts units whose types are in the zone's unitTypes" do
+        expect { described_class.validate!(zone_fixture) }.not_to raise_error
+      end
+
+      it "rejects a unit whose type isn't in the zone's unitTypes, naming the unit and map" do
+        data = zone_fixture.merge("unitTypes" => zone_fixture["unitTypes"].except(unit["unitType"]))
+        map_id = zone_fixture["maps"][0]["identifier"]
+        expect { described_class.validate!(data) }.to raise_error(Validators::ValidationError) { |e|
+          expect(e.message).to include(%(unit "#{unit["identifier"]}" on map "#{map_id}" references unknown unit type "#{unit["unitType"]}"))
+          expect(e.path).to eq("$.maps[0].units[0].unitType")
+        }
+      end
+
+      it "rejects units on a zone with no unitTypes at all" do
+        expect { described_class.validate!(zone_fixture.except("unitTypes")) }
+          .to raise_error(Validators::ValidationError, /references unknown unit type/)
+      end
     end
 
     it "raises when private is missing" do
