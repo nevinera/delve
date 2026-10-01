@@ -31,17 +31,8 @@ Rails.application.routes.draw do
     resources :unit_types, only: [:index, :new, :create]
     resources :items, only: [:index, :new, :create]
     resources :maps, only: [:index, :new, :create]
-    # The content-editing zone editor (see plans/zone-editor.md) owns the
-    # bare `zones` resource name, matching every other content editor above
-    # (classes/unit_types/items/maps). The DB-backed Zone *registration* UI
-    # (register a deployed zone config by identifier/version/config_url -
-    # unrelated to content editing) lives under this `registration`
-    # namespace instead, out of that name's way.
     resources :zones, only: [:index, :new, :create]
     resources :worlds, only: [:index, :new, :create]
-    namespace :registration do
-      resources :zones, only: [:index, :show, :new, :create]
-    end
     # World records and their published versions (see plans/worlds.md),
     # keyed by database id - the bare `worlds` resource above is the
     # content editor, keyed by the world file's key.
@@ -93,7 +84,6 @@ Rails.application.routes.draw do
   namespace :play do
     root to: "dashboard#index"
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
-      resources :zones, only: [:index, :show]
       resources :worlds, only: [:index, :show], controller: "world_characters" do
         member do
           get :play

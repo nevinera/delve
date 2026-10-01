@@ -53,9 +53,9 @@ RSpec.describe "Play::Characters", type: :request do
         expect(response.body).to include("Ariana-AA")
       end
 
-      it "links to the zones listing" do
+      it "links to the worlds listing" do
         get "/play/characters/#{character.id}"
-        expect(response.body).to include(play_character_zones_path(character))
+        expect(response.body).to include(play_character_worlds_path(character))
       end
 
       context "with class details" do

@@ -96,22 +96,6 @@ RSpec.describe Zone, type: :model do
     end
   end
 
-  describe "after create" do
-    include ActiveJob::TestHelper
-
-    let(:user) { create(:user) }
-
-    it "enqueues a FetchZoneContentJob" do
-      expect {
-        create(:zone, registering_user: user)
-      }.to have_enqueued_job(FetchZoneContentJob)
-    end
-
-    it "doesn't enqueue a FetchZoneContentJob for a world zone" do
-      expect { create(:zone, :in_world) }.not_to have_enqueued_job(FetchZoneContentJob)
-    end
-  end
-
   describe "world zones" do
     it "is valid without the legacy registration fields" do
       expect(build(:zone, :in_world)).to be_valid

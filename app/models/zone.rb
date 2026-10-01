@@ -10,8 +10,6 @@ class Zone < ApplicationRecord
 
   scope :legacy, -> { where(world_version_id: nil) }
 
-  after_commit :enqueue_fetch_content, on: :create, if: :legacy?
-
   validates :identifier, presence: true
 
   with_options if: :legacy? do
@@ -40,10 +38,4 @@ class Zone < ApplicationRecord
   # legacy zone's own version, or a world zone's commit SHA. A stopgap until
   # items are tracked per world (worlds slice 4).
   def version_label = legacy? ? version : world_version.commit_sha
-
-  private
-
-  def enqueue_fetch_content
-    FetchZoneContentJob.perform_later(id)
-  end
 end
