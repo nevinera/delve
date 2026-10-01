@@ -108,6 +108,9 @@ Rails.application.routes.draw do
       resources :character_items, only: [:create]
       resources :equipped_items, only: [:index]
     end
+    resources :world_characters, only: [] do
+      resources :zone_exits, only: [:create]
+    end
   end
 
   root to: "home#index"
