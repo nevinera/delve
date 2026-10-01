@@ -68,7 +68,7 @@ RSpec.describe "Build::Worlds", type: :request do
       expect(create_tag).to have_been_requested
       world = World.find_by!(repo: "builder/content", path: "worlds/demo.json")
       expect(world.owner).to eq(user)
-      expect(world.world_versions.sole).to have_attributes(ref: "demo/v1", ref_kind: "tag", state: "importing")
+      expect(world.world_versions.sole).to have_attributes(ref: "demo/v1", state: "importing")
       expect(response.parsed_body).to eq("url" => build_publishing_world_path(world))
     end
 

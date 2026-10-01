@@ -2,7 +2,6 @@ FactoryBot.define do
   factory :world_version do
     world
     sequence(:ref) { |n| "v#{n}" }
-    ref_kind { "tag" }
     commit_sha { "0123456789abcdef0123456789abcdef01234567" }
     raw_base_url { "https://raw.githubusercontent.com/#{world.repo}/#{commit_sha}/" }
     state { "unreleased" }
@@ -14,11 +13,6 @@ FactoryBot.define do
     trait :released do
       state { "released" }
       released_at { Time.current }
-    end
-
-    trait :beta do
-      ref { "master" }
-      ref_kind { "branch" }
     end
   end
 end

@@ -5,10 +5,9 @@ class WorldVersion < ApplicationRecord
   has_many :zones, dependent: :destroy
 
   enum :state, {importing: "importing", failed: "failed", unreleased: "unreleased", released: "released"}
-  enum :ref_kind, {tag: "tag", branch: "branch"}
 
-  has_secure_token :share_token
-
+  # ref is the git tag the version was imported from - for human reference
+  # only; content is always read by commit_sha.
   validates :ref, presence: true, uniqueness: {scope: :world_id}
 
   scope :available, -> { released.where("expires_at IS NULL OR expires_at > ?", Time.current) }
@@ -21,11 +20,9 @@ class WorldVersion < ApplicationRecord
 
   def import = ImportWorldVersionJob.perform_later(id)
 
-  # Releases a tag version: every other released version of the world that
-  # isn't already expiring gets EXPIRY_GRACE before it expires. Betas
-  # (branch versions) are never released, and never expire.
+  # Releases the version: every other released version of the world that
+  # isn't already expiring gets EXPIRY_GRACE before it expires.
   def release!
-    raise ArgumentError, "only tag versions can be released" unless tag?
     raise ArgumentError, "only unreleased versions can be released" unless unreleased?
 
     now = Time.current

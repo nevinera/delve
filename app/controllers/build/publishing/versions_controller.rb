@@ -1,5 +1,5 @@
-# Registers a world version by hand (a tag the builder made themselves, or
-# a beta tracking a branch), and releases or reimports existing ones. The
+# Registers a world version by hand (from a tag the builder made
+# themselves), and releases or reimports existing ones. The
 # world editor's Publish button (Build::WorldsController#publish) creates
 # the tag and the version in one step instead.
 class Build::Publishing::VersionsController < Build::BaseController
@@ -7,8 +7,7 @@ class Build::Publishing::VersionsController < Build::BaseController
 
   def new
     authorize! :manage, @world
-    @version = @world.world_versions.build(ref_kind: params[:ref_kind].presence || "tag")
-    @version.ref = content_client.default_branch if @version.branch?
+    @version = @world.world_versions.build
   end
 
   def create
@@ -36,8 +35,8 @@ class Build::Publishing::VersionsController < Build::BaseController
 
   def reimport
     version = find_version
-    unless version.branch? || version.failed?
-      return redirect_to build_publishing_world_path(@world), alert: "Only betas and failed versions can be reimported."
+    unless version.failed?
+      return redirect_to build_publishing_world_path(@world), alert: "Only failed versions can be reimported."
     end
     version.update!(state: :importing, validity_error: nil)
     version.import
@@ -55,7 +54,7 @@ class Build::Publishing::VersionsController < Build::BaseController
   end
 
   def version_params
-    params.require(:world_version).permit(:ref, :ref_kind)
+    params.require(:world_version).permit(:ref)
   end
 
   def content_client
@@ -67,9 +66,9 @@ class Build::Publishing::VersionsController < Build::BaseController
     return "Your GitHub connection points at #{content_client.repo}, not #{@world.repo}." unless content_client.repo == @world.repo
     return "#{@world.repo} is private; worlds must be published from a public repo." unless content_client.public_repo?
     return "Ref is required." if @version.ref.blank?
-    @version.tag? ? content_client.tag_sha(@version.ref) : content_client.branch_sha(@version.ref)
+    content_client.tag_sha(@version.ref)
     nil
   rescue Github::NotFoundError
-    "#{@version.tag? ? "Tag" : "Branch"} \"#{@version.ref}\" doesn't exist in #{@world.repo}."
+    "Tag \"#{@version.ref}\" doesn't exist in #{@world.repo}."
   end
 end

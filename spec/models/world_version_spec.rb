@@ -17,10 +17,6 @@ RSpec.describe WorldVersion, type: :model do
     end
   end
 
-  it "generates a share token" do
-    expect(create(:world_version, world:).share_token).to be_present
-  end
-
   describe ".available" do
     it "includes released versions that haven't expired" do
       open_ended = create(:world_version, :released, world:)
@@ -54,16 +50,10 @@ RSpec.describe WorldVersion, type: :model do
       expect { create(:world_version, world:).release! }.not_to(change { expiring.reload.expires_at })
     end
 
-    it "doesn't touch betas or other worlds" do
-      beta = create(:world_version, :beta, world:)
+    it "doesn't touch other worlds" do
       other = create(:world_version, :released)
       create(:world_version, world:).release!
-      expect(beta.reload.expires_at).to be_nil
       expect(other.reload.expires_at).to be_nil
-    end
-
-    it "refuses a beta" do
-      expect { create(:world_version, :beta, world:).release! }.to raise_error(ArgumentError)
     end
 
     it "refuses a version that isn't unreleased" do

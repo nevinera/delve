@@ -45,7 +45,7 @@ class ImportWorldVersionJob < ApplicationJob
     unless client.repo == world.repo
       raise ImportError, "the owner's GitHub connection points at #{client.repo}, not #{world.repo}"
     end
-    @version.tag? ? client.tag_sha(@version.ref) : client.branch_sha(@version.ref)
+    client.tag_sha(@version.ref)
   end
 
   def fetch_zone!(base_url, key, entry)

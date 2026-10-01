@@ -33,19 +33,10 @@ RSpec.describe "Build::Publishing::Worlds", type: :request do
 
       it "lists versions with their state and actions" do
         create(:world_version, world:, ref: "demo/v1")
-        create(:world_version, :beta, world:)
         create(:world_version, world:, ref: "demo/v0", state: "failed", validity_error: "zones/x.full.json: HTTP 404")
         get "/build/publishing/worlds/#{world.id}"
         expect(response).to have_http_status(:ok)
-        expect(response.body).to include("demo/v1", "master", "zones/x.full.json: HTTP 404", "Release", "Reimport")
-      end
-
-      it "shows share links for betas and unreleased versions but not released ones" do
-        beta = create(:world_version, :beta, world:)
-        released = create(:world_version, :released, world:)
-        get "/build/publishing/worlds/#{world.id}"
-        expect(response.body).to include(beta.share_token)
-        expect(response.body).not_to include(released.share_token)
+        expect(response.body).to include("demo/v1", "zones/x.full.json: HTTP 404", "Release", "Reimport")
       end
 
       it "auto-refreshes while a version is importing" do

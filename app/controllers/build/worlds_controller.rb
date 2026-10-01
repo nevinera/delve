@@ -51,7 +51,7 @@ class Build::WorldsController < Build::BaseController
     client.create_tag(tag, client.branch_sha(client.default_branch))
     World.transaction do
       world.save!
-      world.world_versions.create!(ref: tag, ref_kind: :tag)
+      world.world_versions.create!(ref: tag)
     end
     render json: {url: build_publishing_world_path(world)}
   rescue Github::ApiError, ActiveRecord::RecordInvalid => e

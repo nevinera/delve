@@ -70,21 +70,8 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     end
   end
 
-  context "with a beta" do
-    let(:version) { create(:world_version, :importing, :beta, world:, commit_sha: nil, raw_base_url: nil) }
-
-    before do
-      stub_request(:get, "#{api}/git/ref/heads/master")
-        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {object: {type: "commit", sha:}}.to_json)
-    end
-
-    it "pins to the branch head's commit" do
-      perform
-      expect(version.reload.raw_base_url).to eq("#{raw}/")
-      expect(version).to be_unreleased
-    end
-
-    it "replaces the zones on reimport" do
+  context "when run again" do
+    it "replaces the zones" do
       perform
       old_ids = version.zones.pluck(:id)
       perform

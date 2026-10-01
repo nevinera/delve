@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -161,14 +161,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
     t.datetime "imported_at"
     t.string "raw_base_url"
     t.string "ref", null: false
-    t.string "ref_kind", null: false
     t.datetime "released_at"
-    t.string "share_token"
     t.string "state", default: "importing", null: false
     t.datetime "updated_at", null: false
     t.text "validity_error"
     t.integer "world_id", null: false
-    t.index ["share_token"], name: "index_world_versions_on_share_token", unique: true
     t.index ["world_id", "ref"], name: "index_world_versions_on_world_id_and_ref", unique: true
     t.index ["world_id", "state"], name: "index_world_versions_on_world_id_and_state"
     t.index ["world_id"], name: "index_world_versions_on_world_id"

@@ -70,17 +70,11 @@ A **World version** is the world as of one commit.
 - The **import** fetches the world file and each zone's `.full.json` at that commit, validates
   them, and checks that every world link and entry point names a real connection. A failed import
   shows its error on the Versions page, and can be retried with Reimport.
-- A successful import leaves the version **unreleased**. It's playable through its share link
-  (only the owner can see it), so it can be tested before anyone else sees it.
+- A successful import leaves the version **unreleased**: nobody plays it until it's released.
 - **Release** makes a version the one players get. Earlier released versions expire 24 hours
   later.
 
 The tag is only for human reference. A version always reads its files by commit SHA, so moving
 or deleting the tag afterwards changes nothing.
 
-A **beta** is a version that follows a branch (usually the default branch) instead of a tag.
-It's pinned to the branch's latest commit each time it's imported, and **Reimport** moves it
-forward. Betas are never released and never expire. Like unreleased versions, they're playable
-by anyone with the owner's share link, which is useful for testing encounters that take a group.
-
-> Playing a world (entering it, travelling between its zones, and share links) isn't built yet.
+> Playing a world (entering it and travelling between its zones) isn't built yet.

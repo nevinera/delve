@@ -1,20 +1,13 @@
-<h1><%= @version.tag? ? "Add a version from a tag" : "Add a beta from a branch" %></h1>
+<h1>Add a version from a tag</h1>
 
-<p>
-  <% if @version.tag? %>
-    The tag must already exist in <%= @world.repo %>. (The world editor's Publish button creates the tag for you.)
-  <% else %>
-    A beta follows its branch, moving to the branch's latest commit each time you reimport it.
-  <% end %>
-</p>
+<p>The tag must already exist in <%= @world.repo %>. (The world editor's Publish button creates the tag for you.)</p>
 
 <%= form_with model: @version, url: build_publishing_world_versions_path(@world) do |f| %>
-  <%= f.hidden_field :ref_kind %>
   <div>
-    <%= f.label :ref, @version.tag? ? "Tag" : "Branch" %>
+    <%= f.label :ref, "Tag" %>
     <%= f.text_field :ref %>
   </div>
-  <%= f.submit @version.tag? ? "Import tag" : "Create beta" %>
+  <%= f.submit "Import tag" %>
 <% end %>
 
 <%= link_to "Cancel", build_publishing_world_path(@world) %>

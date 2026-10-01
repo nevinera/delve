@@ -19,10 +19,10 @@ RSpec.describe "Build::Publishing::Versions", type: :request do
   end
 
   describe "GET new" do
-    it "prefills the default branch for a beta" do
-      get "/build/publishing/worlds/#{world.id}/versions/new", params: {ref_kind: "branch"}
+    it "renders the tag form" do
+      get "/build/publishing/worlds/#{world.id}/versions/new"
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include('value="master"')
+      expect(response.body).to include("Import tag")
     end
 
     it "returns 404 for another user's world" do
@@ -32,8 +32,8 @@ RSpec.describe "Build::Publishing::Versions", type: :request do
   end
 
   describe "POST create" do
-    def create_version(ref:, ref_kind: "tag")
-      post "/build/publishing/worlds/#{world.id}/versions", params: {world_version: {ref:, ref_kind:}}
+    def create_version(ref:)
+      post "/build/publishing/worlds/#{world.id}/versions", params: {world_version: {ref:}}
     end
 
     context "with an existing tag" do
@@ -42,7 +42,7 @@ RSpec.describe "Build::Publishing::Versions", type: :request do
       it "creates the version and enqueues its import" do
         expect { create_version(ref: "demo/v1") }.to have_enqueued_job(ImportWorldVersionJob)
         version = world.world_versions.last
-        expect(version).to have_attributes(ref: "demo/v1", ref_kind: "tag", state: "importing")
+        expect(version).to have_attributes(ref: "demo/v1", state: "importing")
         expect(response).to redirect_to(build_publishing_world_path(world))
       end
 
@@ -68,12 +68,6 @@ RSpec.describe "Build::Publishing::Versions", type: :request do
       expect(response.body).to include("Tag &quot;nope&quot; doesn&#39;t exist")
     end
 
-    it "creates a beta from a branch" do
-      stub_json("#{api}/git/ref/heads/master", {object: {type: "commit", sha: "c0ffee"}})
-      create_version(ref: "master", ref_kind: "branch")
-      expect(world.world_versions.last).to be_branch
-    end
-
     it "refuses when the linked repo isn't the world's repo" do
       world.update!(repo: "builder/other")
       expect { create_version(ref: "demo/v1") }.not_to change(WorldVersion, :count)
@@ -89,29 +83,29 @@ RSpec.describe "Build::Publishing::Versions", type: :request do
       expect(response).to redirect_to(build_publishing_world_path(world))
     end
 
-    it "refuses a beta" do
-      version = create(:world_version, :beta, world:)
+    it "refuses a version that's already released" do
+      version = create(:world_version, :released, world:)
       post "/build/publishing/worlds/#{world.id}/versions/#{version.id}/release"
-      expect(version.reload).to be_unreleased
       expect(flash[:alert]).to be_present
     end
   end
 
   describe "POST reimport" do
-    it "reimports a beta" do
-      version = create(:world_version, :beta, world:)
+    it "reimports a failed version" do
+      version = create(:world_version, world:, state: "failed", validity_error: "boom")
       expect { post "/build/publishing/worlds/#{world.id}/versions/#{version.id}/reimport" }
         .to have_enqueued_job(ImportWorldVersionJob).with(version.id)
-      expect(version.reload).to be_importing
-    end
-
-    it "reimports a failed tag version" do
-      version = create(:world_version, world:, state: "failed", validity_error: "boom")
-      post "/build/publishing/worlds/#{world.id}/versions/#{version.id}/reimport"
       expect(version.reload).to have_attributes(state: "importing", validity_error: nil)
     end
 
-    it "refuses a released tag version" do
+    it "refuses an unreleased version" do
+      version = create(:world_version, world:)
+      expect { post "/build/publishing/worlds/#{world.id}/versions/#{version.id}/reimport" }
+        .not_to have_enqueued_job(ImportWorldVersionJob)
+      expect(version.reload).to be_unreleased
+    end
+
+    it "refuses a released version" do
       version = create(:world_version, :released, world:)
       expect { post "/build/publishing/worlds/#{world.id}/versions/#{version.id}/reimport" }
         .not_to have_enqueued_job(ImportWorldVersionJob)
