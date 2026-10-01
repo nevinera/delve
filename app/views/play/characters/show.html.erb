@@ -7,6 +7,7 @@
 
 <%= render "class_details", character_class: @character.character_class %>
 
+<%= link_to "Worlds", play_character_worlds_path(@character) %>
 <%= link_to "Zones", play_character_zones_path(@character) %>
 <%= link_to "Items", play_character_character_items_path(@character) %>
 <%= link_to "Equipped", play_character_equipped_items_path(@character) %>

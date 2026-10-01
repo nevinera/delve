@@ -1,0 +1,5 @@
+<%= render "play/shared/game_client",
+      result: @result, zone_source_url: @zone.world_version.zone_url(@zone), character: @character,
+      owned_zone_items: @owned_zone_items, equipped_items: @equipped_items,
+      character_settings: @character_settings, stock_assets: @stock_assets,
+      world_return_url: play_play_character_world_path(@character, @world) %>

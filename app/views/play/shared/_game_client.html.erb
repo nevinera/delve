@@ -1,0 +1,18 @@
+<div id="app"
+  data-slot-token="<%= result.token %>"
+  data-game-server-url="<%= game_server_public_url %>"
+  data-instance-id="<%= result.instance_identifier %>"
+  data-slot-id="<%= result.slot_id %>"
+  data-zone-source-url="<%= zone_source_url %>"
+  data-character-name="<%= character.name %>"
+  data-character-token-url="<%= character.token_url %>"
+  data-class-config-url="<%= character.character_class.location %>"
+  data-owned-zone-items="<%= owned_zone_items.to_json %>"
+  data-equipped-items="<%= equipped_items.to_json %>"
+  data-character-items-url="<%= play_character_character_items_path(character, format: :json) %>"
+  data-equipped-items-url="<%= play_character_equipped_items_path(character) %>"
+  data-character-settings="<%= character_settings.to_json %>"
+  data-character-settings-url="<%= play_character_setting_path(character) %>"
+  data-stock-assets="<%= stock_assets.to_json %>"
+  <% if local_assigns[:world_return_url] %>data-world-return-url="<%= world_return_url %>"<% end %>
+></div>

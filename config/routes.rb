@@ -91,6 +91,13 @@ Rails.application.routes.draw do
     root to: "dashboard#index"
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
       resources :zones, only: [:index, :show]
+      resources :worlds, only: [:index, :show], controller: "world_characters" do
+        member do
+          get :play
+          patch :active
+          patch :version
+        end
+      end
       resources :character_items, only: [:index, :show]
       resources :equipped_items, only: [:index, :update], param: :equipped_slot
       resource :setting, only: [:show, :update], controller: "character_settings"
