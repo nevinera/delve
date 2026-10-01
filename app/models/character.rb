@@ -19,7 +19,7 @@ class Character < ApplicationRecord
     character_items
       .where(zone_identifier: zone.identifier)
       .each_with_object({}) do |item, hash|
-        hash[item.identifier] = item.version == zone.version
+        hash[item.identifier] = item.version == zone.version_label
       end
   end
 

@@ -33,6 +33,11 @@ class Zone < ApplicationRecord
 
   def legacy? = world_version.nil?
 
+  # What item awards and ownership checks treat as this zone's version: a
+  # legacy zone's own version, or a world zone's commit SHA. A stopgap until
+  # items are tracked per world (worlds slice 4).
+  def version_label = legacy? ? version : world_version.commit_sha
+
   private
 
   def enqueue_fetch_content

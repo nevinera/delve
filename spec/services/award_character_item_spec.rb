@@ -20,6 +20,21 @@ RSpec.describe AwardCharacterItem do
     described_class.call(character: character, source_data: data, upgrade_only: upgrade_only)
   end
 
+  context "with a zone imported as part of a world" do
+    let(:zone) { create(:zone, :in_world, identifier: "darkwood") }
+    let(:sha) { zone.world_version.commit_sha }
+
+    it "accepts the version's commit SHA as the zone version" do
+      data = source_data.merge("zone" => {"database_id" => zone.id.to_s, "identifier" => "darkwood", "version" => sha})
+      expect(call(data).source_key).to eq("darkwood/#{sha}/sword-of-doom")
+    end
+
+    it "rejects any other version" do
+      data = source_data.merge("zone" => {"database_id" => zone.id.to_s, "identifier" => "darkwood", "version" => "1.0"})
+      expect { call(data) }.to raise_error(AwardCharacterItem::ZoneMismatch)
+    end
+  end
+
   describe "#call" do
     it "returns the new CharacterItem" do
       item = call

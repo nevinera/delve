@@ -46,10 +46,10 @@ class AwardCharacterItem
   memoize def zone = Zone.find(zone_db_id)
 
   def validate_zone!
-    return if zone.identifier == zone_identifier && zone.version == zone_version
+    return if zone.identifier == zone_identifier && zone.version_label == zone_version
 
     raise ZoneMismatch,
-      "zone #{zone_db_id} has identifier/version #{zone.identifier}/#{zone.version}, " \
+      "zone #{zone_db_id} has identifier/version #{zone.identifier}/#{zone.version_label}, " \
       "request sent #{zone_identifier}/#{zone_version}"
   end
 
@@ -59,7 +59,7 @@ class AwardCharacterItem
     end
   end
 
-  memoize def source_key = "#{zone.identifier}/#{zone.version}/#{identifier}"
+  memoize def source_key = "#{zone.identifier}/#{zone.version_label}/#{identifier}"
 
   memoize def built_item = CharacterItem.new(provenance_attributes.merge(item_attributes))
 

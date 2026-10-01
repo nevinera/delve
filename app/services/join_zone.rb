@@ -35,7 +35,7 @@ class JoinZone
       version: @zone.version,
       database_id: @zone.id.to_s,
       source_url: @zone.config_url,
-      zone_config: fetch_json(@zone.config_url),
+      zone_config: zone_config,
       character_name: @character.name,
       character_database_id: @character.id.to_s,
       character_class: fetch_json(@character.character_class.location),
@@ -43,6 +43,8 @@ class JoinZone
       equipped_items: EquippedItems::ForCharacter.call(character: @character)
     }
   end
+
+  def zone_config = fetch_json(@zone.config_url)
 
   def fetch_json(url)
     response = Net::HTTP.get_response(URI(url))

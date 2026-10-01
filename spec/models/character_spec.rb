@@ -17,6 +17,12 @@ RSpec.describe Character, type: :model do
       expect(character.owned_zone_items_for(zone)).to eq({"sword" => true})
     end
 
+    it "treats a world zone's commit SHA as its version" do
+      world_zone = create(:zone, :in_world, identifier: "darkwood")
+      create(:character_item, character: character, zone_identifier: "darkwood", version: world_zone.world_version.commit_sha, identifier: "sword")
+      expect(character.owned_zone_items_for(world_zone)).to eq({"sword" => true})
+    end
+
     it "returns false for an item owned from a different version of this zone" do
       create(:character_item, character: character, zone_identifier: zone.identifier, version: "0.0", identifier: "sword")
       expect(character.owned_zone_items_for(zone)).to eq({"sword" => false})
