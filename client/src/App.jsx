@@ -3942,6 +3942,7 @@ export default function App({
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
           {targetUnit.status === "respawning" && <span style={styles.deadBadge}>RESPAWNING</span>}
+          {targetUnit.status === "leashing" && <span style={styles.deadBadge}>EVADING</span>}
         </>
       );
     }
@@ -3961,6 +3962,7 @@ export default function App({
           </div>
           {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
           {targetUnit.status === "respawning" && <span style={styles.deadBadge}>RESPAWNING</span>}
+          {targetUnit.status === "leashing" && <span style={styles.deadBadge}>EVADING</span>}
         </div>
       </>
     );

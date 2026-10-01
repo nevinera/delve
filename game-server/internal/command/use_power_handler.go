@@ -140,7 +140,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 			}
 			unit.Attacking = true
 			if effect.Amount != nil {
-				if target.TaggedBy == nil && target.Hostility != "" {
+				if target.TaggedBy == nil && target.Hostility != "" && !IsEvading(target) {
 					target.TaggedBy = &unitID
 				}
 				EngageOnAttack(target, unitID, zone, next)
@@ -202,6 +202,9 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				}
 				recipient = target
 			}
+			if IsEvading(recipient) && recipient != unit {
+				continue
+			}
 			amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)
 			recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
 			if recipient.Health > recipient.MaxHealth {
@@ -217,6 +220,9 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 					return false
 				}
 				recipient = target
+			}
+			if IsEvading(recipient) && recipient != unit {
+				continue
 			}
 			AdjustResource(recipient, effect.ResourceName, effect.Delta)
 		}
