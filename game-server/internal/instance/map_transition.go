@@ -62,8 +62,12 @@ func applyMapTransitions(state *instancestate.InstanceState, prevState *instance
 // which side of fromConn the unit approached from.
 // Drops aggro on the unit and on any unit that was targeting it.
 func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.MapConnection, destMap instanceconfig.Map, destConn instanceconfig.MapConnection, prevX, prevY float64, state *instancestate.InstanceState) {
+	fromMapID := unit.MapIdentifier
 	unit.MapIdentifier = destMap.Identifier
 	unit.Position = spawnPosition(fromConn, destConn, prevX, prevY, unit.Position.Angle)
+	if unit.Status == instancestate.UnitStatusEngaged {
+		recordLeashCrossing(unit, fromMapID, prevX, prevY)
+	}
 
 	// Any cached detour was computed against the map just left behind -
 	// those coordinates mean nothing on the new map's geometry, so using

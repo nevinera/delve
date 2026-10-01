@@ -17,9 +17,9 @@ const baseHealthRegenPctPerSecond = 0.005
 
 // tickHealthRegen moves every living player's Health dt*rate closer to
 // MaxHealth, scaled by their own Recovery Rating like any other healing they
-// receive (command.HealingTakenPct). Players only - NPCs already fully heal
-// via the existing leash-return mechanic (unit_behavior.go's
-// leashHealPctPerSecond) instead of needing a passive regen of their own.
+// receive (command.HealingTakenPct). Players only - NPCs heal to full when
+// they leash (leash.go's startLeash) instead of needing a passive regen of
+// their own.
 func tickHealthRegen(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
 	for _, unit := range state.Units {
 		if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") || unit.Status == instancestate.UnitStatusDead {

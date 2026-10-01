@@ -1,6 +1,8 @@
 package command
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
@@ -49,6 +51,7 @@ func engageIdleUnit(u *instancestate.UnitState, attackerID uuid.UUID) {
 	u.Behavior.LeashX = u.Position.X
 	u.Behavior.LeashY = u.Position.Y
 	u.Behavior.LeashMapID = u.MapIdentifier
+	u.Behavior.LastCombatAt = time.Now()
 	id := attackerID
 	u.Target = &id
 	u.Attacking = true
