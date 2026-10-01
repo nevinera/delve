@@ -513,4 +513,24 @@ describe("CharacterSheet", () => {
       expect(screen.getByText("Worn Helm")).toBeInTheDocument();
     });
   });
+
+  describe("equipping", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("fetches equippable items when a slot is clicked", () => {
+      const fetchMock = vi.fn(() => Promise.resolve({ json: () => Promise.resolve([]) }));
+      vi.stubGlobal("fetch", fetchMock);
+      render(<CharacterSheet open equippedItems={{}} characterItemsUrl="/items.json" onClose={() => {}} />);
+      fireEvent.click(screen.getAllByText("Empty")[0].closest("tr"));
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    it("does nothing on click without an items URL (a directly played zone)", () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
+      fireEvent.click(screen.getAllByText("Empty")[0].closest("tr"));
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });

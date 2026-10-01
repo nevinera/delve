@@ -2732,7 +2732,12 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
   const basicAttack = combatStats?.basic_attack ?? ZERO_SCHOOL_STATS;
   const gearElvl = gearElevation(equippedItems);
 
+  // Without an items URL (a zone played directly, wearing imaginary trainee
+  // gear) there's nothing to equip from, so slots aren't clickable.
+  const canEquip = !!characterItemsUrl;
+
   const toggleSlot = (slot) => {
+    if (!canEquip) return;
     setExpandedSlot(current => (current === slot ? null : slot));
   };
 
@@ -2759,8 +2764,8 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
             const item = equippedItems?.[slot];
             const rowStyle = {
               ...styles.charSheetEquipRow,
-              ...styles.charSheetEquipRowClickable,
-              ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+              ...(canEquip ? styles.charSheetEquipRowClickable : {}),
+              ...(canEquip && hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
               ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
             };
             return (
@@ -3046,6 +3051,8 @@ export default function App({
   // True once the server has told us to leave (zone exit, version expiry),
   // so the socket closing behind it doesn't read as a disconnect.
   const leavingRef = useRef(false);
+  // Logged once per session, not once per item (see the lootFailures loop).
+  const lootNotKeptLoggedRef = useRef(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [dialogueNcuId, setDialogueNcuId] = useState(null);
@@ -3585,7 +3592,13 @@ export default function App({
         }
         const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
         for (const failure of lootFailures) {
-          if (self && failure.claimed_by === self.id) {
+          if (!self || failure.claimed_by !== self.id) continue;
+          if (failure.reason === "not_persisted") {
+            if (!lootNotKeptLoggedRef.current) {
+              lootNotKeptLoggedRef.current = true;
+              addLog("Loot isn't kept when trying a zone directly.");
+            }
+          } else {
             addLog(`Failed to loot ${failure.item.name} - please try again.`);
           }
         }
