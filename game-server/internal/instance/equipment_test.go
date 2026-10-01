@@ -35,6 +35,8 @@ func TestRefreshEquippedItems_UpdatesSlotAndRecomputesStats(t *testing.T) {
 
 	inst.RefreshEquippedItems(context.Background(), slot.CharacterUnitID)
 
+	slot, ok := inst.GetSlot(slot.ID)
+	require.True(t, ok)
 	assert.Equal(t, fetched, slot.EquippedItems)
 	require.Contains(t, slot.Stats, "strength")
 	assert.NotEqual(t, chestStrength, slot.Stats["strength"])

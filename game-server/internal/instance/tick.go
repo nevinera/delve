@@ -128,12 +128,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 				select {
 				case result := <-inst.autoUpgradeResultCh:
 					if result.Success {
-						if slot := inst.slotByUnitID(result.CharacterUnitID); slot != nil {
-							if slot.OwnedZoneItems == nil {
-								slot.OwnedZoneItems = make(map[string]bool)
-							}
-							slot.OwnedZoneItems[result.ItemIdentifier] = true
-						}
+						inst.markItemOwned(result.CharacterUnitID, result.ItemIdentifier)
 					}
 					newState := instancestate.LootClaimStateAvailable
 					if result.Success {
@@ -197,12 +192,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			inst.drainZoneExitResults(now)
 
 			for _, update := range state.PendingOwnershipUpdates {
-				if slot := inst.slotByUnitID(update.CharacterUnitID); slot != nil {
-					if slot.OwnedZoneItems == nil {
-						slot.OwnedZoneItems = make(map[string]bool)
-					}
-					slot.OwnedZoneItems[update.ItemIdentifier] = true
-				}
+				inst.markItemOwned(update.CharacterUnitID, update.ItemIdentifier)
 			}
 
 			state.PendingLootEvents = nil

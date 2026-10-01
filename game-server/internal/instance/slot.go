@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"errors"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -122,7 +123,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 			slot.EquippedItems = equippedItems
 			slot.SlotOptions = opts
 			slot.recomputeStats()
-			return slot, nil
+			return slot.snapshot(), nil
 		}
 	}
 
@@ -146,15 +147,74 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 	slot.recomputeStats()
 	inst.slots[slot.ID] = slot
 	inst.recomputeSlotCounts()
-	return slot, nil
+	return slot.snapshot(), nil
 }
 
-// GetSlot returns the slot with the given ID, or (nil, false) if not found.
+// snapshot returns a copy of the slot, maps included, that its caller can
+// read without holding slotsMu. Connection plumbing (writeCh and friends)
+// is left out: only the instance itself uses it, under the lock. Must be
+// called with slotsMu held.
+func (s *InstanceSlot) snapshot() *InstanceSlot {
+	c := *s
+	c.OwnedZoneItems = maps.Clone(s.OwnedZoneItems)
+	c.EquippedItems = maps.Clone(s.EquippedItems)
+	c.Stats = maps.Clone(s.Stats)
+	c.lastSeqByType = maps.Clone(s.lastSeqByType)
+	c.writeCh, c.connCancel, c.connDone = nil, nil, nil
+	return &c
+}
+
+// GetSlot returns a snapshot of the slot with the given ID, or (nil, false)
+// if not found. Every slot accessor returns snapshots, never the live slot:
+// read what you need and drop it, since it won't see later changes (change
+// a slot through the Instance's own methods instead).
 func (inst *Instance) GetSlot(id uuid.UUID) (*InstanceSlot, bool) {
 	inst.slotsMu.RLock()
 	defer inst.slotsMu.RUnlock()
 	slot, ok := inst.slots[id]
-	return slot, ok
+	if !ok {
+		return nil, false
+	}
+	return slot.snapshot(), true
+}
+
+// markItemOwned records that the slot playing unitID now owns this zone
+// version of an item. A no-op if the slot is gone.
+func (inst *Instance) markItemOwned(unitID uuid.UUID, itemIdentifier string) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot := inst.liveSlotByUnitID(unitID)
+	if slot == nil {
+		return
+	}
+	if slot.OwnedZoneItems == nil {
+		slot.OwnedZoneItems = make(map[string]bool)
+	}
+	slot.OwnedZoneItems[itemIdentifier] = true
+}
+
+// setEquippedItems replaces the equipped items of the slot playing unitID
+// and recomputes its Stats. A no-op if the slot is gone.
+func (inst *Instance) setEquippedItems(unitID uuid.UUID, items map[string]instanceconfig.EquippedItem) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot := inst.liveSlotByUnitID(unitID)
+	if slot == nil {
+		return
+	}
+	slot.EquippedItems = items
+	slot.recomputeStats()
+}
+
+// liveSlotByUnitID returns the live slot playing unitID, or nil. Must be
+// called with slotsMu held.
+func (inst *Instance) liveSlotByUnitID(unitID uuid.UUID) *InstanceSlot {
+	for _, s := range inst.slots {
+		if s.CharacterUnitID == unitID {
+			return s
+		}
+	}
+	return nil
 }
 
 // RemoveSlot removes the slot with the given ID, closes its connection (after
@@ -206,13 +266,14 @@ func (inst *Instance) SetSlotState(id uuid.UUID, state SlotState) bool {
 	return true
 }
 
-// ListSlots returns a snapshot of all current slots in unspecified order.
+// ListSlots returns snapshots of all current slots in unspecified order
+// (see GetSlot).
 func (inst *Instance) ListSlots() []*InstanceSlot {
 	inst.slotsMu.RLock()
 	defer inst.slotsMu.RUnlock()
 	result := make([]*InstanceSlot, 0, len(inst.slots))
 	for _, s := range inst.slots {
-		result = append(result, s)
+		result = append(result, s.snapshot())
 	}
 	return result
 }

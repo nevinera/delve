@@ -205,15 +205,13 @@ func NewInstance(
 	return inst
 }
 
-// slotByUnitID returns the slot whose CharacterUnitID matches, or nil.
-// Called from the tick goroutine; acquires a read lock.
+// slotByUnitID returns a snapshot (see GetSlot) of the slot whose
+// CharacterUnitID matches, or nil.
 func (inst *Instance) slotByUnitID(unitID uuid.UUID) *InstanceSlot {
 	inst.slotsMu.RLock()
 	defer inst.slotsMu.RUnlock()
-	for _, s := range inst.slots {
-		if s.CharacterUnitID == unitID {
-			return s
-		}
+	if s := inst.liveSlotByUnitID(unitID); s != nil {
+		return s.snapshot()
 	}
 	return nil
 }

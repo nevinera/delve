@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"log/slog"
+	"maps"
 
 	"github.com/google/uuid"
 
@@ -132,7 +133,7 @@ func (inst *Instance) processLootEvents(ctx context.Context, state *instancestat
 		slots = append(slots, slotSnapshot{
 			CharacterUnitID:     s.CharacterUnitID,
 			CharacterDatabaseID: s.CharacterDatabaseID,
-			OwnedZoneItems:      s.OwnedZoneItems,
+			OwnedZoneItems:      maps.Clone(s.OwnedZoneItems),
 		})
 	}
 	inst.slotsMu.RUnlock()

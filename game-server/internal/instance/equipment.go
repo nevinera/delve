@@ -23,8 +23,5 @@ func (inst *Instance) RefreshEquippedItems(ctx context.Context, unitID uuid.UUID
 		slog.WarnContext(ctx, "failed to refresh equipped items", "error", err, "character", slot.CharacterDatabaseID)
 		return
 	}
-	inst.slotsMu.Lock()
-	defer inst.slotsMu.Unlock()
-	slot.EquippedItems = items
-	slot.recomputeStats()
+	inst.setEquippedItems(unitID, items)
 }
