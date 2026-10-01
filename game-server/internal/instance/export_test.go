@@ -43,7 +43,7 @@ func ApplyMovementForTest(state *instancestate.InstanceState) {
 }
 
 func BuildFullStateMsgForTest(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
-	return buildFullStateMsg(state, now, checksum, nil, nil)
+	return buildFullStateMsg(state, now, checksum, nil, nil, time.Time{})
 }
 
 func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
@@ -51,7 +51,7 @@ func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time
 }
 
 func BuildFullStateMsgWithSeqsForTest(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string) ([]byte, error) {
-	return buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs)
+	return buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs, time.Time{})
 }
 
 func BuildDeltaMsgWithSeqsForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string, prevHeartbeatSeqs, currHeartbeatSeqs, prevMoveSeqs, currMoveSeqs map[uuid.UUID]string) ([]byte, error) {
@@ -217,4 +217,12 @@ func (inst *Instance) FinishZoneExitForTest(exit PendingZoneExitForTest, err err
 		err:             err,
 	}
 	inst.drainZoneExitResults(now)
+}
+
+func (inst *Instance) TickExpiryForTest(now time.Time) bool {
+	return inst.tickExpiry(now)
+}
+
+func BuildFullStateMsgWithExpiryForTest(state *instancestate.InstanceState, now time.Time, expiresAt time.Time) ([]byte, error) {
+	return buildFullStateMsg(state, now, "", nil, nil, expiresAt)
 }

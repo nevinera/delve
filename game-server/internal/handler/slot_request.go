@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -33,6 +34,7 @@ type slotRequestBody struct {
 	Exits                    []string      `json:"exits"`                       // "mapId/connectionId" keys; per instance
 	WorldCharacterDatabaseID string        `json:"world_character_database_id"` // required for world mode
 	WorldVersionID           string        `json:"world_version_id"`            // per instance
+	ExpiresAt                *time.Time    `json:"expires_at"`                  // RFC 3339; per instance, if the version is already expiring
 }
 
 // validate fills in the default mode and checks required fields, returning
@@ -156,6 +158,9 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 	inst.Exits = make(map[string]bool, len(req.Exits))
 	for _, key := range req.Exits {
 		inst.Exits[key] = true
+	}
+	if req.ExpiresAt != nil {
+		inst.SetExpiresAt(*req.ExpiresAt)
 	}
 	if err := inst.Start(h.registry); err != nil {
 		return nil, err

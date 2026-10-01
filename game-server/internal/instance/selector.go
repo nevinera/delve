@@ -1,5 +1,7 @@
 package instance
 
+import "time"
+
 // SelectBestInstance returns the best legacy-mode candidate for zone
 // identifier + version (see pickFullest). Returns nil if no suitable
 // instance exists.
@@ -20,14 +22,15 @@ func SelectKeyedInstance(candidates []*Instance, mode Mode, key string) *Instanc
 	})
 }
 
-// pickFullest returns the fullest active matching instance with remaining
-// capacity, preferring the newest among ties.
+// pickFullest returns the fullest active, unexpired matching instance with
+// remaining capacity, preferring the newest among ties.
 func pickFullest(candidates []*Instance, matches func(*Instance) bool) *Instance {
 	var best *Instance
 	var bestTotal int
+	now := time.Now()
 
 	for _, inst := range candidates {
-		if inst.Status != StatusActive || !matches(inst) {
+		if inst.Status != StatusActive || !matches(inst) || inst.expiredAt(now) {
 			continue
 		}
 		total, _ := inst.SlotCounts()

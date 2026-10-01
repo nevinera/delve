@@ -137,6 +137,14 @@ type Instance struct {
 	// Zone-exit bookkeeping, owned by the tick loop (see zone_exit.go):
 	// when each player unit's exit lockout ends, which have a Rails exit
 	// call in flight, and where those calls report back.
+	// expiresAt is when this instance's world version expires (zero:
+	// never); guarded by expiresMu since Rails can move it at any time.
+	// lastExpiryNotice is the minutes-remaining most recently announced,
+	// owned by the tick loop. See expiry.go.
+	expiresMu        sync.Mutex
+	expiresAt        time.Time
+	lastExpiryNotice int
+
 	exitArmedAt      map[uuid.UUID]time.Time
 	exitsInFlight    map[uuid.UUID]bool
 	zoneExitResultCh chan zoneExitResult

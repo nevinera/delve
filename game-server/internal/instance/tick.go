@@ -169,7 +169,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 					var payload []byte
 					var err error
 					if s.NeedsFullState {
-						payload, err = buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs)
+						payload, err = buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs, inst.ExpiresAt())
 					} else {
 						if deltaPayload == nil {
 							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum, prevHeartbeatSeqs, heartbeatSeqs, prevMoveSeqs, moveSeqs)
@@ -213,6 +213,13 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			prevState = state.Clone()
 			prevHeartbeatSeqs = heartbeatSeqs
 			prevMoveSeqs = moveSeqs
+
+			// A world version past its expiry kicks everyone and stops.
+			if inst.tickExpiry(now) {
+				inst.Status = StatusStopping
+				inst.cancel()
+				return
+			}
 
 			// Remove slots that have been pending or waiting too long.
 			slotWaitTimeout := inst.SlotWaitTimeout
