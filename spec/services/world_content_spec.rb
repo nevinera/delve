@@ -4,7 +4,7 @@ RSpec.describe WorldContent do
   let(:body) { {"name" => "Darkwood"}.to_json }
   let(:version) { create(:world_version, raw_base_url: "https://raw.githubusercontent.com/a/b/c0ffee/") }
   let(:zone) do
-    create(:zone, :in_world, world_version: version, path: "zones/dw/dw.full.json", content_sha: Digest::SHA1.hexdigest(body))
+    create(:zone, world_version: version, path: "zones/dw/dw.full.json", content_sha: Digest::SHA1.hexdigest(body))
   end
   let(:url) { "https://raw.githubusercontent.com/a/b/c0ffee/zones/dw/dw.full.json" }
 

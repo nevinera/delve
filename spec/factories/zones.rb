@@ -1,31 +1,8 @@
 FactoryBot.define do
   factory :zone do
-    association :registering_user, factory: :user
-    sequence(:identifier) do |n|
-      suffix = +""
-      m = n
-      while m > 0
-        suffix.prepend(("a".ord + (m - 1) % 26).chr)
-        m = (m - 1) / 26
-      end
-      "zone_#{suffix}"
-    end
-    sequence(:version) { |n| "1.#{n}" }
-    name { "Test Zone" }
-    config_url { "https://example.com/zones/test.json" }
-    description { nil }
-
-    # An imported world zone: keyed by its world zone key, with no legacy
-    # registration fields.
-    trait :in_world do
-      world_version
-      registering_user { nil }
-      sequence(:identifier) { |n| "zone-#{n}" }
-      version { nil }
-      name { nil }
-      config_url { nil }
-      path { "zones/#{identifier}/#{identifier}.full.json" }
-      state { "fetched" }
-    end
+    world_version
+    sequence(:identifier) { |n| "zone-#{n}" }
+    path { "zones/#{identifier}/#{identifier}.full.json" }
+    state { "fetched" }
   end
 end

@@ -15,7 +15,7 @@ class JoinDirectZone < JoinZone
   private
 
   def build_attrs
-    {
+    character_attrs.merge(
       zone_identifier: @zone_key,
       version: @commit_sha,
       database_id: "",
@@ -23,11 +23,7 @@ class JoinDirectZone < JoinZone
       zone_config: @zone_data,
       mode: "direct",
       instance_key: "direct:#{@character.user_id}:#{@commit_sha}:#{@zone_key}",
-      character_name: @character.name,
-      character_database_id: @character.id.to_s,
-      character_class: fetch_json(@character.character_class.location),
-      owned_zone_items: {},
-      equipped_items: EquippedItems::ForCharacter.call(character: @character)
-    }
+      owned_zone_items: {}
+    )
   end
 end

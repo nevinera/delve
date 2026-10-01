@@ -79,7 +79,7 @@ RSpec.describe WorldVersion, type: :model do
   describe "#zone_url" do
     it "joins the raw base url and the zone path" do
       version = build(:world_version, raw_base_url: "https://raw.githubusercontent.com/a/b/abc/")
-      zone = build(:zone, :in_world, world_version: version, path: "zones/x/x.full.json")
+      zone = build(:zone, world_version: version, path: "zones/x/x.full.json")
       expect(version.zone_url(zone)).to eq("https://raw.githubusercontent.com/a/b/abc/zones/x/x.full.json")
     end
   end

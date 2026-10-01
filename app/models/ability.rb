@@ -6,7 +6,6 @@ class Ability
       can :manage, :all
     else
       can :manage, CharacterClass, user: user
-      can :manage, Zone, registering_user: user
       can :manage, World, owner: user
       can :manage, WorldVersion, world: {owner: user}
       can :manage, Character, user: user

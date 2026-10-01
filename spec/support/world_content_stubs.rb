@@ -58,7 +58,7 @@ module WorldContentStubs
     files[:zones].each do |key, data|
       body = data.to_json
       path = "zones/#{key}/#{key}.full.json"
-      create(:zone, :in_world, world_version: version, identifier: key, path:, content_sha: Digest::SHA1.hexdigest(body),
+      create(:zone, world_version: version, identifier: key, path:, content_sha: Digest::SHA1.hexdigest(body),
         links: WorldContent::Links.links_for(files[:world], key, files[:zones]),
         entry_connection_key: (entry_connection if key == entry_zone))
       stub_request(:get, "#{base_url}#{path}").to_return(body:)

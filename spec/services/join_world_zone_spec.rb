@@ -58,4 +58,25 @@ RSpec.describe JoinWorldZone do
       body: {instance_identifier: "inst", slot_id: "slot", token: "tok"}.to_json)
     expect { call }.not_to raise_error
   end
+
+  it "replaces the character's existing session" do
+    other = create(:zone)
+    create(:slot_session, character:, zone: other, token: "old")
+    expect { call }.not_to change(SlotSession, :count)
+    expect(SlotSession.find_by!(character:)).to have_attributes(zone:, token: "tok", last_confirmed_at: be_present)
+  end
+
+  it "sends the character's items owned from this zone, and their equipment" do
+    create(:character_item, character:, zone_identifier: "darkwood", version: version.commit_sha, identifier: "sword")
+    call
+    expect(slots_client).to have_received(:request).with(hash_including(
+      owned_zone_items: {"sword" => true},
+      equipped_items: EquippedItems::ForCharacter.call(character:)
+    ))
+  end
+
+  it "propagates game server errors" do
+    allow(slots_client).to receive(:request).and_raise(GameApi::CapacityError.new("full", status: 406))
+    expect { call }.to raise_error(GameApi::CapacityError)
+  end
 end

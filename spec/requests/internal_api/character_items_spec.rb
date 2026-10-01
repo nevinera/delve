@@ -7,7 +7,7 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
 
   let(:valid_body) do
     {
-      zone: {database_id: zone.id.to_s, identifier: zone.identifier, version: zone.version},
+      zone: {database_id: zone.id.to_s, identifier: zone.identifier, version: zone.version_label},
       identifier: "sword-of-doom",
       name: "Sword of Doom",
       slot: "main_hand",
@@ -40,7 +40,7 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
       item = CharacterItem.last
       expect(item.character).to eq(character)
       expect(item.provenance_zone).to eq(zone)
-      expect(item.source_key).to eq("#{zone.identifier}/#{zone.version}/sword-of-doom")
+      expect(item.source_key).to eq("#{zone.identifier}/#{zone.version_label}/sword-of-doom")
       expect(item.name).to eq("Sword of Doom")
       expect(item.slot).to eq("main_hand")
       expect(item.elvl).to eq(584)
@@ -73,7 +73,7 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
   end
 
   context "when the character owns the same item from a different version of this zone" do
-    let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
+    let(:other_zone) { create(:zone, identifier: zone.identifier) }
 
     before do
       create(:character_item, character: character, provenance_zone: other_zone,

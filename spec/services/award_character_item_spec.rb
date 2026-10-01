@@ -6,7 +6,7 @@ RSpec.describe AwardCharacterItem do
 
   let(:source_data) do
     {
-      "zone" => {"database_id" => zone.id.to_s, "identifier" => zone.identifier, "version" => zone.version},
+      "zone" => {"database_id" => zone.id.to_s, "identifier" => zone.identifier, "version" => zone.version_label},
       "identifier" => "sword-of-doom",
       "name" => "Sword of Doom",
       "slot" => "main_hand",
@@ -21,7 +21,7 @@ RSpec.describe AwardCharacterItem do
   end
 
   context "with a zone imported as part of a world" do
-    let(:zone) { create(:zone, :in_world, identifier: "darkwood") }
+    let(:zone) { create(:zone, identifier: "darkwood") }
     let(:sha) { zone.world_version.commit_sha }
 
     it "accepts the version's commit SHA as the zone version" do
@@ -47,7 +47,7 @@ RSpec.describe AwardCharacterItem do
       item = CharacterItem.last
       expect(item.character).to eq(character)
       expect(item.provenance_zone).to eq(zone)
-      expect(item.source_key).to eq("#{zone.identifier}/#{zone.version}/sword-of-doom")
+      expect(item.source_key).to eq("#{zone.identifier}/#{zone.version_label}/sword-of-doom")
       expect(item.name).to eq("Sword of Doom")
       expect(item.slot).to eq("main_hand")
       expect(item.elvl).to eq(584)
@@ -93,7 +93,7 @@ RSpec.describe AwardCharacterItem do
     end
 
     context "when the character owns the same item from a different version of this zone" do
-      let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
+      let(:other_zone) { create(:zone, identifier: zone.identifier) }
 
       before { create(:character_item, character: character, provenance_zone: other_zone, identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom") }
 
@@ -119,7 +119,7 @@ RSpec.describe AwardCharacterItem do
       end
 
       context "when the character owns the same item from a different version" do
-        let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
+        let(:other_zone) { create(:zone, identifier: zone.identifier) }
 
         before { create(:character_item, character: character, provenance_zone: other_zone, identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom") }
 

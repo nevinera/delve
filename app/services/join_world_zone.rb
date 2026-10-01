@@ -13,12 +13,14 @@ class JoinWorldZone < JoinZone
 
   def version = @zone.world_version
 
-  def zone_config = @zone_data
-
   def build_attrs
-    base_attrs.merge(
+    character_attrs.merge(
+      zone_identifier: @zone.identifier,
       version: version.commit_sha,
+      database_id: @zone.id.to_s,
       source_url: version.zone_url(@zone),
+      zone_config: @zone_data,
+      owned_zone_items: @character.owned_zone_items_for(@zone),
       mode: "world",
       instance_key: "world:#{@zone.id}",
       spawn_at: @world_character.connection_key,

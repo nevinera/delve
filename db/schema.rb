@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -201,25 +201,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
   end
 
   create_table "zones", force: :cascade do |t|
-    t.string "config_url"
     t.string "content_sha"
     t.datetime "created_at", null: false
-    t.text "description"
     t.integer "elvl"
     t.string "entry_connection_key"
     t.integer "file_size"
     t.string "identifier", null: false
     t.json "links", default: {}, null: false
-    t.string "name"
-    t.string "path"
-    t.integer "registering_user_id"
+    t.string "path", null: false
     t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
     t.string "validity_error"
-    t.string "version"
-    t.integer "world_version_id"
-    t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version", unique: true
-    t.index ["registering_user_id"], name: "index_zones_on_registering_user_id"
+    t.integer "world_version_id", null: false
     t.index ["state"], name: "index_zones_on_state"
     t.index ["world_version_id", "identifier"], name: "index_zones_on_world_version_id_and_identifier", unique: true
     t.index ["world_version_id"], name: "index_zones_on_world_version_id"
@@ -242,6 +235,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
   add_foreign_key "world_characters", "worlds"
   add_foreign_key "world_versions", "worlds"
   add_foreign_key "worlds", "users", column: "owner_id"
-  add_foreign_key "zones", "users", column: "registering_user_id"
   add_foreign_key "zones", "world_versions"
 end

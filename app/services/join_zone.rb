@@ -1,14 +1,15 @@
 require "net/http"
 
+# Base for joining a character to a zone: sends a slot request built by the
+# subclass (JoinWorldZone, JoinDirectZone) and records the SlotSession.
 class JoinZone
   Result = Data.define(:token, :instance_identifier, :slot_id)
 
   def self.call(...) = new(...).call
 
-  def initialize(character:, zone:, instance_identifier: nil)
+  def initialize(character:, zone:)
     @character = character
     @zone = zone
-    @instance_identifier = instance_identifier
   end
 
   def call
@@ -23,28 +24,16 @@ class JoinZone
 
   private
 
-  def build_attrs
-    base_attrs.tap do |attrs|
-      attrs[:instance_identifier] = @instance_identifier if @instance_identifier
-    end
-  end
+  def build_attrs = raise(NotImplementedError, "#{self.class} must implement #build_attrs")
 
-  def base_attrs
+  def character_attrs
     {
-      zone_identifier: @zone.identifier,
-      version: @zone.version,
-      database_id: @zone.id.to_s,
-      source_url: @zone.config_url,
-      zone_config: zone_config,
       character_name: @character.name,
       character_database_id: @character.id.to_s,
       character_class: fetch_json(@character.character_class.location),
-      owned_zone_items: @character.owned_zone_items_for(@zone),
       equipped_items: EquippedItems::ForCharacter.call(character: @character)
     }
   end
-
-  def zone_config = fetch_json(@zone.config_url)
 
   def fetch_json(url)
     response = Net::HTTP.get_response(URI(url))

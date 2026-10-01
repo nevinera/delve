@@ -13,12 +13,12 @@ RSpec.describe Character, type: :model do
     end
 
     it "returns true for an item owned from this exact zone version" do
-      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version, identifier: "sword")
+      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version_label, identifier: "sword")
       expect(character.owned_zone_items_for(zone)).to eq({"sword" => true})
     end
 
     it "treats a world zone's commit SHA as its version" do
-      world_zone = create(:zone, :in_world, identifier: "darkwood")
+      world_zone = create(:zone, identifier: "darkwood")
       create(:character_item, character: character, zone_identifier: "darkwood", version: world_zone.world_version.commit_sha, identifier: "sword")
       expect(character.owned_zone_items_for(world_zone)).to eq({"sword" => true})
     end
@@ -29,12 +29,12 @@ RSpec.describe Character, type: :model do
     end
 
     it "excludes items from zones with a different identifier" do
-      create(:character_item, character: character, zone_identifier: "other_zone", version: zone.version, identifier: "sword")
+      create(:character_item, character: character, zone_identifier: "other_zone", version: zone.version_label, identifier: "sword")
       expect(character.owned_zone_items_for(zone)).to eq({})
     end
 
     it "can return multiple items with mixed ownership" do
-      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version, identifier: "helm")
+      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version_label, identifier: "helm")
       create(:character_item, character: character, zone_identifier: zone.identifier, version: "0.0", identifier: "sword")
       result = character.owned_zone_items_for(zone)
       expect(result).to eq({"helm" => true, "sword" => false})
