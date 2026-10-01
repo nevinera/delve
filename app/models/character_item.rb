@@ -12,7 +12,6 @@ class CharacterItem < ApplicationRecord
   validates :name, presence: true
   validates :elvl, presence: true, numericality: {only_integer: true, greater_than_or_equal_to: 0}
   validates :slot, presence: true, inclusion: {in: SLOTS}
-  validates :received_at, presence: true
   validates :source_json, presence: true
   validates :version, presence: true,
     uniqueness: {scope: [:world_character_id, :zone_identifier, :identifier], message: "is already held"}

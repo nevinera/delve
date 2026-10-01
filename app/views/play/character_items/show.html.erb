@@ -6,7 +6,7 @@
 <% end %>
 <p>Elevation: <%= @item.elvl %></p>
 <p>From: <%= @item.zone_identifier %></p>
-<p>Received: <%= @item.received_at.strftime("%Y-%m-%d %H:%M") %></p>
+<p>Received: <%= @item.created_at.strftime("%Y-%m-%d %H:%M") %></p>
 
 <% if @raw_stats.any? %>
   <p>Stats at ee=0 (on-level):</p>

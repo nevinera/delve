@@ -77,8 +77,7 @@ class AwardCharacterItem
       source_json: definition,
       identifier:,
       zone_identifier: zone.identifier,
-      version:,
-      received_at: Time.current.utc
+      version:
     }
   end
 

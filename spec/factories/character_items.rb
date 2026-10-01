@@ -8,7 +8,6 @@ FactoryBot.define do
     name { "Iron Sword" }
     elvl { 584 }
     slot { "head" }
-    received_at { Time.current }
     source_json { {"identifier" => identifier, "name" => name, "slot" => slot} }
   end
 end

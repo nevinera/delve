@@ -5,8 +5,6 @@
 class Zone < ApplicationRecord
   belongs_to :world_version
 
-  enum :state, {provided: "provided", fetched: "fetched", validation_failed: "validation_failed"}
-
   validates :identifier, presence: true, uniqueness: {scope: :world_version_id}
   validates :path, presence: true
 

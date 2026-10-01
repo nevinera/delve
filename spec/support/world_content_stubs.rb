@@ -49,11 +49,9 @@ module WorldContentStubs
     world ||= create(:world, path: "worlds/demo.json")
     sha = SecureRandom.hex(20)
     base_url = "https://raw.githubusercontent.com/#{world.repo}/#{sha}/"
-    world_body = files[:world].to_json
     name = files[:world]["name"]
     world.update!(name:) if world.name.blank?
-    version = create(:world_version, :released, world:, name:, commit_sha: sha, raw_base_url: base_url,
-      content_sha: Digest::SHA1.hexdigest(world_body), **version_attrs)
+    version = create(:world_version, :released, world:, name:, commit_sha: sha, raw_base_url: base_url, **version_attrs)
     entry_zone, entry_connection = WorldContent::Links.default_entry(files[:world])
     files[:zones].each do |key, data|
       body = data.to_json

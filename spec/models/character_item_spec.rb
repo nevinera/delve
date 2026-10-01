@@ -78,12 +78,6 @@ RSpec.describe CharacterItem, type: :model do
       end
     end
 
-    it "requires received_at" do
-      item = build(:character_item, world_character: world_character, received_at: nil)
-      expect(item).not_to be_valid
-      expect(item.errors[:received_at]).to be_present
-    end
-
     it "requires source_json" do
       item = build(:character_item, world_character: world_character, source_json: nil)
       expect(item).not_to be_valid

@@ -80,4 +80,14 @@ RSpec.describe Character, type: :model do
       expect(c).not_to be_valid
     end
   end
+
+  describe "#last_played_at" do
+    it "is when the character last entered any world" do
+      character = create(:character)
+      expect(character.last_played_at).to be_nil
+      create(:world_character, character:, last_played_at: 2.days.ago)
+      recent = create(:world_character, character:, last_played_at: 1.hour.ago)
+      expect(character.last_played_at).to be_within(1.second).of(recent.last_played_at)
+    end
+  end
 end

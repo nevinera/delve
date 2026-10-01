@@ -3,6 +3,5 @@ FactoryBot.define do
     world_version
     sequence(:identifier) { |n| "zone-#{n}" }
     path { "zones/#{identifier}/#{identifier}.full.json" }
-    state { "fetched" }
   end
 end

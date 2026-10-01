@@ -20,7 +20,7 @@ class Play::CharacterItemsController < Play::BaseController
   private
 
   def filtered_items
-    items = @world_character.character_items.order(received_at: :desc)
+    items = @world_character.character_items.order(created_at: :desc)
     items = items.where(slot: filter_slots) if filter_slots.present?
     items
   end

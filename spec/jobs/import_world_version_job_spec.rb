@@ -81,18 +81,12 @@ RSpec.describe ImportWorldVersionJob, type: :job do
       )
     end
 
-    it "records the world file's checksum" do
-      perform
-      expect(version.reload.content_sha).to eq(Digest::SHA1.hexdigest(world_data.to_json))
-    end
-
     it "creates a zone per world zone, with references and checksums only" do
       perform
       zones = version.zones.order(:identifier)
       expect(zones.map(&:identifier)).to eq(%w[darkwood goblin-cave])
       expect(zones.map(&:path)).to eq(%w[zones/darkwood/darkwood.full.json zones/goblin-cave/goblin-cave.full.json])
       expect(zones.first.content_sha).to eq(Digest::SHA1.hexdigest(darkwood.to_json))
-      expect(zones.first.file_size).to eq(darkwood.to_json.bytesize)
     end
   end
 

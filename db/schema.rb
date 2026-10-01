@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -39,7 +39,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
     t.string "identifier", null: false
     t.string "name", null: false
     t.string "primary_stat"
-    t.datetime "received_at", null: false
     t.json "secondary_stats", default: [], null: false
     t.string "slot", null: false
     t.json "source_json", default: {}, null: false
@@ -64,9 +63,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
   create_table "characters", force: :cascade do |t|
     t.integer "character_class_id", null: false
     t.datetime "created_at", null: false
-    t.datetime "last_played_at"
     t.string "name", null: false
-    t.integer "time_logged", default: 0, null: false
     t.string "token_url", null: false
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false
@@ -156,7 +153,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
     t.string "connection_key"
     t.datetime "created_at", null: false
     t.datetime "last_played_at"
-    t.string "rest_site"
     t.datetime "updated_at", null: false
     t.integer "world_id", null: false
     t.integer "world_version_id"
@@ -169,7 +165,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
 
   create_table "world_versions", force: :cascade do |t|
     t.string "commit_sha"
-    t.string "content_sha"
     t.datetime "created_at", null: false
     t.datetime "expires_at"
     t.datetime "imported_at"
@@ -201,15 +196,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
     t.string "content_sha"
     t.datetime "created_at", null: false
     t.string "entry_connection_key"
-    t.integer "file_size"
     t.string "identifier", null: false
     t.json "links", default: {}, null: false
     t.string "path", null: false
-    t.string "state", default: "provided", null: false
     t.datetime "updated_at", null: false
-    t.string "validity_error"
     t.integer "world_version_id", null: false
-    t.index ["state"], name: "index_zones_on_state"
     t.index ["world_version_id", "identifier"], name: "index_zones_on_world_version_id_and_identifier", unique: true
     t.index ["world_version_id"], name: "index_zones_on_world_version_id"
   end

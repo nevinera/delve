@@ -12,4 +12,7 @@ class Character < ApplicationRecord
     format: {with: /\Ahttps?:\/\/\S+\z/, message: "must be a valid URL"}
 
   def setting_or_default = character_setting || build_character_setting
+
+  # When the character last entered any world.
+  def last_played_at = world_characters.maximum(:last_played_at)
 end

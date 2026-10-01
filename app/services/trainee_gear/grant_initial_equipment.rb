@@ -55,13 +55,10 @@ module TraineeGear
     def character_item_attrs_for(equipped_slot, item, now)
       TraineeGear.item_attrs(equipped_slot, item)
         .merge(world_character_id: @world_character.id)
-        .merge(timestamps(now, received_at: true))
+        .merge(timestamps(now))
     end
 
-    def timestamps(now, received_at: false)
-      base = {created_at: now, updated_at: now}
-      received_at ? base.merge(received_at: now) : base
-    end
+    def timestamps(now) = {created_at: now, updated_at: now}
 
     def equipped_item_attrs(ids_by_identifier)
       now = Time.current

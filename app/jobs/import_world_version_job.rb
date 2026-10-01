@@ -41,7 +41,7 @@ class ImportWorldVersionJob < ApplicationJob
     entry = WorldContent::Links.default_entry(world_data)
     raise ImportError, "#{world.path}: every entry point needs a key, so nobody could enter" unless entry
     zones.each { |key, zone| zone[:links] = WorldContent::Links.links_for(world_data, key, zones_by_key) }
-    save!(sha:, base_url:, world_body:, world_data:, zones:, entry:)
+    save!(sha:, base_url:, world_data:, zones:, entry:)
   end
 
   def resolve_commit_sha
@@ -57,7 +57,7 @@ class ImportWorldVersionJob < ApplicationJob
     body = fetch!(base_url, path)
     data = parse!(body, path)
     in_file(path) { Validators::ZoneValidator.validate!(data) }
-    {path:, data:, content_sha: Digest::SHA1.hexdigest(body), file_size: body.bytesize}
+    {path:, data:, content_sha: Digest::SHA1.hexdigest(body)}
   end
 
   # A world's zone paths are relative to the world file, and point at the
@@ -89,20 +89,18 @@ class ImportWorldVersionJob < ApplicationJob
   # Stores references, checksums, and the structure Rails needs without
   # re-reading the files: the display name, which zone connection is the
   # default entry point, and where each zone's exits lead.
-  def save!(sha:, base_url:, world_body:, world_data:, zones:, entry:)
+  def save!(sha:, base_url:, world_data:, zones:, entry:)
     entry_zone, entry_connection = entry
     WorldVersion.transaction do
       Zone.where(world_version: @version).delete_all
       zones.each do |key, zone|
         @version.zones.create!(
           identifier: key, path: zone[:path], content_sha: zone[:content_sha],
-          file_size: zone[:file_size], state: :fetched,
           links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone)
         )
       end
       @version.update!(
-        commit_sha: sha, raw_base_url: base_url, content_sha: Digest::SHA1.hexdigest(world_body),
-        name: world_data["name"], state: :unreleased, imported_at: Time.current
+        commit_sha: sha, raw_base_url: base_url, name: world_data["name"], state: :unreleased, imported_at: Time.current
       )
       world.update!(name: world_data["name"]) if world.name.blank?
     end
