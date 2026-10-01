@@ -50,6 +50,14 @@ RSpec.describe WorldVersion, type: :model do
       expect { create(:world_version, world:).release! }.not_to(change { expiring.reload.expires_at })
     end
 
+    it "pushes the new expiry to the earlier versions' running instances" do
+      earlier = create(:world_version, :released, world:)
+      already_expiring = create(:world_version, :released, world:, expires_at: 1.hour.from_now)
+      version = create(:world_version, world:)
+      expect { version.release! }.to have_enqueued_job(PushWorldVersionExpiryJob).with(earlier.id).exactly(:once)
+      expect(PushWorldVersionExpiryJob).not_to have_been_enqueued.with(already_expiring.id)
+    end
+
     it "doesn't touch other worlds" do
       other = create(:world_version, :released)
       create(:world_version, world:).release!
