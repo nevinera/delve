@@ -76,8 +76,9 @@ func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.M
 	unit.Behavior.PathWaypoints = nil
 	unit.Behavior.PathRecalcIn = 0
 
-	// Reset idle NPCs that wander through a connection; keep engaged NPCs chasing.
-	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") && unit.Status != instancestate.UnitStatusEngaged {
+	// Reset idle NPCs that wander through a connection; keep engaged NPCs
+	// chasing and leashing ones heading home.
+	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") && unit.Status != instancestate.UnitStatusEngaged && unit.Status != instancestate.UnitStatusLeashing {
 		unit.Target = nil
 		unit.Status = instancestate.UnitStatusIdle
 		unit.Behavior.MovementPhase = ""

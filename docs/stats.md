@@ -358,7 +358,7 @@ Every living player regenerates **0.5% of max HP per second**, always - not gate
 combat. The rate is deliberately small (200s to heal fully from empty) so it's a non-factor next to
 any actual healing, which is why no in/out-of-combat tracking was needed to gate it. Scaled by the
 player's own Recovery Rating like any other healing they receive (see above). NPCs don't get this -
-they already fully heal via the existing leash-return mechanic instead.
+they heal to full whenever they leash instead (see [map.md](schema/map.md#leashing)).
 
 ## Miss Chance
 

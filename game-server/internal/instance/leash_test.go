@@ -12,6 +12,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 func float(v float64) *float64 { return &v }
@@ -201,4 +202,70 @@ func TestUpdateCombatClocks_StampsUnitsThatDealtOrTookDamage(t *testing.T) {
 
 	assert.Equal(t, now, hit.Behavior.LastCombatAt)
 	assert.True(t, idle.Behavior.LastCombatAt.IsZero())
+}
+
+func TestLeash_WalksHomeAroundAWall(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall", Locations: []instanceconfig.Location{{X: -3, Y: 5}, {X: 3, Y: 5}},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(0, 10))
+	u.Radius = 2.0
+	manualLeash(u, 0, 0) // home is on the far side of the wall
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.NotEqual(t, 0.0, u.Position.X, "heads for the wall's open end, not straight through it")
+	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
+}
+
+func TestLeash_WalksBackAcrossAMapConnection(t *testing.T) {
+	zone := twoMapZone()
+	for i := range zone.Maps {
+		zone.Maps[i].FeetDimensions = instanceconfig.Dimensions{Width: 100, Height: 100}
+		for j := range zone.Maps[i].Connections {
+			zone.Maps[i].Connections[j].FuzzRadius = 1.5
+		}
+	}
+	zone.Maps[0].Connections[0].Position = &instanceconfig.Position{X: 50, Y: 60}
+	zone.Maps[1].Connections[0].Position = &instanceconfig.Position{X: 50, Y: 40}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(50, 50))
+	manualLeash(u, 50, 50)                            // home on map1...
+	u.MapIdentifier, u.Position = "map2", pos(50, 70) // ...but it chased someone onto map2
+
+	for tick := 0; tick < 200 && u.Status == instancestate.UnitStatusLeashing; tick++ {
+		prev := s.Clone()
+		instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+		instance.ApplyMapTransitionsForTest(s, prev, zone)
+	}
+
+	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+	assert.Equal(t, "map1", u.MapIdentifier, "walked back through the connection rather than teleporting")
+	assert.InDelta(t, 50, u.Position.X, 1e-9)
+	assert.InDelta(t, 50, u.Position.Y, 1e-9)
+}
+
+func TestLeash_WithNoRouteHomeIsSnappedBack(t *testing.T) {
+	zone := basicAttackZone(4.0, 1.0)
+	// Wall the leash point in completely.
+	zone.Maps[0].Barriers = []instanceconfig.Barrier{{
+		Type: "wall", Locations: []instanceconfig.Location{{X: -5, Y: -5}, {X: 5, Y: -5}, {X: 5, Y: 5}, {X: -5, Y: 5}, {X: -5, Y: -5}},
+	}}
+	graph, err := pathing.Build(zone, 1.0)
+	require.NoError(t, err)
+
+	u, s := npcState("g1", pos(20, 20))
+	manualLeash(u, 0, 0)
+
+	instance.ApplyUnitBehaviorsWithPathGraphForTest(s, zone, dt, graph)
+
+	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
+	assert.Equal(t, pos(0, 0).X, u.Position.X)
+	assert.Equal(t, pos(0, 0).Y, u.Position.Y)
 }

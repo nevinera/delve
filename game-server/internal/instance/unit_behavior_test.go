@@ -1948,9 +1948,9 @@ func TestUnitBehavior_Leash_MovesBackToLeashPoint(t *testing.T) {
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	// Should have moved 1ft south (speed=10, dt=0.1) toward (0,0).
+	// Should have moved 2ft south (speed=10, doubled while leashing, dt=0.1) toward (0,0).
 	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
-	assert.InDelta(t, 19.0, u.Position.Y, 1e-9)
+	assert.InDelta(t, 18.0, u.Position.Y, 1e-9)
 	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
 }
 
@@ -2005,7 +2005,8 @@ func TestUnitBehavior_Leash_EngageRecordsLeashPoint(t *testing.T) {
 }
 
 func TestUnitBehavior_Leash_CrossMapSnapsBack(t *testing.T) {
-	// A unit that chased a player to another map should snap back immediately.
+	// Without pathing for the instance, a unit on another map can't find the
+	// way home, so it's snapped back.
 	zone := twoMapZone()
 	u, s := npcState("g1", pos(0, 0))
 	u.MapIdentifier = "map2" // NPC got dragged to map2

@@ -8,6 +8,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
 // Leashing follows modern WoW (see docs/schema/map.md's "Leashing"): an
@@ -22,6 +23,11 @@ const (
 	leashQuietInside   = 10 * time.Second
 	leashQuietOutside  = 6 * time.Second
 	leashHardCapFactor = 3.0
+
+	// leashSpeedFactor speeds a leashing NPC home.
+	leashSpeedFactor = 2.0
+	// leashArrivalRadius is how close to its leash point counts as home.
+	leashArrivalRadius = 0.5
 )
 
 // leashDistance is how far an engaged unit is from its leash point: plain
@@ -122,10 +128,10 @@ func groupmateTarget(state *instancestate.InstanceState, groupmates []string, st
 	return nil
 }
 
-// startLeash resets a unit and sends it home: it drops its target, cast,
-// and loot tag, heals to full, and loses every status others applied to it.
-// While leashing nothing engages it (only idle units engage). If its leash
-// point is on another map it's snapped back there at once.
+// startLeash resets a unit and sends it home (see walkHome): it drops its
+// target, cast, and loot tag, heals to full, and loses every status others
+// applied to it. While leashing it's immune (command.IsEvading) and nothing
+// engages it (only idle units engage).
 func startLeash(unitID uuid.UUID, unit *instancestate.UnitState) {
 	unit.Target = nil
 	unit.Attacking = false
@@ -143,13 +149,63 @@ func startLeash(unitID uuid.UUID, unit *instancestate.UnitState) {
 	unit.Behavior.ArrivalMapID = ""
 	unit.Behavior.CrossingDistance = 0
 	unit.Behavior.LeftLeashArea = false
-	if unit.MapIdentifier != unit.Behavior.LeashMapID {
-		unit.MapIdentifier = unit.Behavior.LeashMapID
-		unit.Position.X = unit.Behavior.LeashX
-		unit.Position.Y = unit.Behavior.LeashY
-		unit.Status = instancestate.UnitStatusIdle
-		unit.Behavior.MovementPhase = ""
+	unit.Status = instancestate.UnitStatusLeashing
+}
+
+// walkHome moves a leashing unit toward its leash point, pathing around
+// obstacles, and - from another map - toward the connection that leads back
+// to its leash map, crossing it like a chase would. Home, it goes idle and
+// resumes its normal movement. Without pathing for this instance it walks
+// straight home, and from another map it's snapped back; if pathing finds
+// no way home at all it's snapped back too, rather than left stranded and
+// immune.
+func walkHome(unit *instancestate.UnitState, speed, dt float64, pathGraph *pathing.Graph, budget *pathBudget) {
+	b := &unit.Behavior
+	noRoute := false
+	route := func(points []pathing.Point, ok bool) ([]pathing.Point, bool) {
+		noRoute = !ok
+		return points, ok
+	}
+	defer func() {
+		if noRoute {
+			arriveHome(unit)
+		}
+	}()
+	if unit.MapIdentifier != b.LeashMapID {
+		moveAlongPlannedPath(unit, speed, dt, pathGraph, budget, nil,
+			func() ([]pathing.Point, bool) {
+				return route(pathGraph.FindPathTowardMap(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, b.LeashMapID))
+			},
+			func() { arriveHome(unit) },
+		)
 		return
 	}
-	unit.Status = instancestate.UnitStatusLeashing
+	if math.Hypot(b.LeashX-unit.Position.X, b.LeashY-unit.Position.Y) < leashArrivalRadius {
+		arriveHome(unit)
+		return
+	}
+	if pathGraph == nil || pathGraph.SegmentClear(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, b.LeashX, b.LeashY) {
+		b.PathWaypoints = nil
+		moveStraightToward(unit, b.LeashX, b.LeashY, speed, dt)
+		return
+	}
+	goal := pathing.Point{X: b.LeashX, Y: b.LeashY}
+	moveAlongPlannedPath(unit, speed, dt, pathGraph, budget, &goal,
+		func() ([]pathing.Point, bool) {
+			return route(pathGraph.FindPath(unit.Radius, unit.MapIdentifier, unit.Position.X, unit.Position.Y, b.LeashX, b.LeashY))
+		},
+		func() { moveStraightToward(unit, b.LeashX, b.LeashY, speed, dt) },
+	)
+}
+
+// arriveHome puts a leashing unit back at its leash point, idle.
+func arriveHome(unit *instancestate.UnitState) {
+	b := &unit.Behavior
+	unit.MapIdentifier = b.LeashMapID
+	unit.Position.X = b.LeashX
+	unit.Position.Y = b.LeashY
+	unit.Status = instancestate.UnitStatusIdle
+	unit.TaggedBy = nil
+	b.MovementPhase = ""
+	b.PathWaypoints = nil
 }

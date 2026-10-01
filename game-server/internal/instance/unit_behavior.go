@@ -215,30 +215,7 @@ func applyUnitBehavior(
 		}
 
 	case instancestate.UnitStatusLeashing:
-		if unit.MapIdentifier != unit.Behavior.LeashMapID {
-			unit.MapIdentifier = unit.Behavior.LeashMapID
-			unit.Position.X = unit.Behavior.LeashX
-			unit.Position.Y = unit.Behavior.LeashY
-			unit.Status = instancestate.UnitStatusIdle
-			unit.Behavior.MovementPhase = ""
-			unit.TaggedBy = nil
-			return
-		}
-		dx := unit.Behavior.LeashX - unit.Position.X
-		dy := unit.Behavior.LeashY - unit.Position.Y
-		dist := math.Sqrt(dx*dx + dy*dy)
-		if dist < 0.5 {
-			unit.Position.X = unit.Behavior.LeashX
-			unit.Position.Y = unit.Behavior.LeashY
-			unit.Status = instancestate.UnitStatusIdle
-			unit.Behavior.MovementPhase = ""
-			unit.TaggedBy = nil
-			return
-		}
-		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, unit.Behavior.LeashX, unit.Behavior.LeashY)
-		move := math.Min(speed*dt, dist)
-		unit.Position.X += (dx / dist) * move
-		unit.Position.Y += (dy / dist) * move
+		walkHome(unit, speed*leashSpeedFactor, dt, pathGraph, budget)
 
 	case instancestate.UnitStatusDead, instancestate.UnitStatusRespawning:
 		// Nothing - a respawning unit isn't real yet either (see
