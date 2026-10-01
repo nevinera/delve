@@ -77,4 +77,24 @@ A **World version** is the world as of one commit.
 The tag is only for human reference. A version always reads its files by commit SHA, so moving
 or deleting the tag afterwards changes nothing.
 
-> Playing a world (entering it and travelling between its zones) isn't built yet.
+## Playing a World
+
+Each character has a list of worlds (Play → a character → Worlds): every world with a released
+version, minus any they've hidden. "Show all" brings hidden worlds back.
+
+The first time a character enters a world, Delve creates a record of their time there: which
+version they're on and the connection point they last used. They start at the world's first entry
+point that needs no key.
+- **Re-entering** puts them back at their last connection point. If that zone or connection no
+  longer exists in the version they're entering, they start at the entry point instead.
+- **Travelling:** stepping onto one of a zone's world-linked exits takes the character to the
+  connection on the other side, a new page load into that zone's instance. Exits only fire when
+  stepped onto (not when spawning on or standing on one), and not within 6 seconds of arriving.
+- **Versions:** a character stays on their version until it expires. Outside the world, they can
+  switch to any released version that hasn't expired. When a version expires while they're in
+  it, they get a countdown for the last 10 minutes, then they're moved to the latest version.
+
+Delve only stores where a character is between zones. Inside a zone, the instance tracks their
+position; if they leave the instance some other way, they return at their last connection point.
+
+Items are still tracked per character, not per world. That changes in a later update.
