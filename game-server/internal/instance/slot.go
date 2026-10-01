@@ -137,14 +137,19 @@ func (inst *Instance) GetSlot(id uuid.UUID) (*InstanceSlot, bool) {
 	return slot, ok
 }
 
-// RemoveSlot removes the slot with the given ID. Returns true if it existed.
+// RemoveSlot removes the slot with the given ID, and its character's unit
+// on the next tick. Returns true if it existed.
 func (inst *Instance) RemoveSlot(id uuid.UUID) bool {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
-	_, ok := inst.slots[id]
+	slot, ok := inst.slots[id]
+	if !ok {
+		return false
+	}
 	delete(inst.slots, id)
+	inst.queueDespawn(slot.CharacterUnitID)
 	inst.recomputeSlotCounts()
-	return ok
+	return true
 }
 
 // SetSlotState transitions a slot to a new state. Returns false if the slot
@@ -314,13 +319,15 @@ func (inst *Instance) SlotsForTick() []SlotForTick {
 }
 
 // pruneStaleSlots removes slots that have been in an inactive state (pending
-// or waiting) longer than the given timeout. Called from the tick loop.
+// or waiting) longer than the given timeout, and their character units on
+// the next tick. Called from the tick loop.
 func (inst *Instance) pruneStaleSlots(now time.Time, timeout time.Duration) {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
 	for id, s := range inst.slots {
 		if (s.State == SlotStatePending || s.State == SlotStateWaiting) && now.Sub(s.stateEnteredAt) >= timeout {
 			delete(inst.slots, id)
+			inst.queueDespawn(s.CharacterUnitID)
 		}
 	}
 	inst.recomputeSlotCounts()

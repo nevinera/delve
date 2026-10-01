@@ -94,6 +94,8 @@ type Instance struct {
 	atomicActiveSlotCount atomic.Int64
 
 	playerSpawnCh       chan playerSpawn
+	despawnMu           sync.Mutex
+	pendingDespawns     []uuid.UUID // character units of removed slots; see queueDespawn
 	commandCh           chan command.Command
 	commandProcessor    *command.CommandProcessor
 	autoUpgradeResultCh chan autoUpgradeResult

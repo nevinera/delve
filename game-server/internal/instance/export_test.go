@@ -177,3 +177,7 @@ func TickNCUMovementForTest(state *instancestate.InstanceState, dt float64) {
 func UpdateCombatStatsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
 	updateCombatStats(state, zone)
 }
+
+func RemoveUnitForTest(state *instancestate.InstanceState, unitID uuid.UUID) {
+	removeUnit(state, unitID)
+}
