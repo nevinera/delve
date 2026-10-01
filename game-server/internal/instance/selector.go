@@ -2,20 +2,11 @@ package instance
 
 import "time"
 
-// SelectBestInstance returns the best legacy-mode candidate for zone
-// identifier + version (see pickFullest). Returns nil if no suitable
-// instance exists.
+// SelectKeyedInstance returns the best candidate with exactly this mode and
+// Rails-chosen instance key (see pickFullest), so world and direct players
+// never share an instance. Returns nil if none is suitable.
 //
 // candidates should be a registry snapshot (e.g. from Registry.List).
-func SelectBestInstance(candidates []*Instance, zoneIdentifier, version string) *Instance {
-	return pickFullest(candidates, func(inst *Instance) bool {
-		return inst.Mode == ModeLegacy && inst.ZoneIdentifier == zoneIdentifier && inst.Version == version
-	})
-}
-
-// SelectKeyedInstance returns the best candidate with exactly this mode and
-// Rails-chosen instance key (see pickFullest), so world, direct, and legacy
-// players never share an instance. Returns nil if none is suitable.
 func SelectKeyedInstance(candidates []*Instance, mode Mode, key string) *Instance {
 	return pickFullest(candidates, func(inst *Instance) bool {
 		return inst.Mode == mode && inst.InstanceKey == key

@@ -48,8 +48,3 @@ func TestSelectKeyedInstance_PrefersFullestWithRoom(t *testing.T) {
 
 	assert.Same(t, fuller, instance.SelectKeyedInstance([]*instance.Instance{emptier, fuller, full}, instance.ModeWorld, "world:1"))
 }
-
-func TestSelectBestInstance_IgnoresNonLegacyInstances(t *testing.T) {
-	world := makeKeyedInstance(t, instance.ModeWorld, "world:1", 10)
-	assert.Nil(t, instance.SelectBestInstance([]*instance.Instance{world}, "zone-a", "v1"))
-}

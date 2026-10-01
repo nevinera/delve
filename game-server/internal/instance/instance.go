@@ -34,8 +34,6 @@ const (
 type Mode string
 
 const (
-	// ModeLegacy is a hand-registered zone, matched by identifier + version.
-	ModeLegacy Mode = "legacy"
 	// ModeWorld is a zone reached through a world; loot is persisted.
 	ModeWorld Mode = "world"
 	// ModeDirect is a builder trying a zone straight from their repo;
@@ -106,10 +104,9 @@ type Instance struct {
 	// tests. Must be set before Start() is called.
 	SlotWaitTimeout time.Duration
 
-	// Mode is how players reached this instance (see Mode*). InstanceKey,
-	// when set, is the opaque key Rails chose for it; slot requests carrying
-	// a key only ever join an instance with the same key and mode (see
-	// SelectKeyedInstance). WorldVersionID identifies the world version a
+	// Mode is how players reached this instance (see Mode*). InstanceKey is
+	// the opaque key Rails chose for it; slot requests only ever join an
+	// instance with the same key and mode (see SelectKeyedInstance). WorldVersionID identifies the world version a
 	// world-mode instance belongs to. Exits holds the "mapId/connectionId"
 	// keys of connections that leave the zone. All are set once, before
 	// Start, and never written again.
@@ -173,7 +170,7 @@ func NewInstance(
 		SourceURL:           sourceURL,
 		MaxSlots:            maxSlots,
 		Status:              StatusLoading,
-		Mode:                ModeLegacy,
+		Mode:                ModeDirect, // never persists anything unless a world join says otherwise
 		ZoneConfig:          zone,
 		CreatedAt:           time.Now(),
 		Rand:                rand.New(rand.NewSource(time.Now().UnixNano())),

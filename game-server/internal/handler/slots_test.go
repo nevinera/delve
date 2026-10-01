@@ -51,6 +51,7 @@ func addTestInstance(t *testing.T, reg *instance.Registry) *instance.Instance {
 		}}},
 		instance.DefaultMaxSlots,
 	)
+	inst.InstanceKey = "direct:goblin-cave" // matches validRequestBody
 	require.NoError(t, inst.Start(nil))
 	t.Cleanup(inst.Stop)
 	reg.Add(inst)

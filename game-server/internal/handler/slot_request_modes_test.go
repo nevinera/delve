@@ -53,16 +53,6 @@ func TestSlotsRequest_World_SetsInstanceAndSlotOptions(t *testing.T) {
 	assert.Equal(t, "m1/south", slots[0].SpawnAt)
 }
 
-func TestSlotsRequest_LegacyByDefault(t *testing.T) {
-	reg := instance.NewRegistry()
-	router := mountRequest(newSlotsHandler(reg, 200))
-
-	require.Equal(t, http.StatusCreated, postRequest(t, router, validRequestBody(nil)).Code)
-	inst := onlyInstance(t, reg)
-	t.Cleanup(inst.Stop)
-	assert.Equal(t, instance.ModeLegacy, inst.Mode)
-}
-
 func TestSlotsRequest_ModeValidation(t *testing.T) {
 	cases := map[string]map[string]any{
 		"unknown mode":                    {"mode": "sideways"},
@@ -112,8 +102,7 @@ func TestSlotsRequest_ModesNeverShareInstances(t *testing.T) {
 	reg := instance.NewRegistry()
 	router := mountRequest(newSlotsHandler(reg, 200))
 
-	legacy := decodeRequestResponse(t, postRequest(t, router, validRequestBody(nil)))
-	world := decodeRequestResponse(t, postRequest(t, router, worldRequest(map[string]any{"character_name": "Brego"})))
+	world := decodeRequestResponse(t, postRequest(t, router, worldRequest(nil)))
 	direct := decodeRequestResponse(t, postRequest(t, router, worldRequest(map[string]any{
 		"character_name": "Cyra", "mode": "direct", "world_character_database_id": "",
 	})))
@@ -121,8 +110,7 @@ func TestSlotsRequest_ModesNeverShareInstances(t *testing.T) {
 		t.Cleanup(inst.Stop)
 	}
 
-	ids := map[any]bool{legacy["instance_identifier"]: true, world["instance_identifier"]: true, direct["instance_identifier"]: true}
-	assert.Len(t, ids, 3)
+	assert.NotEqual(t, world["instance_identifier"], direct["instance_identifier"])
 }
 
 func TestSlotsRequest_SpecificInstance_ModeMismatch(t *testing.T) {
@@ -134,6 +122,8 @@ func TestSlotsRequest_SpecificInstance_ModeMismatch(t *testing.T) {
 	id, err := uuid.Parse(world["instance_identifier"].(string))
 	require.NoError(t, err)
 
-	rec := postRequest(t, router, validRequestBody(map[string]any{"instance_identifier": id.String(), "character_name": "Brego"}))
+	rec := postRequest(t, router, worldRequest(map[string]any{
+		"instance_identifier": id.String(), "character_name": "Brego", "mode": "direct", "world_character_database_id": "",
+	}))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }

@@ -26,10 +26,10 @@ type slotRequestBody struct {
 	OwnedZoneItems      map[string]bool                        `json:"owned_zone_items"` // optional; nil if not provided
 	EquippedItems       map[string]instanceconfig.EquippedItem `json:"equipped_items"`   // optional; nil if not provided
 
-	// World/direct join settings (see plans/worlds-slice-2.md); all
-	// optional, and a request without them behaves as it always has.
-	Mode                     instance.Mode `json:"mode"`                        // legacy (default) | world | direct
-	InstanceKey              string        `json:"instance_key"`                // Rails-chosen key; selection matches on it
+	// How the player reached the zone, and the world-join settings (see
+	// game-server/README.md).
+	Mode                     instance.Mode `json:"mode"`                        // world | direct; required
+	InstanceKey              string        `json:"instance_key"`                // Rails-chosen key; selection matches on it; required
 	SpawnAt                  string        `json:"spawn_at"`                    // "mapId/connectionId"; per slot
 	Exits                    []string      `json:"exits"`                       // "mapId/connectionId" keys; per instance
 	WorldCharacterDatabaseID string        `json:"world_character_database_id"` // required for world mode
@@ -37,16 +37,13 @@ type slotRequestBody struct {
 	ExpiresAt                *time.Time    `json:"expires_at"`                  // RFC 3339; per instance, if the version is already expiring
 }
 
-// validate fills in the default mode and checks required fields, returning
-// a message for the first problem found.
+// validate checks required fields, returning a message for the first
+// problem found.
 func (req *slotRequestBody) validate() string {
-	if req.Mode == "" {
-		req.Mode = instance.ModeLegacy
-	}
 	switch req.Mode {
-	case instance.ModeLegacy, instance.ModeWorld, instance.ModeDirect:
+	case instance.ModeWorld, instance.ModeDirect:
 	default:
-		return "mode must be legacy, world, or direct"
+		return "mode must be world or direct"
 	}
 	// A direct join has no zone record, so no database_id.
 	if req.ZoneIdentifier == "" || req.Version == "" || (req.DatabaseID == "" && req.Mode != instance.ModeDirect) ||
@@ -56,8 +53,8 @@ func (req *slotRequestBody) validate() string {
 	if req.Mode == instance.ModeWorld && req.WorldCharacterDatabaseID == "" {
 		return "world_character_database_id is required for world mode"
 	}
-	if req.Mode != instance.ModeLegacy && req.InstanceKey == "" {
-		return "instance_key is required for world and direct modes"
+	if req.InstanceKey == "" {
+		return "instance_key is required"
 	}
 	return ""
 }
@@ -119,12 +116,7 @@ func (h *Slots) requestToSpecificInstance(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Slots) requestToAnyInstance(w http.ResponseWriter, r *http.Request, req slotRequestBody) {
-	var inst *instance.Instance
-	if req.Mode == instance.ModeLegacy {
-		inst = instance.SelectBestInstance(h.registry.List(), req.ZoneIdentifier, req.Version)
-	} else {
-		inst = instance.SelectKeyedInstance(h.registry.List(), req.Mode, req.InstanceKey)
-	}
+	inst := instance.SelectKeyedInstance(h.registry.List(), req.Mode, req.InstanceKey)
 	if inst == nil {
 		if h.registry.Count() >= h.maxInstances {
 			writeError(w, r, http.StatusNotAcceptable, "server is at maximum instance capacity")

@@ -50,6 +50,8 @@ func validRequestBody(extras map[string]any) []byte {
 		"zone_config":           validZoneConfig(),
 		"character_name":        "Aldric",
 		"character_database_id": "42",
+		"mode":                  "direct",
+		"instance_key":          "direct:goblin-cave",
 		"character_class": map[string]any{
 			"name":   "Puncher",
 			"colors": map[string]any{"major": "8B4513", "minor": "F4A460"},
@@ -80,7 +82,7 @@ func decodeRequestResponse(t *testing.T, rec *httptest.ResponseRecorder) map[str
 // --- validation ---
 
 func TestSlotsRequest_MissingRequiredFields(t *testing.T) {
-	for _, field := range []string{"zone_identifier", "version", "database_id", "source_url", "character_name", "character_database_id"} {
+	for _, field := range []string{"zone_identifier", "version", "source_url", "character_name", "character_database_id"} {
 		t.Run("missing_"+field, func(t *testing.T) {
 			reg := instance.NewRegistry()
 			router := mountRequest(newSlotsHandler(reg, 200))
@@ -331,14 +333,14 @@ func TestSlotsRequest_RouteRegistered(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 }
 
-func TestSlotsRequest_VersionMismatch_CreatesNewInstance(t *testing.T) {
+func TestSlotsRequest_InstanceKeyMismatch_CreatesNewInstance(t *testing.T) {
 	reg := instance.NewRegistry()
 	router := mountRequest(newSlotsHandler(reg, 200))
 
-	rec1 := postRequest(t, router, validRequestBody(map[string]any{"version": "v1"}))
+	rec1 := postRequest(t, router, validRequestBody(map[string]any{"instance_key": "direct:v1"}))
 	require.Equal(t, http.StatusCreated, rec1.Code)
 
-	rec2 := postRequest(t, router, validRequestBody(map[string]any{"version": "v2"}))
+	rec2 := postRequest(t, router, validRequestBody(map[string]any{"instance_key": "direct:v2"}))
 	require.Equal(t, http.StatusCreated, rec2.Code)
 
 	assert.Equal(t, 2, reg.Count())
@@ -346,8 +348,8 @@ func TestSlotsRequest_VersionMismatch_CreatesNewInstance(t *testing.T) {
 	body2 := decodeRequestResponse(t, rec2)
 	assert.NotEqual(t, body1["instance_identifier"], body2["instance_identifier"])
 
-	// A third request for v1 should reuse the first instance.
-	rec3 := postRequest(t, router, validRequestBody(map[string]any{"version": "v1"}))
+	// A third request for the first key should reuse the first instance.
+	rec3 := postRequest(t, router, validRequestBody(map[string]any{"instance_key": "direct:v1"}))
 	require.Equal(t, http.StatusCreated, rec3.Code)
 	body3 := decodeRequestResponse(t, rec3)
 	assert.Equal(t, body1["instance_identifier"], body3["instance_identifier"])
