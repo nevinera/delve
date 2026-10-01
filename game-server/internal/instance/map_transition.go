@@ -62,8 +62,12 @@ func applyMapTransitions(state *instancestate.InstanceState, prevState *instance
 // which side of fromConn the unit approached from.
 // Drops aggro on the unit and on any unit that was targeting it.
 func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.MapConnection, destMap instanceconfig.Map, destConn instanceconfig.MapConnection, prevX, prevY float64, state *instancestate.InstanceState) {
+	fromMapID := unit.MapIdentifier
 	unit.MapIdentifier = destMap.Identifier
 	unit.Position = spawnPosition(fromConn, destConn, prevX, prevY, unit.Position.Angle)
+	if unit.Status == instancestate.UnitStatusEngaged {
+		recordLeashCrossing(unit, fromMapID, prevX, prevY)
+	}
 
 	// Any cached detour was computed against the map just left behind -
 	// those coordinates mean nothing on the new map's geometry, so using
@@ -72,8 +76,9 @@ func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.M
 	unit.Behavior.PathWaypoints = nil
 	unit.Behavior.PathRecalcIn = 0
 
-	// Reset idle NPCs that wander through a connection; keep engaged NPCs chasing.
-	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") && unit.Status != instancestate.UnitStatusEngaged {
+	// Reset idle NPCs that wander through a connection; keep engaged NPCs
+	// chasing and leashing ones heading home.
+	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") && unit.Status != instancestate.UnitStatusEngaged && unit.Status != instancestate.UnitStatusLeashing {
 		unit.Target = nil
 		unit.Status = instancestate.UnitStatusIdle
 		unit.Behavior.MovementPhase = ""

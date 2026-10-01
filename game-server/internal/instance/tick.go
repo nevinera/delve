@@ -111,6 +111,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			tickNCUMovement(state, TickInterval.Seconds(), inst.Rand)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds(), inst.Rand)
+			updateCombatClocks(state, now)
 			processTriggeredStatusEffects(state, inst.ZoneConfig, now, TickInterval.Seconds(), inst.Rand)
 			scheduleRespawns(state, now)
 			tickRespawns(state, now, inst.Rand)

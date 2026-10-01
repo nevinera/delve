@@ -132,7 +132,7 @@ func (h BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zon
 		PowerName:  "Basic Attack",
 	})
 
-	if target.TaggedBy == nil && target.Hostility != "" {
+	if target.TaggedBy == nil && target.Hostility != "" && !IsEvading(target) {
 		target.TaggedBy = &unitID
 	}
 	EngageOnAttack(target, unitID, zone, next)
@@ -296,6 +296,9 @@ func PlayerMaxHealth(unit *instancestate.UnitState, zone instanceconfig.Zone) fl
 // "Miss Chance" section). NPCs have no EquippedItems, so both are 0 for them
 // - only players currently have any incoming-damage mitigation.
 func IncomingDamage(target *instancestate.UnitState, zone instanceconfig.Zone, rawDamage float64, physical bool, rng *rand.Rand) float64 {
+	if IsEvading(target) {
+		return 0
+	}
 	strength, agility, intellect, defenceRating, _ := unitEffectiveStats(target, zone)
 	mods := ActiveStatModifiers(target)
 	school := "physical"

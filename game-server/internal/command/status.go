@@ -22,6 +22,9 @@ import (
 // every later one - applying a status is itself the first "scheduling"
 // event, not an unhasted special case (see RecurringTickInterval).
 func ApplyStatus(target, applier *instancestate.UnitState, applierID uuid.UUID, status instanceconfig.Status, duration float64, zone instanceconfig.Zone, now time.Time) {
+	if IsEvading(target) && applier != target {
+		return
+	}
 	expiresAt := now.Add(time.Duration(duration * float64(time.Second)))
 
 	for i := range target.ActiveStatusEffects {

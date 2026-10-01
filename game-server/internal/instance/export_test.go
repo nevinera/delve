@@ -226,3 +226,13 @@ func (inst *Instance) TickExpiryForTest(now time.Time) bool {
 func BuildFullStateMsgWithExpiryForTest(state *instancestate.InstanceState, now time.Time, expiresAt time.Time) ([]byte, error) {
 	return buildFullStateMsg(state, now, "", nil, nil, expiresAt)
 }
+
+func LeashDistanceForTest(unit *instancestate.UnitState) float64 { return leashDistance(unit) }
+
+func RecordLeashCrossingForTest(unit *instancestate.UnitState, fromMapID string, prevX, prevY float64) {
+	recordLeashCrossing(unit, fromMapID, prevX, prevY)
+}
+
+func UpdateCombatClocksForTest(state *instancestate.InstanceState, now time.Time) {
+	updateCombatClocks(state, now)
+}

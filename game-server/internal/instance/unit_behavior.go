@@ -35,14 +35,12 @@ func effectiveBasicAttackRange(unitType instanceconfig.UnitType) float64 {
 // damage (UnitType.DPS / UnitType.AttackSpeed) to avoid flat, unvarying hits.
 const basicAttackVariance = 0.15
 
-// leashHealPctPerSecond is the fraction of max health a leashing unit
-// regenerates per second while returning to its leash point.
-const leashHealPctPerSecond = 0.20
-
-// npcEntry pairs an instance unit config with its resolved unit type.
+// npcEntry pairs an instance unit config with its resolved unit type and
+// leash settings.
 type npcEntry struct {
 	unit     instanceconfig.Unit
 	unitType instanceconfig.UnitType
+	leash    instanceconfig.Leash
 }
 
 // playerRef is a live player unit with its state ID, used for aggro checks.
@@ -151,14 +149,26 @@ func applyUnitBehavior(
 		tickNPCMovement(&unit.Position, &unit.Behavior.MovementState, mv, speed, dt, rng)
 
 	case instancestate.UnitStatusEngaged:
-		if unit.Target == nil {
-			startLeash(unit)
+		groupmates := groupByID[e.unit.Identifier]
+		if shouldLeash(unit, e.leash, time.Now()) {
+			leashPack(unitID, unit, state, groupmates, stateByZoneID)
 			return
 		}
-		target, ok := state.Units[*unit.Target]
+		target, ok := (*instancestate.UnitState)(nil), false
+		if unit.Target != nil {
+			target, ok = state.Units[*unit.Target]
+		}
 		if !ok || !target.Status.IsTargetable() {
-			startLeash(unit)
-			return
+			// Its own target is gone: join a groupmate's fight if there is
+			// one, otherwise the fight is over and the pack goes home.
+			newTarget := groupmateTarget(state, groupmates, stateByZoneID)
+			if newTarget == nil {
+				leashPack(unitID, unit, state, groupmates, stateByZoneID)
+				return
+			}
+			unit.Target = newTarget
+			unit.Attacking = true
+			target = state.Units[*newTarget]
 		}
 		if target.MapIdentifier == unit.MapIdentifier {
 			unit.Behavior.LastSeenX = target.Position.X
@@ -205,32 +215,7 @@ func applyUnitBehavior(
 		}
 
 	case instancestate.UnitStatusLeashing:
-		unit.Health = math.Min(unit.MaxHealth, unit.Health+unit.MaxHealth*leashHealPctPerSecond*dt)
-
-		if unit.MapIdentifier != unit.Behavior.LeashMapID {
-			unit.MapIdentifier = unit.Behavior.LeashMapID
-			unit.Position.X = unit.Behavior.LeashX
-			unit.Position.Y = unit.Behavior.LeashY
-			unit.Status = instancestate.UnitStatusIdle
-			unit.Behavior.MovementPhase = ""
-			unit.TaggedBy = nil
-			return
-		}
-		dx := unit.Behavior.LeashX - unit.Position.X
-		dy := unit.Behavior.LeashY - unit.Position.Y
-		dist := math.Sqrt(dx*dx + dy*dy)
-		if dist < 0.5 {
-			unit.Position.X = unit.Behavior.LeashX
-			unit.Position.Y = unit.Behavior.LeashY
-			unit.Status = instancestate.UnitStatusIdle
-			unit.Behavior.MovementPhase = ""
-			unit.TaggedBy = nil
-			return
-		}
-		unit.Position.Angle = facingTowardDeg(unit.Position.X, unit.Position.Y, unit.Behavior.LeashX, unit.Behavior.LeashY)
-		move := math.Min(speed*dt, dist)
-		unit.Position.X += (dx / dist) * move
-		unit.Position.Y += (dy / dist) * move
+		walkHome(unit, speed*leashSpeedFactor, dt, pathGraph, budget)
 
 	case instancestate.UnitStatusDead, instancestate.UnitStatusRespawning:
 		// Nothing - a respawning unit isn't real yet either (see
@@ -801,29 +786,13 @@ func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
 		unit.Behavior.LeashX = unit.Position.X
 		unit.Behavior.LeashY = unit.Position.Y
 		unit.Behavior.LeashMapID = unit.MapIdentifier
+		unit.Behavior.LastCombatAt = time.Now()
 	}
 	id := targetID
 	unit.Target = &id
 	unit.Attacking = true
 	unit.Status = instancestate.UnitStatusEngaged
 	unit.Behavior.PathWaypoints = nil // discard any detour left over from a previous target
-}
-
-// startLeash clears a unit's target and begins leashing it back to the position
-// where it engaged. If the unit is on a different map than the leash point, it
-// is snapped back immediately and returned to idle.
-func startLeash(unit *instancestate.UnitState) {
-	unit.Target = nil
-	unit.Attacking = false
-	if unit.MapIdentifier != unit.Behavior.LeashMapID {
-		unit.MapIdentifier = unit.Behavior.LeashMapID
-		unit.Position.X = unit.Behavior.LeashX
-		unit.Position.Y = unit.Behavior.LeashY
-		unit.Status = instancestate.UnitStatusIdle
-		unit.Behavior.MovementPhase = ""
-		return
-	}
-	unit.Status = instancestate.UnitStatusLeashing
 }
 
 // nearestPlayerInRadius returns the UUID of the closest player within radius
@@ -902,7 +871,7 @@ func buildNPCConfigByID(zone instanceconfig.Zone) map[string]npcEntry {
 	for _, mp := range zone.Maps {
 		for _, u := range mp.Units {
 			if ut, ok := zone.UnitTypes[u.UnitType]; ok {
-				m[u.Identifier] = npcEntry{u, ut}
+				m[u.Identifier] = npcEntry{u, ut, instanceconfig.UnitLeash(mp, u)}
 			}
 		}
 	}

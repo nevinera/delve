@@ -64,6 +64,7 @@ func manualEngage(unit *instancestate.UnitState, targetID uuid.UUID) {
 	unit.Behavior.LeashX = unit.Position.X
 	unit.Behavior.LeashY = unit.Position.Y
 	unit.Behavior.LeashMapID = unit.MapIdentifier
+	unit.Behavior.LastCombatAt = time.Now()
 	id := targetID
 	unit.Target = &id
 	unit.Attacking = true
@@ -1947,9 +1948,9 @@ func TestUnitBehavior_Leash_MovesBackToLeashPoint(t *testing.T) {
 
 	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
 
-	// Should have moved 1ft south (speed=10, dt=0.1) toward (0,0).
+	// Should have moved 2ft south (speed=10, doubled while leashing, dt=0.1) toward (0,0).
 	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
-	assert.InDelta(t, 19.0, u.Position.Y, 1e-9)
+	assert.InDelta(t, 18.0, u.Position.Y, 1e-9)
 	assert.Equal(t, instancestate.UnitStatusLeashing, u.Status)
 }
 
@@ -1963,29 +1964,6 @@ func TestUnitBehavior_Leash_ArrivesAndGoesIdle(t *testing.T) {
 	assert.Equal(t, instancestate.UnitStatusIdle, u.Status)
 	assert.InDelta(t, 0.0, u.Position.X, 1e-9)
 	assert.InDelta(t, 0.0, u.Position.Y, 1e-9)
-}
-
-func TestUnitBehavior_Leash_HealsOverTime(t *testing.T) {
-	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
-	u, s := npcState("g1", pos(0, 20)) // far from leash point, stays leashing this tick
-	u.Health = 5
-	manualLeash(u, 0, 0)
-
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
-
-	// MaxHealth=10, 20%/sec, dt=0.1 -> +0.2
-	assert.InDelta(t, 5.2, u.Health, 1e-9)
-}
-
-func TestUnitBehavior_Leash_HealDoesNotExceedMaxHealth(t *testing.T) {
-	zone := behaviorZone(0, instanceconfig.UnitMovement{Type: "still"})
-	u, s := npcState("g1", pos(0, 20))
-	u.Health = u.MaxHealth
-	manualLeash(u, 0, 0)
-
-	instance.ApplyUnitBehaviorsForTest(s, zone, dt)
-
-	assert.Equal(t, u.MaxHealth, u.Health)
 }
 
 func TestUnitBehavior_Leash_ArrivesAndGoesIdle_ClearsTag(t *testing.T) {
@@ -2027,7 +2005,8 @@ func TestUnitBehavior_Leash_EngageRecordsLeashPoint(t *testing.T) {
 }
 
 func TestUnitBehavior_Leash_CrossMapSnapsBack(t *testing.T) {
-	// A unit that chased a player to another map should snap back immediately.
+	// Without pathing for the instance, a unit on another map can't find the
+	// way home, so it's snapped back.
 	zone := twoMapZone()
 	u, s := npcState("g1", pos(0, 0))
 	u.MapIdentifier = "map2" // NPC got dragged to map2

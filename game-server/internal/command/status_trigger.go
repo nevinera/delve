@@ -100,7 +100,7 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 	if te.Amount == nil {
 		return 0
 	}
-	if recipient.TaggedBy == nil && recipient.Hostility != "" {
+	if recipient.TaggedBy == nil && recipient.Hostility != "" && !IsEvading(recipient) {
 		recipient.TaggedBy = &holderID
 	}
 	raw := TriggeredEffectAmount(holder, zone, eff, false, rng)
@@ -123,6 +123,9 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 
 func fireHeal(holder, recipient *instancestate.UnitState, eff instanceconfig.StatusEffect, zone instanceconfig.Zone, rng *rand.Rand) {
 	if eff.TriggeredEffect.Amount == nil {
+		return
+	}
+	if IsEvading(recipient) && recipient != holder {
 		return
 	}
 	amount := TriggeredEffectAmount(holder, zone, eff, true, rng)

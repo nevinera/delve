@@ -199,6 +199,23 @@ type BehaviorState struct {
 	LeashY     float64
 	LeashMapID string
 
+	// LastCombatAt is when this unit last dealt or took damage (or engaged) -
+	// the clock behind leashing once a fight goes quiet (see
+	// instance/leash.go).
+	LastCombatAt time.Time
+
+	// Chasing beyond the leash map (see instance/leash.go): CrossingDistance
+	// is how far from the leash point the unit was when it left its leash
+	// map, and ArrivalMapID/ArrivalX/ArrivalY where it came out on the
+	// second map - its leash distance there is CrossingDistance plus its
+	// distance from that arrival point. LeftLeashArea is set if it carries on
+	// into a third map, which leashes at once.
+	CrossingDistance float64
+	ArrivalMapID     string
+	ArrivalX         float64
+	ArrivalY         float64
+	LeftLeashArea    bool
+
 	// short-range detour around obstacles when the chase target isn't in
 	// direct line of sight. Waypoints are consumed front-to-back as the unit
 	// reaches each one; PathRecalcIn counts down so the underlying

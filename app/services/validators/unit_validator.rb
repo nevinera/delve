@@ -1,5 +1,7 @@
 module Validators
   class UnitValidator < Base
+    include LeashFields
+
     HOSTILITY_OPTIONS = %w[hostile neutral friendly].freeze
 
     def validate!(data, path: "$")
@@ -9,6 +11,7 @@ module Validators
       UnitMovementValidator.validate!(data["movement"], path: child_path(path, "movement")) if given?(data, "movement")
       validate_group_identifier!(data, path: path) if given?(data, "groupIdentifier")
       RespawnConfigValidator.validate!(data["respawn"], path: child_path(path, "respawn")) if given?(data, "respawn")
+      validate_leash_fields!(data, path:)
     end
 
     private

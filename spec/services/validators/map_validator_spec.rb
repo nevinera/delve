@@ -252,4 +252,26 @@ RSpec.describe Validators::MapValidator, type: :validator do
       end
     end
   end
+
+  describe "leash settings" do
+    it "accepts a leashRadius and hardLeash" do
+      expect { described_class.validate!(cave_entrance_map.merge("leashRadius" => 60, "hardLeash" => true)) }.not_to raise_error
+    end
+
+    it "accepts hardLeash false, to opt out" do
+      expect { described_class.validate!(cave_entrance_map.merge("hardLeash" => false)) }.not_to raise_error
+    end
+
+    it "rejects a leashRadius that isn't a positive number" do
+      expect { described_class.validate!(cave_entrance_map.merge("leashRadius" => 0)) }
+        .to raise_error(Validators::ValidationError, /leashRadius must be greater than 0/)
+      expect { described_class.validate!(cave_entrance_map.merge("leashRadius" => "far")) }
+        .to raise_error(Validators::ValidationError, /leashRadius must be a number/)
+    end
+
+    it "rejects a hardLeash that isn't a boolean" do
+      expect { described_class.validate!(cave_entrance_map.merge("hardLeash" => "yes")) }
+        .to raise_error(Validators::ValidationError, /hardLeash must be a boolean/)
+    end
+  end
 end
