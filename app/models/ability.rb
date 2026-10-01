@@ -9,8 +9,8 @@ class Ability
       can :manage, World, owner: user
       can :manage, WorldVersion, world: {owner: user}
       can :manage, Character, user: user
-      can :read, CharacterItem, character: {user: user}
-      can :manage, EquippedItem, character: {user: user}
+      can :read, CharacterItem, world_character: {character: {user: user}}
+      can :manage, EquippedItem, world_character: {character: {user: user}}
       can :manage, CharacterSetting, character: {user: user}
       can :read, CharacterClass
       can :read, Zone

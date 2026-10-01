@@ -27,8 +27,36 @@ RSpec.describe EnterWorld do
     expect(JoinWorldZone).to have_received(:call).with(
       world_character: WorldCharacter.last,
       zone: version.zones.find_by!(identifier: "darkwood"),
-      zone_data: hash_including("name" => "Darkwood")
+      zone_data: hash_including("name" => "Darkwood"),
+      owned_zone_items: {}
     )
+  end
+
+  it "grants trainee gear on first entry only" do
+    enter
+    world_character = WorldCharacter.last
+    expect(world_character.equipped_items).not_to be_empty
+    expect { enter }.not_to change(CharacterItem, :count)
+  end
+
+  it "grants trainee gear to a world character created by hiding the world" do
+    create(:world_character, world:, character:, active: false)
+    expect { enter }.to change(CharacterItem, :count)
+  end
+
+  it "explains when the character's class content isn't ready" do
+    character.character_class.update!(primary_stats: [], secondary_stats: [], wields: [])
+    expect { enter }.to raise_error(EnterWorld::ClassNotReady, /still loading/)
+  end
+
+  it "reports which of the zone's items the world character already owns" do
+    files = demo_world_files
+    item = {"identifier" => "sword", "name" => "Sword", "slot" => "main_hand", "elvl" => 1}
+    files[:zones]["darkwood"]["items"] = {"sword" => item}
+    other = published_world(files:, world: create(:world, path: "worlds/items.json"))
+    wc = create(:world_character, world: other.world, character:)
+    create(:character_item, world_character: wc, zone_identifier: "darkwood", identifier: "sword", version: ItemDefinition.version(item))
+    expect(described_class.call(character:, world: other.world).owned_zone_items).to eq("sword" => true)
   end
 
   it "re-enters at the saved connection point" do

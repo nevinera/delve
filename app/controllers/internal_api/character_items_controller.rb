@@ -3,9 +3,9 @@ class InternalApi::CharacterItemsController < InternalApi::BaseController
   rescue_from ActiveRecord::RecordInvalid, AwardCharacterItem::Error, with: :render_unprocessable
 
   def create
-    character = Character.find(params[:character_id])
+    world_character = WorldCharacter.find(params[:world_character_id])
     result = AwardCharacterItem.call(
-      character: character,
+      world_character:,
       source_data: params.to_unsafe_h,
       upgrade_only: params[:upgrade_only]
     )

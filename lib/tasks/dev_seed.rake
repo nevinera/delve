@@ -41,11 +41,8 @@ def seed_character(user, character_class, name:, token_url:)
   character.user = user
   character.character_class = character_class
   character.token_url = token_url
+  # Trainee gear comes per world, when the character first enters one.
   character.save!
-  # The after_create hook only enqueues this (development uses the :async
-  # adapter), and this task's process exits before that thread pool would
-  # get a chance to run it - so grant it inline instead.
-  GrantTraineeGearJob.perform_now(character.id)
   character
 end
 

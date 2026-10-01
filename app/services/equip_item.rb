@@ -18,7 +18,7 @@ class EquipItem
     ActiveRecord::Base.transaction do
       previous_placement&.destroy!
       slot_occupant&.destroy!
-      EquippedItem.create!(character: character, character_item: @character_item, equipped_slot: @equipped_slot)
+      EquippedItem.create!(world_character:, character_item: @character_item, equipped_slot: @equipped_slot)
     end
   end
 
@@ -32,9 +32,9 @@ class EquipItem
 
   def already_equipped_here? = previous_placement&.equipped_slot == @equipped_slot
 
-  def character = @character_item.character
+  def world_character = @character_item.world_character
 
   memoize def previous_placement = @character_item.equipped_item
 
-  memoize def slot_occupant = EquippedItem.find_by(character: character, equipped_slot: @equipped_slot)
+  memoize def slot_occupant = EquippedItem.find_by(world_character:, equipped_slot: @equipped_slot)
 end

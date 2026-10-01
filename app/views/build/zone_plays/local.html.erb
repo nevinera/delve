@@ -9,6 +9,8 @@
 <%= form_with url: build_local_zones_path, method: :get do |f| %>
   <%= f.label :key, "Zone key" %>
   <%= f.text_field :key, required: true %>
+  <%= f.label :elevation, "Gear elevation, relative to the zone (e.g. -5 or +3)" %>
+  <%= f.text_field :elevation, placeholder: "+0" %>
   <%= f.submit "Choose a character", name: nil %>
 <% end %>
 

@@ -40,6 +40,42 @@ RSpec.describe "Build::ZonePlays", type: :request do
     ))
   end
 
+  describe "imaginary trainee gear" do
+    let(:zone_elvl) { JSON.parse(zone_body)["elvl"] }
+
+    def equipped_elvls
+      args = nil
+      expect(JoinDirectZone).to have_received(:call) { |**kwargs| args = kwargs }
+      args[:equipped_items].values.map { |item| item[:elvl] }.uniq
+    end
+
+    it "is at the zone's elevation by default" do
+      get "/build/zones/forest/glade/play", params: {character_id: character.id}
+      expect(equipped_elvls).to eq([zone_elvl])
+    end
+
+    it "is offset by ?elevation=, and never below 0" do
+      get "/build/zones/forest/glade/play", params: {character_id: character.id, elevation: "+3"}
+      expect(equipped_elvls).to eq([zone_elvl + 3])
+    end
+
+    it "clamps at 0" do
+      get "/build/zones/forest/glade/play", params: {character_id: character.id, elevation: "-10000"}
+      expect(equipped_elvls).to eq([0])
+    end
+
+    it "explains a malformed elevation" do
+      get "/build/zones/forest/glade/play", params: {character_id: character.id, elevation: "high"}
+      expect(response).to have_http_status(:service_unavailable)
+      expect(response.body).to include("elevation must be a whole number")
+    end
+
+    it "carries the elevation through the character picker" do
+      get "/build/zones/forest/glade/play", params: {elevation: "-5"}
+      expect(response.body).to include("elevation=-5")
+    end
+  end
+
   it "returns 404 for another user's character" do
     get "/build/zones/forest/glade/play", params: {character_id: create(:character).id}
     expect(response).to have_http_status(:not_found)

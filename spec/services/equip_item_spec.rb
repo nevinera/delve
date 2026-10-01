@@ -1,13 +1,13 @@
 require "rails_helper"
 
 RSpec.describe EquipItem do
-  let(:character) { create(:character) }
+  let(:world_character) { create(:world_character) }
 
   def call(item, slot) = described_class.call(character_item: item, equipped_slot: slot)
 
   describe "#call" do
     context "when the slot is empty" do
-      let(:item) { create(:character_item, character: character, slot: "head") }
+      let(:item) { create(:character_item, world_character: world_character, slot: "head") }
 
       it "returns a new EquippedItem" do
         result = call(item, "head")
@@ -27,9 +27,9 @@ RSpec.describe EquipItem do
     end
 
     context "when another item already occupies that slot" do
-      let(:item) { create(:character_item, character: character, slot: "head") }
-      let(:old_item) { create(:character_item, character: character, slot: "head") }
-      let!(:old_placement) { create(:equipped_item, character: character, character_item: old_item, equipped_slot: "head") }
+      let(:item) { create(:character_item, world_character: world_character, slot: "head") }
+      let(:old_item) { create(:character_item, world_character: world_character, slot: "head") }
+      let!(:old_placement) { create(:equipped_item, world_character: world_character, character_item: old_item, equipped_slot: "head") }
 
       it "replaces the occupant" do
         result = call(item, "head")
@@ -47,8 +47,8 @@ RSpec.describe EquipItem do
     end
 
     context "when the item is already equipped in a different slot" do
-      let(:item) { create(:character_item, character: character, slot: "ring") }
-      let!(:placement) { create(:equipped_item, character: character, character_item: item, equipped_slot: "ring_1") }
+      let(:item) { create(:character_item, world_character: world_character, slot: "ring") }
+      let!(:placement) { create(:equipped_item, world_character: world_character, character_item: item, equipped_slot: "ring_1") }
 
       it "moves the item to the new slot" do
         result = call(item, "ring_2")
@@ -66,8 +66,8 @@ RSpec.describe EquipItem do
     end
 
     context "when the item is already equipped in the requested slot" do
-      let(:item) { create(:character_item, character: character, slot: "head") }
-      let!(:placement) { create(:equipped_item, character: character, character_item: item, equipped_slot: "head") }
+      let(:item) { create(:character_item, world_character: world_character, slot: "head") }
+      let!(:placement) { create(:equipped_item, world_character: world_character, character_item: item, equipped_slot: "head") }
 
       it "returns the existing placement unchanged" do
         expect(call(item, "head")).to eq(placement)
@@ -79,7 +79,7 @@ RSpec.describe EquipItem do
     end
 
     context "when the slot is incompatible with the item" do
-      let(:item) { create(:character_item, character: character, slot: "chest") }
+      let(:item) { create(:character_item, world_character: world_character, slot: "chest") }
 
       it "raises IncompatibleSlot" do
         expect { call(item, "legs") }.to raise_error(EquipItem::IncompatibleSlot, /chest/)

@@ -4,57 +4,6 @@ RSpec.describe Character, type: :model do
   let(:user) { create(:user) }
   let(:character_class) { create(:character_class) }
 
-  describe "#owned_zone_items_for" do
-    let(:zone) { create(:zone) }
-    let(:character) { create(:character) }
-
-    it "returns an empty hash when the character has no items" do
-      expect(character.owned_zone_items_for(zone)).to eq({})
-    end
-
-    it "returns true for an item owned from this exact zone version" do
-      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version_label, identifier: "sword")
-      expect(character.owned_zone_items_for(zone)).to eq({"sword" => true})
-    end
-
-    it "treats a world zone's commit SHA as its version" do
-      world_zone = create(:zone, identifier: "darkwood")
-      create(:character_item, character: character, zone_identifier: "darkwood", version: world_zone.world_version.commit_sha, identifier: "sword")
-      expect(character.owned_zone_items_for(world_zone)).to eq({"sword" => true})
-    end
-
-    it "returns false for an item owned from a different version of this zone" do
-      create(:character_item, character: character, zone_identifier: zone.identifier, version: "0.0", identifier: "sword")
-      expect(character.owned_zone_items_for(zone)).to eq({"sword" => false})
-    end
-
-    it "excludes items from zones with a different identifier" do
-      create(:character_item, character: character, zone_identifier: "other_zone", version: zone.version_label, identifier: "sword")
-      expect(character.owned_zone_items_for(zone)).to eq({})
-    end
-
-    it "can return multiple items with mixed ownership" do
-      create(:character_item, character: character, zone_identifier: zone.identifier, version: zone.version_label, identifier: "helm")
-      create(:character_item, character: character, zone_identifier: zone.identifier, version: "0.0", identifier: "sword")
-      result = character.owned_zone_items_for(zone)
-      expect(result).to eq({"helm" => true, "sword" => false})
-    end
-  end
-
-  describe "associations" do
-    it "destroys character_items when destroyed" do
-      character = create(:character)
-      create(:character_item, character: character)
-      expect { character.destroy }.to change(CharacterItem, :count).by(-1)
-    end
-
-    it "destroys equipped_items when destroyed" do
-      character = create(:character)
-      create(:equipped_item, character: character)
-      expect { character.destroy }.to change(EquippedItem, :count).by(-1)
-    end
-  end
-
   describe "validations" do
     it "is valid with all required fields" do
       expect(build(:character, user: user, character_class: character_class)).to be_valid
@@ -129,16 +78,6 @@ RSpec.describe Character, type: :model do
       c = build(:character, user: user)
       c.character_class = nil
       expect(c).not_to be_valid
-    end
-  end
-
-  describe "after create" do
-    include ActiveJob::TestHelper
-
-    it "enqueues a GrantTraineeGearJob" do
-      expect {
-        create(:character, user: user, character_class: character_class)
-      }.to have_enqueued_job(GrantTraineeGearJob)
     end
   end
 end

@@ -30,8 +30,7 @@ class JoinZone
     {
       character_name: @character.name,
       character_database_id: @character.id.to_s,
-      character_class: fetch_json(@character.character_class.location),
-      equipped_items: EquippedItems::ForCharacter.call(character: @character)
+      character_class: fetch_json(@character.character_class.location)
     }
   end
 

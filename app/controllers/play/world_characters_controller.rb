@@ -31,8 +31,8 @@ class Play::WorldCharactersController < Play::BaseController
     result = EnterWorld.call(character: @character, world: @world)
     @zone = result.zone
     @result = result.join
-    @owned_zone_items = @character.owned_zone_items_for(@zone)
-    @equipped_items = EquippedItems::ForCharacter.call(character: @character)
+    @owned_zone_items = result.owned_zone_items
+    @equipped_items = EquippedItems::ForWorldCharacter.call(world_character: result.world_character)
     @character_settings = @character.setting_or_default.as_client_json
     @stock_assets = Content::StockAssets.client_json
   rescue EnterWorld::Error, WorldContent::Error, GameApi::Error => e

@@ -19,7 +19,7 @@ RSpec.describe JoinWorldZone do
   end
 
   def call
-    described_class.call(world_character:, zone:, zone_data: WorldContent.zone(zone))
+    described_class.call(world_character:, zone:, zone_data: WorldContent.zone(zone), owned_zone_items: {"sword" => false})
   end
 
   it "sends a world-mode slot request for the zone" do
@@ -66,12 +66,13 @@ RSpec.describe JoinWorldZone do
     expect(SlotSession.find_by!(character:)).to have_attributes(zone:, token: "tok", last_confirmed_at: be_present)
   end
 
-  it "sends the character's items owned from this zone, and their equipment" do
-    create(:character_item, character:, zone_identifier: "darkwood", version: version.commit_sha, identifier: "sword")
+  it "sends the owned items it's given, and the world character's equipment" do
+    item = create(:character_item, world_character:, slot: "head")
+    create(:equipped_item, world_character:, character_item: item, equipped_slot: "head")
     call
     expect(slots_client).to have_received(:request).with(hash_including(
-      owned_zone_items: {"sword" => true},
-      equipped_items: EquippedItems::ForCharacter.call(character:)
+      owned_zone_items: {"sword" => false},
+      equipped_items: EquippedItems::ForWorldCharacter.call(world_character:)
     ))
   end
 

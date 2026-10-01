@@ -1,7 +1,7 @@
 require "rails_helper"
 
-RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type: :request do
-  let(:character) { create(:character) }
+RSpec.describe "GET /internal_api/world_characters/:world_character_id/equipped_items", type: :request do
+  let(:world_character) { create(:world_character) }
   let(:valid_token) { "test-token" }
 
   before do
@@ -11,7 +11,7 @@ RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type
 
   def get_equipped_items(token: valid_token)
     headers = token ? {"X-Internal-Token" => token} : {}
-    get "/internal_api/characters/#{character.id}/equipped_items", headers: headers
+    get "/internal_api/world_characters/#{world_character.id}/equipped_items", headers: headers
   end
 
   context "with a valid request" do
@@ -26,10 +26,10 @@ RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type
     end
 
     it "returns each equipped item's slot, provenance, and stats" do
-      item = create(:character_item, character: character, slot: "head",
+      item = create(:character_item, world_character:, slot: "head",
         identifier: "helm-of-doom", source_key: "zone_a/1.0/helm-of-doom",
         zone_identifier: "zone_a", version: "1.0", elvl: 584, primary_stat: "strength")
-      create(:equipped_item, character: character, character_item: item, equipped_slot: "head")
+      create(:equipped_item, world_character:, character_item: item, equipped_slot: "head")
 
       get_equipped_items
       head = response.parsed_body["head"]
@@ -47,10 +47,10 @@ RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type
     end
 
     it "includes every equipped slot" do
-      head_item = create(:character_item, character: character, slot: "head")
-      chest_item = create(:character_item, character: character, slot: "chest")
-      create(:equipped_item, character: character, character_item: head_item, equipped_slot: "head")
-      create(:equipped_item, character: character, character_item: chest_item, equipped_slot: "chest")
+      head_item = create(:character_item, world_character:, slot: "head")
+      chest_item = create(:character_item, world_character:, slot: "chest")
+      create(:equipped_item, world_character:, character_item: head_item, equipped_slot: "head")
+      create(:equipped_item, world_character:, character_item: chest_item, equipped_slot: "chest")
 
       get_equipped_items
       expect(response.parsed_body.keys).to contain_exactly("head", "chest")
@@ -64,9 +64,9 @@ RSpec.describe "GET /internal_api/characters/:character_id/equipped_items", type
     end
   end
 
-  context "when the character does not exist" do
+  context "when the world character does not exist" do
     it "returns 404" do
-      get "/internal_api/characters/99999/equipped_items", headers: {"X-Internal-Token" => valid_token}
+      get "/internal_api/world_characters/99999/equipped_items", headers: {"X-Internal-Token" => valid_token}
       expect(response).to have_http_status(:not_found)
     end
   end

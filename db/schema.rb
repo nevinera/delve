@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_170000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -33,14 +33,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
   end
 
   create_table "character_items", force: :cascade do |t|
-    t.integer "character_id", null: false
     t.datetime "created_at", null: false
     t.text "description"
     t.integer "elvl", null: false
     t.string "identifier", null: false
     t.string "name", null: false
     t.string "primary_stat"
-    t.integer "provenance_zone_id"
     t.datetime "received_at", null: false
     t.json "secondary_stats", default: [], null: false
     t.string "slot", null: false
@@ -48,10 +46,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
     t.string "source_key", null: false
     t.datetime "updated_at", null: false
     t.string "version", null: false
+    t.integer "world_character_id", null: false
     t.string "zone_identifier", null: false
-    t.index ["character_id", "source_key"], name: "index_character_items_on_character_id_and_source_key", unique: true
-    t.index ["character_id"], name: "index_character_items_on_character_id"
-    t.index ["provenance_zone_id"], name: "index_character_items_on_provenance_zone_id"
+    t.index ["world_character_id", "source_key"], name: "index_character_items_on_world_character_id_and_source_key", unique: true
+    t.index ["world_character_id"], name: "index_character_items_on_world_character_id"
   end
 
   create_table "character_settings", force: :cascade do |t|
@@ -98,14 +96,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
   end
 
   create_table "equipped_items", force: :cascade do |t|
-    t.integer "character_id", null: false
     t.integer "character_item_id", null: false
     t.datetime "created_at", null: false
     t.string "equipped_slot", null: false
     t.datetime "updated_at", null: false
-    t.index ["character_id", "equipped_slot"], name: "index_equipped_items_on_character_id_and_equipped_slot", unique: true
-    t.index ["character_id"], name: "index_equipped_items_on_character_id"
+    t.integer "world_character_id", null: false
     t.index ["character_item_id"], name: "index_equipped_items_on_character_item_id", unique: true
+    t.index ["world_character_id", "equipped_slot"], name: "index_equipped_items_on_world_character_id_and_equipped_slot", unique: true
+    t.index ["world_character_id"], name: "index_equipped_items_on_world_character_id"
   end
 
   create_table "github_installations", force: :cascade do |t|
@@ -219,14 +217,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
   end
 
   add_foreign_key "character_classes", "users"
-  add_foreign_key "character_items", "characters"
-  add_foreign_key "character_items", "zones", column: "provenance_zone_id"
+  add_foreign_key "character_items", "world_characters"
   add_foreign_key "character_settings", "characters"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
   add_foreign_key "class_abilities", "character_classes"
   add_foreign_key "equipped_items", "character_items"
-  add_foreign_key "equipped_items", "characters"
+  add_foreign_key "equipped_items", "world_characters"
   add_foreign_key "github_installations", "users"
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"

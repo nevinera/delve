@@ -6,6 +6,13 @@
   <p>This world has no released version right now.</p>
 <% end %>
 
+<% if @world_character %>
+  <p>
+    <%= link_to "Items", play_character_world_character_items_path(@character, @world) %>
+    · <%= link_to "Equipped", play_character_world_equipped_items_path(@character, @world) %>
+  </p>
+<% end %>
+
 <% if @world_character&.position %>
   <p>Last seen at <%= @world_character.zone_identifier %> (<%= @world_character.connection_key %>).</p>
 <% end %>

@@ -14,7 +14,8 @@ RSpec.describe JoinDirectZone do
   end
 
   def call
-    described_class.call(character:, zone_key: "demo", commit_sha: "c0ffee", source_url: url, zone_data: {"name" => "Demo"})
+    described_class.call(character:, zone_key: "demo", commit_sha: "c0ffee", source_url: url, zone_data: {"name" => "Demo"},
+      equipped_items: {"head" => {identifier: "trainee-head"}})
   end
 
   it "sends a direct-mode slot request keyed to the builder and commit" do
@@ -27,7 +28,8 @@ RSpec.describe JoinDirectZone do
       zone_config: {"name" => "Demo"},
       mode: "direct",
       instance_key: "direct:#{character.user_id}:c0ffee:demo",
-      owned_zone_items: {}
+      owned_zone_items: {},
+      equipped_items: {"head" => {identifier: "trainee-head"}}
     ))
   end
 

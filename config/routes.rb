@@ -90,18 +90,16 @@ Rails.application.routes.draw do
           patch :active
           patch :version
         end
+        resources :character_items, only: [:index, :show]
+        resources :equipped_items, only: [:index, :update], param: :equipped_slot
       end
-      resources :character_items, only: [:index, :show]
-      resources :equipped_items, only: [:index, :update], param: :equipped_slot
       resource :setting, only: [:show, :update], controller: "character_settings"
     end
   end
   namespace :internal_api do
-    resources :characters, only: [] do
+    resources :world_characters, only: [] do
       resources :character_items, only: [:create]
       resources :equipped_items, only: [:index]
-    end
-    resources :world_characters, only: [] do
       resources :zone_exits, only: [:create]
     end
   end

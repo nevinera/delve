@@ -1,19 +1,10 @@
-class EquippedItems::ForCharacter
-  def self.call(...) = new(...).call
+module EquippedItems
+  module_function
 
-  def initialize(character:)
-    @character = character
-  end
-
-  def call
-    @character.equipped_items.includes(:character_item).each_with_object({}) do |equipped_item, hash|
-      hash[equipped_item.equipped_slot] = provenance(equipped_item.character_item)
-    end
-  end
-
-  private
-
-  def provenance(item)
+  # One equipped item as the game server (instanceconfig.EquippedItem) and
+  # client expect it. Works on unsaved CharacterItems too (see
+  # TraineeGear::Imaginary).
+  def item_json(item)
     {
       identifier: item.identifier,
       name: item.name,
