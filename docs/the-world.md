@@ -27,8 +27,7 @@ by the character that created them (the "party leader" in such a zone) - each
 character can only have one such, and they'll be shut down when empty.
 
 The Region can only be entered at certain places - "entry points". Entry points
-may be "open", in which case you can just pick that zone from the selection page
-and spawn in. But a lot of the entry-points are only reachable by visiting their
+may be "open", in which case you can enter the world there directly. But a lot of the entry-points are only reachable by visiting their
 connected location in another zone, and travelling through the visual 'barrier'.
 Scattered around the region will be additional entry points, which can't be used
 without the appropriate "key" (often granted just by reaching them, but

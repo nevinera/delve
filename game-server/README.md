@@ -26,13 +26,12 @@ go run .
 
 ## World and direct joins
 
-A slot request without `mode` is a legacy join and behaves as it always has. World and direct
-joins add these fields:
+Every slot request says how the player reached the zone (`mode`), along with these fields:
 
 | Field | Scope | Meaning |
 |---|---|---|
-| `mode` | instance | `legacy` (default), `world` (through a world; loot persists), or `direct` (a builder trying a zone; nothing persists, no `database_id` needed). |
-| `instance_key` | instance | Required for `world` and `direct`. Chosen by Rails; a keyed request only joins an instance with the same mode and key. |
+| `mode` | instance | Required. `world` (through a world; loot persists) or `direct` (a builder trying a zone; nothing persists, no `database_id` needed). |
+| `instance_key` | instance | Required. Chosen by Rails; a request only joins an instance with the same mode and key. |
 | `exits` | instance | `"mapId/connectionId"` keys of connections that leave the zone. |
 | `world_version_id` | instance | Lets `/world-versions/{id}/expire` find the instance. |
 | `expires_at` | instance | RFC 3339; set when the version is already expiring. |

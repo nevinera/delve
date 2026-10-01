@@ -6,8 +6,8 @@ Server, and the Game Client.
 The Application Server is a web-application written in Ruby on Rails. It implements
 the chat system, the character persistence, and hosts the Client. It also holds
 the various (JavaScript) editing tools, for abilities, classes, monsters, and
-zones, and the registration system with which one can expose their content for
-others to use or play.
+zones and worlds, and the publishing system with which one can release a world
+from their content repository for others to play.
 
 The Game Server is written in Go - it is responsible for running the Instances -
 hosting and exposing their state, and receiving commands from the browser client

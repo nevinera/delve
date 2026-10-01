@@ -1,6 +1,6 @@
 # Delve
 
-A user-generated MMO built for low server overhead and low content-creation barriers. Zones, units, and powers are defined as JSON files hosted in public repositories - the game server loads them directly. The application server handles character persistence, registration, and hosting the browser client.
+A user-generated MMO built for low server overhead and low content-creation barriers. Zones, units, and powers are defined as JSON files hosted in public repositories - the game server loads them directly. The application server handles character persistence, publishing worlds, and hosting the browser client.
 
 See [docs/goals.md](docs/goals.md) for the full design philosophy.
 
