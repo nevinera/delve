@@ -3,6 +3,7 @@ class Build::DashboardController < Build::BaseController
 
   def index
     @installation = current_user.github_installation
-    redirect_to github_connect_path unless @installation
+    @local_content = Rails.configuration.x.local_content_url.present?
+    redirect_to github_connect_path unless @installation || @local_content
   end
 end

@@ -1,0 +1,15 @@
+<h1>Play a local zone</h1>
+
+<p>
+  Plays a zone from your local content server (<code><%= @local_content_url %></code>), with no
+  GitHub involved. Give the zone's key, the way the zone editor names it (e.g.
+  <code>goblin-cave</code>, read from <code>zones/goblin-cave/goblin-cave.full.json</code>).
+</p>
+
+<%= form_with url: build_local_zones_path, method: :get do |f| %>
+  <%= f.label :key, "Zone key" %>
+  <%= f.text_field :key, required: true %>
+  <%= f.submit "Choose a character", name: nil %>
+<% end %>
+
+<%= link_to "Back to Build", build_root_path %>

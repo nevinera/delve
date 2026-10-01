@@ -1,6 +1,12 @@
 <h1>Build</h1>
 
-<% if @installation.repo_full_name.blank? %>
+<% if @local_content %>
+  <p><%= link_to "Play a local zone", build_local_zones_path %> (from your local content server, no GitHub needed)</p>
+<% end %>
+
+<% if @installation.nil? %>
+  <p><%= link_to "Connect GitHub", github_connect_path %> to edit and publish content.</p>
+<% elsif @installation.repo_full_name.blank? %>
   <p>You don't have a repository selected.</p>
 <% else %>
   <p>
@@ -20,4 +26,6 @@
   </ul>
 <% end %>
 
-<p><%= link_to "Manage GitHub connection", github_manage_path, style: "font-size: 0.8em;" %></p>
+<% if @installation %>
+  <p><%= link_to "Manage GitHub connection", github_manage_path, style: "font-size: 0.8em;" %></p>
+<% end %>

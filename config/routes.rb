@@ -85,6 +85,8 @@ Rails.application.routes.draw do
   get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
   get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
   get "build/zones/*id/play", to: "build/zone_plays#show", as: "build_zone_play"
+  get "build/local_zones", to: "build/zone_plays#local", as: "build_local_zones"
+  get "build/local_zones/*id/play", to: "build/zone_plays#show", as: "build_local_zone_play", defaults: {source: "local"}
   get "build/worlds/*id/edit", to: "build/worlds#edit", as: "edit_build_world"
   post "build/worlds/*id/publish", to: "build/worlds#publish", as: "publish_build_world"
 
