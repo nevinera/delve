@@ -2,6 +2,10 @@
 
 <p><%= @error %></p>
 
+<% if @class_needs_refetch %>
+  <%= render "shared/refetch_class_button", character_class: @character.character_class %>
+<% end %>
+
 <p>
   <%= link_to "Try again", play_play_character_world_path(@character, @world) %>
   · <%= link_to "All worlds", play_character_worlds_path(@character) %>

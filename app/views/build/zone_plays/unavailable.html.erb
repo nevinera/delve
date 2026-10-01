@@ -2,6 +2,10 @@
 
 <p><%= @error %></p>
 
+<% if @class_needs_refetch %>
+  <%= render "shared/refetch_class_button", character_class: @character.character_class %>
+<% end %>
+
 <p>
   <%= link_to "Try again", request.fullpath %>
   · <%= link_to "Back to zones", build_zones_path %>

@@ -37,6 +37,7 @@ class Play::WorldCharactersController < Play::BaseController
     @stock_assets = Content::StockAssets.client_json
   rescue EnterWorld::Error, VerifiedContent::Error, GameApi::Error => e
     @error = e.message
+    @class_needs_refetch = e.is_a?(CharacterClasses::ChecksumMismatch)
     render :unavailable, layout: "application", status: :service_unavailable
   end
 

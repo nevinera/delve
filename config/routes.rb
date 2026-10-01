@@ -33,6 +33,9 @@ Rails.application.routes.draw do
     resources :maps, only: [:index, :new, :create]
     resources :zones, only: [:index, :new, :create]
     resources :worlds, only: [:index, :new, :create]
+    resources :character_classes, only: [] do
+      member { post :refetch }
+    end
     # World records and their published versions (see plans/worlds.md),
     # keyed by database id - the bare `worlds` resource above is the
     # content editor, keyed by the world file's key.

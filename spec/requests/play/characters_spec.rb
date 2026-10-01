@@ -53,6 +53,15 @@ RSpec.describe "Play::Characters", type: :request do
         expect(response.body).to include("Ariana-AA")
       end
 
+      it "offers to refetch the class to its owner only" do
+        get "/play/characters/#{character.id}"
+        expect(response.body).not_to include("Refetch class")
+
+        character_class.update!(user:)
+        get "/play/characters/#{character.id}"
+        expect(response.body).to include("Refetch class", "/build/character_classes/#{character_class.id}/refetch")
+      end
+
       it "links to the worlds listing" do
         get "/play/characters/#{character.id}"
         expect(response.body).to include(play_character_worlds_path(character))

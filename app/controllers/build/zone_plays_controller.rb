@@ -24,6 +24,7 @@ class Build::ZonePlaysController < Build::BaseController
     render :show, layout: "game_client"
   rescue PlayError, VerifiedContent::Error, Validators::ValidationError, GameApi::Error => e
     @error = e.message
+    @class_needs_refetch = e.is_a?(CharacterClasses::ChecksumMismatch)
     render :unavailable, status: :service_unavailable
   end
 

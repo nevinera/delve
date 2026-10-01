@@ -1,0 +1,4 @@
+<% if can?(:manage, character_class) %>
+  <%= button_to "Refetch class", refetch_build_character_class_path(character_class),
+        title: "Re-read #{character_class.identifier}'s class file, e.g. after editing it" %>
+<% end %>

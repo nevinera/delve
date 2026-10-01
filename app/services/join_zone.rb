@@ -41,7 +41,7 @@ class JoinZone
     character_class = @character.character_class
     VerifiedContent.fetch(character_class.location, character_class.content_sha)
   rescue VerifiedContent::ChecksumMismatch
-    raise VerifiedContent::ChecksumMismatch,
+    raise CharacterClasses::ChecksumMismatch,
       "#{character_class.identifier} #{character_class.version}'s class file has changed since it was checked; it needs refetching"
   end
 

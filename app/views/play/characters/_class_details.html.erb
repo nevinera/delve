@@ -1,5 +1,6 @@
 <section>
   <h2><%= character_class.name.presence || character_class.identifier %></h2>
+  <%= render "shared/refetch_class_button", character_class: %>
   <% if character_class.description.present? %>
     <p><%= character_class.description %></p>
   <% end %>
