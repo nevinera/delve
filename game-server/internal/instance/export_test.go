@@ -189,3 +189,32 @@ func (inst *Instance) FireLootAwardForTest(ctx context.Context, pending instance
 func SpawnPlacementForTest(zone instanceconfig.Zone, spawnAt string) (string, instanceconfig.Position) {
 	return spawnPlacement(zone, spawnAt)
 }
+
+type PendingZoneExitForTest struct {
+	SlotID           uuid.UUID
+	UnitID           uuid.UUID
+	WorldCharacterID string
+	Connection       string
+}
+
+func (inst *Instance) DetectZoneExitsForTest(state, prevState *instancestate.InstanceState, now time.Time) []PendingZoneExitForTest {
+	var out []PendingZoneExitForTest
+	for _, p := range inst.detectZoneExits(state, prevState, now) {
+		out = append(out, PendingZoneExitForTest{p.slotID, p.unitID, p.worldCharacterID, p.connection})
+	}
+	return out
+}
+
+func (inst *Instance) ArmZoneExitsForTest(unitID uuid.UUID, now time.Time) {
+	inst.armZoneExits(unitID, now)
+}
+
+// FinishZoneExitForTest feeds a Rails exit result back to the instance and
+// drains it, as the tick loop would.
+func (inst *Instance) FinishZoneExitForTest(exit PendingZoneExitForTest, err error, now time.Time) {
+	inst.zoneExitResultCh <- zoneExitResult{
+		pendingZoneExit: pendingZoneExit{exit.SlotID, exit.UnitID, exit.WorldCharacterID, exit.Connection},
+		err:             err,
+	}
+	inst.drainZoneExitResults(now)
+}

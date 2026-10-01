@@ -106,6 +106,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			updatePlayerMaxHealth(state, inst.ZoneConfig)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
+			zoneExits := inst.detectZoneExits(state, prevState, now)
 			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph, inst.Rand)...)
 			tickNCUMovement(state, TickInterval.Seconds(), inst.Rand)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
@@ -190,6 +191,10 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			for _, pending := range state.PendingLootClaims {
 				go inst.fireLootAward(ctx, pending)
 			}
+			for _, exit := range zoneExits {
+				go inst.fireZoneExit(ctx, exit)
+			}
+			inst.drainZoneExitResults(now)
 
 			for _, update := range state.PendingOwnershipUpdates {
 				if slot := inst.slotByUnitID(update.CharacterUnitID); slot != nil {

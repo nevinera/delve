@@ -26,6 +26,7 @@ func (inst *Instance) drainPlayerDespawns(state *instancestate.InstanceState) {
 	inst.despawnMu.Unlock()
 	for _, unitID := range pending {
 		removeUnit(state, unitID)
+		inst.forgetZoneExits(unitID)
 	}
 }
 

@@ -98,6 +98,10 @@ type Instance struct {
 	// Must be set before Start() is called.
 	EmptyTimeout time.Duration
 
+	// ExitLockout overrides ZoneExitLockout when non-zero. Intended for
+	// tests. Must be set before Start() is called.
+	ExitLockout time.Duration
+
 	// SlotWaitTimeout overrides SlotWaitingTimeout when non-zero. Intended for
 	// tests. Must be set before Start() is called.
 	SlotWaitTimeout time.Duration
@@ -129,6 +133,13 @@ type Instance struct {
 	commandCh           chan command.Command
 	commandProcessor    *command.CommandProcessor
 	autoUpgradeResultCh chan autoUpgradeResult
+
+	// Zone-exit bookkeeping, owned by the tick loop (see zone_exit.go):
+	// when each player unit's exit lockout ends, which have a Rails exit
+	// call in flight, and where those calls report back.
+	exitArmedAt      map[uuid.UUID]time.Time
+	exitsInFlight    map[uuid.UUID]bool
+	zoneExitResultCh chan zoneExitResult
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -163,6 +174,9 @@ func NewInstance(
 		commandCh:           make(chan command.Command, DefaultMaxSlots*8),
 		commandProcessor:    command.NewCommandProcessor(),
 		autoUpgradeResultCh: make(chan autoUpgradeResult, 256),
+		exitArmedAt:         make(map[uuid.UUID]time.Time),
+		exitsInFlight:       make(map[uuid.UUID]bool),
+		zoneExitResultCh:    make(chan zoneExitResult, DefaultMaxSlots),
 	}
 	inst.commandProcessor.Register(command.MoveHandler{})
 	inst.commandProcessor.Register(command.TargetHandler{})

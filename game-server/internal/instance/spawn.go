@@ -65,6 +65,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 			unit.MaxHealth = command.PlayerMaxHealth(unit, inst.ZoneConfig)
 			unit.Health = unit.MaxHealth
 			state.Units[spawn.unitID] = unit
+			inst.armZoneExits(spawn.unitID, now)
 			applyClassPassives(unit, spawn.unitID, spawn.class, inst.ZoneConfig, now)
 			slog.InfoContext(ctx, "player unit spawned",
 				"unit_id", spawn.unitID,

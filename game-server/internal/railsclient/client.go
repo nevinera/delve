@@ -140,3 +140,44 @@ func (c *Client) FetchEquippedItems(characterDatabaseID string) (map[string]inst
 	}
 	return items, nil
 }
+
+type zoneExitBody struct {
+	ZoneIdentifier string `json:"zone_identifier"`
+	Connection     string `json:"connection"`
+}
+
+// ZoneExit tells Rails a world character left its zone through connection
+// ("mapId/connectionId"), so Rails can work out where that leads and move
+// the character there. A non-2xx response is an error carrying Rails'
+// "error" message when it sends one.
+func (c *Client) ZoneExit(worldCharacterDatabaseID, zoneIdentifier, connection string) error {
+	data, err := json.Marshal(zoneExitBody{ZoneIdentifier: zoneIdentifier, Connection: connection})
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/zone_exits", c.baseURL, worldCharacterDatabaseID)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
+		return nil
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	json.NewDecoder(res.Body).Decode(&body) //nolint:errcheck
+	if body.Error != "" {
+		return fmt.Errorf("rails returned %d: %s", res.StatusCode, body.Error)
+	}
+	return fmt.Errorf("rails returned %d", res.StatusCode)
+}

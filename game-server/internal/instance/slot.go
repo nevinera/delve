@@ -157,8 +157,9 @@ func (inst *Instance) GetSlot(id uuid.UUID) (*InstanceSlot, bool) {
 	return slot, ok
 }
 
-// RemoveSlot removes the slot with the given ID, and its character's unit
-// on the next tick. Returns true if it existed.
+// RemoveSlot removes the slot with the given ID, closes its connection (after
+// flushing any queued messages - see handler.Connect), and removes its
+// character's unit on the next tick. Returns true if it existed.
 func (inst *Instance) RemoveSlot(id uuid.UUID) bool {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
@@ -167,9 +168,28 @@ func (inst *Instance) RemoveSlot(id uuid.UUID) bool {
 		return false
 	}
 	delete(inst.slots, id)
+	if slot.connCancel != nil {
+		slot.connCancel()
+	}
 	inst.queueDespawn(slot.CharacterUnitID)
 	inst.recomputeSlotCounts()
 	return true
+}
+
+// sendToSlot queues a pre-encoded message for one connected slot, dropping
+// it if the slot is gone, not connected, or its client is behind - the same
+// non-blocking policy as the tick broadcast.
+func (inst *Instance) sendToSlot(id uuid.UUID, payload []byte) {
+	inst.slotsMu.RLock()
+	defer inst.slotsMu.RUnlock()
+	slot, ok := inst.slots[id]
+	if !ok || slot.State != SlotStateConnected || slot.writeCh == nil {
+		return
+	}
+	select {
+	case slot.writeCh <- payload:
+	default:
+	}
 }
 
 // SetSlotState transitions a slot to a new state. Returns false if the slot
