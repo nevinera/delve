@@ -1,0 +1,18 @@
+<h1>Play <%= @key %></h1>
+
+<p>
+  Plays the zone as it is on your repo's default branch right now. Nothing you do here is saved:
+  loot isn't kept, and there are no world exits.
+</p>
+
+<% if @characters.any? %>
+  <ul>
+    <% @characters.each do |character| %>
+      <li><%= link_to "Play as #{character.name}", build_zone_play_path(id: @key, character_id: character.id) %></li>
+    <% end %>
+  </ul>
+<% else %>
+  <p>You need a character first: <%= link_to "create one", new_play_character_path %>.</p>
+<% end %>
+
+<%= link_to "Back to zones", build_zones_path %>

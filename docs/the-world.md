@@ -57,6 +57,13 @@ coast-line, etc, all places that could just be scattered onto the one map, but
 can be given much more detail as their own locations.
 
 
+## Trying a Zone While Building
+
+Build → Zones → Play runs a zone straight from your repo's default branch, as one of your
+characters, with no publishing. Nothing is kept: loot isn't saved and the zone's world exits do
+nothing. Only your own characters share that instance, and each new commit gets a fresh one. The
+repo must be public.
+
 ## Publishing a World
 
 A World lives entirely in one public GitHub repo: its world file plus every zone it references.

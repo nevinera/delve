@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -130,7 +130,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_140000) do
     t.string "slot_id", null: false
     t.string "token", null: false
     t.datetime "updated_at", null: false
-    t.integer "zone_id", null: false
+    t.integer "zone_id"
     t.index ["character_id"], name: "index_slot_sessions_on_character_id", unique: true
     t.index ["zone_id"], name: "index_slot_sessions_on_zone_id"
   end
