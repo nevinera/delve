@@ -33,10 +33,10 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       expect(response.body).to include("Demo World", "Show")
     end
 
-    it "falls back to the world's key when its file can't be read" do
-      stub_request(:get, "#{version.raw_base_url}#{world.path}").to_return(status: 500)
+    it "falls back to the world's key before it has a name" do
+      world.update!(name: nil)
       get base
-      expect(response.body).to include("demo")
+      expect(response.body).to include(">demo<")
     end
 
     it "returns 404 for another user's character" do
@@ -73,7 +73,7 @@ RSpec.describe "Play::WorldCharacters", type: :request do
     end
 
     it "explains when the world can't be entered" do
-      stub_request(:get, "#{version.raw_base_url}#{world.path}").to_return(body: "{}")
+      stub_request(:get, "#{version.raw_base_url}zones/darkwood/darkwood.full.json").to_return(body: "{}")
       get "#{base}/#{world.id}/play"
       expect(response).to have_http_status(:service_unavailable)
       expect(response.body).to include("enter this world right now", "checksum")

@@ -21,9 +21,10 @@ class WorldVersion < ApplicationRecord
 
   def import = ImportWorldVersionJob.perform_later(id)
 
-  # Releases the version: every other released version of the world that
-  # isn't already expiring gets EXPIRY_GRACE before it expires, and their
-  # running instances are told so they can count down.
+  # Releases the version: the world takes this version's name, every other
+  # released version of the world that isn't already expiring gets
+  # EXPIRY_GRACE before it expires, and their running instances are told so
+  # they can count down.
   def release!
     raise ArgumentError, "only unreleased versions can be released" unless unreleased?
 
@@ -33,6 +34,7 @@ class WorldVersion < ApplicationRecord
     transaction do
       expiring.update_all(expires_at: now + EXPIRY_GRACE)
       update!(state: :released, released_at: now)
+      world.update!(name:)
     end
     expiring_ids.each { |expiring_id| PushWorldVersionExpiryJob.perform_later(expiring_id) }
   end

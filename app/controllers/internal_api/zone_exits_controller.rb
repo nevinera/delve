@@ -15,21 +15,14 @@ class InternalApi::ZoneExitsController < InternalApi::BaseController
       return render_unprocessable("#{world_character.id} isn't in #{zone_identifier}")
     end
 
-    destination = destination_for(version, zone_identifier, connection)
+    destination = version.zones.find_by(identifier: zone_identifier)&.links&.dig(connection)
     return render_unprocessable("#{zone_identifier} #{connection} doesn't lead anywhere") unless destination
 
-    world_character.update!(zone_identifier: destination[0], connection_key: destination[1])
-    render json: {zone_identifier: destination[0], connection: destination[1]}
-  rescue WorldContent::Error => e
-    render_unprocessable(e.message)
+    world_character.update!(zone_identifier: destination["zone"], connection_key: destination["connection"])
+    render json: {zone_identifier: destination["zone"], connection: destination["connection"]}
   end
 
   private
-
-  def destination_for(version, zone_identifier, connection)
-    zone_data_for = ->(key) { WorldContent.zone(version.zones.find_by!(identifier: key)) }
-    WorldContent::Links.destination(WorldContent.world(version), zone_identifier, connection, zone_data_for)
-  end
 
   def render_not_found(err)
     render json: {error: err.message}, status: :not_found

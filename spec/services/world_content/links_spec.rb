@@ -15,7 +15,6 @@ RSpec.describe WorldContent::Links do
     }
   end
   let(:zones) { {"darkwood" => darkwood, "cave" => cave} }
-  let(:zone_data_for) { ->(key) { zones.fetch(key) } }
   let(:links) do
     [
       {
@@ -32,37 +31,23 @@ RSpec.describe WorldContent::Links do
   end
   let(:world) { {"worldLinks" => links, "entryPoints" => {"cave/mouth/in" => "key", "darkwood/road/south" => nil}} }
 
-  describe ".exits_for" do
-    it "maps open names back to connection keys" do
-      expect(described_class.exits_for(world, "darkwood", darkwood)).to eq(["road/north"])
+  describe ".links_for" do
+    it "maps each exit to the far side, translating open names to connection keys" do
+      expect(described_class.links_for(world, "darkwood", zones)).to eq(
+        "road/north" => {"zone" => "cave", "connection" => "mouth/in"}
+      )
     end
 
-    it "includes both two-way and one-way-departure sides, but not one-way arrivals" do
-      expect(described_class.exits_for(world, "cave", cave)).to contain_exactly("mouth/in", "mouth/drop")
+    it "includes two-way links back, and one-way departures but not one-way arrivals" do
+      expect(described_class.links_for(world, "cave", zones)).to eq(
+        "mouth/in" => {"zone" => "darkwood", "connection" => "road/north"},
+        "mouth/drop" => {"zone" => "darkwood", "connection" => "road/south"}
+      )
     end
 
     it "skips links that need a key" do
       links.each { |link| link["requiredKey"] = "gold-key" }
-      expect(described_class.exits_for(world, "cave", cave)).to be_empty
-    end
-  end
-
-  describe ".destination" do
-    it "follows a link from A to B" do
-      expect(described_class.destination(world, "darkwood", "road/north", zone_data_for)).to eq(["cave", "mouth/in"])
-    end
-
-    it "follows a two-way link back from B to A" do
-      expect(described_class.destination(world, "cave", "mouth/in", zone_data_for)).to eq(["darkwood", "road/north"])
-    end
-
-    it "follows a one-way link forward only" do
-      expect(described_class.destination(world, "cave", "mouth/drop", zone_data_for)).to eq(["darkwood", "road/south"])
-      expect(described_class.destination(world, "darkwood", "road/south", zone_data_for)).to be_nil
-    end
-
-    it "returns nil for a connection that isn't linked" do
-      expect(described_class.destination(world, "darkwood", "road/elsewhere", zone_data_for)).to be_nil
+      expect(described_class.links_for(world, "cave", zones)).to be_empty
     end
   end
 

@@ -33,6 +33,9 @@ class Zone < ApplicationRecord
 
   def legacy? = world_version.nil?
 
+  # A world zone's exits ("mapId/connectionId" keys of #links), from import.
+  def exits = links.keys
+
   # What item awards and ownership checks treat as this zone's version: a
   # legacy zone's own version, or a world zone's commit SHA. A stopgap until
   # items are tracked per world (worlds slice 4).

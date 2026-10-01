@@ -58,6 +58,12 @@ RSpec.describe WorldVersion, type: :model do
       expect(PushWorldVersionExpiryJob).not_to have_been_enqueued.with(already_expiring.id)
     end
 
+    it "gives the world this version's name" do
+      world.update!(name: "Old Name")
+      create(:world_version, world:, name: "New Name").release!
+      expect(world.reload.name).to eq("New Name")
+    end
+
     it "doesn't touch other worlds" do
       other = create(:world_version, :released)
       create(:world_version, world:).release!

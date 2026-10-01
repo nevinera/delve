@@ -53,6 +53,34 @@ RSpec.describe ImportWorldVersionJob, type: :job do
       expect(version.validity_error).to be_nil
     end
 
+    it "stores the world's name on the version, and on a world that has none yet" do
+      perform
+      expect(version.reload.name).to eq("Demo")
+      expect(world.reload.name).to eq("Demo")
+    end
+
+    it "doesn't rename a world that already has a name" do
+      world.update!(name: "Released Name")
+      perform
+      expect(world.reload.name).to eq("Released Name")
+    end
+
+    it "marks the default entry point's zone" do
+      perform
+      expect(version.zones.find_by!(identifier: "goblin-cave").entry_connection_key).to eq("cave_entrance/clearing_entrance")
+      expect(version.zones.find_by!(identifier: "darkwood").entry_connection_key).to be_nil
+    end
+
+    it "stores where each zone's exits lead" do
+      perform
+      expect(version.zones.find_by!(identifier: "darkwood").links).to eq(
+        "cave_entrance/clearing_entrance" => {"zone" => "goblin-cave", "connection" => "cave_entrance/clearing_entrance"}
+      )
+      expect(version.zones.find_by!(identifier: "goblin-cave").links).to eq(
+        "cave_entrance/clearing_entrance" => {"zone" => "darkwood", "connection" => "cave_entrance/clearing_entrance"}
+      )
+    end
+
     it "records the world file's checksum" do
       perform
       expect(version.reload.content_sha).to eq(Digest::SHA1.hexdigest(world_data.to_json))
@@ -116,6 +144,15 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     let(:darkwood) { zone_fixture }
 
     it_behaves_like "a failed import", /no openConnection "north-exit"/
+  end
+
+  context "when every entry point needs a key" do
+    before do
+      world_data["entryPoints"] = {"goblin-cave/cave_entrance/clearing_entrance" => "gold-key"}
+      stub_raw("worlds/demo.json", world_data)
+    end
+
+    it_behaves_like "a failed import", /every entry point needs a key/
   end
 
   context "when a zone path leaves the repo" do

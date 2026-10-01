@@ -19,7 +19,7 @@ RSpec.describe JoinWorldZone do
   end
 
   def call
-    described_class.call(world_character:, zone:, zone_data: WorldContent.zone(zone), world_data: WorldContent.world(version))
+    described_class.call(world_character:, zone:, zone_data: WorldContent.zone(zone))
   end
 
   it "sends a world-mode slot request for the zone" do

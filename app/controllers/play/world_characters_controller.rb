@@ -15,7 +15,7 @@ class Play::WorldCharactersController < Play::BaseController
     @rows = worlds.order(:repo, :path).filter_map do |world|
       world_character = world_characters[world.id]
       next if world_character && !world_character.active? && !@show_all
-      {world:, world_character:, name: display_name(world, world_character)}
+      {world:, world_character:, name: world.name || world.key}
     end
   end
 
@@ -23,7 +23,7 @@ class Play::WorldCharactersController < Play::BaseController
     @world_character = @character.world_characters.find_by(world: @world)
     @versions = @world.released_versions
     @current_version = @world_character&.world_version
-    @name = display_name(@world, @world_character)
+    @name = @world.name || @world.key
     @in_world = in_world?
   end
 
@@ -63,15 +63,6 @@ class Play::WorldCharactersController < Play::BaseController
 
   def load_world
     @world = World.find(params[:id])
-  end
-
-  # The world's own name, from the version the character plays (or the
-  # newest release); its key if that can't be read right now.
-  def display_name(world, world_character)
-    version = world_character&.world_version || world.released_versions.first
-    (version && WorldContent.world(version)["name"]).presence || world.key
-  rescue WorldContent::Error
-    world.key
   end
 
   # Whether the character has a live slot in one of this world's zones.

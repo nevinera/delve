@@ -27,8 +27,7 @@ RSpec.describe EnterWorld do
     expect(JoinWorldZone).to have_received(:call).with(
       world_character: WorldCharacter.last,
       zone: version.zones.find_by!(identifier: "darkwood"),
-      zone_data: hash_including("name" => "Darkwood"),
-      world_data: hash_including("name" => "Demo World")
+      zone_data: hash_including("name" => "Darkwood")
     )
   end
 
@@ -66,10 +65,8 @@ RSpec.describe EnterWorld do
     expect { enter }.to raise_error(EnterWorld::NoReleasedVersion)
   end
 
-  it "raises when every entry point needs a key" do
-    files = demo_world_files
-    files[:world]["entryPoints"] = {"darkwood/camp/spawn" => "gold-key"}
-    other = published_world(files:, world: create(:world, path: "worlds/locked.json"))
-    expect { described_class.call(character:, world: other.world) }.to raise_error(EnterWorld::NoEntryPoint)
+  it "raises when the version has no entry point" do
+    version.zones.update_all(entry_connection_key: nil)
+    expect { enter }.to raise_error(EnterWorld::NoEntryPoint)
   end
 end

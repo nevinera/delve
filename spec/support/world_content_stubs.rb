@@ -1,7 +1,9 @@
 require "digest"
 
-# Builds a published world whose files are served (via webmock) from its
-# pinned raw URL, with checksums matching, so WorldContent reads succeed.
+# Builds a published world as ImportWorldVersionJob would leave it (names,
+# entry point, and zone links stored), with its zone files served (via
+# webmock) from the pinned raw URL with matching checksums, so
+# WorldContent.zone reads succeed.
 module WorldContentStubs
   # A two-zone world: darkwood's "road/north" (exposed as "north-exit") is
   # linked both ways to cave's entry point "mouth/in", and the world is
@@ -48,13 +50,17 @@ module WorldContentStubs
     sha = SecureRandom.hex(20)
     base_url = "https://raw.githubusercontent.com/#{world.repo}/#{sha}/"
     world_body = files[:world].to_json
-    version = create(:world_version, :released, world:, commit_sha: sha, raw_base_url: base_url,
+    name = files[:world]["name"]
+    world.update!(name:) if world.name.blank?
+    version = create(:world_version, :released, world:, name:, commit_sha: sha, raw_base_url: base_url,
       content_sha: Digest::SHA1.hexdigest(world_body), **version_attrs)
-    stub_request(:get, "#{base_url}#{world.path}").to_return(body: world_body)
+    entry_zone, entry_connection = WorldContent::Links.default_entry(files[:world])
     files[:zones].each do |key, data|
       body = data.to_json
       path = "zones/#{key}/#{key}.full.json"
-      create(:zone, :in_world, world_version: version, identifier: key, path:, content_sha: Digest::SHA1.hexdigest(body))
+      create(:zone, :in_world, world_version: version, identifier: key, path:, content_sha: Digest::SHA1.hexdigest(body),
+        links: WorldContent::Links.links_for(files[:world], key, files[:zones]),
+        entry_connection_key: (entry_connection if key == entry_zone))
       stub_request(:get, "#{base_url}#{path}").to_return(body:)
     end
     version

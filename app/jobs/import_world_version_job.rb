@@ -36,8 +36,12 @@ class ImportWorldVersionJob < ApplicationJob
     world_data = parse!(world_body, world.path)
     in_file(world.path) { Validators::WorldValidator.validate!(world_data) }
     zones = world_data["zones"].to_h { |key, entry| [key, fetch_zone!(base_url, key, entry)] }
-    in_file(world.path) { Validators::WorldReferences.validate!(world_data, zones.transform_values { |z| z[:data] }) }
-    save!(sha:, base_url:, world_body:, zones:)
+    zones_by_key = zones.transform_values { |z| z[:data] }
+    in_file(world.path) { Validators::WorldReferences.validate!(world_data, zones_by_key) }
+    entry = WorldContent::Links.default_entry(world_data)
+    raise ImportError, "#{world.path}: every entry point needs a key, so nobody could enter" unless entry
+    zones.each { |key, zone| zone[:links] = WorldContent::Links.links_for(world_data, key, zones_by_key) }
+    save!(sha:, base_url:, world_body:, world_data:, zones:, entry:)
   end
 
   def resolve_commit_sha
@@ -82,19 +86,25 @@ class ImportWorldVersionJob < ApplicationJob
     raise ImportError, "#{path}: #{e.message}"
   end
 
-  def save!(sha:, base_url:, world_body:, zones:)
+  # Stores references, checksums, and the structure Rails needs without
+  # re-reading the files: the display name, which zone connection is the
+  # default entry point, and where each zone's exits lead.
+  def save!(sha:, base_url:, world_body:, world_data:, zones:, entry:)
+    entry_zone, entry_connection = entry
     WorldVersion.transaction do
       Zone.where(world_version: @version).delete_all
       zones.each do |key, zone|
         @version.zones.create!(
           identifier: key, path: zone[:path], content_sha: zone[:content_sha],
-          file_size: zone[:file_size], elvl: zone[:data]["elvl"], state: :fetched
+          file_size: zone[:file_size], elvl: zone[:data]["elvl"], state: :fetched,
+          links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone)
         )
       end
       @version.update!(
         commit_sha: sha, raw_base_url: base_url, content_sha: Digest::SHA1.hexdigest(world_body),
-        state: :unreleased, imported_at: Time.current
+        name: world_data["name"], state: :unreleased, imported_at: Time.current
       )
+      world.update!(name: world_data["name"]) if world.name.blank?
     end
   end
 end

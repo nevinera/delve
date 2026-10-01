@@ -42,11 +42,9 @@ RSpec.describe "POST /internal_api/world_characters/:id/zone_exits", type: :requ
     expect(response.parsed_body["error"]).to include("doesn't lead anywhere")
   end
 
-  it "refuses when the world content no longer matches" do
-    stub_request(:get, "#{version.raw_base_url}#{version.world.path}").to_return(body: "{}")
+  it "doesn't read any world files" do
     exit_zone
-    expect(response).to have_http_status(:unprocessable_content)
-    expect(response.parsed_body["error"]).to include("checksum")
+    expect(a_request(:get, /raw.githubusercontent.com/)).not_to have_been_made
   end
 
   it "returns 404 for an unknown world character" do

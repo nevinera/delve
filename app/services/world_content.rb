@@ -1,10 +1,10 @@
 require "digest"
 
-# Reads a world version's files from their pinned (commit SHA) URLs. Delve
-# never stores world content, only references and checksums (see
-# ImportWorldVersionJob), so every read goes back to the repo - verified
-# against the SHA1 recorded at import, and cached by that SHA: content at a
-# given SHA can never change, so cache entries never need invalidating.
+# Reads a world zone's .full.json from its pinned (commit SHA) URL, refusing
+# it if its SHA1 no longer matches the one recorded at import. Delve never
+# stores world content - only references, checksums, and the structure
+# ImportWorldVersionJob extracts (names, entry point, links) - so the zone
+# file is fetched fresh each time Rails hands it to the game server.
 module WorldContent
   Error = Class.new(StandardError)
   FetchError = Class.new(Error)
@@ -13,17 +13,12 @@ module WorldContent
 
   module_function
 
-  def world(version) = fetch("#{version.raw_base_url}#{version.world.path}", version.content_sha)
-
-  def zone(zone) = fetch(zone.world_version.zone_url(zone), zone.content_sha)
-
-  def fetch(url, expected_sha)
-    Rails.cache.fetch(["world-content", expected_sha]) do
-      body = get!(url)
-      actual_sha = Digest::SHA1.hexdigest(body)
-      raise ChecksumMismatch, "#{url} has checksum #{actual_sha}, expected #{expected_sha}" unless actual_sha == expected_sha
-      JSON.parse(body)
-    end
+  def zone(zone)
+    url = zone.world_version.zone_url(zone)
+    body = get!(url)
+    actual_sha = Digest::SHA1.hexdigest(body)
+    raise ChecksumMismatch, "#{url} has checksum #{actual_sha}, expected #{zone.content_sha}" unless actual_sha == zone.content_sha
+    JSON.parse(body)
   end
 
   def get!(url)
