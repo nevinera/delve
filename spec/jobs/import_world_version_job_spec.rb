@@ -168,6 +168,16 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     it_behaves_like "a failed import", %r{points at builder/other}
   end
 
+  context "when something unexpected goes wrong" do
+    before { stub_request(:get, "#{raw}/worlds/demo.json").to_raise(Errno::ECONNRESET) }
+
+    it "marks the version failed and re-raises" do
+      expect { perform }.to raise_error(Errno::ECONNRESET)
+      expect(version.reload).to be_failed
+      expect(version.validity_error).to start_with("unexpected import error:")
+    end
+  end
+
   context "when a reimport fails" do
     it "keeps the existing zones and pin" do
       perform

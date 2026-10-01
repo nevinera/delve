@@ -25,6 +25,53 @@ RSpec.describe "Build::Worlds", type: :request do
     end
   end
 
+  describe "GET /build/worlds/new" do
+    it "asks for a key" do
+      get "/build/worlds/new"
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('name="key"')
+    end
+
+    it "sends a user with no GitHub connection to connect one" do
+      GithubInstallation.where(user:).delete_all
+      user.reload
+      get "/build/worlds/new"
+      expect(response).to redirect_to(github_connect_path)
+    end
+  end
+
+  describe "POST /build/worlds" do
+    before { stub_tree_listing("builder/content", "worlds", ["demo.json", "sub/nested.json"]) }
+
+    it "goes to the editor for an available key" do
+      post "/build/worlds", params: {key: "northern-barrens"}
+      expect(response).to redirect_to(edit_build_world_path(id: "northern-barrens"))
+    end
+
+    it "allows a key in a subdirectory" do
+      post "/build/worlds", params: {key: "sub/other"}
+      expect(response).to redirect_to(edit_build_world_path(id: "sub/other"))
+    end
+
+    it "rejects a blank key" do
+      post "/build/worlds", params: {key: "  "}
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.body).to include("Key is required")
+    end
+
+    it "rejects a key with disallowed characters" do
+      post "/build/worlds", params: {key: "no spaces"}
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.body).to include("Key must contain only")
+    end
+
+    it "rejects a key that's already taken" do
+      post "/build/worlds", params: {key: "sub/nested"}
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.body).to include("is already taken")
+    end
+  end
+
   describe "GET /build/worlds/:id/edit" do
     it "suggests the next version tag for the world" do
       stub_request(:get, "https://api.github.com/repos/builder/content/git/matching-refs/tags/demo/v")
@@ -32,6 +79,14 @@ RSpec.describe "Build::Worlds", type: :request do
           body: [{ref: "refs/tags/demo/v1"}, {ref: "refs/tags/demo/v3"}, {ref: "refs/tags/demo/vx"}].to_json)
       get "/build/worlds/demo/edit"
       expect(response.body).to include('data-next-tag="demo/v4"', 'data-publish-url="/build/worlds/demo/publish"')
+    end
+
+    it "suggests v1 when the tags can't be listed" do
+      stub_request(:get, "https://api.github.com/repos/builder/content/git/matching-refs/tags/demo/v")
+        .to_return(status: 500, headers: {"Content-Type" => "application/json"}, body: {message: "oops"}.to_json)
+      get "/build/worlds/demo/edit"
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('data-next-tag="demo/v1"')
     end
 
     it "suggests v1 when there are no tags yet" do
@@ -84,6 +139,15 @@ RSpec.describe "Build::Worlds", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
       expect(response.parsed_body["error"]).to include("already exists")
       expect(create_tag).not_to have_been_requested
+    end
+
+    it "reports GitHub refusing the tag, without creating a version" do
+      remove_request_stub(create_tag)
+      stub_request(:post, "#{api}/git/refs")
+        .to_return(status: 403, headers: {"Content-Type" => "application/json"}, body: {message: "Resource not accessible"}.to_json)
+      expect { publish }.not_to change(WorldVersion, :count)
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.parsed_body["error"]).to include("Resource not accessible")
     end
 
     it "refuses a malformed tag" do

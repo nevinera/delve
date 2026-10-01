@@ -98,6 +98,13 @@ RSpec.describe "Build::ZonePlays", type: :request do
     expect(response.body).to include("HTTP 404")
   end
 
+  it "explains when the zone file isn't valid JSON" do
+    stub_request(:get, raw_url).to_return(body: "{nope")
+    get "/build/zones/forest/glade/play", params: {character_id: character.id}
+    expect(response).to have_http_status(:service_unavailable)
+    expect(response.body).to include("isn&#39;t valid JSON")
+  end
+
   it "explains when the zone is invalid" do
     stub_request(:get, raw_url).to_return(body: {"name" => "Glade"}.to_json)
     get "/build/zones/forest/glade/play", params: {character_id: character.id}

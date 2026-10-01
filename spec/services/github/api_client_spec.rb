@@ -79,6 +79,13 @@ RSpec.describe Github::ApiClient do
       expect(stub).to have_been_requested
     end
 
+    it "falls back to the HTTP status message when the error body isn't JSON" do
+      stub_request(:post, url).to_return(status: [502, "Bad Gateway"], body: "<html>oops</html>")
+
+      expect { described_class.new("gho_x").create_tag_ref("nevinera/delve-content", "demo/v1", "c0ffee") }
+        .to raise_error(Github::ApiError, /502.*Bad Gateway/)
+    end
+
     it "raises ApiError with GitHub's message when the ref already exists" do
       stub_request(:post, url)
         .to_return(status: 422, headers: {"Content-Type" => "application/json"}, body: {message: "Reference already exists"}.to_json)
