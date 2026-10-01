@@ -43,7 +43,7 @@ func ApplyMovementForTest(state *instancestate.InstanceState) {
 }
 
 func BuildFullStateMsgForTest(state *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
-	return buildFullStateMsg(state, now, checksum, nil, nil)
+	return buildFullStateMsg(state, now, checksum, nil, nil, time.Time{})
 }
 
 func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string) ([]byte, error) {
@@ -51,7 +51,7 @@ func BuildDeltaMsgForTest(prev, curr *instancestate.InstanceState, now time.Time
 }
 
 func BuildFullStateMsgWithSeqsForTest(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string) ([]byte, error) {
-	return buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs)
+	return buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs, time.Time{})
 }
 
 func BuildDeltaMsgWithSeqsForTest(prev, curr *instancestate.InstanceState, now time.Time, checksum string, prevHeartbeatSeqs, currHeartbeatSeqs, prevMoveSeqs, currMoveSeqs map[uuid.UUID]string) ([]byte, error) {
@@ -176,4 +176,53 @@ func TickNCUMovementForTest(state *instancestate.InstanceState, dt float64) {
 
 func UpdateCombatStatsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
 	updateCombatStats(state, zone)
+}
+
+func RemoveUnitForTest(state *instancestate.InstanceState, unitID uuid.UUID) {
+	removeUnit(state, unitID)
+}
+
+func (inst *Instance) FireLootAwardForTest(ctx context.Context, pending instancestate.PendingLootClaim) {
+	inst.fireLootAward(ctx, pending)
+}
+
+func SpawnPlacementForTest(zone instanceconfig.Zone, spawnAt string) (string, instanceconfig.Position) {
+	return spawnPlacement(zone, spawnAt)
+}
+
+type PendingZoneExitForTest struct {
+	SlotID           uuid.UUID
+	UnitID           uuid.UUID
+	WorldCharacterID string
+	Connection       string
+}
+
+func (inst *Instance) DetectZoneExitsForTest(state, prevState *instancestate.InstanceState, now time.Time) []PendingZoneExitForTest {
+	var out []PendingZoneExitForTest
+	for _, p := range inst.detectZoneExits(state, prevState, now) {
+		out = append(out, PendingZoneExitForTest{p.slotID, p.unitID, p.worldCharacterID, p.connection})
+	}
+	return out
+}
+
+func (inst *Instance) ArmZoneExitsForTest(unitID uuid.UUID, now time.Time) {
+	inst.armZoneExits(unitID, now)
+}
+
+// FinishZoneExitForTest feeds a Rails exit result back to the instance and
+// drains it, as the tick loop would.
+func (inst *Instance) FinishZoneExitForTest(exit PendingZoneExitForTest, err error, now time.Time) {
+	inst.zoneExitResultCh <- zoneExitResult{
+		pendingZoneExit: pendingZoneExit{exit.SlotID, exit.UnitID, exit.WorldCharacterID, exit.Connection},
+		err:             err,
+	}
+	inst.drainZoneExitResults(now)
+}
+
+func (inst *Instance) TickExpiryForTest(now time.Time) bool {
+	return inst.tickExpiry(now)
+}
+
+func BuildFullStateMsgWithExpiryForTest(state *instancestate.InstanceState, now time.Time, expiresAt time.Time) ([]byte, error) {
+	return buildFullStateMsg(state, now, "", nil, nil, expiresAt)
 }

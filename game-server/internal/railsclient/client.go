@@ -63,13 +63,13 @@ type awardResponse struct {
 	Status string `json:"status"`
 }
 
-// AwardItem posts a character item award to Rails.
+// AwardItem posts an item award for a world character to Rails.
 // Returns (remove, confirmedOwned, exactVersion, err).
 // remove=true means the item was newly awarded and should be removed from loot.
 // confirmedOwned=true means Rails confirmed the character owns this zone version of the item.
-// exactVersion=true means Rails returned 409 - character already has this exact source_key.
+// exactVersion=true means Rails returned 409 - world character already holds this exact item version.
 // confirmedOwned=false only on network or server errors.
-func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item, upgradeOnly bool) (bool, bool, bool, error) {
+func (c *Client) AwardItem(worldCharacterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item, upgradeOnly bool) (bool, bool, bool, error) {
 	body := awardBody{
 		Zone:        zoneRef{DatabaseID: zoneDatabaseID, Identifier: zoneIdentifier, Version: zoneVersion},
 		Identifier:  item.Identifier,
@@ -87,7 +87,7 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 	if err != nil {
 		return false, false, false, fmt.Errorf("marshal: %w", err)
 	}
-	url := fmt.Sprintf("%s/internal_api/characters/%s/character_items", c.baseURL, characterDatabaseID)
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/character_items", c.baseURL, worldCharacterDatabaseID)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		return false, false, false, fmt.Errorf("build request: %w", err)
@@ -115,10 +115,10 @@ func (c *Client) AwardItem(characterDatabaseID, zoneDatabaseID, zoneIdentifier, 
 	}
 }
 
-// FetchEquippedItems retrieves a character's currently equipped items from
-// Rails, keyed by equipped slot.
-func (c *Client) FetchEquippedItems(characterDatabaseID string) (map[string]instanceconfig.EquippedItem, error) {
-	url := fmt.Sprintf("%s/internal_api/characters/%s/equipped_items", c.baseURL, characterDatabaseID)
+// FetchEquippedItems retrieves a world character's currently equipped items
+// from Rails, keyed by equipped slot.
+func (c *Client) FetchEquippedItems(worldCharacterDatabaseID string) (map[string]instanceconfig.EquippedItem, error) {
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/equipped_items", c.baseURL, worldCharacterDatabaseID)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
@@ -139,4 +139,45 @@ func (c *Client) FetchEquippedItems(characterDatabaseID string) (map[string]inst
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	return items, nil
+}
+
+type zoneExitBody struct {
+	ZoneIdentifier string `json:"zone_identifier"`
+	Connection     string `json:"connection"`
+}
+
+// ZoneExit tells Rails a world character left its zone through connection
+// ("mapId/connectionId"), so Rails can work out where that leads and move
+// the character there. A non-2xx response is an error carrying Rails'
+// "error" message when it sends one.
+func (c *Client) ZoneExit(worldCharacterDatabaseID, zoneIdentifier, connection string) error {
+	data, err := json.Marshal(zoneExitBody{ZoneIdentifier: zoneIdentifier, Connection: connection})
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/zone_exits", c.baseURL, worldCharacterDatabaseID)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode >= 200 && res.StatusCode < 300 {
+		return nil
+	}
+	var body struct {
+		Error string `json:"error"`
+	}
+	json.NewDecoder(res.Body).Decode(&body) //nolint:errcheck
+	if body.Error != "" {
+		return fmt.Errorf("rails returned %d: %s", res.StatusCode, body.Error)
+	}
+	return fmt.Errorf("rails returned %d", res.StatusCode)
 }

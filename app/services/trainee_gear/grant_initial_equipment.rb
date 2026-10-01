@@ -1,8 +1,9 @@
 # Persists and equips Trainee Gear CharacterItems for every equip slot a
-# character doesn't already occupy (real or Trainee), from their class's
-# primaryStats/secondaryStats/wields. See docs/stats.md ("Trainee Gear").
-# Safe to call on a character with existing gear - already-occupied slots
-# are left untouched. Uses batch inserts since it's on the request path.
+# world character doesn't already occupy (real or Trainee), from their
+# class's primaryStats/secondaryStats/wields. See docs/stats.md ("Trainee
+# Gear"). Safe to call on a world character with existing gear -
+# already-occupied slots are left untouched. Uses batch inserts since it's
+# on the request path (EnterWorld).
 module TraineeGear
   class GrantInitialEquipment
     include Memery
@@ -14,16 +15,16 @@ module TraineeGear
 
     def self.call(...) = new(...).call
 
-    def initialize(character:)
-      @character = character
+    def initialize(world_character:)
+      @world_character = world_character
     end
 
     def call
       return if items.empty?
 
-      result = CharacterItem.insert_all!(character_item_attrs, returning: %w[id source_key])
-      ids_by_source_key = result.rows.to_h { |id, source_key| [source_key, id] }
-      EquippedItem.insert_all!(equipped_item_attrs(ids_by_source_key))
+      result = CharacterItem.insert_all!(character_item_attrs, returning: %w[id identifier])
+      ids_by_identifier = result.rows.to_h { |id, identifier| [identifier, id] }
+      EquippedItem.insert_all!(equipped_item_attrs(ids_by_identifier))
     end
 
     private
@@ -37,16 +38,14 @@ module TraineeGear
       ).except(*occupied_slots)
     end
 
-    def occupied_slots = @character.equipped_items.pluck(:equipped_slot)
+    def occupied_slots = @world_character.equipped_items.pluck(:equipped_slot)
 
     def raise_unless_class_content_ready!
       return unless [character_class.primary_stats, character_class.secondary_stats, character_class.wields].any?(&:blank?)
       raise ClassContentNotReady, "#{character_class.identifier} lacks required values for primary_stats, secondary_stats, or wields; ensure FetchCharacterClassContentJob has completed."
     end
 
-    memoize def character_class = @character.character_class
-
-    def source_key_for(equipped_slot) = "trainee/#{equipped_slot}"
+    memoize def character_class = @world_character.character.character_class
 
     def character_item_attrs
       now = Time.current
@@ -54,33 +53,19 @@ module TraineeGear
     end
 
     def character_item_attrs_for(equipped_slot, item, now)
-      {
-        character_id: @character.id,
-        identifier: "trainee-#{equipped_slot}",
-        name: item.name,
-        source_key: source_key_for(equipped_slot),
-        zone_identifier: "trainee",
-        version: "0.0",
-        provenance_zone_id: nil,
-        slot: item.slot,
-        elvl: 0,
-        primary_stat: item.primary_stat,
-        secondary_stats: item.secondary_stats,
-        source_json: {"shield" => item.shield, "weaponType" => item.weapon_type}
-      }.merge(timestamps(now, received_at: true))
+      TraineeGear.item_attrs(equipped_slot, item)
+        .merge(world_character_id: @world_character.id)
+        .merge(timestamps(now))
     end
 
-    def timestamps(now, received_at: false)
-      base = {created_at: now, updated_at: now}
-      received_at ? base.merge(received_at: now) : base
-    end
+    def timestamps(now) = {created_at: now, updated_at: now}
 
-    def equipped_item_attrs(ids_by_source_key)
+    def equipped_item_attrs(ids_by_identifier)
       now = Time.current
       items.keys.map do |equipped_slot|
         {
-          character_id: @character.id,
-          character_item_id: ids_by_source_key.fetch(source_key_for(equipped_slot)),
+          world_character_id: @world_character.id,
+          character_item_id: ids_by_identifier.fetch(TraineeGear.identifier_for(equipped_slot)),
           equipped_slot: equipped_slot
         }.merge(timestamps(now))
       end

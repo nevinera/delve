@@ -203,7 +203,7 @@ func TestSetSlotState_TransitionsState(t *testing.T) {
 
 	ok := inst.SetSlotState(slot.ID, instance.SlotStateConnected)
 	assert.True(t, ok)
-	assert.Equal(t, instance.SlotStateConnected, slot.State)
+	assert.Equal(t, instance.SlotStateConnected, slotState(t, inst, slot.ID))
 }
 
 func TestSetSlotState_NotFound(t *testing.T) {
@@ -259,7 +259,7 @@ func TestConnectSlot_SetsStateConnected(t *testing.T) {
 	require.True(t, ok)
 	t.Cleanup(func() { close(done) })
 
-	assert.Equal(t, instance.SlotStateConnected, slot.State)
+	assert.Equal(t, instance.SlotStateConnected, slotState(t, inst, slot.ID))
 }
 
 func TestConnectSlot_ReturnsChannels(t *testing.T) {
@@ -303,12 +303,33 @@ func TestDisconnectSlot_SetsStateWaiting(t *testing.T) {
 	require.NoError(t, err)
 
 	_, _, done, _ := inst.ConnectSlot(slot.ID)
-	assert.Equal(t, instance.SlotStateConnected, slot.State)
+	assert.Equal(t, instance.SlotStateConnected, slotState(t, inst, slot.ID))
 
 	inst.DisconnectSlot(slot.ID)
 	close(done)
 
-	assert.Equal(t, instance.SlotStateWaiting, slot.State)
+	assert.Equal(t, instance.SlotStateWaiting, slotState(t, inst, slot.ID))
+}
+
+// slotState re-reads a slot's current state (slots are only ever handed out
+// as snapshots, so an earlier AddSlot/GetSlot result doesn't update).
+func slotState(t *testing.T, inst *instance.Instance, id uuid.UUID) instance.SlotState {
+	t.Helper()
+	slot, ok := inst.GetSlot(id)
+	require.True(t, ok)
+	return slot.State
+}
+
+func TestSlotSnapshots_DoNotShareMaps(t *testing.T) {
+	inst := makeInstance()
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, map[string]bool{"sword": false}, nil)
+	require.NoError(t, err)
+
+	slot.OwnedZoneItems["sword"] = true
+
+	again, ok := inst.GetSlot(slot.ID)
+	require.True(t, ok)
+	assert.False(t, again.OwnedZoneItems["sword"])
 }
 
 func TestDisconnectSlot_UnknownSlotIsNoOp(t *testing.T) {

@@ -1,0 +1,8 @@
+<h1>Can't play <%= @key %> right now</h1>
+
+<p><%= @error %></p>
+
+<p>
+  <%= link_to "Try again", request.fullpath %>
+  · <%= link_to "Back to zones", build_zones_path %>
+</p>

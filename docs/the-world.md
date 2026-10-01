@@ -27,8 +27,7 @@ by the character that created them (the "party leader" in such a zone) - each
 character can only have one such, and they'll be shut down when empty.
 
 The Region can only be entered at certain places - "entry points". Entry points
-may be "open", in which case you can just pick that zone from the selection page
-and spawn in. But a lot of the entry-points are only reachable by visiting their
+may be "open", in which case you can enter the world there directly. But a lot of the entry-points are only reachable by visiting their
 connected location in another zone, and travelling through the visual 'barrier'.
 Scattered around the region will be additional entry points, which can't be used
 without the appropriate "key" (often granted just by reaching them, but
@@ -56,3 +55,56 @@ scattered around, but connect it to zones for the bordering forest, a desert, a
 coast-line, etc, all places that could just be scattered onto the one map, but
 can be given much more detail as their own locations.
 
+
+## Trying a Zone While Building
+
+Build → Zones → Play runs a zone straight from your repo's default branch, as one of your
+characters, with no publishing, wearing Trainee Gear at the zone's elevation (`?elevation=-5` or
+`+3` adjusts it). Nothing is kept: loot isn't saved and the zone's world exits do
+nothing. Only your own characters share that instance, and each new commit gets a fresh one. The
+repo must be public.
+
+## Publishing a World
+
+A World lives entirely in one public GitHub repo: its world file plus every zone it references.
+Delve stores only references to that content (the repo, file paths, commit SHAs, and checksums),
+never the content itself.
+
+A **World version** is the world as of one commit.
+- **Publish** in the world editor tags the default branch's latest commit (`<world-key>/v<N>` by
+  default) and imports that commit as a new version. A tag you made yourself can be imported
+  from the world's Versions page instead.
+- The **import** fetches the world file and each zone's `.full.json` at that commit, validates
+  them, and checks that every world link and entry point names a real connection. A failed import
+  shows its error on the Versions page, and can be retried with Reimport.
+- A successful import leaves the version **unreleased**: nobody plays it until it's released.
+- **Release** makes a version the one players get. Earlier released versions expire 24 hours
+  later.
+
+The tag is only for human reference. A version always reads its files by commit SHA, so moving
+or deleting the tag afterwards changes nothing.
+
+## Playing a World
+
+Each character has a list of worlds (Play → a character → Worlds): every world with a released
+version, minus any they've hidden. "Show all" brings hidden worlds back.
+
+The first time a character enters a world, Delve creates a record of their time there: which
+version they're on and the connection point they last used. They start at the world's first entry
+point that needs no key.
+- **Re-entering** puts them back at their last connection point. If that zone or connection no
+  longer exists in the version they're entering, they start at the entry point instead.
+- **Travelling:** stepping onto one of a zone's world-linked exits takes the character to the
+  connection on the other side, a new page load into that zone's instance. Exits only fire when
+  stepped onto (not when spawning on or standing on one), and not within 6 seconds of arriving.
+- **Versions:** a character stays on their version until it expires. Outside the world, they can
+  switch to any released version that hasn't expired. When a version expires while they're in
+  it, they get a countdown for the last 10 minutes, then they're moved to the latest version.
+
+Delve only stores where a character is between zones. Inside a zone, the instance tracks their
+position; if they leave the instance some other way, they return at their last connection point.
+
+Items and equipment belong to a character's time in one world: each world has its own, starting
+with a set of Trainee Gear on the first visit (see [stats.md](stats.md#trainee-gear)). An item is
+identified by its zone and identifier, and its version is a hash of its definition, so a new
+world version only offers an upgrade for items whose definitions actually changed.

@@ -1,6 +1,8 @@
 require "rails_helper"
 
 RSpec.describe "Build::Validators", type: :request do
+  include ValidatorFixtures
+
   let(:user) { create(:user) }
 
   context "when not logged in" do
@@ -174,6 +176,23 @@ RSpec.describe "Build::Validators", type: :request do
         body = JSON.parse(response.body)
         expect(body["valid"]).to eq(false)
         expect(body["error"]["path"]).to eq("$.imageUrl")
+      end
+    end
+
+    describe "POST /build/validators/world" do
+      it "returns valid: true for a valid world" do
+        post "/build/validators/world", params: world_fixture.to_json, headers: {"Content-Type" => "application/json"}
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)).to eq({"valid" => true})
+      end
+
+      it "returns valid: false with the error path for a world with no entry points" do
+        post "/build/validators/world", params: world_fixture.except("entryPoints").to_json, headers: {"Content-Type" => "application/json"}
+
+        body = JSON.parse(response.body)
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["path"]).to eq("$.entryPoints")
       end
     end
 

@@ -10,6 +10,8 @@ import {saveWorld} from "./saveWorld";
 import {validateWorld} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
+import PublishBar from "./PublishBar";
+import {publishWorld} from "./publishWorld";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
 import {redirectTo} from "../redirectTo";
 
@@ -38,7 +40,7 @@ import {redirectTo} from "../redirectTo";
 //     hand (see ZonesPanel).
 // Both are fetched once on mount and again on demand (their own Refresh
 // buttons) rather than on every keystroke/render.
-export default function WorldEditor({worldKey, newZoneUrl}) {
+export default function WorldEditor({worldKey, newZoneUrl, publishUrl, nextTag}) {
   const [draft, setDraft] = useState(null);
   const [availableZoneKeys, setAvailableZoneKeys] = useState([]);
   const [zoneListRefreshStatus, setZoneListRefreshStatus] = useState("");
@@ -51,6 +53,9 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
   // same split ZoneEditor makes for its own graphPositions.
   const [graphPositions, setGraphPositions] = useState({});
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
+  // Edits since the last successful save - Publish tags the saved world,
+  // so it waits for these to be saved first.
+  const [unsaved, setUnsaved] = useState(false);
   const client = useRef(new GithubClient());
 
   useEffect(() => {
@@ -87,6 +92,7 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
 
   function handleChange(nextDraft) {
     markDirty();
+    setUnsaved(true);
     setDraft(nextDraft);
   }
 
@@ -154,6 +160,7 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
     try {
       await saveWorld(worldKey, draft.data, graphPositions, commitMessage);
       setSaved();
+      setUnsaved(false);
     } catch (error) {
       if (error instanceof GithubAuthError) {
         redirectTo(error.redirectUrl);
@@ -161,6 +168,11 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
       }
       setSaveError(error.message);
     }
+  }
+
+  async function handlePublish(tag) {
+    const {url} = await publishWorld(publishUrl, tag);
+    redirectTo(url);
   }
 
   if (loadError) return <div className="world-editor-load-error">Failed to load: {loadError}</div>;
@@ -181,6 +193,7 @@ export default function WorldEditor({worldKey, newZoneUrl}) {
       </div>
       <div className="world-editor-sidebar">
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || worldKey}`} />
+        {publishUrl && <PublishBar unsaved={unsaved} defaultTag={nextTag} onPublish={handlePublish} />}
         <WorldFieldsPanel draft={draft} onChange={handleChange} />
         <ZonesPanel
           draft={draft}

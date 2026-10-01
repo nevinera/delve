@@ -1,19 +1,19 @@
 require "rails_helper"
 
-RSpec.describe "POST /internal_api/character_items", type: :request do
-  let(:character) { create(:character) }
+RSpec.describe "POST /internal_api/world_characters/:id/character_items", type: :request do
   let(:zone) { create(:zone) }
+  let(:world_character) { create(:world_character, world: zone.world_version.world, world_version: zone.world_version) }
   let(:valid_token) { "test-token" }
 
   let(:valid_body) do
     {
-      zone: {database_id: zone.id.to_s, identifier: zone.identifier, version: zone.version},
+      zone: {database_id: zone.id.to_s, identifier: zone.identifier, version: zone.world_version.commit_sha},
       identifier: "sword-of-doom",
       name: "Sword of Doom",
       slot: "main_hand",
       elvl: 584,
-      primary: nil,
-      secondaries: []
+      primary: "strength",
+      secondaries: ["crit_rating"]
     }
   end
 
@@ -22,131 +22,58 @@ RSpec.describe "POST /internal_api/character_items", type: :request do
     allow(ENV).to receive(:fetch).with("INTERNAL_API_TOKENS", "").and_return(valid_token)
   end
 
-  def post_item(body: valid_body, token: valid_token)
+  def post_item(body: valid_body, token: valid_token, id: world_character.id)
     headers = token ? {"X-Internal-Token" => token} : {}
-    post "/internal_api/characters/#{character.id}/character_items", params: body.to_json,
+    post "/internal_api/world_characters/#{id}/character_items", params: body.to_json,
       headers: headers.merge("Content-Type" => "application/json")
   end
 
-  context "with a valid request" do
-    it "returns 201 and the item id" do
-      post_item
-      expect(response).to have_http_status(:created)
-      expect(response.parsed_body["id"]).to eq(CharacterItem.last.id)
-    end
-
-    it "creates a CharacterItem record" do
-      expect { post_item }.to change(CharacterItem, :count).by(1)
-      item = CharacterItem.last
-      expect(item.character).to eq(character)
-      expect(item.provenance_zone).to eq(zone)
-      expect(item.source_key).to eq("#{zone.identifier}/#{zone.version}/sword-of-doom")
-      expect(item.name).to eq("Sword of Doom")
-      expect(item.slot).to eq("main_hand")
-      expect(item.elvl).to eq(584)
-    end
-
-    it "persists primary and secondaries" do
-      post_item(body: valid_body.merge(primary: "strength", secondaries: ["crit_rating"]))
-      item = CharacterItem.last
-      expect(item.primary_stat).to eq("strength")
-      expect(item.secondary_stats).to eq(["crit_rating"])
-    end
+  it "awards the item and returns its id" do
+    post_item
+    expect(response).to have_http_status(:created)
+    item = world_character.character_items.sole
+    expect(response.parsed_body["id"]).to eq(item.id)
+    expect(item).to have_attributes(primary_stat: "strength", secondary_stats: ["crit_rating"])
   end
 
-  context "with a duplicate source_key" do
-    before { post_item }
-
-    it "returns 409" do
-      post_item
-      expect(response).to have_http_status(:conflict)
-    end
-
-    it "returns already_owned_this_version status" do
-      post_item
-      expect(response.parsed_body["status"]).to eq("already_owned_this_version")
-    end
-
-    it "does not create a second record" do
-      expect { post_item }.not_to change(CharacterItem, :count)
-    end
+  it "returns 409 for an item already held at this definition" do
+    post_item
+    post_item
+    expect(response).to have_http_status(:conflict)
+    expect(response.parsed_body["status"]).to eq("already_owned_this_version")
+    expect(world_character.character_items.count).to eq(1)
   end
 
-  context "when the character owns the same item from a different version of this zone" do
-    let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
-
-    before do
-      create(:character_item, character: character, provenance_zone: other_zone,
-        identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom")
-    end
-
-    it "returns 201" do
-      post_item
-      expect(response).to have_http_status(:created)
-    end
-
-    it "returns already_owned_other_version status with the new item id" do
-      post_item
-      expect(response.parsed_body["status"]).to eq("already_owned_other_version")
-      expect(response.parsed_body["id"]).to eq(CharacterItem.last.id)
-    end
-
-    it "creates a new record for this version" do
-      expect { post_item }.to change(CharacterItem, :count).by(1)
-    end
+  it "reports an upgrade when an older definition is held" do
+    post_item(body: valid_body.merge(elvl: 500))
+    post_item
+    expect(response).to have_http_status(:created)
+    expect(response.parsed_body["status"]).to eq("already_owned_other_version")
   end
 
-  context "with a bad token" do
-    it "returns 401" do
-      post_item(token: "wrong")
-      expect(response).to have_http_status(:unauthorized)
-    end
+  it "returns 422 for an upgrade_only award with nothing to upgrade" do
+    post_item(body: valid_body.merge(upgrade_only: true))
+    expect(response).to have_http_status(:unprocessable_content)
   end
 
-  context "when the character does not exist" do
-    it "returns 404" do
-      headers = {"X-Internal-Token" => valid_token, "Content-Type" => "application/json"}
-      post "/internal_api/characters/99999/character_items", params: valid_body.to_json, headers: headers
-      expect(response).to have_http_status(:not_found)
-    end
+  it "returns 422 for a zone outside the world character's version" do
+    post_item(body: valid_body.merge(zone: {database_id: create(:zone).id.to_s, identifier: zone.identifier}))
+    expect(response).to have_http_status(:unprocessable_content)
+    expect(response.parsed_body["error"]).to include("isn't in")
   end
 
-  context "when the zone does not exist" do
-    it "returns 404" do
-      post_item(body: valid_body.deep_merge(zone: {database_id: "99999"}))
-      expect(response).to have_http_status(:not_found)
-    end
+  it "returns 422 for an invalid slot" do
+    post_item(body: valid_body.merge(slot: "tail"))
+    expect(response).to have_http_status(:unprocessable_content)
   end
 
-  context "when zone identifier does not match" do
-    it "returns 422 with an error message" do
-      post_item(body: valid_body.deep_merge(zone: {identifier: "wrong_zone"}))
-      expect(response).to have_http_status(:unprocessable_content)
-      expect(response.parsed_body["error"]).to include("wrong_zone")
-    end
+  it "returns 404 for an unknown world character" do
+    post_item(id: 0)
+    expect(response).to have_http_status(:not_found)
   end
 
-  context "when zone version does not match" do
-    it "returns 422 with an error message" do
-      post_item(body: valid_body.deep_merge(zone: {version: "9.9"}))
-      expect(response).to have_http_status(:unprocessable_content)
-      expect(response.parsed_body["error"]).to include("9.9")
-    end
-  end
-
-  context "with an invalid slot" do
-    it "returns 422" do
-      post_item(body: valid_body.merge(slot: "not_a_slot"))
-      expect(response).to have_http_status(:unprocessable_content)
-    end
-  end
-
-  context "with a missing required field" do
-    %w[identifier name slot elvl].each do |field|
-      it "returns 422 when #{field} is absent" do
-        post_item(body: valid_body.except(field.to_sym))
-        expect(response).to have_http_status(:unprocessable_content)
-      end
-    end
+  it "returns 401 with a bad token" do
+    post_item(token: "wrong")
+    expect(response).to have_http_status(:unauthorized)
   end
 end

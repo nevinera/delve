@@ -1,0 +1,33 @@
+<h1><%= @name %></h1>
+
+<% if @versions.any? %>
+  <p><%= link_to "Enter", play_play_character_world_path(@character, @world) %></p>
+<% else %>
+  <p>This world has no released version right now.</p>
+<% end %>
+
+<% if @world_character %>
+  <p>
+    <%= link_to "Items", play_character_world_character_items_path(@character, @world) %>
+    · <%= link_to "Equipped", play_character_world_equipped_items_path(@character, @world) %>
+  </p>
+<% end %>
+
+<% if @world_character&.position %>
+  <p>Last seen at <%= @world_character.zone_identifier %> (<%= @world_character.connection_key %>).</p>
+<% end %>
+
+<% if @versions.any? %>
+  <h2>Version</h2>
+  <%= form_with url: version_play_character_world_path(@character, @world), method: :patch do |f| %>
+    <%= f.select :world_version_id,
+          @versions.map { |v| ["#{v.ref}#{" (expires #{v.expires_at.to_fs(:short)})" if v.expires_at}", v.id] },
+          selected: @current_version&.id || @versions.first.id %>
+    <%= f.submit "Switch", disabled: @in_world %>
+  <% end %>
+  <% if @in_world %>
+    <p>Leave the world to switch versions.</p>
+  <% end %>
+<% end %>
+
+<%= link_to "All worlds", play_character_worlds_path(@character) %>

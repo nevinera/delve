@@ -1,0 +1,30 @@
+<h1>Play <%= @key %></h1>
+
+<p>
+  <% if @local %>
+    Plays the zone from your local content server, as it is right now.
+  <% else %>
+    Plays the zone as it is on your repo's default branch right now.
+  <% end %>
+  Nothing you do here is saved: loot isn't kept, and there are no world exits.
+</p>
+
+<p>
+  You'll wear trainee gear at the zone's elevation<% if params[:elevation].present? %>
+  <strong><%= params[:elevation] %></strong><% end %>.
+  Add <code>?elevation=-5</code> (or <code>+3</code>) to the URL to test with weaker or stronger gear.
+</p>
+
+<% if @characters.any? %>
+  <ul>
+    <% @characters.each do |character| %>
+      <% play_params = {id: @key, character_id: character.id, elevation: params[:elevation].presence}.compact %>
+      <% play_path = @local ? build_local_zone_play_path(play_params) : build_zone_play_path(play_params) %>
+      <li><%= link_to "Play as #{character.name}", play_path %></li>
+    <% end %>
+  </ul>
+<% else %>
+  <p>You need a character first: <%= link_to "create one", new_play_character_path %>.</p>
+<% end %>
+
+<%= link_to "Back to zones", build_zones_path %>

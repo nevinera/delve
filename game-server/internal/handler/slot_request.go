@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -24,6 +25,38 @@ type slotRequestBody struct {
 	CharacterClass      instanceconfig.CharacterClass          `json:"character_class"`
 	OwnedZoneItems      map[string]bool                        `json:"owned_zone_items"` // optional; nil if not provided
 	EquippedItems       map[string]instanceconfig.EquippedItem `json:"equipped_items"`   // optional; nil if not provided
+
+	// How the player reached the zone, and the world-join settings (see
+	// game-server/README.md).
+	Mode                     instance.Mode `json:"mode"`                        // world | direct; required
+	InstanceKey              string        `json:"instance_key"`                // Rails-chosen key; selection matches on it; required
+	SpawnAt                  string        `json:"spawn_at"`                    // "mapId/connectionId"; per slot
+	Exits                    []string      `json:"exits"`                       // "mapId/connectionId" keys; per instance
+	WorldCharacterDatabaseID string        `json:"world_character_database_id"` // required for world mode
+	WorldVersionID           string        `json:"world_version_id"`            // per instance
+	ExpiresAt                *time.Time    `json:"expires_at"`                  // RFC 3339; per instance, if the version is already expiring
+}
+
+// validate checks required fields, returning a message for the first
+// problem found.
+func (req *slotRequestBody) validate() string {
+	switch req.Mode {
+	case instance.ModeWorld, instance.ModeDirect:
+	default:
+		return "mode must be world or direct"
+	}
+	// A direct join has no zone record, so no database_id.
+	if req.ZoneIdentifier == "" || req.Version == "" || (req.DatabaseID == "" && req.Mode != instance.ModeDirect) ||
+		req.SourceURL == "" || req.CharacterName == "" || req.CharacterDatabaseID == "" {
+		return "zone_identifier, version, database_id, source_url, character_name, and character_database_id are required"
+	}
+	if req.Mode == instance.ModeWorld && req.WorldCharacterDatabaseID == "" {
+		return "world_character_database_id is required for world mode"
+	}
+	if req.InstanceKey == "" {
+		return "instance_key is required"
+	}
+	return ""
 }
 
 type slotRequestResponse struct {
@@ -50,10 +83,8 @@ func (h *Slots) Request(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusUnprocessableEntity, "invalid request body: "+err.Error())
 		return
 	}
-	if req.ZoneIdentifier == "" || req.Version == "" || req.DatabaseID == "" ||
-		req.SourceURL == "" || req.CharacterName == "" || req.CharacterDatabaseID == "" {
-		writeError(w, r, http.StatusUnprocessableEntity,
-			"zone_identifier, version, database_id, source_url, character_name, and character_database_id are required")
+	if msg := req.validate(); msg != "" {
+		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
 
@@ -76,7 +107,7 @@ func (h *Slots) requestToSpecificInstance(w http.ResponseWriter, r *http.Request
 		writeError(w, r, http.StatusNotFound, "instance not found")
 		return
 	}
-	if inst.ZoneIdentifier != req.ZoneIdentifier {
+	if inst.ZoneIdentifier != req.ZoneIdentifier || inst.Mode != req.Mode || inst.InstanceKey != req.InstanceKey {
 		writeError(w, r, http.StatusUnprocessableEntity, "instance belongs to a different zone")
 		return
 	}
@@ -85,7 +116,7 @@ func (h *Slots) requestToSpecificInstance(w http.ResponseWriter, r *http.Request
 }
 
 func (h *Slots) requestToAnyInstance(w http.ResponseWriter, r *http.Request, req slotRequestBody) {
-	inst := instance.SelectBestInstance(h.registry.List(), req.ZoneIdentifier, req.Version)
+	inst := instance.SelectKeyedInstance(h.registry.List(), req.Mode, req.InstanceKey)
 	if inst == nil {
 		if h.registry.Count() >= h.maxInstances {
 			writeError(w, r, http.StatusNotAcceptable, "server is at maximum instance capacity")
@@ -113,6 +144,16 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 		h.maxSlots,
 	)
 	inst.RailsClient = h.railsClient
+	inst.Mode = req.Mode
+	inst.InstanceKey = req.InstanceKey
+	inst.WorldVersionID = req.WorldVersionID
+	inst.Exits = make(map[string]bool, len(req.Exits))
+	for _, key := range req.Exits {
+		inst.Exits[key] = true
+	}
+	if req.ExpiresAt != nil {
+		inst.SetExpiresAt(*req.ExpiresAt)
+	}
 	if err := inst.Start(h.registry); err != nil {
 		return nil, err
 	}
@@ -121,7 +162,10 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 }
 
 func (h *Slots) addSlotAndRespond(w http.ResponseWriter, r *http.Request, inst *instance.Instance, req slotRequestBody) {
-	slot, err := inst.AddSlot(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass, req.OwnedZoneItems, req.EquippedItems)
+	slot, err := inst.AddSlotWithOptions(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass, req.OwnedZoneItems, req.EquippedItems, instance.SlotOptions{
+		WorldCharacterDatabaseID: req.WorldCharacterDatabaseID,
+		SpawnAt:                  req.SpawnAt,
+	})
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {
 			writeError(w, r, http.StatusUnprocessableEntity, err.Error())

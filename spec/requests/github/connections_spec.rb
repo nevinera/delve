@@ -153,6 +153,23 @@ RSpec.describe "Github::Connections", type: :request do
         end
       end
 
+      context "when GitHub rejects the authorization code" do
+        it "redirects to connect with GitHub's explanation" do
+          get "/github/connect"
+          state = session[:github_oauth_state]
+          stub_request(:post, "https://github.com/login/oauth/access_token")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"},
+              body: {error: "bad_verification_code", error_description: "The code passed is incorrect or expired."}.to_json)
+
+          expect {
+            get "/github/callback", params: {code: "abc", state: state}
+          }.not_to change(GithubInstallation, :count)
+
+          expect(response).to redirect_to(github_connect_path)
+          expect(flash[:alert]).to eq("GitHub authorization failed: The code passed is incorrect or expired.")
+        end
+      end
+
       context "when the installation has more than one repository selected" do
         it "does not persist an installation and redirects to connect with an alert" do
           get "/github/connect"
@@ -272,6 +289,20 @@ RSpec.describe "Github::Connections", type: :request do
           expect(revoke_stub).to have_been_requested
           expect(response).to redirect_to(github_connect_path)
           expect(user.reload.github_installation).to be_nil
+        end
+      end
+
+      context "when revoking the grant fails" do
+        let!(:installation) { create(:github_installation, user: user) }
+
+        it "still disconnects, and logs the failure" do
+          stub_request(:delete, "https://api.github.com/applications/test_github_client_id/grant").to_raise(Errno::ECONNREFUSED)
+          allow(Rails.logger).to receive(:warn)
+
+          expect { delete "/github/disconnect" }.to change(GithubInstallation, :count).by(-1)
+
+          expect(response).to redirect_to(github_connect_path)
+          expect(Rails.logger).to have_received(:warn).with(/GitHub grant revocation failed/)
         end
       end
 

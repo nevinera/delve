@@ -19,16 +19,16 @@
         <% if equipped_item %>
           <td><%= equipped_item.character_item.name %></td>
           <td><%= equipped_item.character_item.elvl %></td>
-          <td><%= equipped_item.character_item.provenance_zone&.identifier %></td>
-          <td><%= link_to "View item", play_character_character_item_path(@character, equipped_item.character_item) %></td>
+          <td><%= equipped_item.character_item.zone_identifier %></td>
+          <td><%= link_to "View item", play_character_world_character_item_path(@character, @world, equipped_item.character_item) %></td>
         <% else %>
           <td colspan="3"><em>Empty</em></td>
           <td></td>
         <% end %>
-        <td><%= link_to "Equippable", play_character_character_items_path(@character, slot: EquippedItem.item_slots_for(slot)) %></td>
+        <td><%= link_to "Equippable", play_character_world_character_items_path(@character, @world, slot: EquippedItem.item_slots_for(slot)) %></td>
       </tr>
     <% end %>
   </tbody>
 </table>
 
-<%= link_to "Back to #{@character.name}", play_character_path(@character) %>
+<%= link_to "Back to #{@world.name || @world.key}", play_character_world_path(@character, @world) %>

@@ -31,16 +31,20 @@ Rails.application.routes.draw do
     resources :unit_types, only: [:index, :new, :create]
     resources :items, only: [:index, :new, :create]
     resources :maps, only: [:index, :new, :create]
-    # The content-editing zone editor (see plans/zone-editor.md) owns the
-    # bare `zones` resource name, matching every other content editor above
-    # (classes/unit_types/items/maps). The DB-backed Zone *registration* UI
-    # (register a deployed zone config by identifier/version/config_url -
-    # unrelated to content editing) lives under this `registration`
-    # namespace instead, out of that name's way.
     resources :zones, only: [:index, :new, :create]
     resources :worlds, only: [:index, :new, :create]
-    namespace :registration do
-      resources :zones, only: [:index, :show, :new, :create]
+    # World records and their published versions (see plans/worlds.md),
+    # keyed by database id - the bare `worlds` resource above is the
+    # content editor, keyed by the world file's key.
+    namespace :publishing do
+      resources :worlds, only: [:index, :show, :create] do
+        resources :versions, only: [:new, :create] do
+          member do
+            post :release
+            post :reimport
+          end
+        end
+      end
     end
     post "validators/ability", to: "validators#ability"
     post "validators/character_class", to: "validators#character_class"
@@ -71,21 +75,32 @@ Rails.application.routes.draw do
   get "build/items/*id/edit", to: "build/items#edit", as: "edit_build_item"
   get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
   get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
+  get "build/zones/*id/play", to: "build/zone_plays#show", as: "build_zone_play"
+  get "build/local_zones", to: "build/zone_plays#local", as: "build_local_zones"
+  get "build/local_zones/*id/play", to: "build/zone_plays#show", as: "build_local_zone_play", defaults: {source: "local"}
   get "build/worlds/*id/edit", to: "build/worlds#edit", as: "edit_build_world"
+  post "build/worlds/*id/publish", to: "build/worlds#publish", as: "publish_build_world"
 
   namespace :play do
     root to: "dashboard#index"
     resources :characters, only: [:index, :show, :new, :create, :edit, :update] do
-      resources :zones, only: [:index, :show]
-      resources :character_items, only: [:index, :show]
-      resources :equipped_items, only: [:index, :update], param: :equipped_slot
+      resources :worlds, only: [:index, :show], controller: "world_characters" do
+        member do
+          get :play
+          patch :active
+          patch :version
+        end
+        resources :character_items, only: [:index, :show]
+        resources :equipped_items, only: [:index, :update], param: :equipped_slot
+      end
       resource :setting, only: [:show, :update], controller: "character_settings"
     end
   end
   namespace :internal_api do
-    resources :characters, only: [] do
+    resources :world_characters, only: [] do
       resources :character_items, only: [:create]
       resources :equipped_items, only: [:index]
+      resources :zone_exits, only: [:create]
     end
   end
 

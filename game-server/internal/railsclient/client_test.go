@@ -35,7 +35,7 @@ func TestFetchEquippedItems_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, items, got)
-	assert.Equal(t, "/internal_api/characters/42/equipped_items", gotPath)
+	assert.Equal(t, "/internal_api/world_characters/42/equipped_items", gotPath)
 	assert.Equal(t, "secret-token", gotToken)
 }
 

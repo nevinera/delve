@@ -29,6 +29,7 @@ type playerSpawn struct {
 	characterName string
 	class         instanceconfig.CharacterClass
 	equippedItems map[string]instanceconfig.EquippedItem
+	spawnAt       string // "mapId/connectionId"; see spawnPlacement
 }
 
 // drainPlayerSpawns processes all pending player spawn requests. Called at the
@@ -40,13 +41,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 			if _, exists := state.Units[spawn.unitID]; exists {
 				continue // reconnect: unit already present
 			}
-			pos := instanceconfig.Position{}
-			mapID := ""
-			if len(inst.ZoneConfig.Maps) > 0 {
-				m := inst.ZoneConfig.Maps[0]
-				mapID = m.Identifier
-				pos = entryPosition(inst.ZoneConfig, m)
-			}
+			mapID, pos := spawnPlacement(inst.ZoneConfig, spawn.spawnAt)
 			resources, primaryResourceName := playerResources(spawn.class)
 			unit := &instancestate.UnitState{
 				ZoneUnitIdentifier:  "player:" + spawn.characterName,
@@ -70,6 +65,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 			unit.MaxHealth = command.PlayerMaxHealth(unit, inst.ZoneConfig)
 			unit.Health = unit.MaxHealth
 			state.Units[spawn.unitID] = unit
+			inst.armZoneExits(spawn.unitID, now)
 			applyClassPassives(unit, spawn.unitID, spawn.class, inst.ZoneConfig, now)
 			slog.InfoContext(ctx, "player unit spawned",
 				"unit_id", spawn.unitID,
@@ -144,6 +140,17 @@ func entryPosition(zone instanceconfig.Zone, m instanceconfig.Map) instanceconfi
 		return center
 	}
 
+	if pos, ok := connectionPosition(m, connID); ok {
+		return pos
+	}
+	return center
+}
+
+// connectionPosition returns where a unit spawning at one of m's
+// connections starts: a point connection's own position, or a line
+// connection's midpoint nudged 4 feet toward the map center so the token
+// starts inside the map. ok is false for an unknown or malformed connection.
+func connectionPosition(m instanceconfig.Map, connID string) (instanceconfig.Position, bool) {
 	var conn *instanceconfig.MapConnection
 	for i := range m.Connections {
 		if m.Connections[i].Identifier == connID {
@@ -152,19 +159,18 @@ func entryPosition(zone instanceconfig.Zone, m instanceconfig.Map) instanceconfi
 		}
 	}
 	if conn == nil {
-		return center
+		return instanceconfig.Position{}, false
 	}
 
 	switch conn.Type {
 	case "point":
 		if conn.Position != nil {
-			return *conn.Position
+			return *conn.Position, true
 		}
 	case "line":
 		if conn.Start != nil && conn.End != nil {
 			mx := (conn.Start.X + conn.End.X) / 2
 			my := (conn.Start.Y + conn.End.Y) / 2
-			// nudge 4 feet toward map center so the token starts inside
 			dx := m.FeetDimensions.Width/2 - mx
 			dy := m.FeetDimensions.Height/2 - my
 			dist := math.Sqrt(dx*dx + dy*dy)
@@ -172,9 +178,26 @@ func entryPosition(zone instanceconfig.Zone, m instanceconfig.Map) instanceconfi
 				mx += (dx / dist) * 4
 				my += (dy / dist) * 4
 			}
-			return instanceconfig.Position{X: mx, Y: my}
+			return instanceconfig.Position{X: mx, Y: my}, true
 		}
 	}
+	return instanceconfig.Position{}, false
+}
 
-	return center
+// spawnPlacement returns the map and position a player unit spawns at:
+// spawnAt ("mapId/connectionId") when it names a real connection, else the
+// first map's entry position.
+func spawnPlacement(zone instanceconfig.Zone, spawnAt string) (string, instanceconfig.Position) {
+	if mapID, connID, ok := strings.Cut(spawnAt, "/"); ok {
+		if m := findMap(zone, mapID); m != nil {
+			if pos, ok := connectionPosition(*m, connID); ok {
+				return mapID, pos
+			}
+		}
+	}
+	if len(zone.Maps) == 0 {
+		return "", instanceconfig.Position{}
+	}
+	m := zone.Maps[0]
+	return m.Identifier, entryPosition(zone, m)
 }

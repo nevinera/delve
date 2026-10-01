@@ -119,6 +119,13 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
     context "zoneLinks" do
       let(:bad_zone_link) { zone_fixture["zoneLinks"][0].except("requiredKey") }
 
+      it "raises when requiredKey is neither a string nor null" do
+        link = zone_fixture["zoneLinks"][0].merge("requiredKey" => 7)
+        data = zone_fixture.merge("zoneLinks" => [link])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /requiredKey must be a string or null/)
+      end
+
       it "raises when requiredKey is missing from a zone link" do
         data = zone_fixture.merge("zoneLinks" => [bad_zone_link])
         expect { described_class.validate!(data) }

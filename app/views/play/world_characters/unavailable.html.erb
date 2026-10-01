@@ -1,0 +1,8 @@
+<h1>Can't enter this world right now</h1>
+
+<p><%= @error %></p>
+
+<p>
+  <%= link_to "Try again", play_play_character_world_path(@character, @world) %>
+  · <%= link_to "All worlds", play_character_worlds_path(@character) %>
+</p>

@@ -82,7 +82,12 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case <-ctx.Done():
-				// Kicked by a reconnect — send a close frame and stop.
+				// Kicked by a reconnect, or the slot was removed (e.g. the
+				// character left through a zone exit). Flush anything
+				// already queued - a removed slot's last message (zone-exit,
+				// version-expired) is queued just before the cancel - then
+				// send a close frame and stop.
+				flushQueued(conn, writeCh)
 				_ = conn.WriteControl(
 					websocket.CloseMessage,
 					websocket.FormatCloseMessage(websocket.CloseGoingAway, "reconnected"),
@@ -108,6 +113,24 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 
 	close(quit)
 	wg.Wait()
+}
+
+// flushQueued writes every message already waiting on writeCh, without
+// blocking for more.
+func flushQueued(conn *websocket.Conn, writeCh chan []byte) {
+	for {
+		select {
+		case msg, ok := <-writeCh:
+			if !ok {
+				return
+			}
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		default:
+			return
+		}
+	}
 }
 
 type incomingMsg struct {

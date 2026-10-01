@@ -18,13 +18,13 @@ func (inst *Instance) RefreshEquippedItems(ctx context.Context, unitID uuid.UUID
 		}
 		return
 	}
-	items, err := inst.RailsClient.FetchEquippedItems(slot.CharacterDatabaseID)
+	if slot.WorldCharacterDatabaseID == "" {
+		return // a directly played zone's gear is imaginary; nothing to refresh
+	}
+	items, err := inst.RailsClient.FetchEquippedItems(slot.WorldCharacterDatabaseID)
 	if err != nil {
-		slog.WarnContext(ctx, "failed to refresh equipped items", "error", err, "character", slot.CharacterDatabaseID)
+		slog.WarnContext(ctx, "failed to refresh equipped items", "error", err, "world_character", slot.WorldCharacterDatabaseID)
 		return
 	}
-	inst.slotsMu.Lock()
-	defer inst.slotsMu.Unlock()
-	slot.EquippedItems = items
-	slot.recomputeStats()
+	inst.setEquippedItems(unitID, items)
 }

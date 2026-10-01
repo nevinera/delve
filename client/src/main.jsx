@@ -21,6 +21,7 @@ createRoot(el).render(
       characterSettings={JSON.parse(el.dataset.characterSettings || "{}")}
       characterSettingsUrl={el.dataset.characterSettingsUrl}
       stockAssets={JSON.parse(el.dataset.stockAssets || "{}")}
+      worldReturnUrl={el.dataset.worldReturnUrl}
     />
   </StrictMode>
 );

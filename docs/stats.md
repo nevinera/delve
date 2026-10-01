@@ -404,14 +404,19 @@ identical.
 
 ## Trainee Gear
 
-Any equipment slot without a real item in it is treated as holding a generated "Trainee Gear" item
-for that slot, rather than being empty. These aren't real items — they're synthesized at runtime
-from the character's class. Each class specifies a ranked list of `primaryStats` (usually one, but
-hybrid classes may list more) and a ranked list of exactly five `secondaryStats`; the generated
-gear is itemized from those lists, and has an elvl of 0. Two characters of the same class always
-get the same Trainee Gear. The client displays them dimmed out, so it's clear to the player that
-the character isn't wearing a real item. (The initial zones for a world should generally be
-between elevations 0 and 10.)
+"Trainee Gear" is a generated starter item for every equipment slot, built from the character's
+class. Each class specifies a ranked list of `primaryStats` (usually one, but hybrid classes may
+list more) and a ranked list of exactly five `secondaryStats`; the generated gear is itemized from
+those lists. Two characters of the same class always get the same Trainee Gear. The client
+displays it dimmed out, so it's clear to the player that the character isn't wearing a real item.
+
+- **In a world**, a character gets a full set of Trainee Gear at elvl 0 the first time they enter
+  that world. It's saved like any other item, and each world has its own (items belong to the
+  character's time in one world). (The initial zones for a world should generally be between
+  elevations 0 and 10.)
+- **Playing a zone directly** (Build > Play), the character wears Trainee Gear that's generated
+  for that session and never saved, at the zone's own elevation. Add `?elevation=-5` (or `+3`)
+  to the play URL to test with gear that far below or above it.
 
 ### Stat allocation
 

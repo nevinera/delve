@@ -46,11 +46,11 @@ class EquippedItem < ApplicationRecord
 
   def self.item_slots_for(equipped_slot) = SLOT_TYPES.fetch(equipped_slot, [equipped_slot])
 
-  belongs_to :character
+  belongs_to :world_character
   belongs_to :character_item
 
   validates :equipped_slot, presence: true, inclusion: {in: EQUIPPED_SLOTS}
-  validates :equipped_slot, uniqueness: {scope: :character_id}
+  validates :equipped_slot, uniqueness: {scope: :world_character_id}
   validates :character_item_id, uniqueness: true
   validate :slot_compatible_with_item
 

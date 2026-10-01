@@ -6,19 +6,33 @@ RSpec.describe Ability, type: :model do
   let(:ability) { Ability.new(user) }
 
   describe "Zone" do
-    let(:own_zone) { create(:zone, registering_user: user) }
-    let(:other_zone) { create(:zone, registering_user: other_user) }
-
-    it "can manage a zone registered by the user" do
-      expect(ability).to be_able_to(:manage, own_zone)
-    end
-
-    it "cannot manage a zone registered by another user" do
-      expect(ability).not_to be_able_to(:manage, other_zone)
-    end
-
     it "can read any zone" do
-      expect(ability).to be_able_to(:read, other_zone)
+      expect(ability).to be_able_to(:read, create(:zone))
+    end
+
+    it "cannot manage a zone" do
+      expect(ability).not_to be_able_to(:manage, create(:zone))
+    end
+  end
+
+  describe "World" do
+    let(:own_world) { create(:world, owner: user) }
+    let(:other_world) { create(:world, owner: other_user) }
+
+    it "can manage a world the user owns" do
+      expect(ability).to be_able_to(:manage, own_world)
+    end
+
+    it "cannot manage another user's world" do
+      expect(ability).not_to be_able_to(:manage, other_world)
+    end
+
+    it "can manage versions of a world the user owns" do
+      expect(ability).to be_able_to(:manage, create(:world_version, world: own_world))
+    end
+
+    it "cannot manage versions of another user's world" do
+      expect(ability).not_to be_able_to(:manage, create(:world_version, world: other_world))
     end
   end
 

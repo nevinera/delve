@@ -118,10 +118,7 @@ module Validators
       raise ValidationError.new("must be one of: #{SECONDARY_VALUES.join(", ")}", path: path)
     end
 
-    def max_secondaries(slot)
-      return 2 if TWO_SECONDARY_SLOTS.include?(slot)
-      return 3 if THREE_SECONDARY_SLOTS.include?(slot)
-      3
-    end
+    # slot is already one of SLOT_VALUES, each in exactly one of the two lists.
+    def max_secondaries(slot) = TWO_SECONDARY_SLOTS.include?(slot) ? 2 : 3
   end
 end

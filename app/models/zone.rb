@@ -1,22 +1,18 @@
+# One zone of an imported WorldVersion: its world zone key (identifier), the
+# path of its .full.json relative to the version's raw_base_url, the file's
+# checksum, and the structure ImportWorldVersionJob extracts from it (entry
+# point, links).
 class Zone < ApplicationRecord
-  belongs_to :registering_user, class_name: "User"
+  belongs_to :world_version
 
-  enum :state, {provided: "provided", fetched: "fetched", validation_failed: "validation_failed"}
+  validates :identifier, presence: true, uniqueness: {scope: :world_version_id}
+  validates :path, presence: true
 
-  after_commit :enqueue_fetch_content, on: :create
+  # The zone's exits ("mapId/connectionId" keys of #links).
+  def exits = links.keys
 
-  validates :identifier, presence: true,
-    format: {with: /\A[a-z_]+\z/, message: "may only contain lowercase letters and underscores"}
-  validates :version, presence: true,
-    format: {with: /\A\d+\.\d+\z/, message: "must be two numeric segments (e.g. 1.5)"}
-  validates :version, uniqueness: {scope: :identifier, message: "already registered for this zone identifier"}
-  validates :name, presence: true
-  validates :config_url, presence: true
-  validates :description, length: {maximum: 1024}, allow_blank: true
-
-  private
-
-  def enqueue_fetch_content
-    FetchZoneContentJob.perform_later(id)
-  end
+  # What item awards and ownership checks treat as this zone's version: its
+  # world version's commit SHA. A stopgap until items are tracked per world
+  # (worlds slice 4).
+  def version_label = world_version.commit_sha
 end

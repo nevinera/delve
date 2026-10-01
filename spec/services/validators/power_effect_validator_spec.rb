@@ -42,6 +42,20 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
       expect { described_class.validate!(resource_effect) }.not_to raise_error
     end
 
+    it "accepts a resource effect on the target with a range" do
+      expect { described_class.validate!(resource_effect.merge("affects" => "bTarget", "range" => [1.0, 5.0])) }.not_to raise_error
+    end
+
+    it "requires a range for a resource effect on the target" do
+      expect { described_class.validate!(resource_effect.merge("affects" => "bTarget")) }
+        .to raise_error(Validators::ValidationError, /range/)
+    end
+
+    it "rejects a malformed range on a resource effect" do
+      expect { described_class.validate!(resource_effect.merge("affects" => "bTarget", "range" => "far")) }
+        .to raise_error(Validators::ValidationError, /must be a number or \[min, max\] range/)
+    end
+
     it "raises when type is missing" do
       expect { described_class.validate!({}) }
         .to raise_error(Validators::ValidationError, /type is required/)

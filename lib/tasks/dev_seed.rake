@@ -1,19 +1,16 @@
 namespace :dev do
-  desc "Seed a user/class/zones/characters pointing at a local content server (localhost:8001)"
+  desc "Seed a user/class/characters pointing at a local content server (localhost:8001)"
   task seed_local: :environment do
     user = seed_user
     character_class = seed_character_class(user)
-    small_cave = seed_zone(user, identifier: "small_cave", version: "0.1", name: "Small Cave",
-      description: "Just one goblin", config_url: "http://localhost:8001/zones/small-cave/small-cave.full.json")
-    goblin_cave = seed_zone(user, identifier: "goblin_cave", version: "0.1", name: "Goblin Cave",
-      description: "A damp cave carved out by generations of goblin raiders.", config_url: "http://localhost:8001/zones/goblin-cave/goblin-cave.full.json")
     seed_character(user, character_class, name: "Trainee-Adam",
       token_url: "http://localhost:8001/tokens/character/male-elf-guard.webp")
     seed_character(user, character_class, name: "Trainee-Bob",
       token_url: "http://localhost:8001/tokens/character/female-elf-tribal.webp")
 
-    puts "Seeded user=#{user.email} class=#{character_class.identifier} " \
-      "zones=[#{small_cave.identifier}, #{goblin_cave.identifier}]"
+    # Zones aren't seeded: play them from the same server through Build >
+    # Play a local zone (see Build::ZonePlaysController).
+    puts "Seeded user=#{user.email} class=#{character_class.identifier}"
   end
 end
 
@@ -39,27 +36,13 @@ def seed_character_class(user)
   character_class
 end
 
-def seed_zone(user, attrs)
-  zone = Zone.find_or_initialize_by(identifier: attrs.fetch(:identifier), version: attrs.fetch(:version))
-  zone.registering_user = user
-  zone.name = attrs.fetch(:name)
-  zone.description = attrs.fetch(:description)
-  zone.config_url = attrs.fetch(:config_url)
-  zone.save!
-  fetch_and_verify!(FetchZoneContentJob, zone)
-  zone
-end
-
 def seed_character(user, character_class, name:, token_url:)
   character = Character.find_or_initialize_by(name: name)
   character.user = user
   character.character_class = character_class
   character.token_url = token_url
+  # Trainee gear comes per world, when the character first enters one.
   character.save!
-  # The after_create hook only enqueues this (development uses the :async
-  # adapter), and this task's process exits before that thread pool would
-  # get a chance to run it - so grant it inline instead.
-  GrantTraineeGearJob.perform_now(character.id)
   character
 end
 

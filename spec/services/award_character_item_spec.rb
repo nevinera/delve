@@ -1,152 +1,91 @@
 require "rails_helper"
 
 RSpec.describe AwardCharacterItem do
-  let(:character) { create(:character) }
-  let(:zone) { create(:zone) }
-
-  let(:source_data) do
+  let(:zone) { create(:zone, identifier: "darkwood") }
+  let(:world_character) { create(:world_character, world: zone.world_version.world, world_version: zone.world_version) }
+  let(:definition) do
     {
-      "zone" => {"database_id" => zone.id.to_s, "identifier" => zone.identifier, "version" => zone.version},
       "identifier" => "sword-of-doom",
       "name" => "Sword of Doom",
       "slot" => "main_hand",
       "elvl" => 584,
-      "primary" => nil,
-      "secondaries" => []
+      "weaponType" => "sword",
+      "primary" => "strength",
+      "secondaries" => ["haste_rating", "crit_rating"]
     }
   end
+  let(:source_data) do
+    definition.merge("zone" => {"database_id" => zone.id.to_s, "identifier" => "darkwood", "version" => "anything"})
+  end
+  let(:item_version) { ItemDefinition.version(definition) }
 
   def call(data = source_data, upgrade_only: false)
-    described_class.call(character: character, source_data: data, upgrade_only: upgrade_only)
+    described_class.call(world_character:, source_data: data, upgrade_only:)
   end
 
-  describe "#call" do
-    it "returns the new CharacterItem" do
-      item = call
-      expect(item).to be_a(CharacterItem)
-      expect(item).to be_persisted
+  it "creates the item on the world character, versioned by its definition" do
+    item = call
+    expect(item).to be_persisted
+    expect(item).to have_attributes(
+      world_character:, identifier: "sword-of-doom", zone_identifier: "darkwood", version: item_version,
+      name: "Sword of Doom", slot: "main_hand", elvl: 584,
+      primary_stat: "strength", secondary_stats: ["haste_rating", "crit_rating"]
+    )
+  end
+
+  it "stores the normalized definition, without the zone ref or routing params" do
+    item = call(source_data.merge("world_character_id" => "7", "controller" => "x"))
+    expect(item.source_json).to eq(ItemDefinition.normalize(definition))
+  end
+
+  it "says so when the world character already holds this definition" do
+    call
+    expect(call).to eq(:already_owned_this_version)
+    expect(CharacterItem.count).to eq(1)
+  end
+
+  it "treats a changed definition as a new version of the same item" do
+    call
+    result = call(source_data.merge("elvl" => 600))
+    expect(result).to match([be_a(CharacterItem), :already_owned_other_version])
+    expect(world_character.character_items.count).to eq(2)
+  end
+
+  it "doesn't count the same identifier from another zone as an older version" do
+    other_zone = create(:zone, identifier: "cave", world_version: zone.world_version)
+    call(source_data.merge("zone" => {"database_id" => other_zone.id.to_s, "identifier" => "cave"}))
+    expect(call).to be_a(CharacterItem)
+  end
+
+  describe "upgrade_only" do
+    it "refuses when the world character holds no older version" do
+      expect(call(upgrade_only: true)).to eq(:not_an_upgrade)
+      expect(CharacterItem.count).to eq(0)
     end
 
-    it "creates a CharacterItem with the expected attributes" do
-      call
-      item = CharacterItem.last
-      expect(item.character).to eq(character)
-      expect(item.provenance_zone).to eq(zone)
-      expect(item.source_key).to eq("#{zone.identifier}/#{zone.version}/sword-of-doom")
-      expect(item.name).to eq("Sword of Doom")
-      expect(item.slot).to eq("main_hand")
-      expect(item.elvl).to eq(584)
+    it "awards when they hold an older version" do
+      call(source_data.merge("elvl" => 500))
+      expect(call(upgrade_only: true)).to match([be_a(CharacterItem), :already_owned_other_version])
     end
+  end
 
-    it "stores the full source_data as source_json" do
-      call
-      expect(CharacterItem.last.source_json).to eq(source_data)
-    end
+  it "refuses a zone outside the world character's current version" do
+    other = create(:zone, identifier: "darkwood")
+    data = source_data.merge("zone" => {"database_id" => other.id.to_s, "identifier" => "darkwood"})
+    expect { call(data) }.to raise_error(AwardCharacterItem::ZoneMismatch)
+  end
 
-    it "sets received_at to now" do
-      call
-      expect(CharacterItem.last.received_at).to be_within(2.seconds).of(Time.current)
-    end
+  it "refuses a zone identifier that doesn't match the zone" do
+    data = source_data.merge("zone" => {"database_id" => zone.id.to_s, "identifier" => "cave"})
+    expect { call(data) }.to raise_error(AwardCharacterItem::ZoneMismatch)
+  end
 
-    it "persists primary and secondaries" do
-      call(source_data.merge("primary" => "strength", "secondaries" => ["stamina", "crit_rating"]))
-      item = CharacterItem.last
-      expect(item.primary_stat).to eq("strength")
-      expect(item.secondary_stats).to eq(["stamina", "crit_rating"])
-    end
+  it "refuses a world character that hasn't entered a version" do
+    world_character.update!(world_version: nil)
+    expect { call }.to raise_error(AwardCharacterItem::ZoneMismatch)
+  end
 
-    it "defaults secondaries to an empty array when absent" do
-      call(source_data.except("secondaries"))
-      expect(CharacterItem.last.secondary_stats).to eq([])
-    end
-
-    it "persists optional metadata" do
-      call(source_data.merge("description" => "A fine blade"))
-      expect(CharacterItem.last.description).to eq("A fine blade")
-    end
-
-    context "when the item already exists for this character and source_key" do
-      before { call }
-
-      it "returns :already_owned_this_version" do
-        expect(call).to eq(:already_owned_this_version)
-      end
-
-      it "does not create a second record" do
-        expect { call }.not_to change(CharacterItem, :count)
-      end
-    end
-
-    context "when the character owns the same item from a different version of this zone" do
-      let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
-
-      before { create(:character_item, character: character, provenance_zone: other_zone, identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom") }
-
-      it "returns [CharacterItem, :already_owned_other_version]" do
-        result = call
-        expect(result).to be_a(Array)
-        expect(result[0]).to be_a(CharacterItem).and be_persisted
-        expect(result[1]).to eq(:already_owned_other_version)
-      end
-
-      it "creates a new record for this version" do
-        expect { call }.to change(CharacterItem, :count).by(1)
-      end
-    end
-
-    context "with upgrade_only: true" do
-      it "returns :not_an_upgrade when the character has no prior version" do
-        expect(call(upgrade_only: true)).to eq(:not_an_upgrade)
-      end
-
-      it "does not create a record" do
-        expect { call(upgrade_only: true) }.not_to change(CharacterItem, :count)
-      end
-
-      context "when the character owns the same item from a different version" do
-        let(:other_zone) { create(:zone, identifier: zone.identifier, version: "0.0") }
-
-        before { create(:character_item, character: character, provenance_zone: other_zone, identifier: "sword-of-doom", source_key: "#{other_zone.identifier}/0.0/sword-of-doom") }
-
-        it "returns [CharacterItem, :already_owned_other_version]" do
-          result = call(upgrade_only: true)
-          expect(result).to be_a(Array)
-          expect(result[0]).to be_a(CharacterItem).and be_persisted
-          expect(result[1]).to eq(:already_owned_other_version)
-        end
-      end
-    end
-
-    context "when zone identifier does not match" do
-      let(:bad_data) { source_data.deep_merge("zone" => {"identifier" => "wrong_zone"}) }
-
-      it "raises ZoneMismatch" do
-        expect { call(bad_data) }.to raise_error(AwardCharacterItem::ZoneMismatch, /wrong_zone/)
-      end
-    end
-
-    context "when zone version does not match" do
-      let(:bad_data) { source_data.deep_merge("zone" => {"version" => "9.9"}) }
-
-      it "raises ZoneMismatch" do
-        expect { call(bad_data) }.to raise_error(AwardCharacterItem::ZoneMismatch, /9\.9/)
-      end
-    end
-
-    context "when the zone does not exist (character is already resolved)" do
-      let(:source_data) { super().deep_merge("zone" => {"database_id" => "99999"}) }
-
-      it "raises ActiveRecord::RecordNotFound" do
-        expect { call }.to raise_error(ActiveRecord::RecordNotFound)
-      end
-    end
-
-    context "when a required field is missing" do
-      %w[identifier name slot elvl].each do |field|
-        it "raises MissingField for missing #{field}" do
-          expect { call(source_data.except(field)) }.to raise_error(AwardCharacterItem::MissingField, /#{field}/)
-        end
-      end
-    end
+  it "requires the definition's core fields" do
+    expect { call(source_data.except("slot")) }.to raise_error(AwardCharacterItem::MissingField)
   end
 end

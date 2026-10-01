@@ -12,7 +12,7 @@ class Play::CharacterItemsController < Play::BaseController
   end
 
   def show
-    @item = @character.character_items.find(params[:id])
+    @item = @world_character.character_items.find(params[:id])
     authorize! :read, @item
     @raw_stats = ItemStats::Raw.call(character_item: @item)
   end
@@ -20,7 +20,7 @@ class Play::CharacterItemsController < Play::BaseController
   private
 
   def filtered_items
-    items = @character.character_items.includes(:provenance_zone).order(received_at: :desc)
+    items = @world_character.character_items.order(created_at: :desc)
     items = items.where(slot: filter_slots) if filter_slots.present?
     items
   end
@@ -29,7 +29,6 @@ class Play::CharacterItemsController < Play::BaseController
     {
       id: item.id,
       identifier: item.identifier,
-      source_key: item.source_key,
       name: item.name,
       slot: item.slot,
       elvl: item.elvl,
@@ -44,7 +43,10 @@ class Play::CharacterItemsController < Play::BaseController
 
   def filter_slots = Array(params[:slot]).presence
 
+  # Items belong to the character's time in one world.
   def load_character
     @character = current_user.characters.find(params[:character_id])
+    @world = World.find(params[:world_id])
+    @world_character = @character.world_characters.find_by!(world: @world)
   end
 end

@@ -5,6 +5,7 @@ import WorldEditor from "../WorldEditor";
 import {commitFiles} from "../../github/commitFiles";
 import {GithubClient, GithubAuthError} from "../../github/delve-github";
 import {validateWorld} from "../../validators/validateContent";
+import {publishWorld} from "../publishWorld";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
@@ -17,6 +18,7 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
 });
 
 vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
+vi.mock("../publishWorld", () => ({publishWorld: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateWorld: vi.fn(),
 }));
@@ -62,12 +64,12 @@ function mockFetchFile(implementation, availableZonePaths = []) {
   });
 }
 
-async function renderLoaded(worldData = initialWorld) {
+async function renderLoaded(worldData = initialWorld, props = {}) {
   mockGithubFiles({
     "worlds/northern-barrens.json": JSON.stringify(worldData),
     "zones/goblin_cave/goblin_cave.json": JSON.stringify(goblinCaveZone),
   });
-  render(<WorldEditor worldKey="northern-barrens" />);
+  render(<WorldEditor worldKey="northern-barrens" {...props} />);
   await screen.findByDisplayValue(worldData.name);
 }
 
@@ -209,5 +211,53 @@ describe("WorldEditor", () => {
 
     await screen.findByText("entryPoints is required");
     expect(screen.getByText("Save")).toBeDisabled();
+  });
+
+  describe("Publish", () => {
+    const publishProps = {publishUrl: "/build/worlds/northern-barrens/publish", nextTag: "northern-barrens/v2"};
+
+    it("isn't shown without a publish URL", async () => {
+      await renderLoaded();
+      expect(screen.queryByText("Publish")).not.toBeInTheDocument();
+    });
+
+    it("publishes the prefilled tag and goes to the versions page", async () => {
+      publishWorld.mockResolvedValue({url: "/build/publishing/worlds/7"});
+      await renderLoaded(initialWorld, publishProps);
+
+      fireEvent.click(screen.getByText("Publish"));
+      expect(screen.getByLabelText("Tag")).toHaveValue("northern-barrens/v2");
+      fireEvent.click(screen.getByText("Tag & publish"));
+
+      await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/build/publishing/worlds/7"));
+      expect(publishWorld).toHaveBeenCalledWith("/build/worlds/northern-barrens/publish", "northern-barrens/v2");
+    });
+
+    it("is disabled after an edit until it's saved", async () => {
+      validateWorld.mockResolvedValue({valid: true});
+      commitFiles.mockResolvedValue({});
+      await renderLoaded(initialWorld, publishProps);
+
+      fireEvent.change(screen.getByDisplayValue("Northern Barrens"), {target: {value: "Southern Barrens"}});
+      expect(screen.getByText("Publish")).toBeDisabled();
+
+      fireEvent.click(screen.getByText("Validate"));
+      await waitFor(() => expect(screen.getByText("Save")).not.toBeDisabled());
+      fireEvent.click(screen.getByText("Save"));
+      fireEvent.click(screen.getByText("Commit"));
+      await screen.findByText("Saved.");
+      expect(screen.getByText("Publish")).not.toBeDisabled();
+    });
+
+    it("shows the error when publishing fails", async () => {
+      publishWorld.mockRejectedValue(new Error('Tag "northern-barrens/v2" already exists.'));
+      await renderLoaded(initialWorld, publishProps);
+
+      fireEvent.click(screen.getByText("Publish"));
+      fireEvent.click(screen.getByText("Tag & publish"));
+
+      expect(await screen.findByText('Tag "northern-barrens/v2" already exists.')).toBeInTheDocument();
+      expect(redirectTo).not.toHaveBeenCalled();
+    });
   });
 });

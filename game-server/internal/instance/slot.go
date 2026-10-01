@@ -3,6 +3,7 @@ package instance
 import (
 	"context"
 	"errors"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,6 +50,7 @@ type InstanceSlot struct {
 	OwnedZoneItems      map[string]bool                        // identifier → true if owned this version, false if other version; nil if unknown
 	EquippedItems       map[string]instanceconfig.EquippedItem // equipped_slot → item; nil if unknown
 	Stats               map[string]float64                     // cached raw (em=1.0) sum of EquippedItems' stats; kept in sync by recomputeStats
+	SlotOptions
 
 	// Connection fields; protected by the instance's slotsMu.
 	writeCh        chan []byte        // pre-encoded JSON messages from the tick loop
@@ -65,6 +67,17 @@ type InstanceSlot struct {
 	// exactly the send it answers, rather than guessing from position/timing
 	// alone. Protected by slotsMu.
 	lastSeqByType map[string]string
+}
+
+// SlotOptions are the per-slot settings a world or direct join adds to a
+// slot request; all are empty for a legacy join.
+type SlotOptions struct {
+	// WorldCharacterDatabaseID is the Rails WorldCharacter this slot plays
+	// as; set for world mode only.
+	WorldCharacterDatabaseID string
+	// SpawnAt is the "mapId/connectionId" the character's unit spawns at;
+	// empty (or unknown) spawns at the zone's default entry position.
+	SpawnAt string
 }
 
 // recomputeStats sums the raw (em=1.0) stats of every equipped item into
@@ -93,6 +106,12 @@ func (s *InstanceSlot) recomputeStats() {
 // the new request. Otherwise a new slot is created. Returns ErrInstanceFull if
 // MaxSlots has been reached and there is no existing slot to reuse.
 func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class instanceconfig.CharacterClass, ownedZoneItems map[string]bool, equippedItems map[string]instanceconfig.EquippedItem) (*InstanceSlot, error) {
+	return inst.AddSlotWithOptions(characterName, characterDatabaseID, class, ownedZoneItems, equippedItems, SlotOptions{})
+}
+
+// AddSlotWithOptions is AddSlot with world/direct-join settings; a reused
+// slot takes the new options too.
+func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID string, class instanceconfig.CharacterClass, ownedZoneItems map[string]bool, equippedItems map[string]instanceconfig.EquippedItem, opts SlotOptions) (*InstanceSlot, error) {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
 
@@ -102,8 +121,9 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 			slot.CharacterClass = class
 			slot.OwnedZoneItems = ownedZoneItems
 			slot.EquippedItems = equippedItems
+			slot.SlotOptions = opts
 			slot.recomputeStats()
-			return slot, nil
+			return slot.snapshot(), nil
 		}
 	}
 
@@ -121,30 +141,115 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 		CharacterClass:      class,
 		OwnedZoneItems:      ownedZoneItems,
 		EquippedItems:       equippedItems,
+		SlotOptions:         opts,
 		stateEnteredAt:      time.Now(),
 	}
 	slot.recomputeStats()
 	inst.slots[slot.ID] = slot
 	inst.recomputeSlotCounts()
-	return slot, nil
+	return slot.snapshot(), nil
 }
 
-// GetSlot returns the slot with the given ID, or (nil, false) if not found.
+// snapshot returns a copy of the slot, maps included, that its caller can
+// read without holding slotsMu. Connection plumbing (writeCh and friends)
+// is left out: only the instance itself uses it, under the lock. Must be
+// called with slotsMu held.
+func (s *InstanceSlot) snapshot() *InstanceSlot {
+	c := *s
+	c.OwnedZoneItems = maps.Clone(s.OwnedZoneItems)
+	c.EquippedItems = maps.Clone(s.EquippedItems)
+	c.Stats = maps.Clone(s.Stats)
+	c.lastSeqByType = maps.Clone(s.lastSeqByType)
+	c.writeCh, c.connCancel, c.connDone = nil, nil, nil
+	return &c
+}
+
+// GetSlot returns a snapshot of the slot with the given ID, or (nil, false)
+// if not found. Every slot accessor returns snapshots, never the live slot:
+// read what you need and drop it, since it won't see later changes (change
+// a slot through the Instance's own methods instead).
 func (inst *Instance) GetSlot(id uuid.UUID) (*InstanceSlot, bool) {
 	inst.slotsMu.RLock()
 	defer inst.slotsMu.RUnlock()
 	slot, ok := inst.slots[id]
-	return slot, ok
+	if !ok {
+		return nil, false
+	}
+	return slot.snapshot(), true
 }
 
-// RemoveSlot removes the slot with the given ID. Returns true if it existed.
+// markItemOwned records that the slot playing unitID now owns this zone
+// version of an item. A no-op if the slot is gone.
+func (inst *Instance) markItemOwned(unitID uuid.UUID, itemIdentifier string) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot := inst.liveSlotByUnitID(unitID)
+	if slot == nil {
+		return
+	}
+	if slot.OwnedZoneItems == nil {
+		slot.OwnedZoneItems = make(map[string]bool)
+	}
+	slot.OwnedZoneItems[itemIdentifier] = true
+}
+
+// setEquippedItems replaces the equipped items of the slot playing unitID
+// and recomputes its Stats. A no-op if the slot is gone.
+func (inst *Instance) setEquippedItems(unitID uuid.UUID, items map[string]instanceconfig.EquippedItem) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	slot := inst.liveSlotByUnitID(unitID)
+	if slot == nil {
+		return
+	}
+	slot.EquippedItems = items
+	slot.recomputeStats()
+}
+
+// liveSlotByUnitID returns the live slot playing unitID, or nil. Must be
+// called with slotsMu held.
+func (inst *Instance) liveSlotByUnitID(unitID uuid.UUID) *InstanceSlot {
+	for _, s := range inst.slots {
+		if s.CharacterUnitID == unitID {
+			return s
+		}
+	}
+	return nil
+}
+
+// RemoveSlot removes the slot with the given ID, closes its connection (after
+// flushing any queued messages - see handler.Connect), and removes its
+// character's unit on the next tick. Returns true if it existed.
 func (inst *Instance) RemoveSlot(id uuid.UUID) bool {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
-	_, ok := inst.slots[id]
+	slot, ok := inst.slots[id]
+	if !ok {
+		return false
+	}
 	delete(inst.slots, id)
+	if slot.connCancel != nil {
+		slot.connCancel()
+	}
+	inst.queueDespawn(slot.CharacterUnitID)
 	inst.recomputeSlotCounts()
-	return ok
+	return true
+}
+
+// sendToSlot queues a pre-encoded message for one connected slot, dropping
+// it if the slot is gone, not connected, or its client is behind - the same
+// non-blocking policy as the tick broadcast.
+func (inst *Instance) sendToSlot(id uuid.UUID, payload []byte) {
+	inst.slotsMu.RLock()
+	defer inst.slotsMu.RUnlock()
+	slot, ok := inst.slots[id]
+	if !ok || slot.State != SlotStateConnected || slot.writeCh == nil {
+		return
+	}
+	select {
+	case slot.writeCh <- payload:
+	default:
+	}
 }
 
 // SetSlotState transitions a slot to a new state. Returns false if the slot
@@ -161,13 +266,14 @@ func (inst *Instance) SetSlotState(id uuid.UUID, state SlotState) bool {
 	return true
 }
 
-// ListSlots returns a snapshot of all current slots in unspecified order.
+// ListSlots returns snapshots of all current slots in unspecified order
+// (see GetSlot).
 func (inst *Instance) ListSlots() []*InstanceSlot {
 	inst.slotsMu.RLock()
 	defer inst.slotsMu.RUnlock()
 	result := make([]*InstanceSlot, 0, len(inst.slots))
 	for _, s := range inst.slots {
-		result = append(result, s)
+		result = append(result, s.snapshot())
 	}
 	return result
 }
@@ -232,6 +338,7 @@ func (inst *Instance) ConnectSlot(id uuid.UUID) (chan []byte, context.Context, c
 		characterName: slot.CharacterName,
 		class:         slot.CharacterClass,
 		equippedItems: slot.EquippedItems,
+		spawnAt:       slot.SpawnAt,
 	}:
 	default:
 	}
@@ -314,13 +421,15 @@ func (inst *Instance) SlotsForTick() []SlotForTick {
 }
 
 // pruneStaleSlots removes slots that have been in an inactive state (pending
-// or waiting) longer than the given timeout. Called from the tick loop.
+// or waiting) longer than the given timeout, and their character units on
+// the next tick. Called from the tick loop.
 func (inst *Instance) pruneStaleSlots(now time.Time, timeout time.Duration) {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
 	for id, s := range inst.slots {
 		if (s.State == SlotStatePending || s.State == SlotStateWaiting) && now.Sub(s.stateEnteredAt) >= timeout {
 			delete(inst.slots, id)
+			inst.queueDespawn(s.CharacterUnitID)
 		}
 	}
 	inst.recomputeSlotCounts()

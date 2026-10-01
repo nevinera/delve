@@ -3,7 +3,7 @@
 <% if @filter_slots.present? %>
   <p>
     Filtered to slot<%= "s" if @filter_slots.size > 1 %>: <%= @filter_slots.join(", ") %>
-    (<%= link_to "clear filter", play_character_character_items_path(@character) %>)
+    (<%= link_to "clear filter", play_character_world_character_items_path(@character, @world) %>)
   </p>
 <% end %>
 
@@ -27,13 +27,13 @@
           <td><%= item.name %></td>
           <td><%= item.slot %></td>
           <td><%= item.elvl %></td>
-          <td><%= item.provenance_zone&.identifier %></td>
-          <td><%= item.received_at.strftime("%Y-%m-%d") %></td>
-          <td><%= link_to "View", play_character_character_item_path(@character, item) %></td>
+          <td><%= item.zone_identifier %></td>
+          <td><%= item.created_at.strftime("%Y-%m-%d") %></td>
+          <td><%= link_to "View", play_character_world_character_item_path(@character, @world, item) %></td>
         </tr>
       <% end %>
     </tbody>
   </table>
 <% end %>
 
-<%= link_to "Back to #{@character.name}", play_character_path(@character) %>
+<%= link_to "Back to #{@world.name || @world.key}", play_character_world_path(@character, @world) %>

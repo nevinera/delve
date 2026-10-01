@@ -30,6 +30,22 @@ const (
 	StatusStopping Status = "stopping"
 )
 
+// Mode is how players reached an instance's zone.
+type Mode string
+
+const (
+	// ModeWorld is a zone reached through a world; loot is persisted.
+	ModeWorld Mode = "world"
+	// ModeDirect is a builder trying a zone straight from their repo;
+	// nothing is persisted.
+	ModeDirect Mode = "direct"
+)
+
+// persistsLoot reports whether looted items are awarded through Rails.
+func (inst *Instance) persistsLoot() bool {
+	return inst.RailsClient != nil && inst.Mode != ModeDirect
+}
+
 // DefaultMaxSlots is the slot capacity used when no override is provided.
 const DefaultMaxSlots = 25
 
@@ -80,9 +96,24 @@ type Instance struct {
 	// Must be set before Start() is called.
 	EmptyTimeout time.Duration
 
+	// ExitLockout overrides ZoneExitLockout when non-zero. Intended for
+	// tests. Must be set before Start() is called.
+	ExitLockout time.Duration
+
 	// SlotWaitTimeout overrides SlotWaitingTimeout when non-zero. Intended for
 	// tests. Must be set before Start() is called.
 	SlotWaitTimeout time.Duration
+
+	// Mode is how players reached this instance (see Mode*). InstanceKey is
+	// the opaque key Rails chose for it; slot requests only ever join an
+	// instance with the same key and mode (see SelectKeyedInstance). WorldVersionID identifies the world version a
+	// world-mode instance belongs to. Exits holds the "mapId/connectionId"
+	// keys of connections that leave the zone. All are set once, before
+	// Start, and never written again.
+	Mode           Mode
+	InstanceKey    string
+	WorldVersionID string
+	Exits          map[string]bool
 
 	// RailsClient is used by the tick loop to award looted items. May be nil
 	// (e.g. in tests), in which case loot claims resolve as failures.
@@ -94,9 +125,26 @@ type Instance struct {
 	atomicActiveSlotCount atomic.Int64
 
 	playerSpawnCh       chan playerSpawn
+	despawnMu           sync.Mutex
+	pendingDespawns     []uuid.UUID // character units of removed slots; see queueDespawn
 	commandCh           chan command.Command
 	commandProcessor    *command.CommandProcessor
 	autoUpgradeResultCh chan autoUpgradeResult
+
+	// Zone-exit bookkeeping, owned by the tick loop (see zone_exit.go):
+	// when each player unit's exit lockout ends, which have a Rails exit
+	// call in flight, and where those calls report back.
+	// expiresAt is when this instance's world version expires (zero:
+	// never); guarded by expiresMu since Rails can move it at any time.
+	// lastExpiryNotice is the minutes-remaining most recently announced,
+	// owned by the tick loop. See expiry.go.
+	expiresMu        sync.Mutex
+	expiresAt        time.Time
+	lastExpiryNotice int
+
+	exitArmedAt      map[uuid.UUID]time.Time
+	exitsInFlight    map[uuid.UUID]bool
+	zoneExitResultCh chan zoneExitResult
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -122,6 +170,7 @@ func NewInstance(
 		SourceURL:           sourceURL,
 		MaxSlots:            maxSlots,
 		Status:              StatusLoading,
+		Mode:                ModeDirect, // never persists anything unless a world join says otherwise
 		ZoneConfig:          zone,
 		CreatedAt:           time.Now(),
 		Rand:                rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -130,6 +179,9 @@ func NewInstance(
 		commandCh:           make(chan command.Command, DefaultMaxSlots*8),
 		commandProcessor:    command.NewCommandProcessor(),
 		autoUpgradeResultCh: make(chan autoUpgradeResult, 256),
+		exitArmedAt:         make(map[uuid.UUID]time.Time),
+		exitsInFlight:       make(map[uuid.UUID]bool),
+		zoneExitResultCh:    make(chan zoneExitResult, DefaultMaxSlots),
 	}
 	inst.commandProcessor.Register(command.MoveHandler{})
 	inst.commandProcessor.Register(command.TargetHandler{})
@@ -150,15 +202,13 @@ func NewInstance(
 	return inst
 }
 
-// slotByUnitID returns the slot whose CharacterUnitID matches, or nil.
-// Called from the tick goroutine; acquires a read lock.
+// slotByUnitID returns a snapshot (see GetSlot) of the slot whose
+// CharacterUnitID matches, or nil.
 func (inst *Instance) slotByUnitID(unitID uuid.UUID) *InstanceSlot {
 	inst.slotsMu.RLock()
 	defer inst.slotsMu.RUnlock()
-	for _, s := range inst.slots {
-		if s.CharacterUnitID == unitID {
-			return s
-		}
+	if s := inst.liveSlotByUnitID(unitID); s != nil {
+		return s.snapshot()
 	}
 	return nil
 }

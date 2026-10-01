@@ -3,18 +3,18 @@ class CharacterItem < ApplicationRecord
   PRIMARY_STATS = %w[strength agility intellect].freeze
   SECONDARY_STATS = %w[stamina crit_rating haste_rating mastery_rating versatility_rating defence_rating recovery_rating].freeze
 
-  belongs_to :character
-  belongs_to :provenance_zone, class_name: "Zone", optional: true
+  belongs_to :world_character
   has_one :equipped_item, dependent: :destroy
 
-  validates :source_key, presence: true
+  delegate :character, to: :world_character
+
   validates :identifier, presence: true
   validates :name, presence: true
   validates :elvl, presence: true, numericality: {only_integer: true, greater_than_or_equal_to: 0}
   validates :slot, presence: true, inclusion: {in: SLOTS}
-  validates :received_at, presence: true
   validates :source_json, presence: true
-  validates :source_key, uniqueness: {scope: :character_id}
+  validates :version, presence: true,
+    uniqueness: {scope: [:world_character_id, :zone_identifier, :identifier], message: "is already held"}
   validates :primary_stat, inclusion: {in: PRIMARY_STATS}, allow_nil: true
   validate :secondary_stats_are_valid
 

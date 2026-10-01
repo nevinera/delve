@@ -22,6 +22,10 @@ RSpec.describe ItemStats::ElevationMultiplier do
       expect(described_class.for(20)).to be_within(0.001).of(2.0)
     end
 
+    it "keeps rising, gently, past ee=20" do
+      expect(described_class.for(25)).to be_within(0.001).of(2.088)
+    end
+
     it "returns 0.0 below ee=-20" do
       expect(described_class.for(-30)).to eq(0.0)
     end

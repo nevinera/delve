@@ -130,6 +130,9 @@ type fullStateMsg struct {
 	downBase
 	Units map[string]unitJSON `json:"units"`
 	NCUs  map[string]ncuJSON  `json:"ncus"`
+	// ExpiresAt is when the instance's world version expires (epoch ms),
+	// so a player joining mid-countdown sees it; omitted when it doesn't.
+	ExpiresAt *int64 `json:"expires_at,omitempty"`
 }
 
 type ncuJSON struct {
@@ -240,6 +243,7 @@ type lootEventJSON struct {
 type lootFailureJSON struct {
 	ClaimedBy string            `json:"claimed_by"`
 	Item      lootEventItemJSON `json:"item"`
+	Reason    string            `json:"reason,omitempty"` // see instancestate.LootFailure.Reason
 }
 
 type deltaMsg struct {
@@ -254,7 +258,7 @@ type deltaMsg struct {
 	NCUUpdates    map[string]any            `json:"ncu_updates,omitempty"`
 }
 
-func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string) ([]byte, error) {
+func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string, expiresAt time.Time) ([]byte, error) {
 	units := make(map[string]unitJSON, len(state.Units))
 	for id, u := range state.Units {
 		effects := make([]effectJSON, len(u.ActiveStatusEffects))
@@ -330,9 +334,18 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Timestamp: now.UnixMilli(),
 			Checksum:  checksum,
 		},
-		Units: units,
-		NCUs:  ncusJSON(state.NCUs),
+		Units:     units,
+		NCUs:      ncusJSON(state.NCUs),
+		ExpiresAt: expiresAtJSON(expiresAt),
 	})
+}
+
+func expiresAtJSON(t time.Time) *int64 {
+	if t.IsZero() {
+		return nil
+	}
+	ms := t.UnixMilli()
+	return &ms
 }
 
 func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent, lootEvents []instancestate.LootEvent, lootFailures []instancestate.LootFailure, now time.Time, checksum string, prevHeartbeatSeqs, currHeartbeatSeqs, prevMoveSeqs, currMoveSeqs map[uuid.UUID]string) ([]byte, error) {
@@ -547,6 +560,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		msg.LootFailures = append(msg.LootFailures, lootFailureJSON{
 			ClaimedBy: lf.ClaimedBy.String(),
 			Item:      lootEventItemJSON{Identifier: lf.Item.Identifier, Name: lf.Item.Name, Slot: lf.Item.Slot, Elvl: lf.Item.Elvl},
+			Reason:    lf.Reason,
 		})
 	}
 

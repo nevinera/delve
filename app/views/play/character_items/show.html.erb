@@ -5,8 +5,8 @@
   <p>Weapon Type: <%= @item.source_json["weaponType"] %></p>
 <% end %>
 <p>Elevation: <%= @item.elvl %></p>
-<p>From: <%= @item.provenance_zone&.identifier %></p>
-<p>Received: <%= @item.received_at.strftime("%Y-%m-%d %H:%M") %></p>
+<p>From: <%= @item.zone_identifier %></p>
+<p>Received: <%= @item.created_at.strftime("%Y-%m-%d %H:%M") %></p>
 
 <% if @raw_stats.any? %>
   <p>Stats at ee=0 (on-level):</p>
@@ -24,7 +24,7 @@
 <% if @item.equipped_item %>
   <p>
     <%= button_to "Unequip from #{EquippedItem::SLOT_LABELS[@item.equipped_item.equipped_slot]}",
-      play_character_equipped_item_path(@character, @item.equipped_item.equipped_slot),
+      play_character_world_equipped_item_path(@character, @world, @item.equipped_item.equipped_slot),
       method: :patch,
       params: {character_item_id: ""} %>
   </p>
@@ -34,7 +34,7 @@
     <p>
       <% equippable_slots.each do |slot| %>
         <%= button_to "Equip as #{EquippedItem::SLOT_LABELS[slot]}",
-          play_character_equipped_item_path(@character, slot),
+          play_character_world_equipped_item_path(@character, @world, slot),
           method: :patch,
           params: {character_item_id: @item.id} %>
       <% end %>
@@ -42,4 +42,4 @@
   <% end %>
 <% end %>
 
-<%= link_to "Back to items", play_character_character_items_path(@character) %>
+<%= link_to "Back to items", play_character_world_character_items_path(@character, @world) %>

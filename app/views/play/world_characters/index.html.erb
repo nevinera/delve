@@ -1,0 +1,31 @@
+<h1>Worlds</h1>
+
+<p>
+  Pick a world to enter with <%= @character.name %>.
+  <% if @show_all %>
+    <%= link_to "Hide the worlds you've hidden", play_character_worlds_path(@character) %>
+  <% else %>
+    <%= link_to "Show all worlds", play_character_worlds_path(@character, all: 1) %>
+  <% end %>
+</p>
+
+<table>
+  <tbody>
+    <% @rows.each do |row| %>
+      <% world, world_character = row[:world], row[:world_character] %>
+      <tr>
+        <td><%= link_to row[:name], play_character_world_path(@character, world) %></td>
+        <td><%= link_to "Enter", play_play_character_world_path(@character, world) if world.released_versions.any? %></td>
+        <td>
+          <% if world_character.nil? || world_character.active? %>
+            <%= button_to "Hide", active_play_character_world_path(@character, world), method: :patch, params: {active: false} %>
+          <% else %>
+            <%= button_to "Show", active_play_character_world_path(@character, world), method: :patch, params: {active: true} %>
+          <% end %>
+        </td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "Back to #{@character.name}", play_character_path(@character) %>

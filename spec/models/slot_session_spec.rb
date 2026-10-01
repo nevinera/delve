@@ -15,10 +15,10 @@ RSpec.describe SlotSession, type: :model do
       expect(s).not_to be_valid
     end
 
-    it "requires a zone" do
+    it "allows no zone, for a zone played straight from a repo" do
       s = build(:slot_session, character: character)
       s.zone = nil
-      expect(s).not_to be_valid
+      expect(s).to be_valid
     end
 
     it "requires a token" do

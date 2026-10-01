@@ -21,6 +21,9 @@ import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
 import { darkenHexColor } from "./darkenColor";
+import ExpiryBanner from "./ExpiryBanner";
+import { worldMessageAction } from "./game/worldMessages";
+import { redirectTo } from "./redirectTo";
 
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
@@ -2715,10 +2718,10 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
     setCandidateLoading(true);
     const params = new URLSearchParams();
     itemSlotsFor(expandedSlot).forEach(s => params.append("slot[]", s));
-    const equippedSourceKeys = new Set(Object.values(equippedItems || {}).map(i => i.source_key));
+    const equippedIds = new Set(Object.values(equippedItems || {}).map(i => i.id));
     fetch(`${characterItemsUrl}?${params.toString()}`)
       .then(r => r.json())
-      .then(items => setCandidateItems(items.filter(i => !equippedSourceKeys.has(i.source_key))))
+      .then(items => setCandidateItems(items.filter(i => !equippedIds.has(i.id))))
       .catch(() => setCandidateItems([]))
       .finally(() => setCandidateLoading(false));
   }, [expandedSlot, characterItemsUrl, equippedItems]);
@@ -2729,7 +2732,12 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
   const basicAttack = combatStats?.basic_attack ?? ZERO_SCHOOL_STATS;
   const gearElvl = gearElevation(equippedItems);
 
+  // Without an items URL (a zone played directly, wearing imaginary trainee
+  // gear) there's nothing to equip from, so slots aren't clickable.
+  const canEquip = !!characterItemsUrl;
+
   const toggleSlot = (slot) => {
+    if (!canEquip) return;
     setExpandedSlot(current => (current === slot ? null : slot));
   };
 
@@ -2756,8 +2764,8 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
             const item = equippedItems?.[slot];
             const rowStyle = {
               ...styles.charSheetEquipRow,
-              ...styles.charSheetEquipRowClickable,
-              ...(hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
+              ...(canEquip ? styles.charSheetEquipRowClickable : {}),
+              ...(canEquip && hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
               ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
             };
             return (
@@ -3006,6 +3014,10 @@ export default function App({
   characterSettings,
   characterSettingsUrl,
   stockAssets,
+  // Set on a world's zones: the world's play page, which the client goes
+  // back to when the player leaves through an exit or the world version
+  // expires (see game/worldMessages.js).
+  worldReturnUrl,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
@@ -3034,6 +3046,13 @@ export default function App({
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
   const [disconnected, setDisconnected] = useState(false);
+  // Epoch ms the world version expires at, or null; drives ExpiryBanner.
+  const [expiresAt, setExpiresAt] = useState(null);
+  // True once the server has told us to leave (zone exit, version expiry),
+  // so the socket closing behind it doesn't read as a disconnect.
+  const leavingRef = useRef(false);
+  // Logged once per session, not once per item (see the lootFailures loop).
+  const lootNotKeptLoggedRef = useRef(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [dialogueNcuId, setDialogueNcuId] = useState(null);
@@ -3513,8 +3532,23 @@ export default function App({
       simulatedLatencyMs,
       simulatedJitterMs,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
-      onClose: () => { setDisconnected(true); addLog("Disconnected."); },
-      onStateChange: ({ units: u, ncus: n = {}, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
+      onClose: () => {
+        if (leavingRef.current) return;
+        setDisconnected(true);
+        addLog("Disconnected.");
+      },
+      onServerMessage: (msg) => {
+        const action = worldMessageAction(msg);
+        if (!action) return;
+        if (action.log) addLog(action.log);
+        if (action.type === "expiring") setExpiresAt(action.expiresAt);
+        if (action.type === "leave" && worldReturnUrl) {
+          leavingRef.current = true;
+          redirectTo(worldReturnUrl);
+        }
+      },
+      onStateChange: ({ units: u, ncus: n = {}, combatEvents = [], lootEvents = [], lootFailures = [], ...rest }) => {
+        if ("expiresAt" in rest) setExpiresAt(rest.expiresAt);
         unitsRef.current = u;
         setUnits(u);
         ncusRef.current = n;
@@ -3558,7 +3592,13 @@ export default function App({
         }
         const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
         for (const failure of lootFailures) {
-          if (self && failure.claimed_by === self.id) {
+          if (!self || failure.claimed_by !== self.id) continue;
+          if (failure.reason === "not_persisted") {
+            if (!lootNotKeptLoggedRef.current) {
+              lootNotKeptLoggedRef.current = true;
+              addLog("Loot isn't kept when trying a zone directly.");
+            }
+          } else {
             addLog(`Failed to loot ${failure.item.name} - please try again.`);
           }
         }
@@ -4370,6 +4410,7 @@ export default function App({
           </button>
         </div>
       )}
+      <ExpiryBanner expiresAt={expiresAt} />
       {disconnected && (
         <div style={{
           position: "fixed", inset: 0, display: "flex",

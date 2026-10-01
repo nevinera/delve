@@ -278,7 +278,7 @@ describe("CharacterSheet", () => {
 
     it("opens a candidate pane for an empty slot too", async () => {
       const fetchMock = stubFetch([
-        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", stats: {} },
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", stats: {} },
       ]);
 
       render(
@@ -298,7 +298,7 @@ describe("CharacterSheet", () => {
 
     it("still opens and equips from the candidate pane when portrait (overlay, not inline)", async () => {
       stubFetch([
-        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", stats: {} },
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", stats: {} },
       ]);
       const onEquip = vi.fn().mockResolvedValue(null);
 
@@ -322,7 +322,7 @@ describe("CharacterSheet", () => {
 
     it("still opens and equips from the candidate pane when landscape (overlay, not inline)", async () => {
       stubFetch([
-        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", stats: {} },
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", stats: {} },
       ]);
       const onEquip = vi.fn().mockResolvedValue(null);
 
@@ -346,11 +346,11 @@ describe("CharacterSheet", () => {
 
     it("fetches and shows candidate items for the clicked slot, excluding already-equipped ones", async () => {
       const fetchMock = stubFetch([
-        { id: 1, identifier: "iron-helm", name: "Iron Helm", source_key: "sk-1", stats: {} },
-        { id: 2, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} },
+        { id: 1, identifier: "iron-helm", name: "Iron Helm", stats: {} },
+        { id: 2, identifier: "worn-helm", name: "Worn Helm", stats: {} },
       ]);
       const equippedItems = {
-        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+        head: { identifier: "iron-helm", id: 1, stats: {} },
       };
 
       render(
@@ -373,9 +373,9 @@ describe("CharacterSheet", () => {
 
     it("shows elvl per candidate and sorts by elvl descending", async () => {
       stubFetch([
-        { id: 1, identifier: "worn-boots", name: "Worn Boots", source_key: "sk-1", elvl: 10, stats: {} },
-        { id: 2, identifier: "master-boots", name: "Master Boots", source_key: "sk-2", elvl: 50, stats: {} },
-        { id: 3, identifier: "novice-boots", name: "Novice Boots", source_key: "sk-3", elvl: 30, stats: {} },
+        { id: 1, identifier: "worn-boots", name: "Worn Boots", elvl: 10, stats: {} },
+        { id: 2, identifier: "master-boots", name: "Master Boots", elvl: 50, stats: {} },
+        { id: 3, identifier: "novice-boots", name: "Novice Boots", elvl: 30, stats: {} },
       ]);
 
       render(
@@ -396,7 +396,7 @@ describe("CharacterSheet", () => {
     it("requests every compatible item slot for a multi-slot equipped slot", async () => {
       const fetchMock = stubFetch([]);
       const equippedItems = {
-        main_hand: { identifier: "sword", source_key: "sk-1", stats: {} },
+        main_hand: { identifier: "sword", id: 1, stats: {} },
       };
 
       render(
@@ -419,7 +419,7 @@ describe("CharacterSheet", () => {
     it("closes the candidate pane when clicking the same slot again", async () => {
       stubFetch([]);
       const equippedItems = {
-        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+        head: { identifier: "iron-helm", id: 1, stats: {} },
       };
 
       render(
@@ -439,9 +439,9 @@ describe("CharacterSheet", () => {
     });
 
     it("shows a 'Nothing' row that unequips the slot", async () => {
-      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} }]);
+      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", stats: {} }]);
       const equippedItems = {
-        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+        head: { identifier: "iron-helm", id: 1, stats: {} },
       };
       const onEquip = vi.fn().mockResolvedValue(null);
 
@@ -464,9 +464,9 @@ describe("CharacterSheet", () => {
     });
 
     it("equips a candidate item and closes the pane on success", async () => {
-      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} }]);
+      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", stats: {} }]);
       const equippedItems = {
-        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+        head: { identifier: "iron-helm", id: 1, stats: {} },
       };
       const onEquip = vi.fn().mockResolvedValue(null);
 
@@ -484,14 +484,14 @@ describe("CharacterSheet", () => {
       await waitFor(() => expect(screen.getByText("Worn Helm")).toBeInTheDocument());
 
       fireEvent.click(screen.getByText("Worn Helm"));
-      expect(onEquip).toHaveBeenCalledWith("head", { id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} });
+      expect(onEquip).toHaveBeenCalledWith("head", { id: 5, identifier: "worn-helm", name: "Worn Helm", stats: {} });
       await waitFor(() => expect(screen.queryByText("Worn Helm")).not.toBeInTheDocument());
     });
 
     it("shows an error and keeps the pane open when equipping fails", async () => {
-      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", source_key: "sk-2", stats: {} }]);
+      stubFetch([{ id: 5, identifier: "worn-helm", name: "Worn Helm", stats: {} }]);
       const equippedItems = {
-        head: { identifier: "iron-helm", source_key: "sk-1", stats: {} },
+        head: { identifier: "iron-helm", id: 1, stats: {} },
       };
       const onEquip = vi.fn().mockResolvedValue("cannot equip a chest item into head");
 
@@ -511,6 +511,26 @@ describe("CharacterSheet", () => {
       fireEvent.click(screen.getByText("Worn Helm"));
       await waitFor(() => expect(screen.getByText("cannot equip a chest item into head")).toBeInTheDocument());
       expect(screen.getByText("Worn Helm")).toBeInTheDocument();
+    });
+  });
+
+  describe("equipping", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("fetches equippable items when a slot is clicked", () => {
+      const fetchMock = vi.fn(() => Promise.resolve({ json: () => Promise.resolve([]) }));
+      vi.stubGlobal("fetch", fetchMock);
+      render(<CharacterSheet open equippedItems={{}} characterItemsUrl="/items.json" onClose={() => {}} />);
+      fireEvent.click(screen.getAllByText("Empty")[0].closest("tr"));
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    it("does nothing on click without an items URL (a directly played zone)", () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
+      fireEvent.click(screen.getAllByText("Empty")[0].closest("tr"));
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

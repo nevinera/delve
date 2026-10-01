@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -33,25 +33,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
   end
 
   create_table "character_items", force: :cascade do |t|
-    t.integer "character_id", null: false
     t.datetime "created_at", null: false
     t.text "description"
     t.integer "elvl", null: false
     t.string "identifier", null: false
     t.string "name", null: false
     t.string "primary_stat"
-    t.integer "provenance_zone_id"
-    t.datetime "received_at", null: false
     t.json "secondary_stats", default: [], null: false
     t.string "slot", null: false
     t.json "source_json", default: {}, null: false
-    t.string "source_key", null: false
     t.datetime "updated_at", null: false
     t.string "version", null: false
+    t.integer "world_character_id", null: false
     t.string "zone_identifier", null: false
-    t.index ["character_id", "source_key"], name: "index_character_items_on_character_id_and_source_key", unique: true
-    t.index ["character_id"], name: "index_character_items_on_character_id"
-    t.index ["provenance_zone_id"], name: "index_character_items_on_provenance_zone_id"
+    t.index ["world_character_id", "zone_identifier", "identifier", "version"], name: "index_character_items_on_identity", unique: true
+    t.index ["world_character_id"], name: "index_character_items_on_world_character_id"
   end
 
   create_table "character_settings", force: :cascade do |t|
@@ -67,9 +63,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
   create_table "characters", force: :cascade do |t|
     t.integer "character_class_id", null: false
     t.datetime "created_at", null: false
-    t.datetime "last_played_at"
     t.string "name", null: false
-    t.integer "time_logged", default: 0, null: false
     t.string "token_url", null: false
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false
@@ -98,14 +92,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
   end
 
   create_table "equipped_items", force: :cascade do |t|
-    t.integer "character_id", null: false
     t.integer "character_item_id", null: false
     t.datetime "created_at", null: false
     t.string "equipped_slot", null: false
     t.datetime "updated_at", null: false
-    t.index ["character_id", "equipped_slot"], name: "index_equipped_items_on_character_id_and_equipped_slot", unique: true
-    t.index ["character_id"], name: "index_equipped_items_on_character_id"
+    t.integer "world_character_id", null: false
     t.index ["character_item_id"], name: "index_equipped_items_on_character_item_id", unique: true
+    t.index ["world_character_id", "equipped_slot"], name: "index_equipped_items_on_world_character_id_and_equipped_slot", unique: true
+    t.index ["world_character_id"], name: "index_equipped_items_on_world_character_id"
   end
 
   create_table "github_installations", force: :cascade do |t|
@@ -130,7 +124,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
     t.string "slot_id", null: false
     t.string "token", null: false
     t.datetime "updated_at", null: false
-    t.integer "zone_id", null: false
+    t.integer "zone_id"
     t.index ["character_id"], name: "index_slot_sessions_on_character_id", unique: true
     t.index ["zone_id"], name: "index_slot_sessions_on_zone_id"
   end
@@ -153,36 +147,79 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_120000) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
+  create_table "world_characters", force: :cascade do |t|
+    t.boolean "active", default: true, null: false
+    t.integer "character_id", null: false
+    t.string "connection_key"
+    t.datetime "created_at", null: false
+    t.datetime "last_played_at"
+    t.datetime "updated_at", null: false
+    t.integer "world_id", null: false
+    t.integer "world_version_id"
+    t.string "zone_identifier"
+    t.index ["character_id"], name: "index_world_characters_on_character_id"
+    t.index ["world_id", "character_id"], name: "index_world_characters_on_world_id_and_character_id", unique: true
+    t.index ["world_id"], name: "index_world_characters_on_world_id"
+    t.index ["world_version_id"], name: "index_world_characters_on_world_version_id"
+  end
+
+  create_table "world_versions", force: :cascade do |t|
+    t.string "commit_sha"
+    t.datetime "created_at", null: false
+    t.datetime "expires_at"
+    t.datetime "imported_at"
+    t.string "name"
+    t.string "raw_base_url"
+    t.string "ref", null: false
+    t.datetime "released_at"
+    t.string "state", default: "importing", null: false
+    t.datetime "updated_at", null: false
+    t.text "validity_error"
+    t.integer "world_id", null: false
+    t.index ["world_id", "ref"], name: "index_world_versions_on_world_id_and_ref", unique: true
+    t.index ["world_id", "state"], name: "index_world_versions_on_world_id_and_state"
+    t.index ["world_id"], name: "index_world_versions_on_world_id"
+  end
+
+  create_table "worlds", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name"
+    t.integer "owner_id", null: false
+    t.string "path", null: false
+    t.string "repo", null: false
+    t.datetime "updated_at", null: false
+    t.index ["owner_id"], name: "index_worlds_on_owner_id"
+    t.index ["repo", "path"], name: "index_worlds_on_repo_and_path", unique: true
+  end
+
   create_table "zones", force: :cascade do |t|
-    t.string "config_url", null: false
     t.string "content_sha"
     t.datetime "created_at", null: false
-    t.text "description"
-    t.integer "elvl"
-    t.integer "file_size"
+    t.string "entry_connection_key"
     t.string "identifier", null: false
-    t.string "name", null: false
-    t.integer "registering_user_id", null: false
-    t.string "state", default: "provided", null: false
+    t.json "links", default: {}, null: false
+    t.string "path", null: false
     t.datetime "updated_at", null: false
-    t.string "validity_error"
-    t.string "version", null: false
-    t.index ["identifier", "version"], name: "index_zones_on_identifier_and_version", unique: true
-    t.index ["registering_user_id"], name: "index_zones_on_registering_user_id"
-    t.index ["state"], name: "index_zones_on_state"
+    t.integer "world_version_id", null: false
+    t.index ["world_version_id", "identifier"], name: "index_zones_on_world_version_id_and_identifier", unique: true
+    t.index ["world_version_id"], name: "index_zones_on_world_version_id"
   end
 
   add_foreign_key "character_classes", "users"
-  add_foreign_key "character_items", "characters"
-  add_foreign_key "character_items", "zones", column: "provenance_zone_id"
+  add_foreign_key "character_items", "world_characters"
   add_foreign_key "character_settings", "characters"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
   add_foreign_key "class_abilities", "character_classes"
   add_foreign_key "equipped_items", "character_items"
-  add_foreign_key "equipped_items", "characters"
+  add_foreign_key "equipped_items", "world_characters"
   add_foreign_key "github_installations", "users"
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"
-  add_foreign_key "zones", "users", column: "registering_user_id"
+  add_foreign_key "world_characters", "characters"
+  add_foreign_key "world_characters", "world_versions"
+  add_foreign_key "world_characters", "worlds"
+  add_foreign_key "world_versions", "worlds"
+  add_foreign_key "worlds", "users", column: "owner_id"
+  add_foreign_key "zones", "world_versions"
 end

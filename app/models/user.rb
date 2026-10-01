@@ -4,6 +4,7 @@ class User < ApplicationRecord
 
   has_many :character_classes, dependent: :destroy
   has_many :characters, dependent: :destroy
+  has_many :worlds, foreign_key: :owner_id, inverse_of: :owner, dependent: :destroy
   has_one :github_installation, dependent: :destroy
 
   def self.from_omniauth(auth)

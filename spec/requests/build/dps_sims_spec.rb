@@ -53,6 +53,15 @@ RSpec.describe "Build::DpsSims", type: :request do
       expect(response).to have_http_status(:bad_request)
     end
 
+    it "passes along the game server rejecting the unit type" do
+      stub_request(:post, game_server_url).to_return(status: 422, body: '{"error":"enemy has no powers"}', headers: json_headers)
+
+      post "/build/dps_sims/unit_type", params: unit_type.to_json, headers: json_headers
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["error"]).to eq("enemy has no powers")
+    end
+
     it "returns 502 when the game server returns an error" do
       stub_request(:post, game_server_url).to_return(status: 401, body: '{"error":"unauthorized"}', headers: json_headers)
 

@@ -1,3 +1,8 @@
+# Awards a looted item to a world character (from the game server - see
+# InternalApi::CharacterItemsController). An item is identified within the
+# world by its zone and identifier; its version is a hash of its definition
+# (see ItemDefinition), so holding an older definition of the same item
+# makes this an upgrade.
 class AwardCharacterItem
   include Memery
 
@@ -7,8 +12,8 @@ class AwardCharacterItem
 
   def self.call(...) = new(...).call
 
-  def initialize(character:, source_data:, upgrade_only: false)
-    @character = character
+  def initialize(world_character:, source_data:, upgrade_only: false)
+    @world_character = world_character
     @source_data = source_data
     @upgrade_only = upgrade_only
   end
@@ -22,18 +27,16 @@ class AwardCharacterItem
   end
 
   def validate!
-    validate_zone!
     validate_required_fields!
+    validate_zone!
   end
 
   memoize def already_held? = existing_record.present?
 
   memoize def already_held_other_version?
-    @character.character_items
-      .joins(:provenance_zone)
-      .where(identifier:)
-      .where(zones: {identifier: zone_identifier})
-      .where.not(source_key:)
+    @world_character.character_items
+      .where(zone_identifier: zone.identifier, identifier:)
+      .where.not(version:)
       .exists?
   end
 
@@ -41,17 +44,20 @@ class AwardCharacterItem
 
   memoize def record = existing_record || built_item.tap(&:save!)
 
-  memoize def existing_record = @character.character_items.find_by(source_key:)
+  memoize def existing_record =
+    @world_character.character_items.find_by(zone_identifier: zone.identifier, identifier:, version:)
 
-  memoize def zone = Zone.find(zone_db_id)
-
-  def validate_zone!
-    return if zone.identifier == zone_identifier && zone.version == zone_version
+  # The zone must be one of the world character's current version's zones.
+  memoize def zone
+    version = @world_character.world_version
+    zone = version&.zones&.find_by(id: zone_db_id)
+    return zone if zone && zone.identifier == zone_identifier
 
     raise ZoneMismatch,
-      "zone #{zone_db_id} has identifier/version #{zone.identifier}/#{zone.version}, " \
-      "request sent #{zone_identifier}/#{zone_version}"
+      "zone #{zone_db_id} (#{zone_identifier}) isn't in world character #{@world_character.id}'s current world version"
   end
+
+  def validate_zone! = zone
 
   def validate_required_fields!
     %w[identifier name slot elvl].each do |field|
@@ -59,20 +65,19 @@ class AwardCharacterItem
     end
   end
 
-  memoize def source_key = "#{zone.identifier}/#{zone.version}/#{identifier}"
+  memoize def definition = ItemDefinition.normalize(@source_data)
+
+  memoize def version = ItemDefinition.version(definition)
 
   memoize def built_item = CharacterItem.new(provenance_attributes.merge(item_attributes))
 
   def provenance_attributes
     {
-      character: @character,
-      provenance_zone: zone,
-      source_key:,
-      source_json: @source_data,
+      world_character: @world_character,
+      source_json: definition,
       identifier:,
-      zone_identifier: zone_identifier,
-      version: zone_version,
-      received_at: Time.current.utc
+      zone_identifier: zone.identifier,
+      version:
     }
   end
 
@@ -87,8 +92,6 @@ class AwardCharacterItem
   def zone_db_id = @source_data.dig("zone", "database_id").to_s
 
   def zone_identifier = @source_data.dig("zone", "identifier").to_s
-
-  def zone_version = @source_data.dig("zone", "version").to_s
 
   def identifier = @source_data.fetch("identifier").to_s
 

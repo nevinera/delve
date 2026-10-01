@@ -10,7 +10,10 @@ module GameApi
 
     # Required: :zone_identifier, :version, :database_id, :source_url,
     #           :zone_config, :character_name, :character_database_id, :character_class
-    # Optional: :instance_identifier, :owned_zone_items, :equipped_items
+    # Optional: :instance_identifier, :owned_zone_items, :equipped_items,
+    #           and the world-join fields (see game-server/README.md):
+    #           :mode, :instance_key, :spawn_at, :exits,
+    #           :world_character_database_id, :world_version_id, :expires_at
     #
     # Returns {"instance_identifier", "slot_id", "token"} on success.
     # Raises UnprocessableError on zone mismatch or full instance.
@@ -18,7 +21,8 @@ module GameApi
     def request(attrs)
       validate_attrs(attrs,
         required: %i[zone_identifier version database_id source_url zone_config character_name character_database_id character_class],
-        supported: %i[instance_identifier owned_zone_items equipped_items])
+        supported: %i[instance_identifier owned_zone_items equipped_items
+          mode instance_key spawn_at exits world_character_database_id world_version_id expires_at])
       post("/slots/request", attrs)
     end
 

@@ -97,6 +97,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 		case now := <-ticker.C:
 			tickCount++
 			inst.drainPlayerSpawns(ctx, state, now)
+			inst.drainPlayerDespawns(state)
 			refreshStatusEffectConditions(state)
 			updateCombatStats(state, inst.ZoneConfig)
 			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
@@ -105,6 +106,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			updatePlayerMaxHealth(state, inst.ZoneConfig)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig)
+			zoneExits := inst.detectZoneExits(state, prevState, now)
 			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph, inst.Rand)...)
 			tickNCUMovement(state, TickInterval.Seconds(), inst.Rand)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
@@ -126,12 +128,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 				select {
 				case result := <-inst.autoUpgradeResultCh:
 					if result.Success {
-						if slot := inst.slotByUnitID(result.CharacterUnitID); slot != nil {
-							if slot.OwnedZoneItems == nil {
-								slot.OwnedZoneItems = make(map[string]bool)
-							}
-							slot.OwnedZoneItems[result.ItemIdentifier] = true
-						}
+						inst.markItemOwned(result.CharacterUnitID, result.ItemIdentifier)
 					}
 					newState := instancestate.LootClaimStateAvailable
 					if result.Success {
@@ -167,7 +164,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 					var payload []byte
 					var err error
 					if s.NeedsFullState {
-						payload, err = buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs)
+						payload, err = buildFullStateMsg(state, now, checksum, heartbeatSeqs, moveSeqs, inst.ExpiresAt())
 					} else {
 						if deltaPayload == nil {
 							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum, prevHeartbeatSeqs, heartbeatSeqs, prevMoveSeqs, moveSeqs)
@@ -189,14 +186,13 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			for _, pending := range state.PendingLootClaims {
 				go inst.fireLootAward(ctx, pending)
 			}
+			for _, exit := range zoneExits {
+				go inst.fireZoneExit(ctx, exit)
+			}
+			inst.drainZoneExitResults(now)
 
 			for _, update := range state.PendingOwnershipUpdates {
-				if slot := inst.slotByUnitID(update.CharacterUnitID); slot != nil {
-					if slot.OwnedZoneItems == nil {
-						slot.OwnedZoneItems = make(map[string]bool)
-					}
-					slot.OwnedZoneItems[update.ItemIdentifier] = true
-				}
+				inst.markItemOwned(update.CharacterUnitID, update.ItemIdentifier)
 			}
 
 			state.PendingLootEvents = nil
@@ -207,6 +203,13 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			prevState = state.Clone()
 			prevHeartbeatSeqs = heartbeatSeqs
 			prevMoveSeqs = moveSeqs
+
+			// A world version past its expiry kicks everyone and stops.
+			if inst.tickExpiry(now) {
+				inst.Status = StatusStopping
+				inst.cancel()
+				return
+			}
 
 			// Remove slots that have been pending or waiting too long.
 			slotWaitTimeout := inst.SlotWaitTimeout
