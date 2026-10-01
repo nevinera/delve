@@ -1,6 +1,7 @@
 class World < ApplicationRecord
   belongs_to :owner, class_name: "User"
   has_many :world_versions, dependent: :destroy
+  has_many :world_characters, dependent: :destroy
 
   validates :repo, presence: true,
     format: {with: /\A[\w.-]+\/[\w.-]+\z/, message: "must be username/reponame"}

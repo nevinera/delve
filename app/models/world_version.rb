@@ -3,6 +3,7 @@ class WorldVersion < ApplicationRecord
 
   belongs_to :world
   has_many :zones, dependent: :destroy
+  has_many :world_characters, dependent: :nullify
 
   enum :state, {importing: "importing", failed: "failed", unreleased: "unreleased", released: "released"}
 

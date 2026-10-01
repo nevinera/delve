@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_130000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -153,6 +153,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
+  create_table "world_characters", force: :cascade do |t|
+    t.boolean "active", default: true, null: false
+    t.integer "character_id", null: false
+    t.string "connection_key"
+    t.datetime "created_at", null: false
+    t.datetime "last_played_at"
+    t.string "rest_site"
+    t.datetime "updated_at", null: false
+    t.integer "world_id", null: false
+    t.integer "world_version_id"
+    t.string "zone_identifier"
+    t.index ["character_id"], name: "index_world_characters_on_character_id"
+    t.index ["world_id", "character_id"], name: "index_world_characters_on_world_id_and_character_id", unique: true
+    t.index ["world_id"], name: "index_world_characters_on_world_id"
+    t.index ["world_version_id"], name: "index_world_characters_on_world_version_id"
+  end
+
   create_table "world_versions", force: :cascade do |t|
     t.string "commit_sha"
     t.string "content_sha"
@@ -216,6 +233,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
   add_foreign_key "github_installations", "users"
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"
+  add_foreign_key "world_characters", "characters"
+  add_foreign_key "world_characters", "world_versions"
+  add_foreign_key "world_characters", "worlds"
   add_foreign_key "world_versions", "worlds"
   add_foreign_key "worlds", "users", column: "owner_id"
   add_foreign_key "zones", "users", column: "registering_user_id"
