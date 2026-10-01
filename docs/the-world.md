@@ -59,7 +59,8 @@ can be given much more detail as their own locations.
 ## Trying a Zone While Building
 
 Build → Zones → Play runs a zone straight from your repo's default branch, as one of your
-characters, with no publishing. Nothing is kept: loot isn't saved and the zone's world exits do
+characters, with no publishing, wearing Trainee Gear at the zone's elevation (`?elevation=-5` or
+`+3` adjusts it). Nothing is kept: loot isn't saved and the zone's world exits do
 nothing. Only your own characters share that instance, and each new commit gets a fresh one. The
 repo must be public.
 
@@ -103,4 +104,7 @@ point that needs no key.
 Delve only stores where a character is between zones. Inside a zone, the instance tracks their
 position; if they leave the instance some other way, they return at their last connection point.
 
-Items are still tracked per character, not per world. That changes in a later update.
+Items and equipment belong to a character's time in one world: each world has its own, starting
+with a set of Trainee Gear on the first visit (see [stats.md](stats.md#trainee-gear)). An item is
+identified by its zone and identifier, and its version is a hash of its definition, so a new
+world version only offers an upgrade for items whose definitions actually changed.
