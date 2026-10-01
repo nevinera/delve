@@ -23,6 +23,7 @@ import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSet
 import { darkenHexColor } from "./darkenColor";
 import ExpiryBanner from "./ExpiryBanner";
 import { worldMessageAction } from "./game/worldMessages";
+import { lootFailureMessages } from "./game/lootMessages";
 import { redirectTo } from "./redirectTo";
 
 
@@ -3051,8 +3052,6 @@ export default function App({
   // True once the server has told us to leave (zone exit, version expiry),
   // so the socket closing behind it doesn't read as a disconnect.
   const leavingRef = useRef(false);
-  // Logged once per session, not once per item (see the lootFailures loop).
-  const lootNotKeptLoggedRef = useRef(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [dialogueNcuId, setDialogueNcuId] = useState(null);
@@ -3590,17 +3589,9 @@ export default function App({
         for (const ev of lootEvents) {
           addLog(`Lootable: ${ev.items.map(i => i.name).join(", ")} — right-click to open`);
         }
-        const self = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
-        for (const failure of lootFailures) {
-          if (!self || failure.claimed_by !== self.id) continue;
-          if (failure.reason === "not_persisted") {
-            if (!lootNotKeptLoggedRef.current) {
-              lootNotKeptLoggedRef.current = true;
-              addLog("Loot isn't kept when trying a zone directly.");
-            }
-          } else {
-            addLog(`Failed to loot ${failure.item.name} - please try again.`);
-          }
+        const selfUnitId = Object.keys(u).find(id => u[id].zone_unit_identifier === selfIdentifierRef.current);
+        for (const message of lootFailureMessages(lootFailures, selfUnitId)) {
+          addLog(message);
         }
         for (const ev of combatEvents) {
           const attacker = u[ev.attacker_id];
