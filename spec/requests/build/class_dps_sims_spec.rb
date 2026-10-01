@@ -68,6 +68,15 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
       expect(response).to have_http_status(:bad_request)
     end
 
+    it "passes along the game server rejecting the class" do
+      stub_request(:post, game_server_url).to_return(status: 422, body: '{"error":"class has no powers"}', headers: json_headers)
+
+      post "/build/class_dps_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["error"]).to eq("class has no powers")
+    end
+
     it "returns 502 when the game server returns an error" do
       stub_request(:post, game_server_url).to_return(status: 401, body: '{"error":"unauthorized"}', headers: json_headers)
 

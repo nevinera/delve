@@ -15,13 +15,15 @@ class Build::DpsSimsController < Build::BaseController
     render json: {error: e.message, path: e.path}, status: :unprocessable_content
   end
 
-  rescue_from GameApi::UnprocessableError do |e|
-    render json: {error: e.message}, status: :unprocessable_content
-  end
-
   rescue_from GameApi::Error, SystemCallError, Net::OpenTimeout, Net::ReadTimeout do |e|
     Rails.logger.error("DPS sim request failed: #{e.class}: #{e.message}")
     render json: {error: "game server unavailable"}, status: :bad_gateway
+  end
+
+  # Declared after GameApi::Error on purpose: Rails tries handlers last to
+  # first, so this narrower one must come later to win for a game server 422.
+  rescue_from GameApi::UnprocessableError do |e|
+    render json: {error: e.message}, status: :unprocessable_content
   end
 
   def unit_type
