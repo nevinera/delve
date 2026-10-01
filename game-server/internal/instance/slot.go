@@ -257,6 +257,7 @@ func (inst *Instance) ConnectSlot(id uuid.UUID) (chan []byte, context.Context, c
 		characterName: slot.CharacterName,
 		class:         slot.CharacterClass,
 		equippedItems: slot.EquippedItems,
+		spawnAt:       slot.SpawnAt,
 	}:
 	default:
 	}

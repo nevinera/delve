@@ -185,3 +185,7 @@ func RemoveUnitForTest(state *instancestate.InstanceState, unitID uuid.UUID) {
 func (inst *Instance) FireLootAwardForTest(ctx context.Context, pending instancestate.PendingLootClaim) {
 	inst.fireLootAward(ctx, pending)
 }
+
+func SpawnPlacementForTest(zone instanceconfig.Zone, spawnAt string) (string, instanceconfig.Position) {
+	return spawnPlacement(zone, spawnAt)
+}
