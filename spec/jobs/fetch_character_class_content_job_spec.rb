@@ -79,6 +79,15 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
     end
   end
 
+  context "when the content is JSON but not a valid class" do
+    before { stub_request(:get, character_class.location).to_return(body: {name: "Puncher"}.to_json) }
+
+    it "marks the class validation_failed with the validator's error" do
+      described_class.perform_now(character_class.id)
+      expect(character_class.reload).to have_attributes(state: "validation_failed", validity_error: /\(at \$/)
+    end
+  end
+
   it "raises when the URL returns a non-success response" do
     stub_request(:get, character_class.location).to_return(status: 404)
     expect { described_class.perform_now(character_class.id) }.to raise_error(RuntimeError, /HTTP 404/)

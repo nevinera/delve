@@ -78,6 +78,12 @@ RSpec.describe CharacterItem, type: :model do
       end
     end
 
+    it "requires secondary_stats to be an array" do
+      item = build(:character_item, world_character: world_character, secondary_stats: "crit_rating")
+      expect(item).not_to be_valid
+      expect(item.errors[:secondary_stats]).to include("must be an array")
+    end
+
     it "requires source_json" do
       item = build(:character_item, world_character: world_character, source_json: nil)
       expect(item).not_to be_valid

@@ -75,6 +75,12 @@ RSpec.describe GameApi::BaseClient do
       end
     end
 
+    it "uses a plain-text error body as the message" do
+      stub_request(:get, "#{base_url}/status.json").to_return(status: 422, body: "zone config is invalid")
+
+      expect { client.status }.to raise_error(GameApi::UnprocessableError, "zone config is invalid")
+    end
+
     it "raises Error on 500" do
       stub_request(:get, "#{base_url}/status.json")
         .to_return(status: 500, body: '{"error":"internal error"}', headers: json_headers)

@@ -85,12 +85,10 @@ module Validators
       raise ValidationError.new("barriers use #{total} segments, more than the maximum of #{MAX_BARRIER_SEGMENTS}", path: path)
     end
 
+    # barrier["type"] is already one of BARRIER_TYPES (validate_barrier!).
     def barrier_segment_count(barrier)
-      case barrier["type"]
-      when "wall" then [(barrier["locations"] || []).length - 1, 0].max
-      when "circle" then CIRCLE_BARRIER_SEGMENTS
-      else 0
-      end
+      return CIRCLE_BARRIER_SEGMENTS if barrier["type"] == "circle"
+      [(barrier["locations"] || []).length - 1, 0].max
     end
 
     def validate_connections!(data, path:)
