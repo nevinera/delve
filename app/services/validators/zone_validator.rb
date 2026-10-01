@@ -4,6 +4,7 @@ module Validators
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
       validate_optional_sections!(data, path: path)
+      validate_unit_type_references!(data, path: path)
     end
 
     private
@@ -46,6 +47,24 @@ module Validators
       raise ValidationError.new("unitTypes must be an object", path: child_path(path, "unitTypes")) unless unit_types.is_a?(Hash)
       unit_types.each do |key, unit_type|
         UnitTypeValidator.validate!(unit_type, path: child_path(child_path(path, "unitTypes"), key))
+      end
+    end
+
+    # Every unit placed on a map must name one of the zone's own unitTypes -
+    # the game server refuses to start an instance otherwise, which would
+    # make the zone impossible to enter.
+    def validate_unit_type_references!(data, path:)
+      known = (data["unitTypes"] || {}).keys
+      data["maps"].each_with_index do |map, i|
+        (map["units"] || []).each_with_index do |unit, j|
+          next if known.include?(unit["unitType"])
+          unit_path = index_path(child_path(index_path(child_path(path, "maps"), i), "units"), j)
+          raise ValidationError.new(
+            "unit #{unit["identifier"].inspect} on map #{map["identifier"].inspect} references unknown unit type " \
+            "#{unit["unitType"].inspect}; add it to the zone's unitTypes",
+            path: child_path(unit_path, "unitType")
+          )
+        end
       end
     end
 
