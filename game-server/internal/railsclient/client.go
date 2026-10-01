@@ -67,7 +67,7 @@ type awardResponse struct {
 // Returns (remove, confirmedOwned, exactVersion, err).
 // remove=true means the item was newly awarded and should be removed from loot.
 // confirmedOwned=true means Rails confirmed the character owns this zone version of the item.
-// exactVersion=true means Rails returned 409 - character already has this exact source_key.
+// exactVersion=true means Rails returned 409 - world character already holds this exact item version.
 // confirmedOwned=false only on network or server errors.
 func (c *Client) AwardItem(worldCharacterDatabaseID, zoneDatabaseID, zoneIdentifier, zoneVersion string, item instanceconfig.Item, upgradeOnly bool) (bool, bool, bool, error) {
 	body := awardBody{

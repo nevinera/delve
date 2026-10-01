@@ -6,9 +6,9 @@ module EquippedItems
   # TraineeGear::Imaginary).
   def item_json(item)
     {
+      id: item.id,
       identifier: item.identifier,
       name: item.name,
-      source_key: item.source_key,
       zone_identifier: item.zone_identifier,
       version: item.version,
       slot: item.slot,

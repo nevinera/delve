@@ -23,24 +23,18 @@ RSpec.describe CharacterItem, type: :model do
       expect(item).not_to be_valid
     end
 
-    it "requires source_key" do
-      item = build(:character_item, world_character: world_character, source_key: nil)
-      expect(item).not_to be_valid
-      expect(item.errors[:source_key]).to be_present
+    it "allows holding one version of an item once per world character" do
+      create(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v1")
+      dup = build(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v1")
+      expect(dup).not_to be_valid
+      expect(build(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v2")).to be_valid
+      expect(build(:character_item, world_character:, zone_identifier: "cave", identifier: "sword", version: "v1")).to be_valid
     end
 
-    it "requires source_key to be unique per world character" do
-      create(:character_item, world_character: world_character, source_key: "zone_a/1.0/sword")
-      item = build(:character_item, world_character: world_character, source_key: "zone_a/1.0/sword")
-      expect(item).not_to be_valid
-      expect(item.errors[:source_key]).to be_present
-    end
-
-    it "allows the same source_key on different world characters" do
+    it "allows the same item on different world characters" do
       other = create(:world_character, character: world_character.character)
-      create(:character_item, world_character: world_character, source_key: "zone_a/1.0/sword")
-      item = build(:character_item, world_character: other, source_key: "zone_a/1.0/sword")
-      expect(item).to be_valid
+      create(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v1")
+      expect(build(:character_item, world_character: other, zone_identifier: "dw", identifier: "sword", version: "v1")).to be_valid
     end
 
     it "requires identifier" do

@@ -33,7 +33,7 @@ type CharacterLootClaim struct {
 type LootResult struct {
 	Remove         bool // true = item was newly awarded; remove it from loot
 	ConfirmedOwned bool // true = Rails confirmed the character owns this version
-	ExactVersion   bool // true = 409; character already has this exact source_key
+	ExactVersion   bool // true = 409; world character already holds this exact item version
 	NotPersisted   bool // true = loot isn't kept here at all (a directly played zone)
 }
 

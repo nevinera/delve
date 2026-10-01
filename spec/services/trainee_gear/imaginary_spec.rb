@@ -6,7 +6,7 @@ RSpec.describe TraineeGear::Imaginary do
   it "builds equipped trainee items at the given elvl without saving anything" do
     gear = nil
     expect { gear = described_class.call(character_class:, elvl: 12) }.not_to change(CharacterItem, :count)
-    expect(gear["head"]).to include(identifier: "trainee-head", slot: "head", elvl: 12, source_key: "trainee/head")
+    expect(gear["head"]).to include(identifier: "trainee-head", slot: "head", elvl: 12, id: nil)
     expect(gear["head"][:stats]).to be_present
   end
 

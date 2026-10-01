@@ -28,7 +28,7 @@ RSpec.describe AwardCharacterItem do
     expect(item).to be_persisted
     expect(item).to have_attributes(
       world_character:, identifier: "sword-of-doom", zone_identifier: "darkwood", version: item_version,
-      source_key: "darkwood/sword-of-doom/#{item_version}", name: "Sword of Doom", slot: "main_hand", elvl: 584,
+      name: "Sword of Doom", slot: "main_hand", elvl: 584,
       primary_stat: "strength", secondary_stats: ["haste_rating", "crit_rating"]
     )
   end

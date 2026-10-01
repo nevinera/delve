@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -43,12 +43,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_170000) do
     t.json "secondary_stats", default: [], null: false
     t.string "slot", null: false
     t.json "source_json", default: {}, null: false
-    t.string "source_key", null: false
     t.datetime "updated_at", null: false
     t.string "version", null: false
     t.integer "world_character_id", null: false
     t.string "zone_identifier", null: false
-    t.index ["world_character_id", "source_key"], name: "index_character_items_on_world_character_id_and_source_key", unique: true
+    t.index ["world_character_id", "zone_identifier", "identifier", "version"], name: "index_character_items_on_identity", unique: true
     t.index ["world_character_id"], name: "index_character_items_on_world_character_id"
   end
 
@@ -201,7 +200,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_170000) do
   create_table "zones", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
-    t.integer "elvl"
     t.string "entry_connection_key"
     t.integer "file_size"
     t.string "identifier", null: false

@@ -8,14 +8,14 @@ class CharacterItem < ApplicationRecord
 
   delegate :character, to: :world_character
 
-  validates :source_key, presence: true
   validates :identifier, presence: true
   validates :name, presence: true
   validates :elvl, presence: true, numericality: {only_integer: true, greater_than_or_equal_to: 0}
   validates :slot, presence: true, inclusion: {in: SLOTS}
   validates :received_at, presence: true
   validates :source_json, presence: true
-  validates :source_key, uniqueness: {scope: :world_character_id}
+  validates :version, presence: true,
+    uniqueness: {scope: [:world_character_id, :zone_identifier, :identifier], message: "is already held"}
   validates :primary_stat, inclusion: {in: PRIMARY_STATS}, allow_nil: true
   validate :secondary_stats_are_valid
 

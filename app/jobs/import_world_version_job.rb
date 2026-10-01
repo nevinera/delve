@@ -96,7 +96,7 @@ class ImportWorldVersionJob < ApplicationJob
       zones.each do |key, zone|
         @version.zones.create!(
           identifier: key, path: zone[:path], content_sha: zone[:content_sha],
-          file_size: zone[:file_size], elvl: zone[:data]["elvl"], state: :fetched,
+          file_size: zone[:file_size], state: :fetched,
           links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone)
         )
       end

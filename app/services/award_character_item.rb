@@ -36,7 +36,7 @@ class AwardCharacterItem
   memoize def already_held_other_version?
     @world_character.character_items
       .where(zone_identifier: zone.identifier, identifier:)
-      .where.not(source_key:)
+      .where.not(version:)
       .exists?
   end
 
@@ -44,7 +44,8 @@ class AwardCharacterItem
 
   memoize def record = existing_record || built_item.tap(&:save!)
 
-  memoize def existing_record = @world_character.character_items.find_by(source_key:)
+  memoize def existing_record =
+    @world_character.character_items.find_by(zone_identifier: zone.identifier, identifier:, version:)
 
   # The zone must be one of the world character's current version's zones.
   memoize def zone
@@ -68,14 +69,11 @@ class AwardCharacterItem
 
   memoize def version = ItemDefinition.version(definition)
 
-  memoize def source_key = "#{zone.identifier}/#{identifier}/#{version}"
-
   memoize def built_item = CharacterItem.new(provenance_attributes.merge(item_attributes))
 
   def provenance_attributes
     {
       world_character: @world_character,
-      source_key:,
       source_json: definition,
       identifier:,
       zone_identifier: zone.identifier,

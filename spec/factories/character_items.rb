@@ -5,7 +5,6 @@ FactoryBot.define do
     sequence(:identifier) { |n| "item-#{n}" }
     zone_identifier { "zone_a" }
     version { "1.0" }
-    sequence(:source_key) { |n| "zone_a/item-#{n}/1.0" }
     name { "Iron Sword" }
     elvl { 584 }
     slot { "head" }

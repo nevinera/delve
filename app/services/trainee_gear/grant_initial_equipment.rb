@@ -22,9 +22,9 @@ module TraineeGear
     def call
       return if items.empty?
 
-      result = CharacterItem.insert_all!(character_item_attrs, returning: %w[id source_key])
-      ids_by_source_key = result.rows.to_h { |id, source_key| [source_key, id] }
-      EquippedItem.insert_all!(equipped_item_attrs(ids_by_source_key))
+      result = CharacterItem.insert_all!(character_item_attrs, returning: %w[id identifier])
+      ids_by_identifier = result.rows.to_h { |id, identifier| [identifier, id] }
+      EquippedItem.insert_all!(equipped_item_attrs(ids_by_identifier))
     end
 
     private
@@ -63,12 +63,12 @@ module TraineeGear
       received_at ? base.merge(received_at: now) : base
     end
 
-    def equipped_item_attrs(ids_by_source_key)
+    def equipped_item_attrs(ids_by_identifier)
       now = Time.current
       items.keys.map do |equipped_slot|
         {
           world_character_id: @world_character.id,
-          character_item_id: ids_by_source_key.fetch(TraineeGear.source_key_for(equipped_slot)),
+          character_item_id: ids_by_identifier.fetch(TraineeGear.identifier_for(equipped_slot)),
           equipped_slot: equipped_slot
         }.merge(timestamps(now))
       end

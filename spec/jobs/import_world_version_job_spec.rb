@@ -93,7 +93,6 @@ RSpec.describe ImportWorldVersionJob, type: :job do
       expect(zones.map(&:path)).to eq(%w[zones/darkwood/darkwood.full.json zones/goblin-cave/goblin-cave.full.json])
       expect(zones.first.content_sha).to eq(Digest::SHA1.hexdigest(darkwood.to_json))
       expect(zones.first.file_size).to eq(darkwood.to_json.bytesize)
-      expect(zones.first.elvl).to eq(zone_fixture["elvl"])
     end
   end
 

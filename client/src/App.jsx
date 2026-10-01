@@ -2718,10 +2718,10 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
     setCandidateLoading(true);
     const params = new URLSearchParams();
     itemSlotsFor(expandedSlot).forEach(s => params.append("slot[]", s));
-    const equippedSourceKeys = new Set(Object.values(equippedItems || {}).map(i => i.source_key));
+    const equippedIds = new Set(Object.values(equippedItems || {}).map(i => i.id));
     fetch(`${characterItemsUrl}?${params.toString()}`)
       .then(r => r.json())
-      .then(items => setCandidateItems(items.filter(i => !equippedSourceKeys.has(i.source_key))))
+      .then(items => setCandidateItems(items.filter(i => !equippedIds.has(i.id))))
       .catch(() => setCandidateItems([]))
       .finally(() => setCandidateLoading(false));
   }, [expandedSlot, characterItemsUrl, equippedItems]);

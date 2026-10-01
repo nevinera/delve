@@ -21,7 +21,6 @@ type Item struct {
 // item is legitimate for its source zone/version.
 type EquippedItem struct {
 	Identifier     string   `json:"identifier"`
-	SourceKey      string   `json:"source_key"`
 	ZoneIdentifier string   `json:"zone_identifier"`
 	Version        string   `json:"version"`
 	Slot           string   `json:"slot"`
