@@ -20,7 +20,12 @@ type LootEvent struct {
 type LootFailure struct {
 	ClaimedBy uuid.UUID
 	Item      instanceconfig.Item
+	Reason    string // "" (try again) or LootFailureNotPersisted
 }
+
+// LootFailureNotPersisted is the LootFailure.Reason for loot that can't be
+// kept because the zone is being played directly, outside any world.
+const LootFailureNotPersisted = "not_persisted"
 
 // OwnershipUpdate records that a character confirmed as owning an item this
 // zone version, so the tick loop can update the slot's OwnedZoneItems map.

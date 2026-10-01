@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/railsclient"
 )
@@ -27,9 +28,9 @@ func TestRefreshEquippedItems_UpdatesSlotAndRecomputesStats(t *testing.T) {
 
 	inst := makeInstance()
 	inst.RailsClient = railsclient.New(srv.URL, "token")
-	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
+	slot, err := inst.AddSlotWithOptions("Aldric", "42", puncherClass, nil, map[string]instanceconfig.EquippedItem{
 		"chest": {Slot: "chest", PrimaryStat: strPtr("strength"), SecondaryStats: []string{}},
-	})
+	}, instance.SlotOptions{WorldCharacterDatabaseID: "wc-42"})
 	require.NoError(t, err)
 	chestStrength := slot.Stats["strength"]
 
@@ -85,4 +86,18 @@ func TestRefreshEquippedItems_RailsError_LeavesSlotUnchanged(t *testing.T) {
 
 	assert.Equal(t, original, slot.EquippedItems)
 	assert.Equal(t, originalStats, slot.Stats)
+}
+
+func TestRefreshEquippedItems_SkipsSlotsWithoutAWorldCharacter(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
+	t.Cleanup(srv.Close)
+
+	inst := makeInstance()
+	inst.RailsClient = railsclient.New(srv.URL, "token")
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+
+	inst.RefreshEquippedItems(context.Background(), slot.CharacterUnitID)
+	assert.False(t, called)
 }

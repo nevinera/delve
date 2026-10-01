@@ -56,10 +56,11 @@ func sweepLootClaims(state *instancestate.InstanceState) {
 					// item consumed - drop from list
 				} else {
 					if !result.ConfirmedOwned {
-						state.PendingLootFailures = append(state.PendingLootFailures, instancestate.LootFailure{
-							ClaimedBy: claimedBy,
-							Item:      item.Item,
-						})
+						failure := instancestate.LootFailure{ClaimedBy: claimedBy, Item: item.Item}
+						if result.NotPersisted {
+							failure.Reason = instancestate.LootFailureNotPersisted
+						}
+						state.PendingLootFailures = append(state.PendingLootFailures, failure)
 					}
 					item.Claim = nil
 					kept = append(kept, item)
@@ -76,8 +77,12 @@ func sweepLootClaims(state *instancestate.InstanceState) {
 // up the claiming character's database ID, posts to Rails, then sends the
 // result on the claim's channel so the next tick's sweep can finalise it.
 func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.PendingLootClaim) {
+	if inst.Mode == ModeDirect {
+		pending.Claim.Result <- instancestate.LootResult{NotPersisted: true}
+		return
+	}
 	slot := inst.slotByUnitID(pending.Claim.ClaimedBy)
-	if slot == nil || !inst.persistsLoot() {
+	if slot == nil || !inst.persistsLoot() || slot.WorldCharacterDatabaseID == "" {
 		if inst.RailsClient == nil {
 			slog.WarnContext(ctx, "no Rails client configured; loot award skipped", "item", pending.Item.Identifier)
 		}
@@ -85,7 +90,7 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		return
 	}
 	remove, confirmedOwned, exactVersion, err := inst.RailsClient.AwardItem(
-		slot.CharacterDatabaseID,
+		slot.WorldCharacterDatabaseID,
 		inst.DatabaseID,
 		inst.ZoneIdentifier,
 		inst.Version,
@@ -93,7 +98,7 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 		false,
 	)
 	if err != nil {
-		slog.WarnContext(ctx, "loot award failed", "error", err, "item", pending.Item.Identifier, "character", slot.CharacterDatabaseID)
+		slog.WarnContext(ctx, "loot award failed", "error", err, "item", pending.Item.Identifier, "world_character", slot.WorldCharacterDatabaseID)
 		pending.Claim.Result <- instancestate.LootResult{}
 		return
 	}
@@ -101,9 +106,9 @@ func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.P
 }
 
 type autoUpgradeTarget struct {
-	CharacterDatabaseID string
-	CharacterUnitID     uuid.UUID
-	LootUnitUUID        uuid.UUID
+	WorldCharacterDatabaseID string
+	CharacterUnitID          uuid.UUID
+	LootUnitUUID             uuid.UUID
 }
 
 type autoUpgradeResult struct {
@@ -123,17 +128,17 @@ func (inst *Instance) processLootEvents(ctx context.Context, state *instancestat
 	}
 
 	type slotSnapshot struct {
-		CharacterUnitID     uuid.UUID
-		CharacterDatabaseID string
-		OwnedZoneItems      map[string]bool
+		CharacterUnitID          uuid.UUID
+		WorldCharacterDatabaseID string
+		OwnedZoneItems           map[string]bool
 	}
 	inst.slotsMu.RLock()
 	slots := make([]slotSnapshot, 0, len(inst.slots))
 	for _, s := range inst.slots {
 		slots = append(slots, slotSnapshot{
-			CharacterUnitID:     s.CharacterUnitID,
-			CharacterDatabaseID: s.CharacterDatabaseID,
-			OwnedZoneItems:      maps.Clone(s.OwnedZoneItems),
+			CharacterUnitID:          s.CharacterUnitID,
+			WorldCharacterDatabaseID: s.WorldCharacterDatabaseID,
+			OwnedZoneItems:           maps.Clone(s.OwnedZoneItems),
 		})
 	}
 	inst.slotsMu.RUnlock()
@@ -165,9 +170,9 @@ func (inst *Instance) processLootEvents(ctx context.Context, state *instancestat
 						claimState = instancestate.LootClaimStateUpgrade
 						if inst.persistsLoot() {
 							go inst.fireAutoUpgrade(ctx, autoUpgradeTarget{
-								CharacterDatabaseID: s.CharacterDatabaseID,
-								CharacterUnitID:     s.CharacterUnitID,
-								LootUnitUUID:        event.UnitUUID,
+								WorldCharacterDatabaseID: s.WorldCharacterDatabaseID,
+								CharacterUnitID:          s.CharacterUnitID,
+								LootUnitUUID:             event.UnitUUID,
 							}, lootItem.Item)
 						}
 					}
@@ -188,7 +193,7 @@ func (inst *Instance) processLootEvents(ctx context.Context, state *instancestat
 // so the tick loop can update the claim state.
 func (inst *Instance) fireAutoUpgrade(ctx context.Context, target autoUpgradeTarget, item instanceconfig.Item) {
 	_, confirmedOwned, _, err := inst.RailsClient.AwardItem(
-		target.CharacterDatabaseID,
+		target.WorldCharacterDatabaseID,
 		inst.DatabaseID,
 		inst.ZoneIdentifier,
 		inst.Version,

@@ -243,6 +243,7 @@ type lootEventJSON struct {
 type lootFailureJSON struct {
 	ClaimedBy string            `json:"claimed_by"`
 	Item      lootEventItemJSON `json:"item"`
+	Reason    string            `json:"reason,omitempty"` // see instancestate.LootFailure.Reason
 }
 
 type deltaMsg struct {
@@ -559,6 +560,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		msg.LootFailures = append(msg.LootFailures, lootFailureJSON{
 			ClaimedBy: lf.ClaimedBy.String(),
 			Item:      lootEventItemJSON{Identifier: lf.Item.Identifier, Name: lf.Item.Name, Slot: lf.Item.Slot, Elvl: lf.Item.Elvl},
+			Reason:    lf.Reason,
 		})
 	}
 

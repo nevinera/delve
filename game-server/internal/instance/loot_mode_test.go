@@ -37,6 +37,25 @@ func TestFireLootAward_DirectModeNeverCallsRails(t *testing.T) {
 		Item:         instanceconfig.Item{Identifier: "sword"},
 	})
 
-	assert.Equal(t, instancestate.LootResult{}, <-claim.Result)
+	assert.Equal(t, instancestate.LootResult{NotPersisted: true}, <-claim.Result)
 	assert.False(t, called)
+}
+
+func TestSweepLootClaims_NotPersistedReportsTheReason(t *testing.T) {
+	claimer, npc := uuid.New(), uuid.New()
+	claim := &instancestate.LootClaim{ClaimedBy: claimer, Result: make(chan instancestate.LootResult, 1)}
+	claim.Result <- instancestate.LootResult{NotPersisted: true}
+	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{
+		npc: {LootItems: []instancestate.PendingLootItem{{
+			Item:   instanceconfig.Item{Identifier: "sword"},
+			Claim:  claim,
+			Claims: []instancestate.CharacterLootClaim{{CharacterUnitID: claimer, State: instancestate.LootClaimStateLocked}},
+		}}},
+	}}
+
+	instance.SweepLootClaimsForTest(state)
+
+	require.Len(t, state.PendingLootFailures, 1)
+	assert.Equal(t, instancestate.LootFailureNotPersisted, state.PendingLootFailures[0].Reason)
+	assert.Len(t, state.Units[npc].LootItems, 1, "the item stays lootable")
 }

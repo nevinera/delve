@@ -34,6 +34,7 @@ type LootResult struct {
 	Remove         bool // true = item was newly awarded; remove it from loot
 	ConfirmedOwned bool // true = Rails confirmed the character owns this version
 	ExactVersion   bool // true = 409; character already has this exact source_key
+	NotPersisted   bool // true = loot isn't kept here at all (a directly played zone)
 }
 
 // LootClaim is an in-flight attempt to take one loot item. The goroutine
