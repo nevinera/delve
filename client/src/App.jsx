@@ -21,6 +21,9 @@ import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
 import { darkenHexColor } from "./darkenColor";
+import ExpiryBanner from "./ExpiryBanner";
+import { worldMessageAction } from "./game/worldMessages";
+import { redirectTo } from "./redirectTo";
 
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
@@ -3006,6 +3009,10 @@ export default function App({
   characterSettings,
   characterSettingsUrl,
   stockAssets,
+  // Set on a world's zones: the world's play page, which the client goes
+  // back to when the player leaves through an exit or the world version
+  // expires (see game/worldMessages.js).
+  worldReturnUrl,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
@@ -3034,6 +3041,11 @@ export default function App({
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
   const [disconnected, setDisconnected] = useState(false);
+  // Epoch ms the world version expires at, or null; drives ExpiryBanner.
+  const [expiresAt, setExpiresAt] = useState(null);
+  // True once the server has told us to leave (zone exit, version expiry),
+  // so the socket closing behind it doesn't read as a disconnect.
+  const leavingRef = useRef(false);
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [dialogueNcuId, setDialogueNcuId] = useState(null);
@@ -3513,8 +3525,23 @@ export default function App({
       simulatedLatencyMs,
       simulatedJitterMs,
       onOpen: () => { setDisconnected(false); addLog("Connected to game server."); },
-      onClose: () => { setDisconnected(true); addLog("Disconnected."); },
-      onStateChange: ({ units: u, ncus: n = {}, combatEvents = [], lootEvents = [], lootFailures = [] }) => {
+      onClose: () => {
+        if (leavingRef.current) return;
+        setDisconnected(true);
+        addLog("Disconnected.");
+      },
+      onServerMessage: (msg) => {
+        const action = worldMessageAction(msg);
+        if (!action) return;
+        if (action.log) addLog(action.log);
+        if (action.type === "expiring") setExpiresAt(action.expiresAt);
+        if (action.type === "leave" && worldReturnUrl) {
+          leavingRef.current = true;
+          redirectTo(worldReturnUrl);
+        }
+      },
+      onStateChange: ({ units: u, ncus: n = {}, combatEvents = [], lootEvents = [], lootFailures = [], ...rest }) => {
+        if ("expiresAt" in rest) setExpiresAt(rest.expiresAt);
         unitsRef.current = u;
         setUnits(u);
         ncusRef.current = n;
@@ -4370,6 +4397,7 @@ export default function App({
           </button>
         </div>
       )}
+      <ExpiryBanner expiresAt={expiresAt} />
       {disconnected && (
         <div style={{
           position: "fixed", inset: 0, display: "flex",

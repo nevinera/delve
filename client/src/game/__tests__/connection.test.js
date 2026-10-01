@@ -272,3 +272,38 @@ describe("GameConnection NCUs", () => {
     expect(onStateChange.mock.calls[1][0].ncus.n1).toEqual({...grizzle, position: {x: 5, y: 2, angle: 90}});
   });
 });
+
+describe("GameConnection world messages", () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("passes full state's expires_at along, as null when absent", async () => {
+    const onStateChange = vi.fn();
+    const {ws} = connectAndOpen({onStateChange});
+
+    await ws.onmessage({data: JSON.stringify({direction: "down", type: "instance-state", units: {}, ncus: {}, checksum: "x", expires_at: 1234})});
+    await ws.onmessage({data: JSON.stringify({direction: "down", type: "instance-state", units: {}, ncus: {}, checksum: "x"})});
+
+    await vi.waitFor(() => expect(onStateChange).toHaveBeenCalledTimes(2));
+    expect(onStateChange.mock.calls[0][0].expiresAt).toBe(1234);
+    expect(onStateChange.mock.calls[1][0].expiresAt).toBeNull();
+  });
+
+  it("hands any other message to onServerMessage", async () => {
+    const onServerMessage = vi.fn();
+    const onStateChange = vi.fn();
+    const {ws} = connectAndOpen({onServerMessage, onStateChange});
+
+    await ws.onmessage({data: JSON.stringify({direction: "down", type: "zone-exit", connection: "m/door"})});
+
+    await vi.waitFor(() => expect(onServerMessage).toHaveBeenCalledTimes(1));
+    expect(onServerMessage.mock.calls[0][0]).toMatchObject({type: "zone-exit", connection: "m/door"});
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+});

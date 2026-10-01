@@ -18,6 +18,9 @@ export class GameConnection {
     onOpen,
     onClose,
     onStateChange,
+    // Called with any server message that isn't a state update (zone-exit,
+    // version-expiring, ...).
+    onServerMessage,
     // Artificial one-way delay applied to every send and every receive, for
     // reproducing latency-dependent bugs (e.g. movement reconciliation)
     // without relying on Chrome's network throttling - which throttles the
@@ -30,6 +33,7 @@ export class GameConnection {
     this._onOpen = onOpen;
     this._onClose = onClose;
     this._onStateChange = onStateChange;
+    this._onServerMessage = onServerMessage;
     this._simulatedLatencyMs = simulatedLatencyMs;
     this._simulatedJitterMs = simulatedJitterMs;
 
@@ -115,7 +119,9 @@ export class GameConnection {
       if (local !== msg.checksum) {
         console.warn("checksum mismatch after full state", { server: msg.checksum, local });
       }
-      this._onStateChange?.({ units: this._units, ncus: this._ncus });
+      // expiresAt is only ever on full state (epoch ms, or null when the
+      // world version isn't expiring); deltas leave it out entirely.
+      this._onStateChange?.({ units: this._units, ncus: this._ncus, expiresAt: msg.expires_at ?? null });
     } else if (msg.type === "delta") {
       this._units = applyDelta(this._units, msg);
       this._ncus = applyNCUDelta(this._ncus, msg);
@@ -125,6 +131,8 @@ export class GameConnection {
         this._send({ direction: "up", type: "full-state-request" });
       }
       this._onStateChange?.({ units: this._units, ncus: this._ncus, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
+    } else {
+      this._onServerMessage?.(msg);
     }
   }
 
