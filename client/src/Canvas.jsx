@@ -3,6 +3,7 @@ import { SceneManager } from "./game/scene";
 
 const Canvas = forwardRef(function Canvas({
   zoneSourceUrl,
+  zoneSourceSha,
   units,
   ncus,
   selfIdentifier,
@@ -40,7 +41,7 @@ const Canvas = forwardRef(function Canvas({
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();
-    manager.loadZone(zoneSourceUrl);
+    manager.loadZone(zoneSourceUrl, zoneSourceSha);
 
     const observer = new ResizeObserver(() => manager.handleResize());
     observer.observe(canvasRef.current.parentElement);

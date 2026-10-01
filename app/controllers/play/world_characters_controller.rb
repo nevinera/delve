@@ -35,7 +35,7 @@ class Play::WorldCharactersController < Play::BaseController
     @equipped_items = EquippedItems::ForWorldCharacter.call(world_character: result.world_character)
     @character_settings = @character.setting_or_default.as_client_json
     @stock_assets = Content::StockAssets.client_json
-  rescue EnterWorld::Error, WorldContent::Error, GameApi::Error => e
+  rescue EnterWorld::Error, VerifiedContent::Error, GameApi::Error => e
     @error = e.message
     render :unavailable, layout: "application", status: :service_unavailable
   end

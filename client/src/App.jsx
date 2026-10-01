@@ -24,6 +24,7 @@ import { darkenHexColor } from "./darkenColor";
 import ExpiryBanner from "./ExpiryBanner";
 import { worldMessageAction } from "./game/worldMessages";
 import { lootFailureMessages } from "./game/lootMessages";
+import { fetchVerifiedJson, ContentChecksumError } from "./game/verifiedFetch";
 import { redirectTo } from "./redirectTo";
 
 
@@ -2999,12 +3000,32 @@ function RespawnOverlay({ deathTime, onRespawn }) {
   );
 }
 
+// Blocks the game when the zone or class file the client fetched doesn't
+// match what Rails validated (see fetchVerifiedJson) - playing on would mean
+// the client and game server disagree about the content.
+export function ContentErrorOverlay({ message }) {
+  return (
+    <div role="alert" style={{
+      position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+      background: "rgba(0, 0, 0, 0.8)", zIndex: 1000,
+    }}>
+      <div style={{ maxWidth: 420, padding: 24, background: "#221", border: "1px solid #a64", borderRadius: 6, color: "#fdb", textAlign: "center" }}>
+        <p style={{ margin: "0 0 12px", fontWeight: "bold" }}>{message}</p>
+        <p style={{ margin: 0 }}>Reload the page to load the version the server is running.</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App({
   slotToken,
   gameServerUrl,
   instanceId,
   slotId,
   zoneSourceUrl,
+  // SHA1s Rails validated the zone and class files at; see fetchVerifiedJson.
+  zoneSourceSha,
+  classConfigSha,
   characterName,
   characterTokenUrl,
   classConfigUrl,
@@ -3047,6 +3068,9 @@ export default function App({
   const unitsRef = useRef({});
   const targetIdRef = useRef(null);
   const [disconnected, setDisconnected] = useState(false);
+  // Set when the zone or class file no longer matches what Rails validated;
+  // the game can't be trusted to match the server, so it's shown instead.
+  const [contentError, setContentError] = useState(null);
   // Epoch ms the world version expires at, or null; drives ExpiryBanner.
   const [expiresAt, setExpiresAt] = useState(null);
   // True once the server has told us to leave (zone exit, version expiry),
@@ -3144,8 +3168,7 @@ export default function App({
 
   useEffect(() => {
     if (!classConfigUrl) return;
-    fetch(classConfigUrl)
-      .then(r => r.json())
+    fetchVerifiedJson(classConfigUrl, classConfigSha)
       .then(cfg => {
         setPowers(cfg.powers ?? []);
         setClassInfo({name: cfg.name, description: cfg.description});
@@ -3159,13 +3182,14 @@ export default function App({
             .map(r => ({name: r.name, color: r.color, max: r.max, isFluid: r.isFluid}))
         );
       })
-      .catch(() => {});
-  }, [classConfigUrl]);
+      .catch((error) => {
+        if (error instanceof ContentChecksumError) setContentError("Your class's file has changed since it was checked.");
+      });
+  }, [classConfigUrl, classConfigSha]);
 
   useEffect(() => {
     if (!zoneSourceUrl) return;
-    fetch(zoneSourceUrl)
-      .then(r => r.json())
+    fetchVerifiedJson(zoneSourceUrl, zoneSourceSha)
       .then(zone => {
         const byId = {};
         const basicAttackRangeById = {};
@@ -3212,8 +3236,10 @@ export default function App({
         const allNpcPowers = Object.values(zone.unitTypes ?? {}).flatMap(ut => ut.powers ?? []);
         setNpcStatusCatalog(buildStatusCatalog(allNpcPowers, zoneSourceUrl));
       })
-      .catch(() => {});
-  }, [zoneSourceUrl]);
+      .catch((error) => {
+        if (error instanceof ContentChecksumError) setContentError("This zone's file has changed since it was checked.");
+      });
+  }, [zoneSourceUrl, zoneSourceSha]);
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
@@ -4011,6 +4037,7 @@ export default function App({
       <Canvas
         ref={canvasRef}
         zoneSourceUrl={zoneSourceUrl}
+        zoneSourceSha={zoneSourceSha}
         units={units}
         ncus={ncus}
         selfIdentifier={selfIdentifier}
@@ -4402,6 +4429,7 @@ export default function App({
         </div>
       )}
       <ExpiryBanner expiresAt={expiresAt} />
+      {contentError && <ContentErrorOverlay message={contentError} />}
       {disconnected && (
         <div style={{
           position: "fixed", inset: 0, display: "flex",

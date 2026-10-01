@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { fetchVerifiedJson } from "./verifiedFetch";
 import { resolveBarrierCollisions } from "./collision.js";
 import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 import { loadSvgToCanvas } from "./svgRaster.js";
@@ -730,11 +731,12 @@ export class SceneManager {
     return hits.length > 0 ? (meshToID.get(hits[0].object.uuid) ?? null) : null;
   }
 
-  async loadZone(url) {
+  // expectedSha: see fetchVerifiedJson. The game client (App) reports a
+  // mismatch to the player; here it just means nothing is drawn.
+  async loadZone(url, expectedSha) {
     let json;
     try {
-      const res = await fetch(url);
-      json = await res.json();
+      json = await fetchVerifiedJson(url, expectedSha);
     } catch (e) {
       console.error("Failed to load zone config", e);
       return;

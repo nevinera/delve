@@ -30,14 +30,19 @@ class JoinZone
     {
       character_name: @character.name,
       character_database_id: @character.id.to_s,
-      character_class: fetch_json(@character.character_class.location)
+      character_class: class_config
     }
   end
 
-  def fetch_json(url)
-    response = Net::HTTP.get_response(URI(url))
-    raise "Failed to fetch #{url}: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-    JSON.parse(response.body)
+  # The class file, as long as it still matches what was validated when the
+  # class was fetched (FetchCharacterClassContentJob); otherwise
+  # VerifiedContent::ChecksumMismatch - the class needs refetching.
+  def class_config
+    character_class = @character.character_class
+    VerifiedContent.fetch(character_class.location, character_class.content_sha)
+  rescue VerifiedContent::ChecksumMismatch
+    raise VerifiedContent::ChecksumMismatch,
+      "#{character_class.identifier} #{character_class.version}'s class file has changed since it was checked; it needs refetching"
   end
 
   def upsert_session(response)

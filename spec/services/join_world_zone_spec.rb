@@ -16,6 +16,7 @@ RSpec.describe JoinWorldZone do
     allow(slots_client).to receive(:request)
       .and_return({"instance_identifier" => "inst", "slot_id" => "slot", "token" => "tok"})
     stub_request(:get, character.character_class.location).to_return(body: class_content)
+    character.character_class.update!(content_sha: Digest::SHA1.hexdigest(class_content))
   end
 
   def call
@@ -74,6 +75,12 @@ RSpec.describe JoinWorldZone do
       owned_zone_items: {"sword" => false},
       equipped_items: EquippedItems::ForWorldCharacter.call(world_character:)
     ))
+  end
+
+  it "refuses a class file that changed since the class was fetched" do
+    character.character_class.update!(content_sha: "stale")
+    expect { call }.to raise_error(VerifiedContent::ChecksumMismatch, /class file has changed since it was checked; it needs refetching/)
+    expect(slots_client).not_to have_received(:request)
   end
 
   it "propagates game server errors" do

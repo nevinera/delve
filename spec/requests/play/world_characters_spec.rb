@@ -2,7 +2,7 @@ require "rails_helper"
 
 RSpec.describe "Play::WorldCharacters", type: :request do
   let(:user) { create(:user) }
-  let(:character_class) { create(:character_class, state: :fetched) }
+  let(:character_class) { create(:character_class, state: :fetched, content_sha: "c1a55sha") }
   let(:character) { create(:character, user:, character_class:) }
   let(:version) { published_world }
   let(:world) { version.world }
@@ -68,7 +68,9 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include('data-slot-token="tok"',
         %(data-world-return-url="#{base}/#{world.id}/play"),
-        %(data-zone-source-url="#{version.raw_base_url}zones/darkwood/darkwood.full.json"))
+        %(data-zone-source-url="#{version.raw_base_url}zones/darkwood/darkwood.full.json"),
+        %(data-zone-source-sha="#{version.zones.find_by!(identifier: "darkwood").content_sha}"),
+        %(data-class-config-sha="#{character_class.content_sha}"))
       expect(response.body).not_to include("<nav>")
     end
 

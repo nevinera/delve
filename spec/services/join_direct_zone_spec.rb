@@ -11,6 +11,7 @@ RSpec.describe JoinDirectZone do
     allow(slots_client).to receive(:request)
       .and_return({"instance_identifier" => "inst", "slot_id" => "slot", "token" => "tok"})
     stub_request(:get, character.character_class.location).to_return(body: class_content)
+    character.character_class.update!(content_sha: Digest::SHA1.hexdigest(class_content))
   end
 
   def call

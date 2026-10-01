@@ -22,7 +22,7 @@ class Build::ZonePlaysController < Build::BaseController
     authorize! :read, @character
     join!
     render :show, layout: "game_client"
-  rescue PlayError, WorldContent::Error, Validators::ValidationError, GameApi::Error => e
+  rescue PlayError, VerifiedContent::Error, Validators::ValidationError, GameApi::Error => e
     @error = e.message
     render :unavailable, status: :service_unavailable
   end
@@ -40,8 +40,11 @@ class Build::ZonePlaysController < Build::BaseController
 
   def join!
     @zone_source_url, version = @local ? local_source : github_source
-    body = WorldContent.get!(@zone_source_url)
-    version ||= "local-#{Digest::SHA1.hexdigest(body).first(12)}"
+    body = VerifiedContent.get!(@zone_source_url)
+    # The client checks the file it fetches against this, so it plays
+    # exactly the zone Rails validated and handed to the game server.
+    @zone_source_sha = Digest::SHA1.hexdigest(body)
+    version ||= "local-#{@zone_source_sha.first(12)}"
     zone_data = parse(body)
     Validators::ZoneValidator.validate!(zone_data)
     @equipped_items = TraineeGear::Imaginary.call(character_class: @character.character_class,

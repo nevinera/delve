@@ -4,9 +4,11 @@
   data-instance-id="<%= result.instance_identifier %>"
   data-slot-id="<%= result.slot_id %>"
   data-zone-source-url="<%= zone_source_url %>"
+  data-zone-source-sha="<%= zone_source_sha %>"
   data-character-name="<%= character.name %>"
   data-character-token-url="<%= character.token_url %>"
   data-class-config-url="<%= character.character_class.location %>"
+  data-class-config-sha="<%= character.character_class.content_sha %>"
   data-owned-zone-items="<%= owned_zone_items.to_json %>"
   data-equipped-items="<%= equipped_items.to_json %>"
   <% if local_assigns[:character_items_url] %>data-character-items-url="<%= character_items_url %>"<% end %>

@@ -11,6 +11,8 @@ createRoot(el).render(
       instanceId={el.dataset.instanceId}
       slotId={el.dataset.slotId}
       zoneSourceUrl={el.dataset.zoneSourceUrl}
+      zoneSourceSha={el.dataset.zoneSourceSha}
+      classConfigSha={el.dataset.classConfigSha}
       characterName={el.dataset.characterName}
       characterTokenUrl={el.dataset.characterTokenUrl}
       classConfigUrl={el.dataset.classConfigUrl}
