@@ -76,7 +76,7 @@ func sweepLootClaims(state *instancestate.InstanceState) {
 // result on the claim's channel so the next tick's sweep can finalise it.
 func (inst *Instance) fireLootAward(ctx context.Context, pending instancestate.PendingLootClaim) {
 	slot := inst.slotByUnitID(pending.Claim.ClaimedBy)
-	if slot == nil || inst.RailsClient == nil {
+	if slot == nil || !inst.persistsLoot() {
 		if inst.RailsClient == nil {
 			slog.WarnContext(ctx, "no Rails client configured; loot award skipped", "item", pending.Item.Identifier)
 		}
@@ -162,7 +162,7 @@ func (inst *Instance) processLootEvents(ctx context.Context, state *instancestat
 						claimState = instancestate.LootClaimStateOwned
 					} else {
 						claimState = instancestate.LootClaimStateUpgrade
-						if inst.RailsClient != nil {
+						if inst.persistsLoot() {
 							go inst.fireAutoUpgrade(ctx, autoUpgradeTarget{
 								CharacterDatabaseID: s.CharacterDatabaseID,
 								CharacterUnitID:     s.CharacterUnitID,

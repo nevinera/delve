@@ -49,6 +49,7 @@ type InstanceSlot struct {
 	OwnedZoneItems      map[string]bool                        // identifier → true if owned this version, false if other version; nil if unknown
 	EquippedItems       map[string]instanceconfig.EquippedItem // equipped_slot → item; nil if unknown
 	Stats               map[string]float64                     // cached raw (em=1.0) sum of EquippedItems' stats; kept in sync by recomputeStats
+	SlotOptions
 
 	// Connection fields; protected by the instance's slotsMu.
 	writeCh        chan []byte        // pre-encoded JSON messages from the tick loop
@@ -65,6 +66,17 @@ type InstanceSlot struct {
 	// exactly the send it answers, rather than guessing from position/timing
 	// alone. Protected by slotsMu.
 	lastSeqByType map[string]string
+}
+
+// SlotOptions are the per-slot settings a world or direct join adds to a
+// slot request; all are empty for a legacy join.
+type SlotOptions struct {
+	// WorldCharacterDatabaseID is the Rails WorldCharacter this slot plays
+	// as; set for world mode only.
+	WorldCharacterDatabaseID string
+	// SpawnAt is the "mapId/connectionId" the character's unit spawns at;
+	// empty (or unknown) spawns at the zone's default entry position.
+	SpawnAt string
 }
 
 // recomputeStats sums the raw (em=1.0) stats of every equipped item into
@@ -93,6 +105,12 @@ func (s *InstanceSlot) recomputeStats() {
 // the new request. Otherwise a new slot is created. Returns ErrInstanceFull if
 // MaxSlots has been reached and there is no existing slot to reuse.
 func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class instanceconfig.CharacterClass, ownedZoneItems map[string]bool, equippedItems map[string]instanceconfig.EquippedItem) (*InstanceSlot, error) {
+	return inst.AddSlotWithOptions(characterName, characterDatabaseID, class, ownedZoneItems, equippedItems, SlotOptions{})
+}
+
+// AddSlotWithOptions is AddSlot with world/direct-join settings; a reused
+// slot takes the new options too.
+func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID string, class instanceconfig.CharacterClass, ownedZoneItems map[string]bool, equippedItems map[string]instanceconfig.EquippedItem, opts SlotOptions) (*InstanceSlot, error) {
 	inst.slotsMu.Lock()
 	defer inst.slotsMu.Unlock()
 
@@ -102,6 +120,7 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 			slot.CharacterClass = class
 			slot.OwnedZoneItems = ownedZoneItems
 			slot.EquippedItems = equippedItems
+			slot.SlotOptions = opts
 			slot.recomputeStats()
 			return slot, nil
 		}
@@ -121,6 +140,7 @@ func (inst *Instance) AddSlot(characterName, characterDatabaseID string, class i
 		CharacterClass:      class,
 		OwnedZoneItems:      ownedZoneItems,
 		EquippedItems:       equippedItems,
+		SlotOptions:         opts,
 		stateEnteredAt:      time.Now(),
 	}
 	slot.recomputeStats()

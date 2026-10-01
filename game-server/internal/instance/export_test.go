@@ -181,3 +181,7 @@ func UpdateCombatStatsForTest(state *instancestate.InstanceState, zone instancec
 func RemoveUnitForTest(state *instancestate.InstanceState, unitID uuid.UUID) {
 	removeUnit(state, unitID)
 }
+
+func (inst *Instance) FireLootAwardForTest(ctx context.Context, pending instancestate.PendingLootClaim) {
+	inst.fireLootAward(ctx, pending)
+}
