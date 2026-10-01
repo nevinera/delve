@@ -1,4 +1,5 @@
 import { computeChecksum } from "./checksum";
+import { createGameSocket } from "./workerSocket";
 import { applyFullState, applyDelta, applyFullNCUs, applyNCUDelta } from "./state";
 
 const HEARTBEAT_MS = 300;
@@ -67,7 +68,7 @@ export class GameConnection {
   }
 
   connect() {
-    this._ws = new WebSocket(this._wsUrl);
+    this._ws = createGameSocket(this._wsUrl);
 
     this._ws.onopen = () => {
       this._heartbeatTimer = setInterval(() => {

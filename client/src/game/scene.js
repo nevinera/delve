@@ -464,6 +464,9 @@ export class SceneManager {
     this._zoneBaseUrl = null;
     this._unitInfo = new Map();
     this._barriersByMap = new Map();
+    this._groundLoaders = new Map();
+    this._groundLoadRunning = false;
+    this._disposed = false;
     this._dimsByMap = new Map();   // mapId → { width, height }
     this._animId = null;
 
@@ -790,30 +793,7 @@ export class SceneManager {
 
       if (m.imageUrl) {
         const mapUrl = new URL(m.imageUrl, baseUrl).href;
-        const addGround = (texture) => {
-          // See MapPreviewScene.js's loadMap for why this matters - a
-          // ground texture viewed at a shallow, walking-height angle blurs
-          // heavily without anisotropic filtering, regardless of the
-          // source image's own resolution.
-          texture.anisotropy = this._renderer.capabilities.getMaxAnisotropy();
-          const plane = new THREE.Mesh(
-            new THREE.PlaneGeometry(width, height),
-            new THREE.MeshLambertMaterial({ map: texture })
-          );
-          plane.rotation.x = -Math.PI / 2;
-          group.add(plane);
-        };
-        // A map background is committed as its original SVG (smaller than a
-        // pre-baked raster, and losslessly re-renderable at any resolution -
-        // see the map editor plan's Phase 3 note) rather than a raster
-        // format - rasterize it ourselves at a map-scale-appropriate
-        // resolution instead of trusting the browser's default SVG decode
-        // size, same as the map editor's own walk preview.
-        if (m.imageUrl.toLowerCase().endsWith(".svg")) {
-          loadSvgToCanvas(mapUrl, { width, height }).then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
-        } else {
-          new THREE.TextureLoader().load(mapUrl, addGround);
-        }
+        this._groundLoaders.set(m.identifier, () => this._loadGround(group, mapUrl, width, height));
       }
 
       for (const barrier of m.barriers ?? []) {
@@ -831,6 +811,83 @@ export class SceneManager {
           group.add(buildWall(pts, { color: 0xff00ff, opacity: 0.4 }));
         }
       }
+    }
+
+    // Unit updates may have arrived (and found the current map) before the
+    // zone finished loading; otherwise the first one after this starts it.
+    if (this._selfMapIdentifier) this._loadGroundsInBackground();
+  }
+
+  // A map's ground is its original SVG, which can be tens of MB and take
+  // seconds to rasterize on a phone - so grounds load one at a time, current
+  // map first, and only once the player's map is known (see
+  // _loadGroundsInBackground), instead of every map's all at once up front.
+  _loadGround(group, mapUrl, width, height) {
+    return new Promise((resolve) => {
+      const addGround = (texture) => {
+        if (this._disposed) {
+          texture.dispose();
+          return resolve();
+        }
+        // See MapPreviewScene.js's loadMap for why this matters - a
+        // ground texture viewed at a shallow, walking-height angle blurs
+        // heavily without anisotropic filtering, regardless of the
+        // source image's own resolution.
+        texture.anisotropy = this._renderer.capabilities.getMaxAnisotropy();
+        const plane = new THREE.Mesh(
+          new THREE.PlaneGeometry(width, height),
+          new THREE.MeshLambertMaterial({ map: texture })
+        );
+        plane.rotation.x = -Math.PI / 2;
+        group.add(plane);
+        resolve();
+      };
+      // A map background is committed as its original SVG (smaller than a
+      // pre-baked raster, and losslessly re-renderable at any resolution -
+      // see the map editor plan's Phase 3 note) rather than a raster
+      // format - rasterize it ourselves at a map-scale-appropriate
+      // resolution instead of trusting the browser's default SVG decode
+      // size, same as the map editor's own walk preview.
+      if (mapUrl.toLowerCase().endsWith(".svg")) {
+        loadSvgToCanvas(mapUrl, { width, height })
+          .then((canvas) => addGround(new THREE.CanvasTexture(canvas)))
+          .catch((e) => {
+            console.error("Failed to load map ground", e);
+            resolve();
+          });
+      } else {
+        new THREE.TextureLoader().load(mapUrl, addGround, undefined, (e) => {
+          console.error("Failed to load map ground", e);
+          resolve();
+        });
+      }
+    });
+  }
+
+  _nextGroundToLoad() {
+    const current = this._selfMapIdentifier;
+    if (current && this._groundLoaders.has(current)) return current;
+    return this._groundLoaders.keys().next().value ?? null;
+  }
+
+  // Loads pending grounds sequentially, re-picking the next one each time
+  // (so a map change mid-way jumps the new current map to the front), and
+  // yields to idle time between them so the game stays responsive.
+  async _loadGroundsInBackground() {
+    if (this._groundLoadRunning) return;
+    this._groundLoadRunning = true;
+    try {
+      for (let id = this._nextGroundToLoad(); id && !this._disposed; id = this._nextGroundToLoad()) {
+        const load = this._groundLoaders.get(id);
+        this._groundLoaders.delete(id);
+        await load();
+        await new Promise((resolve) => {
+          if (globalThis.requestIdleCallback) globalThis.requestIdleCallback(resolve, { timeout: 2000 });
+          else setTimeout(resolve, 50);
+        });
+      }
+    } finally {
+      this._groundLoadRunning = false;
     }
   }
 
@@ -871,6 +928,7 @@ export class SceneManager {
       this._selfMapY = selfUnit.position.y;
       this._selfMapTargetX = selfUnit.position.x;
       this._selfMapTargetY = selfUnit.position.y;
+      this._loadGroundsInBackground();
     }
 
     const seen = new Set();
@@ -1384,6 +1442,7 @@ export class SceneManager {
   }
 
   dispose() {
+    this._disposed = true;
     if (this._animId) cancelAnimationFrame(this._animId);
     for (const aura of this._statusAuras.values()) {
       if (aura.plane) {
