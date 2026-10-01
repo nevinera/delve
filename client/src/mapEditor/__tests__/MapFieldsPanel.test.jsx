@@ -22,7 +22,7 @@ describe("MapFieldsPanel", () => {
   it("shows pixelDimensions read-only, with a placeholder when there's no image yet", () => {
     render(<MapFieldsPanel mapData={MAP_DATA} pixelDimensions={null} dispatch={() => {}} />);
     expect(screen.getByText("(choose an image first)")).toBeInTheDocument();
-    expect(document.querySelectorAll('input[type="number"]').length).toBe(3); // elvl + feet width/height, not pixel dims
+    expect(document.querySelectorAll('input[type="number"]').length).toBe(4); // elvl + feet width/height + leash radius, not pixel dims
 
     render(<MapFieldsPanel mapData={MAP_DATA} pixelDimensions={{width: 2048, height: 1536}} dispatch={() => {}} />);
     expect(screen.getByText("2048 × 1536")).toBeInTheDocument();
@@ -72,14 +72,26 @@ describe("MapFieldsPanel", () => {
     const dispatch = vi.fn();
     render(<MapFieldsPanel mapData={MAP_DATA} pixelDimensions={null} dispatch={dispatch} />);
 
-    expect(screen.getByRole("combobox")).toHaveValue("daylight");
+    expect(screen.getByLabelText("Lighting")).toHaveValue("daylight");
 
-    fireEvent.change(screen.getByRole("combobox"), {target: {value: "torchlight"}});
+    fireEvent.change(screen.getByLabelText("Lighting"), {target: {value: "torchlight"}});
     expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "lighting", value: "torchlight"});
   });
 
   it("shows the map's own lighting value when set", () => {
     render(<MapFieldsPanel mapData={{...MAP_DATA, lighting: "torchlight"}} pixelDimensions={null} dispatch={() => {}} />);
-    expect(screen.getByRole("combobox")).toHaveValue("torchlight");
+    expect(screen.getByLabelText("Lighting")).toHaveValue("torchlight");
+  });
+
+  it("sets the map's leash radius and hard leash", () => {
+    const dispatch = vi.fn();
+    render(<MapFieldsPanel mapData={MAP_DATA} pixelDimensions={null} dispatch={dispatch} />);
+    expect(screen.getByLabelText("Leash radius")).toHaveAttribute("placeholder", "120 (default)");
+
+    fireEvent.change(screen.getByLabelText("Leash radius"), {target: {value: "60"}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "leashRadius", value: 60});
+
+    fireEvent.change(screen.getByLabelText("Hard leash"), {target: {value: "on"}});
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "hardLeash", value: true});
   });
 });

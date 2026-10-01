@@ -12,7 +12,9 @@ type Map struct {
 	Connections    []MapConnection `json:"connections,omitempty"`
 	Units          []Unit          `json:"units,omitempty"`
 	NCUs           []NCU           `json:"ncus,omitempty"`
-	Respawn        *RespawnConfig  `json:"respawn,omitempty"` // overrides the zone's respawn for every unit on this map - see Zone.UnitRespawn
+	Respawn        *RespawnConfig  `json:"respawn,omitempty"`     // overrides the zone's respawn for every unit on this map - see Zone.UnitRespawn
+	LeashRadius    *float64        `json:"leashRadius,omitempty"` // feet; see UnitLeash
+	HardLeash      *bool           `json:"hardLeash,omitempty"`   // see UnitLeash
 }
 
 // Dimensions holds the width and height of a map in feet.

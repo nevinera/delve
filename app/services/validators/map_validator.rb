@@ -1,5 +1,7 @@
 module Validators
   class MapValidator < Base
+    include LeashFields
+
     BARRIER_TYPES = %w[wall circle].freeze
     # Each wall contributes (locations.length - 1) segments; a circle is a
     # fixed 6 (see docs/schema/map.md#barrier and issue #45) - caps how much
@@ -30,6 +32,7 @@ module Validators
       validate_units!(data, path: path) if given?(data, "units")
       validate_ncus!(data, path: path) if given?(data, "ncus")
       RespawnConfigValidator.validate!(data["respawn"], path: child_path(path, "respawn")) if given?(data, "respawn")
+      validate_leash_fields!(data, path:)
     end
 
     def validate_fixed_fields!(data, path:)

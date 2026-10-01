@@ -1,3 +1,5 @@
+import LeashFields, {DEFAULT_LEASH_RADIUS} from "./LeashFields";
+
 function TextField({value, onChange, placeholder}) {
   return <input type="text" value={value ?? ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} />;
 }
@@ -17,7 +19,7 @@ function NumberField({value, onChange}) {
 // as Build::MapsController#blank_map.
 function LightingSelect({value, onChange}) {
   return (
-    <select value={value ?? "daylight"} onChange={(e) => onChange(e.target.value)}>
+    <select aria-label="Lighting" value={value ?? "daylight"} onChange={(e) => onChange(e.target.value)}>
       <option value="daylight">Daylight</option>
       <option value="torchlight">Torchlight</option>
     </select>
@@ -85,6 +87,11 @@ export default function MapFieldsPanel({mapData, pixelDimensions, dispatch}) {
           <th>Lighting</th>
           <td><LightingSelect value={mapData.lighting} onChange={(v) => setField("lighting", v)} /></td>
         </tr>
+        <LeashFields
+          leashRadius={mapData.leashRadius} hardLeash={mapData.hardLeash}
+          onChange={(fields) => Object.entries(fields).forEach(([field, value]) => setField(field, value))}
+          inheritLabel={{radius: `${DEFAULT_LEASH_RADIUS} (default)`, hard: "Default (off)"}}
+        />
       </tbody>
     </table>
   );

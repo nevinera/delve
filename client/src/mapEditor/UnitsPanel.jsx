@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from "react";
+import LeashFields from "./LeashFields";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 
 // "+ Add Unit" is two steps, unlike every other add-tool here: pick a unit
@@ -271,6 +272,11 @@ function UnitRow({
                   <th>Movement</th>
                   <td><MovementTypeSelect unit={unit} unitIndex={index} dispatch={dispatch} /></td>
                 </tr>
+                <LeashFields
+                  leashRadius={unit.leashRadius} hardLeash={unit.hardLeash}
+                  onChange={(fields) => updateUnit(index, fields)}
+                  inheritLabel={{radius: "map's", hard: "Map's setting"}}
+                />
               </tbody>
             </table>
             <div className="map-unit-token-panel">

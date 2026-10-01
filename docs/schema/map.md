@@ -21,7 +21,26 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |
 | `ncus` | array of NCU | no | Non-combat units initially present on this map. See [ncu.md](ncu.md). |
 | `respawn` | RespawnConfig | no | Overrides the zone's `respawn` for every unit on this map, unless a unit overrides it again. See [common.md](common.md#respawnconfig). |
+| `leashRadius` | number | no | Feet. How far an engaged NPC on this map may get from where it was pulled before it gives up (see **Leashing** below). Default 120 (about WoW's 40 yards). A unit may override it. |
+| `hardLeash` | boolean | no | `true` makes NPCs on this map leash the moment they pass `leashRadius`, fight or no fight - for boss arenas and tight dungeon rooms. Default `false`. A unit may override it. |
 
+### Leashing
+
+An NPC records where it was standing when it was first pulled (its leash point; not its spawn
+point, since a patrol can range farther than its leash). While engaged, its distance from that
+point decides when it gives up, following modern WoW:
+
+- Within `leashRadius`, it gives up after 10 seconds with no damage dealt by or to it (a target
+  it can't reach).
+- Beyond `leashRadius`, it keeps chasing while the fight continues, and gives up once 6 seconds
+  pass with no damage either way.
+- Beyond 3 x `leashRadius`, it gives up immediately.
+- With `hardLeash`, it gives up the moment it passes `leashRadius`.
+
+Distance carries across one map crossing (from the leash point to the connection it left
+through, plus its distance from the connection it arrived at); following onto a third map gives
+up immediately. Giving up is a reset: the NPC, and its whole group, drop the fight, heal fully,
+lose their debuffs, and walk home immune to everything until they arrive.
 ---
 
 ## Barrier
