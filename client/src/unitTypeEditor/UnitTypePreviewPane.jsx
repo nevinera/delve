@@ -115,7 +115,7 @@ export default function UnitTypePreviewPane({unitTypeData, assetMap, powerAssetO
 
   return (
     <div style={{display: "flex", flexDirection: "column", height: "100%"}}>
-      <div className="unit-type-preview-canvas-area">
+      <div className="preview-canvas-area">
         <AbilityPreviewCanvas
           ref={canvasRef}
           selfTokenUrl={selfTokenUrl}

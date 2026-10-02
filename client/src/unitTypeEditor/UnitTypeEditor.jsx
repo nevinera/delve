@@ -5,19 +5,18 @@ import UnitTypePreviewPane from "./UnitTypePreviewPane";
 import UnitTypeFieldsPanel from "./UnitTypeFieldsPanel";
 import DamageEstimatePanel from "./DamageEstimatePanel";
 import AreaList from "./AreaList";
-import PowerPanel from "./PowerPanel";
-import StatusPanel from "./StatusPanel";
-import ImportPowerPanel from "./ImportPowerPanel";
+import PowerPanel from "../powersEditor/PowerPanel";
+import StatusPanel from "../powersEditor/StatusPanel";
+import ImportPowerPanel from "../powersEditor/ImportPowerPanel";
+import Breadcrumbs from "../powersEditor/Breadcrumbs";
+import {usePowerUploads} from "../powersEditor/usePowerUploads";
+import {withoutIndex} from "../powersEditor/indexedMaps";
 import {estimateDamage} from "./estimateDamage";
 import {saveUnitType} from "./saveUnitType";
-import {
-  expandPowers, fetchLibraryPower, fetchUnitTypePowers, listLibraryAbilities, listUnitTypeFiles,
-  resolveRepoPath, unitTypePath,
-} from "./powerSources";
+import {IMPORT_SOURCE_TYPES, expandPowers, resolveRepoPath} from "../powersEditor/powerSources";
 import {AbilityDraft} from "../abilityEditor/AbilityDraft";
 import {blankAbility} from "../abilityEditor/blankAbility";
 import {collectAssetUrls} from "../abilityEditor/collectAssetUrls";
-import {reindexBySection} from "../abilityEditor/reindexBySection";
 import {validateUnitType} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
@@ -41,19 +40,8 @@ function normalizeUnitType(unitType) {
   return {...unitType, tokenImageUrl: url ? [url] : []};
 }
 
-// Drops the entry at `removed` from a map keyed by array index, shifting
-// every later key down by one to match the array it describes.
-function withoutIndex(map, removed, onRemoved) {
-  const next = {};
-  for (const [key, value] of Object.entries(map)) {
-    const i = Number(key);
-    if (i === removed) {
-      onRemoved?.(value);
-      continue;
-    }
-    next[i > removed ? i - 1 : i] = value;
-  }
-  return next;
+function sourceType(id) {
+  return IMPORT_SOURCE_TYPES.find((type) => type.id === id);
 }
 
 function withoutUpload(uploads, index) {
@@ -61,10 +49,6 @@ function withoutUpload(uploads, index) {
   URL.revokeObjectURL(uploads[index]);
   const {[index]: _dropped, ...rest} = uploads;
   return rest;
-}
-
-function revokeAll(overrides) {
-  for (const url of Object.values(overrides ?? {})) URL.revokeObjectURL(url);
 }
 
 // The trail shown at the top of the config pane - every crumb but the
@@ -82,37 +66,17 @@ function breadcrumbsFor(selection, data) {
   return [unit];
 }
 
-function Breadcrumbs({crumbs, onSelect}) {
-  return (
-    <nav className="config-breadcrumbs" aria-label="Breadcrumb">
-      {crumbs.map((crumb, i) => {
-        const last = i === crumbs.length - 1;
-        return (
-          <span key={i}>
-            {i > 0 && <span className="crumb-sep">›</span>}
-            {last || !crumb.target
-              ? <span className="crumb-current" aria-current={last ? "page" : undefined}>{crumb.label}</span>
-              : <button type="button" className="crumb-link" onClick={() => onSelect(crumb.target)}>{crumb.label}</button>}
-          </span>
-        );
-      })}
-    </nav>
-  );
-}
-
 // Layout: header (back link, save bar) across the top; the preview in the
 // top-left and the list of areas (unit, damage estimate, each power, add/
 // import) in the bottom-left; the selected area's config fills the right
 // half. Powers are stored inline - anything copied in from the abilities/
 // library or another unit type is an independent copy (see powerSources.js).
 export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
-  const ownPath = unitTypePath(unitTypeKey);
+  const ownPath = `unit_types/${unitTypeKey}.json`;
   const [draft, setDraft] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [selection, setSelection] = useState({area: "unit"});
   const [existingTokenImages, setExistingTokenImages] = useState([]);
-  const [libraryPaths, setLibraryPaths] = useState([]);
-  const [unitTypePaths, setUnitTypePaths] = useState([]);
   // A <key>.full.json left over from when powers were $refs - deleted on
   // the next save, since nothing reads it any more.
   const [staleFullPath, setStaleFullPath] = useState(null);
@@ -122,11 +86,6 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
   const [resolvedTokenUrls, setResolvedTokenUrls] = useState({});
   // Same, for every asset URL the powers reference (icons, graphics, sounds).
   const [assetMap, setAssetMap] = useState({});
-  // Unsaved power asset uploads: blob: preview URLs by power index, then by
-  // assetOverrideKey (see resolveAbilityForPlayback) - the Files themselves
-  // live in pendingPowerFilesRef, keyed the same way.
-  const [powerAssetOverrides, setPowerAssetOverrides] = useState({});
-  const pendingPowerFilesRef = useRef({});
   // Unsaved token uploads, keyed by tokenImageUrl index, plus a blob:
   // preview URL for each so the preview can show it before it's saved.
   const pendingTokenFilesRef = useRef({});
@@ -136,6 +95,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
   const [estimateError, setEstimateError] = useState(null);
   const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
   const client = useRef(new GithubClient());
+  const powerUploads = usePowerUploads(markDirty);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,17 +107,14 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
         if (cancelled) return;
         setDraft(new UnitTypeDraft(data, unitTypeKey));
 
-        const [tokenPaths, unitTypeFiles, library] = await Promise.all([
+        const [tokenPaths, unitTypeFiles] = await Promise.all([
           client.current.listDirectory("tokens/unit"),
-          listUnitTypeFiles(client.current),
-          listLibraryAbilities(client.current),
+          client.current.listDirectory("unit_types"),
         ]);
         if (cancelled) return;
         setExistingTokenImages(tokenPaths.map((p) => p.replace(/^tokens\/unit\//, "")).sort());
         const fullPath = ownPath.replace(/\.json$/, ".full.json");
         setStaleFullPath(unitTypeFiles.includes(fullPath) ? fullPath : null);
-        setUnitTypePaths(unitTypeFiles.filter((p) => !p.endsWith(".full.json") && p !== ownPath));
-        setLibraryPaths(library);
       } catch (error) {
         if (cancelled) return;
         if (error instanceof GithubAuthError) {
@@ -247,8 +204,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
 
   function removePower(index) {
     handleChange(draft.removePower(index));
-    pendingPowerFilesRef.current = withoutIndex(pendingPowerFilesRef.current, index);
-    setPowerAssetOverrides((current) => withoutIndex(current, index, revokeAll));
+    powerUploads.removePower(index);
     setSelection((current) => {
       if (current.power === undefined || current.power < index) return current;
       if (current.power === index) return {area: "unit"};
@@ -256,37 +212,9 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
     });
   }
 
-  // Uploading only swaps what the preview shows until save - the field's
-  // own path says where the file gets committed (see saveUnitType).
-  function uploadPowerAsset(powerIndex, field, file) {
-    const previous = powerAssetOverrides[powerIndex]?.[field];
-    if (previous) URL.revokeObjectURL(previous);
-    const url = URL.createObjectURL(file);
-    const files = pendingPowerFilesRef.current;
-    pendingPowerFilesRef.current = {...files, [powerIndex]: {...files[powerIndex], [field]: file}};
-    setPowerAssetOverrides((current) => ({...current, [powerIndex]: {...current[powerIndex], [field]: url}}));
-    markDirty();
-  }
-
-  function clearPowerAsset(powerIndex, field) {
-    const previous = powerAssetOverrides[powerIndex]?.[field];
-    if (previous) URL.revokeObjectURL(previous);
-    const {[field]: _file, ...files} = pendingPowerFilesRef.current[powerIndex] ?? {};
-    pendingPowerFilesRef.current = {...pendingPowerFilesRef.current, [powerIndex]: files};
-    setPowerAssetOverrides((current) => {
-      const {[field]: _url, ...rest} = current[powerIndex] ?? {};
-      return {...current, [powerIndex]: rest};
-    });
-  }
-
   function removePowerEntry(powerIndex, section, index) {
     updatePower(powerIndex, new AbilityDraft(draft.powers[powerIndex]).removeEntry(section, index).data);
-    const files = pendingPowerFilesRef.current;
-    pendingPowerFilesRef.current = {...files, [powerIndex]: reindexBySection(files[powerIndex] ?? {}, section, index)};
-    setPowerAssetOverrides((current) => ({
-      ...current,
-      [powerIndex]: reindexBySection(current[powerIndex] ?? {}, section, index, (url) => URL.revokeObjectURL(url)),
-    }));
+    powerUploads.removeEntry(powerIndex, section, index);
   }
 
   function removeStatus(powerIndex, effectIndex) {
@@ -326,11 +254,11 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
     try {
       await saveUnitType(unitTypeKey, draft.data, {
         tokenFiles: pendingTokenFilesRef.current,
-        powerFiles: pendingPowerFilesRef.current,
+        powerFiles: powerUploads.files(),
         deletePaths: staleFullPath ? [staleFullPath] : [],
       }, commitMessage);
       pendingTokenFilesRef.current = {};
-      pendingPowerFilesRef.current = {};
+      powerUploads.committed();
       setStaleFullPath(null);
       setSaved();
     } catch (error) {
@@ -362,10 +290,9 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
       case "import":
         return (
           <ImportPowerPanel
-            libraryPaths={libraryPaths}
-            unitTypePaths={unitTypePaths}
-            loadLibraryPower={(path) => fetchLibraryPower(client.current, unitTypeKey, path)}
-            loadUnitTypePowers={(path) => fetchUnitTypePowers(client.current, unitTypeKey, path)}
+            sourceTypes={IMPORT_SOURCE_TYPES}
+            listSources={(typeId) => sourceType(typeId).listSources(client.current, ownPath)}
+            loadPowers={(typeId, sourceId) => sourceType(typeId).loadPowers(client.current, sourceId, ownPath)}
             onImport={addPower}
           />
         );
@@ -377,9 +304,9 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
             onChange={(ability) => updatePower(selection.power, ability)}
             onRemovePower={() => removePower(selection.power)}
             onOpenStatus={(effect) => setSelection({area: "status", power: selection.power, effect})}
-            assetOverrides={powerAssetOverrides[selection.power] ?? {}}
-            onUploadAsset={(field, file) => uploadPowerAsset(selection.power, field, file)}
-            onClearAsset={(field) => clearPowerAsset(selection.power, field)}
+            assetOverrides={powerUploads.overrides[selection.power] ?? {}}
+            onUploadAsset={(field, file) => powerUploads.upload(selection.power, field, file)}
+            onClearAsset={(field) => powerUploads.clear(selection.power, field)}
             onRemoveEntry={(section, index) => removePowerEntry(selection.power, section, index)}
             stockAssets={stockAssets}
           />
@@ -410,18 +337,18 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
   }
 
   return (
-    <div className="unit-type-editor">
-      <header className="unit-type-editor-header">
+    <div className="content-editor">
+      <header className="content-editor-header">
         {backUrl && <a className="back-link" href={backUrl}>← Back</a>}
         <h1>{unitTypeKey}</h1>
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || unitTypeKey}`} />
       </header>
-      <div className="unit-type-editor-left">
-        <div className="unit-type-editor-preview">
+      <div className="content-editor-left">
+        <div className="content-editor-preview">
           <UnitTypePreviewPane
             unitTypeData={draft.data}
             assetMap={assetMap}
-            powerAssetOverrides={powerAssetOverrides}
+            powerAssetOverrides={powerUploads.overrides}
             stockAssets={stockAssets}
             resolvedTokenUrls={tokenPreviewUrls}
           />
@@ -433,7 +360,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
           onNewPower={() => addPower(blankAbility("new-power"))}
         />
       </div>
-      <div className="unit-type-editor-fields">
+      <div className="content-editor-fields">
         <Breadcrumbs crumbs={breadcrumbsFor({...selection, area}, draft.data)} onSelect={setSelection} />
         {renderConfig()}
       </div>

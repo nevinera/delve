@@ -1,0 +1,130 @@
+<%# Styles shared by the editors laid out as header / preview + area list
+    (left) / config (right): the unit type and class editors. %>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #editor-root { width: 100%; height: 100%; }
+      body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; overflow: hidden; }
+
+      /* Header across the top; preview (top) and area list (bottom) on the
+         left; the selected area's config on the right. */
+      .content-editor { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+      .content-editor-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: #1c2126; border-bottom: 1px solid #333; }
+      .content-editor-header h1 { font-size: 15px; color: #cce; font-weight: 600; }
+      .content-editor-header .save-bar { margin: 0 0 0 auto; }
+      .content-editor-header a.back-link { color: #9ab; font-size: 13px; text-decoration: none; }
+      .content-editor-left { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid #333; }
+      .content-editor-preview { flex: 3; min-height: 0; display: flex; flex-direction: column; }
+      .content-editor-fields { min-width: 0; min-height: 0; overflow-y: auto; padding: 14px; background: #1c2126; }
+
+      .preview-canvas-area { flex: 1; min-height: 0; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+
+      .area-list { flex: 2; min-height: 0; overflow-y: auto; padding: 8px; background: #171b1f; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 2px; }
+      .area-list .area-list-heading { font-size: 11px; color: #789; text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 6px 4px; }
+      .area-list .area-item { display: flex; align-items: center; gap: 4px; border: 1px solid transparent; border-radius: 4px; }
+      .area-list .area-item:hover { background: #1f262c; }
+      .area-list .area-item.selected { background: #22303c; border-color: #457; }
+      .area-list button.area-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: transparent; border: none; padding: 6px 8px; color: #ddd; cursor: pointer; }
+      .area-list .area-item-order { display: flex; gap: 2px; padding-right: 6px; }
+      .area-list .area-item-order button { background: #222; border: 1px solid #444; color: #9ab; font-size: 11px; width: 22px; height: 22px; border-radius: 3px; cursor: pointer; }
+      .area-list .area-item-order button:disabled { opacity: 0.3; cursor: default; }
+      .area-list button.add-entry:disabled { opacity: 0.4; cursor: default; }
+      .area-list .area-list-count { font-size: 11px; color: #789; margin-left: 6px; }
+      .area-list .area-item-title { font-size: 13px; font-weight: 600; color: #cce; }
+      .area-list .area-item-detail { font-size: 11px; color: #9ab; }
+      .area-list .area-list-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 6px 4px; }
+      .area-list button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      .area-list button.add-entry:hover, .area-list button.add-entry.selected { background: #345; }
+
+      .config-breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; font-size: 13px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #333; }
+      .config-breadcrumbs .crumb-sep { color: #667; margin: 0 8px; }
+      .config-breadcrumbs .crumb-current { color: #cce; font-weight: 600; }
+      .config-breadcrumbs button.crumb-link { background: none; border: none; color: #9cf; font-size: 13px; cursor: pointer; padding: 0; }
+      .config-breadcrumbs button.crumb-link:hover { text-decoration: underline; }
+      .config-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+      .config-empty { font-size: 12px; color: #9ab; margin: 8px 0; }
+
+      .status-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; background: #171b1f; border: 1px solid #2a2f35; border-radius: 4px; }
+      .status-summary-name { font-size: 13px; color: #cce; }
+      .status-summary-detail { font-size: 11px; color: #9ab; }
+
+      .import-power > select { margin-bottom: 10px; }
+      .import-power .import-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+      .import-power .import-error { font-size: 12px; color: #e79; }
+
+      @media (max-width: 700px) {
+        .content-editor { display: flex; flex-direction: column; height: auto; min-height: 100%; }
+        body { overflow: auto; }
+        .content-editor-header { flex-wrap: wrap; }
+        .content-editor-left { border-right: none; }
+        .content-editor-preview { flex: none; height: 38vh; }
+        .area-list { flex: none; max-height: 30vh; }
+        .content-editor-fields { border-top: 1px solid #333; }
+      }
+
+      .content-editor-fields table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+      .content-editor-fields th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
+      .content-editor-fields td { padding: 4px 0; word-break: break-word; }
+      .content-editor-fields input[type=number] { width: 100px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .content-editor-fields input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .content-editor-fields select { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .save-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .save-bar .validate-button { background: #245; border: 1px solid #47a; color: #dee; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .validate-button:hover:not(:disabled) { background: #356; }
+      .save-bar .validate-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .save-bar .save-button:hover:not(:disabled) { background: #3b5; }
+      .save-bar .save-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .save-bar .save-message { font-size: 12px; }
+      .save-bar .save-success { color: #7c7; }
+      .save-bar .save-error { color: #e79; }
+
+      .content-editor-fields .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
+      .content-editor-fields button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      .content-editor-fields button.add-entry:hover { background: #345; }
+      .content-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid #2a2f35; border-radius: 4px; }
+      .content-editor-fields .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+      .content-editor-fields .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
+      .content-editor-fields button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .content-editor-fields button.remove-entry:hover { background: #533; }
+      .content-editor-fields .checkbox-list { display: flex; flex-wrap: wrap; gap: 10px; }
+      .content-editor-fields .checkbox-list label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+      .content-editor-fields h3 { font-size: 13px; color: #cce; font-weight: 600; margin: 16px 0 8px; }
+      .content-editor-fields input[type=file] { font-size: 11px; color: #9ab; max-width: 100%; }
+
+      /* The power and status panes reuse the ability editor's own fields
+         panel and status editor - same styles as build_client.html.erb. */
+      .content-editor-fields .range-field { display: inline-flex; align-items: center; gap: 6px; }
+      .content-editor-fields .range-field input[type=number] { width: 70px; }
+      .content-editor-fields .range-sep { color: #667; }
+      .content-editor-fields .asset-upload { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+      .content-editor-fields .asset-upload button { background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .content-editor-fields .asset-upload button:hover { background: #444; }
+      .content-editor-fields .entry-block-highlight { animation: entry-flash 1.5s ease-out; }
+      @keyframes entry-flash {
+        0%, 15% { background-color: rgba(196, 154, 42, 0.35); }
+        100% { background-color: transparent; }
+      }
+      .content-editor-fields .status-editor h4 { font-size: 12px; color: #9ab; font-weight: 600; margin: 14px 0 6px; }
+      .content-editor-fields .status-aura-effect-fields, .content-editor-fields .status-effects-list { display: flex; flex-direction: column; gap: 8px; }
+      .content-editor-fields .status-effect-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 8px; background: #171b1f; border: 1px solid #2a2f35; border-radius: 4px; }
+      .content-editor-fields .status-effect-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #9ab; }
+      .content-editor-fields .status-effect-field select, .content-editor-fields .status-effect-field input[type=number] { width: auto; min-width: 90px; }
+
+      .power-slots { display: flex; flex-wrap: wrap; gap: 10px; background: #1c2126; border-top: 1px solid #333; padding: 12px 14px; }
+      .power-slot { width: 56px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+      .power-slot-icon {
+        display: block;
+        width: 56px;
+        height: 56px;
+        background: #111;
+        border: 2px solid #668;
+        border-radius: 6px;
+        object-fit: cover;
+        cursor: pointer;
+      }
+      .power-slot-icon:hover { border-color: #9ac; }
+      .power-slot-icon.empty { border-style: dashed; opacity: 0.35; cursor: default; }
+      .power-slot-icon.disabled { cursor: default; opacity: 0.5; border-color: #444; }
+      .power-slot-icon.ability-icon-fallback { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #9ab; background: #182028; border-style: dashed; }
+      .power-slot select { width: 56px; font-size: 9px; padding: 2px; }
+
+      .preview-status { font-size: 12px; color: #999; min-height: 1.2em; padding: 4px 14px; background: #1c2126; }
