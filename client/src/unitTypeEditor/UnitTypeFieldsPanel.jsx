@@ -194,51 +194,15 @@ function TacticsFields({tactics, currentNames, draft, onChange}) {
   );
 }
 
-function PowersList({powers, availableAbilities, draft, onChange}) {
-  const abilityKeys = Object.keys(availableAbilities).sort();
-  const list = powers ?? [];
-
-  return (
-    <div>
-      {list.map((entry, i) => {
-        const selectedKey = draft.abilityKeyForPower(i) ?? "";
-        return (
-          <div className="entry-block" key={i}>
-            <div className="entry-heading-row">
-              <h3>Power {i + 1}</h3>
-              <button type="button" className="remove-entry" onClick={() => onChange(draft.removePower(i))}>
-                Remove
-              </button>
-            </div>
-            <select value={selectedKey} onChange={(e) => onChange(draft.setPower(i, e.target.value))}>
-              <option value="">— select an ability —</option>
-              {abilityKeys.map((key) => <option key={key} value={key}>{key}</option>)}
-            </select>
-          </div>
-        );
-      })}
-      <div className="add-buttons-row">
-        <button
-          type="button" className="add-entry" disabled={!abilityKeys.length}
-          onClick={() => onChange(draft.addPower(abilityKeys[0]))}
-        >
-          + Add power
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // Purely presentational - every domain rule (tactics placeholder shapes,
-// power-ref math, rotation/scripted list editing) lives on UnitTypeDraft
-// now; this just renders draft's current values and calls its mutator
-// methods.
+// rotation/scripted list editing) lives on UnitTypeDraft; this just
+// renders draft's current values and calls its mutator methods. Powers
+// aren't edited here - each one is its own area in the editor.
 export default function UnitTypeFieldsPanel({
-  draft, availableAbilities, newAbilityUrl, onRefreshAbilities, refreshStatus, onChange,
-  existingTokenImages, onUploadTokenImage, onRemoveTokenImage, onPickTokenImage,
+  draft, onChange, existingTokenImages, onUploadTokenImage, onRemoveTokenImage, onPickTokenImage,
 }) {
   const unitTypeData = draft.data;
-  const names = draft.currentPowerNames(availableAbilities);
+  const names = draft.powerNames;
 
   function setField(field) {
     return (value) => onChange(draft.setField(field, value));
@@ -283,14 +247,6 @@ export default function UnitTypeFieldsPanel({
 
       <h3>Tactics</h3>
       <TacticsFields tactics={unitTypeData.tactics} currentNames={names} draft={draft} onChange={onChange} />
-
-      <h3>Powers</h3>
-      <p className="new-ability-link">
-        <a href={newAbilityUrl} target="_blank" rel="noreferrer">+ New ability</a>{" "}
-        <button type="button" className="refresh-abilities" onClick={onRefreshAbilities}>Refresh abilities</button>{" "}
-        {refreshStatus}
-      </p>
-      <PowersList powers={unitTypeData.powers} availableAbilities={availableAbilities} draft={draft} onChange={onChange} />
     </div>
   );
 }

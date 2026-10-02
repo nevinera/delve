@@ -125,9 +125,14 @@ export class PreviewSceneManager {
     this._loadTokenTexture(this.targetToken, targetUrl);
   }
 
+  // Only the most recently requested URL may land - otherwise a slow
+  // earlier load (e.g. the placeholder token, before the real one resolved)
+  // could finish last and overwrite it.
   _loadTokenTexture(tokenGroup, url) {
     if (!url) return;
+    tokenGroup._requestedUrl = url;
     new THREE.TextureLoader().load(url, (texture) => {
+      if (tokenGroup._requestedUrl !== url) return;
       tokenGroup._portraitMat.map = texture;
       tokenGroup._portraitMat.needsUpdate = true;
     });

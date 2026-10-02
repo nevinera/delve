@@ -133,6 +133,16 @@ describe("commitFiles", () => {
     expect(body.tree.every((t) => t.mode === "100644" && t.type === "blob" && t.sha)).toBe(true);
   });
 
+  it("deletes a path given null, with a null-sha tree entry and no blob", async () => {
+    const {calls} = stubGithubApi();
+    await commitFiles({"unit_types/a.json": {a: 1}, "unit_types/a.full.json": null}, {message: "m"});
+
+    expect(calls.filter((c) => c.url.endsWith("/git/blobs"))).toHaveLength(1);
+    const treeCall = calls.find((c) => c.url.endsWith("/git/trees"));
+    const body = JSON.parse(treeCall.options.body);
+    expect(body.tree.find((t) => t.path === "unit_types/a.full.json")).toEqual({path: "unit_types/a.full.json", mode: "100644", type: "blob", sha: null});
+  });
+
   it("passes the commit message and parents through to the commit call", async () => {
     const {calls} = stubGithubApi();
     await commitFiles({"abilities/a.json": {a: 1}}, {message: "Add fireball"});
