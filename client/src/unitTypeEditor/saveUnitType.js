@@ -1,41 +1,45 @@
 import {commitFiles} from "../github/commitFiles";
-import {resolveFullUnitType} from "./resolveFullUnitType";
+import {currentFieldValue} from "../abilityEditor/resolveAbilityForPlayback";
+import {resolveRepoPath, unitTypePath} from "./powerSources";
 
-// Commits unit_types/<key>.json (the authoring form, with $ref powers),
-// unit_types/<key>.full.json (every power inlined via resolveFullUnitType),
-// and any pending tokenImageUrl uploads, in one atomic commit - see
-// docs/schema/common.md#assetreference: an abstract config must have a
-// concrete .full.json alongside it.
+// Commits unit_types/<key>.json (every power inline - a unit type is no
+// longer abstract, so it has no .full.json companion) plus every pending
+// upload, in one atomic commit. Each upload is written to wherever its
+// field currently points, relative to the unit type's own file - the same
+// "write wherever the field currently says" approach as saveAbility.js.
 //
-// pendingFiles (from UnitTypeEditor's uploadTokenImage) is keyed by
-// tokenImageUrl array index; each upload is written to wherever that slot's
-// path currently points (always ../tokens/unit/<filename>, set at upload
-// time) - same "write wherever the field currently says" approach as
-// saveAbility.js, just keyed by index instead of field name since
-// tokenImageUrl has no other asset-bearing fields to disambiguate.
-export async function saveUnitType(key, unitTypeData, availableAbilities, pendingFiles = {}, commitMessage) {
-  const fullUnitType = await resolveFullUnitType(key, unitTypeData, availableAbilities);
-  const filesByPath = {
-    [`unit_types/${key}.json`]: unitTypeData,
-    [`unit_types/${key}.full.json`]: fullUnitType,
-  };
-
+// uploads:
+//   tokenFiles  - {tokenImageUrl index: File}
+//   powerFiles  - {power index: {assetOverrideKey: File}}
+//   deletePaths - repo paths to remove in the same commit (a stale
+//                 .full.json left over from the $ref era)
+export async function saveUnitType(key, unitTypeData, {tokenFiles = {}, powerFiles = {}, deletePaths = []} = {}, commitMessage) {
+  const ownPath = unitTypePath(key);
+  const filesByPath = {[ownPath]: unitTypeData};
   const missingPaths = [];
-  for (const [index, file] of Object.entries(pendingFiles)) {
-    const relativePath = (unitTypeData.tokenImageUrl ?? [])[Number(index)];
+
+  function addUpload(label, relativePath, file) {
     if (!relativePath) {
-      missingPaths.push(`tokenImageUrl[${index}]`);
-      continue;
+      missingPaths.push(label);
+      return;
     }
-    // unit_types/<key>.json is the base - "../tokens/unit/x.webp" from
-    // there lands at tokens/unit/x.webp, same resolution AbilityEditor's
-    // own resolveRepoPath uses for its own asset-relative paths.
-    const url = new URL(relativePath, `https://_/unit_types/${key}.json`);
-    filesByPath[url.pathname.replace(/^\//, "")] = file;
+    filesByPath[resolveRepoPath(ownPath, relativePath)] = file;
+  }
+
+  for (const [index, file] of Object.entries(tokenFiles)) {
+    addUpload(`tokenImageUrl[${index}]`, (unitTypeData.tokenImageUrl ?? [])[Number(index)], file);
+  }
+  for (const [powerIndex, files] of Object.entries(powerFiles)) {
+    const power = (unitTypeData.powers ?? [])[Number(powerIndex)] ?? {};
+    for (const [overrideKey, file] of Object.entries(files)) {
+      addUpload(`${power.name || `power ${Number(powerIndex) + 1}`} ${overrideKey}`, currentFieldValue(power, overrideKey), file);
+    }
   }
   if (missingPaths.length > 0) {
     throw new Error(`Set a path before saving for: ${missingPaths.join(", ")}`);
   }
+
+  for (const path of deletePaths) filesByPath[path] = null;
 
   return commitFiles(filesByPath, {message: commitMessage || `Update ${unitTypeData.name || key}`});
 }

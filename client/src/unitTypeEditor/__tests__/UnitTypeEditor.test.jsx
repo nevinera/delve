@@ -4,7 +4,6 @@ import {render, screen, fireEvent, waitFor, within} from "@testing-library/react
 import UnitTypeEditor from "../UnitTypeEditor";
 import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
 import {GithubClient} from "../../github/delve-github";
-import {loadAvailableAbilities} from "../loadAvailableAbilities";
 import {validateUnitType} from "../../validators/validateContent";
 import {estimateDamage} from "../estimateDamage";
 
@@ -18,10 +17,6 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
   return {...actual, GithubClient: vi.fn()};
 });
 
-vi.mock("../loadAvailableAbilities", () => ({
-  loadAvailableAbilities: vi.fn(),
-}));
-
 vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateUnitType: vi.fn(),
@@ -32,9 +27,8 @@ vi.mock("../estimateDamage", () => ({
 }));
 
 // UnitTypePreviewPane mounts a real Three.js WebGLRenderer via
-// AbilityPreviewCanvas, which jsdom can't back - stub it so this test can
-// exercise the reducer wiring (fields <-> unit type state) in isolation,
-// same approach as ClassEditor.test.jsx.
+// AbilityPreviewCanvas, which jsdom can't back - stub it, exposing the
+// powers it was given.
 vi.mock("../UnitTypePreviewPane", () => ({
   default: ({unitTypeData}) => <div data-testid="preview-powers">{JSON.stringify(unitTypeData.powers)}</div>,
 }));
@@ -46,130 +40,228 @@ const initialUnitType = {
   targeting: {type: "aggroTable"}, tactics: {type: "randomAvailable"}, powers: [],
 };
 
-const availableAbilities = {
-  "units/goblin-raider/slash": {ability: {name: "Slash"}, assetMap: {}},
-};
+const slash = {name: "Slash", maxRange: 5, effects: [{type: "harm", affects: "bTarget", amount: 5}]};
+const bleed = {name: "Bleed", shortName: "BLD", treatAs: "debuff", stacking: "replace", effects: []};
+const rend = {name: "Rend", effects: [{type: "status", affects: "bTarget", duration: 6, status: bleed}]};
 
-function mockUnitTypeLoad(unitType, abilities = {}) {
-  GithubClient.mockImplementation(function () {
-    return {
-      fetchFile: vi.fn().mockResolvedValue(JSON.stringify(unitType)),
-      listDirectory: vi.fn().mockResolvedValue([]),
-      assetUrl: vi.fn().mockImplementation((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
-    };
-  });
-  loadAvailableAbilities.mockResolvedValue(abilities);
+const stockAssets = {icons: {}, graphics: {}, sounds: {}};
+
+function mockRepo({files = {}, listings = {}} = {}) {
+  const client = {
+    fetchFile: vi.fn((path) => Promise.resolve(path in files ? JSON.stringify(files[path]) : null)),
+    listDirectory: vi.fn((path) => Promise.resolve(listings[path] ?? [])),
+    assetUrl: vi.fn((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
+  };
+  GithubClient.mockImplementation(function () { return client; });
+  return client;
 }
 
-async function renderReady(unitType = initialUnitType, abilities = {}) {
-  mockUnitTypeLoad(unitType, abilities);
-  render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+async function renderReady(unitType = initialUnitType, repo = {}) {
+  mockRepo({...repo, files: {"unit_types/goblin-raider.json": unitType, ...repo.files}});
+  const result = render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={stockAssets} backUrl="/build/unit_types" />);
   await screen.findByDisplayValue(unitType.name);
+  return result;
+}
+
+function areaList() {
+  return within(screen.getByRole("navigation", {name: "Unit type areas"}));
+}
+
+function breadcrumbs() {
+  return within(screen.getByRole("navigation", {name: "Breadcrumb"}));
+}
+
+function previewPowers() {
+  return JSON.parse(screen.getByTestId("preview-powers").textContent);
+}
+
+async function validateAndSave() {
+  validateUnitType.mockResolvedValue({valid: true});
+  commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
+  fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+  await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+  fireEvent.click(screen.getByRole("button", {name: "Save"}));
+  fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+  await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
 }
 
 describe("UnitTypeEditor", () => {
   afterEach(() => vi.clearAllMocks());
 
-  it("shows a loading state, then the fields panel once the fetch resolves", async () => {
-    let resolveFetch;
-    GithubClient.mockImplementation(function () {
-      return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([])};
-    });
-    loadAvailableAbilities.mockResolvedValue({});
-
-    render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
-
-    resolveFetch(JSON.stringify(initialUnitType));
-    await waitFor(() => expect(screen.getByDisplayValue("Goblin Raider")).toBeInTheDocument());
-  });
-
-  it("falls back to a blank unit type when the file doesn't exist yet (404 -> null)", async () => {
-    GithubClient.mockImplementation(function () {
-      return {fetchFile: vi.fn().mockResolvedValue(null), listDirectory: vi.fn().mockResolvedValue([])};
-    });
-    loadAvailableAbilities.mockResolvedValue({});
-
-    render(<UnitTypeEditor unitTypeKey="goblin-archer" stockAssets={{}} />);
-
-    await screen.findByDisplayValue("Goblin Archer");
-  });
-
-  it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}; });
-    loadAvailableAbilities.mockResolvedValue({});
-
-    render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
-
-    await screen.findByText(/Failed to load: network down/);
-  });
-
-  it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
-    loadAvailableAbilities.mockResolvedValue({});
-
-    render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
-
-    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
-  });
-
-  it("flows a name edit from the fields panel into the unit type state", async () => {
-    await renderReady();
-
-    fireEvent.change(screen.getByDisplayValue("Goblin Raider"), {target: {value: "Goblin Brute"}});
-
-    expect(screen.getByDisplayValue("Goblin Brute")).toBeInTheDocument();
-  });
-
-  it("normalizes a bare-string tokenImageUrl (schema-legal, used by real content) into a one-entry array instead of crashing", async () => {
-    const withStringToken = {...initialUnitType, tokenImageUrl: "../tokens/unit/goblin-archer.webp"};
-    await renderReady(withStringToken);
-
-    expect(screen.getByDisplayValue("../tokens/unit/goblin-archer.webp")).toBeInTheDocument();
-  });
-
-  it("adds a power's $ref when '+ Add power' is clicked", async () => {
-    await renderReady(initialUnitType, availableAbilities);
-    expect(screen.getByTestId("preview-powers")).toHaveTextContent("[]");
-
-    fireEvent.click(screen.getByRole("button", {name: "+ Add power"}));
-
-    const powers = JSON.parse(screen.getByTestId("preview-powers").textContent);
-    expect(powers).toEqual([{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]);
-  });
-
-  it("removes a power", async () => {
-    const withPower = {...initialUnitType, powers: [{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]};
-    await renderReady(withPower, availableAbilities);
-
-    fireEvent.click(screen.getByRole("button", {name: "Remove"}));
-
-    expect(screen.getByTestId("preview-powers")).toHaveTextContent("[]");
-  });
-
-  describe("refreshing available abilities", () => {
-    it("adds newly-refreshed abilities to the power picker without a page reload", async () => {
-      await renderReady(initialUnitType, availableAbilities);
-      loadAvailableAbilities.mockResolvedValue({
-        "units/goblin-raider/slash": {ability: {name: "Slash"}, assetMap: {}},
-        "units/goblin-raider/bite": {ability: {name: "Bite"}, assetMap: {}},
+  describe("loading", () => {
+    it("shows a loading state, then the unit's fields once the fetch resolves", async () => {
+      let resolveFetch;
+      GithubClient.mockImplementation(function () {
+        return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([])};
       });
 
-      fireEvent.click(screen.getByRole("button", {name: "Refresh abilities"}));
-      await waitFor(() => expect(screen.getByText("Refreshed.")).toBeInTheDocument());
+      render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+      expect(screen.getByText("Loading…")).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole("button", {name: "+ Add power"}));
-      const select = screen.getAllByRole("combobox").find((el) => el.closest(".entry-block")?.textContent.includes("Power 1"));
-      expect(within(select).getByText("units/goblin-raider/bite")).toBeInTheDocument();
+      resolveFetch(JSON.stringify(initialUnitType));
+      await screen.findByDisplayValue("Goblin Raider");
     });
 
-    it("shows an error message when the refresh fails", async () => {
+    it("falls back to a blank unit type when the file doesn't exist yet", async () => {
+      mockRepo();
+      render(<UnitTypeEditor unitTypeKey="goblin-archer" stockAssets={{}} />);
+
+      await screen.findByDisplayValue("Goblin Archer");
+    });
+
+    it("shows a load error when the fetch fails", async () => {
+      GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}; });
+
+      render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+
+      await screen.findByText(/Failed to load: network down/);
+    });
+
+    it("redirects to the GitHub reauth URL when the load hits a GithubAuthError", async () => {
+      GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
+
+      render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
+
+      await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
+    });
+
+    it("normalizes a bare-string tokenImageUrl into a one-entry array", async () => {
+      await renderReady({...initialUnitType, tokenImageUrl: "../tokens/unit/goblin-archer.webp"});
+
+      expect(screen.getByDisplayValue("../tokens/unit/goblin-archer.webp")).toBeInTheDocument();
+    });
+
+    it("expands $ref powers into inline copies on load", async () => {
+      const withRef = {...initialUnitType, powers: [{$ref: "../abilities/units/goblins/slash.json", referenceTo: "ability"}]};
+      await renderReady(withRef, {files: {"abilities/units/goblins/slash.json": slash}});
+
+      expect(previewPowers()).toEqual([slash]);
+      expect(areaList().getByRole("button", {name: /Slash/})).toBeInTheDocument();
+    });
+  });
+
+  describe("layout", () => {
+    it("starts on the unit's own config, with a one-crumb breadcrumb", async () => {
       await renderReady();
-      loadAvailableAbilities.mockRejectedValue(new Error("request failed: 500"));
 
-      fireEvent.click(screen.getByRole("button", {name: "Refresh abilities"}));
+      expect(breadcrumbs().getByText("Goblin Raider")).toHaveAttribute("aria-current", "page");
+      expect(screen.getByDisplayValue("Goblin Raider")).toBeInTheDocument();
+    });
 
-      await waitFor(() => expect(screen.getByText(/Refresh failed/)).toBeInTheDocument());
+    it("flows a unit field edit into the draft and the area list", async () => {
+      await renderReady();
+
+      fireEvent.change(screen.getByDisplayValue("Goblin Raider"), {target: {value: "Goblin Brute"}});
+
+      expect(areaList().getByRole("button", {name: /Goblin Brute/})).toBeInTheDocument();
+    });
+
+    it("lists each power, and opens one in the config pane when clicked", async () => {
+      await renderReady({...initialUnitType, powers: [slash]});
+
+      fireEvent.click(areaList().getByRole("button", {name: /Slash/}));
+
+      expect(breadcrumbs().getByRole("button", {name: "Goblin Raider"})).toBeInTheDocument();
+      expect(breadcrumbs().getByText("Slash")).toHaveAttribute("aria-current", "page");
+      expect(screen.getByDisplayValue("Slash")).toBeInTheDocument();
+    });
+
+    it("goes back to the unit from the breadcrumb", async () => {
+      await renderReady({...initialUnitType, powers: [slash]});
+      fireEvent.click(areaList().getByRole("button", {name: /Slash/}));
+
+      fireEvent.click(breadcrumbs().getByRole("button", {name: "Goblin Raider"}));
+
+      expect(screen.getByDisplayValue("Goblin Raider")).toBeInTheDocument();
+      expect(screen.queryByDisplayValue("Slash")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("powers", () => {
+    it("adds a blank power and opens it", async () => {
+      await renderReady();
+
+      fireEvent.click(screen.getByRole("button", {name: "+ New power"}));
+
+      expect(previewPowers()).toHaveLength(1);
+      expect(breadcrumbs().getByText("New Power")).toHaveAttribute("aria-current", "page");
+    });
+
+    it("edits a power inline", async () => {
+      await renderReady({...initialUnitType, powers: [slash]});
+      fireEvent.click(areaList().getByRole("button", {name: /Slash/}));
+
+      fireEvent.change(screen.getByDisplayValue("Slash"), {target: {value: "Rake"}});
+
+      expect(previewPowers()[0].name).toBe("Rake");
+      expect(breadcrumbs().getByText("Rake")).toBeInTheDocument();
+    });
+
+    it("removes a power and returns to the unit", async () => {
+      await renderReady({...initialUnitType, powers: [slash]});
+      fireEvent.click(areaList().getByRole("button", {name: /Slash/}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Remove power"}));
+
+      expect(previewPowers()).toEqual([]);
+      expect(screen.getByDisplayValue("Goblin Raider")).toBeInTheDocument();
+    });
+
+    it("opens a power's status in its own pane, three crumbs deep", async () => {
+      await renderReady({...initialUnitType, powers: [rend]});
+      fireEvent.click(areaList().getByRole("button", {name: /Rend/}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Edit status ›"}));
+
+      expect(breadcrumbs().getByRole("button", {name: "Rend"})).toBeInTheDocument();
+      expect(breadcrumbs().getByText("Bleed")).toHaveAttribute("aria-current", "page");
+      fireEvent.change(screen.getByDisplayValue("BLD"), {target: {value: "BLEED"}});
+      expect(previewPowers()[0].effects[0].status.shortName).toBe("BLEED");
+    });
+
+    it("removes a status and goes back to its power", async () => {
+      await renderReady({...initialUnitType, powers: [rend]});
+      fireEvent.click(areaList().getByRole("button", {name: /Rend/}));
+      fireEvent.click(screen.getByRole("button", {name: "Edit status ›"}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Remove status"}));
+
+      expect(previewPowers()[0].effects[0].status).toBeNull();
+      expect(breadcrumbs().getByText("Rend")).toHaveAttribute("aria-current", "page");
+    });
+  });
+
+  describe("importing a power", () => {
+    it("copies a library ability in, with its asset URLs rebased", async () => {
+      const pound = {name: "Pound", iconURL: "../../../graphics/icons/pound.png", effects: []};
+      await renderReady(initialUnitType, {
+        files: {"abilities/units/goblins/pound.json": pound},
+        listings: {abilities: ["abilities/units/goblins/pound.json"]},
+      });
+      fireEvent.click(screen.getByRole("button", {name: "+ Import power"}));
+      await waitFor(() => expect(screen.getByRole("option", {name: "units/goblins/pound"})).toBeInTheDocument());
+
+      fireEvent.change(screen.getByRole("combobox", {name: "Library power"}), {target: {value: "abilities/units/goblins/pound.json"}});
+      fireEvent.click(screen.getByRole("button", {name: "Import"}));
+
+      await waitFor(() => expect(previewPowers()).toEqual([{...pound, iconURL: "../graphics/icons/pound.png"}]));
+      expect(breadcrumbs().getByText("Pound")).toHaveAttribute("aria-current", "page");
+    });
+
+    it("copies a power in from another unit type", async () => {
+      await renderReady(initialUnitType, {
+        files: {"unit_types/goblin-boss.json": {name: "Goblin Boss", powers: [slash]}},
+        listings: {unit_types: ["unit_types/goblin-boss.json", "unit_types/goblin-boss.full.json", "unit_types/goblin-raider.json"]},
+      });
+      fireEvent.click(screen.getByRole("button", {name: "+ Import power"}));
+      const picker = screen.getByRole("combobox", {name: "Unit type"});
+      await waitFor(() => expect(within(picker).getAllByRole("option").map((o) => o.textContent)).toEqual(["— pick a unit type —", "goblin-boss"]));
+
+      fireEvent.change(picker, {target: {value: "unit_types/goblin-boss.json"}});
+      await screen.findByText("Slash");
+      fireEvent.click(screen.getAllByRole("button", {name: "Import"})[1]);
+
+      expect(previewPowers()).toEqual([slash]);
     });
   });
 
@@ -179,87 +271,89 @@ describe("UnitTypeEditor", () => {
       validateUnitType.mockReset();
     });
 
-    it("disables Save until Validate passes", async () => {
+    it("disables Save until Validate passes, and again after an edit", async () => {
       validateUnitType.mockResolvedValue({valid: true});
       await renderReady();
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
 
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
-    });
-
-    it("disables Save again after an edit, even though the draft was previously validated", async () => {
-      validateUnitType.mockResolvedValue({valid: true});
-      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
       fireEvent.change(screen.getByDisplayValue("Goblin Raider"), {target: {value: "Goblin Brute"}});
-
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     });
 
-    it("commits the unit type under unit_types/<key>.json and shows a success message", async () => {
+    it("validates the draft itself, since its powers are already inline", async () => {
       validateUnitType.mockResolvedValue({valid: true});
-      commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
-      await renderReady();
+      await renderReady({...initialUnitType, powers: [slash]});
+
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
-      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      await waitFor(() => expect(validateUnitType).toHaveBeenCalledWith({...initialUnitType, powers: [slash]}));
+    });
 
-      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+    it("shows the validation error and keeps Save disabled when invalid", async () => {
+      validateUnitType.mockResolvedValue({valid: false, error: {message: "tokenRadius must be between 1.0 and 20.0", path: "$.tokenRadius"}});
+      await renderReady();
 
-      await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+
+      await screen.findByText("tokenRadius must be between 1.0 and 20.0");
+      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+    });
+
+    it("commits just unit_types/<key>.json, with expanded powers", async () => {
+      const withRef = {...initialUnitType, powers: [{$ref: "../abilities/units/goblins/slash.json", referenceTo: "ability"}]};
+      await renderReady(withRef, {files: {"abilities/units/goblins/slash.json": slash}});
+
+      await validateAndSave();
+
       expect(commitFiles).toHaveBeenCalledWith(
-        {"unit_types/goblin-raider.json": initialUnitType, "unit_types/goblin-raider.full.json": initialUnitType},
+        {"unit_types/goblin-raider.json": {...initialUnitType, powers: [slash]}},
         {message: "Update Goblin Raider"}
       );
     });
 
-    it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
+    it("deletes a leftover .full.json in the same commit, only once", async () => {
+      await renderReady(initialUnitType, {listings: {unit_types: ["unit_types/goblin-raider.json", "unit_types/goblin-raider.full.json"]}});
+
+      await validateAndSave();
+      expect(commitFiles).toHaveBeenLastCalledWith(
+        {"unit_types/goblin-raider.json": initialUnitType, "unit_types/goblin-raider.full.json": null},
+        {message: "Update Goblin Raider"}
+      );
+
+      fireEvent.change(screen.getByDisplayValue("Goblin Raider"), {target: {value: "Goblin Brute"}});
+      await validateAndSave();
+      expect(commitFiles).toHaveBeenLastCalledWith(
+        {"unit_types/goblin-raider.json": {...initialUnitType, name: "Goblin Brute"}},
+        {message: "Update Goblin Brute"}
+      );
+    });
+
+    it("commits an uploaded power icon at the power's iconURL path", async () => {
+      const {container} = await renderReady({...initialUnitType, powers: [{...slash, iconURL: "../graphics/icons/slash.png"}]});
+      fireEvent.click(areaList().getByRole("button", {name: /Slash/}));
+      const file = new File(["png"], "slash.png", {type: "image/png"});
+      URL.createObjectURL = vi.fn(() => "blob:slash");
+      URL.revokeObjectURL = vi.fn();
+
+      fireEvent.change(container.querySelector(".unit-type-editor-fields input[type=file]"), {target: {files: [file]}});
+      await validateAndSave();
+
+      expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"graphics/icons/slash.png": file}), expect.anything());
+    });
+
+    it("redirects instead of showing an error when GitHub auth is required", async () => {
+      await renderReady();
       validateUnitType.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-
-      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
       fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
-    });
-
-    it("validates the resolved (powers-inlined) form, not the raw $ref draft", async () => {
-      validateUnitType.mockResolvedValue({valid: true});
-      const withPower = {...initialUnitType, powers: [{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]};
-      await renderReady(withPower, availableAbilities);
-
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(validateUnitType).toHaveBeenCalledWith({...withPower, powers: [{name: "Slash"}]}));
-    });
-
-    it("shows the validation error and keeps Save disabled when the resolved unit type is invalid", async () => {
-      validateUnitType.mockResolvedValue({valid: false, error: {message: "tokenRadius must be between 1.0 and 20.0", path: "$.tokenRadius"}});
-      await renderReady();
-
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(screen.getByText("tokenRadius must be between 1.0 and 20.0")).toBeInTheDocument());
-      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
-    });
-
-    it("shows a resolution error and keeps Save disabled when a power references an unloaded ability", async () => {
-      const withBadPower = {...initialUnitType, powers: [{$ref: "../abilities/units/goblin-raider/missing.json", referenceTo: "ability"}]};
-      await renderReady(withBadPower);
-
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(screen.getByText(/No ability loaded/)).toBeInTheDocument());
-      expect(validateUnitType).not.toHaveBeenCalled();
-      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     });
   });
 
@@ -269,90 +363,58 @@ describe("UnitTypeEditor", () => {
       validateUnitType.mockReset();
     });
 
-    async function saveIt() {
-      validateUnitType.mockResolvedValue({valid: true});
-      commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
-      fireEvent.click(screen.getByRole("button", {name: "Save"}));
-      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
-      await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
-    }
-
-    it("uploading a file fills in the slot's path and commits the file alongside the JSON on save", async () => {
-      mockUnitTypeLoad(initialUnitType);
-      const {container} = render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
-      await screen.findByDisplayValue("Goblin Raider");
+    it("uploading a file fills in the slot's path and commits the file on save", async () => {
+      const {container} = await renderReady();
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
       const file = new File(["fake"], "raider.webp", {type: "image/webp"});
       fireEvent.change(container.querySelector('input[type="file"]'), {target: {files: [file]}});
-
       expect(screen.getByDisplayValue("../tokens/unit/raider.webp")).toBeInTheDocument();
 
-      await saveIt();
-      expect(commitFiles).toHaveBeenCalledWith(
-        expect.objectContaining({"tokens/unit/raider.webp": file}),
-        {message: "Update Goblin Raider"}
-      );
+      await validateAndSave();
+      expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"tokens/unit/raider.webp": file}), {message: "Update Goblin Raider"});
     });
 
     it("picking an existing token image sets the slot's path without staging an upload", async () => {
-      GithubClient.mockImplementation(function () {
-        return {
-          fetchFile: vi.fn().mockResolvedValue(JSON.stringify(initialUnitType)),
-          listDirectory: vi.fn().mockResolvedValue(["tokens/unit/goblin-1.webp", "tokens/unit/goblin-2.webp"]),
-          assetUrl: vi.fn().mockImplementation((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
-        };
-      });
-      loadAvailableAbilities.mockResolvedValue({});
-      render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
-      await screen.findByDisplayValue("Goblin Raider");
+      await renderReady(initialUnitType, {listings: {"tokens/unit": ["tokens/unit/goblin-1.webp", "tokens/unit/goblin-2.webp"]}});
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
+      await screen.findByRole("option", {name: "goblin-1.webp"});
       fireEvent.change(screen.getByDisplayValue("— existing token —"), {target: {value: "goblin-1.webp"}});
-
       expect(screen.getByDisplayValue("../tokens/unit/goblin-1.webp")).toBeInTheDocument();
 
-      await saveIt();
+      await validateAndSave();
       expect(commitFiles).toHaveBeenCalledWith(
-        {
-          "unit_types/goblin-raider.json": {...initialUnitType, tokenImageUrl: ["../tokens/unit/goblin-1.webp"]},
-          "unit_types/goblin-raider.full.json": {...initialUnitType, tokenImageUrl: ["../tokens/unit/goblin-1.webp"]},
-        },
+        {"unit_types/goblin-raider.json": {...initialUnitType, tokenImageUrl: ["../tokens/unit/goblin-1.webp"]}},
         {message: "Update Goblin Raider"}
       );
     });
 
     it("keeps a pending upload matched to its own slot after an earlier slot is removed", async () => {
-      mockUnitTypeLoad({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
-      const {container} = render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
-      await screen.findByDisplayValue("Goblin Raider");
+      const {container} = await renderReady({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
       const file = new File(["fake"], "second.webp", {type: "image/webp"});
-      const fileInputs = container.querySelectorAll('input[type="file"]');
-      fireEvent.change(fileInputs[1], {target: {files: [file]}});
-      expect(screen.getByDisplayValue("../tokens/unit/second.webp")).toBeInTheDocument();
-
-      // Remove slot 0 ("first.webp") - the pending upload for what was slot 1 needs to follow it down to slot 0.
+      fireEvent.change(container.querySelectorAll('input[type="file"]')[1], {target: {files: [file]}});
       fireEvent.click(screen.getAllByRole("button", {name: "Remove"})[0]);
       expect(screen.getByDisplayValue("../tokens/unit/second.webp")).toBeInTheDocument();
 
-      await saveIt();
-      expect(commitFiles).toHaveBeenCalledWith(
-        expect.objectContaining({"tokens/unit/second.webp": file}),
-        {message: "Update Goblin Raider"}
-      );
+      await validateAndSave();
+      expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"tokens/unit/second.webp": file}), {message: "Update Goblin Raider"});
     });
   });
 
   describe("estimating damage", () => {
     const matrix = {results: [{gearingPlan: "offense", elevation: 0, dps: 3.9, ttdSeconds: 40.0}]};
 
-    it("posts the resolved unit type and shows the matrix when 'Estimate damage' is clicked", async () => {
+    async function openEstimate() {
+      fireEvent.click(areaList().getByRole("button", {name: /Damage estimate/}));
+    }
+
+    it("posts the draft and shows the matrix", async () => {
       estimateDamage.mockResolvedValue(matrix);
       await renderReady();
+      await openEstimate();
 
       fireEvent.click(screen.getByRole("button", {name: "Estimate damage"}));
 
@@ -363,6 +425,7 @@ describe("UnitTypeEditor", () => {
     it("shows the error when the estimate fails", async () => {
       estimateDamage.mockRejectedValue(new Error("game server unavailable"));
       await renderReady();
+      await openEstimate();
 
       fireEvent.click(screen.getByRole("button", {name: "Estimate damage"}));
 
@@ -372,10 +435,13 @@ describe("UnitTypeEditor", () => {
     it("drops a shown estimate once the draft is edited", async () => {
       estimateDamage.mockResolvedValue(matrix);
       await renderReady();
+      await openEstimate();
       fireEvent.click(screen.getByRole("button", {name: "Estimate damage"}));
       await screen.findByText("3.9 dps");
 
+      fireEvent.click(areaList().getByRole("button", {name: /Goblin Raider/}));
       fireEvent.change(screen.getByDisplayValue("Goblin Raider"), {target: {value: "Goblin Brute"}});
+      await openEstimate();
 
       expect(screen.queryByText("3.9 dps")).not.toBeInTheDocument();
     });

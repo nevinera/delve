@@ -98,14 +98,14 @@ RSpec.describe "Build::UnitTypes", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        it "renders the JS editor shell with just the key and a new-ability link - the unit type's own content and available abilities are fetched client-side, not here" do
+        it "renders the JS editor shell with just the key and a back link - the unit type's own content and available abilities are fetched client-side, not here" do
           get "/build/unit_types/goblin-raider/edit"
 
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('id="editor-root"')
           expect(response.body).to match(%r{src="/client/unitTypeEditor[^"]*\.js"})
           expect(response.body).to include('data-key="goblin-raider"')
-          expect(response.body).to include(CGI.escapeHTML(new_build_ability_path(key: "units/goblin-raider/")))
+          expect(response.body).to include(%(data-back-url="#{build_unit_types_path}"))
           # The point of this move: Rails never opens the unit type file,
           # the abilities/units/ directory, or any asset - WebMock would
           # raise if it tried.

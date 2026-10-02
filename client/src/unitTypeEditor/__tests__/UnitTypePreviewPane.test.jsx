@@ -20,27 +20,15 @@ vi.mock("../../AbilityTooltip", () => ({
   AbilityTooltip: ({hint, children}) => <div data-testid="tooltip" data-hint={hint}>{children}</div>,
 }));
 
-const availableAbilities = {
-  "units/goblin/short": {
-    ability: {name: "Slash", castTime: null, maxRange: 5, iconURL: "slash.svg", effects: [{type: "harm", affects: "bTarget", range: 5, amount: 5}]},
-    assetMap: {},
-  },
-  "units/goblin/long": {
-    ability: {name: "Hurl", castTime: null, maxRange: 20, iconURL: "hurl.svg", effects: [{type: "harm", affects: "bTarget", range: 20, amount: 10}]},
-    assetMap: {},
-  },
-};
-
-const powers = [
-  {$ref: "../abilities/units/goblin/short.json", referenceTo: "ability"},
-  {$ref: "../abilities/units/goblin/long.json", referenceTo: "ability"},
-];
+const slash = {name: "Slash", castTime: null, maxRange: 5, iconURL: "slash.svg", effects: [{type: "harm", affects: "bTarget", range: 5, amount: 5}]};
+const hurl = {name: "Hurl", castTime: null, maxRange: 20, iconURL: "hurl.svg", effects: [{type: "harm", affects: "bTarget", range: 20, amount: 10}]};
+const powers = [slash, hurl];
 
 function renderPane(overrides = {}, resolvedTokenUrls = {}) {
   const unitTypeData = {tokenImageUrl: [], powers, ...overrides};
   return render(
     <UnitTypePreviewPane
-      unitTypeKey="goblin" unitTypeData={unitTypeData} availableAbilities={availableAbilities}
+      unitTypeData={unitTypeData} assetMap={{}}
       stockAssets={{}} resolvedTokenUrls={resolvedTokenUrls}
     />
   );
@@ -130,14 +118,21 @@ describe("UnitTypePreviewPane", () => {
   });
 
   it("still renders a clickable button for a power with no iconURL - common for unit-type powers", () => {
-    const noIconAbilities = {
-      "units/goblin/short": {ability: {name: "Enrage", castTime: null, effects: []}, assetMap: {}},
-      "units/goblin/long": availableAbilities["units/goblin/long"],
-    };
-    render(<UnitTypePreviewPane unitTypeKey="goblin" unitTypeData={{tokenImageUrl: [], powers}} availableAbilities={noIconAbilities} stockAssets={{}} />);
+    renderPane({powers: [{name: "Enrage", castTime: null, effects: []}, hurl]});
 
     expect(screen.getAllByRole("img")).toHaveLength(1); // just Hurl
     expect(screen.getByRole("button", {name: "EN"})).toBeInTheDocument();
+  });
+
+  it("shows an unsaved upload's preview URL in place of the power's own icon", () => {
+    render(
+      <UnitTypePreviewPane
+        unitTypeData={{tokenImageUrl: [], powers}} assetMap={{}} stockAssets={{}}
+        powerAssetOverrides={{1: {iconURL: "blob:hurl"}}}
+      />
+    );
+
+    expect(screen.getAllByRole("img")[1]).toHaveAttribute("src", "blob:hurl");
   });
 
   it("shows no power icons (just an empty slot) when the unit type has no powers", () => {
