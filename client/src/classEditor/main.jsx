@@ -8,7 +8,7 @@ createRoot(el).render(
     <ClassEditor
       classKey={el.dataset.key}
       stockAssets={JSON.parse(el.dataset.stockAssets)}
-      newAbilityUrl={el.dataset.newAbilityUrl}
+      backUrl={el.dataset.backUrl}
     />
   </StrictMode>
 );

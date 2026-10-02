@@ -1,11 +1,11 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {redirectTo} from "../../redirectTo";
-import {render, screen, fireEvent, waitFor} from "@testing-library/react";
+import {render, screen, fireEvent, waitFor, within} from "@testing-library/react";
 import ClassEditor from "../ClassEditor";
 import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
 import {GithubClient} from "../../github/delve-github";
-import {loadAvailableAbilities} from "../loadAvailableAbilities";
 import {validateCharacterClass} from "../../validators/validateContent";
+import {estimateClassDps} from "../estimateClassDps";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
@@ -17,18 +17,15 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
   return {...actual, GithubClient: vi.fn()};
 });
 
-vi.mock("../loadAvailableAbilities", () => ({
-  loadAvailableAbilities: vi.fn(),
-}));
-
 vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateCharacterClass: vi.fn(),
 }));
+vi.mock("../estimateClassDps", () => ({estimateClassDps: vi.fn()}));
 
-// ClassPreviewPane mounts a real Three.js WebGLRenderer via AbilityPreviewCanvas,
-// which jsdom can't back - stub it so this test can exercise the reducer wiring
-// (fields <-> class state) in isolation, same approach as AbilityEditor.test.jsx.
+// ClassPreviewPane mounts a real Three.js WebGLRenderer via
+// AbilityPreviewCanvas, which jsdom can't back - stub it, exposing the
+// powers it was given.
 vi.mock("../ClassPreviewPane", () => ({
   default: ({powers}) => <div data-testid="preview-powers">{JSON.stringify(powers)}</div>,
 }));
@@ -38,90 +35,212 @@ const initialClass = {
   resources: [], powers: [], primaryStats: [], secondaryStats: [], wields: [],
 };
 
-const availableAbilities = {
-  "classes/puncher/punch": {ability: {name: "Punch"}, assetMap: {}},
-};
+const punch = {name: "Punch", maxRange: 5, effects: []};
+const kick = {name: "Kick", maxRange: 5, effects: []};
+const stockAssets = {icons: {}, graphics: {}, sounds: {}};
 
-function mockClassLoad(classData, abilities = {}) {
-  GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockResolvedValue(JSON.stringify(classData))}; });
-  loadAvailableAbilities.mockResolvedValue(abilities);
+function mockRepo({files = {}, listings = {}} = {}) {
+  const client = {
+    fetchFile: vi.fn((path) => Promise.resolve(path in files ? JSON.stringify(files[path]) : null)),
+    listDirectory: vi.fn((path) => Promise.resolve(listings[path] ?? [])),
+    assetUrl: vi.fn((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
+  };
+  GithubClient.mockImplementation(function () { return client; });
+  return client;
 }
 
-async function renderReady(classData = initialClass, abilities = {}) {
-  mockClassLoad(classData, abilities);
-  render(<ClassEditor classKey="puncher" stockAssets={{}} />);
+async function renderReady(classData = initialClass, repo = {}) {
+  mockRepo({...repo, files: {"classes/puncher.json": classData, ...repo.files}});
+  const result = render(<ClassEditor classKey="puncher" stockAssets={stockAssets} backUrl="/build/classes" />);
   await screen.findByDisplayValue(classData.name);
+  return result;
+}
+
+function areaList() {
+  return within(screen.getByRole("navigation", {name: "Class areas"}));
+}
+
+function breadcrumbs() {
+  return within(screen.getByRole("navigation", {name: "Breadcrumb"}));
+}
+
+function previewPowers() {
+  return JSON.parse(screen.getByTestId("preview-powers").textContent);
+}
+
+async function validateAndSave() {
+  validateCharacterClass.mockResolvedValue({valid: true});
+  commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
+  fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+  await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+  fireEvent.click(screen.getByRole("button", {name: "Save"}));
+  fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+  await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
 }
 
 describe("ClassEditor", () => {
   afterEach(() => vi.clearAllMocks());
 
-  it("shows a loading state, then the fields panel once the fetch resolves", async () => {
-    let resolveFetch;
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)))}; });
-    loadAvailableAbilities.mockResolvedValue({});
+  describe("loading", () => {
+    it("shows a loading state, then the class's fields once the fetch resolves", async () => {
+      let resolveFetch;
+      GithubClient.mockImplementation(function () {
+        return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([])};
+      });
 
-    render(<ClassEditor classKey="puncher" stockAssets={{}} />);
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+      render(<ClassEditor classKey="puncher" stockAssets={stockAssets} />);
+      expect(screen.getByText("Loading…")).toBeInTheDocument();
 
-    resolveFetch(JSON.stringify(initialClass));
-    await waitFor(() => expect(screen.getByDisplayValue("Puncher")).toBeInTheDocument());
-  });
-
-  it("falls back to a blank class when the file doesn't exist yet (404 -> null)", async () => {
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockResolvedValue(null)}; });
-    loadAvailableAbilities.mockResolvedValue({});
-
-    render(<ClassEditor classKey="druid" stockAssets={{}} />);
-
-    await screen.findByDisplayValue("Druid");
-  });
-
-  it("shows a load error rather than a blank/loading state when the fetch fails", async () => {
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}; });
-    loadAvailableAbilities.mockResolvedValue({});
-
-    render(<ClassEditor classKey="puncher" stockAssets={{}} />);
-
-    await screen.findByText(/Failed to load: network down/);
-  });
-
-  it("redirects to the GitHub reauth URL when the load itself hits a GithubAuthError", async () => {
-    GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
-    loadAvailableAbilities.mockResolvedValue({});
-
-    render(<ClassEditor classKey="puncher" stockAssets={{}} />);
-
-    await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
-  });
-
-  it("flows a name edit from the fields panel into the class state", async () => {
-    await renderReady();
-
-    fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
-
-    expect(screen.getByDisplayValue("Brawler")).toBeInTheDocument();
-  });
-
-  it("adds a power slot's $ref when an ability is picked from an empty slot", async () => {
-    await renderReady(initialClass, availableAbilities);
-    expect(screen.getByTestId("preview-powers")).toHaveTextContent("[]");
-
-    fireEvent.change(screen.getAllByRole("combobox").find((el) => el.closest("tr")?.textContent.includes("Slot 1")), {
-      target: {value: "classes/puncher/punch"},
+      resolveFetch(JSON.stringify(initialClass));
+      await screen.findByDisplayValue("Puncher");
     });
 
-    const powers = JSON.parse(screen.getByTestId("preview-powers").textContent);
-    expect(powers).toEqual([{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]);
+    it("falls back to a blank class when the file doesn't exist yet", async () => {
+      mockRepo();
+      render(<ClassEditor classKey="druid" stockAssets={stockAssets} />);
+
+      await screen.findByDisplayValue("Druid");
+    });
+
+    it("shows a load error when the fetch fails", async () => {
+      GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}; });
+
+      render(<ClassEditor classKey="puncher" stockAssets={stockAssets} />);
+
+      await screen.findByText(/Failed to load: network down/);
+    });
+
+    it("redirects to the GitHub reauth URL when the load hits a GithubAuthError", async () => {
+      GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
+
+      render(<ClassEditor classKey="puncher" stockAssets={stockAssets} />);
+
+      await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
+    });
+
+    it("expands $ref powers into inline copies on load", async () => {
+      const withRef = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
+      await renderReady(withRef, {files: {"abilities/classes/puncher/punch.json": punch}});
+
+      expect(previewPowers()).toEqual([punch]);
+    });
   });
 
-  it("clears a filled slot back to an empty array", async () => {
-    const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
-    await renderReady(withPower, availableAbilities);
+  describe("the class pane", () => {
+    it("flows a name edit into the draft and the area list", async () => {
+      await renderReady();
 
-    fireEvent.click(screen.getByRole("button", {name: "Clear"}));
+      fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
 
-    expect(screen.getByTestId("preview-powers")).toHaveTextContent("[]");
+      expect(areaList().getByRole("button", {name: /Brawler/})).toBeInTheDocument();
+    });
+
+    it("caps resources at 3", async () => {
+      await renderReady({...initialClass, resources: [{name: "a"}, {name: "b"}]});
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add resource"}));
+
+      expect(screen.getByRole("button", {name: "+ Add resource"})).toBeDisabled();
+    });
+  });
+
+  describe("action bar", () => {
+    it("lists powers in slot order with a slot count", async () => {
+      await renderReady({...initialClass, powers: [punch, kick]});
+
+      expect(areaList().getByText("2/10")).toBeInTheDocument();
+      expect(areaList().getByRole("button", {name: /1\. Punch/})).toBeInTheDocument();
+      expect(areaList().getByRole("button", {name: /2\. Kick/})).toBeInTheDocument();
+    });
+
+    it("reorders powers with the arrow buttons, keeping the moved power selected", async () => {
+      await renderReady({...initialClass, powers: [punch, kick]});
+      fireEvent.click(areaList().getByRole("button", {name: /2\. Kick/}));
+
+      fireEvent.click(areaList().getByRole("button", {name: "Move Kick up"}));
+
+      expect(previewPowers().map((p) => p.name)).toEqual(["Kick", "Punch"]);
+      expect(breadcrumbs().getByText("Kick")).toHaveAttribute("aria-current", "page");
+    });
+
+    it("adds a blank power and opens it", async () => {
+      await renderReady();
+
+      fireEvent.click(screen.getByRole("button", {name: "+ New power"}));
+
+      expect(previewPowers()).toHaveLength(1);
+      expect(breadcrumbs().getByText("New Power")).toHaveAttribute("aria-current", "page");
+    });
+
+    it("disables adding powers once all 10 slots are full", async () => {
+      await renderReady({...initialClass, powers: Array.from({length: 10}, (_, i) => ({name: `P${i}`, effects: []}))});
+
+      expect(screen.getByRole("button", {name: "+ New power"})).toBeDisabled();
+      expect(screen.getByRole("button", {name: "+ Import power"})).toBeDisabled();
+    });
+
+    it("edits and removes a power", async () => {
+      await renderReady({...initialClass, powers: [punch]});
+      fireEvent.click(areaList().getByRole("button", {name: /1\. Punch/}));
+
+      fireEvent.change(screen.getByDisplayValue("Punch"), {target: {value: "Jab"}});
+      expect(previewPowers()[0].name).toBe("Jab");
+
+      fireEvent.click(screen.getByRole("button", {name: "Remove power"}));
+      expect(previewPowers()).toEqual([]);
+      expect(screen.getByDisplayValue("Puncher")).toBeInTheDocument();
+    });
+
+    it("imports a power from another class", async () => {
+      await renderReady(initialClass, {
+        files: {"classes/demo.json": {name: "Demo", powers: [kick]}},
+        listings: {classes: ["classes/demo.json", "classes/demo.full.json", "classes/puncher.json"]},
+      });
+      fireEvent.click(screen.getByRole("button", {name: "+ Import power"}));
+
+      fireEvent.change(screen.getByRole("combobox", {name: "Source type"}), {target: {value: "class"}});
+      const source = await screen.findByRole("combobox", {name: "Source"});
+      await within(source).findByRole("option", {name: "demo"});
+      fireEvent.change(source, {target: {value: "classes/demo.json"}});
+      await screen.findByText("Kick");
+      fireEvent.click(screen.getByRole("button", {name: "Import"}));
+
+      expect(previewPowers()).toEqual([kick]);
+    });
+  });
+
+  describe("passives", () => {
+    it("adds a passive and edits it as a status", async () => {
+      await renderReady();
+
+      fireEvent.click(screen.getByRole("button", {name: "+ New passive"}));
+      expect(breadcrumbs().getByText("New Passive")).toHaveAttribute("aria-current", "page");
+
+      fireEvent.change(screen.getByDisplayValue("New Passive"), {target: {value: "Thick Hide"}});
+      expect(areaList().getByRole("button", {name: /Thick Hide/})).toBeInTheDocument();
+    });
+
+    it("removes a passive", async () => {
+      await renderReady({...initialClass, passives: [{name: "Thick Hide", shortName: "Hide", treatAs: "inherent", stacking: "replace", effects: []}]});
+      fireEvent.click(areaList().getByRole("button", {name: /Thick Hide/}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Remove passive"}));
+
+      expect(areaList().queryByRole("button", {name: /Thick Hide/})).not.toBeInTheDocument();
+    });
+  });
+
+  describe("DPS estimate", () => {
+    it("posts the draft and the strategy", async () => {
+      estimateClassDps.mockResolvedValue({results: [{durationSeconds: 60, elevationLabel: "trainee", dps: 12.5}]});
+      await renderReady({...initialClass, powers: [punch]});
+      fireEvent.click(areaList().getByRole("button", {name: /DPS estimate/}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Estimate DPS"}));
+
+      await screen.findByText("12.5 dps");
+      expect(estimateClassDps).toHaveBeenCalledWith({...initialClass, powers: [punch]}, []);
+    });
   });
 
   describe("validate then save", () => {
@@ -130,102 +249,53 @@ describe("ClassEditor", () => {
       validateCharacterClass.mockReset();
     });
 
-    it("disables Save until Validate passes", async () => {
+    it("disables Save until Validate passes, and again after an edit", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
       await renderReady();
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
 
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
-    });
-
-    it("disables Save again after an edit, even though the draft was previously validated", async () => {
-      validateCharacterClass.mockResolvedValue({valid: true});
-      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
       fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
-
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     });
 
-    it("commits the class under classes/<key>.json and shows a success message", async () => {
-      validateCharacterClass.mockResolvedValue({valid: true});
-      commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
+    it("shows the validation error and keeps Save disabled when invalid", async () => {
+      validateCharacterClass.mockResolvedValue({valid: false, error: {message: "resources must have at least 1 entry", path: "$.resources"}});
       await renderReady();
+
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
 
-      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      await screen.findByText("resources must have at least 1 entry");
+      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
+    });
 
-      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+    it("commits classes/<key>.json with expanded powers, deleting a leftover .full.json", async () => {
+      const withRef = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
+      await renderReady(withRef, {
+        files: {"abilities/classes/puncher/punch.json": punch},
+        listings: {classes: ["classes/puncher.json", "classes/puncher.full.json"]},
+      });
 
-      await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
+      await validateAndSave();
+
       expect(commitFiles).toHaveBeenCalledWith(
-        {"classes/puncher.json": initialClass, "classes/puncher.full.json": initialClass},
+        {"classes/puncher.json": {...initialClass, powers: [punch]}, "classes/puncher.full.json": null},
         {message: "Update Puncher"}
       );
     });
 
-    it("shows an error message when the commit fails, without requiring revalidation to retry", async () => {
-      validateCharacterClass.mockResolvedValue({valid: true});
-      commitFiles.mockRejectedValue(new Error("network exploded"));
+    it("redirects instead of showing an error when GitHub auth is required", async () => {
       await renderReady();
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
-
-      fireEvent.click(screen.getByRole("button", {name: "Save"}));
-
-      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
-
-      await waitFor(() => expect(screen.getByText("network exploded")).toBeInTheDocument());
-      expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled();
-    });
-
-    it("redirects to the reported URL instead of showing an error when GitHub auth is required", async () => {
       validateCharacterClass.mockResolvedValue({valid: true});
       commitFiles.mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"));
-
-      await renderReady();
       fireEvent.click(screen.getByRole("button", {name: "Validate"}));
       await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
       fireEvent.click(screen.getByRole("button", {name: "Save"}));
       fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
-    });
-
-    it("validates the resolved (powers-inlined) form, not the raw $ref draft", async () => {
-      validateCharacterClass.mockResolvedValue({valid: true});
-      const withPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
-      await renderReady(withPower, availableAbilities);
-
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(validateCharacterClass).toHaveBeenCalledWith({...withPower, powers: [{name: "Punch"}]}));
-    });
-
-    it("shows the validation error and keeps Save disabled when the resolved class is invalid", async () => {
-      validateCharacterClass.mockResolvedValue({valid: false, error: {message: "major must be a 6-digit hex string (at $.colors.major)", path: "$.colors.major"}});
-      await renderReady();
-
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(screen.getByText("major must be a 6-digit hex string (at $.colors.major)")).toBeInTheDocument());
-      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
-    });
-
-    it("shows a resolution error and keeps Save disabled when a power references an unloaded ability", async () => {
-      const withBadPower = {...initialClass, powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "ability"}]};
-      await renderReady(withBadPower);
-
-      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
-
-      await waitFor(() => expect(screen.getByText(/No ability loaded/)).toBeInTheDocument());
-      expect(validateCharacterClass).not.toHaveBeenCalled();
-      expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     });
   });
 });

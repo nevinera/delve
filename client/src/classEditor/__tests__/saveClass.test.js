@@ -6,66 +6,57 @@ vi.mock("../../github/commitFiles", () => ({
   commitFiles: vi.fn(),
 }));
 
-const availableAbilities = {
-  "classes/puncher/punch": {ability: {name: "Punch", castTime: null}, assetMap: {}},
-};
-
 describe("saveClass", () => {
   beforeEach(() => {
     commitFiles.mockReset();
+    commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
   });
 
-  it("commits both classes/<key>.json and its resolved .full.json companion", async () => {
-    commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
-    const classData = {
-      name: "Puncher",
-      powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}],
-    };
+  it("commits just classes/<key>.json, with its powers inline", async () => {
+    const classData = {name: "Puncher", powers: [{name: "Punch"}]};
 
-    const result = await saveClass("puncher", classData, availableAbilities);
+    const result = await saveClass("puncher", classData);
 
-    expect(commitFiles).toHaveBeenCalledWith(
-      {
-        "classes/puncher.json": classData,
-        "classes/puncher.full.json": {name: "Puncher", powers: [{name: "Punch", castTime: null}]},
-      },
-      {message: "Update Puncher"}
-    );
+    expect(commitFiles).toHaveBeenCalledWith({"classes/puncher.json": classData}, {message: "Update Puncher"});
     expect(result).toEqual({commitSha: "abc123", branch: "main"});
   });
 
   it("falls back to the key in the commit message when the class has no name", async () => {
-    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
-
-    await saveClass("puncher", {name: "", powers: []}, availableAbilities);
+    await saveClass("puncher", {name: "", powers: []});
 
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Update puncher"});
   });
 
   it("uses a given commit message instead of the default", async () => {
-    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
-
-    await saveClass("puncher", {name: "Puncher", powers: []}, availableAbilities, "Custom message");
+    await saveClass("puncher", {name: "Puncher", powers: []}, {}, "Custom message");
 
     expect(commitFiles).toHaveBeenCalledWith(expect.anything(), {message: "Custom message"});
   });
 
-  it("commits a nested key's JSON at classes/<key>.json and .full.json", async () => {
-    commitFiles.mockResolvedValue({commitSha: "x", branch: "main"});
+  it("deletes the given paths in the same commit", async () => {
     const classData = {name: "Druid", powers: []};
 
-    await saveClass("hybrid/druid", classData, {});
+    await saveClass("hybrid/druid", classData, {deletePaths: ["classes/hybrid/druid.full.json"]});
 
     expect(commitFiles).toHaveBeenCalledWith(
-      {"classes/hybrid/druid.json": classData, "classes/hybrid/druid.full.json": classData},
+      {"classes/hybrid/druid.json": classData, "classes/hybrid/druid.full.json": null},
       {message: "Update Druid"}
     );
   });
 
-  it("rejects, without committing anything, when a power references an ability that wasn't loaded", async () => {
-    const classData = {name: "Puncher", powers: [{$ref: "../abilities/classes/puncher/missing.json", referenceTo: "ability"}]};
+  it("commits a power's pending upload at its field's path", async () => {
+    const classData = {name: "Puncher", powers: [{name: "Punch", iconURL: "../graphics/icons/punch.png"}]};
+    const icon = new File(["i"], "punch.png");
 
-    await expect(saveClass("puncher", classData, availableAbilities)).rejects.toThrow(/No ability loaded/);
+    await saveClass("puncher", classData, {powerFiles: {0: {iconURL: icon}}});
+
+    expect(commitFiles).toHaveBeenCalledWith({"classes/puncher.json": classData, "graphics/icons/punch.png": icon}, {message: "Update Puncher"});
+  });
+
+  it("rejects without committing when an upload's field is blank", async () => {
+    const classData = {name: "Puncher", powers: [{name: "Punch", iconURL: ""}]};
+
+    await expect(saveClass("puncher", classData, {powerFiles: {0: {iconURL: new File(["i"], "x.png")}}})).rejects.toThrow(/Punch iconURL/);
     expect(commitFiles).not.toHaveBeenCalled();
   });
 });

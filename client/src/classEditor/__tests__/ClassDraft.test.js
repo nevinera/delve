@@ -105,44 +105,59 @@ describe("ClassDraft", () => {
     });
   });
 
-  describe("power slots", () => {
-    it("abilityKeyForPowerSlot returns null for an empty slot", () => {
-      const draft = new ClassDraft(base, "puncher");
-      expect(draft.abilityKeyForPowerSlot(0)).toBeNull();
+  describe("resource cap", () => {
+    it("addResource does nothing once there are 3", () => {
+      const draft = new ClassDraft({...base, resources: [{name: "a"}, {name: "b"}, {name: "c"}]}, "puncher");
+      expect(draft.addResource()).toBe(draft);
+    });
+  });
+
+  describe("powers", () => {
+    const punch = {name: "Punch", effects: []};
+    const kick = {name: "Kick", effects: []};
+
+    it("addPower appends a copy, suffixing a taken name", () => {
+      const result = new ClassDraft({...base, powers: [punch]}, "puncher").addPower(punch);
+      expect(result.data.powers.map((p) => p.name)).toEqual(["Punch", "Punch 2"]);
     });
 
-    it("abilityKeyForPowerSlot returns the key for a filled slot", () => {
-      const withPower = {...base, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
-      const draft = new ClassDraft(withPower, "puncher");
-      expect(draft.abilityKeyForPowerSlot(0)).toBe("classes/puncher/punch");
+    it("addPower does nothing once all 10 slots are full", () => {
+      const draft = new ClassDraft({...base, powers: Array.from({length: 10}, (_, i) => ({name: `P${i}`}))}, "puncher");
+      expect(draft.actionBarFull).toBe(true);
+      expect(draft.addPower(punch)).toBe(draft);
     });
 
-    it("setPowerSlot appends when filling the first empty slot", () => {
-      const result = new ClassDraft(base, "puncher").setPowerSlot(0, "classes/puncher/punch");
-      expect(result.data.powers).toEqual([{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]);
+    it("updatePower and removePower act on the given slot only", () => {
+      const draft = new ClassDraft({...base, powers: [punch, kick]}, "puncher");
+      expect(draft.updatePower(1, {...kick, cooldown: 3}).data.powers).toEqual([punch, {...kick, cooldown: 3}]);
+      expect(draft.removePower(0).data.powers).toEqual([kick]);
     });
 
-    it("setPowerSlot replaces an already-filled slot in place", () => {
-      const withPower = {...base, powers: [{$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"}]};
-      const result = new ClassDraft(withPower, "puncher").setPowerSlot(0, "classes/puncher/kick");
-      expect(result.data.powers).toEqual([{$ref: "../abilities/classes/puncher/kick.json", referenceTo: "ability"}]);
+    it("movePower swaps a power with its neighbor, ignoring moves off either end", () => {
+      const draft = new ClassDraft({...base, powers: [punch, kick]}, "puncher");
+      expect(draft.movePower(0, 1).data.powers).toEqual([kick, punch]);
+      expect(draft.movePower(1, -1).data.powers).toEqual([kick, punch]);
+      expect(draft.movePower(0, -1)).toBe(draft);
+      expect(draft.movePower(1, 1)).toBe(draft);
+    });
+  });
+
+  describe("passives", () => {
+    it("addPassive appends a blank inherent status with a unique name", () => {
+      const result = new ClassDraft(base, "puncher").addPassive().addPassive();
+      expect(result.data.passives.map((p) => p.name)).toEqual(["New Passive", "New Passive 2"]);
+      expect(result.data.passives[0].treatAs).toBe("inherent");
     });
 
-    it("clearPowerSlot removes the slot and reflows the ones after it", () => {
-      const twoPowers = {
-        ...base,
-        powers: [
-          {$ref: "../abilities/classes/puncher/punch.json", referenceTo: "ability"},
-          {$ref: "../abilities/classes/puncher/kick.json", referenceTo: "ability"},
-        ],
-      };
-      const result = new ClassDraft(twoPowers, "puncher").clearPowerSlot(0);
-      expect(result.data.powers).toEqual([{$ref: "../abilities/classes/puncher/kick.json", referenceTo: "ability"}]);
+    it("addPassive does nothing once there are 6", () => {
+      const draft = new ClassDraft({...base, passives: Array.from({length: 6}, (_, i) => ({name: `P${i}`}))}, "puncher");
+      expect(draft.addPassive()).toBe(draft);
     });
 
-    it("resolves a nested class key's power ref with the matching '../' depth", () => {
-      const result = new ClassDraft(base, "hybrid/druid").setPowerSlot(0, "classes/hybrid/druid/wildshape");
-      expect(result.data.powers[0].$ref).toBe("../../abilities/classes/hybrid/druid/wildshape.json");
+    it("updatePassive and removePassive act on the given passive only", () => {
+      const draft = new ClassDraft({...base, passives: [{name: "A"}, {name: "B"}]}, "puncher");
+      expect(draft.updatePassive(1, {name: "C"}).data.passives).toEqual([{name: "A"}, {name: "C"}]);
+      expect(draft.removePassive(0).data.passives).toEqual([{name: "B"}]);
     });
   });
 });

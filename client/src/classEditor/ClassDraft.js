@@ -1,13 +1,15 @@
-import {refForAbilityKey, abilityKeyForRef} from "./powerRefs";
+import {uniqueName} from "../powersEditor/uniqueName";
+import {MAX_PASSIVES, MAX_RESOURCES, SLOT_COUNT} from "./classFieldOptions";
 
 const BLANK_RESOURCE = {name: "", color: "888888", max: 100, defaultValue: 0, returnRate: 0, isFluid: false};
 
+// Passives must be inherent (hidden) - see docs/schema/character_class.md.
+const BLANK_PASSIVE = {name: "New Passive", shortName: "", treatAs: "inherent", stacking: "replace", effects: []};
+
 // Owns a class draft's data and every mutation the editor can make to it -
 // the UI (ClassEditor.jsx/ClassFieldsPanel.jsx) only ever reads `.data` and
-// calls this class's methods (see plans/editors-as-classes.md). Unlike
-// ItemDraft/AbilityDraft, a power slot's $ref depends on the *class's own
-// key* (see powerRefs.js's relativePrefix) - so ClassDraft carries
-// `classKey` alongside `.data`, not just the data itself.
+// calls this class's methods (see plans/editors-as-classes.md). Powers
+// (the action bar, in slot order) and passives are stored inline.
 //
 // Immutable, like every other draft class: every mutator returns a new
 // ClassDraft rather than changing this one in place.
@@ -63,6 +65,7 @@ export class ClassDraft {
   }
 
   addResource() {
+    if ((this.data.resources ?? []).length >= MAX_RESOURCES) return this;
     return this.addEntry("resources", BLANK_RESOURCE);
   }
 
@@ -89,26 +92,55 @@ export class ClassDraft {
     return this.data.powers ?? [];
   }
 
-  // The availableAbilities key currently filling slot `index`, or null if
-  // it's empty or holds something this editor didn't write (see
-  // powerRefs.js#abilityKeyForRef).
-  abilityKeyForPowerSlot(index) {
-    return index < this.powers.length ? abilityKeyForRef(this.classKey, this.powers[index]) : null;
+  get powerNames() {
+    return this.powers.map((power) => power.name).filter(Boolean);
   }
 
-  // Slot i is only pickable once slot i-1 is filled (see
-  // ClassFieldsPanel's PowerSlots) - filling an already-filled slot
-  // replaces it in place; filling the first empty one appends.
-  setPowerSlot(index, abilityKey) {
-    const entry = {$ref: refForAbilityKey(this.classKey, abilityKey), referenceTo: "ability"};
-    if (index < this.powers.length) return this.updateEntryFields("powers", index, entry);
-    return this.addEntry("powers", entry);
+  get actionBarFull() {
+    return this.powers.length >= SLOT_COUNT;
   }
 
-  // Clearing a middle slot reflows the ones after it, rather than leaving a
-  // gap the saved `powers` array has no way to represent - REMOVE_ENTRY's
-  // splice semantics already do this for free.
-  clearPowerSlot(index) {
+  addPower(ability) {
+    if (this.actionBarFull) return this;
+    return this.addEntry("powers", {...ability, name: uniqueName(ability.name || "New Power", this.powerNames)});
+  }
+
+  updatePower(index, ability) {
+    return this.setField("powers", this.powers.map((p, i) => (i === index ? ability : p)));
+  }
+
+  removePower(index) {
     return this.removeEntry("powers", index);
+  }
+
+  // Moves the power at index one slot earlier (delta -1) or later (+1).
+  movePower(index, delta) {
+    const target = index + delta;
+    if (target < 0 || target >= this.powers.length) return this;
+    const next = [...this.powers];
+    [next[index], next[target]] = [next[target], next[index]];
+    return this.setField("powers", next);
+  }
+
+  get passives() {
+    return this.data.passives ?? [];
+  }
+
+  get passivesFull() {
+    return this.passives.length >= MAX_PASSIVES;
+  }
+
+  addPassive() {
+    if (this.passivesFull) return this;
+    const name = uniqueName(BLANK_PASSIVE.name, this.passives.map((p) => p.name));
+    return this.addEntry("passives", {...BLANK_PASSIVE, name});
+  }
+
+  updatePassive(index, status) {
+    return this.setField("passives", this.passives.map((p, i) => (i === index ? status : p)));
+  }
+
+  removePassive(index) {
+    return this.removeEntry("passives", index);
   }
 }
