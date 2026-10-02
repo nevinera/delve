@@ -30,7 +30,9 @@ vi.mock("../estimateDamage", () => ({
 // AbilityPreviewCanvas, which jsdom can't back - stub it, exposing the
 // powers it was given.
 vi.mock("../UnitTypePreviewPane", () => ({
-  default: ({unitTypeData}) => <div data-testid="preview-powers">{JSON.stringify(unitTypeData.powers)}</div>,
+  default: ({unitTypeData, resolvedTokenUrls}) => (
+    <div data-testid="preview-powers" data-tokens={JSON.stringify(resolvedTokenUrls)}>{JSON.stringify(unitTypeData.powers)}</div>
+  ),
 }));
 
 const initialUnitType = {
@@ -373,6 +375,20 @@ describe("UnitTypeEditor", () => {
 
       await validateAndSave();
       expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"tokens/unit/raider.webp": file}), {message: "Update Goblin Raider"});
+    });
+
+    it("previews an unsaved upload from its local URL, alongside resolved saved tokens", async () => {
+      const {container} = await renderReady({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
+      URL.createObjectURL = vi.fn(() => "blob:second");
+      URL.revokeObjectURL = vi.fn();
+
+      fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
+      fireEvent.change(container.querySelectorAll('input[type="file"]')[1], {target: {files: [new File(["x"], "second.webp")]}});
+
+      await waitFor(() => expect(JSON.parse(screen.getByTestId("preview-powers").dataset.tokens)).toEqual({
+        "../tokens/unit/first.webp": "https://raw.githubusercontent.com/mock/tokens/unit/first.webp",
+        "../tokens/unit/second.webp": "blob:second",
+      }));
     });
 
     it("picking an existing token image sets the slot's path without staging an upload", async () => {

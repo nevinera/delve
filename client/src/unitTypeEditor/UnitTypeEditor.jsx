@@ -56,6 +56,13 @@ function withoutIndex(map, removed, onRemoved) {
   return next;
 }
 
+function withoutUpload(uploads, index) {
+  if (!uploads[index]) return uploads;
+  URL.revokeObjectURL(uploads[index]);
+  const {[index]: _dropped, ...rest} = uploads;
+  return rest;
+}
+
 function revokeAll(overrides) {
   for (const url of Object.values(overrides ?? {})) URL.revokeObjectURL(url);
 }
@@ -120,8 +127,10 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
   // live in pendingPowerFilesRef, keyed the same way.
   const [powerAssetOverrides, setPowerAssetOverrides] = useState({});
   const pendingPowerFilesRef = useRef({});
-  // Unsaved token uploads, keyed by tokenImageUrl index.
+  // Unsaved token uploads, keyed by tokenImageUrl index, plus a blob:
+  // preview URL for each so the preview can show it before it's saved.
   const pendingTokenFilesRef = useRef({});
+  const [tokenUploadUrls, setTokenUploadUrls] = useState({});
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState(null);
@@ -206,15 +215,23 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
 
   function uploadTokenImage(index, file) {
     pendingTokenFilesRef.current[index] = file;
+    const url = URL.createObjectURL(file);
+    setTokenUploadUrls((current) => {
+      if (current[index]) URL.revokeObjectURL(current[index]);
+      return {...current, [index]: url};
+    });
     handleChange(draft.updateTokenImage(index, `${tokensUnitPrefix(unitTypeKey)}tokens/unit/${file.name}`));
   }
 
   function pickTokenImage(index, filename) {
+    delete pendingTokenFilesRef.current[index];
+    setTokenUploadUrls((current) => withoutUpload(current, index));
     handleChange(draft.updateTokenImage(index, `${tokensUnitPrefix(unitTypeKey)}tokens/unit/${filename}`));
   }
 
   function removeTokenImage(index) {
     pendingTokenFilesRef.current = withoutIndex(pendingTokenFilesRef.current, index);
+    setTokenUploadUrls((current) => withoutIndex(current, index, (url) => URL.revokeObjectURL(url)));
     handleChange(draft.removeTokenImage(index));
   }
 
@@ -328,6 +345,13 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
   if (loadError) return <div className="unit-type-editor-load-error">Failed to load: {loadError}</div>;
   if (draft === null) return <div className="unit-type-editor-loading">Loading…</div>;
 
+  // Saved tokens resolve to their GitHub URL; an unsaved upload previews
+  // from its local blob: URL instead.
+  const tokenPreviewUrls = {...resolvedTokenUrls};
+  draft.tokenImageUrls.forEach((url, i) => {
+    if (tokenUploadUrls[i]) tokenPreviewUrls[url] = tokenUploadUrls[i];
+  });
+
   const selectedPower = selection.power === undefined ? null : draft.powers[selection.power];
   const area = (selection.area === "power" || selection.area === "status") && !selectedPower ? "unit" : selection.area;
 
@@ -399,7 +423,7 @@ export default function UnitTypeEditor({unitTypeKey, stockAssets, backUrl}) {
             assetMap={assetMap}
             powerAssetOverrides={powerAssetOverrides}
             stockAssets={stockAssets}
-            resolvedTokenUrls={resolvedTokenUrls}
+            resolvedTokenUrls={tokenPreviewUrls}
           />
         </div>
         <AreaList
