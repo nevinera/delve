@@ -12,7 +12,7 @@ describe("syncZoneRefs", () => {
     const zoneData = {name: "Demo", maps: mapRef, unitTypes: {}, items: {}};
     const details = mapDetails([{unitType: "demo/goblin-archer", itemKeys: []}]);
 
-    const synced = syncZoneRefs(zoneData, details);
+    const synced = syncZoneRefs(zoneData, details, "demo");
 
     expect(synced.unitTypes).toEqual({
       "demo/goblin-archer": {$ref: "../../unit_types/demo/goblin-archer.json", referenceTo: "unit_type"},
@@ -23,7 +23,7 @@ describe("syncZoneRefs", () => {
     const zoneData = {name: "Demo", maps: mapRef, unitTypes: {}, items: {}};
     const details = mapDetails([{unitType: "demo/goblin-archer", itemKeys: ["raiders-cap"]}]);
 
-    const synced = syncZoneRefs(zoneData, details);
+    const synced = syncZoneRefs(zoneData, details, "demo");
 
     expect(synced.items).toEqual({
       "raiders-cap": {$ref: "../../items/raiders-cap.json", referenceTo: "item"},
@@ -35,7 +35,7 @@ describe("syncZoneRefs", () => {
     const zoneData = {name: "Demo", maps: mapRef, unitTypes: {"demo/goblin-archer": customRef}, items: {}};
     const details = mapDetails([{unitType: "demo/goblin-archer", itemKeys: []}]);
 
-    const synced = syncZoneRefs(zoneData, details);
+    const synced = syncZoneRefs(zoneData, details, "demo");
 
     expect(synced.unitTypes["demo/goblin-archer"]).toBe(customRef);
   });
@@ -45,7 +45,7 @@ describe("syncZoneRefs", () => {
     const zoneData = {name: "Demo", maps: mapRef, unitTypes: {unused: staleRef}, items: {}};
     const details = mapDetails([]);
 
-    const synced = syncZoneRefs(zoneData, details);
+    const synced = syncZoneRefs(zoneData, details, "demo");
 
     expect(synced.unitTypes.unused).toBe(staleRef);
   });
@@ -53,9 +53,19 @@ describe("syncZoneRefs", () => {
   it("defaults to an empty dict when the zone has no unitTypes/items at all yet", () => {
     const zoneData = {name: "Demo", maps: []};
 
-    const synced = syncZoneRefs(zoneData, {});
+    const synced = syncZoneRefs(zoneData, {}, "demo");
 
     expect(synced.unitTypes).toEqual({});
     expect(synced.items).toEqual({});
+  });
+
+  it("climbs one extra level per segment of a nested zone key", () => {
+    const zoneData = {name: "Forest", maps: mapRef, unitTypes: {}, items: {}};
+    const details = mapDetails([{unitType: "demo/goblin-archer", itemKeys: ["raiders-cap"]}]);
+
+    const synced = syncZoneRefs(zoneData, details, "small/forest");
+
+    expect(synced.unitTypes["demo/goblin-archer"].$ref).toBe("../../../unit_types/demo/goblin-archer.json");
+    expect(synced.items["raiders-cap"].$ref).toBe("../../../items/raiders-cap.json");
   });
 });

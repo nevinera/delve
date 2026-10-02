@@ -99,7 +99,7 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
   const itemUsageKey = zoneData ? JSON.stringify(Object.keys(aggregateItemUsage(zoneData, mapDetailsByKey)).sort()) : null;
   useEffect(() => {
     if (!zoneData) return;
-    const synced = syncZoneRefs(zoneData, mapDetailsByKey);
+    const synced = syncZoneRefs(zoneData, mapDetailsByKey, zoneKey);
     const unitTypesGrew = Object.keys(synced.unitTypes).length > Object.keys(zoneData.unitTypes ?? {}).length;
     const itemsGrew = Object.keys(synced.items).length > Object.keys(zoneData.items ?? {}).length;
     if (!unitTypesGrew && !itemsGrew) return;
@@ -178,7 +178,7 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
     try {
       // zoneData should already be synced (see the effect above) - this is
       // just a defensive backstop against validating a stale snapshot.
-      const synced = syncZoneRefs(zoneData, mapDetailsByKey);
+      const synced = syncZoneRefs(zoneData, mapDetailsByKey, zoneKey);
       const fullZone = await resolveZoneRefs(synced, `zones/${zoneKey}`);
       const {valid, error} = await validateZone(fullZone);
       if (valid) setValid();
@@ -193,7 +193,7 @@ export default function ZoneEditor({zoneKey, newMapUrl}) {
     try {
       // Same defensive backstop as handleValidate - zoneData should
       // already be synced by the effect above.
-      const synced = syncZoneRefs(zoneData, mapDetailsByKey);
+      const synced = syncZoneRefs(zoneData, mapDetailsByKey, zoneKey);
       await saveZone(zoneKey, synced, graphPositions, commitMessage);
       setDraft(new ZoneDraft(synced));
       setSaved();

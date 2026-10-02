@@ -13,25 +13,30 @@ import {aggregateItemUsage, aggregateUnitTypeUsage} from "./zoneRefUsage";
 // using the same key as the real unit_types/items file (this is the
 // convention every hand-authored zone already follows, e.g.
 // goblin-cave.json's "goblin-archer" -> "../../unit_types/goblin-archer.json").
-function refFor(dir, referenceTo, key) {
-  return {$ref: `../../${dir}/${key}.json`, referenceTo};
+// The zone file lives at zones/<zoneKey>/, and zoneKey's own "/"s (e.g.
+// "small/forest") each add a directory level, so the climb back to the
+// repo root is one ".." per zoneKey segment plus one for zones/ itself.
+function toRepoRoot(zoneKey) {
+  return "../".repeat(zoneKey.split("/").length + 1);
 }
 
-function withMissingKeys(existing, usedKeys, dir, referenceTo) {
+function withMissingKeys(existing, usedKeys, rootPrefix, dir, referenceTo) {
   const missing = usedKeys.filter((key) => !Object.prototype.hasOwnProperty.call(existing ?? {}, key));
   if (missing.length === 0) return existing ?? {};
-  return {...(existing ?? {}), ...Object.fromEntries(missing.map((key) => [key, refFor(dir, referenceTo, key)]))};
+  const refFor = (key) => ({$ref: `${rootPrefix}${dir}/${key}.json`, referenceTo});
+  return {...(existing ?? {}), ...Object.fromEntries(missing.map((key) => [key, refFor(key)]))};
 }
 
 // Returns a copy of zoneData whose unitTypes/items dicts include every key
 // actually used by its own maps (per mapDetailsByKey - see
 // zoneContentLoaders.js's mapDetailsFor), adding whatever's missing.
-export function syncZoneRefs(zoneData, mapDetailsByKey) {
+export function syncZoneRefs(zoneData, mapDetailsByKey, zoneKey) {
+  const rootPrefix = toRepoRoot(zoneKey);
   const itemKeys = Object.keys(aggregateItemUsage(zoneData, mapDetailsByKey));
   const unitTypeKeys = Object.keys(aggregateUnitTypeUsage(zoneData, mapDetailsByKey));
   return {
     ...zoneData,
-    items: withMissingKeys(zoneData.items, itemKeys, "items", "item"),
-    unitTypes: withMissingKeys(zoneData.unitTypes, unitTypeKeys, "unit_types", "unit_type"),
+    items: withMissingKeys(zoneData.items, itemKeys, rootPrefix, "items", "item"),
+    unitTypes: withMissingKeys(zoneData.unitTypes, unitTypeKeys, rootPrefix, "unit_types", "unit_type"),
   };
 }
