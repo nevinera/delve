@@ -6,7 +6,8 @@ import WorldFieldsPanel from "./WorldFieldsPanel";
 import ZonesPanel from "./ZonesPanel";
 import WorldLinksPanel from "./WorldLinksPanel";
 import EntryPointsPanel from "./EntryPointsPanel";
-import {saveWorld} from "./saveWorld";
+import {saveWorld, worldAssetPath} from "./saveWorld";
+import {generateThumbnail} from "../content/generateThumbnail";
 import {validateWorld} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
@@ -56,6 +57,11 @@ export default function WorldEditor({worldKey, newZoneUrl, publishUrl, nextTag})
   // Edits since the last successful save - Publish tags the saved world,
   // so it waits for these to be saved first.
   const [unsaved, setUnsaved] = useState(false);
+  // A just-uploaded thumbnail (already downscaled), committed on the next
+  // save - and what the fields panel previews, either that local file or
+  // the committed thumbnailUrl's real asset URL.
+  const [pendingThumbnail, setPendingThumbnail] = useState(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState(null);
   const client = useRef(new GithubClient());
 
   useEffect(() => {
@@ -71,6 +77,11 @@ export default function WorldEditor({worldKey, newZoneUrl, publishUrl, nextTag})
         setDraft(new WorldDraft(data));
         setGraphPositions(positions);
         setAvailableZoneKeys(zoneKeys);
+        if (data.thumbnailUrl) {
+          client.current.assetUrl(worldAssetPath(worldKey, data.thumbnailUrl)).then((url) => {
+            if (!cancelled) setThumbnailPreviewUrl(url);
+          }, () => {});
+        }
 
         const details = await zoneDetailsFor(client.current, worldKey, data.zones);
         if (cancelled) return;
@@ -94,6 +105,19 @@ export default function WorldEditor({worldKey, newZoneUrl, publishUrl, nextTag})
     markDirty();
     setUnsaved(true);
     setDraft(nextDraft);
+  }
+
+  // Downscales the picked image (see generateThumbnail) and points
+  // thumbnailUrl at a sibling <world>.thumb.webp - falling back to the
+  // original file, under its own extension, if it can't be rasterized.
+  async function handleUploadThumbnail(file) {
+    const basename = worldKey.split("/").pop();
+    const thumbnail = await generateThumbnail(file);
+    const extension = thumbnail ? "webp" : (file.name.split(".").pop() || "png");
+    const upload = thumbnail ?? file;
+    setPendingThumbnail(upload);
+    setThumbnailPreviewUrl(URL.createObjectURL(upload));
+    handleChange(draft.setField("thumbnailUrl", `${basename}.thumb.${extension}`));
   }
 
   // Picks up a zone created in another tab (via the "Create Zone ↗" link)
@@ -158,7 +182,8 @@ export default function WorldEditor({worldKey, newZoneUrl, publishUrl, nextTag})
   async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveWorld(worldKey, draft.data, graphPositions, commitMessage);
+      await saveWorld(worldKey, draft.data, graphPositions, commitMessage, pendingThumbnail);
+      setPendingThumbnail(null);
       setSaved();
       setUnsaved(false);
     } catch (error) {
@@ -194,7 +219,7 @@ export default function WorldEditor({worldKey, newZoneUrl, publishUrl, nextTag})
       <div className="world-editor-sidebar">
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || worldKey}`} />
         {publishUrl && <PublishBar unsaved={unsaved} defaultTag={nextTag} onPublish={handlePublish} />}
-        <WorldFieldsPanel draft={draft} onChange={handleChange} />
+        <WorldFieldsPanel draft={draft} onChange={handleChange} thumbnailPreviewUrl={thumbnailPreviewUrl} onUploadThumbnail={handleUploadThumbnail} />
         <ZonesPanel
           draft={draft}
           onChange={handleChange}

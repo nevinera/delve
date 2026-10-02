@@ -23,7 +23,7 @@ function blankZone(key) {
     .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(" ");
   return {
-    name, description: null, elvl: null, private: null, maps: [],
+    name, description: null, elvl: 0, private: false, maps: [],
     unitTypes: {}, items: {}, zoneLinks: [], entryPoints: {}, openConnections: {},
   };
 }

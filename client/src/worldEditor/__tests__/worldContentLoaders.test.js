@@ -103,6 +103,18 @@ describe("listAvailableZoneKeys", () => {
     expect(client.listDirectory).toHaveBeenCalledWith("zones");
   });
 
+  it("finds zones nested under a grouping folder, without their maps", async () => {
+    const client = {
+      listDirectory: vi.fn().mockResolvedValue([
+        "zones/small/forest/forest.json",
+        "zones/small/forest/glade/glade.json",
+        "zones/small/cave/cave.json",
+      ]),
+    };
+
+    expect(await listAvailableZoneKeys(client)).toEqual(["small/cave", "small/forest"]);
+  });
+
   it("returns an empty array when there are no zones yet", async () => {
     const client = {listDirectory: vi.fn().mockResolvedValue([])};
     expect(await listAvailableZoneKeys(client)).toEqual([]);
@@ -112,5 +124,9 @@ describe("listAvailableZoneKeys", () => {
 describe("zoneRefPath", () => {
   it("computes the deterministic relative path from a world file to a zone's own file", () => {
     expect(zoneRefPath("goblin_cave")).toBe("../zones/goblin_cave/goblin_cave.json");
+  });
+
+  it("names a nested zone's file after its last key segment", () => {
+    expect(zoneRefPath("small/forest")).toBe("../zones/small/forest/forest.json");
   });
 });

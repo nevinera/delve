@@ -6,7 +6,7 @@ class Build::MapsController < Build::BaseController
 
   def index
     entries = Github::ContentClient.new(current_user).list_directory_recursive("zones")
-    @maps = entries.select { |entry| map_file?(entry["path"]) }.sort_by { |entry| entry["path"] }
+    @map_keys = ZoneTree.new(entries.map { |entry| entry["path"] }).map_keys
   end
 
   # `prefix` lets the zone editor's "Create Map" link (opened in a new tab -
@@ -44,16 +44,8 @@ class Build::MapsController < Build::BaseController
     render :new, status: :unprocessable_content
   end
 
-  # A map lives at zones/<key>/<basename(key)>.json - one directory level
-  # deeper than a zone's own zones/<zone>/<zone>.json, which is what
-  # distinguishes the two when scanning the shared "zones" directory (see
-  # ../content/zones/goblin-cave/{goblin-cave.json,gc1-.../gc1-....json}
-  # in the real content repo).
-  def map_file?(path)
-    return false unless path.end_with?(".json") && !path.end_with?(".full.json")
-    path.delete_prefix("zones/").count("/") == 2
-  end
-
+  # A map lives at zones/<key>/<basename(key)>.json, inside its zone's own
+  # directory (see ZoneTree for how the index tells the two apart).
   def map_path(key)
     "zones/#{key}/#{key.split("/").last}.json"
   end

@@ -59,6 +59,10 @@ RSpec.describe WorldContent::Links do
     it "returns nil when every entry point needs a key" do
       expect(described_class.default_entry({"entryPoints" => {"cave/mouth/in" => "key"}})).to be_nil
     end
+
+    it "keeps a nested zone key whole" do
+      expect(described_class.default_entry({"entryPoints" => {"small/forest/road/south" => nil}})).to eq(["small/forest", "road/south"])
+    end
   end
 
   describe ".connection_exists?" do

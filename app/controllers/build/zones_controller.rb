@@ -6,7 +6,7 @@ class Build::ZonesController < Build::BaseController
 
   def index
     entries = Github::ContentClient.new(current_user).list_directory_recursive("zones")
-    @zones = entries.select { |entry| zone_file?(entry["path"]) }.sort_by { |entry| entry["path"] }
+    @zone_keys = ZoneTree.new(entries.map { |entry| entry["path"] }).zone_keys
   end
 
   def new
@@ -43,16 +43,8 @@ class Build::ZonesController < Build::BaseController
 
   # A zone lives at zones/<key>/<basename(key)>.json - the same "own
   # subdirectory, basename-matched file" convention Build::MapsController's
-  # #map_path uses one level down for maps inside it (see
-  # ../content/zones/goblin-cave/goblin-cave.json in the real content repo).
-  # One slash after stripping "zones/" is what distinguishes a zone's own
-  # file from a map file living deeper inside it (see #map_file? for the
-  # exact same trick at depth 2).
-  def zone_file?(path)
-    return false unless path.end_with?(".json") && !path.end_with?(".full.json") && !path.end_with?(".layout.json")
-    path.delete_prefix("zones/").count("/") == 1
-  end
-
+  # #map_path uses one level down for maps inside it (see ZoneTree for how
+  # the index tells the two apart).
   def zone_path(key)
     "zones/#{key}/#{key.split("/").last}.json"
   end
