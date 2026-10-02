@@ -1,4 +1,5 @@
 import {resourceTypeById} from "../resourceTypes";
+import {uniqueName} from "../powersEditor/uniqueName";
 
 // Starter shape for a freshly-picked tactics type (see
 // Validators::TacticsValidator) - mirrors ClassDraft/AbilityDraft's own
@@ -133,18 +134,8 @@ export class UnitTypeDraft {
     return this.powers.map((power) => power.name).filter(Boolean);
   }
 
-  // Tactics refer to powers by name, so two powers sharing one would be
-  // ambiguous - a copied-in power gets a numeric suffix instead.
-  uniquePowerName(name) {
-    const taken = new Set(this.powerNames);
-    if (!taken.has(name)) return name;
-    let n = 2;
-    while (taken.has(`${name} ${n}`)) n++;
-    return `${name} ${n}`;
-  }
-
   addPower(ability) {
-    return this.addEntry("powers", {...ability, name: this.uniquePowerName(ability.name || "New Power")});
+    return this.addEntry("powers", {...ability, name: uniqueName(ability.name || "New Power", this.powerNames)});
   }
 
   removePower(index) {

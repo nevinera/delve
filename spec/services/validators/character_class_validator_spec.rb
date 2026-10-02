@@ -68,6 +68,14 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /at least 1 element/)
     end
 
+    it "raises when there are more than 3 resources" do
+      primary = character_class_fixture["resources"][0]
+      extras = %w[focus rage fury].map { |name| primary.merge("name" => name).except("displayType") }
+      data = character_class_fixture.merge("resources" => [primary, *extras])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /resources may not exceed 3 entries/)
+    end
+
     it "raises when no resource is marked primary" do
       resource = character_class_fixture["resources"][0].except("displayType")
       data = character_class_fixture.merge("resources" => [resource])

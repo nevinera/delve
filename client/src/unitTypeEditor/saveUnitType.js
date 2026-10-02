@@ -1,6 +1,5 @@
 import {commitFiles} from "../github/commitFiles";
-import {currentFieldValue} from "../abilityEditor/resolveAbilityForPlayback";
-import {resolveRepoPath, unitTypePath} from "./powerSources";
+import {powerUploadFiles, resolveRepoPath} from "../powersEditor/powerSources";
 
 // Commits unit_types/<key>.json (every power inline - a unit type is no
 // longer abstract, so it has no .full.json companion) plus every pending
@@ -14,7 +13,7 @@ import {resolveRepoPath, unitTypePath} from "./powerSources";
 //   deletePaths - repo paths to remove in the same commit (a stale
 //                 .full.json left over from the $ref era)
 export async function saveUnitType(key, unitTypeData, {tokenFiles = {}, powerFiles = {}, deletePaths = []} = {}, commitMessage) {
-  const ownPath = unitTypePath(key);
+  const ownPath = `unit_types/${key}.json`;
   const filesByPath = {[ownPath]: unitTypeData};
   const missingPaths = [];
 
@@ -29,12 +28,9 @@ export async function saveUnitType(key, unitTypeData, {tokenFiles = {}, powerFil
   for (const [index, file] of Object.entries(tokenFiles)) {
     addUpload(`tokenImageUrl[${index}]`, (unitTypeData.tokenImageUrl ?? [])[Number(index)], file);
   }
-  for (const [powerIndex, files] of Object.entries(powerFiles)) {
-    const power = (unitTypeData.powers ?? [])[Number(powerIndex)] ?? {};
-    for (const [overrideKey, file] of Object.entries(files)) {
-      addUpload(`${power.name || `power ${Number(powerIndex) + 1}`} ${overrideKey}`, currentFieldValue(power, overrideKey), file);
-    }
-  }
+  const powerUploads = powerUploadFiles(ownPath, unitTypeData.powers ?? [], powerFiles);
+  Object.assign(filesByPath, powerUploads.files);
+  missingPaths.push(...powerUploads.missing);
   if (missingPaths.length > 0) {
     throw new Error(`Set a path before saving for: ${missingPaths.join(", ")}`);
   }

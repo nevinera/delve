@@ -1,5 +1,7 @@
 module Validators
   class CharacterClassValidator < Base
+    MAX_RESOURCES = 3
+
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
@@ -33,6 +35,9 @@ module Validators
     def validate_resources!(data, path:)
       resources_path = child_path(path, "resources")
       resources = require_array!(data, "resources", path: path, min: 1)
+      if resources.length > MAX_RESOURCES
+        raise ValidationError.new("resources may not exceed #{MAX_RESOURCES} entries", path: resources_path)
+      end
       resources.each_with_index do |resource, i|
         ResourceTypeValidator.validate!(resource, path: index_path(resources_path, i))
       end

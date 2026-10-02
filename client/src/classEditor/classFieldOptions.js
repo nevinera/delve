@@ -14,3 +14,8 @@ export const WIELD_TYPES = [
 ];
 
 export const SLOT_COUNT = 10;
+
+export const MAX_RESOURCES = 3;
+
+// See Validators::CharacterClassValidator#validate_passives!.
+export const MAX_PASSIVES = 6;

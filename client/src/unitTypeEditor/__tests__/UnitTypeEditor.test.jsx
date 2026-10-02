@@ -234,19 +234,25 @@ describe("UnitTypeEditor", () => {
   });
 
   describe("importing a power", () => {
-    it("copies a library ability in, with its asset URLs rebased", async () => {
+    it("copies a library ability in, picked by folder then power, with its asset URLs rebased", async () => {
       const pound = {name: "Pound", iconURL: "../../../graphics/icons/pound.png", effects: []};
       await renderReady(initialUnitType, {
         files: {"abilities/units/goblins/pound.json": pound},
-        listings: {abilities: ["abilities/units/goblins/pound.json"]},
+        listings: {
+          abilities: ["abilities/units/goblins/pound.json"],
+          "abilities/units/goblins": ["abilities/units/goblins/pound.json"],
+        },
       });
       fireEvent.click(screen.getByRole("button", {name: "+ Import power"}));
-      await waitFor(() => expect(screen.getByRole("option", {name: "units/goblins/pound"})).toBeInTheDocument());
 
-      fireEvent.change(screen.getByRole("combobox", {name: "Library power"}), {target: {value: "abilities/units/goblins/pound.json"}});
+      fireEvent.change(screen.getByRole("combobox", {name: "Source type"}), {target: {value: "library"}});
+      const source = await screen.findByRole("combobox", {name: "Source"});
+      await within(source).findByRole("option", {name: "units/goblins"});
+      fireEvent.change(source, {target: {value: "abilities/units/goblins"}});
+      await screen.findByText("Pound");
       fireEvent.click(screen.getByRole("button", {name: "Import"}));
 
-      await waitFor(() => expect(previewPowers()).toEqual([{...pound, iconURL: "../graphics/icons/pound.png"}]));
+      expect(previewPowers()).toEqual([{...pound, iconURL: "../graphics/icons/pound.png"}]);
       expect(breadcrumbs().getByText("Pound")).toHaveAttribute("aria-current", "page");
     });
 
@@ -256,12 +262,13 @@ describe("UnitTypeEditor", () => {
         listings: {unit_types: ["unit_types/goblin-boss.json", "unit_types/goblin-boss.full.json", "unit_types/goblin-raider.json"]},
       });
       fireEvent.click(screen.getByRole("button", {name: "+ Import power"}));
-      const picker = screen.getByRole("combobox", {name: "Unit type"});
-      await waitFor(() => expect(within(picker).getAllByRole("option").map((o) => o.textContent)).toEqual(["— pick a unit type —", "goblin-boss"]));
 
-      fireEvent.change(picker, {target: {value: "unit_types/goblin-boss.json"}});
+      fireEvent.change(screen.getByRole("combobox", {name: "Source type"}), {target: {value: "unitType"}});
+      const source = await screen.findByRole("combobox", {name: "Source"});
+      await waitFor(() => expect(within(source).getAllByRole("option").map((o) => o.textContent)).toEqual(["— pick one —", "goblin-boss"]));
+      fireEvent.change(source, {target: {value: "unit_types/goblin-boss.json"}});
       await screen.findByText("Slash");
-      fireEvent.click(screen.getAllByRole("button", {name: "Import"})[1]);
+      fireEvent.click(screen.getByRole("button", {name: "Import"}));
 
       expect(previewPowers()).toEqual([slash]);
     });
@@ -340,7 +347,7 @@ describe("UnitTypeEditor", () => {
       URL.createObjectURL = vi.fn(() => "blob:slash");
       URL.revokeObjectURL = vi.fn();
 
-      fireEvent.change(container.querySelector(".unit-type-editor-fields input[type=file]"), {target: {files: [file]}});
+      fireEvent.change(container.querySelector(".content-editor-fields input[type=file]"), {target: {files: [file]}});
       await validateAndSave();
 
       expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"graphics/icons/slash.png": file}), expect.anything());

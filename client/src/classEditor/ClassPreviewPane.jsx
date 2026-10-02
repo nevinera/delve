@@ -4,7 +4,6 @@ import {AbilityTooltip} from "../AbilityTooltip";
 import AbilityIcon from "../AbilityIcon";
 import AbilityPreviewCanvas from "../abilityEditor/AbilityPreviewCanvas";
 import {resolveAbilityForPlayback} from "../abilityEditor/resolveAbilityForPlayback";
-import {abilityKeyForRef} from "./powerRefs";
 import {SLOT_COUNT} from "./classFieldOptions";
 
 const DEFAULT_MAX_RANGE = 10;
@@ -37,22 +36,16 @@ function inRange(ability, targetDistanceFt) {
   return isSelfOnly(ability) || targetDistanceFt <= abilityRange(ability);
 }
 
-// Resolves every filled slot's referenced ability (already fetched, with its
-// own asset thumbnails, by Build::ClassesController#load_available_abilities)
-// into a playable form, padded out to SLOT_COUNT with nulls for the
-// always-visible empty slots.
-function resolveSlots(classKey, powers, availableAbilities, stockAssets) {
-  const resolved = powers.map((entry) => {
-    const key = abilityKeyForRef(classKey, entry);
-    if (!key || !availableAbilities[key]) return null;
-    const {ability, assetMap} = availableAbilities[key];
-    return resolveAbilityForPlayback(ability, assetMap, {}, stockAssets);
-  });
+// Swaps each inline power's relative/stock asset URLs (and any unsaved
+// uploads - powerAssetOverrides, keyed by slot index) for playable ones,
+// padded out to SLOT_COUNT with nulls for the always-visible empty slots.
+function resolveSlots(powers, assetMap, powerAssetOverrides, stockAssets) {
+  const resolved = powers.map((power, i) => resolveAbilityForPlayback(power, assetMap, powerAssetOverrides?.[i] ?? {}, stockAssets));
   while (resolved.length < SLOT_COUNT) resolved.push(null);
   return resolved;
 }
 
-export default function ClassPreviewPane({classKey, powers, availableAbilities, stockAssets}) {
+export default function ClassPreviewPane({powers, assetMap, powerAssetOverrides, stockAssets}) {
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
@@ -66,8 +59,8 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
   useEffect(() => () => clearTimeout(fireTimeoutRef.current), []);
 
   const resolvedSlots = useMemo(
-    () => resolveSlots(classKey, powers, availableAbilities, stockAssets),
-    [classKey, powers, availableAbilities, stockAssets]
+    () => resolveSlots(powers, assetMap ?? {}, powerAssetOverrides, stockAssets),
+    [powers, assetMap, powerAssetOverrides, stockAssets]
   );
 
   const maxRange = useMemo(() => {
@@ -100,7 +93,7 @@ export default function ClassPreviewPane({classKey, powers, availableAbilities, 
 
   return (
     <div style={{display: "flex", flexDirection: "column", height: "100%"}}>
-      <div className="class-preview-canvas-area">
+      <div className="preview-canvas-area">
         <AbilityPreviewCanvas
           ref={canvasRef}
           selfTokenUrl={DEFAULT_SELF_TOKEN_URL}

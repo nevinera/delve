@@ -30,7 +30,7 @@ end
 
 def seed_character_class(user)
   character_class = CharacterClass.find_or_initialize_by(user: user, identifier: "puncher_local", version: "0.1")
-  character_class.location = "http://localhost:8001/classes/puncher.full.json"
+  character_class.location = "http://localhost:8001/classes/puncher.json"
   character_class.save!
   fetch_and_verify!(FetchCharacterClassContentJob, character_class)
   character_class

@@ -13,7 +13,7 @@ See [status.md](status.md) for the `Status` type embedded in `passives`.
 | `name` | string | yes | Display name. |
 | `description` | string | no | Short description shown in UI. |
 | `colors` | Colors | yes | Two display colors used for this class's tokens and UI elements. |
-| `resources` | array of ResourceType | yes | Resources available to this class. Most classes have one; some may have multiple. Exactly one entry must set `displayType: "primary"` (see [resource_type.md](resource_type.md)) - that's the one displayed, regenerated, and spent by ability costs. |
+| `resources` | array of ResourceType | yes | Resources available to this class, at most 3. Most classes have one; some may have multiple. Exactly one entry must set `displayType: "primary"` (see [resource_type.md](resource_type.md)) - that's the one displayed, regenerated, and spent by ability costs. |
 | `powers` | array of Ability \| AssetReference(`referenceTo: "ability"`) | no | Abilities available to this class. Inline Ability objects or references to external ability files. A class containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `passives` | array of Status | no | Hidden, permanent buffs granted just by playing this class - applied once at spawn and never expire. At most 6, no duplicate `name`s, and each must set `treatAs: "inherent"` (nothing else would stay hidden - see [status.md](status.md)). |
 | `primaryStats` | array of string | yes | One or more of `strength`, `agility`, `intellect`, no duplicates. Hybrid classes may list more than one. Used to synthesize Trainee Gear (see [stats.md](../stats.md)) for this class's empty equipment slots. |
