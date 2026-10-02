@@ -53,6 +53,6 @@ jobs:
         with:
           go-version-file: game-server/go.mod
 
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           working-directory: game-server
