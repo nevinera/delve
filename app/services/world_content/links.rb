@@ -27,7 +27,15 @@ module WorldContent
     # connection_key].
     def default_entry(world_data)
       key, = (world_data["entryPoints"] || {}).find { |_key, required| required.nil? }
-      key&.split("/", 2)
+      key && split_entry_point(key)
+    end
+
+    # "zoneId/mapId/connectionId" -> [zoneId, "mapId/connectionId"]. Splits
+    # from the right, since zone keys can themselves contain "/"
+    # ("small/forest") but map and connection ids can't.
+    def split_entry_point(key)
+      parts = key.split("/")
+      [parts[0..-3].join("/"), parts.last(2).join("/")]
     end
 
     # Whether zone_data has a map connection at "mapId/connectionId".

@@ -38,6 +38,17 @@ RSpec.describe "Build::Maps", type: :request do
           expect(response.body).not_to include(">goblin-cave<")
           expect(response.body).to include(edit_build_map_path(id: "goblin-cave/gc1-entrance"))
         end
+
+        it "lists maps inside zones nested under a grouping folder, but not the zones themselves" do
+          stub_tree_listing("nevinera/delve-content", "zones", [
+            "small/forest/forest.json",
+            "small/forest/glade/glade.json"
+          ])
+
+          get "/build/maps"
+          expect(response.body).to include(edit_build_map_path(id: "small/forest/glade"))
+          expect(response.body).not_to include(">small/forest<")
+        end
       end
     end
 

@@ -64,22 +64,27 @@ export async function zoneDetailsFor(client, worldKey, zones) {
   return Object.fromEntries(entries.filter(Boolean));
 }
 
-// Every real zone key directly under zones/ - a cheap directory listing (no
-// file opens), same intent/shape as zoneContentLoaders.js#listZoneMapKeys
-// one level up. Can't just type a zone key by hand and guess right - this
-// is what ZonesPanel's "Add Zone" picker offers candidates from. A zone
-// lives at zones/<key>/<key>.json (see Build::ZonesController#zone_path) -
-// one "/" left after stripping the zones/ prefix distinguishes a zone's own
-// file from a map file living deeper inside it.
+// Every real zone key under zones/ - a cheap directory listing (no file
+// opens). Can't just type a zone key by hand and guess right - this is
+// what ZonesPanel's "Add Zone" picker offers candidates from. Zones and
+// maps share one convention (a directory holding a json named after it),
+// and zone keys can nest ("small/forest"), so slash-counting can't tell
+// them apart: the shallowest such file on any branch is the zone, and
+// anything beneath it is one of its maps (same rule as app/services/zone_tree.rb).
 export async function listAvailableZoneKeys(client) {
   const prefix = "zones/";
   const paths = await client.listDirectory("zones");
-  const keys = paths
+  const ownKeys = paths
     .filter((path) => path.endsWith(".json") && !path.endsWith(".full.json") && !path.endsWith(".layout.json"))
-    .map((path) => path.slice(prefix.length))
-    .filter((relative) => relative.split("/").length === 2)
-    .map((relative) => relative.split("/")[0]);
-  return [...new Set(keys)].sort();
+    .map((path) => path.slice(prefix.length).split("/"))
+    .filter((parts) => parts.length >= 2 && parts.at(-1) === `${parts.at(-2)}.json`)
+    .map((parts) => parts.slice(0, -1).join("/"))
+    .sort((a, b) => a.split("/").length - b.split("/").length);
+  const zones = [];
+  for (const key of ownKeys) {
+    if (!zones.some((zone) => key.startsWith(`${zone}/`))) zones.push(key);
+  }
+  return [...new Set(zones)].sort();
 }
 
 // The relative path from a world's own file to a zone it references -
@@ -88,5 +93,5 @@ export async function listAvailableZoneKeys(client) {
 // or ask the author to type once a real zone key is picked from
 // listAvailableZoneKeys.
 export function zoneRefPath(zoneKey) {
-  return `../zones/${zoneKey}/${zoneKey}.json`;
+  return `../zones/${zoneKey}/${zoneKey.split("/").pop()}.json`;
 }
