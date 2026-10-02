@@ -1,3 +1,5 @@
+import {useState} from "react";
+
 function TextField({value, onChange, placeholder}) {
   return <input type="text" value={value ?? ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} />;
 }
@@ -34,9 +36,32 @@ function ElevationRangeField({value, onChange}) {
   );
 }
 
+// Type a path, or upload an image - WorldEditor downscales it and points
+// thumbnailUrl at a sibling <world>.thumb.webp, committed on save. The
+// file input is remounted (via `resetKey`) after each upload, since its
+// displayed filename can't otherwise be cleared programmatically.
+function ThumbnailField({value, previewUrl, onChange, onUpload}) {
+  const [resetKey, setResetKey] = useState(0);
+  return (
+    <div className="world-thumbnail-field">
+      <TextField value={value} onChange={onChange} placeholder="northern-barrens.thumb.webp" />
+      <input
+        key={resetKey}
+        type="file" accept="image/*" aria-label="Upload thumbnail"
+        onChange={(e) => {
+          const file = e.target.files[0];
+          if (file) onUpload(file);
+          setResetKey((k) => k + 1);
+        }}
+      />
+      {previewUrl && <img className="world-thumbnail-preview" src={previewUrl} alt="Thumbnail preview" />}
+    </div>
+  );
+}
+
 // Top-level World fields only - zones/worldLinks/entryPoints each get their
 // own panel below (see WorldEditor.jsx).
-export default function WorldFieldsPanel({draft, onChange}) {
+export default function WorldFieldsPanel({draft, onChange, thumbnailPreviewUrl, onUploadThumbnail}) {
   const {data} = draft;
 
   return (
@@ -52,7 +77,14 @@ export default function WorldFieldsPanel({draft, onChange}) {
         </tr>
         <tr>
           <th>Thumbnail URL</th>
-          <td><TextField value={data.thumbnailUrl} onChange={(v) => onChange(draft.setField("thumbnailUrl", v))} placeholder="../../assets/worlds/northern-barrens-thumb.webp" /></td>
+          <td>
+            <ThumbnailField
+              value={data.thumbnailUrl}
+              previewUrl={thumbnailPreviewUrl}
+              onChange={(v) => onChange(draft.setField("thumbnailUrl", v))}
+              onUpload={onUploadThumbnail}
+            />
+          </td>
         </tr>
         <tr>
           <th>Elevation Range</th>

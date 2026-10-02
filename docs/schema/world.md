@@ -13,7 +13,7 @@ See [zone.md](zone.md) for the `Zone` type referenced by `zones`.
 |---|---|---|---|
 | `name` | string | yes | Display name. |
 | `description` | string | no | Short description shown in UI. |
-| `thumbnailUrl` | string | no | URL of a small preview image, shown in world-selection UI. |
+| `thumbnailUrl` | string | no | URL of a small preview image, shown in world-selection UI. Relative to the world file; the world editor uploads it as a sibling `<world>.thumb.webp`. |
 | `elevationRange` | ElevationRange | no | Recommended. Bounds the `elvl` of every zone (and transitively every map) within this world. |
 | `zones` | object | yes | Maps local zone-identifier strings to WorldZoneEntry. At least one. |
 | `worldLinks` | array of WorldLink | no | Connections between pairs of zone connection points (either an `openConnection` or an `entryPoint`) across zones in this world. |
@@ -111,7 +111,7 @@ traversing one transports a unit to the other.
 {
   "name": "Northern Barrens",
   "description": "A dusty region of quillboar mountains, oases, and goblin outposts.",
-  "thumbnailUrl": "../../assets/worlds/northern-barrens-thumb.webp",
+  "thumbnailUrl": "northern-barrens.thumb.webp",
   "elevationRange": [0, 800],
   "zones": {
     "goblin_cave": {

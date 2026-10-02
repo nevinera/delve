@@ -6,6 +6,7 @@ import {commitFiles} from "../../github/commitFiles";
 import {GithubClient, GithubAuthError} from "../../github/delve-github";
 import {validateWorld} from "../../validators/validateContent";
 import {publishWorld} from "../publishWorld";
+import {generateThumbnail} from "../../content/generateThumbnail";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
@@ -19,6 +20,7 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
 
 vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../publishWorld", () => ({publishWorld: vi.fn()}));
+vi.mock("../../content/generateThumbnail", () => ({generateThumbnail: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateWorld: vi.fn(),
 }));
@@ -161,6 +163,31 @@ describe("WorldEditor", () => {
     fireEvent.click(screen.getByText("Add"));
 
     expect(await screen.findByRole("heading", {level: 4, name: "Stagnant Oasis"})).toBeInTheDocument();
+  });
+
+  it("uploads a thumbnail as a downscaled sibling webp, committed with the world", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:thumb");
+    const thumbBlob = new Blob(["thumb"], {type: "image/webp"});
+    generateThumbnail.mockResolvedValue(thumbBlob);
+    validateWorld.mockResolvedValue({valid: true});
+    commitFiles.mockResolvedValue({});
+    await renderLoaded();
+
+    const file = new File(["full"], "barrens.png", {type: "image/png"});
+    fireEvent.change(screen.getByLabelText("Upload thumbnail"), {target: {files: [file]}});
+    expect(await screen.findByDisplayValue("northern-barrens.thumb.webp")).toBeInTheDocument();
+    expect(screen.getByAltText("Thumbnail preview")).toHaveAttribute("src", "blob:thumb");
+
+    fireEvent.click(screen.getByText("Validate"));
+    await waitFor(() => expect(screen.getByText("Save")).not.toBeDisabled());
+    fireEvent.click(screen.getByText("Save"));
+    fireEvent.click(screen.getByText("Commit"));
+    await screen.findByText("Saved.");
+
+    const [savedFiles] = commitFiles.mock.calls[0];
+    expect(generateThumbnail).toHaveBeenCalledWith(file);
+    expect(savedFiles["worlds/northern-barrens.thumb.webp"]).toBe(thumbBlob);
+    expect(savedFiles["worlds/northern-barrens.json"].thumbnailUrl).toBe("northern-barrens.thumb.webp");
   });
 
   it("commits with a custom message typed into the commit prompt", async () => {
