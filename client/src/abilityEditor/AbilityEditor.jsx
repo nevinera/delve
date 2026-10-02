@@ -4,7 +4,7 @@ import {blankAbility} from "./blankAbility";
 import {collectAssetUrls} from "./collectAssetUrls";
 import AbilityPreviewPane from "./AbilityPreviewPane";
 import AbilityFieldsPanel from "./AbilityFieldsPanel";
-import {assetOverrideKey} from "./resolveAbilityForPlayback";
+import {reindexBySection} from "./reindexBySection";
 import {saveAbility} from "./saveAbility";
 import {validateAbility} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
@@ -18,30 +18,6 @@ import {redirectTo} from "../redirectTo";
 function resolveRepoPath(key, relativePath) {
   const url = new URL(relativePath, `https://_/abilities/${key}.json`);
   return url.pathname.replace(/^\//, "");
-}
-
-// Removing an entry shifts every later entry's index down by one, so any
-// value keyed by section+index (see assetOverrideKey) needs to move with
-// it - used for both the preview-URL map and the pending-File map, which
-// share the same keys. Drops (rather than shifts) the entry that was
-// actually removed.
-function reindexBySection(map, section, removedIndex, onRemoved) {
-  const prefix = `${section}[`;
-  const next = {};
-  for (const [key, value] of Object.entries(map)) {
-    if (!key.startsWith(prefix)) {
-      next[key] = value;
-      continue;
-    }
-    const [, entryIndex, field] = key.match(/^(?:.+)\[(\d+)\]\.(.+)$/);
-    const i = Number(entryIndex);
-    if (i === removedIndex) {
-      onRemoved?.(value);
-      continue;
-    }
-    next[assetOverrideKey(section, i > removedIndex ? i - 1 : i, field)] = value;
-  }
-  return next;
 }
 
 export default function AbilityEditor({abilityKey, stockAssets}) {

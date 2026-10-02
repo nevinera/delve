@@ -66,6 +66,8 @@ async function createBlob(token, repo, path, content) {
 }
 
 // filesByPath: {"abilities/firebolt.json": {...}, "graphics/animations/firebolt.png": File}
+// A null value deletes that path instead (it must already exist on the
+// branch - GitHub rejects deleting a missing path).
 // Returns {commitSha, branch} once the branch has been fast-forwarded to
 // the new commit. Throws (without partially applying anything visible on
 // the branch - only the ref update actually moves it) if another commit
@@ -85,7 +87,9 @@ export async function commitFiles(filesByPath, {message}) {
 
   const baseCommit = await githubRequest(token, `/repos/${repo}/git/commits/${baseCommitSha}`);
 
-  const blobs = await Promise.all(paths.map((path) => createBlob(token, repo, path, filesByPath[path])));
+  const blobs = await Promise.all(paths.map((path) => (
+    filesByPath[path] === null ? {path, sha: null} : createBlob(token, repo, path, filesByPath[path])
+  )));
 
   const tree = await githubRequest(token, `/repos/${repo}/git/trees`, {
     method: "POST",
