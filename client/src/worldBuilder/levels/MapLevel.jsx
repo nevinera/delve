@@ -1,7 +1,12 @@
 import {useState} from "react";
 import MapWorkbench from "../../mapEditor/MapWorkbench";
-import UnitTypeAdder from "./UnitTypeAdder";
-import UnitTypeModal from "./UnitTypeModal";
+import ContentAdder from "./ContentAdder";
+import EditModal from "./EditModal";
+import UnitTypeLevel from "./UnitTypeLevel";
+import ItemLevel from "./ItemLevel";
+import {createUnitType, unitTypeData} from "../state/unitTypeOps";
+import {createItem, itemData} from "../state/itemOps";
+import {libraryItems, libraryUnitTypes, prepareItemImport, prepareUnitTypeImport} from "../state/importing";
 import {generateThumbnail} from "../../content/generateThumbnail";
 import {mapData, ncuTokenUrls, setMapImage, updateMap, worldItems, worldUnitTypes} from "../state/mapOps";
 import {inMemory, newAssetPath, tokenImageOptions} from "../state/assetOps";
@@ -10,12 +15,14 @@ import {assetUrlFor} from "../state/assetUrls";
 
 // The map level: the map editor's whole editing surface (MapWorkbench)
 // over one map's part of the live draft. Units can be any of the world's
-// own unit types, and drop the world's own items. Uploaded backgrounds
-// (and their thumbnails) go into the draft like any other change.
+// own unit types, and drop the world's own items - either of which can be
+// imported or created on the spot (a created one opens in an EditModal
+// first). Uploaded backgrounds (and their thumbnails) go into the draft
+// like any other change.
 export default function MapLevel({draft, zone, map, onChange, repo, stockAssets, library}) {
-  // A unit type just created from the Units tab, open for editing, and
-  // what to do once that's done (put it in the palette).
-  const [editingUnitType, setEditingUnitType] = useState(null);
+  // A unit type or item just created while placing units, open for
+  // editing: {kind, key, done} - done uses it (palette, loot table).
+  const [editing, setEditing] = useState(null);
   const data = mapData(draft, zone, map);
   const path = mapFile(draft.worldKey, zone, map);
   const assetUrl = (repoPath) => assetUrlFor(draft, repo, repoPath);
@@ -56,23 +63,39 @@ export default function MapLevel({draft, zone, map, onChange, repo, stockAssets,
         ncuTokenUrls={ncuTokenUrls(draft, zone, map, assetUrl)}
         tokenImages={{options: tokenImageOptions(draft, path, assetUrl), upload: uploadTokenImage}}
         renderUnitTypeAdder={({onAdded, close}) => (
-          <UnitTypeAdder
-            draft={draft} library={library} onChange={onChange} onAdded={onAdded}
+          <ContentAdder
+            noun="unit type" draft={draft} library={library} list={libraryUnitTypes} prepare={prepareUnitTypeImport} create={createUnitType}
+            onChange={onChange} onAdded={onAdded}
             onCreated={(key) => {
               close();
-              setEditingUnitType({key, done: () => onAdded(key)});
+              setEditing({kind: "unitType", key, done: () => onAdded(key)});
+            }}
+          />
+        )}
+        renderItemAdder={({onAdded, close}) => (
+          <ContentAdder
+            noun="item" draft={draft} library={library} list={libraryItems} prepare={prepareItemImport} create={createItem}
+            onChange={onChange} onAdded={onAdded}
+            onCreated={(key) => {
+              close();
+              setEditing({kind: "item", key, done: () => onAdded(key)});
             }}
           />
         )}
       />
-      {editingUnitType && (
-        <UnitTypeModal
-          draft={draft} unitType={editingUnitType.key} onChange={onChange} repo={repo} stockAssets={stockAssets} library={library}
+      {editing && (
+        <EditModal
+          title={editing.kind === "item" ? `Item: ${itemData(draft, editing.key)?.name || editing.key}` : `Unit type: ${unitTypeData(draft, editing.key)?.name || editing.key}`}
+          label={`Edit ${editing.kind === "item" ? "item" : "unit type"} ${editing.key}`}
           onDone={() => {
-            editingUnitType.done();
-            setEditingUnitType(null);
+            editing.done();
+            setEditing(null);
           }}
-        />
+        >
+          {editing.kind === "item"
+            ? <ItemLevel draft={draft} item={editing.key} onChange={onChange} repo={repo} />
+            : <UnitTypeLevel draft={draft} unitType={editing.key} onChange={onChange} repo={repo} stockAssets={stockAssets} library={library} />}
+        </EditModal>
       )}
     </div>
   );

@@ -203,7 +203,7 @@
       /* Hovering a row (or the unit's token on the map, via hoveredIndex)
          highlights it the same way a canvas-selected entry does. */
       .map-editor-sidebar-content .entry-block.map-unit-block.map-entry-hovered { background: #202832; }
-      .map-editor-sidebar-content .map-unit-loot-table { margin-top: 8px; }
+      .map-editor-sidebar-content .map-unit-loot-table { margin-top: 8px; position: relative; }
       .map-editor-sidebar-content .map-unit-loot-table h4 { font-size: 12px; color: #9ab; font-weight: 600; margin-bottom: 4px; }
       .map-editor-sidebar-content .map-loot-entry { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 12px; }
       .map-editor-sidebar-content .map-loot-entry-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -263,7 +263,8 @@
         width: 32px; height: 32px; border-radius: 16px; background: transparent; border: 1px dashed #557; color: #9cf; font-size: 16px; cursor: pointer;
       }
       .map-editor-sidebar-content .map-unit-palette-add:hover { background: #22303c; }
-      .map-editor-sidebar-content .map-unit-palette-popover {
+      .map-editor-sidebar-content .map-unit-palette-popover,
+      .map-editor-sidebar-content .map-loot-item-popover {
         position: absolute; z-index: 5; top: 100%; left: 0; right: 0; margin-top: 4px; padding: 6px;
         background: #1c2126; border: 1px solid #457; border-radius: 6px; box-shadow: 0 6px 24px #00000080;
         max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;

@@ -102,8 +102,11 @@ function LootCountField({unit, unitIndex, dispatch}) {
   );
 }
 
-function LootTableFields({unit, unitIndex, availableItemKeys, itemDetails, onChooseItem, dispatch}) {
+// renderItemAdder({onAdded(key), close()}), if given, offers getting a new
+// item (e.g. importing or creating one) to drop, in a popover.
+function LootTableFields({unit, unitIndex, availableItemKeys, itemDetails, onChooseItem, dispatch, renderItemAdder}) {
   const [chosenItem, setChosenItem] = useState("");
+  const [addingItem, setAddingItem] = useState(false);
   const lootTable = unit.lootTable ?? {};
   const entries = Object.entries(lootTable);
   // An item already in the table isn't offered again - lootTable is keyed
@@ -154,7 +157,21 @@ function LootTableFields({unit, unitIndex, availableItemKeys, itemDetails, onCho
           {pickableKeys.map((key) => <option key={key} value={key}>{itemLabel(itemDetails, key)}</option>)}
         </select>
         <button type="button" className="add-entry" disabled={!chosenItem} onClick={addEntry}>+ Add Loot Entry</button>
+        {renderItemAdder && (
+          <button type="button" className="add-entry" aria-expanded={addingItem} onClick={() => setAddingItem((a) => !a)}>New item…</button>
+        )}
       </div>
+      {addingItem && (
+        <div className="map-loot-item-popover" role="dialog" aria-label="Add a new item">
+          {renderItemAdder({
+            onAdded: (key) => {
+              setLootTable({...lootTable, [key]: 1});
+              setAddingItem(false);
+            },
+            close: () => setAddingItem(false),
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -181,7 +198,7 @@ function UnitRow({
   unitPlacement, onStartUnitPlacement,
   patrolStepPlacement, onStartPatrolStepPlacement, onStartPatrolStepEdit, onHoverPatrolStep,
   wanderLocationPlacement, onStartWanderLocationPlacement, onUpdateMovement,
-  availableItemKeys, itemDetails, onChooseItem,
+  availableItemKeys, itemDetails, onChooseItem, renderItemAdder,
   updateUnit, dispatch,
 }) {
   return (
@@ -277,7 +294,7 @@ function UnitRow({
           <LootTableFields
             unit={unit} unitIndex={index}
             availableItemKeys={availableItemKeys} itemDetails={itemDetails} onChooseItem={onChooseItem}
-            dispatch={dispatch}
+            dispatch={dispatch} renderItemAdder={renderItemAdder}
           />
         </>
       )}
@@ -461,7 +478,7 @@ function OpenGroup({
 export default function UnitsTab({
   units, unitTypes, items, canPlaceOnMap,
   openGroup, onOpenGroup, onCloseGroup, onRenameGroup,
-  armedUnitType, onArmUnitType, onHoverUnitType, paletteAdditions = [], onAddToPalette, renderUnitTypeAdder,
+  armedUnitType, onArmUnitType, onHoverUnitType, paletteAdditions = [], onAddToPalette, renderUnitTypeAdder, renderItemAdder,
   hoveredGroupIdentifier, onHoverGroup, hoveredIndex, onHover, selectedIndex, onSelect,
   focusUnitRequest, onExpandedIndicesChange,
   onChooseUnitType = () => {}, onChooseItem = () => {},
@@ -493,7 +510,7 @@ export default function UnitsTab({
           unitPlacement: inUnitsSection(unitPlacement), onStartUnitPlacement,
           patrolStepPlacement: inUnitsSection(patrolStepPlacement), onStartPatrolStepPlacement, onStartPatrolStepEdit, onHoverPatrolStep,
           wanderLocationPlacement: inUnitsSection(wanderLocationPlacement), onStartWanderLocationPlacement, onUpdateMovement,
-          availableItemKeys: items.keys, itemDetails: items.details, onChooseItem,
+          availableItemKeys: items.keys, itemDetails: items.details, onChooseItem, renderItemAdder,
           updateUnit, dispatch,
         }}
       />

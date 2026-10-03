@@ -166,11 +166,12 @@
 
       /* The map level's unit type adder (UnitTypeAdder.jsx), in the Units
          tab's palette popover, and the modal editor it opens. */
-      .map-unit-palette-popover .unit-type-adder { display: flex; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2f35; }
-      .map-unit-palette-popover .zone-form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2f35; }
-      .map-unit-palette-popover .zone-form input,
-      .map-unit-palette-popover .zone-form select { flex: 1 1 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
-      .map-unit-palette-popover .zone-list-error { color: #e79; font-size: 12px; }
-      .unit-type-modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.6); display: flex; padding: 3vh 3vw; }
-      .unit-type-modal { flex: 1; height: auto; border: 1px solid #457; border-radius: 6px; overflow: hidden; background: #14181c; box-shadow: 0 10px 40px #000a; }
+      :is(.map-unit-palette-popover, .map-loot-item-popover) .content-adder { display: flex; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2f35; }
+      :is(.map-unit-palette-popover, .map-loot-item-popover) .zone-form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2f35; }
+      :is(.map-unit-palette-popover, .map-loot-item-popover) .zone-form input,
+      :is(.map-unit-palette-popover, .map-loot-item-popover) .zone-form select { flex: 1 1 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      :is(.map-unit-palette-popover, .map-loot-item-popover) .zone-list-error { color: #e79; font-size: 12px; }
+      .map-loot-item-popover > :first-child { margin-top: 0; padding-top: 0; border-top: none; }
+      .edit-modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.6); display: flex; padding: 3vh 3vw; }
+      .edit-modal { flex: 1; height: auto; border: 1px solid #457; border-radius: 6px; overflow: hidden; background: #14181c; box-shadow: 0 10px 40px #000a; }
 

@@ -1,21 +1,20 @@
 import {useState} from "react";
 import ImportForm from "./ImportForm";
 import {NewEntryForm} from "./ContentList";
-import {createUnitType} from "../state/unitTypeOps";
-import {libraryUnitTypes, prepareUnitTypeImport} from "../state/importing";
 
-// The map level's extra ways into the Units tab's palette (see
-// MapWorkbench's renderUnitTypeAdder): import one of the shared library's
-// unit types, or create a new one - which opens it for editing first
-// (onCreated), joining the palette when that's done.
-export default function UnitTypeAdder({draft, library, onChange, onAdded, onCreated}) {
+// The map level's extra ways to get one of the world's own unit types or
+// items while placing units (the Units tab's palette, a unit's loot
+// table): import one from the shared library (list/prepare - see
+// ImportForm), or create one (create(draft, key, name)), which is opened
+// for editing first (onCreated) and used once that's done.
+export default function ContentAdder({noun, draft, library, list, prepare, create, onChange, onAdded, onCreated}) {
   const [mode, setMode] = useState(null);
   const [error, setError] = useState(null);
 
   if (mode === "import") {
     return (
       <ImportForm
-        noun="unit type" draft={draft} library={library} list={libraryUnitTypes} prepare={prepareUnitTypeImport}
+        noun={noun} draft={draft} library={library} list={list} prepare={prepare}
         onChange={onChange} onImported={(key) => onAdded(key)} onCancel={() => setMode(null)}
       />
     );
@@ -24,11 +23,11 @@ export default function UnitTypeAdder({draft, library, onChange, onAdded, onCrea
     return (
       <>
         <NewEntryForm
-          noun="unit type"
+          noun={noun}
           onCancel={() => setMode(null)}
           onCreate={(key, name) => {
             try {
-              onChange(createUnitType(draft, key, name));
+              onChange(create(draft, key, name));
               onCreated(key);
             } catch (e) {
               setError(e.message);
@@ -40,7 +39,7 @@ export default function UnitTypeAdder({draft, library, onChange, onAdded, onCrea
     );
   }
   return (
-    <div className="unit-type-adder">
+    <div className="content-adder">
       {library && <button type="button" className="add-entry" onClick={() => setMode("import")}>Import from library…</button>}
       <button type="button" className="add-entry" onClick={() => setMode("create")}>Create new…</button>
     </div>

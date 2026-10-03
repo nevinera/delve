@@ -7,6 +7,7 @@ import {fixtureDraft} from "../state/__tests__/fixtureWorld";
 import {mapData} from "../state/mapOps";
 import {zoneData} from "../state/zoneOps";
 import {unitTypeData, unitTypeKeys} from "../state/unitTypeOps";
+import {itemData, itemKeys} from "../state/itemOps";
 import {LibraryReader} from "../state/libraryReader";
 import {fakeClient} from "../state/__tests__/fakeLibrary";
 
@@ -75,6 +76,47 @@ describe("MapLevel", () => {
 
       await waitFor(() => expect(unitTypeKeys(result.draft)).toContain("ogre"));
       expect(screen.getByRole("button", {name: "Ogre", pressed: true})).toBeInTheDocument();
+    });
+  });
+
+  describe("getting a new item into a unit's loot table", () => {
+    // The archer (hub's second unit) is its own group; open it.
+    function openLootAdder() {
+      fireEvent.click(screen.getByRole("tab", {name: "Units"}));
+      fireEvent.click(screen.getByRole("button", {name: /archer-a/}));
+      fireEvent.click(screen.getByRole("button", {name: "New item…"}));
+      return within(screen.getByRole("dialog", {name: "Add a new item"}));
+    }
+
+    it("creates one, edits it in a modal, then adds it to the loot table", () => {
+      const result = renderWith(MapLevel, {zone: "forest", map: "hub"});
+
+      const adder = openLootAdder();
+      fireEvent.click(adder.getByRole("button", {name: "Create new…"}));
+      fireEvent.change(adder.getByRole("textbox", {name: "Item identifier"}), {target: {value: "bone-charm"}});
+      fireEvent.click(adder.getByRole("button", {name: "Create"}));
+
+      const modal = within(screen.getByRole("dialog", {name: "Edit item bone-charm"}));
+      fireEvent.change(modal.getByDisplayValue("Bone Charm"), {target: {value: "Lucky Bone"}});
+      fireEvent.click(modal.getByRole("button", {name: "Done"}));
+
+      expect(itemData(result.draft, "bone-charm").name).toEqual("Lucky Bone");
+      expect(mapData(result.draft, "forest", "hub").units[1].lootTable).toEqual({"iron-ring": 1, "bone-charm": 1});
+    });
+
+    it("imports one from the library into the loot table", async () => {
+      const library = new LibraryReader(fakeClient({"items/gem.json": {identifier: "gem", name: "Gem", slot: "ring"}}), "c1");
+      const result = renderWith(MapLevel, {zone: "forest", map: "hub", library});
+
+      const adder = openLootAdder();
+      fireEvent.click(adder.getByRole("button", {name: "Import from library…"}));
+      const select = adder.getByRole("combobox", {name: "Library item"});
+      await within(select).findByRole("option", {name: "gem"});
+      fireEvent.change(select, {target: {value: "items/gem.json"}});
+      fireEvent.click(adder.getByRole("button", {name: "Import"}));
+
+      await waitFor(() => expect(itemKeys(result.draft)).toContain("gem"));
+      expect(mapData(result.draft, "forest", "hub").units[1].lootTable).toEqual({"iron-ring": 1, gem: 1});
     });
   });
 
