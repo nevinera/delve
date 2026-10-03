@@ -149,17 +149,23 @@ solo `open` healer still dies in 12s to a squishy, 17s to tanky DPS, 24s to a ta
 avoid more magic. The EHP targets above are effectively against physical damage: tanks take
 noticeably more from `caster` units, casters noticeably less.
 
-## Implied enemy stats (`ee = 0`, `solo`)
+## Implied enemy stats (`ee = 0`)
 
-`D = 25` is a squishy character's full sustained DPS at `ee = 0` (see **D** below).
+`D = 25` is a squishy character's full sustained DPS at `ee = 0` (see **D** below). The reference
+squishy EHP is **1500**: on-level gear with no Stamina, Defence or Versatility has 1150 HP (all
+from armor slots' base Stamina). Against physical attacks its primary stat's Avoidance makes that
+1150 EHP (Intellect), 1472 (Agility) or 1595 (Strength); 1500 is the rounded middle. A unit type's `dps` is raw damage, before the
+target's mitigation: `dps = 1500 * HP lost / TTK`.
 
-| Audience | HP | Net DPS |
-|---|---|---|
-| `open` | 300 (25 * 12s) | 1.67% of a squishy's EHP per second |
-| `g1` | 750 | 2.17% of a squishy's EHP per second |
+| Pull | Units | `open` HP | `open` dps | `g1` HP | `g1` dps |
+|---|---|---|---|---|---|
+| `solo` | 1 | 300 | 25 | 750 | 32.5 |
+| `pair` | 2 | 195 | 15.4 | 490 | 20 |
+| `group` | 3 / 4 | 160 / 120 | 10.9 / 8.8 | 400 / 300 | 14.2 / 11.4 |
+| `swarm` | 5 / 8 | 115 / 70 | 7.0 / 4.7 | 285 / 180 | 9.1 / 6.1 |
 
-Turning net DPS into a unit type's `dps` needs a reference squishy character's EHP at `ee = 0` -
-see **Open questions**.
+Per unit; apply the role multipliers on top. At a 0.5s-2.5s attack interval these keep most hits
+to 1-2 digits.
 
 ## Group sizes (provisional)
 
@@ -184,10 +190,9 @@ solved backward from this target.
 
 ## Open questions
 
-1. **Squishy EHP at `ee = 0`.** Needed to turn net DPS targets into raw `dps` numbers. We want gear
-   to make a substantial part of the tank/DPS difference (tanks should *want* tank gear); once the
-   gear-only difference is known, either adjust gear scaling or set a target for mitigation from
-   class passives/talents.
+1. **Tank and tanky DPS EHP from gear.** We want gear to make a substantial part of the tank/DPS
+   difference (tanks should *want* tank gear); once the gear-only difference is known, either
+   adjust gear scaling or set a target for mitigation from class passives/talents.
 2. **Does the elevation curve hit the `a`/`b` targets?** `em(ee)` is 0.73 at -5 and 0.5 at -10. We
    need to measure what it actually does to TTK and EHP and tune the curve if it's far off,
    without drastically changing the relative value of stats between -10 and 0 (the gear you chase
