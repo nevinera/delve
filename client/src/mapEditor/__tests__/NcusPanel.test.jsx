@@ -21,14 +21,19 @@ function renderPanel(props = {}) {
 }
 
 function openRow() {
-  fireEvent.click(screen.getByText(/^NCUs/));
   fireEvent.click(screen.getByText("Grizzle"));
 }
 
 describe("NcusPanel", () => {
+  it("starts open, and collapses from its heading", () => {
+    renderPanel();
+    expect(screen.getByText("+ Add NCU")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("NCUs (1)"));
+    expect(screen.queryByText("+ Add NCU")).not.toBeInTheDocument();
+  });
+
   it("lists NCUs by name with a dialogue marker, collapsed", () => {
     renderPanel();
-    fireEvent.click(screen.getByText("NCUs (1)"));
     expect(screen.getByText("Grizzle")).toBeInTheDocument();
     expect(screen.getByTitle("Has dialogue")).toBeInTheDocument();
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
@@ -37,7 +42,6 @@ describe("NcusPanel", () => {
   it("arms add-ncu from its button, disabled while another tool is busy", () => {
     const onStartAddNcu = vi.fn();
     const {rerender} = renderPanel({onStartAddNcu});
-    fireEvent.click(screen.getByText(/^NCUs/));
     fireEvent.click(screen.getByText("+ Add NCU"));
     expect(onStartAddNcu).toHaveBeenCalled();
 

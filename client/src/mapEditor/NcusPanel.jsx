@@ -142,7 +142,7 @@ export default function NcusPanel({
   patrolStepPlacement, onStartPatrolStepPlacement, onStartPatrolStepEdit, onHoverPatrolStep,
   wanderLocationPlacement, onStartWanderLocationPlacement, onUpdateMovement,
 }) {
-  const [sectionCollapsed, setSectionCollapsed] = useState(true);
+  const [sectionCollapsed, setSectionCollapsed] = useState(false);
   const [expandedIndices, setExpandedIndices] = useState(() => new Set());
   const toolBusy = tool !== "select" || !!placement || !!unitPlacement || !canPlaceOnMap;
 
