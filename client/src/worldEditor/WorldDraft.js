@@ -72,8 +72,10 @@ export class WorldDraft {
     const worldLinks = (this.data.worldLinks ?? []).filter(
       (link) => link.zoneA?.zone !== key && link.zoneB?.zone !== key
     );
-    const entryPoints = {...(this.data.entryPoints ?? {})};
-    delete entryPoints[key];
+    // entryPoints are keyed "<zoneKey>/<entryPointKey>" (see setEntryPoint).
+    const entryPoints = Object.fromEntries(
+      Object.entries(this.data.entryPoints ?? {}).filter(([entryKey]) => !entryKey.startsWith(`${key}/`))
+    );
     return new WorldDraft({...this.data, zones, worldLinks, entryPoints});
   }
 
