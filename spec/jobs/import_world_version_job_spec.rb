@@ -42,6 +42,29 @@ RSpec.describe ImportWorldVersionJob, type: :job do
 
   def perform = described_class.perform_now(version.id)
 
+  context "with a self-contained world" do
+    let(:world) { create(:world, owner:, repo: "builder/content", path: "worlds/demo/demo.json") }
+
+    before do
+      zones = {
+        "darkwood" => {"path" => "./zones/darkwood/darkwood.json", "name" => "Darkwood"},
+        "goblin-cave" => {"path" => "./zones/goblin-cave/goblin-cave.json", "name" => "Goblin Cave"}
+      }
+      stub_raw("worlds/demo/demo.json", world_data.merge("zones" => zones))
+      stub_raw("worlds/demo/zones/darkwood/darkwood.full.json", darkwood)
+      stub_raw("worlds/demo/zones/goblin-cave/goblin-cave.full.json", goblin_cave)
+    end
+
+    it "reads each zone's .full.json from inside the world's directory" do
+      perform
+      expect(version.reload).to be_unreleased
+      expect(version.zones.pluck(:identifier, :path)).to contain_exactly(
+        ["darkwood", "worlds/demo/zones/darkwood/darkwood.full.json"],
+        ["goblin-cave", "worlds/demo/zones/goblin-cave/goblin-cave.full.json"]
+      )
+    end
+  end
+
   context "with a valid world" do
     it "marks the version unreleased, pinned to the tag's commit" do
       perform

@@ -86,6 +86,7 @@ Rails.application.routes.draw do
   # The new single-page world editor (see plans/world-editor/) - world keys
   # have no slashes, so a plain :id.
   get "build/world_editor/:id", to: "build/world_editor#show", as: "build_world_editor"
+  post "build/world_editor/:id/publish", to: "build/world_editor#publish", as: "publish_build_world_editor"
   post "build/worlds/*id/publish", to: "build/worlds#publish", as: "publish_build_world"
 
   namespace :play do

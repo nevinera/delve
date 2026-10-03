@@ -28,6 +28,24 @@ RSpec.describe World, type: :model do
     it "matches the world editor's key" do
       expect(build(:world, path: "worlds/sub/demo-core.json").key).to eq("sub/demo-core")
     end
+
+    it "is the directory name for a self-contained world" do
+      expect(build(:world, path: "worlds/small/small.json").key).to eq("small")
+      expect(build(:world, path: "worlds/small/small.json")).to be_self_contained
+      expect(build(:world, path: "worlds/demo.json")).not_to be_self_contained
+    end
+  end
+
+  describe ".world_file_paths" do
+    it "finds both shapes of world file, and nothing else inside a self-contained world" do
+      paths = %w[
+        worlds/demo.json worlds/demo.layout.json
+        worlds/small/small.json worlds/small/small.layout.json
+        worlds/small/zones/forest/forest.json worlds/small/zones/forest/forest.full.json
+        worlds/small/unit_types/goblin.json
+      ]
+      expect(World.world_file_paths(paths)).to eq(%w[worlds/demo.json worlds/small/small.json])
+    end
   end
 
   describe "#released_versions" do

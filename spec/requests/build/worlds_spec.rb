@@ -11,6 +11,13 @@ RSpec.describe "Build::Worlds", type: :request do
   describe "GET /build/worlds" do
     before { stub_tree_listing("builder/content", "worlds", ["demo.json", "demo.layout.json", "other.json"]) }
 
+    it "links a self-contained world to the new editor, without listing the files inside it" do
+      stub_tree_listing("builder/content", "worlds", ["small/small.json", "small/zones/forest/forest.json", "demo.json"])
+      get "/build/worlds"
+      expect(response.body).to include(build_world_editor_path(id: "small"), edit_build_world_path(id: "demo"))
+      expect(response.body).not_to include("forest")
+    end
+
     it "lists world files, not their layout companions" do
       get "/build/worlds"
       expect(response.body).to include(edit_build_world_path(id: "demo"), edit_build_world_path(id: "other"))

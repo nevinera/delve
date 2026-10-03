@@ -2,4 +2,6 @@
   id="editor-root"
   data-key="<%= params[:id] %>"
   data-back-url="<%= build_worlds_path %>"
+  data-publish-url="<%= publish_build_world_editor_path(id: params[:id]) %>"
+  data-next-tag="<%= @next_tag %>"
 ></div>

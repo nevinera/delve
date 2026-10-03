@@ -1,15 +1,15 @@
 class Build::WorldsController < Build::BaseController
-  skip_authorization_check only: [:index, :new, :create, :edit]
+  include Build::WorldPublishing
 
-  TAG_FORMAT = %r{\A[\w-]+(?:[/.][\w-]+)*\z}
+  skip_authorization_check only: [:index, :new, :create, :edit]
   layout "build_world_client", only: :edit
 
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
 
   def index
     entries = Github::ContentClient.new(current_user).list_directory_recursive("worlds")
-    @worlds = entries.select { |entry| entry["name"].end_with?(".json") && !entry["name"].end_with?(".layout.json") }.sort_by { |entry| entry["path"] }
-    @published_worlds = current_user.worlds.where(path: @worlds.pluck("path")).index_by(&:path)
+    @world_paths = World.world_file_paths(entries.pluck("path"))
+    @published_worlds = current_user.worlds.where(path: @world_paths).index_by(&:path)
   end
 
   def new
@@ -48,39 +48,12 @@ class Build::WorldsController < Build::BaseController
     error = publish_error(client, tag)
     return render(json: {error:}, status: :unprocessable_content) if error
 
-    client.create_tag(tag, client.branch_sha(client.default_branch))
-    World.transaction do
-      world.save!
-      world.world_versions.create!(ref: tag)
-    end
-    render json: {url: build_publishing_world_path(world)}
-  rescue Github::ApiError, ActiveRecord::RecordInvalid => e
+    tag_and_record_version(client, world, tag, client.branch_sha(client.default_branch))
+  rescue Github::ApiError => e
     render json: {error: e.message}, status: :unprocessable_content
   end
 
   private
-
-  def publish_error(client, tag)
-    return "#{client.repo} is private; worlds must be published from a public repo." unless client.public_repo?
-    return "Tag must be letters, numbers, \"-\" and \"_\", separated by \"/\" or \".\"." unless tag.match?(TAG_FORMAT)
-    "Tag \"#{tag}\" already exists." if tag_exists?(client, tag)
-  end
-
-  def tag_exists?(client, tag)
-    client.tag_sha(tag)
-    true
-  rescue Github::NotFoundError
-    false
-  end
-
-  # "<key>/v<N+1>", N being the highest existing "<key>/v<N>" tag (or 0).
-  def next_tag(client, key)
-    prefix = "#{key}/v"
-    numbers = client.tag_names(prefix).filter_map { |name| name.delete_prefix(prefix)[/\A\d+\z/]&.to_i }
-    "#{prefix}#{(numbers.max || 0) + 1}"
-  rescue Github::ApiError
-    "#{prefix}1"
-  end
 
   def render_new_with_error(message)
     flash.now[:alert] = message
