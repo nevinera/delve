@@ -15,7 +15,7 @@ import UnitTypeList from "./UnitTypeList";
 // are reused as-is - they take the old per-file WorldDraft class, so they
 // get one wrapping the world file's current data, and whatever they hand
 // back is written straight into the live draft.
-export default function WorldLevel({draft, onChange, navigate, repo}) {
+export default function WorldLevel({draft, onChange, navigate, repo, library}) {
   const worldPath = worldFile(draft.worldKey);
   const file = new WorldFile(worldData(draft));
   const onFileChange = (next) => onChange(draft.write(worldPath, next.data));
@@ -55,7 +55,7 @@ export default function WorldLevel({draft, onChange, navigate, repo}) {
       </div>
       <div className="content-editor-fields">
         <ZoneList draft={draft} onChange={onChange} onOpen={(zone) => navigate({zone})} />
-        <UnitTypeList draft={draft} onChange={onChange} onOpen={(unitType) => navigate({unitType})} repo={repo} />
+        <UnitTypeList draft={draft} onChange={onChange} onOpen={(unitType) => navigate({unitType})} repo={repo} library={library} />
         <WorldLinksPanel draft={file} onChange={onFileChange} zoneDetailsByKey={details} />
         <EntryPointsPanel draft={file} onChange={onFileChange} zoneDetailsByKey={details} />
       </div>

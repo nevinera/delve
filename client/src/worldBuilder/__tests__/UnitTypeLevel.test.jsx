@@ -6,6 +6,8 @@ import UnitTypeList from "../levels/UnitTypeList";
 import {fixtureDraft} from "../state/__tests__/fixtureWorld";
 import {mapData} from "../state/mapOps";
 import {unitTypeData, unitTypeKeys} from "../state/unitTypeOps";
+import {LibraryReader} from "../state/libraryReader";
+import {fakeClient} from "../state/__tests__/fakeLibrary";
 
 // The preview mounts a WebGL renderer jsdom can't back.
 vi.mock("../../unitTypeEditor/UnitTypePreviewPane", () => ({default: () => <div data-testid="preview" />}));
@@ -93,5 +95,44 @@ describe("UnitTypeList", () => {
     fireEvent.click(list().getByRole("button", {name: "Delete goblin"}));
 
     expect(list().getByRole("alert")).toHaveTextContent("still placed on forest/hub (1)");
+  });
+});
+
+describe("importing from the library", () => {
+  const LIBRARY = {
+    "unit_types/demo/troll.json": {name: "Troll", tokenImageUrl: ["../../tokens/unit/troll.webp"], powers: [{name: "Smash", iconURL: "../../graphics/icons/smash.png"}]},
+    "tokens/unit/troll.webp": "img",
+    "graphics/icons/smash.png": "img",
+  };
+  const library = () => new LibraryReader(fakeClient(LIBRARY), "c1");
+
+  it("imports a library unit type from the world's list", async () => {
+    const result = renderWith(UnitTypeList, {onOpen: vi.fn(), library: library()});
+    const list = within(screen.getByRole("region", {name: "Unit types"}));
+
+    fireEvent.click(list.getByRole("button", {name: "Import…"}));
+    const select = list.getByRole("combobox", {name: "Library unit type"});
+    await within(select).findByRole("option", {name: "demo/troll"});
+    fireEvent.change(select, {target: {value: "unit_types/demo/troll.json"}});
+    expect(list.getByRole("textbox", {name: "Imported unit type identifier"})).toHaveValue("troll");
+    fireEvent.click(list.getByRole("button", {name: "Import"}));
+
+    await waitFor(() => expect(unitTypeKeys(result.draft)).toEqual(["goblin", "troll"]));
+    expect(result.draft.exists("worlds/w/tokens/unit/troll.webp")).toBe(true);
+  });
+
+  it("copies a library power's assets into the world when it's imported", async () => {
+    const result = renderWith(UnitTypeLevel, {unitType: "goblin", library: library()});
+
+    fireEvent.click(screen.getByRole("button", {name: "+ Import power"}));
+    fireEvent.change(screen.getByRole("combobox", {name: "Source type"}), {target: {value: "unitType"}});
+    const source = await screen.findByRole("combobox", {name: "Source"});
+    await within(source).findByRole("option", {name: "demo/troll"});
+    fireEvent.change(source, {target: {value: "unit_types/demo/troll.json"}});
+    await screen.findByText("Smash");
+    fireEvent.click(screen.getByRole("button", {name: "Import"}));
+
+    await waitFor(() => expect(unitTypeData(result.draft, "goblin").powers).toEqual([{name: "Smash", iconURL: "../graphics/icons/smash.png"}]));
+    expect(result.draft.exists("worlds/w/graphics/icons/smash.png")).toBe(true);
   });
 });

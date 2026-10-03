@@ -1,3 +1,4 @@
+import {useRef} from "react";
 import UnitTypeWorkbench from "../../unitTypeEditor/UnitTypeWorkbench";
 import {collectAssetUrls} from "../../abilityEditor/collectAssetUrls";
 import {currentFieldValue} from "../../abilityEditor/resolveAbilityForPlayback";
@@ -5,15 +6,35 @@ import {unitTypeData, unitTypeKeys, updateUnitType} from "../state/unitTypeOps";
 import {inMemory, newAssetPath, pendingPowerAssets, tokenImageOptions, uploadPowerAsset} from "../state/assetOps";
 import {relativePath, resolvePath, unitTypeFile} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
+import {applyCopies, preparePowerImport} from "../state/importing";
+import {IMPORT_SOURCE_TYPES} from "../../powersEditor/powerSources";
 
-// Copying a power from another of this world's unit types: same directory,
-// so its asset URLs need no rebasing.
-function worldPowerSources(draft, unitType) {
+// Where a power can be copied from: the world's other unit types (same
+// directory, so nothing to rebase), or the shared library - the power
+// library, classes, unit types (see powerSources.js) - whose powers have
+// their assets copied into the world once one is actually imported.
+// copiesFor (kept across renders) remembers each listed power's copies.
+function powerSources(draft, unitType, path, library, onChange, copiesFor) {
+  const librarySource = (typeId) => IMPORT_SOURCE_TYPES.find((type) => type.id === typeId);
   return {
-    types: [{id: "world", label: "This world's unit types"}],
-    listSources: async () => unitTypeKeys(draft).filter((key) => key !== unitType)
-      .map((key) => ({id: key, label: unitTypeData(draft, key).name || key})),
-    loadPowers: async (_typeId, key) => unitTypeData(draft, key)?.powers ?? [],
+    types: [{id: "world", label: "This world's unit types"}, ...(library ? IMPORT_SOURCE_TYPES : [])],
+    listSources: async (typeId) => (typeId === "world"
+      ? unitTypeKeys(draft).filter((key) => key !== unitType).map((key) => ({id: key, label: unitTypeData(draft, key).name || key}))
+      : librarySource(typeId).listSources(library, path)),
+    loadPowers: async (typeId, sourceId) => {
+      if (typeId === "world") return unitTypeData(draft, sourceId)?.powers ?? [];
+      const powers = await librarySource(typeId).loadPowers(library, sourceId, path);
+      return Promise.all(powers.map(async (power) => {
+        const prepared = await preparePowerImport(draft, library, power, path, path);
+        copiesFor.set(prepared.power, prepared.copies);
+        return prepared.power;
+      }));
+    },
+    adopt: (power) => {
+      const copies = copiesFor.get(power);
+      if (copies?.length) onChange((current) => applyCopies(current, copies));
+      return power;
+    },
   };
 }
 
@@ -22,9 +43,10 @@ function worldPowerSources(draft, unitType) {
 // uploads go into the draft (under the world's tokens/unit/, graphics/ and
 // audio/) like any other change; "Restore" on a power asset drops its
 // pending upload.
-export default function UnitTypeLevel({draft, unitType, onChange, repo, stockAssets}) {
+export default function UnitTypeLevel({draft, unitType, onChange, repo, stockAssets, library}) {
   const path = unitTypeFile(draft.worldKey, unitType);
   const data = unitTypeData(draft, unitType);
+  const importCopies = useRef(new WeakMap()).current;
   const assetUrl = (repoPath) => assetUrlFor(draft, repo, repoPath);
   const urlFor = (value) => assetUrl(resolvePath(path, value));
 
@@ -71,7 +93,7 @@ export default function UnitTypeLevel({draft, unitType, onChange, repo, stockAss
       tokenImages={tokenImages}
       assetMap={assetMap}
       powerAssets={powerAssets}
-      importSources={worldPowerSources(draft, unitType)}
+      importSources={powerSources(draft, unitType, path, library, onChange, importCopies)}
       stockAssets={stockAssets}
     />
   );

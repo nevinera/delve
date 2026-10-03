@@ -69,8 +69,12 @@ async function createBlob(token, repo, path, content) {
 // without re-uploading it. The world editor uses this to move a zone's
 // images on a rename.
 export class ExistingBlob {
-  constructor(sha) {
+  // sourcePath: where the blob already lives in the repo, if that's not
+  // otherwise known (e.g. a library asset copied into a world) - for
+  // displaying it before it's committed.
+  constructor(sha, sourcePath = null) {
     this.sha = sha;
+    this.sourcePath = sourcePath;
   }
 }
 

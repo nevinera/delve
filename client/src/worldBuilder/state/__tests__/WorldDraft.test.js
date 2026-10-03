@@ -62,7 +62,7 @@ describe("WorldDraft", () => {
       "worlds/w/zones/z/a.json": {name: "A"},
       "worlds/w/zones/z/m/m.png": new ExistingBlob("png-sha"),
     });
-    expect(moved.assetSource("worlds/w/zones/z/m/m.png")).toEqual({sha: "png-sha"});
+    expect(moved.assetSource("worlds/w/zones/z/m/m.png")).toEqual({sha: "png-sha", sourcePath: null});
   });
 
   it("moving a directory back undoes the move entirely", () => {

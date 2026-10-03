@@ -22,6 +22,7 @@ import ZoneLevel from "./levels/ZoneLevel";
 import MapLevel from "./levels/MapLevel";
 import UnitTypeLevel from "./levels/UnitTypeLevel";
 import {unitTypeData} from "./state/unitTypeOps";
+import {LibraryReader} from "./state/libraryReader";
 import {redirectTo} from "../redirectTo";
 
 const PERSIST_DELAY_MS = 400;
@@ -63,6 +64,9 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   // Whether git's .full.json files match the saved content (resolving every
   // zone, so only recomputed when the draft changes).
   const expanded = useMemo(() => Boolean(draft) && !draft.hasChanges && isExpanded(draft), [draft]);
+  // The shared library (outside worlds/), at the same commit, to import from.
+  const commitSha = draft?.snapshot.commitSha;
+  const library = useMemo(() => (commitSha ? new LibraryReader(client, commitSha) : null), [client, commitSha]);
 
   const fail = useCallback((error) => {
     if (error instanceof GithubAuthError) redirectTo(error.redirectUrl);
@@ -276,10 +280,10 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
       : location.map && !mapData(draft, location.zone, location.map) ? {zone: location.zone} : location;
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
-  else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} />;
+  else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
   else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} />;
   else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} />;
-  else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} />;
+  else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} library={library} />;
 
   return (
     <div className="content-editor world-builder">

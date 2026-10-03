@@ -52,7 +52,9 @@ function breadcrumbsFor(selection, data) {
 // - assetMap: each power asset URL (as written) -> displayable URL.
 // - powerAssets: pending power asset uploads, usePowerUploads' shape
 //   ({overrides, upload, clear, removeEntry, removePower}).
-// - importSources {types, listSources(typeId), loadPowers(typeId, sourceId)}.
+// - importSources {types, listSources(typeId), loadPowers(typeId, sourceId),
+//   adopt?(power)}: where powers can be copied from; adopt, if given, is
+//   called with the power being imported and returns what to add.
 // - stockAssets.
 export default function UnitTypeWorkbench({unitTypeKey, data, onChange, tokenImages, assetMap, powerAssets, importSources, stockAssets}) {
   const draft = new UnitTypeDraft(data, unitTypeKey);
@@ -125,7 +127,7 @@ export default function UnitTypeWorkbench({unitTypeKey, data, onChange, tokenIma
             sourceTypes={importSources.types}
             listSources={importSources.listSources}
             loadPowers={importSources.loadPowers}
-            onImport={addPower}
+            onImport={(power) => addPower(importSources.adopt ? importSources.adopt(power) : power)}
           />
         );
       case "power":

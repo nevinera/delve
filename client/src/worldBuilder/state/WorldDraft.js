@@ -72,7 +72,7 @@ export class WorldDraft {
   assetSource(path) {
     const value = this.read(path);
     if (value instanceof Blob) return {blob: value};
-    if (value instanceof ExistingBlob) return {sha: value.sha};
+    if (value instanceof ExistingBlob) return {sha: value.sha, sourcePath: value.sourcePath};
     if (!this._edits.has(path) && this.snapshot.has(path)) return {sha: this.snapshot.blobSha(path)};
     return null;
   }

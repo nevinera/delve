@@ -14,11 +14,11 @@ const STORE = "drafts";
 export const draftKey = (repo, branch, worldKey) => `${repo}|${branch}|${worldKey}`;
 
 function encodeValue(value) {
-  return value instanceof ExistingBlob ? {existingBlobSha: value.sha} : value;
+  return value instanceof ExistingBlob ? {existingBlobSha: value.sha, sourcePath: value.sourcePath} : value;
 }
 
 function decodeValue(value) {
-  return value && typeof value === "object" && "existingBlobSha" in value ? new ExistingBlob(value.existingBlobSha) : value;
+  return value && typeof value === "object" && "existingBlobSha" in value ? new ExistingBlob(value.existingBlobSha, value.sourcePath ?? null) : value;
 }
 
 export function memoryBackend() {

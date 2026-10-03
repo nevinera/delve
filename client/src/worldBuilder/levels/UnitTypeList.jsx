@@ -2,12 +2,16 @@ import {useState} from "react";
 import {createUnitType, deleteUnitType, renameUnitType, unitTypeData, unitTypeKeys, unitTypeUses} from "../state/unitTypeOps";
 import {resolvePath, unitTypeFile} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
+import ImportUnitTypeForm from "./ImportUnitTypeForm";
 
-// The world's own unit types: open one, create, rename (rewriting every
-// map unit and zone entry using it), or delete (refused while it's placed
-// anywhere). Errors from an operation show inline; the draft is untouched.
-export default function UnitTypeList({draft, onChange, onOpen, repo}) {
+// The world's own unit types: open one, create, import from the shared
+// library, rename (rewriting every map unit and zone entry using it), or
+// delete (refused while it's placed anywhere). Errors from an operation
+// show inline; the draft is untouched.
+export default function UnitTypeList({draft, onChange, onOpen, repo, library}) {
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [error, setError] = useState(null);
   const keys = unitTypeKeys(draft);
@@ -32,7 +36,12 @@ export default function UnitTypeList({draft, onChange, onOpen, repo}) {
     <section className="zone-list unit-type-list" aria-label="Unit types">
       <div className="zone-list-heading">
         <h3>Unit types</h3>
-        {!creating && <button type="button" className="add-entry" onClick={() => setCreating(true)}>+ New unit type</button>}
+        {!creating && !importing && (
+          <span className="unit-type-list-actions">
+            {library && <button type="button" className="add-entry" onClick={() => setImporting(true)}>Import…</button>}
+            <button type="button" className="add-entry" onClick={() => setCreating(true)}>+ New unit type</button>
+          </span>
+        )}
       </div>
       {creating && (
         <NewUnitTypeForm
@@ -45,6 +54,17 @@ export default function UnitTypeList({draft, onChange, onOpen, repo}) {
           }}
         />
       )}
+      {importing && (
+        <ImportUnitTypeForm
+          draft={draft} library={library} onChange={onChange}
+          onCancel={() => setImporting(false)}
+          onImported={(key, missing) => {
+            setImporting(false);
+            setNotice(missing.length ? `Imported "${key}", but the library is missing: ${missing.join(", ")}` : null);
+          }}
+        />
+      )}
+      {notice && <p className="zone-list-error" role="status">{notice}</p>}
       {error && <p className="zone-list-error" role="alert">{error}</p>}
       {keys.length === 0 && !creating && <p className="config-empty">No unit types yet.</p>}
       <ul>
