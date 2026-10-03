@@ -40,8 +40,7 @@ function breadcrumbsFor(selection, data) {
 // areas (unit, damage estimate, each power, add/import) on the left, the
 // selected area's config on the right - rendered as those two columns, for
 // the host's own grid. It has no idea where the unit type comes from or
-// goes: the standalone UnitTypeEditor and the world editor's unit-type
-// level each host it.
+// goes: the world editor's unit-type level hosts it over the draft.
 //
 // Host props:
 // - data (tokenImageUrl already an array - see normalizeUnitType) and

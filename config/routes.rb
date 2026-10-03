@@ -28,8 +28,6 @@ Rails.application.routes.draw do
     root to: "dashboard#index"
     resources :abilities, only: [:index, :new, :create]
     resources :classes, only: [:index, :new, :create]
-    resources :unit_types, only: [:index, :new, :create]
-    resources :items, only: [:index, :new, :create]
     resources :zones, only: [:index]
     resources :worlds, only: [:index, :new, :create]
     resources :character_classes, only: [] do
@@ -74,8 +72,6 @@ Rails.application.routes.draw do
   # "/build/abilities/a/b/edit" with no encoding involved.
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
   get "build/classes/*id/edit", to: "build/classes#edit", as: "edit_build_class"
-  get "build/unit_types/*id/edit", to: "build/unit_types#edit", as: "edit_build_unit_type"
-  get "build/items/*id/edit", to: "build/items#edit", as: "edit_build_item"
   get "build/zones/*id/play", to: "build/zone_plays#show", as: "build_zone_play"
   get "build/local_zones", to: "build/zone_plays#local", as: "build_local_zones"
   get "build/local_zones/*id/play", to: "build/zone_plays#show", as: "build_local_zone_play", defaults: {source: "local"}

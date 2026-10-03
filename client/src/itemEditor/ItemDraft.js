@@ -1,7 +1,7 @@
 import {WEAPON_SLOTS, maxSecondaries} from "./itemFieldOptions";
 
 // Owns an item draft's data and every mutation the editor can make to it -
-// the UI (ItemEditor.jsx/ItemFieldsPanel.jsx) only ever reads this class's
+// the UI (ItemLevel.jsx/ItemFieldsPanel.jsx) only ever reads this class's
 // accessors and calls its methods, so the domain rules (which fields a
 // slot change invalidates, the secondaries cap) are unit-testable on their
 // own, independent of React (see plans/editors-as-classes.md).

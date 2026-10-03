@@ -48,7 +48,7 @@ function resolvePowers(powers, assetMap, powerAssetOverrides, stockAssets) {
 // pick one at random, the same way the game server does when spawning a
 // unit from this type (see docs/schema/unit_type.md#tokenimageurl). tokens
 // arrives here already resolved to real, displayable URLs (see
-// UnitTypeEditor's resolvedTokenUrls) - a raw tokenImageUrl entry that
+// UnitTypeWorkbench's tokenPreviewUrls) - a raw tokenImageUrl entry that
 // hasn't resolved yet (e.g. a just-uploaded, not-yet-saved file) is dropped
 // rather than shown broken. Falls back to the stock goblin token when none
 // are available, so a brand new draft is still previewable before any art

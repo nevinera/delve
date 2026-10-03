@@ -20,8 +20,6 @@ export default defineConfig({
         main: resolve(__dirname, "client/src/main.jsx"),
         abilityEditor: resolve(__dirname, "client/src/abilityEditor/main.jsx"),
         classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
-        unitTypeEditor: resolve(__dirname, "client/src/unitTypeEditor/main.jsx"),
-        itemEditor: resolve(__dirname, "client/src/itemEditor/main.jsx"),
         worldBuilder: resolve(__dirname, "client/src/worldBuilder/main.jsx"),
       },
       output: {
