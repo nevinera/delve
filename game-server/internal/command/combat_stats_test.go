@@ -118,7 +118,7 @@ func TestHealingTakenPct_ReadsTheCachedRecoveryRating(t *testing.T) {
 
 func TestPlayerMaxHealth_ReadsTheCachedStamina(t *testing.T) {
 	unit := snapshotOnly(&instancestate.CombatStats{Stats: map[string]float64{"stamina": 20}})
-	assert.InDelta(t, 300.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
+	assert.InDelta(t, 895.0, PlayerMaxHealth(unit, instanceconfig.Zone{}), 0.01)
 }
 
 func TestComputeCombatStats_DoesNotReadTheUnitsOwnStaleSnapshot(t *testing.T) {

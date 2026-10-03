@@ -152,8 +152,8 @@ noticeably more from `caster` units, casters noticeably less.
 ## Implied enemy stats (`ee = 0`)
 
 `D = 25` is a squishy character's full sustained DPS at `ee = 0` (see **D** below). The reference
-squishy EHP is **1500**: on-level gear with no Stamina, Defence or Versatility has 1150 HP (all
-from armor slots' base Stamina). Against physical attacks its primary stat's Avoidance makes that
+squishy EHP is **1500**: on-level gear with no Stamina, Defence or Versatility has 1150 HP (835
+flat, plus 3 per point of the armor slots' 105 base Stamina). Against physical attacks its primary stat's Avoidance makes that
 1150 EHP (Intellect), 1472 (Agility) or 1595 (Strength); 1500 is the rounded middle. A unit type's `dps` is raw damage, before the
 target's mitigation: `dps = 1500 * HP lost / TTK`.
 
@@ -190,9 +190,10 @@ solved backward from this target.
 
 ## Open questions
 
-1. **Tank and tanky DPS EHP from gear.** We want gear to make a substantial part of the tank/DPS
-   difference (tanks should *want* tank gear); once the gear-only difference is known, either
-   adjust gear scaling or set a target for mitigation from class passives/talents.
+1. **Tank and tanky DPS EHP from gear.** With `MaxHP = 835 + Stamina * 3` and the current Defence
+   curve, gear alone gets a tank (one-hander + shield, best split, vs physical) to ~3.2x squishy EHP
+   and tanky DPS to ~2.0x - on target. Their best splits lean on Stamina (~80% / ~50%); that's
+   accepted, since Defence pulls ahead whenever there's healing or no rest between fights.
 2. **Does the elevation curve hit the `a`/`b` targets?** `em(ee)` is 0.73 at -5 and 0.5 at -10. We
    need to measure what it actually does to TTK and EHP and tune the curve if it's far off,
    without drastically changing the relative value of stats between -10 and 0 (the gear you chase

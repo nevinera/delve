@@ -72,9 +72,9 @@ const (
 	defenceRatingHalfPoint = 98.0
 
 	// playerBaseMaxHealth/maxHealthPerStamina - see docs/stats.md's
-	// "Stamina" section: MaxHP = 100 + Stamina * 10.
-	playerBaseMaxHealth = 100.0
-	maxHealthPerStamina = 10.0
+	// "Stamina" section: MaxHP = 835 + Stamina * 3.
+	playerBaseMaxHealth = 835.0
+	maxHealthPerStamina = 3.0
 )
 
 // BasicAttackHandler executes one swing of a player unit's basic attack

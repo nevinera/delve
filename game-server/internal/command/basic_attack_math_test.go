@@ -33,7 +33,7 @@ func fullyItemizedMainHand(primary string, elvl int) instanceconfig.EquippedItem
 
 func TestPlayerMaxHealth_NakedUnitHasBaseOnly(t *testing.T) {
 	unit := &instancestate.UnitState{}
-	assert.Equal(t, 100.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
+	assert.Equal(t, 835.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestPlayerMaxHealth_StaminaAddsToBase(t *testing.T) {
@@ -41,15 +41,15 @@ func TestPlayerMaxHealth_StaminaAddsToBase(t *testing.T) {
 		EquippedItems: map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 	}
 	// raw stamina 20 (main_hand doesn't grant base stamina - see
-	// itemstats.Raw) -> 100 + 20*10.
-	assert.InDelta(t, 300.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
+	// itemstats.Raw) -> 835 + 20*3.
+	assert.InDelta(t, 895.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestPlayerMaxHealth_ArmorSlotGrantsBaseStaminaEvenWithNoneItemized(t *testing.T) {
 	unit := &instancestate.UnitState{
 		EquippedItems: map[string]instanceconfig.EquippedItem{"chest": {Slot: "chest"}},
 	}
-	assert.Greater(t, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 100.0, "chest grants base stamina even with nothing itemized on it")
+	assert.Greater(t, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 835.0, "chest grants base stamina even with nothing itemized on it")
 }
 
 func TestPlayerMaxHealth_VersatilityDoesNotFeedStamina(t *testing.T) {
@@ -58,21 +58,21 @@ func TestPlayerMaxHealth_VersatilityDoesNotFeedStamina(t *testing.T) {
 			"ring_1": {Slot: "ring", SecondaryStats: []string{"versatility_rating", "versatility_rating"}},
 		},
 	}
-	assert.Equal(t, 100.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), "versatility spreads into Strength/Agility/Intellect/Defence Rating only, not Stamina")
+	assert.Equal(t, 835.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), "versatility spreads into Strength/Agility/Intellect/Defence Rating only, not Stamina")
 }
 
 func TestPlayerMaxHealth_ActiveStatStatusAddsFlatMaxHealth(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("maxHealth", "add", 50)},
 	}
-	assert.Equal(t, 150.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
+	assert.Equal(t, 885.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestPlayerMaxHealth_ActiveStatStatusMultipliesMaxHealth(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("maxHealth", "multiply", 1.5)},
 	}
-	assert.Equal(t, 150.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
+	assert.Equal(t, 1252.5, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestUnitEffectiveStats_ActiveStatStatusAddsToGearDerivedStat(t *testing.T) {
@@ -80,8 +80,8 @@ func TestUnitEffectiveStats_ActiveStatStatusAddsToGearDerivedStat(t *testing.T) 
 		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "add", 30)},
 	}
-	// raw stamina 20 (itemized) + 30 (status) -> 100 + 50*10.
-	assert.InDelta(t, 600.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
+	// raw stamina 20 (itemized) + 30 (status) -> 835 + 50*3.
+	assert.InDelta(t, 985.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestUnitEffectiveStats_ActiveStatStatusMultipliesGearDerivedStat(t *testing.T) {
@@ -89,15 +89,15 @@ func TestUnitEffectiveStats_ActiveStatStatusMultipliesGearDerivedStat(t *testing
 		EquippedItems:       map[string]instanceconfig.EquippedItem{"main_hand": fullyItemizedMainHand("strength", 0)},
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "multiply", 2.0)},
 	}
-	// raw stamina 20 (itemized) * 2.0 (status) -> 100 + 40*10.
-	assert.InDelta(t, 500.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
+	// raw stamina 20 (itemized) * 2.0 (status) -> 835 + 40*3.
+	assert.InDelta(t, 955.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}), 0.01)
 }
 
 func TestUnitEffectiveStats_ActiveStatStatusOnANakedUnit(t *testing.T) {
 	unit := &instancestate.UnitState{
 		ActiveStatusEffects: []instancestate.ActiveStatusEffect{statusWithStatEffect("stamina", "add", 10)},
 	}
-	assert.Equal(t, 200.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
+	assert.Equal(t, 865.0, PlayerMaxHealth(withStats(unit, instanceconfig.Zone{}), instanceconfig.Zone{}))
 }
 
 func TestUnitCombatStats_ActiveStatStatusGrantsPhysicalHasteBuff(t *testing.T) {
