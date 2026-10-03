@@ -66,7 +66,9 @@ function satelliteKeyFor(nodeKey, connection) {
 // Dragging from one port to another creates a worldLink; dragging an
 // already-linked port to empty space removes it - same drag-drop
 // interaction ZoneGraphCanvas's own ports use.
-export default function WorldGraphCanvas({draft, onChange, zoneDetailsByKey, onRefresh, refreshStatus, initialPositions, onPositionsChange}) {
+// onOpenNode(zoneKey), if given, is called when a zone's node is
+// double-clicked (the world editor opens that zone).
+export default function WorldGraphCanvas({draft, onChange, zoneDetailsByKey, onRefresh, refreshStatus, initialPositions, onPositionsChange, onOpenNode}) {
   const containerRef = useRef(null);
   // {[zoneKey|satelliteKey]: {x, y}} - drag overrides, seeded from
   // persisted layout metadata (see layoutMetadata.js/saveWorld.js), loaded
@@ -331,7 +333,7 @@ export default function WorldGraphCanvas({draft, onChange, zoneDetailsByKey, onR
               {nodes.map((node) => {
                 const {x, y} = nodePosition(node.key);
                 return (
-                  <g key={node.key} transform={`translate(${x}, ${y})`} data-node-key={node.key}>
+                  <g key={node.key} transform={`translate(${x}, ${y})`} data-node-key={node.key} onDoubleClick={onOpenNode && (() => onOpenNode(node.key))}>
                     <circle className="zone-graph-node" r={NODE_RADIUS} onPointerDown={(e) => handleNodePointerDown(e, node)} />
                     <text className="zone-graph-node-thumb-placeholder" textAnchor="middle" dominantBaseline="central" pointerEvents="none">🌍</text>
                     <text className="zone-graph-node-label" y={NODE_RADIUS + 14} textAnchor="middle">{node.name}</text>

@@ -38,6 +38,7 @@ export default function WorldLevel({draft, onChange, navigate, repo}) {
             zoneDetailsByKey={details}
             initialPositions={worldPositions(draft)}
             onPositionsChange={(positions) => onChange((current) => setWorldPositions(current, positions))}
+            onOpenNode={(zone) => navigate({zone})}
           />
         </div>
         <div className="world-attributes">

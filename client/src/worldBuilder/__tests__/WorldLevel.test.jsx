@@ -32,6 +32,14 @@ describe("WorldLevel", () => {
     expect(result.navigate).toHaveBeenCalledWith({zone: "cave"});
   });
 
+  it("opens a zone when its graph node is double-clicked", () => {
+    const result = renderLevel();
+
+    fireEvent.doubleClick(document.querySelector('[data-node-key="forest"]'));
+
+    expect(result.navigate).toHaveBeenCalledWith({zone: "forest"});
+  });
+
   it("edits world attributes in the live draft", () => {
     const result = renderLevel();
 
