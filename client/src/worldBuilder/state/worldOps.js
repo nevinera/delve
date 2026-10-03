@@ -7,7 +7,7 @@
 // (worldEditor/WorldDraft.js), applied to the world file's data in place -
 // nothing holds it as separate state.
 import {WorldDraft as WorldFile} from "../../worldEditor/WorldDraft";
-import {isValidIdentifier, relativePath, worldFile, worldLayoutFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
+import {isValidIdentifier, relativePath, worldDir, worldFile, worldLayoutFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
 
 export function blankWorld(name) {
   return {name, description: null, thumbnailUrl: null, elevationRange: null, zones: {}, worldLinks: [], entryPoints: {}};
@@ -126,4 +126,23 @@ export function zoneDeletionImpact(draft, key) {
     worldLinks: (world.worldLinks ?? []).filter((l) => l.zoneA?.zone === key || l.zoneB?.zone === key).length,
     entryPoints: Object.keys(world.entryPoints ?? {}).filter((k) => k.split("/")[0] === key).length,
   };
+}
+
+// {[zoneKey]: {name, description, openConnections, entryPoints}} for every
+// zone in the world, read live from the draft - the shape the world graph
+// and link/entry point panels take (see
+// worldEditor/worldContentLoaders.js#zoneDetailsFor).
+export function zoneDetails(draft) {
+  return Object.fromEntries(zoneKeys(draft).flatMap((key) => {
+    const zone = draft.read(zoneFile(draft.worldKey, key));
+    if (!zone) return [];
+    return [[key, {name: zone.name, description: zone.description ?? null, openConnections: zone.openConnections ?? {}, entryPoints: zone.entryPoints ?? {}}]];
+  }));
+}
+
+// Stores an uploaded thumbnail beside the world file and points
+// thumbnailUrl at it.
+export function setWorldThumbnail(draft, file, extension) {
+  const name = `${draft.worldKey}.thumb.${extension}`;
+  return setWorldField(draft.write(`${worldDir(draft.worldKey)}/${name}`, file), "thumbnailUrl", name);
 }

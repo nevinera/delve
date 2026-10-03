@@ -58,3 +58,47 @@
       .zone-graph-satellite:active { cursor: grabbing; }
       .zone-graph-satellite-tether { stroke: #667; stroke-width: 1; stroke-dasharray: 3 3; }
       .zone-graph-satellite-label { fill: #cce; font-size: 11px; text-anchor: middle; pointer-events: none; }
+
+      /* Panels reused from the old world/zone editors. */
+      .world-builder h3 { font-size: 15px; color: #cce; font-weight: 600; margin: 24px 0 10px; border-top: 1px solid #2a2f35; padding-top: 20px; }
+      .world-builder h4 { font-size: 13px; color: #cce; font-weight: 600; }
+      .world-builder table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+      .world-builder th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; width: 100px; }
+      .world-builder td { padding: 4px 0; word-break: break-word; }
+      .world-builder input[type=text], .world-builder input[type=number] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .world-builder select { background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; margin-right: 6px; }
+      .world-builder .range-field { display: inline-flex; align-items: center; gap: 6px; }
+      .world-builder .range-field input[type=number] { width: 90px; }
+      .world-builder .range-sep { color: #667; }
+      .world-builder .world-thumbnail-field { display: flex; flex-direction: column; gap: 4px; }
+      .world-builder .world-thumbnail-preview { max-width: 128px; max-height: 128px; border: 1px solid #334; }
+      .world-builder .entry-block { margin: 8px 0; padding: 8px 10px; border: 1px solid #2a2f35; border-radius: 4px; }
+      .world-builder .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+      .world-builder .map-row-summary { display: flex; align-items: center; gap: 8px; }
+      .world-builder .zone-connection-name { font-size: 13px; color: #cce; font-weight: 600; }
+      .world-builder .zone-connection-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; color: #9ab; }
+      .world-builder .zone-connection-status input[type=text] { width: 160px; }
+      .world-builder .map-sidebar-hint { color: #987; font-size: 12px; margin: 4px 0 8px; }
+      .world-builder .add-buttons-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+      .world-builder button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      .world-builder button.add-entry:hover { background: #345; }
+      .world-builder button.add-entry:disabled { opacity: 0.4; cursor: default; }
+      .world-builder button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+      .world-builder button.remove-entry:hover { background: #533; }
+      .world-builder button.remove-entry:hover { background: #533; }
+
+      /* World level. */
+      .world-attributes { flex: 2; min-height: 0; overflow-y: auto; padding: 10px 14px; background: #171b1f; border-top: 1px solid #333; }
+      .world-attributes h3 { margin-top: 0; border-top: none; padding-top: 0; }
+      .world-attributes .world-key { font-size: 12px; color: #9ab; margin-bottom: 8px; }
+      .zone-list .zone-list-heading { display: flex; align-items: center; justify-content: space-between; }
+      .zone-list .zone-list-heading h3 { margin: 0; border: none; padding: 0; }
+      .zone-list ul { list-style: none; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+      .zone-list .zone-row { display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid #2a2f35; border-radius: 4px; }
+      .zone-list button.zone-row-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; background: none; border: none; color: #ddd; text-align: left; cursor: pointer; padding: 4px 6px; }
+      .zone-list button.zone-row-open:hover { background: #1f262c; }
+      .zone-list .zone-row-name { font-size: 13px; font-weight: 600; color: #cce; }
+      .zone-list .zone-row-key { font-size: 11px; color: #9ab; }
+      .zone-list .zone-form { display: flex; flex: 1; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+      .zone-list .zone-form input { flex: 1; min-width: 120px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .zone-list .zone-list-error { color: #e79; font-size: 12px; }

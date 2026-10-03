@@ -313,7 +313,7 @@ export default function WorldGraphCanvas({draft, onChange, zoneDetailsByKey, onR
         <button type="button" onClick={() => zoomBy(1 / ZOOM_STEP)}>−</button>
         <button type="button" onClick={fitView}>Reset</button>
         <button type="button" onClick={() => zoomBy(ZOOM_STEP)}>+</button>
-        <button type="button" onClick={onRefresh}>↻ Refresh Connections</button>
+        {onRefresh && <button type="button" onClick={onRefresh}>↻ Refresh Connections</button>}
         {refreshStatus && <span className="zone-connection-status-label">{refreshStatus}</span>}
       </div>
       {nodes.length === 0 ? (

@@ -41,6 +41,7 @@ export default function WorldBuilderApp({worldKey, backUrl, client: givenClient,
   const [loadError, setLoadError] = useState(null);
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [repo, setRepo] = useState(null);
   const [location, navigate] = useHashLocation();
   const storeKey = useRef(null);
   const persistedHash = useRef(null);
@@ -80,11 +81,13 @@ export default function WorldBuilderApp({worldKey, backUrl, client: givenClient,
     (async () => {
       try {
         const snapshot = await loadSnapshot(client, branch, worldKey);
-        storeKey.current = draftKey(await client.repo(), branch, worldKey);
+        const repoName = await client.repo();
+        storeKey.current = draftKey(repoName, branch, worldKey);
         const stored = await store.load(storeKey.current);
         if (cancelled) return;
         const fresh = WorldDraft.fromSnapshot(snapshot);
         persistedHash.current = fresh.hash();
+        setRepo(repoName);
         setDraft(fresh);
         if (stored && Object.keys(stored.changes).length) setResumable(stored);
       } catch (error) {
@@ -198,8 +201,8 @@ export default function WorldBuilderApp({worldKey, backUrl, client: givenClient,
   const zoneMissing = location.zone && !zoneData(draft, location.zone);
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
-  else if (location.zone && !zoneMissing) level = <ZoneLevel draft={draft} zone={location.zone} onChange={setDraft} navigate={navigate} />;
-  else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} />;
+  else if (location.zone && !zoneMissing) level = <ZoneLevel draft={draft} zone={location.zone} onChange={setDraft} navigate={navigate} repo={repo} />;
+  else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} />;
 
   return (
     <div className="content-editor world-builder">

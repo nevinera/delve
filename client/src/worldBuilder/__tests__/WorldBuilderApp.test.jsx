@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
-import {render, screen, fireEvent, waitFor, act} from "@testing-library/react";
+import {render, screen, fireEvent, waitFor, act, within} from "@testing-library/react";
 import WorldBuilderApp from "../WorldBuilderApp";
 import {createDraftStore, memoryBackend, draftKey} from "../state/draftStore";
 import {RepoSnapshot} from "../state/RepoSnapshot";
@@ -37,6 +37,8 @@ function fakeClient(branchFiles) {
   };
 }
 
+const zoneButton = async (name) => within(await screen.findByRole("region", {name: "Zones"})).getByRole("button", {name: new RegExp(`^${name}`)});
+
 function renderApp({branches = {main: fixtureJson()}, store = createDraftStore(memoryBackend()), worldKey = "w"} = {}) {
   const client = fakeClient(branches);
   render(<WorldBuilderApp worldKey={worldKey} backUrl="/build/worlds" client={client} store={store} />);
@@ -56,7 +58,7 @@ describe("WorldBuilderApp", () => {
   it("loads the world from the default branch and lists its zones", async () => {
     renderApp();
 
-    expect(await screen.findByRole("button", {name: "Forest"})).toBeInTheDocument();
+    expect(await zoneButton("Forest")).toBeInTheDocument();
     expect(screen.getByRole("navigation", {name: "Breadcrumb"})).toHaveTextContent("W");
     expect(screen.getByRole("combobox", {name: "Branch"})).toHaveValue("main");
     expect(screen.getByText("No unsaved changes")).toBeInTheDocument();
@@ -65,14 +67,14 @@ describe("WorldBuilderApp", () => {
   it("drills into a zone, mirrored into the URL, and back up through the breadcrumb", async () => {
     renderApp();
 
-    fireEvent.click(await screen.findByRole("button", {name: "Forest"}));
+    fireEvent.click(await zoneButton("Forest"));
 
     expect(window.location.hash).toEqual("#/zone/forest");
     const crumbs = screen.getByRole("navigation", {name: "Breadcrumb"});
     expect(crumbs).toHaveTextContent("W›Forest");
 
     fireEvent.click(screen.getByRole("button", {name: "W"}));
-    expect(await screen.findByRole("button", {name: "Forest"})).toBeInTheDocument();
+    expect(await zoneButton("Forest")).toBeInTheDocument();
   });
 
   it("opens on the zone the URL names", async () => {
@@ -86,7 +88,7 @@ describe("WorldBuilderApp", () => {
     window.localStorage.setItem("delve.worldEditor.branch", "world-editor");
     renderApp({branches: {main: {}, "world-editor": fixtureJson()}});
 
-    expect(await screen.findByRole("button", {name: "Forest"})).toBeInTheDocument();
+    expect(await zoneButton("Forest")).toBeInTheDocument();
     expect(screen.getByRole("combobox", {name: "Branch"})).toHaveValue("world-editor");
   });
 
@@ -96,7 +98,7 @@ describe("WorldBuilderApp", () => {
     fireEvent.change(await screen.findByRole("textbox", {name: "World name"}), {target: {value: "Fresh World"}});
     fireEvent.click(screen.getByRole("button", {name: "Create world"}));
 
-    expect(await screen.findByText("No zones yet.")).toBeInTheDocument();
+    expect(within(await screen.findByRole("region", {name: "Zones"})).getByText("No zones yet.")).toBeInTheDocument();
     expect(screen.getByText("2 unsaved files")).toBeInTheDocument();
     expect(screen.getByRole("combobox", {name: "Branch"})).toBeDisabled();
   });
