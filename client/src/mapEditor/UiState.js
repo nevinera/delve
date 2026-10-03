@@ -22,9 +22,10 @@ export class UiState {
     this.patrolStepPlacement = fields.patrolStepPlacement ?? null;
     // {unitIndex, section} | null - re-placing a wander zone's location
     this.wanderLocationPlacement = fields.wanderLocationPlacement ?? null;
-    // {groupIdentifier} | null - while active, clicking a unit toggles its
-    // membership instead of that click's normal effect.
-    this.groupingMode = fields.groupingMode ?? null;
+    // The group open in the Units tab (its groupIdentifier) | null - while
+    // open, shift-clicking a unit toggles its membership. Not a mode:
+    // placements (a member's position, patrol steps) happen inside it.
+    this.openGroup = fields.openGroup ?? null;
 
     this.selectedBarrierIndex = fields.selectedBarrierIndex ?? null;
     this.selectedConnectionIndex = fields.selectedConnectionIndex ?? null;
@@ -45,10 +46,9 @@ export class UiState {
     // open only that unit's row and scroll it into view, even if it's
     // already the selected one (see #focusUnit's nonce bump).
     this.unitFocusRequest = fields.unitFocusRequest ?? null;
-    // Group names created via "+ Add Group" before any unit has joined
-    // them - not real data (see MapDraft's own group comment), only ever
-    // exists here, for this session.
-    this.pendingGroupNames = fields.pendingGroupNames ?? [];
+    // The unit type hovered in the Units tab's palette - its units are
+    // highlighted on the map.
+    this.hoveredUnitType = fields.hoveredUnitType ?? null;
     // "?" toggles this; Escape closes it.
     this.showHotkeyHelp = fields.showHotkeyHelp ?? false;
   }
@@ -59,7 +59,7 @@ export class UiState {
 
   get nothingArmed() {
     return this.tool === "select" && !this.placement && !this.connectionPlacement && !this.unitPlacement
-      && !this.patrolStepPlacement && !this.wanderLocationPlacement && !this.groupingMode;
+      && !this.patrolStepPlacement && !this.wanderLocationPlacement;
   }
 
   // Clears every mutual-exclusion mode - the common first step of every
@@ -68,7 +68,7 @@ export class UiState {
   clearModes() {
     return this.with({
       placement: null, connectionPlacement: null, unitPlacement: null,
-      patrolStepPlacement: null, wanderLocationPlacement: null, groupingMode: null, tool: "select",
+      patrolStepPlacement: null, wanderLocationPlacement: null, tool: "select",
     });
   }
 
@@ -142,27 +142,10 @@ export class UiState {
     return this.startTool("add-unit").with({pendingUnitType: unitTypeKey});
   }
 
-  // Toggling the same group's button again turns grouping mode back off,
-  // same as every other single-shot mode here.
-  startGroupingMode(groupIdentifier) {
-    const next = this.groupingMode?.groupIdentifier === groupIdentifier ? null : {groupIdentifier};
-    return this.clearModes().with({groupingMode: next});
-  }
-
-  addPendingGroup(name) {
-    const trimmed = name.trim();
-    if (!trimmed) return this;
-    const names = this.pendingGroupNames.includes(trimmed) ? this.pendingGroupNames : [...this.pendingGroupNames, trimmed];
-    return this.with({pendingGroupNames: names}).startGroupingMode(trimmed);
-  }
-
-  // The pendingGroupNames/groupingMode side of a rename - MapDraft#renameGroup
-  // handles the actual unit data, orchestrated together by MapEditor.jsx.
+  // The open group's side of a rename - MapDraft#renameGroup handles the
+  // units themselves.
   renameGroup(oldName, newName) {
-    return this.with({
-      pendingGroupNames: this.pendingGroupNames.map((name) => (name === oldName ? newName : name)),
-      groupingMode: this.groupingMode?.groupIdentifier === oldName ? {groupIdentifier: newName} : this.groupingMode,
-    });
+    return this.with({openGroup: this.openGroup === oldName ? newName : this.openGroup});
   }
 
   // Clicking a unit's token on the map (as opposed to its own row in

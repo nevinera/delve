@@ -196,6 +196,39 @@ RSpec.describe "Build::Validators", type: :request do
       end
     end
 
+    describe "POST /build/validators/world_references" do
+      let(:world) do
+        {
+          "worldLinks" => [{"zoneA" => {"zone" => "forest", "kind" => "open", "connection" => "north-exit"},
+                            "zoneB" => {"zone" => "cave", "kind" => "open", "connection" => "entrance"}}],
+          "entryPoints" => {"forest/hub/central" => nil}
+        }
+      end
+      let(:zones) do
+        {
+          "forest" => {"openConnections" => {"hub/north" => "north-exit"}, "entryPoints" => {"hub/central" => nil}},
+          "cave" => {"openConnections" => {"mouth/in" => "entrance"}, "entryPoints" => {}}
+        }
+      end
+
+      def post_references(body)
+        post "/build/validators/world_references", params: body.to_json, headers: {"Content-Type" => "application/json"}
+        JSON.parse(response.body)
+      end
+
+      it "returns valid: true when every link and entry point names a real connection" do
+        expect(post_references({world:, zones:})).to eq({"valid" => true})
+      end
+
+      it "names a link to a connection the zone doesn't expose" do
+        zones["cave"]["openConnections"] = {}
+        body = post_references({world:, zones:})
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include('zone "cave" has no openConnection "entrance"')
+        expect(body["error"]["path"]).to eq("$.worldLinks[0].zoneB")
+      end
+    end
+
     describe "POST /build/validators/zone" do
       let(:valid_map) do
         {

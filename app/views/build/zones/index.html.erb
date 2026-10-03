@@ -1,7 +1,5 @@
 <h1>Zones</h1>
 
-<p><%= link_to "New Zone", new_build_zone_path %></p>
-
 <table>
   <thead>
     <tr><th>Key</th><th></th></tr>
@@ -9,7 +7,7 @@
   <tbody>
     <% @zone_keys.each do |identifier| %>
       <tr>
-        <td><%= link_to identifier, edit_build_zone_path(id: identifier) %></td>
+        <td><%= identifier %></td>
         <td><%= link_to "Play", build_zone_play_path(id: identifier) %></td>
       </tr>
     <% end %>

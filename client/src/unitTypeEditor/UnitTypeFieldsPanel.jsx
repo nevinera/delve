@@ -1,6 +1,6 @@
-import {useState} from "react";
 import {humanize} from "../abilityEditor/abilityFormatting";
 import {RESOURCE_TYPES} from "../resourceTypes";
+import ImagePicker from "../content/ImagePicker";
 
 const TARGETING_TYPES = ["aggroTable", "nearest", "healerAggro"];
 const BASIC_ATTACK_SCHOOLS = ["physical", "magic"];
@@ -35,59 +35,22 @@ function OptionalSelect({value, options, onChange, blankLabel = "— default —
   );
 }
 
-// Lets a slot's path be picked from an already-committed file under
-// tokens/unit/ (see UnitTypeEditor's existingTokenImages) instead of typed
-// or uploaded - same reset-after-pick pattern as AbilityFieldsPanel's
-// StockAssetPicker, since the picked value lives in the slot's own text
-// field, not in this dropdown's selection.
-function ExistingTokenImagePicker({options, onPick}) {
+// Each slot is an ImagePicker over the host's token images (see
+// UnitTypeWorkbench's tokenImages): pick one by sight, or upload a new one.
+// Clearing a slot removes it.
+function TokenImageUrlField({draft, onChange, tokenImages}) {
   return (
-    <select
-      value=""
-      onChange={(e) => {
-        if (e.target.value) onPick(e.target.value);
-        e.target.value = "";
-      }}
-    >
-      <option value="">— existing token —</option>
-      {options.map((name) => <option key={name} value={name}>{name}</option>)}
-    </select>
-  );
-}
-
-// Each slot offers three ways to set its path: type it directly, upload a
-// new file (written to wherever the resulting path says at save time - see
-// UnitTypeEditor's uploadTokenImage/saveUnitType), or pick a file already
-// committed under tokens/unit/ from another unit's token (onPickTokenImage
-// builds the actual path - it alone knows this unit type's own key depth).
-// The file input is remounted (via `resetKey`) after each upload, since its
-// displayed filename can't otherwise be cleared programmatically.
-function TokenImageUrlField({draft, onChange, existingTokenImages, onUploadTokenImage, onRemoveTokenImage, onPickTokenImage}) {
-  const list = draft.tokenImageUrls;
-  const [resetKeys, setResetKeys] = useState({});
-
-  return (
-    <div>
-      {list.map((url, i) => (
-        <div key={i} style={{display: "flex", gap: 6, marginBottom: 4, alignItems: "center"}}>
-          <input type="text" value={url} onChange={(e) => onChange(draft.updateTokenImage(i, e.target.value))} />
-          <input
-            key={resetKeys[i] ?? 0}
-            type="file" accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files[0];
-              if (file) onUploadTokenImage(i, file);
-              setResetKeys((current) => ({...current, [i]: (current[i] ?? 0) + 1}));
-            }}
-          />
-          <ExistingTokenImagePicker
-            options={existingTokenImages ?? []}
-            onPick={(name) => onPickTokenImage(i, name)}
-          />
-          <button type="button" className="remove-entry" onClick={() => onRemoveTokenImage(i)}>
-            Remove
-          </button>
-        </div>
+    <div className="token-image-slots">
+      {draft.tokenImageUrls.map((url, i) => (
+        <ImagePicker
+          key={i}
+          label={`Token image ${i + 1}`}
+          value={url || undefined}
+          url={url ? tokenImages.urlFor(url) : null}
+          options={tokenImages.options}
+          onUpload={tokenImages.upload}
+          onChange={(value) => onChange(value ? draft.updateTokenImage(i, value) : draft.removeTokenImage(i))}
+        />
       ))}
       <button type="button" className="add-entry" onClick={() => onChange(draft.addTokenImage())}>
         + Add token image
@@ -199,7 +162,7 @@ function TacticsFields({tactics, currentNames, draft, onChange}) {
 // renders draft's current values and calls its mutator methods. Powers
 // aren't edited here - each one is its own area in the editor.
 export default function UnitTypeFieldsPanel({
-  draft, onChange, existingTokenImages, onUploadTokenImage, onRemoveTokenImage, onPickTokenImage,
+  draft, onChange, tokenImages,
 }) {
   const unitTypeData = draft.data;
   const names = draft.powerNames;
@@ -234,13 +197,7 @@ export default function UnitTypeFieldsPanel({
       </table>
 
       <h3>Token images</h3>
-      <TokenImageUrlField
-        draft={draft} onChange={onChange}
-        existingTokenImages={existingTokenImages}
-        onUploadTokenImage={onUploadTokenImage}
-        onRemoveTokenImage={onRemoveTokenImage}
-        onPickTokenImage={onPickTokenImage}
-      />
+      <TokenImageUrlField draft={draft} onChange={onChange} tokenImages={tokenImages} />
 
       <h3>Resource</h3>
       <ResourceTypeField resource={unitTypeData.resource} draft={draft} onChange={onChange} />

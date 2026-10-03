@@ -28,10 +28,7 @@ Rails.application.routes.draw do
     root to: "dashboard#index"
     resources :abilities, only: [:index, :new, :create]
     resources :classes, only: [:index, :new, :create]
-    resources :unit_types, only: [:index, :new, :create]
-    resources :items, only: [:index, :new, :create]
-    resources :maps, only: [:index, :new, :create]
-    resources :zones, only: [:index, :new, :create]
+    resources :zones, only: [:index]
     resources :worlds, only: [:index, :new, :create]
     resources :character_classes, only: [] do
       member { post :refetch }
@@ -56,6 +53,7 @@ Rails.application.routes.draw do
     post "validators/map", to: "validators#map"
     post "validators/zone", to: "validators#zone"
     post "validators/world", to: "validators#world"
+    post "validators/world_references", to: "validators#world_references"
     post "dps_sims/unit_type", to: "dps_sims#unit_type"
     post "class_dps_sims/character_class", to: "class_dps_sims#character_class"
   end
@@ -74,15 +72,14 @@ Rails.application.routes.draw do
   # "/build/abilities/a/b/edit" with no encoding involved.
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
   get "build/classes/*id/edit", to: "build/classes#edit", as: "edit_build_class"
-  get "build/unit_types/*id/edit", to: "build/unit_types#edit", as: "edit_build_unit_type"
-  get "build/items/*id/edit", to: "build/items#edit", as: "edit_build_item"
-  get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
-  get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
   get "build/zones/*id/play", to: "build/zone_plays#show", as: "build_zone_play"
   get "build/local_zones", to: "build/zone_plays#local", as: "build_local_zones"
   get "build/local_zones/*id/play", to: "build/zone_plays#show", as: "build_local_zone_play", defaults: {source: "local"}
-  get "build/worlds/*id/edit", to: "build/worlds#edit", as: "edit_build_world"
-  post "build/worlds/*id/publish", to: "build/worlds#publish", as: "publish_build_world"
+  # The single-page world editor (see plans/world-editor/) - world keys
+  # have no slashes, so a plain :id.
+  get "build/worlds/:id/edit", to: "build/worlds#edit", as: "edit_build_world"
+  post "build/worlds/:id/publish", to: "build/worlds#publish", as: "publish_build_world"
+  get "build/worlds/:world/zones/:zone/play", to: "build/zone_plays#show", as: "build_world_zone_play"
 
   namespace :play do
     root to: "dashboard#index"

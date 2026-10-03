@@ -20,7 +20,7 @@ function renameTacticsPower(tactics, from, to) {
 }
 
 // Owns a unit type draft's data and every mutation the editor can make to
-// it - the UI (UnitTypeEditor.jsx/UnitTypeFieldsPanel.jsx) only ever reads
+// it - the UI (UnitTypeWorkbench.jsx/UnitTypeFieldsPanel.jsx) only ever reads
 // `.data` and calls this class's methods (see plans/editors-as-classes.md).
 // Powers are stored inline (full Ability objects, no $refs); tactics refer
 // to them by name.

@@ -1,27 +1,36 @@
 <h1>Worlds</h1>
 
-<p><%= link_to "New World", new_build_world_path %></p>
+<%= form_with url: build_worlds_path, method: :get do %>
+  <label for="branch">Branch</label>
+  <%= select_tag :branch, options_for_select(@branches, @branch), onchange: "this.form.requestSubmit()" %>
+  <noscript><%= submit_tag "Show", name: nil %></noscript>
+<% end %>
 
-<table>
-  <thead>
-    <tr><th>Key</th><th>Publishing</th></tr>
-  </thead>
-  <tbody>
-    <% @worlds.each do |entry| %>
-      <% identifier = entry["path"].delete_prefix("worlds/").delete_suffix(".json") %>
-      <tr>
-        <td><%= link_to identifier, edit_build_world_path(id: identifier) %></td>
-        <td>
-          <% if (published = @published_worlds[entry["path"]]) %>
-            <%= link_to "Versions", build_publishing_world_path(published) %>
-          <% else %>
-            <%= button_to "Set up publishing", build_publishing_worlds_path, params: {path: entry["path"]} %>
-          <% end %>
-        </td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<p><%= link_to "New World", new_build_world_path(branch: @branch) %></p>
+
+<% if @world_paths.empty? %>
+  <p>No worlds on <%= @branch %> yet.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr><th>Key</th><th>Publishing</th></tr>
+    </thead>
+    <tbody>
+      <% @world_paths.each do |path| %>
+        <tr>
+          <td><%= link_to World.key_for(path), edit_build_world_path(id: World.key_for(path), branch: @branch) %></td>
+          <td>
+            <% if (published = @published_worlds[path]) %>
+              <%= link_to "Versions", build_publishing_world_path(published) %>
+            <% else %>
+              <%= button_to "Set up publishing", build_publishing_worlds_path, params: {path:} %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
 
 <p><%= link_to "Published worlds", build_publishing_worlds_path %></p>
 

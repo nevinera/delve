@@ -112,4 +112,32 @@ RSpec.describe "Build::ZonePlays", type: :request do
     expect(response).to have_http_status(:service_unavailable)
     expect(JoinDirectZone).not_to have_received(:call)
   end
+
+  describe "a world's zone, at the commit the world editor expanded" do
+    let(:commit) { "a" * 40 }
+    let(:world_raw_url) { "https://raw.githubusercontent.com/builder/content/#{commit}/worlds/small/zones/forest/forest.full.json" }
+
+    before { stub_request(:get, world_raw_url).to_return(body: zone_body) }
+
+    it "asks which character to play as, keeping the commit" do
+      get "/build/worlds/small/zones/forest/play", params: {commit:}
+      expect(response.body).to include("Play small/forest", commit.first(7),
+        CGI.escapeHTML(build_world_zone_play_path(world: "small", zone: "forest", commit:, character_id: character.id)),
+        edit_build_world_path(id: "small"))
+    end
+
+    it "joins the zone from that commit" do
+      get "/build/worlds/small/zones/forest/play", params: {commit:, character_id: character.id}
+      expect(response).to have_http_status(:ok)
+      expect(JoinDirectZone).to have_received(:call).with(hash_including(
+        zone_key: "small/forest", commit_sha: commit, source_url: world_raw_url
+      ))
+    end
+
+    it "explains that it needs a commit" do
+      get "/build/worlds/small/zones/forest/play", params: {character_id: character.id}
+      expect(response).to have_http_status(:service_unavailable)
+      expect(response.body).to include("once it&#39;s expanded")
+    end
+  end
 end

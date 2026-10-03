@@ -45,17 +45,17 @@ describe("ZoneItemsPanel", () => {
     expect(screen.getByText("No items referenced yet.")).toBeInTheDocument();
   });
 
-  it("counts every unit referencing an item, across every map, and links to the single map when there's only one", () => {
+  it("counts every unit referencing an item, across every map, naming the single map when there's only one", () => {
     render(<ZoneItemsPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" />);
     expand();
 
     // iron-shield is only used by one unit, on one map.
     expect(screen.getByText("iron-shield")).toBeInTheDocument();
     expect(screen.getByText(/1 unit on/)).toBeInTheDocument();
-    expect(screen.getByRole("link", {name: "Cave Entrance ↗"})).toHaveAttribute("href", "/build/maps/goblin-cave/gc1-goblin-cave-entrance/edit");
+    expect(screen.getByText(/1 unit on/)).toHaveTextContent("Cave Entrance");
   });
 
-  it("shows the across-maps count with no link when more than one map uses it", () => {
+  it("shows the across-maps count when more than one map uses it", () => {
     render(<ZoneItemsPanel zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} zoneKey="goblin-cave" />);
     expand();
 

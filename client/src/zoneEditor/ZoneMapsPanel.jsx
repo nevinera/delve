@@ -1,9 +1,12 @@
 import {useState} from "react";
 import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
 import {connectionStatus} from "./connectionStatus";
-import {keyFromRef, refFromKey, mapEditPath} from "./mapRef";
+import {keyFromRef, refFromKey} from "./mapRef";
 
-export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
+// newMapUrl and onRefresh are optional: a "Create Map" link and a
+// refresh button. rowActions(key), if given, renders extra
+// controls on each map's row.
+export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus, rowActions}) {
   const [collapsed, setCollapsed] = useState(false);
   const [pendingKey, setPendingKey] = useState("");
   // Which map rows have their connections list expanded - starts empty
@@ -48,7 +51,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
   function handleAdd() {
     if (!pendingKey) return;
     dispatch({type: "ADD_ENTRY", section: "maps", entry: {$ref: refFromKey(pendingKey), referenceTo: "map"}});
-    onAddMap(pendingKey);
+    onAddMap?.(pendingKey);
     setPendingKey("");
   }
 
@@ -77,17 +80,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
                     )}
                     <span className="zone-map-name">{name}</span>
                   </div>
-                  {key && (
-                    <a
-                      className="zone-map-edit-link"
-                      href={mapEditPath(zoneKey, key)}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Edit ↗
-                    </a>
-                  )}
+                  {key && rowActions && <span className="zone-map-row-actions" onClick={(e) => e.stopPropagation()}>{rowActions(key)}</span>}
                   <button
                     type="button"
                     className="remove-entry"
@@ -130,8 +123,8 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
                 </button>
               </>
             )}
-            <a href={createMapHref} target="_blank" rel="noreferrer">Create Map ↗</a>
-            <button type="button" className="add-entry" onClick={onRefresh}>Refresh</button>
+            {newMapUrl && <a href={createMapHref} target="_blank" rel="noreferrer">Create Map ↗</a>}
+            {onRefresh && <button type="button" className="add-entry" onClick={onRefresh}>Refresh</button>}
             {refreshStatus && <span className="map-sidebar-unit-type-links">{refreshStatus}</span>}
           </div>
         </div>
