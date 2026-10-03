@@ -8,7 +8,7 @@ import {aggregateItemUsage} from "./zoneRefUsage";
 // it valid". A key shown as invalid gets added to the zone's own `items`
 // dict automatically at save time instead (see syncZoneRefs.js), so it's
 // expected to only ever show briefly, between placing a unit and saving.
-export default function ZoneItemsPanel({zoneData, mapDetailsByKey, zoneKey}) {
+export default function ZoneItemsPanel({zoneData, mapDetailsByKey, zoneKey, mapEditHref = (key) => mapEditPath(zoneKey, key)}) {
   const [collapsed, setCollapsed] = useState(true);
   const usage = aggregateItemUsage(zoneData, mapDetailsByKey);
   const itemKeys = Object.keys(usage).sort();
@@ -37,7 +37,9 @@ export default function ZoneItemsPanel({zoneData, mapDetailsByKey, zoneKey}) {
                   {mapKeys.length === 1 ? (
                     <>
                       {info.count} {unitWord} on{" "}
-                      <a href={mapEditPath(zoneKey, mapKeys[0])} target="_blank" rel="noreferrer">{info.mapNames[mapKeys[0]]} ↗</a>
+                      {mapEditHref(mapKeys[0])
+                        ? <a href={mapEditHref(mapKeys[0])} target="_blank" rel="noreferrer">{info.mapNames[mapKeys[0]]} ↗</a>
+                        : info.mapNames[mapKeys[0]]}
                     </>
                   ) : (
                     `${info.count} ${unitWord} across ${mapKeys.length} maps`

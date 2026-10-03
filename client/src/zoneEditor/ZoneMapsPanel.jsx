@@ -3,7 +3,10 @@ import ZoneMapConnectionsPanel from "./ZoneMapConnectionsPanel";
 import {connectionStatus} from "./connectionStatus";
 import {keyFromRef, refFromKey, mapEditPath} from "./mapRef";
 
-export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus}) {
+// mapEditHref(key) links each map out to its editor; the world editor,
+// which edits maps in place, passes one that returns null. newMapUrl and
+// onRefresh are likewise optional.
+export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus, mapEditHref = (key) => mapEditPath(zoneKey, key)}) {
   const [collapsed, setCollapsed] = useState(false);
   const [pendingKey, setPendingKey] = useState("");
   // Which map rows have their connections list expanded - starts empty
@@ -48,7 +51,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
   function handleAdd() {
     if (!pendingKey) return;
     dispatch({type: "ADD_ENTRY", section: "maps", entry: {$ref: refFromKey(pendingKey), referenceTo: "map"}});
-    onAddMap(pendingKey);
+    onAddMap?.(pendingKey);
     setPendingKey("");
   }
 
@@ -77,10 +80,10 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
                     )}
                     <span className="zone-map-name">{name}</span>
                   </div>
-                  {key && (
+                  {key && mapEditHref(key) && (
                     <a
                       className="zone-map-edit-link"
-                      href={mapEditPath(zoneKey, key)}
+                      href={mapEditHref(key)}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -130,8 +133,8 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
                 </button>
               </>
             )}
-            <a href={createMapHref} target="_blank" rel="noreferrer">Create Map ↗</a>
-            <button type="button" className="add-entry" onClick={onRefresh}>Refresh</button>
+            {newMapUrl && <a href={createMapHref} target="_blank" rel="noreferrer">Create Map ↗</a>}
+            {onRefresh && <button type="button" className="add-entry" onClick={onRefresh}>Refresh</button>}
             {refreshStatus && <span className="map-sidebar-unit-type-links">{refreshStatus}</span>}
           </div>
         </div>

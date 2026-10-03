@@ -45,19 +45,23 @@ export function mapKeysInZone(draft, zone) {
 // {[mapKey]: {identifier, name, connections, units, thumbnailUrl}} for
 // every map the zone references - the shape the zone graph and panels
 // already take (see zoneEditor/zoneContentLoaders.js#mapDetailsFor).
-export function mapDetails(draft, zone) {
+// assetUrl(repoPath), if given, turns thumbnailUrl into something
+// displayable; otherwise it's left as the map file has it.
+export function mapDetails(draft, zone, assetUrl = null) {
   const details = {};
   for (const entry of zoneData(draft, zone)?.maps ?? []) {
     if (!entry?.$ref) continue;
     const key = keyFromRef(entry.$ref);
-    const map = draft.read(mapFile(draft.worldKey, zone, key));
+    const path = mapFile(draft.worldKey, zone, key);
+    const map = draft.read(path);
     if (!map) continue;
+    const thumbnail = map.thumbnailUrl && assetUrl ? assetUrl(resolvePath(path, map.thumbnailUrl)) : map.thumbnailUrl;
     details[key] = {
       identifier: map.identifier,
       name: map.name,
       connections: map.connections ?? [],
       units: (map.units ?? []).map((unit) => ({unitType: unit.unitType, itemKeys: Object.keys(unit.lootTable ?? {})})),
-      thumbnailUrl: map.thumbnailUrl ?? null,
+      thumbnailUrl: thumbnail ?? null,
     };
   }
   return details;
@@ -124,4 +128,46 @@ export function resolveZone(draft, zone) {
   }
 
   return inline(zoneData(draft, zone), path);
+}
+
+// The old zone editor's action shapes (see zoneEditor/ZoneEditor.jsx's
+// dispatch), applied to the zone's part of the live draft - so its graph
+// and panels work unchanged. Adding a map also fills in the zone's refs
+// to whatever unit types and items the map uses.
+export function applyZoneAction(draft, zone, action) {
+  switch (action.type) {
+    case "ADD_ENTRY": {
+      const next = updateZone(draft, zone, (z) => z.addEntry(action.section, action.entry));
+      return action.section === "maps" ? syncZoneRefs(next, zone) : next;
+    }
+    case "REMOVE_MAP":
+      return removeMap(draft, zone, action.index);
+    default:
+      return updateZone(draft, zone, (z) => {
+        switch (action.type) {
+          case "SET_FIELD": return z.setField(action.field, action.value);
+          case "REMOVE_ENTRY": return z.removeEntry(action.section, action.index);
+          case "UPDATE_ENTRY_FIELD": return z.updateEntryField(action.section, action.index, action.field, action.value);
+          case "UPDATE_ENTRY_FIELDS": return z.updateEntryFields(action.section, action.index, action.fields);
+          case "SET_ENTRY_POINT": return z.setEntryPoint(action.key, action.requiredKey);
+          case "REMOVE_ENTRY_POINT": return z.removeEntryPoint(action.key);
+          case "SET_OPEN_CONNECTION": return z.setOpenConnection(action.key, action.name);
+          case "REMOVE_OPEN_CONNECTION": return z.removeOpenConnection(action.key);
+          case "ADD_ZONE_LINK": return z.addZoneLink(action.connectionA, action.connectionB);
+          case "REMOVE_ZONE_LINK": return z.removeZoneLink(action.index);
+          default: throw new Error(`Unknown zone action: ${action.type}`);
+        }
+      });
+  }
+}
+
+// Every unit type or item $ref in the zone whose file the world doesn't
+// have - shown as a warning, and a Validate error.
+export function missingZoneRefs(draft, zone) {
+  const path = zoneFile(draft.worldKey, zone);
+  const data = zoneData(draft, zone) ?? {};
+  const missing = (section) => Object.entries(data[section] ?? {})
+    .filter(([, ref]) => isRef(ref) && !draft.exists(resolvePath(path, ref.$ref) ?? ""))
+    .map(([key]) => key);
+  return {unitTypes: missing("unitTypes"), items: missing("items")};
 }
