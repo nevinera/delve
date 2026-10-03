@@ -1,8 +1,7 @@
 module WorldsHelper
-  # The editor for a world file: the single-page world editor for a
-  # self-contained world, the older world editor otherwise.
+  # The world editor for a world file, or nil for an older-style world
+  # (worlds/<key>.json), which the editor can't open.
   def world_editor_path_for(path)
-    key = World.key_for(path)
-    World.self_contained_path?(path) ? build_world_editor_path(id: key) : edit_build_world_path(id: key)
+    edit_build_world_path(id: World.key_for(path)) if World.self_contained_path?(path)
   end
 end

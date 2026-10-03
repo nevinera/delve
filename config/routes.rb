@@ -30,8 +30,7 @@ Rails.application.routes.draw do
     resources :classes, only: [:index, :new, :create]
     resources :unit_types, only: [:index, :new, :create]
     resources :items, only: [:index, :new, :create]
-    resources :maps, only: [:index, :new, :create]
-    resources :zones, only: [:index, :new, :create]
+    resources :zones, only: [:index]
     resources :worlds, only: [:index, :new, :create]
     resources :character_classes, only: [] do
       member { post :refetch }
@@ -77,17 +76,13 @@ Rails.application.routes.draw do
   get "build/classes/*id/edit", to: "build/classes#edit", as: "edit_build_class"
   get "build/unit_types/*id/edit", to: "build/unit_types#edit", as: "edit_build_unit_type"
   get "build/items/*id/edit", to: "build/items#edit", as: "edit_build_item"
-  get "build/maps/*id/edit", to: "build/maps#edit", as: "edit_build_map"
-  get "build/zones/*id/edit", to: "build/zones#edit", as: "edit_build_zone"
   get "build/zones/*id/play", to: "build/zone_plays#show", as: "build_zone_play"
   get "build/local_zones", to: "build/zone_plays#local", as: "build_local_zones"
   get "build/local_zones/*id/play", to: "build/zone_plays#show", as: "build_local_zone_play", defaults: {source: "local"}
-  get "build/worlds/*id/edit", to: "build/worlds#edit", as: "edit_build_world"
-  # The new single-page world editor (see plans/world-editor/) - world keys
+  # The single-page world editor (see plans/world-editor/) - world keys
   # have no slashes, so a plain :id.
-  get "build/world_editor/:id", to: "build/world_editor#show", as: "build_world_editor"
-  post "build/world_editor/:id/publish", to: "build/world_editor#publish", as: "publish_build_world_editor"
-  post "build/worlds/*id/publish", to: "build/worlds#publish", as: "publish_build_world"
+  get "build/worlds/:id/edit", to: "build/worlds#edit", as: "edit_build_world"
+  post "build/worlds/:id/publish", to: "build/worlds#publish", as: "publish_build_world"
 
   namespace :play do
     root to: "dashboard#index"

@@ -1,8 +1,7 @@
-<%= link_to "← Back", build_worlds_path, class: "back-link" %>
 <div
   id="editor-root"
   data-key="<%= params[:id] %>"
-  data-new-zone-url="<%= new_build_zone_path %>"
+  data-back-url="<%= build_worlds_path %>"
   data-publish-url="<%= publish_build_world_path(id: params[:id]) %>"
   data-next-tag="<%= @next_tag %>"
 ></div>

@@ -9,7 +9,7 @@
   <tbody>
     <% @world_paths.each do |path| %>
       <tr>
-        <td><%= link_to World.key_for(path), world_editor_path_for(path) %></td>
+        <td><%= link_to_if world_editor_path_for(path), World.key_for(path), world_editor_path_for(path) %><%= " (old layout, not editable)" unless World.self_contained_path?(path) %></td>
         <td>
           <% if (published = @published_worlds[path]) %>
             <%= link_to "Versions", build_publishing_world_path(published) %>

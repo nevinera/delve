@@ -128,7 +128,6 @@ export default function ZoneLevel({draft, zone, onChange, navigate, repo}) {
           availableMapKeys={mapKeysInZone(draft, zone)}
           mapDetailsByKey={details}
           zoneKey={zone}
-          mapEditHref={() => null}
           rowActions={(map) => (
             <>
               <button type="button" className="add-entry" onClick={() => openMap(map)} aria-label={`Open ${map}`}>Open</button>
@@ -138,7 +137,7 @@ export default function ZoneLevel({draft, zone, onChange, navigate, repo}) {
           )}
         />
         <ZoneUnitTypesPanel zoneData={data} mapDetailsByKey={details} />
-        <ZoneItemsPanel zoneData={data} mapDetailsByKey={details} zoneKey={zone} mapEditHref={() => null} />
+        <ZoneItemsPanel zoneData={data} mapDetailsByKey={details} zoneKey={zone} />
       </div>
     </>
   );

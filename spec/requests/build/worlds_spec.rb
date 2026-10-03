@@ -11,17 +11,17 @@ RSpec.describe "Build::Worlds", type: :request do
   describe "GET /build/worlds" do
     before { stub_tree_listing("builder/content", "worlds", ["demo.json", "demo.layout.json", "other.json"]) }
 
-    it "links a self-contained world to the new editor, without listing the files inside it" do
+    it "links a self-contained world to the editor, without listing the files inside it" do
       stub_tree_listing("builder/content", "worlds", ["small/small.json", "small/zones/forest/forest.json", "demo.json"])
       get "/build/worlds"
-      expect(response.body).to include(build_world_editor_path(id: "small"), edit_build_world_path(id: "demo"))
+      expect(response.body).to include(edit_build_world_path(id: "small"))
       expect(response.body).not_to include("forest")
     end
 
-    it "lists world files, not their layout companions" do
+    it "lists an older-style world without an editor link" do
       get "/build/worlds"
-      expect(response.body).to include(edit_build_world_path(id: "demo"), edit_build_world_path(id: "other"))
-      expect(response.body).not_to include("demo.layout")
+      expect(response.body).to include("demo (old layout, not editable)")
+      expect(response.body).not_to include(edit_build_world_path(id: "demo"), "demo.layout")
     end
 
     it "links to versions for a published world, and offers setup for the rest" do
@@ -48,16 +48,11 @@ RSpec.describe "Build::Worlds", type: :request do
   end
 
   describe "POST /build/worlds" do
-    before { stub_tree_listing("builder/content", "worlds", ["demo.json", "sub/nested.json"]) }
+    before { stub_tree_listing("builder/content", "worlds", ["demo.json", "small/small.json"]) }
 
     it "goes to the editor for an available key" do
       post "/build/worlds", params: {key: "northern-barrens"}
       expect(response).to redirect_to(edit_build_world_path(id: "northern-barrens"))
-    end
-
-    it "allows a key in a subdirectory" do
-      post "/build/worlds", params: {key: "sub/other"}
-      expect(response).to redirect_to(edit_build_world_path(id: "sub/other"))
     end
 
     it "rejects a blank key" do
@@ -67,19 +62,37 @@ RSpec.describe "Build::Worlds", type: :request do
     end
 
     it "rejects a key with disallowed characters" do
-      post "/build/worlds", params: {key: "no spaces"}
+      post "/build/worlds", params: {key: "sub/other"}
       expect(response).to have_http_status(:unprocessable_content)
       expect(response.body).to include("Key must contain only")
     end
 
-    it "rejects a key that's already taken" do
-      post "/build/worlds", params: {key: "sub/nested"}
-      expect(response).to have_http_status(:unprocessable_content)
-      expect(response.body).to include("is already taken")
+    it "rejects a key that's already taken, in either layout" do
+      %w[small demo].each do |key|
+        post "/build/worlds", params: {key:}
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(response.body).to include("is already taken")
+      end
     end
   end
 
   describe "GET /build/worlds/:id/edit" do
+    it "mounts the editor for the world" do
+      stub_request(:get, "https://api.github.com/repos/builder/content/git/matching-refs/tags/small/v")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: [].to_json)
+      get "/build/worlds/small/edit"
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include('data-key="small"', %(data-back-url="#{build_worlds_path}"))
+      expect(response.body).to match(%r{src="/client/worldBuilder[^"]*\.js"})
+    end
+
+    it "sends a user with no GitHub connection to connect one" do
+      GithubInstallation.where(user:).delete_all
+      user.reload
+      get "/build/worlds/small/edit"
+      expect(response).to redirect_to(github_connect_path)
+    end
+
     it "suggests the next version tag for the world" do
       stub_request(:get, "https://api.github.com/repos/builder/content/git/matching-refs/tags/demo/v")
         .to_return(status: 200, headers: {"Content-Type" => "application/json"},
@@ -109,7 +122,7 @@ RSpec.describe "Build::Worlds", type: :request do
     let(:private_repo) { false }
     let!(:create_tag) do
       stub_request(:post, "#{api}/git/refs")
-        .with(body: {ref: "refs/tags/demo/v1", sha: "c0ffee"}.to_json)
+        .with(body: {ref: "refs/tags/small/v1", sha: "expanded"}.to_json)
         .to_return(status: 201, headers: {"Content-Type" => "application/json"}, body: {}.to_json)
     end
 
@@ -118,32 +131,51 @@ RSpec.describe "Build::Worlds", type: :request do
     end
 
     before do
-      stub_json(api, {private: private_repo, default_branch: "master"})
-      stub_json("#{api}/git/ref/heads/master", {object: {type: "commit", sha: "c0ffee"}})
-      stub_json("#{api}/git/ref/tags/demo/v1", {message: "Not Found"}, status: 404)
+      stub_json(api, {private: private_repo, default_branch: "main"})
+      stub_json("#{api}/git/ref/tags/small/v1", {message: "Not Found"}, status: 404)
+      stub_json("#{api}/git/ref/heads/world-editor", {object: {type: "commit", sha: "expanded"}})
     end
 
-    def publish(tag: "demo/v1") = post("/build/worlds/demo/publish", params: {tag:}, as: :json)
+    def publish(tag: "small/v1", branch: "world-editor", expected_sha: "expanded")
+      post "/build/worlds/small/publish", params: {tag:, branch:, expected_sha:}, as: :json
+    end
 
-    it "tags the default branch head and creates an importing tag version" do
+    it "tags the expanded commit and records a version of the self-contained world" do
       expect { publish }.to have_enqueued_job(ImportWorldVersionJob)
       expect(create_tag).to have_been_requested
-      world = World.find_by!(repo: "builder/content", path: "worlds/demo.json")
+      world = World.find_by!(repo: "builder/content", path: "worlds/small/small.json")
       expect(world.owner).to eq(user)
-      expect(world.world_versions.sole).to have_attributes(ref: "demo/v1", state: "importing")
+      expect(world.world_versions.sole).to have_attributes(ref: "small/v1", state: "importing")
       expect(response.parsed_body).to eq("url" => build_publishing_world_path(world))
     end
 
     it "reuses the world record on later publishes" do
-      world = create(:world, owner: user, repo: "builder/content", path: "worlds/demo.json")
+      world = create(:world, owner: user, repo: "builder/content", path: "worlds/small/small.json")
       expect { publish }.not_to change(World, :count)
       expect(world.world_versions.count).to eq(1)
     end
 
-    it "refuses a tag that already exists" do
-      stub_json("#{api}/git/ref/tags/demo/v1", {object: {type: "commit", sha: "old"}})
-      expect { publish }.not_to change(WorldVersion, :count)
+    it "refuses when the branch has moved on since it was expanded" do
+      expect { publish(expected_sha: "older") }.not_to change(WorldVersion, :count)
       expect(response).to have_http_status(:unprocessable_content)
+      expect(response.parsed_body["error"]).to include("has moved on since it was expanded")
+      expect(create_tag).not_to have_been_requested
+    end
+
+    it "refuses a branch that doesn't exist" do
+      stub_json("#{api}/git/ref/heads/gone", {message: "Not Found"}, status: 404)
+      publish(branch: "gone")
+      expect(response.parsed_body["error"]).to eq("Branch gone doesn't exist.")
+    end
+
+    it "requires the branch and expanded commit" do
+      publish(branch: "", expected_sha: "")
+      expect(response.parsed_body["error"]).to include("branch and its expanded commit are required")
+    end
+
+    it "refuses a tag that already exists" do
+      stub_json("#{api}/git/ref/tags/small/v1", {object: {type: "commit", sha: "old"}})
+      expect { publish }.not_to change(WorldVersion, :count)
       expect(response.parsed_body["error"]).to include("already exists")
       expect(create_tag).not_to have_been_requested
     end
@@ -153,12 +185,11 @@ RSpec.describe "Build::Worlds", type: :request do
       stub_request(:post, "#{api}/git/refs")
         .to_return(status: 403, headers: {"Content-Type" => "application/json"}, body: {message: "Resource not accessible"}.to_json)
       expect { publish }.not_to change(WorldVersion, :count)
-      expect(response).to have_http_status(:unprocessable_content)
       expect(response.parsed_body["error"]).to include("Resource not accessible")
     end
 
     it "refuses a malformed tag" do
-      publish(tag: "demo v1")
+      publish(tag: "small v1")
       expect(response).to have_http_status(:unprocessable_content)
       expect(create_tag).not_to have_been_requested
     end
