@@ -100,6 +100,16 @@ const PAN_KEY_DIRECTIONS = {
 // of a canvas tool-mode row - "add-circle" is still a tool this component
 // tracks (a drag on the map sets a circle's center/radius), but it's
 // entered externally via the `tool`/`onToolChange` props, not a button here.
+//
+// activeLayers says which kinds of shape can be edited ({barriers,
+// connections, units, ncus}, all by default) - the rest are drawn dimmed and
+// ignore the pointer. With a group open (openGroup), shift-clicking a unit
+// toggles its membership. onDoubleClickUnit(index)/onDoubleClickEmpty fire
+// on a double-click on a unit's token or anywhere else. keepUnitToolArmed
+// leaves "add-unit" armed after each placement, and prepareUnit(entry)
+// fills in each new unit before it's added (e.g. its group).
+const ALL_LAYERS = {barriers: true, connections: true, units: true, ncus: true};
+
 export default function MapCanvas({
   image, displayImageUrl, imageError, onImageFile, backUrl, mapData, dispatch,
   selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement,
@@ -111,7 +121,8 @@ export default function MapCanvas({
   wanderLocationPlacement, onPlaceWanderLocation, onCancelWanderLocationPlacement,
   hoveredPatrolStep, expandedUnitIndices,
   ncuTokenUrls = {}, selectedNcuIndex = null, onSelectNcu, hoveredNcuIndex = null, onHoverNcu, expandedNcuIndices,
-  groupingMode, onToggleGroupMember, hoveredGroupIdentifier,
+  openGroup = null, onToggleGroupMember, hoveredGroupIdentifier, highlightedUnitIndices = null,
+  activeLayers = ALL_LAYERS, onDoubleClickUnit, onDoubleClickEmpty, keepUnitToolArmed = false, prepareUnit = (entry) => entry,
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   previewing = false, onTogglePreview,
   tool = "select", onToolChange,
@@ -425,14 +436,14 @@ export default function MapCanvas({
       const angle = Math.hypot(dx, dy) >= MIN_FACING_DRAG_FEET ? facingDegrees(dx, dy) : 0;
       dispatch({
         type: "ADD_ENTRY", section: "units",
-        entry: {
+        entry: prepareUnit({
           identifier: nextUnitIdentifier(mapData.units, pendingUnitType), unitType: pendingUnitType,
           position: {x: position.x, y: position.y, angle}, hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"},
-        },
+        }),
       });
     }
     setDrawingUnit(null);
-    onToolChange?.("select");
+    if (!keepUnitToolArmed) onToolChange?.("select");
   }
 
   // Esc backs out of an armed-but-not-yet-used add-tool (e.g. a sidebar
@@ -622,9 +633,9 @@ export default function MapCanvas({
   function startDragUnit(unitIndex, e) {
     e.stopPropagation();
     if (simulating) return;
-    // Grouping mode hijacks every unit click into a membership toggle -
-    // no select/drag while it's active (see MapEditor's toggleGroupMember).
-    if (groupingMode) {
+    // With a group open, shift-click toggles membership instead of
+    // selecting/dragging.
+    if (openGroup && e.shiftKey) {
       onToggleGroupMember(unitIndex);
       return;
     }
@@ -876,6 +887,13 @@ export default function MapCanvas({
     if (tool === "add-unit" && drawingUnit) commitUnit();
   }
 
+  function handleDoubleClick(e) {
+    if (simulating) return;
+    const token = e.target.closest?.("[data-unit-index]");
+    if (token) onDoubleClickUnit?.(Number(token.dataset.unitIndex));
+    else onDoubleClickEmpty?.();
+  }
+
   function handlePointerLeave() {
     handlePointerUp();
     setCursorPixel(null);
@@ -953,6 +971,12 @@ export default function MapCanvas({
     }[tool];
   const isPlacing = !!placingStatusText;
 
+  // A kind of shape the current tab doesn't edit: drawn dimmed, and the
+  // pointer passes through it (see activeLayers).
+  function layer(name, shapes) {
+    return <div className={`map-canvas-layer${activeLayers[name] ? "" : " map-canvas-layer-inactive"}`}>{shapes}</div>;
+  }
+
   return (
     <div className="map-canvas-area">
       <div className="map-canvas-toolbar-row">
@@ -1019,6 +1043,7 @@ export default function MapCanvas({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerLeave}
+          onDoubleClick={handleDoubleClick}
         >
           <div
             className="map-canvas-content"
@@ -1059,12 +1084,12 @@ export default function MapCanvas({
                 <rect width="100%" height="100%" fill="url(#map-canvas-grid-pattern)" />
               </svg>
             )}
-            {canDrawBarriers && mapData.barriers.length > 0 && (
+            {canDrawBarriers && mapData.barriers.length > 0 && layer("barriers",
               <BarrierShapes
                 barriers={mapData.barriers}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                interactive={!isPlacing}
+                interactive={!isPlacing && activeLayers.barriers}
                 selectedIndex={selectedBarrierIndex}
                 hoveredIndex={hoveredBarrierIndex}
                 hoveredPoint={hoveredPoint}
@@ -1120,12 +1145,12 @@ export default function MapCanvas({
                 />
               </svg>
             )}
-            {canDrawBarriers && mapData.connections.length > 0 && (
+            {canDrawBarriers && mapData.connections.length > 0 && layer("connections",
               <ConnectionShapes
                 connections={mapData.connections}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                interactive={!isPlacing}
+                interactive={!isPlacing && activeLayers.connections}
                 selectedIndex={selectedConnectionIndex}
                 hoveredIndex={hoveredConnectionIndex}
                 onSelect={onSelectConnection}
@@ -1144,7 +1169,7 @@ export default function MapCanvas({
                 />
               </svg>
             )}
-            {canDrawBarriers && mapData.units.length > 0 && (
+            {canDrawBarriers && mapData.units.length > 0 && layer("units",
               <MovementShapes
                 units={mapData.units}
                 pixelDimensions={image.pixelDimensions}
@@ -1155,7 +1180,7 @@ export default function MapCanvas({
                 expandedUnitIndices={expandedUnitIndices}
               />
             )}
-            {canDrawBarriers && mapData.ncus?.length > 0 && (
+            {canDrawBarriers && mapData.ncus?.length > 0 && layer("ncus",
               <MovementShapes
                 units={mapData.ncus}
                 pixelDimensions={image.pixelDimensions}
@@ -1165,12 +1190,12 @@ export default function MapCanvas({
                 expandedUnitIndices={expandedNcuIndices}
               />
             )}
-            {canDrawBarriers && mapData.ncus?.length > 0 && (
+            {canDrawBarriers && mapData.ncus?.length > 0 && layer("ncus",
               <UnitShapes
                 units={mapData.ncus}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                interactive={!isPlacing}
+                interactive={!isPlacing && activeLayers.ncus}
                 tokenInfoFor={(ncu) => ({tokenImageUrl: ncuTokenUrls[ncu.tokenImageUrl], tokenRadius: ncu.tokenRadius})}
                 fallbackColorFor={() => NCU_FALLBACK_COLOR}
                 idPrefix="map-ncu"
@@ -1181,12 +1206,13 @@ export default function MapCanvas({
                 onHoverUnit={onHoverNcu}
               />
             )}
-            {canDrawBarriers && mapData.units.length > 0 && (
+            {canDrawBarriers && mapData.units.length > 0 && layer("units",
               <UnitShapes
                 units={mapData.units}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                interactive={!isPlacing}
+                interactive={!isPlacing && activeLayers.units}
+                tokenDataAttribute="data-unit-index"
                 availableUnitTypes={availableUnitTypes}
                 selectedIndex={selectedUnitIndex}
                 hoveredIndex={hoveredUnitIndex}
@@ -1201,7 +1227,8 @@ export default function MapCanvas({
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
                 availableUnitTypes={availableUnitTypes}
-                groupIdentifier={groupingMode?.groupIdentifier ?? hoveredGroupIdentifier}
+                groupIdentifier={openGroup ?? hoveredGroupIdentifier}
+                memberIndices={highlightedUnitIndices}
               />
             )}
             {canDrawBarriers && drawingUnit && (() => {

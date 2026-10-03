@@ -17,18 +17,21 @@ const GROUP_HIGHLIGHT_COLOR = "rgba(255, 64, 64, 0.6)";
 const GROUP_LINE_COLOR = "rgba(255, 40, 40, 0.85)";
 const DEFAULT_TOKEN_RADIUS_FEET = 2; // used only if the unit's type is missing from availableUnitTypes
 
-export default function GroupShapes({units, pixelDimensions, feetDimensions, availableUnitTypes, groupIdentifier}) {
-  if (!groupIdentifier) return null;
+// memberIndices, when given, highlights those units instead (rings only, no
+// lines - e.g. every unit of a hovered unit type, which isn't a set the
+// way a group is).
+export default function GroupShapes({units, pixelDimensions, feetDimensions, availableUnitTypes, groupIdentifier, memberIndices = null}) {
+  if (!groupIdentifier && !memberIndices) return null;
 
   const members = units
     .map((unit, i) => ({unit, i}))
-    .filter(({unit}) => unit.groupIdentifier === groupIdentifier);
+    .filter(({unit, i}) => (memberIndices ? memberIndices.includes(i) : unit.groupIdentifier === groupIdentifier));
   if (members.length === 0) return null;
 
   const points = members.map(({unit}) => feetToPixel(unit.position.x, unit.position.y, pixelDimensions, feetDimensions));
 
   const lines = [];
-  for (let a = 0; a < points.length; a++) {
+  for (let a = 0; !memberIndices && a < points.length; a++) {
     for (let b = a + 1; b < points.length; b++) {
       lines.push([points[a], points[b]]);
     }

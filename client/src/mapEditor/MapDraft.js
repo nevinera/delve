@@ -123,11 +123,12 @@ export class MapDraft {
   // groupIdentifier is just a plain string on each unit) - these just
   // read/write that one field across the affected units.
 
-  // Already a member -> clear it; not a member -> set it, silently moving
-  // the unit out of whatever other group it was in.
-  toggleGroupMember(groupIdentifier, unitIndex) {
+  // Shift-clicking a unit while its group is open: a member leaves for a
+  // group of its own (freshIdentifier); anyone else joins, leaving
+  // whatever group it was in.
+  toggleGroupMember(groupIdentifier, unitIndex, freshIdentifier) {
     const unit = this.data.units[unitIndex];
-    const nextValue = unit.groupIdentifier === groupIdentifier ? null : groupIdentifier;
+    const nextValue = unit.groupIdentifier === groupIdentifier ? freshIdentifier : groupIdentifier;
     return this.updateEntryField("units", unitIndex, "groupIdentifier", nextValue);
   }
 

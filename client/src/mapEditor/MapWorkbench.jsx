@@ -4,7 +4,7 @@ import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
-import UnitsPanel from "./UnitsPanel";
+import UnitsTab from "./UnitsTab";
 import NcusPanel from "./NcusPanel";
 import HotkeyHelp from "./HotkeyHelp";
 import {MapDraft} from "./MapDraft";
@@ -12,6 +12,7 @@ import {UiState} from "./UiState";
 import {PatrolSimState} from "./PatrolSimState";
 import {WalkSimState} from "./WalkSimState";
 import {loadSvgToCanvas} from "../game/svgRaster";
+import {newGroupIdentifier} from "./groupIdentifiers";
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
 // battle-map background needs (the docs' own example is 2048x1536), and
@@ -19,11 +20,19 @@ import {loadSvgToCanvas} from "../game/svgRaster";
 // Phase 2 actually commits it.
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
-// The map editor's whole editing surface - canvas, sidebar panels, tools,
+// The sidebar's tabs, and which of the map's shapes each one edits (the
+// rest are drawn dimmed and ignore the pointer - see MapCanvas's
+// activeLayers). Quests don't exist yet; NCUs live there meanwhile.
+const TABS = [["map", "Map"], ["units", "Units"], ["quests", "Quests"]];
+const TAB_LAYERS = {
+  map: {barriers: true, connections: true, units: false, ncus: false},
+  units: {barriers: false, connections: false, units: true, ncus: false},
+  quests: {barriers: false, connections: false, units: false, ncus: true},
+};
+
+// The map editor's whole editing surface - canvas, tabbed sidebar, tools,
 // Simulate Units and Walk Preview - with no idea where the map comes from
-// or goes. Two hosts use it: the standalone MapEditor (which loads from
-// and saves to the default branch itself) and the world editor's map
-// level (which reads and writes the live world draft).
+// or goes (the world editor's map level hosts it over the live draft).
 //
 // Every domain rule (barrier/connection/unit mutations, group membership)
 // and every "which mode is active" rule lives in plain classes - MapDraft
@@ -38,22 +47,22 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 //   mapData.pixelDimensions it becomes the canvas image.
 // - onImageUpload(file): store a just-picked background (already read into
 //   memory); this component sets imageUrl/pixelDimensions on the map.
-// - unitTypes {keys, details, request(key), newUrl}, items {keys, details,
-//   request(key), newUrl}, onRefresh/refreshStatus: what units can be and
+// - unitTypes {keys, details}, items {keys, details}: what units can be and
 //   drop. details are {key: {name, tokenRadius, tokenImageUrl, speedFactor}}
 //   and {key: {identifier, name, slot}}.
 // - ncuTokenUrls: raw NCU tokenImageUrl -> displayable URL.
 // - sidebarHeader: rendered at the top of the sidebar (e.g. a save bar).
 export default function MapWorkbench({
-  mapKey, mapData, onMapChange, imageUrl, onImageUpload, unitTypes, items, onRefresh, refreshStatus,
+  mapKey, mapData, onMapChange, imageUrl, onImageUpload, unitTypes, items,
   ncuTokenUrls, sidebarHeader, backUrl,
 }) {
+  const [tab, setTab] = useState("map");
+  // Unit types added to the Units tab's palette with "+" (see UnitsTab).
+  const [paletteAdditions, setPaletteAdditions] = useState([]);
   const [imageError, setImageError] = useState("");
   const draft = new MapDraft(mapData);
   const image = imageUrl && mapData.pixelDimensions ? {url: imageUrl, pixelDimensions: mapData.pixelDimensions} : null;
   const unitTypeDetails = unitTypes.details;
-  const requestUnitTypeDetails = (key) => key && unitTypes.request?.(key);
-  const requestItemDetails = (key) => key && items.request?.(key);
 
   function dispatch(action) {
     switch (action.type) {
@@ -139,46 +148,68 @@ export default function MapWorkbench({
   const [hoveredNcuIndex, setHoveredNcuIndex] = useState(null);
   const [expandedNcuIndices, setExpandedNcuIndices] = useState(() => new Set());
 
-  function startAddUnit(unitTypeKey) {
-    setUiState(uiState.startAddUnit(unitTypeKey));
-    requestUnitTypeDetails(unitTypeKey);
+  function switchTab(next) {
+    setUiState(uiState.clearModes().with({hoveredUnitType: null, hoveredGroupIdentifier: null, hoveredUnitIndex: null}));
+    setTab(next);
+  }
+
+  // Arming a palette entry places units of that type with each map click
+  // until it's pressed again (or Escape - see MapCanvas).
+  function armUnitType(unitTypeKey) {
+    setUiState(unitTypeKey ? uiState.startAddUnit(unitTypeKey) : uiState.clearModes());
+  }
+
+  // Every unit placed from the palette starts in a group of its own.
+  function prepareUnit(entry) {
+    return {...entry, groupIdentifier: newGroupIdentifier(mapData.units)};
+  }
+
+  // A unit authored before every unit had a group gets one when its group
+  // is opened.
+  function openGroupOf(unitIndex) {
+    let identifier = mapData.units[unitIndex].groupIdentifier;
+    if (!identifier) {
+      identifier = newGroupIdentifier(mapData.units);
+      handleChange(draft.updateEntryField("units", unitIndex, "groupIdentifier", identifier));
+    }
+    setUiState(uiState.clearModes().with({openGroup: identifier, hoveredGroupIdentifier: null}));
+  }
+
+  function closeGroup() {
+    setUiState(uiState.clearModes().with({openGroup: null}));
   }
 
   function focusUnitFromMap(unitIndex) {
-    if (uiState.groupingMode) {
-      handleChange(draft.toggleGroupMember(uiState.groupingMode.groupIdentifier, unitIndex));
-      return;
-    }
     setUiState(uiState.focusUnit(unitIndex));
   }
 
-  // The only way a unit's groupIdentifier ever changes - toggled by
-  // clicking a unit (its map token, via focusUnitFromMap above, or its
-  // UnitsPanel row) while grouping mode targets a group.
+  // Shift-clicking a unit with a group open: a member leaves for a group of
+  // its own, anyone else joins. Closes the group once nobody's left in it.
   function toggleGroupMember(unitIndex) {
-    if (!uiState.groupingMode) return;
-    handleChange(draft.toggleGroupMember(uiState.groupingMode.groupIdentifier, unitIndex));
+    const {openGroup} = uiState;
+    if (!openGroup) return;
+    const next = draft.toggleGroupMember(openGroup, unitIndex, newGroupIdentifier(mapData.units));
+    handleChange(next);
+    if (!next.data.units.some((unit) => unit.groupIdentifier === openGroup)) closeGroup();
   }
 
-  // Renaming a group touches both the units themselves (MapDraft) and
-  // whatever's tracking the name in UiState (pendingGroupNames/groupingMode).
+  // Renaming a group touches both the units themselves (MapDraft) and the
+  // open group (UiState).
   function renameGroup(oldName, newName) {
     handleChange(draft.renameGroup(oldName, newName));
     setUiState(uiState.renameGroup(oldName, newName));
   }
 
-  // Grouping mode's only cancel gesture is Escape or its own button again
-  // (see UiState#startGroupingMode) - unlike the placement modes, clicks
-  // everywhere in the canvas and sidebar are meaningful membership toggles,
-  // not "click outside to cancel" targets.
+  // Escape closes the open group - unless something's armed, which Escape
+  // cancels first (see MapCanvas).
   useEffect(() => {
-    if (!uiState.groupingMode) return;
+    if (tab !== "units" || !uiState.openGroup || !uiState.nothingArmed) return;
     function onKeyDown(e) {
-      if (e.key === "Escape") setUiState((s) => s.with({groupingMode: null}));
+      if (e.key === "Escape") setUiState((s) => s.with({openGroup: null}));
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [uiState.groupingMode]);
+  }, [tab, uiState]);
 
   // Global editor hotkeys - B/C/L/P start the same single-shot add-tools as
   // BarriersPanel/ConnectionsPanel's own buttons (B also immediately arms
@@ -210,7 +241,7 @@ export default function MapWorkbench({
         return;
       }
 
-      if (!uiState.nothingArmed || !canPlaceOnMap) return;
+      if (tab !== "map" || !uiState.nothingArmed || !canPlaceOnMap) return;
 
       if (e.key === "b" || e.key === "B") {
         const newIndex = mapData.barriers.length;
@@ -230,7 +261,7 @@ export default function MapWorkbench({
     // closure here like everywhere else in this file - only the values
     // below actually change what this handler should do.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uiState, canPlaceOnMap, mapData.barriers]);
+  }, [uiState, canPlaceOnMap, mapData.barriers, tab]);
 
   // Simulate Units mode (Slice 9): a read-only preview of patrol/wander
   // movement (see PatrolSimState.js) - mapData itself is never touched, so
@@ -488,9 +519,15 @@ export default function MapWorkbench({
         hoveredNcuIndex={hoveredNcuIndex}
         onHoverNcu={setHoveredNcuIndex}
         expandedNcuIndices={expandedNcuIndices}
-        groupingMode={uiState.groupingMode}
+        activeLayers={TAB_LAYERS[tab]}
+        openGroup={tab === "units" ? uiState.openGroup : null}
         onToggleGroupMember={toggleGroupMember}
         hoveredGroupIdentifier={uiState.hoveredGroupIdentifier}
+        highlightedUnitIndices={uiState.hoveredUnitType ? mapData.units.flatMap((unit, i) => (unit.unitType === uiState.hoveredUnitType ? [i] : [])) : null}
+        onDoubleClickUnit={tab === "units" ? openGroupOf : undefined}
+        onDoubleClickEmpty={tab === "units" && uiState.openGroup ? closeGroup : undefined}
+        keepUnitToolArmed={tab === "units"}
+        prepareUnit={prepareUnit}
         simulating={patrolSim.current.running}
         onToggleSimulate={toggleSimulation}
         simSpeed={simSpeed}
@@ -502,6 +539,13 @@ export default function MapWorkbench({
       />
       <MapSidebar>
         {sidebarHeader}
+        <div className="map-editor-tabs" role="tablist">
+          {TABS.map(([key, label]) => (
+            <button key={key} type="button" role="tab" aria-selected={tab === key} className={tab === key ? "active" : ""} onClick={() => switchTab(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
         {patrolSim.current.running ? (
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Simulating units - editing is disabled while this runs.</h3>
@@ -510,7 +554,7 @@ export default function MapWorkbench({
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Walk preview running - editing is disabled while this runs.</h3>
           </div>
-        ) : (
+        ) : tab === "map" ? (
           <>
             <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
             <BarriersPanel
@@ -542,48 +586,44 @@ export default function MapWorkbench({
               onStartAddLineConnection={() => setUiState(uiState.startTool("add-line-connection"))}
               dispatch={dispatch}
             />
-            <UnitsPanel
-              units={mapData.units}
-              selectedIndex={uiState.selectedUnitIndex}
-              onSelect={(i) => setUiState(uiState.with({selectedUnitIndex: i}))}
-              onHover={(i) => setUiState(uiState.with({hoveredUnitIndex: i}))}
-              hoveredIndex={uiState.hoveredUnitIndex}
-              focusUnitRequest={uiState.unitFocusRequest}
-              availableUnitTypeKeys={unitTypes.keys}
-              unitTypeDetails={unitTypeDetails}
-              onChooseUnitType={requestUnitTypeDetails}
-              newUnitTypeUrl={unitTypes.newUrl}
-              availableItemKeys={items.keys}
-              itemDetails={items.details}
-              onChooseItem={requestItemDetails}
-              newItemUrl={items.newUrl}
-              onRefresh={onRefresh}
-              refreshStatus={refreshStatus}
-              tool={uiState.tool}
-              placement={uiState.placement}
-              canPlaceOnMap={canPlaceOnMap}
-              pendingUnitType={uiState.pendingUnitType}
-              onStartAddUnit={startAddUnit}
-              unitPlacement={uiState.unitPlacement}
-              onStartUnitPlacement={(unitIndex) => setUiState(uiState.startUnitPlacement(unitIndex))}
-              patrolStepPlacement={uiState.patrolStepPlacement}
-              onStartPatrolStepPlacement={(unitIndex, stepIndex, mode) => setUiState(uiState.startPatrolStepPlacement(unitIndex, stepIndex, mode))}
-              onStartPatrolStepEdit={(unitIndex, stepIndex) => setUiState(uiState.startPatrolStepEdit(unitIndex, stepIndex))}
-              wanderLocationPlacement={uiState.wanderLocationPlacement}
-              onStartWanderLocationPlacement={(unitIndex) => setUiState(uiState.startWanderLocationPlacement(unitIndex))}
-              onUpdateMovement={updateMovement}
-              onHoverPatrolStep={(p) => setUiState(uiState.with({hoveredPatrolStep: p}))}
-              onExpandedIndicesChange={setExpandedUnitIndices}
-              groupingMode={uiState.groupingMode}
-              onStartGroupingMode={(groupIdentifier) => setUiState(uiState.startGroupingMode(groupIdentifier))}
-              onToggleGroupMember={toggleGroupMember}
-              hoveredGroupIdentifier={uiState.hoveredGroupIdentifier}
-              onHoverGroup={(g) => setUiState(uiState.with({hoveredGroupIdentifier: g}))}
-              pendingGroupNames={uiState.pendingGroupNames}
-              onAddPendingGroup={(name) => setUiState(uiState.addPendingGroup(name))}
-              onRenameGroup={renameGroup}
-              dispatch={dispatch}
-            />
+          </>
+        ) : tab === "units" ? (
+          <UnitsTab
+            units={mapData.units}
+            unitTypes={unitTypes}
+            items={items}
+            canPlaceOnMap={canPlaceOnMap}
+            openGroup={uiState.openGroup}
+            onOpenGroup={(group) => openGroupOf(group.memberIndices[0])}
+            onCloseGroup={closeGroup}
+            onRenameGroup={renameGroup}
+            armedUnitType={uiState.tool === "add-unit" ? uiState.pendingUnitType : null}
+            onArmUnitType={armUnitType}
+            onHoverUnitType={(key) => setUiState(uiState.with({hoveredUnitType: key}))}
+            paletteAdditions={paletteAdditions}
+            onAddToPalette={(key) => setPaletteAdditions((current) => [...current, key])}
+            hoveredGroupIdentifier={uiState.hoveredGroupIdentifier}
+            onHoverGroup={(g) => setUiState(uiState.with({hoveredGroupIdentifier: g}))}
+            hoveredIndex={uiState.hoveredUnitIndex}
+            onHover={(i) => setUiState(uiState.with({hoveredUnitIndex: i}))}
+            selectedIndex={uiState.selectedUnitIndex}
+            onSelect={(i) => setUiState(uiState.with({selectedUnitIndex: i}))}
+            focusUnitRequest={uiState.unitFocusRequest}
+            onExpandedIndicesChange={setExpandedUnitIndices}
+            unitPlacement={uiState.unitPlacement}
+            onStartUnitPlacement={(unitIndex) => setUiState(uiState.startUnitPlacement(unitIndex))}
+            patrolStepPlacement={uiState.patrolStepPlacement}
+            onStartPatrolStepPlacement={(unitIndex, stepIndex, mode) => setUiState(uiState.startPatrolStepPlacement(unitIndex, stepIndex, mode))}
+            onStartPatrolStepEdit={(unitIndex, stepIndex) => setUiState(uiState.startPatrolStepEdit(unitIndex, stepIndex))}
+            wanderLocationPlacement={uiState.wanderLocationPlacement}
+            onStartWanderLocationPlacement={(unitIndex) => setUiState(uiState.startWanderLocationPlacement(unitIndex))}
+            onUpdateMovement={updateMovement}
+            onHoverPatrolStep={(p) => setUiState(uiState.with({hoveredPatrolStep: p}))}
+            dispatch={dispatch}
+          />
+        ) : (
+          <>
+            <p className="map-sidebar-hint">Quests aren't built yet. Non-combat characters (NCUs) live here meanwhile.</p>
             <NcusPanel
               ncus={mapData.ncus ?? []}
               tokenUrls={ncuTokenUrls}

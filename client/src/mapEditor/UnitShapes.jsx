@@ -30,7 +30,7 @@ export default function UnitShapes({
   units, pixelDimensions, feetDimensions, interactive, availableUnitTypes = {}, selectedIndex, hoveredIndex, onSelect, onStartDrag, onHoverUnit,
   tokenInfoFor = (unit) => availableUnitTypes[unit.unitType],
   fallbackColorFor = (unit) => HOSTILITY_COLORS[unit.hostility] ?? HOSTILITY_COLORS.hostile,
-  idPrefix = "map-unit",
+  idPrefix = "map-unit", tokenDataAttribute = null,
 }) {
   // Only interactive (tool === "select" and no add-tool/placement of any
   // kind active - see MapCanvas's isPlacing) drags an existing unit on
@@ -53,6 +53,7 @@ export default function UnitShapes({
         return (
           <g
             key={i}
+            {...(tokenDataAttribute ? {[tokenDataAttribute]: i} : {})}
             onPointerDown={selectable ? (e) => onStartDrag(i, e) : undefined}
             onPointerEnter={() => onHoverUnit?.(i)}
             onPointerLeave={() => onHoverUnit?.(null)}

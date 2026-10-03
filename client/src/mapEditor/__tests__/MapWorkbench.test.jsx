@@ -1,6 +1,6 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
 import {useState} from "react";
-import {render, screen, fireEvent, waitFor, act} from "@testing-library/react";
+import {render, screen, fireEvent, waitFor, act, within} from "@testing-library/react";
 import MapWorkbench from "../MapWorkbench";
 import {MapDraft} from "../MapDraft";
 
@@ -54,6 +54,16 @@ async function renderReady({
     );
   }
   render(<Host />);
+}
+
+function showTab(name) {
+  fireEvent.click(screen.getByRole("tab", {name}));
+}
+
+// The Units tab, with the first group in its list open.
+function openFirstGroup() {
+  showTab("Units");
+  fireEvent.click(within(screen.getByRole("list", {name: "Groups"})).getAllByRole("button")[0]);
 }
 
 describe("MapWorkbench", () => {
@@ -222,31 +232,62 @@ describe("MapWorkbench", () => {
     expect(screen.getByRole("button", {name: "+ Add Line Connection"})).not.toBeDisabled();
   });
 
-  it("flows choosing a unit type + '+ Add Unit' into a single canvas click, creating a unit", async () => {
+  it("places units from the palette with each map click, each in a group of its own, until disarmed", async () => {
     await renderReady({map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA", unitTypeKeys: ["goblin-raider"], unitTypeDetails: {"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
     fireEvent.click(screen.getByRole("button", {name: "Fit"}));
 
-    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-    const unitTypeSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="goblin-raider"]'));
-    fireEvent.change(unitTypeSelect, {target: {value: "goblin-raider"}});
-    fireEvent.click(screen.getByRole("button", {name: "+ Add Unit"}));
+    showTab("Units");
+    fireEvent.click(screen.getByRole("button", {name: "Add a unit type"}));
+    fireEvent.click(within(screen.getByRole("dialog", {name: "Add a unit type"})).getByRole("button", {name: "Goblin Raider"}));
+    expect(screen.getByRole("button", {name: "Goblin Raider", pressed: true})).toBeInTheDocument();
 
-    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
-    fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0});
+    for (const x of [0, 50]) {
+      fireEvent.pointerDown(wrapper, {clientX: x, clientY: 0});
+      fireEvent.pointerUp(wrapper, {clientX: x, clientY: 0});
+    }
 
-    // A default identifier is assigned on placement (issue #46) - no more
-    // "Unit 1" placeholder fallback to check against.
-    expect(document.querySelector(".map-unit-row-name")).toHaveTextContent(/^goblin-raider-[a-z]{6}$/);
-    // Choosing "goblin-raider" from the dropdown kicks off an async detail
-    // fetch (see requestUnitTypeDetails) - the resolved name lands a tick
-    // later, not synchronously.
-    await waitFor(() => expect(document.querySelector(".map-unit-row-type")).toHaveTextContent("Goblin Raider"));
-    // Single-shot - the tool reverted to "select", so the button's enabled
-    // again (the dropdown's own choice isn't cleared by placing one).
-    expect(screen.getByRole("button", {name: "+ Add Unit"})).not.toBeDisabled();
+    expect(current.mapData.units.map((unit) => unit.unitType)).toEqual(["goblin-raider", "goblin-raider"]);
+    const groups = current.mapData.units.map((unit) => unit.groupIdentifier);
+    groups.forEach((group) => expect(group).toMatch(/^group-[a-z]{6}$/));
+    expect(new Set(groups).size).toEqual(2);
+    expect(screen.getByRole("button", {name: "Goblin Raider", pressed: true})).toBeInTheDocument();
+
+    fireEvent.keyDown(document, {key: "Escape"});
+    expect(screen.getByRole("button", {name: "Goblin Raider", pressed: false})).toBeInTheDocument();
+  });
+
+  it("highlights a palette entry's units while it's hovered", async () => {
+    await renderReady({map: {
+          ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+          units: [
+            {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+            {unitType: "slime", identifier: "b", position: {x: 50, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+          ],
+        }, imageUrl: "data:image/webp;base64,AAAA", unitTypeKeys: ["goblin-raider", "slime"]});
+
+    showTab("Units");
+    fireEvent.mouseEnter(screen.getByRole("button", {name: "slime"}));
+
+    expect(document.querySelectorAll(".map-group-highlight circle")).toHaveLength(1);
+  });
+
+  it("only lets the current tab's shapes be edited", async () => {
+    await renderReady({map: {
+          ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
+          units: [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
+          ncus: [{identifier: "sage", name: "Sage", position: {x: 50, y: 5, angle: 0}, movement: {type: "still"}}],
+        }, imageUrl: "data:image/webp;base64,AAAA"});
+    const unitLayer = () => document.querySelector("[data-unit-index]").closest(".map-canvas-layer");
+
+    expect(unitLayer()).toHaveClass("map-canvas-layer-inactive");
+    showTab("Units");
+    expect(unitLayer()).not.toHaveClass("map-canvas-layer-inactive");
+    showTab("Quests");
+    expect(unitLayer()).toHaveClass("map-canvas-layer-inactive");
+    expect(screen.getByText(/^NCUs/)).toBeInTheDocument();
   });
 
   it("flows a click on a unit's position pill into re-placing it via a map click", async () => {
@@ -259,8 +300,7 @@ describe("MapWorkbench", () => {
     Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
     fireEvent.click(screen.getByRole("button", {name: "Fit"}));
 
-    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-    fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row
+    openFirstGroup(); // its only unit's row opens straight away
     fireEvent.click(screen.getByRole("button", {name: "0, 0"})); // the position pill
     expect(screen.getByText("Placing Points")).toBeInTheDocument();
 
@@ -270,33 +310,25 @@ describe("MapWorkbench", () => {
     expect(screen.getByRole("button", {name: "10, 120"})).toBeInTheDocument();
   });
 
-  it("clicking a unit's token on the map opens only that unit's row and scrolls it into view, closing any others already open", async () => {
+  it("clicking a member's token on the map opens its row in the open group and scrolls it into view", async () => {
     Element.prototype.scrollIntoView = vi.fn();
     await renderReady({map: {
           ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
           units: [
-            {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
-            {unitType: "goblin-raider", identifier: "b", position: {x: 50, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+            {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
+            {unitType: "goblin-raider", identifier: "b", position: {x: 50, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
           ],
         }, imageUrl: "data:image/webp;base64,AAAA", unitTypeKeys: ["goblin-raider"], unitTypeDetails: {"goblin-raider": {name: "Goblin Raider", tokenImageUrl: null}}});
-    const wrapper = document.querySelector(".map-canvas-wrapper");
-    Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
-    Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
-    fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+    vi.stubGlobal("requestAnimationFrame", (cb) => { cb(); return 1; });
 
-    fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-    const rows = document.querySelectorAll(".map-unit-row");
-    fireEvent.click(rows[0]);
-    fireEvent.click(rows[1]);
-    expect(document.querySelectorAll(".map-unit-body")).toHaveLength(2);
+    openFirstGroup();
+    expect(document.querySelectorAll(".map-unit-body")).toHaveLength(0);
 
-    const markers = document.querySelectorAll(".map-canvas-shapes g");
-    fireEvent.pointerDown(markers[0]);
+    fireEvent.pointerDown(document.querySelectorAll("[data-unit-index]")[1]);
 
-    const bodies = document.querySelectorAll(".map-unit-body");
-    expect(bodies).toHaveLength(1);
-    expect(document.querySelectorAll(".map-unit-block")[0].querySelector(".map-unit-body")).toBeInTheDocument();
+    expect(document.querySelectorAll(".map-unit-block")[1].querySelector(".map-unit-body")).toBeInTheDocument();
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("flows a coordinate pill click in the sidebar into re-placing an existing point connection", async () => {
@@ -409,8 +441,7 @@ describe("MapWorkbench", () => {
             units: [{unitType: "goblin-raider", identifier: "a", position: {x: 0, y: 0, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}],
           }, imageUrl: "data:image/webp;base64,AAAA", itemKeys: ["sword-of-doom"], itemDetails: {"sword-of-doom": {identifier: "sword-of-doom", name: "Sword of Doom", slot: "main_hand"}}});
 
-      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-      fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row, revealing its loot table
+      openFirstGroup(); // its only unit's row opens straight away
       const itemSelect = screen.getAllByRole("combobox").find((el) => el.querySelector('option[value="sword-of-doom"]'));
       fireEvent.change(itemSelect, {target: {value: "sword-of-doom"}});
       fireEvent.click(screen.getByRole("button", {name: "+ Add Loot Entry"}));
@@ -423,71 +454,98 @@ describe("MapWorkbench", () => {
   });
 
   describe("unit groups", () => {
-    function twoUnitMap() {
+    function threeUnitMap() {
       return {
         ...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120},
         units: [
-          {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+          {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
           {unitType: "goblin-raider", identifier: "b", position: {x: 50, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+          {unitType: "goblin-raider", identifier: "c", position: {x: 90, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
         ],
       };
     }
+    const token = (i) => document.querySelectorAll("[data-unit-index]")[i];
+    const memberNames = () => [...document.querySelectorAll(".map-unit-row-name")].map((el) => el.textContent);
 
-    async function renderWithTwoUnits() {
-      await renderReady({map: twoUnitMap(), imageUrl: "data:image/webp;base64,AAAA"});
-      const wrapper = document.querySelector(".map-canvas-wrapper");
-      Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
-      Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
-      fireEvent.click(screen.getByRole("button", {name: "Fit"}));
-      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-      return wrapper;
+    async function renderOnUnitsTab() {
+      await renderReady({map: threeUnitMap(), imageUrl: "data:image/webp;base64,AAAA"});
+      showTab("Units");
     }
 
-    it("'+ Add Group' immediately enters grouping mode, and clicking units (map token + sidebar row) adds both", async () => {
-      await renderWithTwoUnits();
+    it("double-clicking a unit opens its group; double-clicking empty map closes it", async () => {
+      await renderOnUnitsTab();
 
-      fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
-      fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
-      expect(screen.getByRole("button", {name: "Done"})).toBeInTheDocument();
+      fireEvent.doubleClick(token(2));
+      expect(screen.getByRole("textbox", {name: "Group name"})).toHaveValue("pack");
+      expect(memberNames()).toEqual(["a", "c"]);
+      expect(document.querySelectorAll(".map-group-highlight circle")).toHaveLength(2);
 
-      // Add the first unit via its token on the map.
-      const marker = document.querySelectorAll(".map-canvas-shapes g")[0];
-      fireEvent.pointerDown(marker, {pointerId: 1});
-
-      // Add the second unit via its row in the sidebar.
-      const rows = document.querySelectorAll(".map-unit-row");
-      const ungroupedRow = [...rows].find((r) => r.querySelector(".map-unit-row-name")?.textContent === "b");
-      fireEvent.click(ungroupedRow);
-
-      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(2)");
-      const highlight = document.querySelector(".map-group-highlight");
-      expect(highlight.querySelectorAll("circle")).toHaveLength(2);
-      expect(highlight.querySelectorAll("line")).toHaveLength(1);
+      fireEvent.doubleClick(document.querySelector(".map-canvas-content img"));
+      expect(screen.getByRole("list", {name: "Groups"})).toBeInTheDocument();
     });
 
-    it("clicking a group member again (while grouping mode is active) removes it", async () => {
-      await renderWithTwoUnits();
+    it("opening an ungrouped unit's group gives it a group identifier", async () => {
+      await renderOnUnitsTab();
 
-      fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
-      fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
-      const marker = document.querySelectorAll(".map-canvas-shapes g")[0];
-      fireEvent.pointerDown(marker, {pointerId: 1});
-      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(1)");
+      fireEvent.doubleClick(token(1));
 
-      fireEvent.pointerDown(marker, {pointerId: 1});
-
-      expect(document.querySelector(".map-unit-group-count")).toHaveTextContent("(0)");
+      expect(current.mapData.units[1].groupIdentifier).toMatch(/^group-[a-z]{6}$/);
+      expect(memberNames()).toEqual(["b"]);
     });
 
-    it("Escape exits grouping mode", async () => {
-      await renderWithTwoUnits();
-      fireEvent.change(screen.getByPlaceholderText("New group name…"), {target: {value: "raiders"}});
-      fireEvent.click(screen.getByRole("button", {name: "+ Add Group"}));
-      expect(screen.getByRole("button", {name: "Done"})).toBeInTheDocument();
+    it("shift-clicking units adds them to the open group, or moves members out to groups of their own", async () => {
+      await renderOnUnitsTab();
+      fireEvent.doubleClick(token(0));
+
+      fireEvent.pointerDown(token(1), {pointerId: 1, shiftKey: true});
+      expect(memberNames()).toEqual(["a", "b", "c"]);
+
+      fireEvent.pointerDown(token(0), {pointerId: 1, shiftKey: true});
+      expect(memberNames()).toEqual(["b", "c"]);
+      expect(current.mapData.units[0].groupIdentifier).toMatch(/^group-[a-z]{6}$/);
+    });
+
+    it("closes the group once its last member leaves", async () => {
+      await renderReady({map: {...threeUnitMap(), units: threeUnitMap().units.slice(0, 1)}, imageUrl: "data:image/webp;base64,AAAA"});
+      showTab("Units");
+      fireEvent.doubleClick(token(0));
+
+      fireEvent.pointerDown(token(0), {pointerId: 1, shiftKey: true});
+
+      expect(screen.getByRole("list", {name: "Groups"})).toBeInTheDocument();
+    });
+
+    it("renaming the open group renames it on every member", async () => {
+      await renderOnUnitsTab();
+      fireEvent.doubleClick(token(0));
+
+      const name = screen.getByRole("textbox", {name: "Group name"});
+      fireEvent.change(name, {target: {value: "wolves"}});
+      fireEvent.blur(name);
+
+      expect(current.mapData.units.map((unit) => unit.groupIdentifier)).toEqual(["wolves", undefined, "wolves"]);
+      expect(screen.getByRole("textbox", {name: "Group name"})).toHaveValue("wolves");
+    });
+
+    it("Escape or the Close group link closes it", async () => {
+      await renderOnUnitsTab();
+      fireEvent.doubleClick(token(0));
+      fireEvent.keyDown(document, {key: "Escape"});
+      expect(screen.getByRole("list", {name: "Groups"})).toBeInTheDocument();
+
+      fireEvent.doubleClick(token(0));
+      fireEvent.click(screen.getByRole("button", {name: "← Close group"}));
+      expect(screen.getByRole("list", {name: "Groups"})).toBeInTheDocument();
+    });
+
+    it("Escape cancels a member's placement first, leaving the group open", async () => {
+      await renderOnUnitsTab();
+      fireEvent.doubleClick(token(1));
+      fireEvent.click(screen.getByRole("button", {name: "50, 5"})); // its position pill
 
       fireEvent.keyDown(document, {key: "Escape"});
 
-      expect(screen.getByRole("button", {name: "Add/Remove Units"})).toBeInTheDocument();
+      expect(screen.getByRole("textbox", {name: "Group name"})).toBeInTheDocument();
     });
   });
 
@@ -501,8 +559,7 @@ describe("MapWorkbench", () => {
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
       fireEvent.click(screen.getByRole("button", {name: "Fit"}));
-      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-      fireEvent.click(document.querySelector(".map-unit-row")); // expand the unit's row
+      openFirstGroup(); // its only unit's row opens straight away
       return wrapper;
     }
 
@@ -542,8 +599,7 @@ describe("MapWorkbench", () => {
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
       fireEvent.click(screen.getByRole("button", {name: "Fit"}));
-      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-      fireEvent.click(document.querySelector(".map-unit-row"));
+      openFirstGroup();
 
       const plusButtons = document.querySelectorAll(".map-unit-movement-fields .map-point-plus");
       expect(plusButtons).toHaveLength(2); // between the two steps, and after the last - none before step 0
@@ -610,12 +666,13 @@ describe("MapWorkbench", () => {
       Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
       Object.defineProperty(wrapper, "clientHeight", {value: 600, configurable: true});
       fireEvent.click(screen.getByRole("button", {name: "Fit"}));
+      showTab("Units");
 
       fireEvent.click(screen.getByRole("button", {name: "Simulate Units"}));
 
       // Sidebar swaps to a status notice, hiding every editing control.
       expect(screen.getByText(/Simulating units/)).toBeInTheDocument();
-      expect(screen.queryByRole("button", {name: "+ Add Unit"})).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", {name: "Unit palette"})).not.toBeInTheDocument();
 
       // Dragging the unit's token is a no-op while simulating.
       const marker = document.querySelector(".map-canvas-shapes g");
@@ -639,8 +696,7 @@ describe("MapWorkbench", () => {
       // Sidebar and editing controls are back, and the unit snapped back to
       // its authored position (0,0)ft - nothing was ever written to mapData.
       expect(screen.queryByText(/Simulating units/)).not.toBeInTheDocument();
-      fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[2]); // Units
-      expect(screen.getByRole("button", {name: "+ Add Unit"})).toBeInTheDocument();
+      expect(screen.getByRole("region", {name: "Unit palette"})).toBeInTheDocument();
       expect(document.querySelector(".map-canvas-shapes circle").getAttribute("cx")).toBe(cxBefore);
 
       vi.restoreAllMocks();
