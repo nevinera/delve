@@ -39,6 +39,7 @@ class Build::WorldsController < Build::BaseController
 
   def edit
     @next_tag = next_tag(Github::ContentClient.new(current_user), params[:id]) # raises (and BaseController redirects) with no repo connected
+    @stock_assets = Content::StockAssets.client_json
   end
 
   # Publish: tags the branch's head - only if it's still the commit the

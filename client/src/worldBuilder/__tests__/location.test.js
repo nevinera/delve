@@ -16,6 +16,11 @@ describe("location", () => {
     expect(parseLocation("#/zone/forest/map")).toEqual({zone: "forest"});
   });
 
+  it("round-trips the unit type level", () => {
+    expect(parseLocation("#/unit_type/goblin")).toEqual({unitType: "goblin"});
+    expect(formatLocation({unitType: "goblin"})).toEqual("#/unit_type/goblin");
+  });
+
   it("ignores segments it doesn't understand", () => {
     expect(parseLocation("#/nonsense/x")).toEqual({});
     expect(parseLocation("#/zone")).toEqual({});

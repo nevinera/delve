@@ -1,11 +1,13 @@
 import {useEffect, useState} from "react";
 
 // The drill-down, mirrored into the URL hash one segment per level
-// ("#/zone/forest/map/hub"), so reload and back land in the same place. Only
-// *where* you are lives here - edits live in the draft.
+// ("#/zone/forest/map/hub", "#/unit_type/goblin"), so reload and back land
+// in the same place. Only *where* you are lives here - edits live in the
+// draft.
 export function parseLocation(hash) {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
   const location = {};
+  if (parts[0] === "unit_type" && parts[1]) location.unitType = parts[1];
   if (parts[0] === "zone" && parts[1]) {
     location.zone = parts[1];
     if (parts[2] === "map" && parts[3]) location.map = parts[3];
@@ -14,6 +16,7 @@ export function parseLocation(hash) {
 }
 
 export function formatLocation(location) {
+  if (location.unitType) return `#/unit_type/${encodeURIComponent(location.unitType)}`;
   if (!location.zone) return "#/";
   const zone = `#/zone/${encodeURIComponent(location.zone)}`;
   return location.map ? `${zone}/map/${encodeURIComponent(location.map)}` : zone;

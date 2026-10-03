@@ -93,6 +93,14 @@ export class WorldDraft {
     return new WorldDraft(this.snapshot, edits);
   }
 
+  // Back to what git has at path (dropping any pending edit to it).
+  revert(path) {
+    if (!this._edits.has(path)) return this;
+    const edits = new Map(this._edits);
+    edits.delete(path);
+    return new WorldDraft(this.snapshot, edits);
+  }
+
   removeDir(dir) {
     return this.paths(dir).reduce((draft, path) => draft.remove(path), this);
   }

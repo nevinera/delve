@@ -110,6 +110,7 @@ RSpec.describe "Build::Worlds", type: :request do
       get "/build/worlds/small/edit"
       expect(response).to have_http_status(:ok)
       expect(response.body).to include('data-key="small"', %(data-back-url="#{build_worlds_path}"))
+      expect(response.body).to include("data-stock-assets=")
       expect(response.body).to match(%r{src="/client/worldBuilder[^"]*\.js"})
     end
 

@@ -20,6 +20,8 @@ import ValidationProblems from "./header/ValidationProblems";
 import WorldLevel from "./levels/WorldLevel";
 import ZoneLevel from "./levels/ZoneLevel";
 import MapLevel from "./levels/MapLevel";
+import UnitTypeLevel from "./levels/UnitTypeLevel";
+import {unitTypeData} from "./state/unitTypeOps";
 import {redirectTo} from "../redirectTo";
 
 const PERSIST_DELAY_MS = 400;
@@ -29,6 +31,7 @@ function crumbsFor(location, draft) {
   const crumbs = [{label: world?.name || draft.worldKey, target: {}}];
   if (location.zone) crumbs.push({label: zoneData(draft, location.zone)?.name || location.zone, target: {zone: location.zone}});
   if (location.map) crumbs.push({label: mapData(draft, location.zone, location.map)?.name || location.map, target: location});
+  if (location.unitType) crumbs.push({label: `Unit type: ${unitTypeData(draft, location.unitType)?.name || location.unitType}`, target: location});
   return crumbs;
 }
 
@@ -38,7 +41,7 @@ function crumbsFor(location, draft) {
 // reads and edits the draft through worldOps/zoneOps.
 //
 // `client` and `store` are injectable for tests.
-export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag, client: givenClient, store: givenStore}) {
+export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag, stockAssets, client: givenClient, store: givenStore}) {
   const client = useRef(givenClient ?? new BranchClient()).current;
   const store = useRef(givenStore ?? createDraftStore()).current;
   const [branches, setBranches] = useState(null);
@@ -268,10 +271,12 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   };
   // A location whose zone or map no longer exists (deleted, renamed) falls
   // back to the nearest level that does.
-  const shown = !location.zone || !zoneData(draft, location.zone) ? {}
-    : location.map && !mapData(draft, location.zone, location.map) ? {zone: location.zone} : location;
+  const shown = location.unitType ? (unitTypeData(draft, location.unitType) ? location : {})
+    : !location.zone || !zoneData(draft, location.zone) ? {}
+      : location.map && !mapData(draft, location.zone, location.map) ? {zone: location.zone} : location;
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
+  else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} />;
   else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} />;
   else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} />;
   else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} />;
