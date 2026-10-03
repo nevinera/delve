@@ -1,6 +1,9 @@
 import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import ClassEditor from "./ClassEditor";
+import {adoptBranchParam} from "../github/branchPreference";
+
+adoptBranchParam();
 
 const el = document.getElementById("editor-root");
 createRoot(el).render(

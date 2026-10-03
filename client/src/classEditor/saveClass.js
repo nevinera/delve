@@ -9,7 +9,7 @@ import {powerUploadFiles} from "../powersEditor/powerSources";
 //               wherever its field currently points (see powerUploadFiles)
 // deletePaths - repo paths to remove in the same commit (a stale
 //               .full.json left over from the $ref era)
-export async function saveClass(key, classData, {powerFiles = {}, deletePaths = []} = {}, commitMessage) {
+export async function saveClass(key, classData, {powerFiles = {}, deletePaths = [], branch} = {}, commitMessage) {
   const ownPath = `classes/${key}.json`;
   const {files, missing} = powerUploadFiles(ownPath, classData.powers ?? [], powerFiles);
   if (missing.length > 0) {
@@ -18,5 +18,5 @@ export async function saveClass(key, classData, {powerFiles = {}, deletePaths = 
 
   const filesByPath = {[ownPath]: classData, ...files};
   for (const path of deletePaths) filesByPath[path] = null;
-  return commitFiles(filesByPath, {message: commitMessage || `Update ${classData.name || key}`});
+  return commitFiles(filesByPath, {message: commitMessage || `Update ${classData.name || key}`, branch});
 }

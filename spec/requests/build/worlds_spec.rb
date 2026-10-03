@@ -9,12 +9,7 @@ RSpec.describe "Build::Worlds", type: :request do
   end
 
   describe "GET /build/worlds" do
-    def stub_branches(*names)
-      stub_request(:get, "https://api.github.com/repos/builder/content/git/matching-refs/heads/")
-        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: names.map { |name| {ref: "refs/heads/#{name}"} }.to_json)
-    end
-
-    before { stub_branches("main", "world-editor") }
+    before { stub_branch_list("builder/content", %w[main world-editor]) }
 
     it "lists the default branch's self-contained worlds, linking to the editor on that branch" do
       stub_tree_listing("builder/content", "worlds", ["small/small.json", "small/zones/forest/forest.json", "demo.json", "demo.layout.json"])

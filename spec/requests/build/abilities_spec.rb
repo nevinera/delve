@@ -32,7 +32,10 @@ RSpec.describe "Build::Abilities", type: :request do
       end
 
       context "with a connected repository" do
-        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+        before do
+          create(:github_installation, user: user, repo_full_name: "nevinera/delve-content")
+          stub_branch_list("nevinera/delve-content", %w[main rework])
+        end
 
         it "lists the abilities directory contents, linking to the edit page" do
           stub_tree_listing("nevinera/delve-content", "abilities", ["punch.json"])
@@ -41,8 +44,19 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include(">punch<")
           expect(response.body).not_to include("punch.json")
-          expect(response.body).to include(edit_build_ability_path(id: "punch"))
+          expect(response.body).to include(edit_build_ability_path(id: "punch", branch: "main"))
           expect(response.body).not_to include("github.com/nevinera/delve-content/blob")
+        end
+
+        it "lists another branch when it's picked, linking to the editor on it" do
+          stub_tree_listing("nevinera/delve-content", "abilities", ["punch.json"], branch: "rework")
+          stub_request(:get, "https://api.github.com/repos/nevinera/delve-content")
+            .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {default_branch: "main"}.to_json)
+
+          get "/build/abilities", params: {branch: "rework"}
+
+          expect(response.body).to include(edit_build_ability_path(id: "punch", branch: "rework"), new_build_ability_path(branch: "rework"))
+          expect(response.body).to include('<option selected="selected" value="rework">')
         end
 
         it "recurses into subdirectories, showing each ability's full repo-relative path" do
@@ -53,7 +67,7 @@ RSpec.describe "Build::Abilities", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include(">punch<")
           expect(response.body).to include(">classes/druid/wildshape<")
-          expect(response.body).to include(edit_build_ability_path(id: "classes/druid/wildshape"))
+          expect(response.body).to include(edit_build_ability_path(id: "classes/druid/wildshape", branch: "main"))
         end
       end
     end
@@ -95,6 +109,14 @@ RSpec.describe "Build::Abilities", type: :request do
         post "/build/abilities", params: {key: "firebolt"}
 
         expect(response).to redirect_to(edit_build_ability_path(id: "firebolt"))
+      end
+
+      it "keeps the branch it was started from" do
+        stub_tree_listing("nevinera/delve-content", "abilities", ["punch.json"], branch: "rework")
+
+        post "/build/abilities", params: {key: "firebolt", branch: "rework"}
+
+        expect(response).to redirect_to(edit_build_ability_path(id: "firebolt", branch: "rework"))
       end
 
       it "rejects a blank key" do

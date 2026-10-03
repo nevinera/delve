@@ -8,14 +8,26 @@ import {useState} from "react";
 //     failed Save attempt does NOT require revalidating an unchanged draft.
 //   - activity: what's currently happening / the outcome of the last
 //     Validate or Save click, for messages and button labels.
+// dirty says whether there are edits since the last load (reset) or save -
+// e.g. the branch picker is locked while there are.
 export function useValidateThenSave() {
   const [validity, setValidity] = useState("unknown");
   const [activity, setActivity] = useState({status: "idle"});
+  const [dirty, setDirty] = useState(false);
 
   return {
     validity,
     activity,
-    markDirty: () => setValidity((current) => (current === "unknown" ? current : "unknown")),
+    dirty,
+    markDirty: () => {
+      setDirty(true);
+      setValidity((current) => (current === "unknown" ? current : "unknown"));
+    },
+    reset: () => {
+      setDirty(false);
+      setValidity("unknown");
+      setActivity({status: "idle"});
+    },
     setValidating: () => setActivity({status: "validating"}),
     setValid: () => {
       setValidity("valid");
@@ -26,7 +38,10 @@ export function useValidateThenSave() {
       setActivity({status: "invalid", message});
     },
     setSaving: () => setActivity({status: "saving"}),
-    setSaved: () => setActivity({status: "success"}),
+    setSaved: () => {
+      setDirty(false);
+      setActivity({status: "success"});
+    },
     setSaveError: (message) => setActivity({status: "save_error", message}),
   };
 }

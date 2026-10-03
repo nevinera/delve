@@ -105,7 +105,7 @@ describe("WorldBuilderApp", () => {
   });
 
   it("uses the remembered branch when it still exists", async () => {
-    window.localStorage.setItem("delve.worldEditor.branch", "world-editor");
+    window.localStorage.setItem("delve.editor.branch", "world-editor");
     renderApp({branches: {main: {}, "world-editor": fixtureJson()}});
 
     expect(await zoneButton("Forest")).toBeInTheDocument();
@@ -200,7 +200,7 @@ describe("WorldBuilderApp", () => {
 
     await waitFor(() => expect(screen.getByRole("combobox", {name: "Branch"})).toHaveValue("rework"));
     expect(client.createBranch).toHaveBeenCalledWith("rework");
-    expect(window.localStorage.getItem("delve.worldEditor.branch")).toEqual("rework");
+    expect(window.localStorage.getItem("delve.editor.branch")).toEqual("rework");
   });
 
 describe("WorldBuilderApp pipeline", () => {

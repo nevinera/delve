@@ -1,6 +1,8 @@
 <h1>Abilities</h1>
 
-<p><%= link_to "New Ability", new_build_ability_path %></p>
+<%= render "build/shared/branch_picker", url: build_abilities_path %>
+
+<p><%= link_to "New Ability", new_build_ability_path(branch: @branch) %></p>
 
 <table>
   <thead>
@@ -10,7 +12,7 @@
     <% @abilities.each do |entry| %>
       <% identifier = entry["path"].delete_prefix("abilities/").delete_suffix(".json") %>
       <tr>
-        <td><%= link_to identifier, edit_build_ability_path(id: identifier) %></td>
+        <td><%= link_to identifier, edit_build_ability_path(id: identifier, branch: @branch) %></td>
       </tr>
     <% end %>
   </tbody>
