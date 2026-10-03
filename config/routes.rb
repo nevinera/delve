@@ -79,6 +79,7 @@ Rails.application.routes.draw do
   # have no slashes, so a plain :id.
   get "build/worlds/:id/edit", to: "build/worlds#edit", as: "edit_build_world"
   post "build/worlds/:id/publish", to: "build/worlds#publish", as: "publish_build_world"
+  get "build/worlds/:world/zones/:zone/play", to: "build/zone_plays#show", as: "build_world_zone_play"
 
   namespace :play do
     root to: "dashboard#index"

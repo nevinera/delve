@@ -1,11 +1,12 @@
 import {useState} from "react";
+import PlayLink from "./PlayLink";
 import {createZone, deleteZone, renameZone, worldData, zoneDeletionImpact, zoneKeys} from "../state/worldOps";
 
 // The world's zones: open one, create, rename (moves its files and
 // rewrites every world reference), or delete (after a confirm listing
 // what goes with it). Errors from an operation (a taken or malformed
 // identifier) show inline; the draft is untouched.
-export default function ZoneList({draft, onChange, onOpen}) {
+export default function ZoneList({draft, onChange, onOpen, play}) {
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState(null);
   const [error, setError] = useState(null);
@@ -62,6 +63,7 @@ export default function ZoneList({draft, onChange, onOpen}) {
                   <span className="zone-row-name">{zones[key].name || key}</span>
                   <span className="zone-row-key">{key}{draft.dirtyUnder(`worlds/${draft.worldKey}/zones/${key}`).length > 0 ? " • unsaved" : ""}</span>
                 </button>
+                <PlayLink play={play} zone={key} />
                 <button type="button" className="add-entry" onClick={() => setRenaming(key)} aria-label={`Rename ${key}`}>Rename</button>
                 <button type="button" className="remove-entry" onClick={() => confirmDelete(key)} aria-label={`Delete ${key}`}>Delete</button>
               </>

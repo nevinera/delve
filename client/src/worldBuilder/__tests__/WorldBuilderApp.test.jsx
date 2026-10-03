@@ -44,7 +44,7 @@ const zoneButton = async (name) => within(await screen.findByRole("region", {nam
 
 function renderApp({branches = {main: fixtureJson()}, store = createDraftStore(memoryBackend()), worldKey = "w", publishUrl = "/publish/w"} = {}) {
   const client = fakeClient(branches);
-  render(<WorldBuilderApp worldKey={worldKey} backUrl="/build/worlds" publishUrl={publishUrl} nextTag="w/v1" client={client} store={store} />);
+  render(<WorldBuilderApp worldKey={worldKey} backUrl="/build/worlds" publishUrl={publishUrl} nextTag="w/v1" zonePlayUrl="/build/worlds/w/zones/ZONE/play" client={client} store={store} />);
   return {client, store};
 }
 
@@ -265,6 +265,21 @@ describe("WorldBuilderApp pipeline", () => {
     expect(Object.keys(commit.mock.calls[0][0]).sort()).toEqual(["worlds/w/zones/cave/cave.full.json", "worlds/w/zones/forest/forest.full.json"]);
     await waitFor(() => expect(button("Publish")).toBeEnabled());
     expect(button("Expand")).toHaveAttribute("title", "Already expanded");
+  });
+
+  it("offers play-testing a zone once the world is expanded, at that commit", async () => {
+    const {client} = renderApp({branches: {main: assetFreeJson()}});
+    vi.spyOn(commitModule, "commitFiles").mockImplementation(async (files, {branch}) => {
+      client._advance(branch, {...assetFreeJson(), ...files});
+      return {commitSha: "next"};
+    });
+    const zones = within(await screen.findByRole("region", {name: "Zones"}));
+    expect(zones.getByRole("button", {name: "Play forest"})).toHaveAttribute("title", "Validate and expand to play");
+
+    await act(async () => fireEvent.click(button("Validate")));
+    await act(async () => fireEvent.click(button("Expand")));
+
+    await waitFor(() => expect(zones.getByRole("link", {name: "Play forest"})).toHaveAttribute("href", "/build/worlds/w/zones/forest/play?commit=main-c1"));
   });
 
   it("drops a passing Validate as soon as the draft changes", async () => {

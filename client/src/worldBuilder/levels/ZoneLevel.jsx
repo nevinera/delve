@@ -5,6 +5,7 @@ import ZoneItemsPanel from "../../zoneEditor/ZoneItemsPanel";
 import ZoneUnitTypesPanel from "../../zoneEditor/ZoneUnitTypesPanel";
 import {applyZoneAction, mapDetails, mapKeysInZone, missingZoneRefs, setZoneField, setZonePositions, zoneData, zonePositions} from "../state/zoneOps";
 import {assetUrlFor} from "../state/assetUrls";
+import PlayLink from "./PlayLink";
 import {createMap, deleteMap, renameMap} from "../state/mapOps";
 
 // The zone level: graph (top-left), zone fields (bottom-left), maps with
@@ -13,7 +14,7 @@ import {createMap, deleteMap, renameMap} from "../state/mapOps";
 // be created, renamed and deleted here. The old zone editor's graph and
 // panels are reused, their actions applied to the zone's part of the live
 // draft (zoneOps#applyZoneAction).
-export default function ZoneLevel({draft, zone, onChange, navigate, repo}) {
+export default function ZoneLevel({draft, zone, onChange, navigate, repo, play}) {
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState(null);
   const [mapError, setMapError] = useState(null);
@@ -54,7 +55,10 @@ export default function ZoneLevel({draft, zone, onChange, navigate, repo}) {
           />
         </div>
         <div className="world-attributes">
-          <h3>Zone</h3>
+          <div className="zone-heading">
+            <h3>Zone</h3>
+            <PlayLink play={play} zone={zone} />
+          </div>
           <p className="world-key">Identifier: <code>{zone}</code></p>
           <table>
             <tbody>

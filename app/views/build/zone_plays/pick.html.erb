@@ -3,6 +3,8 @@
 <p>
   <% if @local %>
     Plays the zone from your local content server, as it is right now.
+  <% elsif @world %>
+    Plays the zone as the world editor last expanded it (commit <code><%= @commit.first(7) %></code>).
   <% else %>
     Plays the zone as it is on your repo's default branch right now.
   <% end %>
@@ -18,8 +20,11 @@
 <% if @characters.any? %>
   <ul>
     <% @characters.each do |character| %>
-      <% play_params = {id: @key, character_id: character.id, elevation: params[:elevation].presence}.compact %>
-      <% play_path = @local ? build_local_zone_play_path(play_params) : build_zone_play_path(play_params) %>
+      <% shared = {character_id: character.id, elevation: params[:elevation].presence}.compact %>
+      <% play_path = if @local then build_local_zone_play_path(id: @key, **shared)
+         elsif @world then build_world_zone_play_path(world: @world, zone: params[:zone], commit: @commit, **shared)
+         else build_zone_play_path(id: @key, **shared)
+         end %>
       <li><%= link_to "Play as #{character.name}", play_path %></li>
     <% end %>
   </ul>
@@ -27,4 +32,4 @@
   <p>You need a character first: <%= link_to "create one", new_play_character_path %>.</p>
 <% end %>
 
-<%= link_to "Back to zones", build_zones_path %>
+<%= render "back_link" %>

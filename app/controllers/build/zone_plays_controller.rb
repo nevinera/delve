@@ -1,17 +1,23 @@
 # Plays a zone straight from source with one of the builder's characters -
 # for trying a zone out while building it, with no Zone or WorldVersion
 # record and nothing persisted (see JoinDirectZone), wearing imaginary
-# trainee gear at the zone's elevation (offset by ?elevation=). The source is either
-# the builder's GitHub repo (its default branch's latest commit; the repo
-# must be public, since the game client reads the zone from its raw URL) or,
-# when configured, a local content server (config.x.local_content_url).
+# trainee gear at the zone's elevation (offset by ?elevation=). The source is one
+# of:
+# - the builder's GitHub repo, its default branch's latest commit (the repo
+#   must be public, since the game client reads the zone from its raw URL);
+# - a zone of a self-contained world, at the commit the world editor
+#   expanded (?commit=), from the same repo - so whatever branch it's on;
+# - when configured, a local content server (config.x.local_content_url).
 class Build::ZonePlaysController < Build::BaseController
   RAW_BASE = "https://raw.githubusercontent.com"
 
   PlayError = Class.new(StandardError)
+  COMMIT_FORMAT = /\A\h{40}\z/
 
   def show
-    @key = params[:id]
+    @world = params[:world]
+    @commit = params[:commit].to_s
+    @key = @world ? "#{@world}/#{params[:zone]}" : params[:id]
     @local = params[:source] == "local"
     raise ActionController::RoutingError, "local content isn't configured" if @local && !local_content_url
     @characters = current_user.characters.order(:name)
@@ -40,7 +46,10 @@ class Build::ZonePlaysController < Build::BaseController
   private
 
   def join!
-    @zone_source_url, version = @local ? local_source : github_source
+    @zone_source_url, version = if @local then local_source
+    elsif @world then world_source
+    else github_source
+    end
     body = VerifiedContent.get!(@zone_source_url)
     # The client checks the file it fetches against this, so it plays
     # exactly the zone Rails validated and handed to the game server.
@@ -63,6 +72,16 @@ class Build::ZonePlaysController < Build::BaseController
 
     sha = client.branch_sha(client.default_branch)
     ["#{RAW_BASE}/#{client.repo}/#{sha}/#{zone_file}", sha]
+  end
+
+  # [url, version]: the world's zone, expanded, at the given commit.
+  def world_source
+    raise PlayError, "Play a world's zone from the world editor, once it's expanded (no commit given)." unless @commit.match?(COMMIT_FORMAT)
+    client = Github::ContentClient.new(current_user)
+    raise PlayError, "#{client.repo} is private; zones can only be played from a public repo." unless client.public_repo?
+
+    zone = params[:zone]
+    ["#{RAW_BASE}/#{client.repo}/#{@commit}/worlds/#{@world}/zones/#{zone}/#{zone}.full.json", @commit]
   end
 
   # [url, nil]: a local file has no commit; join! versions it by content

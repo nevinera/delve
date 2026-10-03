@@ -175,3 +175,9 @@
       .edit-modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.6); display: flex; padding: 3vh 3vw; }
       .edit-modal { flex: 1; height: auto; border: 1px solid #457; border-radius: 6px; overflow: hidden; background: #14181c; box-shadow: 0 10px 40px #000a; }
 
+      /* PlayLink.jsx - a zone's "Play" (a link styled like the buttons). */
+      .zone-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      a.play-link, button.play-link { display: inline-block; text-decoration: none; background: #243; border: 1px solid #4a7; color: #9e9; font-size: 12px; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+      a.play-link:hover { background: #354; }
+      button.play-link:disabled { opacity: 0.45; cursor: default; }
+

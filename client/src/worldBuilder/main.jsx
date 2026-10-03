@@ -23,6 +23,7 @@ createRoot(el).render(
       publishUrl={el.dataset.publishUrl}
       nextTag={el.dataset.nextTag}
       stockAssets={JSON.parse(el.dataset.stockAssets)}
+      zonePlayUrl={el.dataset.zonePlayUrl}
     />
   </StrictMode>
 );

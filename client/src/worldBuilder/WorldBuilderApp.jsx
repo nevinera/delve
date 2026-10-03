@@ -45,7 +45,7 @@ function crumbsFor(location, draft) {
 // reads and edits the draft through worldOps/zoneOps.
 //
 // `client` and `store` are injectable for tests.
-export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag, stockAssets, client: givenClient, store: givenStore}) {
+export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag, stockAssets, zonePlayUrl, client: givenClient, store: givenStore}) {
   const client = useRef(givenClient ?? new BranchClient()).current;
   const store = useRef(givenStore ?? createDraftStore()).current;
   const [branches, setBranches] = useState(null);
@@ -282,13 +282,19 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
     : location.item ? (itemData(draft, location.item) ? location : {})
       : !location.zone || !zoneData(draft, location.zone) ? {}
       : location.map && !mapData(draft, location.zone, location.map) ? {zone: location.zone} : location;
+  // Play-testing reads a zone's committed .full.json, so it needs the
+  // world saved and expanded: {url(zone)} then, {blocker} otherwise.
+  const play = !zonePlayUrl ? null
+    : draft.hasChanges ? {blocker: "Save, validate and expand to play"}
+      : !expanded ? {blocker: "Validate and expand to play"}
+        : {url: (zone) => `${zonePlayUrl.replace("ZONE", encodeURIComponent(zone))}?commit=${draft.snapshot.commitSha}`};
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
   else if (shown.item) level = <ItemLevel draft={draft} item={shown.item} onChange={setDraft} repo={repo} />;
   else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
   else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
-  else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} />;
-  else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} library={library} />;
+  else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} play={play} />;
+  else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} library={library} play={play} />;
 
   return (
     <div className="content-editor world-builder">
