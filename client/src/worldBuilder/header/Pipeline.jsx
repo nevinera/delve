@@ -41,25 +41,7 @@ export default function Pipeline({canSave, defaultMessage, onSave, validating, o
           </>
         )}
       </div>
-      {status && <div className={`pipeline-status${status.error ? " error" : ""}`} role="status">{status.text}</div>}
+      {status && <div className={`pipeline-status${status.error ? " error" : ""}`} role="status" title={status.text}>{status.text}</div>}
     </>
-  );
-}
-
-// The last Validate's problems, each a link to where in the editor to
-// look. Shown only while they still describe the current draft.
-export function ValidationProblems({problems, onSelect}) {
-  if (!problems?.length) return null;
-  return (
-    <details className="validation-problems" open>
-      <summary>{problems.length} validation problem{problems.length === 1 ? "" : "s"}</summary>
-      <ul>
-        {problems.map((problem, i) => (
-          <li key={i}>
-            <button type="button" className="crumb-link" onClick={() => onSelect(problem.location)}>{problem.file}</button>: {problem.message}
-          </li>
-        ))}
-      </ul>
-    </details>
   );
 }

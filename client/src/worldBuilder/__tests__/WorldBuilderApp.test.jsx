@@ -215,9 +215,16 @@ describe("WorldBuilderApp pipeline", () => {
     await screen.findByRole("button", {name: "Validate"});
     await act(async () => fireEvent.click(button("Validate")));
 
-    expect(screen.getByText("1 validation problem")).toBeInTheDocument();
-    fireEvent.click(button("worlds/w/zones/cave/cave.json"));
+    const popover = screen.getByRole("dialog", {name: "Validation problems"});
+    expect(popover).toHaveTextContent("bad elvl");
+    fireEvent.click(within(popover).getByRole("button", {name: "worlds/w/zones/cave/cave.json"}));
     expect(window.location.hash).toEqual("#/zone/cave");
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(button("⚠ 1 problem"));
+    expect(screen.getByRole("dialog", {name: "Validation problems"})).toBeInTheDocument();
+    fireEvent.keyDown(document, {key: "Escape"});
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("gates Expand on a passing Validate of the saved content, and Publish on Expand", async () => {

@@ -7,6 +7,7 @@
 // (worldEditor/WorldDraft.js), applied to the world file's data in place -
 // nothing holds it as separate state.
 import {WorldDraft as WorldFile} from "../../worldEditor/WorldDraft";
+import {stableStringify} from "./WorldDraft";
 import {isValidIdentifier, relativePath, worldDir, worldFile, worldLayoutFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
 
 export function blankWorld(name) {
@@ -41,7 +42,10 @@ export function worldPositions(draft) {
   return draft.read(worldLayoutFile(draft.worldKey))?.positions ?? {};
 }
 
+// A no-op when nothing moved, so a graph reporting its positions on mount
+// never dirties the draft (even with no layout file yet).
 export function setWorldPositions(draft, positions) {
+  if (stableStringify(positions) === stableStringify(worldPositions(draft))) return draft;
   return draft.write(worldLayoutFile(draft.worldKey), {positions});
 }
 

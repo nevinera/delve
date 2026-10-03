@@ -45,6 +45,13 @@ describe("zoneOps", () => {
     expect(zone.openConnections).toEqual({});
   });
 
+  it("doesn't write a layout file when nothing moved", () => {
+    const draft = fixtureDraft();
+
+    expect(setZonePositions(draft, "cave", {})).toBe(draft);
+    expect(setZonePositions(draft, "forest", {})).toBe(draft);
+  });
+
   it("stores graph positions in the zone's layout file", () => {
     const draft = setZonePositions(fixtureDraft(), "forest", {hub: {x: 9, y: 9}});
 

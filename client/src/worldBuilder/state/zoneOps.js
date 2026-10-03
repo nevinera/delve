@@ -11,6 +11,7 @@ import {keyFromRef, refFromKey} from "../../zoneEditor/mapRef";
 import {aggregateItemUsage, aggregateUnitTypeUsage} from "../../zoneEditor/zoneRefUsage";
 import {rebaseRelativeUrls, dirname} from "../../content/rebaseRelativeUrls";
 import {syncZoneEntry} from "./worldOps";
+import {stableStringify} from "./WorldDraft";
 import {itemFile, mapFile, relativePath, resolvePath, unitTypeFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
 
 export const zoneData = (draft, zone) => draft.read(zoneFile(draft.worldKey, zone));
@@ -28,7 +29,9 @@ export function zonePositions(draft, zone) {
   return draft.read(zoneLayoutFile(draft.worldKey, zone))?.positions ?? {};
 }
 
+// A no-op when nothing moved (see worldOps#setWorldPositions).
 export function setZonePositions(draft, zone, positions) {
+  if (stableStringify(positions) === stableStringify(zonePositions(draft, zone))) return draft;
   return draft.write(zoneLayoutFile(draft.worldKey, zone), {positions});
 }
 
