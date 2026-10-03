@@ -39,11 +39,11 @@ RSpec.describe TraineeGear::GrantInitialEquipment do
     end
   end
 
-  it "gives each item a synthetic zone_identifier/version" do
+  it "gives each item a synthetic version and no world version" do
     described_class.call(world_character:)
 
     item = world_character.character_items.find_by(identifier: "trainee-head")
-    expect(item.zone_identifier).to eq("trainee")
+    expect(item.world_version).to be_nil
     expect(item.version).to eq("0.0")
   end
 

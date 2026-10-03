@@ -25,7 +25,7 @@ class EnterWorld
     zone, connection_key, zone_data = entry(world_character, version)
     world_character.update!(world_version: version, zone_identifier: zone.identifier,
       connection_key:, last_played_at: Time.current)
-    owned_zone_items = world_character.owned_zone_items_for(zone, zone_data)
+    owned_zone_items = world_character.owned_zone_items_for(zone_data)
     join = JoinWorldZone.call(world_character:, zone:, zone_data:, owned_zone_items:)
     Result.new(world_character:, zone:, owned_zone_items:, join:)
   end

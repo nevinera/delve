@@ -3,7 +3,6 @@ FactoryBot.define do
     world_character
 
     sequence(:identifier) { |n| "item-#{n}" }
-    zone_identifier { "zone_a" }
     version { "1.0" }
     name { "Iron Sword" }
     elvl { 584 }

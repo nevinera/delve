@@ -1,8 +1,8 @@
 # Awards a looted item to a world character (from the game server - see
 # InternalApi::CharacterItemsController). An item is identified within the
-# world by its zone and identifier; its version is a hash of its definition
-# (see ItemDefinition), so holding an older definition of the same item
-# makes this an upgrade.
+# world by its identifier; its version is a hash of its definition (see
+# ItemDefinition), so holding an older definition of the same item makes
+# this an upgrade. Its provenance is the world version it dropped in.
 class AwardCharacterItem
   include Memery
 
@@ -35,7 +35,7 @@ class AwardCharacterItem
 
   memoize def already_held_other_version?
     @world_character.character_items
-      .where(zone_identifier: zone.identifier, identifier:)
+      .where(identifier:)
       .where.not(version:)
       .exists?
   end
@@ -45,7 +45,7 @@ class AwardCharacterItem
   memoize def record = existing_record || built_item.tap(&:save!)
 
   memoize def existing_record =
-    @world_character.character_items.find_by(zone_identifier: zone.identifier, identifier:, version:)
+    @world_character.character_items.find_by(identifier:, version:)
 
   # The zone must be one of the world character's current version's zones.
   memoize def zone
@@ -76,7 +76,7 @@ class AwardCharacterItem
       world_character: @world_character,
       source_json: definition,
       identifier:,
-      zone_identifier: zone.identifier,
+      world_version: zone.world_version,
       version:
     }
   end

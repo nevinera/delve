@@ -5,7 +5,7 @@ package instanceconfig
 // secondaries it rolls. Actual numbers are computed from Elvl/slot/em at runtime;
 // see the itemstats package.
 type Item struct {
-	Identifier  string   `json:"identifier"`           // Required: unique within the zone
+	Identifier  string   `json:"identifier"`           // Required: unique within the world
 	Name        string   `json:"name"`                 // Required: display name
 	Slot        string   `json:"slot"`                 // Required: equipment slot (e.g. "chest", "ring")
 	Elvl        int      `json:"elvl"`                 // Required: elevation ≥ 0
@@ -17,11 +17,9 @@ type Item struct {
 }
 
 // EquippedItem is a character item equipped in a particular slot, as reported
-// by Rails on join. Provenance fields let the game server validate that the
-// item is legitimate for its source zone/version.
+// by Rails on join.
 type EquippedItem struct {
 	Identifier     string   `json:"identifier"`
-	ZoneIdentifier string   `json:"zone_identifier"`
 	Version        string   `json:"version"`
 	Slot           string   `json:"slot"`
 	Elvl           int      `json:"elvl"`

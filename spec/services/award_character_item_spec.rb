@@ -27,7 +27,7 @@ RSpec.describe AwardCharacterItem do
     item = call
     expect(item).to be_persisted
     expect(item).to have_attributes(
-      world_character:, identifier: "sword-of-doom", zone_identifier: "darkwood", version: item_version,
+      world_character:, identifier: "sword-of-doom", world_version: zone.world_version, version: item_version,
       name: "Sword of Doom", slot: "main_hand", elvl: 584,
       primary_stat: "strength", secondary_stats: ["haste_rating", "crit_rating"]
     )
@@ -51,10 +51,10 @@ RSpec.describe AwardCharacterItem do
     expect(world_character.character_items.count).to eq(2)
   end
 
-  it "doesn't count the same identifier from another zone as an older version" do
+  it "counts the same item dropped in another zone of the world as already held" do
     other_zone = create(:zone, identifier: "cave", world_version: zone.world_version)
     call(source_data.merge("zone" => {"database_id" => other_zone.id.to_s, "identifier" => "cave"}))
-    expect(call).to be_a(CharacterItem)
+    expect(call).to eq(:already_owned_this_version)
   end
 
   describe "upgrade_only" do
