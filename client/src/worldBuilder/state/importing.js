@@ -8,9 +8,10 @@ import {ExistingBlob} from "../../github/commitFiles";
 import {expandPowers} from "../../powersEditor/powerSources";
 import {normalizeUnitType} from "../../unitTypeEditor/UnitTypeWorkbench";
 import {createUnitType} from "./unitTypeOps";
-import {relativePath, resolvePath, unitTypeFile, worldDir} from "./worldPaths";
+import {createItem} from "./itemOps";
+import {itemFile, relativePath, resolvePath, unitTypeFile, worldDir} from "./worldPaths";
 
-const URL_FIELD_NAMES = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl"]);
+const URL_FIELD_NAMES = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl", "icon_url"]);
 
 function isRelative(value) {
   return typeof value === "string" && value !== "" && !(value.startsWith(":") && value.endsWith(":"))
@@ -61,13 +62,16 @@ export function applyCopies(draft, copies) {
   return copies.reduce((next, {to, sha, from}) => (next.exists(to) ? next : next.write(to, new ExistingBlob(sha, from))), draft);
 }
 
-// The shared library's unit types: [{path, label}], label being the key
-// under unit_types/.
-export async function libraryUnitTypes(reader) {
-  const paths = await reader.listDirectory("unit_types");
+// The shared library's files under dir: [{path, label}], label being the
+// key under dir.
+async function libraryFiles(reader, dir) {
+  const paths = await reader.listDirectory(dir);
   return paths.filter((path) => path.endsWith(".json") && !path.endsWith(".full.json"))
-    .map((path) => ({path, label: path.slice("unit_types/".length, -".json".length)}));
+    .map((path) => ({path, label: path.slice(dir.length + 1, -".json".length)}));
 }
+
+export const libraryUnitTypes = (reader) => libraryFiles(reader, "unit_types");
+export const libraryItems = (reader) => libraryFiles(reader, "items");
 
 // Imports a library unit type as the world's unit type `key`: powers
 // inline (any $ref expanded), every asset copied in. Resolves to
@@ -92,4 +96,18 @@ export async function preparePowerImport(draft, reader, power, sourceFile, targe
   const {content, assets} = relocateAssets(power, sourceFile, targetFile, draft.worldKey);
   const {copies} = await assetCopies(draft, reader, assets);
   return {power: content, copies};
+}
+
+// Imports a library item as the world's item `key` (its identifier set to
+// match), with its icon copied in. Same shape as prepareUnitTypeImport.
+export async function prepareItemImport(draft, reader, sourcePath, key) {
+  createItem(draft, key); // checks the key is valid and free
+  const raw = JSON.parse(await reader.fetchFile(sourcePath));
+  const target = itemFile(draft.worldKey, key);
+  const {content, assets} = relocateAssets({...raw, identifier: key}, sourcePath, target, draft.worldKey);
+  const {copies, missing} = await assetCopies(draft, reader, assets);
+  return {
+    missing,
+    apply: (current) => applyCopies(createItem(current, key), copies).write(target, content),
+  };
 }

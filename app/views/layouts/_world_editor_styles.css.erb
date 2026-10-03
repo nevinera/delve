@@ -96,12 +96,20 @@
       .zone-list .zone-row { display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid #2a2f35; border-radius: 4px; }
       .zone-list button.zone-row-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; background: none; border: none; color: #ddd; text-align: left; cursor: pointer; padding: 4px 6px; }
       .zone-list button.zone-row-open:hover { background: #1f262c; }
-      .unit-type-list { margin-top: 18px; }
-      .unit-type-list .unit-type-list-actions { display: flex; gap: 6px; }
-      .unit-type-list .import-unit-type-form select { flex: 2; min-width: 160px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
-      .unit-type-list button.unit-type-row-open { flex-direction: row; align-items: center; gap: 8px; }
-      .unit-type-list button.unit-type-row-open > span { display: flex; flex-direction: column; min-width: 0; }
-      .unit-type-list .unit-type-row-token { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #223; flex-shrink: 0; }
+      .content-list { margin-top: 18px; }
+      .content-list .content-list-actions { display: flex; gap: 6px; }
+      .content-list .import-form select { flex: 2; min-width: 160px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .content-list button.content-row-open { flex-direction: row; align-items: center; gap: 8px; }
+      .content-list button.content-row-open > span { display: flex; flex-direction: column; min-width: 0; }
+      .content-list .content-row-thumb { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #223; flex-shrink: 0; }
+
+      /* The item level (ItemLevel.jsx): the in-game tooltip preview on the
+         left, the item editor's fields on the right. */
+      .item-level-preview { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 14px; }
+      .item-preview-elvl-control { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9ab; }
+      .item-level-preview .item-preview-elvl-control input { width: 90px; flex: none; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .item-level-fields .checkbox-list { display: flex; flex-wrap: wrap; gap: 10px; }
+      .item-level-fields .checkbox-list label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
       .zone-list .zone-row-name { font-size: 13px; font-weight: 600; color: #cce; }
       .zone-list .zone-row-key { font-size: 11px; color: #9ab; }
       .zone-list .zone-form { display: flex; flex: 1; flex-wrap: wrap; gap: 6px; margin: 6px 0; }

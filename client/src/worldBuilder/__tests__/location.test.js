@@ -19,6 +19,8 @@ describe("location", () => {
   it("round-trips the unit type level", () => {
     expect(parseLocation("#/unit_type/goblin")).toEqual({unitType: "goblin"});
     expect(formatLocation({unitType: "goblin"})).toEqual("#/unit_type/goblin");
+    expect(parseLocation("#/item/iron-ring")).toEqual({item: "iron-ring"});
+    expect(formatLocation({item: "iron-ring"})).toEqual("#/item/iron-ring");
   });
 
   it("ignores segments it doesn't understand", () => {

@@ -15,7 +15,7 @@ import {isJsonPath} from "./RepoSnapshot";
 import {zoneKeys} from "./worldOps";
 import {mapKeysInZone, resolveZone} from "./zoneOps";
 
-const ASSET_FIELDS = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl"]);
+const ASSET_FIELDS = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl", "icon_url"]);
 
 const isLocalPath = (value) => typeof value === "string" && value !== "" &&
   !(value.startsWith(":") && value.endsWith(":")) && !value.startsWith("/") && !/^[a-z][a-z0-9+.-]*:\/\//i.test(value);

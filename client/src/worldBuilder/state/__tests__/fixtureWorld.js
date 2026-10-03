@@ -42,6 +42,7 @@ export function fixtureJson() {
       unitTypes: {}, items: {}, zoneLinks: [], entryPoints: {}, openConnections: {},
     },
     "worlds/w/unit_types/goblin.json": {name: "Goblin", tokenImageUrl: ["../tokens/goblin.webp"]},
+    "worlds/w/items/iron-ring.json": {identifier: "iron-ring", name: "Iron Ring", slot: "ring", elvl: 0, primary: null, secondaries: []},
   };
 }
 

@@ -1,7 +1,8 @@
 import {useState} from "react";
-import ImportUnitTypeForm from "./ImportUnitTypeForm";
-import {NewUnitTypeForm} from "./UnitTypeList";
+import ImportForm from "./ImportForm";
+import {NewEntryForm} from "./ContentList";
 import {createUnitType} from "../state/unitTypeOps";
+import {libraryUnitTypes, prepareUnitTypeImport} from "../state/importing";
 
 // The map level's extra ways into the Units tab's palette (see
 // MapWorkbench's renderUnitTypeAdder): import one of the shared library's
@@ -12,12 +13,18 @@ export default function UnitTypeAdder({draft, library, onChange, onAdded, onCrea
   const [error, setError] = useState(null);
 
   if (mode === "import") {
-    return <ImportUnitTypeForm draft={draft} library={library} onChange={onChange} onImported={(key) => onAdded(key)} onCancel={() => setMode(null)} />;
+    return (
+      <ImportForm
+        noun="unit type" draft={draft} library={library} list={libraryUnitTypes} prepare={prepareUnitTypeImport}
+        onChange={onChange} onImported={(key) => onAdded(key)} onCancel={() => setMode(null)}
+      />
+    );
   }
   if (mode === "create") {
     return (
       <>
-        <NewUnitTypeForm
+        <NewEntryForm
+          noun="unit type"
           onCancel={() => setMode(null)}
           onCreate={(key, name) => {
             try {

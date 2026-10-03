@@ -3,7 +3,8 @@ import {fixtureDraft} from "./fixtureWorld";
 import {ExistingBlob} from "../../../github/commitFiles";
 import {LibraryReader} from "../libraryReader";
 import {fakeClient} from "./fakeLibrary";
-import {applyCopies, libraryUnitTypes, preparePowerImport, prepareUnitTypeImport, relocateAssets} from "../importing";
+import {applyCopies, libraryItems, libraryUnitTypes, prepareItemImport, preparePowerImport, prepareUnitTypeImport, relocateAssets} from "../importing";
+import {itemData} from "../itemOps";
 import {unitTypeData} from "../unitTypeOps";
 import {assetUrlFor} from "../assetUrls";
 
@@ -16,6 +17,8 @@ const LIBRARY = {
   "abilities/smash.json": {name: "Smash", iconURL: "../graphics/icons/smash.png", soundEffects: [{sourceURL: ":thud:"}]},
   "tokens/unit/troll.webp": "img",
   "graphics/icons/smash.png": "img",
+  "items/rings/gold-ring.json": {identifier: "gold-ring", name: "Gold Ring", slot: "ring", icon_url: "../../graphics/items/gold-ring.webp"},
+  "graphics/items/gold-ring.webp": "img",
 };
 
 const reader = () => new LibraryReader(fakeClient(LIBRARY), "c1");
@@ -65,5 +68,14 @@ describe("importing", () => {
 
     expect(adopted.iconURL).toEqual("../graphics/icons/smash.png");
     expect(applyCopies(fixtureDraft(), copies).exists("worlds/w/graphics/icons/smash.png")).toBe(true);
+  });
+
+  it("imports a library item under a new key, with its icon copied in", async () => {
+    expect(await libraryItems(reader())).toEqual([{path: "items/rings/gold-ring.json", label: "rings/gold-ring"}]);
+    const prepared = await prepareItemImport(fixtureDraft(), reader(), "items/rings/gold-ring.json", "golden-band");
+    const draft = prepared.apply(fixtureDraft());
+
+    expect(itemData(draft, "golden-band")).toEqual({identifier: "golden-band", name: "Gold Ring", slot: "ring", icon_url: "../graphics/items/gold-ring.webp"});
+    expect(draft.exists("worlds/w/graphics/items/gold-ring.webp")).toBe(true);
   });
 });

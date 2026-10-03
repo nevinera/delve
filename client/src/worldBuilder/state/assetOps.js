@@ -6,15 +6,17 @@ import {relativePath, resolvePath, worldDir} from "./worldPaths";
 
 const IMAGE_EXTENSIONS = /\.(png|webp|jpe?g|gif|svg)$/i;
 
-// The world's token images (under worlds/<w>/tokens/), as a file at
-// fromFile refers to them: {value: path relative to fromFile, label: path
-// under tokens/, url}.
-export function tokenImageOptions(draft, fromFile, assetUrl) {
-  const dir = `${worldDir(draft.worldKey)}/tokens`;
+// The world's images under subdir (e.g. "tokens"), as a file at fromFile
+// refers to them: {value: path relative to fromFile, label: path under
+// subdir, url}.
+export function imageOptions(draft, fromFile, subdir, assetUrl) {
+  const dir = `${worldDir(draft.worldKey)}/${subdir}`;
   return draft.paths(dir).filter((p) => IMAGE_EXTENSIONS.test(p)).map((p) => ({
     value: relativePath(fromFile, p), label: p.slice(dir.length + 1), url: assetUrl(p),
   }));
 }
+
+export const tokenImageOptions = (draft, fromFile, assetUrl) => imageOptions(draft, fromFile, "tokens", assetUrl);
 
 // A free path for an upload named `name` in the world directory `subdir`
 // (e.g. "tokens/ncu"), numbered if the name's taken.

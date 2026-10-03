@@ -7,6 +7,7 @@ import {MapDraft} from "../../mapEditor/MapDraft";
 import {blankMap} from "../../mapEditor/mapContentLoaders";
 import {keyFromRef, refFromKey} from "../../zoneEditor/mapRef";
 import {addMap, removeMap, syncZoneRefs, zoneData, zonePositions, setZonePositions} from "./zoneOps";
+import {zoneKeys} from "./worldOps";
 import {isValidIdentifier, itemFile, mapDir, mapFile, resolvePath, unitTypeFile, worldDir, zoneFile} from "./worldPaths";
 
 export const mapData = (draft, zone, map) => draft.read(mapFile(draft.worldKey, zone, map));
@@ -129,4 +130,13 @@ export function ncuTokenUrls(draft, zone, map, assetUrl) {
   const path = mapFile(draft.worldKey, zone, map);
   const raws = [...new Set((mapData(draft, zone, map)?.ncus ?? []).map((n) => n.tokenImageUrl).filter(Boolean))];
   return Object.fromEntries(raws.map((raw) => [raw, raw.startsWith(":") ? raw : assetUrl(resolvePath(path, raw))]));
+}
+
+// Every map in the world, as [zone, mapKey, mapData].
+export function worldMaps(draft) {
+  return zoneKeys(draft).flatMap((zone) => (zoneData(draft, zone)?.maps ?? [])
+    .filter((entry) => entry?.$ref)
+    .map((entry) => keyFromRef(entry.$ref))
+    .map((map) => [zone, map, mapData(draft, zone, map)])
+    .filter(([, , data]) => data));
 }

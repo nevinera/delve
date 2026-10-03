@@ -1,4 +1,5 @@
 import {humanize} from "../abilityEditor/abilityFormatting";
+import ImagePicker from "../content/ImagePicker";
 import {SLOT_VALUES, WEAPON_TYPES, PRIMARY_STATS, SECONDARY_STATS} from "./itemFieldOptions";
 
 function TextField({value, onChange, placeholder}) {
@@ -26,7 +27,11 @@ function SelectField({value, options, onChange, nullLabel = "—"}) {
 // Purely presentational - every domain rule (which fields a slot change
 // invalidates, the secondaries cap) lives on ItemDraft itself now; this
 // just renders draft's current values and calls its mutator methods.
-export default function ItemFieldsPanel({draft, onChange}) {
+//
+// The world editor shows the identifier read-only (renaming the item sets
+// it) and picks the icon from the world's images: iconPicker {options,
+// url, upload} (see content/ImagePicker).
+export default function ItemFieldsPanel({draft, onChange, identifierEditable = true, iconPicker = null}) {
   const {data, slot, shield, secondaries, maxSecondaries, primaryEligible, weaponTypeEligible} = draft;
 
   return (
@@ -35,7 +40,11 @@ export default function ItemFieldsPanel({draft, onChange}) {
         <tbody>
           <tr>
             <th>Identifier</th>
-            <td><TextField value={data.identifier} onChange={(v) => onChange(draft.setField("identifier", v))} placeholder="sword-of-doom" /></td>
+            <td>
+              {identifierEditable
+                ? <TextField value={data.identifier} onChange={(v) => onChange(draft.setField("identifier", v))} placeholder="sword-of-doom" />
+                : <code>{data.identifier}</code>}
+            </td>
           </tr>
           <tr>
             <th>Name</th>
@@ -74,8 +83,18 @@ export default function ItemFieldsPanel({draft, onChange}) {
             <td><TextField value={data.description} onChange={(v) => onChange(draft.setField("description", v))} /></td>
           </tr>
           <tr>
-            <th>Icon URL</th>
-            <td><TextField value={data.icon_url} onChange={(v) => onChange(draft.setField("icon_url", v))} placeholder="../../assets/items/sword-of-doom.webp" /></td>
+            <th>{iconPicker ? "Icon" : "Icon URL"}</th>
+            <td>
+              {iconPicker
+                ? (
+                  <ImagePicker
+                    label="Icon" value={data.icon_url || undefined} url={iconPicker.url}
+                    options={iconPicker.options} onUpload={iconPicker.upload}
+                    onChange={(v) => onChange(draft.setField("icon_url", v ?? null))}
+                  />
+                )
+                : <TextField value={data.icon_url} onChange={(v) => onChange(draft.setField("icon_url", v))} placeholder="../../assets/items/sword-of-doom.webp" />}
+            </td>
           </tr>
         </tbody>
       </table>

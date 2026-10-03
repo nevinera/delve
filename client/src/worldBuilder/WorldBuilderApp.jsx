@@ -21,6 +21,8 @@ import WorldLevel from "./levels/WorldLevel";
 import ZoneLevel from "./levels/ZoneLevel";
 import MapLevel from "./levels/MapLevel";
 import UnitTypeLevel from "./levels/UnitTypeLevel";
+import ItemLevel from "./levels/ItemLevel";
+import {itemData} from "./state/itemOps";
 import {unitTypeData} from "./state/unitTypeOps";
 import {LibraryReader} from "./state/libraryReader";
 import {redirectTo} from "../redirectTo";
@@ -33,6 +35,7 @@ function crumbsFor(location, draft) {
   if (location.zone) crumbs.push({label: zoneData(draft, location.zone)?.name || location.zone, target: {zone: location.zone}});
   if (location.map) crumbs.push({label: mapData(draft, location.zone, location.map)?.name || location.map, target: location});
   if (location.unitType) crumbs.push({label: `Unit type: ${unitTypeData(draft, location.unitType)?.name || location.unitType}`, target: location});
+  if (location.item) crumbs.push({label: `Item: ${itemData(draft, location.item)?.name || location.item}`, target: location});
   return crumbs;
 }
 
@@ -276,10 +279,12 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   // A location whose zone or map no longer exists (deleted, renamed) falls
   // back to the nearest level that does.
   const shown = location.unitType ? (unitTypeData(draft, location.unitType) ? location : {})
-    : !location.zone || !zoneData(draft, location.zone) ? {}
+    : location.item ? (itemData(draft, location.item) ? location : {})
+      : !location.zone || !zoneData(draft, location.zone) ? {}
       : location.map && !mapData(draft, location.zone, location.map) ? {zone: location.zone} : location;
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
+  else if (shown.item) level = <ItemLevel draft={draft} item={shown.item} onChange={setDraft} repo={repo} />;
   else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
   else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
   else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} />;

@@ -6,8 +6,8 @@
 // powers inline.
 import {blankUnitType} from "../../unitTypeEditor/blankUnitType";
 import {normalizeUnitType} from "../../unitTypeEditor/UnitTypeWorkbench";
-import {keyFromRef} from "../../zoneEditor/mapRef";
 import {zoneData} from "./zoneOps";
+import {worldMaps} from "./mapOps";
 import {zoneKeys} from "./worldOps";
 import {isValidIdentifier, mapFile, relativePath, unitTypeFile, worldDir, zoneFile} from "./worldPaths";
 
@@ -38,15 +38,6 @@ export function createUnitType(draft, key, name) {
   checkNewKey(draft, key);
   const blank = blankUnitType(key);
   return draft.write(unitTypeFile(draft.worldKey, key), name ? {...blank, name} : blank);
-}
-
-// Every map in the world, as [zone, mapKey, mapData].
-function worldMaps(draft) {
-  return zoneKeys(draft).flatMap((zone) => (zoneData(draft, zone)?.maps ?? [])
-    .filter((entry) => entry?.$ref)
-    .map((entry) => keyFromRef(entry.$ref))
-    .map((map) => [zone, map, draft.read(mapFile(draft.worldKey, zone, map))])
-    .filter(([, , data]) => data));
 }
 
 // Where the unit type is placed: [{zone, map, count}].
