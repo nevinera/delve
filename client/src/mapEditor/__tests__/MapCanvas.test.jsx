@@ -31,6 +31,17 @@ describe("MapCanvas", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps the user's zoom when re-rendered with an equal (but new) image object", () => {
+    const props = {imageError: "", onImageFile: noop, mapData: mapData(), dispatch: noop, onSelectBarrier: noop};
+    const {rerender} = render(<MapCanvas {...props} image={{...IMAGE}} />);
+    fireEvent.click(screen.getByRole("button", {name: "+"}));
+    const zoomedIn = content().style.transform;
+
+    rerender(<MapCanvas {...props} image={{...IMAGE, pixelDimensions: {...IMAGE.pixelDimensions}}} />);
+
+    expect(content().style.transform).toEqual(zoomedIn);
+  });
+
   it("shows a Back link (in the toolbar, not overlaid) pointing at backUrl, with or without an image", () => {
     render(<MapCanvas image={null} imageError="" onImageFile={noop} backUrl="/build/maps" mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
     let backLink = screen.getByRole("link", {name: "← Back"});

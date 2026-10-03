@@ -249,12 +249,15 @@ export default function MapCanvas({
 
   // Re-fit whenever a new image loads (including the first one) - a
   // previous image's pan/zoom has no bearing on a differently-sized image.
+  // Keyed on the image's URL and size, not the `image` object, which hosts
+  // rebuild on every render - re-fitting on that would undo the user's
+  // zoom on any unrelated re-render (a hover, a selection, a draft save).
   useEffect(() => {
     if (!image) return;
     applyFit();
-    // computeFit reads wrapperRef/image fresh each call; only the image identity should re-trigger this.
+    // computeFit reads wrapperRef/image fresh each call.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [image]);
+  }, [image?.url, image?.pixelDimensions.width, image?.pixelDimensions.height]);
 
   // Native (not React's onWheel) so preventDefault reliably stops page
   // scroll/browser zoom - React may attach wheel listeners passively.
@@ -303,7 +306,7 @@ export default function MapCanvas({
 
     wrapper.addEventListener("wheel", onWheel, {passive: false});
     return () => wrapper.removeEventListener("wheel", onWheel);
-  }, [image]);
+  }, [image?.url]);
 
   // WASD pans the map, +/- zoom it - deliberately *not* gated behind
   // "nothing else armed" the way MapEditor's B/C/L/P hotkeys are, since the
