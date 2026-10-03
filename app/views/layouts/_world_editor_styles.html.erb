@@ -140,3 +140,13 @@
       .validation-problems-popover li { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
       .validation-problems-popover button.crumb-link { align-self: flex-start; background: none; border: none; color: #9cf; font-size: 12px; cursor: pointer; padding: 0; text-align: left; }
       .validation-problem-message { color: #e9a; }
+
+      /* Map level: the map editor's own canvas + sidebar, filling the area
+         below the header. */
+      .map-level { grid-column: 1 / -1; min-height: 0; min-width: 0; display: flex; }
+      .map-level > .map-editor { flex: 1; min-width: 0; height: auto; }
+      .map-actions { margin-bottom: 8px; }
+      .zone-map-row-actions { display: flex; gap: 4px; margin-left: auto; }
+      /* The old editors' collapsible section headings, not the world
+         editor's own h3s. */
+      .world-builder .map-sidebar-section-heading h3 { margin: 0; padding: 0; border: none; font-size: 13px; }

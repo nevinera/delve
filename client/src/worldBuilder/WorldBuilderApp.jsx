@@ -9,6 +9,7 @@ import {publishWorld} from "../worldEditor/publishWorld";
 import {createDraftStore, draftKey} from "./state/draftStore";
 import {createWorld, worldData} from "./state/worldOps";
 import {zoneData} from "./state/zoneOps";
+import {mapData} from "./state/mapOps";
 import {useHashLocation} from "./location";
 import {rememberBranch, rememberedBranch} from "./branchPreference";
 import Breadcrumbs from "../powersEditor/Breadcrumbs";
@@ -18,6 +19,7 @@ import Pipeline from "./header/Pipeline";
 import ValidationProblems from "./header/ValidationProblems";
 import WorldLevel from "./levels/WorldLevel";
 import ZoneLevel from "./levels/ZoneLevel";
+import MapLevel from "./levels/MapLevel";
 import {redirectTo} from "../redirectTo";
 
 const PERSIST_DELAY_MS = 400;
@@ -26,6 +28,7 @@ function crumbsFor(location, draft) {
   const world = worldData(draft);
   const crumbs = [{label: world?.name || draft.worldKey, target: {}}];
   if (location.zone) crumbs.push({label: zoneData(draft, location.zone)?.name || location.zone, target: {zone: location.zone}});
+  if (location.map) crumbs.push({label: mapData(draft, location.zone, location.map)?.name || location.map, target: location});
   return crumbs;
 }
 
@@ -263,17 +266,21 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
     expand: draft.hasChanges ? "Save first" : !validated ? "Validate first" : expanded ? "Already expanded" : null,
     publish: draft.hasChanges ? "Save first" : !validated ? "Validate first" : !expanded ? "Expand first" : null,
   };
-  const zoneMissing = location.zone && !zoneData(draft, location.zone);
+  // A location whose zone or map no longer exists (deleted, renamed) falls
+  // back to the nearest level that does.
+  const shown = !location.zone || !zoneData(draft, location.zone) ? {}
+    : location.map && !mapData(draft, location.zone, location.map) ? {zone: location.zone} : location;
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
-  else if (location.zone && !zoneMissing) level = <ZoneLevel draft={draft} zone={location.zone} onChange={setDraft} navigate={navigate} repo={repo} />;
+  else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} />;
+  else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} />;
   else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} />;
 
   return (
     <div className="content-editor world-builder">
       <header className="content-editor-header world-builder-header">
         {backUrl && <a className="back-link" href={backUrl}>← Worlds</a>}
-        <Breadcrumbs crumbs={crumbsFor(zoneMissing ? {} : location, draft)} onSelect={navigate} />
+        <Breadcrumbs crumbs={crumbsFor(shown, draft)} onSelect={navigate} />
         <span className="header-spacer" />
         <BranchPicker branches={branches} branch={branch} disabled={draft.hasChanges || saving} onSelect={selectBranch} onCreate={createBranch} />
         <UnsavedIndicator draft={draft} />

@@ -5,8 +5,9 @@ import {keyFromRef, refFromKey, mapEditPath} from "./mapRef";
 
 // mapEditHref(key) links each map out to its editor; the world editor,
 // which edits maps in place, passes one that returns null. newMapUrl and
-// onRefresh are likewise optional.
-export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus, mapEditHref = (key) => mapEditPath(zoneKey, key)}) {
+// onRefresh are likewise optional. rowActions(key), if given, renders extra
+// controls on each map's row.
+export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, mapDetailsByKey, onAddMap, zoneKey, newMapUrl, onRefresh, refreshStatus, mapEditHref = (key) => mapEditPath(zoneKey, key), rowActions}) {
   const [collapsed, setCollapsed] = useState(false);
   const [pendingKey, setPendingKey] = useState("");
   // Which map rows have their connections list expanded - starts empty
@@ -91,6 +92,7 @@ export default function ZoneMapsPanel({zoneData, dispatch, availableMapKeys, map
                       Edit ↗
                     </a>
                   )}
+                  {key && rowActions && <span className="zone-map-row-actions" onClick={(e) => e.stopPropagation()}>{rowActions(key)}</span>}
                   <button
                     type="button"
                     className="remove-entry"

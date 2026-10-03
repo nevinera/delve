@@ -956,7 +956,7 @@ export default function MapCanvas({
   return (
     <div className="map-canvas-area">
       <div className="map-canvas-toolbar-row">
-        <a href={backUrl} className="map-canvas-back-link">← Back</a>
+        {backUrl && <a href={backUrl} className="map-canvas-back-link">← Back</a>}
         {image && (
           <div className="map-toolbar-button-group">
             <button type="button" onClick={() => zoomAroundCenter(1 / ZOOM_STEP)}>−</button>

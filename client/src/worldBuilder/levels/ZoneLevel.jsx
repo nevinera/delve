@@ -1,22 +1,43 @@
+import {useState} from "react";
 import ZoneGraphCanvas from "../../zoneEditor/ZoneGraphCanvas";
 import ZoneMapsPanel from "../../zoneEditor/ZoneMapsPanel";
 import ZoneItemsPanel from "../../zoneEditor/ZoneItemsPanel";
 import ZoneUnitTypesPanel from "../../zoneEditor/ZoneUnitTypesPanel";
 import {applyZoneAction, mapDetails, mapKeysInZone, missingZoneRefs, setZoneField, setZonePositions, zoneData, zonePositions} from "../state/zoneOps";
 import {assetUrlFor} from "../state/assetUrls";
+import {createMap, deleteMap, renameMap} from "../state/mapOps";
 
 // The zone level: graph (top-left), zone fields (bottom-left), maps with
-// their connections, unit types and items (right). Maps are edited
-// elsewhere for now (plans/world-editor/02-maps.md); this level only
-// links them into the zone. The old zone editor's graph and panels are
-// reused unchanged, their actions applied to the zone's part of the live
+// their connections, unit types and items (right). Maps open into the map
+// level (from their row, or by double-clicking their graph node), and can
+// be created, renamed and deleted here. The old zone editor's graph and
+// panels are reused, their actions applied to the zone's part of the live
 // draft (zoneOps#applyZoneAction).
-export default function ZoneLevel({draft, zone, onChange, repo}) {
+export default function ZoneLevel({draft, zone, onChange, navigate, repo}) {
+  const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState(null);
+  const [mapError, setMapError] = useState(null);
   const data = zoneData(draft, zone);
   const details = mapDetails(draft, zone, (path) => assetUrlFor(draft, repo, path));
   const dispatch = (action) => onChange((current) => applyZoneAction(current, zone, action));
   const setField = (field, value) => onChange(setZoneField(draft, zone, field, value));
   const missing = missingZoneRefs(draft, zone);
+  const openMap = (map) => navigate({zone, map});
+
+  function attempt(fn) {
+    try {
+      onChange(fn());
+      setMapError(null);
+      return true;
+    } catch (e) {
+      setMapError(e.message);
+      return false;
+    }
+  }
+
+  function confirmDelete(map) {
+    if (window.confirm(`Delete map "${map}" and all its files? Nothing is committed until you save.`)) attempt(() => deleteMap(draft, zone, map));
+  }
 
   return (
     <>
@@ -29,6 +50,7 @@ export default function ZoneLevel({draft, zone, onChange, repo}) {
             dispatch={dispatch}
             initialPositions={zonePositions(draft, zone)}
             onPositionsChange={(positions) => onChange((current) => setZonePositions(current, zone, positions))}
+            onOpenNode={openMap}
           />
         </div>
         <div className="world-attributes">
@@ -74,6 +96,32 @@ export default function ZoneLevel({draft, zone, onChange, repo}) {
             . Validate will fail until they exist.
           </div>
         )}
+        <section className="map-actions" aria-label="Map actions">
+          {creating ? (
+            <KeyForm
+              fields={[["Map identifier", "identifier (a-z, 0-9, _ -)"], ["Map name", "name"]]}
+              submitLabel="Create"
+              onCancel={() => setCreating(false)}
+              onSubmit={([key, name]) => {
+                if (attempt(() => createMap(draft, zone, key, name || key))) {
+                  setCreating(false);
+                  openMap(key);
+                }
+              }}
+            />
+          ) : renaming ? (
+            <KeyForm
+              fields={[[`New identifier for ${renaming}`, "identifier"]]}
+              initial={[renaming]}
+              submitLabel="Rename"
+              onCancel={() => setRenaming(null)}
+              onSubmit={([to]) => attempt(() => renameMap(draft, zone, renaming, to)) && setRenaming(null)}
+            />
+          ) : (
+            <button type="button" className="add-entry" onClick={() => setCreating(true)}>+ New map</button>
+          )}
+          {mapError && <p className="zone-list-error" role="alert">{mapError}</p>}
+        </section>
         <ZoneMapsPanel
           zoneData={data}
           dispatch={dispatch}
@@ -81,10 +129,41 @@ export default function ZoneLevel({draft, zone, onChange, repo}) {
           mapDetailsByKey={details}
           zoneKey={zone}
           mapEditHref={() => null}
+          rowActions={(map) => (
+            <>
+              <button type="button" className="add-entry" onClick={() => openMap(map)} aria-label={`Open ${map}`}>Open</button>
+              <button type="button" className="add-entry" onClick={() => setRenaming(map)} aria-label={`Rename ${map}`}>Rename</button>
+              <button type="button" className="remove-entry" onClick={() => confirmDelete(map)} aria-label={`Delete ${map}`} title="Delete the map and its files (Remove only takes it out of this zone)">Delete</button>
+            </>
+          )}
         />
         <ZoneUnitTypesPanel zoneData={data} mapDetailsByKey={details} />
         <ZoneItemsPanel zoneData={data} mapDetailsByKey={details} zoneKey={zone} mapEditHref={() => null} />
       </div>
     </>
+  );
+}
+
+// A small inline form of text fields; onSubmit gets their trimmed values.
+function KeyForm({fields, initial = [], submitLabel, onSubmit, onCancel}) {
+  const [values, setValues] = useState(() => fields.map((_, i) => initial[i] ?? ""));
+  return (
+    <form className="zone-form" onSubmit={(e) => {
+      e.preventDefault();
+      onSubmit(values.map((v) => v.trim()));
+    }}>
+      {fields.map(([label, placeholder], i) => (
+        <input
+          key={label}
+          aria-label={label}
+          placeholder={placeholder}
+          value={values[i]}
+          autoFocus={i === 0}
+          onChange={(e) => setValues((current) => current.map((v, j) => (j === i ? e.target.value : v)))}
+        />
+      ))}
+      <button type="submit" className="add-entry" disabled={!values[0].trim()}>{submitLabel}</button>
+      <button type="button" className="remove-entry" onClick={onCancel}>Cancel</button>
+    </form>
   );
 }

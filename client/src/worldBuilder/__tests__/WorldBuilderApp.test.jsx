@@ -87,6 +87,23 @@ describe("WorldBuilderApp", () => {
     expect(await screen.findByRole("navigation", {name: "Breadcrumb"})).toHaveTextContent("W›Cave");
   });
 
+  it("opens on the map the URL names, with the full breadcrumb trail", async () => {
+    window.location.hash = "#/zone/forest/map/hub";
+    renderApp();
+
+    expect(await screen.findByRole("navigation", {name: "Breadcrumb"})).toHaveTextContent("W›Forest›Hub");
+    expect(screen.getByLabelText("Lighting")).toHaveValue("daylight");
+  });
+
+  it("falls back to the zone when the URL names a map that isn't there", async () => {
+    window.location.hash = "#/zone/forest/map/nowhere";
+    renderApp();
+
+    const crumbs = await screen.findByRole("navigation", {name: "Breadcrumb"});
+    expect(crumbs).toHaveTextContent("W›Forest");
+    expect(crumbs).not.toHaveTextContent("nowhere");
+  });
+
   it("uses the remembered branch when it still exists", async () => {
     window.localStorage.setItem("delve.worldEditor.branch", "world-editor");
     renderApp({branches: {main: {}, "world-editor": fixtureJson()}});

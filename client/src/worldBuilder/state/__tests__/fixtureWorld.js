@@ -28,11 +28,15 @@ export function fixtureJson() {
     },
     "worlds/w/zones/forest/forest.layout.json": {positions: {}},
     "worlds/w/zones/forest/hub/hub.json": {
-      identifier: "hub", name: "Hub", imageUrl: "hub.png", thumbnailUrl: "hub.thumb.webp",
-      connections: [{identifier: "central"}, {identifier: "north"}],
-      units: [{unitType: "goblin"}, {unitType: "archer", lootTable: {"iron-ring": 1}}],
+      identifier: "hub", name: "Hub", elvl: 0, imageUrl: "hub.png", thumbnailUrl: "hub.thumb.webp",
+      pixelDimensions: {width: 100, height: 100}, feetDimensions: {width: 100, height: 100}, lighting: "daylight", barriers: [],
+      connections: [{identifier: "central", type: "point", position: {x: 10, y: 10}}, {identifier: "north", type: "point", position: {x: 50, y: 0}}],
+      units: [
+        {identifier: "goblin-a", unitType: "goblin", position: {x: 20, y: 20, angle: 0}, hostility: "hostile", movement: {type: "still"}},
+        {identifier: "archer-a", unitType: "archer", position: {x: 30, y: 30, angle: 0}, hostility: "hostile", movement: {type: "still"}, lootTable: {"iron-ring": 1}},
+      ],
     },
-    "worlds/w/zones/forest/passage/passage.json": {identifier: "passage", name: "Passage", connections: [{identifier: "south"}], units: []},
+    "worlds/w/zones/forest/passage/passage.json": {identifier: "passage", name: "Passage", elvl: 0, lighting: "daylight", barriers: [], connections: [{identifier: "south", type: "point", position: {x: 5, y: 5}}], units: []},
     "worlds/w/zones/cave/cave.json": {
       name: "Cave", description: null, elvl: 0, private: false, maps: [],
       unitTypes: {}, items: {}, zoneLinks: [], entryPoints: {}, openConnections: {},

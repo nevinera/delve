@@ -22,7 +22,7 @@ describe("zoneOps", () => {
     expect(mapDetails(fixtureDraft(), "forest")).toEqual({
       hub: {
         identifier: "hub", name: "Hub", thumbnailUrl: "hub.thumb.webp",
-        connections: [{identifier: "central"}, {identifier: "north"}],
+        connections: [{identifier: "central", type: "point", position: {x: 10, y: 10}}, {identifier: "north", type: "point", position: {x: 50, y: 0}}],
         units: [{unitType: "goblin", itemKeys: []}, {unitType: "archer", itemKeys: ["iron-ring"]}],
       },
     });
