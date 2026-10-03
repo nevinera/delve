@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useMemo, useState} from "react";
 import {ClassDraft} from "./ClassDraft";
 import {blankClass} from "./blankClass";
 import ClassPreviewPane from "./ClassPreviewPane";
@@ -21,6 +21,8 @@ import {validateCharacterClass} from "../validators/validateContent";
 import {useValidateThenSave} from "../validators/useValidateThenSave";
 import ValidateSaveBar from "../validators/ValidateSaveBar";
 import {GithubClient, GithubAuthError} from "../github/delve-github";
+import {useEditorBranch} from "../github/useEditorBranch";
+import BranchPicker from "../content/BranchPicker";
 import {redirectTo} from "../redirectTo";
 
 function sourceType(id) {
@@ -78,21 +80,28 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState(null);
-  const {validity, activity, markDirty, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
-  const client = useRef(new GithubClient());
+  const {validity, activity, dirty, markDirty, reset, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
+  // Reads and writes the picked branch (see useEditorBranch); switching
+  // reloads the class from it. (Only possible with nothing unsaved, so no
+  // pending uploads are dropped.)
+  const {branches, branch, select, create, error: branchError} = useEditorBranch();
+  const client = useMemo(() => (branch ? new GithubClient({branch}) : null), [branch]);
   const powerUploads = usePowerUploads(markDirty);
 
   useEffect(() => {
+    if (!client) return undefined;
     let cancelled = false;
+    setDraft(null);
+    reset();
     (async () => {
       try {
-        const content = await client.current.fetchFile(ownPath);
+        const content = await client.fetchFile(ownPath);
         const raw = content === null ? blankClass(classKey) : JSON.parse(content);
-        const data = await expandPowers(client.current, raw, ownPath);
+        const data = await expandPowers(client, raw, ownPath);
         if (cancelled) return;
         setDraft(new ClassDraft(data, classKey));
 
-        const classFiles = await client.current.listDirectory("classes");
+        const classFiles = await client.listDirectory("classes");
         if (cancelled) return;
         const fullPath = ownPath.replace(/\.json$/, ".full.json");
         setStaleFullPath(classFiles.includes(fullPath) ? fullPath : null);
@@ -108,22 +117,24 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
     return () => {
       cancelled = true;
     };
-  }, [classKey, ownPath]);
+    // reset is a fresh function each render; only the class and branch matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classKey, ownPath, client]);
 
   // Keyed by the raw url strings so unrelated edits don't re-resolve.
   const powerUrlsKey = JSON.stringify([...new Set(collectAssetUrls(draft?.data.powers ?? []))]);
   useEffect(() => {
     const urls = JSON.parse(powerUrlsKey);
-    if (!urls.length) return undefined;
+    if (!urls.length || !client) return undefined;
     let cancelled = false;
     (async () => {
-      const entries = await Promise.all(urls.map(async (url) => [url, await client.current.assetUrl(resolveRepoPath(ownPath, url))]));
+      const entries = await Promise.all(urls.map(async (url) => [url, await client.assetUrl(resolveRepoPath(ownPath, url))]));
       if (!cancelled) setAssetMap(Object.fromEntries(entries));
     })();
     return () => {
       cancelled = true;
     };
-  }, [ownPath, powerUrlsKey]);
+  }, [ownPath, powerUrlsKey, client]);
 
   // Every draft edit drops a prior "valid" (or "invalid") result - see
   // useValidateThenSave - and any DPS estimate, which no longer describes
@@ -224,6 +235,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
       await saveClass(classKey, draft.data, {
         powerFiles: powerUploads.files(),
         deletePaths: staleFullPath ? [staleFullPath] : [],
+        branch,
       }, commitMessage);
       powerUploads.committed();
       setStaleFullPath(null);
@@ -237,6 +249,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
     }
   }
 
+  if (branchError) return <div className="class-editor-load-error">Failed to load: {branchError.message}</div>;
   if (loadError) return <div className="class-editor-load-error">Failed to load: {loadError}</div>;
   if (draft === null) return <div className="class-editor-loading">Loading…</div>;
 
@@ -262,8 +275,8 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
         return (
           <ImportPowerPanel
             sourceTypes={IMPORT_SOURCE_TYPES}
-            listSources={(typeId) => sourceType(typeId).listSources(client.current, ownPath)}
-            loadPowers={(typeId, sourceId) => sourceType(typeId).loadPowers(client.current, sourceId, ownPath)}
+            listSources={(typeId) => sourceType(typeId).listSources(client, ownPath)}
+            loadPowers={(typeId, sourceId) => sourceType(typeId).loadPowers(client, sourceId, ownPath)}
             onImport={addPower}
             full={draft.actionBarFull}
           />
@@ -314,6 +327,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
       <header className="content-editor-header">
         {backUrl && <a className="back-link" href={backUrl}>← Back</a>}
         <h1>{classKey}</h1>
+        <BranchPicker branches={branches} branch={branch} disabled={dirty || activity.status === "saving"} onSelect={select} onCreate={create} />
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || classKey}`} />
       </header>
       <div className="content-editor-left">

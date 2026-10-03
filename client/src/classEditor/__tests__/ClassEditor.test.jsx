@@ -17,6 +17,11 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
   return {...actual, GithubClient: vi.fn()};
 });
 
+// One branch, "main" (see useEditorBranch).
+vi.mock("../../github/useEditorBranch", () => ({
+  useEditorBranch: () => ({branches: ["main"], branch: "main", select: vi.fn(), create: vi.fn(), error: null}),
+}));
+
 vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateCharacterClass: vi.fn(),
@@ -282,7 +287,7 @@ describe("ClassEditor", () => {
 
       expect(commitFiles).toHaveBeenCalledWith(
         {"classes/puncher.json": {...initialClass, powers: [punch]}, "classes/puncher.full.json": null},
-        {message: "Update Puncher"}
+        {message: "Update Puncher", branch: "main"}
       );
     });
 

@@ -1,0 +1,6 @@
+<%# The branch an index page lists (see Build::BranchSelection). %>
+<%= form_with url: url, method: :get do %>
+  <label for="branch">Branch</label>
+  <%= select_tag :branch, options_for_select(@branches, @branch), onchange: "this.form.requestSubmit()" %>
+  <noscript><%= submit_tag "Show", name: nil %></noscript>
+<% end %>

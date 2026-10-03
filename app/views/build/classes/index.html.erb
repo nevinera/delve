@@ -1,6 +1,8 @@
 <h1>Classes</h1>
 
-<p><%= link_to "New Class", new_build_class_path %></p>
+<%= render "build/shared/branch_picker", url: build_classes_path %>
+
+<p><%= link_to "New Class", new_build_class_path(branch: @branch) %></p>
 
 <table>
   <thead>
@@ -10,7 +12,7 @@
     <% @classes.each do |entry| %>
       <% identifier = entry["path"].delete_prefix("classes/").delete_suffix(".json") %>
       <tr>
-        <td><%= link_to identifier, edit_build_class_path(id: identifier) %></td>
+        <td><%= link_to identifier, edit_build_class_path(id: identifier, branch: @branch) %></td>
       </tr>
     <% end %>
   </tbody>

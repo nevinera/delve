@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
+import {rememberBranch, rememberedBranch} from "../../github/branchPreference";
 import {render, screen, fireEvent, waitFor, act, within} from "@testing-library/react";
 import WorldBuilderApp from "../WorldBuilderApp";
 import {createDraftStore, memoryBackend, draftKey} from "../state/draftStore";
@@ -51,6 +52,7 @@ function renderApp({branches = {main: fixtureJson()}, store = createDraftStore(m
 beforeEach(() => {
   window.location.hash = "";
   window.localStorage.clear();
+  document.cookie = "delve_editor_branch=; max-age=0; path=/";
 });
 
 afterEach(() => {
@@ -105,7 +107,7 @@ describe("WorldBuilderApp", () => {
   });
 
   it("uses the remembered branch when it still exists", async () => {
-    window.localStorage.setItem("delve.worldEditor.branch", "world-editor");
+    rememberBranch("world-editor");
     renderApp({branches: {main: {}, "world-editor": fixtureJson()}});
 
     expect(await zoneButton("Forest")).toBeInTheDocument();
@@ -200,7 +202,7 @@ describe("WorldBuilderApp", () => {
 
     await waitFor(() => expect(screen.getByRole("combobox", {name: "Branch"})).toHaveValue("rework"));
     expect(client.createBranch).toHaveBeenCalledWith("rework");
-    expect(window.localStorage.getItem("delve.worldEditor.branch")).toEqual("rework");
+    expect(rememberedBranch()).toEqual("rework");
   });
 
 describe("WorldBuilderApp pipeline", () => {

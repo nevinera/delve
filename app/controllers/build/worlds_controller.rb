@@ -4,6 +4,7 @@
 # whichever branch it's pointed at.
 class Build::WorldsController < Build::BaseController
   include Build::WorldPublishing
+  include Build::BranchSelection
 
   skip_authorization_check only: [:index, :new, :create, :edit]
   layout "build_world_client", only: :edit
@@ -14,8 +15,7 @@ class Build::WorldsController < Build::BaseController
   # the default branch unless another is picked.
   def index
     client = Github::ContentClient.new(current_user)
-    @branches = client.branch_names
-    @branch = @branches.include?(params[:branch]) ? params[:branch] : client.default_branch
+    select_branch(client)
     paths = client.list_directory_recursive("worlds", ref: @branch).pluck("path")
     @world_paths = paths.select { |path| World.self_contained_path?(path) }.sort
     @published_worlds = current_user.worlds.where(path: @world_paths).index_by(&:path)

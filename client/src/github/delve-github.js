@@ -22,9 +22,11 @@ function authHeaders(token) {
   return {Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"};
 }
 
+// Reads the default branch, or `branch` when given.
 export class GithubClient {
-  constructor() {
+  constructor({branch = null} = {}) {
     this._auth = null;
+    this._branch = branch;
     this._defaultBranch = null;
     // Non-recursive tree fetches, keyed by sha - shared by every
     // listDirectory call on this instance (see its own comment), so
@@ -39,7 +41,9 @@ export class GithubClient {
     return this._auth;
   }
 
-  async _getDefaultBranch(repo, token) {
+  // The branch every read is from: the one given, else the default.
+  async _getBranch(repo, token) {
+    if (this._branch) return this._branch;
     if (!this._defaultBranch) {
       const res = await fetch(`${GITHUB_API}/repos/${repo}`, {headers: authHeaders(token)});
       if (!res.ok) throw new Error(`GitHub API error ${res.status} fetching ${repo}: ${res.statusText}`);
@@ -66,7 +70,7 @@ export class GithubClient {
   // might return ["a/b/c.json"]. Empty array if the path doesn't exist.
   async listDirectory(path) {
     const {token, repo_full_name: repo} = await this._getAuth();
-    let sha = await this._getDefaultBranch(repo, token);
+    let sha = await this._getBranch(repo, token);
     for (const segment of path.split("/")) {
       const tree = await this._getTree(repo, token, sha);
       const entry = tree.find((e) => e.path === segment && e.type === "tree");
@@ -88,7 +92,7 @@ export class GithubClient {
   // (unlike the Contents API's base64 envelope, capped at 1MB).
   async assetUrl(path) {
     const {token, repo_full_name: repo} = await this._getAuth();
-    const branch = await this._getDefaultBranch(repo, token);
+    const branch = await this._getBranch(repo, token);
     return `https://raw.githubusercontent.com/${repo}/${branch}/${path}`;
   }
 
@@ -99,7 +103,8 @@ export class GithubClient {
   // error worth throwing over).
   async fetchFile(path) {
     const {token, repo_full_name: repo} = await this._getAuth();
-    const res = await fetch(`${GITHUB_API}/repos/${repo}/contents/${path}`, {cache: "no-store", headers: authHeaders(token)});
+    const ref = this._branch ? `?ref=${encodeURIComponent(this._branch)}` : "";
+    const res = await fetch(`${GITHUB_API}/repos/${repo}/contents/${path}${ref}`, {cache: "no-store", headers: authHeaders(token)});
     if (res.status === 404) return null;
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

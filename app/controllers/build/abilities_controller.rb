@@ -1,4 +1,6 @@
 class Build::AbilitiesController < Build::BaseController
+  include Build::BranchSelection
+
   skip_authorization_check only: [:index, :new, :create, :edit]
   layout "build_client", only: :edit
 
@@ -8,22 +10,26 @@ class Build::AbilitiesController < Build::BaseController
   KEY_FORMAT = %r{\A[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*\z}
 
   def index
-    entries = Github::ContentClient.new(current_user).list_directory_recursive("abilities")
+    client = Github::ContentClient.new(current_user)
+    select_branch(client)
+    entries = client.list_directory_recursive("abilities", ref: @branch)
     @abilities = entries.select { |entry| entry["name"].end_with?(".json") }.sort_by { |entry| entry["path"] }
   end
 
   def new
     Github::ContentClient.new(current_user) # raises (and BaseController redirects) if there's no repo connected yet
     @key = params[:key].to_s
+    @branch = params[:branch].to_s
   end
 
   def create
     @key = params[:key].to_s.strip
+    @branch = params[:branch].to_s
     return render_new_with_error("Key is required.") if @key.blank?
     return render_new_with_error("Key must contain only letters, numbers, underscores, hyphens, and \"/\" to place it in a subdirectory.") unless @key.match?(KEY_FORMAT)
     return render_new_with_error("\"#{@key}\" is already taken.") if ability_key_taken?(@key)
 
-    redirect_to edit_build_ability_path(id: @key)
+    redirect_to edit_build_ability_path(id: @key, branch: @branch.presence)
   end
 
   # No ability content (or its asset URLs) is fetched here - the editor
@@ -46,6 +52,6 @@ class Build::AbilitiesController < Build::BaseController
   end
 
   def ability_key_taken?(key)
-    Github::ContentClient.new(current_user).list_directory_recursive("abilities").any? { |entry| entry["path"] == "abilities/#{key}.json" }
+    Github::ContentClient.new(current_user).list_directory_recursive("abilities", ref: @branch.presence).any? { |entry| entry["path"] == "abilities/#{key}.json" }
   end
 end

@@ -22,7 +22,10 @@ RSpec.describe "Build::Classes", type: :request do
       end
 
       context "with a connected repository" do
-        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+        before do
+          create(:github_installation, user: user, repo_full_name: "nevinera/delve-content")
+          stub_branch_list("nevinera/delve-content", %w[main])
+        end
 
         it "lists the classes directory contents, linking to the edit page" do
           stub_tree_listing("nevinera/delve-content", "classes", ["puncher.json", "puncher.full.json"])
@@ -31,7 +34,7 @@ RSpec.describe "Build::Classes", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include(">puncher<")
           expect(response.body).not_to include(">puncher.full<")
-          expect(response.body).to include(edit_build_class_path(id: "puncher"))
+          expect(response.body).to include(edit_build_class_path(id: "puncher", branch: "main"))
         end
       end
     end
