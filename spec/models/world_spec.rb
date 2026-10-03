@@ -35,19 +35,6 @@ RSpec.describe World, type: :model do
       expect(build(:world, path: "worlds/demo.json")).not_to be_self_contained
     end
   end
-
-  describe ".world_file_paths" do
-    it "finds both shapes of world file, and nothing else inside a self-contained world" do
-      paths = %w[
-        worlds/demo.json worlds/demo.layout.json
-        worlds/small/small.json worlds/small/small.layout.json
-        worlds/small/zones/forest/forest.json worlds/small/zones/forest/forest.full.json
-        worlds/small/unit_types/goblin.json
-      ]
-      expect(World.world_file_paths(paths)).to eq(%w[worlds/demo.json worlds/small/small.json])
-    end
-  end
-
   describe "#released_versions" do
     it "lists available versions, newest release first" do
       world = create(:world)

@@ -9,23 +9,44 @@ RSpec.describe "Build::Worlds", type: :request do
   end
 
   describe "GET /build/worlds" do
-    before { stub_tree_listing("builder/content", "worlds", ["demo.json", "demo.layout.json", "other.json"]) }
-
-    it "links a self-contained world to the editor, without listing the files inside it" do
-      stub_tree_listing("builder/content", "worlds", ["small/small.json", "small/zones/forest/forest.json", "demo.json"])
-      get "/build/worlds"
-      expect(response.body).to include(edit_build_world_path(id: "small"))
-      expect(response.body).not_to include("forest")
+    def stub_branches(*names)
+      stub_request(:get, "https://api.github.com/repos/builder/content/git/matching-refs/heads/")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: names.map { |name| {ref: "refs/heads/#{name}"} }.to_json)
     end
 
-    it "lists an older-style world without an editor link" do
+    before { stub_branches("main", "world-editor") }
+
+    it "lists the default branch's self-contained worlds, linking to the editor on that branch" do
+      stub_tree_listing("builder/content", "worlds", ["small/small.json", "small/zones/forest/forest.json", "demo.json", "demo.layout.json"])
       get "/build/worlds"
-      expect(response.body).to include("demo (old layout, not editable)")
-      expect(response.body).not_to include(edit_build_world_path(id: "demo"), "demo.layout")
+      expect(response.body).to include(edit_build_world_path(id: "small", branch: "main"))
+      expect(response.body).not_to include("forest", "demo")
+    end
+
+    it "lists another branch's worlds when it's picked" do
+      stub_tree_listing("builder/content", "worlds", ["small/small.json"], branch: "world-editor")
+      stub_request(:get, "https://api.github.com/repos/builder/content")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {default_branch: "main"}.to_json)
+      get "/build/worlds", params: {branch: "world-editor"}
+      expect(response.body).to include(edit_build_world_path(id: "small", branch: "world-editor"), new_build_world_path(branch: "world-editor"))
+      expect(response.body).to include('<option selected="selected" value="world-editor">')
+    end
+
+    it "falls back to the default branch for one that doesn't exist" do
+      stub_tree_listing("builder/content", "worlds", ["small/small.json"])
+      get "/build/worlds", params: {branch: "gone"}
+      expect(response.body).to include(edit_build_world_path(id: "small", branch: "main"))
+    end
+
+    it "says so when the branch has no worlds" do
+      stub_tree_listing("builder/content", "worlds", ["demo.json"])
+      get "/build/worlds"
+      expect(response.body).to include("No worlds on main yet.")
     end
 
     it "links to versions for a published world, and offers setup for the rest" do
-      world = create(:world, owner: user, repo: "builder/content", path: "worlds/demo.json")
+      stub_tree_listing("builder/content", "worlds", ["small/small.json", "other/other.json"])
+      world = create(:world, owner: user, repo: "builder/content", path: "worlds/small/small.json")
       get "/build/worlds"
       expect(response.body).to include(build_publishing_world_path(world))
       expect(response.body.scan("Set up publishing").size).to eq(1)
@@ -53,6 +74,12 @@ RSpec.describe "Build::Worlds", type: :request do
     it "goes to the editor for an available key" do
       post "/build/worlds", params: {key: "northern-barrens"}
       expect(response).to redirect_to(edit_build_world_path(id: "northern-barrens"))
+    end
+
+    it "keeps the branch it was started from" do
+      stub_tree_listing("builder/content", "worlds", [], branch: "world-editor")
+      post "/build/worlds", params: {key: "northern-barrens", branch: "world-editor"}
+      expect(response).to redirect_to(edit_build_world_path(id: "northern-barrens", branch: "world-editor"))
     end
 
     it "rejects a blank key" do

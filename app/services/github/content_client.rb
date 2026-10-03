@@ -17,9 +17,9 @@ module Github
     # abilities/units/) without the caller needing to know that structure
     # ahead of time. Backed by Github::TreeListing (Git Trees API) rather
     # than one Contents API call per directory level.
-    def list_directory_recursive(path)
+    def list_directory_recursive(path, ref: nil)
       ensure_fresh_token!
-      Github::TreeListing.new(@installation.access_token, @installation.repo_full_name).list(path)
+      Github::TreeListing.new(@installation.access_token, @installation.repo_full_name).list(path, ref:)
     end
 
     def file_content(path)
@@ -43,6 +43,10 @@ module Github
     def tag_sha(tag) = api.commit_sha(repo, "tags/#{tag}")
 
     # Tag names (without "refs/tags/") starting with prefix.
+    def branch_names
+      api.matching_refs(repo, "heads/").map { |ref| ref.delete_prefix("refs/heads/") }
+    end
+
     def tag_names(prefix)
       api.matching_refs(repo, "tags/#{prefix}").map { |ref| ref.delete_prefix("refs/tags/") }
     end

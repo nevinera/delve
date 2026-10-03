@@ -10,24 +10,31 @@ class Build::WorldsController < Build::BaseController
 
   KEY_FORMAT = /\A[A-Za-z0-9_-]+\z/
 
+  # The worlds the editor can open (self-contained ones) on one branch -
+  # the default branch unless another is picked.
   def index
-    entries = Github::ContentClient.new(current_user).list_directory_recursive("worlds")
-    @world_paths = World.world_file_paths(entries.pluck("path"))
+    client = Github::ContentClient.new(current_user)
+    @branches = client.branch_names
+    @branch = @branches.include?(params[:branch]) ? params[:branch] : client.default_branch
+    paths = client.list_directory_recursive("worlds", ref: @branch).pluck("path")
+    @world_paths = paths.select { |path| World.self_contained_path?(path) }.sort
     @published_worlds = current_user.worlds.where(path: @world_paths).index_by(&:path)
   end
 
   def new
     Github::ContentClient.new(current_user) # raises (and BaseController redirects) if there's no repo connected yet
     @key = params[:key].to_s
+    @branch = params[:branch].to_s
   end
 
   def create
     @key = params[:key].to_s.strip
+    @branch = params[:branch].to_s
     return render_new_with_error("Key is required.") if @key.blank?
     return render_new_with_error("Key must contain only letters, numbers, underscores and hyphens.") unless @key.match?(KEY_FORMAT)
     return render_new_with_error("\"#{@key}\" is already taken.") if world_key_taken?(@key)
 
-    redirect_to edit_build_world_path(id: @key)
+    redirect_to edit_build_world_path(id: @key, branch: @branch.presence)
   end
 
   def edit
@@ -62,7 +69,7 @@ class Build::WorldsController < Build::BaseController
   end
 
   def world_key_taken?(key)
-    Github::ContentClient.new(current_user).list_directory_recursive("worlds").any? do |entry|
+    Github::ContentClient.new(current_user).list_directory_recursive("worlds", ref: @branch.presence).any? do |entry|
       entry["path"] == World.self_contained_path(key) || entry["path"] == "worlds/#{key}.json"
     end
   end
