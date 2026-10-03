@@ -1,0 +1,60 @@
+<%# Styles for the single-page world editor (see plans/world-editor/), on
+    top of the shared content_editor_styles grid. %>
+      /* Header: breadcrumbs, branch, unsaved work, the pipeline. */
+      .world-builder-header { flex-wrap: wrap; row-gap: 6px; }
+      .world-builder-header .config-breadcrumbs { margin: 0; padding: 0; border: none; font-size: 14px; }
+      .world-builder-header .header-spacer { flex: 1; }
+      .branch-picker { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #9ab; }
+      .branch-picker select, .branch-picker input { background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; font-size: 12px; }
+      .branch-picker button { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 3px 8px; border-radius: 3px; cursor: pointer; }
+      .branch-picker .branch-error { color: #e79; }
+      .unsaved-indicator { font-size: 12px; color: #9ab; }
+      .unsaved-indicator.has-changes { color: #eb7; }
+      .unsaved-indicator.heavy { color: #f96; font-weight: 600; }
+      .pipeline { display: flex; align-items: center; gap: 6px; }
+      .pipeline button { background: #245; border: 1px solid #47a; color: #dee; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 3px; cursor: pointer; }
+      .pipeline button:hover:not(:disabled) { background: #356; }
+      .pipeline button.save-button { background: #2a4; border-color: #4c7; color: #efe; }
+      .pipeline button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .pipeline-status { font-size: 12px; color: #9ab; flex-basis: 100%; text-align: right; }
+      .pipeline-status.error { color: #e79; }
+      .save-prompt { display: flex; gap: 6px; }
+      .save-prompt input { background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; font-size: 12px; width: 220px; }
+
+      /* Full-page notices: loading, errors, resume, create. */
+      .world-builder-notice { max-width: 560px; margin: 60px auto; padding: 20px; background: #1c2126; border: 1px solid #333; border-radius: 6px; display: flex; flex-direction: column; gap: 12px; }
+      .world-builder-span { grid-column: 1 / -1; align-self: start; }
+      .world-builder-notice h2 { font-size: 16px; color: #cce; }
+      .world-builder-notice p { font-size: 13px; color: #9ab; }
+      .world-builder-notice .notice-error { color: #e79; }
+      .world-builder-notice .notice-actions { display: flex; gap: 8px; }
+      .world-builder-notice button { background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; padding: 6px 12px; border-radius: 3px; cursor: pointer; }
+      .world-builder-notice input { background: #111; border: 1px solid #555; color: #eee; padding: 5px 8px; border-radius: 3px; }
+
+      /* Graph canvases (WorldGraphCanvas, ZoneGraphCanvas). */
+         WorldGraphCanvas, one level up (zones instead of maps). */
+      .zone-graph-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px; }
+      .zone-graph-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex: 0 0 auto; }
+      .zone-graph-toolbar button {
+        background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600;
+        padding: 4px 10px; border-radius: 3px; cursor: pointer;
+      }
+      .zone-graph-toolbar button:hover { background: #345; }
+      .zone-graph-wrapper {
+        flex: 1; min-height: 0; border: 1px solid #333; border-radius: 4px; background: #0a0c0e;
+        background-image: linear-gradient(45deg, #101316 25%, transparent 25%), linear-gradient(-45deg, #101316 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #101316 75%), linear-gradient(-45deg, transparent 75%, #101316 75%);
+        background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        touch-action: none; cursor: grab; overflow: hidden;
+      }
+      .zone-graph-wrapper:active { cursor: grabbing; }
+      .zone-graph-node { fill: #1c2126; stroke: #457; stroke-width: 2; cursor: grab; }
+      .zone-graph-node:active { cursor: grabbing; }
+      .zone-graph-node-label { fill: #cce; font-size: 12px; text-anchor: middle; pointer-events: none; }
+      .zone-graph-node-thumb-placeholder { font-size: 22px; pointer-events: none; }
+      .zone-graph-port { cursor: crosshair; stroke: #000; stroke-width: 1; }
+      .zone-graph-edge { stroke: #59c; stroke-width: 2; }
+      .zone-graph-drag-line { stroke: #fd0; stroke-width: 2; stroke-dasharray: 4 3; }
+      .zone-graph-satellite { stroke: #000; stroke-width: 1; cursor: grab; }
+      .zone-graph-satellite:active { cursor: grabbing; }
+      .zone-graph-satellite-tether { stroke: #667; stroke-width: 1; stroke-dasharray: 3 3; }
+      .zone-graph-satellite-label { fill: #cce; font-size: 11px; text-anchor: middle; pointer-events: none; }

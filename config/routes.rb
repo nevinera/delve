@@ -82,6 +82,9 @@ Rails.application.routes.draw do
   get "build/local_zones", to: "build/zone_plays#local", as: "build_local_zones"
   get "build/local_zones/*id/play", to: "build/zone_plays#show", as: "build_local_zone_play", defaults: {source: "local"}
   get "build/worlds/*id/edit", to: "build/worlds#edit", as: "edit_build_world"
+  # The new single-page world editor (see plans/world-editor/) - world keys
+  # have no slashes, so a plain :id.
+  get "build/world_editor/:id", to: "build/world_editor#show", as: "build_world_editor"
   post "build/worlds/*id/publish", to: "build/worlds#publish", as: "publish_build_world"
 
   namespace :play do

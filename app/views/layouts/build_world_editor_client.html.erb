@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Delve - World Editor</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <style>
+<%= render "layouts/content_editor_styles" %>
+<%= render "layouts/world_editor_styles" %>
+    </style>
+  </head>
+  <body>
+    <%= yield %>
+    <%= vite_script_tags("src/worldBuilder/main.jsx", "/client/worldBuilder.js") %>
+  </body>
+</html>
