@@ -10,7 +10,6 @@ module TraineeGear
     {
       identifier: identifier_for(equipped_slot),
       name: item.name,
-      zone_identifier: "trainee",
       version: "0.0",
       slot: item.slot,
       elvl:,

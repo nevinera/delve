@@ -55,8 +55,18 @@ RSpec.describe EnterWorld do
     files[:zones]["darkwood"]["items"] = {"sword" => item}
     other = published_world(files:, world: create(:world, path: "worlds/items.json"))
     wc = create(:world_character, world: other.world, character:)
-    create(:character_item, world_character: wc, zone_identifier: "darkwood", identifier: "sword", version: ItemDefinition.version(item))
+    create(:character_item, world_character: wc, identifier: "sword", version: ItemDefinition.version(item))
     expect(described_class.call(character:, world: other.world).owned_zone_items).to eq("sword" => true)
+  end
+
+  it "doesn't report owned items that aren't in the zone" do
+    files = demo_world_files
+    item = {"identifier" => "sword", "name" => "Sword", "slot" => "main_hand", "elvl" => 1}
+    files[:zones]["darkwood"]["items"] = {"sword" => item}
+    other = published_world(files:, world: create(:world, path: "worlds/items.json"))
+    wc = create(:world_character, world: other.world, character:)
+    create(:character_item, world_character: wc, identifier: "axe", version: "1.0")
+    expect(described_class.call(character:, world: other.world).owned_zone_items).to eq({})
   end
 
   it "re-enters at the saved connection point" do
