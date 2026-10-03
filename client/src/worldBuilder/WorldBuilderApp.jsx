@@ -1,8 +1,11 @@
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {BranchClient, GithubAuthError} from "../github/branchClient";
 import {loadSnapshot} from "./state/RepoSnapshot";
 import {WorldDraft} from "./state/WorldDraft";
 import {saveDraft} from "./state/saveDraft";
+import {validateDraft} from "./state/validateDraft";
+import {expandDraft, isExpanded} from "./state/expandDraft";
+import {publishWorld} from "../worldEditor/publishWorld";
 import {createDraftStore, draftKey} from "./state/draftStore";
 import {createWorld, worldData} from "./state/worldOps";
 import {zoneData} from "./state/zoneOps";
@@ -11,7 +14,7 @@ import {rememberBranch, rememberedBranch} from "./branchPreference";
 import Breadcrumbs from "../powersEditor/Breadcrumbs";
 import BranchPicker from "./header/BranchPicker";
 import UnsavedIndicator from "./header/UnsavedIndicator";
-import Pipeline from "./header/Pipeline";
+import Pipeline, {ValidationProblems} from "./header/Pipeline";
 import WorldLevel from "./levels/WorldLevel";
 import ZoneLevel from "./levels/ZoneLevel";
 import {redirectTo} from "../redirectTo";
@@ -31,7 +34,7 @@ function crumbsFor(location, draft) {
 // reads and edits the draft through worldOps/zoneOps.
 //
 // `client` and `store` are injectable for tests.
-export default function WorldBuilderApp({worldKey, backUrl, client: givenClient, store: givenStore}) {
+export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag, client: givenClient, store: givenStore}) {
   const client = useRef(givenClient ?? new BranchClient()).current;
   const store = useRef(givenStore ?? createDraftStore()).current;
   const [branches, setBranches] = useState(null);
@@ -42,9 +45,17 @@ export default function WorldBuilderApp({worldKey, backUrl, client: givenClient,
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
   const [repo, setRepo] = useState(null);
+  // The last Validate: {hash, problems}. Only counts while hash is the
+  // current draft's.
+  const [validation, setValidation] = useState(null);
+  const [validating, setValidating] = useState(false);
   const [location, navigate] = useHashLocation();
   const storeKey = useRef(null);
   const persistedHash = useRef(null);
+
+  // Whether git's .full.json files match the saved content (resolving every
+  // zone, so only recomputed when the draft changes).
+  const expanded = useMemo(() => Boolean(draft) && !draft.hasChanges && isExpanded(draft), [draft]);
 
   const fail = useCallback((error) => {
     if (error instanceof GithubAuthError) redirectTo(error.redirectUrl);
@@ -168,6 +179,54 @@ export default function WorldBuilderApp({worldKey, backUrl, client: givenClient,
     }
   }
 
+  async function handleValidate() {
+    setValidating(true);
+    setStatus({text: "Validating…"});
+    const validated = draft;
+    try {
+      const problems = await validateDraft(validated);
+      setValidation({hash: validated.hash(), problems});
+      setStatus(problems.length ? {text: `Validation found ${problems.length} problem(s).`, error: true} : {text: "Valid."});
+    } catch (error) {
+      setStatus({text: `Validate failed: ${error.message}`, error: true});
+    } finally {
+      setValidating(false);
+    }
+  }
+
+  async function handleExpand() {
+    setSaving(true);
+    setStatus({text: "Expanding…"});
+    try {
+      const result = await expandDraft(client, draft, `Expand ${worldData(draft)?.name || worldKey}`);
+      persistedHash.current = result.draft.hash();
+      // Expand only adds .full.json files, so what was validated still holds.
+      setValidation({hash: result.draft.hash(), problems: []});
+      setDraft(result.draft);
+      setStatus({text: `Expanded at ${result.snapshot.commitSha.slice(0, 7)}.`});
+    } catch (error) {
+      if (error instanceof GithubAuthError) {
+        redirectTo(error.redirectUrl);
+        return;
+      }
+      setStatus({text: `Expand failed: ${error.message}`, error: true});
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePublish(tag) {
+    setSaving(true);
+    setStatus({text: "Publishing…"});
+    try {
+      const {url} = await publishWorld(publishUrl, tag, {branch, expectedSha: draft.snapshot.commitSha});
+      redirectTo(url);
+    } catch (error) {
+      setStatus({text: `Publish failed: ${error.message}`, error: true});
+      setSaving(false);
+    }
+  }
+
   if (loadError) {
     return (
       <div className="world-builder-notice">
@@ -198,6 +257,11 @@ export default function WorldBuilderApp({worldKey, backUrl, client: givenClient,
   }
 
   const world = worldData(draft);
+  const validated = validation?.hash === draft.hash() && validation.problems.length === 0;
+  const blockers = {
+    expand: draft.hasChanges ? "Save first" : !validated ? "Validate first" : expanded ? "Already expanded" : null,
+    publish: draft.hasChanges ? "Save first" : !validated ? "Validate first" : !expanded ? "Expand first" : null,
+  };
   const zoneMissing = location.zone && !zoneData(draft, location.zone);
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
@@ -212,7 +276,20 @@ export default function WorldBuilderApp({worldKey, backUrl, client: givenClient,
         <span className="header-spacer" />
         <BranchPicker branches={branches} branch={branch} disabled={draft.hasChanges || saving} onSelect={selectBranch} onCreate={createBranch} />
         <UnsavedIndicator draft={draft} />
-        <Pipeline canSave={draft.hasChanges && !saving} defaultMessage={`Update ${world?.name || worldKey}`} onSave={handleSave} status={status} />
+        <Pipeline
+          canSave={draft.hasChanges}
+          defaultMessage={`Update ${world?.name || worldKey}`}
+          onSave={handleSave}
+          validating={validating}
+          onValidate={handleValidate}
+          blockers={blockers}
+          onExpand={handleExpand}
+          defaultTag={nextTag}
+          onPublish={publishUrl ? handlePublish : null}
+          busy={saving || !world}
+          status={status}
+        />
+        <ValidationProblems problems={validation?.hash === draft.hash() ? validation.problems : null} onSelect={navigate} />
       </header>
       {level}
     </div>

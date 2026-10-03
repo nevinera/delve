@@ -56,6 +56,7 @@ Rails.application.routes.draw do
     post "validators/map", to: "validators#map"
     post "validators/zone", to: "validators#zone"
     post "validators/world", to: "validators#world"
+    post "validators/world_references", to: "validators#world_references"
     post "dps_sims/unit_type", to: "dps_sims#unit_type"
     post "class_dps_sims/character_class", to: "class_dps_sims#character_class"
   end

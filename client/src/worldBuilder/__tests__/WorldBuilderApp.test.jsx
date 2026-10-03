@@ -6,6 +6,9 @@ import {RepoSnapshot} from "../state/RepoSnapshot";
 import {WorldDraft} from "../state/WorldDraft";
 import {fixtureJson} from "../state/__tests__/fixtureWorld";
 import * as commitModule from "../../github/commitFiles";
+import * as validators from "../../validators/validateContent";
+import * as publishModule from "../../worldEditor/publishWorld";
+import * as redirectModule from "../../redirectTo";
 
 // A fake BranchClient over in-memory branches: {branch: {path: json}}.
 function fakeClient(branchFiles) {
@@ -39,9 +42,9 @@ function fakeClient(branchFiles) {
 
 const zoneButton = async (name) => within(await screen.findByRole("region", {name: "Zones"})).getByRole("button", {name: new RegExp(`^${name}`)});
 
-function renderApp({branches = {main: fixtureJson()}, store = createDraftStore(memoryBackend()), worldKey = "w"} = {}) {
+function renderApp({branches = {main: fixtureJson()}, store = createDraftStore(memoryBackend()), worldKey = "w", publishUrl = "/publish/w"} = {}) {
   const client = fakeClient(branches);
-  render(<WorldBuilderApp worldKey={worldKey} backUrl="/build/worlds" client={client} store={store} />);
+  render(<WorldBuilderApp worldKey={worldKey} backUrl="/build/worlds" publishUrl={publishUrl} nextTag="w/v1" client={client} store={store} />);
   return {client, store};
 }
 
@@ -182,4 +185,95 @@ describe("WorldBuilderApp", () => {
     expect(client.createBranch).toHaveBeenCalledWith("rework");
     expect(window.localStorage.getItem("delve.worldEditor.branch")).toEqual("rework");
   });
+
+describe("WorldBuilderApp pipeline", () => {
+  // The fixture without asset references, so it validates cleanly with
+  // JSON-only fake branches.
+  function assetFreeJson() {
+    const json = fixtureJson();
+    const hub = json["worlds/w/zones/forest/hub/hub.json"];
+    delete hub.imageUrl;
+    delete hub.thumbnailUrl;
+    json["worlds/w/unit_types/goblin.json"] = {name: "Goblin"};
+    json["worlds/w/unit_types/archer.json"] = {name: "Archer"};
+    json["worlds/w/items/iron-ring.json"] = {identifier: "iron-ring"};
+    return json;
+  }
+
+  const button = (name) => screen.getByRole("button", {name});
+
+  beforeEach(() => {
+    vi.spyOn(validators, "validateZone").mockResolvedValue({valid: true});
+    vi.spyOn(validators, "validateWorld").mockResolvedValue({valid: true});
+    vi.spyOn(validators, "validateWorldReferences").mockResolvedValue({valid: true});
+  });
+
+  it("lists validation problems, each leading to where they are", async () => {
+    validators.validateZone.mockImplementation(async (zone) => (zone.name === "Cave" ? {valid: false, error: {message: "bad elvl"}} : {valid: true}));
+    renderApp({branches: {main: assetFreeJson()}});
+
+    await screen.findByRole("button", {name: "Validate"});
+    await act(async () => fireEvent.click(button("Validate")));
+
+    expect(screen.getByText("1 validation problem")).toBeInTheDocument();
+    fireEvent.click(button("worlds/w/zones/cave/cave.json"));
+    expect(window.location.hash).toEqual("#/zone/cave");
+  });
+
+  it("gates Expand on a passing Validate of the saved content, and Publish on Expand", async () => {
+    const {client} = renderApp({branches: {main: assetFreeJson()}});
+    const commit = vi.spyOn(commitModule, "commitFiles").mockImplementation(async (files, {branch}) => {
+      client._advance(branch, {...assetFreeJson(), ...files});
+      return {commitSha: "next"};
+    });
+    await screen.findByRole("button", {name: "Validate"});
+
+    expect(button("Expand")).toBeDisabled();
+    expect(button("Expand")).toHaveAttribute("title", "Validate first");
+    expect(button("Publish")).toHaveAttribute("title", "Validate first");
+
+    await act(async () => fireEvent.click(button("Validate")));
+    expect(screen.getByRole("status")).toHaveTextContent("Valid.");
+    expect(button("Expand")).toBeEnabled();
+    expect(button("Publish")).toHaveAttribute("title", "Expand first");
+
+    await act(async () => fireEvent.click(button("Expand")));
+    expect(Object.keys(commit.mock.calls[0][0]).sort()).toEqual(["worlds/w/zones/cave/cave.full.json", "worlds/w/zones/forest/forest.full.json"]);
+    await waitFor(() => expect(button("Publish")).toBeEnabled());
+    expect(button("Expand")).toHaveAttribute("title", "Already expanded");
+  });
+
+  it("drops a passing Validate as soon as the draft changes", async () => {
+    renderApp({branches: {main: assetFreeJson()}});
+    await screen.findByRole("button", {name: "Validate"});
+    await act(async () => fireEvent.click(button("Validate")));
+
+    fireEvent.click(await zoneButton("Forest"));
+    fireEvent.change(screen.getByLabelText("Name"), {target: {value: "Changed"}});
+
+    expect(button("Expand")).toHaveAttribute("title", "Save first");
+  });
+
+  it("publishes the branch at the expanded commit, then goes to the versions page", async () => {
+    const json = assetFreeJson();
+    const {client} = renderApp({branches: {main: json}});
+    vi.spyOn(commitModule, "commitFiles").mockImplementation(async (files, {branch}) => {
+      client._advance(branch, {...json, ...files});
+      return {commitSha: "next"};
+    });
+    const publish = vi.spyOn(publishModule, "publishWorld").mockResolvedValue({url: "/build/publishing/worlds/1"});
+    const redirect = vi.spyOn(redirectModule, "redirectTo").mockImplementation(() => {});
+    await screen.findByRole("button", {name: "Validate"});
+    await act(async () => fireEvent.click(button("Validate")));
+    await act(async () => fireEvent.click(button("Expand")));
+    await waitFor(() => expect(button("Publish")).toBeEnabled());
+
+    fireEvent.click(button("Publish"));
+    expect(screen.getByRole("textbox", {name: "Release tag"})).toHaveValue("w/v1");
+    await act(async () => fireEvent.click(button("Publish")));
+
+    expect(publish).toHaveBeenCalledWith("/publish/w", "w/v1", {branch: "main", expectedSha: "main-c1"});
+    expect(redirect).toHaveBeenCalledWith("/build/publishing/worlds/1");
+  });
+});
 });

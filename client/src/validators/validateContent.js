@@ -58,3 +58,9 @@ export function validateZone(fullZone) {
 export function validateWorld(world) {
   return postValidation("/build/validators/world", world);
 }
+
+// Cross-checks a world's links and entry points against its zones (see
+// Validators::WorldReferences). zones: {key: {openConnections, entryPoints}}.
+export function validateWorldReferences(world, zones) {
+  return postValidation("/build/validators/world_references", {world, zones});
+}
