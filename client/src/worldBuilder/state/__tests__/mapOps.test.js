@@ -2,7 +2,7 @@ import {describe, it, expect} from "vitest";
 import {fixtureDraft} from "./fixtureWorld";
 import {worldData} from "../worldOps";
 import {setZonePositions, zoneData, zonePositions} from "../zoneOps";
-import {createMap, deleteMap, mapData, ncuTokenUrls, renameMap, setMapImage, updateMap, worldItems, worldUnitTypes} from "../mapOps";
+import {createMap, deleteMap, mapData, ncuTokenUrls, newTokenImagePath, renameMap, setMapImage, updateMap, worldItems, worldTokenImages, worldUnitTypes} from "../mapOps";
 import {ExistingBlob} from "../../../github/commitFiles";
 
 const assetUrl = (path) => `url:${path}`;
@@ -23,6 +23,20 @@ describe("mapOps", () => {
     expect(zoneData(draft, "cave").maps).toEqual([{$ref: "./mouth/mouth.json", referenceTo: "map"}]);
     expect(() => createMap(draft, "cave", "mouth")).toThrow(/already exists/);
     expect(() => createMap(draft, "cave", "a b")).toThrow(/valid identifier/);
+  });
+
+  it("lists the world's token images relative to the map", () => {
+    expect(worldTokenImages(fixtureDraft(), "forest", "hub", assetUrl)).toEqual([
+      {value: "../../../tokens/goblin.webp", label: "goblin.webp", url: "url:worlds/w/tokens/goblin.webp"},
+    ]);
+  });
+
+  it("places an uploaded token under tokens/ncu/, numbered when the name's taken", () => {
+    const draft = fixtureDraft();
+    expect(newTokenImagePath(draft, "old sage.png")).toEqual("worlds/w/tokens/ncu/old-sage.png");
+
+    const taken = draft.write("worlds/w/tokens/ncu/old-sage.png", new Blob(["x"]));
+    expect(newTokenImagePath(taken, "old sage.png")).toEqual("worlds/w/tokens/ncu/old-sage-2.png");
   });
 
   describe("renameMap", () => {

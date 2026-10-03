@@ -7,7 +7,7 @@ import {MapDraft} from "../../mapEditor/MapDraft";
 import {blankMap} from "../../mapEditor/mapContentLoaders";
 import {keyFromRef, refFromKey} from "../../zoneEditor/mapRef";
 import {addMap, removeMap, syncZoneRefs, zoneData, zonePositions, setZonePositions} from "./zoneOps";
-import {isValidIdentifier, itemFile, mapDir, mapFile, resolvePath, unitTypeFile, worldDir, zoneFile} from "./worldPaths";
+import {isValidIdentifier, itemFile, mapDir, mapFile, relativePath, resolvePath, unitTypeFile, worldDir, zoneFile} from "./worldPaths";
 
 export const mapData = (draft, zone, map) => draft.read(mapFile(draft.worldKey, zone, map));
 
@@ -131,3 +131,27 @@ export function ncuTokenUrls(draft, zone, map, assetUrl) {
   return Object.fromEntries(raws.map((raw) => [raw, raw.startsWith(":") ? raw : assetUrl(resolvePath(path, raw))]));
 }
 
+const IMAGE_EXTENSIONS = /\.(png|webp|jpe?g|gif|svg)$/i;
+
+// The world's token images (under worlds/<w>/tokens/), as an NCU on this
+// map refers to them: {value: path relative to the map file, label: path
+// under tokens/, url}.
+export function worldTokenImages(draft, zone, map, assetUrl) {
+  const dir = `${worldDir(draft.worldKey)}/tokens`;
+  const path = mapFile(draft.worldKey, zone, map);
+  return draft.paths(dir).filter((p) => IMAGE_EXTENSIONS.test(p)).sort().map((p) => ({
+    value: relativePath(path, p), label: p.slice(dir.length + 1), url: assetUrl(p),
+  }));
+}
+
+// Where an uploaded token image named `name` goes: worlds/<w>/tokens/ncu/,
+// numbered if the name's taken.
+export function newTokenImagePath(draft, name) {
+  const dir = `${worldDir(draft.worldKey)}/tokens/ncu`;
+  const safe = name.replace(/[^A-Za-z0-9_.-]/g, "-");
+  const dot = safe.lastIndexOf(".");
+  const [base, ext] = dot > 0 ? [safe.slice(0, dot), safe.slice(dot)] : [safe, ""];
+  let target = `${dir}/${safe}`;
+  for (let n = 2; draft.exists(target); n++) target = `${dir}/${base}-${n}${ext}`;
+  return target;
+}

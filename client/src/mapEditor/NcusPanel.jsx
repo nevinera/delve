@@ -1,11 +1,13 @@
 import {useEffect, useState} from "react";
 import DialogueFields from "./DialogueFields";
+import ImagePicker from "./ImagePicker";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 
 // Non-combat units (docs/schema/ncu.md): everything is set inline - no unit
 // type to pick. "+ Add NCU" arms MapCanvas's single-shot "add-ncu" tool;
 // position/movement editing is the same as a unit's (see MovementFields),
-// with every placement tagged section "ncus".
+// with every placement tagged section "ncus". tokenImages {options,
+// upload} feeds the token's ImagePicker.
 
 function inNcusSection(placement) {
   return placement?.section === "ncus" ? placement : null;
@@ -35,7 +37,7 @@ export function NcuTokenThumb({tokenUrl, className = "map-unit-token-thumb"}) {
 }
 
 function NcuRow({
-  ncu, index, expanded, hovered, tokenUrl, onRowClick, onHover, onRemove, update, dispatch,
+  ncu, index, expanded, hovered, tokenUrl, tokenImages, onRowClick, onHover, onRemove, update, dispatch,
   unitPlacement, onStartUnitPlacement,
   patrolStepPlacement, onStartPatrolStepPlacement, onStartPatrolStepEdit, onHoverPatrolStep,
   wanderLocationPlacement, onStartWanderLocationPlacement, onUpdateMovement,
@@ -74,7 +76,13 @@ function NcuRow({
                 </tr>
                 <tr>
                   <th>Token Image</th>
-                  <td><TextField label="Token Image" value={ncu.tokenImageUrl} placeholder="../../tokens/unit/goblin-2.webp" onChange={(v) => update(index, {tokenImageUrl: v})} /></td>
+                  <td>
+                    <ImagePicker
+                      label="Token Image" value={ncu.tokenImageUrl} url={tokenUrl}
+                      options={tokenImages.options} onUpload={tokenImages.upload}
+                      onChange={(v) => update(index, {tokenImageUrl: v})}
+                    />
+                  </td>
                 </tr>
                 <tr>
                   <th>Token Radius</th>
@@ -128,7 +136,7 @@ function NcuRow({
 }
 
 export default function NcusPanel({
-  ncus = [], tokenUrls = {}, hoveredIndex, onHover, selectedIndex, onSelect,
+  ncus = [], tokenUrls = {}, tokenImages = {options: []}, hoveredIndex, onHover, selectedIndex, onSelect,
   tool, placement, canPlaceOnMap, onStartAddNcu, dispatch, onExpandedIndicesChange,
   unitPlacement, onStartUnitPlacement,
   patrolStepPlacement, onStartPatrolStepPlacement, onStartPatrolStepEdit, onHoverPatrolStep,
@@ -195,7 +203,7 @@ export default function NcusPanel({
             <NcuRow
               key={index} ncu={ncu} index={index}
               expanded={expandedIndices.has(index)} hovered={hoveredIndex === index}
-              tokenUrl={tokenUrls[ncu.tokenImageUrl]}
+              tokenUrl={tokenUrls[ncu.tokenImageUrl]} tokenImages={tokenImages}
               onRowClick={toggleExpanded} onHover={onHover} onRemove={remove} update={update} dispatch={dispatch}
               unitPlacement={inNcusSection(unitPlacement)} onStartUnitPlacement={onStartUnitPlacement}
               patrolStepPlacement={inNcusSection(patrolStepPlacement)}

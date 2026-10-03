@@ -51,10 +51,12 @@ const TAB_LAYERS = {
 //   drop. details are {key: {name, tokenRadius, tokenImageUrl, speedFactor}}
 //   and {key: {identifier, name, slot}}.
 // - ncuTokenUrls: raw NCU tokenImageUrl -> displayable URL.
+// - tokenImages {options: [{value, label, url}], upload(file)}: the token
+//   images an NCU can use, and storing a new one (see ImagePicker).
 // - sidebarHeader: rendered at the top of the sidebar (e.g. a save bar).
 export default function MapWorkbench({
   mapKey, mapData, onMapChange, imageUrl, onImageUpload, unitTypes, items,
-  ncuTokenUrls, sidebarHeader, backUrl,
+  ncuTokenUrls, tokenImages, sidebarHeader, backUrl,
 }) {
   const [tab, setTab] = useState("map");
   // Unit types added to the Units tab's palette with "+" (see UnitsTab).
@@ -627,6 +629,7 @@ export default function MapWorkbench({
             <NcusPanel
               ncus={mapData.ncus ?? []}
               tokenUrls={ncuTokenUrls}
+              tokenImages={tokenImages}
               selectedIndex={selectedNcuIndex}
               onSelect={setSelectedNcuIndex}
               hoveredIndex={hoveredNcuIndex}

@@ -214,15 +214,50 @@
       .map-editor-sidebar-content .map-loot-entry-remove:hover { background: #422; }
       .map-editor-sidebar-content .map-loot-count-field { font-size: 12px; margin-bottom: 6px; }
       .map-editor-sidebar-content .map-ncu-row-talk-icon { font-size: 12px; margin-left: 4px; }
-      .map-editor-sidebar-content .map-unit-dialogue { margin-top: 8px; }
-      .map-editor-sidebar-content .map-unit-dialogue h4 { font-size: 12px; color: #9ab; font-weight: 600; margin-bottom: 4px; }
-      .map-editor-sidebar-content .map-dialogue-line { display: flex; gap: 4px; margin: 3px 0; }
-      .map-editor-sidebar-content .map-dialogue-line textarea { flex: 1; min-width: 0; font-size: 12px; resize: vertical; }
-      .map-editor-sidebar-content .map-dialogue-line-buttons { display: flex; flex-direction: column; gap: 2px; }
-      .map-editor-sidebar-content .map-dialogue-line-buttons button {
-        background: none; border: 1px solid #445; color: #bcd; font-size: 11px; line-height: 1; padding: 2px 5px; cursor: pointer; border-radius: 3px;
+      /* An NCU's dialogue (DialogueFields.jsx): each node's text, and each
+         choice's, is a full-width textarea, with its controls below it. */
+      .map-editor-sidebar-content .map-ncu-dialogue { margin-top: 10px; }
+      .map-editor-sidebar-content .map-ncu-dialogue h4 { font-size: 12px; color: #9ab; font-weight: 600; margin-bottom: 4px; }
+      .map-editor-sidebar-content .map-dialogue-node-preview { flex: 1; min-width: 0; font-size: 13px; color: #cce; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .map-editor-sidebar-content .map-dialogue-node-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 4px 18px; font-size: 12px; color: #bcd; }
+      .map-editor-sidebar-content .map-dialogue-node-body textarea {
+        display: block; width: 100%; resize: vertical; background: #111; border: 1px solid #555; color: #eee;
+        padding: 6px 8px; border-radius: 3px; font: inherit; font-size: 13px; line-height: 1.4;
       }
-      .map-editor-sidebar-content .map-dialogue-line-buttons button:disabled { opacity: 0.35; cursor: default; }
+      .map-editor-sidebar-content .map-dialogue-node-body select { background: #111; border: 1px solid #555; color: #eee; font-size: 12px; padding: 3px 6px; border-radius: 3px; max-width: 100%; }
+      .map-editor-sidebar-content .map-dialogue-mode { display: flex; flex-wrap: wrap; gap: 14px; color: #9ab; }
+      .map-editor-sidebar-content .map-dialogue-choices { display: flex; flex-direction: column; gap: 8px; }
+      .map-editor-sidebar-content .map-dialogue-choice-row {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; border: 1px solid #2a2f35; border-radius: 4px;
+      }
+      .map-editor-sidebar-content .map-dialogue-choice-row textarea { flex: 1 1 100%; }
+      .map-editor-sidebar-content .map-dialogue-choice-row select { flex: 1; min-width: 0; }
+      .map-editor-sidebar-content .map-dialogue-choice-row button { background: none; border: 1px solid #644; color: #e9a; border-radius: 3px; padding: 2px 7px; cursor: pointer; }
+      .map-editor-sidebar-content .map-dialogue-dead-end { color: #c96; font-style: italic; }
+
+      /* ImagePicker.jsx */
+      .map-editor-sidebar-content .map-image-picker { position: relative; }
+      .map-editor-sidebar-content .map-image-picker-current {
+        display: flex; align-items: center; gap: 8px; max-width: 100%; background: #111; border: 1px solid #555; color: #eee;
+        padding: 3px 8px 3px 3px; border-radius: 3px; cursor: pointer; font-size: 12px;
+      }
+      .map-editor-sidebar-content .map-image-picker-current:hover { border-color: #79a; }
+      .map-editor-sidebar-content .map-image-picker-current img,
+      .map-editor-sidebar-content .map-image-picker-empty { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #223; flex-shrink: 0; }
+      .map-editor-sidebar-content .map-image-picker-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .map-editor-sidebar-content .map-image-picker-popover {
+        position: absolute; z-index: 5; top: 100%; left: 0; width: 280px; margin-top: 4px; padding: 8px;
+        background: #1c2126; border: 1px solid #457; border-radius: 6px; box-shadow: 0 6px 24px #00000080;
+      }
+      .map-editor-sidebar-content .map-image-picker-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; max-height: 220px; overflow-y: auto;
+      }
+      .map-editor-sidebar-content .map-image-picker-option { aspect-ratio: 1; padding: 2px; background: #111; border: 2px solid transparent; border-radius: 6px; cursor: pointer; }
+      .map-editor-sidebar-content .map-image-picker-option:hover { border-color: #579; }
+      .map-editor-sidebar-content .map-image-picker-option.selected { border-color: #9cf; }
+      .map-editor-sidebar-content .map-image-picker-option img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; display: block; }
+      .map-editor-sidebar-content .map-image-picker-actions { display: flex; gap: 6px; margin-top: 8px; }
+      .map-editor-sidebar-content .map-image-picker-actions button { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
       .map-editor-sidebar-content .map-loot-count-field input[type=number] { width: 56px; }
       .map-editor-sidebar-content .map-loot-count-field .map-sidebar-hint { margin: 2px 0 0; }
 

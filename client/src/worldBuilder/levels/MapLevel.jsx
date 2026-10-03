@@ -1,7 +1,7 @@
 import MapWorkbench from "../../mapEditor/MapWorkbench";
 import {generateThumbnail} from "../../content/generateThumbnail";
-import {mapData, ncuTokenUrls, setMapImage, updateMap, worldItems, worldUnitTypes} from "../state/mapOps";
-import {mapFile, resolvePath} from "../state/worldPaths";
+import {mapData, newTokenImagePath, ncuTokenUrls, setMapImage, updateMap, worldItems, worldTokenImages, worldUnitTypes} from "../state/mapOps";
+import {mapFile, relativePath, resolvePath} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
 
 // The map level: the map editor's whole editing surface (MapWorkbench)
@@ -27,6 +27,15 @@ export default function MapLevel({draft, zone, map, onChange, repo}) {
       .catch(() => {});
   }
 
+  // An uploaded NCU token goes into the draft (read into memory first, so
+  // a dropped file's handle going stale can't break the later Save).
+  async function uploadTokenImage(file) {
+    const blob = new Blob([await file.arrayBuffer()], {type: file.type});
+    const target = newTokenImagePath(draft, file.name);
+    onChange((current) => current.write(target, blob));
+    return relativePath(path, target);
+  }
+
   return (
     <div className="map-level">
       <MapWorkbench
@@ -39,6 +48,7 @@ export default function MapLevel({draft, zone, map, onChange, repo}) {
         unitTypes={{keys: unitTypeKeys, details: unitTypeDetails}}
         items={{keys: itemKeys, details: itemDetails}}
         ncuTokenUrls={ncuTokenUrls(draft, zone, map, assetUrl)}
+        tokenImages={{options: worldTokenImages(draft, zone, map, assetUrl), upload: uploadTokenImage}}
       />
     </div>
   );
