@@ -6,7 +6,7 @@
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <style>
-<%= render "layouts/content_editor_styles" %>
+<%= render partial: "layouts/content_editor_styles", formats: [:css] %>
 
       .damage-estimate { margin-bottom: 14px; }
       .damage-estimate-header { display: flex; align-items: center; gap: 10px; }

@@ -6,9 +6,9 @@
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <style>
-<%= render "layouts/content_editor_styles" %>
-<%= render "layouts/map_editor_styles" %>
-<%= render "layouts/world_editor_styles" %>
+<%= render partial: "layouts/content_editor_styles", formats: [:css] %>
+<%= render partial: "layouts/map_editor_styles", formats: [:css] %>
+<%= render partial: "layouts/world_editor_styles", formats: [:css] %>
     </style>
   </head>
   <body>
