@@ -1,6 +1,6 @@
 import {useEffect, useState} from "react";
 import DialogueFields from "./DialogueFields";
-import ImagePicker from "./ImagePicker";
+import ImagePicker from "../content/ImagePicker";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 
 // Non-combat units (docs/schema/ncu.md): everything is set inline - no unit

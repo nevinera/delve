@@ -38,21 +38,21 @@ export default function ImagePicker({label, value, url, options = [], onChange, 
   }
 
   return (
-    <div className="map-image-picker" ref={rootRef}>
-      <button type="button" className="map-image-picker-current" aria-label={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        {url ? <img src={url} alt="" /> : <span className="map-image-picker-empty" />}
-        <span className="map-image-picker-name">{value ? value.split("/").pop() : "None"}</span>
+    <div className="image-picker" ref={rootRef}>
+      <button type="button" className="image-picker-current" aria-label={label} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {url ? <img src={url} alt="" /> : <span className="image-picker-empty" />}
+        <span className="image-picker-name">{value ? value.split("/").pop() : "None"}</span>
       </button>
       {open && (
-        <div className="map-image-picker-popover" role="dialog" aria-label={`Choose ${label}`}>
+        <div className="image-picker-popover" role="dialog" aria-label={`Choose ${label}`}>
           {options.length === 0
             ? <p className="map-sidebar-hint">No images in this world yet.</p>
             : (
-              <div className="map-image-picker-grid">
+              <div className="image-picker-grid">
                 {options.map((option) => (
                   <button
                     key={option.value} type="button" title={option.label} aria-label={option.label} aria-pressed={option.value === value}
-                    className={`map-image-picker-option${option.value === value ? " selected" : ""}`}
+                    className={`image-picker-option${option.value === value ? " selected" : ""}`}
                     onClick={() => pick(option.value)}
                   >
                     <img src={option.url} alt="" />
@@ -60,7 +60,7 @@ export default function ImagePicker({label, value, url, options = [], onChange, 
                 ))}
               </div>
             )}
-          <div className="map-image-picker-actions">
+          <div className="image-picker-actions">
             {onUpload && (
               <>
                 <button type="button" onClick={() => inputRef.current?.click()}>Upload…</button>

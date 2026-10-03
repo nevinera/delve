@@ -45,32 +45,16 @@ describe("saveUnitType", () => {
   });
 
   describe("pending token image uploads", () => {
-    it("commits a pending upload alongside the JSON, at the slot's own path", async () => {
+    it("commits each alongside the JSON, at its repo path", async () => {
       const unitTypeData = {name: "Goblin Raider", tokenImageUrl: ["../tokens/unit/goblin-raider.webp"], powers: []};
       const file = new File(["fake"], "goblin-raider.webp");
 
-      await saveUnitType("goblin-raider", unitTypeData, {tokenFiles: {0: file}});
+      await saveUnitType("goblin-raider", unitTypeData, {tokenFiles: {"tokens/unit/goblin-raider.webp": file}});
 
       expect(commitFiles).toHaveBeenCalledWith(
         {"unit_types/goblin-raider.json": unitTypeData, "tokens/unit/goblin-raider.webp": file},
         {message: "Update Goblin Raider"}
       );
-    });
-
-    it("resolves a nested key's token path relative to its own unit_types subdirectory", async () => {
-      const unitTypeData = {name: "Raider", tokenImageUrl: ["../../tokens/unit/raider.webp"], powers: []};
-      const file = new File(["fake"], "raider.webp");
-
-      await saveUnitType("goblins/raider", unitTypeData, {tokenFiles: {0: file}});
-
-      expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"tokens/unit/raider.webp": file}), {message: "Update Raider"});
-    });
-
-    it("rejects, without committing anything, when a pending upload's slot has been cleared", async () => {
-      const unitTypeData = {name: "Goblin Raider", tokenImageUrl: [""], powers: []};
-
-      await expect(saveUnitType("goblin-raider", unitTypeData, {tokenFiles: {0: new File(["x"], "x.webp")}})).rejects.toThrow(/Set a path before saving/);
-      expect(commitFiles).not.toHaveBeenCalled();
     });
   });
 

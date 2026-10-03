@@ -8,7 +8,7 @@ import {powerUploadFiles, resolveRepoPath} from "../powersEditor/powerSources";
 // "write wherever the field currently says" approach as saveAbility.js.
 //
 // uploads:
-//   tokenFiles  - {tokenImageUrl index: File}
+//   tokenFiles  - {repo path: File}
 //   powerFiles  - {power index: {assetOverrideKey: File}}
 //   deletePaths - repo paths to remove in the same commit (a stale
 //                 .full.json left over from the $ref era)
@@ -25,9 +25,7 @@ export async function saveUnitType(key, unitTypeData, {tokenFiles = {}, powerFil
     filesByPath[resolveRepoPath(ownPath, relativePath)] = file;
   }
 
-  for (const [index, file] of Object.entries(tokenFiles)) {
-    addUpload(`tokenImageUrl[${index}]`, (unitTypeData.tokenImageUrl ?? [])[Number(index)], file);
-  }
+  Object.assign(filesByPath, tokenFiles);
   const powerUploads = powerUploadFiles(ownPath, unitTypeData.powers ?? [], powerFiles);
   Object.assign(filesByPath, powerUploads.files);
   missingPaths.push(...powerUploads.missing);

@@ -94,7 +94,7 @@ describe("UnitTypeEditor", () => {
     it("shows a loading state, then the unit's fields once the fetch resolves", async () => {
       let resolveFetch;
       GithubClient.mockImplementation(function () {
-        return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([])};
+        return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([]), assetUrl: vi.fn().mockResolvedValue("")};
       });
 
       render(<UnitTypeEditor unitTypeKey="goblin-raider" stockAssets={{}} />);
@@ -130,7 +130,7 @@ describe("UnitTypeEditor", () => {
     it("normalizes a bare-string tokenImageUrl into a one-entry array", async () => {
       await renderReady({...initialUnitType, tokenImageUrl: "../tokens/unit/goblin-archer.webp"});
 
-      expect(screen.getByDisplayValue("../tokens/unit/goblin-archer.webp")).toBeInTheDocument();
+      expect(screen.getByRole("button", {name: "Token image 1"})).toHaveTextContent("goblin-archer.webp");
     });
 
     it("expands $ref powers into inline copies on load", async () => {
@@ -372,25 +372,30 @@ describe("UnitTypeEditor", () => {
       validateUnitType.mockReset();
     });
 
+    function upload(slot, file) {
+      fireEvent.click(screen.getByRole("button", {name: `Token image ${slot}`}));
+      fireEvent.change(screen.getByLabelText(`Upload Token image ${slot}`), {target: {files: [file]}});
+    }
+
     it("uploading a file fills in the slot's path and commits the file on save", async () => {
-      const {container} = await renderReady();
+      await renderReady();
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
       const file = new File(["fake"], "raider.webp", {type: "image/webp"});
-      fireEvent.change(container.querySelector('input[type="file"]'), {target: {files: [file]}});
-      expect(screen.getByDisplayValue("../tokens/unit/raider.webp")).toBeInTheDocument();
+      upload(1, file);
+      await waitFor(() => expect(screen.getByRole("button", {name: "Token image 1"})).toHaveTextContent("raider.webp"));
 
       await validateAndSave();
       expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"tokens/unit/raider.webp": file}), {message: "Update Goblin Raider"});
     });
 
     it("previews an unsaved upload from its local URL, alongside resolved saved tokens", async () => {
-      const {container} = await renderReady({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
+      await renderReady({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
       URL.createObjectURL = vi.fn(() => "blob:second");
       URL.revokeObjectURL = vi.fn();
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
-      fireEvent.change(container.querySelectorAll('input[type="file"]')[1], {target: {files: [new File(["x"], "second.webp")]}});
+      upload(2, new File(["x"], "second.webp"));
 
       await waitFor(() => expect(JSON.parse(screen.getByTestId("preview-powers").dataset.tokens)).toEqual({
         "../tokens/unit/first.webp": "https://raw.githubusercontent.com/mock/tokens/unit/first.webp",
@@ -402,9 +407,9 @@ describe("UnitTypeEditor", () => {
       await renderReady(initialUnitType, {listings: {"tokens/unit": ["tokens/unit/goblin-1.webp", "tokens/unit/goblin-2.webp"]}});
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
-      await screen.findByRole("option", {name: "goblin-1.webp"});
-      fireEvent.change(screen.getByDisplayValue("— existing token —"), {target: {value: "goblin-1.webp"}});
-      expect(screen.getByDisplayValue("../tokens/unit/goblin-1.webp")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", {name: "Token image 1"}));
+      fireEvent.click(await screen.findByRole("button", {name: "goblin-1.webp"}));
+      expect(screen.getByRole("button", {name: "Token image 1"})).toHaveTextContent("goblin-1.webp");
 
       await validateAndSave();
       expect(commitFiles).toHaveBeenCalledWith(
@@ -413,17 +418,23 @@ describe("UnitTypeEditor", () => {
       );
     });
 
-    it("keeps a pending upload matched to its own slot after an earlier slot is removed", async () => {
-      const {container} = await renderReady({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
+    it("commits only uploads a slot still points at", async () => {
+      await renderReady({...initialUnitType, tokenImageUrl: ["../tokens/unit/first.webp"]});
 
       fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
-      const file = new File(["fake"], "second.webp", {type: "image/webp"});
-      fireEvent.change(container.querySelectorAll('input[type="file"]')[1], {target: {files: [file]}});
-      fireEvent.click(screen.getAllByRole("button", {name: "Remove"})[0]);
-      expect(screen.getByDisplayValue("../tokens/unit/second.webp")).toBeInTheDocument();
+      const kept = new File(["fake"], "second.webp", {type: "image/webp"});
+      upload(2, kept);
+      await waitFor(() => expect(screen.getByRole("button", {name: "Token image 2"})).toHaveTextContent("second.webp"));
+      fireEvent.click(screen.getByRole("button", {name: "+ Add token image"}));
+      upload(3, new File(["fake"], "dropped.webp", {type: "image/webp"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Token image 3"})).toHaveTextContent("dropped.webp"));
+      fireEvent.click(screen.getByRole("button", {name: "Token image 3"}));
+      fireEvent.click(screen.getByRole("button", {name: "Clear"}));
 
       await validateAndSave();
-      expect(commitFiles).toHaveBeenCalledWith(expect.objectContaining({"tokens/unit/second.webp": file}), {message: "Update Goblin Raider"});
+      const committed = commitFiles.mock.calls[0][0];
+      expect(committed["tokens/unit/second.webp"]).toBe(kept);
+      expect(committed).not.toHaveProperty("tokens/unit/dropped.webp");
     });
   });
 
