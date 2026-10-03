@@ -27,6 +27,27 @@ RSpec.describe "Build::Worlds", type: :request do
       expect(response.body).to include('<option selected="selected" value="world-editor">')
     end
 
+    it "lists the branch last picked in any editor or list (the shared cookie)" do
+      stub_tree_listing("builder/content", "worlds", ["small/small.json"], branch: "world-editor")
+      stub_request(:get, "https://api.github.com/repos/builder/content")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {default_branch: "main"}.to_json)
+      cookies[:delve_editor_branch] = "world-editor"
+
+      get "/build/worlds"
+
+      expect(response.body).to include(edit_build_world_path(id: "small", branch: "world-editor"))
+    end
+
+    it "remembers a branch picked here for the editors and other lists" do
+      stub_tree_listing("builder/content", "worlds", ["small/small.json"], branch: "world-editor")
+      stub_request(:get, "https://api.github.com/repos/builder/content")
+        .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {default_branch: "main"}.to_json)
+
+      get "/build/worlds", params: {branch: "world-editor"}
+
+      expect(cookies[:delve_editor_branch]).to eq("world-editor")
+    end
+
     it "falls back to the default branch for one that doesn't exist" do
       stub_tree_listing("builder/content", "worlds", ["small/small.json"])
       get "/build/worlds", params: {branch: "gone"}

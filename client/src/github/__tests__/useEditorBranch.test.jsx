@@ -1,7 +1,7 @@
 import {describe, it, expect, vi, beforeEach} from "vitest";
 import {renderHook, waitFor, act} from "@testing-library/react";
 import {useEditorBranch} from "../useEditorBranch";
-import {rememberedBranch} from "../branchPreference";
+import {rememberBranch, rememberedBranch} from "../branchPreference";
 
 function fakeClient(names) {
   return {
@@ -11,7 +11,9 @@ function fakeClient(names) {
   };
 }
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => {
+  document.cookie = "delve_editor_branch=; max-age=0; path=/";
+});
 
 describe("useEditorBranch", () => {
   it("starts on the default branch with nothing remembered", async () => {
@@ -21,7 +23,7 @@ describe("useEditorBranch", () => {
   });
 
   it("starts on the remembered branch while it exists", async () => {
-    window.localStorage.setItem("delve.editor.branch", "rework");
+    rememberBranch("rework");
     const {result} = renderHook(() => useEditorBranch(fakeClient(["main", "rework"])));
     await waitFor(() => expect(result.current.branch).toEqual("rework"));
   });

@@ -1,23 +1,17 @@
-// Every content editor (world, class, ability) starts on the branch last
-// picked in any of them, remembered in this browser. Storage can be
-// unavailable (private windows, blocked site data), so every access is
-// guarded and a miss just means "use the default branch".
-const KEY = "delve.editor.branch";
+// Every content editor (world, class, ability), and every index page that
+// lists content (see Build::BranchSelection), uses the branch last picked
+// in any of them - remembered in a cookie so the server-rendered lists can
+// read it too. A miss just means "use the default branch".
+export const COOKIE = "delve_editor_branch";
+const ONE_YEAR = 60 * 60 * 24 * 365;
 
 export function rememberedBranch() {
-  try {
-    return window.localStorage.getItem(KEY);
-  } catch {
-    return null;
-  }
+  const entry = document.cookie.split("; ").find((part) => part.startsWith(`${COOKIE}=`));
+  return entry ? decodeURIComponent(entry.slice(COOKIE.length + 1)) : null;
 }
 
 export function rememberBranch(branch) {
-  try {
-    window.localStorage.setItem(KEY, branch);
-  } catch {
-    // not remembered; harmless
-  }
+  document.cookie = `${COOKIE}=${encodeURIComponent(branch)}; path=/; max-age=${ONE_YEAR}; samesite=lax`;
 }
 
 // Opened from an index page with ?branch=: start on that branch (the
