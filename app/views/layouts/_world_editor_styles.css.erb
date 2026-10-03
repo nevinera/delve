@@ -155,3 +155,14 @@
       /* The old editors' collapsible section headings, not the world
          editor's own h3s. */
       .world-builder .map-sidebar-section-heading h3 { margin: 0; padding: 0; border: none; font-size: 13px; }
+
+      /* The map level's unit type adder (UnitTypeAdder.jsx), in the Units
+         tab's palette popover, and the modal editor it opens. */
+      .map-unit-palette-popover .unit-type-adder { display: flex; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2f35; }
+      .map-unit-palette-popover .zone-form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2f35; }
+      .map-unit-palette-popover .zone-form input,
+      .map-unit-palette-popover .zone-form select { flex: 1 1 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+      .map-unit-palette-popover .zone-list-error { color: #e79; font-size: 12px; }
+      .unit-type-modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.6); display: flex; padding: 3vh 3vw; }
+      .unit-type-modal { flex: 1; height: auto; border: 1px solid #457; border-radius: 6px; overflow: hidden; background: #14181c; box-shadow: 0 10px 40px #000a; }
+

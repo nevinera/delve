@@ -315,7 +315,9 @@ function paletteKeys(units, added) {
   return [...new Set([...units.map((unit) => unit.unitType).filter(Boolean), ...added])];
 }
 
-function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, onHoverUnitType, canPlaceOnMap}) {
+// renderAdder({onAdded(key), close()}), if given, renders more ways to get
+// a unit type (e.g. import or create one) below the world's others.
+function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, onHoverUnitType, canPlaceOnMap, renderAdder}) {
   const [adding, setAdding] = useState(false);
   const keys = paletteKeys(units, added);
   const addable = unitTypes.keys.filter((key) => !keys.includes(key));
@@ -356,6 +358,7 @@ function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, 
                 {unitTypeLabel(unitTypes.details, key)}
               </button>
             ))}
+          {renderAdder?.({onAdded: add, close: () => setAdding(false)})}
         </div>
       )}
       {!canPlaceOnMap && <p className="map-sidebar-hint">Set feet dimensions (Map tab) before placing units.</p>}
@@ -458,7 +461,7 @@ function OpenGroup({
 export default function UnitsTab({
   units, unitTypes, items, canPlaceOnMap,
   openGroup, onOpenGroup, onCloseGroup, onRenameGroup,
-  armedUnitType, onArmUnitType, onHoverUnitType, paletteAdditions = [], onAddToPalette,
+  armedUnitType, onArmUnitType, onHoverUnitType, paletteAdditions = [], onAddToPalette, renderUnitTypeAdder,
   hoveredGroupIdentifier, onHoverGroup, hoveredIndex, onHover, selectedIndex, onSelect,
   focusUnitRequest, onExpandedIndicesChange,
   onChooseUnitType = () => {}, onChooseItem = () => {},
@@ -501,7 +504,7 @@ export default function UnitsTab({
     <div className="map-units-tab">
       <Palette
         units={units} unitTypes={unitTypes} canPlaceOnMap={canPlaceOnMap}
-        added={paletteAdditions} onAdd={onAddToPalette}
+        added={paletteAdditions} onAdd={onAddToPalette} renderAdder={renderUnitTypeAdder}
         armedUnitType={armedUnitType} onArmUnitType={onArmUnitType} onHoverUnitType={onHoverUnitType}
       />
       <GroupList

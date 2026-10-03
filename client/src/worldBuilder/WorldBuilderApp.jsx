@@ -281,7 +281,7 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
   else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
-  else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} />;
+  else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
   else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} />;
   else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} library={library} />;
 

@@ -51,12 +51,14 @@ const TAB_LAYERS = {
 //   drop. details are {key: {name, tokenRadius, tokenImageUrl, speedFactor}}
 //   and {key: {identifier, name, slot}}.
 // - ncuTokenUrls: raw NCU tokenImageUrl -> displayable URL.
+// - renderUnitTypeAdder({onAdded(key), close()}): more ways to get a unit
+//   type into the Units tab's palette (see UnitsTab).
 // - tokenImages {options: [{value, label, url}], upload(file)}: the token
 //   images an NCU can use, and storing a new one (see ImagePicker).
 // - sidebarHeader: rendered at the top of the sidebar (e.g. a save bar).
 export default function MapWorkbench({
   mapKey, mapData, onMapChange, imageUrl, onImageUpload, unitTypes, items,
-  ncuTokenUrls, tokenImages, sidebarHeader, backUrl,
+  ncuTokenUrls, tokenImages, renderUnitTypeAdder, sidebarHeader, backUrl,
 }) {
   const [tab, setTab] = useState("map");
   // Unit types added to the Units tab's palette with "+" (see UnitsTab).
@@ -604,6 +606,7 @@ export default function MapWorkbench({
             onHoverUnitType={(key) => setUiState(uiState.with({hoveredUnitType: key}))}
             paletteAdditions={paletteAdditions}
             onAddToPalette={(key) => setPaletteAdditions((current) => [...current, key])}
+            renderUnitTypeAdder={renderUnitTypeAdder}
             hoveredGroupIdentifier={uiState.hoveredGroupIdentifier}
             onHoverGroup={(g) => setUiState(uiState.with({hoveredGroupIdentifier: g}))}
             hoveredIndex={uiState.hoveredUnitIndex}

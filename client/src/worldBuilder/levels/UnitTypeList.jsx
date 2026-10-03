@@ -106,7 +106,7 @@ export default function UnitTypeList({draft, onChange, onOpen, repo, library}) {
   );
 }
 
-function NewUnitTypeForm({onCreate, onCancel}) {
+export function NewUnitTypeForm({onCreate, onCancel}) {
   const [key, setKey] = useState("");
   const [name, setName] = useState("");
   return (

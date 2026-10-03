@@ -1,4 +1,7 @@
+import {useState} from "react";
 import MapWorkbench from "../../mapEditor/MapWorkbench";
+import UnitTypeAdder from "./UnitTypeAdder";
+import UnitTypeModal from "./UnitTypeModal";
 import {generateThumbnail} from "../../content/generateThumbnail";
 import {mapData, ncuTokenUrls, setMapImage, updateMap, worldItems, worldUnitTypes} from "../state/mapOps";
 import {inMemory, newAssetPath, tokenImageOptions} from "../state/assetOps";
@@ -9,7 +12,10 @@ import {assetUrlFor} from "../state/assetUrls";
 // over one map's part of the live draft. Units can be any of the world's
 // own unit types, and drop the world's own items. Uploaded backgrounds
 // (and their thumbnails) go into the draft like any other change.
-export default function MapLevel({draft, zone, map, onChange, repo}) {
+export default function MapLevel({draft, zone, map, onChange, repo, stockAssets, library}) {
+  // A unit type just created from the Units tab, open for editing, and
+  // what to do once that's done (put it in the palette).
+  const [editingUnitType, setEditingUnitType] = useState(null);
   const data = mapData(draft, zone, map);
   const path = mapFile(draft.worldKey, zone, map);
   const assetUrl = (repoPath) => assetUrlFor(draft, repo, repoPath);
@@ -49,7 +55,25 @@ export default function MapLevel({draft, zone, map, onChange, repo}) {
         items={{keys: itemKeys, details: itemDetails}}
         ncuTokenUrls={ncuTokenUrls(draft, zone, map, assetUrl)}
         tokenImages={{options: tokenImageOptions(draft, path, assetUrl), upload: uploadTokenImage}}
+        renderUnitTypeAdder={({onAdded, close}) => (
+          <UnitTypeAdder
+            draft={draft} library={library} onChange={onChange} onAdded={onAdded}
+            onCreated={(key) => {
+              close();
+              setEditingUnitType({key, done: () => onAdded(key)});
+            }}
+          />
+        )}
       />
+      {editingUnitType && (
+        <UnitTypeModal
+          draft={draft} unitType={editingUnitType.key} onChange={onChange} repo={repo} stockAssets={stockAssets} library={library}
+          onDone={() => {
+            editingUnitType.done();
+            setEditingUnitType(null);
+          }}
+        />
+      )}
     </div>
   );
 }

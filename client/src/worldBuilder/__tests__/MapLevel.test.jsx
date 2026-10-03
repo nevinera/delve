@@ -1,18 +1,24 @@
 import {describe, it, expect, vi, afterEach} from "vitest";
 import {useState} from "react";
-import {render, screen, fireEvent, within} from "@testing-library/react";
+import {render, screen, fireEvent, within, waitFor} from "@testing-library/react";
 import MapLevel from "../levels/MapLevel";
 import ZoneLevel from "../levels/ZoneLevel";
 import {fixtureDraft} from "../state/__tests__/fixtureWorld";
 import {mapData} from "../state/mapOps";
 import {zoneData} from "../state/zoneOps";
+import {unitTypeData, unitTypeKeys} from "../state/unitTypeOps";
+import {LibraryReader} from "../state/libraryReader";
+import {fakeClient} from "../state/__tests__/fakeLibrary";
+
+// The unit type editor's preview mounts a WebGL renderer jsdom can't back.
+vi.mock("../../unitTypeEditor/UnitTypePreviewPane", () => ({default: () => <div data-testid="preview" />}));
 
 function renderWith(Level, props) {
   const result = {draft: null, navigate: vi.fn()};
   function Harness() {
     const [draft, setDraft] = useState(fixtureDraft);
     result.draft = draft;
-    return <Level draft={draft} onChange={setDraft} navigate={result.navigate} repo="o/content" {...props} />;
+    return <Level draft={draft} onChange={setDraft} navigate={result.navigate} repo="o/content" stockAssets={{icons: {}, graphics: {}, sounds: {}}} {...props} />;
   }
   render(<Harness />);
   return result;
@@ -30,6 +36,46 @@ describe("MapLevel", () => {
 
     expect(mapData(result.draft, "forest", "hub").lighting).toEqual("torchlight");
     expect(result.draft.dirtyPaths()).toContain("worlds/w/zones/forest/hub/hub.json");
+  });
+
+  describe("getting a unit type into the Units tab's palette", () => {
+    function openAdder() {
+      fireEvent.click(screen.getByRole("tab", {name: "Units"}));
+      fireEvent.click(screen.getByRole("button", {name: "Add a unit type"}));
+      return within(screen.getByRole("dialog", {name: "Add a unit type"}));
+    }
+
+    it("creates one, edits it in a modal, then arms it", () => {
+      const result = renderWith(MapLevel, {zone: "forest", map: "hub"});
+
+      const adder = openAdder();
+      fireEvent.click(adder.getByRole("button", {name: "Create new…"}));
+      fireEvent.change(adder.getByRole("textbox", {name: "Unit type identifier"}), {target: {value: "troll"}});
+      fireEvent.click(adder.getByRole("button", {name: "Create"}));
+
+      const modal = within(screen.getByRole("dialog", {name: "Edit unit type troll"}));
+      fireEvent.change(modal.getByDisplayValue("Troll"), {target: {value: "Cave Troll"}});
+      fireEvent.click(modal.getByRole("button", {name: "Done"}));
+
+      expect(unitTypeData(result.draft, "troll").name).toEqual("Cave Troll");
+      expect(screen.queryByRole("dialog", {name: "Edit unit type troll"})).not.toBeInTheDocument();
+      expect(screen.getByRole("button", {name: "Cave Troll", pressed: true})).toBeInTheDocument();
+    });
+
+    it("imports one from the library and arms it", async () => {
+      const library = new LibraryReader(fakeClient({"unit_types/ogre.json": {name: "Ogre", tokenImageUrl: [], powers: []}}), "c1");
+      const result = renderWith(MapLevel, {zone: "forest", map: "hub", library});
+
+      const adder = openAdder();
+      fireEvent.click(adder.getByRole("button", {name: "Import from library…"}));
+      const select = adder.getByRole("combobox", {name: "Library unit type"});
+      await within(select).findByRole("option", {name: "ogre"});
+      fireEvent.change(select, {target: {value: "unit_types/ogre.json"}});
+      fireEvent.click(adder.getByRole("button", {name: "Import"}));
+
+      await waitFor(() => expect(unitTypeKeys(result.draft)).toContain("ogre"));
+      expect(screen.getByRole("button", {name: "Ogre", pressed: true})).toBeInTheDocument();
+    });
   });
 
   it("has no back link of its own (the breadcrumbs do that)", () => {
