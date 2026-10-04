@@ -10,8 +10,12 @@
     <ul style="list-style: none; padding: 0;">
       <% character_class.class_abilities.each do |ability| %>
         <li style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px;">
-          <% if ability.icon_url.present? %>
-            <%= image_tag ability.icon_url, alt: ability.name, style: "width: 40px; height: 40px; flex-shrink: 0;" %>
+          <% if ability.icon_mask_url && ability.icon_color %>
+            <span role="img" aria-label="<%= ability.name %>" style="width: 40px; height: 40px; flex-shrink: 0; background: #1a1f2b; border-radius: 4px; display: grid;">
+              <span style="background-color: <%= ability.icon_color %>; -webkit-mask: url('<%= ability.icon_mask_url %>') center / contain no-repeat; mask: url('<%= ability.icon_mask_url %>') center / contain no-repeat;"></span>
+            </span>
+          <% elsif ability.icon_url.present? %>
+            <%= image_tag ability.icon_url, alt: ability.name, style: "width: 40px; height: 40px; flex-shrink: 0; background: #1a1f2b; border-radius: 4px;" %>
           <% else %>
             <span style="width: 40px; height: 40px; flex-shrink: 0;"></span>
           <% end %>

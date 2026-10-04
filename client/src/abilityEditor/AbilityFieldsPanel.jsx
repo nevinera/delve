@@ -3,6 +3,7 @@ import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityForm
 import {entryFieldsFor, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
 import StatusEditor from "./StatusEditor";
+import {iconTint} from "../IconImage";
 
 // Order entries are added/listed in - graphic, then sound, then effect.
 const EFFECT_SECTIONS = ["graphicEffects", "soundEffects", "effects"];
@@ -15,6 +16,7 @@ const TOP_LEVEL_FIELDS = [
   {key: "name", type: "text", editable: true},
   {key: "description", type: "text", editable: true},
   {key: "iconURL", type: "text", editable: true, upload: true},
+  {key: "iconColor", type: "color", editable: true},
   {key: "castTime", type: "number", editable: true},
   {key: "globalCooldown", type: "number", editable: true},
   {key: "cooldown", type: "number", editable: true},
@@ -32,6 +34,9 @@ function EditableField({field, type, value, draft, onChange}) {
   if (type === "tags") {
     return <TagsField value={value} onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
   }
+  if (type === "color") {
+    return <ColorField value={value} onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
+  }
 
   return (
     <input
@@ -44,6 +49,19 @@ function EditableField({field, type, value, draft, onChange}) {
         onChange(draft.setField(field, parsed));
       }}
     />
+  );
+}
+
+// A color picker for an optional color: unset shows as white (the icon's
+// own default), and Clear removes it again.
+function ColorField({value, onChange}) {
+  const hex = iconTint(value) ?? "#ffffff";
+  return (
+    <div className="color-field">
+      <input type="color" aria-label="Pick color" value={hex.toLowerCase()} onChange={(e) => onChange(e.target.value)} />
+      <span>{value ? hex : "default (white)"}</span>
+      {value && <button type="button" onClick={() => onChange(null)}>Clear</button>}
+    </div>
   );
 }
 

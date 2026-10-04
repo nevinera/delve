@@ -24,6 +24,7 @@ asset syntax accepted by `iconURL`.
 | `costType` | string | no | | Name of the resource required to use this ability. Must match the unit's resource `name`. |
 | `costAmount` | float | no | | Amount of the resource that must be available. The ability cannot be used if the unit has less than this. |
 | `iconURL` | string | no | | URL of the action bar icon image, or a stock asset reference (see above). **Only meaningful when the ability is used by a class** - units don't have an action bar, so `iconURL` on a unit's power is stored but never displayed. Client-only; ignored by the game server. |
+| `iconColor` | Color | no | white | Tint for the icon (see [common.md](common.md#color)). The icon image is used as a mask filled with this color, so it suits single-color icons like the stock ones; a full-color image becomes a solid silhouette. If omitted, the image shows unchanged. Client-only. |
 | `tags` | array of string | no | | Free-form labels (max 24, each ≤16 characters) for categorizing the ability, e.g. `"harmful"`, `"beneficial"`, `"class_druid"`. |
 | `graphicEffects` | array of GraphicEffect | no | `[]` | Visual effects played when this ability fires. Client-only; ignored by the game server. |
 | `soundEffects` | array of SoundEffect | no | `[]` | Audio effects played when this ability fires. Client-only; ignored by the game server. |

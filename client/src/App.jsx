@@ -26,6 +26,7 @@ import { worldMessageAction } from "./game/worldMessages";
 import { lootFailureMessages } from "./game/lootMessages";
 import { fetchVerifiedJson, ContentChecksumError } from "./game/verifiedFetch";
 import { redirectTo } from "./redirectTo";
+import IconImage from "./IconImage";
 
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
@@ -4016,7 +4017,7 @@ export default function App({
           style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing && affordable) ? 1 : 0.3}}
           onClick={power ? () => usePower(i) : undefined}
         >
-          {iconUrl && <img src={iconUrl} alt={power.name} style={styles.actionIcon}/>}
+          {iconUrl && <IconImage src={iconUrl} color={power.iconColor} alt={power.name} style={styles.actionIcon}/>}
           {onCooldown && (
             <div style={{
               position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",

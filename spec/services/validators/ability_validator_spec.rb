@@ -89,6 +89,16 @@ RSpec.describe Validators::AbilityValidator, type: :validator do
       expect { described_class.validate!(stab_power.merge("iconURL" => nil)) }.not_to raise_error
     end
 
+    it "accepts an iconColor hex, with or without #" do
+      expect { described_class.validate!(stab_power.merge("iconColor" => "#ff8a3d")) }.not_to raise_error
+      expect { described_class.validate!(stab_power.merge("iconColor" => "FF8A3D")) }.not_to raise_error
+    end
+
+    it "rejects an iconColor that isn't a 6-digit hex" do
+      expect { described_class.validate!(stab_power.merge("iconColor" => "red")) }
+        .to raise_error(Validators::ValidationError, /iconColor must be a 6-digit hex/)
+    end
+
     it "accepts optional top-level tags" do
       expect { described_class.validate!(stab_power.merge("tags" => ["harmful"])) }.not_to raise_error
     end

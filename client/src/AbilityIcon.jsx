@@ -5,9 +5,11 @@
 // `className` should already carry the sizing/position/interaction styles
 // (e.g. "power-slot-icon" or "ability-icon-button") that the caller's own
 // layout defines for both the image and fallback cases.
+import IconImage from "./IconImage";
+
 export default function AbilityIcon({ability, className, onClick}) {
   if (ability.iconURL) {
-    return <img src={ability.iconURL} alt={ability.name} className={className} onClick={onClick} />;
+    return <IconImage src={ability.iconURL} color={ability.iconColor} alt={ability.name} className={className} onClick={onClick} />;
   }
 
   const initials = (ability.name ?? "").trim().slice(0, 2).toUpperCase() || "?";
