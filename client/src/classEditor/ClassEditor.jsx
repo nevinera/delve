@@ -4,9 +4,11 @@ import {blankClass} from "./blankClass";
 import ClassPreviewPane from "./ClassPreviewPane";
 import ClassFieldsPanel from "./ClassFieldsPanel";
 import ClassDpsEstimatePanel from "./ClassDpsEstimatePanel";
+import ClassSurvivabilityPanel from "./ClassSurvivabilityPanel";
 import ClassAreaList from "./ClassAreaList";
 import PassivePanel from "./PassivePanel";
 import {estimateClassDps} from "./estimateClassDps";
+import {estimateClassTtd} from "./estimateClassTtd";
 import {saveClass} from "./saveClass";
 import PowerPanel from "../powersEditor/PowerPanel";
 import StatusPanel from "../powersEditor/StatusPanel";
@@ -34,7 +36,7 @@ function breadcrumbsFor(selection, data) {
   const root = {label: data.name || "Class", target: {area: "class"}};
   switch (selection.area) {
     case "estimate":
-      return [root, {label: "DPS estimate"}];
+      return [root, {label: "DPS and survivability"}];
     case "import":
       return [root, {label: "Import power"}];
     case "passive":
@@ -80,6 +82,9 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
   const [estimate, setEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState(null);
+  const [survival, setSurvival] = useState(null);
+  const [surviving, setSurviving] = useState(false);
+  const [survivalError, setSurvivalError] = useState(null);
   const {validity, activity, dirty, markDirty, reset, setValidating, setValid, setInvalid, setSaving, setSaved, setSaveError} = useValidateThenSave();
   // Reads and writes the picked branch (see useEditorBranch); switching
   // reloads the class from it. (Only possible with nothing unsaved, so no
@@ -143,6 +148,8 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
     markDirty();
     setEstimate(null);
     setEstimateError(null);
+    setSurvival(null);
+    setSurvivalError(null);
     setDraft(nextDraft);
   }
 
@@ -229,6 +236,19 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
     }
   }
 
+  async function handleSurvival() {
+    setSurviving(true);
+    setSurvivalError(null);
+    try {
+      setSurvival(await estimateClassTtd(draft.data, strategy));
+    } catch (error) {
+      setSurvival(null);
+      setSurvivalError(error.message);
+    } finally {
+      setSurviving(false);
+    }
+  }
+
   async function handleSave(commitMessage) {
     setSaving();
     try {
@@ -261,15 +281,18 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
     switch (area) {
       case "estimate":
         return (
-          <ClassDpsEstimatePanel
-            strategy={strategy}
-            onStrategyChange={setStrategy}
-            powerNames={draft.powerNames}
-            estimate={estimate}
-            estimating={estimating}
-            error={estimateError}
-            onEstimate={handleEstimate}
-          />
+          <>
+            <ClassDpsEstimatePanel
+              strategy={strategy}
+              onStrategyChange={setStrategy}
+              powerNames={draft.powerNames}
+              estimate={estimate}
+              estimating={estimating}
+              error={estimateError}
+              onEstimate={handleEstimate}
+            />
+            <ClassSurvivabilityPanel estimate={survival} estimating={surviving} error={survivalError} onEstimate={handleSurvival} />
+          </>
         );
       case "import":
         return (

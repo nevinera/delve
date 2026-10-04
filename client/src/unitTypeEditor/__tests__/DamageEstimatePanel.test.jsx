@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from "vitest";
-import {render, screen, fireEvent} from "@testing-library/react";
+import {render, screen, fireEvent, within} from "@testing-library/react";
 import DamageEstimatePanel from "../DamageEstimatePanel";
 
 const estimate = {
@@ -73,5 +73,37 @@ describe("DamageEstimatePanel", () => {
     expect(screen.getByText("target 46s")).toBeInTheDocument(); // offense, ee -10: 60 / 1.3
     expect(screen.getByText("30.5s to kill").closest("td")).toHaveClass("target-off"); // defense -10, target 138s
   });
-});
 
+  describe("time to kill", () => {
+    const noEstimate = {estimate: null, estimating: false, error: null, onEstimate: () => {}};
+
+    it("shows the reference character's time to kill per gear profile and elevation, before any estimate", () => {
+      render(<DamageEstimatePanel {...noEstimate} unitType={{maxHP: 300, tags: ["open", "solo"]}} />);
+
+      const table = screen.getByRole("table");
+      expect(within(table).getByText("Time for the reference character to kill it")).toBeInTheDocument();
+      const squishy = within(table).getByRole("rowheader", {name: "squishy"}).closest("tr");
+      expect(within(squishy).getByText("12.0s")).toBeInTheDocument();
+      const tank = within(table).getByRole("rowheader", {name: "tank"}).closest("tr");
+      expect(within(tank).getByText("45.0s")).toBeInTheDocument();
+    });
+
+    it("rates each cell against the target for the unit's tags", () => {
+      render(<DamageEstimatePanel {...noEstimate} unitType={{maxHP: 600, tags: ["open", "solo"]}} />);
+
+      const squishy = screen.getByRole("rowheader", {name: "squishy"}).closest("tr");
+      const cell = within(squishy).getByText("24.0s").closest("td");
+      expect(cell).toHaveClass("target-off");
+      expect(within(cell).getByText("target 12s")).toBeInTheDocument();
+    });
+
+    it("is hidden without maxHP, or for a group size with no targets", () => {
+      const { unmount } = render(<DamageEstimatePanel {...noEstimate} unitType={{tags: ["open"]}} />);
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+      unmount();
+
+      render(<DamageEstimatePanel {...noEstimate} unitType={{maxHP: 300, tags: ["g3"]}} />);
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    });
+  });
+});
