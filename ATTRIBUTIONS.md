@@ -102,3 +102,83 @@ Sharp Explosion 1 (of 5) by Rudmer_Rotteveel -- https://freesound.org/s/336006/ 
 Mob teleport by Sadiquecat -- https://freesound.org/s/865948/ -- License: Creative Commons 0
 
 Poof in cloud by Mateusz_Chenc -- https://freesound.org/s/512217/ -- License: Creative Commons 0
+
+The sounds below were picked from CC0 packs and freesound.org, then trimmed, leveled and re-encoded as Opus.
+
+arcane.ogg: Magic Smite.wav by spookymodem -- https://freesound.org/people/spookymodem/sounds/249819/ -- License: Creative Commons 0
+
+armor-up.ogg: armor-light.wav from "RPG Sound Pack" by artisticdude -- https://opengameart.org/content/rpg-sound-pack -- License: Creative Commons 0
+
+arrow-hit.ogg: Arrow.mp3 by thecrow_br -- https://freesound.org/people/thecrow_br/sounds/574044/ -- License: Creative Commons 0
+
+barrier.ogg: Attack Blocked.wav by LilMati -- https://freesound.org/people/LilMati/sounds/523760/ -- License: Creative Commons 0
+
+bell.ogg: impactBell_heavy_001.ogg from "Impact Sounds" by Kenney -- https://kenney.nl/assets/impact-sounds -- License: Creative Commons 0
+
+bite.ogg: monster bite by LucasDuff -- https://freesound.org/people/LucasDuff/sounds/467701/ -- License: Creative Commons 0
+
+blade-hit.ogg: Slash1.ogg by Wenpire -- https://freesound.org/people/Wenpire/sounds/574821/ -- License: Creative Commons 0
+
+blade-scrape.ogg: knifeSlice.ogg from "RPG Audio" by Kenney -- https://kenney.nl/assets/rpg-audio -- License: Creative Commons 0
+
+bloody-blade.ogg: Bloody Blade 2.wav by Kreastricon62 -- https://freesound.org/people/Kreastricon62/sounds/323526/ -- License: Creative Commons 0
+
+bubble.ogg: bubble3.wav from "RPG Sound Pack" by artisticdude -- https://opengameart.org/content/rpg-sound-pack -- License: Creative Commons 0
+
+buff.ogg: Spell Cast / Buff / High Tone by SypherZent -- https://freesound.org/people/SypherZent/sounds/420676/ -- License: Creative Commons 0
+
+chains.ogg: chain_01.ogg from "80 CC0 RPG SFX" by rubberduck -- https://opengameart.org/content/80-cc0-rpg-sfx -- License: Creative Commons 0
+
+charge-up.ogg: Laser Charge Up by magnuswaker -- https://freesound.org/people/magnuswaker/sounds/588242/ -- License: Creative Commons 0
+
+dark.ogg: shade5.wav from "RPG Sound Pack" by artisticdude -- https://opengameart.org/content/rpg-sound-pack -- License: Creative Commons 0
+
+dash.ogg: DashNoise.wav by d4nhardt -- https://freesound.org/people/d4nhardt/sounds/688551/ -- License: Creative Commons 0
+
+debuff.ogg: Bass Power Down by Kinoton -- https://freesound.org/people/Kinoton/sounds/369520/ -- License: Creative Commons 0
+
+fire-cast.ogg: spell_fire_07.ogg from "80 CC0 RPG SFX" by rubberduck -- https://opengameart.org/content/80-cc0-rpg-sfx -- License: Creative Commons 0
+
+fizzle.ogg: Cigarette Sizzle 02 by chaosportal -- https://freesound.org/people/chaosportal/sounds/133449/ -- License: Creative Commons 0
+
+hiss.ogg: Snake Hiss by xoiziox -- https://freesound.org/people/xoiziox/sounds/553374/ -- License: Creative Commons 0
+
+holy.ogg: Angel Reveal.wav by MarknKris1996 -- https://freesound.org/people/MarknKris1996/sounds/608892/ -- License: Creative Commons 0
+
+ice-cast.ogg: ice.wav from "Ice spells" -- https://opengameart.org/content/ice-spells -- License: Creative Commons 0
+
+magic-hit.ogg: Hitting Wall.wav by spookymodem -- https://freesound.org/people/spookymodem/sounds/249814/ -- License: Creative Commons 0
+
+parry.ogg: Sword.wav by hello_flowers -- https://freesound.org/people/hello_flowers/sounds/37596/ -- License: Creative Commons 0
+
+portal.ogg: teleport.mp3 by outroelison -- https://freesound.org/people/outroelison/sounds/150950/ -- License: Creative Commons 0
+
+potion.ogg: Health Pickup by KeshaFilm -- https://freesound.org/people/KeshaFilm/sounds/471834/ -- License: Creative Commons 0
+
+punch-hit.ogg: punch.wav by Ekokubza123 -- https://freesound.org/people/Ekokubza123/sounds/104183/ -- License: Creative Commons 0
+
+roar.ogg: creature_roar_03.ogg from "80 CC0 RPG SFX" by rubberduck -- https://opengameart.org/content/80-cc0-rpg-sfx -- License: Creative Commons 0
+
+rock-hit.ogg: S020_Rock_Impact_Mono.wav by Pól -- https://freesound.org/people/Pól/sounds/385938/ -- License: Creative Commons 0
+
+root.ogg: one plant grows with lettuce.wav by squidge316 -- https://freesound.org/people/squidge316/sounds/677814/ -- License: Creative Commons 0
+
+rumble.ogg: ultrasound boom.flac by jnr hacksaw -- https://freesound.org/people/jnr hacksaw/sounds/11220/ -- License: Creative Commons 0
+
+shatter.ogg: ICEBrk_Break04_InMotionAudio_FREESampleSunday by InMotionAudio -- https://freesound.org/people/InMotionAudio/sounds/719973/ -- License: Creative Commons 0
+
+shield-block.ogg: impactPlate_heavy_002.ogg from "Impact Sounds" by Kenney -- https://kenney.nl/assets/impact-sounds -- License: Creative Commons 0
+
+shout.ogg: man's scream.wav by saraonsins -- https://freesound.org/people/saraonsins/sounds/219814/ -- License: Creative Commons 0
+
+splash.ogg: Splash by swordofkings128 -- https://freesound.org/people/swordofkings128/sounds/398032/ -- License: Creative Commons 0
+
+stab.ogg: Knife Stab.wav by Mixedupmoviestuff -- https://freesound.org/people/Mixedupmoviestuff/sounds/179222/ -- License: Creative Commons 0
+
+stun.ogg: Cartoon, Dizzy 06.wav by LilMati -- https://freesound.org/people/LilMati/sounds/455266/ -- License: Creative Commons 0
+
+swing-heavy.ogg: GASP_Swing_Heavy_3.wav by Rob_Marion -- https://freesound.org/people/Rob_Marion/sounds/542017/ -- License: Creative Commons 0
+
+swing-light.ogg: Swing.mp3 by XxChr0nosxX -- https://freesound.org/people/XxChr0nosxX/sounds/268227/ -- License: Creative Commons 0
+
+thunder.ogg: strike 3 sec.wav by Littlebrojay -- https://freesound.org/people/Littlebrojay/sounds/195439/ -- License: Creative Commons 0
