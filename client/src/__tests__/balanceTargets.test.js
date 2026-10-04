@@ -4,9 +4,9 @@ import {unitTargets, classTargetDps, targetFit} from "../balanceTargets";
 const close = (actual, expected) => actual.forEach((v, i) => expect(v).toBeCloseTo(expected[i], 1));
 
 describe("unitTargets", () => {
-  it("explains a missing or untargeted audience", () => {
-    expect(unitTargets([])).toEqual({missing: "audience"});
-    expect(unitTargets(undefined)).toEqual({missing: "audience"});
+  it("assumes open when untagged, and has no targets above g1 yet", () => {
+    expect(unitTargets([]).audience).toBe("open");
+    expect(unitTargets(undefined).audience).toBe("open");
     expect(unitTargets(["g5", "solo"])).toEqual({untargeted: "g5"});
   });
 

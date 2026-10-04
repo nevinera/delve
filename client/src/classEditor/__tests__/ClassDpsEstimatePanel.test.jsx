@@ -75,14 +75,6 @@ describe("ClassDpsEstimatePanel", () => {
     expect(screen.getByText("12.3 dps")).toHaveClass("target-off"); // vs 25
   });
 
-  it("lowers the targets for a tank or healer", () => {
-    renderPanel({estimate});
-
-    fireEvent.change(screen.getByRole("combobox", {name: /Target role/}), {target: {value: "support"}});
-
-    expect(screen.getByText("16.7 dps")).toBeInTheDocument();
-    expect(screen.getByText("6.7 dps")).toBeInTheDocument();
-  });
 
   it("adds a strategy entry", () => {
     const onStrategyChange = vi.fn();

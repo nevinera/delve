@@ -52,11 +52,11 @@ describe("DamageEstimatePanel", () => {
     expect(screen.getByText("no damage")).toBeInTheDocument();
   });
 
-  it("asks for an audience tag when there are no targets", () => {
-    render(<DamageEstimatePanel estimate={estimate} estimating={false} error={null} onEstimate={() => {}} unitType={{}} />);
+  it("assumes an untagged unit is open", () => {
+    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{maxHP: 300, dps: 25}} />);
 
-    expect(screen.getByText(/Add an audience tag/)).toBeInTheDocument();
-    expect(screen.queryByText(/^target/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Targets for open, solo/)).toBeInTheDocument();
+    expect(screen.getByText("300 HP (this unit: 300)")).toHaveClass("target-on");
   });
 
   it("shows the unit's HP and dps against its tags' targets", () => {

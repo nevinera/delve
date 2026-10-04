@@ -1,4 +1,3 @@
-import {useState} from "react";
 import {classTargetDps, targetFit} from "../balanceTargets";
 
 const DURATION_LABELS = {60: "1m", 300: "5m", 1200: "20m"};
@@ -6,8 +5,6 @@ const DURATION_LABELS = {60: "1m", 300: "5m", 1200: "20m"};
 function formatDuration(seconds) {
   return DURATION_LABELS[seconds] ?? `${seconds}s`;
 }
-
-const ROLE_LABELS = {dps: "DPS", support: "Tank or healer"};
 
 function formatElevation(ee) {
   return ee > 0 ? `+${ee}` : ee === 0 ? "+0" : String(ee);
@@ -151,12 +148,11 @@ function Cell({cell, target}) {
 // DamageEstimatePanel/#72), plus the strategy editor a class needs that an
 // enemy UnitType doesn't: a CharacterClass has no Tactics to drive its own
 // power selection, so the caller supplies a priority-list rotation here.
-// Rows are relative elevation, each with its target DPS for the chosen role
+// Rows are relative elevation, each with a DPS-geared character's target DPS
 // (see docs/combat_balance.md); columns are fight duration (1m/5m/20m - see
 // plans/character-dps-sim.md's decision to always show all three rather than
 // take a caller-chosen duration).
 export default function ClassDpsEstimatePanel({strategy, onStrategyChange, powerNames, estimate, estimating, error, onEstimate}) {
-  const [role, setRole] = useState("dps");
   const results = estimate?.results ?? [];
   const durations = uniqueSorted(results.map((r) => r.durationSeconds));
   const elevations = uniqueSorted(results.map((r) => r.elevation));
@@ -168,14 +164,6 @@ export default function ClassDpsEstimatePanel({strategy, onStrategyChange, power
         <button type="button" className="estimate-dps-button" onClick={onEstimate} disabled={estimating}>
           {estimating ? "Estimating…" : "Estimate DPS"}
         </button>
-        <label className="class-dps-estimate-role">
-          Target role{" "}
-          <select value={role} onChange={(e) => setRole(e.target.value)}>
-            {Object.entries(ROLE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
         {error && <span className="class-dps-estimate-error">{error}</span>}
       </div>
       {results.length > 0 && (
@@ -191,7 +179,7 @@ export default function ClassDpsEstimatePanel({strategy, onStrategyChange, power
           </thead>
           <tbody>
             {elevations.map((ee) => {
-              const target = classTargetDps(ee, role);
+              const target = classTargetDps(ee);
               const label = results.find((r) => r.elevation === ee)?.elevationLabel;
               return (
                 <tr key={ee}>

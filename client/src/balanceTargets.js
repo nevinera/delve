@@ -59,13 +59,13 @@ function span(lo, hi) {
   return lo <= hi ? [lo, hi] : [hi, lo];
 }
 
-// The targets for a unit type's tags, or {missing} / {untargeted} explaining
-// why there are none. hp/dps are [lo, hi] (a range when the pull size spans
-// several unit counts); ttd(plan, ee) is the target seconds for this unit
-// alone to kill a character in that gear profile at that ee, or null.
+// The targets for a unit type's tags (assumed "open" until it's tagged
+// otherwise), or {untargeted} for a group size with no targets yet. hp/dps
+// are [lo, hi] (a range when the pull size spans several unit counts);
+// ttd(plan, ee) is the target seconds for this unit alone to kill a
+// character in that gear profile at that ee, or null.
 export function unitTargets(tags = []) {
-  const audienceTag = tags.find((t) => AUDIENCES[t] || UNTARGETED_AUDIENCES.includes(t));
-  if (!audienceTag) return {missing: "audience"};
+  const audienceTag = tags.find((t) => AUDIENCES[t] || UNTARGETED_AUDIENCES.includes(t)) ?? "open";
   if (!AUDIENCES[audienceTag]) return {untargeted: audienceTag};
   const audience = AUDIENCES[audienceTag];
   const pullTag = tags.find((t) => PULLS[t]) ?? "solo";

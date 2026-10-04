@@ -40,9 +40,6 @@ function Cell({cell, target}) {
 // The unit's own maxHP/dps against the targets for its tags (see
 // docs/combat_balance.md), or why there are none.
 function TargetSummary({targets, maxHP, dps}) {
-  if (targets.missing) {
-    return <p className="damage-estimate-targets">Add an audience tag (open, g1) to see balance targets.</p>;
-  }
   if (targets.untargeted) {
     return <p className="damage-estimate-targets">No balance targets for {targets.untargeted} yet.</p>;
   }
