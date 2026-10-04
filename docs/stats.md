@@ -72,8 +72,8 @@ increasing throughout.
 | +15 | 1.77 |
 | +20 | 2.0 |
 
-At `ee = -20` a character is effectively naked (835 HP) — every attack should take about half their health.
-This is intentionally implausible in real play (see the zone table above), but it does create an
+At `ee = -20` a character is effectively naked: 835 HP, no stats from gear, and abilities at the
+20% floor of [Authored amount scaling](#authored-amount-scaling). This is intentionally implausible in real play (see the zone table above), but it does create an
 edge case in a world's starting zones, where characters genuinely are on-level but have no gear yet.
 See **Trainee Gear** below for how that's handled. This will also be used in cases where _some_ of
 a character's gear isn't supported by the Zone (once provenance restrictions are implemented)
@@ -499,9 +499,10 @@ Neck, Rings, and the weapon don't grant it.
 ### Net stats
 
 **Note:** this worked example (and Bob's below), including the Net Stats table, predates the
-Strength/Agility divisor rebalance, the later Crit/Haste stat swap, and the Avoidance rework above
-- its `/7` division is now `/90`, Crit Rating here would now come from Strength (not Agility)
-directly, and Parry/Dodge no longer exist as separate stacking rolls (see **Avoidance**). The
+Strength/Agility divisor rebalance, the later Crit/Haste stat swap, the Avoidance rework, and the
+Stamina change above - its `/7` division is now `/90`, Crit Rating here would now come from Strength
+(not Agility) directly, Parry/Dodge no longer exist as separate stacking rolls (see **Avoidance**),
+and max HP is now `835 + Stamina * 3`. The
 numbers below haven't been recomputed; treat them as stale/illustrative of the calculation shape,
 not current values. See "Basic Attack DPS" above for the formula actually implemented (which also
 has no `BaseWeaponDamage`/`NominalSwingSpeed` to plug in - those don't exist anywhere in the item
