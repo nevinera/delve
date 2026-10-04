@@ -67,6 +67,22 @@ describe("ClassDpsEstimatePanel", () => {
     expect(screen.getByText("6.1 dps")).toBeInTheDocument();
   });
 
+  it("renders one table per stat priority", () => {
+    renderPanel({
+      estimate: {
+        results: [
+          {priority: "hybrid", durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 12.3},
+          {priority: "dps", durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 15.4},
+        ],
+      },
+    });
+
+    expect(screen.getByText("hybrid gear")).toBeInTheDocument();
+    expect(screen.getByText("dps gear")).toBeInTheDocument();
+    expect(screen.getByText("12.3 dps")).toBeInTheDocument();
+    expect(screen.getByText("15.4 dps")).toBeInTheDocument();
+  });
+
   it("shows each elevation's target DPS and colors cells against it", () => {
     renderPanel({estimate});
 

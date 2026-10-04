@@ -12,16 +12,18 @@ module GameApi
     #           to fall back on, so an omitted/empty strategy means "basic
     #           attack only")
     #
-    # Runs class against every (elevation x duration) cell - 4 elevations
-    # ("trainee"/"dungeon"/"heroic"/"raid", ee = -20/-10/0/10) x 3 durations
-    # (60s/300s/1200s) - neither side is something a caller picks.
+    #           :extended (true also runs the slowest, 1200s duration; the
+    #           class editor never sends it)
     #
-    # Returns {"results" => [{"durationSeconds", "elevation",
+    # Runs class, once per entry in its statPriorities, against every
+    # (elevation x duration) cell - neither side is something a caller picks.
+    #
+    # Returns {"results" => [{"priority", "durationSeconds", "elevation",
     # "elevationLabel", "dps", "basicAttackDamage", "powerDamage",
     # "statusTickDamage", "totalDamage"}, ...]}, one entry per
     # (durationSeconds, elevation) pair.
     def simulate(attrs)
-      validate_attrs(attrs, required: [:class], supported: [:strategy])
+      validate_attrs(attrs, required: [:class], supported: [:strategy, :extended])
       post("/class-dps-sim", attrs)
     end
   end

@@ -1,4 +1,4 @@
-package classdpscli_test
+package classttdcli_test
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/classdps"
-	"github.com/delve-mmo/game-server/internal/classdpscli"
+	"github.com/delve-mmo/game-server/internal/classttdcli"
 )
 
 const puncherJSON = `{
@@ -24,7 +24,7 @@ const puncherJSON = `{
 
 func run(args ...string) (stdout, stderr string, code int) {
 	var out, errOut bytes.Buffer
-	code = classdpscli.Run(args, &out, &errOut)
+	code = classttdcli.Run(args, &out, &errOut)
 	return out.String(), errOut.String(), code
 }
 
@@ -53,18 +53,18 @@ func TestRun_MalformedJSON(t *testing.T) {
 	assert.Contains(t, stderr, "error parsing input")
 }
 
-func TestRun_ValidClassPrintsFullMatrix(t *testing.T) {
+func TestRun_ValidClassPrintsAllCells(t *testing.T) {
 	path := writeTempFile(t, puncherJSON)
 	stdout, stderr, code := run(path)
 	require.Equal(t, 0, code, "stderr: %s", stderr)
 
 	var resp struct {
-		Results []classdps.FlatCell `json:"results"`
+		Results []classdps.TTDCell `json:"results"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &resp))
-	assert.Len(t, resp.Results, (len(classdps.Durations)-1)*len(classdps.Elevations))
+	assert.Len(t, resp.Results, len(classdps.IntendedFor)*len(classdps.Pulls)*len(classdps.Schools)*len(classdps.TTDElevations))
 	for _, cell := range resp.Results {
-		assert.Greater(t, cell.DPS, 0.0)
+		assert.Equal(t, 300.0, cell.CapSeconds)
 	}
 }
 
@@ -76,7 +76,7 @@ func TestRun_ReadsFromStdinWhenPathIsDash(t *testing.T) {
 	require.Equal(t, 0, code, "stderr: %s", stderr)
 
 	var resp struct {
-		Results []classdps.FlatCell `json:"results"`
+		Results []classdps.TTDCell `json:"results"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &resp))
 	assert.NotEmpty(t, resp.Results)
@@ -90,7 +90,7 @@ func writeTempFile(t *testing.T, content string) string {
 }
 
 // setStdin temporarily replaces os.Stdin with a pipe fed content, returning
-// a restore func. Needed since classdpscli.Run reads "-" from os.Stdin
+// a restore func. Needed since classttdcli.Run reads "-" from os.Stdin
 // directly (matching the CLI's real invocation), not an injectable reader.
 func setStdin(t *testing.T, content string) (restore func()) {
 	t.Helper()

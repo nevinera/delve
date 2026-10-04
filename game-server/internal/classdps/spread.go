@@ -29,13 +29,13 @@ func elevationLabel(ee int) string {
 }
 
 // Spread runs Simulate once per Elevations entry, gearing the attacker with
-// a freshly synthesized Trainee Gear kit (see traineegear.go) at that
+// a freshly synthesized Trainee Gear kit for priority (see traineegear.go) at that
 // elevation, for duration seconds. Returns len(Elevations) cells, in
 // Elevations' order.
-func Spread(class instanceconfig.CharacterClass, strategy Strategy, duration float64, rng *rand.Rand) []ElevationResult {
+func Spread(class instanceconfig.CharacterClass, priority instanceconfig.StatPriority, strategy Strategy, duration float64, rng *rand.Rand) []ElevationResult {
 	cells := make([]ElevationResult, 0, len(Elevations))
 	for _, ee := range Elevations {
-		cfg := AttackerConfig{Class: class, EquippedItems: newTraineeGear(class, class.DefaultStatPriority(), ee)}
+		cfg := AttackerConfig{Class: class, EquippedItems: newTraineeGear(class, priority, ee)}
 		cells = append(cells, ElevationResult{
 			Elevation: ee,
 			Label:     elevationLabel(ee),

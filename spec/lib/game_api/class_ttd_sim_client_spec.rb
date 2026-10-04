@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe GameApi::ClassDpsSimClient do
+RSpec.describe GameApi::ClassTtdSimClient do
   let(:base_url) { "http://game-test.local" }
   let(:token) { "test-token-abc" }
   let(:client) { described_class.new(base_url: base_url, auth_tokens: token) }
@@ -21,31 +21,28 @@ RSpec.describe GameApi::ClassDpsSimClient do
   let(:result_body) do
     {
       results: [
-        {durationSeconds: 60.0, elevation: -20, elevationLabel: "trainee",
-         dps: 6.5, basicAttackDamage: 300.0, powerDamage: 90.0, statusTickDamage: 0.0, totalDamage: 390.0},
-        {durationSeconds: 60.0, elevation: -10, elevationLabel: "dungeon",
-         dps: 8.0, basicAttackDamage: 350.0, powerDamage: 130.0, statusTickDamage: 0.0, totalDamage: 480.0}
+        {priority: "hybrid", intendedFor: "open", pull: "solo", school: "physical", elevation: 0,
+         hpLostPct: 20.0, fightSeconds: 12.0, cleared: true, died: false, ttd: 40.0, survives: false, capSeconds: 300.0}
       ]
     }.to_json
   end
 
   describe "#simulate" do
-    it "POSTs to /class-dps-sim and returns the duration x elevation matrix" do
-      stub_request(:post, "#{base_url}/class-dps-sim")
+    it "POSTs to /class-ttd-sim and returns the survivability cells" do
+      stub_request(:post, "#{base_url}/class-ttd-sim")
         .to_return(status: 200, body: result_body, headers: json_headers)
 
       result = client.simulate(valid_attrs)
-      expect(result["results"].length).to eq(2)
-      expect(result["results"].first["elevationLabel"]).to eq("trainee")
-      expect(result["results"].first["dps"]).to eq(6.5)
+      expect(result["results"].length).to eq(1)
+      expect(result["results"].first["ttd"]).to eq(40.0)
     end
 
     it "sends class and strategy in the request body" do
-      stub_request(:post, "#{base_url}/class-dps-sim")
+      stub_request(:post, "#{base_url}/class-ttd-sim")
         .to_return(status: 200, body: result_body, headers: json_headers)
 
       client.simulate(valid_attrs)
-      expect(WebMock).to have_requested(:post, "#{base_url}/class-dps-sim")
+      expect(WebMock).to have_requested(:post, "#{base_url}/class-ttd-sim")
         .with { |req|
           body = JSON.parse(req.body)
           body["class"] == character_class && body["strategy"] == JSON.parse(strategy.to_json)
@@ -53,30 +50,30 @@ RSpec.describe GameApi::ClassDpsSimClient do
     end
 
     it "sends the Bearer token" do
-      stub_request(:post, "#{base_url}/class-dps-sim")
+      stub_request(:post, "#{base_url}/class-ttd-sim")
         .to_return(status: 200, body: result_body, headers: json_headers)
 
       client.simulate(valid_attrs)
-      expect(WebMock).to have_requested(:post, "#{base_url}/class-dps-sim")
+      expect(WebMock).to have_requested(:post, "#{base_url}/class-ttd-sim")
         .with(headers: {"Authorization" => "Bearer #{token}"})
     end
 
     it "accepts extended" do
-      stub_request(:post, "#{base_url}/class-dps-sim")
+      stub_request(:post, "#{base_url}/class-ttd-sim")
         .to_return(status: 200, body: result_body, headers: json_headers)
 
       expect { client.simulate(valid_attrs.merge(extended: true)) }.not_to raise_error
     end
 
     it "accepts an omitted strategy" do
-      stub_request(:post, "#{base_url}/class-dps-sim")
+      stub_request(:post, "#{base_url}/class-ttd-sim")
         .to_return(status: 200, body: result_body, headers: json_headers)
 
       expect { client.simulate(class: character_class) }.not_to raise_error
     end
 
     it "raises UnprocessableError when the game server rejects the request" do
-      stub_request(:post, "#{base_url}/class-dps-sim")
+      stub_request(:post, "#{base_url}/class-ttd-sim")
         .to_return(status: 422, body: '{"error":"invalid request body"}', headers: json_headers)
 
       expect { client.simulate(valid_attrs) }
