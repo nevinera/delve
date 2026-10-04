@@ -11,12 +11,7 @@ class Play::WorldCharactersController < Play::BaseController
   def index
     @show_all = params[:all].present?
     world_characters = @character.world_characters.index_by(&:world_id)
-    worlds = World.where(id: WorldVersion.available.select(:world_id)).or(World.where(id: world_characters.keys))
-    @rows = worlds.order(:repo, :path).filter_map do |world|
-      world_character = world_characters[world.id]
-      next if world_character && !world_character.active? && !@show_all
-      {world:, world_character:, name: world.name || world.key}
-    end
+    @rows = listed_worlds(world_characters.keys).filter_map { |world| world_row(world, world_characters[world.id]) }
   end
 
   def show
@@ -33,8 +28,7 @@ class Play::WorldCharactersController < Play::BaseController
     @result = result.join
     @owned_zone_items = result.owned_zone_items
     @equipped_items = EquippedItems::ForWorldCharacter.call(world_character: result.world_character)
-    @character_settings = @character.setting_or_default.as_client_json
-    @stock_assets = Content::StockAssets.client_json
+    load_client_settings
   rescue EnterWorld::Error, VerifiedContent::Error, GameApi::Error => e
     @error = e.message
     @class_needs_refetch = e.is_a?(CharacterClasses::ChecksumMismatch)
@@ -56,6 +50,20 @@ class Play::WorldCharactersController < Play::BaseController
   end
 
   private
+
+  def listed_worlds(entered_world_ids)
+    World.where(id: WorldVersion.available.select(:world_id)).or(World.where(id: entered_world_ids)).order(:repo, :path)
+  end
+
+  def world_row(world, world_character)
+    return if world_character && !world_character.active? && !@show_all
+    {world:, world_character:, name: world.name || world.key}
+  end
+
+  def load_client_settings
+    @character_settings = @character.setting_or_default.as_client_json
+    @stock_assets = Content::StockAssets.client_json
+  end
 
   def load_character
     @character = current_user.characters.find(params[:character_id])

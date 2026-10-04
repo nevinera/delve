@@ -8,13 +8,17 @@ class Build::CharacterClassesController < Build::BaseController
     character_class = CharacterClass.find(params[:id])
     authorize! :manage, character_class
     FetchCharacterClassContentJob.perform_now(character_class.id)
-    error = character_class.reload.validity_error
-    if error
-      redirect_back_or_to play_characters_path, alert: "#{character_class.identifier} refetched, but it's invalid: #{error}"
-    else
-      redirect_back_or_to play_characters_path, notice: "#{character_class.identifier} refetched."
-    end
+    redirect_back_or_to play_characters_path, **refetch_flash(character_class)
   rescue RuntimeError => e
     redirect_back_or_to play_characters_path, alert: "Couldn't refetch #{character_class.identifier}: #{e.message}"
+  end
+
+  private
+
+  def refetch_flash(character_class)
+    error = character_class.reload.validity_error
+    return {notice: "#{character_class.identifier} refetched."} unless error
+
+    {alert: "#{character_class.identifier} refetched, but it's invalid: #{error}"}
   end
 end

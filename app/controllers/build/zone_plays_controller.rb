@@ -11,16 +11,12 @@ class Build::ZonePlaysController < Build::BaseController
   PlayError = Class.new(StandardError)
 
   def show
-    @key = params[:id]
-    @local = params[:source] == "local"
-    raise ActionController::RoutingError, "local content isn't configured" if @local && !local_content_url
+    load_source_params
     @characters = current_user.characters.order(:name)
     authorize! :read, Character
     return render(:pick) unless params[:character_id]
 
-    @character = current_user.characters.find(params[:character_id])
-    authorize! :read, @character
-    join!
+    join_character!
     render :show, layout: "game_client"
   rescue PlayError, VerifiedContent::Error, Validators::ValidationError, GameApi::Error => e
     @error = e.message
@@ -33,25 +29,54 @@ class Build::ZonePlaysController < Build::BaseController
     authorize! :read, Character
     raise ActionController::RoutingError, "local content isn't configured" unless local_content_url
     key = params[:key].to_s.strip.delete_prefix("/").delete_suffix("/")
-    return redirect_to(build_local_zone_play_path({id: key, elevation: params[:elevation].presence}.compact)) if key.present?
+    return redirect_to(local_play_path(key)) if key.present?
     @local_content_url = local_content_url
   end
 
   private
 
+  def load_source_params
+    @key = params[:id]
+    @local = params[:source] == "local"
+    raise ActionController::RoutingError, "local content isn't configured" if @local && !local_content_url
+  end
+
+  def local_play_path(key)
+    build_local_zone_play_path({id: key, elevation: params[:elevation].presence}.compact)
+  end
+
+  def join_character!
+    @character = current_user.characters.find(params[:character_id])
+    authorize! :read, @character
+    join!
+  end
+
   def join!
+    zone_data, version = load_zone
+    @equipped_items = trainee_gear(zone_data)
+    @result = JoinDirectZone.call(character: @character, zone_key: @key, commit_sha: version,
+      source_url: @zone_source_url, zone_data:, equipped_items: @equipped_items)
+    load_client_settings
+  end
+
+  # Fetches and validates the zone; returns [zone_data, version].
+  def load_zone
     @zone_source_url, version = @local ? local_source : github_source
     body = VerifiedContent.get!(@zone_source_url)
     # The client checks the file it fetches against this, so it plays
     # exactly the zone Rails validated and handed to the game server.
     @zone_source_sha = Digest::SHA1.hexdigest(body)
-    version ||= "local-#{@zone_source_sha.first(12)}"
     zone_data = parse(body)
     Validators::ZoneValidator.validate!(zone_data)
-    @equipped_items = TraineeGear::Imaginary.call(character_class: @character.character_class,
+    [zone_data, version || "local-#{@zone_source_sha.first(12)}"]
+  end
+
+  def trainee_gear(zone_data)
+    TraineeGear::Imaginary.call(character_class: @character.character_class,
       elvl: [zone_data["elvl"].to_i + elevation_offset, 0].max)
-    @result = JoinDirectZone.call(character: @character, zone_key: @key, commit_sha: version,
-      source_url: @zone_source_url, zone_data:, equipped_items: @equipped_items)
+  end
+
+  def load_client_settings
     @character_settings = @character.setting_or_default.as_client_json
     @stock_assets = Content::StockAssets.client_json
   end

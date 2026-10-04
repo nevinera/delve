@@ -89,6 +89,11 @@ module Github
 
     def request(path, accept:, method: :get, body: nil)
       uri = URI("#{BASE_URL}#{path}")
+      req = build_request(uri, method:, accept:, body:)
+      Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(req) }
+    end
+
+    def build_request(uri, method:, accept:, body:)
       req = (method == :post) ? Net::HTTP::Post.new(uri) : Net::HTTP::Get.new(uri)
       req["Authorization"] = "Bearer #{@access_token}"
       req["Accept"] = accept
@@ -97,8 +102,7 @@ module Github
         req["Content-Type"] = "application/json"
         req.body = body.to_json
       end
-
-      Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(req) }
+      req
     end
   end
 end

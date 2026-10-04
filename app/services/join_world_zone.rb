@@ -15,22 +15,31 @@ class JoinWorldZone < JoinZone
   def version = @zone.world_version
 
   def build_attrs
-    character_attrs.merge(
+    character_attrs.merge(zone_attrs, world_attrs).tap do |attrs|
+      attrs[:expires_at] = version.expires_at.iso8601 if version.expires_at
+    end
+  end
+
+  def zone_attrs
+    {
       zone_identifier: @zone.identifier,
       version: version.commit_sha,
       database_id: @zone.id.to_s,
       source_url: version.zone_url(@zone),
       zone_config: @zone_data,
+      exits: @zone.exits
+    }
+  end
+
+  def world_attrs
+    {
       owned_zone_items: @owned_zone_items,
       equipped_items: EquippedItems::ForWorldCharacter.call(world_character: @world_character),
       mode: "world",
       instance_key: "world:#{@zone.id}",
       spawn_at: @world_character.connection_key,
-      exits: @zone.exits,
       world_character_database_id: @world_character.id.to_s,
       world_version_id: version.id.to_s
-    ).tap do |attrs|
-      attrs[:expires_at] = version.expires_at.iso8601 if version.expires_at
-    end
+    }
   end
 end

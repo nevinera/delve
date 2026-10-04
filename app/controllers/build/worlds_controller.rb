@@ -7,8 +7,7 @@ class Build::WorldsController < Build::BaseController
   KEY_FORMAT = Build::AbilitiesController::KEY_FORMAT
 
   def index
-    entries = Github::ContentClient.new(current_user).list_directory_recursive("worlds")
-    @worlds = entries.select { |entry| entry["name"].end_with?(".json") && !entry["name"].end_with?(".layout.json") }.sort_by { |entry| entry["path"] }
+    @worlds = world_entries
     @published_worlds = current_user.worlds.where(path: @worlds.pluck("path")).index_by(&:path)
   end
 
@@ -38,27 +37,41 @@ class Build::WorldsController < Build::BaseController
   # world, not the editor's draft), then creates an unreleased WorldVersion
   # for that tag, which imports itself. Responds with the versions page URL.
   def publish
-    key = params[:id]
-    tag = params[:tag].to_s.strip
     client = Github::ContentClient.new(current_user)
-    world = World.find_or_initialize_by(repo: client.repo, path: "worlds/#{key}.json")
-    world.owner ||= current_user
-    authorize! :manage, world
+    world = manageable_world(client, params[:id])
 
-    error = publish_error(client, tag)
+    error = publish_error(client, tag_param)
     return render(json: {error:}, status: :unprocessable_content) if error
 
-    client.create_tag(tag, client.branch_sha(client.default_branch))
-    World.transaction do
-      world.save!
-      world.world_versions.create!(ref: tag)
-    end
+    create_version!(client, world, tag_param)
     render json: {url: build_publishing_world_path(world)}
   rescue Github::ApiError, ActiveRecord::RecordInvalid => e
     render json: {error: e.message}, status: :unprocessable_content
   end
 
   private
+
+  def tag_param = params[:tag].to_s.strip
+
+  def world_entries
+    entries = Github::ContentClient.new(current_user).list_directory_recursive("worlds")
+    entries.select { |entry| entry["name"].end_with?(".json") && !entry["name"].end_with?(".layout.json") }.sort_by { |entry| entry["path"] }
+  end
+
+  def manageable_world(client, key)
+    World.find_or_initialize_by(repo: client.repo, path: "worlds/#{key}.json").tap do |world|
+      world.owner ||= current_user
+      authorize! :manage, world
+    end
+  end
+
+  def create_version!(client, world, tag)
+    client.create_tag(tag, client.branch_sha(client.default_branch))
+    World.transaction do
+      world.save!
+      world.world_versions.create!(ref: tag)
+    end
+  end
 
   def publish_error(client, tag)
     return "#{client.repo} is private; worlds must be published from a public repo." unless client.public_repo?

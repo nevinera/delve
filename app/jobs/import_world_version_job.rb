@@ -32,16 +32,27 @@ class ImportWorldVersionJob < ApplicationJob
   def import!
     sha = resolve_commit_sha
     base_url = "#{RAW_BASE}/#{world.repo}/#{sha}/"
-    world_body = fetch!(base_url, world.path)
-    world_data = parse!(world_body, world.path)
-    in_file(world.path) { Validators::WorldValidator.validate!(world_data) }
+    world_data = fetch_world!(base_url)
     zones = world_data["zones"].to_h { |key, entry| [key, fetch_zone!(base_url, key, entry)] }
+    entry = link_zones!(world_data, zones)
+    save!(sha:, base_url:, world_data:, zones:, entry:)
+  end
+
+  def fetch_world!(base_url)
+    world_data = parse!(fetch!(base_url, world.path), world.path)
+    in_file(world.path) { Validators::WorldValidator.validate!(world_data) }
+    world_data
+  end
+
+  # Cross-checks the world against its zones and stores each zone's exits
+  # on it; returns the world's default entry point.
+  def link_zones!(world_data, zones)
     zones_by_key = zones.transform_values { |z| z[:data] }
     in_file(world.path) { Validators::WorldReferences.validate!(world_data, zones_by_key) }
     entry = WorldContent::Links.default_entry(world_data)
     raise ImportError, "#{world.path}: every entry point needs a key, so nobody could enter" unless entry
     zones.each { |key, zone| zone[:links] = WorldContent::Links.links_for(world_data, key, zones_by_key) }
-    save!(sha:, base_url:, world_data:, zones:, entry:)
+    entry
   end
 
   def resolve_commit_sha
@@ -90,19 +101,23 @@ class ImportWorldVersionJob < ApplicationJob
   # re-reading the files: the display name, which zone connection is the
   # default entry point, and where each zone's exits lead.
   def save!(sha:, base_url:, world_data:, zones:, entry:)
-    entry_zone, entry_connection = entry
     WorldVersion.transaction do
-      Zone.where(world_version: @version).delete_all
-      zones.each do |key, zone|
-        @version.zones.create!(
-          identifier: key, path: zone[:path], content_sha: zone[:content_sha],
-          links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone)
-        )
-      end
+      replace_zones!(zones, entry)
       @version.update!(
         commit_sha: sha, raw_base_url: base_url, name: world_data["name"], state: :unreleased, imported_at: Time.current
       )
       world.update!(name: world_data["name"]) if world.name.blank?
+    end
+  end
+
+  def replace_zones!(zones, entry)
+    entry_zone, entry_connection = entry
+    Zone.where(world_version: @version).delete_all
+    zones.each do |key, zone|
+      @version.zones.create!(
+        identifier: key, path: zone[:path], content_sha: zone[:content_sha],
+        links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone)
+      )
     end
   end
 end

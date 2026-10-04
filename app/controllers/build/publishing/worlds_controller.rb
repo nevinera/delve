@@ -16,14 +16,20 @@ class Build::Publishing::WorldsController < Build::BaseController
   # Sets up publishing for a world file in the user's linked repo; a no-op
   # (beyond the redirect) when it's already set up.
   def create
-    client = Github::ContentClient.new(current_user)
-    world = World.find_or_initialize_by(repo: client.repo, path: params[:path].to_s)
-    world.owner ||= current_user
+    world = world_for(params[:path].to_s)
     authorize! :manage, world
     if world.save
       redirect_to build_publishing_world_path(world)
     else
       redirect_to build_worlds_path, alert: "Couldn't set up publishing: #{world.errors.full_messages.to_sentence}"
+    end
+  end
+
+  private
+
+  def world_for(path)
+    World.find_or_initialize_by(repo: Github::ContentClient.new(current_user).repo, path:).tap do |world|
+      world.owner ||= current_user
     end
   end
 end

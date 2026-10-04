@@ -28,14 +28,18 @@ class WorldVersion < ApplicationRecord
   def release!
     raise ArgumentError, "only unreleased versions can be released" unless unreleased?
 
-    now = Time.current
     expiring = world.world_versions.released.where(expires_at: nil).where.not(id:)
     expiring_ids = expiring.ids
-    transaction do
-      expiring.update_all(expires_at: now + EXPIRY_GRACE)
-      update!(state: :released, released_at: now)
-      world.update!(name:)
-    end
+    transaction { release_and_expire!(expiring) }
     expiring_ids.each { |expiring_id| PushWorldVersionExpiryJob.perform_later(expiring_id) }
+  end
+
+  private
+
+  def release_and_expire!(expiring)
+    now = Time.current
+    expiring.update_all(expires_at: now + EXPIRY_GRACE)
+    update!(state: :released, released_at: now)
+    world.update!(name:)
   end
 end
