@@ -169,4 +169,34 @@ describe("UnitTypeDraft", () => {
       expect(draft.powerNames).toEqual(["Slash", "Bite"]);
     });
   });
+
+  describe("balance tags", () => {
+    it("sets, replaces and clears one tag per exclusive category", () => {
+      const options = ["open", "g1", "g5"];
+      let draft = new UnitTypeDraft(base, "goblin-raider").setExclusiveTag(options, "open");
+      expect(draft.tags).toEqual(["open"]);
+
+      draft = draft.setExclusiveTag(["solo", "pair"], "pair").setExclusiveTag(options, "g1");
+      expect(draft.tags).toEqual(["pair", "g1"]);
+
+      draft = draft.setExclusiveTag(options, null);
+      expect(draft.tags).toEqual(["pair"]);
+    });
+
+    it("toggles role tags, with tough and glass excluding each other", () => {
+      let draft = new UnitTypeDraft(base, "goblin-raider").toggleRoleTag("healer").toggleRoleTag("tough");
+      expect(draft.tags).toEqual(["healer", "tough"]);
+
+      draft = draft.toggleRoleTag("glass");
+      expect(draft.tags).toEqual(["healer", "glass"]);
+
+      draft = draft.toggleRoleTag("healer");
+      expect(draft.tags).toEqual(["glass"]);
+    });
+
+    it("drops the tags field once it's empty", () => {
+      const draft = new UnitTypeDraft({...base, tags: ["buffs"]}, "goblin-raider").toggleRoleTag("buffs");
+      expect(draft.data).toEqual(base);
+    });
+  });
 });

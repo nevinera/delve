@@ -31,9 +31,9 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
           .to raise_error(Validators::ValidationError, /tags may not repeat/)
       end
 
-      it "raises on two audience tags" do
+      it "raises on two intended-for tags" do
         expect { described_class.validate!(goblin_unit_type.merge("tags" => %w[open g1])) }
-          .to raise_error(Validators::ValidationError, /only one audience tag \(got open, g1\)/)
+          .to raise_error(Validators::ValidationError, /only one intended-for tag \(got open, g1\)/)
       end
 
       it "raises on two pull size tags" do

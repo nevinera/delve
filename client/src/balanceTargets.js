@@ -13,14 +13,31 @@ const ELEVATIONS = {
   [-10]: {a: 2.5, b: 1.3},
 };
 
+// Unit type balance tags, by category (see docs/schema/unit_type.md). Only
+// roles may combine, and never tough with glass.
+export const TAG_CATEGORIES = [
+  {key: "intendedFor", label: "Intended for", exclusive: true, tags: ["open", "g1", "g2", "g3", "g5", "g10"]},
+  {key: "pullSize", label: "Pull size", exclusive: true, tags: ["solo", "pair", "group", "swarm"]},
+  {key: "role", label: "Role", exclusive: false, tags: ["healer", "tough", "debuffs", "buffs", "glass"]},
+  {key: "damageType", label: "Damage type", exclusive: true, tags: ["caster", "melee", "ranged"]},
+];
+
+export const TAG_DESCRIPTIONS = {
+  open: "open world", g1: "solo dungeon", g2: "2 players", g3: "3 players", g5: "5-player dungeon", g10: "10 players",
+  solo: "1 unit", pair: "2 units", group: "3-4 units", swarm: "5-8 units",
+};
+
+// Roles that can't be combined.
+export const EXCLUSIVE_ROLES = {tough: "glass", glass: "tough"};
+
 // solo-pull, squishy, ee = 0. g5's are the single-character equivalent of
 // its party targets (see combat_balance.md's "g5 enemies").
-const AUDIENCES = {
+const INTENDED_FOR = {
   open: {ttk: 12, hpLost: 0.2},
   g1: {ttk: 30, hpLost: 0.65},
   g5: {ttk: 68.75, hpLost: 10},
 };
-const UNTARGETED_AUDIENCES = ["g2", "g3", "g10"];
+const UNTARGETED = ["g2", "g3", "g10"];
 
 // Keyed by the unit-type estimate's gearing plans.
 export const GEAR_PROFILES = {
@@ -67,20 +84,20 @@ function span(lo, hi) {
 // ttd(plan, ee) is the target seconds for this unit alone to kill a
 // character in that gear profile at that ee, or null.
 export function unitTargets(tags = []) {
-  const audienceTag = tags.find((t) => AUDIENCES[t] || UNTARGETED_AUDIENCES.includes(t)) ?? "open";
-  if (!AUDIENCES[audienceTag]) return {untargeted: audienceTag};
-  const audience = AUDIENCES[audienceTag];
+  const intendedForTag = tags.find((t) => INTENDED_FOR[t] || UNTARGETED.includes(t)) ?? "open";
+  if (!INTENDED_FOR[intendedForTag]) return {untargeted: intendedForTag};
+  const intendedFor = INTENDED_FOR[intendedForTag];
   const pullTag = tags.find((t) => PULLS[t]) ?? "solo";
   const pull = PULLS[pullTag];
   const role = roleMultipliers(tags);
 
-  const soloHp = SQUISHY_DPS * audience.ttk;
-  const soloDps = (SQUISHY_EHP * audience.hpLost) / audience.ttk;
+  const soloHp = SQUISHY_DPS * intendedFor.ttk;
+  const soloDps = (SQUISHY_EHP * intendedFor.hpLost) / intendedFor.ttk;
   const [few, many] = pull.n.map((n) => pullUnitMultipliers(pull, n));
   const unitDps = (m) => soloDps * m.dps * role.dps;
 
   return {
-    audience: audienceTag,
+    intendedFor: intendedForTag,
     pull: pullTag,
     hp: span(soloHp * many.hp * role.hp, soloHp * few.hp * role.hp),
     dps: span(unitDps(many), unitDps(few)),

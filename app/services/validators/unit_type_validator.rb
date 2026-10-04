@@ -6,7 +6,7 @@ module Validators
     # Balance tags - see docs/combat_balance.md. At most one tag from each
     # exclusive category; roles combine freely, except tough with glass.
     EXCLUSIVE_TAG_CATEGORIES = {
-      "audience" => %w[open g1 g2 g3 g5 g10],
+      "intended-for" => %w[open g1 g2 g3 g5 g10],
       "pull size" => %w[solo pair group swarm],
       "damage type" => %w[caster melee ranged]
     }.freeze
