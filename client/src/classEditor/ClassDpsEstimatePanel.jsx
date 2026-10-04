@@ -1,12 +1,17 @@
+import {useState} from "react";
+import {classTargetDps, targetFit} from "../balanceTargets";
+
 const DURATION_LABELS = {60: "1m", 300: "5m", 1200: "20m"};
 
 function formatDuration(seconds) {
   return DURATION_LABELS[seconds] ?? `${seconds}s`;
 }
 
-// Elevations in the order the server always returns them (trainee, dungeon,
-// heroic, raid) - see classdps.Elevations.
-const ELEVATION_ORDER = ["trainee", "dungeon", "heroic", "raid"];
+const ROLE_LABELS = {dps: "DPS", support: "Tank or healer"};
+
+function formatElevation(ee) {
+  return ee > 0 ? `+${ee}` : ee === 0 ? "+0" : String(ee);
+}
 
 function uniqueSorted(values) {
   return [...new Set(values)].sort((a, b) => a - b);
@@ -136,23 +141,25 @@ function StrategyEditor({strategy, powerNames, onChange}) {
   );
 }
 
-function Cell({cell}) {
+function Cell({cell, target}) {
   if (!cell) return <td>-</td>;
-  return <td>{cell.dps.toFixed(1)} dps</td>;
+  const fit = target === null ? null : targetFit(cell.dps, [target, target]);
+  return <td className={fit ? `target-${fit}` : undefined}>{cell.dps.toFixed(1)} dps</td>;
 }
 
 // Explicit-click estimate (not live-updating - same UX as
 // DamageEstimatePanel/#72), plus the strategy editor a class needs that an
 // enemy UnitType doesn't: a CharacterClass has no Tactics to drive its own
 // power selection, so the caller supplies a priority-list rotation here.
-// Rows are relative elevation (trainee/dungeon/heroic/raid), columns are
-// fight duration (1m/5m/20m - see plans/character-dps-sim.md's decision to
-// always show all three rather than take a caller-chosen duration).
+// Rows are relative elevation, each with its target DPS for the chosen role
+// (see docs/combat_balance.md); columns are fight duration (1m/5m/20m - see
+// plans/character-dps-sim.md's decision to always show all three rather than
+// take a caller-chosen duration).
 export default function ClassDpsEstimatePanel({strategy, onStrategyChange, powerNames, estimate, estimating, error, onEstimate}) {
+  const [role, setRole] = useState("dps");
   const results = estimate?.results ?? [];
   const durations = uniqueSorted(results.map((r) => r.durationSeconds));
-  const labelsSeen = new Set(results.map((r) => r.elevationLabel));
-  const elevationLabels = ELEVATION_ORDER.filter((label) => labelsSeen.has(label));
+  const elevations = uniqueSorted(results.map((r) => r.elevation));
 
   return (
     <div className="class-dps-estimate">
@@ -161,6 +168,14 @@ export default function ClassDpsEstimatePanel({strategy, onStrategyChange, power
         <button type="button" className="estimate-dps-button" onClick={onEstimate} disabled={estimating}>
           {estimating ? "Estimating…" : "Estimate DPS"}
         </button>
+        <label className="class-dps-estimate-role">
+          Target role{" "}
+          <select value={role} onChange={(e) => setRole(e.target.value)}>
+            {Object.entries(ROLE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </label>
         {error && <span className="class-dps-estimate-error">{error}</span>}
       </div>
       {results.length > 0 && (
@@ -168,20 +183,26 @@ export default function ClassDpsEstimatePanel({strategy, onStrategyChange, power
           <thead>
             <tr>
               <th>Elevation \ Duration</th>
+              <th scope="col">Target</th>
               {durations.map((d) => (
                 <th key={d} scope="col">{formatDuration(d)}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {elevationLabels.map((label) => (
-              <tr key={label}>
-                <th scope="row">{label}</th>
-                {durations.map((d) => (
-                  <Cell key={d} cell={results.find((r) => r.elevationLabel === label && r.durationSeconds === d)} />
-                ))}
-              </tr>
-            ))}
+            {elevations.map((ee) => {
+              const target = classTargetDps(ee, role);
+              const label = results.find((r) => r.elevation === ee)?.elevationLabel;
+              return (
+                <tr key={ee}>
+                  <th scope="row">{formatElevation(ee)}{label ? ` (${label})` : ""}</th>
+                  <td className="class-dps-estimate-target">{target === null ? "-" : `${target.toFixed(1)} dps`}</td>
+                  {durations.map((d) => (
+                    <Cell key={d} cell={results.find((r) => r.elevation === ee && r.durationSeconds === d)} target={target} />
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

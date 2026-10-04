@@ -45,10 +45,33 @@ describe("DamageEstimatePanel", () => {
 
     expect(screen.getByRole("columnheader", {name: "-10"})).toBeInTheDocument();
     expect(screen.getByRole("columnheader", {name: "+0"})).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", {name: "Offense gear"})).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", {name: "Defense gear"})).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", {name: "Offense gear (squishy)"})).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", {name: "Defense gear (tank)"})).toBeInTheDocument();
     expect(screen.getByText("12.3 dps")).toBeInTheDocument();
     expect(screen.getByText("30.5s to kill")).toBeInTheDocument();
     expect(screen.getByText("no damage")).toBeInTheDocument();
   });
+
+  it("asks for an audience tag when there are no targets", () => {
+    render(<DamageEstimatePanel estimate={estimate} estimating={false} error={null} onEstimate={() => {}} unitType={{}} />);
+
+    expect(screen.getByText(/Add an audience tag/)).toBeInTheDocument();
+    expect(screen.queryByText(/^target/)).not.toBeInTheDocument();
+  });
+
+  it("shows the unit's HP and dps against its tags' targets", () => {
+    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{tags: ["open", "pair"], maxHP: 195, dps: 30}} />);
+
+    expect(screen.getByText("195 HP (this unit: 195)")).toHaveClass("target-on");
+    expect(screen.getByText("15.4 dps (this unit: 30)")).toHaveClass("target-off");
+  });
+
+  it("shows each cell's time-to-kill target", () => {
+    render(<DamageEstimatePanel estimate={estimate} estimating={false} error={null} onEstimate={() => {}} unitType={{tags: ["open"]}} />);
+
+    expect(screen.getAllByText("target 60s")).toHaveLength(1); // offense, ee 0
+    expect(screen.getByText("target 46s")).toBeInTheDocument(); // offense, ee -10: 60 / 1.3
+    expect(screen.getByText("30.5s to kill").closest("td")).toHaveClass("target-off"); // defense -10, target 138s
+  });
 });
+

@@ -119,7 +119,7 @@ export default function UnitTypeWorkbench({unitTypeKey, data, onChange, tokenIma
   function renderConfig() {
     switch (area) {
       case "estimate":
-        return <DamageEstimatePanel estimate={estimate} estimating={estimating} error={estimateError} onEstimate={handleEstimate} />;
+        return <DamageEstimatePanel estimate={estimate} estimating={estimating} error={estimateError} onEstimate={handleEstimate} unitType={draft.data} />;
       case "import":
         return (
           <ImportPowerPanel
