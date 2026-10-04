@@ -43,10 +43,13 @@ module Validators
       resources.each_with_index do |resource, i|
         ResourceTypeValidator.validate!(resource, path: index_path(resources_path, i))
       end
+      validate_one_primary_resource!(resources, path: resources_path)
+    end
+
+    def validate_one_primary_resource!(resources, path:)
       primary_count = resources.count { |r| r.is_a?(Hash) && r["displayType"] == "primary" }
-      if primary_count != 1
-        raise ValidationError.new("exactly one resource must set displayType: \"primary\"", path: resources_path)
-      end
+      return if primary_count == 1
+      raise ValidationError.new("exactly one resource must set displayType: \"primary\"", path: path)
     end
 
     def validate_powers!(data, path:)

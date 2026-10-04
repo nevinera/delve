@@ -32,9 +32,11 @@ module Validators
       validate_basic_attack_school!(data, path: path) if given?(data, "basicAttackSchool")
       validate_basic_attack_style!(data, path: path) if given?(data, "basicAttackStyle")
       validate_unit_tags!(data, path: path) if given?(data, "tags")
-      if given?(data, "resource")
-        ResourceTypeValidator.validate!(require_hash!(data, "resource", path: path), path: child_path(path, "resource"))
-      end
+      validate_resource!(data, path: path) if given?(data, "resource")
+    end
+
+    def validate_resource!(data, path:)
+      ResourceTypeValidator.validate!(require_hash!(data, "resource", path: path), path: child_path(path, "resource"))
     end
 
     def validate_fixed_fields!(data, path:)
@@ -59,18 +61,24 @@ module Validators
     def validate_unit_tags!(data, path:)
       tags = require_array!(data, "tags", path: path)
       tags_path = child_path(path, "tags")
-      tags.each_with_index do |tag, i|
-        raise ValidationError.new("tag must be a string", path: index_path(tags_path, i)) unless tag.is_a?(String)
-        require_one_of!(tag, TAGS, path: index_path(tags_path, i))
-      end
+      tags.each_with_index { |tag, i| validate_unit_tag!(tag, path: index_path(tags_path, i)) }
       raise ValidationError.new("tags may not repeat", path: tags_path) if tags.uniq.length < tags.length
+      validate_tag_combination!(tags, path: tags_path)
+    end
+
+    def validate_unit_tag!(tag, path:)
+      raise ValidationError.new("tag must be a string", path: path) unless tag.is_a?(String)
+      require_one_of!(tag, TAGS, path: path)
+    end
+
+    def validate_tag_combination!(tags, path:)
       EXCLUSIVE_TAG_CATEGORIES.each do |category, options|
         chosen = tags & options
         next if chosen.length <= 1
-        raise ValidationError.new("tags may include only one #{category} tag (got #{chosen.join(", ")})", path: tags_path)
+        raise ValidationError.new("tags may include only one #{category} tag (got #{chosen.join(", ")})", path: path)
       end
       return unless tags.include?("tough") && tags.include?("glass")
-      raise ValidationError.new("tags may not include both tough and glass", path: tags_path)
+      raise ValidationError.new("tags may not include both tough and glass", path: path)
     end
 
     def validate_positive_numeric!(data, key, path:)

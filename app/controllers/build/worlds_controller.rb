@@ -30,9 +30,8 @@ class Build::WorldsController < Build::BaseController
   def create
     @key = params[:key].to_s.strip
     @branch = params[:branch].to_s
-    return render_new_with_error("Key is required.") if @key.blank?
-    return render_new_with_error("Key must contain only letters, numbers, underscores and hyphens.") unless @key.match?(KEY_FORMAT)
-    return render_new_with_error("\"#{@key}\" is already taken.") if world_key_taken?(@key)
+    error = key_error
+    return render_new_with_error(error) if error
 
     redirect_to edit_build_world_path(id: @key, branch: @branch.presence)
   end
@@ -47,22 +46,36 @@ class Build::WorldsController < Build::BaseController
   # published unvalidated - and records an unreleased version for that
   # tag, which imports itself. Responds with the versions page URL.
   def publish
-    key = params[:id]
-    tag = params[:tag].to_s.strip
     client = Github::ContentClient.new(current_user)
-    world = World.find_or_initialize_by(repo: client.repo, path: World.self_contained_path(key))
-    world.owner ||= current_user
-    authorize! :manage, world
-
-    error = publish_error(client, tag) || branch_error(client, params[:branch].to_s, params[:expected_sha].to_s)
+    world = publishable_world(client, params[:id])
+    error = publish_request_error(client)
     return render(json: {error:}, status: :unprocessable_content) if error
 
-    tag_and_record_version(client, world, tag, params[:expected_sha].to_s)
+    tag_and_record_version(client, world, publish_tag, params[:expected_sha].to_s)
   rescue Github::ApiError => e
     render json: {error: e.message}, status: :unprocessable_content
   end
 
   private
+
+  def publish_tag = params[:tag].to_s.strip
+
+  def publish_request_error(client)
+    publish_error(client, publish_tag) || branch_error(client, params[:branch].to_s, params[:expected_sha].to_s)
+  end
+
+  def publishable_world(client, key)
+    World.find_or_initialize_by(repo: client.repo, path: World.self_contained_path(key)).tap do |world|
+      world.owner ||= current_user
+      authorize! :manage, world
+    end
+  end
+
+  def key_error
+    return "Key is required." if @key.blank?
+    return "Key must contain only letters, numbers, underscores and hyphens." unless @key.match?(KEY_FORMAT)
+    "\"#{@key}\" is already taken." if world_key_taken?(@key)
+  end
 
   def render_new_with_error(message)
     flash.now[:alert] = message

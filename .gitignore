@@ -34,7 +34,6 @@
 /public/assets
 /public/client
 /node_modules
-/package-lock.json
 
 # Ignore key files for decrypting credentials and more.
 /config/*.key

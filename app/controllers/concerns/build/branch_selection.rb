@@ -15,6 +15,12 @@ module Build::BranchSelection
     @branches = client.branch_names
     requested = params[:branch].presence || cookies[COOKIE]
     @branch = @branches.include?(requested) ? requested : client.default_branch
-    cookies[COOKIE] = {value: @branch, expires: 1.year, same_site: :lax} if params[:branch].present? && @branch == params[:branch]
+    remember_branch
+  end
+
+  # Only an explicit, valid ?branch= is remembered.
+  def remember_branch
+    return unless params[:branch].present? && @branch == params[:branch]
+    cookies[COOKIE] = {value: @branch, expires: 1.year, same_site: :lax}
   end
 end

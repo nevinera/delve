@@ -25,9 +25,8 @@ class Build::AbilitiesController < Build::BaseController
   def create
     @key = params[:key].to_s.strip
     @branch = params[:branch].to_s
-    return render_new_with_error("Key is required.") if @key.blank?
-    return render_new_with_error("Key must contain only letters, numbers, underscores, hyphens, and \"/\" to place it in a subdirectory.") unless @key.match?(KEY_FORMAT)
-    return render_new_with_error("\"#{@key}\" is already taken.") if ability_key_taken?(@key)
+    error = key_error
+    return render_new_with_error(error) if error
 
     redirect_to edit_build_ability_path(id: @key, branch: @branch.presence)
   end
@@ -45,6 +44,12 @@ class Build::AbilitiesController < Build::BaseController
   end
 
   private
+
+  def key_error
+    return "Key is required." if @key.blank?
+    return "Key must contain only letters, numbers, underscores, hyphens, and \"/\" to place it in a subdirectory." unless @key.match?(KEY_FORMAT)
+    "\"#{@key}\" is already taken." if ability_key_taken?(@key)
+  end
 
   def render_new_with_error(message)
     flash.now[:alert] = message
