@@ -24,7 +24,7 @@ Each unit type carries tags (the unit type's `tags` field, see
 
 | Category | Tags | Meaning |
 |---|---|---|
-| Audience | `open`, `g1`, `g2`, `g3`, `g5`, `g10` | How many players it's meant to oppose. `open` is a public quest-zone mob; `gX` is a dungeon elite for X players (`g1` is a solo-dungeon elite, like WoW's delves). |
+| Intended for | `open`, `g1`, `g2`, `g3`, `g5`, `g10` | How many players it's meant to oppose. `open` is a public quest-zone mob; `gX` is a dungeon elite for X players (`g1` is a solo-dungeon elite, like WoW's delves). |
 | Pull size | `solo`, `pair`, `group`, `swarm` | How many units come in a normal pull: 1, 2, 3-4, 5-8. |
 | Role | `healer`, `tough`, `debuffs`, `buffs`, `glass` | Its job in the encounter. |
 | Damage type | `caster`, `melee`, `ranged` | Flavor only - no budget effect (but see **Damage type**). |
@@ -104,7 +104,7 @@ The numbers above are for `solo` pulls. Bigger pulls take longer and cost more, 
 | `group` | 3-4 | x1.6 | x1.4 | x0.53-0.40 | x0.44-0.35 |
 | `swarm` | 5-8 | x1.9 | x1.6 | x0.38-0.24 | x0.28-0.19 |
 
-Per unit, relative to a `solo` unit of the same audience:
+Per unit, relative to a `solo` unit with the same intended-for tag:
 
 ```
 unit HP      = solo HP  * pullTTK / n
@@ -197,7 +197,7 @@ busy healing). Unlike `open`/`g1`, these targets are for the whole party:
 | Tank TTD on the boss, no healing | ~10-12s | 12s: 125 net DPS on the tank |
 | Healing over a boss fight | ~2x a DPS | ~60 HPS |
 
-In the single-character terms the other audiences use (and `balanceTargets.js`), a `solo` `g5`
+In the single-character terms `open` and `g1` use (and `balanceTargets.js`), a `solo` `g5`
 unit has a squishy TTK of 68.75s (1719 HP) and net DPS of 72.7, which the **Pull size** rules turn
 into the trash-pull numbers above. Bosses are tuned by hand from the table, not by tags.
 

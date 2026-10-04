@@ -5,8 +5,8 @@ const close = (actual, expected) => actual.forEach((v, i) => expect(v).toBeClose
 
 describe("unitTargets", () => {
   it("assumes open when untagged, and has no targets above g1 yet", () => {
-    expect(unitTargets([]).audience).toBe("open");
-    expect(unitTargets(undefined).audience).toBe("open");
+    expect(unitTargets([]).intendedFor).toBe("open");
+    expect(unitTargets(undefined).intendedFor).toBe("open");
     expect(unitTargets(["g3", "solo"])).toEqual({untargeted: "g3"});
   });
 

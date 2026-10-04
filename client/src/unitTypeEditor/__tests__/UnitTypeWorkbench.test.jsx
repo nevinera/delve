@@ -99,6 +99,22 @@ describe("UnitTypeWorkbench", () => {
     });
   });
 
+  describe("balance tags", () => {
+    it("picks tags and shows the targets for them beside max HP and DPS", async () => {
+      await renderReady({...initialUnitType, maxHP: 195, dps: 4});
+
+      expect(screen.getByText("target 300")).toBeInTheDocument(); // untagged: assumed open, solo
+      fireEvent.change(screen.getByRole("combobox", {name: "Pull size"}), {target: {value: "pair"}});
+      fireEvent.click(screen.getByRole("checkbox", {name: "glass"}));
+
+      expect(screen.getByText("target 98")).toHaveClass("target-off"); // 195 * 0.5
+      expect(screen.getByText("target 6.7")).toBeInTheDocument(); // 5.13 * 1.3
+      fireEvent.click(screen.getByRole("checkbox", {name: "tough"}));
+      expect(screen.getByRole("checkbox", {name: "glass"})).not.toBeChecked();
+      expect(screen.getByText("target 390")).toHaveClass("target-off");
+    });
+  });
+
   describe("powers", () => {
     it("adds a blank power and opens it", async () => {
       await renderReady();

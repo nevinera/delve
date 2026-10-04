@@ -1,6 +1,7 @@
 import {humanize} from "../abilityEditor/abilityFormatting";
 import {RESOURCE_TYPES} from "../resourceTypes";
 import ImagePicker from "../content/ImagePicker";
+import {TAG_CATEGORIES, TAG_DESCRIPTIONS, unitTargets, targetFit} from "../balanceTargets";
 
 const TARGETING_TYPES = ["aggroTable", "nearest", "healerAggro"];
 const BASIC_ATTACK_SCHOOLS = ["physical", "magic"];
@@ -157,6 +158,53 @@ function TacticsFields({tactics, currentNames, draft, onChange}) {
   );
 }
 
+function tagLabel(tag) {
+  return TAG_DESCRIPTIONS[tag] ? `${tag} (${TAG_DESCRIPTIONS[tag]})` : tag;
+}
+
+// The balance tags docs/combat_balance.md's targets are keyed by: a select
+// per exclusive category, a checkbox per role.
+function BalanceTagFields({draft, onChange}) {
+  const tags = draft.tags;
+  return (
+    <table className="balance-tags">
+      <tbody>
+        {TAG_CATEGORIES.map((category) => (
+          <tr key={category.key}>
+            <th>{category.label}</th>
+            <td>
+              {category.exclusive ? (
+                <select
+                  aria-label={category.label}
+                  value={tags.find((t) => category.tags.includes(t)) ?? ""}
+                  onChange={(e) => onChange(draft.setExclusiveTag(category.tags, e.target.value || null))}
+                >
+                  <option value="">— none —</option>
+                  {category.tags.map((t) => <option key={t} value={t}>{tagLabel(t)}</option>)}
+                </select>
+              ) : (
+                category.tags.map((t) => (
+                  <label key={t} className="balance-tag-role">
+                    <input type="checkbox" checked={tags.includes(t)} onChange={() => onChange(draft.toggleRoleTag(t))} /> {t}
+                  </label>
+                ))
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// "target 300" (or a range) beside Max HP / DPS, colored by fit.
+function TargetHint({value, range, digits}) {
+  if (!range) return null;
+  const [lo, hi] = range.map((n) => n.toFixed(digits));
+  const fit = typeof value === "number" ? targetFit(value, range) : null;
+  return <span className={`field-target${fit ? ` target-${fit}` : ""}`}>target {lo === hi ? lo : `${lo}-${hi}`}</span>;
+}
+
 // Purely presentational - every domain rule (tactics placeholder shapes,
 // rotation/scripted list editing) lives on UnitTypeDraft; this just
 // renders draft's current values and calls its mutator methods. Powers
@@ -166,6 +214,7 @@ export default function UnitTypeFieldsPanel({
 }) {
   const unitTypeData = draft.data;
   const names = draft.powerNames;
+  const targets = unitTargets(draft.tags);
 
   function setField(field) {
     return (value) => onChange(draft.setField(field, value));
@@ -180,8 +229,14 @@ export default function UnitTypeFieldsPanel({
           <tr><th>Token radius (ft)</th><td><NumberField value={unitTypeData.tokenRadius} onChange={setField("tokenRadius")} /></td></tr>
           <tr><th>Speed factor</th><td><NumberField value={unitTypeData.speedFactor} onChange={setField("speedFactor")} /></td></tr>
           <tr><th>Aggro radius (ft)</th><td><NumberField value={unitTypeData.aggroRadius} onChange={setField("aggroRadius")} /></td></tr>
-          <tr><th>Max HP</th><td><NumberField value={unitTypeData.maxHP} onChange={setField("maxHP")} /></td></tr>
-          <tr><th>DPS</th><td><NumberField value={unitTypeData.dps} onChange={setField("dps")} /></td></tr>
+          <tr>
+            <th>Max HP</th>
+            <td><NumberField value={unitTypeData.maxHP} onChange={setField("maxHP")} /> <TargetHint value={unitTypeData.maxHP} range={targets.hp} digits={0} /></td>
+          </tr>
+          <tr>
+            <th>DPS</th>
+            <td><NumberField value={unitTypeData.dps} onChange={setField("dps")} /> <TargetHint value={unitTypeData.dps} range={targets.dps} digits={1} /></td>
+          </tr>
           <tr><th>Attack speed</th><td><NumberField value={unitTypeData.attackSpeed} onChange={setField("attackSpeed")} /></td></tr>
           <tr><th>Basic attack range (ft)</th><td><NumberField value={unitTypeData.basicAttackRange} onChange={setField("basicAttackRange")} /></td></tr>
           <tr>
@@ -195,6 +250,9 @@ export default function UnitTypeFieldsPanel({
           <tr><th>Targeting</th><td><TargetingField targeting={unitTypeData.targeting} draft={draft} onChange={onChange} /></td></tr>
         </tbody>
       </table>
+
+      <h3>Balance tags</h3>
+      <BalanceTagFields draft={draft} onChange={onChange} />
 
       <h3>Token images</h3>
       <TokenImageUrlField draft={draft} onChange={onChange} tokenImages={tokenImages} />

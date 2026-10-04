@@ -47,7 +47,7 @@ function TargetSummary({targets, maxHP, dps}) {
   const dpsFit = typeof dps === "number" ? targetFit(dps, targets.dps) : null;
   return (
     <p className="damage-estimate-targets">
-      Targets for {targets.audience}, {targets.pull}:{" "}
+      Targets for {targets.intendedFor}, {targets.pull}:{" "}
       <span className={hpFit ? `target-${hpFit}` : undefined}>{formatRange(targets.hp)} HP (this unit: {maxHP ?? "-"})</span>,{" "}
       <span className={dpsFit ? `target-${dpsFit}` : undefined}>{formatRange(targets.dps, 1)} dps (this unit: {dps ?? "-"})</span>
     </p>

@@ -1,5 +1,6 @@
 import {resourceTypeById} from "../resourceTypes";
 import {uniqueName} from "../powersEditor/uniqueName";
+import {EXCLUSIVE_ROLES} from "../balanceTargets";
 
 // Starter shape for a freshly-picked tactics type (see
 // Validators::TacticsValidator) - mirrors ClassDraft/AbilityDraft's own
@@ -51,6 +52,31 @@ export class UnitTypeDraft {
     const entries = this.data[section] ?? [];
     const next = entries.map((entry, i) => (i === index ? {...entry, ...fields} : entry));
     return new UnitTypeDraft({...this.data, [section]: next}, this.unitTypeKey);
+  }
+
+  // Balance tags (see balanceTargets.js's TAG_CATEGORIES). An empty list
+  // drops the field.
+  get tags() {
+    return this.data.tags ?? [];
+  }
+
+  setTags(tags) {
+    if (tags.length > 0) return this.setField("tags", tags);
+    const {tags: _dropped, ...rest} = this.data;
+    return new UnitTypeDraft(rest, this.unitTypeKey);
+  }
+
+  // Replaces whichever of options is set (at most one) with tag, or clears
+  // it when tag is null.
+  setExclusiveTag(options, tag) {
+    const rest = this.tags.filter((t) => !options.includes(t));
+    return this.setTags(tag ? [...rest, tag] : rest);
+  }
+
+  // Adds or removes a role tag; adding tough drops glass and vice versa.
+  toggleRoleTag(tag) {
+    if (this.tags.includes(tag)) return this.setTags(this.tags.filter((t) => t !== tag));
+    return this.setTags([...this.tags.filter((t) => t !== EXCLUSIVE_ROLES[tag]), tag]);
   }
 
   get tokenImageUrls() {
