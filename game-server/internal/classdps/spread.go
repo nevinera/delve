@@ -35,7 +35,7 @@ func elevationLabel(ee int) string {
 func Spread(class instanceconfig.CharacterClass, strategy Strategy, duration float64, rng *rand.Rand) []ElevationResult {
 	cells := make([]ElevationResult, 0, len(Elevations))
 	for _, ee := range Elevations {
-		cfg := AttackerConfig{Class: class, EquippedItems: newTraineeGear(class, ee)}
+		cfg := AttackerConfig{Class: class, EquippedItems: newTraineeGear(class, class.DefaultStatPriority(), ee)}
 		cells = append(cells, ElevationResult{
 			Elevation: ee,
 			Label:     elevationLabel(ee),

@@ -14,7 +14,7 @@ import (
 func puncherLikeClass() instanceconfig.CharacterClass {
 	return instanceconfig.CharacterClass{
 		PrimaryStats:   []string{"strength"},
-		SecondaryStats: []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"},
+		StatPriorities: []instanceconfig.StatPriority{{Name: "hybrid", SecondaryStats: []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"}}},
 		Wields:         []string{"dagger", "dagger"},
 	}
 }
@@ -58,7 +58,7 @@ func TestSpread_ClassWithNoWieldsDoesNotPanic(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	class := instanceconfig.CharacterClass{
 		PrimaryStats:   []string{"intellect"},
-		SecondaryStats: []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"},
+		StatPriorities: []instanceconfig.StatPriority{{Name: "hybrid", SecondaryStats: []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"}}},
 	}
 	assert.NotPanics(t, func() {
 		classdps.Spread(class, nil, 60, rng)
@@ -69,7 +69,7 @@ func TestSpread_TwoHandedClassSkipsOffHand(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	class := instanceconfig.CharacterClass{
 		PrimaryStats:   []string{"strength"},
-		SecondaryStats: []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"},
+		StatPriorities: []instanceconfig.StatPriority{{Name: "hybrid", SecondaryStats: []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"}}},
 		Wields:         []string{"greatsword"},
 	}
 	// A two-handed class should still simulate cleanly (no off_hand item,

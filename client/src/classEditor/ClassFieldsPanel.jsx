@@ -1,5 +1,5 @@
 import {entryHeading, humanize} from "../abilityEditor/abilityFormatting";
-import {MAX_RESOURCES, PRIMARY_STATS, SECONDARY_STATS, WIELD_TYPES} from "./classFieldOptions";
+import {MAX_RESOURCES, MAX_STAT_PRIORITIES, PRIMARY_STATS, SECONDARY_STATS, STAT_PRIORITY_NAMES, WIELD_TYPES} from "./classFieldOptions";
 
 const RESOURCE_FIELDS = [
   {key: "name", type: "text"},
@@ -81,28 +81,38 @@ function StatCheckboxList({stats, options, onToggle}) {
   );
 }
 
-// Five ranked picks (highest priority first) from the seven secondary
-// stats - duplicates aren't blocked here (this editor does no validation
-// before saving, same as the ability editor), just left for the class's
-// eventual release-time validation to catch.
-function SecondaryStatsRanking({stats, draft, onChange}) {
-  const ranks = Array.from({length: 5}, (_, i) => stats[i] ?? "");
+// One named gearing: five ranked picks (highest priority first) from the
+// seven secondary stats - duplicates aren't blocked here (this editor does
+// no validation before saving, same as the ability editor), just left for
+// the class's eventual release-time validation to catch.
+function StatPriorityEntry({priority, index, draft, onChange}) {
+  const ranks = Array.from({length: 5}, (_, i) => priority.secondaryStats?.[i] ?? "");
   return (
-    <table>
-      <tbody>
-        {ranks.map((value, i) => (
-          <tr key={i}>
-            <th>Rank {i + 1}</th>
-            <td>
-              <select value={value} onChange={(e) => onChange(draft.setSecondaryStatRank(i, e.target.value))}>
-                <option value="">—</option>
-                {SECONDARY_STATS.map((stat) => <option key={stat} value={stat}>{humanize(stat)}</option>)}
-              </select>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="entry-block">
+      <label>
+        Name{" "}
+        <select value={priority.name ?? ""} onChange={(e) => onChange(draft.setStatPriorityName(index, e.target.value))}>
+          {STAT_PRIORITY_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+        </select>
+      </label>
+      {index === 0 && <span> (used for Trainee Gear)</span>}
+      <table>
+        <tbody>
+          {ranks.map((value, i) => (
+            <tr key={i}>
+              <th>Rank {i + 1}</th>
+              <td>
+                <select value={value} onChange={(e) => onChange(draft.setStatPriorityRank(index, i, e.target.value))}>
+                  <option value="">—</option>
+                  {SECONDARY_STATS.map((stat) => <option key={stat} value={stat}>{humanize(stat)}</option>)}
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button type="button" onClick={() => onChange(draft.removeStatPriority(index))}>Remove</button>
+    </div>
   );
 }
 
@@ -184,8 +194,17 @@ export default function ClassFieldsPanel({draft, onChange}) {
         </tbody>
       </table>
 
-      <h3>Secondary stats (ranked)</h3>
-      <SecondaryStatsRanking stats={classData.secondaryStats ?? []} draft={draft} onChange={onChange} />
+      <h3>Stat priorities</h3>
+      {(classData.statPriorities ?? []).map((priority, index) => (
+        <StatPriorityEntry key={index} priority={priority} index={index} draft={draft} onChange={onChange} />
+      ))}
+      <button
+        type="button" className="add-entry"
+        disabled={(classData.statPriorities ?? []).length >= MAX_STAT_PRIORITIES}
+        onClick={() => onChange(draft.addStatPriority())}
+      >
+        Add stat priority
+      </button>
 
       <h3>Wields</h3>
       <WieldsFields wields={classData.wields ?? []} draft={draft} onChange={onChange} />

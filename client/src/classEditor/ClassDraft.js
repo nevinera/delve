@@ -1,5 +1,5 @@
 import {uniqueName} from "../powersEditor/uniqueName";
-import {MAX_PASSIVES, MAX_RESOURCES, SLOT_COUNT} from "./classFieldOptions";
+import {MAX_PASSIVES, MAX_RESOURCES, MAX_STAT_PRIORITIES, SLOT_COUNT, STAT_PRIORITY_NAMES} from "./classFieldOptions";
 
 const BLANK_RESOURCE = {name: "", color: "888888", max: 100, defaultValue: 0, returnRate: 0, isFluid: false};
 
@@ -51,13 +51,34 @@ export class ClassDraft {
 
   // Rank i is only meaningful once every rank before it is filled, same as
   // a power slot - but unlike powers, an unranked slot is stored as an
-  // explicit "" placeholder (not simply absent), so the ranking always has
-  // exactly 5 entries. See ClassFieldsPanel's SecondaryStatsRanking.
-  setSecondaryStatRank(index, stat) {
-    const current = this.data.secondaryStats ?? [];
+  // explicit "" placeholder (not simply absent), so each priority always has
+  // exactly 5 entries. See ClassFieldsPanel's StatPriorityEntry.
+  setStatPriorityRank(index, rank, stat) {
+    const current = this.data.statPriorities?.[index]?.secondaryStats ?? [];
     const ranks = Array.from({length: 5}, (_, i) => current[i] ?? "");
-    ranks[index] = stat;
-    return this.setField("secondaryStats", ranks);
+    ranks[rank] = stat;
+    return this.updateStatPriority(index, {secondaryStats: ranks});
+  }
+
+  setStatPriorityName(index, name) {
+    return this.updateStatPriority(index, {name});
+  }
+
+  updateStatPriority(index, changes) {
+    const priorities = (this.data.statPriorities ?? []).map((p, i) => (i === index ? {...p, ...changes} : p));
+    return this.setField("statPriorities", priorities);
+  }
+
+  // The new priority takes the first name not already used.
+  addStatPriority() {
+    const priorities = this.data.statPriorities ?? [];
+    if (priorities.length >= MAX_STAT_PRIORITIES) return this;
+    const name = STAT_PRIORITY_NAMES.find((n) => !priorities.some((p) => p.name === n)) ?? STAT_PRIORITY_NAMES[0];
+    return this.addEntry("statPriorities", {name, secondaryStats: ["", "", "", "", ""]});
+  }
+
+  removeStatPriority(index) {
+    return this.removeEntry("statPriorities", index);
   }
 
   setWields(main, off) {

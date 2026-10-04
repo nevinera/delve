@@ -3,7 +3,7 @@ import {ClassDraft} from "../ClassDraft";
 
 const base = {
   name: "Puncher", description: "", colors: {major: "888888", minor: "CCCCCC"},
-  resources: [], powers: [], primaryStats: [], secondaryStats: [], wields: [],
+  resources: [], powers: [], primaryStats: [], statPriorities: [{name: "hybrid", secondaryStats: []}], wields: [],
 };
 
 describe("ClassDraft", () => {
@@ -40,16 +40,35 @@ describe("ClassDraft", () => {
     });
   });
 
-  describe("setSecondaryStatRank", () => {
-    it("pads to 5 ranks, filling the given index", () => {
-      const result = new ClassDraft(base, "puncher").setSecondaryStatRank(0, "crit_rating");
-      expect(result.data.secondaryStats).toEqual(["crit_rating", "", "", "", ""]);
+  describe("stat priorities", () => {
+    const priorities = (draft) => draft.data.statPriorities;
+
+    it("pads a rank edit to 5 ranks, filling the given index", () => {
+      const result = new ClassDraft(base, "puncher").setStatPriorityRank(0, 0, "crit_rating");
+      expect(priorities(result)[0].secondaryStats).toEqual(["crit_rating", "", "", "", ""]);
     });
 
-    it("sets a rank without disturbing the others", () => {
-      const draft = new ClassDraft({...base, secondaryStats: ["crit_rating", "haste_rating"]}, "puncher");
-      const result = draft.setSecondaryStatRank(2, "mastery_rating");
-      expect(result.data.secondaryStats).toEqual(["crit_rating", "haste_rating", "mastery_rating", "", ""]);
+    it("sets a rank without disturbing the others or the name", () => {
+      const draft = new ClassDraft({...base, statPriorities: [{name: "tank", secondaryStats: ["crit_rating", "haste_rating"]}]}, "puncher");
+      const result = draft.setStatPriorityRank(0, 2, "mastery_rating");
+      expect(priorities(result)).toEqual([{name: "tank", secondaryStats: ["crit_rating", "haste_rating", "mastery_rating", "", ""]}]);
+    });
+
+    it("renames a priority", () => {
+      const result = new ClassDraft(base, "puncher").setStatPriorityName(0, "healing");
+      expect(priorities(result)[0]).toEqual({name: "healing", secondaryStats: []});
+    });
+
+    it("adds a priority under the first unused name, up to 3", () => {
+      let draft = new ClassDraft(base, "puncher").addStatPriority();
+      expect(priorities(draft).map((p) => p.name)).toEqual(["hybrid", "dps"]);
+      draft = draft.addStatPriority().addStatPriority();
+      expect(priorities(draft).map((p) => p.name)).toEqual(["hybrid", "dps", "tank"]);
+    });
+
+    it("removes a priority", () => {
+      const draft = new ClassDraft(base, "puncher").addStatPriority().removeStatPriority(0);
+      expect(priorities(draft).map((p) => p.name)).toEqual(["dps"]);
     });
   });
 

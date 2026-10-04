@@ -38,7 +38,7 @@ var primaryRanks = map[int]map[string]int{
 }
 
 // secondaryRanks mirrors TraineeGear::Generate::SECONDARY_RANKS - which
-// ranks (0-indexed into a class's SecondaryStats) each equip slot carries.
+// ranks (0-indexed into a StatPriority's SecondaryStats) each equip slot carries.
 var secondaryRanks = map[string][]int{
 	"head": {0, 1, 2}, "neck": {0, 1, 2}, "shoulders": {1, 3}, "back": {0, 1},
 	"chest": {0, 1, 2}, "wrists": {0, 3}, "hands": {0, 4}, "ring_1": {0, 2},
@@ -60,13 +60,13 @@ func itemSlotFor(equippedSlot string) string {
 
 // newTraineeGear mirrors TraineeGear::Generate.call - synthesizes one
 // EquippedItem for every equip slot class can fill, from its
-// PrimaryStats/SecondaryStats/Wields, all at relative elevation ee (see
+// PrimaryStats/Wields and one StatPriority, all at relative elevation ee (see
 // attacker.go/problem-solving note: an empty instanceconfig.Zone{} always
 // resolves MapElvl to 0, so setting every item's Elvl to ee directly
 // reproduces the desired relative elevation through the normal
 // unitEffectiveStats/itemstats.ScaledSum pathway command functions already
 // use).
-func newTraineeGear(class instanceconfig.CharacterClass, ee int) map[string]instanceconfig.EquippedItem {
+func newTraineeGear(class instanceconfig.CharacterClass, priority instanceconfig.StatPriority, ee int) map[string]instanceconfig.EquippedItem {
 	twoHanded := len(class.Wields) == 1
 
 	kit := make(map[string]instanceconfig.EquippedItem, len(equippedSlots))
@@ -74,14 +74,14 @@ func newTraineeGear(class instanceconfig.CharacterClass, ee int) map[string]inst
 		if equippedSlot == "off_hand" && twoHanded {
 			continue
 		}
-		kit[equippedSlot] = traineeGearItemFor(class, equippedSlot, ee, twoHanded)
+		kit[equippedSlot] = traineeGearItemFor(class, priority, equippedSlot, ee, twoHanded)
 	}
 	return kit
 }
 
-func traineeGearItemFor(class instanceconfig.CharacterClass, equippedSlot string, ee int, twoHanded bool) instanceconfig.EquippedItem {
+func traineeGearItemFor(class instanceconfig.CharacterClass, priority instanceconfig.StatPriority, equippedSlot string, ee int, twoHanded bool) instanceconfig.EquippedItem {
 	if equippedSlot == "main_hand" || equippedSlot == "off_hand" {
-		if item, ok := traineeWeaponItemFor(class, equippedSlot, ee, twoHanded); ok {
+		if item, ok := traineeWeaponItemFor(class, priority, equippedSlot, ee, twoHanded); ok {
 			return item
 		}
 		return instanceconfig.EquippedItem{}
@@ -90,7 +90,7 @@ func traineeGearItemFor(class instanceconfig.CharacterClass, equippedSlot string
 	item := instanceconfig.EquippedItem{
 		Slot:           itemSlotFor(equippedSlot),
 		Elvl:           ee,
-		SecondaryStats: secondaryStatsFor(class, equippedSlot),
+		SecondaryStats: secondaryStatsFor(priority, equippedSlot),
 	}
 	if p := primaryStatFor(class, equippedSlot); p != "" {
 		item.PrimaryStat = &p
@@ -102,7 +102,7 @@ func traineeGearItemFor(class instanceconfig.CharacterClass, equippedSlot string
 // malformed class with too few Wields entries for the slot it's asked
 // about) rather than panicking, so a bad request body fails gracefully
 // instead of crashing the handler.
-func traineeWeaponItemFor(class instanceconfig.CharacterClass, equippedSlot string, ee int, twoHanded bool) (item instanceconfig.EquippedItem, ok bool) {
+func traineeWeaponItemFor(class instanceconfig.CharacterClass, priority instanceconfig.StatPriority, equippedSlot string, ee int, twoHanded bool) (item instanceconfig.EquippedItem, ok bool) {
 	wieldIndex := 0
 	if equippedSlot == "off_hand" {
 		wieldIndex = 1
@@ -117,7 +117,7 @@ func traineeWeaponItemFor(class instanceconfig.CharacterClass, equippedSlot stri
 		Slot:           weaponSlotFor(equippedSlot, twoHanded),
 		Elvl:           ee,
 		Shield:         shield,
-		SecondaryStats: secondaryStatsFor(class, equippedSlot),
+		SecondaryStats: secondaryStatsFor(priority, equippedSlot),
 	}
 	if !shield {
 		if p := primaryStatFor(class, equippedSlot); p != "" {
@@ -154,12 +154,12 @@ func primaryStatFor(class instanceconfig.CharacterClass, equippedSlot string) st
 	return class.PrimaryStats[rank]
 }
 
-func secondaryStatsFor(class instanceconfig.CharacterClass, equippedSlot string) []string {
+func secondaryStatsFor(priority instanceconfig.StatPriority, equippedSlot string) []string {
 	ranks := secondaryRanks[equippedSlot]
 	out := make([]string, 0, len(ranks))
 	for _, rank := range ranks {
-		if rank < len(class.SecondaryStats) {
-			out = append(out, class.SecondaryStats[rank])
+		if rank < len(priority.SecondaryStats) {
+			out = append(out, priority.SecondaryStats[rank])
 		}
 	}
 	return out

@@ -5,7 +5,7 @@ RSpec.describe CharacterClasses::Refetch do
     {
       "name" => "Puncher", "colors" => {"major" => "8B4513", "minor" => "F4A460"},
       "primaryStats" => ["strength"],
-      "secondaryStats" => %w[stamina crit_rating haste_rating mastery_rating versatility_rating],
+      "statPriorities" => [{"name" => "hybrid", "secondaryStats" => %w[stamina crit_rating haste_rating mastery_rating versatility_rating]}],
       "wields" => %w[dagger dagger],
       "resources" => [{"name" => "energy", "color" => "FFDD00", "max" => 100, "defaultValue" => 100, "isFluid" => true, "displayType" => "primary"}],
       "powers" => [{"name" => "Punch", "castTime" => nil, "globalCooldown" => 0.5,

@@ -4,6 +4,9 @@
 // validators' enums.
 export const PRIMARY_STATS = ["strength", "agility", "intellect"];
 
+export const STAT_PRIORITY_NAMES = ["dps", "hybrid", "tank", "healing"];
+export const MAX_STAT_PRIORITIES = 3;
+
 export const SECONDARY_STATS = [
   "stamina", "crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "defence_rating", "recovery_rating",
 ];

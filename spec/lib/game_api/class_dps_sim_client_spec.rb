@@ -11,7 +11,7 @@ RSpec.describe GameApi::ClassDpsSimClient do
     {
       "name" => "Puncher",
       "primaryStats" => ["strength"],
-      "secondaryStats" => ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"],
+      "statPriorities" => [{"name" => "hybrid", "secondaryStats" => ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"]}],
       "wields" => ["dagger", "dagger"]
     }
   end

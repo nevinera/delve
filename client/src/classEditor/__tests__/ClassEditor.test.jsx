@@ -37,7 +37,7 @@ vi.mock("../ClassPreviewPane", () => ({
 
 const initialClass = {
   name: "Puncher", description: "", colors: {major: "888888", minor: "CCCCCC"},
-  resources: [], powers: [], primaryStats: [], secondaryStats: [], wields: [],
+  resources: [], powers: [], primaryStats: [], statPriorities: [], wields: [],
 };
 
 const punch = {name: "Punch", maxRange: 5, effects: []};
