@@ -1,7 +1,7 @@
 // Commits any number of files - JSON objects and/or uploaded File/Blob
 // assets - to the user's connected content repo as a single atomic commit,
 // entirely from the browser (never through the Rails backend). Uses
-// GitHub's Git Data API (blob -> tree -> commit -> ref), not the Contents
+// GitHub's Git Data API ([blob for binaries ->] tree -> commit -> ref), not the Contents
 // API, specifically because it needs no per-file "does this already exist"
 // check: a tree entry at a given path either already exists in the base
 // tree (and gets replaced) or doesn't (and gets added) - the same call
@@ -48,21 +48,24 @@ function readFileAsBase64(file) {
 }
 
 // A file's content may be a plain object (serialized as pretty-printed
-// JSON), a string (written as-is), or a File/Blob (an uploaded asset,
-// base64-encoded).
-async function encodeContent(content) {
-  if (content instanceof Blob) return {content: await readFileAsBase64(content), encoding: "base64"};
-  if (typeof content === "string") return {content, encoding: "utf-8"};
-  return {content: JSON.stringify(content, null, 2), encoding: "utf-8"};
+// JSON), a string (written as-is), or a File/Blob (an uploaded asset).
+// Text goes straight into its tree entry as `content` (the create-tree API
+// accepts that in place of a blob sha), so only binary assets cost a
+// separate POST /git/blobs request - a JSON-only save is the same handful
+// of requests however many files it touches.
+function textContent(content) {
+  return typeof content === "string" ? content : JSON.stringify(content, null, 2);
 }
 
-async function createBlob(token, repo, path, content) {
-  const {content: encoded, encoding} = await encodeContent(content);
+async function treeEntry(token, repo, path, content) {
+  const entry = {path, mode: "100644", type: "blob"};
+  if (!(content instanceof Blob)) return {...entry, content: textContent(content)};
+
   const blob = await githubRequest(token, `/repos/${repo}/git/blobs`, {
     method: "POST",
-    body: JSON.stringify({content: encoded, encoding}),
+    body: JSON.stringify({content: await readFileAsBase64(content), encoding: "base64"}),
   });
-  return {path, sha: blob.sha};
+  return {...entry, sha: blob.sha};
 }
 
 // filesByPath: {"abilities/firebolt.json": {...}, "graphics/animations/firebolt.png": File}
@@ -85,13 +88,13 @@ export async function commitFiles(filesByPath, {message}) {
 
   const baseCommit = await githubRequest(token, `/repos/${repo}/git/commits/${baseCommitSha}`);
 
-  const blobs = await Promise.all(paths.map((path) => createBlob(token, repo, path, filesByPath[path])));
+  const entries = await Promise.all(paths.map((path) => treeEntry(token, repo, path, filesByPath[path])));
 
   const tree = await githubRequest(token, `/repos/${repo}/git/trees`, {
     method: "POST",
     body: JSON.stringify({
       base_tree: baseCommit.tree.sha,
-      tree: blobs.map(({path, sha}) => ({path, mode: "100644", type: "blob", sha})),
+      tree: entries,
     }),
   });
 
