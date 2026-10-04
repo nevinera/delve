@@ -3,7 +3,7 @@ import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityForm
 import {entryFieldsFor, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
 import StatusEditor from "./StatusEditor";
-import {iconTint} from "../IconImage";
+import ColorField from "../ColorField";
 
 // Order entries are added/listed in - graphic, then sound, then effect.
 const EFFECT_SECTIONS = ["graphicEffects", "soundEffects", "effects"];
@@ -35,7 +35,7 @@ function EditableField({field, type, value, draft, onChange}) {
     return <TagsField value={value} onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
   }
   if (type === "color") {
-    return <ColorField value={value} onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
+    return <ColorField label="Pick icon color" value={value} emptyLabel="default (white)" clearable onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
   }
 
   return (
@@ -49,19 +49,6 @@ function EditableField({field, type, value, draft, onChange}) {
         onChange(draft.setField(field, parsed));
       }}
     />
-  );
-}
-
-// A color picker for an optional color: unset shows as white (the icon's
-// own default), and Clear removes it again.
-function ColorField({value, onChange}) {
-  const hex = iconTint(value) ?? "#ffffff";
-  return (
-    <div className="color-field">
-      <input type="color" aria-label="Pick color" value={hex.toLowerCase()} onChange={(e) => onChange(e.target.value)} />
-      <span>{value ? hex : "default (white)"}</span>
-      {value && <button type="button" onClick={() => onChange(null)}>Clear</button>}
-    </div>
   );
 }
 
@@ -211,6 +198,8 @@ function EntryField({field, value, onChange, stockAssets}) {
       return <RangeField value={value} onChange={onChange} zeroBased={field === "range"} />;
     case "tags":
       return <TagsField value={value} onChange={onChange} />;
+    case "color":
+      return <ColorField label={`Pick ${field}`} value={value} emptyLabel="no tint" clearable onChange={onChange} />;
     case "number":
       return (
         <input

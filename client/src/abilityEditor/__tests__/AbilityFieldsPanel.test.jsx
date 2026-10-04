@@ -58,7 +58,7 @@ describe("AbilityFieldsPanel", () => {
       const onChange = renderPanel(ability);
       expect(screen.getByText("default (white)")).toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText("Pick color"), {target: {value: "#ff8a3d"}});
+      fireEvent.change(screen.getByLabelText("Pick icon color"), {target: {value: "#ff8a3d"}});
 
       expect(onChange.mock.calls[0][0].data.iconColor).toBe("#ff8a3d");
     });

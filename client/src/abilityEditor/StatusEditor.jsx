@@ -10,6 +10,7 @@
 // this component any more.
 
 import {StockAssetPicker} from "./AbilityFieldsPanel";
+import ColorField from "../ColorField";
 
 const TREAT_AS_OPTIONS = ["buff", "debuff", "inherent"];
 const STACKING_OPTIONS = ["extend", "replace", "stack"];
@@ -87,7 +88,7 @@ function AuraEffectFields({aura, onChange, onPickStock, onRemove, stockAssets}) 
           </tr>
           <tr><th>Scale</th><td><NumberField value={aura.scale} onChange={(scale) => onChange({scale})} /></td></tr>
           <tr><th>Opacity</th><td><NumberField value={aura.opacity} onChange={(opacity) => onChange({opacity})} /></td></tr>
-          <tr><th>Color</th><td><TextField value={aura.color} onChange={(color) => onChange({color})} /></td></tr>
+          <tr><th>Color</th><td><ColorField label="Pick aura color" value={aura.color} emptyLabel="no tint" clearable onChange={(color) => onChange({color})} /></td></tr>
           <tr><th>Sprite columns</th><td><NumberField value={aura.spriteColumns} onChange={(spriteColumns) => onChange({spriteColumns})} /></td></tr>
           <tr><th>Sprite rows</th><td><NumberField value={aura.spriteRows} onChange={(spriteRows) => onChange({spriteRows})} /></td></tr>
           <tr><th>Sprite frame count</th><td><NumberField value={aura.spriteFrameCount} onChange={(spriteFrameCount) => onChange({spriteFrameCount})} /></td></tr>

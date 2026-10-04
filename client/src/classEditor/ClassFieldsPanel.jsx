@@ -1,9 +1,10 @@
 import {entryHeading, humanize} from "../abilityEditor/abilityFormatting";
 import {MAX_RESOURCES, MAX_STAT_PRIORITIES, PRIMARY_STATS, SECONDARY_STATS, STAT_PRIORITY_NAMES, WIELD_TYPES} from "./classFieldOptions";
+import ColorField from "../ColorField";
 
 const RESOURCE_FIELDS = [
   {key: "name", type: "text"},
-  {key: "color", type: "text"},
+  {key: "color", type: "color"},
   {key: "max", type: "number"},
   {key: "defaultValue", type: "number"},
   {key: "returnRate", type: "number"},
@@ -56,6 +57,8 @@ function ResourceEntry({resource, index, draft, onChange}) {
                       onChange={(e) => onChange(draft.updateResourceField(index, key, e.target.checked))}
                     />
                   )
+                  : type === "color"
+                    ? <ColorField label="Pick resource color" value={resource[key]} onChange={(value) => onChange(draft.updateResourceField(index, key, value))} />
                   : type === "number"
                     ? <NumberField value={resource[key]} onChange={(value) => onChange(draft.updateResourceField(index, key, value))} />
                     : <TextField value={resource[key]} onChange={(value) => onChange(draft.updateResourceField(index, key, value))} />}
@@ -166,7 +169,8 @@ export default function ClassFieldsPanel({draft, onChange}) {
           <tr>
             <th>Major color</th>
             <td>
-              <TextField
+              <ColorField
+                label="Pick major color"
                 value={classData.colors?.major}
                 onChange={(value) => onChange(draft.setColor("major", value))}
               />
@@ -175,7 +179,8 @@ export default function ClassFieldsPanel({draft, onChange}) {
           <tr>
             <th>Minor color</th>
             <td>
-              <TextField
+              <ColorField
+                label="Pick minor color"
                 value={classData.colors?.minor}
                 onChange={(value) => onChange(draft.setColor("minor", value))}
               />
