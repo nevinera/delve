@@ -1,3 +1,4 @@
+import IconImage from "./IconImage";
 import {resolveStockAssetUrl} from "./resolveStockAssetUrl";
 import {describeEffects, hastedCastTime} from "./abilityEffectText";
 
@@ -79,7 +80,7 @@ export function ClassSheet({open, className, classDescription, powers = [], comb
               const effects = describeEffects(ability, {combatStats});
               return (
                 <li key={`${ability.name}-${i}`} style={styles.row}>
-                  {url ? <img src={url} alt={ability.name} style={styles.icon} /> : <span style={styles.iconBlank} />}
+                  {url ? <IconImage src={url} color={ability.iconColor} alt={ability.name} style={styles.icon} /> : <span style={styles.iconBlank} />}
                   <div>
                     <div style={styles.name}>{ability.name}</div>
                     <div style={styles.summary}>{statSummary(ability, combatStats)}</div>

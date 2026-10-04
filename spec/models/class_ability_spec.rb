@@ -31,6 +31,25 @@ RSpec.describe ClassAbility, type: :model do
     expect { character_class.destroy }.to change(described_class, :count).by(-1)
   end
 
+  describe "#icon_color" do
+    it "reads iconColor from the source JSON, adding a missing #" do
+      expect(build(:class_ability, source_json: {"iconColor" => "ff8a3d"}).icon_color).to eq("#ff8a3d")
+      expect(build(:class_ability, source_json: {"iconColor" => "#FF8A3D"}).icon_color).to eq("#FF8A3D")
+    end
+
+    it "is nil when absent or not a hex color" do
+      expect(build(:class_ability, source_json: {}).icon_color).to be_nil
+      expect(build(:class_ability, source_json: {"iconColor" => "red"}).icon_color).to be_nil
+    end
+  end
+
+  describe "#icon_mask_url" do
+    it "passes a plain URL through and refuses one that could break out of a CSS url()" do
+      expect(build(:class_ability, icon_url: "/abilities/icons/slash.svg").icon_mask_url).to eq("/abilities/icons/slash.svg")
+      expect(build(:class_ability, icon_url: "x.svg') ; background: url('y").icon_mask_url).to be_nil
+    end
+  end
+
   describe "#stat_summary" do
     it "lists cost, cast time, GCD, cooldown, and range" do
       ability = build(:class_ability, cost_type: "energy", cost_amount: 30.0, cast_time: 1.5,

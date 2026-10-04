@@ -20,6 +20,7 @@ module Validators
       require_string!(data, "description", path: path) if given?(data, "description")
       validate_tags!(data, path: path) if given?(data, "tags")
       validate_icon_url!(data, path: path) if given?(data, "iconURL")
+      validate_hex_color!(data, "iconColor", path: path) if given?(data, "iconColor")
       validate_speed!(data, path: path) if given?(data, "speed")
       validate_graphic_effects!(data, path: path) if given?(data, "graphicEffects")
       validate_sound_effects!(data, path: path) if given?(data, "soundEffects")

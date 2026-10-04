@@ -27,9 +27,12 @@ describe("widgetFor", () => {
     expect(widgetFor("status")).toEqual("status");
   });
 
+  it("uses a color picker for color", () => {
+    expect(widgetFor("color")).toEqual("color");
+  });
+
   it("falls back to text for everything else", () => {
     expect(widgetFor("sourceURL")).toEqual("text");
-    expect(widgetFor("color")).toEqual("text");
     expect(widgetFor("resourceName")).toEqual("text");
     expect(widgetFor("somethingUnknown")).toEqual("text");
   });

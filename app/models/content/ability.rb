@@ -6,6 +6,7 @@ module Content
     attribute :name, :string
     attribute :description, :string
     attribute :icon_url, :string
+    attribute :icon_color, :string
     attribute :cast_time, :float
     attribute :global_cooldown, :float
     attribute :cooldown, :float
@@ -34,6 +35,7 @@ module Content
         name: hash["name"],
         description: hash["description"],
         icon_url: hash["iconURL"],
+        icon_color: hash["iconColor"],
         cast_time: hash["castTime"],
         global_cooldown: hash["globalCooldown"],
         cooldown: hash["cooldown"],
@@ -63,7 +65,7 @@ module Content
     private
 
     def optional_fields
-      {"description" => description, "cooldown" => cooldown, "maxRange" => max_range, "speed" => speed, "tags" => tags.presence}.compact
+      {"description" => description, "iconColor" => icon_color, "cooldown" => cooldown, "maxRange" => max_range, "speed" => speed, "tags" => tags.presence}.compact
     end
   end
 end

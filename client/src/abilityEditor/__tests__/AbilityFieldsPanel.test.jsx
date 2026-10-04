@@ -53,6 +53,25 @@ function renderPanel(data, props = {}) {
 }
 
 describe("AbilityFieldsPanel", () => {
+  describe("icon color", () => {
+    it("shows the default when unset, and sets iconColor from the picker", () => {
+      const onChange = renderPanel(ability);
+      expect(screen.getByText("default (white)")).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText("Pick icon color"), {target: {value: "#ff8a3d"}});
+
+      expect(onChange.mock.calls[0][0].data.iconColor).toBe("#ff8a3d");
+    });
+
+    it("clears iconColor back to the default", () => {
+      const onChange = renderPanel({...ability, iconColor: "#ff8a3d"});
+
+      fireEvent.click(screen.getByRole("button", {name: "Clear"}));
+
+      expect(onChange.mock.calls[0][0].data.iconColor).toBeNull();
+    });
+  });
+
   it("renders every recognized field even when the ability lacks it, e.g. cooldown", () => {
     renderPanel(ability);
     expect(screen.getByText("Cooldown")).toBeInTheDocument();

@@ -11,6 +11,20 @@ class ClassAbility < ApplicationRecord
     [cost_summary, cast_summary, *timing_summaries].compact.join(" · ")
   end
 
+  # icon_url for a CSS url(), or nil if it has characters that could break
+  # out of one.
+  def icon_mask_url
+    icon_url if icon_url.present? && !icon_url.match?(/["'()\\\s]/)
+  end
+
+  # The ability's iconColor (see docs/schema/ability.md) as a CSS color,
+  # or nil when it gives none.
+  def icon_color
+    color = source_json&.dig("iconColor")
+    return unless color.is_a?(String) && Validators::Helpers::HEX_COLOR_RE.match?(color)
+    color.start_with?("#") ? color : "##{color}"
+  end
+
   private
 
   def cost_summary

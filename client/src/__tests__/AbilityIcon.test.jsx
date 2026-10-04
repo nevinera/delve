@@ -11,6 +11,15 @@ describe("AbilityIcon", () => {
     expect(img).toHaveClass("power-slot-icon");
   });
 
+  it("tints the icon with iconColor by masking a div filled with that color", () => {
+    render(<AbilityIcon ability={{name: "Slash", iconURL: "slash.svg", iconColor: "ff8a3d"}} className="power-slot-icon" onClick={vi.fn()} />);
+
+    const icon = screen.getByRole("img", {name: "Slash"});
+    expect(icon.tagName).toBe("DIV");
+    expect(icon).toHaveClass("power-slot-icon");
+    expect(icon.style.backgroundColor).toBe("rgb(255, 138, 61)");
+  });
+
   it("renders a clickable fallback badge with the ability's initials when there is no iconURL", () => {
     render(<AbilityIcon ability={{name: "Enrage"}} className="power-slot-icon" onClick={vi.fn()} />);
 

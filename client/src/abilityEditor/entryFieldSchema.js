@@ -35,6 +35,7 @@ export function widgetFor(field) {
   if (SELECT_OPTIONS[field]) return "select";
   if (RANGE_FIELDS.has(field)) return "range";
   if (field === "tags") return "tags";
+  if (field === "color") return "color";
   if (NUMBER_FIELDS.has(field)) return "number";
   return "text";
 }

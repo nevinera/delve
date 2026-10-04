@@ -3,6 +3,7 @@ import {entryHeading, entryTypeLabel, formatValue, humanize} from "./abilityForm
 import {entryFieldsFor, selectOptions, widgetFor} from "./entryFieldSchema";
 import {assetOverrideKey} from "./resolveAbilityForPlayback";
 import StatusEditor from "./StatusEditor";
+import ColorField from "../ColorField";
 
 // Order entries are added/listed in - graphic, then sound, then effect.
 const EFFECT_SECTIONS = ["graphicEffects", "soundEffects", "effects"];
@@ -15,6 +16,7 @@ const TOP_LEVEL_FIELDS = [
   {key: "name", type: "text", editable: true},
   {key: "description", type: "text", editable: true},
   {key: "iconURL", type: "text", editable: true, upload: true},
+  {key: "iconColor", type: "color", editable: true},
   {key: "castTime", type: "number", editable: true},
   {key: "globalCooldown", type: "number", editable: true},
   {key: "cooldown", type: "number", editable: true},
@@ -31,6 +33,9 @@ const TOP_LEVEL_FIELDS = [
 function EditableField({field, type, value, draft, onChange}) {
   if (type === "tags") {
     return <TagsField value={value} onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
+  }
+  if (type === "color") {
+    return <ColorField label="Pick icon color" value={value} emptyLabel="default (white)" clearable onChange={(newValue) => onChange(draft.setField(field, newValue))} />;
   }
 
   return (
@@ -193,6 +198,8 @@ function EntryField({field, value, onChange, stockAssets}) {
       return <RangeField value={value} onChange={onChange} zeroBased={field === "range"} />;
     case "tags":
       return <TagsField value={value} onChange={onChange} />;
+    case "color":
+      return <ColorField label={`Pick ${field}`} value={value} emptyLabel="no tint" clearable onChange={onChange} />;
     case "number":
       return (
         <input
