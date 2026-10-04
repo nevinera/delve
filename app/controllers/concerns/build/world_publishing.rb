@@ -1,6 +1,8 @@
 # Tagging and version-suggestion helpers shared by the two world editors'
 # Publish actions (Build::WorldsController, Build::WorldEditorController).
 module Build::WorldPublishing
+  include Build::ContentTagging
+
   TAG_FORMAT = %r{\A[\w-]+(?:[/.][\w-]+)*\z}
 
   private
@@ -9,13 +11,6 @@ module Build::WorldPublishing
     return "#{client.repo} is private; worlds must be published from a public repo." unless client.public_repo?
     return "Tag must be letters, numbers, \"-\" and \"_\", separated by \"/\" or \".\"." unless tag.match?(TAG_FORMAT)
     "Tag \"#{tag}\" already exists." if tag_exists?(client, tag)
-  end
-
-  def tag_exists?(client, tag)
-    client.tag_sha(tag)
-    true
-  rescue Github::NotFoundError
-    false
   end
 
   # "<key>/v<N+1>", N being the highest existing "<key>/v<N>" tag (or 0).
