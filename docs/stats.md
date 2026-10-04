@@ -334,6 +334,26 @@ future passives/talents rather than gear alone.
 **Implementation:** same as Avoidance above - wired server-side into basic attacks and powers,
 applied after the Avoidance roll, only reduces damage landing on a player target.
 
+## Authored amount scaling
+
+A player's authored harm and heal amounts (power effects, and recurring status ticks) are what a
+character with **200** of their primary stat deals. They scale linearly with it, floored at 20%:
+
+```
+AmountScale = max(0.2, Primary / 200)
+Amount      = (Authored * AmountScale + StatBonus) * crit
+```
+
+`Primary` is the class's damage stat (Strength, Agility or Intellect), for heals too - a tank's
+self-heal scales off Strength. Only the authored part scales; the stat bonus (`Primary / 90` per
+second of time budget, doubled for heals) is unchanged. A fully-geared on-level character has 217.5
+primary, so 1.09x. NPCs, and classes with no damage stat, are unscaled. The client shows scaled
+amounts in tooltips (`combat_stats.amount_scale`).
+
+**Why:** without it, about 45% of a character's damage was authored amounts that gear didn't
+touch, so being under-geared barely slowed kills (1.4x at `ee = -10` against a 2.5x target - see
+[combat_balance.md](combat_balance.md)'s "Elevation check").
+
 ## Recovery Rating
 
 Recovery Rating grants a percentage bonus to all healing the character *receives* - a property of

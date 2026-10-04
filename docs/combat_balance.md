@@ -167,6 +167,20 @@ target's mitigation: `dps = 1500 * HP lost / TTK`.
 Per unit; apply the role multipliers on top. At a 0.5s-2.5s attack interval these keep most hits
 to 1-2 digits.
 
+## Elevation check
+
+A squishy with all gear at one ee, against mobs that don't scale with elevation. `D = 25` at
+`ee = 0` is 5 from basic attacks plus 20 from abilities. EHP is against physical attacks.
+
+| ee | DPS | Kill slowdown `a` (target) | EHP drop `b`, Str / Agi / Int (target) | HP lost, Str / Int (target) |
+|---|---|---|---|---|
+| -5 | ~17 | 1.47 (1.25) | 1.15 / 1.14 / 1.08 (1.2) | 34 / 32% (30%) |
+| -10 | ~11 | 2.26 (2.5) | 1.31 / 1.28 / 1.16 (1.3) | 60 / 53% (65%) |
+
+Before authored amount scaling (see [stats.md](stats.md)), `a` was only 1.19 / 1.40 and HP lost at
+-10 was ~36%. Intellect characters lose less EHP going down because they have no physical
+avoidance to lose.
+
 ## Group sizes (provisional)
 
 Not yet reviewed against the `open`/`g1` work above. The original rules, now anchored on `g1`:
@@ -194,10 +208,9 @@ solved backward from this target.
    curve, gear alone gets a tank (one-hander + shield, best split, vs physical) to ~3.2x squishy EHP
    and tanky DPS to ~2.0x - on target. Their best splits lean on Stamina (~80% / ~50%); that's
    accepted, since Defence pulls ahead whenever there's healing or no rest between fights.
-2. **Does the elevation curve hit the `a`/`b` targets?** `em(ee)` is 0.73 at -5 and 0.5 at -10. We
-   need to measure what it actually does to TTK and EHP and tune the curve if it's far off,
-   without drastically changing the relative value of stats between -10 and 0 (the gear you chase
-   going into content should resemble the gear you finish it in).
+2. **Elevation curve shape.** With authored amount scaling, -5 is slightly harsh and -10 slightly
+   soft (see **Elevation check**). That's the `em` curve's shape; tune it only if play shows it
+   matters, without drastically changing the relative value of stats between -10 and 0.
 3. **Group sizes above `g1`** need the same review `open` and `g1` got.
 4. **Hit size.** No damage cap, but numbers on screen should usually be 1-2 digits for readability.
    Attack intervals are mostly 0.5s-2.5s.

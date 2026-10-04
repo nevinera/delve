@@ -3,6 +3,7 @@ package command
 import (
 	"math"
 	"math/rand"
+	"strings"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
@@ -151,12 +152,34 @@ func RecurringTickInterval(applier *instancestate.UnitState, zone instanceconfig
 	return interval
 }
 
+// A player's authored harm/heal amounts are what a character with
+// authoredAmountReferencePrimary of their primary stat deals; they scale
+// linearly with it, floored at authoredAmountFloor. See docs/stats.md's
+// "Authored amount scaling".
+const (
+	authoredAmountReferencePrimary = 200.0
+	authoredAmountFloor            = 0.2
+)
+
+// AuthoredAmountScale is the multiplier on a unit's authored harm/heal
+// amounts: its primary stat (the class's damage stat) over
+// authoredAmountReferencePrimary, floored at authoredAmountFloor, for a
+// player; always 1 for an NPC, whose UnitType sets its numbers directly, and
+// for a class with no damage stat to scale by.
+func AuthoredAmountScale(unit *instancestate.UnitState) float64 {
+	if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") || unit.DamageStatKey == "" || unit.CombatStats == nil {
+		return 1
+	}
+	primary := unit.CombatStats.Stats[unit.DamageStatKey]
+	return math.Max(authoredAmountFloor, primary/authoredAmountReferencePrimary)
+}
+
 // effectAmount is the shared stat-scaling/crit/miss math behind
 // PowerEffectAmount and StatusTickAmount: rolled is the base amount before
 // any bonus (an authored-range roll for a harm/heal effect, or a status
-// tick's own fixed Amount). Healing is always treated as magic (Intellect,
-// magic Crit) and its bonus is doubled relative to the same-shaped harm
-// bonus; a recurring (status tick) effect's bonus gets a further 2x
+// tick's own fixed Amount), scaled by AuthoredAmountScale. Healing is always
+// treated as magic (Intellect, magic Crit) and its bonus is doubled relative
+// to the same-shaped harm bonus; a recurring (status tick) effect's bonus gets a further 2x
 // premium. See tmp/plan.md's status-implementation step 0 for the full
 // derivation.
 //
@@ -193,7 +216,7 @@ func effectAmount(unit *instancestate.UnitState, zone instanceconfig.Zone, schoo
 		bonus *= 2
 	}
 
-	amount := (rolled + bonus) * multiplier
+	amount := (rolled*AuthoredAmountScale(unit) + bonus) * multiplier
 	mods := ActiveStatModifiers(unit)
 	if isHeal {
 		add, mult := mods.Get("healingDone")
