@@ -12,6 +12,8 @@ createRoot(el).render(
       classKey={el.dataset.key}
       stockAssets={JSON.parse(el.dataset.stockAssets)}
       backUrl={el.dataset.backUrl}
+      publishUrl={el.dataset.publishUrl}
+      nextVersion={el.dataset.nextVersion}
     />
   </StrictMode>
 );

@@ -1,5 +1,6 @@
 class Build::ClassesController < Build::BaseController
   include Build::BranchSelection
+  include Build::ClassPublishing
 
   skip_authorization_check only: [:index, :new, :create, :edit]
   layout "build_class_client", only: :edit
@@ -36,9 +37,37 @@ class Build::ClassesController < Build::BaseController
   def edit
     Github::ContentClient.new(current_user)
     @stock_assets = Content::StockAssets.client_json
+    @next_version = next_class_version(params[:id])
+  end
+
+  # Publish: tags the branch's head as "<key>-<version>" - only if it's still
+  # the commit the editor last loaded or saved (expected_sha), and the class
+  # there validates - and registers that tag as a new class version.
+  # Responds with the version's identifier and number.
+  def publish
+    authorize! :create, CharacterClass
+    client = Github::ContentClient.new(current_user)
+    error = class_publish_request_error(client)
+    return render_publish_error(error) if error
+
+    render json: publish_class!(client, params[:id], publish_version, expected_sha).slice(:identifier, :version)
+  rescue Github::ApiError, ActiveRecord::RecordInvalid => e
+    render_publish_error(e.message)
   end
 
   private
+
+  def publish_version = params[:version].to_s.strip
+
+  def expected_sha = params[:expected_sha].to_s
+
+  def render_publish_error(error) = render(json: {error:}, status: :unprocessable_content)
+
+  def class_publish_request_error(client)
+    class_publish_error(client, params[:id], publish_version) ||
+      branch_error(client, params[:branch].to_s, expected_sha) ||
+      class_content_error(client, params[:id], expected_sha)
+  end
 
   def key_error
     return "Key is required." if @key.blank?

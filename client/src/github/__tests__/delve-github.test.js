@@ -194,3 +194,22 @@ describe("GithubClient on a branch", () => {
     expect(url).toEqual("https://raw.githubusercontent.com/nevinera/delve-content/rework/v2/graphics/icons/punch.png");
   });
 });
+
+describe("GithubClient#headSha and fetchFile's ref", () => {
+  it("reads the branch's head commit, and a file at a given commit", async () => {
+    vi.spyOn(tokenModule, "fetchToken").mockResolvedValue({token: "tok", repo_full_name: "nevinera/delve-content"});
+    const fetchMock = vi.fn(async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () => (url.includes("/git/ref/") ? {object: {sha: "head123"}} : {content: btoa("{}")}),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new GithubClient({branch: "feature"});
+
+    expect(await client.headSha()).toBe("head123");
+    await client.fetchFile("classes/puncher.json", {ref: "head123"});
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.github.com/repos/nevinera/delve-content/git/ref/heads/feature");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://api.github.com/repos/nevinera/delve-content/contents/classes/puncher.json?ref=head123");
+  });
+});

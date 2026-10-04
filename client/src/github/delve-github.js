@@ -96,14 +96,25 @@ export class GithubClient {
     return `https://raw.githubusercontent.com/${repo}/${branch}/${path}`;
   }
 
+  // The commit the branch currently points at.
+  async headSha() {
+    const {token, repo_full_name: repo} = await this._getAuth();
+    const branch = await this._getBranch(repo, token);
+    const res = await fetch(`${GITHUB_API}/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`, {cache: "no-store", headers: authHeaders(token)});
+    if (!res.ok) throw new Error(`GitHub API error ${res.status} fetching ${branch}: ${res.statusText}`);
+    return (await res.json()).object.sha;
+  }
+
   // Returns a file's decoded text content, or null if it doesn't exist -
   // same "doesn't exist yet" shape Github::ContentClient#file_content's
   // NotFoundError represents server-side, just as a plain return value
   // rather than an exception (the normal case for a brand-new key, not an
   // error worth throwing over).
-  async fetchFile(path) {
+  // `ref` reads it at a specific commit instead of the branch.
+  async fetchFile(path, {ref: at = null} = {}) {
     const {token, repo_full_name: repo} = await this._getAuth();
-    const ref = this._branch ? `?ref=${encodeURIComponent(this._branch)}` : "";
+    const refName = at ?? this._branch;
+    const ref = refName ? `?ref=${encodeURIComponent(refName)}` : "";
     const res = await fetch(`${GITHUB_API}/repos/${repo}/contents/${path}${ref}`, {cache: "no-store", headers: authHeaders(token)});
     if (res.status === 404) return null;
     if (!res.ok) {

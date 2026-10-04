@@ -10,6 +10,7 @@
       .content-editor-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: #1c2126; border-bottom: 1px solid #333; }
       .content-editor-header h1 { font-size: 15px; color: #cce; font-weight: 600; }
       .content-editor-header .save-bar { margin: 0 0 0 auto; }
+      .content-editor-header .publish-bar { margin: 0; }
       .content-editor-header a.back-link { color: #9ab; font-size: 13px; text-decoration: none; }
       .content-editor-left { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid #333; }
       .content-editor-preview { flex: 3; min-height: 0; display: flex; flex-direction: column; }
@@ -97,9 +98,15 @@
       .save-bar .save-button { background: #2a4; border: 1px solid #4c7; color: #efe; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
       .save-bar .save-button:hover:not(:disabled) { background: #3b5; }
       .save-bar .save-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
-      .save-bar .save-message { font-size: 12px; }
-      .save-bar .save-success { color: #7c7; }
-      .save-bar .save-error { color: #e79; }
+      .save-bar .save-message, .publish-bar .save-message { font-size: 12px; }
+      .save-bar .save-success, .publish-bar .save-success { color: #7c7; }
+      .save-bar .save-error, .publish-bar .save-error { color: #e79; }
+      .publish-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+      .publish-bar .publish-button { background: #542; border: 1px solid #a74; color: #fed; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .publish-bar .publish-button:hover:not(:disabled) { background: #653; }
+      .publish-bar .publish-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .publish-bar .commit-prompt { display: flex; gap: 6px; }
+      .publish-bar .commit-prompt input { width: 70px; }
 
       .content-editor-fields .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
       .content-editor-fields button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }

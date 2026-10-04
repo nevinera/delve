@@ -10,6 +10,8 @@ import PassivePanel from "./PassivePanel";
 import {estimateClassDps} from "./estimateClassDps";
 import {estimateClassTtd} from "./estimateClassTtd";
 import {saveClass} from "./saveClass";
+import {publishClass} from "./publishClass";
+import PublishClassControl from "./PublishClassControl";
 import PowerPanel from "../powersEditor/PowerPanel";
 import StatusPanel from "../powersEditor/StatusPanel";
 import ImportPowerPanel from "../powersEditor/ImportPowerPanel";
@@ -67,7 +69,13 @@ function effectiveArea(selection, draft) {
 // half. Powers are stored inline - anything copied in from the abilities/
 // library, another class, or a unit type is an independent copy (see
 // powersEditor/powerSources.js).
-export default function ClassEditor({classKey, stockAssets, backUrl}) {
+// "0.6" -> "0.7"; anything else is left as it was.
+function bumpVersion(version) {
+  const match = /^(\d+)\.(\d+)$/.exec(version);
+  return match ? `${match[1]}.${Number(match[2]) + 1}` : version;
+}
+
+export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl, nextVersion: initialNextVersion}) {
   const ownPath = `classes/${classKey}.json`;
   const [draft, setDraft] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -75,6 +83,13 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
   // A <key>.full.json left over from when powers were $refs - deleted on
   // the next save, since nothing reads it any more.
   const [staleFullPath, setStaleFullPath] = useState(null);
+  // The commit the draft was loaded from or last saved as - what Publish
+  // tags (Rails refuses if the branch has moved on since).
+  const [baseSha, setBaseSha] = useState(null);
+  // That commit's class, serialized - Publish only needs the draft to
+  // match it, not a save since the last edit.
+  const [committedJson, setCommittedJson] = useState(null);
+  const [nextVersion, setNextVersion] = useState(initialNextVersion);
   // Every asset URL the powers reference (icons, graphics, sounds), mapped
   // to its displayable raw.githubusercontent.com URL.
   const [assetMap, setAssetMap] = useState({});
@@ -97,14 +112,18 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
     if (!client) return undefined;
     let cancelled = false;
     setDraft(null);
+    setBaseSha(null);
     reset();
     (async () => {
       try {
-        const content = await client.fetchFile(ownPath);
+        const sha = await client.headSha();
+        const content = await client.fetchFile(ownPath, {ref: sha});
         const raw = content === null ? blankClass(classKey) : JSON.parse(content);
         const data = await expandPowers(client, raw, ownPath);
         if (cancelled) return;
         setDraft(new ClassDraft(data, classKey));
+        setBaseSha(sha);
+        setCommittedJson(JSON.stringify(data));
 
         const classFiles = await client.listDirectory("classes");
         if (cancelled) return;
@@ -252,13 +271,15 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
   async function handleSave(commitMessage) {
     setSaving();
     try {
-      await saveClass(classKey, draft.data, {
+      const {commitSha} = await saveClass(classKey, draft.data, {
         powerFiles: powerUploads.files(),
         deletePaths: staleFullPath ? [staleFullPath] : [],
         branch,
       }, commitMessage);
       powerUploads.committed();
       setStaleFullPath(null);
+      setBaseSha(commitSha);
+      setCommittedJson(JSON.stringify(draft.data));
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -268,6 +289,16 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
       setSaveError(error.message);
     }
   }
+
+  async function handlePublish(version) {
+    const published = await publishClass(publishUrl, version, {branch, expectedSha: baseSha});
+    setNextVersion(bumpVersion(published.version));
+    return published;
+  }
+
+  const pendingUploads = Object.values(powerUploads.files()).some((files) => Object.keys(files).length > 0);
+  const unsaved = pendingUploads || (draft !== null && JSON.stringify(draft.data) !== committedJson);
+  const publishBlocker = activity.status === "saving" ? "Saving…" : !baseSha ? "Loading…" : unsaved ? "Save first" : null;
 
   if (branchError) return <div className="class-editor-load-error">Failed to load: {branchError.message}</div>;
   if (loadError) return <div className="class-editor-load-error">Failed to load: {loadError}</div>;
@@ -352,6 +383,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl}) {
         <h1>{classKey}</h1>
         <BranchPicker branches={branches} branch={branch} disabled={dirty || activity.status === "saving"} onSelect={select} onCreate={create} />
         <ValidateSaveBar validity={validity} activity={activity} onValidate={handleValidate} onSave={handleSave} defaultMessage={`Update ${draft.data.name || classKey}`} />
+        {publishUrl && <PublishClassControl nextVersion={nextVersion} blocker={publishBlocker} onPublish={handlePublish} />}
       </header>
       <div className="content-editor-left">
         <div className="content-editor-preview">

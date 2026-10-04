@@ -4,6 +4,7 @@ import {render, screen, fireEvent, waitFor, within} from "@testing-library/react
 import ClassEditor from "../ClassEditor";
 import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../github/commitFiles";
 import {GithubClient} from "../../github/delve-github";
+import {publishClass} from "../publishClass";
 import {validateCharacterClass} from "../../validators/validateContent";
 import {estimateClassDps} from "../estimateClassDps";
 import {estimateClassTtd} from "../estimateClassTtd";
@@ -29,6 +30,7 @@ vi.mock("../../validators/validateContent", () => ({
 }));
 vi.mock("../estimateClassDps", () => ({estimateClassDps: vi.fn()}));
 vi.mock("../estimateClassTtd", () => ({estimateClassTtd: vi.fn()}));
+vi.mock("../publishClass", () => ({publishClass: vi.fn()}));
 
 // ClassPreviewPane mounts a real Three.js WebGLRenderer via
 // AbilityPreviewCanvas, which jsdom can't back - stub it, exposing the
@@ -48,6 +50,7 @@ const stockAssets = {icons: {}, graphics: {}, sounds: {}};
 
 function mockRepo({files = {}, listings = {}} = {}) {
   const client = {
+    headSha: vi.fn().mockResolvedValue("head-sha"),
     fetchFile: vi.fn((path) => Promise.resolve(path in files ? JSON.stringify(files[path]) : null)),
     listDirectory: vi.fn((path) => Promise.resolve(listings[path] ?? [])),
     assetUrl: vi.fn((path) => Promise.resolve(`https://raw.githubusercontent.com/mock/${path}`)),
@@ -92,12 +95,13 @@ describe("ClassEditor", () => {
     it("shows a loading state, then the class's fields once the fetch resolves", async () => {
       let resolveFetch;
       GithubClient.mockImplementation(function () {
-        return {fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([])};
+        return {headSha: vi.fn().mockResolvedValue("head-sha"), fetchFile: vi.fn(() => new Promise((resolve) => (resolveFetch = resolve))), listDirectory: vi.fn().mockResolvedValue([])};
       });
 
       render(<ClassEditor classKey="puncher" stockAssets={stockAssets} />);
       expect(screen.getByText("Loading…")).toBeInTheDocument();
 
+      await vi.waitFor(() => expect(resolveFetch).toBeTypeOf("function")); // after the head sha
       resolveFetch(JSON.stringify(initialClass));
       await screen.findByDisplayValue("Puncher");
     });
@@ -110,7 +114,7 @@ describe("ClassEditor", () => {
     });
 
     it("shows a load error when the fetch fails", async () => {
-      GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}; });
+      GithubClient.mockImplementation(function () { return {headSha: vi.fn().mockResolvedValue("head-sha"), fetchFile: vi.fn().mockRejectedValue(new Error("network down"))}; });
 
       render(<ClassEditor classKey="puncher" stockAssets={stockAssets} />);
 
@@ -118,7 +122,7 @@ describe("ClassEditor", () => {
     });
 
     it("redirects to the GitHub reauth URL when the load hits a GithubAuthError", async () => {
-      GithubClient.mockImplementation(function () { return {fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
+      GithubClient.mockImplementation(function () { return {headSha: vi.fn().mockResolvedValue("head-sha"), fetchFile: vi.fn().mockRejectedValue(new CommitGithubAuthError("reauth_required", "/github/reauth"))}; });
 
       render(<ClassEditor classKey="puncher" stockAssets={stockAssets} />);
 
@@ -314,6 +318,82 @@ describe("ClassEditor", () => {
       fireEvent.click(screen.getByRole("button", {name: "Commit"}));
 
       await waitFor(() => expect(redirectTo).toHaveBeenCalledWith("/github/reauth"));
+    });
+  });
+
+  describe("publishing", () => {
+    beforeEach(() => {
+      publishClass.mockReset();
+      publishClass.mockImplementation(async (_url, version) => ({identifier: "puncher", version}));
+    });
+
+    async function renderPublishable() {
+      mockRepo({files: {"classes/puncher.json": initialClass}});
+      render(<ClassEditor classKey="puncher" stockAssets={stockAssets} publishUrl="/build/classes/puncher/publish" nextVersion="0.6" />);
+      await screen.findByDisplayValue("Puncher");
+    }
+
+    function publish(version) {
+      fireEvent.click(screen.getByRole("button", {name: "Publish"}));
+      if (version) fireEvent.change(screen.getByRole("textbox", {name: "Version"}), {target: {value: version}});
+      fireEvent.submit(screen.getByRole("textbox", {name: "Version"}).closest("form"));
+    }
+
+    it("has no Publish button without a publish URL", async () => {
+      await renderReady();
+      expect(screen.queryByRole("button", {name: "Publish"})).not.toBeInTheDocument();
+    });
+
+    it("publishes the loaded commit at the suggested version, then suggests the next one", async () => {
+      await renderPublishable();
+
+      fireEvent.click(screen.getByRole("button", {name: "Publish"}));
+      expect(screen.getByRole("textbox", {name: "Version"})).toHaveValue("0.6");
+      fireEvent.submit(screen.getByRole("textbox", {name: "Version"}).closest("form"));
+
+      await screen.findByText("Published puncher 0.6.");
+      expect(publishClass).toHaveBeenCalledWith("/build/classes/puncher/publish", "0.6", {branch: "main", expectedSha: "head-sha"});
+      fireEvent.click(screen.getByRole("button", {name: "Publish"}));
+      expect(screen.getByRole("textbox", {name: "Version"})).toHaveValue("0.7");
+    });
+
+    it("is blocked while there are unsaved changes", async () => {
+      await renderPublishable();
+      fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
+      expect(screen.getByRole("button", {name: "Publish"})).toBeDisabled();
+      expect(screen.getByRole("button", {name: "Publish"})).toHaveAttribute("title", "Save first");
+    });
+
+    it("is allowed again once the draft matches the commit, without saving", async () => {
+      await renderPublishable();
+      fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
+      fireEvent.change(screen.getByDisplayValue("Brawler"), {target: {value: "Puncher"}});
+      expect(screen.getByRole("button", {name: "Publish"})).not.toBeDisabled();
+    });
+
+    it("publishes the commit it just saved", async () => {
+      commitFiles.mockReset();
+      commitFiles.mockResolvedValue({commitSha: "saved-sha", branch: "main"});
+      validateCharacterClass.mockResolvedValue({valid: true});
+      await renderPublishable();
+      fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
+      fireEvent.click(screen.getByRole("button", {name: "Validate"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Save"})).not.toBeDisabled());
+      fireEvent.click(screen.getByRole("button", {name: "Save"}));
+      fireEvent.click(screen.getByRole("button", {name: "Commit"}));
+      await waitFor(() => expect(screen.getByRole("button", {name: "Publish"})).not.toBeDisabled());
+
+      publish("1.0");
+
+      await screen.findByText("Published puncher 1.0.");
+      expect(publishClass).toHaveBeenCalledWith("/build/classes/puncher/publish", "1.0", {branch: "main", expectedSha: "saved-sha"});
+    });
+
+    it("shows Rails' error", async () => {
+      publishClass.mockRejectedValue(new Error("puncher 0.6 is already published."));
+      await renderPublishable();
+      publish();
+      await screen.findByText("puncher 0.6 is already published.");
     });
   });
 });

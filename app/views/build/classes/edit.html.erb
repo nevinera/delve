@@ -3,4 +3,6 @@
   data-key="<%= params[:id] %>"
   data-stock-assets="<%= @stock_assets.to_json %>"
   data-back-url="<%= build_classes_path %>"
+  data-publish-url="<%= publish_build_class_path(id: params[:id]) %>"
+  data-next-version="<%= @next_version %>"
 ></div>
