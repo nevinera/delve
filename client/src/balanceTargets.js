@@ -44,7 +44,20 @@ export const GEAR_PROFILES = {
   offense: {label: "squishy", ttk: 1, ehp: 1},
   offenseWithDefense: {label: "tanky DPS", ttk: 1.25, ehp: 2},
   defense: {label: "tank", ttk: 1.5, ehp: 3},
+  healing: {label: "healing", ttk: 1.5, ehp: 1},
 };
+
+// A class's stat priority name -> the gear profile it's measured against.
+export const PRIORITY_PROFILES = {
+  dps: "offense",
+  hybrid: "offenseWithDefense",
+  tank: "defense",
+  healing: "healing",
+};
+
+// Priorities that can out-heal or out-mitigate a pull at ee = 0: surviving
+// the whole cap is the target for them there, not a miss.
+const SUSTAINING_PRIORITIES = ["tank", "healing"];
 
 // Whole-pull TTK (T) and HP lost (L) relative to a solo pull, over n units.
 const PULLS = {
@@ -78,6 +91,22 @@ function span(lo, hi) {
   return lo <= hi ? [lo, hi] : [hi, lo];
 }
 
+// Damage per second of the reference character (squishy DPS at ee = 0,
+// slowed by the elevation's `a` and the profile's TTK factor), or null for an
+// unknown profile or elevation.
+export function referenceDps(plan, ee) {
+  const profile = GEAR_PROFILES[plan];
+  const elevation = ELEVATIONS[ee];
+  if (!profile || !elevation) return null;
+  return SQUISHY_DPS / elevation.a / profile.ttk;
+}
+
+// Seconds for the reference character to kill a unit with `maxHP`, or null.
+export function referenceTimeToKill(maxHP, plan, ee) {
+  const dps = referenceDps(plan, ee);
+  return dps === null || typeof maxHP !== "number" ? null : maxHP / dps;
+}
+
 // The targets for a unit type's tags (assumed "open" until it's tagged
 // otherwise), or {untargeted} for a group size with no targets yet. hp/dps
 // are [lo, hi] (a range when the pull size spans several unit counts);
@@ -95,12 +124,21 @@ export function unitTargets(tags = []) {
   const soloDps = (SQUISHY_EHP * intendedFor.hpLost) / intendedFor.ttk;
   const [few, many] = pull.n.map((n) => pullUnitMultipliers(pull, n));
   const unitDps = (m) => soloDps * m.dps * role.dps;
+  const hp = span(soloHp * many.hp * role.hp, soloHp * few.hp * role.hp);
 
   return {
     intendedFor: intendedForTag,
     pull: pullTag,
-    hp: span(soloHp * many.hp * role.hp, soloHp * few.hp * role.hp),
+    hp,
     dps: span(unitDps(many), unitDps(few)),
+    // Seconds for the reference character in `plan` gear at `ee` to kill this
+    // unit alone: [lo, hi] of the HP target over their damage. referenceDps
+    // is that character's damage, from the same a-slowdown the class DPS
+    // targets use.
+    ttk(plan, ee) {
+      const dps = referenceDps(plan, ee);
+      return dps === null ? null : span(...hp.map((h) => h / dps));
+    },
     ttd(plan, ee) {
       const profile = GEAR_PROFILES[plan];
       const elevation = ELEVATIONS[ee];
@@ -109,6 +147,45 @@ export function unitTargets(tags = []) {
       return span(ttd(unitDps(few)), ttd(unitDps(many)));
     },
   };
+}
+
+// The unit counts the class survivability sim uses per pull size.
+const SIM_PULL_UNITS = {solo: 1, pair: 2, group: 4, swarm: 6};
+
+// Targets for one cell of the class survivability sim (a stat priority at an
+// ee, against a pull from `intendedFor` content): the whole pull's TTK,
+// HP lost (a fraction) and TTD (enemies never dying), or null where there's
+// no target (an untargeted group size, elevation or priority name).
+export function classSurvivalTarget({priority, intendedFor, pull, ee}) {
+  const profile = GEAR_PROFILES[PRIORITY_PROFILES[priority]];
+  const base = INTENDED_FOR[intendedFor];
+  const shape = PULLS[pull];
+  const elevation = ELEVATIONS[ee];
+  const n = SIM_PULL_UNITS[pull];
+  if (!profile || !base || !shape || !elevation || intendedFor === "g5") return null;
+
+  const soloDps = (SQUISHY_EHP * base.hpLost) / base.ttk;
+  const unitDps = (soloDps * shape.L) / ((shape.T * (n + 1)) / 2);
+  return {
+    ttk: base.ttk * shape.T * profile.ttk * elevation.a,
+    hpLost: (base.hpLost * shape.L * elevation.a * elevation.b * profile.ttk) / profile.ehp,
+    ttd: (SQUISHY_EHP * profile.ehp) / (n * unitDps * elevation.b),
+  };
+}
+
+// How a survivability cell (see Build::ClassTtdSimsController) fits its
+// target, per metric: "on"/"near"/"off" like targetFit, or "tanky" for a
+// character that outlasts the sim's cap where that isn't the goal.
+export function classSurvivalFit(cell, target) {
+  if (!target) return {ttd: null, hpLost: null};
+  const sustains = SUSTAINING_PRIORITIES.includes(cell.priority) && cell.elevation === 0;
+  let ttdFit;
+  if (cell.survives) {
+    ttdFit = sustains ? "on" : "tanky";
+  } else {
+    ttdFit = targetFit(cell.ttd, [target.ttd, target.ttd]);
+  }
+  return {ttd: ttdFit, hpLost: targetFit(cell.hpLostPct / 100, [target.hpLost, target.hpLost])};
 }
 
 // Target sustained DPS for a class at ee, or null where there's no target.

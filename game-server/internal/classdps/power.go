@@ -55,8 +55,11 @@ func applyPowerEffects(unit, target *instancestate.UnitState, attackerID uuid.UU
 			if effect.Amount == nil {
 				continue
 			}
+			// The character is the only ally in this simulation, so any
+			// non-hostile heal lands on it; a heal with no affects (or a
+			// hostile one) keeps targeting the enemy, same as before.
 			recipient := target
-			if effect.Affects == "self" {
+			if effect.Affects == "self" || (effect.Affects != "" && !command.IsHostileAffects(effect.Affects)) {
 				recipient = unit
 			}
 			amount := command.PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)

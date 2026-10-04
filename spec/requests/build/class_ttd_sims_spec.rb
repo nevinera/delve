@@ -1,9 +1,9 @@
 require "rails_helper"
 
-RSpec.describe "Build::ClassDpsSims", type: :request do
+RSpec.describe "Build::ClassTtdSims", type: :request do
   let(:user) { create(:user) }
   let(:json_headers) { {"Content-Type" => "application/json"} }
-  let(:game_server_url) { "http://localhost:8090/class-dps-sim" }
+  let(:game_server_url) { "http://localhost:8090/class-ttd-sim" }
 
   let(:character_class) do
     {
@@ -17,13 +17,13 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
   end
   let(:strategy) { [{power: "Bolt"}] }
   let(:matrix) do
-    {results: [{durationSeconds: 60.0, elevation: 0, elevationLabel: "heroic",
-                dps: 12.3, basicAttackDamage: 300.0, powerDamage: 438.0, statusTickDamage: 0.0, totalDamage: 738.0}]}
+    {results: [{priority: "hybrid", intendedFor: "open", pull: "solo", school: "physical", elevation: 0,
+                hpLostPct: 20.0, fightSeconds: 12.0, cleared: true, died: false, ttd: 40.0, survives: false, capSeconds: 300.0}]}
   end
 
   context "when not logged in" do
     it "redirects to login" do
-      post "/build/class_dps_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
       expect(response).to redirect_to("/login")
     end
   end
@@ -36,10 +36,10 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
         .with { |req| JSON.parse(req.body)["class"]["name"] == "Puncher" }
         .to_return(status: 200, body: matrix.to_json, headers: json_headers)
 
-      post "/build/class_dps_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
 
       expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)["results"].first["dps"]).to eq(12.3)
+      expect(JSON.parse(response.body)["results"].first["ttd"]).to eq(40.0)
       expect(stub).to have_been_requested
     end
 
@@ -48,14 +48,24 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
         .with { |req| JSON.parse(req.body)["strategy"] == [] }
         .to_return(status: 200, body: matrix.to_json, headers: json_headers)
 
-      post "/build/class_dps_sims/character_class", params: {class: character_class}.to_json, headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: {class: character_class}.to_json, headers: json_headers
 
       expect(response).to have_http_status(:ok)
       expect(stub).to have_been_requested
     end
 
+    it "passes extended through to the game server" do
+      stub = stub_request(:post, game_server_url)
+        .with { |req| JSON.parse(req.body)["extended"] == true }
+        .to_return(status: 200, body: matrix.to_json, headers: json_headers)
+
+      post "/build/class_ttd_sims/character_class", params: {class: character_class, extended: true}.to_json, headers: json_headers
+
+      expect(stub).to have_been_requested
+    end
+
     it "returns 422 with the validation error and skips the game server for an invalid class" do
-      post "/build/class_dps_sims/character_class", params: {class: character_class.merge(wields: [])}.to_json, headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: {class: character_class.merge(wields: [])}.to_json, headers: json_headers
 
       expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)["path"]).to eq("$.wields")
@@ -63,7 +73,7 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
     end
 
     it "returns 400 for a malformed JSON body" do
-      post "/build/class_dps_sims/character_class", params: "not json", headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: "not json", headers: json_headers
 
       expect(response).to have_http_status(:bad_request)
     end
@@ -71,7 +81,7 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
     it "passes along the game server rejecting the class" do
       stub_request(:post, game_server_url).to_return(status: 422, body: '{"error":"class has no powers"}', headers: json_headers)
 
-      post "/build/class_dps_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
 
       expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)["error"]).to eq("class has no powers")
@@ -80,7 +90,7 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
     it "returns 502 when the game server returns an error" do
       stub_request(:post, game_server_url).to_return(status: 401, body: '{"error":"unauthorized"}', headers: json_headers)
 
-      post "/build/class_dps_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
 
       expect(response).to have_http_status(:bad_gateway)
     end
@@ -88,7 +98,7 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
     it "returns 502 when the game server is unreachable" do
       stub_request(:post, game_server_url).to_raise(Errno::ECONNREFUSED)
 
-      post "/build/class_dps_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
+      post "/build/class_ttd_sims/character_class", params: {class: character_class, strategy: strategy}.to_json, headers: json_headers
 
       expect(response).to have_http_status(:bad_gateway)
     end

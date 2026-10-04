@@ -144,18 +144,53 @@ function Cell({cell, target}) {
   return <td className={fit ? `target-${fit}` : undefined}>{cell.dps.toFixed(1)} dps</td>;
 }
 
+function PriorityTable({priority, results}) {
+  const durations = uniqueSorted(results.map((r) => r.durationSeconds));
+  const elevations = uniqueSorted(results.map((r) => r.elevation));
+
+  return (
+    <>
+      {priority && <h4 className="class-dps-estimate-priority">{priority} gear</h4>}
+      <table className="class-dps-estimate-table">
+        <thead>
+          <tr>
+            <th>Elevation \ Duration</th>
+            <th scope="col">Target</th>
+            {durations.map((d) => (
+              <th key={d} scope="col">{formatDuration(d)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {elevations.map((ee) => {
+            const target = classTargetDps(ee);
+            const label = results.find((r) => r.elevation === ee)?.elevationLabel;
+            return (
+              <tr key={ee}>
+                <th scope="row">{formatElevation(ee)}{label ? ` (${label})` : ""}</th>
+                <td className="class-dps-estimate-target">{target === null ? "-" : `${target.toFixed(1)} dps`}</td>
+                {durations.map((d) => (
+                  <Cell key={d} cell={results.find((r) => r.elevation === ee && r.durationSeconds === d)} target={target} />
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 // Explicit-click estimate (not live-updating - same UX as
 // DamageEstimatePanel/#72), plus the strategy editor a class needs that an
 // enemy UnitType doesn't: a CharacterClass has no Tactics to drive its own
 // power selection, so the caller supplies a priority-list rotation here.
 // Rows are relative elevation, each with a DPS-geared character's target DPS
-// (see docs/combat_balance.md); columns are fight duration (1m/5m/20m - see
-// plans/character-dps-sim.md's decision to always show all three rather than
-// take a caller-chosen duration).
+// (see docs/combat_balance.md); columns are fight duration (1m/5m by default - see
+// plans/character-dps-sim.md); one table per stat priority the class lists.
 export default function ClassDpsEstimatePanel({strategy, onStrategyChange, powerNames, estimate, estimating, error, onEstimate}) {
-  const results = estimate?.results ?? [];
-  const durations = uniqueSorted(results.map((r) => r.durationSeconds));
-  const elevations = uniqueSorted(results.map((r) => r.elevation));
+  const allResults = estimate?.results ?? [];
+  const priorities = [...new Set(allResults.map((r) => r.priority))];
 
   return (
     <div className="class-dps-estimate">
@@ -166,34 +201,9 @@ export default function ClassDpsEstimatePanel({strategy, onStrategyChange, power
         </button>
         {error && <span className="class-dps-estimate-error">{error}</span>}
       </div>
-      {results.length > 0 && (
-        <table className="class-dps-estimate-table">
-          <thead>
-            <tr>
-              <th>Elevation \ Duration</th>
-              <th scope="col">Target</th>
-              {durations.map((d) => (
-                <th key={d} scope="col">{formatDuration(d)}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {elevations.map((ee) => {
-              const target = classTargetDps(ee);
-              const label = results.find((r) => r.elevation === ee)?.elevationLabel;
-              return (
-                <tr key={ee}>
-                  <th scope="row">{formatElevation(ee)}{label ? ` (${label})` : ""}</th>
-                  <td className="class-dps-estimate-target">{target === null ? "-" : `${target.toFixed(1)} dps`}</td>
-                  {durations.map((d) => (
-                    <Cell key={d} cell={results.find((r) => r.elevation === ee && r.durationSeconds === d)} target={target} />
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
+      {priorities.map((priority) => (
+        <PriorityTable key={priority ?? "default"} priority={priority} results={allResults.filter((r) => r.priority === priority)} />
+      ))}
     </div>
   );
 }

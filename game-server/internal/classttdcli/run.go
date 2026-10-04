@@ -1,9 +1,8 @@
-// Package classdpscli implements the class-dps-sim CLI's logic (issue #75's
-// "Claude runs parametrized sims for balancing work" requirement) - reads a
+// Package classttdcli implements the class-ttd-sim CLI (issue #135): reads a
 // class+strategy JSON document from a file or stdin, runs
-// internal/classdps.Matrix, and prints the resulting (duration x
-// elevation) matrix as JSON. No HTTP, no Rails - standalone.
-package classdpscli
+// internal/classdps.TTDMatrix, and prints the survivability cells as JSON.
+// No HTTP, no Rails - standalone.
+package classttdcli
 
 import (
 	"encoding/json"
@@ -18,20 +17,20 @@ import (
 )
 
 // request is the input document's shape - the same {class, strategy, seed}
-// body POST /class-dps-sim takes, so the same JSON works against either.
+// body POST /class-ttd-sim takes, so the same JSON works against either.
 type request struct {
 	Class    instanceconfig.CharacterClass `json:"class"`
 	Strategy classdps.Strategy             `json:"strategy"`
 	Seed     *int64                        `json:"seed,omitempty"`     // omitted: a fresh, non-reproducible run
-	Extended bool                          `json:"extended,omitempty"` // also run the slowest (20m) duration
+	Extended bool                          `json:"extended,omitempty"` // raise the survival cap to 1200s
 }
 
-// Run is the entry point for the class-dps-sim CLI. It accepts args (the
+// Run is the entry point for the class-ttd-sim CLI. It accepts args (the
 // non-program portion of os.Args), stdout, and stderr writers, and returns
 // an exit code. Factored out of main so it can be tested without exec.
 func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
-		_, _ = fmt.Fprintln(stderr, "usage: class-dps-sim <path|->")
+		_, _ = fmt.Fprintln(stderr, "usage: class-ttd-sim <path|->")
 		return 1
 	}
 
@@ -53,8 +52,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	rng := rand.New(rand.NewSource(seed))
 
-	rows := classdps.Matrix(req.Class, req.Strategy, req.Extended, rng)
-	out, err := json.MarshalIndent(map[string]any{"results": classdps.Flatten(rows)}, "", "  ")
+	cells := classdps.TTDMatrix(req.Class, req.Strategy, req.Extended, rng)
+	out, err := json.MarshalIndent(map[string]any{"results": cells}, "", "  ")
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error encoding output: %v\n", err)
 		return 1

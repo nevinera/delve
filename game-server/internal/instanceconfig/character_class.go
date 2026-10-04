@@ -18,8 +18,25 @@ type CharacterClass struct {
 	Powers         []Power        `json:"powers,omitempty"`
 	Passives       []Status       `json:"passives,omitempty"` // Hidden, permanent buffs - see docs/schema/character_class.md
 	PrimaryStats   []string       `json:"primaryStats"`
-	SecondaryStats []string       `json:"secondaryStats"`
+	StatPriorities []StatPriority `json:"statPriorities"`
 	Wields         []string       `json:"wields"`
+}
+
+// StatPriority is one named gearing a class supports (dps, hybrid, tank or
+// healing): its five ranked secondary stats. The first entry in a class's
+// StatPriorities is what its Trainee Gear is built from.
+type StatPriority struct {
+	Name           string   `json:"name"`
+	SecondaryStats []string `json:"secondaryStats"`
+}
+
+// DefaultStatPriority is the class's first StatPriority, or the zero value
+// if it lists none.
+func (c CharacterClass) DefaultStatPriority() StatPriority {
+	if len(c.StatPriorities) == 0 {
+		return StatPriority{}
+	}
+	return c.StatPriorities[0]
 }
 
 func (c *CharacterClass) UnmarshalJSON(data []byte) error {

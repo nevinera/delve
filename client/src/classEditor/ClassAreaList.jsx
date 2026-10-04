@@ -16,7 +16,7 @@ export default function ClassAreaList({classData, selection, onSelect, onNewPowe
   return (
     <nav className="area-list" aria-label="Class areas">
       <AreaButton selected={area === "class"} onClick={() => onSelect({area: "class"})} title={classData.name || "Class"} detail="Class" />
-      <AreaButton selected={area === "estimate"} onClick={() => onSelect({area: "estimate"})} title="DPS estimate" />
+      <AreaButton selected={area === "estimate"} onClick={() => onSelect({area: "estimate"})} title="DPS and survivability" />
 
       <div className="area-list-heading">Action bar <span className="area-list-count">{powers.length}/{SLOT_COUNT}</span></div>
       {powers.map((power, i) => (

@@ -6,6 +6,7 @@ import {commitFiles, GithubAuthError as CommitGithubAuthError} from "../../githu
 import {GithubClient} from "../../github/delve-github";
 import {validateCharacterClass} from "../../validators/validateContent";
 import {estimateClassDps} from "../estimateClassDps";
+import {estimateClassTtd} from "../estimateClassTtd";
 
 vi.mock("../../github/commitFiles", async (importOriginal) => {
   const actual = await importOriginal();
@@ -27,6 +28,7 @@ vi.mock("../../validators/validateContent", () => ({
   validateCharacterClass: vi.fn(),
 }));
 vi.mock("../estimateClassDps", () => ({estimateClassDps: vi.fn()}));
+vi.mock("../estimateClassTtd", () => ({estimateClassTtd: vi.fn()}));
 
 // ClassPreviewPane mounts a real Three.js WebGLRenderer via
 // AbilityPreviewCanvas, which jsdom can't back - stub it, exposing the
@@ -37,7 +39,7 @@ vi.mock("../ClassPreviewPane", () => ({
 
 const initialClass = {
   name: "Puncher", description: "", colors: {major: "888888", minor: "CCCCCC"},
-  resources: [], powers: [], primaryStats: [], secondaryStats: [], wields: [],
+  resources: [], powers: [], primaryStats: [], statPriorities: [], wields: [],
 };
 
 const punch = {name: "Punch", maxRange: 5, effects: []};
@@ -239,12 +241,23 @@ describe("ClassEditor", () => {
     it("posts the draft and the strategy", async () => {
       estimateClassDps.mockResolvedValue({results: [{durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 12.5}]});
       await renderReady({...initialClass, powers: [punch]});
-      fireEvent.click(areaList().getByRole("button", {name: /DPS estimate/}));
+      fireEvent.click(areaList().getByRole("button", {name: /DPS and survivability/}));
 
       fireEvent.click(screen.getByRole("button", {name: "Estimate DPS"}));
 
       await screen.findByText("12.5 dps");
       expect(estimateClassDps).toHaveBeenCalledWith({...initialClass, powers: [punch]}, []);
+    });
+
+    it("posts the draft and the strategy for the survivability estimate", async () => {
+      estimateClassTtd.mockResolvedValue({results: [{priority: "dps", intendedFor: "open", pull: "solo", school: "physical", elevation: 0, hpLostPct: 21, ttd: 58, survives: false, died: false, capSeconds: 300}]});
+      await renderReady({...initialClass, powers: [punch]});
+      fireEvent.click(areaList().getByRole("button", {name: /DPS and survivability/}));
+
+      fireEvent.click(screen.getByRole("button", {name: "Estimate survivability"}));
+
+      await screen.findByText("58.0s");
+      expect(estimateClassTtd).toHaveBeenCalledWith({...initialClass, powers: [punch]}, []);
     });
   });
 

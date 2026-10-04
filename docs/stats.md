@@ -437,9 +437,9 @@ identical.
 
 "Trainee Gear" is a generated starter item for every equipment slot, built from the character's
 class. Each class specifies a ranked list of `primaryStats` (usually one, but hybrid classes may
-list more) and a ranked list of exactly five `secondaryStats`; the generated gear is itemized from
-those lists. Two characters of the same class always get the same Trainee Gear. The client
-displays it dimmed out, so it's clear to the player that the character isn't wearing a real item.
+list more) and up to three named `statPriorities`, each a ranked list of exactly five
+`secondaryStats`; the generated gear is itemized from the primaries and the first priority. Two
+characters of the same class always get the same Trainee Gear. The client displays it dimmed out, so it's clear to the player that the character isn't wearing a real item.
 
 - **In a world**, a character gets a full set of Trainee Gear at elvl 0 the first time they enter
   that world. It's saved like any other item, and each world has its own (items belong to the

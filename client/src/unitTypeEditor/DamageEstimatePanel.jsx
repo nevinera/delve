@@ -1,4 +1,4 @@
-import {unitTargets, targetFit} from "../balanceTargets";
+import {unitTargets, targetFit, referenceTimeToKill, GEAR_PROFILES} from "../balanceTargets";
 
 const PLAN_LABELS = {
   offense: "Offense gear (squishy)",
@@ -54,6 +54,47 @@ function TargetSummary({targets, maxHP, dps}) {
   );
 }
 
+const KILL_PLANS = ["offense", "offenseWithDefense", "defense"];
+const KILL_ELEVATIONS = [0, -5, -10];
+
+// How long the reference character (see balanceTargets.js) takes to kill this
+// unit, per gear profile and elevation, against the target for its tags.
+// Needs no estimate: it's the unit's maxHP over a fixed reference DPS.
+function TimeToKill({targets, maxHP}) {
+  if (targets.untargeted || typeof maxHP !== "number") return null;
+  return (
+    <table className="damage-estimate-table damage-estimate-kill-table">
+      <caption>Time for the reference character to kill it</caption>
+      <thead>
+        <tr>
+          <th>Character gear \ Relative elevation</th>
+          {KILL_ELEVATIONS.map((ee) => (
+            <th key={ee} scope="col">{formatElevation(ee)}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {KILL_PLANS.map((plan) => (
+          <tr key={plan}>
+            <th scope="row">{GEAR_PROFILES[plan].label}</th>
+            {KILL_ELEVATIONS.map((ee) => {
+              const seconds = referenceTimeToKill(maxHP, plan, ee);
+              const target = targets.ttk(plan, ee);
+              const fit = targetFit(seconds, target);
+              return (
+                <td key={ee} className={`target-${fit}`}>
+                  {seconds.toFixed(1)}s
+                  <div className="damage-estimate-target">target {formatRange(target, 0, "s")}</div>
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 // Explicit-click estimate (not live-updating - see issue #72): a matrix of
 // the unit's simulated DPS against mocked gear kits (rows) at several
 // relative elevations (columns), each time-to-kill shown against its target
@@ -73,6 +114,7 @@ export default function DamageEstimatePanel({estimate, estimating, error, onEsti
         {error && <span className="damage-estimate-error">{error}</span>}
       </div>
       <TargetSummary targets={targets} maxHP={unitType.maxHP} dps={unitType.dps} />
+      <TimeToKill targets={targets} maxHP={unitType.maxHP} />
       {results.length > 0 && (
         <table className="damage-estimate-table">
           <thead>

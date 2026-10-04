@@ -16,7 +16,7 @@ export function blankClass(key) {
     resources: [],
     powers: [],
     primaryStats: [],
-    secondaryStats: [],
+    statPriorities: [{name: "hybrid", secondaryStats: ["", "", "", "", ""]}],
     wields: [],
   };
 }
