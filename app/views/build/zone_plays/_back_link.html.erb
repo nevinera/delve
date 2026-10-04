@@ -1,0 +1,5 @@
+<% if @world %>
+  <%= link_to "Back to the world editor", edit_build_world_path(id: @world) %>
+<% else %>
+  <%= link_to "Back to zones", build_zones_path %>
+<% end %>

@@ -1,6 +1,9 @@
 import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import ClassEditor from "./ClassEditor";
+import {adoptBranchParam} from "../github/branchPreference";
+
+adoptBranchParam();
 
 const el = document.getElementById("editor-root");
 createRoot(el).render(
@@ -8,7 +11,7 @@ createRoot(el).render(
     <ClassEditor
       classKey={el.dataset.key}
       stockAssets={JSON.parse(el.dataset.stockAssets)}
-      newAbilityUrl={el.dataset.newAbilityUrl}
+      backUrl={el.dataset.backUrl}
     />
   </StrictMode>
 );

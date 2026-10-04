@@ -64,6 +64,13 @@ type Result struct {
 	TotalDamage       float64
 
 	DPS float64 // TotalDamage / Duration
+
+	// Only meaningful for a fight against an enemy pull (see runFight): the
+	// dummy fight never damages the character or ends early. Duration is the
+	// time actually elapsed when one of these ended the run.
+	Died          bool    // the character's health reached 0
+	Cleared       bool    // every enemy in the pull died
+	HealthLostPct float64 // share of MaxHealth lost by the end, 0-100+ (>= 100 means died)
 }
 
 // Simulate runs the simulated character's basic attack and power rotation
@@ -82,21 +89,46 @@ type Result struct {
 // injectable rand.Source through internal/command's exported functions,
 // a much bigger change than this package).
 func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand.Rand) Result {
+	return runFight(cfg, strategy, duration, rng, fightConfig{tickInterval: simTickInterval})
+}
+
+// fightConfig varies runFight between the DPS calculator's fixed dummy
+// (zero value of pull) and the time-to-die sim's enemy pull.
+type fightConfig struct {
+	tickInterval float64
+	statsRecalc  float64 // 0: resourceStatsRecalcInterval
+	pull         *pull   // nil: one immortal, passive target dummy
+}
+
+// runFight is Simulate's event loop, shared with the time-to-die sim. With a
+// pull, the character fights its units one at a time (the first alive one is
+// its target) while every living unit attacks the character; the run ends
+// early when the character dies or the last unit does.
+func runFight(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand.Rand, fc fightConfig) Result {
+	dt := fc.tickInterval
 	res := Result{Duration: duration}
 	unit := newAttacker(cfg)
-	target := newTargetDummy()
 	zone := instanceconfig.Zone{}
 	attackerID := uuid.New()
+	enemies := newEnemies(fc.pull)
+	target := newTargetDummy()
 	targetID := uuid.New()
+	if len(enemies) > 0 {
+		target, targetID = enemies[0].unit, enemies[0].id
+	}
 	// A "triggered" StatusEffect with affects: "target" resolves against
 	// the holder's own current Target (command.FireTriggeredEffect) - this
-	// package's whole simulated fight is a fixed 1v1, so that's set once
-	// here rather than ever changing (no aggro/EngageOnAttack modeled -
-	// see package doc). state is the minimal instancestate.InstanceState
-	// FireTriggeredEffect needs to resolve that lookup.
+	// package's simulated fight is 1v1 at any moment, so it's set here and
+	// only changes when a pull's current unit dies (no aggro/EngageOnAttack
+	// modeled - see package doc). state is the minimal
+	// instancestate.InstanceState FireTriggeredEffect needs to resolve that
+	// lookup.
 	unit.Target = &targetID
 	target.Target = &attackerID
 	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{attackerID: unit, targetID: target}}
+	for _, e := range enemies {
+		state.Units[e.id] = e.unit
+	}
 
 	powersByName := make(map[string]instanceconfig.Power, len(cfg.Class.Powers))
 	for _, p := range cfg.Class.Powers {
@@ -115,10 +147,15 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand
 	addTriggeredDamage := add(&res.TriggeredDamage)
 
 	nextBasicAttackAt := 0.0
+	nextEnemy := 0
 
 	needsHastePct, needsHealingTakenPct := resourceRegenNeedsStats(cfg.Class.Resources)
 	var hastePctForRegen, healingTakenPctForRegen float64
 	nextStatsRecalcAt := 0.0
+	recalcInterval := resourceStatsRecalcInterval
+	if fc.statsRecalc > 0 {
+		recalcInterval = fc.statsRecalc
+	}
 
 	// pendingCast tracks a cast-time power between selection and completion -
 	// see docs on castPower/applyPowerEffects. GCD/cooldown are already
@@ -127,7 +164,7 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand
 	// selecting a cast only requires affording it.
 	var pendingCast *pendingCastState
 
-	for now := 0.0; now < duration; now += simTickInterval {
+	for now := 0.0; now < duration; now += dt {
 		nowTime := simTime(now)
 
 		if now >= nextStatsRecalcAt {
@@ -139,15 +176,15 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand
 			if needsHealingTakenPct {
 				healingTakenPctForRegen = command.HealingTakenPct(unit, zone)
 			}
-			nextStatsRecalcAt = now + resourceStatsRecalcInterval
+			nextStatsRecalcAt = now + recalcInterval
 		}
 
 		refreshStatusConditions(unit, unit, target)
 		refreshStatusConditions(target, unit, unit)
 
-		tickResourceRegen(unit, hastePctForRegen, healingTakenPctForRegen, simTickInterval)
-		tickActiveStatuses(unit, unit, zone, nowTime, simTickInterval, addStatusTickDamage, rng)
-		tickActiveStatuses(target, unit, zone, nowTime, simTickInterval, addStatusTickDamage, rng)
+		tickResourceRegen(unit, hastePctForRegen, healingTakenPctForRegen, dt)
+		tickActiveStatuses(unit, unit, zone, nowTime, dt, addStatusTickDamage, rng)
+		tickActiveStatuses(target, unit, zone, nowTime, dt, addStatusTickDamage, rng)
 
 		if pendingCast != nil && now >= pendingCast.endsAt {
 			applyPowerEffects(unit, target, attackerID, pendingCast.power, zone, nowTime, addPowerDamage, rng)
@@ -181,14 +218,41 @@ func Simulate(cfg AttackerConfig, strategy Strategy, duration float64, rng *rand
 			}
 		}
 
-		processTriggeredEffects(attackerID, unit, zone, nowTime, simTickInterval, state, addTriggeredDamage, rng)
-		processTriggeredEffects(targetID, target, zone, nowTime, simTickInterval, state, addTriggeredDamage, rng)
+		if len(enemies) > 0 {
+			attackFromPull(enemies, unit, zone, now, fc.pull, rng)
+		}
+
+		processTriggeredEffects(attackerID, unit, zone, nowTime, dt, state, addTriggeredDamage, rng)
+		processTriggeredEffects(targetID, target, zone, nowTime, dt, state, addTriggeredDamage, rng)
 		unit.DamageTakenThisTick, unit.DamageDealtThisTick = false, false
 		target.DamageTakenThisTick, target.DamageDealtThisTick = false, false
+
+		if len(enemies) > 0 {
+			if unit.Health <= 0 {
+				res.Died, res.Duration = true, now+dt
+				break
+			}
+			if target.Health <= 0 {
+				for nextEnemy < len(enemies) && enemies[nextEnemy].unit.Health <= 0 {
+					nextEnemy++
+				}
+				if nextEnemy == len(enemies) {
+					res.Cleared, res.Duration = true, now+dt
+					break
+				}
+				target, targetID = enemies[nextEnemy].unit, enemies[nextEnemy].id
+				unit.Target = &targetID
+				target.Target = &attackerID
+				target.CombatStats = command.ComputeCombatStats(target, zone)
+			}
+		}
 	}
 
-	if duration > 0 {
-		res.DPS = res.TotalDamage / duration
+	if len(enemies) > 0 && unit.MaxHealth > 0 {
+		res.HealthLostPct = max(0, (unit.MaxHealth-unit.Health)/unit.MaxHealth*100)
+	}
+	if res.Duration > 0 {
+		res.DPS = res.TotalDamage / res.Duration
 	}
 	return res
 }

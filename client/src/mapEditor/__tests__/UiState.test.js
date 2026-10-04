@@ -8,7 +8,7 @@ describe("UiState", () => {
     expect(state.nothingArmed).toBe(true);
     expect(state.placement).toBeNull();
     expect(state.expandedUnitIndices).toEqual(new Set());
-    expect(state.pendingGroupNames).toEqual([]);
+    expect(state.openGroup).toBeNull();
   });
 
   describe("with", () => {
@@ -122,58 +122,20 @@ describe("UiState", () => {
     });
   });
 
-  describe("grouping mode", () => {
-    it("startGroupingMode arms the given group", () => {
-      const result = new UiState().startGroupingMode("raiders");
-      expect(result.groupingMode).toEqual({groupIdentifier: "raiders"});
+  describe("open group", () => {
+    it("survives starting a placement, unlike the modes", () => {
+      const result = new UiState({openGroup: "pack"}).startUnitPlacement(0);
+      expect(result.openGroup).toEqual("pack");
+      expect(result.unitPlacement).toEqual({unitIndex: 0, section: "units"});
     });
 
-    it("startGroupingMode with the currently-active group turns it back off", () => {
-      const state = new UiState().startGroupingMode("raiders");
-      const result = state.startGroupingMode("raiders");
-      expect(result.groupingMode).toBeNull();
+    it("isn't something armed", () => {
+      expect(new UiState({openGroup: "pack"}).nothingArmed).toBe(true);
     });
 
-    it("startGroupingMode with a different group switches to it", () => {
-      const state = new UiState().startGroupingMode("raiders");
-      const result = state.startGroupingMode("scouts");
-      expect(result.groupingMode).toEqual({groupIdentifier: "scouts"});
-    });
-
-    it("startGroupingMode clears an in-progress placement", () => {
-      const state = new UiState().startBarrierPlacement(1, 0);
-      const result = state.startGroupingMode("raiders");
-      expect(result.placement).toBeNull();
-    });
-
-    it("addPendingGroup adds a new trimmed name and enters grouping mode for it", () => {
-      const result = new UiState().addPendingGroup("  raiders  ");
-      expect(result.pendingGroupNames).toEqual(["raiders"]);
-      expect(result.groupingMode).toEqual({groupIdentifier: "raiders"});
-    });
-
-    it("addPendingGroup is a no-op for a blank name", () => {
-      const state = new UiState();
-      expect(state.addPendingGroup("   ")).toBe(state);
-    });
-
-    it("addPendingGroup doesn't duplicate an already-pending name", () => {
-      const state = new UiState({pendingGroupNames: ["raiders"]});
-      const result = state.addPendingGroup("raiders");
-      expect(result.pendingGroupNames).toEqual(["raiders"]);
-    });
-
-    it("renameGroup renames a pending name and an active groupingMode targeting it", () => {
-      const state = new UiState({pendingGroupNames: ["raiders"], groupingMode: {groupIdentifier: "raiders"}});
-      const result = state.renameGroup("raiders", "warband");
-      expect(result.pendingGroupNames).toEqual(["warband"]);
-      expect(result.groupingMode).toEqual({groupIdentifier: "warband"});
-    });
-
-    it("renameGroup leaves groupingMode alone if it's targeting a different group", () => {
-      const state = new UiState({groupingMode: {groupIdentifier: "scouts"}});
-      const result = state.renameGroup("raiders", "warband");
-      expect(result.groupingMode).toEqual({groupIdentifier: "scouts"});
+    it("follows a rename of the open group, and ignores others", () => {
+      expect(new UiState({openGroup: "pack"}).renameGroup("pack", "wolves").openGroup).toEqual("wolves");
+      expect(new UiState({openGroup: "pack"}).renameGroup("other", "wolves").openGroup).toEqual("pack");
     });
   });
 

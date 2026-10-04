@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 	"github.com/delve-mmo/game-server/internal/itemstats"
@@ -99,6 +100,9 @@ type combatStatsJSON struct {
 	Physical    schoolCombatStatsJSON `json:"physical"`
 	Magic       schoolCombatStatsJSON `json:"magic"`
 	BasicAttack schoolCombatStatsJSON `json:"basic_attack"`
+	// AmountScale multiplies the player's authored harm/heal amounts - see
+	// command.AuthoredAmountScale.
+	AmountScale float64 `json:"amount_scale"`
 }
 
 func schoolCombatStatsToJSON(s instancestate.SchoolCombatStats) schoolCombatStatsJSON {
@@ -116,6 +120,7 @@ func combatStatsToJSON(u *instancestate.UnitState) *combatStatsJSON {
 		Physical:    schoolCombatStatsToJSON(u.CombatStats.Physical),
 		Magic:       schoolCombatStatsToJSON(u.CombatStats.Magic),
 		BasicAttack: schoolCombatStatsToJSON(u.CombatStats.BasicAttack),
+		AmountScale: command.AuthoredAmountScale(u),
 	}
 }
 

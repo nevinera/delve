@@ -11,7 +11,7 @@ RSpec.describe "Build::ClassDpsSims", type: :request do
       colors: {major: "FF0000", minor: "00FF00"},
       resources: [{name: "energy", color: "888888", max: 100.0, defaultValue: 100.0, returnRate: 0.0, isFluid: true, displayType: "primary"}],
       primaryStats: ["strength"],
-      secondaryStats: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"],
+      statPriorities: [{name: "hybrid", secondaryStats: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"]}],
       wields: ["dagger", "dagger"]
     }
   end

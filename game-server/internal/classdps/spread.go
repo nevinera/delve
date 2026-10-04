@@ -7,17 +7,16 @@ import (
 )
 
 // Elevations is every relative elevation (ee = item elvl - map elvl) Spread
-// runs, in a fixed, stable order - named after docs/stats.md's "Elevation"
-// feel table / intro paragraph (BC-dungeon-in-quest-greens, on-level
-// heroics, raid-epics-back-in-dungeons), extended one tier further down for
-// Trainee Gear's own starting point.
-var Elevations = []int{-20, -10, 0, 10}
+// runs, in a fixed, stable order: docs/combat_balance.md's three target
+// elevations, plus +10 (raid epics back in dungeons - see docs/stats.md's
+// "Elevation" feel table), which has no target yet.
+var Elevations = []int{-10, -5, 0, 10}
 
 // elevationLabels names each of Elevations - purely descriptive, has no
 // effect on the simulation itself.
 var elevationLabels = map[int]string{
-	-20: "trainee",
 	-10: "dungeon",
+	-5:  "stretch",
 	0:   "heroic",
 	10:  "raid",
 }
@@ -30,13 +29,13 @@ func elevationLabel(ee int) string {
 }
 
 // Spread runs Simulate once per Elevations entry, gearing the attacker with
-// a freshly synthesized Trainee Gear kit (see traineegear.go) at that
+// a freshly synthesized Trainee Gear kit for priority (see traineegear.go) at that
 // elevation, for duration seconds. Returns len(Elevations) cells, in
 // Elevations' order.
-func Spread(class instanceconfig.CharacterClass, strategy Strategy, duration float64, rng *rand.Rand) []ElevationResult {
+func Spread(class instanceconfig.CharacterClass, priority instanceconfig.StatPriority, strategy Strategy, duration float64, rng *rand.Rand) []ElevationResult {
 	cells := make([]ElevationResult, 0, len(Elevations))
 	for _, ee := range Elevations {
-		cfg := AttackerConfig{Class: class, EquippedItems: newTraineeGear(class, ee)}
+		cfg := AttackerConfig{Class: class, EquippedItems: newTraineeGear(class, priority, ee)}
 		cells = append(cells, ElevationResult{
 			Elevation: ee,
 			Label:     elevationLabel(ee),

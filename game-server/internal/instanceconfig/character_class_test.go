@@ -30,7 +30,11 @@ func TestCharacterClass_ValidFull(t *testing.T) {
 	assert.Equal(t, "Thick Hide", c.Passives[0].Name)
 	assert.Equal(t, "inherent", c.Passives[0].TreatAs)
 	assert.Equal(t, []string{"strength"}, c.PrimaryStats)
-	assert.Equal(t, []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"}, c.SecondaryStats)
+	require.Len(t, c.StatPriorities, 1)
+	assert.Equal(t, "hybrid", c.StatPriorities[0].Name)
+	assert.Equal(t, []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"}, c.StatPriorities[0].SecondaryStats)
+	assert.Equal(t, c.StatPriorities[0], c.DefaultStatPriority())
+	assert.Equal(t, instanceconfig.StatPriority{}, instanceconfig.CharacterClass{}.DefaultStatPriority())
 	assert.Equal(t, []string{"dagger", "dagger"}, c.Wields)
 }
 

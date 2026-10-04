@@ -9,7 +9,7 @@ module EquippedItems
       id: item.id,
       identifier: item.identifier,
       name: item.name,
-      zone_identifier: item.zone_identifier,
+      world_version_id: item.world_version_id,
       version: item.version,
       slot: item.slot,
       elvl: item.elvl,

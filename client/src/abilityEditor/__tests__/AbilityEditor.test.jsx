@@ -16,6 +16,11 @@ vi.mock("../../github/delve-github", async (importOriginal) => {
   return {...actual, GithubClient: vi.fn()};
 });
 
+// One branch, "main" (see useEditorBranch).
+vi.mock("../../github/useEditorBranch", () => ({
+  useEditorBranch: () => ({branches: ["main"], branch: "main", select: vi.fn(), create: vi.fn(), error: null}),
+}));
+
 vi.mock("../../redirectTo", () => ({redirectTo: vi.fn()}));
 vi.mock("../../validators/validateContent", () => ({
   validateAbility: vi.fn(),
@@ -267,6 +272,15 @@ describe("AbilityEditor", () => {
       expect(screen.getByRole("button", {name: "Save"})).toBeDisabled();
     });
 
+    it("locks the branch picker while there are unsaved edits", async () => {
+      await renderReady();
+      expect(screen.getByRole("combobox", {name: "Branch"})).toBeEnabled();
+
+      fireEvent.change(screen.getByDisplayValue("60"), {target: {value: "99"}});
+
+      expect(screen.getByRole("combobox", {name: "Branch"})).toBeDisabled();
+    });
+
     it("commits the ability under abilities/<key>.json and shows a success message", async () => {
       validateAbility.mockResolvedValue({valid: true});
       commitFiles.mockResolvedValue({commitSha: "abc123", branch: "main"});
@@ -281,7 +295,7 @@ describe("AbilityEditor", () => {
       await waitFor(() => expect(screen.getByText("Saved.")).toBeInTheDocument());
       expect(commitFiles).toHaveBeenCalledWith(
         {"abilities/firebolt.json": initialAbility},
-        {message: "Update Firebolt"}
+        {message: "Update Firebolt", branch: "main"}
       );
     });
 

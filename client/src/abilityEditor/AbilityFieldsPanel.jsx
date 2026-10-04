@@ -212,7 +212,7 @@ function EntryField({field, value, onChange, stockAssets}) {
   }
 }
 
-function EntryFieldsTable({section, index, entry, draft, onChange, assetOverrides, onUploadAsset, onClearAsset, stockAssets}) {
+function EntryFieldsTable({section, index, entry, draft, onChange, assetOverrides, onUploadAsset, onClearAsset, stockAssets, renderStatus}) {
   const stockOptions = section === "soundEffects" ? stockAssets.sounds : stockAssets.graphics;
 
   function pickStockAsset(name) {
@@ -226,18 +226,22 @@ function EntryFieldsTable({section, index, entry, draft, onChange, assetOverride
           // A status is its own nested domain object (StatusDraft), reached
           // and replaced through AbilityDraft rather than routed through
           // the generic updateEntryField path every other field uses - see
-          // AbilityDraft#statusFor/setStatus/addStatus.
+          // AbilityDraft#statusFor/setStatus/addStatus. renderStatus lets a
+          // host editor show something else here instead (the unit type
+          // editor shows a summary that opens the status in its own pane).
           if (field === "status") {
             return (
               <tr key={field}>
                 <th>{humanize(field)}</th>
                 <td>
-                  <StatusEditor
-                    status={draft.statusFor(index)}
-                    onAdd={() => onChange(draft.addStatus(index))}
-                    onChange={(nextStatus) => onChange(draft.setStatus(index, nextStatus))}
-                    stockAssets={stockAssets}
-                  />
+                  {renderStatus ? renderStatus(index) : (
+                    <StatusEditor
+                      status={draft.statusFor(index)}
+                      onAdd={() => onChange(draft.addStatus(index))}
+                      onChange={(nextStatus) => onChange(draft.setStatus(index, nextStatus))}
+                      stockAssets={stockAssets}
+                    />
+                  )}
                 </td>
               </tr>
             );
@@ -293,7 +297,7 @@ const EMPTY_STOCK_ASSETS = {icons: {}, graphics: {}, sounds: {}};
 // Purely presentational - every domain rule (what a new entry starts as,
 // what a stock-asset pick writes) lives on AbilityDraft now; this just
 // renders draft's current values and calls its mutator methods.
-export default function AbilityFieldsPanel({draft, onChange, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry, stockAssets = EMPTY_STOCK_ASSETS}) {
+export default function AbilityFieldsPanel({draft, onChange, assetOverrides, onUploadAsset, onClearAsset, onRemoveEntry, stockAssets = EMPTY_STOCK_ASSETS, renderStatus}) {
   const ability = draft.data;
   // Scrolls the fields panel to a newly-added entry, and briefly highlights
   // it, since it's appended at the end of a (possibly long) list and might
@@ -373,6 +377,7 @@ export default function AbilityFieldsPanel({draft, onChange, assetOverrides, onU
                 onUploadAsset={onUploadAsset}
                 onClearAsset={onClearAsset}
                 stockAssets={stockAssets}
+                renderStatus={renderStatus}
               />
             </div>
           );

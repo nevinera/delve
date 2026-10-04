@@ -4,6 +4,8 @@ class CharacterItem < ApplicationRecord
   SECONDARY_STATS = %w[stamina crit_rating haste_rating mastery_rating versatility_rating defence_rating recovery_rating].freeze
 
   belongs_to :world_character
+  # The world version it was acquired in; nil for trainee gear.
+  belongs_to :world_version, optional: true
   has_one :equipped_item, dependent: :destroy
 
   delegate :character, to: :world_character
@@ -14,9 +16,16 @@ class CharacterItem < ApplicationRecord
   validates :slot, presence: true, inclusion: {in: SLOTS}
   validates :source_json, presence: true
   validates :version, presence: true,
-    uniqueness: {scope: [:world_character_id, :zone_identifier, :identifier], message: "is already held"}
+    uniqueness: {scope: [:world_character_id, :identifier], message: "is already held"}
   validates :primary_stat, inclusion: {in: PRIMARY_STATS}, allow_nil: true
   validate :secondary_stats_are_valid
+
+  # Where it came from, for display: the world and version it was acquired
+  # in, or "Trainee gear".
+  def provenance_label
+    return "Trainee gear" unless world_version
+    "#{world_version.world.name || world_version.world.key} (#{world_version.ref})"
+  end
 
   private
 

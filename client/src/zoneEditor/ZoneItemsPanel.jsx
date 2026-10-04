@@ -1,13 +1,12 @@
 import {useState} from "react";
-import {mapEditPath} from "./mapRef";
 import {aggregateItemUsage} from "./zoneRefUsage";
 
 // Every item identifier referenced by any unit's lootTable, anywhere in
 // this zone's referenced-and-resolved maps - not directly editable here
 // (see plans/zone-editor.md step 7); this is purely "what's used, and is
 // it valid". A key shown as invalid gets added to the zone's own `items`
-// dict automatically at save time instead (see syncZoneRefs.js), so it's
-// expected to only ever show briefly, between placing a unit and saving.
+// dict automatically as the map changes (see worldBuilder/state/zoneOps.js
+// syncZoneRefs), so it's not expected to show at all.
 export default function ZoneItemsPanel({zoneData, mapDetailsByKey, zoneKey}) {
   const [collapsed, setCollapsed] = useState(true);
   const usage = aggregateItemUsage(zoneData, mapDetailsByKey);
@@ -37,7 +36,7 @@ export default function ZoneItemsPanel({zoneData, mapDetailsByKey, zoneKey}) {
                   {mapKeys.length === 1 ? (
                     <>
                       {info.count} {unitWord} on{" "}
-                      <a href={mapEditPath(zoneKey, mapKeys[0])} target="_blank" rel="noreferrer">{info.mapNames[mapKeys[0]]} ↗</a>
+                      {info.mapNames[mapKeys[0]]}
                     </>
                   ) : (
                     `${info.count} ${unitWord} across ${mapKeys.length} maps`

@@ -228,3 +228,36 @@ func TestHastedGlobalCooldownSeconds(t *testing.T) {
 	assert.Equal(t, 0.5, HastedGlobalCooldownSeconds(unit, instanceconfig.Power{GlobalCooldown: 0.5}))
 	assert.Equal(t, 1.5, HastedGlobalCooldownSeconds(&instancestate.UnitState{}, instanceconfig.Power{GlobalCooldown: 1.5}))
 }
+
+func scaleUnit(identifier, damageStat string, primary float64) *instancestate.UnitState {
+	return &instancestate.UnitState{
+		ZoneUnitIdentifier: identifier,
+		DamageStatKey:      damageStat,
+		CombatStats:        &instancestate.CombatStats{Stats: map[string]float64{damageStat: primary}},
+	}
+}
+
+func TestAuthoredAmountScale_PlayerScalesWithPrimaryOverReference(t *testing.T) {
+	assert.InDelta(t, 1.0, AuthoredAmountScale(scaleUnit("player:a", "strength", 200)), 0.001)
+	assert.InDelta(t, 0.5, AuthoredAmountScale(scaleUnit("player:a", "intellect", 100)), 0.001)
+	assert.InDelta(t, 1.5, AuthoredAmountScale(scaleUnit("player:a", "agility", 300)), 0.001)
+}
+
+func TestAuthoredAmountScale_FlooredAtTwentyPercent(t *testing.T) {
+	assert.InDelta(t, 0.2, AuthoredAmountScale(scaleUnit("player:a", "strength", 10)), 0.001)
+	assert.InDelta(t, 0.2, AuthoredAmountScale(scaleUnit("player:a", "strength", 0)), 0.001)
+}
+
+func TestAuthoredAmountScale_NPCsAndClasslessPlayersAreUnscaled(t *testing.T) {
+	assert.Equal(t, 1.0, AuthoredAmountScale(scaleUnit("goblin-1", "strength", 10)))
+	assert.Equal(t, 1.0, AuthoredAmountScale(scaleUnit("player:a", "", 0)))
+}
+
+func TestEffectAmount_ScalesTheAuthoredAmount(t *testing.T) {
+	unit := scaleUnit("player:a", "strength", 100) // scale 0.5
+	// A heal never misses; with 0% crit chance and no stat contribution the
+	// result is just the scaled authored amount.
+	unit.CombatStats.Magic = instancestate.SchoolCombatStats{}
+	amount := effectAmount(unit, instanceconfig.Zone{}, "", 40, 1.5, true, false, rand.New(rand.NewSource(1)))
+	assert.Equal(t, 20.0, amount)
+}

@@ -1,7 +1,6 @@
-<%= link_to "← Back", build_classes_path, class: "back-link" %>
 <div
   id="editor-root"
   data-key="<%= params[:id] %>"
   data-stock-assets="<%= @stock_assets.to_json %>"
-  data-new-ability-url="<%= new_build_ability_path(key: "classes/#{params[:id]}/") %>"
+  data-back-url="<%= build_classes_path %>"
 ></div>

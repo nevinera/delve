@@ -151,9 +151,9 @@ describe("MapDraft", () => {
       expect(result.data.units[0].groupIdentifier).toBe("raiders");
     });
 
-    it("toggleGroupMember removes an existing member", () => {
-      const result = new MapDraft({...base, units}).toggleGroupMember("raiders", 1);
-      expect(result.data.units[1].groupIdentifier).toBeNull();
+    it("toggleGroupMember moves an existing member to a group of its own", () => {
+      const result = new MapDraft({...base, units}).toggleGroupMember("raiders", 1, "group-abcdef");
+      expect(result.data.units[1].groupIdentifier).toBe("group-abcdef");
     });
 
     it("toggleGroupMember moves a unit out of a different group silently", () => {

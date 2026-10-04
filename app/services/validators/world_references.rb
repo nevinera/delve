@@ -38,7 +38,7 @@ module Validators
     def validate_entry_points!
       entry_points_path = child_path("$", "entryPoints")
       @world_data["entryPoints"].each_key do |key|
-        zone_key, entry_point = key.split("/", 2)
+        zone_key, entry_point = WorldContent::Links.split_entry_point(key)
         validate_connection!(zone_key, "entryPoint", entry_point.to_s, path: child_path(entry_points_path, key))
       end
     end

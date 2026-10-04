@@ -19,9 +19,10 @@ module Github
     # Returns [{"name" => "sword.json", "path" => "items/sword.json", "type" => "file"}, ...] -
     # same shape callers have always gotten back. An empty array means the
     # path doesn't exist (yet) or is empty - not an error; a content type
-    # with nothing in it yet is a normal state, not a failure.
-    def list(path)
-      sha = resolve_sha(path)
+    # with nothing in it yet is a normal state, not a failure. ref is a
+    # branch name (the default branch if nil).
+    def list(path, ref: nil)
+      sha = resolve_sha(path, ref || default_branch)
       return [] if sha.nil?
 
       tree = @api.tree(@repo, sha, recursive: true)
@@ -36,8 +37,8 @@ module Github
     # Walks path's own segments (not what's beneath it) down from the
     # branch's root tree, one non-recursive lookup per segment, to find the
     # target subdirectory's own tree SHA. nil if any segment doesn't exist.
-    def resolve_sha(path)
-      sha = default_branch
+    def resolve_sha(path, ref)
+      sha = ref
       path.split("/").each do |segment|
         tree = @api.tree(@repo, sha)
         entry = Array(tree["tree"]).find { |e| e["path"] == segment && e["type"] == "tree" }

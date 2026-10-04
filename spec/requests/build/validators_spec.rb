@@ -53,7 +53,7 @@ RSpec.describe "Build::Validators", type: :request do
         {
           name: "Puncher", colors: {major: "8B4513", minor: "F4A460"},
           primaryStats: ["strength"],
-          secondaryStats: %w[crit_rating haste_rating mastery_rating versatility_rating recovery_rating],
+          statPriorities: [{name: "hybrid", secondaryStats: %w[crit_rating haste_rating mastery_rating versatility_rating recovery_rating]}],
           wields: ["axe", "dagger"],
           resources: [
             {name: "energy", color: "FFDD00", max: 100.0, defaultValue: 100.0, returnRate: 10.0, isFluid: true, displayType: "primary"}
@@ -193,6 +193,39 @@ RSpec.describe "Build::Validators", type: :request do
         body = JSON.parse(response.body)
         expect(body["valid"]).to eq(false)
         expect(body["error"]["path"]).to eq("$.entryPoints")
+      end
+    end
+
+    describe "POST /build/validators/world_references" do
+      let(:world) do
+        {
+          "worldLinks" => [{"zoneA" => {"zone" => "forest", "kind" => "open", "connection" => "north-exit"},
+                            "zoneB" => {"zone" => "cave", "kind" => "open", "connection" => "entrance"}}],
+          "entryPoints" => {"forest/hub/central" => nil}
+        }
+      end
+      let(:zones) do
+        {
+          "forest" => {"openConnections" => {"hub/north" => "north-exit"}, "entryPoints" => {"hub/central" => nil}},
+          "cave" => {"openConnections" => {"mouth/in" => "entrance"}, "entryPoints" => {}}
+        }
+      end
+
+      def post_references(body)
+        post "/build/validators/world_references", params: body.to_json, headers: {"Content-Type" => "application/json"}
+        JSON.parse(response.body)
+      end
+
+      it "returns valid: true when every link and entry point names a real connection" do
+        expect(post_references({world:, zones:})).to eq({"valid" => true})
+      end
+
+      it "names a link to a connection the zone doesn't expose" do
+        zones["cave"]["openConnections"] = {}
+        body = post_references({world:, zones:})
+        expect(body["valid"]).to eq(false)
+        expect(body["error"]["message"]).to include('zone "cave" has no openConnection "entrance"')
+        expect(body["error"]["path"]).to eq("$.worldLinks[0].zoneB")
       end
     end
 

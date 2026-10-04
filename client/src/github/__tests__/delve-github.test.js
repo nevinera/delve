@@ -178,3 +178,19 @@ describe("GithubClient#listDirectory", () => {
     expect(abilitiesTreeFetches).toBe(1);
   });
 });
+
+describe("GithubClient on a branch", () => {
+  it("reads files and assets from that branch, without looking up the default", async () => {
+    vi.spyOn(tokenModule, "fetchToken").mockResolvedValue({token: "tok", repo_full_name: "nevinera/delve-content"});
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => ({content: btoa("{}")})});
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new GithubClient({branch: "rework/v2"});
+
+    await client.fetchFile("classes/puncher.json");
+    const url = await client.assetUrl("graphics/icons/punch.png");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toEqual("https://api.github.com/repos/nevinera/delve-content/contents/classes/puncher.json?ref=rework%2Fv2");
+    expect(url).toEqual("https://raw.githubusercontent.com/nevinera/delve-content/rework/v2/graphics/icons/punch.png");
+  });
+});

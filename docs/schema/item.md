@@ -2,13 +2,13 @@
 
 An Item is a piece of equipment that can be awarded to a character from a zone's loot table.
 
-Items are defined in the zone config and sent to the Rails app by the game server when a character receives one. The `identifier` must be unique within the zone.
+Items are defined in the zone config and sent to the Rails app by the game server when a character receives one. The `identifier` must be unique within the world: a character holds an item by world, identifier and definition, whichever zone it dropped in.
 
 ## Fields
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `identifier` | string | yes | Slug unique within this zone. Used to deduplicate awards - a character can only hold one item per `identifier` per zone version. |
+| `identifier` | string | yes | Slug unique within the world. Used to deduplicate awards - a character holds one copy of each definition of an `identifier` per world. |
 | `name` | string | yes | Display name. |
 | `slot` | string | yes | Equipment slot type. See valid values below. |
 | `elvl` | integer | yes | Elevation. See [stats.md](../stats.md). Must be at least 0. |

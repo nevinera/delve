@@ -32,7 +32,7 @@ Deals damage to one or more targets.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `affects` | string | yes | Must not be `"self"`. |
-| `amount` | float \| floatRange | yes | Damage dealt. |
+| `amount` | float \| floatRange | yes | Damage dealt. For a player, scaled by their primary stat - see [stats.md](../stats.md#authored-amount-scaling). |
 | `range` | rangeFloat | yes | Distance in feet to a valid target. |
 | `school` | string | no, default `"physical"` | `"physical"` or `"magic"`. Picks which of the target's Avoidance/Defence Rating pools mitigates this effect - see [stats.md](../stats.md). Not the same as `tags` (which is free-form and has no mechanical effect). |
 
@@ -58,7 +58,7 @@ Restores HP to one or more targets.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `affects` | string | yes | |
-| `amount` | float \| floatRange | yes | HP restored. |
+| `amount` | float \| floatRange | yes | HP restored. For a player, scaled by their primary stat - see [stats.md](../stats.md#authored-amount-scaling). |
 | `range` | rangeFloat | unless `affects` is `"self"` | Distance in feet to a valid target. |
 
 ### Example

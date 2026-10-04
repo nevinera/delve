@@ -57,8 +57,12 @@ function textContent(content) {
   return typeof content === "string" ? content : JSON.stringify(content, null, 2);
 }
 
+// One tree entry: null deletes the path, an ExistingBlob reuses its sha, a
+// File/Blob is uploaded first, and anything else is inlined as text.
 async function treeEntry(token, repo, path, content) {
   const entry = {path, mode: "100644", type: "blob"};
+  if (content === null) return {...entry, sha: null};
+  if (content instanceof ExistingBlob) return {...entry, sha: content.sha};
   if (!(content instanceof Blob)) return {...entry, content: textContent(content)};
 
   const blob = await githubRequest(token, `/repos/${repo}/git/blobs`, {
@@ -68,27 +72,67 @@ async function treeEntry(token, repo, path, content) {
   return {...entry, sha: blob.sha};
 }
 
+// A file already in git, by blob SHA - committed at a (possibly new) path
+// without re-uploading it. The world editor uses this to move a zone's
+// images on a rename.
+export class ExistingBlob {
+  // sourcePath: where the blob already lives in the repo, if that's not
+  // otherwise known (e.g. a library asset copied into a world) - for
+  // displaying it before it's committed.
+  constructor(sha, sourcePath = null) {
+    this.sha = sha;
+    this.sourcePath = sourcePath;
+  }
+}
+
+// Uploads run a few at a time - a world save can carry dozens of files,
+// some of them multi-megabyte images.
+const BLOB_CONCURRENCY = 4;
+
+async function treeEntries(token, repo, filesByPath, onProgress) {
+  const paths = Object.keys(filesByPath);
+  const results = new Array(paths.length);
+  let next = 0;
+  let done = 0;
+  async function worker() {
+    while (next < paths.length) {
+      const index = next++;
+      const path = paths[index];
+      results[index] = await treeEntry(token, repo, path, filesByPath[path]);
+      onProgress?.({done: ++done, total: paths.length});
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(BLOB_CONCURRENCY, paths.length)}, worker));
+  return results;
+}
+
 // filesByPath: {"abilities/firebolt.json": {...}, "graphics/animations/firebolt.png": File}
+// A null value deletes that path instead (it must already exist on the
+// branch - GitHub rejects deleting a missing path).
 // Returns {commitSha, branch} once the branch has been fast-forwarded to
 // the new commit. Throws (without partially applying anything visible on
 // the branch - only the ref update actually moves it) if another commit
 // landed on the branch first, since that's not something to silently
 // force past.
-export async function commitFiles(filesByPath, {message}) {
+//
+// Options beyond message: `branch` (default: the repo's default branch),
+// `parentSha` (build on this commit rather than the branch's current head -
+// the world editor pins its reads to one commit, so a branch that moved
+// since then fails the ref update instead of silently absorbing it), and
+// `onProgress({done, total})` as blobs upload.
+export async function commitFiles(filesByPath, {message, branch: requestedBranch, parentSha, onProgress}) {
   const paths = Object.keys(filesByPath);
   if (paths.length === 0) throw new Error("commitFiles: no files given");
 
   const {token, repo_full_name: repo} = await fetchToken();
 
-  const repoInfo = await githubRequest(token, `/repos/${repo}`);
-  const branch = repoInfo.default_branch;
+  const branch = requestedBranch ?? (await githubRequest(token, `/repos/${repo}`)).default_branch;
 
-  const ref = await githubRequest(token, `/repos/${repo}/git/ref/heads/${branch}`);
-  const baseCommitSha = ref.object.sha;
+  const baseCommitSha = parentSha ?? (await githubRequest(token, `/repos/${repo}/git/ref/heads/${branch}`)).object.sha;
 
   const baseCommit = await githubRequest(token, `/repos/${repo}/git/commits/${baseCommitSha}`);
 
-  const entries = await Promise.all(paths.map((path) => treeEntry(token, repo, path, filesByPath[path])));
+  const entries = await treeEntries(token, repo, filesByPath, onProgress);
 
   const tree = await githubRequest(token, `/repos/${repo}/git/trees`, {
     method: "POST",

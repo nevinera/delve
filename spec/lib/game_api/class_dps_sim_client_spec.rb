@@ -11,7 +11,7 @@ RSpec.describe GameApi::ClassDpsSimClient do
     {
       "name" => "Puncher",
       "primaryStats" => ["strength"],
-      "secondaryStats" => ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"],
+      "statPriorities" => [{"name" => "hybrid", "secondaryStats" => ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"]}],
       "wields" => ["dagger", "dagger"]
     }
   end
@@ -59,6 +59,13 @@ RSpec.describe GameApi::ClassDpsSimClient do
       client.simulate(valid_attrs)
       expect(WebMock).to have_requested(:post, "#{base_url}/class-dps-sim")
         .with(headers: {"Authorization" => "Bearer #{token}"})
+    end
+
+    it "accepts extended" do
+      stub_request(:post, "#{base_url}/class-dps-sim")
+        .to_return(status: 200, body: result_body, headers: json_headers)
+
+      expect { client.simulate(valid_attrs.merge(extended: true)) }.not_to raise_error
     end
 
     it "accepts an omitted strategy" do

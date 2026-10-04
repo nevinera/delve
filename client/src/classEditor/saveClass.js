@@ -1,19 +1,22 @@
 import {commitFiles} from "../github/commitFiles";
-import {resolveFullClass} from "./resolveFullClass";
+import {powerUploadFiles} from "../powersEditor/powerSources";
 
-// Unlike saveAbility, a class's own JSON never holds direct asset
-// references (icons/sounds live on the abilities it points at, authored
-// separately in the ability editor) - so there's nothing to upload here,
-// just the abstract file plus its resolved companion.
+// Commits classes/<key>.json (every power inline - a class is no longer
+// abstract, so it has no .full.json companion) plus any pending power asset
+// uploads, in one atomic commit.
 //
-// Commits classes/<key>.json (the authoring form, with $ref powers) and
-// classes/<key>.full.json (every power inlined via resolveFullClass) in one
-// atomic commit - see docs/schema/common.md#assetreference: an abstract
-// config must have a concrete .full.json alongside it.
-export async function saveClass(key, classData, availableAbilities, commitMessage) {
-  const fullClass = await resolveFullClass(key, classData, availableAbilities);
-  return commitFiles(
-    {[`classes/${key}.json`]: classData, [`classes/${key}.full.json`]: fullClass},
-    {message: commitMessage || `Update ${classData.name || key}`}
-  );
+// powerFiles  - {power index: {assetOverrideKey: File}}, each written to
+//               wherever its field currently points (see powerUploadFiles)
+// deletePaths - repo paths to remove in the same commit (a stale
+//               .full.json left over from the $ref era)
+export async function saveClass(key, classData, {powerFiles = {}, deletePaths = [], branch} = {}, commitMessage) {
+  const ownPath = `classes/${key}.json`;
+  const {files, missing} = powerUploadFiles(ownPath, classData.powers ?? [], powerFiles);
+  if (missing.length > 0) {
+    throw new Error(`Set a path before saving for: ${missing.join(", ")}`);
+  }
+
+  const filesByPath = {[ownPath]: classData, ...files};
+  for (const path of deletePaths) filesByPath[path] = null;
+  return commitFiles(filesByPath, {message: commitMessage || `Update ${classData.name || key}`, branch});
 }

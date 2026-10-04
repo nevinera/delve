@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach} from "vitest";
-import {commitFiles, GithubAuthError} from "../commitFiles";
+import {commitFiles, ExistingBlob, GithubAuthError} from "../commitFiles";
 
 function jsonResponse(body, ok = true, status = ok ? 200 : 400) {
   return {ok, status, statusText: "", json: () => Promise.resolve(body)};
@@ -36,7 +36,10 @@ function stubGithubApi() {
     if (url === "https://api.github.com/repos/nevinera/delve-content/git/commits" && method === "POST") {
       return Promise.resolve(jsonResponse({sha: "new-commit-sha"}));
     }
-    if (url === "https://api.github.com/repos/nevinera/delve-content/git/refs/heads/main" && method === "PATCH") {
+    if (url === "https://api.github.com/repos/nevinera/delve-content/git/commits/pinned-sha") {
+      return Promise.resolve(jsonResponse({tree: {sha: "pinned-tree-sha"}}));
+    }
+    if (url.startsWith("https://api.github.com/repos/nevinera/delve-content/git/refs/heads/") && method === "PATCH") {
       return Promise.resolve(jsonResponse({}));
     }
     throw new Error(`unstubbed request: ${method} ${url}`);
@@ -150,6 +153,16 @@ describe("commitFiles", () => {
     expect(body.tree.map((t) => t.path).sort()).toEqual(["abilities/a.json", "abilities/b.json"]);
   });
 
+  it("deletes a path given null, with a null-sha tree entry and no blob", async () => {
+    const {calls} = stubGithubApi();
+    await commitFiles({"unit_types/a.json": {a: 1}, "unit_types/a.full.json": null}, {message: "m"});
+
+    expect(calls.filter((c) => c.url.endsWith("/git/blobs"))).toHaveLength(0);
+    const treeCall = calls.find((c) => c.url.endsWith("/git/trees"));
+    const body = JSON.parse(treeCall.options.body);
+    expect(body.tree.find((t) => t.path === "unit_types/a.full.json")).toEqual({path: "unit_types/a.full.json", mode: "100644", type: "blob", sha: null});
+  });
+
   it("passes the commit message and parents through to the commit call", async () => {
     const {calls} = stubGithubApi();
     await commitFiles({"abilities/a.json": {a: 1}}, {message: "Add fireball"});
@@ -192,5 +205,40 @@ describe("commitFiles", () => {
     }));
 
     await expect(commitFiles({"abilities/a.json": {a: 1}}, {message: "m"})).rejects.toThrow(/GitHub API error 404/);
+  });
+
+  it("commits onto a named branch, building on a pinned parent without reading the ref", async () => {
+    const {calls} = stubGithubApi();
+
+    const result = await commitFiles({"worlds/small/small.json": {name: "Small"}}, {message: "m", branch: "world-editor", parentSha: "pinned-sha"});
+
+    expect(result).toEqual({commitSha: "new-commit-sha", branch: "world-editor"});
+    const urls = calls.map((c) => c.url);
+    expect(urls).not.toContain("https://api.github.com/repos/nevinera/delve-content");
+    expect(urls.some((u) => u.includes("/git/ref/heads/"))).toBe(false);
+    expect(JSON.parse(calls.find((c) => c.url.endsWith("/git/trees")).options.body).base_tree).toEqual("pinned-tree-sha");
+    expect(JSON.parse(calls.find((c) => c.url.endsWith("/git/commits") && c.options.method === "POST").options.body).parents).toEqual(["pinned-sha"]);
+    expect(calls.at(-1).url).toEqual("https://api.github.com/repos/nevinera/delve-content/git/refs/heads/world-editor");
+  });
+
+  it("reports progress as each blob uploads", async () => {
+    stubGithubApi();
+    const progress = [];
+
+    await commitFiles({"a.json": {a: 1}, "b.json": {b: 2}, "c.json": null}, {message: "m", onProgress: (p) => progress.push(p)});
+
+    expect(progress.map((p) => p.done)).toEqual([1, 2, 3]);
+    expect(progress.every((p) => p.total === 3)).toBe(true);
+  });
+
+  it("commits an existing blob at a new path without uploading it", async () => {
+    const {calls} = stubGithubApi();
+
+    await commitFiles({"worlds/w/zones/b/map.png": new ExistingBlob("png-sha")}, {message: "m"});
+
+    expect(calls.filter((c) => c.url.endsWith("/git/blobs"))).toHaveLength(0);
+    expect(JSON.parse(calls.find((c) => c.url.endsWith("/git/trees")).options.body).tree).toEqual([
+      {path: "worlds/w/zones/b/map.png", mode: "100644", type: "blob", sha: "png-sha"},
+    ]);
   });
 });

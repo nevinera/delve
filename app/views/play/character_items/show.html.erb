@@ -5,7 +5,7 @@
   <p>Weapon Type: <%= @item.source_json["weaponType"] %></p>
 <% end %>
 <p>Elevation: <%= @item.elvl %></p>
-<p>From: <%= @item.zone_identifier %></p>
+<p>From: <%= @item.provenance_label %></p>
 <p>Received: <%= @item.created_at.strftime("%Y-%m-%d %H:%M") %></p>
 
 <% if @raw_stats.any? %>

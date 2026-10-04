@@ -1,5 +1,9 @@
 module Validators
   class CharacterClassValidator < Base
+    MAX_RESOURCES = 3
+    MAX_STAT_PRIORITIES = 3
+    STAT_PRIORITY_NAMES = %w[dps hybrid tank healing].freeze
+
     def validate!(data, path: "$")
       require_object!(data, path: path)
       require_string!(data, "name", path: path)
@@ -8,7 +12,7 @@ module Validators
       validate_resources!(data, path: path)
       validate_abilities!(data, path: path)
       validate_primary_stats!(data, path: path)
-      validate_secondary_stats!(data, path: path)
+      validate_stat_priorities!(data, path: path)
       validate_wields!(data, path: path)
     end
 
@@ -33,6 +37,9 @@ module Validators
     def validate_resources!(data, path:)
       resources_path = child_path(path, "resources")
       resources = require_array!(data, "resources", path: path, min: 1)
+      if resources.length > MAX_RESOURCES
+        raise ValidationError.new("resources may not exceed #{MAX_RESOURCES} entries", path: resources_path)
+      end
       resources.each_with_index do |resource, i|
         ResourceTypeValidator.validate!(resource, path: index_path(resources_path, i))
       end
@@ -105,11 +112,34 @@ module Validators
       end
     end
 
-    def validate_secondary_stats!(data, path:)
+    def validate_stat_priorities!(data, path:)
+      priorities_path = child_path(path, "statPriorities")
+      priorities = data["statPriorities"]
+      raise ValidationError.new("statPriorities must be an array", path: priorities_path) unless priorities.is_a?(Array)
+      unless priorities.length.between?(1, MAX_STAT_PRIORITIES)
+        raise ValidationError.new("statPriorities must contain 1 to #{MAX_STAT_PRIORITIES} entries", path: priorities_path)
+      end
+      priorities.each_with_index { |priority, i| validate_stat_priority!(priority, path: index_path(priorities_path, i)) }
+      validate_stat_priority_names_unique!(priorities, path: priorities_path)
+    end
+
+    def validate_stat_priority!(priority, path:)
+      raise ValidationError.new("statPriorities entry must be an object", path: path) unless priority.is_a?(Hash)
+      validate_stat_priority_name!(priority["name"], path: child_path(path, "name"))
       stats_path = child_path(path, "secondaryStats")
-      stats = data["secondaryStats"]
+      stats = priority["secondaryStats"]
       raise ValidationError.new("secondaryStats must be an array", path: stats_path) unless stats.is_a?(Array)
       validate_secondary_stats_content!(stats, path: stats_path)
+    end
+
+    def validate_stat_priority_name!(name, path:)
+      return if STAT_PRIORITY_NAMES.include?(name)
+      raise ValidationError.new("statPriorities name must be one of #{STAT_PRIORITY_NAMES.join(", ")}", path: path)
+    end
+
+    def validate_stat_priority_names_unique!(priorities, path:)
+      names = priorities.map { |priority| priority["name"] }
+      raise ValidationError.new("statPriorities names must be unique", path: path) if names.uniq.length != names.length
     end
 
     def validate_secondary_stats_content!(stats, path:)

@@ -57,7 +57,7 @@ function ChoiceRow({choice, index, nodeIds, nodes, excludeId, onChangeText, onCh
   return (
     <div className="map-dialogue-choice-row">
       <textarea
-        rows={1} value={choice.text} aria-label={`Choice ${index + 1} text`}
+        rows={2} value={choice.text} aria-label={`Choice ${index + 1} text`}
         onChange={(e) => onChangeText(e.target.value)}
       />
       <NextSelect
@@ -92,7 +92,7 @@ function NodeCard({id, node, nodeIds, nodes, entry, onChangeText, onChangeNext, 
             {" "}Possible starting line
           </label>
           <textarea
-            rows={2} value={node.text} aria-label="Node text"
+            rows={3} value={node.text} aria-label="Node text"
             onChange={(e) => onChangeText(e.target.value)}
           />
           <div className="map-dialogue-mode">

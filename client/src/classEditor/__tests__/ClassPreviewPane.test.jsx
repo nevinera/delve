@@ -21,24 +21,13 @@ vi.mock("../../AbilityTooltip", () => ({
   AbilityTooltip: ({hint, children}) => <div data-testid="tooltip" data-hint={hint}>{children}</div>,
 }));
 
-const availableAbilities = {
-  "classes/x/short": {
-    ability: {name: "Punch", castTime: null, maxRange: 5, iconURL: "punch.svg", effects: [{type: "harm", affects: "bTarget", range: 5, amount: 5}]},
-    assetMap: {},
-  },
-  "classes/x/long": {
-    ability: {name: "Firebolt", castTime: null, maxRange: 20, iconURL: "firebolt.svg", effects: [{type: "harm", affects: "bTarget", range: 20, amount: 10}]},
-    assetMap: {},
-  },
-};
+const punch = {name: "Punch", castTime: null, maxRange: 5, iconURL: "punch.svg", effects: [{type: "harm", affects: "bTarget", range: 5, amount: 5}]};
+const firebolt = {name: "Firebolt", castTime: null, maxRange: 20, iconURL: "firebolt.svg", effects: [{type: "harm", affects: "bTarget", range: 20, amount: 10}]};
+const recover = {name: "Recover", castTime: null, iconURL: "recover.svg", effects: [{type: "heal", affects: "self", amount: 10}]};
+const powers = [punch, firebolt];
 
-const powers = [
-  {$ref: "../abilities/classes/x/short.json", referenceTo: "ability"},
-  {$ref: "../abilities/classes/x/long.json", referenceTo: "ability"},
-];
-
-function renderPane() {
-  return render(<ClassPreviewPane classKey="x" powers={powers} availableAbilities={availableAbilities} stockAssets={{}} />);
+function renderPane(list = powers, extra = {}) {
+  return render(<ClassPreviewPane powers={list} assetMap={{}} stockAssets={{}} {...extra} />);
 }
 
 describe("ClassPreviewPane", () => {
@@ -103,31 +92,23 @@ describe("ClassPreviewPane", () => {
   });
 
   it("still renders a clickable button for a power with no iconURL", () => {
-    const noIconAbilities = {
-      "classes/x/short": {ability: {name: "Enrage", castTime: null, effects: []}, assetMap: {}},
-      "classes/x/long": availableAbilities["classes/x/long"],
-    };
-    render(<ClassPreviewPane classKey="x" powers={powers} availableAbilities={noIconAbilities} stockAssets={{}} />);
+    renderPane([{name: "Enrage", castTime: null, effects: []}, firebolt]);
 
     expect(screen.getAllByRole("img")).toHaveLength(1); // just Firebolt
     expect(screen.getByRole("button", {name: "EN"})).toBeInTheDocument();
   });
 
+  it("shows an unsaved upload's preview URL in place of the power's own icon", () => {
+    renderPane(powers, {powerAssetOverrides: {1: {iconURL: "blob:firebolt"}}});
+
+    expect(screen.getAllByRole("img")[1]).toHaveAttribute("src", "blob:firebolt");
+  });
+
   describe("a self-only ability (e.g. Recover)", () => {
-    const selfOnlyAbilities = {
-      "classes/x/recover": {
-        ability: {name: "Recover", castTime: null, iconURL: "recover.svg", effects: [{type: "heal", affects: "self", amount: 10}]},
-        assetMap: {},
-      },
-      "classes/x/long": availableAbilities["classes/x/long"],
-    };
-    const selfOnlyPowers = [
-      {$ref: "../abilities/classes/x/recover.json", referenceTo: "ability"},
-      {$ref: "../abilities/classes/x/long.json", referenceTo: "ability"},
-    ];
+    const selfOnlyPowers = [recover, firebolt];
 
     it("is never disabled for range, even at a distance beyond the DEFAULT_MAX_RANGE fallback", () => {
-      render(<ClassPreviewPane classKey="x" powers={selfOnlyPowers} availableAbilities={selfOnlyAbilities} stockAssets={{}} />);
+      renderPane(selfOnlyPowers);
       // the slider starts at Firebolt's range (20), well past the 10ft
       // fallback a ranged ability with no maxRange/effect range would get
       expect(screen.getByText("Target distance: 20.0 ft")).toBeInTheDocument();
@@ -136,7 +117,7 @@ describe("ClassPreviewPane", () => {
     });
 
     it("does not inflate the shared slider's max range", () => {
-      render(<ClassPreviewPane classKey="x" powers={[selfOnlyPowers[0]]} availableAbilities={selfOnlyAbilities} stockAssets={{}} />);
+      renderPane([recover]);
 
       // with no ranged ability in the class at all, the slider falls back
       // to DEFAULT_MAX_RANGE (10) rather than Recover's own fallback
@@ -144,7 +125,7 @@ describe("ClassPreviewPane", () => {
     });
 
     it("still fires on click", () => {
-      render(<ClassPreviewPane classKey="x" powers={selfOnlyPowers} availableAbilities={selfOnlyAbilities} stockAssets={{}} />);
+      renderPane(selfOnlyPowers);
 
       fireEvent.click(screen.getAllByRole("img")[0]);
 

@@ -129,50 +129,74 @@ describe("UnitTypeDraft", () => {
   });
 
   describe("powers", () => {
-    it("abilityKeyForPower returns the key for a filled slot", () => {
-      const withPower = {...base, powers: [{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]};
-      const draft = new UnitTypeDraft(withPower, "goblin-raider");
-      expect(draft.abilityKeyForPower(0)).toBe("units/goblin-raider/slash");
+    const slash = {name: "Slash", effects: []};
+    const bite = {name: "Bite", effects: []};
+
+    it("addPower appends a copy of the given ability", () => {
+      const result = new UnitTypeDraft(base, "goblin-raider").addPower(slash);
+      expect(result.data.powers).toEqual([slash]);
     });
 
-    it("addPower appends a new power entry", () => {
-      const result = new UnitTypeDraft(base, "goblin-raider").addPower("units/goblins/slash");
-      expect(result.data.powers).toEqual([{$ref: "../abilities/units/goblins/slash.json", referenceTo: "ability"}]);
-    });
-
-    it("setPower replaces an existing power entry in place", () => {
-      const withPower = {...base, powers: [{$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"}]};
-      const result = new UnitTypeDraft(withPower, "goblin-raider").setPower(0, "units/goblin-raider/bite");
-      expect(result.data.powers).toEqual([{$ref: "../abilities/units/goblin-raider/bite.json", referenceTo: "ability"}]);
+    it("addPower suffixes a name that's already taken", () => {
+      const draft = new UnitTypeDraft({...base, powers: [slash, {name: "Slash 2"}]}, "goblin-raider");
+      expect(draft.addPower(slash).data.powers[2].name).toBe("Slash 3");
     });
 
     it("removePower removes only the entry at the given index", () => {
-      const twoPowers = {
-        ...base,
-        powers: [
-          {$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"},
-          {$ref: "../abilities/units/goblin-raider/bite.json", referenceTo: "ability"},
-        ],
-      };
-      const result = new UnitTypeDraft(twoPowers, "goblin-raider").removePower(0);
-      expect(result.data.powers).toEqual([{$ref: "../abilities/units/goblin-raider/bite.json", referenceTo: "ability"}]);
+      const result = new UnitTypeDraft({...base, powers: [slash, bite]}, "goblin-raider").removePower(0);
+      expect(result.data.powers).toEqual([bite]);
+    });
+
+    it("updatePower replaces the power at the given index", () => {
+      const result = new UnitTypeDraft({...base, powers: [slash, bite]}, "goblin-raider").updatePower(1, {...bite, cooldown: 5});
+      expect(result.data.powers).toEqual([slash, {...bite, cooldown: 5}]);
+    });
+
+    it("updatePower carries a rename through to rotation tactics", () => {
+      const draft = new UnitTypeDraft({...base, powers: [slash, bite], tactics: {type: "rotation", powers: ["Slash", "Bite", "Slash"]}}, "goblin-raider");
+      const result = draft.updatePower(0, {...slash, name: "Rend"});
+      expect(result.data.tactics.powers).toEqual(["Rend", "Bite", "Rend"]);
+    });
+
+    it("updatePower carries a rename through to scripted events", () => {
+      const tactics = {type: "scripted", duration: 5, events: [{power: "Slash", at: 0}, {power: "Bite", at: 2}]};
+      const result = new UnitTypeDraft({...base, powers: [slash, bite], tactics}, "goblin-raider").updatePower(0, {...slash, name: "Rend"});
+      expect(result.data.tactics.events).toEqual([{power: "Rend", at: 0}, {power: "Bite", at: 2}]);
+    });
+
+    it("powerNames lists each named power", () => {
+      const draft = new UnitTypeDraft({...base, powers: [slash, {effects: []}, bite]}, "goblin-raider");
+      expect(draft.powerNames).toEqual(["Slash", "Bite"]);
     });
   });
 
-  describe("currentPowerNames", () => {
-    it("resolves each power's name from availableAbilities, skipping unresolved ones", () => {
-      const withPowers = {
-        ...base,
-        powers: [
-          {$ref: "../abilities/units/goblin-raider/slash.json", referenceTo: "ability"},
-          {$ref: "../abilities/units/goblin-raider/missing.json", referenceTo: "ability"},
-        ],
-      };
-      const availableAbilities = {"units/goblin-raider/slash": {ability: {name: "Slash"}}};
+  describe("balance tags", () => {
+    it("sets, replaces and clears one tag per exclusive category", () => {
+      const options = ["open", "g1", "g5"];
+      let draft = new UnitTypeDraft(base, "goblin-raider").setExclusiveTag(options, "open");
+      expect(draft.tags).toEqual(["open"]);
 
-      const names = new UnitTypeDraft(withPowers, "goblin-raider").currentPowerNames(availableAbilities);
+      draft = draft.setExclusiveTag(["solo", "pair"], "pair").setExclusiveTag(options, "g1");
+      expect(draft.tags).toEqual(["pair", "g1"]);
 
-      expect(names).toEqual(["Slash"]);
+      draft = draft.setExclusiveTag(options, null);
+      expect(draft.tags).toEqual(["pair"]);
+    });
+
+    it("toggles role tags, with tough and glass excluding each other", () => {
+      let draft = new UnitTypeDraft(base, "goblin-raider").toggleRoleTag("healer").toggleRoleTag("tough");
+      expect(draft.tags).toEqual(["healer", "tough"]);
+
+      draft = draft.toggleRoleTag("glass");
+      expect(draft.tags).toEqual(["healer", "glass"]);
+
+      draft = draft.toggleRoleTag("healer");
+      expect(draft.tags).toEqual(["glass"]);
+    });
+
+    it("drops the tags field once it's empty", () => {
+      const draft = new UnitTypeDraft({...base, tags: ["buffs"]}, "goblin-raider").toggleRoleTag("buffs");
+      expect(draft.data).toEqual(base);
     });
   });
 });

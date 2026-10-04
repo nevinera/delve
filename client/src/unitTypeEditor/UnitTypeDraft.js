@@ -1,5 +1,6 @@
-import {refForAbilityKey, abilityKeyForRef} from "./abilityRefs";
 import {resourceTypeById} from "../resourceTypes";
+import {uniqueName} from "../powersEditor/uniqueName";
+import {EXCLUSIVE_ROLES} from "../balanceTargets";
 
 // Starter shape for a freshly-picked tactics type (see
 // Validators::TacticsValidator) - mirrors ClassDraft/AbilityDraft's own
@@ -10,12 +11,20 @@ function blankTactics(type) {
   return {type: "randomAvailable"};
 }
 
+function renameTacticsPower(tactics, from, to) {
+  if (!tactics) return tactics;
+  const rename = (name) => (name === from ? to : name);
+  const next = {...tactics};
+  if (tactics.powers) next.powers = tactics.powers.map(rename);
+  if (tactics.events) next.events = tactics.events.map((e) => ({...e, power: rename(e.power)}));
+  return next;
+}
+
 // Owns a unit type draft's data and every mutation the editor can make to
-// it - the UI (UnitTypeEditor.jsx/UnitTypeFieldsPanel.jsx) only ever reads
+// it - the UI (UnitTypeWorkbench.jsx/UnitTypeFieldsPanel.jsx) only ever reads
 // `.data` and calls this class's methods (see plans/editors-as-classes.md).
-// Like ClassDraft, a power's $ref depends on the *unit type's own key* (see
-// abilityRefs.js's relativePrefix), so UnitTypeDraft carries `unitTypeKey`
-// alongside `.data`.
+// Powers are stored inline (full Ability objects, no $refs); tactics refer
+// to them by name.
 //
 // Immutable, like every other draft class: every mutator returns a new
 // UnitTypeDraft rather than changing this one in place.
@@ -43,6 +52,31 @@ export class UnitTypeDraft {
     const entries = this.data[section] ?? [];
     const next = entries.map((entry, i) => (i === index ? {...entry, ...fields} : entry));
     return new UnitTypeDraft({...this.data, [section]: next}, this.unitTypeKey);
+  }
+
+  // Balance tags (see balanceTargets.js's TAG_CATEGORIES). An empty list
+  // drops the field.
+  get tags() {
+    return this.data.tags ?? [];
+  }
+
+  setTags(tags) {
+    if (tags.length > 0) return this.setField("tags", tags);
+    const {tags: _dropped, ...rest} = this.data;
+    return new UnitTypeDraft(rest, this.unitTypeKey);
+  }
+
+  // Replaces whichever of options is set (at most one) with tag, or clears
+  // it when tag is null.
+  setExclusiveTag(options, tag) {
+    const rest = this.tags.filter((t) => !options.includes(t));
+    return this.setTags(tag ? [...rest, tag] : rest);
+  }
+
+  // Adds or removes a role tag; adding tough drops glass and vice versa.
+  toggleRoleTag(tag) {
+    if (this.tags.includes(tag)) return this.setTags(this.tags.filter((t) => t !== tag));
+    return this.setTags([...this.tags.filter((t) => t !== EXCLUSIVE_ROLES[tag]), tag]);
   }
 
   get tokenImageUrls() {
@@ -122,35 +156,24 @@ export class UnitTypeDraft {
     return this.data.powers ?? [];
   }
 
-  // The availableAbilities key currently filling the power at index, or
-  // null if it's empty or holds something this editor didn't write (see
-  // abilityRefs.js#abilityKeyForRef).
-  abilityKeyForPower(index) {
-    return abilityKeyForRef(this.unitTypeKey, this.powers[index]);
+  get powerNames() {
+    return this.powers.map((power) => power.name).filter(Boolean);
   }
 
-  setPower(index, abilityKey) {
-    return this.updateEntryFields("powers", index, {$ref: refForAbilityKey(this.unitTypeKey, abilityKey), referenceTo: "ability"});
-  }
-
-  addPower(abilityKey) {
-    return this.addEntry("powers", {$ref: refForAbilityKey(this.unitTypeKey, abilityKey), referenceTo: "ability"});
+  addPower(ability) {
+    return this.addEntry("powers", {...ability, name: uniqueName(ability.name || "New Power", this.powerNames)});
   }
 
   removePower(index) {
     return this.removeEntry("powers", index);
   }
 
-  // Resolved names of the currently-selected powers, for the tactics
-  // rotation/scripted pickers - availableAbilities isn't part of this
-  // draft's own data (it's fetched/refreshed separately, see
-  // UnitTypeEditor.jsx), so it's passed in rather than stored.
-  currentPowerNames(availableAbilities) {
-    return this.powers
-      .map((entry) => {
-        const key = abilityKeyForRef(this.unitTypeKey, entry);
-        return key && availableAbilities[key]?.ability?.name;
-      })
-      .filter(Boolean);
+  // Replaces the power at index. A rename carries through to every tactics
+  // entry that named the old power, so the rotation/script keeps working.
+  updatePower(index, ability) {
+    const oldName = this.powers[index]?.name;
+    const next = new UnitTypeDraft({...this.data, powers: this.powers.map((p, i) => (i === index ? ability : p))}, this.unitTypeKey);
+    if (!oldName || oldName === ability.name) return next;
+    return next.setField("tactics", renameTacticsPower(this.data.tactics, oldName, ability.name ?? ""));
   }
 }

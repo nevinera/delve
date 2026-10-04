@@ -13,11 +13,11 @@ See [status.md](status.md) for the `Status` type embedded in `passives`.
 | `name` | string | yes | Display name. |
 | `description` | string | no | Short description shown in UI. |
 | `colors` | Colors | yes | Two display colors used for this class's tokens and UI elements. |
-| `resources` | array of ResourceType | yes | Resources available to this class. Most classes have one; some may have multiple. Exactly one entry must set `displayType: "primary"` (see [resource_type.md](resource_type.md)) - that's the one displayed, regenerated, and spent by ability costs. |
+| `resources` | array of ResourceType | yes | Resources available to this class, at most 3. Most classes have one; some may have multiple. Exactly one entry must set `displayType: "primary"` (see [resource_type.md](resource_type.md)) - that's the one displayed, regenerated, and spent by ability costs. |
 | `powers` | array of Ability \| AssetReference(`referenceTo: "ability"`) | no | Abilities available to this class. Inline Ability objects or references to external ability files. A class containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `passives` | array of Status | no | Hidden, permanent buffs granted just by playing this class - applied once at spawn and never expire. At most 6, no duplicate `name`s, and each must set `treatAs: "inherent"` (nothing else would stay hidden - see [status.md](status.md)). |
 | `primaryStats` | array of string | yes | One or more of `strength`, `agility`, `intellect`, no duplicates. Hybrid classes may list more than one. Used to synthesize Trainee Gear (see [stats.md](../stats.md)) for this class's empty equipment slots. |
-| `secondaryStats` | array of string | yes | Exactly 5 secondary stats, ranked highest to lowest priority, no duplicates. Each must be one of `stamina`, `crit_rating`, `haste_rating`, `mastery_rating`, `versatility_rating`, `defence_rating`, `recovery_rating`. Used alongside `primaryStat` to synthesize Trainee Gear. |
+| `statPriorities` | array of object | yes | 1-3 named gearings for the class, each `{name, secondaryStats}`. `name` is one of `dps`, `hybrid`, `tank`, `healing`, unique within the class. `secondaryStats` is exactly 5 secondary stats, ranked highest to lowest priority, no duplicates, each one of `stamina`, `crit_rating`, `haste_rating`, `mastery_rating`, `versatility_rating`, `defence_rating`, `recovery_rating`. The first entry is used to synthesize Trainee Gear (see [stats.md](../stats.md)); list `hybrid` first for solo play. The balance calculators run every entry. |
 | `wields` | array of string | yes | 1-2 entries, each one of `axe`, `sword`, `staff`, `wand`, `dagger`, `shield`, `totem`, `book`, `spear`, `bow`, `crossbow`, `gun`, `orb`. A single entry is two-handed. Two entries put the first in `main_hand` and the second in `off_hand`. Only used to pick weapon types for Trainee Gear (see [stats.md](../stats.md)) — weapon-type restrictions on real items aren't implemented yet. |
 
 ---
@@ -45,7 +45,7 @@ Two display colors for this class, used for token rendering and UI theming.
   "description": "A heavily armored melee fighter.",
   "colors": { "major": "AA2200", "minor": "FFCC88" },
   "primaryStats": ["strength"],
-  "secondaryStats": ["mastery_rating", "haste_rating", "crit_rating", "versatility_rating", "stamina"],
+  "statPriorities": [{"name": "hybrid", "secondaryStats": ["mastery_rating", "haste_rating", "crit_rating", "versatility_rating", "stamina"]}],
   "wields": ["sword", "shield"],
   "resources": [
     {

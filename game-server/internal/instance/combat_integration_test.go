@@ -13,9 +13,10 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
-// drainHealth reads messages from writeCh for `window`, returning the last
+// drainHealth reads messages from writeCh for `window`, returning the lowest
 // health value seen for unitID (from a full-state or delta message), or nil
-// if none arrived.
+// if none arrived. Lowest rather than last, so passive HP regen can't hide a
+// small hit by healing it back within the window.
 func drainHealth(t *testing.T, writeCh chan []byte, unitID uuid.UUID, window time.Duration) *float64 {
 	t.Helper()
 	idStr := unitID.String()
@@ -29,13 +30,8 @@ func drainHealth(t *testing.T, writeCh chan []byte, unitID uuid.UUID, window tim
 				UnitUpdates map[string]map[string]any `json:"unit_updates"`
 			}
 			require.NoError(t, json.Unmarshal(msg, &parsed))
-			if u, ok := parsed.Units[idStr]; ok {
-				if h, ok := u["health"].(float64); ok {
-					result = &h
-				}
-			}
-			if u, ok := parsed.UnitUpdates[idStr]; ok {
-				if h, ok := u["health"].(float64); ok {
+			for _, units := range []map[string]map[string]any{parsed.Units, parsed.UnitUpdates} {
+				if h, ok := units[idStr]["health"].(float64); ok && (result == nil || h < *result) {
 					result = &h
 				}
 			}

@@ -30,6 +30,7 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 	slots := handler.NewSlots(registry, cfg.MaxInstances, cfg.MaxSlots, railsclient.FromEnv())
 	dpsSim := handler.NewDPSSim()
 	classDPSSim := handler.NewClassDPSSim()
+	classTTDSim := handler.NewClassTTDSim()
 	worldVersions := handler.NewWorldVersions(registry)
 
 	// Slot WebSocket — authenticated by slot token query param, not Bearer.
@@ -42,6 +43,7 @@ func New(registry *instance.Registry, cfg *config.Config) http.Handler {
 		r.Post("/slots/request", slots.Request)
 		r.Post("/dps-sim", dpsSim.Simulate)
 		r.Post("/class-dps-sim", classDPSSim.Simulate)
+		r.Post("/class-ttd-sim", classTTDSim.Simulate)
 		r.Post("/world-versions/{worldVersionID}/expire", worldVersions.Expire)
 		r.Route("/instances", func(r chi.Router) {
 			r.Get("/", instances.List)

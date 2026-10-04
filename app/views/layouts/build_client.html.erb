@@ -9,6 +9,8 @@
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #editor-root { width: 100%; height: 100%; }
       body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; overflow: hidden; }
+<%= render partial: "layouts/branch_picker_styles", formats: [:css] %>
+      .ability-editor-branch { margin-bottom: 10px; }
 
       .ability-editor { display: flex; height: 100%; }
       .ability-editor-preview { flex: 2; min-width: 0; display: flex; flex-direction: column; }

@@ -16,7 +16,7 @@ import (
 const puncherJSON = `{
 	"class": {
 		"primaryStats": ["strength"],
-		"secondaryStats": ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"],
+		"statPriorities": [{"name": "hybrid", "secondaryStats": ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"]}],
 		"wields": ["dagger", "dagger"]
 	},
 	"strategy": []
@@ -62,7 +62,7 @@ func TestRun_ValidClassPrintsFullMatrix(t *testing.T) {
 		Results []classdps.FlatCell `json:"results"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &resp))
-	assert.Len(t, resp.Results, len(classdps.Durations)*len(classdps.Elevations))
+	assert.Len(t, resp.Results, (len(classdps.Durations)-1)*len(classdps.Elevations))
 	for _, cell := range resp.Results {
 		assert.Greater(t, cell.DPS, 0.0)
 	}

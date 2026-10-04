@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_03_150000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -45,9 +45,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
     t.datetime "updated_at", null: false
     t.string "version", null: false
     t.integer "world_character_id", null: false
-    t.string "zone_identifier", null: false
-    t.index ["world_character_id", "zone_identifier", "identifier", "version"], name: "index_character_items_on_identity", unique: true
+    t.integer "world_version_id"
+    t.index ["world_character_id", "identifier", "version"], name: "index_character_items_on_identity", unique: true
     t.index ["world_character_id"], name: "index_character_items_on_world_character_id"
+    t.index ["world_version_id"], name: "index_character_items_on_world_version_id"
   end
 
   create_table "character_settings", force: :cascade do |t|
@@ -207,6 +208,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
 
   add_foreign_key "character_classes", "users"
   add_foreign_key "character_items", "world_characters"
+  add_foreign_key "character_items", "world_versions", on_delete: :nullify
   add_foreign_key "character_settings", "characters"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"

@@ -12,6 +12,18 @@ RSpec.describe CharacterItem, type: :model do
     end
   end
 
+  describe "#provenance_label" do
+    it "names the world and version it was acquired in" do
+      version = create(:world_version, ref: "small/v3")
+      version.world.update!(name: "Small")
+      expect(build(:character_item, world_version: version).provenance_label).to eq("Small (small/v3)")
+    end
+
+    it "calls versionless items trainee gear" do
+      expect(build(:character_item, world_version: nil).provenance_label).to eq("Trainee gear")
+    end
+  end
+
   describe "validations" do
     it "is valid with all required fields" do
       expect(build(:character_item, world_character: world_character)).to be_valid
@@ -24,17 +36,16 @@ RSpec.describe CharacterItem, type: :model do
     end
 
     it "allows holding one version of an item once per world character" do
-      create(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v1")
-      dup = build(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v1")
+      create(:character_item, world_character:, identifier: "sword", version: "v1")
+      dup = build(:character_item, world_character:, identifier: "sword", version: "v1")
       expect(dup).not_to be_valid
-      expect(build(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v2")).to be_valid
-      expect(build(:character_item, world_character:, zone_identifier: "cave", identifier: "sword", version: "v1")).to be_valid
+      expect(build(:character_item, world_character:, identifier: "sword", version: "v2")).to be_valid
     end
 
     it "allows the same item on different world characters" do
       other = create(:world_character, character: world_character.character)
-      create(:character_item, world_character:, zone_identifier: "dw", identifier: "sword", version: "v1")
-      expect(build(:character_item, world_character: other, zone_identifier: "dw", identifier: "sword", version: "v1")).to be_valid
+      create(:character_item, world_character:, identifier: "sword", version: "v1")
+      expect(build(:character_item, world_character: other, identifier: "sword", version: "v1")).to be_valid
     end
 
     it "requires identifier" do

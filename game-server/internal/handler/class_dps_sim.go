@@ -25,9 +25,10 @@ func NewClassDPSSim() *ClassDPSSim { return &ClassDPSSim{} }
 // reuses instanceconfig.CharacterClass's own JSON shape directly - the same
 // JSON the class editor already authors.
 type classDPSSimRequest struct {
-	Class    instanceconfig.CharacterClass `json:"class"`          // Required
-	Strategy classdps.Strategy             `json:"strategy"`       // Required (empty = basic attack only)
-	Seed     *int64                        `json:"seed,omitempty"` // omitted: a fresh, non-reproducible run
+	Class    instanceconfig.CharacterClass `json:"class"`              // Required
+	Strategy classdps.Strategy             `json:"strategy"`           // Required (empty = basic attack only)
+	Seed     *int64                        `json:"seed,omitempty"`     // omitted: a fresh, non-reproducible run
+	Extended bool                          `json:"extended,omitempty"` // also run the slowest (20m) duration
 }
 
 // Simulate handles POST /class-dps-sim: runs classdps.Matrix (every
@@ -59,6 +60,6 @@ func (h *ClassDPSSim) Simulate(w http.ResponseWriter, r *http.Request) {
 	}
 	rng := rand.New(rand.NewSource(seed))
 
-	rows := classdps.Matrix(req.Class, req.Strategy, rng)
+	rows := classdps.Matrix(req.Class, req.Strategy, req.Extended, rng)
 	writeJSON(w, r, http.StatusOK, map[string]any{"results": classdps.Flatten(rows)})
 }

@@ -101,9 +101,9 @@ describe("WorldDraft", () => {
     });
 
     it("strips entryPoints keyed under the removed zone", () => {
-      const draft = new WorldDraft(worldData({entryPoints: {goblin_cave: null, stagnant_oasis: "iron_key"}}));
+      const draft = new WorldDraft(worldData({entryPoints: {"goblin_cave/camp/spawn": null, "goblin_cave_2/a/b": null, "stagnant_oasis/x/y": "iron_key"}}));
       const result = draft.removeZone("goblin_cave");
-      expect(result.data.entryPoints).toEqual({stagnant_oasis: "iron_key"});
+      expect(result.data.entryPoints).toEqual({"goblin_cave_2/a/b": null, "stagnant_oasis/x/y": "iron_key"});
     });
   });
 

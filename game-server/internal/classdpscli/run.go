@@ -22,7 +22,8 @@ import (
 type request struct {
 	Class    instanceconfig.CharacterClass `json:"class"`
 	Strategy classdps.Strategy             `json:"strategy"`
-	Seed     *int64                        `json:"seed,omitempty"` // omitted: a fresh, non-reproducible run
+	Seed     *int64                        `json:"seed,omitempty"`     // omitted: a fresh, non-reproducible run
+	Extended bool                          `json:"extended,omitempty"` // also run the slowest (20m) duration
 }
 
 // Run is the entry point for the class-dps-sim CLI. It accepts args (the
@@ -52,7 +53,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	rng := rand.New(rand.NewSource(seed))
 
-	rows := classdps.Matrix(req.Class, req.Strategy, rng)
+	rows := classdps.Matrix(req.Class, req.Strategy, req.Extended, rng)
 	out, err := json.MarshalIndent(map[string]any{"results": classdps.Flatten(rows)}, "", "  ")
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error encoding output: %v\n", err)

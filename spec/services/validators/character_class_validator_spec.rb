@@ -68,6 +68,14 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /at least 1 element/)
     end
 
+    it "raises when there are more than 3 resources" do
+      primary = character_class_fixture["resources"][0]
+      extras = %w[focus rage fury].map { |name| primary.merge("name" => name).except("displayType") }
+      data = character_class_fixture.merge("resources" => [primary, *extras])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /resources may not exceed 3 entries/)
+    end
+
     it "raises when no resource is marked primary" do
       resource = character_class_fixture["resources"][0].except("displayType")
       data = character_class_fixture.merge("resources" => [resource])
@@ -215,32 +223,71 @@ RSpec.describe Validators::CharacterClassValidator, type: :validator do
       expect { described_class.validate!(data) }.not_to raise_error
     end
 
-    it "raises when secondaryStats is missing" do
-      expect { described_class.validate!(character_class_fixture.except("secondaryStats")) }
-        .to raise_error(Validators::ValidationError, /secondaryStats must be an array/)
+    def priority(name, stats = %w[crit_rating haste_rating mastery_rating versatility_rating stamina])
+      {"name" => name, "secondaryStats" => stats}
     end
 
-    it "raises when secondaryStats is not an array" do
-      data = character_class_fixture.merge("secondaryStats" => "stamina")
+    it "raises when statPriorities is missing" do
+      expect { described_class.validate!(character_class_fixture.except("statPriorities")) }
+        .to raise_error(Validators::ValidationError, /statPriorities must be an array/)
+    end
+
+    it "raises when statPriorities is not an array" do
+      data = character_class_fixture.merge("statPriorities" => "stamina")
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /statPriorities must be an array/)
+    end
+
+    it "raises when statPriorities is empty" do
+      data = character_class_fixture.merge("statPriorities" => [])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /1 to 3 entries/)
+    end
+
+    it "raises when statPriorities has more than 3 entries" do
+      data = character_class_fixture.merge("statPriorities" => %w[dps hybrid tank healing].map { |n| priority(n) })
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /1 to 3 entries/)
+    end
+
+    it "accepts up to 3 distinctly named priorities" do
+      data = character_class_fixture.merge("statPriorities" => %w[hybrid tank healing].map { |n| priority(n) })
+      expect { described_class.validate!(data) }.not_to raise_error
+    end
+
+    it "raises when a priority has an unrecognized name" do
+      data = character_class_fixture.merge("statPriorities" => [priority("bard")])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /name must be one of dps, hybrid, tank, healing/)
+    end
+
+    it "raises when two priorities share a name" do
+      data = character_class_fixture.merge("statPriorities" => [priority("dps"), priority("dps")])
+      expect { described_class.validate!(data) }
+        .to raise_error(Validators::ValidationError, /names must be unique/)
+    end
+
+    it "raises when a priority's secondaryStats is not an array" do
+      data = character_class_fixture.merge("statPriorities" => [{"name" => "dps", "secondaryStats" => "stamina"}])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /secondaryStats must be an array/)
     end
 
-    it "raises when secondaryStats does not have exactly 5 entries" do
-      data = character_class_fixture.merge("secondaryStats" => ["stamina", "crit_rating"])
+    it "raises when a priority's secondaryStats does not have exactly 5 entries" do
+      data = character_class_fixture.merge("statPriorities" => [priority("dps", %w[stamina crit_rating])])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /exactly 5 entries/)
     end
 
-    it "raises when secondaryStats contains duplicates" do
-      data = character_class_fixture.merge("secondaryStats" => ["stamina"] * 5)
+    it "raises when a priority's secondaryStats contains duplicates" do
+      data = character_class_fixture.merge("statPriorities" => [priority("dps", ["stamina"] * 5)])
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /must not contain duplicates/)
     end
 
-    it "raises when secondaryStats contains an unrecognized value" do
+    it "raises when a priority's secondaryStats contains an unrecognized value" do
       data = character_class_fixture.merge(
-        "secondaryStats" => ["stamina", "crit_rating", "haste_rating", "mastery_rating", "wisdom"]
+        "statPriorities" => [priority("dps", %w[stamina crit_rating haste_rating mastery_rating wisdom])]
       )
       expect { described_class.validate!(data) }
         .to raise_error(Validators::ValidationError, /unrecognized values: wisdom/)

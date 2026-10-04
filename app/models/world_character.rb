@@ -15,12 +15,14 @@ class WorldCharacter < ApplicationRecord
 
   def position = zone_identifier && connection_key && [zone_identifier, connection_key]
 
-  # For each item this world character holds from zone, whether they hold
+  # For each of zone's items this world character holds, whether they hold
   # its current definition (true) or an older one (false) - the game
-  # server's owned_zone_items. zone_data is the zone's parsed file.
-  def owned_zone_items_for(zone, zone_data)
+  # server's owned_zone_items. zone_data is the zone's parsed file. Items
+  # are identified within the world, so one picked up in another zone
+  # counts here too.
+  def owned_zone_items_for(zone_data)
     definitions = zone_data["items"] || {}
-    character_items.where(zone_identifier: zone.identifier).each_with_object({}) do |item, owned|
+    character_items.where(identifier: definitions.keys).each_with_object({}) do |item, owned|
       definition = definitions[item.identifier]
       owned[item.identifier] ||= definition.present? && item.version == ItemDefinition.version(definition)
     end

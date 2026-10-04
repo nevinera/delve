@@ -4,7 +4,6 @@ import {AbilityTooltip} from "../AbilityTooltip";
 import AbilityIcon from "../AbilityIcon";
 import AbilityPreviewCanvas from "../abilityEditor/AbilityPreviewCanvas";
 import {resolveAbilityForPlayback} from "../abilityEditor/resolveAbilityForPlayback";
-import {abilityKeyForRef} from "./abilityRefs";
 
 const DEFAULT_MAX_RANGE = 10;
 // Melee default per docs/schema/unit_type.md#basicAttackRange - every unit
@@ -37,26 +36,19 @@ function inRange(ability, targetDistanceFt) {
   return isSelfOnly(ability) || targetDistanceFt <= abilityRange(ability);
 }
 
-// Resolves every attached power's $ref (already fetched, with its own asset
-// thumbnails, by Build::UnitTypesController#load_available_abilities) into
-// a playable form. Unlike a class's action bar, a unit type has no fixed
-// slot count - just however many powers it actually has.
-function resolvePowers(unitTypeKey, powers, availableAbilities, stockAssets) {
-  return (powers ?? [])
-    .map((entry) => {
-      const key = abilityKeyForRef(unitTypeKey, entry);
-      if (!key || !availableAbilities[key]) return null;
-      const {ability, assetMap} = availableAbilities[key];
-      return resolveAbilityForPlayback(ability, assetMap, {}, stockAssets);
-    })
-    .filter(Boolean);
+// Swaps each inline power's relative/stock asset URLs (and any unsaved
+// uploads - powerAssetOverrides, keyed by power index) for playable ones.
+// Unlike a class's action bar, a unit type has no fixed slot count - just
+// however many powers it actually has.
+function resolvePowers(powers, assetMap, powerAssetOverrides, stockAssets) {
+  return (powers ?? []).map((power, i) => resolveAbilityForPlayback(power, assetMap, powerAssetOverrides?.[i] ?? {}, stockAssets));
 }
 
 // The unit's own tokenImageUrl entries are its actual saved appearance -
 // pick one at random, the same way the game server does when spawning a
 // unit from this type (see docs/schema/unit_type.md#tokenimageurl). tokens
 // arrives here already resolved to real, displayable URLs (see
-// UnitTypeEditor's resolvedTokenUrls) - a raw tokenImageUrl entry that
+// UnitTypeWorkbench's tokenPreviewUrls) - a raw tokenImageUrl entry that
 // hasn't resolved yet (e.g. a just-uploaded, not-yet-saved file) is dropped
 // rather than shown broken. Falls back to the stock goblin token when none
 // are available, so a brand new draft is still previewable before any art
@@ -67,7 +59,7 @@ function pickSelfToken(tokens) {
   return urls[Math.floor(Math.random() * urls.length)];
 }
 
-export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availableAbilities, stockAssets, resolvedTokenUrls}) {
+export default function UnitTypePreviewPane({unitTypeData, assetMap, powerAssetOverrides, stockAssets, resolvedTokenUrls}) {
   const canvasRef = useRef(null);
   const [status, setStatus] = useState("");
   const [firing, setFiring] = useState(false);
@@ -91,8 +83,8 @@ export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availabl
   const selfTokenUrl = useMemo(() => pickSelfToken(resolvedTokens), [tokenImageUrlKey]);
 
   const resolvedPowers = useMemo(
-    () => resolvePowers(unitTypeKey, unitTypeData.powers, availableAbilities, stockAssets),
-    [unitTypeKey, unitTypeData.powers, availableAbilities, stockAssets]
+    () => resolvePowers(unitTypeData.powers, assetMap ?? {}, powerAssetOverrides, stockAssets),
+    [unitTypeData.powers, assetMap, powerAssetOverrides, stockAssets]
   );
 
   const basicAttackRange = unitTypeData.basicAttackRange || DEFAULT_BASIC_ATTACK_RANGE;
@@ -123,7 +115,7 @@ export default function UnitTypePreviewPane({unitTypeKey, unitTypeData, availabl
 
   return (
     <div style={{display: "flex", flexDirection: "column", height: "100%"}}>
-      <div className="unit-type-preview-canvas-area">
+      <div className="preview-canvas-area">
         <AbilityPreviewCanvas
           ref={canvasRef}
           selfTokenUrl={selfTokenUrl}

@@ -6,7 +6,7 @@
 
 <p>
   <%= link_to "#{@world.repo}/#{@world.path}", "https://github.com/#{@world.repo}/blob/HEAD/#{@world.path}" %>
-  · <%= link_to "Edit", edit_build_world_path(id: @world.key) %>
+  <% if (editor_path = world_editor_path_for(@world.path)) %> · <%= link_to "Edit", editor_path %><% end %>
 </p>
 
 <p><%= link_to "Add a version from an existing tag", new_build_publishing_world_version_path(@world) %></p>

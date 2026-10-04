@@ -1,5 +1,5 @@
 import {entryHeading, humanize} from "../abilityEditor/abilityFormatting";
-import {PRIMARY_STATS, SECONDARY_STATS, SLOT_COUNT, WIELD_TYPES} from "./classFieldOptions";
+import {MAX_RESOURCES, MAX_STAT_PRIORITIES, PRIMARY_STATS, SECONDARY_STATS, STAT_PRIORITY_NAMES, WIELD_TYPES} from "./classFieldOptions";
 
 const RESOURCE_FIELDS = [
   {key: "name", type: "text"},
@@ -81,28 +81,38 @@ function StatCheckboxList({stats, options, onToggle}) {
   );
 }
 
-// Five ranked picks (highest priority first) from the seven secondary
-// stats - duplicates aren't blocked here (this editor does no validation
-// before saving, same as the ability editor), just left for the class's
-// eventual release-time validation to catch.
-function SecondaryStatsRanking({stats, draft, onChange}) {
-  const ranks = Array.from({length: 5}, (_, i) => stats[i] ?? "");
+// One named gearing: five ranked picks (highest priority first) from the
+// seven secondary stats - duplicates aren't blocked here (this editor does
+// no validation before saving, same as the ability editor), just left for
+// the class's eventual release-time validation to catch.
+function StatPriorityEntry({priority, index, draft, onChange}) {
+  const ranks = Array.from({length: 5}, (_, i) => priority.secondaryStats?.[i] ?? "");
   return (
-    <table>
-      <tbody>
-        {ranks.map((value, i) => (
-          <tr key={i}>
-            <th>Rank {i + 1}</th>
-            <td>
-              <select value={value} onChange={(e) => onChange(draft.setSecondaryStatRank(i, e.target.value))}>
-                <option value="">—</option>
-                {SECONDARY_STATS.map((stat) => <option key={stat} value={stat}>{humanize(stat)}</option>)}
-              </select>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="entry-block">
+      <label>
+        Name{" "}
+        <select value={priority.name ?? ""} onChange={(e) => onChange(draft.setStatPriorityName(index, e.target.value))}>
+          {STAT_PRIORITY_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+        </select>
+      </label>
+      {index === 0 && <span> (used for Trainee Gear)</span>}
+      <table>
+        <tbody>
+          {ranks.map((value, i) => (
+            <tr key={i}>
+              <th>Rank {i + 1}</th>
+              <td>
+                <select value={value} onChange={(e) => onChange(draft.setStatPriorityRank(index, i, e.target.value))}>
+                  <option value="">—</option>
+                  {SECONDARY_STATS.map((stat) => <option key={stat} value={stat}>{humanize(stat)}</option>)}
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button type="button" onClick={() => onChange(draft.removeStatPriority(index))}>Remove</button>
+    </div>
   );
 }
 
@@ -135,50 +145,11 @@ function WieldsFields({wields, draft, onChange}) {
   );
 }
 
-// Slot i is only pickable once slot i-1 is filled (see ClassDraft#setPowerSlot -
-// clearing a middle slot reflows the ones after it, rather than leaving a
-// gap the saved `powers` array has no way to represent).
-function PowerSlots({powers, availableAbilities, draft, onChange}) {
-  const abilityKeys = Object.keys(availableAbilities).sort();
-
-  return (
-    <table>
-      <tbody>
-        {Array.from({length: SLOT_COUNT}, (_, i) => {
-          const filled = i < powers.length;
-          const disabled = i > powers.length;
-          const selectedKey = draft.abilityKeyForPowerSlot(i);
-          return (
-            <tr key={i}>
-              <th>Slot {i + 1}</th>
-              <td>
-                <select
-                  value={selectedKey ?? ""}
-                  disabled={disabled}
-                  onChange={(e) => onChange(draft.setPowerSlot(i, e.target.value))}
-                >
-                  <option value="">{disabled ? "(fill earlier slots first)" : "— empty —"}</option>
-                  {abilityKeys.map((key) => <option key={key} value={key}>{key}</option>)}
-                </select>
-                {filled && (
-                  <button type="button" className="remove-entry" onClick={() => onChange(draft.clearPowerSlot(i))}>
-                    Clear
-                  </button>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
 // Purely presentational - every domain rule (what a fresh resource starts
-// as, the power-slot fill-in-order/ref math, the secondary-stat ranking's
-// padding) lives on ClassDraft now; this just renders draft's current
-// values and calls its mutator methods.
-export default function ClassFieldsPanel({draft, availableAbilities, newAbilityUrl, onChange}) {
+// as, the secondary-stat ranking's padding) lives on ClassDraft; this just
+// renders draft's current values and calls its mutator methods. Powers and
+// passives aren't edited here - each one is its own area in the editor.
+export default function ClassFieldsPanel({draft, onChange}) {
   const classData = draft.data;
   return (
     <div className="fields-panel">
@@ -223,31 +194,32 @@ export default function ClassFieldsPanel({draft, availableAbilities, newAbilityU
         </tbody>
       </table>
 
-      <h3>Secondary stats (ranked)</h3>
-      <SecondaryStatsRanking stats={classData.secondaryStats ?? []} draft={draft} onChange={onChange} />
+      <h3>Stat priorities</h3>
+      {(classData.statPriorities ?? []).map((priority, index) => (
+        <StatPriorityEntry key={index} priority={priority} index={index} draft={draft} onChange={onChange} />
+      ))}
+      <button
+        type="button" className="add-entry"
+        disabled={(classData.statPriorities ?? []).length >= MAX_STAT_PRIORITIES}
+        onClick={() => onChange(draft.addStatPriority())}
+      >
+        Add stat priority
+      </button>
 
       <h3>Wields</h3>
       <WieldsFields wields={classData.wields ?? []} draft={draft} onChange={onChange} />
 
-      <div className="add-buttons-row">
-        <button type="button" className="add-entry" onClick={() => onChange(draft.addResource())}>
-          + Add Resource
-        </button>
-      </div>
+      <h3>Resources</h3>
       {(classData.resources ?? []).map((resource, index) => (
         <ResourceEntry key={index} resource={resource} index={index} draft={draft} onChange={onChange} />
       ))}
-
-      <h3>Powers</h3>
-      <p className="new-ability-link">
-        <a href={newAbilityUrl} target="_blank" rel="noreferrer">+ New ability</a>
-      </p>
-      <PowerSlots
-        powers={classData.powers ?? []}
-        availableAbilities={availableAbilities}
-        draft={draft}
-        onChange={onChange}
-      />
+      <button
+        type="button" className="add-entry"
+        disabled={(classData.resources ?? []).length >= MAX_RESOURCES}
+        onClick={() => onChange(draft.addResource())}
+      >
+        + Add resource
+      </button>
     </div>
   );
 }

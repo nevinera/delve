@@ -10,6 +10,48 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
       expect { described_class.validate!(goblin_boss_unit_type) }.not_to raise_error
     end
 
+    describe "tags" do
+      it "accepts one tag per category plus several roles" do
+        data = goblin_unit_type.merge("tags" => %w[open pair melee healer buffs])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when tags is not an array" do
+        expect { described_class.validate!(goblin_unit_type.merge("tags" => "open")) }
+          .to raise_error(Validators::ValidationError, /tags must be an array/)
+      end
+
+      it "raises on an unknown tag" do
+        expect { described_class.validate!(goblin_unit_type.merge("tags" => %w[boss])) }
+          .to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "raises on a repeated tag" do
+        expect { described_class.validate!(goblin_unit_type.merge("tags" => %w[open open])) }
+          .to raise_error(Validators::ValidationError, /tags may not repeat/)
+      end
+
+      it "raises on two intended-for tags" do
+        expect { described_class.validate!(goblin_unit_type.merge("tags" => %w[open g1])) }
+          .to raise_error(Validators::ValidationError, /only one intended-for tag \(got open, g1\)/)
+      end
+
+      it "raises on two pull size tags" do
+        expect { described_class.validate!(goblin_unit_type.merge("tags" => %w[solo swarm])) }
+          .to raise_error(Validators::ValidationError, /only one pull size tag/)
+      end
+
+      it "raises on two damage type tags" do
+        expect { described_class.validate!(goblin_unit_type.merge("tags" => %w[caster melee])) }
+          .to raise_error(Validators::ValidationError, /only one damage type tag/)
+      end
+
+      it "raises on tough with glass" do
+        expect { described_class.validate!(goblin_unit_type.merge("tags" => %w[tough glass])) }
+          .to raise_error(Validators::ValidationError, /both tough and glass/)
+      end
+    end
+
     it "raises when name is missing" do
       expect { described_class.validate!(goblin_unit_type.except("name")) }
         .to raise_error(Validators::ValidationError, /name is required/)

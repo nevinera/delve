@@ -28,8 +28,13 @@ RSpec.describe World, type: :model do
     it "matches the world editor's key" do
       expect(build(:world, path: "worlds/sub/demo-core.json").key).to eq("sub/demo-core")
     end
-  end
 
+    it "is the directory name for a self-contained world" do
+      expect(build(:world, path: "worlds/small/small.json").key).to eq("small")
+      expect(build(:world, path: "worlds/small/small.json")).to be_self_contained
+      expect(build(:world, path: "worlds/demo.json")).not_to be_self_contained
+    end
+  end
   describe "#released_versions" do
     it "lists available versions, newest release first" do
       world = create(:world)

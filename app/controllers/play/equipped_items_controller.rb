@@ -5,7 +5,7 @@ class Play::EquippedItemsController < Play::BaseController
 
   def index
     authorize! :read, EquippedItem
-    @equipped_items_by_slot = @world_character.equipped_items.includes(:character_item).index_by(&:equipped_slot)
+    @equipped_items_by_slot = @world_character.equipped_items.includes(character_item: {world_version: :world}).index_by(&:equipped_slot)
   end
 
   def update

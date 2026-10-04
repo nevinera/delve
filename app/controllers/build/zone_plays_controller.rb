@@ -1,22 +1,32 @@
 # Plays a zone straight from source with one of the builder's characters -
 # for trying a zone out while building it, with no Zone or WorldVersion
 # record and nothing persisted (see JoinDirectZone), wearing imaginary
-# trainee gear at the zone's elevation (offset by ?elevation=). The source is either
-# the builder's GitHub repo (its default branch's latest commit; the repo
-# must be public, since the game client reads the zone from its raw URL) or,
-# when configured, a local content server (config.x.local_content_url).
+# trainee gear at the zone's elevation (offset by ?elevation=). The source is one
+# of:
+# - the builder's GitHub repo, its default branch's latest commit (the repo
+#   must be public, since the game client reads the zone from its raw URL);
+# - a zone of a self-contained world, at the commit the world editor
+#   expanded (?commit=), from the same repo - so whatever branch it's on;
+# - when configured, a local content server (config.x.local_content_url).
 class Build::ZonePlaysController < Build::BaseController
   RAW_BASE = "https://raw.githubusercontent.com"
 
   PlayError = Class.new(StandardError)
+  COMMIT_FORMAT = /\A\h{40}\z/
 
   def show
-    load_source_params
+    @world = params[:world]
+    @commit = params[:commit].to_s
+    @key = @world ? "#{@world}/#{params[:zone]}" : params[:id]
+    @local = params[:source] == "local"
+    raise ActionController::RoutingError, "local content isn't configured" if @local && !local_content_url
     @characters = current_user.characters.order(:name)
     authorize! :read, Character
     return render(:pick) unless params[:character_id]
 
-    join_character!
+    @character = current_user.characters.find(params[:character_id])
+    authorize! :read, @character
+    join!
     render :show, layout: "game_client"
   rescue PlayError, VerifiedContent::Error, Validators::ValidationError, GameApi::Error => e
     @error = e.message
@@ -29,54 +39,28 @@ class Build::ZonePlaysController < Build::BaseController
     authorize! :read, Character
     raise ActionController::RoutingError, "local content isn't configured" unless local_content_url
     key = params[:key].to_s.strip.delete_prefix("/").delete_suffix("/")
-    return redirect_to(local_play_path(key)) if key.present?
+    return redirect_to(build_local_zone_play_path({id: key, elevation: params[:elevation].presence}.compact)) if key.present?
     @local_content_url = local_content_url
   end
 
   private
 
-  def load_source_params
-    @key = params[:id]
-    @local = params[:source] == "local"
-    raise ActionController::RoutingError, "local content isn't configured" if @local && !local_content_url
-  end
-
-  def local_play_path(key)
-    build_local_zone_play_path({id: key, elevation: params[:elevation].presence}.compact)
-  end
-
-  def join_character!
-    @character = current_user.characters.find(params[:character_id])
-    authorize! :read, @character
-    join!
-  end
-
   def join!
-    zone_data, version = load_zone
-    @equipped_items = trainee_gear(zone_data)
-    @result = JoinDirectZone.call(character: @character, zone_key: @key, commit_sha: version,
-      source_url: @zone_source_url, zone_data:, equipped_items: @equipped_items)
-    load_client_settings
-  end
-
-  # Fetches and validates the zone; returns [zone_data, version].
-  def load_zone
-    @zone_source_url, version = @local ? local_source : github_source
+    @zone_source_url, version = if @local then local_source
+    elsif @world then world_source
+    else github_source
+    end
     body = VerifiedContent.get!(@zone_source_url)
     # The client checks the file it fetches against this, so it plays
     # exactly the zone Rails validated and handed to the game server.
     @zone_source_sha = Digest::SHA1.hexdigest(body)
+    version ||= "local-#{@zone_source_sha.first(12)}"
     zone_data = parse(body)
     Validators::ZoneValidator.validate!(zone_data)
-    [zone_data, version || "local-#{@zone_source_sha.first(12)}"]
-  end
-
-  def trainee_gear(zone_data)
-    TraineeGear::Imaginary.call(character_class: @character.character_class,
+    @equipped_items = TraineeGear::Imaginary.call(character_class: @character.character_class,
       elvl: [zone_data["elvl"].to_i + elevation_offset, 0].max)
-  end
-
-  def load_client_settings
+    @result = JoinDirectZone.call(character: @character, zone_key: @key, commit_sha: version,
+      source_url: @zone_source_url, zone_data:, equipped_items: @equipped_items)
     @character_settings = @character.setting_or_default.as_client_json
     @stock_assets = Content::StockAssets.client_json
   end
@@ -88,6 +72,16 @@ class Build::ZonePlaysController < Build::BaseController
 
     sha = client.branch_sha(client.default_branch)
     ["#{RAW_BASE}/#{client.repo}/#{sha}/#{zone_file}", sha]
+  end
+
+  # [url, version]: the world's zone, expanded, at the given commit.
+  def world_source
+    raise PlayError, "Play a world's zone from the world editor, once it's expanded (no commit given)." unless @commit.match?(COMMIT_FORMAT)
+    client = Github::ContentClient.new(current_user)
+    raise PlayError, "#{client.repo} is private; zones can only be played from a public repo." unless client.public_repo?
+
+    zone = params[:zone]
+    ["#{RAW_BASE}/#{client.repo}/#{@commit}/worlds/#{@world}/zones/#{zone}/#{zone}.full.json", @commit]
   end
 
   # [url, nil]: a local file has no commit; join! versions it by content

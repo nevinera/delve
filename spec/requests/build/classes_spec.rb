@@ -22,7 +22,10 @@ RSpec.describe "Build::Classes", type: :request do
       end
 
       context "with a connected repository" do
-        before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
+        before do
+          create(:github_installation, user: user, repo_full_name: "nevinera/delve-content")
+          stub_branch_list("nevinera/delve-content", %w[main])
+        end
 
         it "lists the classes directory contents, linking to the edit page" do
           stub_tree_listing("nevinera/delve-content", "classes", ["puncher.json", "puncher.full.json"])
@@ -31,7 +34,7 @@ RSpec.describe "Build::Classes", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include(">puncher<")
           expect(response.body).not_to include(">puncher.full<")
-          expect(response.body).to include(edit_build_class_path(id: "puncher"))
+          expect(response.body).to include(edit_build_class_path(id: "puncher", branch: "main"))
         end
       end
     end
@@ -98,14 +101,14 @@ RSpec.describe "Build::Classes", type: :request do
       context "with a connected repository" do
         before { create(:github_installation, user: user, repo_full_name: "nevinera/delve-content") }
 
-        it "renders the JS editor shell with just the key and a new-ability link - the class's own content and available abilities are fetched client-side, not here" do
+        it "renders the JS editor shell with just the key and a back link - the class's own content and available abilities are fetched client-side, not here" do
           get "/build/classes/puncher/edit"
 
           expect(response).to have_http_status(:ok)
           expect(response.body).to include('id="editor-root"')
           expect(response.body).to match(%r{src="/client/classEditor[^"]*\.js"})
           expect(response.body).to include('data-key="puncher"')
-          expect(response.body).to include(CGI.escapeHTML(new_build_ability_path(key: "classes/puncher/")))
+          expect(response.body).to include(%(data-back-url="#{build_classes_path}"))
           # The point of this move: Rails never opens the class file, its
           # available-abilities directory, or any asset - WebMock would
           # raise if it tried.

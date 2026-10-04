@@ -4,9 +4,9 @@ import ClassDpsEstimatePanel from "../ClassDpsEstimatePanel";
 
 const estimate = {
   results: [
-    {durationSeconds: 60, elevation: -20, elevationLabel: "trainee", dps: 6.5},
+    {durationSeconds: 60, elevation: -10, elevationLabel: "dungeon", dps: 6.5},
     {durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 12.3},
-    {durationSeconds: 300, elevation: -20, elevationLabel: "trainee", dps: 6.1},
+    {durationSeconds: 300, elevation: -10, elevationLabel: "dungeon", dps: 6.1},
     {durationSeconds: 300, elevation: 0, elevationLabel: "heroic", dps: 12.9},
   ],
 };
@@ -61,11 +61,36 @@ describe("ClassDpsEstimatePanel", () => {
 
     expect(screen.getByRole("columnheader", {name: "1m"})).toBeInTheDocument();
     expect(screen.getByRole("columnheader", {name: "5m"})).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", {name: "trainee"})).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", {name: "heroic"})).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", {name: "-10 (dungeon)"})).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", {name: "+0 (heroic)"})).toBeInTheDocument();
     expect(screen.getByText("12.3 dps")).toBeInTheDocument();
     expect(screen.getByText("6.1 dps")).toBeInTheDocument();
   });
+
+  it("renders one table per stat priority", () => {
+    renderPanel({
+      estimate: {
+        results: [
+          {priority: "hybrid", durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 12.3},
+          {priority: "dps", durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 15.4},
+        ],
+      },
+    });
+
+    expect(screen.getByText("hybrid gear")).toBeInTheDocument();
+    expect(screen.getByText("dps gear")).toBeInTheDocument();
+    expect(screen.getByText("12.3 dps")).toBeInTheDocument();
+    expect(screen.getByText("15.4 dps")).toBeInTheDocument();
+  });
+
+  it("shows each elevation's target DPS and colors cells against it", () => {
+    renderPanel({estimate});
+
+    expect(screen.getByText("25.0 dps")).toBeInTheDocument(); // ee 0
+    expect(screen.getByText("10.0 dps")).toBeInTheDocument(); // ee -10
+    expect(screen.getByText("12.3 dps")).toHaveClass("target-off"); // vs 25
+  });
+
 
   it("adds a strategy entry", () => {
     const onStrategyChange = vi.fn();

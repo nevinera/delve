@@ -28,7 +28,7 @@ RSpec.describe "GET /internal_api/world_characters/:world_character_id/equipped_
     it "returns each equipped item's slot, provenance, and stats" do
       item = create(:character_item, world_character:, slot: "head",
         identifier: "helm-of-doom",
-        zone_identifier: "zone_a", version: "1.0", elvl: 584, primary_stat: "strength")
+        version: "1.0", elvl: 584, primary_stat: "strength")
       create(:equipped_item, world_character:, character_item: item, equipped_slot: "head")
 
       get_equipped_items
@@ -36,7 +36,7 @@ RSpec.describe "GET /internal_api/world_characters/:world_character_id/equipped_
       expect(head).to include(
         "identifier" => "helm-of-doom",
         "id" => item.id,
-        "zone_identifier" => "zone_a",
+        "world_version_id" => nil,
         "version" => "1.0",
         "slot" => "head",
         "elvl" => 584,

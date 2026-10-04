@@ -72,8 +72,8 @@ increasing throughout.
 | +15 | 1.77 |
 | +20 | 2.0 |
 
-At `ee = -20` a character is effectively naked — every attack should take about half their health.
-This is intentionally implausible in real play (see the zone table above), but it does create an
+At `ee = -20` a character is effectively naked: 280 HP, no stats from gear, and abilities at the
+20% floor of [Authored amount scaling](#authored-amount-scaling). This is intentionally implausible in real play (see the zone table above), but it does create an
 edge case in a world's starting zones, where characters genuinely are on-level but have no gear yet.
 See **Trainee Gear** below for how that's handled. This will also be used in cases where _some_ of
 a character's gear isn't supported by the Zone (once provenance restrictions are implemented)
@@ -223,8 +223,19 @@ Stamina feeds max HP, which does have its own flat base - a character at `ee = -
 zeroes out all gear-derived Stamina) sits at exactly that base, effectively naked:
 
 ```
-MaxHP = 100 + Stamina * 10
+MaxHP = 280 + Stamina
 ```
+
+The flat base is large on purpose: it keeps itemized Stamina from multiplying HP several times over.
+On-level gear with no itemized Stamina (just the armor slots' base 105) gives 385 HP; itemizing
+every secondary into Stamina adds 445 more. See [combat_balance.md](combat_balance.md)'s "Gear
+profiles". For solo EHP math Stamina can beat Defence Rating, but Defence *reduces* damage, so it
+pulls ahead with self-healing, a healer, or back-to-back fights.
+
+**Design history:** originally `100 + Stamina * 10`, which let a tank's gear reach ~7x a squishy's
+EHP (the target is 3x). Then `835 + Stamina * 3` (same ratios as now, 3x the HP), cut to a third so
+HP relative to damage output matches BC-era WoW (a squishy's HP is ~16s of their own DPS) - which
+keeps healer HPS in the same range as DPS rather than 4-6x it.
 
 ## Crit Rating
 
@@ -325,6 +336,26 @@ future passives/talents rather than gear alone.
 **Implementation:** same as Avoidance above - wired server-side into basic attacks and powers,
 applied after the Avoidance roll, only reduces damage landing on a player target.
 
+## Authored amount scaling
+
+A player's authored harm and heal amounts (power effects, and recurring status ticks) are what a
+character with **200** of their primary stat deals. They scale linearly with it, floored at 20%:
+
+```
+AmountScale = max(0.2, Primary / 200)
+Amount      = (Authored * AmountScale + StatBonus) * crit
+```
+
+`Primary` is the class's damage stat (Strength, Agility or Intellect), for heals too - a tank's
+self-heal scales off Strength. Only the authored part scales; the stat bonus (`Primary / 90` per
+second of time budget, doubled for heals) is unchanged. A fully-geared on-level character has 217.5
+primary, so 1.09x. NPCs, and classes with no damage stat, are unscaled. The client shows scaled
+amounts in tooltips (`combat_stats.amount_scale`).
+
+**Why:** without it, about 45% of a character's damage was authored amounts that gear didn't
+touch, so being under-geared barely slowed kills (1.4x at `ee = -10` against a 2.5x target - see
+[combat_balance.md](combat_balance.md)'s "Elevation check").
+
 ## Recovery Rating
 
 Recovery Rating grants a percentage bonus to all healing the character *receives* - a property of
@@ -406,9 +437,9 @@ identical.
 
 "Trainee Gear" is a generated starter item for every equipment slot, built from the character's
 class. Each class specifies a ranked list of `primaryStats` (usually one, but hybrid classes may
-list more) and a ranked list of exactly five `secondaryStats`; the generated gear is itemized from
-those lists. Two characters of the same class always get the same Trainee Gear. The client
-displays it dimmed out, so it's clear to the player that the character isn't wearing a real item.
+list more) and up to three named `statPriorities`, each a ranked list of exactly five
+`secondaryStats`; the generated gear is itemized from the primaries and the first priority. Two
+characters of the same class always get the same Trainee Gear. The client displays it dimmed out, so it's clear to the player that the character isn't wearing a real item.
 
 - **In a world**, a character gets a full set of Trainee Gear at elvl 0 the first time they enter
   that world. It's saved like any other item, and each world has its own (items belong to the
@@ -470,9 +501,10 @@ Neck, Rings, and the weapon don't grant it.
 ### Net stats
 
 **Note:** this worked example (and Bob's below), including the Net Stats table, predates the
-Strength/Agility divisor rebalance, the later Crit/Haste stat swap, and the Avoidance rework above
-- its `/7` division is now `/90`, Crit Rating here would now come from Strength (not Agility)
-directly, and Parry/Dodge no longer exist as separate stacking rolls (see **Avoidance**). The
+Strength/Agility divisor rebalance, the later Crit/Haste stat swap, the Avoidance rework, and the
+Stamina change above - its `/7` division is now `/90`, Crit Rating here would now come from Strength
+(not Agility) directly, Parry/Dodge no longer exist as separate stacking rolls (see **Avoidance**),
+and max HP is now `280 + Stamina`. The
 numbers below haven't been recomputed; treat them as stale/illustrative of the calculation shape,
 not current values. See "Basic Attack DPS" above for the formula actually implemented (which also
 has no `BaseWeaponDamage`/`NominalSwingSpeed` to plug in - those don't exist anywhere in the item

@@ -31,6 +31,17 @@ describe("MapCanvas", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps the user's zoom when re-rendered with an equal (but new) image object", () => {
+    const props = {imageError: "", onImageFile: noop, mapData: mapData(), dispatch: noop, onSelectBarrier: noop};
+    const {rerender} = render(<MapCanvas {...props} image={{...IMAGE}} />);
+    fireEvent.click(screen.getByRole("button", {name: "+"}));
+    const zoomedIn = content().style.transform;
+
+    rerender(<MapCanvas {...props} image={{...IMAGE, pixelDimensions: {...IMAGE.pixelDimensions}}} />);
+
+    expect(content().style.transform).toEqual(zoomedIn);
+  });
+
   it("shows a Back link (in the toolbar, not overlaid) pointing at backUrl, with or without an image", () => {
     render(<MapCanvas image={null} imageError="" onImageFile={noop} backUrl="/build/maps" mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
     let backLink = screen.getByRole("link", {name: "← Back"});
@@ -905,6 +916,94 @@ describe("MapCanvas", () => {
       expect(onToolChange).toHaveBeenCalledWith("select");
     });
 
+    it("with keepUnitToolArmed, stays armed after placing, and prepareUnit fills in each new unit", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-unit" pendingUnitType="goblin-raider" onToolChange={onToolChange}
+          keepUnitToolArmed prepareUnit={(entry) => ({...entry, groupIdentifier: "group-abcdef"})}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0});
+      fireEvent.pointerUp(wrapper, {clientX: 50, clientY: 0});
+
+      expect(dispatch.mock.calls[0][0].entry).toMatchObject({unitType: "goblin-raider", groupIdentifier: "group-abcdef"});
+      expect(onToolChange).not.toHaveBeenCalled();
+    });
+
+    it("reports a double-click on a unit's token, or on anything else", () => {
+      const onDoubleClickUnit = vi.fn();
+      const onDoubleClickEmpty = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          onSelectUnit={noop} onDoubleClickUnit={onDoubleClickUnit} onDoubleClickEmpty={onDoubleClickEmpty}
+        />
+      );
+
+      fireEvent.doubleClick(document.querySelector("[data-unit-index] circle"));
+      fireEvent.doubleClick(document.querySelector(".map-canvas-content img"));
+
+      expect(onDoubleClickUnit).toHaveBeenCalledWith(0);
+      expect(onDoubleClickEmpty).toHaveBeenCalledTimes(1);
+    });
+
+    it("a plain click on a unit with a group open still selects it", () => {
+      const onSelectUnit = vi.fn();
+      const onToggleGroupMember = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          onSelectUnit={onSelectUnit} openGroup="pack" onToggleGroupMember={onToggleGroupMember}
+        />
+      );
+
+      fireEvent.pointerDown(document.querySelector("[data-unit-index]"), {pointerId: 1});
+
+      expect(onSelectUnit).toHaveBeenCalledWith(0);
+      expect(onToggleGroupMember).not.toHaveBeenCalled();
+    });
+
+    it("draws the shapes of layers that aren't active dimmed, and ignores the pointer on them", () => {
+      const onSelectUnit = vi.fn();
+      const units = [{unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          onSelectUnit={onSelectUnit} activeLayers={{barriers: true, connections: true, units: false, ncus: false}}
+        />
+      );
+
+      const token = document.querySelector("[data-unit-index]");
+      expect(token.closest(".map-canvas-layer")).toHaveClass("map-canvas-layer-inactive");
+      fireEvent.pointerDown(token, {pointerId: 1});
+      expect(onSelectUnit).not.toHaveBeenCalled();
+    });
+
+    it("highlights the given units (e.g. one unit type's) with rings only", () => {
+      const units = [
+        {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+        {unitType: "goblin-raider", identifier: "b", position: {x: 20, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}},
+      ];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})} dispatch={noop} onSelectBarrier={noop}
+          highlightedUnitIndices={[0, 1]}
+        />
+      );
+
+      const highlight = document.querySelector(".map-group-highlight");
+      expect(highlight.querySelectorAll("circle")).toHaveLength(2);
+      expect(highlight.querySelectorAll("line")).toHaveLength(0);
+    });
+
     it("does not snap unit placement to a nearby barrier point", () => {
       const dispatch = vi.fn();
       const barriers = [{type: "wall", locations: [{x: 10, y: 120}, {x: 20, y: 120}]}];
@@ -1055,7 +1154,7 @@ describe("MapCanvas", () => {
       expect(onHoverUnit).toHaveBeenCalledWith(null);
     });
 
-    it("clicking a unit's marker while grouping mode is active toggles membership instead of selecting/dragging", () => {
+    it("shift-clicking a unit's marker with a group open toggles membership instead of selecting/dragging", () => {
       const onSelectUnit = vi.fn();
       const onToggleGroupMember = vi.fn();
       const dispatch = vi.fn();
@@ -1066,14 +1165,14 @@ describe("MapCanvas", () => {
           mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
           dispatch={dispatch} onSelectBarrier={noop}
           selectedUnitIndex={null} onSelectUnit={onSelectUnit}
-          groupingMode={{groupIdentifier: "pack"}} onToggleGroupMember={onToggleGroupMember}
+          openGroup="pack" onToggleGroupMember={onToggleGroupMember}
         />
       );
       fitToImageSize();
       const wrapper = document.querySelector(".map-canvas-wrapper");
       const marker = document.querySelector(".map-canvas-shapes g");
 
-      fireEvent.pointerDown(marker, {pointerId: 1});
+      fireEvent.pointerDown(marker, {pointerId: 1, shiftKey: true});
       fireEvent.pointerMove(wrapper, {clientX: 999, clientY: 999, pointerId: 1});
 
       expect(onToggleGroupMember).toHaveBeenCalledWith(0);
@@ -1081,7 +1180,7 @@ describe("MapCanvas", () => {
       expect(dispatch).not.toHaveBeenCalled();
     });
 
-    it("draws a translucent-red highlight (ring per member + full-mesh lines) for the group named by groupIdentifier via groupingMode", () => {
+    it("draws a translucent-red highlight (ring per member + full-mesh lines) for the open group", () => {
       const units = [
         {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
         {unitType: "goblin-raider", identifier: "b", position: {x: 20, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
@@ -1092,7 +1191,7 @@ describe("MapCanvas", () => {
           image={IMAGE} imageError="" onImageFile={noop}
           mapData={mapData({feetDimensions: FEET_DIMENSIONS, units})}
           dispatch={noop} onSelectBarrier={noop}
-          groupingMode={{groupIdentifier: "pack"}}
+          openGroup="pack"
         />
       );
 
@@ -1103,7 +1202,7 @@ describe("MapCanvas", () => {
       expect(highlight.querySelectorAll("line")).toHaveLength(1);
     });
 
-    it("highlights via hoveredGroupIdentifier when grouping mode isn't active", () => {
+    it("highlights via hoveredGroupIdentifier when no group is open", () => {
       const units = [
         {unitType: "goblin-raider", identifier: "a", position: {x: 5, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},
         {unitType: "goblin-raider", identifier: "b", position: {x: 20, y: 5, angle: 0}, hostility: "hostile", currentHpFraction: 1, movement: {type: "still"}, groupIdentifier: "pack"},

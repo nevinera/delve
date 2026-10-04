@@ -74,7 +74,9 @@ const STATUS_COLOR = {
 // caller (see ZoneEditor) observe the live layout for generating that
 // same metadata on save, without this component needing to know anything
 // about persistence itself.
-export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch, initialPositions, onPositionsChange}) {
+// onOpenNode(mapKey), if given, is called when a map's node is
+// double-clicked (the world editor opens that map).
+export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch, initialPositions, onPositionsChange, onOpenNode}) {
   const containerRef = useRef(null);
   const [positions, setPositions] = useState(initialPositions ?? {}); // {[nodeKey]: {x, y}} - drag overrides
   const [view, setView] = useState({panX: 0, panY: 0, zoom: 1});
@@ -350,7 +352,7 @@ export default function ZoneGraphCanvas({zoneData, mapDetailsByKey, dispatch, in
                 const {x, y} = nodePosition(node.key);
                 const clipId = `zone-graph-node-clip-${node.key}`;
                 return (
-                  <g key={node.key} transform={`translate(${x}, ${y})`} data-node-key={node.key}>
+                  <g key={node.key} transform={`translate(${x}, ${y})`} data-node-key={node.key} onDoubleClick={onOpenNode && (() => onOpenNode(node.key))}>
                     <circle className="zone-graph-node" r={NODE_RADIUS} onPointerDown={(e) => handleNodePointerDown(e, node)} />
                     {node.detail?.thumbnailUrl ? (
                       <>

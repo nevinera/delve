@@ -27,6 +27,12 @@ module GithubTreeStubs
       .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: {tree: []}.to_json)
   end
 
+  # The repo's branches (Build::BranchSelection's picker).
+  def stub_branch_list(repo, names)
+    stub_request(:get, "https://api.github.com/repos/#{repo}/git/matching-refs/heads/")
+      .to_return(status: 200, headers: {"Content-Type" => "application/json"}, body: names.map { |name| {ref: "refs/heads/#{name}"} }.to_json)
+  end
+
   private
 
   def stub_branch_lookup(repo, branch)

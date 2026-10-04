@@ -23,9 +23,12 @@ func mountClassDPSSim(h *handler.ClassDPSSim) http.Handler {
 
 func punchingClass() map[string]any {
 	return map[string]any{
-		"primaryStats":   []string{"strength"},
-		"secondaryStats": []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"},
-		"wields":         []string{"dagger", "dagger"},
+		"primaryStats": []string{"strength"},
+		"statPriorities": []map[string]any{{
+			"name":           "hybrid",
+			"secondaryStats": []string{"crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "stamina"},
+		}},
+		"wields": []string{"dagger", "dagger"},
 	}
 }
 
@@ -44,7 +47,7 @@ func TestClassDPSSim_Simulate_ReturnsOneCellPerDurationAndElevation(t *testing.T
 		Results []map[string]any `json:"results"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Results, len(classdps.Durations)*len(classdps.Elevations))
+	require.Len(t, resp.Results, (len(classdps.Durations)-1)*len(classdps.Elevations))
 
 	type key struct {
 		duration, elevation float64
@@ -56,6 +59,7 @@ func TestClassDPSSim_Simulate_ReturnsOneCellPerDurationAndElevation(t *testing.T
 		seen[k] = true
 		assert.Greater(t, cell["dps"], 0.0)
 		assert.NotEmpty(t, cell["elevationLabel"])
+		assert.Equal(t, "hybrid", cell["priority"])
 	}
 }
 
