@@ -83,6 +83,23 @@ describe("ClassDpsEstimatePanel", () => {
     expect(screen.getByText("15.4 dps")).toBeInTheDocument();
   });
 
+  it("targets each stat priority's own gear profile", () => {
+    renderPanel({
+      estimate: {
+        results: [
+          {priority: "dps", durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 24},
+          {priority: "hybrid", durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 19},
+          {priority: "tank", durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 16.5},
+        ],
+      },
+    });
+
+    expect(screen.getByText("25.0 dps")).toBeInTheDocument(); // dps target
+    expect(screen.getByText("20.0 dps")).toBeInTheDocument(); // hybrid target, 25 / 1.25
+    expect(screen.getByText("16.7 dps")).toBeInTheDocument(); // tank target, 25 / 1.5
+    expect(screen.getByText("16.5 dps")).toHaveClass("target-on");
+  });
+
   it("shows each elevation's target DPS and colors cells against it", () => {
     renderPanel({estimate});
 

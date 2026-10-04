@@ -163,7 +163,7 @@ function PriorityTable({priority, results}) {
         </thead>
         <tbody>
           {elevations.map((ee) => {
-            const target = classTargetDps(ee);
+            const target = classTargetDps(ee, priority);
             const label = results.find((r) => r.elevation === ee)?.elevationLabel;
             return (
               <tr key={ee}>

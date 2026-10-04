@@ -48,11 +48,14 @@ describe("unitTargets", () => {
 });
 
 describe("classTargetDps", () => {
-  it("drops with elevation and for tanks or healers", () => {
+  it("drops with elevation and by stat priority", () => {
     expect(classTargetDps(0)).toBe(25);
     expect(classTargetDps(-5)).toBe(20);
     expect(classTargetDps(-10)).toBe(10);
-    expect(classTargetDps(0, "support")).toBeCloseTo(16.67, 1);
+    expect(classTargetDps(0, "tank")).toBeCloseTo(16.67, 1);
+    expect(classTargetDps(0, "healing")).toBeCloseTo(16.67, 1);
+    expect(classTargetDps(-5, "hybrid")).toBe(16);
+    expect(classTargetDps(0, "unknown")).toBe(25);
     expect(classTargetDps(10)).toBeNull();
   });
 });

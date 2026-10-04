@@ -188,12 +188,11 @@ export function classSurvivalFit(cell, target) {
   return {ttd: ttdFit, hpLost: targetFit(cell.hpLostPct / 100, [target.hpLost, target.hpLost])};
 }
 
-// Target sustained DPS for a class at ee, or null where there's no target.
-// Tanks and healers hold back: their TTK is 1.5x a DPS's.
-export function classTargetDps(ee, role = "dps") {
-  const elevation = ELEVATIONS[ee];
-  if (!elevation) return null;
-  return (SQUISHY_DPS / elevation.a) / (role === "dps" ? 1 : 1.5);
+// Target sustained DPS for a class in one stat priority's gear at ee, or null
+// where there's no target: slowed by that gear profile's TTK factor (tanky
+// DPS 1.25x, tanks and healers 1.5x a DPS's).
+export function classTargetDps(ee, priority = "dps") {
+  return referenceDps(PRIORITY_PROFILES[priority] ?? "offense", ee);
 }
 
 // How far actual is from target, for coloring: "on" within 10%, "near"
