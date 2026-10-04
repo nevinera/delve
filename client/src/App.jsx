@@ -2502,7 +2502,7 @@ function primaryStatEffectLines(key, value, primaryStats, stats) {
       return lines;
     }
     case "stamina":
-      return [`${(835 + value * 3).toFixed(0)} Max HP`];
+      return [`${(280 + value).toFixed(0)} Max HP`];
     default:
       return [];
   }

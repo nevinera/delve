@@ -205,7 +205,7 @@ describe("CharacterSheet", () => {
 
     it("shows stamina's max HP, always", () => {
       hover("Stamina", {stamina: 50}, []);
-      expect(screen.getByText("985 Max HP")).toBeInTheDocument();
+      expect(screen.getByText("330 Max HP")).toBeInTheDocument();
     });
 
     it("computes basic attack dps as ~1.0 for a fully naked character", () => {

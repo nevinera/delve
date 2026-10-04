@@ -3,7 +3,7 @@
 
 // A squishy (DPS-geared, no defensive stats) character at ee = 0.
 export const SQUISHY_DPS = 25;
-export const SQUISHY_EHP = 1500;
+export const SQUISHY_EHP = 500;
 
 // Going down in ee: the character kills `a` times slower and the enemy hits
 // `b` times harder relative to its EHP.

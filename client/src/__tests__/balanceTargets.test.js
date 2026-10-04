@@ -14,29 +14,29 @@ describe("unitTargets", () => {
     const t = unitTargets(["open"]);
     expect(t.pull).toBe("solo");
     close(t.hp, [300, 300]);
-    close(t.dps, [25, 25]);
+    close(t.dps, [8.33, 8.33]);
   });
 
   it("splits a pull's budget across its units", () => {
     const pair = unitTargets(["open", "pair"]);
     close(pair.hp, [195, 195]);
-    close(pair.dps, [15.38, 15.38]);
+    close(pair.dps, [5.13, 5.13]);
     const swarm = unitTargets(["g1", "swarm"]);
     close(swarm.hp, [178.1, 285]);
-    close(swarm.dps, [6.08, 9.12]);
+    close(swarm.dps, [2.03, 3.04]);
   });
 
   it("applies role multipliers", () => {
     const t = unitTargets(["open", "glass", "melee"]);
     close(t.hp, [150, 150]);
-    close(t.dps, [32.5, 32.5]);
+    close(t.dps, [10.83, 10.83]);
     close(unitTargets(["open", "healer"]).hp, [201, 201]);
   });
 
   it("gives the time-to-kill target per gear profile and elevation", () => {
     const t = unitTargets(["open"]);
     close(t.ttd("offense", 0), [60, 60]);
-    close(t.ttd("defense", -10), [138.5, 138.5]); // 1500 * 3 / (25 * 1.3)
+    close(t.ttd("defense", -10), [138.5, 138.5]); // 500 * 3 / (8.33 * 1.3)
     expect(t.ttd("offense", 10)).toBeNull();
   });
 });

@@ -26,8 +26,8 @@ var Elevations = []float64{-10, -5, 0}
 // Mirrors internal/command/basic_attack_handler.go's same-named constants.
 const (
 	versatilityStatWeight = 0.2
-	playerBaseMaxHealth   = 835.0
-	maxHealthPerStamina   = 3.0
+	playerBaseMaxHealth   = 280.0
+	maxHealthPerStamina   = 1.0
 )
 
 // slotSpec is the subset of docs/stats.md's "Slots" table this package

@@ -152,20 +152,20 @@ noticeably more from `caster` units, casters noticeably less.
 ## Implied enemy stats (`ee = 0`)
 
 `D = 25` is a squishy character's full sustained DPS at `ee = 0` (see **D** below). The reference
-squishy EHP is **1500**: on-level gear with no Stamina, Defence or Versatility has 1150 HP (835
-flat, plus 3 per point of the armor slots' 105 base Stamina). Against physical attacks its primary stat's Avoidance makes that
-1150 EHP (Intellect), 1472 (Agility) or 1595 (Strength); 1500 is the rounded middle. A unit type's `dps` is raw damage, before the
-target's mitigation: `dps = 1500 * HP lost / TTK`.
+squishy EHP is **500**: on-level gear with no Stamina, Defence or Versatility has 385 HP (280 flat,
+plus the armor slots' 105 base Stamina). Against physical attacks its primary stat's Avoidance
+makes that 385 EHP (Intellect), 493 (Agility) or 534 (Strength); 500 is the rounded middle. A unit
+type's `dps` is raw damage, before the target's mitigation: `dps = 500 * HP lost / TTK`.
 
 | Pull | Units | `open` HP | `open` dps | `g1` HP | `g1` dps |
 |---|---|---|---|---|---|
-| `solo` | 1 | 300 | 25 | 750 | 32.5 |
-| `pair` | 2 | 195 | 15.4 | 490 | 20 |
-| `group` | 3 / 4 | 160 / 120 | 10.9 / 8.8 | 400 / 300 | 14.2 / 11.4 |
-| `swarm` | 5 / 8 | 115 / 70 | 7.0 / 4.7 | 285 / 180 | 9.1 / 6.1 |
+| `solo` | 1 | 300 | 8.3 | 750 | 10.8 |
+| `pair` | 2 | 195 | 5.1 | 490 | 6.7 |
+| `group` | 3 / 4 | 160 / 120 | 3.6 / 2.9 | 400 / 300 | 4.7 / 3.8 |
+| `swarm` | 5 / 8 | 115 / 70 | 2.3 / 1.6 | 285 / 180 | 3.0 / 2.0 |
 
-Per unit; apply the role multipliers on top. At a 0.5s-2.5s attack interval these keep most hits
-to 1-2 digits.
+Per unit; apply the role multipliers on top. At a 0.5s-2.5s attack interval these keep hits to
+1-2 digits.
 
 ## Elevation check
 
@@ -204,7 +204,7 @@ solved backward from this target.
 
 ## Open questions
 
-1. **Tank and tanky DPS EHP from gear.** With `MaxHP = 835 + Stamina * 3` and the current Defence
+1. **Tank and tanky DPS EHP from gear.** With `MaxHP = 280 + Stamina` and the current Defence
    curve, gear alone gets a tank (one-hander + shield, best split, vs physical) to ~3.2x squishy EHP
    and tanky DPS to ~2.0x - on target. Their best splits lean on Stamina (~80% / ~50%); that's
    accepted, since Defence pulls ahead whenever there's healing or no rest between fights.

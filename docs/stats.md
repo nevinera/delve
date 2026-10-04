@@ -72,7 +72,7 @@ increasing throughout.
 | +15 | 1.77 |
 | +20 | 2.0 |
 
-At `ee = -20` a character is effectively naked: 835 HP, no stats from gear, and abilities at the
+At `ee = -20` a character is effectively naked: 280 HP, no stats from gear, and abilities at the
 20% floor of [Authored amount scaling](#authored-amount-scaling). This is intentionally implausible in real play (see the zone table above), but it does create an
 edge case in a world's starting zones, where characters genuinely are on-level but have no gear yet.
 See **Trainee Gear** below for how that's handled. This will also be used in cases where _some_ of
@@ -223,17 +223,19 @@ Stamina feeds max HP, which does have its own flat base - a character at `ee = -
 zeroes out all gear-derived Stamina) sits at exactly that base, effectively naked:
 
 ```
-MaxHP = 835 + Stamina * 3
+MaxHP = 280 + Stamina
 ```
 
 The flat base is large on purpose: it keeps itemized Stamina from multiplying HP several times over.
-On-level gear with no itemized Stamina (just the armor slots' base 105) gives 1150 HP; itemizing
-every secondary into Stamina adds 1335 more. See [combat_balance.md](combat_balance.md)'s "Gear
+On-level gear with no itemized Stamina (just the armor slots' base 105) gives 385 HP; itemizing
+every secondary into Stamina adds 445 more. See [combat_balance.md](combat_balance.md)'s "Gear
 profiles". For solo EHP math Stamina can beat Defence Rating, but Defence *reduces* damage, so it
 pulls ahead with self-healing, a healer, or back-to-back fights.
 
 **Design history:** originally `100 + Stamina * 10`, which let a tank's gear reach ~7x a squishy's
-EHP (the target is 3x).
+EHP (the target is 3x). Then `835 + Stamina * 3` (same ratios as now, 3x the HP), cut to a third so
+HP relative to damage output matches BC-era WoW (a squishy's HP is ~16s of their own DPS) - which
+keeps healer HPS in the same range as DPS rather than 4-6x it.
 
 ## Crit Rating
 
@@ -502,7 +504,7 @@ Neck, Rings, and the weapon don't grant it.
 Strength/Agility divisor rebalance, the later Crit/Haste stat swap, the Avoidance rework, and the
 Stamina change above - its `/7` division is now `/90`, Crit Rating here would now come from Strength
 (not Agility) directly, Parry/Dodge no longer exist as separate stacking rolls (see **Avoidance**),
-and max HP is now `835 + Stamina * 3`. The
+and max HP is now `280 + Stamina`. The
 numbers below haven't been recomputed; treat them as stale/illustrative of the calculation shape,
 not current values. See "Basic Attack DPS" above for the formula actually implemented (which also
 has no `BaseWeaponDamage`/`NominalSwingSpeed` to plug in - those don't exist anywhere in the item

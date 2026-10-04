@@ -53,17 +53,17 @@ describe("DamageEstimatePanel", () => {
   });
 
   it("assumes an untagged unit is open", () => {
-    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{maxHP: 300, dps: 25}} />);
+    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{maxHP: 300, dps: 8}} />);
 
     expect(screen.getByText(/Targets for open, solo/)).toBeInTheDocument();
     expect(screen.getByText("300 HP (this unit: 300)")).toHaveClass("target-on");
   });
 
   it("shows the unit's HP and dps against its tags' targets", () => {
-    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{tags: ["open", "pair"], maxHP: 195, dps: 30}} />);
+    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{tags: ["open", "pair"], maxHP: 195, dps: 10}} />);
 
     expect(screen.getByText("195 HP (this unit: 195)")).toHaveClass("target-on");
-    expect(screen.getByText("15.4 dps (this unit: 30)")).toHaveClass("target-off");
+    expect(screen.getByText("5.1 dps (this unit: 10)")).toHaveClass("target-off");
   });
 
   it("shows each cell's time-to-kill target", () => {
