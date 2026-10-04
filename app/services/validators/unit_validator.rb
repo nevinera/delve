@@ -7,14 +7,18 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_core_fields!(data, path: path)
-      validate_hp_fraction!(data, path: path) if given?(data, "currentHpFraction")
-      UnitMovementValidator.validate!(data["movement"], path: child_path(path, "movement")) if given?(data, "movement")
-      validate_group_identifier!(data, path: path) if given?(data, "groupIdentifier")
-      RespawnConfigValidator.validate!(data["respawn"], path: child_path(path, "respawn")) if given?(data, "respawn")
+      validate_optional_fields!(data, path: path)
       validate_leash_fields!(data, path:)
     end
 
     private
+
+    def validate_optional_fields!(data, path:)
+      validate_hp_fraction!(data, path: path) if given?(data, "currentHpFraction")
+      UnitMovementValidator.validate!(data["movement"], path: child_path(path, "movement")) if given?(data, "movement")
+      validate_group_identifier!(data, path: path) if given?(data, "groupIdentifier")
+      RespawnConfigValidator.validate!(data["respawn"], path: child_path(path, "respawn")) if given?(data, "respawn")
+    end
 
     def validate_core_fields!(data, path:)
       require_string!(data, "identifier", path: path)

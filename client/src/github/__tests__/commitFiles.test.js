@@ -97,50 +97,67 @@ describe("commitFiles", () => {
       "https://api.github.com/repos/nevinera/delve-content/git/ref/heads/main",
       "https://api.github.com/repos/nevinera/delve-content/git/commits/base-commit-sha",
       "https://api.github.com/repos/nevinera/delve-content/git/blobs",
-      "https://api.github.com/repos/nevinera/delve-content/git/blobs",
       "https://api.github.com/repos/nevinera/delve-content/git/trees",
       "https://api.github.com/repos/nevinera/delve-content/git/commits",
       "https://api.github.com/repos/nevinera/delve-content/git/refs/heads/main",
     ]);
   });
 
-  it("JSON-encodes a plain object as pretty-printed utf-8, not base64", async () => {
+  it("inlines a plain object as pretty-printed JSON in its tree entry, with no blob request", async () => {
     const {calls} = stubGithubApi();
     await commitFiles({"abilities/firebolt.json": {name: "Firebolt"}}, {message: "m"});
 
-    const blobCall = calls.find((c) => c.url.endsWith("/git/blobs"));
-    const body = JSON.parse(blobCall.options.body);
-    expect(body.encoding).toEqual("utf-8");
-    expect(body.content).toEqual(JSON.stringify({name: "Firebolt"}, null, 2));
+    expect(calls.some((c) => c.url.endsWith("/git/blobs"))).toBe(false);
+    const body = JSON.parse(calls.find((c) => c.url.endsWith("/git/trees")).options.body);
+    expect(body.tree).toEqual([
+      {path: "abilities/firebolt.json", mode: "100644", type: "blob", content: JSON.stringify({name: "Firebolt"}, null, 2)},
+    ]);
   });
 
-  it("base64-encodes an uploaded File", async () => {
+  it("inlines a string as-is", async () => {
+    const {calls} = stubGithubApi();
+    await commitFiles({"notes.txt": "hello\n"}, {message: "m"});
+
+    const body = JSON.parse(calls.find((c) => c.url.endsWith("/git/trees")).options.body);
+    expect(body.tree[0].content).toEqual("hello\n");
+    expect(body.tree[0].sha).toBeUndefined();
+  });
+
+  it("uploads an uploaded File as a base64 blob and references it by sha", async () => {
     const {calls} = stubGithubApi();
     const file = new File(["hello"], "x.png", {type: "image/png"});
     await commitFiles({"graphics/x.png": file}, {message: "m"});
 
-    const blobCall = calls.find((c) => c.url.endsWith("/git/blobs"));
-    const body = JSON.parse(blobCall.options.body);
-    expect(body.encoding).toEqual("base64");
-    expect(atob(body.content)).toEqual("hello");
+    const blobBody = JSON.parse(calls.find((c) => c.url.endsWith("/git/blobs")).options.body);
+    expect(blobBody.encoding).toEqual("base64");
+    expect(atob(blobBody.content)).toEqual("hello");
+    const treeBody = JSON.parse(calls.find((c) => c.url.endsWith("/git/trees")).options.body);
+    expect(treeBody.tree[0].sha).toMatch(/^blob-sha-for-/);
+    expect(treeBody.tree[0].content).toBeUndefined();
   });
 
-  it("builds the tree from every blob's path and sha, based on the base tree", async () => {
+  it("makes the same number of requests for many JSON files as for one", async () => {
+    const {calls} = stubGithubApi();
+    const files = Object.fromEntries(Array.from({length: 30}, (_, i) => [`abilities/a${i}.json`, {i}]));
+    await commitFiles(files, {message: "m"});
+
+    expect(calls.length).toEqual(7);
+  });
+
+  it("builds the tree from every file's path, based on the base tree", async () => {
     const {calls} = stubGithubApi();
     await commitFiles({"abilities/a.json": {a: 1}, "abilities/b.json": {b: 2}}, {message: "m"});
 
-    const treeCall = calls.find((c) => c.url.endsWith("/git/trees"));
-    const body = JSON.parse(treeCall.options.body);
+    const body = JSON.parse(calls.find((c) => c.url.endsWith("/git/trees")).options.body);
     expect(body.base_tree).toEqual("base-tree-sha");
     expect(body.tree.map((t) => t.path).sort()).toEqual(["abilities/a.json", "abilities/b.json"]);
-    expect(body.tree.every((t) => t.mode === "100644" && t.type === "blob" && t.sha)).toBe(true);
   });
 
   it("deletes a path given null, with a null-sha tree entry and no blob", async () => {
     const {calls} = stubGithubApi();
     await commitFiles({"unit_types/a.json": {a: 1}, "unit_types/a.full.json": null}, {message: "m"});
 
-    expect(calls.filter((c) => c.url.endsWith("/git/blobs"))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.endsWith("/git/blobs"))).toHaveLength(0);
     const treeCall = calls.find((c) => c.url.endsWith("/git/trees"));
     const body = JSON.parse(treeCall.options.body);
     expect(body.tree.find((t) => t.path === "unit_types/a.full.json")).toEqual({path: "unit_types/a.full.json", mode: "100644", type: "blob", sha: null});

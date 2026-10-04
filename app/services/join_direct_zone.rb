@@ -4,13 +4,13 @@
 # instance key includes the user and commit, so only this builder's
 # characters share it, and a new commit gets a fresh instance.
 class JoinDirectZone < JoinZone
-  def initialize(character:, zone_key:, commit_sha:, source_url:, zone_data:, equipped_items:)
+  def initialize(character:, zone_key:, zone_data:, equipped_items:, **source)
     super(character:, zone: nil)
     @equipped_items = equipped_items
     @zone_key = zone_key
-    @commit_sha = commit_sha
-    @source_url = source_url
     @zone_data = zone_data
+    @commit_sha = source.fetch(:commit_sha)
+    @source_url = source.fetch(:source_url)
   end
 
   private

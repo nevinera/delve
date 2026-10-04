@@ -13,16 +13,10 @@ class Build::Publishing::VersionsController < Build::BaseController
   def create
     authorize! :manage, @world
     @version = @world.world_versions.build(version_params)
-    error = ref_error
-    if error
-      flash.now[:alert] = error
-      render :new, status: :unprocessable_content
-    elsif @version.save
-      redirect_to build_publishing_world_path(@world), notice: "Importing #{@version.ref}."
-    else
-      flash.now[:alert] = @version.errors.full_messages.to_sentence
-      render :new, status: :unprocessable_content
-    end
+    error = ref_error || save_error
+    return render_new_with_error(error) if error
+
+    redirect_to build_publishing_world_path(@world), notice: "Importing #{@version.ref}."
   end
 
   def release
@@ -61,10 +55,26 @@ class Build::Publishing::VersionsController < Build::BaseController
     @content_client ||= Github::ContentClient.new(current_user)
   end
 
+  def render_new_with_error(message)
+    flash.now[:alert] = message
+    render :new, status: :unprocessable_content
+  end
+
+  def save_error
+    @version.errors.full_messages.to_sentence unless @version.save
+  end
+
   # Checked up front, so a typo fails here rather than as a failed import.
   def ref_error
+    repo_error || tag_error
+  end
+
+  def repo_error
     return "Your GitHub connection points at #{content_client.repo}, not #{@world.repo}." unless content_client.repo == @world.repo
-    return "#{@world.repo} is private; worlds must be published from a public repo." unless content_client.public_repo?
+    "#{@world.repo} is private; worlds must be published from a public repo." unless content_client.public_repo?
+  end
+
+  def tag_error
     return "Ref is required." if @version.ref.blank?
     content_client.tag_sha(@version.ref)
     nil

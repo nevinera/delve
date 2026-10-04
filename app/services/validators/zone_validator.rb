@@ -58,14 +58,21 @@ module Validators
       data["maps"].each_with_index do |map, i|
         (map["units"] || []).each_with_index do |unit, j|
           next if known.include?(unit["unitType"])
-          unit_path = index_path(child_path(index_path(child_path(path, "maps"), i), "units"), j)
-          raise ValidationError.new(
-            "unit #{unit["identifier"].inspect} on map #{map["identifier"].inspect} references unknown unit type " \
-            "#{unit["unitType"].inspect}; add it to the zone's unitTypes",
-            path: child_path(unit_path, "unitType")
-          )
+          raise unknown_unit_type_error(map, unit, unit_path(path, i, j))
         end
       end
+    end
+
+    def unit_path(path, map_index, unit_index)
+      index_path(child_path(index_path(child_path(path, "maps"), map_index), "units"), unit_index)
+    end
+
+    def unknown_unit_type_error(map, unit, unit_path)
+      ValidationError.new(
+        "unit #{unit["identifier"].inspect} on map #{map["identifier"].inspect} references unknown unit type " \
+        "#{unit["unitType"].inspect}; add it to the zone's unitTypes",
+        path: child_path(unit_path, "unitType")
+      )
     end
 
     def validate_maps!(data, path:)
