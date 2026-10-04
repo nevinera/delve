@@ -1,7 +1,9 @@
+import {unitTargets, targetFit} from "../balanceTargets";
+
 const PLAN_LABELS = {
-  offense: "Offense gear",
-  offenseWithDefense: "Offense + some defense",
-  defense: "Defense gear",
+  offense: "Offense gear (squishy)",
+  offenseWithDefense: "Offense + some defense (tanky DPS)",
+  defense: "Defense gear (tank)",
 };
 
 function formatElevation(ee) {
@@ -17,22 +19,48 @@ function uniqueInOrder(values) {
   return [...new Set(values)];
 }
 
-function Cell({cell}) {
+function formatRange([lo, hi], digits = 0, suffix = "") {
+  const a = lo.toFixed(digits);
+  const b = hi.toFixed(digits);
+  return a === b ? `${a}${suffix}` : `${a}-${b}${suffix}`;
+}
+
+function Cell({cell, target}) {
   if (!cell) return <td>-</td>;
+  const fit = target && cell.ttdSeconds !== null ? targetFit(cell.ttdSeconds, target) : null;
   return (
-    <td>
+    <td className={fit ? `target-${fit}` : undefined}>
       {cell.dps.toFixed(1)} dps
       <div className="damage-estimate-ttd">{cell.ttdSeconds === null ? "no damage" : `${cell.ttdSeconds.toFixed(1)}s to kill`}</div>
+      {target && <div className="damage-estimate-target">target {formatRange(target, 0, "s")}</div>}
     </td>
+  );
+}
+
+// The unit's own maxHP/dps against the targets for its tags (see
+// docs/combat_balance.md), or why there are none.
+function TargetSummary({targets, maxHP, dps}) {
+  if (targets.untargeted) {
+    return <p className="damage-estimate-targets">No balance targets for {targets.untargeted} yet.</p>;
+  }
+  const hpFit = typeof maxHP === "number" ? targetFit(maxHP, targets.hp) : null;
+  const dpsFit = typeof dps === "number" ? targetFit(dps, targets.dps) : null;
+  return (
+    <p className="damage-estimate-targets">
+      Targets for {targets.audience}, {targets.pull}:{" "}
+      <span className={hpFit ? `target-${hpFit}` : undefined}>{formatRange(targets.hp)} HP (this unit: {maxHP ?? "-"})</span>,{" "}
+      <span className={dpsFit ? `target-${dpsFit}` : undefined}>{formatRange(targets.dps, 1)} dps (this unit: {dps ?? "-"})</span>
+    </p>
   );
 }
 
 // Explicit-click estimate (not live-updating - see issue #72): a matrix of
 // the unit's simulated DPS against mocked gear kits (rows) at several
-// relative elevations (columns). Deliberately uncolored and untagged until
-// there are target numbers to judge it against.
-export default function DamageEstimatePanel({estimate, estimating, error, onEstimate}) {
+// relative elevations (columns), each time-to-kill shown against its target
+// for the unit's balance tags.
+export default function DamageEstimatePanel({estimate, estimating, error, onEstimate, unitType = {}}) {
   const results = estimate?.results ?? [];
+  const targets = unitTargets(unitType.tags);
   const plans = uniqueInOrder(results.map((r) => r.gearingPlan));
   const elevations = uniqueSorted(results.map((r) => r.elevation));
 
@@ -44,6 +72,7 @@ export default function DamageEstimatePanel({estimate, estimating, error, onEsti
         </button>
         {error && <span className="damage-estimate-error">{error}</span>}
       </div>
+      <TargetSummary targets={targets} maxHP={unitType.maxHP} dps={unitType.dps} />
       {results.length > 0 && (
         <table className="damage-estimate-table">
           <thead>
@@ -59,7 +88,7 @@ export default function DamageEstimatePanel({estimate, estimating, error, onEsti
               <tr key={plan}>
                 <th scope="row">{PLAN_LABELS[plan] ?? plan}</th>
                 {elevations.map((ee) => (
-                  <Cell key={ee} cell={results.find((r) => r.gearingPlan === plan && r.elevation === ee)} />
+                  <Cell key={ee} cell={results.find((r) => r.gearingPlan === plan && r.elevation === ee)} target={targets.ttd?.(plan, ee)} />
                 ))}
               </tr>
             ))}

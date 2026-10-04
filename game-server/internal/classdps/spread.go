@@ -7,17 +7,16 @@ import (
 )
 
 // Elevations is every relative elevation (ee = item elvl - map elvl) Spread
-// runs, in a fixed, stable order - named after docs/stats.md's "Elevation"
-// feel table / intro paragraph (BC-dungeon-in-quest-greens, on-level
-// heroics, raid-epics-back-in-dungeons), extended one tier further down for
-// Trainee Gear's own starting point.
-var Elevations = []int{-20, -10, 0, 10}
+// runs, in a fixed, stable order: docs/combat_balance.md's three target
+// elevations, plus +10 (raid epics back in dungeons - see docs/stats.md's
+// "Elevation" feel table), which has no target yet.
+var Elevations = []int{-10, -5, 0, 10}
 
 // elevationLabels names each of Elevations - purely descriptive, has no
 // effect on the simulation itself.
 var elevationLabels = map[int]string{
-	-20: "trainee",
 	-10: "dungeon",
+	-5:  "stretch",
 	0:   "heroic",
 	10:  "raid",
 }

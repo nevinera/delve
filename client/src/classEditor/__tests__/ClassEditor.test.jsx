@@ -237,7 +237,7 @@ describe("ClassEditor", () => {
 
   describe("DPS estimate", () => {
     it("posts the draft and the strategy", async () => {
-      estimateClassDps.mockResolvedValue({results: [{durationSeconds: 60, elevationLabel: "trainee", dps: 12.5}]});
+      estimateClassDps.mockResolvedValue({results: [{durationSeconds: 60, elevation: 0, elevationLabel: "heroic", dps: 12.5}]});
       await renderReady({...initialClass, powers: [punch]});
       fireEvent.click(areaList().getByRole("button", {name: /DPS estimate/}));
 

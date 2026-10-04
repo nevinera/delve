@@ -45,10 +45,33 @@ describe("DamageEstimatePanel", () => {
 
     expect(screen.getByRole("columnheader", {name: "-10"})).toBeInTheDocument();
     expect(screen.getByRole("columnheader", {name: "+0"})).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", {name: "Offense gear"})).toBeInTheDocument();
-    expect(screen.getByRole("rowheader", {name: "Defense gear"})).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", {name: "Offense gear (squishy)"})).toBeInTheDocument();
+    expect(screen.getByRole("rowheader", {name: "Defense gear (tank)"})).toBeInTheDocument();
     expect(screen.getByText("12.3 dps")).toBeInTheDocument();
     expect(screen.getByText("30.5s to kill")).toBeInTheDocument();
     expect(screen.getByText("no damage")).toBeInTheDocument();
   });
+
+  it("assumes an untagged unit is open", () => {
+    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{maxHP: 300, dps: 8}} />);
+
+    expect(screen.getByText(/Targets for open, solo/)).toBeInTheDocument();
+    expect(screen.getByText("300 HP (this unit: 300)")).toHaveClass("target-on");
+  });
+
+  it("shows the unit's HP and dps against its tags' targets", () => {
+    render(<DamageEstimatePanel estimate={null} estimating={false} error={null} onEstimate={() => {}} unitType={{tags: ["open", "pair"], maxHP: 195, dps: 10}} />);
+
+    expect(screen.getByText("195 HP (this unit: 195)")).toHaveClass("target-on");
+    expect(screen.getByText("5.1 dps (this unit: 10)")).toHaveClass("target-off");
+  });
+
+  it("shows each cell's time-to-kill target", () => {
+    render(<DamageEstimatePanel estimate={estimate} estimating={false} error={null} onEstimate={() => {}} unitType={{tags: ["open"]}} />);
+
+    expect(screen.getAllByText("target 60s")).toHaveLength(1); // offense, ee 0
+    expect(screen.getByText("target 46s")).toBeInTheDocument(); // offense, ee -10: 60 / 1.3
+    expect(screen.getByText("30.5s to kill").closest("td")).toHaveClass("target-off"); // defense -10, target 138s
+  });
 });
+

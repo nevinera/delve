@@ -26,11 +26,17 @@ function span(amount) {
 }
 
 // Rounds each end of an authored amount after adding the stat bonus.
-function amountText(amount, bonus) {
+// scale is the server's amount_scale: authored amounts grow with the
+// player's primary stat (see command.AuthoredAmountScale); the bonus doesn't.
+function amountText(amount, bonus, scale = 1) {
   const [lo, hi] = span(amount);
-  const a = Math.round(lo + bonus);
-  const b = Math.round(hi + bonus);
+  const a = Math.round(lo * scale + bonus);
+  const b = Math.round(hi * scale + bonus);
   return a === b ? String(a) : `${a}-${b}`;
+}
+
+function amountScale(combatStats) {
+  return combatStats?.amount_scale ?? 1;
 }
 
 function rangeText(range) {
@@ -59,7 +65,7 @@ function statusEffectLines(status, ctx) {
       const school = effectSchool(effect);
       const bonus = amountBonus({...ctx, school, budget: effect.tickRate, isHeal: heal, isRecurring: true});
       const every = hastedSeconds(effect.tickRate, hastePct(ctx.combatStats, school));
-      const amount = amountText(effect.amount, bonus);
+      const amount = amountText(effect.amount, bonus, amountScale(ctx.combatStats));
       lines.push(heal ? `Heals ${amount} every ${num(every)}s` : `Deals ${school} damage: ${amount} every ${num(every)}s`);
     } else if (effect.type === "triggered") {
       lines.push(`Triggered effect (${humanize(effect.trigger?.type || "trigger")})`);
@@ -75,11 +81,11 @@ function effectLine(effect, ability, ctx) {
     case "harm": {
       const school = effectSchool(effect);
       const bonus = amountBonus({...ctx, school, budget});
-      return [`Deals ${amountText(effect.amount, bonus)} ${school} damage to ${who}${rangeText(effect.range)}`];
+      return [`Deals ${amountText(effect.amount, bonus, amountScale(ctx.combatStats))} ${school} damage to ${who}${rangeText(effect.range)}`];
     }
     case "heal": {
       const bonus = amountBonus({...ctx, school: "magic", budget, isHeal: true});
-      return [`Heals ${who} for ${amountText(effect.amount, bonus)}${rangeText(effect.range)}`];
+      return [`Heals ${who} for ${amountText(effect.amount, bonus, amountScale(ctx.combatStats))}${rangeText(effect.range)}`];
     }
     case "resource": {
       const verb = effect.delta >= 0 ? "Restores" : "Drains";

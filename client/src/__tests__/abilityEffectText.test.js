@@ -22,6 +22,12 @@ describe("describeEffects", () => {
     expect(out[0][0]).toBe("Heals self for 14"); // 10 + 1*2*2
   });
 
+  it("scales the authored amount, not the bonus, by amount_scale", () => {
+    const ability = {castTime: null, globalCooldown: 1.5, effects: [{type: "harm", affects: "bTarget", amount: [10, 20], school: "magic"}]};
+    const stats = {...combatStats({magic: {stat_contribution: 90}}), amount_scale: 0.5};
+    expect(describeEffects(ability, {combatStats: stats})[0][0]).toBe("Deals 7-12 magic damage to the target"); // 5-10 + 1.5 (rounded half up)
+  });
+
   it("describes resource effects", () => {
     const ability = {globalCooldown: 1, effects: [{type: "resource", affects: "self", resourceName: "fury", delta: 3}, {type: "resource", affects: "self", resourceName: "mana", delta: -2}]};
     expect(describeEffects(ability, noStats)).toEqual([["Restores 3 fury on self"], ["Drains 2 mana on self"]]);

@@ -3,6 +3,15 @@ module Validators
     TARGETING_TYPES = %w[aggroTable nearest healerAggro].freeze
     BASIC_ATTACK_SCHOOLS = %w[physical magic].freeze
     BASIC_ATTACK_STYLES = %w[claw sword axe club arrow arcane ice nature fire].freeze
+    # Balance tags - see docs/combat_balance.md. At most one tag from each
+    # exclusive category; roles combine freely, except tough with glass.
+    EXCLUSIVE_TAG_CATEGORIES = {
+      "audience" => %w[open g1 g2 g3 g5 g10],
+      "pull size" => %w[solo pair group swarm],
+      "damage type" => %w[caster melee ranged]
+    }.freeze
+    ROLE_TAGS = %w[healer tough debuffs buffs glass].freeze
+    TAGS = (EXCLUSIVE_TAG_CATEGORIES.values.flatten + ROLE_TAGS).freeze
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
@@ -22,6 +31,7 @@ module Validators
       validate_positive_numeric!(data, "basicAttackRange", path: path) if given?(data, "basicAttackRange")
       validate_basic_attack_school!(data, path: path) if given?(data, "basicAttackSchool")
       validate_basic_attack_style!(data, path: path) if given?(data, "basicAttackStyle")
+      validate_unit_tags!(data, path: path) if given?(data, "tags")
       if given?(data, "resource")
         ResourceTypeValidator.validate!(require_hash!(data, "resource", path: path), path: child_path(path, "resource"))
       end
@@ -44,6 +54,23 @@ module Validators
     def validate_basic_attack_style!(data, path:)
       style = require_string!(data, "basicAttackStyle", path: path)
       require_one_of!(style, BASIC_ATTACK_STYLES, path: child_path(path, "basicAttackStyle"))
+    end
+
+    def validate_unit_tags!(data, path:)
+      tags = require_array!(data, "tags", path: path)
+      tags_path = child_path(path, "tags")
+      tags.each_with_index do |tag, i|
+        raise ValidationError.new("tag must be a string", path: index_path(tags_path, i)) unless tag.is_a?(String)
+        require_one_of!(tag, TAGS, path: index_path(tags_path, i))
+      end
+      raise ValidationError.new("tags may not repeat", path: tags_path) if tags.uniq.length < tags.length
+      EXCLUSIVE_TAG_CATEGORIES.each do |category, options|
+        chosen = tags & options
+        next if chosen.length <= 1
+        raise ValidationError.new("tags may include only one #{category} tag (got #{chosen.join(", ")})", path: tags_path)
+      end
+      return unless tags.include?("tough") && tags.include?("glass")
+      raise ValidationError.new("tags may not include both tough and glass", path: tags_path)
     end
 
     def validate_positive_numeric!(data, key, path:)

@@ -93,7 +93,7 @@ func TestPlayerSpawn_AppearsInFullState(t *testing.T) {
 
 // TestPlayerSpawn_MaxHealthReflectsEquippedStamina guards against the bug
 // where a player's MaxHealth was a flat 100 regardless of equipped Stamina
-// (see docs/stats.md's "Stamina" section: MaxHP = 100 + Stamina * 10) -
+// (see docs/stats.md's "Stamina" section: MaxHP = 280 + Stamina) -
 // spawn.go now computes it from EquippedItems, and health should start full
 // against that real cap, not the flat base.
 func TestPlayerSpawn_MaxHealthReflectsEquippedStamina(t *testing.T) {
@@ -116,7 +116,7 @@ func TestPlayerSpawn_MaxHealthReflectsEquippedStamina(t *testing.T) {
 	for _, u := range units {
 		if u["zone_unit_identifier"] == "player:Aldric" {
 			maxHealth := u["max_health"].(float64)
-			assert.Greater(t, maxHealth, 100.0, "equipped Stamina should raise MaxHealth above the flat base")
+			assert.Greater(t, maxHealth, 280.0, "equipped Stamina should raise MaxHealth above the flat base")
 			assert.Equal(t, maxHealth, u["health"], "should spawn at full health against the real cap")
 			return
 		}
