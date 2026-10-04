@@ -14,9 +14,56 @@ module Content
   # given where it's already established elsewhere (see below); otherwise it
   # falls back to GraphicEffect's own default (8fps).
   module StockAssets
+    # Every icon but magic-ball is from game-icons.net (CC BY 3.0, see
+    # ATTRIBUTIONS.md): single-color white silhouettes, so they tint.
     ICONS = {
+      "arcane" => {"file" => "arcane.svg"},
+      "arrow" => {"file" => "arrow.svg"},
+      "aura" => {"file" => "aura.svg"},
+      "barrier" => {"file" => "barrier.svg"},
+      "bleed" => {"file" => "bleed.svg"},
+      "blink" => {"file" => "blink.svg"},
+      "burn" => {"file" => "burn.svg"},
+      "charge" => {"file" => "charge.svg"},
+      "cleanse" => {"file" => "cleanse.svg"},
+      "cleave" => {"file" => "cleave.svg"},
+      "drain" => {"file" => "drain.svg"},
+      "earth" => {"file" => "earth.svg"},
+      "empower" => {"file" => "empower.svg"},
+      "fear" => {"file" => "fear.svg"},
+      "firebolt" => {"file" => "firebolt.svg"},
+      "focus" => {"file" => "focus.svg"},
+      "frost" => {"file" => "frost.svg"},
       "heal" => {"file" => "heal.svg"},
-      "magic-ball" => {"file" => "magic-ball.svg"}
+      "holy" => {"file" => "holy.svg"},
+      "leap" => {"file" => "leap.svg"},
+      "lightning" => {"file" => "lightning.svg"},
+      "magic-ball" => {"file" => "magic-ball.svg"},
+      "nature" => {"file" => "nature.svg"},
+      "parry" => {"file" => "parry.svg"},
+      "poison" => {"file" => "poison.svg"},
+      "punch" => {"file" => "punch.svg"},
+      "rage" => {"file" => "rage.svg"},
+      "regen" => {"file" => "regen.svg"},
+      "revive" => {"file" => "revive.svg"},
+      "root" => {"file" => "root.svg"},
+      "shadow" => {"file" => "shadow.svg"},
+      "shield" => {"file" => "shield.svg"},
+      "shield-bash" => {"file" => "shield-bash.svg"},
+      "silence" => {"file" => "silence.svg"},
+      "slash" => {"file" => "slash.svg"},
+      "slow" => {"file" => "slow.svg"},
+      "smash" => {"file" => "smash.svg"},
+      "stab" => {"file" => "stab.svg"},
+      "stealth" => {"file" => "stealth.svg"},
+      "stun" => {"file" => "stun.svg"},
+      "summon" => {"file" => "summon.svg"},
+      "taunt" => {"file" => "taunt.svg"},
+      "throw" => {"file" => "throw.svg"},
+      "volley" => {"file" => "volley.svg"},
+      "water" => {"file" => "water.svg"},
+      "weaken" => {"file" => "weaken.svg"},
+      "wind" => {"file" => "wind.svg"}
     }.freeze
 
     # spriteFrameRate: 12 for sword-swing/spinning-arrow/magic-ball matches
