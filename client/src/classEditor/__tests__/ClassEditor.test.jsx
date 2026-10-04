@@ -364,6 +364,13 @@ describe("ClassEditor", () => {
       expect(screen.getByRole("button", {name: "Publish"})).toHaveAttribute("title", "Save first");
     });
 
+    it("is allowed again once the draft matches the commit, without saving", async () => {
+      await renderPublishable();
+      fireEvent.change(screen.getByDisplayValue("Puncher"), {target: {value: "Brawler"}});
+      fireEvent.change(screen.getByDisplayValue("Brawler"), {target: {value: "Puncher"}});
+      expect(screen.getByRole("button", {name: "Publish"})).not.toBeDisabled();
+    });
+
     it("publishes the commit it just saved", async () => {
       commitFiles.mockReset();
       commitFiles.mockResolvedValue({commitSha: "saved-sha", branch: "main"});

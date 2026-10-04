@@ -86,6 +86,9 @@ export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl,
   // The commit the draft was loaded from or last saved as - what Publish
   // tags (Rails refuses if the branch has moved on since).
   const [baseSha, setBaseSha] = useState(null);
+  // That commit's class, serialized - Publish only needs the draft to
+  // match it, not a save since the last edit.
+  const [committedJson, setCommittedJson] = useState(null);
   const [nextVersion, setNextVersion] = useState(initialNextVersion);
   // Every asset URL the powers reference (icons, graphics, sounds), mapped
   // to its displayable raw.githubusercontent.com URL.
@@ -120,6 +123,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl,
         if (cancelled) return;
         setDraft(new ClassDraft(data, classKey));
         setBaseSha(sha);
+        setCommittedJson(JSON.stringify(data));
 
         const classFiles = await client.listDirectory("classes");
         if (cancelled) return;
@@ -275,6 +279,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl,
       powerUploads.committed();
       setStaleFullPath(null);
       setBaseSha(commitSha);
+      setCommittedJson(JSON.stringify(draft.data));
       setSaved();
     } catch (error) {
       if (error instanceof GithubAuthError) {
@@ -291,7 +296,9 @@ export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl,
     return published;
   }
 
-  const publishBlocker = dirty ? "Save first" : activity.status === "saving" ? "Saving…" : baseSha ? null : "Loading…";
+  const pendingUploads = Object.values(powerUploads.files()).some((files) => Object.keys(files).length > 0);
+  const unsaved = pendingUploads || (draft !== null && JSON.stringify(draft.data) !== committedJson);
+  const publishBlocker = activity.status === "saving" ? "Saving…" : !baseSha ? "Loading…" : unsaved ? "Save first" : null;
 
   if (branchError) return <div className="class-editor-load-error">Failed to load: {branchError.message}</div>;
   if (loadError) return <div className="class-editor-load-error">Failed to load: {loadError}</div>;
