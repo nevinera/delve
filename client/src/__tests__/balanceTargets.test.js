@@ -7,7 +7,7 @@ describe("unitTargets", () => {
   it("assumes open when untagged, and has no targets above g1 yet", () => {
     expect(unitTargets([]).audience).toBe("open");
     expect(unitTargets(undefined).audience).toBe("open");
-    expect(unitTargets(["g5", "solo"])).toEqual({untargeted: "g5"});
+    expect(unitTargets(["g3", "solo"])).toEqual({untargeted: "g3"});
   });
 
   it("gives the solo open targets, defaulting the pull size to solo", () => {
@@ -24,6 +24,12 @@ describe("unitTargets", () => {
     const swarm = unitTargets(["g1", "swarm"]);
     close(swarm.hp, [178.1, 285]);
     close(swarm.dps, [2.03, 3.04]);
+  });
+
+  it("gives g5 trash-pull units matching the party targets", () => {
+    const t = unitTargets(["g5", "group"]);
+    close(t.hp, [687.5, 916.7]);
+    close(t.dps, [25.45, 31.8]);
   });
 
   it("applies role multipliers", () => {

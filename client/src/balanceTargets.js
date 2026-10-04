@@ -13,12 +13,14 @@ const ELEVATIONS = {
   [-10]: {a: 2.5, b: 1.3},
 };
 
-// solo-pull, squishy, ee = 0.
+// solo-pull, squishy, ee = 0. g5's are the single-character equivalent of
+// its party targets (see combat_balance.md's "g5 enemies").
 const AUDIENCES = {
   open: {ttk: 12, hpLost: 0.2},
   g1: {ttk: 30, hpLost: 0.65},
+  g5: {ttk: 68.75, hpLost: 10},
 };
-const UNTARGETED_AUDIENCES = ["g2", "g3", "g5", "g10"];
+const UNTARGETED_AUDIENCES = ["g2", "g3", "g10"];
 
 // Keyed by the unit-type estimate's gearing plans.
 export const GEAR_PROFILES = {

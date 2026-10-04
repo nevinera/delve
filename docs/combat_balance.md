@@ -4,8 +4,8 @@ This is the design target this project is building *toward* - guidelines, not im
 It works backward from desired play feel (how long fights take, how much health they cost) to
 enemy HP and damage. See [stats.md](stats.md) for what's actually implemented today.
 
-Scope so far: `open` and `g1` enemies (parties aren't implemented), from `ee = 0` down to
-`ee = -10`. Larger group sizes are provisional - see **Group sizes (provisional)**.
+Scope so far: `open`, `g1` and `g5` enemies and player healers, from `ee = 0` down to `ee = -10`.
+`g2`, `g3` and `g10` have no targets yet.
 
 ## Definitions
 
@@ -181,19 +181,36 @@ Before authored amount scaling (see [stats.md](stats.md)), `a` was only 1.19 / 1
 -10 was ~36%. Intellect characters lose less EHP going down because they have no physical
 avoidance to lose.
 
-## Group sizes (provisional)
+## `g5` enemies (dungeons)
 
-Not yet reviewed against the `open`/`g1` work above. The original rules, now anchored on `g1`:
+Modelled on BC-era WoW normal dungeons in quest blues, at `ee = 0`. The party is a tank (tank gear),
+a healer and three DPS, dealing about 92 DPS together (3 x 25, plus the tank's 16.7; the healer is
+busy healing). Unlike `open`/`g1`, these targets are for the whole party:
 
-1. TTK scales linearly with group size: `TTK(n) = n * TTK(g1)`, so enemy HP is `750n`.
-2. TTD scales down with group size by a fixed factor:
+| | BC figure | Target |
+|---|---|---|
+| Trash pull (`group`, 3-4 units), party TTK | ~30s | 30s: ~2750 HP, 690-920 per unit |
+| Tank TTD on that pull, no healing | ~15s | 15s: 100 net DPS on the tank (25-33 per unit) |
+| A DPS that pulls aggro | ~3-5s | 5s (the tank's 3x EHP) |
+| Healing over a trash pull | ~1-1.5x a DPS | ~20 HPS, the tank ending around half health |
+| Boss fight | ~2-3 min | 2.5 min: ~13,800 HP |
+| Tank TTD on the boss, no healing | ~10-12s | 12s: 125 net DPS on the tank |
+| Healing over a boss fight | ~2x a DPS | ~60 HPS |
 
-   | n | 1 | 2 | 3 | 5 | 10 | 25 |
-   |---|---|---|---|---|---|---|
-   | TTD factor | 1.0 | 0.9 | 0.75 | 0.6 | 0.4 | 0.35 |
+In the single-character terms the other audiences use (and `balanceTargets.js`), a `solo` `g5`
+unit has a squishy TTK of 68.75s (1719 HP) and net DPS of 72.7, which the **Pull size** rules turn
+into the trash-pull numbers above. Bosses are tuned by hand from the table, not by tags.
 
-   So enemy net DPS is `1 / factor(n)` times a `g1` enemy's (2.86x at 25).
-3. The tank's 3x EHP ratio holds at every group size.
+## Player healers
+
+A healer deals damage like a tank (TTK 1.5x a DPS's, ~16.7 DPS at `ee = 0`) when it isn't healing.
+In healing gear at `ee = 0` its healing targets are:
+
+- **~25 HPS sustained** (trash, long fights): about 1x a DPS's DPS.
+- **~60 HPS on a boss**, with careful resource use; running low late in a boss fight is expected.
+
+Both scale with elevation the way damage does (`/ a`): 20 / 48 at -5, 10 / 24 at -10. Healing is
+a raw HP number; see `g5` for what it has to cover.
 
 ## Resolved: `D` (a DPS-geared character's full sustained DPS)
 
@@ -211,6 +228,7 @@ solved backward from this target.
 2. **Elevation curve shape.** With authored amount scaling, -5 is slightly harsh and -10 slightly
    soft (see **Elevation check**). That's the `em` curve's shape; tune it only if play shows it
    matters, without drastically changing the relative value of stats between -10 and 0.
-3. **Group sizes above `g1`** need the same review `open` and `g1` got.
+3. **`g2`, `g3`, `g10`** need the same treatment `g5` got.
 4. **Hit size.** No damage cap, but numbers on screen should usually be 1-2 digits for readability.
-   Attack intervals are mostly 0.5s-2.5s.
+   Attack intervals are mostly 0.5s-2.5s; small `swarm` units need the slow end, or their hits
+   round to 0-1.
