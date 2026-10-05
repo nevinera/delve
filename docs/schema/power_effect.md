@@ -25,6 +25,8 @@ Used by several effect types:
 
 For an NPC, the friendly units are itself and its living pack (units sharing its `groupIdentifier` on the same map) within the effect's `range`. `gTarget` picks the most wounded one; a `heal` only counts wounded units, so a healer holds its power until someone is hurt. `bTarget` is the unit's current hostile target; an NPC's `bAll` hits every living player on its map within `range` that it has line of sight to, centered on the NPC (there is no target-centered radius yet).
 
+For a player, `bAll` hits every living hostile or neutral NPC on their map within `range` of the player, with line of sight (never players or friendly NPCs), and `gAll` is just the player themselves until there are parties. Neither needs a target, so a power made only of `self`, `bAll` and `gAll` effects can be used with nothing targeted; give its graphics `"from": "self", "to": "self"` so they play around the caster.
+
 ---
 
 ## harm

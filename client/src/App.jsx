@@ -2164,8 +2164,12 @@ function HealthBar({ current, max, numbersAlign, landscape, mirrored, resourceLa
 
 // Returns the maximum range in feet for a power, or null for self-only powers.
 // The JSON range field may be a number (e.g. 5.0) or a [min, max] array.
+// The range a power needs its target within, from its first targeted
+// effect - self and area (bAll/gAll) effects need no target at all, so a
+// power made only of those has no range to check (null).
 function powerMaxRange(power) {
   for (const effect of power.effects ?? []) {
+    if (["self", "bAll", "gAll"].includes(effect.affects)) continue;
     const r = effect.range;
     if (r == null) continue;
     return Array.isArray(r) ? r[1] : r;
