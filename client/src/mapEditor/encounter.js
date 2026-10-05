@@ -8,6 +8,9 @@
 
 export const INTENDED_FOR = ["open", "g1", "g2", "g3", "g5", "g10"];
 export const PULL_SIZES = ["solo", "pair", "group", "swarm"];
+// "random" picks one of PULL_SIZES per encounter - only sizes the
+// candidates actually have (see buildEncounter).
+export const RANDOM_PULL_SIZE = "random";
 
 const WEIGHT = {swarm: 1, group: 2, pair: 4, solo: 8};
 const BUDGET = {solo: [8, 8], pair: [8, 8], group: [6, 8], swarm: [5, 8]};
@@ -42,9 +45,32 @@ function pick(list, random) {
   return list[Math.floor(random() * list.length)];
 }
 
-// candidates: [{key, tags}]. Returns {keys} (one entry per unit to place)
-// or {error} explaining why nothing fits.
+// candidates: [{key, tags}]. Returns {keys, pullSize} (one key per unit to
+// place, and the size used) or {error} explaining why nothing fits. A
+// pullSize of "random" tries the sizes the candidates have, in random
+// order, until one builds.
 export function buildEncounter({candidates, intendedFor, pullSize, random = Math.random}) {
+  if (pullSize !== RANDOM_PULL_SIZE) return buildSized({candidates, intendedFor, pullSize, random});
+  const sizes = PULL_SIZES.filter((size) => candidates.some((c) => (c.tags ?? []).includes(intendedFor) && (c.tags ?? []).includes(size)));
+  if (sizes.length === 0) return {error: `No ${intendedFor} unit types with a pull size to choose from.`};
+  let result = null;
+  for (const size of shuffled(sizes, random)) {
+    result = buildSized({candidates, intendedFor, pullSize: size, random});
+    if (!result.error) return result;
+  }
+  return result;
+}
+
+function shuffled(list, random) {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function buildSized({candidates, intendedFor, pullSize, random}) {
   const ownWeight = WEIGHT[pullSize];
   const eligible = candidates
     .map((c) => ({...c, size: pullSizeOf(c.tags ?? [])}))
@@ -57,7 +83,7 @@ export function buildEncounter({candidates, intendedFor, pullSize, random = Math
     if (keys === null) continue;
     const picked = keys.map((key) => eligible.find((c) => c.key === key));
     if (picked.length > 1 && !picked.some((c) => c.damage === "melee")) continue;
-    return {keys};
+    return {keys, pullSize};
   }
   const hasMelee = eligible.some((c) => c.damage === "melee");
   return {error: hasMelee

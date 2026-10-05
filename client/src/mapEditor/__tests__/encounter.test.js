@@ -3,7 +3,7 @@ import {buildEncounter, scatterPositions} from "../encounter";
 
 // A deterministic stand-in for Math.random.
 function seeded(seed = 1) {
-  let s = seed;
+  let s = (seed * 7919 + 104729) % 2147483647;
   return () => {
     s = (s * 16807) % 2147483647;
     return (s - 1) / 2147483646;
@@ -99,5 +99,33 @@ describe("scatterPositions", () => {
 
   it("puts a single unit on the point", () => {
     expect(scatterPositions({x: 3, y: 4}, [2], seeded())[0]).toMatchObject({x: 3, y: 4});
+  });
+});
+
+describe("buildEncounter with a random pull size", () => {
+  const mixed = [
+    {key: "wolf", tags: ["open", "group", "melee"]},
+    {key: "worg", tags: ["open", "pair", "melee"]},
+  ];
+
+  it("picks among the sizes the candidates have, never others", () => {
+    const sizes = new Set();
+    for (let seed = 1; seed < 60; seed++) {
+      const result = buildEncounter({candidates: mixed, intendedFor: "open", pullSize: "random", random: seeded(seed)});
+      expect(result.error).toBeUndefined();
+      sizes.add(result.pullSize);
+    }
+    expect([...sizes].sort()).toEqual(["group", "pair"]);
+  });
+
+  it("falls back to another size when one can't build", () => {
+    const candidates = [
+      {key: "archer", tags: ["open", "group", "ranged"]},
+      {key: "tiger", tags: ["open", "solo", "melee"]},
+    ];
+    for (let seed = 1; seed < 20; seed++) {
+      const result = buildEncounter({candidates, intendedFor: "open", pullSize: "random", random: seeded(seed)});
+      expect(result.pullSize).toBe("solo");
+    }
   });
 });

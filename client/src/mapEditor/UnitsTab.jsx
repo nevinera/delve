@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from "react";
 import LeashFields from "./LeashFields";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 import {unitGroups} from "./groupIdentifiers";
-import {INTENDED_FOR, PULL_SIZES} from "./encounter";
+import {INTENDED_FOR, PULL_SIZES, RANDOM_PULL_SIZE} from "./encounter";
 
 const NO_ENCOUNTER = {selection: [], settings: {intendedFor: "open", pullSize: null}, onChangeSettings: () => {}, onSelect: () => {}, onExtendSelection: () => {}, armed: false, onArm: () => {}, onDisarm: () => {}, error: ""};
 
@@ -411,13 +411,14 @@ function EncounterControls({encounter, canPlaceOnMap}) {
         <select aria-label="Encounter pull size" value={settings.pullSize ?? ""} onChange={(e) => onChangeSettings({pullSize: e.target.value || null})}>
           <option value="">pull size…</option>
           {PULL_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+          <option value={RANDOM_PULL_SIZE}>random size</option>
         </select>
         <button type="button" className={`add-entry${armed ? " armed" : ""}`} aria-pressed={armed} disabled={!canPlaceOnMap}
           onClick={() => (armed ? encounter.onDisarm() : onArm())}>+ Encounter</button>
       </div>
       {armed && (
         <p className="map-sidebar-hint">
-          Click the map to place a {settings.intendedFor} {settings.pullSize} encounter from {selection.length ? `the ${selection.length} selected unit types` : "the whole palette"}. Escape to stop.
+          Click the map to place a {settings.intendedFor} {settings.pullSize === RANDOM_PULL_SIZE ? "random-size" : settings.pullSize} encounter from {selection.length ? `the ${selection.length} selected unit types` : "the whole palette"}. Escape to stop.
         </p>
       )}
       {error && <p className="map-sidebar-hint map-encounter-error" role="alert">{error}</p>}
