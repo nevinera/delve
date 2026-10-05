@@ -302,39 +302,47 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 		if !npcEffectInRange(eff, dist, unit, target) {
 			continue
 		}
-		switch eff.Type {
-		case "status":
-			// Casting at a hostile target is an attack too - it aggros
-			// an idle hostile target and can be resisted, same as harm.
-			// Resistibility is a property of this cast (who it's aimed
-			// at), not of the Status itself - see command.IsHostileAffects.
-			command.EngageOnAttack(target, attackerID, zone, state)
-			if command.IsHostileAffects(eff.Affects) {
-				if missed, _ := command.RollAttackOutcome(0, rng); missed {
-					continue // resisted
-				}
-			}
-			command.ApplyStatus(target, unit, attackerID, *eff.Status, eff.Duration, zone, now)
-		case "harm":
-			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false, rng)
-			dealt := command.IncomingDamage(target, zone, raw, eff.School != "magic", rng)
-			target.Health -= dealt
-			if dealt > 0 {
-				command.ApplyCastPushback(target)
-				unit.DamageDealtThisTick = true
-				target.DamageTakenThisTick = true
-			}
-			if target.Health < 0 {
-				target.Health = 0
-			}
-			if target.Health == 0 {
-				target.Status = instancestate.UnitStatusDead
-				target.Target = nil
-				instancestate.RollAndRecordLoot(targetID, target, state, rng)
-			}
-		case "resource":
-			command.AdjustResource(target, eff.ResourceName, eff.Delta)
+		for _, v := range hostileRecipients(eff, unit, targetID, target, zone, state) {
+			applyNPCHostileEffect(attackerID, v.id, unit, v.unit, eff, timeBudget, zone, now, state, rng)
 		}
+	}
+}
+
+// applyNPCHostileEffect applies one harm/status/resource effect from unit to
+// a single hostile victim.
+func applyNPCHostileEffect(attackerID, victimID uuid.UUID, unit, victim *instancestate.UnitState, eff instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) {
+	switch eff.Type {
+	case "status":
+		// Casting at a hostile target is an attack too - it aggros
+		// an idle hostile target and can be resisted, same as harm.
+		// Resistibility is a property of this cast (who it's aimed
+		// at), not of the Status itself - see command.IsHostileAffects.
+		command.EngageOnAttack(victim, attackerID, zone, state)
+		if command.IsHostileAffects(eff.Affects) {
+			if missed, _ := command.RollAttackOutcome(0, rng); missed {
+				return // resisted
+			}
+		}
+		command.ApplyStatus(victim, unit, attackerID, *eff.Status, eff.Duration, zone, now)
+	case "harm":
+		raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false, rng)
+		dealt := command.IncomingDamage(victim, zone, raw, eff.School != "magic", rng)
+		victim.Health -= dealt
+		if dealt > 0 {
+			command.ApplyCastPushback(victim)
+			unit.DamageDealtThisTick = true
+			victim.DamageTakenThisTick = true
+		}
+		if victim.Health < 0 {
+			victim.Health = 0
+		}
+		if victim.Health == 0 {
+			victim.Status = instancestate.UnitStatusDead
+			victim.Target = nil
+			instancestate.RollAndRecordLoot(victimID, victim, state, rng)
+		}
+	case "resource":
+		command.AdjustResource(victim, eff.ResourceName, eff.Delta)
 	}
 }
 

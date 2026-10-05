@@ -3,6 +3,7 @@ package instance
 import (
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -108,4 +109,34 @@ func applyNPCAllyEffect(attackerID uuid.UUID, unit *instancestate.UnitState, all
 			command.AdjustResource(recipient, eff.ResourceName, eff.Delta)
 		}
 	}
+}
+
+type hostileRef struct {
+	id   uuid.UUID
+	unit *instancestate.UnitState
+}
+
+// hostileRecipients picks who a hostile effect lands on: bTarget (and any
+// other non-area value) is just the current target; bAll is every living
+// player on the caster's map within the effect's range with a clear line of
+// sight, the current target included.
+func hostileRecipients(eff instanceconfig.PowerEffect, unit *instancestate.UnitState, targetID uuid.UUID, target *instancestate.UnitState, zone instanceconfig.Zone, state *instancestate.InstanceState) []hostileRef {
+	if eff.Affects != "bAll" {
+		return []hostileRef{{targetID, target}}
+	}
+	var hit []hostileRef
+	for id, u := range state.Units {
+		if !strings.HasPrefix(u.ZoneUnitIdentifier, "player:") || u.MapIdentifier != unit.MapIdentifier || !u.Status.IsTargetable() {
+			continue
+		}
+		dx, dy := u.Position.X-unit.Position.X, u.Position.Y-unit.Position.Y
+		if !npcEffectInRange(eff, math.Sqrt(dx*dx+dy*dy), unit, u) {
+			continue
+		}
+		if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, unit.Position.X, unit.Position.Y, u.Position.X, u.Position.Y) {
+			continue
+		}
+		hit = append(hit, hostileRef{id, u})
+	}
+	return hit
 }
