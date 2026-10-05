@@ -69,24 +69,55 @@ module Content
     # spriteFrameRate: 12 for sword-swing/spinning-arrow/magic-ball matches
     # the values already hand-tuned for these exact sprites in App.jsx's
     # hardcoded basic-attack powers (NPC_BASIC_ATTACK_POWER etc.) - not a
-    # guess, an existing precedent.
+    # guess, an existing precedent. Picked graphics (see ATTRIBUTIONS.md) play
+    # at their frame count per second, between 8 and 24.
     GRAPHICS = {
       "arc" => {"file" => "arc.webp"},
+      "arc-back-faded" => {"file" => "arc-back-faded.png"},
+      "arc-burst" => {"file" => "arc-burst.png"},
+      "atomic-circle" => {"file" => "atomic-circle.sprites7x1.png", "spriteColumns" => 7, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "aurora-sweep" => {"file" => "aurora-sweep.sprites6x6.png", "spriteColumns" => 6, "spriteRows" => 6, "spriteFrameCount" => 32, "spriteFrameRate" => 24},
       "claw-slash" => {"file" => "claw-slash.png"},
+      "cloud" => {"file" => "cloud.png"},
+      "coalescing-sigil" => {"file" => "coalescing-sigil.sprites5x4.png", "spriteColumns" => 5, "spriteRows" => 4, "spriteFrameRate" => 20},
+      "eclipse" => {"file" => "eclipse.sprites6x5.png", "spriteColumns" => 6, "spriteRows" => 5, "spriteFrameRate" => 24},
       "glow" => {"file" => "glow.png"},
       "helix-beam" => {"file" => "helix-beam.sprites1x3.png", "spriteColumns" => 1, "spriteRows" => 3},
+      "lightning-ball" => {"file" => "lightning-ball.sprites5x4.png", "spriteColumns" => 5, "spriteRows" => 4, "spriteFrameRate" => 20},
       "magic-ball" => {"file" => "magic-ball.sprites3x3.png", "spriteColumns" => 3, "spriteRows" => 3, "spriteFrameRate" => 12},
+      "magic-flare" => {"file" => "magic-flare.sprites5x4.png", "spriteColumns" => 5, "spriteRows" => 4, "spriteFrameRate" => 20},
+      "missile-pair" => {"file" => "missile-pair.sprites6x1.png", "spriteColumns" => 6, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "missile-ringed" => {"file" => "missile-ringed.sprites4x1.png", "spriteColumns" => 4, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "missile-wiggly" => {"file" => "missile-wiggly.sprites4x1.png", "spriteColumns" => 4, "spriteRows" => 1, "spriteFrameRate" => 8},
       "mist" => {"file" => "mist.png"},
+      "pixel-pulse-star" => {"file" => "pixel-pulse-star.sprites6x1.png", "spriteColumns" => 6, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "pixel-swirling-orb" => {"file" => "pixel-swirling-orb.sprites6x1.png", "spriteColumns" => 6, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "pulsar" => {"file" => "pulsar.sprites5x5.png", "spriteColumns" => 5, "spriteRows" => 5, "spriteFrameCount" => 24, "spriteFrameRate" => 24},
       "radial-burst" => {"file" => "radial-burst.png"},
+      "ring" => {"file" => "ring.png"},
       "ring-burst" => {"file" => "ring-burst.png"},
+      "ring-faded" => {"file" => "ring-faded.png"},
       "rotating-beam" => {"file" => "rotating-beam.sprites3x4.png", "spriteColumns" => 3, "spriteRows" => 4},
+      "scratch" => {"file" => "scratch.png"},
+      "shadow-flare" => {"file" => "shadow-flare.sprites5x4.png", "spriteColumns" => 5, "spriteRows" => 4, "spriteFrameCount" => 19, "spriteFrameRate" => 19},
       "shards" => {"file" => "shards.sprites7x1.png", "spriteColumns" => 7, "spriteRows" => 1},
       "shield-spark" => {"file" => "shield-spark.png"},
       # filename says "sprites5x1" but the actual grid is 2x3 (32x32 cells,
       # matching every other stock sprite) with only 5 of the 6 cells used.
       "sparkle-cloud" => {"file" => "sparkle-cloud.sprites5x1.png", "spriteColumns" => 2, "spriteRows" => 3, "spriteFrameCount" => 5},
       "spinning-arrow" => {"file" => "spinning-arrow.sprites2x4.png", "spriteColumns" => 2, "spriteRows" => 4, "spriteFrameRate" => 12},
+      "spinning-ice" => {"file" => "spinning-ice.sprites8x8.png", "spriteColumns" => 8, "spriteRows" => 8, "spriteFrameCount" => 61, "spriteFrameRate" => 24},
+      "spinning-spear" => {"file" => "spinning-spear.sprites4x1.png", "spriteColumns" => 4, "spriteRows" => 1, "spriteFrameRate" => 8},
       "splat" => {"file" => "splat.png"},
+      "star-diamond" => {"file" => "star-diamond.png"},
+      "star-faded-diamond" => {"file" => "star-faded-diamond.png"},
+      "star-faded-round" => {"file" => "star-faded-round.png"},
+      "star-pointed" => {"file" => "star-pointed.png"},
+      "star-round" => {"file" => "star-round.png"},
+      "star-x" => {"file" => "star-x.png"},
+      "surrounding-burst" => {"file" => "surrounding-burst.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "swirling-burst" => {"file" => "swirling-burst.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "swirling-fire" => {"file" => "swirling-fire.sprites11x11.png", "spriteColumns" => 11, "spriteRows" => 11, "spriteFrameRate" => 24},
       "sword-swing" => {"file" => "sword-swing.sprites3x3.png", "spriteColumns" => 3, "spriteRows" => 3, "spriteFrameRate" => 12},
       "tendrils" => {"file" => "tendrils.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1}
     }.freeze
