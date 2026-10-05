@@ -135,6 +135,32 @@ swirling-burst.sprites5x1.png: Cosmic_21.png from OpenGameArt "cosmic-time-magic
 
 swirling-fire.sprites11x11.png: fire_circles.gif from OpenGameArt "fire-circle-fx" -- https://opengameart.org/content/fire-circle-fx -- License: Creative Commons 0
 
+blowtorch.sprites5x1.png: muzzle_01.png from OpenGameArt "particle-pack-80-sprites" -- https://opengameart.org/content/particle-pack-80-sprites -- License: Creative Commons 0
+
+blurred-orb.png: 12_9.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+burst-of-stars.sprites4x4.png: Effect51.png from OpenGameArt "lots-of-game-effects" -- https://opengameart.org/content/lots-of-game-effects -- License: Creative Commons 0
+
+crackling-arc.sprites7x6.png: 1.png from OpenGameArt "sprite-effects-part-2" -- https://opengameart.org/content/sprite-effects-part-2 -- License: Creative Commons 0
+
+crescent.png: Circular.png from OpenGameArt "slash-effect-collection" -- https://opengameart.org/content/slash-effect-collection -- License: Creative Commons 0
+
+crisscross-orbits.sprites5x5.png: 1.png from OpenGameArt "sprite-effects-part-2" -- https://opengameart.org/content/sprite-effects-part-2 -- License: Creative Commons 0
+
+eclipse-corona.png: 11_11.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+large-arc.png: Slash symmetrical.png from OpenGameArt "slash-effect-collection" -- https://opengameart.org/content/slash-effect-collection -- License: Creative Commons 0
+
+oblong-energy.png: trace_06_rotated.png from OpenGameArt "particle-pack-80-sprites" -- https://opengameart.org/content/particle-pack-80-sprites -- License: Creative Commons 0
+
+spinning-comet.sprites5x5.png: 1.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+static-lightning.png: spark_05_rotated.png from OpenGameArt "particle-pack-80-sprites" -- https://opengameart.org/content/particle-pack-80-sprites -- License: Creative Commons 0
+
+thick-arc.png: 1_200.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+wings.sprites5x1.png: 01.png from OpenGameArt "angel-wings-effect" -- https://opengameart.org/content/angel-wings-effect -- License: Creative Commons 0
+
 ## Sounds
 
 ### public/abilities/sounds/

@@ -77,12 +77,20 @@ module Content
       "arc-burst" => {"file" => "arc-burst.png"},
       "atomic-circle" => {"file" => "atomic-circle.sprites7x1.png", "spriteColumns" => 7, "spriteRows" => 1, "spriteFrameRate" => 8},
       "aurora-sweep" => {"file" => "aurora-sweep.sprites6x6.png", "spriteColumns" => 6, "spriteRows" => 6, "spriteFrameCount" => 32, "spriteFrameRate" => 24},
+      "blowtorch" => {"file" => "blowtorch.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1, "spriteFrameRate" => 8},
+      "blurred-orb" => {"file" => "blurred-orb.png"},
+      "burst-of-stars" => {"file" => "burst-of-stars.sprites4x4.png", "spriteColumns" => 4, "spriteRows" => 4, "spriteFrameRate" => 16},
       "claw-slash" => {"file" => "claw-slash.png"},
       "cloud" => {"file" => "cloud.png"},
       "coalescing-sigil" => {"file" => "coalescing-sigil.sprites5x4.png", "spriteColumns" => 5, "spriteRows" => 4, "spriteFrameRate" => 20},
+      "crackling-arc" => {"file" => "crackling-arc.sprites7x6.png", "spriteColumns" => 7, "spriteRows" => 6, "spriteFrameCount" => 37, "spriteFrameRate" => 24},
+      "crescent" => {"file" => "crescent.png"},
+      "crisscross-orbits" => {"file" => "crisscross-orbits.sprites5x5.png", "spriteColumns" => 5, "spriteRows" => 5, "spriteFrameCount" => 21, "spriteFrameRate" => 21},
       "eclipse" => {"file" => "eclipse.sprites6x5.png", "spriteColumns" => 6, "spriteRows" => 5, "spriteFrameRate" => 24},
+      "eclipse-corona" => {"file" => "eclipse-corona.png"},
       "glow" => {"file" => "glow.png"},
       "helix-beam" => {"file" => "helix-beam.sprites1x3.png", "spriteColumns" => 1, "spriteRows" => 3},
+      "large-arc" => {"file" => "large-arc.png"},
       "lightning-ball" => {"file" => "lightning-ball.sprites5x4.png", "spriteColumns" => 5, "spriteRows" => 4, "spriteFrameRate" => 20},
       "magic-ball" => {"file" => "magic-ball.sprites3x3.png", "spriteColumns" => 3, "spriteRows" => 3, "spriteFrameRate" => 12},
       "magic-flare" => {"file" => "magic-flare.sprites5x4.png", "spriteColumns" => 5, "spriteRows" => 4, "spriteFrameRate" => 20},
@@ -90,6 +98,7 @@ module Content
       "missile-ringed" => {"file" => "missile-ringed.sprites4x1.png", "spriteColumns" => 4, "spriteRows" => 1, "spriteFrameRate" => 8},
       "missile-wiggly" => {"file" => "missile-wiggly.sprites4x1.png", "spriteColumns" => 4, "spriteRows" => 1, "spriteFrameRate" => 8},
       "mist" => {"file" => "mist.png"},
+      "oblong-energy" => {"file" => "oblong-energy.png"},
       "pixel-pulse-star" => {"file" => "pixel-pulse-star.sprites6x1.png", "spriteColumns" => 6, "spriteRows" => 1, "spriteFrameRate" => 8},
       "pixel-swirling-orb" => {"file" => "pixel-swirling-orb.sprites6x1.png", "spriteColumns" => 6, "spriteRows" => 1, "spriteFrameRate" => 8},
       "pulsar" => {"file" => "pulsar.sprites5x5.png", "spriteColumns" => 5, "spriteRows" => 5, "spriteFrameCount" => 24, "spriteFrameRate" => 24},
@@ -106,6 +115,7 @@ module Content
       # matching every other stock sprite) with only 5 of the 6 cells used.
       "sparkle-cloud" => {"file" => "sparkle-cloud.sprites5x1.png", "spriteColumns" => 2, "spriteRows" => 3, "spriteFrameCount" => 5},
       "spinning-arrow" => {"file" => "spinning-arrow.sprites2x4.png", "spriteColumns" => 2, "spriteRows" => 4, "spriteFrameRate" => 12},
+      "spinning-comet" => {"file" => "spinning-comet.sprites5x5.png", "spriteColumns" => 5, "spriteRows" => 5, "spriteFrameCount" => 21, "spriteFrameRate" => 21},
       "spinning-ice" => {"file" => "spinning-ice.sprites8x8.png", "spriteColumns" => 8, "spriteRows" => 8, "spriteFrameCount" => 61, "spriteFrameRate" => 24},
       "spinning-spear" => {"file" => "spinning-spear.sprites4x1.png", "spriteColumns" => 4, "spriteRows" => 1, "spriteFrameRate" => 8},
       "splat" => {"file" => "splat.png"},
@@ -115,11 +125,14 @@ module Content
       "star-pointed" => {"file" => "star-pointed.png"},
       "star-round" => {"file" => "star-round.png"},
       "star-x" => {"file" => "star-x.png"},
+      "static-lightning" => {"file" => "static-lightning.png"},
       "surrounding-burst" => {"file" => "surrounding-burst.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1, "spriteFrameRate" => 8},
       "swirling-burst" => {"file" => "swirling-burst.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1, "spriteFrameRate" => 8},
       "swirling-fire" => {"file" => "swirling-fire.sprites11x11.png", "spriteColumns" => 11, "spriteRows" => 11, "spriteFrameRate" => 24},
       "sword-swing" => {"file" => "sword-swing.sprites3x3.png", "spriteColumns" => 3, "spriteRows" => 3, "spriteFrameRate" => 12},
-      "tendrils" => {"file" => "tendrils.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1}
+      "tendrils" => {"file" => "tendrils.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1},
+      "thick-arc" => {"file" => "thick-arc.png"},
+      "wings" => {"file" => "wings.sprites5x1.png", "spriteColumns" => 5, "spriteRows" => 1, "spriteFrameRate" => 8}
     }.freeze
 
     # duration is the measured length of the audio file itself, in seconds -
