@@ -2,6 +2,7 @@ package instance_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -63,7 +64,7 @@ func TestNPCAllies_SelfHealHealsTheCaster(t *testing.T) {
 
 	instance.ApplyUnitBehaviorsForTest(state, zone, dt)
 
-	assert.Equal(t, 7.0, g1.Health)
+	assert.GreaterOrEqual(t, g1.Health, 7.0) // a crit can heal more
 }
 
 func TestNPCAllies_GTargetHealPicksMostWoundedPackmateInRange(t *testing.T) {
@@ -75,7 +76,7 @@ func TestNPCAllies_GTargetHealPicksMostWoundedPackmateInRange(t *testing.T) {
 
 	assert.Equal(t, 6.0, g1.Health)
 	assert.Equal(t, 8.0, g2.Health)
-	assert.Equal(t, 8.0, g3.Health)
+	assert.GreaterOrEqual(t, g3.Health, 8.0)
 	assert.Equal(t, 100.0, player.Health)
 }
 
@@ -97,8 +98,8 @@ func TestNPCAllies_GAllHealHealsEveryWoundedPackmateInRange(t *testing.T) {
 
 	instance.ApplyUnitBehaviorsForTest(state, zone, dt)
 
-	assert.Equal(t, 6.0, g1.Health)
-	assert.Equal(t, 7.0, g2.Health)
+	assert.GreaterOrEqual(t, g1.Health, 6.0)
+	assert.GreaterOrEqual(t, g2.Health, 7.0)
 	assert.Equal(t, 10.0, g3.Health)
 }
 
@@ -126,4 +127,48 @@ func TestNPCAllies_GAllStatusBuffsPackmatesNotTheHostileTarget(t *testing.T) {
 	assert.Len(t, g2.ActiveStatusEffects, 1)
 	assert.Len(t, g3.ActiveStatusEffects, 1)
 	assert.Empty(t, player.ActiveStatusEffects)
+}
+
+func bombZone(affects string) instanceconfig.Zone {
+	zone := packZone()
+	amount := instanceconfig.ValueRange{3, 3}
+	r := instanceconfig.ZeroBasedValueRange{0, 10}
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers = []instanceconfig.Power{{Name: "Bomb", GlobalCooldown: 1.5, Cooldown: 100, Effects: []instanceconfig.PowerEffect{
+		{Type: "harm", Affects: affects, Amount: &amount, Range: &r},
+	}}}
+	zone.UnitTypes["goblin"] = ut
+	return zone
+}
+
+// fireBombs ticks g1 repeatedly, clearing its cooldowns each time, so the
+// per-hit avoidance roll can't make an assertion flaky.
+func fireBombs(state *instancestate.InstanceState, g1 *instancestate.UnitState, zone instanceconfig.Zone) {
+	for i := 0; i < 60; i++ {
+		g1.GlobalCooldownEndsAt = time.Time{}
+		g1.PowerCooldowns = nil
+		instance.ApplyUnitBehaviorsForTest(state, zone, dt)
+	}
+}
+
+func TestNPCHostile_BAllHitsEveryPlayerInRange(t *testing.T) {
+	state, g1, _, _, near := packState(t)
+	_, second := addPlayer(state, "map1", 4, 0)
+	_, far := addPlayer(state, "map1", 60, 0)
+
+	fireBombs(state, g1, bombZone("bAll"))
+
+	assert.Less(t, near.Health, 100.0)
+	assert.Less(t, second.Health, 100.0)
+	assert.Equal(t, 100.0, far.Health)
+}
+
+func TestNPCHostile_BTargetStillHitsOnlyTheTarget(t *testing.T) {
+	state, g1, _, _, near := packState(t)
+	_, second := addPlayer(state, "map1", 4, 0)
+
+	fireBombs(state, g1, bombZone("bTarget"))
+
+	assert.Less(t, near.Health, 100.0)
+	assert.Equal(t, 100.0, second.Health)
 }
