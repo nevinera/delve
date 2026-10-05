@@ -1,10 +1,10 @@
 import {useCallback, useEffect, useRef, useState} from "react";
-import MapCanvas from "./MapCanvas";
+import MapCanvas, {nextUnitIdentifier} from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
-import UnitsTab from "./UnitsTab";
+import UnitsTab, {paletteKeys} from "./UnitsTab";
 import NcusPanel from "./NcusPanel";
 import HotkeyHelp from "./HotkeyHelp";
 import {MapDraft} from "./MapDraft";
@@ -13,6 +13,17 @@ import {PatrolSimState} from "./PatrolSimState";
 import {WalkSimState} from "./WalkSimState";
 import {loadSvgToCanvas} from "../game/svgRaster";
 import {newGroupIdentifier} from "./groupIdentifiers";
+import {buildEncounter, scatterPositions} from "./encounter";
+
+const ENCOUNTER_SETTINGS_KEY = "delve.mapEditor.encounter";
+
+function loadEncounterSettings() {
+  try {
+    return {intendedFor: "open", pullSize: null, ...JSON.parse(localStorage.getItem(ENCOUNTER_SETTINGS_KEY) ?? "{}")};
+  } catch {
+    return {intendedFor: "open", pullSize: null};
+  }
+}
 
 // 25MB - see the map editor plan's Slice 1: comfortably above what a real
 // battle-map background needs (the docs' own example is 2048x1536), and
@@ -64,6 +75,13 @@ export default function MapWorkbench({
   const [tab, setTab] = useState("map");
   // Unit types added to the Units tab's palette with "+" (see UnitsTab).
   const [paletteAdditions, setPaletteAdditions] = useState([]);
+  // Palette entries selected for "+ Encounter" (click selects one,
+  // shift-click extends the range from the last click), and its
+  // intended-for/pull-size choices, remembered across visits.
+  const [paletteSelection, setPaletteSelection] = useState([]);
+  const [paletteAnchor, setPaletteAnchor] = useState(null);
+  const [encounterSettings, setEncounterSettings] = useState(loadEncounterSettings);
+  const [encounterError, setEncounterError] = useState("");
   const [imageError, setImageError] = useState("");
   const draft = new MapDraft(mapData);
   const image = imageUrl && mapData.pixelDimensions ? {url: imageUrl, pixelDimensions: mapData.pixelDimensions} : null;
@@ -162,6 +180,74 @@ export default function MapWorkbench({
   // until it's pressed again (or Escape - see MapCanvas).
   function armUnitType(unitTypeKey) {
     setUiState(unitTypeKey ? uiState.startAddUnit(unitTypeKey) : uiState.clearModes());
+  }
+
+  function changeEncounterSettings(fields) {
+    const next = {...encounterSettings, ...fields};
+    setEncounterSettings(next);
+    try {
+      localStorage.setItem(ENCOUNTER_SETTINGS_KEY, JSON.stringify(next));
+    } catch {
+      // Not remembered; still works for this visit.
+    }
+  }
+
+  // Arms "+ Encounter" - each map click then places a pull built from the
+  // selected palette entries (or the whole palette, with none selected).
+  function armEncounter() {
+    setEncounterError("");
+    setUiState(encounterSettings.pullSize ? uiState.startTool("add-encounter") : uiState.clearModes());
+    if (!encounterSettings.pullSize) setEncounterError("Pick a pull size first.");
+  }
+
+  // Shift-click: selects every palette entry between the last-clicked one
+  // and key (orderedKeys is the palette's order), then arms "+ Encounter".
+  function extendPaletteSelection(key, orderedKeys) {
+    const from = orderedKeys.indexOf(paletteAnchor ?? key);
+    const to = orderedKeys.indexOf(key);
+    const [lo, hi] = from < 0 ? [to, to] : [Math.min(from, to), Math.max(from, to)];
+    setPaletteSelection(orderedKeys.slice(lo, hi + 1));
+    if (paletteAnchor === null) setPaletteAnchor(key);
+    armEncounter();
+  }
+
+  function selectPaletteEntries(keys) {
+    setPaletteSelection(keys);
+    setPaletteAnchor(keys[0] ?? null);
+    setEncounterError("");
+  }
+
+  const encounter = {
+    selection: paletteSelection, settings: encounterSettings, error: encounterError,
+    armed: uiState.tool === "add-encounter",
+    onChangeSettings: changeEncounterSettings, onSelect: selectPaletteEntries, onExtendSelection: extendPaletteSelection,
+    onArm: armEncounter, onDisarm: () => setUiState(uiState.clearModes()),
+  };
+
+  // Places one encounter centered on feet: its units in a fresh group of
+  // their own, spread around the point (see encounter.js).
+  function placeEncounter(feet, paletteKeys) {
+    const keys = paletteSelection.length ? paletteSelection : paletteKeys;
+    const candidates = keys.map((key) => ({key, tags: unitTypeDetails[key]?.tags ?? []}));
+    const {keys: picked, error} = buildEncounter({candidates, ...encounterSettings});
+    if (error) {
+      setEncounterError(error);
+      return;
+    }
+    setEncounterError("");
+    const radii = picked.map((key) => unitTypeDetails[key]?.tokenRadius ?? 2);
+    const positions = scatterPositions(feet, radii);
+    onMapChange((d) => {
+      let next = d;
+      const groupIdentifier = newGroupIdentifier(d.data.units ?? []);
+      picked.forEach((unitType, i) => {
+        next = next.addEntry("units", {
+          identifier: nextUnitIdentifier(next.data.units ?? [], unitType), unitType,
+          position: positions[i], hostility: "hostile", currentHpFraction: 1.0, movement: {type: "still"}, groupIdentifier,
+        });
+      });
+      return next;
+    });
   }
 
   // Every unit placed from the palette starts in a group of its own.
@@ -507,6 +593,7 @@ export default function MapWorkbench({
         onHoverUnit={(i) => setUiState(uiState.with({hoveredUnitIndex: i}))}
         pendingUnitType={uiState.pendingUnitType}
         availableUnitTypes={unitTypeDetails}
+        onPlaceEncounter={(feet) => placeEncounter(feet, paletteKeys(mapData.units, paletteAdditions))}
         unitPlacement={uiState.unitPlacement}
         onPlaceUnitPosition={placeUnitPosition}
         onCancelUnitPlacement={() => setUiState(uiState.clearUnitPlacement())}
@@ -603,6 +690,7 @@ export default function MapWorkbench({
             onCloseGroup={closeGroup}
             onRenameGroup={renameGroup}
             armedUnitType={uiState.tool === "add-unit" ? uiState.pendingUnitType : null}
+            encounter={encounter}
             onArmUnitType={armUnitType}
             onHoverUnitType={(key) => setUiState(uiState.with({hoveredUnitType: key}))}
             paletteAdditions={paletteAdditions}

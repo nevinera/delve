@@ -72,7 +72,7 @@ describe("mapOps", () => {
 
     expect(worldUnitTypes(draft, assetUrl)).toEqual({
       keys: ["goblin"],
-      details: {goblin: {name: "Goblin", tokenRadius: undefined, speedFactor: undefined, tokenImageUrl: "url:worlds/w/tokens/goblin.webp"}},
+      details: {goblin: {name: "Goblin", tokenRadius: undefined, speedFactor: undefined, tokenImageUrl: "url:worlds/w/tokens/goblin.webp", tags: []}},
     });
     expect(worldItems(draft)).toEqual({keys: ["iron-ring"], details: {"iron-ring": {identifier: "iron-ring", name: "Iron Ring", slot: "ring"}}});
   });

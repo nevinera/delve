@@ -64,7 +64,7 @@ describe("unitTypeDetailsFor", () => {
 
     const result = await unitTypeDetailsFor(client, ["goblin-raider"]);
 
-    expect(result).toEqual({"goblin-raider": {name: "Goblin Raider", tokenRadius: 1.5, tokenImageUrl: "https://raw.example/goblin.webp", speedFactor: 1.2}});
+    expect(result).toEqual({"goblin-raider": {name: "Goblin Raider", tokenRadius: 1.5, tokenImageUrl: "https://raw.example/goblin.webp", speedFactor: 1.2, tags: []}});
   });
 
   it("resolves the first entry of an array-form tokenImageUrl", async () => {

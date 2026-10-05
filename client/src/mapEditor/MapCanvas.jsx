@@ -27,7 +27,7 @@ function nextConnectionIdentifier(connections) {
 // map's own units, same scope nextConnectionIdentifier uses despite the
 // schema requiring zone-wide uniqueness - the map editor only has this
 // map's data to check against.
-function nextUnitIdentifier(units, unitType) {
+export function nextUnitIdentifier(units, unitType) {
   const existing = new Set(units.map((u) => u.identifier));
   let identifier = `${unitType}-${randomIdentifierSuffix()}`;
   while (existing.has(identifier)) identifier = `${unitType}-${randomIdentifierSuffix()}`;
@@ -123,6 +123,7 @@ export default function MapCanvas({
   ncuTokenUrls = {}, selectedNcuIndex = null, onSelectNcu, hoveredNcuIndex = null, onHoverNcu, expandedNcuIndices,
   openGroup = null, onToggleGroupMember, hoveredGroupIdentifier, highlightedUnitIndices = null,
   activeLayers = ALL_LAYERS, onDoubleClickUnit, onDoubleClickEmpty, keepUnitToolArmed = false, prepareUnit = (entry) => entry,
+  onPlaceEncounter,
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   previewing = false, onTogglePreview,
   tool = "select", onToolChange,
@@ -456,7 +457,8 @@ export default function MapCanvas({
   // it (see commitCircle/commitLineConnection/commitUnit).
   useEffect(() => {
     const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection"
-      || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit) || tool === "add-ncu";
+      || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit) || tool === "add-ncu"
+      || tool === "add-encounter";
     if (!armed) return;
 
     function onKeyDown(e) {
@@ -657,6 +659,13 @@ export default function MapCanvas({
 
   function handlePointerDown(e) {
     if (!image) return;
+
+    if (tool === "add-encounter") {
+      // Stays armed - each click places another encounter (see encounter.js).
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) onPlaceEncounter?.(feet);
+      return;
+    }
 
     if (tool === "add-ncu") {
       // Single click, no facing drag - facing is a slider on the NCU's row.
@@ -970,6 +979,7 @@ export default function MapCanvas({
       "add-point-connection": "Placing Point Connection - click the map",
       "add-line-connection": "Placing Line Connection - drag on the map",
       "add-unit": "Placing Unit - click the map",
+      "add-encounter": "Placing Encounter - click the map",
       "add-ncu": "Placing NCU - click the map",
     }[tool];
   const isPlacing = !!placingStatusText;

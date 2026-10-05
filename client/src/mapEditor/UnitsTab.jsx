@@ -2,6 +2,9 @@ import {useEffect, useRef, useState} from "react";
 import LeashFields from "./LeashFields";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 import {unitGroups} from "./groupIdentifiers";
+import {INTENDED_FOR, PULL_SIZES, RANDOM_PULL_SIZE} from "./encounter";
+
+const NO_ENCOUNTER = {selection: [], settings: {intendedFor: "open", pullSize: null}, onChangeSettings: () => {}, onSelect: () => {}, onExtendSelection: () => {}, armed: false, onArm: () => {}, onDisarm: () => {}, error: ""};
 
 // The map editor's Units tab. With no group open: a palette of the unit
 // types on this map (plus "+" for the world's others) above the list of
@@ -326,15 +329,16 @@ function GroupNameField({identifier, onRename}) {
   );
 }
 
-// The unit types placeable from the palette: those already on the map,
-// then any added with "+" (paletteAdditions, kept by the host).
-function paletteKeys(units, added) {
-  return [...new Set([...units.map((unit) => unit.unitType).filter(Boolean), ...added])];
+// The unit types placeable from the palette: those already on the map and
+// any added with "+" (paletteAdditions, kept by the host), alphabetically -
+// so a family (goblin-*) sits together for range-selecting.
+export function paletteKeys(units, added) {
+  return [...new Set([...units.map((unit) => unit.unitType).filter(Boolean), ...added])].sort();
 }
 
 // renderAdder({onAdded(key), close()}), if given, renders more ways to get
 // a unit type (e.g. import or create one) below the world's others.
-function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, onHoverUnitType, canPlaceOnMap, renderAdder}) {
+function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, onHoverUnitType, canPlaceOnMap, renderAdder, encounter}) {
   const [adding, setAdding] = useState(false);
   const keys = paletteKeys(units, added);
   const addable = unitTypes.keys.filter((key) => !keys.includes(key));
@@ -350,11 +354,19 @@ function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, 
       <div className="map-unit-palette-entries">
         {keys.map((key) => {
           const armed = armedUnitType === key;
+          const selected = encounter.selection.includes(key);
           return (
             <button
               key={key} type="button" aria-pressed={armed} disabled={!canPlaceOnMap}
-              className={`map-unit-palette-entry${armed ? " armed" : ""}`}
-              onClick={() => onArmUnitType(armed ? null : key)}
+              className={`map-unit-palette-entry${armed ? " armed" : ""}${selected ? " selected" : ""}`}
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  encounter.onExtendSelection(key, keys);
+                  return;
+                }
+                encounter.onSelect(armed ? [] : [key]);
+                onArmUnitType(armed ? null : key);
+              }}
               onMouseEnter={() => onHoverUnitType(key)}
               onMouseLeave={() => onHoverUnitType(null)}
             >
@@ -380,7 +392,37 @@ function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, 
       )}
       {!canPlaceOnMap && <p className="map-sidebar-hint">Set feet dimensions (Map tab) before placing units.</p>}
       {armedUnitType && <p className="map-sidebar-hint">Click the map to place {unitTypeLabel(unitTypes.details, armedUnitType)}. Escape to stop.</p>}
+      <EncounterControls encounter={encounter} canPlaceOnMap={canPlaceOnMap} />
     </section>
+  );
+}
+
+// "+ Encounter": places a balanced pull per map click, built from the
+// selected palette entries (shift-click to range-select) or the whole
+// palette - see encounter.js.
+function EncounterControls({encounter, canPlaceOnMap}) {
+  const {settings, onChangeSettings, armed, onArm, error, selection} = encounter;
+  return (
+    <div className="map-encounter-controls">
+      <div className="map-encounter-row">
+        <select aria-label="Encounter intended for" value={settings.intendedFor} onChange={(e) => onChangeSettings({intendedFor: e.target.value})}>
+          {INTENDED_FOR.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+        </select>
+        <select aria-label="Encounter pull size" value={settings.pullSize ?? ""} onChange={(e) => onChangeSettings({pullSize: e.target.value || null})}>
+          <option value="">pull size…</option>
+          {PULL_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+          <option value={RANDOM_PULL_SIZE}>random size</option>
+        </select>
+        <button type="button" className={`add-entry${armed ? " armed" : ""}`} aria-pressed={armed} disabled={!canPlaceOnMap}
+          onClick={() => (armed ? encounter.onDisarm() : onArm())}>+ Encounter</button>
+      </div>
+      {armed && (
+        <p className="map-sidebar-hint">
+          Click the map to place a {settings.intendedFor} {settings.pullSize === RANDOM_PULL_SIZE ? "random-size" : settings.pullSize} encounter from {selection.length ? `the ${selection.length} selected unit types` : "the whole palette"}. Escape to stop.
+        </p>
+      )}
+      {error && <p className="map-sidebar-hint map-encounter-error" role="alert">{error}</p>}
+    </div>
   );
 }
 
@@ -479,6 +521,7 @@ export default function UnitsTab({
   units, unitTypes, items, canPlaceOnMap,
   openGroup, onOpenGroup, onCloseGroup, onRenameGroup,
   armedUnitType, onArmUnitType, onHoverUnitType, paletteAdditions = [], onAddToPalette, renderUnitTypeAdder, renderItemAdder,
+  encounter = NO_ENCOUNTER,
   hoveredGroupIdentifier, onHoverGroup, hoveredIndex, onHover, selectedIndex, onSelect,
   focusUnitRequest, onExpandedIndicesChange,
   onChooseUnitType = () => {}, onChooseItem = () => {},
@@ -523,6 +566,7 @@ export default function UnitsTab({
         units={units} unitTypes={unitTypes} canPlaceOnMap={canPlaceOnMap}
         added={paletteAdditions} onAdd={onAddToPalette} renderAdder={renderUnitTypeAdder}
         armedUnitType={armedUnitType} onArmUnitType={onArmUnitType} onHoverUnitType={onHoverUnitType}
+        encounter={encounter}
       />
       <GroupList
         units={units} unitTypeDetails={unitTypes.details}
