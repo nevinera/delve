@@ -106,6 +106,7 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 	raw := TriggeredEffectAmount(holder, zone, eff, false, rng)
 	dealt := IncomingDamage(recipient, zone, raw, te.School != "magic", rng)
 	recipient.Health -= dealt
+	AddThreat(recipient, holderID, dealt)
 	if recipient.Health < 0 {
 		recipient.Health = 0
 	}
@@ -129,8 +130,5 @@ func fireHeal(holder, recipient *instancestate.UnitState, eff instanceconfig.Sta
 		return
 	}
 	amount := TriggeredEffectAmount(holder, zone, eff, true, rng)
-	recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
-	if recipient.Health > recipient.MaxHealth {
-		recipient.Health = recipient.MaxHealth
-	}
+	ApplyHeal(holder, recipient, amount, zone)
 }

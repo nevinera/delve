@@ -141,6 +141,7 @@ func (h BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zon
 	raw = ApplyDamageDoneBonus(unit, physical, raw)
 	dealt := IncomingDamage(target, zone, raw, physical, h.Rng)
 	target.Health -= dealt
+	AddThreat(target, unitID, dealt)
 	if dealt > 0 {
 		ApplyCastPushback(target)
 		unit.DamageDealtThisTick = true

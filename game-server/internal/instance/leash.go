@@ -145,6 +145,7 @@ func startLeash(unitID uuid.UUID, unit *instancestate.UnitState) {
 		}
 	}
 	unit.ActiveStatusEffects = kept
+	unit.Behavior.Threat = nil
 	unit.Behavior.PathWaypoints = nil
 	unit.Behavior.ArrivalMapID = ""
 	unit.Behavior.CrossingDistance = 0

@@ -147,6 +147,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false, rng)
 				dealt := IncomingDamage(target, zone, raw, effect.School != "magic", rng)
 				target.Health -= dealt
+				AddThreat(target, unitID, dealt)
 				if dealt > 0 {
 					ApplyCastPushback(target)
 					unit.DamageDealtThisTick = true
@@ -206,10 +207,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				continue
 			}
 			amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)
-			recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
-			if recipient.Health > recipient.MaxHealth {
-				recipient.Health = recipient.MaxHealth
-			}
+			ApplyHeal(unit, recipient, amount, zone)
 		case "resource":
 			recipient := unit
 			if effect.Affects != "self" {

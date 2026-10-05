@@ -38,15 +38,15 @@ Determines how the unit selects its target once aggro'd.
 
 ### aggroTable
 
-Targets the unit at the top of the threat table (standard MMO behavior). No additional fields.
+Follows the unit's threat table. Players build threat on it by damaging it (1 per point) and by healing (0.5 per point restored, on every engaged NPC on the map). It starts on whoever it first engaged and switches only when another player's threat passes 110% of its current target's. When its target dies it takes the highest-threat player, then falls back to a packmate's target. The table clears on leash and respawn. No additional fields.
 
 ### nearest
 
-Targets the nearest valid enemy. No additional fields.
+Switches to the nearest valid player, at most once every 6 seconds. Never retargets mid-cast. No additional fields.
 
 ### healerAggro
 
-Targets whoever is contributing the most healing to enemies. Use sparingly. No additional fields.
+Switches to the player who has restored the most health to others lately (a total that halves every 10 seconds; overheal and self-healing don't count), once they out-heal its current target by 25%, and at most once every 6 seconds. Keeps its current target while nobody is healing. Use sparingly. No additional fields.
 
 ---
 
