@@ -31,6 +31,13 @@ module Validators
       validate_basic_attack_style!(data, path: path) if given?(data, "basicAttackStyle")
       validate_unit_tags!(data, path: path) if given?(data, "tags")
       validate_resource!(data, path: path) if given?(data, "resource")
+      validate_stealth_ratings!(data, path: path)
+    end
+
+    def validate_stealth_ratings!(data, path:)
+      %w[stealth detection].each do |key|
+        require_numeric!(data, key, path: path) if given?(data, key)
+      end
     end
 
     def validate_resource!(data, path:)

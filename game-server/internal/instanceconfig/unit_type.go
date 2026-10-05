@@ -21,6 +21,11 @@ type UnitType struct {
 	// OnDeath names one of Powers that fires once when the unit dies, instead
 	// of in combat (see docs/schema/unit_type.md). Empty means none.
 	OnDeath string `json:"onDeath,omitempty"`
+	// Stealth, when set, makes the unit spawn stealthed (and re-stealth when
+	// it resets), with this stealth rating. Detection is its detection
+	// rating, for spotting stealthed characters. See docs/schema/unit_type.md.
+	Stealth   *float64 `json:"stealth,omitempty"`
+	Detection float64  `json:"detection,omitempty"`
 }
 
 // CombatPowers are the powers the unit's tactics choose from while it's

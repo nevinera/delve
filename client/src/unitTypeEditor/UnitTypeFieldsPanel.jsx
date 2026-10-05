@@ -229,6 +229,8 @@ export default function UnitTypeFieldsPanel({
           <tr><th>Token radius (ft)</th><td><NumberField value={unitTypeData.tokenRadius} onChange={setField("tokenRadius")} /></td></tr>
           <tr><th>Speed factor</th><td><NumberField value={unitTypeData.speedFactor} onChange={setField("speedFactor")} /></td></tr>
           <tr><th>Aggro radius (ft)</th><td><NumberField value={unitTypeData.aggroRadius} onChange={setField("aggroRadius")} /></td></tr>
+          <tr><th title="Set to spawn stealthed, with this stealth rating">Stealth</th><td><NumberField value={unitTypeData.stealth} onChange={setField("stealth")} /></td></tr>
+          <tr><th title="Detection rating, for spotting stealthed characters">Detection</th><td><NumberField value={unitTypeData.detection} onChange={setField("detection")} /></td></tr>
           <tr>
             <th>Max HP</th>
             <td><NumberField value={unitTypeData.maxHP} onChange={setField("maxHP")} /> <TargetHint value={unitTypeData.maxHP} range={targets.hp} digits={0} /></td>

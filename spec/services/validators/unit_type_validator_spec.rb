@@ -172,6 +172,20 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /basicAttackRange must be greater than 0/)
     end
 
+    it "accepts numeric stealth and detection" do
+      expect { described_class.validate!(goblin_unit_type.merge("stealth" => 5, "detection" => -2.5)) }.not_to raise_error
+    end
+
+    it "raises when stealth is not a number" do
+      expect { described_class.validate!(goblin_unit_type.merge("stealth" => true)) }
+        .to raise_error(Validators::ValidationError, /stealth must be a number/)
+    end
+
+    it "raises when detection is not a number" do
+      expect { described_class.validate!(goblin_unit_type.merge("detection" => "keen")) }
+        .to raise_error(Validators::ValidationError, /detection must be a number/)
+    end
+
     it "allows basicAttackSchool to be omitted" do
       expect { described_class.validate!(goblin_unit_type.except("basicAttackSchool")) }.not_to raise_error
     end
