@@ -16,7 +16,7 @@ asset syntax accepted by `iconURL`.
 | `name` | string | yes | | Display name. |
 | `description` | string | no | | Short description shown in UI. |
 | `maxRange` | float | no | | Maximum range in feet to a valid target. Omit for self-only or melee abilities. |
-| `speed` | float | no | | Projectile travel speed in feet/sec. When present, `when: "impact"` effects are delayed until the projectile reaches the target (`distance / speed`), and a traveling (`from` != `to`) `when: "immediate"` graphic's `duration` is overridden to match that arrival time. Omit for instant-hit abilities. Client-only; ignored by the game server. |
+| `speed` | float | no | | Projectile travel speed in feet/sec. When present, the effects aimed at a target (`bTarget`/`gTarget`, including any `radius` splash) land when the projectile arrives (`distance / speed` after the cast), not at cast: range is checked at cast, and the effect fizzles if the target dies or leaves first. `self`, `bAll` and `gAll` effects, and an `onDeath` power's effects, still land at once. On the client, `when: "impact"` graphics and sounds play at the same moment, and a traveling (`from` != `to`) `when: "immediate"` graphic's `duration` is overridden to match that arrival time. Omit for instant-hit abilities. |
 | `castTime` | float \| null | yes | | Cast duration in seconds. `null` means instant. |
 | `globalCooldown` | float | yes | | Seconds before the unit can use any ability again after this one. |
 | `cooldown` | float | no | | Per-ability cooldown in seconds. The unit cannot use this specific ability again until this duration has elapsed. |

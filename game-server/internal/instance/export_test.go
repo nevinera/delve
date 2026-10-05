@@ -243,3 +243,8 @@ func FireDeathEffectsForTest(state, prevState *instancestate.InstanceState, zone
 	fireDeathEffects(state, prevState, zone, time.Now(), &events, testRng())
 	return events
 }
+
+func ResolveImpactsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time) {
+	updateCombatStats(state, zone)
+	resolveImpacts(state, zone, now, testRng())
+}

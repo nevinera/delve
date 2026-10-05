@@ -148,17 +148,46 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 			if !inRangeAndLOS(unit, target, zone, effect.Range) {
 				return false
 			}
-			applyPlayerEffect(unitID, unit, *targetID, target, effect, timeBudget, zone, now, next, rng)
-			// A bTarget radius splashes onto the NPCs around the target. A
-			// gTarget one reaches nobody else until there are parties.
-			if effect.Radius > 0 && effect.Affects == "bTarget" {
-				for _, v := range playerSplashVictims(unit, target, effect.Radius, zone, next) {
-					applyPlayerEffect(unitID, unit, v.id, v.unit, effect, timeBudget, zone, now, next, rng)
-				}
+			if power.Speed > 0 {
+				QueueImpact(next, instancestate.PendingImpact{
+					CasterID: unitID, TargetID: *targetID, Effect: effect, TimeBudget: timeBudget,
+					LandsAt: now.Add(ImpactDelay(unit, target, power)), FromPlayer: true,
+				})
+				continue
 			}
+			ApplyPlayerTargetedEffect(unitID, unit, *targetID, target, effect, timeBudget, zone, now, next, rng)
 		}
 	}
 	return true
+}
+
+// ApplyPlayerTargetedEffect lands one effect a player aimed at target -
+// directly, or when its projectile arrives - plus a bTarget radius's splash
+// onto the NPCs around it. A gTarget radius reaches nobody else until there
+// are parties.
+func ApplyPlayerTargetedEffect(unitID uuid.UUID, unit *instancestate.UnitState, targetID uuid.UUID, target *instancestate.UnitState, effect instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState, rng *rand.Rand) {
+	applyPlayerEffect(unitID, unit, targetID, target, effect, timeBudget, zone, now, next, rng)
+	if effect.Radius > 0 && effect.Affects == "bTarget" {
+		for _, v := range playerSplashVictims(unit, target, effect.Radius, zone, next) {
+			applyPlayerEffect(unitID, unit, v.id, v.unit, effect, timeBudget, zone, now, next, rng)
+		}
+	}
+}
+
+// ImpactDelay is how long power's projectile takes to fly from unit to
+// target: their distance over its Speed. The client times a travelling
+// graphic the same way (game/effectPlayback.js).
+func ImpactDelay(unit, target *instancestate.UnitState, power instanceconfig.Power) time.Duration {
+	if power.Speed <= 0 {
+		return 0
+	}
+	dx, dy := target.Position.X-unit.Position.X, target.Position.Y-unit.Position.Y
+	return time.Duration(math.Sqrt(dx*dx+dy*dy) / power.Speed * float64(time.Second))
+}
+
+// QueueImpact puts an effect in flight; the instance lands it at LandsAt.
+func QueueImpact(next *instancestate.InstanceState, impact instancestate.PendingImpact) {
+	next.PendingImpacts = append(next.PendingImpacts, impact)
 }
 
 // isUntargetedAffects reports whether an effect lands without the caster

@@ -20,6 +20,17 @@ type Power struct {
 	CostAmount     float64       `json:"costAmount,omitempty"` // Minimum resource required
 	Tags           []string      `json:"tags,omitempty"`       // Free-form labels, e.g. "harmful", "class_druid"
 	Effects        []PowerEffect `json:"effects"`              // Required (may be empty)
+	// Speed is projectile speed in feet/sec. When set, effects aimed at a
+	// target land once the projectile arrives (distance / Speed) rather than
+	// at cast - see ImpactDelay.
+	Speed float64 `json:"speed,omitempty"`
+}
+
+// IsImpactAffects reports whether an effect with this affects value rides a
+// projectile (lands at impact) on a power with a Speed: anything aimed at a
+// target. self, bAll and gAll effects always land at cast.
+func IsImpactAffects(affects string) bool {
+	return affects != "self" && affects != "bAll" && affects != "gAll"
 }
 
 // IsFrontal returns true when the power requires the caster to face the target

@@ -51,9 +51,22 @@ func npcAlliesFromState(unit *instancestate.UnitState, zone instanceconfig.Zone,
 // allies around it), gAll every eligible ally in range. A heal is only
 // eligible on a wounded ally, so a healer doesn't fire at a full-health pack.
 func allyRecipients(unit *instancestate.UnitState, allies []*instancestate.UnitState, eff instanceconfig.PowerEffect, zone instanceconfig.Zone) []*instancestate.UnitState {
+	if eff.Affects != "gTarget" {
+		return eligibleAllies(unit, allies, eff)
+	}
+	best := mostWoundedAlly(unit, allies, eff)
+	if best == nil {
+		return nil
+	}
+	return withAllySplash(best, allies, eff, zone)
+}
+
+// mostWoundedAlly is who a gTarget effect aims at: the most wounded eligible
+// ally in range, or nil if there's none.
+func mostWoundedAlly(unit *instancestate.UnitState, allies []*instancestate.UnitState, eff instanceconfig.PowerEffect) *instancestate.UnitState {
 	eligible := eligibleAllies(unit, allies, eff)
-	if eff.Affects != "gTarget" || len(eligible) == 0 {
-		return eligible
+	if len(eligible) == 0 {
+		return nil
 	}
 	best := eligible[0]
 	for _, a := range eligible[1:] {
@@ -61,7 +74,7 @@ func allyRecipients(unit *instancestate.UnitState, allies []*instancestate.UnitS
 			best = a
 		}
 	}
-	return withAllySplash(best, allies, eff, zone)
+	return best
 }
 
 // eligibleAllies is every ally eff could land on from unit: just unit for
@@ -122,7 +135,11 @@ func healthFraction(u *instancestate.UnitState) float64 {
 
 // applyNPCAllyEffect applies one self/gTarget/gAll effect to its recipients.
 func applyNPCAllyEffect(attackerID uuid.UUID, unit *instancestate.UnitState, allies []*instancestate.UnitState, eff instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, rng *rand.Rand) {
-	for _, recipient := range allyRecipients(unit, allies, eff, zone) {
+	applyNPCAllyEffectTo(attackerID, unit, allyRecipients(unit, allies, eff, zone), eff, timeBudget, zone, now, rng)
+}
+
+func applyNPCAllyEffectTo(attackerID uuid.UUID, unit *instancestate.UnitState, recipients []*instancestate.UnitState, eff instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, rng *rand.Rand) {
+	for _, recipient := range recipients {
 		switch eff.Type {
 		case "status":
 			command.ApplyStatus(recipient, unit, attackerID, *eff.Status, eff.Duration, zone, now)

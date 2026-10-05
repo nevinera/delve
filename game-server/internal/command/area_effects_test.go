@@ -3,6 +3,7 @@ package command_test
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -118,4 +119,24 @@ func TestUsePowerHandler_BTargetRadiusSplashesNPCsAroundTheTarget(t *testing.T) 
 	assert.Less(t, state.Units[beside].Health, 50.0, "so is an NPC 4ft from it")
 	assert.Equal(t, 50.0, state.Units[far].Health, "an NPC 15ft from it isn't")
 	assert.Equal(t, 50.0, state.Units[friendly].Health, "friendly NPCs aren't")
+}
+
+func TestUsePowerHandler_ProjectileEffectsAreQueuedNotApplied(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 20, 0)
+	payload := punchPower()
+	payload.Power.Speed = 40
+	r := instanceconfig.ZeroBasedValueRange{0, 30}
+	payload.Power.Effects[0].Range = &r
+
+	stampStats(state, instanceconfig.Zone{})
+	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, payload, instanceconfig.Zone{}, state))
+
+	assert.Equal(t, 50.0, state.Units[targetID].Health, "nothing lands at cast")
+	require.Len(t, state.PendingImpacts, 1)
+	impact := state.PendingImpacts[0]
+	assert.True(t, impact.FromPlayer)
+	assert.Equal(t, targetID, impact.TargetID)
+	assert.InDelta(t, 0.5, time.Until(impact.LandsAt).Seconds(), 0.05, "20ft at 40ft/s")
 }
