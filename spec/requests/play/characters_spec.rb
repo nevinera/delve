@@ -93,9 +93,11 @@ RSpec.describe "Play::Characters", type: :request do
     end
 
     describe "GET /play/characters/new" do
-      it "returns 200" do
+      it "returns 200 with every stock token to pick from, the first preselected" do
         get "/play/characters/new"
         expect(response).to have_http_status(:ok)
+        expect(response.body).to include("/tokens/stock/human-female-1.webp", "/tokens/stock/tiefling-male-4.webp")
+        expect(response.body).to match(/value="human-female-1"[^>]*checked/)
       end
     end
 
@@ -106,6 +108,21 @@ RSpec.describe "Play::Characters", type: :request do
             post "/play/characters", params: {character: {name: "Briana-BB", character_class_id: character_class.id, token_url: "https://example.com/token.webp"}}
           }.to change(Character, :count).by(1)
           expect(response).to redirect_to(play_character_path(Character.last))
+        end
+      end
+
+      context "with a stock token picked" do
+        it "stores the stock reference" do
+          post "/play/characters", params: {character: {name: "Stocky-ST", character_class_id: character_class.id, token_choice: "dwarf-male-2", token_url: ""}}
+          expect(response).to redirect_to(play_character_path(Character.last))
+          expect(Character.last.token_url).to eq(":dwarf-male-2:")
+        end
+      end
+
+      context "with custom picked" do
+        it "stores the typed URL" do
+          post "/play/characters", params: {character: {name: "Custom-CU", character_class_id: character_class.id, token_choice: "custom", token_url: " https://example.com/mine.webp "}}
+          expect(Character.last.token_url).to eq("https://example.com/mine.webp")
         end
       end
 
@@ -139,6 +156,15 @@ RSpec.describe "Play::Characters", type: :request do
           patch "/play/characters/#{character.id}", params: {character: {token_url: "https://example.com/new-token.webp"}}
           expect(response).to redirect_to(play_character_path(character))
           expect(character.reload.token_url).to eq("https://example.com/new-token.webp")
+        end
+      end
+
+      context "switching to a stock token" do
+        it "stores the stock reference and shows its image" do
+          patch "/play/characters/#{character.id}", params: {character: {token_choice: "halfling-female-4", token_url: "https://example.com/ignored.webp"}}
+          expect(character.reload.token_url).to eq(":halfling-female-4:")
+          get "/play/characters/#{character.id}"
+          expect(response.body).to include("/tokens/stock/halfling-female-4.webp")
         end
       end
 

@@ -16,6 +16,16 @@ RSpec.describe Content::StockAssets do
     end
   end
 
+  describe "TOKENS entries" do
+    it "has 48 character tokens, each a real file under public/tokens/stock" do
+      expect(Content::StockAssets::TOKENS.size).to eq(48)
+      Content::StockAssets::TOKENS.each_value do |meta|
+        path = Rails.public_path.join("tokens", "stock", meta.fetch("file"))
+        expect(File.exist?(path)).to be(true), "expected #{path} to exist"
+      end
+    end
+  end
+
   # Reads width/height straight out of the PNG header (bytes 16-23 of the
   # IHDR chunk) rather than pulling in an image-dimension gem for one spec.
   def png_dimensions(path)

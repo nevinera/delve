@@ -1,0 +1,26 @@
+<%# Pick a stock token or give a custom image URL; the controller turns
+    token_choice + token_url into the character's token_url (see
+    Play::CharactersController#token_value). %>
+<% choice = character.stock_token || (character.token_url.present? ? "custom" : Content::StockAssets::TOKENS.keys.first) %>
+<fieldset class="token-picker">
+  <legend>Token</legend>
+  <div class="token-grid">
+    <% Content::StockAssets::TOKENS.each_key do |name| %>
+      <label class="token-option" title="<%= name.tr("-", " ") %>">
+        <%= radio_button_tag "character[token_choice]", name, choice == name, id: "token_choice_#{name}" %>
+        <%= image_tag Content::StockAssets.token_url(name), alt: name.tr("-", " "), loading: "lazy" %>
+      </label>
+    <% end %>
+  </div>
+  <label class="token-custom">
+    <%= radio_button_tag "character[token_choice]", "custom", choice == "custom", id: "token_choice_custom" %>
+    Custom image URL
+  </label>
+  <%= f.text_field :token_url, value: (character.stock_token ? "" : character.token_url), placeholder: "https://example.com/my-token.webp", "aria-label": "Custom image URL" %>
+</fieldset>
+<%= javascript_tag nonce: true do %>
+  // Typing a custom URL picks "Custom", so it isn't silently ignored.
+  document.getElementById("character_token_url")?.addEventListener("input", () => {
+    document.getElementById("token_choice_custom").checked = true;
+  });
+<% end %>

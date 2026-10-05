@@ -68,6 +68,17 @@ RSpec.describe Character, type: :model do
       expect(c).to be_valid
     end
 
+    it "accepts a stock token reference" do
+      c = build(:character, user: user, character_class: character_class, token_url: ":elf-female-2:")
+      expect(c).to be_valid
+    end
+
+    it "rejects an unknown stock token" do
+      c = build(:character, user: user, character_class: character_class, token_url: ":ogre-male-1:")
+      expect(c).not_to be_valid
+      expect(c.errors[:token_url]).to include("is not a known stock token")
+    end
+
     it "requires a user" do
       c = build(:character, character_class: character_class)
       c.user = nil
@@ -88,6 +99,16 @@ RSpec.describe Character, type: :model do
       create(:world_character, character:, last_played_at: 2.days.ago)
       recent = create(:world_character, character:, last_played_at: 1.hour.ago)
       expect(character.last_played_at).to be_within(1.second).of(recent.last_played_at)
+    end
+  end
+
+  describe "#token_image_url" do
+    it "resolves a stock token to its server-hosted image" do
+      expect(build(:character, token_url: ":tiefling-male-3:").token_image_url).to eq("/tokens/stock/tiefling-male-3.webp")
+    end
+
+    it "passes a custom URL through" do
+      expect(build(:character, token_url: "https://example.com/t.webp").token_image_url).to eq("https://example.com/t.webp")
     end
   end
 end

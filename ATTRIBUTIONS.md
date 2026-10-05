@@ -13,6 +13,108 @@ Maps created with Dungeon Scrawl (https://dungeonscrawl.com) — used under CC B
 AI-generated token images sourced from the "Too Many Tokens" D&D pack by IsThisMyRealName
 (https://github.com/IsThisMyRealName/too-many-tokens-dnd/) — license-free.
 
+### public/tokens/stock/
+
+Stock character tokens, from the same "Too Many Tokens" pack by IsThisMyRealName
+(https://github.com/IsThisMyRealName/too-many-tokens-dnd/, MIT; the tokens are described as license-free).
+Each file and its path in that repository:
+
+human-female-1.webp: Acolyte/AcolyteDarkHumanFemale (11).webp
+
+human-female-2.webp: Mage/MageHumanFemale (7).webp
+
+human-female-3.webp: Thug/ThugHumanFemaleRanged (2).webp
+
+human-female-4.webp: Knight/KnightHumanFemaleGood (3).webp
+
+human-male-1.webp: Commoner/CommonerHumanArcticMale (22).webp
+
+human-male-2.webp: Mage/MageHumanMale (6).webp
+
+human-male-3.webp: Noble/NobleHumanMale (9).webp
+
+human-male-4.webp: Knight/KnightHumanMaleEvil (5).webp
+
+elf-female-1.webp: Knight/KnightElfFemaleGood (1).webp
+
+elf-female-2.webp: Thug/ThugElfFemaleMelee (6).webp
+
+elf-female-3.webp: Priest/PriestDarkElfFemale (3).webp
+
+elf-female-4.webp: Acolyte/AcolyteDarkElfFemale (2).webp
+
+elf-male-1.webp: Bandit/BanditElfArcticMaleMelee (11).webp
+
+elf-male-2.webp: Scout/ScoutElfMaleForest (6).webp
+
+elf-male-3.webp: Commoner/CommonerElfTavernMale (4).webp
+
+elf-male-4.webp: Veteran/VeteranElfMaleMelee (3).webp
+
+dwarf-female-1.webp: Knight/KnightDwarfFemaleEvil (3).webp
+
+dwarf-female-2.webp: Thug/ThugDwarfFemaleRanged (2).webp
+
+dwarf-female-3.webp: Priest/PriestLightDwarfFemale (2).webp
+
+dwarf-female-4.webp: Berserker/BerserkerDwarfFemale (2).webp
+
+dwarf-male-1.webp: Bandit/BanditDwarfArcticMaleRanged (3).webp
+
+dwarf-male-2.webp: Acolyte/AcolyteWaterDwarfMale (5).webp
+
+dwarf-male-3.webp: Thug/ThugDwarfMaleMelee (17).webp
+
+dwarf-male-4.webp: Mage/MageDwarfMale (3).webp
+
+halfling-female-1.webp: Veteran/VeteranHalflingFemaleRanged (4).webp
+
+halfling-female-2.webp: Priest/PriestLightHalflingFemale (1).webp
+
+halfling-female-3.webp: Commoner/CommonerHalflingArcticFemale (11).webp
+
+halfling-female-4.webp: Bandit Captain/BanditCaptainHalflingDesertFemale (2).webp
+
+halfling-male-1.webp: Noble/NobleHalflingMale (6).webp
+
+halfling-male-2.webp: Commoner/CommonerHalflingUrbanMale (1).webp
+
+halfling-male-3.webp: Bandit/BanditHalflingUrbanMaleMelee (3).webp
+
+halfling-male-4.webp: Knight/KnightHalflingMaleGood (1).webp
+
+half-elf-female-1.webp: Bandit/BanditHalfElfUrbanFemaleMelee (8).webp
+
+half-elf-female-2.webp: Scout/ScoutHalfElfFemaleArctic (2).webp
+
+half-elf-female-3.webp: Mage/MageHalfElfFemale (1).webp
+
+half-elf-female-4.webp: Veteran/VeteranHalfElfFemaleMelee (14).webp
+
+half-elf-male-1.webp: Acolyte/AcolyteLightHalfElfMale (2).webp
+
+half-elf-male-2.webp: Commoner/CommonerHalfElfDesertMale (3).webp
+
+half-elf-male-3.webp: Tribal Warrior/TribalWarriorHalfElfMaleForest (2).webp
+
+half-elf-male-4.webp: Scout/ScoutHalfElfMaleUnderdark (1).webp
+
+tiefling-female-1.webp: Mage/MageTieflingFemale (6).webp
+
+tiefling-female-2.webp: Veteran/VeteranTieflingFemaleMelee (15).webp
+
+tiefling-female-3.webp: Priest/PriestWaterTieflingFemale (2).webp
+
+tiefling-female-4.webp: Acolyte/AcolyteWaterTieflingFemale (2).webp
+
+tiefling-male-1.webp: Thug/ThugTieflingMaleMelee (3).webp
+
+tiefling-male-2.webp: Acolyte/AcolyteDarkTieflingMale (4).webp
+
+tiefling-male-3.webp: Mage/MageTieflingMale (3).webp
+
+tiefling-male-4.webp: Scout/ScoutTieflingMaleForest (3).webp
+
 ## Icons
 
 ### public/abilities/icons/

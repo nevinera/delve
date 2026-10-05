@@ -44,10 +44,18 @@ class Play::CharactersController < Play::BaseController
   private
 
   def character_params
-    params.require(:character).permit(:name, :character_class_id, :token_url)
+    params.require(:character).permit(:name, :character_class_id).merge(token_url: token_value)
   end
 
   def token_url_params
-    params.require(:character).permit(:token_url)
+    {token_url: token_value}
+  end
+
+  # A stock token picked in the form becomes ":name:"; "custom" (or no
+  # choice) keeps the typed URL.
+  def token_value
+    choice = params.dig(:character, :token_choice).to_s
+    return ":#{choice}:" if choice.present? && choice != "custom"
+    params.dig(:character, :token_url).to_s.strip
   end
 end

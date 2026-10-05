@@ -1,6 +1,6 @@
 <h1><%= @character.name %></h1>
 
-<%= image_tag @character.token_url, style: "width: 64px; height: 64px; object-fit: cover;" %>
+<%= image_tag @character.token_image_url, alt: "", style: "width: 64px; height: 64px; object-fit: cover;" %>
 <p>Class: <%= "#{@character.character_class.identifier} #{@character.character_class.version}" %></p>
 <p>Last played: <%= @character.last_played_at&.strftime("%Y-%m-%d %H:%M") || "Never" %></p>
 
