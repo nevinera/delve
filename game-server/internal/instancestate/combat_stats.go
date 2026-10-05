@@ -24,4 +24,8 @@ type CombatStats struct {
 	// BasicAttack is the school-of-the-damage-stat figure basic attacks use;
 	// its StatContribution is the raw stat, not yet divided into DPS.
 	BasicAttack SchoolCombatStats
+
+	// Elvl is the unit's elevation (docs/stats.md): a player's weighted mean
+	// gear elvl (itemstats.GearElvl), or an NPC's map elvl.
+	Elvl float64
 }

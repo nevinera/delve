@@ -40,7 +40,7 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 		return nil
 	}
 
-	target, ok := ResolveCastTarget(unit, unit.Target, p.Power, next)
+	target, ok := ResolveCastTarget(unit, unit.Target, p.Power, zone, next)
 	if !ok {
 		return nil
 	}
@@ -68,14 +68,14 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 // completion - the target snapshotted at cast start) and, for a frontal
 // power, the caster's current facing. Returns (nil, true) for a power that
 // needs no target. Returns (_, false) if a target is required but missing,
-// dead, or (for a frontal power) no longer in front of the caster - the
+// dead, undetected while stealthed (see CanSee), or (for a frontal power) no longer in front of the caster - the
 // caller should treat that as "this cast/use does nothing".
 //
 // Exported so instance.tickCasts can re-run the same validation a completed
 // cast-time power needs (the target's situation may have changed since cast
 // start - see docs on UnitState.Casting) that Handle already runs for an
 // instant power.
-func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, next *instancestate.InstanceState) (*instancestate.UnitState, bool) {
+func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, next *instancestate.InstanceState) (*instancestate.UnitState, bool) {
 	needsTarget := false
 	for _, eff := range power.Effects {
 		if !isUntargetedAffects(eff.Affects) {
@@ -91,7 +91,7 @@ func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power
 		return nil, false
 	}
 	target, ok := next.Units[*targetID]
-	if !ok || !target.Status.IsTargetable() {
+	if !ok || !target.Status.IsTargetable() || !CanSee(unit, target, zone) {
 		return nil, false
 	}
 

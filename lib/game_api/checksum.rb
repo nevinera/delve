@@ -11,8 +11,10 @@ module GameApi
 
     module_function
 
+    # A stealthed unit's position is null (players are sent only the ones
+    # they detect), and hashes as zero.
     def canonical_unit(u)
-      pos = u["position"]
+      pos = u["position"] || {"x" => 0, "y" => 0, "angle" => 0}
       {"id" => u["zone_unit_identifier"], "map" => u["map_identifier"],
        "x" => pos["x"], "y" => pos["y"], "angle" => pos["angle"],
        "health" => u["health"], "maxHealth" => u["max_health"],

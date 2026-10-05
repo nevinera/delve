@@ -1052,7 +1052,7 @@ func TestResolveCastTarget_SelfOnlyPowerNeedsNoTarget(t *testing.T) {
 		Effects: []instanceconfig.PowerEffect{{Type: "resource", Affects: "self"}},
 	}
 
-	target, ok := command.ResolveCastTarget(state.Units[playerID], nil, power, state)
+	target, ok := command.ResolveCastTarget(state.Units[playerID], nil, power, instanceconfig.Zone{}, state)
 
 	assert.True(t, ok)
 	assert.Nil(t, target)
@@ -1062,7 +1062,7 @@ func TestResolveCastTarget_MissingTargetIsRejected(t *testing.T) {
 	playerID := uuid.New()
 	state := stateWithUnit(playerID)
 
-	target, ok := command.ResolveCastTarget(state.Units[playerID], nil, punchPower().Power, state)
+	target, ok := command.ResolveCastTarget(state.Units[playerID], nil, punchPower().Power, instanceconfig.Zone{}, state)
 
 	assert.False(t, ok)
 	assert.Nil(t, target)
@@ -1073,10 +1073,25 @@ func TestResolveCastTarget_DeadTargetIsRejected(t *testing.T) {
 	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 0)
 	state.Units[targetID].Status = instancestate.UnitStatusDead
 
-	target, ok := command.ResolveCastTarget(state.Units[playerID], state.Units[playerID].Target, punchPower().Power, state)
+	target, ok := command.ResolveCastTarget(state.Units[playerID], state.Units[playerID].Target, punchPower().Power, instanceconfig.Zone{}, state)
 
 	assert.False(t, ok)
 	assert.Nil(t, target)
+}
+
+func TestResolveCastTarget_UndetectedStealthedTargetIsRejected(t *testing.T) {
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 0, 40)
+	state.Units[targetID].Stealthed = true
+
+	target, ok := command.ResolveCastTarget(state.Units[playerID], state.Units[playerID].Target, punchPower().Power, instanceconfig.Zone{}, state)
+	assert.False(t, ok)
+	assert.Nil(t, target)
+
+	// Close enough to detect: fine.
+	state.Units[targetID].Position.Y = 10
+	_, ok = command.ResolveCastTarget(state.Units[playerID], state.Units[playerID].Target, punchPower().Power, instanceconfig.Zone{}, state)
+	assert.True(t, ok)
 }
 
 // --- cast pushback (see command.ApplyCastPushback) ---

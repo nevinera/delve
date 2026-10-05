@@ -138,6 +138,7 @@ func NewInstanceState(zone instanceconfig.Zone) (*InstanceState, error) {
 				LootTable:           u.LootTable,
 				LootCount:           lootCount,
 				Status:              UnitStatusIdle,
+				Stealthed:           ut.Stealth != nil,
 				Target:              nil,
 				ActiveStatusEffects: []ActiveStatusEffect{},
 				Behavior:            BehaviorState{},

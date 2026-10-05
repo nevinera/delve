@@ -31,10 +31,22 @@ const parityUnits = {
     target: null,
     active_status_effects: [],
   },
+  "00000000-0000-0000-0000-000000000003": {
+    zone_unit_identifier: "goblin_sneak",
+    map_identifier: "cave_entrance",
+    position: null,
+    stealthed: true,
+    health: 15,
+    max_health: 15,
+    resources: {},
+    status: "idle",
+    target: null,
+    active_status_effects: [],
+  },
 };
 
 const PARITY_CHECKSUM =
-  "2593bfcf2c1302acb08990dc44eb3c56a76ec4e00e313a5cc9b126c1bbe49860";
+  "e1539e24991668f7ced23613e6b248aedf72bbd0a8b0b2ac563a115f64c65104";
 
 describe("computeChecksum", () => {
   it("matches the parity fixture shared with Go and Ruby", async () => {

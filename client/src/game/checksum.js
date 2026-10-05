@@ -14,8 +14,12 @@ function canonicalResources(unit) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// A stealthed unit's position is null (players are sent only the ones they
+// detect, in stealth_view), and hashes as zero.
+const NO_POSITION = {x: 0, y: 0, angle: 0};
+
 export function canonicalUnit(unit) {
-  const pos = unit.position;
+  const pos = unit.position ?? NO_POSITION;
   return {
     id: unit.zone_unit_identifier,
     map: unit.map_identifier,

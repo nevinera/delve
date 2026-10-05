@@ -397,8 +397,9 @@ func (inst *Instance) LastSeqsByUnit(msgType string) map[uuid.UUID]string {
 
 // SlotForTick carries the data the tick loop needs for one connected slot.
 type SlotForTick struct {
-	WriteCh        chan []byte
-	NeedsFullState bool
+	WriteCh         chan []byte
+	NeedsFullState  bool
+	CharacterUnitID uuid.UUID
 }
 
 // SlotsForTick returns one SlotForTick per connected slot and atomically
@@ -412,8 +413,9 @@ func (inst *Instance) SlotsForTick() []SlotForTick {
 			continue
 		}
 		result = append(result, SlotForTick{
-			WriteCh:        s.writeCh,
-			NeedsFullState: s.needsFullState,
+			WriteCh:         s.writeCh,
+			NeedsFullState:  s.needsFullState,
+			CharacterUnitID: s.CharacterUnitID,
 		})
 		s.needsFullState = false
 	}

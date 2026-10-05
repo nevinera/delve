@@ -45,7 +45,7 @@ func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now
 		}
 
 		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
-			target, ok := command.ResolveCastTarget(unit, cast.TargetID, cast.Power, state)
+			target, ok := command.ResolveCastTarget(unit, cast.TargetID, cast.Power, zone, state)
 			if ok && command.ApplyPowerEffects(id, unit, target, cast.TargetID, cast.Power, zone, now, state, rng) {
 				command.SpendPowerCost(unit, cast.Power)
 			}

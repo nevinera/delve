@@ -132,3 +132,17 @@ func withStats(unit *instancestate.UnitState, zone instanceconfig.Zone) *instanc
 	unit.CombatStats = ComputeCombatStats(unit, zone)
 	return unit
 }
+
+func TestComputeCombatStats_ElvlIsPlayerGearMean(t *testing.T) {
+	unit := &instancestate.UnitState{EquippedItems: map[string]instanceconfig.EquippedItem{
+		"main_hand": {Slot: "two_hand", Elvl: 39},
+	}}
+	cs := ComputeCombatStats(unit, instanceconfig.Zone{Elvl: 50})
+	assert.InDelta(t, 8.0, cs.Elvl, 0.001)
+}
+
+func TestComputeCombatStats_ElvlIsNPCMapElvl(t *testing.T) {
+	unit := &instancestate.UnitState{Hostility: "hostile", MapIdentifier: "m"}
+	cs := ComputeCombatStats(unit, instanceconfig.Zone{Elvl: 50})
+	assert.InDelta(t, 50.0, cs.Elvl, 0.001)
+}

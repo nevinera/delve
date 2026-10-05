@@ -119,6 +119,9 @@ func applyUnitBehavior(
 		sf = 1.0
 	}
 	speed := BaseMobSpeed * sf
+	if unit.Stealthed {
+		speed *= StealthSpeedFactor
+	}
 
 	// Proactive aggro: transition idle hostile units when a player enters range.
 	aggroRadius := e.unitType.AggroRadius

@@ -110,7 +110,7 @@ func (h BasicAttackHandler) Handle(unitID uuid.UUID, payload CommandPayload, zon
 	}
 
 	target, ok := next.Units[*unit.Target]
-	if !ok || !target.Status.IsTargetable() {
+	if !ok || !target.Status.IsTargetable() || !CanSee(unit, target, zone) {
 		return nil
 	}
 

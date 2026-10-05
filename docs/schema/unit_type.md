@@ -26,6 +26,8 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 | `targeting` | UnitTargeting | no | `{ "type": "aggroTable" }` | How this unit selects its target when aggro'd. |
 | `tactics` | UnitTactics | no | `{ "type": "randomAvailable" }` | How this unit decides which power to use. |
 | `onDeath` | string | no | | Name of one of `powers` to fire once when the unit dies, instead of in combat. Tactics never use it. See [On death](#on-death). |
+| `stealth` | float | no | | When set, the unit spawns stealthed (and re-stealths whenever it resets), with this stealth rating. See [Stealth](#stealth). |
+| `detection` | float | no | `0` | Detection rating, for spotting stealthed characters. Not used yet. |
 
 ---
 
@@ -187,6 +189,25 @@ a burst of spores or a dying curse can be shown on the corpse.
   ]
 }
 ```
+
+## Stealth
+
+A unit type with `stealth` spawns stealthed: invisible to players unless they
+detect it. Each player detects it through their facing:
+
+- **Rating gap** `d = detection - stealth + elevation gap`, where the elevation
+  gap is the character's weighted mean gear elvl minus the map's elvl (see
+  [stats.md](../stats.md)). Players have detection 0 for now.
+- **Full range** `max(0, 15 + d * 0.5)` feet, and a **faint** band out to 1.6
+  times that. Outside the player's front 180 degrees, both are a third as
+  long. Within 5 feet it's always fully visible.
+- A **faint** unit is drawn at low opacity, a fully seen one half see-through; otherwise they work normally. A unit the
+  player doesn't detect isn't drawn and can't be targeted (area effects still
+  hit it).
+
+While stealthed it moves at 0.6 times its speed and doesn't body-block. It
+drops stealth when it attacks, uses a power, takes damage or aggros, and
+re-stealths when it resets.
 
 ## Example
 
