@@ -40,6 +40,8 @@ Any `harm`, `heal`, `resource` or `status` effect with `affects` of `bTarget` or
 { "type": "harm", "affects": "bTarget", "range": 30.0, "radius": 8.0, "amount": [6.0, 9.0], "school": "magic" }
 ```
 
+The client marks every area automatically when the power fires: a faint ring around the caster at a `bAll`/`gAll` effect's `range`, and around the target at a `radius` (when the projectile lands, for a power with a `speed`). Red for hostile effects, green for friendly ones. It plays alongside the power's own graphics, in the game and in the editors' previews.
+
 ---
 
 ## harm

@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from "vitest";
-import {playSoundEffects, firePowerEffects} from "../effectPlayback";
+import {areaIndicators, playSoundEffects, firePowerEffects} from "../effectPlayback";
 
 const stockAssets = {sounds: {twang: {url: "/abilities/sounds/twang.ogg"}}};
 
@@ -89,5 +89,36 @@ describe("firePowerEffects", () => {
         firePowerEffects(power, {positions: {self: {x: 0, y: 0}, target: {x: 1, y: 0}}, baseUrl: "https://example.com/", sceneManager, stockAssets})
       ).not.toThrow();
     });
+  });
+});
+
+describe("areaIndicators", () => {
+  it("rings the caster at an area effect's range, red for hostile and green for friendly", () => {
+    const rings = areaIndicators({effects: [
+      {type: "harm", affects: "bAll", range: 12},
+      {type: "heal", affects: "gAll", range: [0, 8]},
+    ]});
+    expect(rings).toEqual([
+      expect.objectContaining({sourceURL: ":ring:", from: "self", to: "self", when: "immediate", scale: 6, color: "#FF5A4E"}),
+      expect.objectContaining({from: "self", to: "self", scale: 4, color: "#5AD27A"}),
+    ]);
+  });
+
+  it("rings the target at a splash radius, at impact", () => {
+    const [ring] = areaIndicators({effects: [{type: "harm", affects: "bTarget", range: 30, radius: 6}]});
+    expect(ring).toMatchObject({from: "affected", to: "affected", when: "impact", scale: 3});
+  });
+
+  it("draws one ring per distinct area, and none for single-target effects", () => {
+    expect(areaIndicators({effects: [{type: "harm", affects: "bTarget", range: 5}]})).toEqual([]);
+    expect(areaIndicators({effects: [
+      {type: "harm", affects: "bAll", range: 10},
+      {type: "status", affects: "bAll", range: 10, status: {}},
+    ]})).toHaveLength(1);
+  });
+
+  it("adds the caster's own radius to a caster-centered ring", () => {
+    const [ring] = areaIndicators({effects: [{type: "harm", affects: "bAll", range: 10}]}, 2);
+    expect(ring.scale).toBe(6);
   });
 });

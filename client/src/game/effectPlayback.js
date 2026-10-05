@@ -15,11 +15,42 @@ function distanceFeet(a, b) {
 // sceneManager: the object exposing playGraphicEffects(effects, positions, baseUrl, travelOverrideMs, stockAssets) — may be null/undefined.
 // stockAssets: the {icons, graphics, sounds} shape from Content::StockAssets.client_json - a sourceURL/iconURL
 // that's a ":name:" reference resolves against this app's own origin instead of baseUrl (see resolveStockAssetUrl.js).
+// A faint ring showing the area an area effect covers: around the caster
+// for bAll/gAll (its range), around the target for a radius splash (at
+// impact). Red for hostile, green for friendly. Drawn for every power, so
+// the area reads the same whatever art the ability uses. The ring graphic
+// is drawn on a 4ft-per-scale plane (see scene.js), so radius R is scale R/2.
+const AREA_RING = ":ring:";
+const AREA_COLORS = {hostile: "#FF5A4E", friendly: "#5AD27A"};
+
+function maxRange(range) {
+  if (range == null) return 0;
+  return Array.isArray(range) ? range[1] : range;
+}
+
+export function areaIndicators(power, casterRadius = 0) {
+  const rings = new Map();
+  for (const effect of power.effects ?? []) {
+    let ring = null;
+    if (effect.affects === "bAll" || effect.affects === "gAll") {
+      const r = maxRange(effect.range) + casterRadius;
+      if (r > 0) ring = {at: "self", when: "immediate", radius: r, side: effect.affects === "bAll" ? "hostile" : "friendly"};
+    } else if (effect.radius > 0) {
+      ring = {at: "affected", when: "impact", radius: effect.radius, side: effect.affects === "gTarget" ? "friendly" : "hostile"};
+    }
+    if (ring) rings.set(`${ring.at}|${ring.radius}|${ring.side}`, ring);
+  }
+  return [...rings.values()].map((ring) => ({
+    sourceURL: AREA_RING, from: ring.at, to: ring.at, when: ring.when, condition: "always",
+    duration: 0.7, scale: ring.radius / 2, color: AREA_COLORS[ring.side], opacity: 0.45,
+  }));
+}
+
 export function firePowerEffects(power, { positions, baseUrl, sceneManager, stockAssets }) {
   const distanceFt = distanceFeet(positions.self, positions.target);
   const travelMs = power.speed ? (distanceFt / power.speed) * 1000 : 0;
 
-  const graphicEffects = power.graphicEffects ?? [];
+  const graphicEffects = [...(power.graphicEffects ?? []), ...areaIndicators(power, positions.self?.radius ?? 0)];
   const soundEffects = power.soundEffects ?? [];
   const immediateGraphics = graphicEffects.filter((e) => e.when !== "impact");
   const impactGraphics = graphicEffects.filter((e) => e.when === "impact");
