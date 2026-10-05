@@ -252,3 +252,8 @@ func ResolveImpactsForTest(state *instancestate.InstanceState, zone instanceconf
 func UpdateStealthForTest(state, prev *instancestate.InstanceState, zone instanceconfig.Zone) {
 	updateStealth(state, prev, zone)
 }
+
+// StealthViewForTest builds observer's stealth view and splices it onto payload.
+func StealthViewForTest(payload []byte, state *instancestate.InstanceState, observer uuid.UUID, zone instanceconfig.Zone) ([]byte, error) {
+	return withStealthView(payload, stealthView(state.Units[observer], stealthedUnits(state), zone))
+}

@@ -56,7 +56,8 @@ type unitJSON struct {
 	UnitTypeIdentifier   string                   `json:"unit_type_identifier,omitempty"`
 	MapIdentifier        string                   `json:"map_identifier"`
 	Hostility            string                   `json:"hostility,omitempty"`
-	Position             instanceconfig.Position  `json:"position"`
+	Position             *instanceconfig.Position `json:"position"` // nil while stealthed - see stealthViewJSON
+	Stealthed            bool                     `json:"stealthed,omitempty"`
 	Health               float64                  `json:"health"`
 	MaxHealth            float64                  `json:"max_health"`
 	Resources            map[string]resourceJSON  `json:"resources"`
@@ -309,7 +310,8 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			UnitTypeIdentifier:   u.UnitTypeIdentifier,
 			MapIdentifier:        u.MapIdentifier,
 			Hostility:            u.Hostility,
-			Position:             u.Position,
+			Position:             sharedPosition(u),
+			Stealthed:            u.Stealthed,
 			Health:               u.Health,
 			MaxHealth:            u.MaxHealth,
 			Resources:            resourcesJSON(u.Resources),
@@ -343,6 +345,16 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 		NCUs:      ncusJSON(state.NCUs),
 		ExpiresAt: expiresAtJSON(expiresAt),
 	})
+}
+
+// sharedPosition is a unit's position as everyone is sent it: nil while it's
+// stealthed, since only the players who detect it are sent where it is.
+func sharedPosition(u *instancestate.UnitState) *instanceconfig.Position {
+	if u.Stealthed {
+		return nil
+	}
+	pos := u.Position
+	return &pos
 }
 
 func expiresAtJSON(t time.Time) *int64 {
@@ -388,7 +400,8 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 				"unit_type_identifier": cu.UnitTypeIdentifier,
 				"map_identifier":       cu.MapIdentifier,
 				"hostility":            cu.Hostility,
-				"position":             cu.Position,
+				"position":             sharedPosition(cu),
+				"stealthed":            cu.Stealthed,
 				"health":               cu.Health,
 				"max_health":           cu.MaxHealth,
 				"resources":            resourcesJSON(cu.Resources),
@@ -438,7 +451,10 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		if cu.MapIdentifier != pu.MapIdentifier {
 			patch["map_identifier"] = cu.MapIdentifier
 		}
-		if cu.Position != pu.Position {
+		if cu.Stealthed != pu.Stealthed {
+			patch["stealthed"] = cu.Stealthed
+			patch["position"] = sharedPosition(cu)
+		} else if !cu.Stealthed && cu.Position != pu.Position {
 			patch["position"] = cu.Position
 		}
 		if cu.Health != pu.Health {

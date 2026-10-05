@@ -163,7 +163,9 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 
 			if slots := inst.SlotsForTick(); len(slots) > 0 {
 				// Build the delta once; reuse for all slots that don't need full state.
+				// Each slot's copy then gets its own stealth view spliced on.
 				var deltaPayload []byte
+				stealthed := stealthedUnits(state)
 				for _, s := range slots {
 					var payload []byte
 					var err error
@@ -174,6 +176,9 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 							deltaPayload, err = buildDeltaMsg(prevState, state, combatEvents, state.PendingLootEvents, state.PendingLootFailures, now, checksum, prevHeartbeatSeqs, heartbeatSeqs, prevMoveSeqs, moveSeqs)
 						}
 						payload = deltaPayload
+					}
+					if err == nil && len(stealthed) > 0 {
+						payload, err = withStealthView(payload, stealthView(state.Units[s.CharacterUnitID], stealthed, inst.ZoneConfig))
 					}
 					if err != nil {
 						slog.ErrorContext(ctx, "failed to build tick message", "error", err)

@@ -153,6 +153,7 @@ func TestChecksumParity(t *testing.T) {
 				Y     float64 `json:"y"`
 				Angle float64 `json:"angle"`
 			} `json:"position"`
+			Stealthed bool    `json:"stealthed"`
 			Health    float64 `json:"health"`
 			MaxHealth float64 `json:"max_health"`
 			Resources map[string]struct {
@@ -193,6 +194,7 @@ func TestChecksumParity(t *testing.T) {
 			ZoneUnitIdentifier:  u.ZoneUnitIdentifier,
 			MapIdentifier:       u.MapIdentifier,
 			Position:            instanceconfig.Position{X: u.Position.X, Y: u.Position.Y, Angle: u.Position.Angle},
+			Stealthed:           u.Stealthed,
 			Health:              u.Health,
 			MaxHealth:           u.MaxHealth,
 			Resources:           resources,

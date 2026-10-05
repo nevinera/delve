@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"sort"
+
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 type canonicalEffect struct {
@@ -33,7 +35,7 @@ type canonicalUnit struct {
 }
 
 // Checksum returns a SHA256 hex digest of the instance state in a canonical
-// JSON form. Units are sorted by ZoneUnitIdentifier; effects within each unit
+// JSON form, with stealthed units' positions zeroed. Units are sorted by ZoneUnitIdentifier; effects within each unit
 // are sorted by (Status.Name, ApplierID). JS clients reproduce this identically;
 // Ruby clients need to drop trailing ".0" from whole-number floats before hashing.
 func (s *InstanceState) Checksum() string {
@@ -55,12 +57,18 @@ func (s *InstanceState) Checksum() string {
 		}
 		sort.Slice(resources, func(i, j int) bool { return resources[i].Name < resources[j].Name })
 
+		// A stealthed unit's position isn't shared (each player is sent only
+		// the stealthed units they detect), so it hashes as zero.
+		pos := u.Position
+		if u.Stealthed {
+			pos = instanceconfig.Position{}
+		}
 		units = append(units, canonicalUnit{
 			ID:        u.ZoneUnitIdentifier,
 			Map:       u.MapIdentifier,
-			X:         u.Position.X,
-			Y:         u.Position.Y,
-			Angle:     u.Position.Angle,
+			X:         pos.X,
+			Y:         pos.Y,
+			Angle:     pos.Angle,
 			Health:    u.Health,
 			MaxHealth: u.MaxHealth,
 			Resources: resources,
