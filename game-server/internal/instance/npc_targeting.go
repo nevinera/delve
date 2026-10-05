@@ -16,14 +16,10 @@ import (
 // to halve, so healerAggro follows who is healing now, not who once did.
 const healingAggroHalfLife = 10.0
 
-// retargetSlackFeet is how much closer another player must be before a
-// "nearest" unit abandons its current target, so two equidistant players
-// don't make it flip-flop every tick.
-const retargetSlackFeet = 1.0
-
-// healerRetargetCooldown is the minimum time between a "healerAggro" unit's
-// target switches, so a healer swap mid-fight can't ping-pong it.
-const healerRetargetCooldown = 6 * time.Second
+// targetChangeCooldown is the minimum time between a "nearest" or
+// "healerAggro" unit's target switches, so players moving about can't
+// ping-pong it.
+const targetChangeCooldown = 6 * time.Second
 
 // threatSwitchRatio is how far above its current target's threat another
 // player must climb before an "aggroTable" unit switches to them.
@@ -66,9 +62,12 @@ func pickNPCTarget(unit *instancestate.UnitState, targeting instanceconfig.UnitT
 	case "", "aggroTable":
 		return topThreat(unit, current, players)
 	case "nearest":
+		if now.Sub(unit.Behavior.LastRetargetAt) < targetChangeCooldown {
+			return nil
+		}
 		return nearestPlayer(unit, current, players)
 	case "healerAggro":
-		if now.Sub(unit.Behavior.LastRetargetAt) < healerRetargetCooldown {
+		if now.Sub(unit.Behavior.LastRetargetAt) < targetChangeCooldown {
 			return nil
 		}
 		return topHealer(unit, current, players)
@@ -77,7 +76,7 @@ func pickNPCTarget(unit *instancestate.UnitState, targeting instanceconfig.UnitT
 }
 
 func nearestPlayer(unit, current *instancestate.UnitState, players []playerRef) *uuid.UUID {
-	best, bestDist := (*uuid.UUID)(nil), distanceTo(unit, current)-retargetSlackFeet
+	best, bestDist := (*uuid.UUID)(nil), distanceTo(unit, current)
 	for _, p := range players {
 		if p.unit == current || !p.unit.Status.IsTargetable() {
 			continue

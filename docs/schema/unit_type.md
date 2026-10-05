@@ -42,7 +42,7 @@ Follows the unit's threat table. Players build threat on it by damaging it (1 pe
 
 ### nearest
 
-Switches to the nearest valid player whenever one is more than a foot closer than its current target. Never retargets mid-cast. No additional fields.
+Switches to the nearest valid player, at most once every 6 seconds. Never retargets mid-cast. No additional fields.
 
 ### healerAggro
 

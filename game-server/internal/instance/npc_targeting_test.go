@@ -33,15 +33,19 @@ func TestNPCTargeting_NearestSwitchesToACloserPlayer(t *testing.T) {
 	assert.Equal(t, nearID, *u.Target)
 }
 
-func TestNPCTargeting_NearestIgnoresAnEquallyCloseOtherPlayer(t *testing.T) {
+func TestNPCTargeting_NearestWaitsOutItsRetargetCooldown(t *testing.T) {
 	u, s := npcState("g1", pos(0, 0))
-	firstID, _ := addPlayer(s, "map1", 10, 0)
-	addPlayer(s, "map1", 0, 10)
-	manualEngage(u, firstID)
+	farID, _ := addPlayer(s, "map1", 15, 0)
+	nearID, _ := addPlayer(s, "map1", 6, 0)
+	manualEngage(u, farID)
+	u.Behavior.LastRetargetAt = time.Now()
 
 	instance.ApplyUnitBehaviorsForTest(s, targetingZone("nearest"), dt)
+	assert.Equal(t, farID, *u.Target, "still cooling down")
 
-	assert.Equal(t, firstID, *u.Target)
+	u.Behavior.LastRetargetAt = time.Now().Add(-7 * time.Second)
+	instance.ApplyUnitBehaviorsForTest(s, targetingZone("nearest"), dt)
+	assert.Equal(t, nearID, *u.Target)
 }
 
 func TestNPCTargeting_AggroTableKeepsItsTargetWithoutThreat(t *testing.T) {
