@@ -186,6 +186,27 @@ export function setTokenTagDimmed(group, dimmed) {
   if (dimmed) group._bodyMaterial.color.lerp(new THREE.Color(TAG_DIM_COLOR), TAG_DIM_AMOUNT);
 }
 
+// How opaque a stealthed unit's token is, by how well this player sees it
+// (see game/stealthView.js): faint is hard to make out; full is see-through
+// enough to read as stealthed.
+const STEALTH_OPACITY = {faint: 0.2, full: 0.55};
+
+export function setTokenStealth(group, visibility) {
+  const opacity = STEALTH_OPACITY[visibility] ?? 1;
+  if (group._stealthOpacity === opacity) return;
+  group._stealthOpacity = opacity;
+  group.traverse((node) => {
+    const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+    for (const mat of materials) {
+      mat.userData.baseOpacity ??= mat.opacity;
+      mat.userData.baseTransparent ??= mat.transparent;
+      mat.opacity = mat.userData.baseOpacity * opacity;
+      mat.transparent = opacity < 1 || mat.userData.baseTransparent;
+      mat.needsUpdate = true;
+    }
+  });
+}
+
 const TARGET_LINE_COLOR = 0x00ff44;
 const TARGET_LINE_ATTACKING_COLOR = 0xff8c1a;
 
@@ -922,6 +943,7 @@ export class SceneManager {
           }
         }
         setTokenDead(entry.group, isUntargetableStatus(unit.status));
+        setTokenStealth(entry.group, unit.stealth_visibility);
         if (!isSelf) {
           setTokenTagDimmed(entry.group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
         }
@@ -936,6 +958,7 @@ export class SceneManager {
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
         setTokenDead(group, isUntargetableStatus(unit.status));
+        setTokenStealth(group, unit.stealth_visibility);
         if (!isSelf) {
           setTokenTagDimmed(group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
         }

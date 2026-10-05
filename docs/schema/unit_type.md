@@ -201,7 +201,7 @@ detect it. Each player detects it through their facing:
 - **Full range** `max(0, 15 + d * 0.5)` feet, and a **faint** band out to 1.6
   times that. Outside the player's front 180 degrees, both are a third as
   long. Within 5 feet it's always fully visible.
-- A **faint** unit is drawn at low opacity; otherwise it's normal. A unit the
+- A **faint** unit is drawn at low opacity, a fully seen one half see-through; otherwise they work normally. A unit the
   player doesn't detect isn't drawn and can't be targeted (area effects still
   hit it).
 

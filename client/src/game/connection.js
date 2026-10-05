@@ -1,4 +1,5 @@
 import { computeChecksum } from "./checksum";
+import { visibleUnits } from "./stealthView";
 import { applyFullState, applyDelta, applyFullNCUs, applyNCUDelta } from "./state";
 
 const HEARTBEAT_MS = 300;
@@ -121,7 +122,7 @@ export class GameConnection {
       }
       // expiresAt is only ever on full state (epoch ms, or null when the
       // world version isn't expiring); deltas leave it out entirely.
-      this._onStateChange?.({ units: this._units, ncus: this._ncus, expiresAt: msg.expires_at ?? null });
+      this._onStateChange?.({ units: visibleUnits(this._units, msg.stealth_view), ncus: this._ncus, expiresAt: msg.expires_at ?? null });
     } else if (msg.type === "delta") {
       this._units = applyDelta(this._units, msg);
       this._ncus = applyNCUDelta(this._ncus, msg);
@@ -130,7 +131,7 @@ export class GameConnection {
         console.warn("checksum mismatch after delta", { server: msg.checksum, local });
         this._send({ direction: "up", type: "full-state-request" });
       }
-      this._onStateChange?.({ units: this._units, ncus: this._ncus, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
+      this._onStateChange?.({ units: visibleUnits(this._units, msg.stealth_view), ncus: this._ncus, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
     } else {
       this._onServerMessage?.(msg);
     }
