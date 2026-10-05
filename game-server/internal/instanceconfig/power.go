@@ -53,6 +53,12 @@ type PowerEffect struct {
 	// harm, heal, resource, status (omitted when affects is "self")
 	Range *ZeroBasedValueRange `json:"range,omitempty"`
 
+	// Radius (feet), bTarget/gTarget only: the effect also lands on every
+	// other hostile (bTarget) or friendly (gTarget) unit within Radius of the
+	// target - a splash centered on the target rather than the caster. 0
+	// means just the target.
+	Radius float64 `json:"radius,omitempty"`
+
 	// resource
 	ResourceName string  `json:"resourceName,omitempty"` // Required for resource
 	Delta        float64 `json:"delta,omitempty"`        // Required for resource; negative consumes

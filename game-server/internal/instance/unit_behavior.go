@@ -403,7 +403,7 @@ func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, 
 			}
 			reachable := false
 			if isAllyAffects(eff.Affects) {
-				reachable = len(allyRecipients(unit, allies, eff)) > 0
+				reachable = len(eligibleAllies(unit, allies, eff)) > 0
 			} else {
 				reachable = npcEffectInRange(eff, dist, unit, target)
 			}

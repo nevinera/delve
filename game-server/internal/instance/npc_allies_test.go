@@ -172,3 +172,37 @@ func TestNPCHostile_BTargetStillHitsOnlyTheTarget(t *testing.T) {
 	assert.Less(t, near.Health, 100.0)
 	assert.Equal(t, 100.0, second.Health)
 }
+
+func splashBombZone(radius float64) instanceconfig.Zone {
+	zone := bombZone("bTarget")
+	ut := zone.UnitTypes["goblin"]
+	ut.Powers[0].Effects[0].Radius = radius
+	zone.UnitTypes["goblin"] = ut
+	return zone
+}
+
+func TestNPCHostile_BTargetRadiusSplashesPlayersAroundTheTarget(t *testing.T) {
+	state, g1, _, _, target := packState(t)     // target 4ft from g1
+	_, beside := addPlayer(state, "map1", 0, 9) // 5ft past the target
+	_, far := addPlayer(state, "map1", 0, 18)   // 14ft past it
+
+	fireBombs(state, g1, splashBombZone(6))
+
+	assert.Less(t, target.Health, 100.0)
+	assert.Less(t, beside.Health, 100.0, "within the radius of the target")
+	assert.Equal(t, 100.0, far.Health)
+}
+
+func TestNPCAllies_GTargetRadiusHealsPackmatesAroundTheMostWounded(t *testing.T) {
+	heal := healEffect("gTarget", 20)
+	heal.Radius = 2
+	zone := packZone(heal)
+	state, g1, g2, g3, _ := packState(t) // g1 at 0, g2 at 3, g3 at 6
+	g1.Health, g2.Health, g3.Health = 5, 6, 1
+
+	instance.ApplyUnitBehaviorsForTest(state, zone, dt)
+
+	assert.GreaterOrEqual(t, g3.Health, 6.0, "the most wounded is healed")
+	assert.GreaterOrEqual(t, g2.Health, 10.0, "so is the packmate 3ft from it")
+	assert.Equal(t, 5.0, g1.Health, "the one 6ft away isn't")
+}

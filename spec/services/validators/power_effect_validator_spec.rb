@@ -22,6 +22,23 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
   end
 
   describe ".validate!" do
+    describe "radius" do
+      it "accepts a positive radius on a bTarget or gTarget effect" do
+        expect { described_class.validate!(harm_effect.merge("affects" => "bTarget", "radius" => 6)) }.not_to raise_error
+        expect { described_class.validate!(heal_effect.merge("affects" => "gTarget", "radius" => 4.5)) }.not_to raise_error
+      end
+
+      it "rejects a radius on an effect that isn't aimed at a target" do
+        expect { described_class.validate!(harm_effect.merge("affects" => "bAll", "radius" => 6)) }
+          .to raise_error(Validators::ValidationError, /radius only applies to bTarget and gTarget effects/)
+      end
+
+      it "rejects a zero or negative radius" do
+        expect { described_class.validate!(harm_effect.merge("affects" => "bTarget", "radius" => 0)) }
+          .to raise_error(Validators::ValidationError, /radius must be greater than 0/)
+      end
+    end
+
     it "accepts a harm effect from the fixture" do
       expect { described_class.validate!(zone_fixture["unitTypes"]["goblin"]["powers"][0]["effects"][0]) }.not_to raise_error
     end
