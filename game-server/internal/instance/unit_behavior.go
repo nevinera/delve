@@ -258,7 +258,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	available := usablePowers(unit, unitType.Powers, dist, target, allies, now)
+	available := usablePowers(unit, unitType.CombatPowers(), dist, target, allies, now)
 	power, ok := selectFromLeafTactics(unit, leafTactics, available, rng)
 	if !ok {
 		return

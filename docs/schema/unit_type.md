@@ -25,6 +25,7 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 | `powers` | array of Ability \| AssetReference(`referenceTo: "ability"`) | no | `[]` | Abilities available to this unit. Inline Ability objects or references to external ability files. A unit_type containing any AssetReferences is abstract (see [common.md](common.md)). |
 | `targeting` | UnitTargeting | no | `{ "type": "aggroTable" }` | How this unit selects its target when aggro'd. |
 | `tactics` | UnitTactics | no | `{ "type": "randomAvailable" }` | How this unit decides which power to use. |
+| `onDeath` | string | no | | Name of one of `powers` to fire once when the unit dies, instead of in combat. Tactics never use it. See [On death](#on-death). |
 
 ---
 
@@ -147,6 +148,41 @@ Sequences through a list of phases, each with its own tactics, advancing when a 
           { "power": "Slash", "at": 6.0 }
         ]
       }
+    }
+  ]
+}
+```
+
+## On death
+
+`onDeath` names one of the unit's `powers`. That power fires once, the tick
+the unit dies, from where it died: no cost, cooldown, cast time or GCD, and
+its tactics never pick it while the unit is alive (a tactics entry naming it
+is a validation error).
+
+Its effects resolve like any NPC power's, with the dead unit as the caster:
+
+| `affects` | On death |
+|---|---|
+| `bAll` | Every living player on its map within `range` of the corpse, with line of sight. |
+| `bTarget` | Whoever it was fighting when it died, if they're still alive and within `range`. |
+| `gAll` / `gTarget` | Its living packmates (units sharing its `groupIdentifier`) within `range`; never itself. |
+| `self` | Skipped - the unit is dead. |
+
+Its graphics and sounds play like any other power's, so an explosion,
+a burst of spores or a dying curse can be shown on the corpse.
+
+```json
+{
+  "onDeath": "Last Fuse",
+  "powers": [
+    {
+      "name": "Last Fuse",
+      "castTime": null,
+      "globalCooldown": 1.0,
+      "effects": [
+        { "type": "harm", "affects": "bAll", "range": 10.0, "amount": [10.0, 14.0], "school": "magic" }
+      ]
     }
   ]
 }

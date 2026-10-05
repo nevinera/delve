@@ -8,8 +8,14 @@ module Validators
     TYPES = %w[randomAvailable rotation priorityRotation scripted phased].freeze
     PATROL_TYPES = (TYPES - ["phased"]).freeze
 
-    def self.validate!(data, known_power_names:, path: "$", allow_phased: true)
-      new.validate!(data, known_power_names: known_power_names, path: path, allow_phased: allow_phased)
+    # death_power_name is the unit type's onDeath power, which fires only
+    # when the unit dies, so tactics may not use it.
+    def self.validate!(data, known_power_names:, path: "$", allow_phased: true, death_power_name: nil)
+      new(death_power_name).validate!(data, known_power_names: known_power_names, path: path, allow_phased: allow_phased)
+    end
+
+    def initialize(death_power_name = nil)
+      @death_power_name = death_power_name
     end
 
     def validate!(data, known_power_names:, path: "$", allow_phased: true)
@@ -81,6 +87,9 @@ module Validators
     end
 
     def check_power_name!(name, known_power_names, path:)
+      if name == @death_power_name
+        raise ValidationError.new("references power #{name.inspect}, which is this unit type's onDeath power and only fires on death", path: path)
+      end
       return if known_power_names.include?(name)
       raise ValidationError.new("references power #{name.inspect}, which is not in this unit type's powers", path: path)
     end

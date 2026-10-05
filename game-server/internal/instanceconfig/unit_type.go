@@ -18,6 +18,37 @@ type UnitType struct {
 	Powers            []Power       `json:"powers,omitempty"`
 	Targeting         UnitTargeting `json:"targeting,omitempty"`
 	Tactics           UnitTactics   `json:"tactics,omitempty"`
+	// OnDeath names one of Powers that fires once when the unit dies, instead
+	// of in combat (see docs/schema/unit_type.md). Empty means none.
+	OnDeath string `json:"onDeath,omitempty"`
+}
+
+// CombatPowers are the powers the unit's tactics choose from while it's
+// alive: every power except its OnDeath one.
+func (u UnitType) CombatPowers() []Power {
+	if u.OnDeath == "" {
+		return u.Powers
+	}
+	combat := make([]Power, 0, len(u.Powers))
+	for _, p := range u.Powers {
+		if p.Name != u.OnDeath {
+			combat = append(combat, p)
+		}
+	}
+	return combat
+}
+
+// DeathPower is the power named by OnDeath, if the unit has one.
+func (u UnitType) DeathPower() (Power, bool) {
+	if u.OnDeath == "" {
+		return Power{}, false
+	}
+	for _, p := range u.Powers {
+		if p.Name == u.OnDeath {
+			return p, true
+		}
+	}
+	return Power{}, false
 }
 
 // BasicAttackStyles are the valid values for UnitType.BasicAttackStyle - each
