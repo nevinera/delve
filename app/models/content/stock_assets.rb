@@ -198,6 +198,11 @@ module Content
       "zap" => {"file" => "zap.ogg", "duration" => 0.232}
     }.freeze
 
+    # Character tokens (public/tokens/stock/, credits in ATTRIBUTIONS.md),
+    # picked by a Character's token_url as ":name:" instead of a URL.
+    TOKENS = %w[human elf dwarf halfling half-elf tiefling].product(%w[female male], [1, 2, 3, 4])
+      .to_h { |species, gender, n| ["#{species}-#{gender}-#{n}", {"file" => "#{species}-#{gender}-#{n}.webp"}] }.freeze
+
     def self.icon?(name)
       ICONS.key?(name)
     end
@@ -208,6 +213,14 @@ module Content
 
     def self.sound?(name)
       SOUNDS.key?(name)
+    end
+
+    def self.token?(name)
+      TOKENS.key?(name)
+    end
+
+    def self.token_url(name)
+      "/tokens/stock/#{TOKENS.fetch(name).fetch("file")}"
     end
 
     def self.icon_url(name)

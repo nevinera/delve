@@ -9,10 +9,7 @@
     </ul>
   <% end %>
 
-  <div>
-    <%= f.label :token_url, "Token image URL" %>
-    <%= f.text_field :token_url %>
-  </div>
+  <%= render "token_fields", f:, character: @character %>
 
   <%= f.submit "Save" %>
 <% end %>

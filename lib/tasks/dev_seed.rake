@@ -4,9 +4,9 @@ namespace :dev do
     user = seed_user
     character_class = seed_character_class(user)
     seed_character(user, character_class, name: "Trainee-Adam",
-      token_url: "http://localhost:8001/tokens/character/male-elf-guard.webp")
+      token_url: ":elf-male-1:")
     seed_character(user, character_class, name: "Trainee-Bob",
-      token_url: "http://localhost:8001/tokens/character/female-elf-tribal.webp")
+      token_url: ":elf-female-1:")
 
     # Zones aren't seeded: play them from the same server through Build >
     # Play a local zone (see Build::ZonePlaysController).
