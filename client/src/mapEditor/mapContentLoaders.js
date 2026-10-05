@@ -83,7 +83,7 @@ export async function unitTypeDetailsFor(client, keys) {
         const unitType = JSON.parse(content);
         const rawUrl = Array.isArray(unitType.tokenImageUrl) ? unitType.tokenImageUrl[0] : unitType.tokenImageUrl;
         const tokenImageUrl = rawUrl ? await client.assetUrl(resolveRelativePath(`unit_types/${key}.json`, rawUrl)) : null;
-        return [key, {name: unitType.name, tokenRadius: unitType.tokenRadius, tokenImageUrl, speedFactor: unitType.speedFactor}];
+        return [key, {name: unitType.name, tokenRadius: unitType.tokenRadius, tokenImageUrl, speedFactor: unitType.speedFactor, tags: unitType.tags ?? []}];
       } catch {
         return null;
       }

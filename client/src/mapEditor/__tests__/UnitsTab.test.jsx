@@ -588,13 +588,28 @@ describe("UnitsTab", () => {
     });
   });
   describe("with no group open", () => {
+    it("lists the palette alphabetically; a click selects one, shift-click extends the selection", () => {
+      const onSelect = vi.fn(), onExtendSelection = vi.fn();
+      const encounter = {selection: [], settings: {intendedFor: "open", pullSize: "group"}, onChangeSettings: vi.fn(), onSelect, onExtendSelection,
+        armed: false, onArm: vi.fn(), onDisarm: vi.fn(), error: ""};
+      const units = [unit("a", {unitType: "slime"}), unit("b")];
+      render(<UnitsTab {...DEFAULT_PROPS} units={units} encounter={encounter} />);
+      const palette = within(screen.getByRole("region", {name: "Unit palette"}));
+
+      expect(palette.getAllByRole("button", {pressed: false}).slice(0, 2).map((b) => b.textContent)).toEqual(["Goblin Raider", "Slime"]);
+      fireEvent.click(palette.getByRole("button", {name: "Goblin Raider"}));
+      expect(onSelect).toHaveBeenLastCalledWith(["goblin-raider"]);
+      fireEvent.click(palette.getByRole("button", {name: "Slime"}), {shiftKey: true});
+      expect(onExtendSelection).toHaveBeenLastCalledWith("slime", ["goblin-raider", "slime"]);
+    });
+
     it("offers a palette of the unit types on the map, pressing one arms it and pressing it again disarms", () => {
       const onArmUnitType = vi.fn();
       const units = [unit("a"), unit("b", {unitType: "slime"}), unit("c")];
       const {rerender} = render(<UnitsTab {...DEFAULT_PROPS} units={units} onArmUnitType={onArmUnitType} />);
       const palette = within(screen.getByRole("region", {name: "Unit palette"}));
 
-      expect(palette.getAllByRole("button", {pressed: false}).map((b) => b.textContent)).toEqual(["Goblin Raider", "Slime"]);
+      expect(palette.getAllByRole("button", {pressed: false}).map((b) => b.textContent)).toEqual(["Goblin Raider", "Slime", "+ Encounter"]);
       fireEvent.click(palette.getByRole("button", {name: "Slime"}));
       expect(onArmUnitType).toHaveBeenLastCalledWith("slime");
 
