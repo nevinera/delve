@@ -23,6 +23,8 @@ Used by several effect types:
 | `gAll` | All friendly units within range |
 | `self` | The unit using the power |
 
+For an NPC, the friendly units are itself and its living pack (units sharing its `groupIdentifier` on the same map) within the effect's `range`. `gTarget` picks the most wounded one; a `heal` only counts wounded units, so a healer holds its power until someone is hurt. `bTarget` is the unit's current hostile target.
+
 ---
 
 ## harm

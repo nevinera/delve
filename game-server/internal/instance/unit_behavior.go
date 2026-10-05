@@ -205,7 +205,7 @@ func applyUnitBehavior(
 			if losClear {
 				tryNPCBasicAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, events, state, rng)
 				if target.Status.IsTargetable() {
-					tryNPCAttack(unitID, *unit.Target, unit, target, e.unitType, zone, now, dt, events, state, rng)
+					tryNPCAttack(unitID, *unit.Target, unit, target, npcAllies(unit, groupmates, stateByZoneID), e.unitType, zone, now, dt, events, state, rng)
 				}
 			}
 		} else {
@@ -227,7 +227,7 @@ func applyUnitBehavior(
 // unit_type.md's UnitTactics) at the target if the unit is off GCD and at
 // least one power is in range. Appends a CombatEvent to events if an
 // attack fires.
-func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, dt float64, events *[]CombatEvent, state *instancestate.InstanceState, rng *rand.Rand) {
+func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, allies []*instancestate.UnitState, unitType instanceconfig.UnitType, zone instanceconfig.Zone, now time.Time, dt float64, events *[]CombatEvent, state *instancestate.InstanceState, rng *rand.Rand) {
 	// Phase advancement runs every call, GCD or not - a "phased" unit's
 	// timeElapsed transition shouldn't lag behind while the unit happens to
 	// be mid-GCD (see advancePhase).
@@ -247,7 +247,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
-	available := usablePowers(unit, unitType.Powers, dist, target, now)
+	available := usablePowers(unit, unitType.Powers, dist, target, allies, now)
 	power, ok := selectFromLeafTactics(unit, leafTactics, available, rng)
 	if !ok {
 		return
@@ -265,7 +265,7 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 		return
 	}
 
-	applyNPCPowerEffects(attackerID, targetID, unit, target, power, zone, now, state, rng)
+	applyNPCPowerEffects(attackerID, targetID, unit, target, allies, power, zone, now, state, rng)
 	spendNPCPowerCost(unit, power)
 	commitNPCCooldowns(unit, power, now)
 	*events = append(*events, CombatEvent{
@@ -285,35 +285,37 @@ func tryNPCAttack(attackerID, targetID uuid.UUID, unit, target *instancestate.Un
 // player equivalent), there's no whole-cast abort on an out-of-range
 // effect - each effect independently no-ops via npcEffectInRange, matching
 // NPC attacks' existing per-effect (not all-or-nothing) validation.
-func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) {
+func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instancestate.UnitState, allies []*instancestate.UnitState, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) {
 	dx := target.Position.X - unit.Position.X
 	dy := target.Position.Y - unit.Position.Y
 	dist := math.Sqrt(dx*dx + dy*dy)
 
+	timeBudget := command.PowerEffectTimeBudget(power)
 	for _, eff := range power.Effects {
-		if !npcEffectUsable(eff) || !npcEffectInRange(eff, dist, unit, target) {
+		if !npcEffectUsable(eff) {
+			continue
+		}
+		if isAllyAffects(eff.Affects) {
+			applyNPCAllyEffect(attackerID, unit, allies, eff, timeBudget, zone, now, rng)
+			continue
+		}
+		if !npcEffectInRange(eff, dist, unit, target) {
 			continue
 		}
 		switch eff.Type {
 		case "status":
-			recipient := target
-			if eff.Affects == "self" {
-				recipient = unit
-			} else {
-				// Casting at a hostile target is an attack too - it aggros
-				// an idle hostile target and can be resisted, same as harm.
-				// Resistibility is a property of this cast (who it's aimed
-				// at), not of the Status itself - see command.IsHostileAffects.
-				command.EngageOnAttack(target, attackerID, zone, state)
-				if command.IsHostileAffects(eff.Affects) {
-					if missed, _ := command.RollAttackOutcome(0, rng); missed {
-						continue // resisted
-					}
+			// Casting at a hostile target is an attack too - it aggros
+			// an idle hostile target and can be resisted, same as harm.
+			// Resistibility is a property of this cast (who it's aimed
+			// at), not of the Status itself - see command.IsHostileAffects.
+			command.EngageOnAttack(target, attackerID, zone, state)
+			if command.IsHostileAffects(eff.Affects) {
+				if missed, _ := command.RollAttackOutcome(0, rng); missed {
+					continue // resisted
 				}
 			}
-			command.ApplyStatus(recipient, unit, attackerID, *eff.Status, eff.Duration, zone, now)
+			command.ApplyStatus(target, unit, attackerID, *eff.Status, eff.Duration, zone, now)
 		case "harm":
-			timeBudget := command.PowerEffectTimeBudget(power)
 			raw := command.PowerEffectAmount(unit, zone, eff, timeBudget, false, false, rng)
 			dealt := command.IncomingDamage(target, zone, raw, eff.School != "magic", rng)
 			target.Health -= dealt
@@ -331,11 +333,7 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 				instancestate.RollAndRecordLoot(targetID, target, state, rng)
 			}
 		case "resource":
-			recipient := target
-			if eff.Affects == "self" {
-				recipient = unit
-			}
-			command.AdjustResource(recipient, eff.ResourceName, eff.Delta)
+			command.AdjustResource(target, eff.ResourceName, eff.Delta)
 		}
 	}
 }
@@ -374,14 +372,23 @@ func spendNPCPowerCost(unit *instancestate.UnitState, power instanceconfig.Power
 // player casts. This is the same "could I use this at all" filter
 // regardless of UnitTactics.Type - Tactics only decides *which* of these
 // gets picked, never what counts as a candidate.
-func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, dist float64, target *instancestate.UnitState, now time.Time) []instanceconfig.Power {
+func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, dist float64, target *instancestate.UnitState, allies []*instancestate.UnitState, now time.Time) []instanceconfig.Power {
 	var available []instanceconfig.Power
 	for _, p := range powers {
 		if !command.PowerUsable(unit, p, now) {
 			continue
 		}
 		for _, eff := range p.Effects {
-			if npcEffectUsable(eff) && npcEffectInRange(eff, dist, unit, target) {
+			if !npcEffectUsable(eff) {
+				continue
+			}
+			reachable := false
+			if isAllyAffects(eff.Affects) {
+				reachable = len(allyRecipients(unit, allies, eff)) > 0
+			} else {
+				reachable = npcEffectInRange(eff, dist, unit, target)
+			}
+			if reachable {
 				available = append(available, p)
 				break
 			}
@@ -491,8 +498,8 @@ func selectPriorityRotation(order []string, available []instanceconfig.Power) (i
 }
 
 // npcEffectUsable reports whether eff is a type/shape tryNPCAttack knows how
-// to fire at all (a harm with an amount, a status with a status, or a
-// resource with a resourceName).
+// to fire at all (a harm or heal with an amount, a status with a status,
+// or a resource with a resourceName).
 func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
 	switch eff.Type {
 	case "harm":
@@ -501,6 +508,8 @@ func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
 		return eff.Status != nil
 	case "resource":
 		return eff.ResourceName != ""
+	case "heal":
+		return eff.Amount != nil
 	default:
 		return false
 	}
