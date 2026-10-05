@@ -69,6 +69,98 @@ icons are otherwise unmodified. Each file and its original icon:
 - weaken.svg: "sword-break" by Lorc
 - wind.svg: "whirlwind" by Lorc
 
+## Graphics
+
+### public/abilities/graphics/
+
+The graphics below were picked from CC0 packs, then cropped, squared and assembled into sprite sheets; some were rotated, mirrored or desaturated for tinting.
+
+arc-back-faded.png: slash_02.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+arc-burst.png: slash_04.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+atomic-circle.sprites7x1.png: hits-4-1.png from OpenGameArt "warped-shooting-fx" -- https://opengameart.org/content/warped-shooting-fx -- License: Creative Commons 0
+
+aurora-sweep.sprites6x6.png: aura_test_1_32_1.png from OpenGameArt "2d-spell-effects" -- https://opengameart.org/content/2d-spell-effects -- License: Creative Commons 0
+
+cloud.png: whitePuff06.png from "Smoke Particles" by Kenney -- https://kenney.nl/assets/smoke-particles -- License: Creative Commons 0
+
+coalescing-sigil.sprites5x4.png: spell_signoffire_1.png from OpenGameArt "2d-spell-effects" -- https://opengameart.org/content/2d-spell-effects -- License: Creative Commons 0
+
+eclipse.sprites6x5.png: Effect_ElectricShield_1_000.png from OpenGameArt "free-vfx-asset-pack" -- https://opengameart.org/content/free-vfx-asset-pack -- License: Creative Commons 0
+
+lightning-ball.sprites5x4.png: lighteningball_1_20_1.png from OpenGameArt "2d-spell-effects" -- https://opengameart.org/content/2d-spell-effects -- License: Creative Commons 0
+
+magic-flare.sprites5x4.png: spell_decap_2_ball_1.png from OpenGameArt "2d-spell-effects" -- https://opengameart.org/content/2d-spell-effects -- License: Creative Commons 0
+
+missile-pair.sprites6x1.png: crossed1.png from OpenGameArt "warped-shooting-fx" -- https://opengameart.org/content/warped-shooting-fx -- License: Creative Commons 0
+
+missile-ringed.sprites4x1.png: pulse1.png from OpenGameArt "warped-shooting-fx" -- https://opengameart.org/content/warped-shooting-fx -- License: Creative Commons 0
+
+missile-wiggly.sprites4x1.png: waveform1.png from OpenGameArt "warped-shooting-fx" -- https://opengameart.org/content/warped-shooting-fx -- License: Creative Commons 0
+
+pixel-pulse-star.sprites6x1.png: ezgif.com-animated-gif-maker_16.gif from OpenGameArt "pixel-art-spells" -- https://opengameart.org/content/pixel-art-spells -- License: Creative Commons 0
+
+pixel-swirling-orb.sprites6x1.png: ezgif.com-animated-gif-maker_4.gif from OpenGameArt "pixel-art-spells" -- https://opengameart.org/content/pixel-art-spells -- License: Creative Commons 0
+
+pulsar.sprites5x5.png: Effect_TheVortex_1_000.png from OpenGameArt "free-vfx-asset-pack" -- https://opengameart.org/content/free-vfx-asset-pack -- License: Creative Commons 0
+
+ring.png: circle_03.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+ring-faded.png: light_03.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+scratch.png: scratch_01.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+shadow-flare.sprites5x4.png: smoke_black_1_19_1.png from OpenGameArt "2d-spell-effects" -- https://opengameart.org/content/2d-spell-effects -- License: Creative Commons 0
+
+spinning-ice.sprites8x8.png: 12_nebula_spritesheet.png from OpenGameArt "free-pixel-effects-pack" -- https://opengameart.org/content/free-pixel-effects-pack -- License: Creative Commons 0
+
+spinning-spear.sprites4x1.png: ezgif.com-animated-gif-maker_9.gif from OpenGameArt "pixel-art-spells" -- https://opengameart.org/content/pixel-art-spells -- License: Creative Commons 0
+
+star-diamond.png: star_06.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+star-faded-diamond.png: star_02.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+star-faded-round.png: star_05.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+star-pointed.png: star_07.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+star-round.png: star_09.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+star-x.png: star_08.png from "Particle Pack" by Kenney -- https://kenney.nl/assets/particle-pack -- License: Creative Commons 0
+
+surrounding-burst.sprites5x1.png: hits-3-1.png from OpenGameArt "warped-shooting-fx" -- https://opengameart.org/content/warped-shooting-fx -- License: Creative Commons 0
+
+swirling-burst.sprites5x1.png: Cosmic_21.png from OpenGameArt "cosmic-time-magic-effect" -- https://opengameart.org/content/cosmic-time-magic-effect -- License: Creative Commons 0
+
+swirling-fire.sprites11x11.png: fire_circles.gif from OpenGameArt "fire-circle-fx" -- https://opengameart.org/content/fire-circle-fx -- License: Creative Commons 0
+
+blowtorch.sprites5x1.png: muzzle_01.png from OpenGameArt "particle-pack-80-sprites" -- https://opengameart.org/content/particle-pack-80-sprites -- License: Creative Commons 0
+
+blurred-orb.png: 12_9.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+burst-of-stars.sprites4x4.png: Effect51.png from OpenGameArt "lots-of-game-effects" -- https://opengameart.org/content/lots-of-game-effects -- License: Creative Commons 0
+
+crackling-arc.sprites7x6.png: 1.png from OpenGameArt "sprite-effects-part-2" -- https://opengameart.org/content/sprite-effects-part-2 -- License: Creative Commons 0
+
+crescent.png: Circular.png from OpenGameArt "slash-effect-collection" -- https://opengameart.org/content/slash-effect-collection -- License: Creative Commons 0
+
+crisscross-orbits.sprites5x5.png: 1.png from OpenGameArt "sprite-effects-part-2" -- https://opengameart.org/content/sprite-effects-part-2 -- License: Creative Commons 0
+
+eclipse-corona.png: 11_11.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+large-arc.png: Slash symmetrical.png from OpenGameArt "slash-effect-collection" -- https://opengameart.org/content/slash-effect-collection -- License: Creative Commons 0
+
+oblong-energy.png: trace_06_rotated.png from OpenGameArt "particle-pack-80-sprites" -- https://opengameart.org/content/particle-pack-80-sprites -- License: Creative Commons 0
+
+spinning-comet.sprites5x5.png: 1.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+static-lightning.png: spark_05_rotated.png from OpenGameArt "particle-pack-80-sprites" -- https://opengameart.org/content/particle-pack-80-sprites -- License: Creative Commons 0
+
+thick-arc.png: 1_200.png from OpenGameArt "sprite-effects-part-1" -- https://opengameart.org/content/sprite-effects-part-1 -- License: Creative Commons 0
+
+wings.sprites5x1.png: 01.png from OpenGameArt "angel-wings-effect" -- https://opengameart.org/content/angel-wings-effect -- License: Creative Commons 0
+
 ## Sounds
 
 ### public/abilities/sounds/
