@@ -78,7 +78,7 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, next *instancestate.InstanceState) (*instancestate.UnitState, bool) {
 	needsTarget := false
 	for _, eff := range power.Effects {
-		if eff.Affects != "self" {
+		if !isUntargetedAffects(eff.Affects) {
 			needsTarget = true
 			break
 		}
@@ -130,102 +130,138 @@ func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power
 func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState, rng *rand.Rand) bool {
 	timeBudget := PowerEffectTimeBudget(power)
 	for _, effect := range power.Effects {
-		switch effect.Type {
-		case "harm":
+		if !playerEffectUsable(effect) {
+			continue
+		}
+		switch effect.Affects {
+		case "self", "gAll":
+			// No parties yet, so a player's gAll is just the caster.
+			applyPlayerEffect(unitID, unit, unitID, unit, effect, timeBudget, zone, now, next, rng)
+		case "bAll":
+			for _, v := range playerAreaVictims(unit, effect, zone, next) {
+				applyPlayerEffect(unitID, unit, v.id, v.unit, effect, timeBudget, zone, now, next, rng)
+			}
+		default:
 			if target == nil {
 				continue
 			}
 			if !inRangeAndLOS(unit, target, zone, effect.Range) {
 				return false
 			}
-			unit.Attacking = true
-			if effect.Amount != nil {
-				if target.TaggedBy == nil && target.Hostility != "" && !IsEvading(target) {
-					target.TaggedBy = &unitID
-				}
-				EngageOnAttack(target, unitID, zone, next)
-				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false, rng)
-				dealt := IncomingDamage(target, zone, raw, effect.School != "magic", rng)
-				target.Health -= dealt
-				AddThreat(target, unitID, dealt)
-				if dealt > 0 {
-					ApplyCastPushback(target)
-					unit.DamageDealtThisTick = true
-					target.DamageTakenThisTick = true
-				}
-				if target.Health < 0 {
-					target.Health = 0
-				}
-				if target.Health == 0 {
-					target.Status = instancestate.UnitStatusDead
-					target.Target = nil
-					instancestate.RollAndRecordLoot(*targetID, target, next, rng)
-					if unit.Target != nil && *unit.Target == *targetID {
-						unit.Target = nil
-						unit.Attacking = false
-					}
-				}
-			}
-		case "status":
-			if effect.Status == nil {
-				continue
-			}
-			recipient := unit
-			if effect.Affects != "self" {
-				if target == nil {
-					continue
-				}
-				if !inRangeAndLOS(unit, target, zone, effect.Range) {
-					return false
-				}
-				recipient = target
-				// Casting at a hostile target is an attack too - it aggros
-				// an idle hostile target and can be resisted, same as harm.
-				// Resistibility is a property of this cast (who it's aimed
-				// at), not of the Status itself - see IsHostileAffects.
-				EngageOnAttack(target, unitID, zone, next)
-				if IsHostileAffects(effect.Affects) && rng.Float64() < baseMissChance {
-					continue // resisted
-				}
-			}
-			ApplyStatus(recipient, unit, unitID, *effect.Status, effect.Duration, zone, now)
-		case "heal":
-			if effect.Amount == nil {
-				continue
-			}
-			recipient := unit
-			if effect.Affects != "self" {
-				if target == nil {
-					continue
-				}
-				if !inRangeAndLOS(unit, target, zone, effect.Range) {
-					return false
-				}
-				recipient = target
-			}
-			if IsEvading(recipient) && recipient != unit {
-				continue
-			}
-			amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)
-			ApplyHeal(unit, recipient, amount, zone)
-		case "resource":
-			recipient := unit
-			if effect.Affects != "self" {
-				if target == nil {
-					continue
-				}
-				if !inRangeAndLOS(unit, target, zone, effect.Range) {
-					return false
-				}
-				recipient = target
-			}
-			if IsEvading(recipient) && recipient != unit {
-				continue
-			}
-			AdjustResource(recipient, effect.ResourceName, effect.Delta)
+			applyPlayerEffect(unitID, unit, *targetID, target, effect, timeBudget, zone, now, next, rng)
 		}
 	}
 	return true
+}
+
+// isUntargetedAffects reports whether an effect lands without the caster
+// needing a target: on itself, or on everyone around it.
+func isUntargetedAffects(affects string) bool {
+	return affects == "self" || affects == "bAll" || affects == "gAll"
+}
+
+// playerEffectUsable reports whether effect has what its type needs.
+func playerEffectUsable(effect instanceconfig.PowerEffect) bool {
+	switch effect.Type {
+	case "harm", "heal":
+		return effect.Amount != nil
+	case "status":
+		return effect.Status != nil
+	case "resource":
+		return true
+	default:
+		return false
+	}
+}
+
+type areaVictim struct {
+	id   uuid.UUID
+	unit *instancestate.UnitState
+}
+
+// playerAreaVictims is everyone a player's bAll effect hits: every living,
+// non-evading hostile or neutral NPC on the caster's map within the effect's
+// range, with line of sight - never players or friendly NPCs.
+func playerAreaVictims(unit *instancestate.UnitState, effect instanceconfig.PowerEffect, zone instanceconfig.Zone, next *instancestate.InstanceState) []areaVictim {
+	var victims []areaVictim
+	for id, u := range next.Units {
+		if u == unit || u.MapIdentifier != unit.MapIdentifier || !u.Status.IsTargetable() || IsEvading(u) {
+			continue
+		}
+		if u.Hostility != "hostile" && u.Hostility != "neutral" {
+			continue
+		}
+		if inRangeAndLOS(unit, u, zone, effect.Range) {
+			victims = append(victims, areaVictim{id, u})
+		}
+	}
+	return victims
+}
+
+// applyPlayerEffect applies one effect from a player (unit) to a single
+// recipient that's already passed its range/LOS checks. The recipient may be
+// the caster itself.
+func applyPlayerEffect(unitID uuid.UUID, unit *instancestate.UnitState, recipientID uuid.UUID, recipient *instancestate.UnitState, effect instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState, rng *rand.Rand) {
+	self := recipient == unit
+	switch effect.Type {
+	case "harm":
+		if self {
+			return
+		}
+		applyPlayerHarm(unitID, unit, recipientID, recipient, effect, timeBudget, zone, next, rng)
+	case "status":
+		if !self {
+			// Casting at a hostile target is an attack too - it aggros
+			// an idle hostile target and can be resisted, same as harm.
+			// Resistibility is a property of this cast (who it's aimed
+			// at), not of the Status itself - see IsHostileAffects.
+			EngageOnAttack(recipient, unitID, zone, next)
+			if IsHostileAffects(effect.Affects) && rng.Float64() < baseMissChance {
+				return // resisted
+			}
+		}
+		ApplyStatus(recipient, unit, unitID, *effect.Status, effect.Duration, zone, now)
+	case "heal":
+		if !self && IsEvading(recipient) {
+			return
+		}
+		amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)
+		ApplyHeal(unit, recipient, amount, zone)
+	case "resource":
+		if !self && IsEvading(recipient) {
+			return
+		}
+		AdjustResource(recipient, effect.ResourceName, effect.Delta)
+	}
+}
+
+func applyPlayerHarm(unitID uuid.UUID, unit *instancestate.UnitState, victimID uuid.UUID, victim *instancestate.UnitState, effect instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, next *instancestate.InstanceState, rng *rand.Rand) {
+	unit.Attacking = true
+	if victim.TaggedBy == nil && victim.Hostility != "" && !IsEvading(victim) {
+		victim.TaggedBy = &unitID
+	}
+	EngageOnAttack(victim, unitID, zone, next)
+	raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false, rng)
+	dealt := IncomingDamage(victim, zone, raw, effect.School != "magic", rng)
+	victim.Health -= dealt
+	AddThreat(victim, unitID, dealt)
+	if dealt > 0 {
+		ApplyCastPushback(victim)
+		unit.DamageDealtThisTick = true
+		victim.DamageTakenThisTick = true
+	}
+	if victim.Health < 0 {
+		victim.Health = 0
+	}
+	if victim.Health == 0 {
+		victim.Status = instancestate.UnitStatusDead
+		victim.Target = nil
+		instancestate.RollAndRecordLoot(victimID, victim, next, rng)
+		if unit.Target != nil && *unit.Target == victimID {
+			unit.Target = nil
+			unit.Attacking = false
+		}
+	}
 }
 
 // commitPowerCostAndCooldowns spends power's resource cost and starts its
