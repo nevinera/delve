@@ -248,3 +248,7 @@ func ResolveImpactsForTest(state *instancestate.InstanceState, zone instanceconf
 	updateCombatStats(state, zone)
 	resolveImpacts(state, zone, now, testRng())
 }
+
+func UpdateStealthForTest(state, prev *instancestate.InstanceState, zone instanceconfig.Zone) {
+	updateStealth(state, prev, zone)
+}

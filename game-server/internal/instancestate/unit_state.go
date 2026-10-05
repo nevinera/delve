@@ -278,6 +278,12 @@ type UnitState struct {
 	// own name for an NPC. "" for a unit with no resources.
 	PrimaryResourceName string
 
+	// Stealthed is whether the unit is currently stealthed: hidden from
+	// players who don't detect it (docs/schema/unit_type.md's Stealth). Set
+	// at spawn and on reset for unit types with a stealth rating; see
+	// instance/stealth.go.
+	Stealthed bool
+
 	Speed  float64 // movement speed in feet per second
 	Radius float64 // collision radius in feet; 0 means no collision (NPCs for now)
 

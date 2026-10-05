@@ -120,6 +120,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			tickResourceRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			tickHealthRegen(state, inst.ZoneConfig, TickInterval.Seconds())
 			expireStatusEffects(state, now)
+			updateStealth(state, prevState, inst.ZoneConfig)
 			resolveCollisions(state, inst.ZoneConfig)
 			restoreUnitsThatCrossedBarriers(state, prevState, inst.ZoneConfig)
 			roundPositions(state)
