@@ -129,8 +129,5 @@ func fireHeal(holder, recipient *instancestate.UnitState, eff instanceconfig.Sta
 		return
 	}
 	amount := TriggeredEffectAmount(holder, zone, eff, true, rng)
-	recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
-	if recipient.Health > recipient.MaxHealth {
-		recipient.Health = recipient.MaxHealth
-	}
+	ApplyHeal(holder, recipient, amount, zone)
 }

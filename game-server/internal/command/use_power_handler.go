@@ -206,10 +206,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				continue
 			}
 			amount := PowerEffectAmount(unit, zone, effect, timeBudget, true, false, rng)
-			recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
-			if recipient.Health > recipient.MaxHealth {
-				recipient.Health = recipient.MaxHealth
-			}
+			ApplyHeal(unit, recipient, amount, zone)
 		case "resource":
 			recipient := unit
 			if effect.Affects != "self" {

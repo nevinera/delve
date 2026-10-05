@@ -101,10 +101,7 @@ func applyNPCAllyEffect(attackerID uuid.UUID, unit *instancestate.UnitState, all
 			command.ApplyStatus(recipient, unit, attackerID, *eff.Status, eff.Duration, zone, now)
 		case "heal":
 			amount := command.PowerEffectAmount(unit, zone, eff, timeBudget, true, false, rng)
-			recipient.Health += amount * (1 + command.HealingTakenPct(recipient, zone)/100)
-			if recipient.Health > recipient.MaxHealth {
-				recipient.Health = recipient.MaxHealth
-			}
+			command.ApplyHeal(unit, recipient, amount, zone)
 		case "resource":
 			command.AdjustResource(recipient, eff.ResourceName, eff.Delta)
 		}

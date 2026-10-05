@@ -328,6 +328,12 @@ type UnitState struct {
 	DamageTakenThisTick bool
 	DamageDealtThisTick bool
 
+	// RecentHealing is a decaying total of the healing this unit has
+	// actually restored to others (overheal excluded), fed by
+	// command.ApplyHeal and decayed each tick by the instance. It backs the
+	// "healerAggro" UnitTargeting type.
+	RecentHealing float64
+
 	// LastMoveAt is when the server last processed a client-submitted move
 	// with an explicit position (see command.MoveHandler), used to bound how
 	// far that position can feasibly have moved since - zero until the first

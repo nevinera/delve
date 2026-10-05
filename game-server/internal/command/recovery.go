@@ -37,3 +37,18 @@ func HealingTakenPct(unit *instancestate.UnitState, zone instanceconfig.Zone) fl
 	add, multiply := ActiveStatModifiers(unit).Get("healingTaken")
 	return (recoveryPct + add) * multiply
 }
+
+// ApplyHeal restores amount (scaled by the recipient's healing-taken bonus)
+// to recipient, capped at its max health, and credits healer's
+// RecentHealing with what was actually restored on someone else - overheal
+// and self-healing earn no healing aggro. healer may be nil.
+func ApplyHeal(healer, recipient *instancestate.UnitState, amount float64, zone instanceconfig.Zone) {
+	before := recipient.Health
+	recipient.Health += amount * (1 + HealingTakenPct(recipient, zone)/100)
+	if recipient.Health > recipient.MaxHealth {
+		recipient.Health = recipient.MaxHealth
+	}
+	if healer != nil && healer != recipient {
+		healer.RecentHealing += recipient.Health - before
+	}
+}

@@ -60,6 +60,7 @@ type CombatEvent = instancestate.CombatEvent
 // dispatches to the appropriate movement routine.
 func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, pathGraph *pathing.Graph, rng *rand.Rand) []CombatEvent {
 	cfgByID := buildNPCConfigByID(zone)
+	decayRecentHealing(state, dt)
 	budget := &pathBudget{remaining: maxPathSearchesPerTick}
 
 	// Index live players by map for O(1) aggro checks.
@@ -169,6 +170,11 @@ func applyUnitBehavior(
 			unit.Target = newTarget
 			unit.Attacking = true
 			target = state.Units[*newTarget]
+		}
+		if switchTo := pickNPCTarget(unit, e.unitType.Targeting, target, playersByMap[unit.MapIdentifier]); switchTo != nil {
+			unit.Target = switchTo
+			unit.Behavior.PathWaypoints = nil // discard any detour left over from the old target
+			target = state.Units[*switchTo]
 		}
 		if target.MapIdentifier == unit.MapIdentifier {
 			unit.Behavior.LastSeenX = target.Position.X

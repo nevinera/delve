@@ -65,10 +65,7 @@ func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState
 			return
 		}
 		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, true, rng)
-		target.Health += amount * (1 + command.HealingTakenPct(target, zone)/100)
-		if target.Health > target.MaxHealth {
-			target.Health = target.MaxHealth
-		}
+		command.ApplyHeal(applier, target, amount, zone)
 	case "harm":
 		if target.TaggedBy == nil && target.Hostility != "" && !command.IsEvading(target) {
 			id := applierID
