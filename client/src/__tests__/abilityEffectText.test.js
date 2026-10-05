@@ -5,6 +5,11 @@ import {combatStats} from "./combatStatsFixture";
 const noStats = {combatStats: combatStats()};
 
 describe("describeEffects", () => {
+  it("describes a splash around the target", () => {
+    const ability = {castTime: null, globalCooldown: 1, effects: [{type: "harm", affects: "bTarget", amount: [2, 4], range: 30, radius: 6}]};
+    expect(describeEffects(ability, noStats)).toEqual([["Deals 2-4 physical damage to the target and every enemy within 6 of it (range 30)"]]);
+  });
+
   it("shows an authored harm range with no stats", () => {
     const ability = {castTime: null, globalCooldown: 1, effects: [{type: "harm", affects: "bTarget", amount: [2, 4], range: 5}]};
     expect(describeEffects(ability, noStats)).toEqual([["Deals 2-4 physical damage to the target (range 5)"]]);

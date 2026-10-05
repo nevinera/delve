@@ -2,6 +2,7 @@ package instancestate
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -62,6 +63,19 @@ type InstanceState struct {
 	PendingLootFailures     []LootFailure                  // drained each tick into delta message
 	PendingOwnershipUpdates []OwnershipUpdate              // drained each tick to update slot OwnedZoneItems
 	PendingCombatEvents     []CombatEvent                  // drained each tick into delta message; appended by command handlers
+	PendingImpacts          []PendingImpact                // projectile effects in flight; resolved once each lands
+}
+
+// PendingImpact is one effect riding a projectile (a power with a Speed),
+// aimed at TargetID, that lands at LandsAt. Its range was checked at cast;
+// it fizzles if the target is gone or dead by then.
+type PendingImpact struct {
+	CasterID   uuid.UUID
+	TargetID   uuid.UUID
+	Effect     instanceconfig.PowerEffect
+	TimeBudget float64 // the power's, for PowerEffectAmount's stat bonus
+	LandsAt    time.Time
+	FromPlayer bool // resolved through the player path (command) or the NPC one (instance)
 }
 
 // NewInstanceState constructs an InstanceState from a zone config, placing every

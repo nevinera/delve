@@ -3,6 +3,7 @@ package command_test
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -92,4 +93,50 @@ func TestResolveCastTarget_AreaOnlyPowersNeedNoTarget(t *testing.T) {
 	_, ok := command.ResolveCastTarget(state.Units[playerID], nil, areaPower(areaHarm(8)).Power, state)
 
 	assert.True(t, ok)
+}
+
+func TestUsePowerHandler_BTargetRadiusSplashesNPCsAroundTheTarget(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	playerID, target, beside, far, friendly := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	npcs := map[uuid.UUID]npcSpec{
+		target: {20, "hostile"}, beside: {24, "neutral"}, far: {35, "hostile"}, friendly: {22, "friendly"},
+	}
+	state := areaState(playerID, npcs)
+	targetUUID := target
+	state.Units[playerID].Target = &targetUUID
+	state.Units[playerID].Position.Angle = 90 // facing +x, toward the target
+	splash := areaHarm(30)
+	splash.Affects, splash.Radius = "bTarget", 6
+	payload := areaPower(splash)
+
+	for i := 0; i < 20; i++ {
+		state.Units[playerID].GlobalCooldownEndsAt = state.Units[playerID].GlobalCooldownEndsAt.AddDate(-1, 0, 0)
+		stampStats(state, instanceconfig.Zone{})
+		require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, payload, instanceconfig.Zone{}, state))
+	}
+
+	assert.Less(t, state.Units[target].Health, 50.0, "the target is hit")
+	assert.Less(t, state.Units[beside].Health, 50.0, "so is an NPC 4ft from it")
+	assert.Equal(t, 50.0, state.Units[far].Health, "an NPC 15ft from it isn't")
+	assert.Equal(t, 50.0, state.Units[friendly].Health, "friendly NPCs aren't")
+}
+
+func TestUsePowerHandler_ProjectileEffectsAreQueuedNotApplied(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	playerID, targetID := uuid.New(), uuid.New()
+	state := stateWithPlayerAndTarget(playerID, targetID, 0, 0, 20, 0)
+	payload := punchPower()
+	payload.Power.Speed = 40
+	r := instanceconfig.ZeroBasedValueRange{0, 30}
+	payload.Power.Effects[0].Range = &r
+
+	stampStats(state, instanceconfig.Zone{})
+	require.NoError(t, command.UsePowerHandler{Rng: rng}.Handle(playerID, payload, instanceconfig.Zone{}, state))
+
+	assert.Equal(t, 50.0, state.Units[targetID].Health, "nothing lands at cast")
+	require.Len(t, state.PendingImpacts, 1)
+	impact := state.PendingImpacts[0]
+	assert.True(t, impact.FromPlayer)
+	assert.Equal(t, targetID, impact.TargetID)
+	assert.InDelta(t, 0.5, time.Until(impact.LandsAt).Seconds(), 0.05, "20ft at 40ft/s")
 }

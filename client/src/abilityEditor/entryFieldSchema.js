@@ -27,7 +27,7 @@ const RANGE_FIELDS = new Set(["amount", "range"]);
 
 const NUMBER_FIELDS = new Set([
   "duration", "scale", "spriteColumns", "spriteRows", "spriteFrameCount",
-  "spriteFrameRate", "volumeScale", "delta",
+  "spriteFrameRate", "volumeScale", "delta", "radius",
 ]);
 
 export function widgetFor(field) {
@@ -67,7 +67,15 @@ const ENTRY_FIELDS = {
 // list.
 const RESOURCE_EFFECT_FIELDS = ["type", "affects", "resourceName", "delta", "range"];
 
+// An effect aimed at a target can splash around it (radius), so offer the
+// field even before it's set.
 export function entryFieldsFor(section, entry) {
+  const fields = baseEntryFields(section, entry);
+  const targeted = section === "effects" && (entry.affects === "bTarget" || entry.affects === "gTarget");
+  return targeted && !fields.includes("radius") ? [...fields, "radius"] : fields;
+}
+
+function baseEntryFields(section, entry) {
   if (section === "effects" && entry.type === "status") {
     const fields = Object.keys(entry);
     if (!fields.includes("status")) fields.push("status");

@@ -307,10 +307,21 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 			continue
 		}
 		if isAllyAffects(eff.Affects) {
+			if power.Speed > 0 && eff.Affects == "gTarget" {
+				queueNPCAllyImpact(attackerID, unit, allies, eff, timeBudget, power, now, state)
+				continue
+			}
 			applyNPCAllyEffect(attackerID, unit, allies, eff, timeBudget, zone, now, rng)
 			continue
 		}
 		if !npcEffectInRange(eff, dist, unit, target) {
+			continue
+		}
+		if power.Speed > 0 && instanceconfig.IsImpactAffects(eff.Affects) {
+			command.QueueImpact(state, instancestate.PendingImpact{
+				CasterID: attackerID, TargetID: targetID, Effect: eff, TimeBudget: timeBudget,
+				LandsAt: now.Add(command.ImpactDelay(unit, target, power)),
+			})
 			continue
 		}
 		for _, v := range hostileRecipients(eff, unit, targetID, target, zone, state) {
@@ -403,7 +414,7 @@ func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, 
 			}
 			reachable := false
 			if isAllyAffects(eff.Affects) {
-				reachable = len(allyRecipients(unit, allies, eff)) > 0
+				reachable = len(eligibleAllies(unit, allies, eff)) > 0
 			} else {
 				reachable = npcEffectInRange(eff, dist, unit, target)
 			}

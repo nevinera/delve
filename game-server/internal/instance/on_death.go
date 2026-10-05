@@ -78,18 +78,17 @@ func applyDeathPower(unitID uuid.UUID, unit *instancestate.UnitState, targetID u
 			applyNPCAllyEffect(unitID, unit, packmates, eff, timeBudget, zone, now, rng)
 			continue
 		}
-		if eff.Affects == "bAll" {
-			for _, v := range hostileRecipients(eff, unit, targetID, target, zone, state) {
-				applyNPCHostileEffect(unitID, v.id, unit, v.unit, eff, timeBudget, zone, now, state, rng)
+		if eff.Affects != "bAll" {
+			if target == nil {
+				continue
 			}
-			continue
+			dx, dy := target.Position.X-unit.Position.X, target.Position.Y-unit.Position.Y
+			if !npcEffectInRange(eff, math.Sqrt(dx*dx+dy*dy), unit, target) {
+				continue
+			}
 		}
-		if target == nil {
-			continue
-		}
-		dx, dy := target.Position.X-unit.Position.X, target.Position.Y-unit.Position.Y
-		if npcEffectInRange(eff, math.Sqrt(dx*dx+dy*dy), unit, target) {
-			applyNPCHostileEffect(unitID, targetID, unit, target, eff, timeBudget, zone, now, state, rng)
+		for _, v := range hostileRecipients(eff, unit, targetID, target, zone, state) {
+			applyNPCHostileEffect(unitID, v.id, unit, v.unit, eff, timeBudget, zone, now, state, rng)
 		}
 	}
 }

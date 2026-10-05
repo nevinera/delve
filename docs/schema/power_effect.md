@@ -23,9 +23,22 @@ Used by several effect types:
 | `gAll` | All friendly units within range |
 | `self` | The unit using the power |
 
-For an NPC, the friendly units are itself and its living pack (units sharing its `groupIdentifier` on the same map) within the effect's `range`. `gTarget` picks the most wounded one; a `heal` only counts wounded units, so a healer holds its power until someone is hurt. `bTarget` is the unit's current hostile target; an NPC's `bAll` hits every living player on its map within `range` that it has line of sight to, centered on the NPC (there is no target-centered radius yet).
+For an NPC, the friendly units are itself and its living pack (units sharing its `groupIdentifier` on the same map) within the effect's `range`. `gTarget` picks the most wounded one; a `heal` only counts wounded units, so a healer holds its power until someone is hurt. `bTarget` is the unit's current hostile target; an NPC's `bAll` hits every living player on its map within `range` that it has line of sight to, centered on the NPC (for an area centered on the target, use `radius`, below).
 
 For a player, `bAll` hits every living hostile or neutral NPC on their map within `range` of the player, with line of sight (never players or friendly NPCs), and `gAll` is just the player themselves until there are parties. Neither needs a target, so a power made only of `self`, `bAll` and `gAll` effects can be used with nothing targeted; give its graphics `"from": "self", "to": "self"` so they play around the caster.
+
+### radius (splash around the target)
+
+Any `harm`, `heal`, `resource` or `status` effect with `affects` of `bTarget` or `gTarget` may set `radius` (feet, greater than 0). It still lands on the target, and also on every other unit of the same side within `radius` of the target, with line of sight from the target: a fireball's splash, a burst heal on an ally. `range` is still how far the caster can be from the target.
+
+| Caster | `bTarget` + `radius` | `gTarget` + `radius` |
+|---|---|---|
+| Player | The target, plus every living hostile or neutral NPC around it. | Just the target, until there are parties. |
+| NPC | Its target, plus every living player around it. | The most wounded packmate in range, plus every packmate around it the effect can land on (a heal only reaches the wounded). |
+
+```json
+{ "type": "harm", "affects": "bTarget", "range": 30.0, "radius": 8.0, "amount": [6.0, 9.0], "school": "magic" }
+```
 
 ---
 

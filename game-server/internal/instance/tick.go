@@ -110,6 +110,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph, inst.Rand)...)
 			tickNCUMovement(state, TickInterval.Seconds(), inst.Rand)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
+			resolveImpacts(state, inst.ZoneConfig, now, inst.Rand)
 			tickStatusEffects(state, inst.ZoneConfig, TickInterval.Seconds(), inst.Rand)
 			updateCombatClocks(state, now)
 			processTriggeredStatusEffects(state, inst.ZoneConfig, now, TickInterval.Seconds(), inst.Rand)

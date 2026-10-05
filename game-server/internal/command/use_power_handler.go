@@ -148,10 +148,46 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 			if !inRangeAndLOS(unit, target, zone, effect.Range) {
 				return false
 			}
-			applyPlayerEffect(unitID, unit, *targetID, target, effect, timeBudget, zone, now, next, rng)
+			if power.Speed > 0 {
+				QueueImpact(next, instancestate.PendingImpact{
+					CasterID: unitID, TargetID: *targetID, Effect: effect, TimeBudget: timeBudget,
+					LandsAt: now.Add(ImpactDelay(unit, target, power)), FromPlayer: true,
+				})
+				continue
+			}
+			ApplyPlayerTargetedEffect(unitID, unit, *targetID, target, effect, timeBudget, zone, now, next, rng)
 		}
 	}
 	return true
+}
+
+// ApplyPlayerTargetedEffect lands one effect a player aimed at target -
+// directly, or when its projectile arrives - plus a bTarget radius's splash
+// onto the NPCs around it. A gTarget radius reaches nobody else until there
+// are parties.
+func ApplyPlayerTargetedEffect(unitID uuid.UUID, unit *instancestate.UnitState, targetID uuid.UUID, target *instancestate.UnitState, effect instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState, rng *rand.Rand) {
+	applyPlayerEffect(unitID, unit, targetID, target, effect, timeBudget, zone, now, next, rng)
+	if effect.Radius > 0 && effect.Affects == "bTarget" {
+		for _, v := range playerSplashVictims(unit, target, effect.Radius, zone, next) {
+			applyPlayerEffect(unitID, unit, v.id, v.unit, effect, timeBudget, zone, now, next, rng)
+		}
+	}
+}
+
+// ImpactDelay is how long power's projectile takes to fly from unit to
+// target: their distance over its Speed. The client times a travelling
+// graphic the same way (game/effectPlayback.js).
+func ImpactDelay(unit, target *instancestate.UnitState, power instanceconfig.Power) time.Duration {
+	if power.Speed <= 0 {
+		return 0
+	}
+	dx, dy := target.Position.X-unit.Position.X, target.Position.Y-unit.Position.Y
+	return time.Duration(math.Sqrt(dx*dx+dy*dy) / power.Speed * float64(time.Second))
+}
+
+// QueueImpact puts an effect in flight; the instance lands it at LandsAt.
+func QueueImpact(next *instancestate.InstanceState, impact instancestate.PendingImpact) {
+	next.PendingImpacts = append(next.PendingImpacts, impact)
 }
 
 // isUntargetedAffects reports whether an effect lands without the caster
@@ -196,6 +232,36 @@ func playerAreaVictims(unit *instancestate.UnitState, effect instanceconfig.Powe
 		}
 	}
 	return victims
+}
+
+// playerSplashVictims is everyone else a player's bTarget radius hits: the
+// living, non-evading hostile or neutral NPCs within radius of target (not
+// target itself), with line of sight from target.
+func playerSplashVictims(unit, target *instancestate.UnitState, radius float64, zone instanceconfig.Zone, next *instancestate.InstanceState) []areaVictim {
+	var victims []areaVictim
+	for id, u := range next.Units {
+		if u == target || u == unit || u.MapIdentifier != target.MapIdentifier || !u.Status.IsTargetable() || IsEvading(u) {
+			continue
+		}
+		if u.Hostility != "hostile" && u.Hostility != "neutral" {
+			continue
+		}
+		if WithinRadius(target, u, zone, radius) {
+			victims = append(victims, areaVictim{id, u})
+		}
+	}
+	return victims
+}
+
+// WithinRadius reports whether u is within radius feet of center (edge to
+// center: u's own radius counts) with line of sight from center - the test
+// for a splash centered on a target. Shared with the NPC side.
+func WithinRadius(center, u *instancestate.UnitState, zone instanceconfig.Zone, radius float64) bool {
+	dx, dy := u.Position.X-center.Position.X, u.Position.Y-center.Position.Y
+	if math.Sqrt(dx*dx+dy*dy) > radius+u.Radius {
+		return false
+	}
+	return instanceconfig.LineOfSightClear(zone, center.MapIdentifier, center.Position.X, center.Position.Y, u.Position.X, u.Position.Y)
 }
 
 // applyPlayerEffect applies one effect from a player (unit) to a single

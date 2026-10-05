@@ -4,6 +4,8 @@ module Validators
     AFFECTS_OPTIONS = %w[bTarget gTarget bAll gAll self].freeze
     HARM_AFFECTS_OPTIONS = %w[bTarget gTarget bAll gAll].freeze
     DAMAGE_SCHOOLS = %w[physical magic].freeze
+    # A radius splashes around the target, so it needs one.
+    RADIUS_AFFECTS_OPTIONS = %w[bTarget gTarget].freeze
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
@@ -17,6 +19,7 @@ module Validators
       when "resource" then validate_resource!(data, path: path)
       when "status" then validate_status!(data, path: path)
       end
+      validate_radius!(data, path: path) if given?(data, "radius")
     end
 
     private
@@ -29,6 +32,13 @@ module Validators
       range_val = require_key!(data, "range", path: path)
       validate_float_or_range!(range_val, path: child_path(path, "range"))
       validate_school!(data, path: path) if given?(data, "school")
+    end
+
+    def validate_radius!(data, path:)
+      radius = require_numeric!(data, "radius", path: path)
+      raise ValidationError.new("radius must be greater than 0", path: child_path(path, "radius")) unless radius.positive?
+      return if RADIUS_AFFECTS_OPTIONS.include?(data["affects"])
+      raise ValidationError.new("radius only applies to bTarget and gTarget effects", path: child_path(path, "radius"))
     end
 
     def validate_school!(data, path:)

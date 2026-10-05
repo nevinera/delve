@@ -74,8 +74,15 @@ function statusEffectLines(status, ctx) {
   return lines;
 }
 
+// " and every enemy within 6 of it" for a splash centered on the target.
+function splashText(effect) {
+  if (!(effect.radius > 0)) return "";
+  const kind = effect.affects === "gTarget" ? "ally" : "enemy";
+  return ` and every ${kind} within ${num(effect.radius)} of it`;
+}
+
 function effectLine(effect, ability, ctx) {
-  const who = TARGETS[effect.affects] || effect.affects;
+  const who = (TARGETS[effect.affects] || effect.affects) + splashText(effect);
   const budget = timeBudget(ability);
   switch (effect.type) {
     case "harm": {
