@@ -236,3 +236,10 @@ func RecordLeashCrossingForTest(unit *instancestate.UnitState, fromMapID string,
 func UpdateCombatClocksForTest(state *instancestate.InstanceState, now time.Time) {
 	updateCombatClocks(state, now)
 }
+
+func FireDeathEffectsForTest(state, prevState *instancestate.InstanceState, zone instanceconfig.Zone) []CombatEvent {
+	var events []CombatEvent
+	updateCombatStats(state, zone)
+	fireDeathEffects(state, prevState, zone, time.Now(), &events, testRng())
+	return events
+}

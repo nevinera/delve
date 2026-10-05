@@ -10,6 +10,27 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
       expect { described_class.validate!(goblin_boss_unit_type) }.not_to raise_error
     end
 
+    describe "onDeath" do
+      let(:power_names) { goblin_boss_unit_type["powers"].map { |p| p["name"] } }
+
+      it "accepts the name of one of its powers that the tactics don't use" do
+        data = goblin_boss_unit_type.merge("onDeath" => power_names.first, "tactics" => {"type" => "randomAvailable"})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "rejects a name that isn't one of its powers" do
+        expect { described_class.validate!(goblin_boss_unit_type.merge("onDeath" => "Explode")) }
+          .to raise_error(Validators::ValidationError, /onDeath references power "Explode", which is not in this unit type's powers/)
+      end
+
+      it "rejects tactics that use the onDeath power" do
+        data = goblin_boss_unit_type.merge("onDeath" => power_names.first,
+          "tactics" => {"type" => "priorityRotation", "powers" => [power_names.first]})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /onDeath power and only fires on death/)
+      end
+    end
+
     describe "tags" do
       it "accepts one tag per category plus several roles" do
         data = goblin_unit_type.merge("tags" => %w[open pair melee healer buffs])

@@ -19,9 +19,7 @@ module Validators
       validate_optional_fields!(data, path: path)
       validate_powers!(data, path: path) if given?(data, "powers")
       validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if given?(data, "targeting")
-      if given?(data, "tactics")
-        UnitTacticsValidator.validate!(data["tactics"], known_power_names: known_power_names(data), path: child_path(path, "tactics"))
-      end
+      validate_behavior!(data, path: path)
     end
 
     private
@@ -132,6 +130,23 @@ module Validators
       require_object!(data, path: path)
       type = require_string!(data, "type", path: path)
       require_one_of!(type, TARGETING_TYPES, path: child_path(path, "type"))
+    end
+
+    def validate_behavior!(data, path:)
+      validate_on_death!(data, path: path) if given?(data, "onDeath")
+      return unless given?(data, "tactics")
+      UnitTacticsValidator.validate!(data["tactics"], known_power_names: known_power_names(data), path: child_path(path, "tactics"),
+        death_power_name: data["onDeath"])
+    end
+
+    # onDeath names one of the unit's own powers, fired when it dies (see
+    # docs/schema/unit_type.md). A power from a file reference has no name
+    # until the unit type is expanded, so those can't be checked here.
+    def validate_on_death!(data, path:)
+      name = require_string!(data, "onDeath", path: path)
+      powers = data["powers"]
+      return if powers.is_a?(Array) && powers.any? { |p| asset_reference?(p) || (p.is_a?(Hash) && p["name"] == name) }
+      raise ValidationError.new("onDeath references power #{name.inspect}, which is not in this unit type's powers", path: child_path(path, "onDeath"))
     end
 
     def known_power_names(data)

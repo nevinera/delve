@@ -170,6 +170,35 @@ describe("UnitTypeDraft", () => {
     });
   });
 
+  describe("onDeath", () => {
+    const slash = {name: "Slash", effects: []};
+    const bite = {name: "Bite", effects: []};
+    const draft = new UnitTypeDraft({...base, powers: [slash, bite], tactics: {type: "priorityRotation", powers: ["Slash", "Bite"]}}, "goblin-raider");
+
+    it("setOnDeath names the power and drops it from the tactics", () => {
+      const result = draft.setOnDeath("Bite");
+      expect(result.data.onDeath).toBe("Bite");
+      expect(result.data.tactics.powers).toEqual(["Slash"]);
+      expect(result.combatPowerNames).toEqual(["Slash"]);
+    });
+
+    it("setOnDeath(null) clears the field", () => {
+      const result = draft.setOnDeath("Bite").setOnDeath(null);
+      expect(result.data).not.toHaveProperty("onDeath");
+      expect(result.combatPowerNames).toEqual(["Slash", "Bite"]);
+    });
+
+    it("a rename of the onDeath power carries through", () => {
+      const result = draft.setOnDeath("Bite").updatePower(1, {...bite, name: "Death Bite"});
+      expect(result.data.onDeath).toBe("Death Bite");
+    });
+
+    it("removing the onDeath power clears onDeath", () => {
+      const result = draft.setOnDeath("Bite").removePower(1);
+      expect(result.data).not.toHaveProperty("onDeath");
+    });
+  });
+
   describe("balance tags", () => {
     it("sets, replaces and clears one tag per exclusive category", () => {
       const options = ["open", "g1", "g5"];

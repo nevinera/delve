@@ -38,7 +38,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 		nextBasicAttack = 0
 	}
 	nextPowerCheck := math.Inf(1)
-	if hasUsablePower(enemy.Powers) {
+	if hasUsablePower(enemy.CombatPowers()) {
 		nextPowerCheck = 0
 	}
 
@@ -123,7 +123,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 		if pendingCast == nil && now == nextPowerCheck {
 			pickDt := now - lastPickAt
 			lastPickAt = now
-			if power, ok := pickPower(enemy.Tactics, tactics, enemy.Powers, resource, powerReadyAt, now, pickDt, rng); ok {
+			if power, ok := pickPower(enemy.Tactics, tactics, enemy.CombatPowers(), resource, powerReadyAt, now, pickDt, rng); ok {
 				if power.Cooldown > 0 {
 					powerReadyAt[power.Name] = now + power.Cooldown
 				}
@@ -140,7 +140,7 @@ func Simulate(enemy instanceconfig.UnitType, target TargetStats, duration float6
 					statuses = applyPowerEffects(power, target, statuses, &resource, enemy.Resource.Max, now, rng, trackDamage(add(&res.PowerDamage)))
 					nextPowerCheck = now + effectGlobalCooldown(power)
 				}
-			} else if hasUsablePower(enemy.Powers) {
+			} else if hasUsablePower(enemy.CombatPowers()) {
 				// At least one power is the right shape to fire, just not
 				// affordable or off cooldown this instant - both change with
 				// time, so retry rather than parking nextPowerCheck at +Inf

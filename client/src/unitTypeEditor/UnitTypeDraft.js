@@ -20,6 +20,14 @@ function renameTacticsPower(tactics, from, to) {
   return next;
 }
 
+function withoutTacticsPower(tactics, name) {
+  if (!tactics) return tactics;
+  const next = {...tactics};
+  if (tactics.powers) next.powers = tactics.powers.filter((p) => p !== name);
+  if (tactics.events) next.events = tactics.events.filter((e) => e.power !== name);
+  return next;
+}
+
 // Owns a unit type draft's data and every mutation the editor can make to
 // it - the UI (UnitTypeWorkbench.jsx/UnitTypeFieldsPanel.jsx) only ever reads
 // `.data` and calls this class's methods (see plans/editors-as-classes.md).
@@ -160,12 +168,29 @@ export class UnitTypeDraft {
     return this.powers.map((power) => power.name).filter(Boolean);
   }
 
+  // Powers its tactics can use: everything but the onDeath power.
+  get combatPowerNames() {
+    return this.powerNames.filter((name) => name !== this.data.onDeath);
+  }
+
+  // The power that fires when the unit dies (see docs/schema/unit_type.md),
+  // or null for none. It can't also be in the tactics, so it's dropped
+  // from them.
+  setOnDeath(name) {
+    if (!name) {
+      const {onDeath: _onDeath, ...rest} = this.data;
+      return new UnitTypeDraft(rest, this.unitTypeKey);
+    }
+    return new UnitTypeDraft({...this.data, onDeath: name, tactics: withoutTacticsPower(this.data.tactics, name)}, this.unitTypeKey);
+  }
+
   addPower(ability) {
     return this.addEntry("powers", {...ability, name: uniqueName(ability.name || "New Power", this.powerNames)});
   }
 
   removePower(index) {
-    return this.removeEntry("powers", index);
+    const next = this.removeEntry("powers", index);
+    return this.powers[index]?.name === this.data.onDeath ? next.setOnDeath(null) : next;
   }
 
   // Replaces the power at index. A rename carries through to every tactics
@@ -174,6 +199,7 @@ export class UnitTypeDraft {
     const oldName = this.powers[index]?.name;
     const next = new UnitTypeDraft({...this.data, powers: this.powers.map((p, i) => (i === index ? ability : p))}, this.unitTypeKey);
     if (!oldName || oldName === ability.name) return next;
-    return next.setField("tactics", renameTacticsPower(this.data.tactics, oldName, ability.name ?? ""));
+    const renamed = next.setField("tactics", renameTacticsPower(this.data.tactics, oldName, ability.name ?? ""));
+    return oldName === this.data.onDeath ? renamed.setField("onDeath", ability.name ?? "") : renamed;
   }
 }

@@ -19,9 +19,14 @@ module Validators
     def validate_optional_fields!(data, path:)
       require_string!(data, "description", path: path) if given?(data, "description")
       validate_tags!(data, path: path) if given?(data, "tags")
+      validate_speed!(data, path: path) if given?(data, "speed")
+      validate_presentation_fields!(data, path: path)
+    end
+
+    # The client-only fields: icon, graphics and sounds.
+    def validate_presentation_fields!(data, path:)
       validate_icon_url!(data, path: path) if given?(data, "iconURL")
       validate_hex_color!(data, "iconColor", path: path) if given?(data, "iconColor")
-      validate_speed!(data, path: path) if given?(data, "speed")
       validate_graphic_effects!(data, path: path) if given?(data, "graphicEffects")
       validate_sound_effects!(data, path: path) if given?(data, "soundEffects")
     end

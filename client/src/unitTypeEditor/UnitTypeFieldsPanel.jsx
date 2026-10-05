@@ -261,7 +261,14 @@ export default function UnitTypeFieldsPanel({
       <ResourceTypeField resource={unitTypeData.resource} draft={draft} onChange={onChange} />
 
       <h3>Tactics</h3>
-      <TacticsFields tactics={unitTypeData.tactics} currentNames={names} draft={draft} onChange={onChange} />
+      <TacticsFields tactics={unitTypeData.tactics} currentNames={draft.combatPowerNames} draft={draft} onChange={onChange} />
+
+      <h3>On death</h3>
+      <p className="field-hint">A power that fires once when this unit dies, instead of in combat: area damage around the corpse, or a heal or buff for its pack.</p>
+      <select aria-label="On death power" value={unitTypeData.onDeath ?? ""} onChange={(e) => onChange(draft.setOnDeath(e.target.value || null))}>
+        <option value="">None</option>
+        {names.map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
     </div>
   );
 }
