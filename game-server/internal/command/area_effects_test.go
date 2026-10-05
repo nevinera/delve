@@ -90,7 +90,7 @@ func TestResolveCastTarget_AreaOnlyPowersNeedNoTarget(t *testing.T) {
 	playerID := uuid.New()
 	state := areaState(playerID, nil)
 
-	_, ok := command.ResolveCastTarget(state.Units[playerID], nil, areaPower(areaHarm(8)).Power, state)
+	_, ok := command.ResolveCastTarget(state.Units[playerID], nil, areaPower(areaHarm(8)).Power, instanceconfig.Zone{}, state)
 
 	assert.True(t, ok)
 }

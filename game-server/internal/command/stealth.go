@@ -56,6 +56,13 @@ func StealthVisibility(observer, unit *instancestate.UnitState, zone instancecon
 	}
 }
 
+// CanSee reports whether observer detects target at all (fully or faintly):
+// a player can only attack or cast at a stealthed unit they detect. Area
+// effects don't ask.
+func CanSee(observer, target *instancestate.UnitState, zone instanceconfig.Zone) bool {
+	return StealthVisibility(observer, target, zone) != VisibilityHidden
+}
+
 // ratingGap is detection minus stealth, plus how far the observer's
 // elevation sits above the unit's.
 func ratingGap(observer, unit *instancestate.UnitState, zone instanceconfig.Zone) float64 {
