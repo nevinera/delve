@@ -32,7 +32,15 @@ func basicAttackDamage(enemy instanceconfig.UnitType, rng *rand.Rand) float64 {
 // an amount, a status with a status, or a resource with a resourceName) -
 // range/LOS/facing are assumed always satisfied against a stationary dummy
 // (see package doc).
+//
+// A gTarget effect is never usable: in the real engine it lands on one
+// packmate (see instance/npc_allies.go), and this simulation models a lone
+// enemy. A gAll effect still applies - the caster is among its recipients.
+// A heal effect isn't modeled either (no live HP, see package doc).
 func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
+	if eff.Affects == "gTarget" {
+		return false
+	}
 	switch eff.Type {
 	case "harm":
 		return eff.Amount != nil

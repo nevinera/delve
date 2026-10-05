@@ -504,3 +504,25 @@ func TestSimulate_SameSeedIsDeterministic(t *testing.T) {
 
 	assert.Equal(t, a, b)
 }
+
+func TestSimulate_GTargetStatusIsAimedAtAPackmateNotTheTarget(t *testing.T) {
+	status := instanceconfig.Status{
+		Name:     "Bleed",
+		Stacking: "replace",
+		Effects: []instanceconfig.StatusEffect{
+			{Type: "recurring", TickRate: 2, OnTick: "harm", Amount: 20},
+		},
+	}
+	enemy := instanceconfig.UnitType{
+		Powers: []instanceconfig.Power{{
+			Name:           "Rally",
+			GlobalCooldown: 11,
+			Effects: []instanceconfig.PowerEffect{
+				{Type: "status", Affects: "gTarget", Duration: 9, Status: &status},
+			},
+		}},
+	}
+	res := dpssim.Simulate(enemy, dpssim.TargetStats{}, 600, seeded(7))
+
+	assert.Zero(t, res.TotalDamage)
+}

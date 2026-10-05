@@ -56,7 +56,7 @@ func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now
 				target = state.Units[*cast.TargetID]
 				targetID = *cast.TargetID
 			}
-			applyNPCPowerEffects(id, targetID, unit, target, cast.Power, zone, now, state, rng)
+			applyNPCPowerEffects(id, targetID, unit, target, npcAlliesFromState(unit, zone, state), cast.Power, zone, now, state, rng)
 			spendNPCPowerCost(unit, cast.Power)
 			*events = append(*events, CombatEvent{
 				AttackerID: id.String(),
