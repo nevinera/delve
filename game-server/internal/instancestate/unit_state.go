@@ -204,6 +204,16 @@ type BehaviorState struct {
 	// instance/leash.go).
 	LastCombatAt time.Time
 
+	// Threat is the unit's aggro table: how much threat each player has
+	// built on it (damage dealt, plus a share of healing - see
+	// command.AddThreat and instance.distributeHealingThreat). Reset with
+	// the rest of Behavior on respawn, and cleared on leash.
+	Threat map[uuid.UUID]float64
+
+	// LastRetargetAt is when the unit last switched target of its own
+	// accord, backing the "healerAggro" target-change cooldown.
+	LastRetargetAt time.Time
+
 	// Chasing beyond the leash map (see instance/leash.go): CrossingDistance
 	// is how far from the leash point the unit was when it left its leash
 	// map, and ArrivalMapID/ArrivalX/ArrivalY where it came out on the
@@ -333,6 +343,11 @@ type UnitState struct {
 	// command.ApplyHeal and decayed each tick by the instance. It backs the
 	// "healerAggro" UnitTargeting type.
 	RecentHealing float64
+
+	// HealingThreatPending is healing restored to others since the last
+	// tick, waiting to be turned into threat on engaged NPCs (see
+	// instance.distributeHealingThreat).
+	HealingThreatPending float64
 
 	// LastMoveAt is when the server last processed a client-submitted move
 	// with an explicit position (see command.MoveHandler), used to bound how

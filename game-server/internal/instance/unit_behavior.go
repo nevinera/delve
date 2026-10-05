@@ -61,6 +61,7 @@ type CombatEvent = instancestate.CombatEvent
 func applyUnitBehaviors(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64, pathGraph *pathing.Graph, rng *rand.Rand) []CombatEvent {
 	cfgByID := buildNPCConfigByID(zone)
 	decayRecentHealing(state, dt)
+	distributeHealingThreat(state)
 	budget := &pathBudget{remaining: maxPathSearchesPerTick}
 
 	// Index live players by map for O(1) aggro checks.
@@ -162,7 +163,10 @@ func applyUnitBehavior(
 		if !ok || !target.Status.IsTargetable() {
 			// Its own target is gone: join a groupmate's fight if there is
 			// one, otherwise the fight is over and the pack goes home.
-			newTarget := groupmateTarget(state, groupmates, stateByZoneID)
+			newTarget := topThreatTarget(unit, playersByMap[unit.MapIdentifier])
+			if newTarget == nil {
+				newTarget = groupmateTarget(state, groupmates, stateByZoneID)
+			}
 			if newTarget == nil {
 				leashPack(unitID, unit, state, groupmates, stateByZoneID)
 				return
@@ -171,8 +175,9 @@ func applyUnitBehavior(
 			unit.Attacking = true
 			target = state.Units[*newTarget]
 		}
-		if switchTo := pickNPCTarget(unit, e.unitType.Targeting, target, playersByMap[unit.MapIdentifier]); switchTo != nil {
+		if switchTo := pickNPCTarget(unit, e.unitType.Targeting, target, playersByMap[unit.MapIdentifier], time.Now()); switchTo != nil {
 			unit.Target = switchTo
+			unit.Behavior.LastRetargetAt = time.Now()
 			unit.Behavior.PathWaypoints = nil // discard any detour left over from the old target
 			target = state.Units[*switchTo]
 		}
@@ -806,6 +811,7 @@ func chaseAcrossMap(unit *instancestate.UnitState, targetMapID string, speed, dt
 // Records the current position as the leash point on first engagement (idle→engaged).
 func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
 	if unit.Status == instancestate.UnitStatusIdle {
+		unit.Behavior.Threat = nil
 		unit.Behavior.LeashX = unit.Position.X
 		unit.Behavior.LeashY = unit.Position.Y
 		unit.Behavior.LeashMapID = unit.MapIdentifier
@@ -816,6 +822,7 @@ func engageUnit(unit *instancestate.UnitState, targetID uuid.UUID) {
 	unit.Attacking = true
 	unit.Status = instancestate.UnitStatusEngaged
 	unit.Behavior.PathWaypoints = nil // discard any detour left over from a previous target
+	command.AddThreat(unit, targetID, initialThreat)
 }
 
 // nearestPlayerInRadius returns the UUID of the closest player within radius

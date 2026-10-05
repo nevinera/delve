@@ -49,6 +49,8 @@ func ApplyHeal(healer, recipient *instancestate.UnitState, amount float64, zone 
 		recipient.Health = recipient.MaxHealth
 	}
 	if healer != nil && healer != recipient {
-		healer.RecentHealing += recipient.Health - before
+		restored := recipient.Health - before
+		healer.RecentHealing += restored
+		healer.HealingThreatPending += restored
 	}
 }

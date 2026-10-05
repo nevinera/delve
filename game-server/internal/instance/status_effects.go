@@ -74,6 +74,7 @@ func fireStatusTick(targetID uuid.UUID, target, applier *instancestate.UnitState
 		amount := command.StatusTickAmount(applier, zone, eff, eff.TickRate, false, rng)
 		dealt := command.IncomingDamage(target, zone, amount, eff.School != "magic", rng)
 		target.Health -= dealt
+		command.AddThreat(target, applierID, dealt)
 		if dealt > 0 {
 			applier.DamageDealtThisTick = true
 			target.DamageTakenThisTick = true

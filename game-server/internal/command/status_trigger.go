@@ -106,6 +106,7 @@ func fireHarm(holderID uuid.UUID, holder *instancestate.UnitState, recipientID u
 	raw := TriggeredEffectAmount(holder, zone, eff, false, rng)
 	dealt := IncomingDamage(recipient, zone, raw, te.School != "magic", rng)
 	recipient.Health -= dealt
+	AddThreat(recipient, holderID, dealt)
 	if recipient.Health < 0 {
 		recipient.Health = 0
 	}

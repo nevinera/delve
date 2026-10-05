@@ -147,6 +147,7 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				raw := PowerEffectAmount(unit, zone, effect, timeBudget, false, false, rng)
 				dealt := IncomingDamage(target, zone, raw, effect.School != "magic", rng)
 				target.Health -= dealt
+				AddThreat(target, unitID, dealt)
 				if dealt > 0 {
 					ApplyCastPushback(target)
 					unit.DamageDealtThisTick = true
