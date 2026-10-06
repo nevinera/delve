@@ -25,6 +25,16 @@ class ProvenanceRestrictions
     layers
   end
 
+  # Parses the client's `restrictions` param: a JSON array of layers.
+  # Raises ArgumentError on anything else.
+  def self.from_json(json, own_world_key: nil)
+    layers = JSON.parse(json)
+    raise ArgumentError, "restrictions must be a JSON array of objects" unless layers.is_a?(Array) && layers.all?(Hash)
+    new(layers:, own_world_key:)
+  rescue JSON::ParserError
+    raise ArgumentError, "restrictions is not valid JSON"
+  end
+
   def self.from_param(param, own_world_key: nil)
     new(layers: Array(param).map { |layer| layer.respond_to?(:to_unsafe_h) ? layer.to_unsafe_h : layer }, own_world_key:)
   end

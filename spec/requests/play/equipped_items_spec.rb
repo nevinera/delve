@@ -142,4 +142,26 @@ RSpec.describe "Play::EquippedItems", type: :request do
       end
     end
   end
+
+  describe "POST .../equipped_items/best_available" do
+    let(:character) { create(:character, user:) }
+    let(:world_character) { create(:world_character, character:) }
+    let(:world) { world_character.world }
+    let(:path) { "/play/characters/#{character.id}/worlds/#{world.id}/equipped_items/best_available" }
+    let(:user) { create(:user) }
+
+    before { sign_in user }
+
+    it "equips the best allowed item and returns the equipment" do
+      create(:character_item, world_character:, name: "Weak", elvl: 10, slot: "head")
+      strong = create(:character_item, world_character:, name: "Strong", elvl: 90, slot: "head")
+      post path, params: {restrictions: [{"worlds" => []}].to_json}, as: :json
+      expect(JSON.parse(response.body)["head"]["id"]).to eq(strong.id)
+    end
+
+    it "rejects malformed restrictions" do
+      post path, params: {restrictions: "nope"}, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
 end
