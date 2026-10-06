@@ -46,6 +46,27 @@ RSpec.describe ProvenanceRestrictions do
     expect(restrictions(layers).allows?(item_from("other", elvl: 10))).to be(true)
   end
 
+  describe ".layers_for" do
+    it "is empty for a zone with no restrictions played on its own" do
+      expect(described_class.layers_for(zone: nil)).to eq([])
+    end
+
+    it "uses the zone's restrictions as they are when played on its own" do
+      expect(described_class.layers_for(zone: {"maxElevation" => 5}))
+        .to eq([{"worlds" => nil, "maxElevation" => 5}])
+    end
+
+    it "restricts a world with no restrictions to its own items" do
+      expect(described_class.layers_for(world: nil, in_world: true))
+        .to eq([{"worlds" => [], "maxElevation" => nil}])
+    end
+
+    it "layers the world's restrictions under the zone's" do
+      layers = described_class.layers_for(world: {"worlds" => ["a"]}, zone: {"maxElevation" => 9}, in_world: true)
+      expect(layers).to eq([{"worlds" => ["a"], "maxElevation" => nil}, {"worlds" => nil, "maxElevation" => 9}])
+    end
+  end
+
   describe ".from_param" do
     it "accepts plain hashes" do
       result = described_class.from_param([{"worlds" => []}], own_world_key: "home")

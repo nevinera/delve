@@ -42,6 +42,13 @@ RSpec.describe JoinWorldZone do
     ))
   end
 
+  it "sends the world key and the world's restriction layer" do
+    call
+    expect(slots_client).to have_received(:request).with(hash_including(
+      provenance_restrictions: {world_key: world_character.world.key, layers: [{"worlds" => [], "maxElevation" => nil}]}
+    ))
+  end
+
   it "leaves out expires_at when the version isn't expiring" do
     version.update!(expires_at: nil)
     call

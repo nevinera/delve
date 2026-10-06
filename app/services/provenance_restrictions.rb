@@ -15,6 +15,16 @@ class ProvenanceRestrictions
     @own_world_key = own_world_key
   end
 
+  # The layers for a zone: its own restrictions (raw schema hash or nil),
+  # plus, when played inside a world, the world's. A world's missing "worlds"
+  # means its own items only, so it resolves to [].
+  def self.layers_for(world: nil, zone: nil, in_world: false)
+    layers = []
+    layers << {"worlds" => world&.dig("worlds") || [], "maxElevation" => world&.dig("maxElevation")} if in_world
+    layers << {"worlds" => zone["worlds"], "maxElevation" => zone["maxElevation"]} if zone
+    layers
+  end
+
   def self.from_param(param, own_world_key: nil)
     new(layers: Array(param).map { |layer| layer.respond_to?(:to_unsafe_h) ? layer.to_unsafe_h : layer }, own_world_key:)
   end

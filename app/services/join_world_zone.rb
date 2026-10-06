@@ -39,7 +39,13 @@ class JoinWorldZone < JoinZone
       instance_key: "world:#{@zone.id}",
       spawn_at: @world_character.connection_key,
       world_character_database_id: @world_character.id.to_s,
-      world_version_id: version.id.to_s
+      world_version_id: version.id.to_s,
+      provenance_restrictions: {
+        world_key: @world_character.world.key,
+        layers: ProvenanceRestrictions.layers_for(
+          world: version.provenance_restrictions, zone: @zone_data["provenanceRestrictions"], in_world: true
+        )
+      }
     }
   end
 end

@@ -25,7 +25,11 @@ class JoinDirectZone < JoinZone
       mode: "direct",
       instance_key: "direct:#{@character.user_id}:#{@commit_sha}:#{@zone_key}",
       owned_zone_items: {},
-      equipped_items: @equipped_items
+      equipped_items: @equipped_items,
+      provenance_restrictions: {
+        world_key: nil,
+        layers: ProvenanceRestrictions.layers_for(zone: @zone_data["provenanceRestrictions"])
+      }
     )
   end
 end
