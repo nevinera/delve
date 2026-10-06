@@ -27,6 +27,8 @@ import { lootFailureMessages } from "./game/lootMessages";
 import { fetchVerifiedJson, ContentChecksumError } from "./game/verifiedFetch";
 import { redirectTo } from "./redirectTo";
 import IconImage from "./IconImage";
+import GearRestrictionPrompt from "./GearRestrictionPrompt";
+import { itemAllowed, disallowedItems } from "./game/provenance";
 
 
 // Portrait phone action bar: two full-width rows of 5, spanning the whole
@@ -1437,6 +1439,10 @@ const styles = {
   charSheetEmptySlot: {
     color: "#555",
   },
+  charSheetDisallowed: {
+    color: "#c66",
+    textDecoration: "line-through",
+  },
   charSheetStatGroup: {
     marginBottom: 10,
   },
@@ -2707,7 +2713,7 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
 // equipped item opens a candidate-item pane to its left; clicking a
 // candidate equips it via `onEquip(equippedSlot, item)`, which should
 // return null on success or an error message string on failure.
-export function CharacterSheet({ open, equippedItems, combatStats, characterItemsUrl, onEquip, onClose, localElvl, primaryStats = [], portrait = false, landscape = false }) {
+export function CharacterSheet({ open, equippedItems, combatStats, characterItemsUrl, onEquip, onBestAvailable, provenanceRestrictions, onClose, localElvl, primaryStats = [], portrait = false, landscape = false }) {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [hoveredSlot, setHoveredSlot] = useState(null);
   const [candidateItems, setCandidateItems] = useState([]);
@@ -2725,13 +2731,14 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
     setCandidateLoading(true);
     const params = new URLSearchParams();
     itemSlotsFor(expandedSlot).forEach(s => params.append("slot[]", s));
+    if (provenanceRestrictions) params.append("restrictions", JSON.stringify(provenanceRestrictions.layers));
     const equippedIds = new Set(Object.values(equippedItems || {}).map(i => i.id));
     fetch(`${characterItemsUrl}?${params.toString()}`)
       .then(r => r.json())
       .then(items => setCandidateItems(items.filter(i => !equippedIds.has(i.id))))
       .catch(() => setCandidateItems([]))
       .finally(() => setCandidateLoading(false));
-  }, [expandedSlot, characterItemsUrl, equippedItems]);
+  }, [expandedSlot, characterItemsUrl, equippedItems, provenanceRestrictions]);
 
   if (!open) return null;
 
@@ -2765,6 +2772,9 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
   const equipmentBlock = (
     <div style={styles.charSheetColumn}>
       <div style={styles.charSheetColumnTitle}>Equipment</div>
+      {canEquip && onBestAvailable && (
+        <button style={{ marginBottom: 6 }} onClick={onBestAvailable}>Best available</button>
+      )}
       <table style={styles.charSheetEquipTable}>
         <tbody>
           {EQUIPPED_SLOT_ORDER.map(slot => {
@@ -2790,7 +2800,12 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
                 <td style={styles.charSheetNameCell}>
                   {item ? (
                     <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
-                      <span style={styles.charSheetNameBox}>{item.name || formatItemName(item.identifier)}</span>
+                      <span
+                        style={{ ...styles.charSheetNameBox, ...(itemAllowed(item, provenanceRestrictions) ? {} : styles.charSheetDisallowed) }}
+                        title={itemAllowed(item, provenanceRestrictions) ? undefined : "Not allowed here; it doesn't count"}
+                      >
+                        {item.name || formatItemName(item.identifier)}
+                      </span>
                     </ItemTooltip>
                   ) : (
                     <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
@@ -3038,6 +3053,8 @@ export default function App({
   equippedItems: initialEquippedItems = {},
   characterItemsUrl,
   equippedItemsUrl,
+  // {world_key, layers}: which equipped items count here (see game/provenance.js).
+  provenanceRestrictions,
   characterSettings,
   characterSettingsUrl,
   stockAssets,
@@ -3837,6 +3854,51 @@ export default function App({
     }
   }, [equippedItemsUrl]);
 
+  const [gearPromptDismissed, setGearPromptDismissed] = useState(false);
+  const [gearSwitching, setGearSwitching] = useState(false);
+  const [gearError, setGearError] = useState(null);
+
+  // Equips the best allowed gear in every slot (EquipBestAvailable), then
+  // tells the game server to refetch. Returns null on success or an error.
+  const handleBestAvailable = useCallback(async () => {
+    if (!equippedItemsUrl) return "Equip endpoint unavailable.";
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    try {
+      const res = await fetch(`${equippedItemsUrl}/best_available`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ restrictions: JSON.stringify(provenanceRestrictions?.layers ?? []) }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        return body?.error || "Failed to switch gear.";
+      }
+      setEquippedItems(await res.json());
+      connRef.current?.send({ type: "refresh_equipment" });
+      return null;
+    } catch {
+      return "Failed to switch gear.";
+    }
+  }, [equippedItemsUrl, provenanceRestrictions]);
+
+  const handleGearPromptSwitch = useCallback(async () => {
+    setGearSwitching(true);
+    setGearError(null);
+    const error = await handleBestAvailable();
+    setGearSwitching(false);
+    if (error) setGearError(error);
+  }, [handleBestAvailable]);
+
+  const disallowedEquipped = useMemo(
+    () => (gearPromptDismissed ? [] : disallowedItems(equippedItems, provenanceRestrictions)),
+    [gearPromptDismissed, equippedItems, provenanceRestrictions]
+  );
+
   const targetRange = (selfUnit && targetUnit)
     ? Math.sqrt(
         (targetUnit.position.x - selfUnit.position.x) ** 2 +
@@ -4120,6 +4182,8 @@ export default function App({
         combatStats={selfUnit?.combat_stats}
         characterItemsUrl={characterItemsUrl}
         onEquip={handleEquipItem}
+        onBestAvailable={handleBestAvailable}
+        provenanceRestrictions={provenanceRestrictions}
         onClose={() => setCharSheetOpen(false)}
         localElvl={localElvl}
         primaryStats={primaryStats}
@@ -4436,6 +4500,13 @@ export default function App({
         </div>
       )}
       <ExpiryBanner expiresAt={expiresAt} />
+      <GearRestrictionPrompt
+        items={disallowedEquipped}
+        busy={gearSwitching}
+        error={gearError}
+        onSwitch={handleGearPromptSwitch}
+        onDismiss={() => setGearPromptDismissed(true)}
+      />
       {contentError && <ContentErrorOverlay message={contentError} />}
       {disconnected && (
         <div style={{

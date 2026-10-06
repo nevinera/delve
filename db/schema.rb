@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_03_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -170,6 +170,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_03_150000) do
     t.datetime "expires_at"
     t.datetime "imported_at"
     t.string "name"
+    t.json "provenance_restrictions"
     t.string "raw_base_url"
     t.string "ref", null: false
     t.datetime "released_at"

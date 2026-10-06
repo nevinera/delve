@@ -34,6 +34,7 @@ Every slot request says how the player reached the zone (`mode`), along with the
 | `instance_key` | instance | Required. Chosen by Rails; a request only joins an instance with the same mode and key. |
 | `exits` | instance | `"mapId/connectionId"` keys of connections that leave the zone. |
 | `world_version_id` | instance | Lets `/world-versions/{id}/expire` find the instance. |
+| `provenance_restrictions` | instance | `{world_key, layers}`: equipped items that fail any layer (by their `world_key` and `elvl`) are ignored, not worn. See `docs/schema/common.md#provenancerestrictions`. |
 | `expires_at` | instance | RFC 3339; set when the version is already expiring. |
 | `spawn_at` | slot | `"mapId/connectionId"` to spawn at; unknown keys fall back to the default entry position. |
 | `world_character_database_id` | slot | Required for `world`; sent to Rails when the player exits. |

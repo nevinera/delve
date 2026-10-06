@@ -18,6 +18,11 @@ module Validators
       require_string!(data, "thumbnailUrl", path: path) if given?(data, "thumbnailUrl")
       validate_elevation_range!(data, path: path) if given?(data, "elevationRange")
       validate_world_links!(data, path: path) if given?(data, "worldLinks")
+      validate_provenance_restrictions!(data, path: path) if given?(data, "provenanceRestrictions")
+    end
+
+    def validate_provenance_restrictions!(data, path:)
+      ProvenanceRestrictionsValidator.validate!(data["provenanceRestrictions"], path: child_path(path, "provenanceRestrictions"))
     end
 
     def validate_elevation_range!(data, path:)

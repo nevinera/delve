@@ -13,6 +13,13 @@
   </p>
 <% end %>
 
+<% if @disallowed_items.any? %>
+  <p><strong>This world does not allow some of your equipped gear:</strong>
+    <%= @disallowed_items.map(&:name).to_sentence %>.
+    <%= link_to "Change equipment", play_character_world_equipped_items_path(@character, @world) %>
+    (the "Best available" button picks the best allowed gear).</p>
+<% end %>
+
 <% if @world_character&.position %>
   <p>Last seen at <%= @world_character.zone_identifier %> (<%= @world_character.connection_key %>).</p>
 <% end %>

@@ -104,7 +104,8 @@ class ImportWorldVersionJob < ApplicationJob
     WorldVersion.transaction do
       replace_zones!(zones, entry)
       @version.update!(
-        commit_sha: sha, raw_base_url: base_url, name: world_data["name"], state: :unreleased, imported_at: Time.current
+        commit_sha: sha, raw_base_url: base_url, name: world_data["name"], state: :unreleased, imported_at: Time.current,
+        provenance_restrictions: world_data["provenanceRestrictions"]
       )
       world.update!(name: world_data["name"]) if world.name.blank?
     end

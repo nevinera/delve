@@ -17,10 +17,10 @@ See [zone.md](zone.md) for the `Zone` type referenced by `zones`.
 | `elevationRange` | ElevationRange | no | Recommended. Bounds the `elvl` of every zone (and transitively every map) within this world. |
 | `zones` | object | yes | Maps local zone-identifier strings to WorldZoneEntry. At least one. |
 | `worldLinks` | array of WorldLink | no | Connections between pairs of zone connection points (either an `openConnection` or an `entryPoint`) across zones in this world. |
+| `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Default: this world's items only, any elevation. |
 | `entryPoints` | object | yes | Maps serialized WorldEntryPointIdentifier keys (`"zoneId/entryPointKey"`) to required key strings (or `null`). At least one. |
 
-> Skipped for now, tracked separately: `allowedClasses` (blocked on ClassSets) and equipment
-> provenance restrictions (issue #79).
+> Skipped for now, tracked separately: `allowedClasses` (blocked on ClassSets).
 
 ---
 

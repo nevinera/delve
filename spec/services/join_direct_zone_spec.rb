@@ -34,6 +34,13 @@ RSpec.describe JoinDirectZone do
     ))
   end
 
+  it "sends no world and no layers when the zone has no restrictions" do
+    call
+    expect(slots_client).to have_received(:request).with(hash_including(
+      provenance_restrictions: {world_key: nil, layers: []}
+    ))
+  end
+
   it "records a slot session with no zone" do
     expect(call.token).to eq("tok")
     expect(SlotSession.find_by!(character:)).to have_attributes(zone: nil, token: "tok")

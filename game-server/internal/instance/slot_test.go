@@ -44,6 +44,25 @@ func TestAddSlot_StoresEquippedItems(t *testing.T) {
 	assert.Equal(t, equipped, slot.EquippedItems)
 }
 
+func TestAddSlot_IgnoresEquippedItemsTheInstanceDisallows(t *testing.T) {
+	inst := makeInstance()
+	inst.Provenance = instanceconfig.ProvenanceRestrictions{
+		WorldKey: "home", Layers: []instanceconfig.ProvenanceLayer{{Worlds: []string{}}},
+	}
+	equipped := map[string]instanceconfig.EquippedItem{
+		"head":  {Slot: "head", WorldKey: strPtr("home"), PrimaryStat: strPtr("strength"), SecondaryStats: []string{}},
+		"chest": {Slot: "chest", WorldKey: strPtr("other"), PrimaryStat: strPtr("strength"), SecondaryStats: []string{}},
+	}
+	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, equipped)
+	require.NoError(t, err)
+
+	assert.Contains(t, slot.EquippedItems, "head")
+	assert.NotContains(t, slot.EquippedItems, "chest")
+	allowedOnly, err := makeInstance().AddSlot("Bree", "43", puncherClass, nil, map[string]instanceconfig.EquippedItem{"head": equipped["head"]})
+	require.NoError(t, err)
+	assert.Equal(t, allowedOnly.Stats, slot.Stats)
+}
+
 func TestAddSlot_StatsEmptyWhenNoEquippedItems(t *testing.T) {
 	inst := makeInstance()
 	slot, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)

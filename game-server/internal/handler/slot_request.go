@@ -28,13 +28,14 @@ type slotRequestBody struct {
 
 	// How the player reached the zone, and the world-join settings (see
 	// game-server/README.md).
-	Mode                     instance.Mode `json:"mode"`                        // world | direct; required
-	InstanceKey              string        `json:"instance_key"`                // Rails-chosen key; selection matches on it; required
-	SpawnAt                  string        `json:"spawn_at"`                    // "mapId/connectionId"; per slot
-	Exits                    []string      `json:"exits"`                       // "mapId/connectionId" keys; per instance
-	WorldCharacterDatabaseID string        `json:"world_character_database_id"` // required for world mode
-	WorldVersionID           string        `json:"world_version_id"`            // per instance
-	ExpiresAt                *time.Time    `json:"expires_at"`                  // RFC 3339; per instance, if the version is already expiring
+	Mode                     instance.Mode                         `json:"mode"`                        // world | direct; required
+	InstanceKey              string                                `json:"instance_key"`                // Rails-chosen key; selection matches on it; required
+	SpawnAt                  string                                `json:"spawn_at"`                    // "mapId/connectionId"; per slot
+	Exits                    []string                              `json:"exits"`                       // "mapId/connectionId" keys; per instance
+	WorldCharacterDatabaseID string                                `json:"world_character_database_id"` // required for world mode
+	WorldVersionID           string                                `json:"world_version_id"`            // per instance
+	Provenance               instanceconfig.ProvenanceRestrictions `json:"provenance_restrictions"`     // per instance
+	ExpiresAt                *time.Time                            `json:"expires_at"`                  // RFC 3339; per instance, if the version is already expiring
 }
 
 // validate checks required fields, returning a message for the first
@@ -147,6 +148,7 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 	inst.Mode = req.Mode
 	inst.InstanceKey = req.InstanceKey
 	inst.WorldVersionID = req.WorldVersionID
+	inst.Provenance = req.Provenance
 	inst.Exits = make(map[string]bool, len(req.Exits))
 	for _, key := range req.Exits {
 		inst.Exits[key] = true

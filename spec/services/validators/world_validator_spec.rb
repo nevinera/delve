@@ -43,6 +43,23 @@ RSpec.describe Validators::WorldValidator, type: :validator do
       end
     end
 
+    context "provenanceRestrictions" do
+      it "accepts valid restrictions" do
+        data = world_fixture.merge("provenanceRestrictions" => {"worlds" => ["other"], "maxElevation" => 400})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "allows it explicitly null" do
+        expect { described_class.validate!(world_fixture.merge("provenanceRestrictions" => nil)) }.not_to raise_error
+      end
+
+      it "propagates errors with path context" do
+        data = world_fixture.merge("provenanceRestrictions" => {"maxElevation" => -5})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/provenanceRestrictions/) }
+      end
+    end
+
     context "zones" do
       it "raises when zones is missing" do
         expect { described_class.validate!(world_fixture.except("zones")) }
