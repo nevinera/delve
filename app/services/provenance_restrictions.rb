@@ -25,6 +25,19 @@ class ProvenanceRestrictions
     layers
   end
 
+  # The {world_key, layers} payload sent to the game server and the client
+  # for a zone played inside a world version, or on its own (no world).
+  def self.payload_for_world_zone(world_version, zone_data)
+    {
+      world_key: world_version.world.key,
+      layers: layers_for(world: world_version.provenance_restrictions, zone: zone_data["provenanceRestrictions"], in_world: true)
+    }
+  end
+
+  def self.payload_for_direct_zone(zone_data)
+    {world_key: nil, layers: layers_for(zone: zone_data["provenanceRestrictions"])}
+  end
+
   # Parses the client's `restrictions` param: a JSON array of layers.
   # Raises ArgumentError on anything else.
   def self.from_json(json, own_world_key: nil)

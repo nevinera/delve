@@ -296,6 +296,25 @@ describe("CharacterSheet", () => {
       await waitFor(() => expect(screen.getByText("Novice Boots")).toBeInTheDocument());
     });
 
+    it("passes the provenance layers when fetching candidates", () => {
+      const fetchMock = stubFetch([]);
+      const restrictions = { world_key: "home", layers: [{ worlds: [], maxElevation: null }] };
+
+      render(
+        <CharacterSheet
+          open
+          equippedItems={{}}
+          provenanceRestrictions={restrictions}
+          characterItemsUrl="/play/characters/1/character_items.json"
+          onClose={() => {}}
+        />
+      );
+      fireEvent.click(screen.getAllByText("Empty")[0]);
+
+      const url = new URL(fetchMock.mock.calls[0][0], "http://x");
+      expect(JSON.parse(url.searchParams.get("restrictions"))).toEqual(restrictions.layers);
+    });
+
     it("still opens and equips from the candidate pane when portrait (overlay, not inline)", async () => {
       stubFetch([
         { id: 3, identifier: "novice-boots", name: "Novice Boots", stats: {} },
@@ -531,6 +550,42 @@ describe("CharacterSheet", () => {
       render(<CharacterSheet open equippedItems={{}} onClose={() => {}} />);
       fireEvent.click(screen.getAllByText("Empty")[0].closest("tr"));
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("provenance restrictions", () => {
+    const restrictions = { world_key: "home", layers: [{ worlds: [] }] };
+
+    it("marks equipped items the restrictions disallow", () => {
+      const equippedItems = {
+        head: { id: 1, identifier: "a", name: "Local Helm", elvl: 5, world_key: "home" },
+        chest: { id: 2, identifier: "b", name: "Foreign Chest", elvl: 5, world_key: "other" },
+      };
+      render(<CharacterSheet open equippedItems={equippedItems} provenanceRestrictions={restrictions} onClose={() => {}} />);
+
+      expect(screen.getByText("Foreign Chest")).toHaveStyle({ textDecoration: "line-through" });
+      expect(screen.getByText("Local Helm")).not.toHaveStyle({ textDecoration: "line-through" });
+    });
+
+    it("offers a best available button that calls back", () => {
+      const onBestAvailable = vi.fn();
+      render(
+        <CharacterSheet
+          open
+          equippedItems={{}}
+          characterItemsUrl="/items.json"
+          onBestAvailable={onBestAvailable}
+          onClose={() => {}}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Best available"));
+      expect(onBestAvailable).toHaveBeenCalled();
+    });
+
+    it("hides the best available button when equipping isn't possible", () => {
+      render(<CharacterSheet open equippedItems={{}} onBestAvailable={() => {}} onClose={() => {}} />);
+      expect(screen.queryByText("Best available")).not.toBeInTheDocument();
     });
   });
 });

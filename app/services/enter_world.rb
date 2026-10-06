@@ -9,7 +9,7 @@ class EnterWorld
   NoEntryPoint = Class.new(Error)
   ClassNotReady = Class.new(Error)
 
-  Result = Data.define(:world_character, :zone, :owned_zone_items, :join)
+  Result = Data.define(:world_character, :zone, :owned_zone_items, :join, :provenance_restrictions)
 
   def self.call(...) = new(...).call
 
@@ -27,7 +27,8 @@ class EnterWorld
       connection_key:, last_played_at: Time.current)
     owned_zone_items = world_character.owned_zone_items_for(zone_data)
     join = JoinWorldZone.call(world_character:, zone:, zone_data:, owned_zone_items:)
-    Result.new(world_character:, zone:, owned_zone_items:, join:)
+    Result.new(world_character:, zone:, owned_zone_items:, join:,
+      provenance_restrictions: ProvenanceRestrictions.payload_for_world_zone(version, zone_data))
   end
 
   private
