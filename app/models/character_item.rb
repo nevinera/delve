@@ -20,6 +20,9 @@ class CharacterItem < ApplicationRecord
   validates :primary_stat, inclusion: {in: PRIMARY_STATS}, allow_nil: true
   validate :secondary_stats_are_valid
 
+  # Key of the world it was acquired in; nil for trainee gear.
+  def world_key = world_version&.world&.key
+
   # Where it came from, for display: the world and version it was acquired
   # in, or "Trainee gear".
   def provenance_label

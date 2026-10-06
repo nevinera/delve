@@ -20,7 +20,7 @@ class ProvenanceRestrictions
   end
 
   def allows?(item)
-    world_key = item.world_version&.world&.key
+    world_key = item.world_key
     return true if world_key.nil?
     @layers.all? { |layer| layer_allows?(layer, world_key, item.elvl) }
   end

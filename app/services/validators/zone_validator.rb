@@ -22,6 +22,10 @@ module Validators
       validate_zone_links!(data, path: path) if given?(data, "zoneLinks")
       validate_entry_points!(data, path: path) if given?(data, "entryPoints")
       validate_open_connections!(data, path: path) if given?(data, "openConnections")
+      validate_settings!(data, path: path)
+    end
+
+    def validate_settings!(data, path:)
       validate_respawn!(data, path: path) if given?(data, "respawn")
       validate_provenance_restrictions!(data, path: path) if given?(data, "provenanceRestrictions")
     end
