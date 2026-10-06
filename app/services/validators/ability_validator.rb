@@ -22,6 +22,10 @@ module Validators
       validate_icon_url!(data, path: path) if given?(data, "iconURL")
       validate_hex_color!(data, "iconColor", path: path) if given?(data, "iconColor")
       validate_speed!(data, path: path) if given?(data, "speed")
+      validate_effect_lists!(data, path: path)
+    end
+
+    def validate_effect_lists!(data, path:)
       validate_graphic_effects!(data, path: path) if given?(data, "graphicEffects")
       validate_sound_effects!(data, path: path) if given?(data, "soundEffects")
     end
