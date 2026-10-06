@@ -20,6 +20,7 @@ class Play::WorldCharactersController < Play::BaseController
     @current_version = @world_character&.world_version
     @name = @world.name || @world.key
     @in_world = in_world?
+    @disallowed_items = @world_character ? DisallowedEquipment.call(world_character: @world_character, world: @world) : []
   end
 
   def play

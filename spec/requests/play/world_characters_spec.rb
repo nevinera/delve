@@ -59,6 +59,28 @@ RSpec.describe "Play::WorldCharacters", type: :request do
     end
   end
 
+  describe "GET show with gear the world disallows" do
+    let(:world_character) { create(:world_character, world:, character:, world_version: version) }
+
+    def wear(name, slot, world_version)
+      item = create(:character_item, world_character:, name:, slot:, world_version:)
+      create(:equipped_item, world_character:, character_item: item, equipped_slot: slot)
+    end
+
+    it "warns and links to the equip screen" do
+      wear("Foreign Helm", "head", create(:world_version, world: create(:world)))
+      get "#{base}/#{world.id}"
+      expect(response.body).to include("does not allow some of your equipped gear", "Foreign Helm",
+        "#{base}/#{world.id}/equipped_items")
+    end
+
+    it "says nothing when all gear is allowed" do
+      wear("Own Helm", "head", version)
+      get "#{base}/#{world.id}"
+      expect(response.body).not_to include("does not allow")
+    end
+  end
+
   describe "GET play" do
     let(:join_result) { JoinZone::Result.new(token: "tok", instance_identifier: "inst", slot_id: "slot") }
 
