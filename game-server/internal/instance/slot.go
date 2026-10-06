@@ -120,7 +120,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 			slot.Token = uuid.New()
 			slot.CharacterClass = class
 			slot.OwnedZoneItems = ownedZoneItems
-			slot.EquippedItems = equippedItems
+			slot.EquippedItems = inst.Provenance.Worn(equippedItems)
 			slot.SlotOptions = opts
 			slot.recomputeStats()
 			return slot.snapshot(), nil
@@ -140,7 +140,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 		CharacterDatabaseID: characterDatabaseID,
 		CharacterClass:      class,
 		OwnedZoneItems:      ownedZoneItems,
-		EquippedItems:       equippedItems,
+		EquippedItems:       inst.Provenance.Worn(equippedItems),
 		SlotOptions:         opts,
 		stateEnteredAt:      time.Now(),
 	}
@@ -202,7 +202,7 @@ func (inst *Instance) setEquippedItems(unitID uuid.UUID, items map[string]instan
 	if slot == nil {
 		return
 	}
-	slot.EquippedItems = items
+	slot.EquippedItems = inst.Provenance.Worn(items)
 	slot.recomputeStats()
 }
 
