@@ -28,6 +28,17 @@ describe("ZoneLevel", () => {
     expect(worldData(result.draft).zones.forest.name).toEqual("Old Forest");
   });
 
+  it("edits the zone's gear restrictions", () => {
+    const result = renderLevel();
+
+    fireEvent.change(screen.getByLabelText("Max item elevation"), {target: {value: "10"}});
+    const worlds = screen.getByLabelText(/Other worlds allowed/);
+    fireEvent.change(worlds, {target: {value: "demo"}});
+    fireEvent.blur(worlds);
+
+    expect(zoneData(result.draft, "forest").provenanceRestrictions).toEqual({worlds: ["demo"], maxElevation: 10});
+  });
+
   it("lists the zone's maps, with no links out to the old map editor", () => {
     renderLevel();
 

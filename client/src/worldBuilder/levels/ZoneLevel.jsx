@@ -5,6 +5,7 @@ import ZoneItemsPanel from "../../zoneEditor/ZoneItemsPanel";
 import ZoneUnitTypesPanel from "../../zoneEditor/ZoneUnitTypesPanel";
 import {applyZoneAction, mapDetails, mapKeysInZone, missingZoneRefs, setZoneField, setZonePositions, zoneData, zonePositions} from "../state/zoneOps";
 import {assetUrlFor} from "../state/assetUrls";
+import ProvenanceRestrictionsField from "../../worldEditor/ProvenanceRestrictionsField";
 import PlayLink from "./PlayLink";
 import {createMap, deleteMap, renameMap} from "../state/mapOps";
 
@@ -86,6 +87,17 @@ export default function ZoneLevel({draft, zone, onChange, navigate, repo, play})
               <tr>
                 <th><label htmlFor="zone-private">Private</label></th>
                 <td><input id="zone-private" type="checkbox" checked={data.private ?? false} onChange={(e) => setField("private", e.target.checked)} /></td>
+              </tr>
+              <tr>
+                <th>Gear Restrictions</th>
+                <td>
+                  <ProvenanceRestrictionsField
+                    idPrefix="zone-provenance"
+                    value={data.provenanceRestrictions}
+                    worldsDefault="blank: any world"
+                    onChange={(v) => setField("provenanceRestrictions", v)}
+                  />
+                </td>
               </tr>
             </tbody>
           </table>
