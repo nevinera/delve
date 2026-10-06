@@ -20,6 +20,7 @@ See [item.md](item.md) for the `Item` type embedded in `items`.
 | `items` | object | no | Maps item identifier strings to Item definitions. Every identifier referenced in a unit's `lootTable` must appear here. |
 | `zoneLinks` | array of ZoneLink | no | Connections between pairs of MapConnections within this zone. |
 | `entryPoints` | object | no | Maps `"mapId/connectionId"` keys to required key strings (or `null`). Players can spawn at these connections directly. |
+| `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Inside a world it is ANDed with the world's; default is no restriction. |
 | `openConnections` | object | no | Maps `"mapId/connectionId"` keys to zone-level name strings. Exposes connections for other zones to link against. |
 
 > A zone must have at least one `entryPoint` or be reachable via an `openConnection` linked by another zone  -  otherwise there is no way for players to enter it.

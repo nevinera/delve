@@ -23,6 +23,11 @@ module Validators
       validate_entry_points!(data, path: path) if given?(data, "entryPoints")
       validate_open_connections!(data, path: path) if given?(data, "openConnections")
       validate_respawn!(data, path: path) if given?(data, "respawn")
+      validate_provenance_restrictions!(data, path: path) if given?(data, "provenanceRestrictions")
+    end
+
+    def validate_provenance_restrictions!(data, path:)
+      ProvenanceRestrictionsValidator.validate!(data["provenanceRestrictions"], path: child_path(path, "provenanceRestrictions"))
     end
 
     def validate_respawn!(data, path:)
