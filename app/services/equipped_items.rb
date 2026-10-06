@@ -10,6 +10,7 @@ module EquippedItems
       identifier: item.identifier,
       name: item.name,
       world_version_id: item.world_version_id,
+      world_key: item.world_version&.world&.key,
       version: item.version,
       slot: item.slot,
       elvl: item.elvl,

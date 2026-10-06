@@ -20,6 +20,7 @@ RSpec.describe EquippedItems::ForWorldCharacter do
       name: "Helm of Doom",
       id: item.id,
       world_version_id: nil,
+      world_key: nil,
       version: "1.0",
       slot: "head",
       elvl: 584,

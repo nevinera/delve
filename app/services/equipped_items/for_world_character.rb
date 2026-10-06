@@ -8,7 +8,7 @@ class EquippedItems::ForWorldCharacter
   end
 
   def call
-    @world_character.equipped_items.includes(:character_item).each_with_object({}) do |equipped_item, hash|
+    @world_character.equipped_items.includes(character_item: {world_version: :world}).each_with_object({}) do |equipped_item, hash|
       hash[equipped_item.equipped_slot] = EquippedItems.item_json(equipped_item.character_item)
     end
   end
