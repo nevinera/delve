@@ -74,6 +74,8 @@ Rails.application.routes.draw do
   get "build/abilities/*id/edit", to: "build/abilities#edit", as: "edit_build_ability"
   get "build/classes/*id/edit", to: "build/classes#edit", as: "edit_build_class"
   post "build/classes/*id/publish", to: "build/classes#publish", as: "publish_build_class"
+  get "build/classes/*id/versions", to: "build/class_versions#index", as: "build_class_versions"
+  post "build/classes/*id/versions", to: "build/class_versions#create"
   get "build/zones/*id/play", to: "build/zone_plays#show", as: "build_zone_play"
   get "build/local_zones", to: "build/zone_plays#local", as: "build_local_zones"
   get "build/local_zones/*id/play", to: "build/zone_plays#show", as: "build_local_zone_play", defaults: {source: "local"}

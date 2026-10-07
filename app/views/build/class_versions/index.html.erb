@@ -1,0 +1,46 @@
+<% if @versions.any?(&:provided?) %>
+  <% content_for :head do %><meta http-equiv="refresh" content="3"><% end %>
+<% end %>
+
+<h1><%= @key %> versions</h1>
+
+<p><%= link_to "Edit", edit_build_class_path(id: @key) %></p>
+
+<% if @unimported_versions.nil? %>
+  <p><small>Tags in your repo couldn't be listed, so versions that aren't imported here are missing.</small></p>
+<% end %>
+
+<% if @rows.empty? %>
+  <p>No versions yet. The class editor's Publish button tags and imports one.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr><th>Version</th><th>State</th><th>Name</th><th>Imported</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% @rows.each do |row| %>
+        <% if row.is_a?(String) %>
+          <tr>
+            <td><%= row %></td>
+            <td>not imported</td>
+            <td colspan="2"></td>
+            <td><%= button_to "Import", build_class_versions_path(id: @key), params: {version: row} %></td>
+          </tr>
+        <% else %>
+          <tr>
+            <td><%= row.version %></td>
+            <td><%= row.provided? ? "importing" : row.state %></td>
+            <td><%= row.name %></td>
+            <td><%= row.created_at.to_fs(:short) %></td>
+            <td></td>
+          </tr>
+          <% if row.validity_error.present? %>
+            <tr><td colspan="5"><strong>Import error:</strong> <%= row.validity_error %></td></tr>
+          <% end %>
+        <% end %>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<%= link_to "All classes", build_classes_path %>
