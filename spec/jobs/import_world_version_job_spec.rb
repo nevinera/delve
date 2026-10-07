@@ -179,6 +179,65 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     it_behaves_like "a failed import", /outside the repo/
   end
 
+  context "with a quests file" do
+    let(:quests) do
+      [{
+        "identifier" => "goblin-hunt", "name" => "Goblin Hunt", "chainIdentifier" => "hunts", "chainName" => "Hunts",
+        "offeredBy" => {"zone" => "goblin-cave", "ncu" => "grizzle"}, "offerText" => "Thin them out.",
+        "objectives" => [{"type" => "kill", "zone" => "goblin-cave", "unitType" => "goblin", "count" => 3}]
+      }]
+    end
+    let(:goblin_cave) do
+      maps = zone_fixture["maps"].dup
+      maps[0] = maps[0].merge("ncus" => [ncu_fixture])
+      zone_fixture.merge("maps" => maps)
+    end
+    let(:ncu_fixture) do
+      {"identifier" => "grizzle", "name" => "Grizzle", "tokenImageUrl" => "g.webp", "tokenRadius" => 2.0,
+       "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
+    end
+
+    before do
+      world_data["questsPath"] = "./demo.quests.json"
+      stub_raw("worlds/demo.json", world_data)
+      stub_raw("worlds/demo.quests.json", quests)
+    end
+
+    it "pins the quests file's path and checksum on the version" do
+      perform
+      version.reload
+      expect(version).to be_unreleased
+      expect(version.quests_path).to eq("worlds/demo.quests.json")
+      expect(version.quests_sha).to eq(Digest::SHA1.hexdigest(quests.to_json))
+    end
+
+    context "when a quest fails validation" do
+      before { stub_raw("worlds/demo.quests.json", [quests[0].except("name")]) }
+
+      it_behaves_like "a failed import", %r{worlds/demo.quests.json: name is required}
+    end
+
+    context "when a quest references something missing" do
+      let(:ncu_fixture) { super().merge("identifier" => "someone-else") }
+
+      it_behaves_like "a failed import", %r{worlds/demo.quests.json: zone "goblin-cave" has no NCU "grizzle"}
+    end
+
+    context "when the quests path leaves the repo" do
+      before do
+        world_data["questsPath"] = "../../elsewhere/demo.quests.json"
+        stub_raw("worlds/demo.json", world_data)
+      end
+
+      it_behaves_like "a failed import", /quests path .* is outside the repo/
+    end
+  end
+
+  it "leaves the quests file unset for a world without one" do
+    perform
+    expect(version.reload).to have_attributes(quests_path: nil, quests_sha: nil)
+  end
+
   context "when the tag doesn't exist" do
     before { stub_request(:get, "#{api}/git/ref/tags/demo/v1").to_return(status: 404, body: "{}") }
 

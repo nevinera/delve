@@ -4,16 +4,16 @@ A task a player accepts from an NCU, completes by meeting its objectives, and op
 
 ## Quests file
 
-A JSON array of Quest objects. Order has no meaning; editors keep it sorted by `chainIdentifier`, then `identifier`, to reduce merge conflicts. Validation does not enforce the order.
+A JSON array of Quest objects. Importing a world version validates it, and checks that every zone, NCU, map, unit, unit type and item it names exists in the world. Order has no meaning; editors keep it sorted by `chainIdentifier`, then `identifier`, to reduce merge conflicts. Validation does not enforce the order.
 
 ## Fields
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `identifier` | string | yes | Unique among the world's quests. |
+| `identifier` | string | yes | Unique among the world's quests. 1-54 letters, digits, `_` or `-` (so its completion flag is a valid flag). |
 | `name` | string | yes | Short title, shown in the quest log. |
 | `chainIdentifier` | string | yes | Groups related quests into a chain. Display grouping only; sequencing comes from flags. |
-| `chainName` | string | yes | Display name for the chain. Same for every quest sharing a `chainIdentifier`. |
+| `chainName` | string | yes | Display name for the chain. Must be the same for every quest sharing a `chainIdentifier`. |
 | `offeredBy` | NcuRef | yes | The NCU that offers the quest. |
 | `turnIn` | NcuRef | no | The NCU the quest is turned in to. Without one, the quest completes wherever its objectives are met. |
 | `description` | string | no | Quest log text. Defaults to `<NCU name> said: <offerText>`. |
@@ -21,8 +21,8 @@ A JSON array of Quest objects. Order has no meaning; editors keep it sorted by `
 | `progressText` | string | no | What the turn-in NCU says while the quest is incomplete. |
 | `completionText` | string | no | What the turn-in NCU says on completion. |
 | `requiresFlags` | array of strings | no | Flags the character must have to be offered the quest. |
-| `grantsFlags` | array of strings | no | Flags set on completion. |
-| `timer` | string | no | Time limit in in-game time, like `"124s"` or `"5m"`. Max `"60m"`. Running out fails the quest. |
+| `grantsFlags` | array of strings | no | Flags set on completion. No `quest/` flags: those come only from completing quests. |
+| `timer` | string | no | Time limit in in-game time: a positive whole number of seconds or minutes, like `"124s"` or `"5m"`. Max `"60m"`. Running out fails the quest. |
 | `objectives` | array of Objective | no | All must be met to complete the quest. |
 | `rewards` | array of Reward | no | Items granted on completion. |
 
@@ -72,9 +72,9 @@ A `talk` objective and `turnIn` are independent, and may name the same NCU (talk
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `zone` | string | yes | | Zone defining the unit or unit type. |
-| `unit` | string | no | | A specific unit's identifier (unique within the zone). Exactly one of `unit` or `unitType` is required. |
+| `unit` | string | no | | A specific unit's identifier (unique within the zone). Exactly one of `unit` or `unitType` is required. With `map`, the unit must be on that map. |
 | `unitType` | string | no | | A unit type identifier; any unit of that type counts. |
-| `count` | integer | no | `1` | Number of kills required. |
+| `count` | integer | no | `1` | Number of kills required. At least 1. |
 | `map` | string | no | | Only count kills on this map. |
 
 **`reach` fields:**

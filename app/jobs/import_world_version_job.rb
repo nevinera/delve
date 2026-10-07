@@ -3,6 +3,7 @@ require "digest"
 # Imports a WorldVersion from its repo: resolves the ref to a commit SHA,
 # fetches and validates the world file and every zone's .full.json at that
 # SHA, cross-checks the world's links and entry points against the zones,
+# fetches and validates the world's quests file (if any) against the zones,
 # then replaces the version's Zone rows. Only references and checksums are
 # stored - never the content itself (see plans/worlds.md). On any failure
 # the version is marked failed and its existing zones are left alone.
@@ -35,6 +36,7 @@ class ImportWorldVersionJob < ApplicationJob
     world_data = fetch_world!(base_url)
     zones = world_data["zones"].to_h { |key, entry| [key, fetch_zone!(base_url, key, entry)] }
     entry = link_zones!(world_data, zones)
+    @quests = fetch_quests!(base_url, world_data["questsPath"], zones)
     save!(sha:, base_url:, world_data:, zones:, entry:)
   end
 
@@ -53,6 +55,20 @@ class ImportWorldVersionJob < ApplicationJob
     raise ImportError, "#{world.path}: every entry point needs a key, so nobody could enter" unless entry
     zones.each { |key, zone| zone[:links] = WorldContent::Links.links_for(world_data, key, zones_by_key) }
     entry
+  end
+
+  # Validates the quests file and its references into the world's zones;
+  # returns its path and checksum, or nil for a world without one.
+  def fetch_quests!(base_url, relative_path, zones)
+    return if relative_path.blank?
+    path = repo_path(relative_path, "quests path")
+    body = fetch!(base_url, path)
+    quests = parse!(body, path)
+    in_file(path) do
+      Validators::QuestsValidator.validate!(quests)
+      Validators::QuestReferences.validate!(quests, zones.transform_values { |z| z[:data] })
+    end
+    {path:, content_sha: Digest::SHA1.hexdigest(body)}
   end
 
   def resolve_commit_sha
@@ -74,9 +90,14 @@ class ImportWorldVersionJob < ApplicationJob
   # A world's zone paths are relative to the world file, and point at the
   # zone's abstract file; the importable one is its .full.json sibling.
   def full_zone_path(relative_path)
+    repo_path(relative_path, "zone path").sub(/\.json\z/, ".full.json")
+  end
+
+  # A path relative to the world file, as a path within the repo.
+  def repo_path(relative_path, what)
     path = Pathname(world.path).dirname.join(relative_path).cleanpath.to_s
-    raise ImportError, "#{world.path}: zone path #{relative_path} is outside the repo" if path.start_with?("..", "/")
-    path.sub(/\.json\z/, ".full.json")
+    raise ImportError, "#{world.path}: #{what} #{relative_path} is outside the repo" if path.start_with?("..", "/")
+    path
   end
 
   def fetch!(base_url, path)
@@ -105,7 +126,8 @@ class ImportWorldVersionJob < ApplicationJob
       replace_zones!(zones, entry)
       @version.update!(
         commit_sha: sha, raw_base_url: base_url, name: world_data["name"], state: :unreleased, imported_at: Time.current,
-        provenance_restrictions: world_data["provenanceRestrictions"]
+        provenance_restrictions: world_data["provenanceRestrictions"],
+        quests_path: @quests&.dig(:path), quests_sha: @quests&.dig(:content_sha)
       )
       world.update!(name: world_data["name"]) if world.name.blank?
     end
