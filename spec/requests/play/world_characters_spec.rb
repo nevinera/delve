@@ -18,6 +18,20 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       expect(response.body).to include("Demo World", "#{base}/#{world.id}/play", "Hide")
     end
 
+    it "shows the character's version, with an upgrade to the latest" do
+      newer = published_world(world:)
+      create(:world_character, world:, character:, world_version: version)
+      get base
+      expect(response.body).to include(version.ref, "Upgrade to #{newer.ref}")
+    end
+
+    it "offers no upgrade on the latest version" do
+      create(:world_character, world:, character:, world_version: version)
+      get base
+      expect(response.body).to include(version.ref)
+      expect(response.body).not_to include("Upgrade")
+    end
+
     it "leaves out worlds with no released version" do
       unreleased = create(:world, path: "worlds/unreleased.json")
       create(:world_version, world: unreleased)
