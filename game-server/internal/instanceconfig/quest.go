@@ -1,6 +1,9 @@
 package instanceconfig
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strconv"
+)
 
 // Quest is one quest in a world's quests file (docs/schema/quest.md). Rails
 // validates the file at import; the game server only reads it.
@@ -66,3 +69,32 @@ type ActiveObjective struct {
 	Required  int            `json:"required"`
 }
 
+// TimerSeconds is the quest's time limit in seconds ("90s", "5m"), or 0
+// for none (or a malformed one; Rails validates them at import).
+func (q Quest) TimerSeconds() int {
+	if len(q.Timer) < 2 {
+		return 0
+	}
+	n, err := strconv.Atoi(q.Timer[:len(q.Timer)-1])
+	if err != nil || n < 1 {
+		return 0
+	}
+	switch q.Timer[len(q.Timer)-1] {
+	case 's':
+		return n
+	case 'm':
+		return n * 60
+	default:
+		return 0
+	}
+}
+
+// Ready reports whether every objective is met.
+func (q ActiveQuest) Ready() bool {
+	for _, objective := range q.Objectives {
+		if objective.Count < objective.Required {
+			return false
+		}
+	}
+	return true
+}

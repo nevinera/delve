@@ -63,3 +63,9 @@ func TestAcceptQuestHandler_QueuesTheQuest(t *testing.T) {
 	_ = command.AcceptQuestHandler{}.Handle(unitID, command.AcceptQuestPayload{NCUID: ncuID, Quest: "rat-hunt"}, instanceconfig.Zone{}, state)
 	assert.Equal(t, []instancestate.Talk{{UnitID: unitID, NCUIdentifier: "grizzle", AcceptQuest: "rat-hunt"}}, state.PendingTalks)
 }
+
+func TestTurnInQuestHandler_QueuesTheTurnIn(t *testing.T) {
+	state, unitID, ncuID := talkState(0, instancestate.UnitStatusIdle, "camp")
+	_ = command.TurnInQuestHandler{}.Handle(unitID, command.TurnInQuestPayload{NCUID: ncuID, Quest: "rat-hunt"}, instanceconfig.Zone{}, state)
+	assert.Equal(t, []instancestate.Talk{{UnitID: unitID, NCUIdentifier: "grizzle", TurnInQuest: "rat-hunt"}}, state.PendingTalks)
+}

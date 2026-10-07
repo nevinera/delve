@@ -146,6 +146,8 @@ func (inst *Instance) SendQuestOffers(ctx context.Context, slotID uuid.UUID) {
 // doesn't is abandoned (quest-abandoned). Logs any failure. Calls Rails,
 // so run it in its own goroutine.
 func (inst *Instance) UpgradeQuests(ctx context.Context, slotID uuid.UUID) {
+	inst.questMu.Lock()
+	defer inst.questMu.Unlock()
 	slot, ok := inst.GetSlot(slotID)
 	if !ok || slot.WorldCharacterDatabaseID == "" || inst.RailsClient == nil {
 		return
@@ -184,6 +186,8 @@ func (inst *Instance) upgradeQuest(slotID uuid.UUID, worldCharacterID, questIden
 // quest-received and their new offers (or quest-accept-failed). Calls
 // Rails, so run it in its own goroutine.
 func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIdentifier, questIdentifier string) {
+	inst.questMu.Lock()
+	defer inst.questMu.Unlock()
 	quest, err := inst.acceptQuest(slotID, ncuIdentifier, questIdentifier)
 	if err != nil {
 		if !errors.Is(err, errSlotGone) {
@@ -230,6 +234,8 @@ func (inst *Instance) acceptQuest(slotID uuid.UUID, ncuIdentifier, questIdentifi
 // then sends quest-abandoned and their new offers (or
 // quest-abandon-failed). Calls Rails, so run it in its own goroutine.
 func (inst *Instance) AbandonQuest(ctx context.Context, slotID uuid.UUID, questIdentifier string) {
+	inst.questMu.Lock()
+	defer inst.questMu.Unlock()
 	if err := inst.abandonQuest(slotID, questIdentifier); err != nil {
 		if !errors.Is(err, errSlotGone) {
 			inst.sendJSONToSlot(slotID, questFailedMsg{downBase: inst.downBase("quest-abandon-failed"), Quest: questIdentifier, Error: err.Error()})
@@ -292,16 +298,19 @@ func (inst *Instance) removeActiveQuest(slotID uuid.UUID, questIdentifier string
 }
 
 // processTalks acts on each conversation started this tick (refreshing the
-// player's offers) and each quest accepted, off the tick loop.
+// player's offers) and each quest accepted or turned in, off the tick loop.
 func (inst *Instance) processTalks(ctx context.Context, talks []instancestate.Talk) {
 	for _, talk := range talks {
 		slot := inst.slotByUnitID(talk.UnitID)
 		if slot == nil {
 			continue
 		}
-		if talk.AcceptQuest != "" {
+		switch {
+		case talk.AcceptQuest != "":
 			go inst.AcceptQuest(ctx, slot.ID, talk.NCUIdentifier, talk.AcceptQuest)
-		} else {
+		case talk.TurnInQuest != "":
+			go inst.TurnInQuest(ctx, slot.ID, talk.NCUIdentifier, talk.TurnInQuest)
+		default:
 			go inst.SendQuestOffers(ctx, slot.ID)
 		}
 	}

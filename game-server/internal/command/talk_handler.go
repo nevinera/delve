@@ -25,7 +25,7 @@ func (TalkHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ instanceco
 	if !ok {
 		return nil
 	}
-	queueTalk(unitID, p.NCUID, "", next)
+	queueTalk(unitID, p.NCUID, instancestate.Talk{}, next)
 	return nil
 }
 
@@ -41,21 +41,37 @@ func (AcceptQuestHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ ins
 	if !ok || p.Quest == "" {
 		return nil
 	}
-	queueTalk(unitID, p.NCUID, p.Quest, next)
+	queueTalk(unitID, p.NCUID, instancestate.Talk{AcceptQuest: p.Quest}, next)
 	return nil
 }
 
-func queueTalk(unitID, ncuID uuid.UUID, quest string, next *instancestate.InstanceState) {
+// TurnInQuestHandler records a player turning a quest in to an NCU in
+// range; the tick loop checks it's finished and completes it through Rails.
+type TurnInQuestHandler struct{}
+
+func (TurnInQuestHandler) Type() string      { return "turn_in_quest" }
+func (TurnInQuestHandler) Deduplicate() bool { return false }
+
+func (TurnInQuestHandler) Handle(unitID uuid.UUID, payload CommandPayload, _ instanceconfig.Zone, next *instancestate.InstanceState) error {
+	p, ok := payload.(TurnInQuestPayload)
+	if !ok || p.Quest == "" {
+		return nil
+	}
+	queueTalk(unitID, p.NCUID, instancestate.Talk{TurnInQuest: p.Quest}, next)
+	return nil
+}
+
+// queueTalk queues talk (with its unit and NCU filled in) if the unit is in
+// range of the NCU.
+func queueTalk(unitID, ncuID uuid.UUID, talk instancestate.Talk, next *instancestate.InstanceState) {
 	unit, ok := next.Units[unitID]
 	ncu, found := next.NCUs[ncuID]
 	if !ok || !found || !InTalkRange(unit, ncu) {
 		return
 	}
-	next.PendingTalks = append(next.PendingTalks, instancestate.Talk{
-		UnitID:        unitID,
-		NCUIdentifier: ncu.ZoneNCUIdentifier,
-		AcceptQuest:   quest,
-	})
+	talk.UnitID = unitID
+	talk.NCUIdentifier = ncu.ZoneNCUIdentifier
+	next.PendingTalks = append(next.PendingTalks, talk)
 }
 
 // InTalkRange reports whether a living unit is close enough to talk to ncu.

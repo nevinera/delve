@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -26,7 +27,12 @@ type fakeQuestRails struct {
 	accepted  []string
 	synced    []string
 	abandoned []string
+	completed []string
 	refuse    string
+	// active is what PATCHes update and return, by quest identifier.
+	active map[string]instanceconfig.ActiveQuest
+	// timers is each quest's last saved timer.
+	timers map[string]int
 }
 
 func activeQuestJSON(identifier string) map[string]any {
@@ -59,12 +65,44 @@ func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		identifier := strings.TrimSuffix(strings.TrimPrefix(path, "quests/"), "/sync")
 		f.synced = append(f.synced, identifier)
 		_ = json.NewEncoder(w).Encode(activeQuestJSON(identifier))
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/complete"):
+		f.completed = append(f.completed, strings.TrimSuffix(strings.TrimPrefix(path, "quests/"), "/complete"))
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"flags": []string{"quest/completed/" + f.completed[len(f.completed)-1]},
+			"items": []map[string]string{{"identifier": "rat-tail", "name": "Rat Tail"}},
+		})
+	case r.Method == http.MethodPatch && strings.HasPrefix(path, "quests/"):
+		f.patch(w, r, strings.TrimPrefix(path, "quests/"))
 	case r.Method == http.MethodDelete && strings.HasPrefix(path, "quests/"):
 		f.abandoned = append(f.abandoned, strings.TrimPrefix(path, "quests/"))
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func (f *fakeQuestRails) patch(w http.ResponseWriter, r *http.Request, identifier string) {
+	var body struct {
+		Progress map[string]int `json:"progress"`
+		Timer    *int           `json:"timer_elapsed_seconds"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	quest := f.active[identifier]
+	quest.Objectives = slices.Clone(quest.Objectives)
+	for i, objective := range quest.Objectives {
+		if count, ok := body.Progress[objective.Hash]; ok {
+			quest.Objectives[i].Count = count
+		}
+	}
+	if body.Timer != nil {
+		quest.TimerElapsedSeconds = *body.Timer
+		if f.timers == nil {
+			f.timers = map[string]int{}
+		}
+		f.timers[identifier] = *body.Timer
+	}
+	f.active[identifier] = quest
+	_ = json.NewEncoder(w).Encode(map[string]any{"quest": quest})
 }
 
 var testQuests = []instanceconfig.Quest{

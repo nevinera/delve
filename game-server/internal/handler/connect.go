@@ -55,6 +55,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 	powers := slot.CharacterClass.Powers
 	defer func() {
+		go inst.SaveQuestTimers(context.WithoutCancel(r.Context()), slotID)
 		inst.DisconnectSlot(slotID)
 		close(done)
 	}()
@@ -233,7 +234,7 @@ func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.I
 				})
 			}
 		}
-	case "talk", "accept_quest":
+	case "talk", "accept_quest", "turn_in_quest":
 		if msg.NCUID == nil {
 			return
 		}
@@ -242,8 +243,11 @@ func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.I
 			return
 		}
 		var payload command.CommandPayload = command.TalkPayload{NCUID: ncuID}
-		if msg.Type == "accept_quest" {
+		switch msg.Type {
+		case "accept_quest":
 			payload = command.AcceptQuestPayload{NCUID: ncuID, Quest: msg.Quest}
+		case "turn_in_quest":
+			payload = command.TurnInQuestPayload{NCUID: ncuID, Quest: msg.Quest}
 		}
 		inst.SendCommand(command.Command{UnitID: unitID, ReceivedAt: time.Now(), Payload: payload})
 	case "abandon_quest":

@@ -119,6 +119,13 @@ type Instance struct {
 	// quests.go); set once, before Start.
 	Quests []instanceconfig.Quest
 
+	// questMu serializes every change to players' quests (accept, abandon,
+	// upgrade, progress, completion, timers), so their Rails writes land in
+	// order. Never taken while holding slotsMu.
+	questMu sync.Mutex
+	// questTimerAt is when quest timers last advanced; tick loop only.
+	questTimerAt time.Time
+
 	// Provenance limits which equipped items count as worn here; disallowed
 	// ones stay equipped in Rails but are ignored (see instanceconfig).
 	Provenance instanceconfig.ProvenanceRestrictions
@@ -201,6 +208,7 @@ func NewInstance(
 	inst.commandProcessor.Register(command.LootItemHandler{})
 	inst.commandProcessor.Register(command.TalkHandler{})
 	inst.commandProcessor.Register(command.AcceptQuestHandler{})
+	inst.commandProcessor.Register(command.TurnInQuestHandler{})
 
 	if graph, err := pathing.Build(zone, fallbackPathingRadius); err != nil {
 		slog.Error("pathing graph build failed; chasing units will fall back to straight-line pursuit",

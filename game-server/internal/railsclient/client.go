@@ -312,3 +312,67 @@ func (c *Client) AbandonQuest(worldCharacterDatabaseID, questIdentifier string) 
 	}
 	return nil
 }
+
+// QuestProgress sets an active quest's objective counts (by objective
+// hash) and, when timerElapsedSeconds isn't nil, its timer (PATCH
+// .../quests/:quest), returning the quest as Rails now stores it.
+func (c *Client) QuestProgress(worldCharacterDatabaseID, questIdentifier string, progress map[string]int, timerElapsedSeconds *int) (instanceconfig.ActiveQuest, error) {
+	var none instanceconfig.ActiveQuest
+	body := map[string]any{"progress": progress}
+	if timerElapsedSeconds != nil {
+		body["timer_elapsed_seconds"] = *timerElapsedSeconds
+	}
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s", c.baseURL, worldCharacterDatabaseID, questIdentifier)
+	var resp struct {
+		Quest instanceconfig.ActiveQuest `json:"quest"`
+	}
+	if err := c.questCall(http.MethodPatch, url, body, http.StatusOK, &resp); err != nil {
+		return none, err
+	}
+	return resp.Quest, nil
+}
+
+// CompletedQuest is what completing a quest granted: flags, and the items
+// newly held.
+type CompletedQuest struct {
+	Flags []string `json:"flags"`
+	Items []struct {
+		Identifier string `json:"identifier"`
+		Name       string `json:"name"`
+	} `json:"items"`
+}
+
+// CompleteQuest completes an active quest (POST .../quests/:quest/complete):
+// Rails grants its flags and rewards from the definition it stored.
+func (c *Client) CompleteQuest(worldCharacterDatabaseID, questIdentifier string) (CompletedQuest, error) {
+	var resp CompletedQuest
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s/complete", c.baseURL, worldCharacterDatabaseID, questIdentifier)
+	err := c.questCall(http.MethodPost, url, map[string]any{}, http.StatusOK, &resp)
+	return resp, err
+}
+
+func (c *Client) questCall(method, url string, body any, wantStatus int, out any) error {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	req, err := http.NewRequest(method, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != wantStatus {
+		return fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	if err := json.NewDecoder(res.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+	return nil
+}

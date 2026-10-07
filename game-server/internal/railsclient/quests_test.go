@@ -105,3 +105,48 @@ func TestAbandonQuest_RailsError(t *testing.T) {
 
 	assert.ErrorContains(t, railsclient.New(srv.URL, "t").AbandonQuest("42", "rat-hunt"), "500")
 }
+
+func TestQuestProgress(t *testing.T) {
+	var gotPath, gotMethod string
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod = r.URL.Path, r.Method
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		_, _ = w.Write([]byte(activeRatHunt))
+	}))
+	t.Cleanup(srv.Close)
+
+	timer := 30
+	quest, err := railsclient.New(srv.URL, "t").QuestProgress("42", "rat-hunt", map[string]int{"abc": 2}, &timer)
+	require.NoError(t, err)
+	assert.Equal(t, "rat-hunt", quest.QuestIdentifier)
+	assert.Equal(t, http.MethodPatch, gotMethod)
+	assert.Equal(t, "/internal_api/world_characters/42/quests/rat-hunt", gotPath)
+	assert.Equal(t, map[string]any{"progress": map[string]any{"abc": float64(2)}, "timer_elapsed_seconds": float64(30)}, gotBody)
+}
+
+func TestCompleteQuest(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(`{"flags":["quest/completed/rat-hunt"],"items":[{"identifier":"dagger","name":"Dagger"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	done, err := railsclient.New(srv.URL, "t").CompleteQuest("42", "rat-hunt")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quest/completed/rat-hunt"}, done.Flags)
+	require.Len(t, done.Items, 1)
+	assert.Equal(t, "Dagger", done.Items[0].Name)
+	assert.Equal(t, "/internal_api/world_characters/42/quests/rat-hunt/complete", gotPath)
+}
+
+func TestCompleteQuest_RailsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := railsclient.New(srv.URL, "t").CompleteQuest("42", "rat-hunt")
+	assert.ErrorContains(t, err, "404")
+}

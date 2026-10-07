@@ -108,3 +108,11 @@ type AcceptQuestPayload struct {
 }
 
 func (AcceptQuestPayload) CommandType() string { return "accept_quest" }
+
+// TurnInQuestPayload turns a finished quest in to the NCU that takes it.
+type TurnInQuestPayload struct {
+	NCUID uuid.UUID
+	Quest string
+}
+
+func (TurnInQuestPayload) CommandType() string { return "turn_in_quest" }

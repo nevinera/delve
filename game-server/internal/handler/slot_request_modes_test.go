@@ -159,8 +159,8 @@ func TestSlotsRequest_World_LoadsQuestsAndActiveQuests(t *testing.T) {
 	reg := instance.NewRegistry()
 	router := mountRequest(newSlotsHandler(reg, 200))
 	rec := postRequest(t, router, worldRequest(map[string]any{
-		"quests_url":    srv.URL + "/quests.json",
-		"quests_sha":    hex.EncodeToString(sum[:]),
+		"quests_url": srv.URL + "/quests.json",
+		"quests_sha": hex.EncodeToString(sum[:]),
 		"active_quests": []map[string]any{{
 			"quest_identifier": "rat-hunt", "world_version_id": "wv-3", "timer_elapsed_seconds": 7, "definition": map[string]any{},
 			"objectives": []map[string]any{{"hash": "abc", "objective": map[string]any{"type": "talk", "zone": "z", "ncu": "n"}, "count": 1, "required": 1}},

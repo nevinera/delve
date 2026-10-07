@@ -68,6 +68,18 @@ events as quests change.
   `quest-accept-failed` (`{quest, error}`).
 - The client sends `abandon_quest` (`{quest}`); the server ends it through Rails and sends
   `quest-abandoned` and new offers, or `quest-abandon-failed` (`{quest, error}`).
+- Objectives in this zone progress as the player meets them: `talk` when they start a
+  conversation, `kill` when a unit they tagged dies, `reach` when they arrive on a map (or spawn
+  on it). Each is saved through Rails (PATCH) and sent as `quest-progress`
+  (`{quest, objective, count}`, the objective by hash).
+- A quest with no `turnIn` completes once every objective is met. One with a `turnIn` completes
+  when the client sends `turn_in_quest` (`{ncu_id, quest}`) to that NCU, in talk range, or gets
+  `quest-turn-in-failed` (`{quest, error}`). Rails grants its completion flag, `grantsFlags` and
+  rewards; the client gets `quest-completed` (`{quest, flags, items}`, items by name) and new
+  offers.
+- A timed quest's timer runs only while the player is connected to a zone in that world. It's
+  saved every 15 seconds and on disconnect; when it runs out the quest is abandoned through Rails
+  and the client gets `quest-failed` (`{quest}`) and new offers.
 
 **Expiry.** For the last 10 minutes before `expires_at`, every player gets `version-expiring`
 (`{expires_at, minutes_remaining}`) once a minute. At expiry they get `version-expired`, every
