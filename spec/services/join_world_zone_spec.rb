@@ -20,7 +20,8 @@ RSpec.describe JoinWorldZone do
   end
 
   def call
-    described_class.call(world_character:, zone:, zone_data: WorldContent.zone(zone), owned_zone_items: {"sword" => false})
+    described_class.call(world_character:, zone:, zone_data: WorldContent.zone(zone), owned_zone_items: {"sword" => false},
+      held_flags: ["key/gate"])
   end
 
   it "sends a world-mode slot request for the zone" do
@@ -80,6 +81,7 @@ RSpec.describe JoinWorldZone do
     call
     expect(slots_client).to have_received(:request).with(hash_including(
       owned_zone_items: {"sword" => false},
+      held_flags: ["key/gate"],
       equipped_items: EquippedItems::ForWorldCharacter.call(world_character:)
     ))
   end

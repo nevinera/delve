@@ -3,11 +3,12 @@
 # only with other players in the same imported zone, spawning at the
 # character's connection point, with the zone's world-linked exits.
 class JoinWorldZone < JoinZone
-  def initialize(world_character:, zone:, zone_data:, owned_zone_items:)
+  def initialize(world_character:, zone:, zone_data:, owned_zone_items:, held_flags: [])
     super(character: world_character.character, zone:)
     @world_character = world_character
     @zone_data = zone_data
     @owned_zone_items = owned_zone_items
+    @held_flags = held_flags
   end
 
   private
@@ -34,6 +35,7 @@ class JoinWorldZone < JoinZone
   def world_attrs
     {
       owned_zone_items: @owned_zone_items,
+      held_flags: @held_flags,
       equipped_items: EquippedItems::ForWorldCharacter.call(world_character: @world_character),
       mode: "world",
       instance_key: "world:#{@zone.id}",

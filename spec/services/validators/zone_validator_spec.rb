@@ -29,6 +29,23 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
       expect { described_class.validate!(data) }.not_to raise_error
     end
 
+    describe "flags" do
+      it "accepts a list of valid flags" do
+        data = zone_fixture.merge("flags" => ["zone/reached/goblinCave", "key/cave-gate"])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "rejects a non-array" do
+        expect { described_class.validate!(zone_fixture.merge("flags" => "zone/reached/x")) }
+          .to raise_error(Validators::ValidationError, /flags must be an array/)
+      end
+
+      it "rejects an invalid flag, with its index" do
+        expect { described_class.validate!(zone_fixture.merge("flags" => ["key/gate", "bogus/x"])) }
+          .to raise_error(Validators::ValidationError, /"bogus\/x" isn't a valid flag/) { |e| expect(e.path).to eq("$.flags[1]") }
+      end
+    end
+
     describe "unit type references" do
       let(:unit) { zone_fixture["maps"][0]["units"][0] }
 

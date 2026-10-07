@@ -38,6 +38,7 @@ Every slot request says how the player reached the zone (`mode`), along with the
 | `expires_at` | instance | RFC 3339; set when the version is already expiring. |
 | `spawn_at` | slot | `"mapId/connectionId"` to spawn at; unknown keys fall back to the default entry position. |
 | `world_character_database_id` | slot | Required for `world`; sent to Rails when the player exits. |
+| `held_flags` | slot | The zone config's `flags` the character holds. The slot caches these, asks Rails about any other flag when needed, and grants `zone/reached/<zone>` on connect. See `docs/flags.md`. |
 
 "Instance" fields are taken from the request that starts the instance.
 

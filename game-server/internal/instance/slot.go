@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,6 +51,7 @@ type InstanceSlot struct {
 	OwnedZoneItems      map[string]bool                        // identifier → true if owned this version, false if other version; nil if unknown
 	EquippedItems       map[string]instanceconfig.EquippedItem // equipped_slot → item; nil if unknown
 	Stats               map[string]float64                     // cached raw (em=1.0) sum of EquippedItems' stats; kept in sync by recomputeStats
+	Flags               map[string]bool                        // "type/identifier" → held; a flag missing from it is unknown (see flags.go)
 	SlotOptions
 
 	// Connection fields; protected by the instance's slotsMu.
@@ -78,6 +80,9 @@ type SlotOptions struct {
 	// SpawnAt is the "mapId/connectionId" the character's unit spawns at;
 	// empty (or unknown) spawns at the zone's default entry position.
 	SpawnAt string
+	// HeldFlags are the zone's preloaded flags (ZoneConfig.Flags) that the
+	// character holds; world mode only.
+	HeldFlags []string
 }
 
 // recomputeStats sums the raw (em=1.0) stats of every equipped item into
@@ -122,6 +127,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 			slot.OwnedZoneItems = ownedZoneItems
 			slot.EquippedItems = inst.Provenance.Worn(equippedItems)
 			slot.SlotOptions = opts
+			slot.Flags = inst.initialFlags(opts.HeldFlags)
 			slot.recomputeStats()
 			return slot.snapshot(), nil
 		}
@@ -142,6 +148,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 		OwnedZoneItems:      ownedZoneItems,
 		EquippedItems:       inst.Provenance.Worn(equippedItems),
 		SlotOptions:         opts,
+		Flags:               inst.initialFlags(opts.HeldFlags),
 		stateEnteredAt:      time.Now(),
 	}
 	slot.recomputeStats()
@@ -159,6 +166,8 @@ func (s *InstanceSlot) snapshot() *InstanceSlot {
 	c.OwnedZoneItems = maps.Clone(s.OwnedZoneItems)
 	c.EquippedItems = maps.Clone(s.EquippedItems)
 	c.Stats = maps.Clone(s.Stats)
+	c.Flags = maps.Clone(s.Flags)
+	c.HeldFlags = slices.Clone(s.HeldFlags)
 	c.lastSeqByType = maps.Clone(s.lastSeqByType)
 	c.writeCh, c.connCancel, c.connDone = nil, nil, nil
 	return &c

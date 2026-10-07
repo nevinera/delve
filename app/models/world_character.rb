@@ -8,6 +8,7 @@ class WorldCharacter < ApplicationRecord
   belongs_to :world_version, optional: true
   has_many :character_items, dependent: :destroy
   has_many :equipped_items, dependent: :destroy
+  has_many :character_flags, dependent: :destroy
 
   validates :character_id, uniqueness: {scope: :world_id}
 
@@ -27,4 +28,8 @@ class WorldCharacter < ApplicationRecord
       owned[item.identifier] ||= definition.present? && item.version == ItemDefinition.version(definition)
     end
   end
+
+  # The flags in zone_data's "flags" list (the ones the zone preloads) that
+  # this world character holds.
+  def held_zone_flags_for(zone_data) = CharacterFlag.held(self, zone_data["flags"])
 end

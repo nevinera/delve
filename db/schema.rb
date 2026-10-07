@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -30,6 +30,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
     t.index ["identifier", "version"], name: "index_character_classes_on_identifier_and_version", unique: true
     t.index ["state"], name: "index_character_classes_on_state"
     t.index ["user_id"], name: "index_character_classes_on_user_id"
+  end
+
+  create_table "character_flags", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "flag_type", null: false
+    t.string "identifier", limit: 64, null: false
+    t.integer "world_character_id", null: false
+    t.integer "world_version_id"
+    t.index ["world_character_id", "flag_type", "identifier"], name: "index_character_flags_uniquely", unique: true
+    t.index ["world_version_id"], name: "index_character_flags_on_world_version_id"
   end
 
   create_table "character_items", force: :cascade do |t|
@@ -208,6 +218,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
   end
 
   add_foreign_key "character_classes", "users"
+  add_foreign_key "character_flags", "world_characters"
+  add_foreign_key "character_flags", "world_versions", on_delete: :nullify
   add_foreign_key "character_items", "world_characters"
   add_foreign_key "character_items", "world_versions", on_delete: :nullify
   add_foreign_key "character_settings", "characters"

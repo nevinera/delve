@@ -25,6 +25,7 @@ import ExpiryBanner from "./ExpiryBanner";
 import { worldMessageAction } from "./game/worldMessages";
 import { lootFailureMessages } from "./game/lootMessages";
 import { fetchVerifiedJson, ContentChecksumError } from "./game/verifiedFetch";
+import { FlagCache } from "./game/flags";
 import { redirectTo } from "./redirectTo";
 import { leaveWorld } from "./game/leaveWorld";
 import IconImage from "./IconImage";
@@ -3066,6 +3067,10 @@ export default function App({
   // Set on a world's zones: where the Settings menu's "Leave world" sends
   // its DELETE (see game/leaveWorld.js).
   leaveWorldUrl,
+  // Set on a world's zones: the zone's listed flags the character holds,
+  // and the base of the has-flag endpoint for any others (see game/flags.js).
+  heldFlags = [],
+  flagsUrl,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
@@ -3102,6 +3107,10 @@ export default function App({
   // True once the server has told us to leave (zone exit, version expiry),
   // so the socket closing behind it doesn't read as a disconnect.
   const leavingRef = useRef(false);
+  // The character's flags in this world (see game/flags.js); nothing reads
+  // it yet.
+  const flagCacheRef = useRef(null);
+  if (!flagCacheRef.current) flagCacheRef.current = new FlagCache({ heldFlags, flagsUrl });
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [dialogueNcuId, setDialogueNcuId] = useState(null);
@@ -3256,6 +3265,7 @@ export default function App({
         npcResourceByZoneIdRef.current = resourceById;
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
+        flagCacheRef.current.preload(zone.flags);
         // Every unit type's powers, not just spawned units' - a status
         // applied by a unit type nobody's spawned yet at load time would
         // otherwise never resolve.
