@@ -26,6 +26,7 @@ import { worldMessageAction } from "./game/worldMessages";
 import { lootFailureMessages } from "./game/lootMessages";
 import { fetchVerifiedJson, ContentChecksumError } from "./game/verifiedFetch";
 import { redirectTo } from "./redirectTo";
+import { leaveWorld } from "./game/leaveWorld";
 import IconImage from "./IconImage";
 
 
@@ -3045,6 +3046,9 @@ export default function App({
   // back to when the player leaves through an exit or the world version
   // expires (see game/worldMessages.js).
   worldReturnUrl,
+  // Set on a world's zones: where the Settings menu's "Leave world" sends
+  // its DELETE (see game/leaveWorld.js).
+  leaveWorldUrl,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
@@ -3804,6 +3808,20 @@ export default function App({
     if (canTalkTo(self, ncu, dialogue)) setDialogueNcuId(id);
   }, []);
 
+  // Frees the slot through Rails (which closes our socket, so onClose is
+  // muted while leaving), then goes to the world's page.
+  const handleLeaveWorld = useCallback(async () => {
+    setSettingsOpen(false);
+    leavingRef.current = true;
+    const { redirectUrl, error } = await leaveWorld(leaveWorldUrl);
+    if (redirectUrl) {
+      redirectTo(redirectUrl);
+      return;
+    }
+    leavingRef.current = false;
+    addLog(error);
+  }, [leaveWorldUrl]);
+
   const handleTakeItem = useCallback((targetUnitId, itemIndex) => {
     connRef.current?.send({ type: "loot_item", target_unit_id: targetUnitId, item_index: itemIndex });
   }, []);
@@ -4106,6 +4124,7 @@ export default function App({
           setSettingsOpen(false);
         }}
         onReload={() => window.location.reload()}
+        onLeaveWorld={leaveWorldUrl ? handleLeaveWorld : undefined}
         hotkeys={hotkeys}
         onSaveHotkeys={saveHotkeys}
         showHotkeys={!viewportMode.isPhoneLayout}

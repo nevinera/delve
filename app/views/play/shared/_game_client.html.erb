@@ -17,4 +17,5 @@
   data-character-settings-url="<%= play_character_setting_path(character) %>"
   data-stock-assets="<%= stock_assets.to_json %>"
   <% if local_assigns[:world_return_url] %>data-world-return-url="<%= world_return_url %>"<% end %>
+  <% if local_assigns[:leave_world_url] %>data-leave-world-url="<%= leave_world_url %>"<% end %>
 ></div>

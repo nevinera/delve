@@ -35,7 +35,7 @@ RSpec.describe "Build::ZonePlays", type: :request do
     expect(response).to have_http_status(:ok)
     expect(response.body).to include('data-slot-token="tok"', %(data-zone-source-url="#{raw_url}"),
       %(data-zone-source-sha="#{Digest::SHA1.hexdigest(zone_body)}"))
-    expect(response.body).not_to include("data-world-return-url")
+    expect(response.body).not_to include("data-world-return-url", "data-leave-world-url")
     expect(JoinDirectZone).to have_received(:call).with(hash_including(
       character:, zone_key: "forest/glade", commit_sha: "c0ffee", source_url: raw_url
     ))
