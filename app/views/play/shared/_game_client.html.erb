@@ -15,6 +15,7 @@
   <% if local_assigns[:equipped_items_url] %>data-equipped-items-url="<%= equipped_items_url %>"<% end %>
   <% if local_assigns[:held_flags] %>data-held-flags="<%= held_flags.to_json %>"<% end %>
   <% if local_assigns[:flags_url] %>data-flags-url="<%= flags_url %>"<% end %>
+  <% if local_assigns[:zone_identifier] %>data-zone-identifier="<%= zone_identifier %>"<% end %>
   <% if local_assigns[:quests_url] %>data-quests-url="<%= quests_url %>" data-quests-sha="<%= quests_sha %>"<% end %>
   <% if local_assigns[:provenance_restrictions] %>data-provenance-restrictions="<%= provenance_restrictions.to_json %>"<% end %>
   data-character-settings="<%= character_settings.to_json %>"

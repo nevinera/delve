@@ -11,7 +11,8 @@ import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { canKeepTalking, canTalkTo } from "./game/dialogue";
 import { DialogueWindow } from "./DialogueWindow";
-import { offersFor, questMessageAction, questNcus, questsById } from "./game/quests";
+import { offersFor, questLogChains, questMessageAction, questNcus, questsById, zoneNames } from "./game/quests";
+import { QuestLog } from "./QuestLog";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
@@ -3072,6 +3073,7 @@ export default function App({
   // and the base of the has-flag endpoint for any others (see game/flags.js).
   heldFlags = [],
   flagsUrl,
+  zoneIdentifier,
   questsUrl,
   questsSha,
 }) {
@@ -3122,6 +3124,13 @@ export default function App({
   const [questOffers, setQuestOffers] = useState({});
   const questOffersRef = useRef({});
   const questNcuSet = useMemo(() => questNcus(questOffers), [questOffers]);
+  const [questLogEntries, setQuestLogEntries] = useState([]);
+  const [questLogOpen, setQuestLogOpen] = useState(false);
+  const [currentZoneNames, setCurrentZoneNames] = useState(null);
+  const questChains = useMemo(
+    () => questLogChains(questLogEntries, questDefinitions, {zoneIdentifier, names: currentZoneNames}),
+    [questLogEntries, questDefinitions, zoneIdentifier, currentZoneNames]
+  );
   const [ncus, setNcus] = useState({});
   const ncusRef = useRef({});
   const [charSheetOpen, setCharSheetOpen] = useState(false);
@@ -3274,6 +3283,7 @@ export default function App({
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
         flagCacheRef.current.preload(zone.flags);
+        setCurrentZoneNames(zoneNames(zone));
         // Every unit type's powers, not just spawned units' - a status
         // applied by a unit type nobody's spawned yet at load time would
         // otherwise never resolve.
@@ -3529,6 +3539,7 @@ export default function App({
           setLootWindowUnitId(null);
           setDialogueNcuId(null);
           setCharSheetOpen(false);
+          setQuestLogOpen(false);
           setClassOpen(false);
           setSettingsOpen(false);
           setMenuOpen(false);
@@ -3543,6 +3554,8 @@ export default function App({
       if (!action) return;
       if (action === "toggle_character_sheet") {
         setCharSheetOpen(o => !o);
+      } else if (action === "toggle_quest_log") {
+        setQuestLogOpen(o => !o);
       } else if (action === "toggle_latency") {
         setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
       } else if (action === "attack_start") {
@@ -3625,6 +3638,7 @@ export default function App({
           questOffersRef.current = questAction.offers;
           setQuestOffers(questAction.offers);
         }
+        if (questAction?.type === "quest_log") setQuestLogEntries(questAction.quests);
         if (questAction?.log) addLog(questAction.log);
         const action = worldMessageAction(msg);
         if (!action) return;
@@ -3865,6 +3879,10 @@ export default function App({
     connRef.current?.send({ type: "talk", ncu_id: id });
   }, []);
 
+  const handleAbandonQuest = useCallback((quest) => {
+    connRef.current?.send({ type: "abandon_quest", quest });
+  }, []);
+
   const handleAcceptQuest = useCallback((quest) => {
     if (dialogueNcuId) connRef.current?.send({ type: "accept_quest", ncu_id: dialogueNcuId, quest });
   }, [dialogueNcuId]);
@@ -3990,7 +4008,7 @@ export default function App({
   // is only ever non-empty when the target happens to be self.
   const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
-  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || classOpen || settingsOpen || menuOpen;
+  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || questLogOpen || classOpen || settingsOpen || menuOpen;
 
   // Walking away (or dying) ends the conversation.
   const dialogueNcu = dialogueNcuId ? ncus[dialogueNcuId] : null;
@@ -4256,6 +4274,14 @@ export default function App({
         portrait={viewportMode.isPortraitPhone}
         landscape={viewportMode.isLandscapePhone}
       />
+      <QuestLog
+        open={questLogOpen}
+        chains={questChains}
+        onAbandon={handleAbandonQuest}
+        onClose={() => setQuestLogOpen(false)}
+        portrait={viewportMode.isPortraitPhone}
+        landscape={viewportMode.isLandscapePhone}
+      />
       <ClassSheet
         open={classOpen}
         powers={powers}
@@ -4290,6 +4316,12 @@ export default function App({
             onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
           >
             Character
+          </button>
+          <button
+            style={styles.menuDialogButton}
+            onClick={() => { setQuestLogOpen((o) => !o); setMenuOpen(false); }}
+          >
+            Quests
           </button>
           <button
             style={styles.menuDialogButton}
@@ -4548,6 +4580,13 @@ export default function App({
             onClick={() => setCharSheetOpen(o => !o)}
           >
             Char
+          </button>
+          <button
+            style={styles.utilityButton}
+            title="Quest log (J)"
+            onClick={() => setQuestLogOpen(o => !o)}
+          >
+            Quests
           </button>
           <button
             style={styles.utilityButton}

@@ -59,6 +59,13 @@ blue diamond over its token, and its quests are listed at the top of its convers
 with quests but no dialogue can still be talked to). Accepting goes through the game server,
 which checks the offer again.
 
+## Quest log
+
+The quest log (default key `J`) lists a player's active quests grouped by chain, with each quest's
+description (or `<NCU name> said: <offerText>`), its objectives' progress, and its time limit.
+Abandoning a quest from the log goes through the game server. The game server sends the log on
+connect and whenever the player's quests change.
+
 ## State
 
 Rails stores only active quests (`CharacterQuest`), never quest definitions: the quest's
