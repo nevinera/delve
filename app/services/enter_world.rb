@@ -9,7 +9,7 @@ class EnterWorld
   NoEntryPoint = WorldEntryPoint::NoEntryPoint
   ClassNotReady = Class.new(Error)
 
-  Result = Data.define(:world_character, :zone, :owned_zone_items, :join, :provenance_restrictions)
+  Result = Data.define(:world_character, :zone, :owned_zone_items, :held_flags, :join, :provenance_restrictions)
 
   def self.call(...) = new(...).call
 
@@ -25,13 +25,18 @@ class EnterWorld
     version, zone, connection_key, zone_data = entry.to_h.values_at(:version, :zone, :connection_key, :zone_data)
     world_character.update!(world_version: version, zone_identifier: zone.identifier,
       connection_key:, last_played_at: Time.current)
-    owned_zone_items = world_character.owned_zone_items_for(zone_data)
-    join = JoinWorldZone.call(world_character:, zone:, zone_data:, owned_zone_items:)
-    Result.new(world_character:, zone:, owned_zone_items:, join:,
-      provenance_restrictions: ProvenanceRestrictions.payload_for_world_zone(version, zone_data))
+    join(world_character, zone, zone_data)
   end
 
   private
+
+  def join(world_character, zone, zone_data)
+    owned_zone_items = world_character.owned_zone_items_for(zone_data)
+    held_flags = world_character.held_zone_flags_for(zone_data)
+    join = JoinWorldZone.call(world_character:, zone:, zone_data:, owned_zone_items:, held_flags:)
+    Result.new(world_character:, zone:, owned_zone_items:, held_flags:, join:,
+      provenance_restrictions: ProvenanceRestrictions.payload_for_world_zone(world_character.world_version, zone_data))
+  end
 
   # A world character starts with trainee gear the first time they enter
   # (one that's never received anything; hiding a world also creates a

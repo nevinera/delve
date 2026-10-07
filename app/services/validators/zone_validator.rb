@@ -22,6 +22,7 @@ module Validators
       validate_zone_links!(data, path: path) if given?(data, "zoneLinks")
       validate_entry_points!(data, path: path) if given?(data, "entryPoints")
       validate_open_connections!(data, path: path) if given?(data, "openConnections")
+      validate_flags!(data, path: path) if given?(data, "flags")
       validate_settings!(data, path: path)
     end
 
@@ -140,6 +141,18 @@ module Validators
       open_connections.each do |key, value|
         oc_path = child_path(child_path(path, "openConnections"), key)
         raise ValidationError.new("openConnection value must be a string", path: oc_path) unless value.is_a?(String)
+      end
+    end
+
+    # The flags the zone preloads (see plans/flags.md), compiled by the world
+    # editor's Expand.
+    def validate_flags!(data, path:)
+      flags = data["flags"]
+      raise ValidationError.new("flags must be an array", path: child_path(path, "flags")) unless flags.is_a?(Array)
+      flags.each_with_index do |flag, i|
+        next if CharacterFlag.valid_flag?(flag)
+        raise ValidationError.new("#{flag.inspect} isn't a valid flag (type/identifier, types: #{CharacterFlag::TYPES.join(", ")})",
+          path: index_path(child_path(path, "flags"), i))
       end
     end
 

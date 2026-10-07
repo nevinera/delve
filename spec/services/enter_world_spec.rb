@@ -28,7 +28,8 @@ RSpec.describe EnterWorld do
       world_character: WorldCharacter.last,
       zone: version.zones.find_by!(identifier: "darkwood"),
       zone_data: hash_including("name" => "Darkwood"),
-      owned_zone_items: {}
+      owned_zone_items: {},
+      held_flags: []
     )
   end
 
@@ -67,6 +68,16 @@ RSpec.describe EnterWorld do
     wc = create(:world_character, world: other.world, character:)
     create(:character_item, world_character: wc, identifier: "axe", version: "1.0")
     expect(described_class.call(character:, world: other.world).owned_zone_items).to eq({})
+  end
+
+  it "reports which of the zone's listed flags the world character holds" do
+    files = demo_world_files
+    files[:zones]["darkwood"]["flags"] = ["zone/reached/darkwood", "key/gate"]
+    other = published_world(files:, world: create(:world, path: "worlds/flags.json"))
+    wc = create(:world_character, world: other.world, character:)
+    create(:character_flag, world_character: wc, flag_type: "key", identifier: "gate")
+    create(:character_flag, world_character: wc, flag_type: "key", identifier: "unlisted")
+    expect(described_class.call(character:, world: other.world).held_flags).to eq(["key/gate"])
   end
 
   it "re-enters at the saved connection point" do

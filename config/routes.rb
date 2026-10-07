@@ -96,6 +96,7 @@ Rails.application.routes.draw do
           delete :leave
         end
         resources :character_items, only: [:index, :show]
+        get "flags/*flag", to: "character_flags#show", as: :flag, format: false
         resources :equipped_items, only: [:index, :update], param: :equipped_slot do
           post :best_available, on: :collection
         end
@@ -108,6 +109,8 @@ Rails.application.routes.draw do
       resources :character_items, only: [:create]
       resources :equipped_items, only: [:index]
       resources :zone_exits, only: [:create]
+      resources :character_flags, only: [:create], path: "flags"
+      get "flags/*flag", to: "character_flags#show", as: :character_flag, format: false
     end
   end
 

@@ -25,12 +25,9 @@ class Play::WorldCharactersController < Play::BaseController
   end
 
   def play
-    result = EnterWorld.call(character: @character, world: @world)
-    @zone = result.zone
-    @result = result.join
-    @owned_zone_items = result.owned_zone_items
-    @equipped_items = EquippedItems::ForWorldCharacter.call(world_character: result.world_character)
-    @provenance_restrictions = result.provenance_restrictions
+    @entry = EnterWorld.call(character: @character, world: @world)
+    @zone = @entry.zone
+    @equipped_items = EquippedItems::ForWorldCharacter.call(world_character: @entry.world_character)
     load_client_settings
   rescue EnterWorld::Error, VerifiedContent::Error, GameApi::Error => e
     @error = e.message

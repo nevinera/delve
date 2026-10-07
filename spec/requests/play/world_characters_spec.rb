@@ -105,6 +105,8 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       expect(response.body).to include('data-slot-token="tok"',
         %(data-world-return-url="#{base}/#{world.id}/play"),
         %(data-leave-world-url="#{base}/#{world.id}/leave"),
+        %(data-held-flags="[]"),
+        %(data-flags-url="#{base}/#{world.id}/flags"),
         %(data-zone-source-url="#{version.raw_base_url}zones/darkwood/darkwood.full.json"),
         %(data-zone-source-sha="#{version.zones.find_by!(identifier: "darkwood").content_sha}"),
         %(data-class-config-sha="#{character_class.content_sha}"))

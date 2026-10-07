@@ -13,6 +13,8 @@
   data-equipped-items="<%= equipped_items.to_json %>"
   <% if local_assigns[:character_items_url] %>data-character-items-url="<%= character_items_url %>"<% end %>
   <% if local_assigns[:equipped_items_url] %>data-equipped-items-url="<%= equipped_items_url %>"<% end %>
+  <% if local_assigns[:held_flags] %>data-held-flags="<%= held_flags.to_json %>"<% end %>
+  <% if local_assigns[:flags_url] %>data-flags-url="<%= flags_url %>"<% end %>
   <% if local_assigns[:provenance_restrictions] %>data-provenance-restrictions="<%= provenance_restrictions.to_json %>"<% end %>
   data-character-settings="<%= character_settings.to_json %>"
   data-character-settings-url="<%= play_character_setting_path(character) %>"
