@@ -64,10 +64,11 @@ RSpec.describe "Play::Characters", type: :request do
         end
 
         it "offers Upgrade instead when there's a newer version" do
+          version.update!(ref: "demo/v7")
           create(:world_character, character:, world:, world_version: version, last_played_at: 1.hour.ago)
-          published_world(world:).tap { |newer| newer.update!(released_at: 1.minute.from_now) }
+          published_world(world:, ref: "demo/v9").update!(released_at: 1.minute.from_now)
           get "/play/characters"
-          expect(response.body).to include("Upgrade", "enter")
+          expect(response.body).to include("Upgrade from v7-&gt;v9", "enter")
           expect(response.body).not_to include(">Enter<", 'value="Enter"')
         end
       end

@@ -159,3 +159,10 @@ input[type="submit"].upgrade:hover {
   --pico-background-color: #d9ad3a;
   --pico-border-color: #d9ad3a;
 }
+
+/* a button_to that sits beside text in a cell instead of on its own line */
+form.inline {
+  display: inline-block;
+  margin: 0 0 0 0.5rem;
+  vertical-align: middle;
+}
