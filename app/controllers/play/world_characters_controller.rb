@@ -21,6 +21,7 @@ class Play::WorldCharactersController < Play::BaseController
     @current_version = @world_character&.world_version
     @name = @world.name || @world.key
     @in_world = in_world?
+    @disallowed_items = @world_character ? DisallowedEquipment.call(world_character: @world_character, world: @world) : []
   end
 
   def play
@@ -29,6 +30,7 @@ class Play::WorldCharactersController < Play::BaseController
     @result = result.join
     @owned_zone_items = result.owned_zone_items
     @equipped_items = EquippedItems::ForWorldCharacter.call(world_character: result.world_character)
+    @provenance_restrictions = result.provenance_restrictions
     load_client_settings
   rescue EnterWorld::Error, VerifiedContent::Error, GameApi::Error => e
     @error = e.message

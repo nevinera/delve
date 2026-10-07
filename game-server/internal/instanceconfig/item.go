@@ -21,6 +21,7 @@ type Item struct {
 type EquippedItem struct {
 	Identifier     string   `json:"identifier"`
 	Version        string   `json:"version"`
+	WorldKey       *string  `json:"world_key"` // world it was acquired in; nil for trainee gear
 	Slot           string   `json:"slot"`
 	Elvl           int      `json:"elvl"`
 	Shield         bool     `json:"shield"`

@@ -96,7 +96,9 @@ Rails.application.routes.draw do
           delete :leave
         end
         resources :character_items, only: [:index, :show]
-        resources :equipped_items, only: [:index, :update], param: :equipped_slot
+        resources :equipped_items, only: [:index, :update], param: :equipped_slot do
+          post :best_available, on: :collection
+        end
       end
       resource :setting, only: [:show, :update], controller: "character_settings"
     end

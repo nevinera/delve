@@ -1,4 +1,5 @@
 import {useState} from "react";
+import ProvenanceRestrictionsField from "./ProvenanceRestrictionsField";
 
 function TextField({value, onChange, placeholder}) {
   return <input type="text" value={value ?? ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} />;
@@ -89,6 +90,17 @@ export default function WorldFieldsPanel({draft, onChange, thumbnailPreviewUrl, 
         <tr>
           <th>Elevation Range</th>
           <td><ElevationRangeField value={data.elevationRange} onChange={(v) => onChange(draft.setField("elevationRange", v))} /></td>
+        </tr>
+        <tr>
+          <th>Gear Restrictions</th>
+          <td>
+            <ProvenanceRestrictionsField
+              idPrefix="world-provenance"
+              value={data.provenanceRestrictions}
+              worldsDefault="none (this world's gear only)"
+              onChange={(v) => onChange(draft.setField("provenanceRestrictions", v))}
+            />
+          </td>
         </tr>
       </tbody>
     </table>

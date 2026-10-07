@@ -115,6 +115,10 @@ type Instance struct {
 	WorldVersionID string
 	Exits          map[string]bool
 
+	// Provenance limits which equipped items count as worn here; disallowed
+	// ones stay equipped in Rails but are ignored (see instanceconfig).
+	Provenance instanceconfig.ProvenanceRestrictions
+
 	// RailsClient is used by the tick loop to award looted items. May be nil
 	// (e.g. in tests), in which case loot claims resolve as failures.
 	RailsClient *railsclient.Client

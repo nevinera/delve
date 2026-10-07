@@ -90,6 +90,19 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /unitTypes must be an object/)
     end
 
+    context "provenanceRestrictions" do
+      it "accepts valid restrictions" do
+        data = zone_fixture.merge("provenanceRestrictions" => {"worlds" => ["other"], "maxElevation" => 400})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "propagates errors with path context" do
+        data = zone_fixture.merge("provenanceRestrictions" => {"worlds" => "x"})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to match(/provenanceRestrictions/) }
+      end
+    end
+
     context "respawn" do
       it "accepts a zone with no respawn" do
         expect { described_class.validate!(zone_fixture.except("respawn")) }.not_to raise_error

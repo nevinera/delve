@@ -1,4 +1,6 @@
 class Play::CharacterItemsController < Play::BaseController
+  rescue_from ArgumentError, with: :render_bad_restrictions
+
   before_action :load_character
 
   def index
@@ -7,7 +9,7 @@ class Play::CharacterItemsController < Play::BaseController
     @filter_slots = filter_slots
     respond_to do |format|
       format.html
-      format.json { render json: @items.map { |item| item_json(item) } }
+      format.json { render json: @items.map { |item| params[:lean].present? ? lean_item_json(item) : item_json(item) } }
     end
   end
 
@@ -22,7 +24,23 @@ class Play::CharacterItemsController < Play::BaseController
   def filtered_items
     items = @world_character.character_items.includes(world_version: :world).order(created_at: :desc)
     items = items.where(slot: filter_slots) if filter_slots.present?
-    items
+    restrictions ? items.select { |item| restrictions.allows?(item) } : items
+  end
+
+  # Only the items the client's provenance restrictions (a JSON array of
+  # layers, see ProvenanceRestrictions) allow; nil when none were sent.
+  def restrictions
+    return unless params[:restrictions].present?
+    @restrictions ||= ProvenanceRestrictions.from_json(params[:restrictions], own_world_key: @world.key)
+  end
+
+  # The listing without the stats block, for long pulldowns.
+  def lean_item_json(item)
+    {id: item.id, identifier: item.identifier, name: item.name, slot: item.slot, elvl: item.elvl, provenance: item.provenance_label}
+  end
+
+  def render_bad_restrictions(err)
+    render json: {error: err.message}, status: :unprocessable_content
   end
 
   def item_json(item)

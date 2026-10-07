@@ -141,4 +141,45 @@ RSpec.describe "Play::CharacterItems", type: :request do
       end
     end
   end
+
+  describe "GET /play/characters/:character_id/worlds/:world_id/character_items with restrictions" do
+    let(:path) { "/play/characters/#{character.id}/worlds/#{world.id}/character_items" }
+    let(:other_version) { create(:world_version, world: create(:world)) }
+    let!(:trainee) { create(:character_item, world_character:, name: "Trainee Helm", elvl: 900) }
+    let!(:foreign) { create(:character_item, world_character:, name: "Foreign Helm", elvl: 100, world_version: other_version) }
+    let!(:local) { create(:character_item, world_character:, name: "Local Helm", elvl: 100, world_version: create(:world_version, world:)) }
+
+    def names(restrictions)
+      get path, params: {restrictions: restrictions.to_json}, as: :json
+      JSON.parse(response.body).map { |i| i["name"] }
+    end
+
+    it "returns everything when no restrictions are sent" do
+      get path, as: :json
+      expect(JSON.parse(response.body).size).to eq(3)
+    end
+
+    it "drops items from worlds the layers don't allow, keeping trainee gear" do
+      expect(names([{"worlds" => []}])).to contain_exactly("Trainee Helm", "Local Helm")
+    end
+
+    it "allows a listed world" do
+      expect(names([{"worlds" => [other_version.world.key]}])).to contain_exactly("Trainee Helm", "Foreign Helm", "Local Helm")
+    end
+
+    it "filters by maxElevation but keeps trainee gear" do
+      expect(names([{"maxElevation" => 50}])).to contain_exactly("Trainee Helm")
+    end
+
+    it "rejects malformed restrictions" do
+      get path, params: {restrictions: "nope"}, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "returns a lean listing without stats" do
+      get path, params: {lean: "1"}, as: :json
+      row = JSON.parse(response.body).find { |i| i["name"] == "Local Helm" }
+      expect(row.keys).to contain_exactly("id", "identifier", "name", "slot", "elvl", "provenance")
+    end
+  end
 end

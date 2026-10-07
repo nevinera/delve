@@ -48,6 +48,14 @@ describe("WorldLevel", () => {
     expect(worldData(result.draft).name).toEqual("Wider");
   });
 
+  it("edits the world's gear restrictions", () => {
+    const result = renderLevel();
+
+    fireEvent.change(screen.getByLabelText("Max item elevation"), {target: {value: "20"}});
+
+    expect(worldData(result.draft).provenanceRestrictions).toEqual({maxElevation: 20});
+  });
+
   it("creates a zone and opens it", () => {
     const result = renderLevel();
 

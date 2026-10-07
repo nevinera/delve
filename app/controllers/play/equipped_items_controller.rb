@@ -1,5 +1,5 @@
 class Play::EquippedItemsController < Play::BaseController
-  rescue_from EquipItem::IncompatibleSlot, ActiveRecord::RecordInvalid, with: :render_unprocessable
+  rescue_from EquipItem::IncompatibleSlot, ActiveRecord::RecordInvalid, ArgumentError, with: :render_unprocessable
 
   before_action :load_character
 
@@ -13,6 +13,18 @@ class Play::EquippedItemsController < Play::BaseController
     character_item_id.present? ? equip : unequip
     respond_to do |format|
       format.html { redirect_to play_character_world_equipped_items_path(@character, @world), notice: "Updated." }
+      format.json { render json: EquippedItems::ForWorldCharacter.call(world_character: @world_character) }
+    end
+  end
+
+  # Equips the best allowed item in every slot (see EquipBestAvailable);
+  # `restrictions` is the client's JSON array of provenance layers.
+  def best_available
+    authorize! :update, EquippedItem
+    restrictions = ProvenanceRestrictions.from_json(params[:restrictions].presence || "[]", own_world_key: @world.key)
+    EquipBestAvailable.call(world_character: @world_character, restrictions:)
+    respond_to do |format|
+      format.html { redirect_to play_character_world_equipped_items_path(@character, @world), notice: "Equipped the best available gear." }
       format.json { render json: EquippedItems::ForWorldCharacter.call(world_character: @world_character) }
     end
   end

@@ -115,3 +115,20 @@ Once `delaySeconds` after death has passed, the unit doesn't just reappear: it t
 ```json
 { "type": "timer", "delaySeconds": 120.0 }
 ```
+
+---
+
+## ProvenanceRestrictions
+
+Limits which items a unit may wear, by where they came from. Settable on [World](world.md) and [Zone](zone.md) with the same shape. An item's provenance is the world it was acquired in and its `elvl`. Disallowed equipped items are treated as not worn while the restrictions apply (they stay equipped and in the bag), and the equip UI only offers allowed items. Trainee gear (no world) is always allowed.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `worlds` | array of string | no | Keys of other worlds whose items are allowed, in addition to the owning world (a world's own items are always allowed). Absent means: this world only, for a world; any world, for a zone with no world. |
+| `maxElevation` | integer | no | Items with `elvl` above this are disallowed. Must be >= 0. Absent means any. |
+
+A zone inside a world must satisfy both its own restrictions and the world's. A zone played on its own is subject only to its own.
+
+```json
+{ "worlds": ["northern-barrens"], "maxElevation": 400 }
+```
