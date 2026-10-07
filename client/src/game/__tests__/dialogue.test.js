@@ -49,6 +49,11 @@ describe("canTalkTo", () => {
     expect(canTalkTo(self, ncu(5), undefined)).toBe(false);
   });
 
+  it("is true without dialogue when the NCU has quests to offer", () => {
+    expect(canTalkTo(self, ncu(5), undefined, true)).toBe(true);
+    expect(canTalkTo(self, ncu(50), undefined, true)).toBe(false);
+  });
+
   it("is false when the player is dead", () => {
     expect(canTalkTo({ ...self, status: "dead" }, ncu(5), dialogue)).toBe(false);
   });

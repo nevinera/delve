@@ -1,14 +1,22 @@
 import { useState } from "react";
-import { pickEntryNodeId } from "./game/dialogue";
+import { hasDialogue, pickEntryNodeId } from "./game/dialogue";
 
 // Walks a branching dialogue tree (docs/schema/ncu.md#dialogue) node by
 // node. Keyed by the speaking unit's id by the caller (see App.jsx's
 // key={dialogueNcuId}), so talking to someone new remounts this component -
 // the lazy useState initializer below re-picks a random entry node each time.
-export function DialogueWindow({ name, dialogue, onClose }) {
-  const [currentNodeId, setCurrentNodeId] = useState(() => dialogue && pickEntryNodeId(dialogue));
+//
+// The quests the NCU offers ({identifier, name, offerText}) are top-level
+// options, listed under the opening line (or alone, for an NCU with no
+// dialogue). Picking one shows its offerText, to accept or put off.
+export function DialogueWindow({ name, dialogue, offers = [], onAcceptQuest, onClose }) {
+  const [entryNodeId] = useState(() => (hasDialogue(dialogue) ? pickEntryNodeId(dialogue) : null));
+  const [currentNodeId, setCurrentNodeId] = useState(entryNodeId);
+  const [questId, setQuestId] = useState(null);
   const node = dialogue?.nodes?.[currentNodeId];
-  if (!node) return null;
+  const quest = offers.find((offer) => offer.identifier === questId);
+  const atTop = currentNodeId === entryNodeId;
+  if (!node && !quest && !(atTop && offers.length)) return null;
 
   return (
     <div style={styles.window} role="dialog" aria-label={name}>
@@ -16,25 +24,51 @@ export function DialogueWindow({ name, dialogue, onClose }) {
         <span style={styles.title}>{name}</span>
         <button style={styles.close} onClick={onClose} aria-label="Close">✕</button>
       </div>
-      <p style={styles.line}>{node.text}</p>
-      <div style={styles.footer}>
-        {node.choices?.length ? (
-          node.choices.map((choice, i) => (
-            <button
-              key={i}
-              style={styles.next}
-              onClick={choice.next ? () => setCurrentNodeId(choice.next) : onClose}
-            >
-              {choice.text}
-            </button>
-          ))
-        ) : (
-          <button style={styles.next} onClick={node.next ? () => setCurrentNodeId(node.next) : onClose}>
-            {node.next ? "Next" : "Goodbye"}
-          </button>
-        )}
-      </div>
+      {quest ? (
+        <QuestOffer quest={quest} onAccept={() => { onAcceptQuest?.(quest.identifier); onClose(); }} onBack={() => setQuestId(null)} />
+      ) : (
+        <>
+          {node && <p style={styles.line}>{node.text}</p>}
+          <div style={styles.footer}>
+            {atTop && offers.map((offer) => (
+              <button key={offer.identifier} style={styles.quest} onClick={() => setQuestId(offer.identifier)}>
+                ◆ {offer.name}
+              </button>
+            ))}
+            {node && <NodeButtons node={node} onNext={setCurrentNodeId} onClose={onClose} />}
+            {!node && <button style={styles.next} onClick={onClose}>Goodbye</button>}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function NodeButtons({ node, onNext, onClose }) {
+  if (node.choices?.length) {
+    return node.choices.map((choice, i) => (
+      <button key={i} style={styles.next} onClick={choice.next ? () => onNext(choice.next) : onClose}>
+        {choice.text}
+      </button>
+    ));
+  }
+  return (
+    <button style={styles.next} onClick={node.next ? () => onNext(node.next) : onClose}>
+      {node.next ? "Next" : "Goodbye"}
+    </button>
+  );
+}
+
+function QuestOffer({ quest, onAccept, onBack }) {
+  return (
+    <>
+      <p style={styles.questName}>{quest.name}</p>
+      <p style={styles.line}>{quest.offerText}</p>
+      <div style={styles.footer}>
+        <button style={styles.quest} onClick={onAccept}>Accept</button>
+        <button style={styles.next} onClick={onBack}>Not now</button>
+      </div>
+    </>
   );
 }
 
@@ -87,6 +121,21 @@ const styles = {
     flexDirection: "column",
     alignItems: "flex-end",
     gap: 6,
+  },
+  questName: {
+    color: "#7fe0ff",
+    fontSize: 14,
+    fontWeight: "bold",
+    margin: "4px 0 0",
+  },
+  quest: {
+    background: "#14303a",
+    color: "#bfefff",
+    border: "1px solid #3f8fa8",
+    borderRadius: 4,
+    padding: "4px 14px",
+    cursor: "pointer",
+    fontSize: 14,
   },
   next: {
     background: "#3a2a14",

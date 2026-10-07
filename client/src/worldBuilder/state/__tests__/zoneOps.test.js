@@ -76,6 +76,23 @@ describe("zoneOps", () => {
       expect(resolveZone(fixtureDraft(), "forest").flags).toEqual(["zone/reached/forest"]);
     });
 
+    it("adds the flags its NCUs' quest offers depend on, from the default quests file", () => {
+      const draft = fixtureDraft().write("worlds/w/quests.json", [
+        {identifier: "rat-hunt", offeredBy: {zone: "forest", ncu: "grizzle"}, requiresFlags: ["custom/trusted", "zone/reached/forest"]},
+        {identifier: "elsewhere", offeredBy: {zone: "cave", ncu: "grizzle"}, requiresFlags: ["key/gate"]},
+      ]);
+
+      expect(resolveZone(draft, "forest").flags).toEqual(["zone/reached/forest", "quest/completed/rat-hunt", "custom/trusted"]);
+    });
+
+    it("reads the quests file at the world's questsPath", () => {
+      const draft = fixtureDraft()
+        .write("worlds/w/w.json", {...worldData(fixtureDraft()), questsPath: "./story/quests.json"})
+        .write("worlds/w/story/quests.json", [{identifier: "rat-hunt", offeredBy: {zone: "forest", ncu: "grizzle"}}]);
+
+      expect(resolveZone(draft, "forest").flags).toEqual(["zone/reached/forest", "quest/completed/rat-hunt"]);
+    });
+
     it("replaces any hand-written flags list", () => {
       const draft = setZoneField(fixtureDraft(), "forest", "flags", ["key/stale"]);
 

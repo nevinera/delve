@@ -74,4 +74,47 @@ describe("DialogueWindow", () => {
     render(<DialogueWindow name="Scout" dialogue={multiEntry} onClose={() => {}} />);
     expect(screen.getByText("Greeting A.")).toBeInTheDocument();
   });
+
+  describe("quest offers", () => {
+    const offers = [{ identifier: "rat-hunt", name: "Rat Hunt", offerText: "Clear out those rats." }];
+
+    it("lists offers under the opening line", () => {
+      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onClose={() => {}} />);
+      expect(screen.getByText("Choose one.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Rat Hunt/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Path A" })).toBeInTheDocument();
+    });
+
+    it("only offers quests at the top of the conversation", () => {
+      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onClose={() => {}} />);
+      fireEvent.click(screen.getByRole("button", { name: "Path A" }));
+      expect(screen.queryByRole("button", { name: /Rat Hunt/ })).not.toBeInTheDocument();
+    });
+
+    it("shows the offer text, and accepts", () => {
+      const onAcceptQuest = vi.fn();
+      const onClose = vi.fn();
+      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onAcceptQuest={onAcceptQuest} onClose={onClose} />);
+      fireEvent.click(screen.getByRole("button", { name: /Rat Hunt/ }));
+      expect(screen.getByText("Clear out those rats.")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+      expect(onAcceptQuest).toHaveBeenCalledWith("rat-hunt");
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it("goes back to the conversation on Not now", () => {
+      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onClose={() => {}} />);
+      fireEvent.click(screen.getByRole("button", { name: /Rat Hunt/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+      expect(screen.getByText("Choose one.")).toBeInTheDocument();
+    });
+
+    it("lists offers alone for an NCU with no dialogue", () => {
+      const onClose = vi.fn();
+      render(<DialogueWindow name="Grizzle" dialogue={undefined} offers={offers} onClose={onClose} />);
+      expect(screen.getByRole("button", { name: /Rat Hunt/ })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Goodbye" }));
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
 });

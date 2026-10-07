@@ -50,6 +50,15 @@ requiring the earlier quest's completion flag. That makes several shapes fall ou
 Flags are the only link between quests, so the schema never implies requirements. Editors may fill
 in the usual completion-flag requirements for authors.
 
+## Offers
+
+An NCU offers a quest to a character who isn't on it, hasn't completed it, and holds every flag
+in its `requiresFlags`. The game server works out each player's offers on connecting, after they
+talk to an NCU, and after they accept a quest. An NCU with a quest for the player shows a pale
+blue diamond over its token, and its quests are listed at the top of its conversation (an NCU
+with quests but no dialogue can still be talked to). Accepting goes through the game server,
+which checks the offer again.
+
 ## State
 
 Rails stores only active quests (`CharacterQuest`), never quest definitions: the quest's

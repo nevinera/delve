@@ -11,6 +11,7 @@ import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { canKeepTalking, canTalkTo } from "./game/dialogue";
 import { DialogueWindow } from "./DialogueWindow";
+import { offersFor, questMessageAction, questNcus, questsById } from "./game/quests";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
@@ -3071,6 +3072,8 @@ export default function App({
   // and the base of the has-flag endpoint for any others (see game/flags.js).
   heldFlags = [],
   flagsUrl,
+  questsUrl,
+  questsSha,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
@@ -3114,6 +3117,11 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [dialogueNcuId, setDialogueNcuId] = useState(null);
+  const [questDefinitions, setQuestDefinitions] = useState({});
+  const questDefinitionsRef = useRef({});
+  const [questOffers, setQuestOffers] = useState({});
+  const questOffersRef = useRef({});
+  const questNcuSet = useMemo(() => questNcus(questOffers), [questOffers]);
   const [ncus, setNcus] = useState({});
   const ncusRef = useRef({});
   const [charSheetOpen, setCharSheetOpen] = useState(false);
@@ -3276,6 +3284,19 @@ export default function App({
         if (error instanceof ContentChecksumError) setContentError("This zone's file has changed since it was checked.");
       });
   }, [zoneSourceUrl, zoneSourceSha]);
+
+  useEffect(() => {
+    if (!questsUrl) return;
+    fetchVerifiedJson(questsUrl, questsSha)
+      .then((quests) => {
+        const byId = questsById(quests);
+        questDefinitionsRef.current = byId;
+        setQuestDefinitions(byId);
+      })
+      .catch((error) => {
+        if (error instanceof ContentChecksumError) setContentError("This world's quests file has changed since it was checked.");
+      });
+  }, [questsUrl, questsSha]);
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
@@ -3599,6 +3620,12 @@ export default function App({
         addLog("Disconnected.");
       },
       onServerMessage: (msg) => {
+        const questAction = questMessageAction(msg, questDefinitionsRef.current);
+        if (questAction?.type === "offers") {
+          questOffersRef.current = questAction.offers;
+          setQuestOffers(questAction.offers);
+        }
+        if (questAction?.log) addLog(questAction.log);
         const action = worldMessageAction(msg);
         if (!action) return;
         if (action.log) addLog(action.log);
@@ -3832,8 +3859,15 @@ export default function App({
     const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
     const ncu = ncusRef.current[id];
     const dialogue = ncu && canvasRef.current?.ncuInfo(ncu.zone_ncu_identifier)?.dialogue;
-    if (canTalkTo(self, ncu, dialogue)) setDialogueNcuId(id);
+    const hasOffers = !!ncu && questOffersRef.current[ncu.zone_ncu_identifier]?.length > 0;
+    if (!canTalkTo(self, ncu, dialogue, hasOffers)) return;
+    setDialogueNcuId(id);
+    connRef.current?.send({ type: "talk", ncu_id: id });
   }, []);
+
+  const handleAcceptQuest = useCallback((quest) => {
+    if (dialogueNcuId) connRef.current?.send({ type: "accept_quest", ncu_id: dialogueNcuId, quest });
+  }, [dialogueNcuId]);
 
   // Frees the slot through Rails (which closes our socket, so onClose is
   // muted while leaving), then goes to the world's page.
@@ -4137,6 +4171,7 @@ export default function App({
         zoneSourceSha={zoneSourceSha}
         units={units}
         ncus={ncus}
+        questNcus={questNcuSet}
         selfIdentifier={selfIdentifier}
         characterTokenUrl={characterTokenUrl}
         movementKeysRef={movementKeysRef}
@@ -4173,6 +4208,8 @@ export default function App({
           key={dialogueNcuId}
           name={dialogueInfo?.name ?? dialogueNcu.zone_ncu_identifier}
           dialogue={dialogueInfo?.dialogue}
+          offers={offersFor(questOffers, dialogueNcu.zone_ncu_identifier, questDefinitions)}
+          onAcceptQuest={handleAcceptQuest}
           onClose={() => setDialogueNcuId(null)}
         />
       )}
