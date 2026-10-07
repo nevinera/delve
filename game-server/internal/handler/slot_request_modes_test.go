@@ -127,3 +127,19 @@ func TestSlotsRequest_SpecificInstance_ModeMismatch(t *testing.T) {
 	}))
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 }
+
+func TestSlotsRequest_World_CachesHeldFlags(t *testing.T) {
+	reg := instance.NewRegistry()
+	router := mountRequest(newSlotsHandler(reg, 200))
+	zone := validZoneConfig()
+	zone.Flags = []string{"zone/reached/goblin-cave", "key/gate"}
+
+	rec := postRequest(t, router, worldRequest(map[string]any{"zone_config": zone, "held_flags": []string{"key/gate"}}))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	inst := onlyInstance(t, reg)
+	t.Cleanup(inst.Stop)
+	slots := inst.ListSlots()
+	require.Len(t, slots, 1)
+	assert.Equal(t, map[string]bool{"zone/reached/goblin-cave": false, "key/gate": true}, slots[0].Flags)
+}

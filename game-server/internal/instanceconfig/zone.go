@@ -24,6 +24,9 @@ type Zone struct {
 	// OpenConnections maps "mapId/connectionId" to a zone-level name.
 	OpenConnections map[string]string `json:"openConnections,omitempty"`
 	Respawn         *RespawnConfig    `json:"respawn,omitempty"` // zone-wide default - see UnitRespawn
+	// Flags are the "type/identifier" flags the zone preloads for each
+	// character on entry (see plans/flags.md); others are fetched as needed.
+	Flags []string `json:"flags,omitempty"`
 }
 
 func (z *Zone) UnmarshalJSON(data []byte) error {

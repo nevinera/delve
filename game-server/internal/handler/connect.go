@@ -63,6 +63,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	go inst.GrantZoneReached(context.WithoutCancel(r.Context()), slotID)
 
 	// quit is closed by the read loop when it exits, signalling the write
 	// goroutine to stop regardless of whether ctx was cancelled.

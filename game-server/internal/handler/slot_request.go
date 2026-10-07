@@ -25,6 +25,7 @@ type slotRequestBody struct {
 	CharacterClass      instanceconfig.CharacterClass          `json:"character_class"`
 	OwnedZoneItems      map[string]bool                        `json:"owned_zone_items"` // optional; nil if not provided
 	EquippedItems       map[string]instanceconfig.EquippedItem `json:"equipped_items"`   // optional; nil if not provided
+	HeldFlags           []string                               `json:"held_flags"`       // optional; the zone's listed flags the character holds
 
 	// How the player reached the zone, and the world-join settings (see
 	// game-server/README.md).
@@ -167,6 +168,7 @@ func (h *Slots) addSlotAndRespond(w http.ResponseWriter, r *http.Request, inst *
 	slot, err := inst.AddSlotWithOptions(req.CharacterName, req.CharacterDatabaseID, req.CharacterClass, req.OwnedZoneItems, req.EquippedItems, instance.SlotOptions{
 		WorldCharacterDatabaseID: req.WorldCharacterDatabaseID,
 		SpawnAt:                  req.SpawnAt,
+		HeldFlags:                req.HeldFlags,
 	})
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {

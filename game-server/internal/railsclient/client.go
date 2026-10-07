@@ -181,3 +181,58 @@ func (c *Client) ZoneExit(worldCharacterDatabaseID, zoneIdentifier, connection s
 	}
 	return fmt.Errorf("rails returned %d", res.StatusCode)
 }
+
+// HasFlag asks Rails whether a world character holds flag
+// ("type/identifier", see plans/flags.md).
+func (c *Client) HasFlag(worldCharacterDatabaseID, flag string) (bool, error) {
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/flags/%s", c.baseURL, worldCharacterDatabaseID, flag)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	var body struct {
+		Held bool `json:"held"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		return false, fmt.Errorf("decode: %w", err)
+	}
+	return body.Held, nil
+}
+
+// GrantFlag grants a world character flag ("type/identifier"). Granting a
+// flag they already hold succeeds and changes nothing.
+func (c *Client) GrantFlag(worldCharacterDatabaseID, flag string) error {
+	data, err := json.Marshal(map[string]string{"flag": flag})
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/flags", c.baseURL, worldCharacterDatabaseID)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusCreated {
+		return fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	return nil
+}
