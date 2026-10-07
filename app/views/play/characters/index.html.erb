@@ -6,14 +6,29 @@
       <th>Name</th>
       <th>Class</th>
       <th>Last Played</th>
+      <th>World</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
     <% @characters.each do |character| %>
+      <% last = character.last_world_character %>
       <tr>
         <td><%= link_to character.name, play_character_path(character) %></td>
         <td><%= "#{character.character_class.identifier} #{character.character_class.version}" %></td>
-        <td><%= character.last_played_at&.strftime("%Y-%m-%d") || "Never" %></td>
+        <td><%= last&.last_played_at&.strftime("%Y-%m-%d") || "Never" %></td>
+        <td><%= link_to(last.world.name || last.world.key, play_character_world_path(character, last.world)) if last %></td>
+        <td>
+          <% if last && (latest = last.world.released_versions.first) %>
+            <% if last.world_version.nil? || last.world_version == latest %>
+              <%= button_to "Enter", play_play_character_world_path(character, last.world), method: :get, class: "compact" %>
+            <% else %>
+              <%= button_to "Upgrade", version_play_character_world_path(character, last.world), method: :patch,
+                    params: {world_version_id: latest.id, enter: 1}, class: "compact upgrade",
+                    title: "Upgrade from #{last.world_version.ref} to #{latest.ref} and enter" %>
+            <% end %>
+          <% end %>
+        </td>
       </tr>
     <% end %>
   </tbody>

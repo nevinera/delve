@@ -126,6 +126,11 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       expect(WorldCharacter.find_by!(world:, character:).world_version).to eq(version)
     end
 
+    it "enters the world after switching when asked to" do
+      patch "#{base}/#{world.id}/version", params: {world_version_id: version.id, enter: 1}
+      expect(response).to redirect_to("#{base}/#{world.id}/play")
+    end
+
     it "refuses an expired version" do
       version.update!(expires_at: 1.minute.ago)
       patch "#{base}/#{world.id}/version", params: {world_version_id: version.id}

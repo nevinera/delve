@@ -40,6 +40,37 @@ RSpec.describe "Play::Characters", type: :request do
         get "/play/characters"
         expect(response.body).to include("Ariana-AA")
       end
+
+      it "lists the most recently played first, never-played last" do
+        version = published_world
+        create(:character, user:, character_class:, name: "Aaron-AA")
+        older = create(:character, user:, character_class:, name: "Older-AA")
+        create(:world_character, character:, world: version.world, world_version: version, last_played_at: 1.hour.ago)
+        create(:world_character, character: older, world: version.world, world_version: version, last_played_at: 1.day.ago)
+        get "/play/characters"
+        order = %w[Ariana-AA Older-AA Aaron-AA].map { |name| response.body.index(name) }
+        expect(order).to eq(order.sort)
+      end
+
+      context "with a last world" do
+        let(:version) { published_world }
+        let(:world) { version.world }
+
+        it "shows it with an Enter button" do
+          create(:world_character, character:, world:, world_version: version, last_played_at: 1.hour.ago)
+          get "/play/characters"
+          expect(response.body).to include("Demo World", "/play/characters/#{character.id}/worlds/#{world.id}/play", "Enter")
+          expect(response.body).not_to include("Upgrade")
+        end
+
+        it "offers Upgrade instead when there's a newer version" do
+          create(:world_character, character:, world:, world_version: version, last_played_at: 1.hour.ago)
+          published_world(world:).tap { |newer| newer.update!(released_at: 1.minute.from_now) }
+          get "/play/characters"
+          expect(response.body).to include("Upgrade", "enter")
+          expect(response.body).not_to include(">Enter<", 'value="Enter"')
+        end
+      end
     end
 
     describe "GET /play/characters/:id" do

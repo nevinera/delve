@@ -1,6 +1,7 @@
 class Play::CharactersController < Play::BaseController
   def index
-    @characters = current_user.characters.includes(:character_class).order(:name)
+    characters = current_user.characters.includes(:character_class, world_characters: [:world_version, :world]).order(:name)
+    @characters = most_recently_played_first(characters)
     authorize! :read, Character
   end
 
@@ -42,6 +43,11 @@ class Play::CharactersController < Play::BaseController
   end
 
   private
+
+  # Never-played characters last, keeping their name order.
+  def most_recently_played_first(characters)
+    characters.sort_by.with_index { |character, i| [-(character.last_world_character&.last_played_at.to_f), i] }
+  end
 
   def character_params
     params.require(:character).permit(:name, :character_class_id).merge(token_url: token_value)
