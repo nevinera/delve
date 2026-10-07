@@ -126,9 +126,9 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       expect(WorldCharacter.find_by!(world:, character:).world_version).to eq(version)
     end
 
-    it "enters the world after switching when asked to" do
-      patch "#{base}/#{world.id}/version", params: {world_version_id: version.id, enter: 1}
-      expect(response).to redirect_to("#{base}/#{world.id}/play")
+    it "returns to the page it came from" do
+      patch "#{base}/#{world.id}/version", params: {world_version_id: version.id}, headers: {"HTTP_REFERER" => "http://www.example.com/play/characters"}
+      expect(response).to redirect_to("http://www.example.com/play/characters")
     end
 
     it "refuses an expired version" do

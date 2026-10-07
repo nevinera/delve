@@ -47,8 +47,6 @@ class Play::WorldCharactersController < Play::BaseController
     return redirect_back_or_to(back, alert: "Leave the world before switching versions.") if in_world?
 
     version = switch_version
-    return redirect_to(play_play_character_world_path(@character, @world)) if params[:enter].present?
-
     redirect_back_or_to back, notice: "Switched to #{version.ref}."
   end
 

@@ -25,7 +25,7 @@
               <% else %>
                 <%= button_to "Upgrade from #{last.world_version.ref.split("/").last}->#{latest.ref.split("/").last}",
                       version_play_character_world_path(character, last.world), method: :patch,
-                      params: {world_version_id: latest.id, enter: 1}, class: "compact upgrade", form_class: "inline" %>
+                      params: {world_version_id: latest.id}, class: "compact upgrade", form_class: "inline" %>
               <% end %>
             <% end %>
           <% end %>
