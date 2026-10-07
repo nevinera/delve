@@ -26,6 +26,8 @@ createRoot(el).render(
       stockAssets={JSON.parse(el.dataset.stockAssets || "{}")}
       worldReturnUrl={el.dataset.worldReturnUrl}
       leaveWorldUrl={el.dataset.leaveWorldUrl}
+      heldFlags={JSON.parse(el.dataset.heldFlags || "[]")}
+      flagsUrl={el.dataset.flagsUrl}
     />
   </StrictMode>
 );

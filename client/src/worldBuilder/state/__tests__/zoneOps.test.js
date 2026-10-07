@@ -72,6 +72,16 @@ describe("zoneOps", () => {
       expect(resolveZone(draft, "forest").unitTypes.goblin.name).toEqual("Hobgoblin");
     });
 
+    it("compiles the zone's flags, starting with its reached flag", () => {
+      expect(resolveZone(fixtureDraft(), "forest").flags).toEqual(["zone/reached/forest"]);
+    });
+
+    it("replaces any hand-written flags list", () => {
+      const draft = setZoneField(fixtureDraft(), "forest", "flags", ["key/stale"]);
+
+      expect(resolveZone(draft, "forest").flags).toEqual(["zone/reached/forest"]);
+    });
+
     it("names a $ref that doesn't resolve", () => {
       const draft = setZoneField(fixtureDraft(), "forest", "unitTypes", {ghost: {$ref: "../../unit_types/ghost.json", referenceTo: "unit_type"}});
 

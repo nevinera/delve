@@ -130,7 +130,14 @@ export function resolveZone(draft, zone) {
     return node;
   }
 
-  return inline(zoneData(draft, zone), path);
+  return {...inline(zoneData(draft, zone), path), flags: zoneFlags(zone)};
+}
+
+// The flags a zone preloads for each character on entry (see
+// plans/flags.md): compiled from the zone's nested data, never edited.
+// For now that's only the one every character gets on reaching it.
+export function zoneFlags(zone) {
+  return [`zone/reached/${zone}`];
 }
 
 // The old zone editor's action shapes (see zoneEditor/ZoneEditor.jsx's
