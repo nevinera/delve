@@ -10,8 +10,9 @@ class Build::Publishing::WorldsController < Build::BaseController
   def show
     @world = current_user.worlds.find(params[:id])
     authorize! :read, @world
-    @versions = @world.world_versions.order(created_at: :desc)
+    @versions = @world.world_versions.to_a
     @unimported_tags = UnimportedWorldTags.call(world: @world, user: current_user)
+    @rows = newest_ref_first(@versions + Array(@unimported_tags))
   end
 
   # Sets up publishing for a world file in the user's linked repo; a no-op
@@ -27,6 +28,11 @@ class Build::Publishing::WorldsController < Build::BaseController
   end
 
   private
+
+  # Versions and not-imported tags (strings) together, by ref.
+  def newest_ref_first(rows)
+    rows.sort_by { |row| WorldVersion.ref_sort_key(row.is_a?(String) ? row : row.ref) }.reverse
+  end
 
   def world_for(path)
     World.find_or_initialize_by(repo: Github::ContentClient.new(current_user).repo, path:).tap do |world|

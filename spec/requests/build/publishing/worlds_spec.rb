@@ -47,6 +47,14 @@ RSpec.describe "Build::Publishing::Worlds", type: :request do
           expect(response.body).to include("#{world.key}/v2", "not imported", "Import")
           expect(response.body.scan("not imported").size).to eq(1)
         end
+
+        it "mixes them in with the imported versions, newest ref first" do
+          create(:world_version, world:, ref: "#{world.key}/v1")
+          create(:world_version, world:, ref: "#{world.key}/v10")
+          get "/build/publishing/worlds/#{world.id}"
+          order = ["v10", "v2", "v1"].map { |v| response.body.index("#{world.key}/#{v}<") }
+          expect(order).to eq(order.sort)
+        end
       end
 
       it "lists versions with their state and actions" do

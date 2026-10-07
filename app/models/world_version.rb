@@ -16,6 +16,10 @@ class WorldVersion < ApplicationRecord
 
   after_commit :import, on: :create
 
+  # Orders refs by name, comparing runs of digits as numbers so demo/v10
+  # sorts after demo/v9.
+  def self.ref_sort_key(ref) = ref.split(/(\d+)/).map { |part| part.match?(/\A\d+\z/) ? [1, part.to_i] : [0, part] }
+
   def expired? = expires_at.present? && expires_at.past?
 
   def zone_url(zone) = "#{raw_base_url}#{zone.path}"

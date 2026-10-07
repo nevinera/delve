@@ -16,10 +16,10 @@ RSpec.describe UnimportedWorldTags do
 
   before { create(:github_installation, user:, repo_full_name: "builder/content") }
 
-  it "lists the world's tags with no version here, newest first" do
+  it "lists the world's tags with no version here" do
     create(:world_version, world:, ref: "demo/v2")
-    stub_tags("demo/v1", "demo/v2", "demo/v9", "demo/v10")
-    expect(tags).to eq(["demo/v10", "demo/v9", "demo/v1"])
+    stub_tags("demo/v1", "demo/v2", "demo/v9")
+    expect(tags).to eq(["demo/v1", "demo/v9"])
   end
 
   it "is nil when the GitHub connection points at another repo" do
