@@ -91,6 +91,7 @@ Rails.application.routes.draw do
           get :play
           patch :active
           patch :version
+          delete :leave
         end
         resources :character_items, only: [:index, :show]
         resources :equipped_items, only: [:index, :update], param: :equipped_slot

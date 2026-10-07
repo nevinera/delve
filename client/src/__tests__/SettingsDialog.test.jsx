@@ -35,6 +35,15 @@ describe("SettingsDialog", () => {
     expect(onReload).toHaveBeenCalled();
   });
 
+  it("offers Leave world only when there's a world to leave", () => {
+    renderDialog();
+    expect(screen.queryByText("Leave world")).toBeNull();
+    const onLeaveWorld = vi.fn();
+    renderDialog({ onLeaveWorld });
+    fireEvent.click(screen.getByText("Leave world"));
+    expect(onLeaveWorld).toHaveBeenCalled();
+  });
+
   it("replaces the menu with the remap pane, and Back returns to it", () => {
     renderDialog();
     openAbilities();
