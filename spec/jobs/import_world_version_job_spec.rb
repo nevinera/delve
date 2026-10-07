@@ -38,6 +38,7 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     stub_raw("worlds/demo.json", world_data)
     stub_raw("zones/darkwood/darkwood.full.json", darkwood)
     stub_raw("zones/goblin-cave/goblin-cave.full.json", goblin_cave)
+    stub_request(:get, %r{/quests\.json\z}).to_return(status: 404)
   end
 
   def perform = described_class.perform_now(version.id)
@@ -233,9 +234,31 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     end
   end
 
-  it "leaves the quests file unset for a world without one" do
-    perform
-    expect(version.reload).to have_attributes(quests_path: nil, quests_sha: nil)
+  context "with a quests file at the default path" do
+    before { stub_raw("worlds/quests.json", []) }
+
+    it "pins it" do
+      perform
+      expect(version.reload).to have_attributes(quests_path: "worlds/quests.json", quests_sha: Digest::SHA1.hexdigest("[]"))
+    end
+  end
+
+  context "with no questsPath and nothing at the default path" do
+    it "imports with no quests file" do
+      perform
+      expect(version.reload).to be_unreleased
+      expect(version).to have_attributes(quests_path: nil, quests_sha: nil)
+    end
+  end
+
+  context "when the questsPath file is missing" do
+    before do
+      world_data["questsPath"] = "./demo.quests.json"
+      stub_raw("worlds/demo.json", world_data)
+      stub_raw("worlds/demo.quests.json", "Not Found", status: 404)
+    end
+
+    it_behaves_like "a failed import", %r{worlds/demo.quests.json: HTTP 404}
   end
 
   context "when the tag doesn't exist" do

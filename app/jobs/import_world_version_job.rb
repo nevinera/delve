@@ -3,7 +3,7 @@ require "digest"
 # Imports a WorldVersion from its repo: resolves the ref to a commit SHA,
 # fetches and validates the world file and every zone's .full.json at that
 # SHA, cross-checks the world's links and entry points against the zones,
-# fetches and validates the world's quests file (if any) against the zones,
+# fetches and validates the world's quests file (if it has one) against the zones,
 # then replaces the version's Zone rows. Only references and checksums are
 # stored - never the content itself (see plans/worlds.md). On any failure
 # the version is marked failed and its existing zones are left alone.
@@ -13,6 +13,8 @@ class ImportWorldVersionJob < ApplicationJob
   ImportError = Class.new(StandardError)
 
   RAW_BASE = "https://raw.githubusercontent.com"
+  # Where a world's quests file is when its questsPath doesn't say.
+  DEFAULT_QUESTS_PATH = "./quests.json"
 
   def perform(world_version_id)
     @version = WorldVersion.find(world_version_id)
@@ -58,11 +60,11 @@ class ImportWorldVersionJob < ApplicationJob
   end
 
   # Validates the quests file and its references into the world's zones;
-  # returns its path and checksum, or nil for a world without one.
+  # returns its path and checksum. A world without a questsPath uses
+  # DEFAULT_QUESTS_PATH, and has no quests if there's nothing there.
   def fetch_quests!(base_url, relative_path, zones)
-    return if relative_path.blank?
-    path = repo_path(relative_path, "quests path")
-    body = fetch!(base_url, path)
+    path = repo_path(relative_path.presence || DEFAULT_QUESTS_PATH, "quests path")
+    body = fetch!(base_url, path, missing_ok: relative_path.blank?) or return
     quests = parse!(body, path)
     in_file(path) do
       Validators::QuestsValidator.validate!(quests)
@@ -100,8 +102,10 @@ class ImportWorldVersionJob < ApplicationJob
     path
   end
 
-  def fetch!(base_url, path)
+  # nil for a missing file when missing_ok.
+  def fetch!(base_url, path, missing_ok: false)
     response = Net::HTTP.get_response(URI("#{base_url}#{path}"))
+    return if missing_ok && response.is_a?(Net::HTTPNotFound)
     raise ImportError, "#{path}: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
     response.body
   end
