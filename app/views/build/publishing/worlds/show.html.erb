@@ -11,6 +11,10 @@
 
 <p><%= link_to "Add a version from an existing tag", new_build_publishing_world_version_path(@world) %></p>
 
+<% if @unimported_tags.nil? %>
+  <p><small>Tags in <%= @world.repo %> can't be listed here; connect GitHub to that repo to import them.</small></p>
+<% end %>
+
 <table>
   <thead>
     <tr>
@@ -19,6 +23,16 @@
     </tr>
   </thead>
   <tbody>
+    <% Array(@unimported_tags).each do |tag| %>
+      <tr>
+        <td><%= tag %></td>
+        <td>not imported</td>
+        <td colspan="4"></td>
+        <td>
+          <%= button_to "Import", build_publishing_world_versions_path(@world), params: {world_version: {ref: tag}} %>
+        </td>
+      </tr>
+    <% end %>
     <% @versions.each do |version| %>
       <tr>
         <td><%= version.ref %></td>

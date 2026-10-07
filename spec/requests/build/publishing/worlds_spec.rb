@@ -30,6 +30,24 @@ RSpec.describe "Build::Publishing::Worlds", type: :request do
 
     describe "GET /build/publishing/worlds/:id" do
       let(:world) { create(:world, owner: user) }
+      let(:tag_names) { [] }
+
+      before do
+        stub_request(:get, "https://api.github.com/repos/builder/content/git/matching-refs/tags/#{world.key}/")
+          .to_return(headers: {"Content-Type" => "application/json"},
+            body: tag_names.map { |name| {ref: "refs/tags/#{name}"} }.to_json)
+      end
+
+      context "with tags that aren't imported here" do
+        let(:tag_names) { ["#{world.key}/v1", "#{world.key}/v2"] }
+
+        it "lists them with an Import button, leaving out imported ones" do
+          create(:world_version, world:, ref: "#{world.key}/v1")
+          get "/build/publishing/worlds/#{world.id}"
+          expect(response.body).to include("#{world.key}/v2", "not imported", "Import")
+          expect(response.body.scan("not imported").size).to eq(1)
+        end
+      end
 
       it "lists versions with their state and actions" do
         create(:world_version, world:, ref: "demo/v1")

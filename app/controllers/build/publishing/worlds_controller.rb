@@ -11,6 +11,7 @@ class Build::Publishing::WorldsController < Build::BaseController
     @world = current_user.worlds.find(params[:id])
     authorize! :read, @world
     @versions = @world.world_versions.order(created_at: :desc)
+    @unimported_tags = UnimportedWorldTags.call(world: @world, user: current_user)
   end
 
   # Sets up publishing for a world file in the user's linked repo; a no-op
