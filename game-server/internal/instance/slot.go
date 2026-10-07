@@ -52,6 +52,7 @@ type InstanceSlot struct {
 	EquippedItems       map[string]instanceconfig.EquippedItem // equipped_slot → item; nil if unknown
 	Stats               map[string]float64                     // cached raw (em=1.0) sum of EquippedItems' stats; kept in sync by recomputeStats
 	Flags               map[string]bool                        // "type/identifier" → held; a flag missing from it is unknown (see flags.go)
+	Quests              map[string]instanceconfig.ActiveQuest  // quest identifier → the character's active quest (see quests.go); values are replaced, never mutated
 	SlotOptions
 
 	// Connection fields; protected by the instance's slotsMu.
@@ -83,6 +84,9 @@ type SlotOptions struct {
 	// HeldFlags are the zone's preloaded flags (ZoneConfig.Flags) that the
 	// character holds; world mode only.
 	HeldFlags []string
+	// ActiveQuests are the character's active quests in the world; world
+	// mode only.
+	ActiveQuests []instanceconfig.ActiveQuest
 }
 
 // recomputeStats sums the raw (em=1.0) stats of every equipped item into
@@ -128,6 +132,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 			slot.EquippedItems = inst.Provenance.Worn(equippedItems)
 			slot.SlotOptions = opts
 			slot.Flags = inst.initialFlags(opts.HeldFlags)
+			slot.Quests = activeQuestsByIdentifier(opts.ActiveQuests)
 			slot.recomputeStats()
 			return slot.snapshot(), nil
 		}
@@ -149,6 +154,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 		EquippedItems:       inst.Provenance.Worn(equippedItems),
 		SlotOptions:         opts,
 		Flags:               inst.initialFlags(opts.HeldFlags),
+		Quests:              activeQuestsByIdentifier(opts.ActiveQuests),
 		stateEnteredAt:      time.Now(),
 	}
 	slot.recomputeStats()
@@ -168,6 +174,8 @@ func (s *InstanceSlot) snapshot() *InstanceSlot {
 	c.Stats = maps.Clone(s.Stats)
 	c.Flags = maps.Clone(s.Flags)
 	c.HeldFlags = slices.Clone(s.HeldFlags)
+	c.Quests = maps.Clone(s.Quests)
+	c.ActiveQuests = slices.Clone(s.ActiveQuests)
 	c.lastSeqByType = maps.Clone(s.lastSeqByType)
 	c.writeCh, c.connCancel, c.connDone = nil, nil, nil
 	return &c

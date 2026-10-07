@@ -63,7 +63,10 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	go inst.GrantZoneReached(context.WithoutCancel(r.Context()), slotID)
+	go func(ctx context.Context) {
+		inst.GrantZoneReached(ctx, slotID)
+		inst.SendQuestOffers(ctx, slotID)
+	}(context.WithoutCancel(r.Context()))
 
 	// quit is closed by the read loop when it exits, signalling the write
 	// goroutine to stop regardless of whether ctx was cancelled.
@@ -144,6 +147,8 @@ type incomingMsg struct {
 	Slot         *int     `json:"slot"`
 	TargetUnitID *string  `json:"target_unit_id"`
 	ItemIndex    *int     `json:"item_index"`
+	NCUID        *string  `json:"ncu_id"`
+	Quest        string   `json:"quest"`
 	// Seq is a per-connection, monotonically increasing hex id the client
 	// stamps on every outgoing message (see GameConnection._send). Recorded
 	// per message type that needs acking (heartbeat, move) via RecordSeq, and
@@ -227,6 +232,19 @@ func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.I
 				})
 			}
 		}
+	case "talk", "accept_quest":
+		if msg.NCUID == nil {
+			return
+		}
+		ncuID, err := uuid.Parse(*msg.NCUID)
+		if err != nil {
+			return
+		}
+		var payload command.CommandPayload = command.TalkPayload{NCUID: ncuID}
+		if msg.Type == "accept_quest" {
+			payload = command.AcceptQuestPayload{NCUID: ncuID, Quest: msg.Quest}
+		}
+		inst.SendCommand(command.Command{UnitID: unitID, ReceivedAt: time.Now(), Payload: payload})
 	case "refresh_equipment":
 		go inst.RefreshEquippedItems(context.Background(), unitID)
 	}

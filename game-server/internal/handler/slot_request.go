@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -26,6 +28,7 @@ type slotRequestBody struct {
 	OwnedZoneItems      map[string]bool                        `json:"owned_zone_items"` // optional; nil if not provided
 	EquippedItems       map[string]instanceconfig.EquippedItem `json:"equipped_items"`   // optional; nil if not provided
 	HeldFlags           []string                               `json:"held_flags"`       // optional; the zone's listed flags the character holds
+	ActiveQuests        []instanceconfig.ActiveQuest           `json:"active_quests"`    // optional; the character's active quests in the world
 
 	// How the player reached the zone, and the world-join settings (see
 	// game-server/README.md).
@@ -37,6 +40,8 @@ type slotRequestBody struct {
 	WorldVersionID           string                                `json:"world_version_id"`            // per instance
 	Provenance               instanceconfig.ProvenanceRestrictions `json:"provenance_restrictions"`     // per instance
 	ExpiresAt                *time.Time                            `json:"expires_at"`                  // RFC 3339; per instance, if the version is already expiring
+	QuestsURL                string                                `json:"quests_url"`                  // per instance; the world's quests file, if it has one
+	QuestsSHA                string                                `json:"quests_sha"`                  // per instance; its SHA1
 }
 
 // validate checks required fields, returning a message for the first
@@ -125,7 +130,7 @@ func (h *Slots) requestToAnyInstance(w http.ResponseWriter, r *http.Request, req
 			return
 		}
 		var err error
-		inst, err = h.createInstance(req)
+		inst, err = h.createInstance(r, req)
 		if err != nil {
 			writeError(w, r, http.StatusUnprocessableEntity, "failed to start instance: "+err.Error())
 			return
@@ -135,7 +140,21 @@ func (h *Slots) requestToAnyInstance(w http.ResponseWriter, r *http.Request, req
 	h.addSlotAndRespond(w, r, inst, req)
 }
 
-func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) {
+// loadQuests returns the world's quests, or none (logging why) if they
+// can't be read: a quest-less zone beats one nobody can enter.
+func (h *Slots) loadQuests(ctx context.Context, req slotRequestBody) []instanceconfig.Quest {
+	if req.QuestsURL == "" {
+		return nil
+	}
+	quests, err := h.questBook.Load(req.QuestsURL, req.QuestsSHA)
+	if err != nil {
+		slog.WarnContext(ctx, "failed to load quests; the zone will offer none", "error", err, "zone", req.ZoneIdentifier)
+		return nil
+	}
+	return quests
+}
+
+func (h *Slots) createInstance(r *http.Request, req slotRequestBody) (*instance.Instance, error) {
 	inst := instance.NewInstance(
 		uuid.New(),
 		req.DatabaseID,
@@ -157,6 +176,7 @@ func (h *Slots) createInstance(req slotRequestBody) (*instance.Instance, error) 
 	if req.ExpiresAt != nil {
 		inst.SetExpiresAt(*req.ExpiresAt)
 	}
+	inst.Quests = h.loadQuests(r.Context(), req)
 	if err := inst.Start(h.registry); err != nil {
 		return nil, err
 	}
@@ -169,6 +189,7 @@ func (h *Slots) addSlotAndRespond(w http.ResponseWriter, r *http.Request, inst *
 		WorldCharacterDatabaseID: req.WorldCharacterDatabaseID,
 		SpawnAt:                  req.SpawnAt,
 		HeldFlags:                req.HeldFlags,
+		ActiveQuests:             req.ActiveQuests,
 	})
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {

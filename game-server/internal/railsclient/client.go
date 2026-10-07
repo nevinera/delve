@@ -3,6 +3,7 @@ package railsclient
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -235,4 +236,46 @@ func (c *Client) GrantFlag(worldCharacterDatabaseID, flag string) error {
 		return fmt.Errorf("rails returned %d", res.StatusCode)
 	}
 	return nil
+}
+
+// ErrQuestRefused is returned by AcceptQuest when Rails refuses the quest
+// (already completed, or too many active).
+var ErrQuestRefused = errors.New("quest refused")
+
+// AcceptQuest starts a quest for a world character (POST
+// /internal_api/world_characters/:id/quests), returning it as Rails stores
+// it. Accepting an active quest returns it unchanged.
+func (c *Client) AcceptQuest(worldCharacterDatabaseID, questIdentifier string) (instanceconfig.ActiveQuest, error) {
+	var quest instanceconfig.ActiveQuest
+	data, err := json.Marshal(map[string]string{"quest": questIdentifier})
+	if err != nil {
+		return quest, fmt.Errorf("marshal: %w", err)
+	}
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests", c.baseURL, worldCharacterDatabaseID)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return quest, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return quest, fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	var body struct {
+		Quest instanceconfig.ActiveQuest `json:"quest"`
+		Error string                     `json:"error"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&body)
+	switch res.StatusCode {
+	case http.StatusCreated:
+		return body.Quest, nil
+	case http.StatusUnprocessableEntity:
+		return quest, fmt.Errorf("%w: %s", ErrQuestRefused, body.Error)
+	default:
+		return quest, fmt.Errorf("rails returned %d", res.StatusCode)
+	}
 }

@@ -36,9 +36,11 @@ Every slot request says how the player reached the zone (`mode`), along with the
 | `world_version_id` | instance | Lets `/world-versions/{id}/expire` find the instance. |
 | `provenance_restrictions` | instance | `{world_key, layers}`: equipped items that fail any layer (by their `world_key` and `elvl`) are ignored, not worn. See `docs/schema/common.md#provenancerestrictions`. |
 | `expires_at` | instance | RFC 3339; set when the version is already expiring. |
+| `quests_url`, `quests_sha` | instance | The world's quests file and its SHA1. Fetched once per URL and cached; if it can't be read, the zone offers no quests. |
 | `spawn_at` | slot | `"mapId/connectionId"` to spawn at; unknown keys fall back to the default entry position. |
 | `world_character_database_id` | slot | Required for `world`; sent to Rails when the player exits. |
 | `held_flags` | slot | The zone config's `flags` the character holds. The slot caches these, asks Rails about any other flag when needed, and grants `zone/reached/<zone>` on connect. See `docs/flags.md`. |
+| `active_quests` | slot | The character's active quests in the world, as Rails stores them (`{quest_identifier, timer_elapsed_seconds, progress}`). |
 
 "Instance" fields are taken from the request that starts the instance.
 
@@ -48,6 +50,16 @@ on one, and not within 6 seconds of spawning. The server posts
 - On success, the client gets `zone-exit` (`{connection}`), its slot is removed, and the socket
   closes.
 - On failure, the client gets `zone-exit-failed` (`{error}`), and the 6 seconds start again.
+
+**Quests.** In a zone where an NCU offers quests, a world-mode player gets `quest_offers`
+(`{offers: {ncuIdentifier: [questIdentifier]}}`) on connect: the quests they aren't on, haven't
+completed, and hold every `requiresFlags` flag for.
+- The client sends `talk` (`{ncu_id}`, the NCU's state id) whenever it opens a conversation; the
+  server checks the player is alive and within talk range (10 feet between token edges), and
+  resends their offers.
+- The client sends `accept_quest` (`{ncu_id, quest}`). If that NCU offers it to them, the server
+  accepts it through Rails (`/internal_api/world_characters/{id}/quests`); the client gets
+  `quest_accepted` (`{quest}`) and new offers, or `quest_accept_failed` (`{quest, error}`).
 
 **Expiry.** For the last 10 minutes before `expires_at`, every player gets `version-expiring`
 (`{expires_at, minutes_remaining}`) once a minute. At expiry they get `version-expired`, every

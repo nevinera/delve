@@ -93,3 +93,18 @@ type Command struct {
 	ReceivedAt time.Time
 	Payload    CommandPayload
 }
+
+// TalkPayload starts a conversation with an NCU (by its state id).
+type TalkPayload struct {
+	NCUID uuid.UUID
+}
+
+func (TalkPayload) CommandType() string { return "talk" }
+
+// AcceptQuestPayload accepts a quest an NCU offers.
+type AcceptQuestPayload struct {
+	NCUID uuid.UUID
+	Quest string
+}
+
+func (AcceptQuestPayload) CommandType() string { return "accept_quest" }

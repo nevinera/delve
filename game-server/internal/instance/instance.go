@@ -115,6 +115,10 @@ type Instance struct {
 	WorldVersionID string
 	Exits          map[string]bool
 
+	// Quests is every quest in the instance's world version (see
+	// quests.go); set once, before Start.
+	Quests []instanceconfig.Quest
+
 	// Provenance limits which equipped items count as worn here; disallowed
 	// ones stay equipped in Rails but are ignored (see instanceconfig).
 	Provenance instanceconfig.ProvenanceRestrictions
@@ -195,6 +199,8 @@ func NewInstance(
 	// once inst.Rand is final - see its own comment.
 	inst.commandProcessor.Register(command.RespawnHandler{})
 	inst.commandProcessor.Register(command.LootItemHandler{})
+	inst.commandProcessor.Register(command.TalkHandler{})
+	inst.commandProcessor.Register(command.AcceptQuestHandler{})
 
 	if graph, err := pathing.Build(zone, fallbackPathingRadius); err != nil {
 		slog.Error("pathing graph build failed; chasing units will fall back to straight-line pursuit",
