@@ -65,6 +65,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 	go func(ctx context.Context) {
 		inst.GrantZoneReached(ctx, slotID)
+		inst.SendQuestLog(slotID)
 		inst.SendQuestOffers(ctx, slotID)
 	}(context.WithoutCancel(r.Context()))
 
@@ -245,6 +246,10 @@ func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.I
 			payload = command.AcceptQuestPayload{NCUID: ncuID, Quest: msg.Quest}
 		}
 		inst.SendCommand(command.Command{UnitID: unitID, ReceivedAt: time.Now(), Payload: payload})
+	case "abandon_quest":
+		if msg.Quest != "" {
+			go inst.AbandonQuest(context.Background(), slotID, msg.Quest)
+		}
 	case "refresh_equipment":
 		go inst.RefreshEquippedItems(context.Background(), unitID)
 	}

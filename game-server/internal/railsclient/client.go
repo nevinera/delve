@@ -279,3 +279,25 @@ func (c *Client) AcceptQuest(worldCharacterDatabaseID, questIdentifier string) (
 		return quest, fmt.Errorf("rails returned %d", res.StatusCode)
 	}
 }
+
+// AbandonQuest ends a world character's active quest without completing it
+// (DELETE /internal_api/world_characters/:id/quests/:quest). Idempotent.
+func (c *Client) AbandonQuest(worldCharacterDatabaseID, questIdentifier string) error {
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s", c.baseURL, worldCharacterDatabaseID, questIdentifier)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	return nil
+}

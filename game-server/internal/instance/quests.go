@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +20,9 @@ var errNotOffered = errors.New("that quest isn't offered here")
 // errUnavailable is a quest accept the character doesn't qualify for.
 var errUnavailable = errors.New("that quest isn't available")
 
+// errNotActive is abandoning a quest the character isn't on.
+var errNotActive = errors.New("that quest isn't active")
+
 // questOffersMsg tells a player which quests each of the zone's NCUs
 // offers them: NCU identifier → quest identifiers, in quests-file order.
 type questOffersMsg struct {
@@ -31,6 +36,26 @@ type questAcceptedMsg struct {
 }
 
 type questAcceptFailedMsg struct {
+	downBase
+	Quest string `json:"quest"`
+	Error string `json:"error"`
+}
+
+// questLogMsg is a player's active quests, with each objective's progress
+// in the quest's objective order (resolved from Rails' per-hash counts
+// against this version's definitions).
+type questLogMsg struct {
+	downBase
+	Quests []questLogEntry `json:"quests"`
+}
+
+type questLogEntry struct {
+	QuestIdentifier     string `json:"quest_identifier"`
+	TimerElapsedSeconds int    `json:"timer_elapsed_seconds"`
+	Objectives          []int  `json:"objectives"`
+}
+
+type questAbandonFailedMsg struct {
 	downBase
 	Quest string `json:"quest"`
 	Error string `json:"error"`
@@ -132,7 +157,94 @@ func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIden
 		return
 	}
 	inst.sendJSONToSlot(slotID, questAcceptedMsg{downBase: inst.downBase("quest_accepted"), Quest: quest})
+	inst.SendQuestLog(slotID)
 	inst.SendQuestOffers(ctx, slotID)
+}
+
+// QuestLog returns the character in slotID's active quests, sorted by
+// identifier, each objective's progress capped at what it requires.
+func (inst *Instance) QuestLog(slotID uuid.UUID) ([]questLogEntry, bool) {
+	slot, ok := inst.GetSlot(slotID)
+	if !ok {
+		return nil, false
+	}
+	definitions := make(map[string]instanceconfig.Quest, len(inst.Quests))
+	for _, quest := range inst.Quests {
+		definitions[quest.Identifier] = quest
+	}
+	entries := make([]questLogEntry, 0, len(slot.Quests))
+	for _, active := range slot.Quests {
+		objectives := definitions[active.QuestIdentifier].Objectives
+		counts := make([]int, len(objectives))
+		for i, objective := range objectives {
+			counts[i] = min(active.Progress[objective.Hash()], objective.Required())
+		}
+		entries = append(entries, questLogEntry{
+			QuestIdentifier:     active.QuestIdentifier,
+			TimerElapsedSeconds: active.TimerElapsedSeconds,
+			Objectives:          counts,
+		})
+	}
+	slices.SortFunc(entries, func(a, b questLogEntry) int { return strings.Compare(a.QuestIdentifier, b.QuestIdentifier) })
+	return entries, true
+}
+
+// SendQuestLog sends the character in slotID their quest log. Sends
+// nothing to a slot with no world character.
+func (inst *Instance) SendQuestLog(slotID uuid.UUID) {
+	if slot, ok := inst.GetSlot(slotID); !ok || slot.WorldCharacterDatabaseID == "" {
+		return
+	}
+	entries, ok := inst.QuestLog(slotID)
+	if !ok {
+		return
+	}
+	inst.sendJSONToSlot(slotID, questLogMsg{downBase: inst.downBase("quest_log"), Quests: entries})
+}
+
+// AbandonQuest ends the character in slotID's active quest through Rails,
+// then sends their new quest log and offers (or quest_abandon_failed).
+// Calls Rails, so run it in its own goroutine.
+func (inst *Instance) AbandonQuest(ctx context.Context, slotID uuid.UUID, questIdentifier string) {
+	if err := inst.abandonQuest(slotID, questIdentifier); err != nil {
+		if !errors.Is(err, errSlotGone) {
+			inst.sendJSONToSlot(slotID, questAbandonFailedMsg{downBase: inst.downBase("quest_abandon_failed"), Quest: questIdentifier, Error: err.Error()})
+		}
+		return
+	}
+	inst.SendQuestLog(slotID)
+	inst.SendQuestOffers(ctx, slotID)
+}
+
+func (inst *Instance) abandonQuest(slotID uuid.UUID, questIdentifier string) error {
+	slot, ok := inst.GetSlot(slotID)
+	if !ok {
+		return errSlotGone
+	}
+	if slot.WorldCharacterDatabaseID == "" {
+		return ErrNoWorldCharacter
+	}
+	if _, active := slot.Quests[questIdentifier]; !active {
+		return errNotActive
+	}
+	if inst.RailsClient == nil {
+		return ErrNoRailsClient
+	}
+	if err := inst.RailsClient.AbandonQuest(slot.WorldCharacterDatabaseID, questIdentifier); err != nil {
+		return err
+	}
+	inst.removeActiveQuest(slotID, questIdentifier)
+	return nil
+}
+
+// removeActiveQuest drops an active quest from the slot. A no-op if the
+// slot is gone.
+func (inst *Instance) removeActiveQuest(slotID uuid.UUID, questIdentifier string) {
+	inst.slotsMu.Lock()
+	defer inst.slotsMu.Unlock()
+	if slot, ok := inst.slots[slotID]; ok {
+		delete(slot.Quests, questIdentifier)
+	}
 }
 
 func (inst *Instance) acceptQuest(slotID uuid.UUID, ncuIdentifier, questIdentifier string) (instanceconfig.ActiveQuest, error) {

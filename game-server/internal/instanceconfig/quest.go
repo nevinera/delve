@@ -1,5 +1,11 @@
 package instanceconfig
 
+import (
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
+)
+
 // Quest is one quest in a world's quests file (docs/schema/quest.md). Rails
 // validates the file at import; the game server only reads it.
 type Quest struct {
@@ -51,4 +57,35 @@ type ActiveQuest struct {
 	QuestIdentifier     string         `json:"quest_identifier"`
 	TimerElapsedSeconds int            `json:"timer_elapsed_seconds"`
 	Progress            map[string]int `json:"progress"`
+}
+
+// Hash identifies the objective across world versions, matching Rails'
+// QuestObjective.hash_of: the SHA1 of its JSON with only these fields, in
+// this order, leaving out blanks and the default count of 1. Progress is
+// kept per hash (see docs/quests.md#world-versions).
+func (o QuestObjective) Hash() string {
+	type hashed struct {
+		Type     string `json:"type,omitempty"`
+		Zone     string `json:"zone,omitempty"`
+		NCU      string `json:"ncu,omitempty"`
+		Unit     string `json:"unit,omitempty"`
+		UnitType string `json:"unitType,omitempty"`
+		Count    int    `json:"count,omitempty"`
+		Map      string `json:"map,omitempty"`
+	}
+	h := hashed(o)
+	if h.Count == 1 {
+		h.Count = 0
+	}
+	data, _ := json.Marshal(h) // can't fail: strings and an int
+	sum := sha1.Sum(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// Required is how many times the objective must be met: its count, or 1.
+func (o QuestObjective) Required() int {
+	if o.Count < 1 {
+		return 1
+	}
+	return o.Count
 }

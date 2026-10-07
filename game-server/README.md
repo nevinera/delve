@@ -59,7 +59,13 @@ completed, and hold every `requiresFlags` flag for.
   resends their offers.
 - The client sends `accept_quest` (`{ncu_id, quest}`). If that NCU offers it to them, the server
   accepts it through Rails (`/internal_api/world_characters/{id}/quests`); the client gets
-  `quest_accepted` (`{quest}`) and new offers, or `quest_accept_failed` (`{quest, error}`).
+  `quest_accepted` (`{quest}`), their quest log and new offers, or `quest_accept_failed`
+  (`{quest, error}`).
+- A world-mode player also gets `quest_log` (`{quests: [{quest_identifier,
+  timer_elapsed_seconds, objectives}]}`) on connect and whenever their quests change, with
+  `objectives` the count toward each of the quest's objectives, in order.
+- The client sends `abandon_quest` (`{quest}`); the server ends it through Rails and sends the
+  new quest log and offers, or `quest_abandon_failed` (`{quest, error}`).
 
 **Expiry.** For the last 10 minutes before `expires_at`, every player gets `version-expiring`
 (`{expires_at, minutes_remaining}`) once a minute. At expiry they get `version-expired`, every

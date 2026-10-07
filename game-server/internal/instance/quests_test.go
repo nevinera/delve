@@ -21,10 +21,11 @@ import (
 
 // fakeQuestRails serves the internal flag lookups and quest accepts.
 type fakeQuestRails struct {
-	mu       sync.Mutex
-	held     map[string]bool
-	accepted []string
-	refuse   string
+	mu        sync.Mutex
+	held      map[string]bool
+	accepted  []string
+	abandoned []string
+	refuse    string
 }
 
 func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,13 +49,20 @@ func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"quest": map[string]any{"quest_identifier": body["quest"], "timer_elapsed_seconds": 0, "progress": map[string]int{}},
 		})
+	case r.Method == http.MethodDelete && strings.HasPrefix(path, "quests/"):
+		f.abandoned = append(f.abandoned, strings.TrimPrefix(path, "quests/"))
+		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
 }
 
+var ratKill = instanceconfig.QuestObjective{Type: "kill", Zone: "darkwood", UnitType: "rat", Count: 5}
+var grizzleTalk = instanceconfig.QuestObjective{Type: "talk", Zone: "darkwood", NCU: "grizzle"}
+
 var testQuests = []instanceconfig.Quest{
-	{Identifier: "rat-hunt", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"}},
+	{Identifier: "rat-hunt", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"},
+		Objectives: []instanceconfig.QuestObjective{ratKill, grizzleTalk}},
 	{Identifier: "rat-king", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"},
 		RequiresFlags: []string{"quest/completed/rat-hunt"}},
 	{Identifier: "trusted", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "warden"},
@@ -148,6 +156,8 @@ func TestAcceptQuest_AcceptsThroughRailsAndRefreshesOffers(t *testing.T) {
 	accepted := nextMessage(t, writeCh)
 	assert.Equal(t, "quest_accepted", accepted["type"])
 	assert.Equal(t, "rat-hunt", accepted["quest"].(map[string]any)["quest_identifier"])
+	log := nextMessage(t, writeCh)
+	assert.Equal(t, "quest_log", log["type"])
 	offers := nextMessage(t, writeCh)
 	assert.Equal(t, "quest_offers", offers["type"])
 	assert.Empty(t, offers["offers"])
@@ -188,4 +198,52 @@ func TestAcceptQuest_ReportsARailsRefusal(t *testing.T) {
 	assert.Contains(t, msg["error"], "at most 20 quests")
 	got, _ := inst.GetSlot(slot.ID)
 	assert.NotContains(t, got.Quests, "rat-hunt")
+}
+
+func TestQuestLog_ResolvesProgressPerObjective(t *testing.T) {
+	inst := questInstance(t, &fakeQuestRails{})
+	slot, err := inst.AddSlotWithOptions("Aldric", "42", puncherClass, nil, nil, instance.SlotOptions{
+		WorldCharacterDatabaseID: "wc-1",
+		ActiveQuests: []instanceconfig.ActiveQuest{
+			{QuestIdentifier: "trusted", TimerElapsedSeconds: 30},
+			{QuestIdentifier: "rat-hunt", Progress: map[string]int{ratKill.Hash(): 9, "stale-hash": 4}},
+		},
+	})
+	require.NoError(t, err)
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	inst.SendQuestLog(slot.ID)
+	msg := nextMessage(t, writeCh)
+	assert.Equal(t, "quest_log", msg["type"])
+	assert.Equal(t, []any{
+		map[string]any{"quest_identifier": "rat-hunt", "timer_elapsed_seconds": float64(0), "objectives": []any{float64(5), float64(0)}},
+		map[string]any{"quest_identifier": "trusted", "timer_elapsed_seconds": float64(30), "objectives": []any{}},
+	}, msg["quests"])
+}
+
+func TestAbandonQuest_AbandonsThroughRails(t *testing.T) {
+	rails := &fakeQuestRails{}
+	inst := questInstance(t, rails)
+	slot, writeCh := addQuestSlot(t, inst, "rat-hunt")
+
+	inst.AbandonQuest(context.Background(), slot.ID, "rat-hunt")
+	log := nextMessage(t, writeCh)
+	assert.Equal(t, "quest_log", log["type"])
+	assert.Empty(t, log["quests"])
+	offers := nextMessage(t, writeCh)
+	assert.Equal(t, map[string]any{"grizzle": []any{"rat-hunt"}}, offers["offers"])
+	assert.Equal(t, []string{"rat-hunt"}, rails.abandoned)
+}
+
+func TestAbandonQuest_RefusesAQuestThatIsntActive(t *testing.T) {
+	rails := &fakeQuestRails{}
+	inst := questInstance(t, rails)
+	slot, writeCh := addQuestSlot(t, inst)
+
+	inst.AbandonQuest(context.Background(), slot.ID, "rat-hunt")
+	msg := nextMessage(t, writeCh)
+	assert.Equal(t, "quest_abandon_failed", msg["type"])
+	assert.Empty(t, rails.abandoned)
 }

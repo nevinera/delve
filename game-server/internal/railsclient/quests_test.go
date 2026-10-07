@@ -53,3 +53,25 @@ func TestAcceptQuest_RailsError(t *testing.T) {
 	_, err := railsclient.New(srv.URL, "t").AcceptQuest("42", "rat-hunt")
 	assert.ErrorContains(t, err, "500")
 }
+
+func TestAbandonQuest(t *testing.T) {
+	var gotPath, gotMethod string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod = r.URL.Path, r.Method
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	require.NoError(t, railsclient.New(srv.URL, "t").AbandonQuest("42", "rat-hunt"))
+	assert.Equal(t, http.MethodDelete, gotMethod)
+	assert.Equal(t, "/internal_api/world_characters/42/quests/rat-hunt", gotPath)
+}
+
+func TestAbandonQuest_RailsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	assert.ErrorContains(t, railsclient.New(srv.URL, "t").AbandonQuest("42", "rat-hunt"), "500")
+}
