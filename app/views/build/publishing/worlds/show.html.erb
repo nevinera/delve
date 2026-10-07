@@ -11,6 +11,10 @@
 
 <p><%= link_to "Add a version from an existing tag", new_build_publishing_world_version_path(@world) %></p>
 
+<% if @unimported_tags.nil? %>
+  <p><small>Tags in <%= @world.repo %> can't be listed here; connect GitHub to that repo to import them.</small></p>
+<% end %>
+
 <table>
   <thead>
     <tr>
@@ -19,26 +23,37 @@
     </tr>
   </thead>
   <tbody>
-    <% @versions.each do |version| %>
-      <tr>
-        <td><%= version.ref %></td>
-        <td><%= version.expired? ? "expired" : version.state %></td>
-        <td><%= version.commit_sha&.first(7) %></td>
-        <td><%= version.imported_at&.to_fs(:short) %></td>
-        <td><%= version.released_at&.to_fs(:short) %></td>
-        <td><%= version.expires_at&.to_fs(:short) %></td>
-        <td>
-          <% if version.unreleased? %>
-            <%= button_to "Release", release_build_publishing_world_version_path(@world, version),
-                  data: {confirm: "Release #{version.ref}? Earlier versions expire in 24 hours."} %>
-          <% end %>
-          <% if version.failed? %>
-            <%= button_to "Reimport", reimport_build_publishing_world_version_path(@world, version) %>
-          <% end %>
-        </td>
-      </tr>
-      <% if version.validity_error.present? %>
-        <tr><td colspan="7"><strong>Import error:</strong> <%= version.validity_error %></td></tr>
+    <% @rows.each do |row| %>
+      <% if row.is_a?(String) %>
+        <tr>
+          <td><%= row %></td>
+          <td>not imported</td>
+          <td colspan="4"></td>
+          <td>
+            <%= button_to "Import", build_publishing_world_versions_path(@world), params: {world_version: {ref: row}} %>
+          </td>
+        </tr>
+      <% else %>
+        <tr>
+          <td><%= row.ref %></td>
+          <td><%= row.expired? ? "expired" : row.state %></td>
+          <td><%= row.commit_sha&.first(7) %></td>
+          <td><%= row.imported_at&.to_fs(:short) %></td>
+          <td><%= row.released_at&.to_fs(:short) %></td>
+          <td><%= row.expires_at&.to_fs(:short) %></td>
+          <td>
+            <% if row.unreleased? %>
+              <%= button_to "Release", release_build_publishing_world_version_path(@world, row),
+                    data: {confirm: "Release #{row.ref}? Earlier versions expire in 24 hours."} %>
+            <% end %>
+            <% if row.failed? %>
+              <%= button_to "Reimport", reimport_build_publishing_world_version_path(@world, row) %>
+            <% end %>
+          </td>
+        </tr>
+        <% if row.validity_error.present? %>
+          <tr><td colspan="7"><strong>Import error:</strong> <%= row.validity_error %></td></tr>
+        <% end %>
       <% end %>
     <% end %>
   </tbody>

@@ -12,6 +12,7 @@ class Play::WorldCharactersController < Play::BaseController
     @show_all = params[:all].present?
     world_characters = @character.world_characters.index_by(&:world_id)
     @rows = listed_worlds(world_characters.keys).filter_map { |world| world_row(world, world_characters[world.id]) }
+    @in_world_id = in_world_id
   end
 
   def show
@@ -42,11 +43,12 @@ class Play::WorldCharactersController < Play::BaseController
   end
 
   def version
-    return redirect_to(play_character_world_path(@character, @world), alert: "Leave the world before switching versions.") if in_world?
+    back = play_character_world_path(@character, @world)
+    return redirect_back_or_to(back, alert: "Leave the world before switching versions.") if in_world?
 
     version = @world.released_versions.find(params[:world_version_id])
     @character.world_characters.find_or_create_by!(world: @world).update!(world_version: version)
-    redirect_to play_character_world_path(@character, @world), notice: "Switched to #{version.ref}."
+    redirect_back_or_to back, notice: "Switched to #{version.ref}."
   end
 
   # The game client's "Leave World" button: frees the character's slot right
@@ -66,7 +68,14 @@ class Play::WorldCharactersController < Play::BaseController
 
   def world_row(world, world_character)
     return if world_character && !world_character.active? && !@show_all
-    {world:, world_character:, name: world.name || world.key}
+    latest = world.released_versions.first
+    current = world_character&.world_version
+    {world:, world_character:, name: world.name || world.key, latest:, current:, upgradable: upgradable?(current, latest)}
+  end
+
+  # A character on an older version (expired or not) can move to the latest.
+  def upgradable?(current, latest)
+    current && latest && current != latest
   end
 
   def load_client_settings
@@ -83,9 +92,8 @@ class Play::WorldCharactersController < Play::BaseController
     @world = World.find(params[:id])
   end
 
-  # Whether the character has a live slot in one of this world's zones.
-  def in_world?
-    session = SlotSession.find_by(character: @character)
-    session&.zone&.world_version&.world_id == @world.id
-  end
+  # The world the character has a live slot in, if any.
+  def in_world_id = SlotSession.find_by(character: @character)&.zone&.world_version&.world_id
+
+  def in_world? = in_world_id == @world.id
 end

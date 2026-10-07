@@ -134,3 +134,15 @@ div.asset-thumbnail {
   outline-color: var(--pico-primary-hover);
   outline-style: dashed;
 }
+
+/* small, low-key buttons for table-row actions (Hide, Upgrade) */
+button.compact,
+input[type="submit"].compact {
+  width: auto;
+  margin: 0;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+}
+td form {
+  margin: 0;
+}
