@@ -9,7 +9,8 @@ const chains = [{
     identifier: "rat-hunt",
     name: "Rat Hunt",
     description: "Grizzle said: Rats!",
-    timer: "5m",
+    timerSeconds: 300,
+    timerStartedAt: Date.now() - 60_000,
     objectives: [{text: "Kill Rat", count: 2, required: 5}, {text: "Talk to Grizzle", count: 1, required: 1}],
   }],
 }];
@@ -32,7 +33,7 @@ describe("QuestLog", () => {
     expect(screen.getByText("Grizzle said: Rats!")).toBeInTheDocument();
     expect(screen.getByText("Kill Rat: 2/5")).toBeInTheDocument();
     expect(screen.getByText("Talk to Grizzle: 1/1")).toBeInTheDocument();
-    expect(screen.getByText("Time limit: 5m")).toBeInTheDocument();
+    expect(screen.getByText("Time left: 4:00")).toBeInTheDocument();
   });
 
   it("abandons only after confirming", () => {

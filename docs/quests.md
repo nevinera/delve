@@ -62,10 +62,25 @@ which checks the offer again.
 ## Quest log
 
 The quest log (default key `J`) lists a player's active quests grouped by chain, with each quest's
-description (or `<NCU name> said: <offerText>`), its objectives' progress, and its time limit.
-The client keeps the log itself: it reads the active quests from Rails on load, then applies the
-game server's events (`quest-received`, `quest-updated`, `quest-abandoned`). Names and texts
-come from the quests file. Abandoning a quest from the log goes through the game server.
+description (or `<NCU name> said: <offerText>`), its objectives' progress, and the time left on
+a timed quest. The client keeps the log itself: it reads the active quests from Rails on load,
+then applies the game server's events (`quest-received`, `quest-updated`, `quest-progress`,
+`quest-completed`, `quest-failed`, `quest-abandoned`). Names and texts come from the quests file.
+Abandoning a quest from the log goes through the game server.
+
+## Progress and completion
+
+The game server tracks objectives in the zone the player is in: `talk` when they start a
+conversation with the NCU, `kill` when a matching unit they tagged (damaged first) dies, and
+`reach` when they arrive on the map. Each step is saved to Rails as it happens.
+
+A quest with no `turnIn` completes as soon as every objective is met. One with a `turnIn` is
+listed in that NCU's conversation: its `progressText` until it's finished, then its
+`completionText` and a Complete button. Completing grants `quest/completed/<identifier>`, the
+quest's `grantsFlags` and its rewards, and can open up new offers.
+
+A timed quest fails when its timer runs out. Its timer runs only while the character is
+connected to a zone in the world; the game server saves it every 15 seconds and on disconnect.
 
 ## State
 
@@ -79,8 +94,8 @@ changes.
 - **`QuestProgress`:** one per objective: its definition, its position, its count, and its hash
   (`QuestObjective.hash_of`), which identifies it across versions.
 
-The timer only runs while the character is connected to a zone in the world; the game server
-counts it and reports it.
+The game server counts the timer and saves it (see
+[Progress and completion](#progress-and-completion)).
 
 When a character joins a zone with a quest from an older world version, the game server syncs it
 to the new definition, or abandons it if the new version doesn't have it (see
@@ -95,7 +110,7 @@ to the new definition, or abandons it if the new version doesn't have it (see
 | `POST /internal_api/world_characters/:id/quests` `{quest: definition}` | Game server | Accepts it. Idempotent; 422 if completed, or 20 are active. |
 | `POST /internal_api/world_characters/:id/quests/:quest/sync` `{quest: definition}` | Game server | Moves it to a newer definition, keeping progress on unchanged objectives. |
 | `PATCH /internal_api/world_characters/:id/quests/:quest` `{progress: {hash: count}, timer_elapsed_seconds}` | Game server | Sets progress and the timer (absolute values). |
-| `POST /internal_api/world_characters/:id/quests/:quest/complete` `{grants_flags}` | Game server | Grants `quest/completed/<quest>` and the flags; ends the quest. |
+| `POST /internal_api/world_characters/:id/quests/:quest/complete` | Game server | Grants `quest/completed/<quest>`, the stored `grantsFlags` and rewards; ends the quest. Returns `{flags, items: [{identifier, name}]}` (items newly held). |
 | `DELETE /internal_api/world_characters/:id/quests/:quest` | Game server | Fails or abandons it. Idempotent. |
 
 Each quest is `{quest_identifier, world_version_id, timer_elapsed_seconds, definition,

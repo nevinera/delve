@@ -6,17 +6,20 @@ import { hasDialogue, pickEntryNodeId } from "./game/dialogue";
 // key={dialogueNcuId}), so talking to someone new remounts this component -
 // the lazy useState initializer below re-picks a random entry node each time.
 //
-// The quests the NCU offers ({identifier, name, offerText}) are top-level
+// The quests the NCU offers ({identifier, name, offerText}) and the active
+// quests it takes turned in ({identifier, name, ready, text}) are top-level
 // options, listed under the opening line (or alone, for an NCU with no
-// dialogue). Picking one shows its offerText, to accept or put off.
-export function DialogueWindow({ name, dialogue, offers = [], onAcceptQuest, onClose }) {
+// dialogue). Picking an offer shows its offerText, to accept or put off;
+// picking a turn-in shows its text, to complete when it's ready.
+export function DialogueWindow({ name, dialogue, offers = [], turnIns = [], onAcceptQuest, onTurnInQuest, onClose }) {
   const [entryNodeId] = useState(() => (hasDialogue(dialogue) ? pickEntryNodeId(dialogue) : null));
   const [currentNodeId, setCurrentNodeId] = useState(entryNodeId);
   const [questId, setQuestId] = useState(null);
   const node = dialogue?.nodes?.[currentNodeId];
   const quest = offers.find((offer) => offer.identifier === questId);
+  const turnIn = turnIns.find((t) => t.identifier === questId);
   const atTop = currentNodeId === entryNodeId;
-  if (!node && !quest && !(atTop && offers.length)) return null;
+  if (!node && !quest && !turnIn && !(atTop && (offers.length || turnIns.length))) return null;
 
   return (
     <div style={styles.window} role="dialog" aria-label={name}>
@@ -26,6 +29,8 @@ export function DialogueWindow({ name, dialogue, offers = [], onAcceptQuest, onC
       </div>
       {quest ? (
         <QuestOffer quest={quest} onAccept={() => { onAcceptQuest?.(quest.identifier); onClose(); }} onBack={() => setQuestId(null)} />
+      ) : turnIn ? (
+        <QuestTurnIn quest={turnIn} onComplete={() => { onTurnInQuest?.(turnIn.identifier); onClose(); }} onBack={() => setQuestId(null)} />
       ) : (
         <>
           {node && <p style={styles.line}>{node.text}</p>}
@@ -33,6 +38,11 @@ export function DialogueWindow({ name, dialogue, offers = [], onAcceptQuest, onC
             {atTop && offers.map((offer) => (
               <button key={offer.identifier} style={styles.quest} onClick={() => setQuestId(offer.identifier)}>
                 ◆ {offer.name}
+              </button>
+            ))}
+            {atTop && turnIns.map((t) => (
+              <button key={t.identifier} style={styles.quest} onClick={() => setQuestId(t.identifier)}>
+                {t.ready ? "✔" : "…"} {t.name}
               </button>
             ))}
             {node && <NodeButtons node={node} onNext={setCurrentNodeId} onClose={onClose} />}
@@ -67,6 +77,19 @@ function QuestOffer({ quest, onAccept, onBack }) {
       <div style={styles.footer}>
         <button style={styles.quest} onClick={onAccept}>Accept</button>
         <button style={styles.next} onClick={onBack}>Not now</button>
+      </div>
+    </>
+  );
+}
+
+function QuestTurnIn({ quest, onComplete, onBack }) {
+  return (
+    <>
+      <p style={styles.questName}>{quest.name}</p>
+      {quest.text && <p style={styles.line}>{quest.text}</p>}
+      <div style={styles.footer}>
+        {quest.ready && <button style={styles.quest} onClick={onComplete}>Complete</button>}
+        <button style={styles.next} onClick={onBack}>{quest.ready ? "Not now" : "Back"}</button>
       </div>
     </>
   );

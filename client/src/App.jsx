@@ -11,7 +11,7 @@ import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { canKeepTalking, canTalkTo } from "./game/dialogue";
 import { DialogueWindow } from "./DialogueWindow";
-import { activeQuestsById, applyQuestAction, offersFor, questLogChains, questMessageAction, questNcus, questsById, zoneNames } from "./game/quests";
+import { activeQuestsById, applyQuestAction, offersFor, questLogChains, questMessageAction, questNcus, questsById, turnInsFor, zoneNames } from "./game/quests";
 import { QuestLog } from "./QuestLog";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
@@ -3126,6 +3126,8 @@ export default function App({
   const questOffersRef = useRef({});
   const questNcuSet = useMemo(() => questNcus(questOffers), [questOffers]);
   const [activeQuests, setActiveQuests] = useState({});
+  const activeQuestsRef = useRef({});
+  activeQuestsRef.current = activeQuests;
   // Quest events that arrive before the log has loaded from Rails, replayed
   // over it once it has (null once loaded).
   const pendingQuestActionsRef = useRef([]);
@@ -3306,7 +3308,7 @@ export default function App({
       .then(({quests}) => {
         const pending = pendingQuestActionsRef.current ?? [];
         pendingQuestActionsRef.current = null;
-        setActiveQuests(pending.reduce(applyQuestAction, activeQuestsById(quests)));
+        setActiveQuests(pending.reduce((current, action) => applyQuestAction(current, action), activeQuestsById(quests)));
       })
       .catch(() => addLog("Couldn't load your quests."));
   }, [activeQuestsUrl]);
@@ -3654,7 +3656,7 @@ export default function App({
           questOffersRef.current = questAction.offers;
           setQuestOffers(questAction.offers);
         }
-        if (questAction?.type === "upsert" || questAction?.type === "remove") {
+        if (["upsert", "progress", "remove"].includes(questAction?.type)) {
           if (pendingQuestActionsRef.current) pendingQuestActionsRef.current.push(questAction);
           else setActiveQuests((current) => applyQuestAction(current, questAction));
         }
@@ -3892,11 +3894,12 @@ export default function App({
     const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
     const ncu = ncusRef.current[id];
     const dialogue = ncu && canvasRef.current?.ncuInfo(ncu.zone_ncu_identifier)?.dialogue;
-    const hasOffers = !!ncu && questOffersRef.current[ncu.zone_ncu_identifier]?.length > 0;
+    const hasOffers = !!ncu && (questOffersRef.current[ncu.zone_ncu_identifier]?.length > 0 ||
+      turnInsFor(activeQuestsRef.current, ncu.zone_ncu_identifier, zoneIdentifier, {}).length > 0);
     if (!canTalkTo(self, ncu, dialogue, hasOffers)) return;
     setDialogueNcuId(id);
     connRef.current?.send({ type: "talk", ncu_id: id });
-  }, []);
+  }, [zoneIdentifier]);
 
   const handleAbandonQuest = useCallback((quest) => {
     connRef.current?.send({ type: "abandon_quest", quest });
@@ -3904,6 +3907,10 @@ export default function App({
 
   const handleAcceptQuest = useCallback((quest) => {
     if (dialogueNcuId) connRef.current?.send({ type: "accept_quest", ncu_id: dialogueNcuId, quest });
+  }, [dialogueNcuId]);
+
+  const handleTurnInQuest = useCallback((quest) => {
+    if (dialogueNcuId) connRef.current?.send({ type: "turn_in_quest", ncu_id: dialogueNcuId, quest });
   }, [dialogueNcuId]);
 
   // Frees the slot through Rails (which closes our socket, so onClose is
@@ -4246,7 +4253,9 @@ export default function App({
           name={dialogueInfo?.name ?? dialogueNcu.zone_ncu_identifier}
           dialogue={dialogueInfo?.dialogue}
           offers={offersFor(questOffers, dialogueNcu.zone_ncu_identifier, questDefinitions)}
+          turnIns={turnInsFor(activeQuests, dialogueNcu.zone_ncu_identifier, zoneIdentifier, questDefinitions)}
           onAcceptQuest={handleAcceptQuest}
+          onTurnInQuest={handleTurnInQuest}
           onClose={() => setDialogueNcuId(null)}
         />
       )}

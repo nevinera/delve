@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { timerRemaining } from "./game/quests";
 
 const wrapperBase = {
   position: "fixed",
@@ -59,6 +60,17 @@ export function QuestLog({open, chains = [], onAbandon, onClose, portrait = fals
   );
 }
 
+// Counts down a timed quest's remaining time, as m:ss.
+function QuestTimer({seconds, startedAt}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const left = timerRemaining(seconds, startedAt ?? now, now);
+  return <div style={styles.timer}>Time left: {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</div>;
+}
+
 function QuestEntry({quest, onAbandon}) {
   const [confirming, setConfirming] = useState(false);
   return (
@@ -74,7 +86,7 @@ function QuestEntry({quest, onAbandon}) {
           ))}
         </ul>
       )}
-      {quest.timer && <div style={styles.timer}>Time limit: {quest.timer}</div>}
+      {quest.timerSeconds && <QuestTimer seconds={quest.timerSeconds} startedAt={quest.timerStartedAt} />}
       <div style={styles.actions}>
         {confirming ? (
           <>

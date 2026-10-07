@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {activeQuestsById, applyQuestAction, describeObjective, offersFor, questLogChains, questMessageAction, questNcus, questsById, zoneNames} from "../quests";
+import {activeQuestsById, applyQuestAction, describeObjective, offersFor, questLogChains, questMessageAction, questNcus, questsById, timerRemaining, timerSeconds, turnInsFor, zoneNames} from "../quests";
 
 const definitions = questsById([
   {identifier: "rat-hunt", name: "Rat Hunt", offerText: "Rats!", objectives: []},
@@ -47,19 +47,75 @@ describe("questMessageAction", () => {
     expect(questMessageAction({type: "quest-abandon-failed", quest: "x", error: "nope"}, {}).log).toBe("Couldn't abandon x: nope");
   });
 
+  it("reads progress, completion and failure", () => {
+    expect(questMessageAction({type: "quest-progress", quest: "rat-hunt", objective: "h1", count: 2}, definitions))
+      .toEqual({type: "progress", quest: "rat-hunt", objective: "h1", count: 2});
+    expect(questMessageAction({type: "quest-completed", quest: "rat-hunt", flags: [], items: ["Rat Tail", "Cheese"]}, definitions))
+      .toEqual({type: "remove", quest: "rat-hunt", log: "Quest complete: Rat Hunt. Received: Rat Tail, Cheese."});
+    expect(questMessageAction({type: "quest-completed", quest: "rat-hunt", items: []}, definitions).log).toBe("Quest complete: Rat Hunt.");
+    expect(questMessageAction({type: "quest-failed", quest: "rat-hunt"}, definitions))
+      .toEqual({type: "remove", quest: "rat-hunt", log: "Quest failed: Rat Hunt (out of time)"});
+    expect(questMessageAction({type: "quest-turn-in-failed", quest: "rat-hunt", error: "not yet"}, definitions).log)
+      .toBe("Couldn't turn in Rat Hunt: not yet");
+  });
+
   it("ignores other messages", () => {
     expect(questMessageAction({type: "zone-exit"}, definitions)).toBeNull();
   });
 });
 
 describe("applyQuestAction", () => {
-  it("adds, replaces and removes active quests", () => {
-    let quests = activeQuestsById([{quest_identifier: "a", timer_elapsed_seconds: 0}]);
-    quests = applyQuestAction(quests, {type: "upsert", quest: {quest_identifier: "a", timer_elapsed_seconds: 5}});
-    quests = applyQuestAction(quests, {type: "upsert", quest: {quest_identifier: "b"}});
-    expect(quests).toEqual({a: {quest_identifier: "a", timer_elapsed_seconds: 5}, b: {quest_identifier: "b"}});
-    expect(applyQuestAction(quests, {type: "remove", quest: "a"})).toEqual({b: {quest_identifier: "b"}});
+  it("adds, replaces and removes active quests, noting when timers started", () => {
+    let quests = activeQuestsById([{quest_identifier: "a", timer_elapsed_seconds: 0}], 10_000);
+    quests = applyQuestAction(quests, {type: "upsert", quest: {quest_identifier: "a", timer_elapsed_seconds: 5}}, 20_000);
+    quests = applyQuestAction(quests, {type: "upsert", quest: {quest_identifier: "b"}}, 20_000);
+    expect(quests).toEqual({
+      a: {quest_identifier: "a", timer_elapsed_seconds: 5, timer_started_at: 15_000},
+      b: {quest_identifier: "b", timer_started_at: 20_000},
+    });
+    expect(applyQuestAction(quests, {type: "remove", quest: "a"})).toEqual({b: quests.b});
     expect(applyQuestAction(quests, {type: "offers"})).toBe(quests);
+  });
+
+  it("updates an objective's count by hash", () => {
+    const quests = {a: {quest_identifier: "a", objectives: [{hash: "h1", count: 0, required: 2}, {hash: "h2", count: 0, required: 1}]}};
+    const updated = applyQuestAction(quests, {type: "progress", quest: "a", objective: "h1", count: 1});
+    expect(updated.a.objectives).toEqual([{hash: "h1", count: 1, required: 2}, {hash: "h2", count: 0, required: 1}]);
+    expect(applyQuestAction(quests, {type: "progress", quest: "gone", objective: "h1", count: 1})).toBe(quests);
+  });
+});
+
+describe("timers", () => {
+  it("parses time limits", () => {
+    expect(timerSeconds("90s")).toBe(90);
+    expect(timerSeconds("5m")).toBe(300);
+    expect(timerSeconds(undefined)).toBeNull();
+    expect(timerSeconds("0s")).toBeNull();
+  });
+
+  it("counts down without going below zero", () => {
+    expect(timerRemaining(90, 1_000, 31_500)).toBe(60);
+    expect(timerRemaining(90, 1_000, 200_000)).toBe(0);
+  });
+});
+
+describe("turnInsFor", () => {
+  const prose = questsById([{identifier: "deliver", name: "Delivery", progressText: "Well?", completionText: "Thanks!"}]);
+  const active = {
+    deliver: {quest_identifier: "deliver", definition: {turnIn: {zone: "cave", ncu: "warden"}},
+      objectives: [{hash: "h1", count: 1, required: 1}]},
+    unfinished: {quest_identifier: "unfinished", definition: {turnIn: {zone: "cave", ncu: "warden"}},
+      objectives: [{hash: "h1", count: 0, required: 1}]},
+    elsewhere: {quest_identifier: "elsewhere", definition: {turnIn: {zone: "town", ncu: "warden"}}, objectives: []},
+    none: {quest_identifier: "none", definition: {}, objectives: []},
+  };
+
+  it("is the NCU's turn-ins in this zone, with completion or progress text", () => {
+    expect(turnInsFor(active, "warden", "cave", prose)).toEqual([
+      {identifier: "deliver", name: "Delivery", ready: true, text: "Thanks!"},
+      {identifier: "unfinished", name: "unfinished", ready: false, text: ""},
+    ]);
+    expect(turnInsFor(active, "grizzle", "cave", prose)).toEqual([]);
   });
 });
 
@@ -99,11 +155,12 @@ describe("questLogChains", () => {
   it("groups quests into chains sorted by name, with progress and prose", () => {
     const chains = questLogChains(active, prose, here);
     expect(chains.map((c) => c.name)).toEqual(["Alpha", "Zeta"]);
-    expect(chains[0].quests[0]).toMatchObject({name: "A", description: "Do the thing.", timer: null, objectives: []});
+    expect(chains[0].quests[0]).toMatchObject({name: "A", description: "Do the thing.", timerSeconds: null, objectives: []});
     expect(chains[1].quests[0]).toMatchObject({
       name: "B",
       description: "Grizzle said: Go.",
-      timer: "5m",
+      timerSeconds: 300,
+      timerStartedAt: active["b-quest"].timer_started_at,
       objectives: [{text: "Kill Rat", count: 3, required: 5}, {text: "Talk to Grizzle", count: 1, required: 1}],
     });
   });

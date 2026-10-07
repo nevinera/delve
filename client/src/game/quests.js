@@ -41,15 +41,36 @@ export function questMessageAction(msg, definitions) {
       return {type: "log", log: `Couldn't accept ${name(msg.quest)}: ${msg.error}`};
     case "quest-abandon-failed":
       return {type: "log", log: `Couldn't abandon ${name(msg.quest)}: ${msg.error}`};
+    case "quest-progress":
+      return {type: "progress", quest: msg.quest, objective: msg.objective, count: msg.count};
+    case "quest-completed":
+      return {type: "remove", quest: msg.quest, log: completedLog(name(msg.quest), msg.items)};
+    case "quest-failed":
+      return {type: "remove", quest: msg.quest, log: `Quest failed: ${name(msg.quest)} (out of time)`};
+    case "quest-turn-in-failed":
+      return {type: "log", log: `Couldn't turn in ${name(msg.quest)}: ${msg.error}`};
     default:
       return null;
   }
 }
 
-// The quest log after an upsert or remove action: active quests by
-// identifier.
-export function applyQuestAction(activeQuests, action) {
-  if (action?.type === "upsert") return {...activeQuests, [action.quest.quest_identifier]: action.quest};
+function completedLog(name, items) {
+  const rewards = items?.length ? ` Received: ${items.join(", ")}.` : "";
+  return `Quest complete: ${name}.${rewards}`;
+}
+
+// The quest log after an upsert, progress or remove action: active quests
+// by identifier. now (ms) stamps when an upserted quest's timer started.
+export function applyQuestAction(activeQuests, action, now = Date.now()) {
+  if (action?.type === "upsert") return {...activeQuests, [action.quest.quest_identifier]: withTimerStart(action.quest, now)};
+  if (action?.type === "progress") {
+    const quest = activeQuests[action.quest];
+    if (!quest) return activeQuests;
+    const objectives = (quest.objectives ?? []).map((objective) =>
+      objective.hash === action.objective ? {...objective, count: action.count} : objective
+    );
+    return {...activeQuests, [action.quest]: {...quest, objectives}};
+  }
   if (action?.type === "remove") {
     const {[action.quest]: _removed, ...rest} = activeQuests;
     return rest;
@@ -57,9 +78,47 @@ export function applyQuestAction(activeQuests, action) {
   return activeQuests;
 }
 
-// Active quests (as Rails lists them) by identifier.
-export function activeQuestsById(quests) {
-  return Object.fromEntries((quests ?? []).map((quest) => [quest.quest_identifier, quest]));
+// Active quests (as Rails lists them) by identifier, with when (ms) each
+// one's timer started counting from now.
+export function activeQuestsById(quests, now = Date.now()) {
+  return Object.fromEntries((quests ?? []).map((quest) => [quest.quest_identifier, withTimerStart(quest, now)]));
+}
+
+// The timer runs on the game server while the player's connected; the
+// client counts down from what it was last told.
+function withTimerStart(quest, now) {
+  return {...quest, timer_started_at: now - (quest.timer_elapsed_seconds ?? 0) * 1000};
+}
+
+// A quest timer ("90s", "5m") in seconds, or null for none.
+export function timerSeconds(timer) {
+  const match = /^([1-9]\d*)([sm])$/.exec(timer ?? "");
+  if (!match) return null;
+  return Number(match[1]) * (match[2] === "m" ? 60 : 1);
+}
+
+// Seconds left on a timed quest at now (ms), never below 0.
+export function timerRemaining(seconds, startedAt, now) {
+  return Math.max(0, seconds - Math.floor((now - startedAt) / 1000));
+}
+
+// The active quests ncuIdentifier (in zoneIdentifier) takes turned in, as
+// {identifier, name, ready, text}: ready once every objective is met, with
+// the quest's completionText, otherwise its progressText.
+export function turnInsFor(activeQuests, ncuIdentifier, zoneIdentifier, definitions) {
+  return Object.values(activeQuests ?? {})
+    .filter(({definition}) => definition?.turnIn?.zone === zoneIdentifier && definition.turnIn.ncu === ncuIdentifier)
+    .sort((a, b) => a.quest_identifier.localeCompare(b.quest_identifier))
+    .map((active) => {
+      const prose = definitions?.[active.quest_identifier];
+      const ready = (active.objectives ?? []).every(({count, required}) => count >= required);
+      return {
+        identifier: active.quest_identifier,
+        name: prose?.name ?? active.quest_identifier,
+        ready,
+        text: (ready ? prose?.completionText : prose?.progressText) ?? "",
+      };
+    });
 }
 
 // Display names from a zone's file, by identifier: its unit types, units
@@ -124,7 +183,8 @@ export function questLogChains(activeQuests, definitions, here) {
       identifier: active.quest_identifier,
       name: prose?.name ?? active.quest_identifier,
       description: questDescription(prose, definition.offeredBy, here),
-      timer: definition.timer ?? null,
+      timerSeconds: timerSeconds(definition.timer),
+      timerStartedAt: active.timer_started_at ?? null,
       objectives: (active.objectives ?? []).map(({objective, count, required}) => ({
         text: describeObjective(objective, here),
         count,

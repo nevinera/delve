@@ -117,4 +117,29 @@ describe("DialogueWindow", () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+
+  describe("quest turn-ins", () => {
+    const ready = { identifier: "deliver", name: "Delivery", ready: true, text: "Thanks!" };
+    const unfinished = { identifier: "deliver", name: "Delivery", ready: false, text: "Well?" };
+
+    it("completes a finished quest", () => {
+      const onTurnInQuest = vi.fn();
+      const onClose = vi.fn();
+      render(<DialogueWindow name="Warden" dialogue={undefined} turnIns={[ready]} onTurnInQuest={onTurnInQuest} onClose={onClose} />);
+      fireEvent.click(screen.getByRole("button", { name: /Delivery/ }));
+      expect(screen.getByText("Thanks!")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Complete" }));
+      expect(onTurnInQuest).toHaveBeenCalledWith("deliver");
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it("shows progress text, with no way to complete, while unfinished", () => {
+      render(<DialogueWindow name="Warden" dialogue={branching} turnIns={[unfinished]} onClose={() => {}} />);
+      fireEvent.click(screen.getByRole("button", { name: /Delivery/ }));
+      expect(screen.getByText("Well?")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Complete" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
+      expect(screen.getByText("Choose one.")).toBeInTheDocument();
+    });
+  });
 });
