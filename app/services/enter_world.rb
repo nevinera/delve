@@ -2,7 +2,8 @@
 # theirs while it's available, otherwise the newest release), works out
 # where they enter (their last connection point if it still exists in that
 # version, otherwise the version's default entry point), records both on
-# their WorldCharacter, and joins that zone.
+# their WorldCharacter, moves their active quests onto that version, and
+# joins that zone.
 class EnterWorld
   Error = WorldEntryPoint::Error
   NoReleasedVersion = WorldEntryPoint::NoReleasedVersion
@@ -25,6 +26,7 @@ class EnterWorld
     version, zone, connection_key, zone_data = entry.to_h.values_at(:version, :zone, :connection_key, :zone_data)
     world_character.update!(world_version: version, zone_identifier: zone.identifier,
       connection_key:, last_played_at: Time.current)
+    UpgradeCharacterQuests.call(world_character)
     join(world_character, zone, zone_data)
   end
 

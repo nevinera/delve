@@ -49,3 +49,32 @@ requiring the earlier quest's completion flag. That makes several shapes fall ou
 
 Flags are the only link between quests, so the schema never implies requirements. Editors may fill
 in the usual completion-flag requirements for authors.
+
+## State
+
+Rails stores only active quests (`CharacterQuest`), never quest definitions: the quest's
+identifier, the world version its progress follows, the timer's elapsed seconds, and a count per
+objective (`QuestProgress`), keyed by the objective's hash (`QuestObjective.hash_of`). The game
+server must hash objectives the same way; `spec/fixtures/quests/objective_hashes.json` pins the
+expected hashes for both.
+
+The timer only runs while the character is connected to a zone in the world; the game server
+counts it and reports it.
+
+Entering a world moves the character's active quests onto the version they enter (see
+[World versions](#world-versions)).
+
+## Endpoints
+
+| Endpoint | For | Does |
+|---|---|---|
+| `GET /play/characters/:id/worlds/:world_id/quests` | Client | Active quests. |
+| `GET /internal_api/world_characters/:id/quests` | Game server | Active quests. |
+| `POST /internal_api/world_characters/:id/quests` `{quest}` | Game server | Accepts it. Idempotent; 422 if completed, or 20 are active. |
+| `PATCH /internal_api/world_characters/:id/quests/:quest` `{progress: {hash: count}, timer_elapsed_seconds}` | Game server | Sets progress and the timer (absolute values). |
+| `POST /internal_api/world_characters/:id/quests/:quest/complete` `{grants_flags}` | Game server | Grants `quest/completed/<quest>` and the flags; ends the quest. |
+| `DELETE /internal_api/world_characters/:id/quests/:quest` | Game server | Fails or abandons it. Idempotent. |
+
+Each quest is `{quest_identifier, timer_elapsed_seconds, progress: {hash: count}}`. The game
+server owns the rules (requirements, objectives, timers); Rails only checks the 20-quest cap and
+that a quest isn't already completed.

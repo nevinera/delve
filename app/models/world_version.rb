@@ -6,6 +6,7 @@ class WorldVersion < ApplicationRecord
   has_many :world_characters, dependent: :nullify
   has_many :character_items, dependent: :nullify
   has_many :character_flags, dependent: :nullify
+  has_many :character_quests, dependent: :nullify
 
   enum :state, {importing: "importing", failed: "failed", unreleased: "unreleased", released: "released"}
 
@@ -24,6 +25,8 @@ class WorldVersion < ApplicationRecord
   def expired? = expires_at.present? && expires_at.past?
 
   def zone_url(zone) = "#{raw_base_url}#{zone.path}"
+
+  def quests_url = quests_path && "#{raw_base_url}#{quests_path}"
 
   def import = ImportWorldVersionJob.perform_later(id)
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_140000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -59,6 +59,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
     t.index ["world_character_id", "identifier", "version"], name: "index_character_items_on_identity", unique: true
     t.index ["world_character_id"], name: "index_character_items_on_world_character_id"
     t.index ["world_version_id"], name: "index_character_items_on_world_version_id"
+  end
+
+  create_table "character_quests", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "quest_identifier", limit: 54, null: false
+    t.integer "timer_elapsed_seconds", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.integer "world_character_id", null: false
+    t.integer "world_version_id"
+    t.index ["world_character_id", "quest_identifier"], name: "idx_on_world_character_id_quest_identifier_b7c4d39b8d", unique: true
+    t.index ["world_version_id"], name: "index_character_quests_on_world_version_id"
   end
 
   create_table "character_settings", force: :cascade do |t|
@@ -125,6 +136,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
     t.integer "user_id", null: false
     t.index ["installation_id"], name: "index_github_installations_on_installation_id", unique: true
     t.index ["user_id"], name: "index_github_installations_on_user_id", unique: true
+  end
+
+  create_table "quest_progresses", force: :cascade do |t|
+    t.integer "character_quest_id", null: false
+    t.integer "count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.string "objective_hash", null: false
+    t.datetime "updated_at", null: false
+    t.index ["character_quest_id", "objective_hash"], name: "idx_on_character_quest_id_objective_hash_b0890fad2a", unique: true
   end
 
   create_table "slot_sessions", force: :cascade do |t|
@@ -224,6 +244,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
   add_foreign_key "character_flags", "world_versions", on_delete: :nullify
   add_foreign_key "character_items", "world_characters"
   add_foreign_key "character_items", "world_versions", on_delete: :nullify
+  add_foreign_key "character_quests", "world_characters"
+  add_foreign_key "character_quests", "world_versions", on_delete: :nullify
   add_foreign_key "character_settings", "characters"
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
@@ -231,6 +253,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_130000) do
   add_foreign_key "equipped_items", "character_items"
   add_foreign_key "equipped_items", "world_characters"
   add_foreign_key "github_installations", "users"
+  add_foreign_key "quest_progresses", "character_quests", on_delete: :cascade
   add_foreign_key "slot_sessions", "characters"
   add_foreign_key "slot_sessions", "zones"
   add_foreign_key "world_characters", "characters"

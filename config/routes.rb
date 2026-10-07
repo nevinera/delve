@@ -97,6 +97,7 @@ Rails.application.routes.draw do
         end
         resources :character_items, only: [:index, :show]
         get "flags/*flag", to: "character_flags#show", as: :flag, format: false
+        resources :character_quests, only: [:index], path: "quests"
         resources :equipped_items, only: [:index, :update], param: :equipped_slot do
           post :best_available, on: :collection
         end
@@ -111,6 +112,9 @@ Rails.application.routes.draw do
       resources :zone_exits, only: [:create]
       resources :character_flags, only: [:create], path: "flags"
       get "flags/*flag", to: "character_flags#show", as: :character_flag, format: false
+      resources :character_quests, only: [:index, :create, :update, :destroy], path: "quests", param: :quest_identifier do
+        post :complete, on: :member
+      end
     end
   end
 
