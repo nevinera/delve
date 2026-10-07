@@ -4,7 +4,7 @@
 # two columns. Flags belong to the world, not a version, and are never
 # revoked; world_version is the version it was first granted under.
 class CharacterFlag < ApplicationRecord
-  TYPES = %w[quest kill clear key zone met custom].freeze
+  TYPES = %w[quest kill clear key zone custom].freeze
   IDENTIFIER_FORMAT = %r{\A[A-Za-z0-9_/-]{1,64}\z}
 
   belongs_to :world_character

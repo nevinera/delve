@@ -21,7 +21,6 @@ A flag is written `<type>/<identifier>`, for example `quest/completed/killMoreOr
 | `clear` | Killed all of a zone's listed units. | `clear/goblin-cave` |
 | `key` | May pass a barrier or use a connection. | `key/dire-mall` |
 | `zone` | Entered a zone. Granted automatically on connecting. | `zone/reached/goblin-cave` |
-| `met` | Talked to an NCU. | `met/grizzle` |
 | `custom` | Author-defined, fits no other type. | `custom/grizzle-trusts-you` |
 
 Only `zone/reached` is granted today. The other types are for quests, dialogue, units and zones
