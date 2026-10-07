@@ -105,18 +105,18 @@ RSpec.describe "InternalApi::CharacterQuests", type: :request do
   end
 
   describe "POST complete" do
-    it "grants the flags and ends the quest" do
-      active_quest
-      post("#{base}/rat-hunt/complete", params: {grants_flags: ["custom/brave"]}, headers:, as: :json)
-      expect(response.parsed_body).to eq("flags" => ["quest/completed/rat-hunt", "custom/brave"])
+    it "grants the quest's flags and ends it" do
+      CharacterQuest.accept!(world_character, definition.merge("grantsFlags" => ["custom/brave"]))
+      post("#{base}/rat-hunt/complete", headers:, as: :json)
+      expect(response.parsed_body).to eq("flags" => ["quest/completed/rat-hunt", "custom/brave"], "items" => [])
       expect(world_character.character_quests.reload).to be_empty
       expect(CharacterFlag.held?(world_character, "custom/brave")).to be(true)
     end
 
-    it "refuses invalid flags, leaving the quest active" do
-      active_quest
-      post("#{base}/rat-hunt/complete", params: {grants_flags: ["bogus/x"]}, headers:, as: :json)
-      expect(response).to have_http_status(:unprocessable_content)
+    it "refuses a quest whose reward is missing, leaving it active" do
+      CharacterQuest.accept!(world_character, definition.merge("rewards" => [{"zone" => "cave", "item" => "gold"}]))
+      post("#{base}/rat-hunt/complete", headers:, as: :json)
+      expect(response).to have_http_status(:not_found)
       expect(world_character.character_quests.reload.count).to eq(1)
     end
   end

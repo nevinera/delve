@@ -5,7 +5,7 @@
 class InternalApi::CharacterQuestsController < InternalApi::BaseController
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
   rescue_from CharacterQuest::Error, with: :render_unprocessable
-  rescue_from ActiveRecord::RecordInvalid, with: :render_unprocessable
+  rescue_from ActiveRecord::RecordInvalid, AwardCharacterItem::Error, WorldContent::Error, with: :render_unprocessable
 
   before_action :load_world_character
   before_action :load_quest, only: [:update, :sync, :complete, :destroy]
@@ -39,14 +39,10 @@ class InternalApi::CharacterQuestsController < InternalApi::BaseController
     render json: {quest: CharacterQuestJson.call(@quest.reload)}
   end
 
-  # Grants the completion flag plus grants_flags, and ends the quest.
+  # Completes the quest from its stored definition: grants its flags,
+  # awards its rewards, and ends it. Returns {flags, items}.
   def complete
-    flags = Array(params[:grants_flags])
-    invalid = flags.reject { |flag| CharacterFlag.valid_flag?(flag) }
-    return render_unprocessable("invalid flags: #{invalid.join(", ")}") if invalid.any?
-
-    @quest.complete!(flags)
-    render json: {flags: [@quest.completion_flag, *flags]}
+    render json: @quest.complete!
   end
 
   # Fails the quest. Idempotent.

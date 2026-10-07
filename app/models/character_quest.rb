@@ -74,13 +74,23 @@ class CharacterQuest < ApplicationRecord
     end
   end
 
-  # Grants the completion flag and flags, and deletes the quest.
-  def complete!(grants_flags = [])
+  # Completes the quest: grants the completion flag and its grantsFlags,
+  # awards its rewards, and deletes it. Returns {flags:, items:} (the
+  # items newly held, as {identifier, name}).
+  def complete!
+    flags = [completion_flag, *grants_flags]
+    sources = QuestRewards.sources(world_character, rewards)
     transaction do
-      [completion_flag, *grants_flags].each { |flag| CharacterFlag.grant!(world_character, flag) }
+      flags.each { |flag| CharacterFlag.grant!(world_character, flag) }
+      items = QuestRewards.award!(world_character, sources)
       destroy!
+      {flags:, items:}
     end
   end
+
+  def grants_flags = Array(definition["grantsFlags"])
+
+  def rewards = Array(definition["rewards"])
 
   private
 

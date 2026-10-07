@@ -95,19 +95,42 @@ RSpec.describe CharacterQuest do
   end
 
   describe "#complete!" do
-    it "grants the completion flag and the given flags, and deletes the quest and its progress" do
+    it "grants the completion flag and the quest's flags, and deletes the quest and its progress" do
       quest = described_class.accept!(world_character, definition)
-      quest.complete!(["custom/brave"])
+      expect(quest.complete!).to eq(flags: ["quest/completed/rat-hunt", "custom/brave"], items: [])
       expect(CharacterFlag.held(world_character, ["quest/completed/rat-hunt", "custom/brave"]).size).to eq(2)
       expect(described_class.count).to eq(0)
       expect(QuestProgress.count).to eq(0)
     end
 
-    it "grants nothing when a flag is invalid" do
-      quest = described_class.accept!(world_character, definition)
-      expect { quest.complete!(["bogus/x"]) }.to raise_error(ActiveRecord::RecordInvalid)
-      expect(world_character.character_flags.count).to eq(0)
-      expect(quest.reload).to be_persisted
+    context "with rewards" do
+      let(:dagger) { {"name" => "Rusty Dagger", "slot" => "main_hand", "elvl" => 1, "primary" => "strength"} }
+      let(:version) do
+        files = demo_world_files
+        files[:zones]["cave"] = cave_zone_file.merge("items" => {"rusty-dagger" => dagger})
+        published_world(files:)
+      end
+
+      it "awards each reward item from its zone" do
+        quest = described_class.accept!(world_character, definition.merge("rewards" => [{"zone" => "cave", "item" => "rusty-dagger"}]))
+        expect(quest.complete![:items]).to eq([{identifier: "rusty-dagger", name: "Rusty Dagger"}])
+        expect(world_character.character_items.pluck(:identifier, :world_version_id)).to eq([["rusty-dagger", version.id]])
+      end
+
+      it "skips a reward already held in this version" do
+        rewards = [{"zone" => "cave", "item" => "rusty-dagger"}]
+        described_class.accept!(world_character, definition.merge("identifier" => "first", "rewards" => rewards)).complete!
+        quest = described_class.accept!(world_character, definition.merge("rewards" => rewards))
+        expect(quest.complete![:items]).to eq([])
+        expect(world_character.character_items.count).to eq(1)
+      end
+
+      it "grants nothing when a reward can't be found" do
+        quest = described_class.accept!(world_character, definition.merge("rewards" => [{"zone" => "cave", "item" => "gold"}]))
+        expect { quest.complete! }.to raise_error(ActiveRecord::RecordNotFound)
+        expect(world_character.character_flags.count).to eq(0)
+        expect(quest.reload).to be_persisted
+      end
     end
   end
 end
