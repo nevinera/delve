@@ -161,7 +161,10 @@ func TestSlotsRequest_World_LoadsQuestsAndActiveQuests(t *testing.T) {
 	rec := postRequest(t, router, worldRequest(map[string]any{
 		"quests_url":    srv.URL + "/quests.json",
 		"quests_sha":    hex.EncodeToString(sum[:]),
-		"active_quests": []map[string]any{{"quest_identifier": "rat-hunt", "timer_elapsed_seconds": 7, "progress": map[string]int{"abc": 1}}},
+		"active_quests": []map[string]any{{
+			"quest_identifier": "rat-hunt", "world_version_id": "wv-3", "timer_elapsed_seconds": 7, "definition": map[string]any{},
+			"objectives": []map[string]any{{"hash": "abc", "objective": map[string]any{"type": "talk", "zone": "z", "ncu": "n"}, "count": 1, "required": 1}},
+		}},
 	}))
 	require.Equal(t, http.StatusCreated, rec.Code)
 
@@ -171,9 +174,12 @@ func TestSlotsRequest_World_LoadsQuestsAndActiveQuests(t *testing.T) {
 	assert.Equal(t, "rat-hunt", inst.Quests[0].Identifier)
 	slots := inst.ListSlots()
 	require.Len(t, slots, 1)
-	assert.Equal(t, map[string]instanceconfig.ActiveQuest{
-		"rat-hunt": {QuestIdentifier: "rat-hunt", TimerElapsedSeconds: 7, Progress: map[string]int{"abc": 1}},
-	}, slots[0].Quests)
+	quest := slots[0].Quests["rat-hunt"]
+	assert.Equal(t, "wv-3", quest.WorldVersionID)
+	assert.Equal(t, 7, quest.TimerElapsedSeconds)
+	assert.Equal(t, []instanceconfig.ActiveObjective{{
+		Hash: "abc", Objective: instanceconfig.QuestObjective{Type: "talk", Zone: "z", NCU: "n"}, Count: 1, Required: 1,
+	}}, quest.Objectives)
 }
 
 func TestSlotsRequest_World_StartsWithoutQuestsItCantRead(t *testing.T) {

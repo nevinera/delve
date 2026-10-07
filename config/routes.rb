@@ -113,7 +113,10 @@ Rails.application.routes.draw do
       resources :character_flags, only: [:create], path: "flags"
       get "flags/*flag", to: "character_flags#show", as: :character_flag, format: false
       resources :character_quests, only: [:index, :create, :update, :destroy], path: "quests", param: :quest_identifier do
-        post :complete, on: :member
+        member do
+          post :sync
+          post :complete
+        end
       end
     end
   end

@@ -11,13 +11,15 @@ RSpec.describe "Play::CharacterQuests", type: :request do
 
   it "lists the character's active quests in this world" do
     world_character = create(:world_character, world:, character:)
-    create(:character_quest, world_character:, quest_identifier: "rat-hunt").record_progress!("abc" => 1)
+    quest = create(:character_quest, world_character:, quest_identifier: "rat-hunt")
+    progress = create(:quest_progress, character_quest: quest, position: 0, count: 1)
     other = create(:world_character, character:, world: create(:world, path: "worlds/other.json"))
     create(:character_quest, world_character: other, quest_identifier: "elsewhere")
     get quests_path
-    expect(response.parsed_body).to eq("quests" => [
-      {"quest_identifier" => "rat-hunt", "timer_elapsed_seconds" => 0, "progress" => {"abc" => 1}}
-    ])
+    expect(response.parsed_body).to eq("quests" => [{
+      "quest_identifier" => "rat-hunt", "world_version_id" => nil, "timer_elapsed_seconds" => 0, "definition" => {},
+      "objectives" => [{"hash" => progress.objective_hash, "objective" => progress.objective, "count" => 1, "required" => 1}]
+    }])
   end
 
   it "is empty for a world the character never entered" do

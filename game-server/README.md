@@ -51,21 +51,23 @@ on one, and not within 6 seconds of spawning. The server posts
   closes.
 - On failure, the client gets `zone-exit-failed` (`{error}`), and the 6 seconds start again.
 
-**Quests.** In a zone where an NCU offers quests, a world-mode player gets `quest_offers`
-(`{offers: {ncuIdentifier: [questIdentifier]}}`) on connect: the quests they aren't on, haven't
-completed, and hold every `requiresFlags` flag for.
+**Quests.** The client keeps its own quest log (read from Rails on load); the server sends it
+events as quests change.
+- In a zone where an NCU offers quests, a world-mode player gets `quest-offers`
+  (`{offers: {ncuIdentifier: [questIdentifier]}}`) on connect: the quests they aren't on, haven't
+  completed, and hold every `requiresFlags` flag for.
+- On connect, any active quest from an older world version is synced to this version's definition
+  through Rails (`quest-updated`, `{quest}`), or abandoned if this version doesn't have it
+  (`quest-abandoned`, `{quest}`).
 - The client sends `talk` (`{ncu_id}`, the NCU's state id) whenever it opens a conversation; the
   server checks the player is alive and within talk range (10 feet between token edges), and
   resends their offers.
 - The client sends `accept_quest` (`{ncu_id, quest}`). If that NCU offers it to them, the server
-  accepts it through Rails (`/internal_api/world_characters/{id}/quests`); the client gets
-  `quest_accepted` (`{quest}`), their quest log and new offers, or `quest_accept_failed`
-  (`{quest, error}`).
-- A world-mode player also gets `quest_log` (`{quests: [{quest_identifier,
-  timer_elapsed_seconds, objectives}]}`) on connect and whenever their quests change, with
-  `objectives` the count toward each of the quest's objectives, in order.
-- The client sends `abandon_quest` (`{quest}`); the server ends it through Rails and sends the
-  new quest log and offers, or `quest_abandon_failed` (`{quest, error}`).
+  accepts it through Rails, sending the quest's definition (`/internal_api/world_characters/{id}/quests`);
+  the client gets `quest-received` (`{quest}`, as Rails stores it) and new offers, or
+  `quest-accept-failed` (`{quest, error}`).
+- The client sends `abandon_quest` (`{quest}`); the server ends it through Rails and sends
+  `quest-abandoned` and new offers, or `quest-abandon-failed` (`{quest, error}`).
 
 **Expiry.** For the last 10 minutes before `expires_at`, every player gets `version-expiring`
 (`{expires_at, minutes_remaining}`) once a minute. At expiry they get `version-expired`, every

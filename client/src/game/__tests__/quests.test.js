@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {describeObjective, offersFor, questLogChains, questMessageAction, questNcus, questsById, zoneNames} from "../quests";
+import {activeQuestsById, applyQuestAction, describeObjective, offersFor, questLogChains, questMessageAction, questNcus, questsById, zoneNames} from "../quests";
 
 const definitions = questsById([
   {identifier: "rat-hunt", name: "Rat Hunt", offerText: "Rats!", objectives: []},
@@ -25,19 +25,41 @@ describe("offersFor", () => {
 
 describe("questMessageAction", () => {
   it("reads offers", () => {
-    expect(questMessageAction({type: "quest_offers", offers: {grizzle: ["rat-hunt"]}}, definitions))
+    expect(questMessageAction({type: "quest-offers", offers: {grizzle: ["rat-hunt"]}}, definitions))
       .toEqual({type: "offers", offers: {grizzle: ["rat-hunt"]}});
   });
 
-  it("logs accepts and failures by quest name", () => {
-    expect(questMessageAction({type: "quest_accepted", quest: {quest_identifier: "rat-hunt"}}, definitions).log)
-      .toBe("Quest accepted: Rat Hunt");
-    expect(questMessageAction({type: "quest_accept_failed", quest: "rat-king", error: "nope"}, definitions).log)
+  it("adds received and updated quests, logging receipt by name", () => {
+    const quest = {quest_identifier: "rat-hunt"};
+    expect(questMessageAction({type: "quest-received", quest}, definitions))
+      .toEqual({type: "upsert", quest, log: "Quest accepted: Rat Hunt"});
+    expect(questMessageAction({type: "quest-updated", quest}, definitions)).toEqual({type: "upsert", quest});
+  });
+
+  it("removes abandoned quests", () => {
+    expect(questMessageAction({type: "quest-abandoned", quest: "rat-king"}, definitions))
+      .toEqual({type: "remove", quest: "rat-king", log: "Quest abandoned: The Rat King"});
+  });
+
+  it("logs failures by quest name", () => {
+    expect(questMessageAction({type: "quest-accept-failed", quest: "rat-king", error: "nope"}, definitions).log)
       .toBe("Couldn't accept The Rat King: nope");
+    expect(questMessageAction({type: "quest-abandon-failed", quest: "x", error: "nope"}, {}).log).toBe("Couldn't abandon x: nope");
   });
 
   it("ignores other messages", () => {
     expect(questMessageAction({type: "zone-exit"}, definitions)).toBeNull();
+  });
+});
+
+describe("applyQuestAction", () => {
+  it("adds, replaces and removes active quests", () => {
+    let quests = activeQuestsById([{quest_identifier: "a", timer_elapsed_seconds: 0}]);
+    quests = applyQuestAction(quests, {type: "upsert", quest: {quest_identifier: "a", timer_elapsed_seconds: 5}});
+    quests = applyQuestAction(quests, {type: "upsert", quest: {quest_identifier: "b"}});
+    expect(quests).toEqual({a: {quest_identifier: "a", timer_elapsed_seconds: 5}, b: {quest_identifier: "b"}});
+    expect(applyQuestAction(quests, {type: "remove", quest: "a"})).toEqual({b: {quest_identifier: "b"}});
+    expect(applyQuestAction(quests, {type: "offers"})).toBe(quests);
   });
 });
 
@@ -61,19 +83,21 @@ describe("describeObjective", () => {
 });
 
 describe("questLogChains", () => {
-  const defs = questsById([
-    {identifier: "b-quest", name: "B", chainIdentifier: "zeta", chainName: "Zeta", offeredBy: {zone: "cave", ncu: "grizzle"}, offerText: "Go.",
-      timer: "5m", objectives: [{type: "kill", zone: "cave", unitType: "rat", count: 5}, {type: "talk", zone: "cave", ncu: "grizzle"}]},
-    {identifier: "a-quest", name: "A", chainIdentifier: "alpha", chainName: "Alpha", offeredBy: {zone: "cave", ncu: "grizzle"}, offerText: "Hi.",
-      description: "Do the thing."},
+  const prose = questsById([
+    {identifier: "b-quest", name: "B", chainName: "Zeta", offerText: "Go."},
+    {identifier: "a-quest", name: "A", chainName: "Alpha", description: "Do the thing."},
+  ]);
+  const active = activeQuestsById([
+    {quest_identifier: "b-quest", definition: {chainIdentifier: "zeta", offeredBy: {zone: "cave", ncu: "grizzle"}, timer: "5m"},
+      objectives: [
+        {objective: {type: "kill", zone: "cave", unitType: "rat", count: 5}, count: 3, required: 5},
+        {objective: {type: "talk", zone: "cave", ncu: "grizzle"}, count: 1, required: 1},
+      ]},
+    {quest_identifier: "a-quest", definition: {chainIdentifier: "alpha"}, objectives: []},
   ]);
 
-  it("groups quests into chains sorted by name, with progress and text", () => {
-    const chains = questLogChains([
-      {quest_identifier: "b-quest", objectives: [3, 1]},
-      {quest_identifier: "a-quest", objectives: []},
-      {quest_identifier: "gone", objectives: []},
-    ], defs, here);
+  it("groups quests into chains sorted by name, with progress and prose", () => {
+    const chains = questLogChains(active, prose, here);
     expect(chains.map((c) => c.name)).toEqual(["Alpha", "Zeta"]);
     expect(chains[0].quests[0]).toMatchObject({name: "A", description: "Do the thing.", timer: null, objectives: []});
     expect(chains[1].quests[0]).toMatchObject({
@@ -83,11 +107,10 @@ describe("questLogChains", () => {
       objectives: [{text: "Kill Rat", count: 3, required: 5}, {text: "Talk to Grizzle", count: 1, required: 1}],
     });
   });
-});
 
-describe("questMessageAction for the log", () => {
-  it("reads the quest log and abandon failures", () => {
-    expect(questMessageAction({type: "quest_log", quests: [{quest_identifier: "x"}]}, {})).toEqual({type: "quest_log", quests: [{quest_identifier: "x"}]});
-    expect(questMessageAction({type: "quest_abandon_failed", quest: "x", error: "nope"}, {}).log).toBe("Couldn't abandon x: nope");
+  it("falls back to identifiers when the quests file lacks a quest", () => {
+    const chains = questLogChains(active, {}, here);
+    expect(chains.map((c) => c.name)).toEqual(["alpha", "zeta"]);
+    expect(chains[0].quests[0]).toMatchObject({name: "a-quest", description: ""});
   });
 });

@@ -1,24 +1,32 @@
 # The game server's quest calls (see plans/quests.md): a world character's
-# active quests, and accepting, progressing, completing and failing one.
-# The game server owns the quest rules (requirements, objectives, timers);
-# Rails keeps the state.
+# active quests, and accepting, syncing, progressing, completing and failing
+# one. The game server owns the quest rules (requirements, objectives,
+# timers) and supplies quest definitions; Rails keeps the state.
 class InternalApi::CharacterQuestsController < InternalApi::BaseController
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
   rescue_from CharacterQuest::Error, with: :render_unprocessable
   rescue_from ActiveRecord::RecordInvalid, with: :render_unprocessable
 
   before_action :load_world_character
-  before_action :load_quest, only: [:update, :complete, :destroy]
+  before_action :load_quest, only: [:update, :sync, :complete, :destroy]
 
   def index
     quests = @world_character.character_quests.includes(:quest_progresses).order(:created_at)
     render json: {quests: quests.map { |quest| CharacterQuestJson.call(quest) }}
   end
 
-  # Idempotent: accepting an active quest returns it unchanged.
+  # Accepts a quest, given its definition (a quests-file entry). Idempotent:
+  # accepting an active quest returns it unchanged.
   def create
-    quest = CharacterQuest.accept!(@world_character, params.require(:quest))
+    quest = CharacterQuest.accept!(@world_character, definition_param)
     render json: {quest: CharacterQuestJson.call(quest)}, status: :created
+  end
+
+  # Moves the quest to a newer definition (from the world character's
+  # current version), keeping progress on unchanged objectives.
+  def sync
+    @quest.sync!(definition_param)
+    render json: {quest: CharacterQuestJson.call(@quest)}
   end
 
   # Sets objective counts ({progress: {hash => count}}) and the timer, both
@@ -56,6 +64,12 @@ class InternalApi::CharacterQuestsController < InternalApi::BaseController
   def load_quest
     @quest = @world_character.character_quests.find_by(quest_identifier: params[:quest_identifier])
     render_not_found("no active quest #{params[:quest_identifier]}") if @quest.nil? && action_name != "destroy"
+  end
+
+  def definition_param
+    definition = params.require(:quest)
+    raise ActionController::BadRequest, "quest must be an object" unless definition.is_a?(ActionController::Parameters)
+    definition.permit!.to_h
   end
 
   def progress_params

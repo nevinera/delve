@@ -11,7 +11,7 @@ import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { canKeepTalking, canTalkTo } from "./game/dialogue";
 import { DialogueWindow } from "./DialogueWindow";
-import { offersFor, questLogChains, questMessageAction, questNcus, questsById, zoneNames } from "./game/quests";
+import { activeQuestsById, applyQuestAction, offersFor, questLogChains, questMessageAction, questNcus, questsById, zoneNames } from "./game/quests";
 import { QuestLog } from "./QuestLog";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
@@ -3074,6 +3074,7 @@ export default function App({
   heldFlags = [],
   flagsUrl,
   zoneIdentifier,
+  activeQuestsUrl,
   questsUrl,
   questsSha,
 }) {
@@ -3124,12 +3125,15 @@ export default function App({
   const [questOffers, setQuestOffers] = useState({});
   const questOffersRef = useRef({});
   const questNcuSet = useMemo(() => questNcus(questOffers), [questOffers]);
-  const [questLogEntries, setQuestLogEntries] = useState([]);
+  const [activeQuests, setActiveQuests] = useState({});
+  // Quest events that arrive before the log has loaded from Rails, replayed
+  // over it once it has (null once loaded).
+  const pendingQuestActionsRef = useRef([]);
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [currentZoneNames, setCurrentZoneNames] = useState(null);
   const questChains = useMemo(
-    () => questLogChains(questLogEntries, questDefinitions, {zoneIdentifier, names: currentZoneNames}),
-    [questLogEntries, questDefinitions, zoneIdentifier, currentZoneNames]
+    () => questLogChains(activeQuests, questDefinitions, {zoneIdentifier, names: currentZoneNames}),
+    [activeQuests, questDefinitions, zoneIdentifier, currentZoneNames]
   );
   const [ncus, setNcus] = useState({});
   const ncusRef = useRef({});
@@ -3294,6 +3298,18 @@ export default function App({
         if (error instanceof ContentChecksumError) setContentError("This zone's file has changed since it was checked.");
       });
   }, [zoneSourceUrl, zoneSourceSha]);
+
+  useEffect(() => {
+    if (!activeQuestsUrl) return;
+    fetch(activeQuestsUrl)
+      .then((r) => r.json())
+      .then(({quests}) => {
+        const pending = pendingQuestActionsRef.current ?? [];
+        pendingQuestActionsRef.current = null;
+        setActiveQuests(pending.reduce(applyQuestAction, activeQuestsById(quests)));
+      })
+      .catch(() => addLog("Couldn't load your quests."));
+  }, [activeQuestsUrl]);
 
   useEffect(() => {
     if (!questsUrl) return;
@@ -3638,7 +3654,10 @@ export default function App({
           questOffersRef.current = questAction.offers;
           setQuestOffers(questAction.offers);
         }
-        if (questAction?.type === "quest_log") setQuestLogEntries(questAction.quests);
+        if (questAction?.type === "upsert" || questAction?.type === "remove") {
+          if (pendingQuestActionsRef.current) pendingQuestActionsRef.current.push(questAction);
+          else setActiveQuests((current) => applyQuestAction(current, questAction));
+        }
         if (questAction?.log) addLog(questAction.log);
         const action = worldMessageAction(msg);
         if (!action) return;

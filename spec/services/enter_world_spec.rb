@@ -109,15 +109,6 @@ RSpec.describe EnterWorld do
     expect(enter.world_character.world_version).to eq(newer)
   end
 
-  it "moves active quests onto the version it enters (dropping them, when it has no quests file)" do
-    version.update!(expires_at: 1.minute.ago)
-    published_world(world:)
-    world_character = create(:world_character, world:, character:, world_version: version)
-    create(:character_quest, world_character:, world_version: version)
-    enter
-    expect(world_character.character_quests).to be_empty
-  end
-
   it "raises when the world has no released version" do
     version.update!(state: :unreleased)
     expect { enter }.to raise_error(EnterWorld::NoReleasedVersion)

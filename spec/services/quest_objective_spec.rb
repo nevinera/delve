@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe QuestObjective do
-  # Shared with the game server's tests, which must hash the same.
+  # Pinned hashes: changing them would reset every character's progress.
   let(:fixture) { JSON.parse(File.read(Rails.root.join("spec/fixtures/quests/objective_hashes.json"))) }
 
   it "matches every hash in the shared fixture" do

@@ -13,23 +13,53 @@ import (
 	"github.com/delve-mmo/game-server/internal/railsclient"
 )
 
+var ratHunt = instanceconfig.Quest{
+	Identifier: "rat-hunt",
+	OfferedBy:  instanceconfig.NcuRef{Zone: "cave", NCU: "grizzle"},
+	Objectives: []instanceconfig.QuestObjective{{Type: "kill", Zone: "cave", UnitType: "rat", Count: 5}},
+}
+
+const activeRatHunt = `{"quest":{"quest_identifier":"rat-hunt","world_version_id":"7","timer_elapsed_seconds":5,` +
+	`"definition":{"offeredBy":{"zone":"cave","ncu":"grizzle"}},` +
+	`"objectives":[{"hash":"abc","objective":{"type":"kill","zone":"cave","unitType":"rat","count":5},"count":2,"required":5}]}}`
+
 func TestAcceptQuest(t *testing.T) {
 	var gotPath, gotMethod string
-	var gotBody map[string]string
+	var gotBody map[string]map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath, gotMethod = r.URL.Path, r.Method
 		_ = json.NewDecoder(r.Body).Decode(&gotBody)
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"quest":{"quest_identifier":"rat-hunt","timer_elapsed_seconds":5,"progress":{"abc":2}}}`))
+		_, _ = w.Write([]byte(activeRatHunt))
 	}))
 	t.Cleanup(srv.Close)
 
-	quest, err := railsclient.New(srv.URL, "t").AcceptQuest("42", "rat-hunt")
+	quest, err := railsclient.New(srv.URL, "t").AcceptQuest("42", ratHunt)
 	require.NoError(t, err)
-	assert.Equal(t, instanceconfig.ActiveQuest{QuestIdentifier: "rat-hunt", TimerElapsedSeconds: 5, Progress: map[string]int{"abc": 2}}, quest)
+	assert.Equal(t, "rat-hunt", quest.QuestIdentifier)
+	assert.Equal(t, "7", quest.WorldVersionID)
+	assert.Equal(t, 5, quest.TimerElapsedSeconds)
+	assert.Equal(t, []instanceconfig.ActiveObjective{{
+		Hash: "abc", Objective: ratHunt.Objectives[0], Count: 2, Required: 5,
+	}}, quest.Objectives)
 	assert.Equal(t, http.MethodPost, gotMethod)
 	assert.Equal(t, "/internal_api/world_characters/42/quests", gotPath)
-	assert.Equal(t, map[string]string{"quest": "rat-hunt"}, gotBody)
+	assert.Equal(t, "rat-hunt", gotBody["quest"]["identifier"])
+	assert.Equal(t, map[string]any{"zone": "cave", "ncu": "grizzle"}, gotBody["quest"]["offeredBy"])
+}
+
+func TestSyncQuest(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_, _ = w.Write([]byte(activeRatHunt))
+	}))
+	t.Cleanup(srv.Close)
+
+	quest, err := railsclient.New(srv.URL, "t").SyncQuest("42", ratHunt)
+	require.NoError(t, err)
+	assert.Equal(t, "rat-hunt", quest.QuestIdentifier)
+	assert.Equal(t, "/internal_api/world_characters/42/quests/rat-hunt/sync", gotPath)
 }
 
 func TestAcceptQuest_Refused(t *testing.T) {
@@ -39,7 +69,7 @@ func TestAcceptQuest_Refused(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, err := railsclient.New(srv.URL, "t").AcceptQuest("42", "rat-hunt")
+	_, err := railsclient.New(srv.URL, "t").AcceptQuest("42", ratHunt)
 	assert.ErrorIs(t, err, railsclient.ErrQuestRefused)
 	assert.ErrorContains(t, err, "already completed")
 }
@@ -50,7 +80,7 @@ func TestAcceptQuest_RailsError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, err := railsclient.New(srv.URL, "t").AcceptQuest("42", "rat-hunt")
+	_, err := railsclient.New(srv.URL, "t").AcceptQuest("42", ratHunt)
 	assert.ErrorContains(t, err, "500")
 }
 

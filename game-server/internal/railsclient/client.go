@@ -242,26 +242,37 @@ func (c *Client) GrantFlag(worldCharacterDatabaseID, flag string) error {
 // (already completed, or too many active).
 var ErrQuestRefused = errors.New("quest refused")
 
-// AcceptQuest starts a quest for a world character (POST
-// /internal_api/world_characters/:id/quests), returning it as Rails stores
-// it. Accepting an active quest returns it unchanged.
-func (c *Client) AcceptQuest(worldCharacterDatabaseID, questIdentifier string) (instanceconfig.ActiveQuest, error) {
-	var quest instanceconfig.ActiveQuest
-	data, err := json.Marshal(map[string]string{"quest": questIdentifier})
-	if err != nil {
-		return quest, fmt.Errorf("marshal: %w", err)
-	}
+// AcceptQuest starts a quest for a world character from its definition
+// (POST /internal_api/world_characters/:id/quests), returning it as Rails
+// stores it. Accepting an active quest returns it unchanged.
+func (c *Client) AcceptQuest(worldCharacterDatabaseID string, quest instanceconfig.Quest) (instanceconfig.ActiveQuest, error) {
 	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests", c.baseURL, worldCharacterDatabaseID)
+	return c.postQuest(url, quest, http.StatusCreated)
+}
+
+// SyncQuest moves a world character's active quest to a newer definition
+// (POST .../quests/:quest/sync), keeping progress on unchanged objectives.
+func (c *Client) SyncQuest(worldCharacterDatabaseID string, quest instanceconfig.Quest) (instanceconfig.ActiveQuest, error) {
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s/sync", c.baseURL, worldCharacterDatabaseID, quest.Identifier)
+	return c.postQuest(url, quest, http.StatusOK)
+}
+
+func (c *Client) postQuest(url string, quest instanceconfig.Quest, wantStatus int) (instanceconfig.ActiveQuest, error) {
+	var none instanceconfig.ActiveQuest
+	data, err := json.Marshal(map[string]instanceconfig.Quest{"quest": quest})
+	if err != nil {
+		return none, fmt.Errorf("marshal: %w", err)
+	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		return quest, fmt.Errorf("build request: %w", err)
+		return none, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Internal-Token", c.token)
 
 	res, err := c.http.Do(req)
 	if err != nil {
-		return quest, fmt.Errorf("http: %w", err)
+		return none, fmt.Errorf("http: %w", err)
 	}
 	defer func() { _ = res.Body.Close() }()
 
@@ -271,12 +282,12 @@ func (c *Client) AcceptQuest(worldCharacterDatabaseID, questIdentifier string) (
 	}
 	_ = json.NewDecoder(res.Body).Decode(&body)
 	switch res.StatusCode {
-	case http.StatusCreated:
+	case wantStatus:
 		return body.Quest, nil
 	case http.StatusUnprocessableEntity:
-		return quest, fmt.Errorf("%w: %s", ErrQuestRefused, body.Error)
+		return none, fmt.Errorf("%w: %s", ErrQuestRefused, body.Error)
 	default:
-		return quest, fmt.Errorf("rails returned %d", res.StatusCode)
+		return none, fmt.Errorf("rails returned %d", res.StatusCode)
 	}
 }
 

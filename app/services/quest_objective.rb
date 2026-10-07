@@ -3,9 +3,9 @@ require "digest"
 # A quest objective's hash identifies it across world versions: progress
 # is kept on a QuestProgress row under the hash, so the same objective in
 # a new version keeps its progress and a changed one starts over (see
-# docs/quests.md#world-versions). The game server hashes objectives too,
-# and must match: only these fields count, in this order, with blanks and
-# the default count of 1 dropped.
+# docs/quests.md#world-versions). Only these fields count, in this order,
+# with blanks and the default count of 1 dropped; the game server and
+# client use the hashes Rails returns rather than computing their own.
 module QuestObjective
   FIELDS = %w[type zone ncu unit unitType count map].freeze
 

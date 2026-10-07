@@ -24,8 +24,16 @@ type fakeQuestRails struct {
 	mu        sync.Mutex
 	held      map[string]bool
 	accepted  []string
+	synced    []string
 	abandoned []string
 	refuse    string
+}
+
+func activeQuestJSON(identifier string) map[string]any {
+	return map[string]any{"quest": map[string]any{
+		"quest_identifier": identifier, "world_version_id": "wv-2", "timer_elapsed_seconds": 0,
+		"definition": map[string]any{}, "objectives": []any{},
+	}}
 }
 
 func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -37,18 +45,20 @@ func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "flags/"):
 		_ = json.NewEncoder(w).Encode(map[string]bool{"held": f.held[strings.TrimPrefix(path, "flags/")]})
 	case r.Method == http.MethodPost && path == "quests":
-		var body map[string]string
+		var body map[string]instanceconfig.Quest
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		if f.refuse != "" {
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": f.refuse})
 			return
 		}
-		f.accepted = append(f.accepted, body["quest"])
+		f.accepted = append(f.accepted, body["quest"].Identifier)
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"quest": map[string]any{"quest_identifier": body["quest"], "timer_elapsed_seconds": 0, "progress": map[string]int{}},
-		})
+		_ = json.NewEncoder(w).Encode(activeQuestJSON(body["quest"].Identifier))
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/sync"):
+		identifier := strings.TrimSuffix(strings.TrimPrefix(path, "quests/"), "/sync")
+		f.synced = append(f.synced, identifier)
+		_ = json.NewEncoder(w).Encode(activeQuestJSON(identifier))
 	case r.Method == http.MethodDelete && strings.HasPrefix(path, "quests/"):
 		f.abandoned = append(f.abandoned, strings.TrimPrefix(path, "quests/"))
 		w.WriteHeader(http.StatusNoContent)
@@ -57,12 +67,8 @@ func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var ratKill = instanceconfig.QuestObjective{Type: "kill", Zone: "darkwood", UnitType: "rat", Count: 5}
-var grizzleTalk = instanceconfig.QuestObjective{Type: "talk", Zone: "darkwood", NCU: "grizzle"}
-
 var testQuests = []instanceconfig.Quest{
-	{Identifier: "rat-hunt", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"},
-		Objectives: []instanceconfig.QuestObjective{ratKill, grizzleTalk}},
+	{Identifier: "rat-hunt", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"}},
 	{Identifier: "rat-king", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"},
 		RequiresFlags: []string{"quest/completed/rat-hunt"}},
 	{Identifier: "trusted", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "warden"},
@@ -78,6 +84,7 @@ func questInstance(t *testing.T, rails *fakeQuestRails) *instance.Instance {
 	t.Cleanup(srv.Close)
 	inst.RailsClient = railsclient.New(srv.URL, "token")
 	inst.Quests = testQuests
+	inst.WorldVersionID = "wv-2"
 	return inst
 }
 
@@ -85,7 +92,7 @@ func addQuestSlot(t *testing.T, inst *instance.Instance, active ...string) (*ins
 	t.Helper()
 	quests := make([]instanceconfig.ActiveQuest, len(active))
 	for i, id := range active {
-		quests[i] = instanceconfig.ActiveQuest{QuestIdentifier: id}
+		quests[i] = instanceconfig.ActiveQuest{QuestIdentifier: id, WorldVersionID: "wv-2"}
 	}
 	slot, err := inst.AddSlotWithOptions("Aldric", "42", puncherClass, nil, nil,
 		instance.SlotOptions{WorldCharacterDatabaseID: "wc-1", ActiveQuests: quests})
@@ -143,7 +150,7 @@ func TestSendQuestOffers_SendsThemToTheSlot(t *testing.T) {
 
 	inst.SendQuestOffers(context.Background(), slot.ID)
 	msg := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_offers", msg["type"])
+	assert.Equal(t, "quest-offers", msg["type"])
 	assert.Equal(t, map[string]any{"grizzle": []any{"rat-hunt"}}, msg["offers"])
 }
 
@@ -153,13 +160,11 @@ func TestAcceptQuest_AcceptsThroughRailsAndRefreshesOffers(t *testing.T) {
 	slot, writeCh := addQuestSlot(t, inst)
 
 	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt")
-	accepted := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_accepted", accepted["type"])
-	assert.Equal(t, "rat-hunt", accepted["quest"].(map[string]any)["quest_identifier"])
-	log := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_log", log["type"])
+	received := nextMessage(t, writeCh)
+	assert.Equal(t, "quest-received", received["type"])
+	assert.Equal(t, "rat-hunt", received["quest"].(map[string]any)["quest_identifier"])
 	offers := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_offers", offers["type"])
+	assert.Equal(t, "quest-offers", offers["type"])
 	assert.Empty(t, offers["offers"])
 
 	assert.Equal(t, []string{"rat-hunt"}, rails.accepted)
@@ -181,7 +186,7 @@ func TestAcceptQuest_RefusesQuestsTheNCUDoesntOffer(t *testing.T) {
 
 			inst.AcceptQuest(context.Background(), slot.ID, tc.ncu, tc.quest)
 			msg := nextMessage(t, writeCh)
-			assert.Equal(t, "quest_accept_failed", msg["type"])
+			assert.Equal(t, "quest-accept-failed", msg["type"])
 			assert.Equal(t, tc.quest, msg["quest"])
 			assert.Empty(t, rails.accepted)
 		})
@@ -194,19 +199,21 @@ func TestAcceptQuest_ReportsARailsRefusal(t *testing.T) {
 
 	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt")
 	msg := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_accept_failed", msg["type"])
+	assert.Equal(t, "quest-accept-failed", msg["type"])
 	assert.Contains(t, msg["error"], "at most 20 quests")
 	got, _ := inst.GetSlot(slot.ID)
 	assert.NotContains(t, got.Quests, "rat-hunt")
 }
 
-func TestQuestLog_ResolvesProgressPerObjective(t *testing.T) {
-	inst := questInstance(t, &fakeQuestRails{})
+func TestUpgradeQuests_SyncsOlderQuestsAndAbandonsRemovedOnes(t *testing.T) {
+	rails := &fakeQuestRails{}
+	inst := questInstance(t, rails)
 	slot, err := inst.AddSlotWithOptions("Aldric", "42", puncherClass, nil, nil, instance.SlotOptions{
 		WorldCharacterDatabaseID: "wc-1",
 		ActiveQuests: []instanceconfig.ActiveQuest{
-			{QuestIdentifier: "trusted", TimerElapsedSeconds: 30},
-			{QuestIdentifier: "rat-hunt", Progress: map[string]int{ratKill.Hash(): 9, "stale-hash": 4}},
+			{QuestIdentifier: "rat-hunt", WorldVersionID: "wv-1"},
+			{QuestIdentifier: "trusted", WorldVersionID: "wv-2"},
+			{QuestIdentifier: "removed", WorldVersionID: "wv-1"},
 		},
 	})
 	require.NoError(t, err)
@@ -214,13 +221,23 @@ func TestQuestLog_ResolvesProgressPerObjective(t *testing.T) {
 	require.True(t, ok)
 	t.Cleanup(func() { close(done) })
 
-	inst.SendQuestLog(slot.ID)
-	msg := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_log", msg["type"])
-	assert.Equal(t, []any{
-		map[string]any{"quest_identifier": "rat-hunt", "timer_elapsed_seconds": float64(0), "objectives": []any{float64(5), float64(0)}},
-		map[string]any{"quest_identifier": "trusted", "timer_elapsed_seconds": float64(30), "objectives": []any{}},
-	}, msg["quests"])
+	inst.UpgradeQuests(context.Background(), slot.ID)
+	types := map[string]string{}
+	for range 2 {
+		msg := nextMessage(t, writeCh)
+		switch msg["type"] {
+		case "quest-updated":
+			types["updated"] = msg["quest"].(map[string]any)["quest_identifier"].(string)
+		case "quest-abandoned":
+			types["abandoned"] = msg["quest"].(string)
+		}
+	}
+	assert.Equal(t, map[string]string{"updated": "rat-hunt", "abandoned": "removed"}, types)
+	assert.Equal(t, []string{"rat-hunt"}, rails.synced)
+	assert.Equal(t, []string{"removed"}, rails.abandoned)
+	got, _ := inst.GetSlot(slot.ID)
+	assert.Equal(t, "wv-2", got.Quests["rat-hunt"].WorldVersionID)
+	assert.NotContains(t, got.Quests, "removed")
 }
 
 func TestAbandonQuest_AbandonsThroughRails(t *testing.T) {
@@ -229,9 +246,9 @@ func TestAbandonQuest_AbandonsThroughRails(t *testing.T) {
 	slot, writeCh := addQuestSlot(t, inst, "rat-hunt")
 
 	inst.AbandonQuest(context.Background(), slot.ID, "rat-hunt")
-	log := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_log", log["type"])
-	assert.Empty(t, log["quests"])
+	abandoned := nextMessage(t, writeCh)
+	assert.Equal(t, "quest-abandoned", abandoned["type"])
+	assert.Equal(t, "rat-hunt", abandoned["quest"])
 	offers := nextMessage(t, writeCh)
 	assert.Equal(t, map[string]any{"grizzle": []any{"rat-hunt"}}, offers["offers"])
 	assert.Equal(t, []string{"rat-hunt"}, rails.abandoned)
@@ -244,6 +261,6 @@ func TestAbandonQuest_RefusesAQuestThatIsntActive(t *testing.T) {
 
 	inst.AbandonQuest(context.Background(), slot.ID, "rat-hunt")
 	msg := nextMessage(t, writeCh)
-	assert.Equal(t, "quest_abandon_failed", msg["type"])
+	assert.Equal(t, "quest-abandon-failed", msg["type"])
 	assert.Empty(t, rails.abandoned)
 }

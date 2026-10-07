@@ -7,7 +7,9 @@ FactoryBot.define do
 
   factory :quest_progress do
     character_quest
-    sequence(:objective_hash) { |n| Digest::SHA1.hexdigest(n.to_s) }
-    count { 1 }
+    sequence(:position)
+    objective { {"type" => "talk", "zone" => "cave", "ncu" => "ncu-#{position}"} }
+    objective_hash { QuestObjective.hash_of(objective) }
+    count { 0 }
   end
 end

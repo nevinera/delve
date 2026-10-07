@@ -1,18 +1,12 @@
 package instanceconfig
 
-import (
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
-)
+import "encoding/json"
 
 // Quest is one quest in a world's quests file (docs/schema/quest.md). Rails
 // validates the file at import; the game server only reads it.
 type Quest struct {
 	Identifier      string           `json:"identifier"`
-	Name            string           `json:"name"`
 	ChainIdentifier string           `json:"chainIdentifier"`
-	ChainName       string           `json:"chainName"`
 	OfferedBy       NcuRef           `json:"offeredBy"`
 	TurnIn          *NcuRef          `json:"turnIn,omitempty"`
 	RequiresFlags   []string         `json:"requiresFlags,omitempty"`
@@ -20,8 +14,8 @@ type Quest struct {
 	Timer           string           `json:"timer,omitempty"`
 	Objectives      []QuestObjective `json:"objectives,omitempty"`
 	Rewards         []QuestReward    `json:"rewards,omitempty"`
-	// The quest's texts (description, offerText, progressText,
-	// completionText) are client-only.
+	// The quest's prose (name, chainName, description, offerText,
+	// progressText, completionText) is client-only.
 }
 
 // NcuRef names an NCU in one of the world's zones.
@@ -52,40 +46,23 @@ type QuestReward struct {
 func (q Quest) CompletionFlag() string { return "quest/completed/" + q.Identifier }
 
 // ActiveQuest is a quest a character has accepted and not finished, as
-// Rails stores it: progress is a count per objective hash.
+// Rails stores it: the structure of the definition it was accepted (or
+// last synced) under, from WorldVersionID, and each objective's progress
+// in order.
 type ActiveQuest struct {
-	QuestIdentifier     string         `json:"quest_identifier"`
-	TimerElapsedSeconds int            `json:"timer_elapsed_seconds"`
-	Progress            map[string]int `json:"progress"`
+	QuestIdentifier     string            `json:"quest_identifier"`
+	WorldVersionID      string            `json:"world_version_id"`
+	TimerElapsedSeconds int               `json:"timer_elapsed_seconds"`
+	Definition          json.RawMessage   `json:"definition"`
+	Objectives          []ActiveObjective `json:"objectives"`
 }
 
-// Hash identifies the objective across world versions, matching Rails'
-// QuestObjective.hash_of: the SHA1 of its JSON with only these fields, in
-// this order, leaving out blanks and the default count of 1. Progress is
-// kept per hash (see docs/quests.md#world-versions).
-func (o QuestObjective) Hash() string {
-	type hashed struct {
-		Type     string `json:"type,omitempty"`
-		Zone     string `json:"zone,omitempty"`
-		NCU      string `json:"ncu,omitempty"`
-		Unit     string `json:"unit,omitempty"`
-		UnitType string `json:"unitType,omitempty"`
-		Count    int    `json:"count,omitempty"`
-		Map      string `json:"map,omitempty"`
-	}
-	h := hashed(o)
-	if h.Count == 1 {
-		h.Count = 0
-	}
-	data, _ := json.Marshal(h) // can't fail: strings and an int
-	sum := sha1.Sum(data)
-	return hex.EncodeToString(sum[:])
+// ActiveObjective is one objective of an active quest: its definition,
+// Rails' hash of it (which identifies it across versions), and progress.
+type ActiveObjective struct {
+	Hash      string         `json:"hash"`
+	Objective QuestObjective `json:"objective"`
+	Count     int            `json:"count"`
+	Required  int            `json:"required"`
 }
 
-// Required is how many times the objective must be met: its count, or 1.
-func (o QuestObjective) Required() int {
-	if o.Count < 1 {
-		return 1
-	}
-	return o.Count
-}

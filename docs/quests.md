@@ -63,21 +63,27 @@ which checks the offer again.
 
 The quest log (default key `J`) lists a player's active quests grouped by chain, with each quest's
 description (or `<NCU name> said: <offerText>`), its objectives' progress, and its time limit.
-Abandoning a quest from the log goes through the game server. The game server sends the log on
-connect and whenever the player's quests change.
+The client keeps the log itself: it reads the active quests from Rails on load, then applies the
+game server's events (`quest-received`, `quest-updated`, `quest-abandoned`). Names and texts
+come from the quests file. Abandoning a quest from the log goes through the game server.
 
 ## State
 
-Rails stores only active quests (`CharacterQuest`), never quest definitions: the quest's
-identifier, the world version its progress follows, the timer's elapsed seconds, and a count per
-objective (`QuestProgress`), keyed by the objective's hash (`QuestObjective.hash_of`). The game
-server must hash objectives the same way; `spec/fixtures/quests/objective_hashes.json` pins the
-expected hashes for both.
+Rails stores only active quests. Rails never reads the quests file outside import: the game
+server supplies a quest's definition when it's accepted, and a newer one when the world version
+changes.
+
+- **`CharacterQuest`:** the quest's structure (`chainIdentifier`, `offeredBy`, `turnIn`, flags,
+  `timer`, `rewards`), the world version that definition is from, and the timer's elapsed
+  seconds. No prose: names and texts stay in the quests file.
+- **`QuestProgress`:** one per objective: its definition, its position, its count, and its hash
+  (`QuestObjective.hash_of`), which identifies it across versions.
 
 The timer only runs while the character is connected to a zone in the world; the game server
 counts it and reports it.
 
-Entering a world moves the character's active quests onto the version they enter (see
+When a character joins a zone with a quest from an older world version, the game server syncs it
+to the new definition, or abandons it if the new version doesn't have it (see
 [World versions](#world-versions)).
 
 ## Endpoints
@@ -86,11 +92,13 @@ Entering a world moves the character's active quests onto the version they enter
 |---|---|---|
 | `GET /play/characters/:id/worlds/:world_id/quests` | Client | Active quests. |
 | `GET /internal_api/world_characters/:id/quests` | Game server | Active quests. |
-| `POST /internal_api/world_characters/:id/quests` `{quest}` | Game server | Accepts it. Idempotent; 422 if completed, or 20 are active. |
+| `POST /internal_api/world_characters/:id/quests` `{quest: definition}` | Game server | Accepts it. Idempotent; 422 if completed, or 20 are active. |
+| `POST /internal_api/world_characters/:id/quests/:quest/sync` `{quest: definition}` | Game server | Moves it to a newer definition, keeping progress on unchanged objectives. |
 | `PATCH /internal_api/world_characters/:id/quests/:quest` `{progress: {hash: count}, timer_elapsed_seconds}` | Game server | Sets progress and the timer (absolute values). |
 | `POST /internal_api/world_characters/:id/quests/:quest/complete` `{grants_flags}` | Game server | Grants `quest/completed/<quest>` and the flags; ends the quest. |
 | `DELETE /internal_api/world_characters/:id/quests/:quest` | Game server | Fails or abandons it. Idempotent. |
 
-Each quest is `{quest_identifier, timer_elapsed_seconds, progress: {hash: count}}`. The game
-server owns the rules (requirements, objectives, timers); Rails only checks the 20-quest cap and
-that a quest isn't already completed.
+Each quest is `{quest_identifier, world_version_id, timer_elapsed_seconds, definition,
+objectives: [{hash, objective, count, required}]}`. The game server owns the rules
+(requirements, objectives, timers); Rails only checks the 20-quest cap and that a quest isn't
+already completed.

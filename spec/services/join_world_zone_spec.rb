@@ -51,11 +51,9 @@ RSpec.describe JoinWorldZone do
   end
 
   it "sends the character's active quests, and no quests file when the world has none" do
-    create(:character_quest, world_character:, quest_identifier: "rat-hunt").record_progress!("abc" => 2)
+    quest = create(:character_quest, world_character:, quest_identifier: "rat-hunt")
     call
-    expect(slots_client).to have_received(:request).with(hash_including(
-      active_quests: [{quest_identifier: "rat-hunt", timer_elapsed_seconds: 0, progress: {"abc" => 2}}]
-    ))
+    expect(slots_client).to have_received(:request).with(hash_including(active_quests: [CharacterQuestJson.call(quest)]))
     expect(slots_client).to have_received(:request).with(hash_excluding(:quests_url, :quests_sha))
   end
 

@@ -63,6 +63,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_140000) do
 
   create_table "character_quests", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.json "definition", default: {}, null: false
     t.string "quest_identifier", limit: 54, null: false
     t.integer "timer_elapsed_seconds", default: 0, null: false
     t.datetime "updated_at", null: false
@@ -142,7 +143,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_140000) do
     t.integer "character_quest_id", null: false
     t.integer "count", default: 0, null: false
     t.datetime "created_at", null: false
+    t.json "objective", default: {}, null: false
     t.string "objective_hash", null: false
+    t.integer "position", null: false
     t.datetime "updated_at", null: false
     t.index ["character_quest_id", "objective_hash"], name: "idx_on_character_quest_id_objective_hash_b0890fad2a", unique: true
   end
