@@ -49,6 +49,15 @@ class Play::WorldCharactersController < Play::BaseController
     redirect_to play_character_world_path(@character, @world), notice: "Switched to #{version.ref}."
   end
 
+  # The game client's "Leave World" button: frees the character's slot right
+  # away, then sends the client to the world's page.
+  def leave
+    LeaveWorld.call(character: @character, world: @world)
+    render json: {redirect_url: play_character_world_path(@character, @world)}
+  rescue GameApi::Error => e
+    render json: {error: e.message}, status: :service_unavailable
+  end
+
   private
 
   def listed_worlds(entered_world_ids)

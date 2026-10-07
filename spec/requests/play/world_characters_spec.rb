@@ -124,4 +124,26 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       expect(flash[:alert]).to include("Leave the world")
     end
   end
+
+  describe "DELETE leave" do
+    let(:slots_client) { instance_double(GameApi::SlotsClient, destroy: nil) }
+
+    before do
+      allow(GameApi).to receive(:slots).and_return(slots_client)
+      create(:slot_session, character:, zone: version.zones.first)
+    end
+
+    it "frees the slot and points the client at the world page" do
+      delete "#{base}/#{world.id}/leave", as: :json
+      expect(SlotSession.find_by(character:)).to be_nil
+      expect(response.parsed_body["redirect_url"]).to eq("#{base}/#{world.id}")
+    end
+
+    it "reports a game-server failure" do
+      allow(slots_client).to receive(:destroy).and_raise(GameApi::Error.new("down", status: 500))
+      delete "#{base}/#{world.id}/leave", as: :json
+      expect(response).to have_http_status(:service_unavailable)
+      expect(SlotSession.find_by(character:)).to be_present
+    end
+  end
 end
