@@ -46,8 +46,7 @@ class Play::WorldCharactersController < Play::BaseController
     back = play_character_world_path(@character, @world)
     return redirect_back_or_to(back, alert: "Leave the world before switching versions.") if in_world?
 
-    version = @world.released_versions.find(params[:world_version_id])
-    @character.world_characters.find_or_create_by!(world: @world).update!(world_version: version)
+    version = switch_version
     redirect_back_or_to back, notice: "Switched to #{version.ref}."
   end
 
@@ -61,6 +60,13 @@ class Play::WorldCharactersController < Play::BaseController
   end
 
   private
+
+  # Moves the character to params[:world_version_id] (a released version).
+  def switch_version
+    @world.released_versions.find(params[:world_version_id]).tap do |version|
+      @character.world_characters.find_or_create_by!(world: @world).update!(world_version: version)
+    end
+  end
 
   def listed_worlds(entered_world_ids)
     World.where(id: WorldVersion.available.select(:world_id)).or(World.where(id: entered_world_ids)).order(:repo, :path)

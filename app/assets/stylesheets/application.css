@@ -146,3 +146,23 @@ input[type="submit"].compact {
 td form {
   margin: 0;
 }
+
+/* a version upgrade is pending: yellow instead of the primary blue */
+button.upgrade,
+input[type="submit"].upgrade {
+  --pico-background-color: #c49a2a;
+  --pico-border-color: #c49a2a;
+  --pico-color: #1a1a1a;
+}
+button.upgrade:hover,
+input[type="submit"].upgrade:hover {
+  --pico-background-color: #d9ad3a;
+  --pico-border-color: #d9ad3a;
+}
+
+/* a button_to that sits beside text in a cell instead of on its own line */
+form.inline {
+  display: inline-block;
+  margin: 0 0 0 0.5rem;
+  vertical-align: middle;
+}

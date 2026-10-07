@@ -25,7 +25,7 @@
         <td>
           <% if row[:upgradable] %>
             <%= button_to "Upgrade to #{latest.ref}", version_play_character_world_path(@character, world),
-                  method: :patch, params: {world_version_id: latest.id}, class: "compact",
+                  method: :patch, params: {world_version_id: latest.id}, class: "compact upgrade",
                   disabled: @in_world_id == world.id,
                   title: (@in_world_id == world.id ? "Leave the world to upgrade" : nil) %>
           <% end %>

@@ -23,6 +23,18 @@ module Build::ClassPublishing
     version_taken_error(client, key, version)
   end
 
+  # Importing an existing "<key>-<version>" tag: Publish's checks, except
+  # that the tag must exist, and its content must validate.
+  def class_import_error(client, key, version)
+    return "#{client.repo} is private; classes must be published from a public repo." unless client.public_repo?
+    return "Version must be two numbers, like 1.0." unless version.match?(VERSION_FORMAT)
+    return "#{key} belongs to another builder." if CharacterClass.where(identifier: key).where.not(user: current_user).exists?
+    return "#{key} #{version} is already imported." if CharacterClass.exists?(identifier: key, version:)
+    class_content_error(client, key, client.tag_sha(class_tag(key, version)))
+  rescue Github::NotFoundError
+    "Tag \"#{class_tag(key, version)}\" doesn't exist in #{client.repo}."
+  end
+
   def version_taken_error(client, key, version)
     return "#{key} belongs to another builder." if CharacterClass.where(identifier: key).where.not(user: current_user).exists?
     return "#{key} #{version} is already published." if CharacterClass.exists?(identifier: key, version:)

@@ -6,13 +6,14 @@
 
 <table>
   <thead>
-    <tr><th>Key</th></tr>
+    <tr><th>Key</th><th>Publishing</th></tr>
   </thead>
   <tbody>
     <% @classes.each do |entry| %>
       <% identifier = entry["path"].delete_prefix("classes/").delete_suffix(".json") %>
       <tr>
         <td><%= link_to identifier, edit_build_class_path(id: identifier, branch: @branch) %></td>
+        <td><%= link_to "Versions", build_class_versions_path(id: identifier) %></td>
       </tr>
     <% end %>
   </tbody>

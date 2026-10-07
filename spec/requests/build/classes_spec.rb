@@ -34,7 +34,7 @@ RSpec.describe "Build::Classes", type: :request do
           expect(response).to have_http_status(:ok)
           expect(response.body).to include(">puncher<")
           expect(response.body).not_to include(">puncher.full<")
-          expect(response.body).to include(edit_build_class_path(id: "puncher", branch: "main"))
+          expect(response.body).to include(edit_build_class_path(id: "puncher", branch: "main"), build_class_versions_path(id: "puncher"))
         end
       end
     end

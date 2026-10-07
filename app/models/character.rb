@@ -22,6 +22,10 @@ class Character < ApplicationRecord
   # When the character last entered any world.
   def last_played_at = world_characters.maximum(:last_played_at)
 
+  # The world character the character last entered with, or nil. Reads the
+  # loaded association, so preload world_characters when listing.
+  def last_world_character = world_characters.select(&:last_played_at).max_by(&:last_played_at)
+
   # The stock token's name, or nil for a custom URL.
   def stock_token = token_url.to_s[STOCK_TOKEN_FORMAT, 1]
 
