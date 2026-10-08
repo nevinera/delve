@@ -11,7 +11,7 @@ import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { canKeepTalking, canTalkTo } from "./game/dialogue";
 import { DialogueWindow } from "./DialogueWindow";
-import { activeQuestsById, applyQuestAction, offersFor, questLogChains, questMessageAction, questNcus, questsById, turnInsFor, zoneNames } from "./game/quests";
+import { activeQuestsById, applyQuestAction, offersFor, questLogZones, questMessageAction, questNcus, questsById, turnInsFor, zoneNames } from "./game/quests";
 import { QuestLog } from "./QuestLog";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
@@ -3124,7 +3124,7 @@ export default function App({
   const questDefinitionsRef = useRef({});
   const [questOffers, setQuestOffers] = useState({});
   const questOffersRef = useRef({});
-  const questNcuSet = useMemo(() => questNcus(questOffers), [questOffers]);
+  const questNcuSet = useMemo(() => questNcus(questOffers, questDefinitions), [questOffers, questDefinitions]);
   const [activeQuests, setActiveQuests] = useState({});
   const activeQuestsRef = useRef({});
   activeQuestsRef.current = activeQuests;
@@ -3133,9 +3133,10 @@ export default function App({
   const pendingQuestActionsRef = useRef([]);
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [currentZoneNames, setCurrentZoneNames] = useState(null);
-  const questChains = useMemo(
-    () => questLogChains(activeQuests, questDefinitions, {zoneIdentifier, names: currentZoneNames}),
-    [activeQuests, questDefinitions, zoneIdentifier, currentZoneNames]
+  const [questZoneNames, setQuestZoneNames] = useState({});
+  const questZones = useMemo(
+    () => questLogZones(activeQuests, questDefinitions, {zoneIdentifier, zoneNames: questZoneNames}),
+    [activeQuests, questDefinitions, zoneIdentifier, questZoneNames]
   );
   const [ncus, setNcus] = useState({});
   const ncusRef = useRef({});
@@ -3305,7 +3306,8 @@ export default function App({
     if (!activeQuestsUrl) return;
     fetch(activeQuestsUrl)
       .then((r) => r.json())
-      .then(({quests}) => {
+      .then(({quests, zone_names}) => {
+        setQuestZoneNames(zone_names ?? {});
         const pending = pendingQuestActionsRef.current ?? [];
         pendingQuestActionsRef.current = null;
         setActiveQuests(pending.reduce((current, action) => applyQuestAction(current, action), activeQuestsById(quests)));
@@ -4304,7 +4306,10 @@ export default function App({
       />
       <QuestLog
         open={questLogOpen}
-        chains={questChains}
+        zones={questZones}
+        currentZone={zoneIdentifier}
+        currentNames={currentZoneNames}
+        zonesUrl={activeQuestsUrl && `${activeQuestsUrl}/zones`}
         onAbandon={handleAbandonQuest}
         onClose={() => setQuestLogOpen(false)}
         portrait={viewportMode.isPortraitPhone}

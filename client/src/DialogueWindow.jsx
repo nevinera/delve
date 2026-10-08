@@ -6,20 +6,31 @@ import { hasDialogue, pickEntryNodeId } from "./game/dialogue";
 // key={dialogueNcuId}), so talking to someone new remounts this component -
 // the lazy useState initializer below re-picks a random entry node each time.
 //
-// The quests the NCU offers ({identifier, name, offerText}) and the active
-// quests it takes turned in ({identifier, name, ready, text}) are top-level
-// options, listed under the opening line (or alone, for an NCU with no
-// dialogue). Picking an offer shows its offerText, to accept or put off;
-// picking a turn-in shows its text, to complete when it's ready.
+// The quests the NCU offers ({identifier, offerText, description, marker})
+// and the active quests it takes turned in ({identifier, name, ready,
+// text}) are top-level options, listed under the opening line (or alone,
+// for an NCU with no dialogue). An offer's option is its offerText (with a
+// marker glyph only for marker quests); picking it starts the quest, and
+// the NCU replies with its description. Picking a turn-in shows its text,
+// to complete when it's ready.
 export function DialogueWindow({ name, dialogue, offers = [], turnIns = [], onAcceptQuest, onTurnInQuest, onClose }) {
   const [entryNodeId] = useState(() => (hasDialogue(dialogue) ? pickEntryNodeId(dialogue) : null));
   const [currentNodeId, setCurrentNodeId] = useState(entryNodeId);
   const [questId, setQuestId] = useState(null);
+  // Started here, so hidden before the server's new offers arrive.
+  const [started, setStarted] = useState(() => new Map());
   const node = dialogue?.nodes?.[currentNodeId];
-  const quest = offers.find((offer) => offer.identifier === questId);
+  const reply = started.get(questId);
   const turnIn = turnIns.find((t) => t.identifier === questId);
+  const openOffers = offers.filter((offer) => !started.has(offer.identifier));
   const atTop = currentNodeId === entryNodeId;
-  if (!node && !quest && !turnIn && !(atTop && (offers.length || turnIns.length))) return null;
+  if (!node && !reply && !turnIn && !(atTop && (openOffers.length || turnIns.length))) return null;
+
+  const startQuest = (offer) => {
+    onAcceptQuest?.(offer.identifier);
+    setStarted((current) => new Map(current).set(offer.identifier, offer.description));
+    setQuestId(offer.identifier);
+  };
 
   return (
     <div style={styles.window} role="dialog" aria-label={name}>
@@ -27,17 +38,22 @@ export function DialogueWindow({ name, dialogue, offers = [], turnIns = [], onAc
         <span style={styles.title}>{name}</span>
         <button style={styles.close} onClick={onClose} aria-label="Close">✕</button>
       </div>
-      {quest ? (
-        <QuestOffer quest={quest} onAccept={() => { onAcceptQuest?.(quest.identifier); onClose(); }} onBack={() => setQuestId(null)} />
+      {reply !== undefined ? (
+        <>
+          <p style={styles.line}>{reply}</p>
+          <div style={styles.footer}>
+            <button style={styles.next} onClick={() => setQuestId(null)}>Back</button>
+          </div>
+        </>
       ) : turnIn ? (
         <QuestTurnIn quest={turnIn} onComplete={() => { onTurnInQuest?.(turnIn.identifier); onClose(); }} onBack={() => setQuestId(null)} />
       ) : (
         <>
           {node && <p style={styles.line}>{node.text}</p>}
           <div style={styles.footer}>
-            {atTop && offers.map((offer) => (
-              <button key={offer.identifier} style={styles.quest} onClick={() => setQuestId(offer.identifier)}>
-                ◆ {offer.name}
+            {atTop && openOffers.map((offer) => (
+              <button key={offer.identifier} style={offer.marker ? styles.quest : styles.next} onClick={() => startQuest(offer)}>
+                {offer.marker && "◆ "}{offer.offerText}
               </button>
             ))}
             {atTop && turnIns.map((t) => (
@@ -66,19 +82,6 @@ function NodeButtons({ node, onNext, onClose }) {
     <button style={styles.next} onClick={node.next ? () => onNext(node.next) : onClose}>
       {node.next ? "Next" : "Goodbye"}
     </button>
-  );
-}
-
-function QuestOffer({ quest, onAccept, onBack }) {
-  return (
-    <>
-      <p style={styles.questName}>{quest.name}</p>
-      <p style={styles.line}>{quest.offerText}</p>
-      <div style={styles.footer}>
-        <button style={styles.quest} onClick={onAccept}>Accept</button>
-        <button style={styles.next} onClick={onBack}>Not now</button>
-      </div>
-    </>
   );
 }
 

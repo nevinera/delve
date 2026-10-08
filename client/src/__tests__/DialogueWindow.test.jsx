@@ -76,45 +76,54 @@ describe("DialogueWindow", () => {
   });
 
   describe("quest offers", () => {
-    const offers = [{ identifier: "rat-hunt", name: "Rat Hunt", offerText: "Clear out those rats." }];
+    const offers = [
+      { identifier: "rat-hunt", offerText: "Got any work?", description: "Clear out those rats.", marker: false },
+      { identifier: "rat-king", offerText: "Heard of a rat king?", description: "Big one, down deep.", marker: true },
+    ];
 
-    it("lists offers under the opening line", () => {
+    it("lists offers by their offer text under the opening line, marking only marker quests", () => {
       render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onClose={() => {}} />);
       expect(screen.getByText("Choose one.")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Rat Hunt/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Got any work?" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "◆ Heard of a rat king?" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Path A" })).toBeInTheDocument();
     });
 
     it("only offers quests at the top of the conversation", () => {
       render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onClose={() => {}} />);
       fireEvent.click(screen.getByRole("button", { name: "Path A" }));
-      expect(screen.queryByRole("button", { name: /Rat Hunt/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Got any work?" })).not.toBeInTheDocument();
     });
 
-    it("shows the offer text, and accepts", () => {
+    it("starts the quest on choosing it, with the description as the reply", () => {
       const onAcceptQuest = vi.fn();
-      const onClose = vi.fn();
-      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onAcceptQuest={onAcceptQuest} onClose={onClose} />);
-      fireEvent.click(screen.getByRole("button", { name: /Rat Hunt/ }));
-      expect(screen.getByText("Clear out those rats.")).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onAcceptQuest={onAcceptQuest} onClose={() => {}} />);
+      fireEvent.click(screen.getByRole("button", { name: "Got any work?" }));
       expect(onAcceptQuest).toHaveBeenCalledWith("rat-hunt");
-      expect(onClose).toHaveBeenCalled();
+      expect(screen.getByText("Clear out those rats.")).toBeInTheDocument();
     });
 
-    it("goes back to the conversation on Not now", () => {
-      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onClose={() => {}} />);
-      fireEvent.click(screen.getByRole("button", { name: /Rat Hunt/ }));
-      fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+    it("goes back to the conversation without the started quest", () => {
+      render(<DialogueWindow name="Grizzle" dialogue={branching} offers={offers} onAcceptQuest={() => {}} onClose={() => {}} />);
+      fireEvent.click(screen.getByRole("button", { name: "Got any work?" }));
+      fireEvent.click(screen.getByRole("button", { name: "Back" }));
       expect(screen.getByText("Choose one.")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Got any work?" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "◆ Heard of a rat king?" })).toBeInTheDocument();
     });
 
     it("lists offers alone for an NCU with no dialogue", () => {
       const onClose = vi.fn();
       render(<DialogueWindow name="Grizzle" dialogue={undefined} offers={offers} onClose={onClose} />);
-      expect(screen.getByRole("button", { name: /Rat Hunt/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Got any work?" })).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Goodbye" }));
       expect(onClose).toHaveBeenCalled();
+    });
+
+    it("still shows the reply for an NCU with no dialogue", () => {
+      render(<DialogueWindow name="Grizzle" dialogue={undefined} offers={offers.slice(0, 1)} onAcceptQuest={() => {}} onClose={() => {}} />);
+      fireEvent.click(screen.getByRole("button", { name: "Got any work?" }));
+      expect(screen.getByText("Clear out those rats.")).toBeInTheDocument();
     });
   });
 

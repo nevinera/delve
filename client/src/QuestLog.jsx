@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { timerRemaining } from "./game/quests";
 
 const wrapperBase = {
@@ -21,7 +21,9 @@ const styles = {
   header: {display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10},
   title: {fontSize: 15, fontWeight: "bold", color: "#d4a84b", letterSpacing: 1, textTransform: "uppercase"},
   close: {background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 14},
-  chain: {color: "#d4a84b", fontSize: 12, fontWeight: "bold", letterSpacing: 1, textTransform: "uppercase", margin: "4px 0 8px"},
+  zone: {display: "flex", justifyContent: "space-between", width: "100%", background: "none", border: "none", borderBottom: "1px solid #3a2a14", color: "#d4a84b", fontSize: 12, fontWeight: "bold", letterSpacing: 1, textTransform: "uppercase", padding: "6px 0", cursor: "pointer", textAlign: "left"},
+  zoneBody: {padding: "8px 0 4px"},
+  map: {color: "#889", fontSize: 11},
   quest: {marginBottom: 14},
   name: {color: "#bfefff", fontWeight: "bold", fontSize: 14},
   description: {color: "#aaa", fontSize: 12, margin: "2px 0 6px", whiteSpace: "pre-wrap"},
@@ -34,10 +36,34 @@ const styles = {
   empty: {color: "#889", fontStyle: "italic"},
 };
 
-// The player's active quests, grouped by chain (see game/quests.js's
-// questLogChains), with each objective's progress, and a way to abandon.
-export function QuestLog({open, chains = [], onAbandon, onClose, portrait = false, landscape = false}) {
+// The player's quest log, by zone (see game/quests.js's questLogZones):
+// each zone with something to do and its count. The current zone starts
+// open; opening another fetches its name and map names from
+// zonesUrl/<identifier>. Stays mounted while closed, so opened zones last
+// until the page (or instance) changes.
+export function QuestLog({open, zones = [], currentZone, currentNames, zonesUrl, onAbandon, onClose, portrait = false, landscape = false}) {
+  const [opened, setOpened] = useState(() => new Set());
+  const [names, setNames] = useState({});
+  const requested = useRef(new Set());
+
+  const toggle = (identifier) => {
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(identifier)) next.delete(identifier);
+      else next.add(identifier);
+      return next;
+    });
+    if (identifier === currentZone || !zonesUrl || requested.current.has(identifier)) return;
+    requested.current.add(identifier);
+    fetch(`${zonesUrl}/${encodeURIComponent(identifier)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((zone) => setNames((current) => ({...current, [identifier]: {maps: zone.map_names ?? {}}})))
+      .catch(() => requested.current.delete(identifier));
+  };
+
   if (!open) return null;
+  const isOpen = (identifier) => (identifier === currentZone) !== opened.has(identifier);
+  const namesFor = (identifier) => (identifier === currentZone ? currentNames : names[identifier]);
   return (
     <div style={portrait ? styles.wrapperPortrait : landscape ? styles.wrapperLandscape : styles.wrapper}>
       <div style={(portrait || landscape) ? styles.scrollArea : styles.panel}>
@@ -45,13 +71,22 @@ export function QuestLog({open, chains = [], onAbandon, onClose, portrait = fals
           <span style={styles.title}>Quests</span>
           <button style={styles.close} aria-label="Close quests" onClick={onClose}>✕</button>
         </div>
-        {chains.length === 0 ? (
+        {zones.length === 0 ? (
           <div style={styles.empty}>No active quests.</div>
         ) : (
-          chains.map((chain) => (
-            <section key={chain.identifier}>
-              <div style={styles.chain}>{chain.name}</div>
-              {chain.quests.map((quest) => <QuestEntry key={quest.identifier} quest={quest} onAbandon={onAbandon} />)}
+          zones.map((zone) => (
+            <section key={zone.identifier}>
+              <button style={styles.zone} aria-expanded={isOpen(zone.identifier)} onClick={() => toggle(zone.identifier)}>
+                <span>{isOpen(zone.identifier) ? "▾" : "▸"} {zone.name}</span>
+                <span>{zone.count}</span>
+              </button>
+              {isOpen(zone.identifier) && (
+                <div style={styles.zoneBody}>
+                  {zone.quests.map((quest) => (
+                    <QuestEntry key={quest.identifier} quest={quest} names={namesFor(zone.identifier)} onAbandon={onAbandon} />
+                  ))}
+                </div>
+              )}
             </section>
           ))
         )}
@@ -71,21 +106,28 @@ function QuestTimer({seconds, startedAt}) {
   return <div style={styles.timer}>Time left: {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</div>;
 }
 
-function QuestEntry({quest, onAbandon}) {
+// One quest's entries in a zone: its unfinished objectives there, or that
+// it's ready to turn in there. names ({maps, ncus}) names things in the
+// zone, when known.
+function QuestEntry({quest, names, onAbandon}) {
   const [confirming, setConfirming] = useState(false);
   return (
     <div style={styles.quest}>
       <div style={styles.name}>{quest.name}</div>
-      <div style={styles.description}>{quest.description}</div>
-      {quest.objectives.length > 0 && (
-        <ul style={styles.objectives}>
-          {quest.objectives.map((objective, i) => (
-            <li key={i} style={objective.count >= objective.required ? styles.objectiveDone : styles.objective}>
-              {objective.text}{objective.required > 1 || objective.count >= objective.required ? `: ${objective.count}/${objective.required}` : ""}
-            </li>
-          ))}
-        </ul>
-      )}
+      {quest.description && <div style={styles.description}>{quest.description}</div>}
+      <ul style={styles.objectives}>
+        {quest.objectives.map((objective) => (
+          <li key={objective.hash} style={styles.objective}>
+            {objective.text}{objective.required > 1 ? `: ${objective.count}/${objective.required}` : ""}
+            {objective.map && <span style={styles.map}> ({names?.maps?.[objective.map] ?? objective.map})</span>}
+          </li>
+        ))}
+        {quest.turnIn && (
+          <li style={styles.objectiveDone}>
+            Ready to turn in{names?.ncus?.[quest.turnIn] ? ` to ${names.ncus[quest.turnIn]}` : ""}
+          </li>
+        )}
+      </ul>
       {quest.timerSeconds && <QuestTimer seconds={quest.timerSeconds} startedAt={quest.timerStartedAt} />}
       <div style={styles.actions}>
         {confirming ? (
