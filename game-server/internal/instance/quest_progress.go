@@ -60,7 +60,7 @@ func (inst *Instance) matches(objective instanceconfig.QuestObjective, event que
 	case "talk":
 		return objective.NCU == event.NCU
 	case "reach":
-		return objective.Map == event.Map
+		return objective.Map == "" || objective.Map == event.Map
 	case "kill":
 		if objective.Map != "" && objective.Map != event.Map {
 			return false

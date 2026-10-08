@@ -62,16 +62,17 @@ events as quests change.
 - The client sends `talk` (`{ncu_id}`, the NCU's state id) whenever it opens a conversation; the
   server checks the player is alive and within talk range (10 feet between token edges), and
   resends their offers.
-- The client sends `accept_quest` (`{ncu_id, quest}`). If that NCU offers it to them, the server
-  accepts it through Rails, sending the quest's definition (`/internal_api/world_characters/{id}/quests`);
+- The client sends `accept_quest` (`{ncu_id, quest}`) when the player picks a quest's dialogue
+  option. If that NCU offers it to them, the server starts it through Rails, sending the quest's definition (`/internal_api/world_characters/{id}/quests`);
   the client gets `quest-received` (`{quest}`, as Rails stores it) and new offers, or
   `quest-accept-failed` (`{quest, error}`).
 - The client sends `abandon_quest` (`{quest}`); the server ends it through Rails and sends
   `quest-abandoned` and new offers, or `quest-abandon-failed` (`{quest, error}`).
 - Objectives in this zone progress as the player meets them: `talk` when they start a
-  conversation, `kill` when a unit they tagged dies, `reach` when they arrive on a map (or spawn
-  on it). Each is saved through Rails (PATCH) and sent as `quest-progress`
-  (`{quest, objective, count}`, the objective by hash).
+  conversation, `kill` when a unit they can loot dies, `reach` when they arrive in the zone or on
+  the objective's map (or spawn there, or are already there when the quest starts). Each is saved
+  through Rails (PATCH) and sent as `quest-progress` (`{quest, objective, count}`, the objective
+  by hash).
 - A quest with no `turnIn` completes once every objective is met. One with a `turnIn` completes
   when the client sends `turn_in_quest` (`{ncu_id, quest}`) to that NCU, in talk range, or gets
   `quest-turn-in-failed` (`{quest, error}`). Rails grants its completion flag, `grantsFlags` and

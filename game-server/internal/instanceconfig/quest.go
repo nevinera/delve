@@ -31,6 +31,7 @@ type NcuRef struct {
 // depends on Type (talk, kill, reach).
 type QuestObjective struct {
 	Type     string `json:"type"`
+	Text     string `json:"text"` // for the quest log; not part of its hash
 	Zone     string `json:"zone"`
 	NCU      string `json:"ncu,omitempty"`
 	Unit     string `json:"unit,omitempty"`

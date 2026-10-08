@@ -60,6 +60,10 @@ func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		f.accepted = append(f.accepted, body["quest"].Identifier)
 		w.WriteHeader(http.StatusCreated)
+		if quest, ok := f.active[body["quest"].Identifier]; ok {
+			_ = json.NewEncoder(w).Encode(map[string]any{"quest": quest})
+			return
+		}
 		_ = json.NewEncoder(w).Encode(activeQuestJSON(body["quest"].Identifier))
 	case r.Method == http.MethodPost && strings.HasSuffix(path, "/sync"):
 		identifier := strings.TrimSuffix(strings.TrimPrefix(path, "quests/"), "/sync")
@@ -197,7 +201,7 @@ func TestAcceptQuest_AcceptsThroughRailsAndRefreshesOffers(t *testing.T) {
 	inst := questInstance(t, rails)
 	slot, writeCh := addQuestSlot(t, inst)
 
-	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt")
+	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt", "")
 	received := nextMessage(t, writeCh)
 	assert.Equal(t, "quest-received", received["type"])
 	assert.Equal(t, "rat-hunt", received["quest"].(map[string]any)["quest_identifier"])
@@ -222,7 +226,7 @@ func TestAcceptQuest_RefusesQuestsTheNCUDoesntOffer(t *testing.T) {
 			inst := questInstance(t, rails)
 			slot, writeCh := addQuestSlot(t, inst)
 
-			inst.AcceptQuest(context.Background(), slot.ID, tc.ncu, tc.quest)
+			inst.AcceptQuest(context.Background(), slot.ID, tc.ncu, tc.quest, "")
 			msg := nextMessage(t, writeCh)
 			assert.Equal(t, "quest-accept-failed", msg["type"])
 			assert.Equal(t, tc.quest, msg["quest"])
@@ -232,13 +236,13 @@ func TestAcceptQuest_RefusesQuestsTheNCUDoesntOffer(t *testing.T) {
 }
 
 func TestAcceptQuest_ReportsARailsRefusal(t *testing.T) {
-	inst := questInstance(t, &fakeQuestRails{refuse: "at most 20 quests can be active at once"})
+	inst := questInstance(t, &fakeQuestRails{refuse: "rat-hunt is already completed"})
 	slot, writeCh := addQuestSlot(t, inst)
 
-	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt")
+	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt", "")
 	msg := nextMessage(t, writeCh)
 	assert.Equal(t, "quest-accept-failed", msg["type"])
-	assert.Contains(t, msg["error"], "at most 20 quests")
+	assert.Contains(t, msg["error"], "already completed")
 	got, _ := inst.GetSlot(slot.ID)
 	assert.NotContains(t, got.Quests, "rat-hunt")
 }

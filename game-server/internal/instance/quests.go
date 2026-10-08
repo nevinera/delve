@@ -183,9 +183,10 @@ func (inst *Instance) upgradeQuest(slotID uuid.UUID, worldCharacterID, questIden
 
 // AcceptQuest accepts questIdentifier, offered by the zone's NCU
 // ncuIdentifier, for the character in slotID, through Rails; then sends
-// quest-received and their new offers (or quest-accept-failed). Calls
-// Rails, so run it in its own goroutine.
-func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIdentifier, questIdentifier string) {
+// quest-received and their new offers (or quest-accept-failed). A reach
+// objective for where they are (mapIdentifier, in this zone) is met
+// straight away. Calls Rails, so run it in its own goroutine.
+func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIdentifier, questIdentifier, mapIdentifier string) {
 	inst.questMu.Lock()
 	defer inst.questMu.Unlock()
 	quest, err := inst.acceptQuest(slotID, ncuIdentifier, questIdentifier)
@@ -196,6 +197,12 @@ func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIden
 		return
 	}
 	inst.sendJSONToSlot(slotID, questMsg{downBase: inst.downBase("quest-received"), Quest: quest})
+	if slot, ok := inst.GetSlot(slotID); ok {
+		here := questEvent{UnitID: slot.CharacterUnitID, Type: "reach", Map: mapIdentifier}
+		if err := inst.advanceQuest(ctx, slotID, slot.WorldCharacterDatabaseID, quest, here); err != nil {
+			slog.WarnContext(ctx, "failed to record quest progress", "error", err, "quest", questIdentifier)
+		}
+	}
 	inst.SendQuestOffers(ctx, slotID)
 }
 
@@ -307,7 +314,7 @@ func (inst *Instance) processTalks(ctx context.Context, talks []instancestate.Ta
 		}
 		switch {
 		case talk.AcceptQuest != "":
-			go inst.AcceptQuest(ctx, slot.ID, talk.NCUIdentifier, talk.AcceptQuest)
+			go inst.AcceptQuest(ctx, slot.ID, talk.NCUIdentifier, talk.AcceptQuest, talk.Map)
 		case talk.TurnInQuest != "":
 			go inst.TurnInQuest(ctx, slot.ID, talk.NCUIdentifier, talk.TurnInQuest)
 		default:

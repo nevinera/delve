@@ -213,3 +213,29 @@ func TestSaveQuestTimers_SavesRunningTimers(t *testing.T) {
 	inst.SaveQuestTimers(context.Background(), slot.ID)
 	assert.Equal(t, map[string]int{"timed": 7}, rails.timers)
 }
+
+// arriveInstance is a darkwood instance offering "arrive" (reach darkwood,
+// any map; turned in to the warden) from grizzle, with one player not on it.
+func arriveInstance(t *testing.T) (*instance.Instance, *instance.InstanceSlot, chan []byte) {
+	t.Helper()
+	arrive := instanceconfig.ActiveQuest{QuestIdentifier: "arrive", WorldVersionID: "wv-2", Objectives: []instanceconfig.ActiveObjective{
+		activeObjective("reach-darkwood", instanceconfig.QuestObjective{Type: "reach", Text: "Reach Darkwood", Zone: "darkwood"}, 0, 1),
+	}}
+	inst := questInstance(t, &fakeQuestRails{active: map[string]instanceconfig.ActiveQuest{"arrive": arrive}})
+	inst.Quests = []instanceconfig.Quest{{Identifier: "arrive", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"},
+		TurnIn: &instanceconfig.NcuRef{Zone: "darkwood", NCU: "warden"}}}
+	slot, writeCh := addQuestSlot(t, inst)
+	return inst, slot, writeCh
+}
+
+func TestAcceptQuest_MeetsAReachObjectiveForWhereThePlayerIs(t *testing.T) {
+	inst, slot, writeCh := arriveInstance(t)
+	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "arrive", "yard")
+
+	assert.Equal(t, "quest-received", nextMessage(t, writeCh)["type"])
+	progress := nextMessage(t, writeCh)
+	assert.Equal(t, "quest-progress", progress["type"])
+	assert.Equal(t, "reach-darkwood", progress["objective"])
+	got, _ := inst.GetSlot(slot.ID)
+	assert.True(t, got.Quests["arrive"].Ready())
+}

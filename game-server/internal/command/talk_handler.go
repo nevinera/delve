@@ -71,6 +71,7 @@ func queueTalk(unitID, ncuID uuid.UUID, talk instancestate.Talk, next *instances
 	}
 	talk.UnitID = unitID
 	talk.NCUIdentifier = ncu.ZoneNCUIdentifier
+	talk.Map = unit.MapIdentifier
 	next.PendingTalks = append(next.PendingTalks, talk)
 }
 

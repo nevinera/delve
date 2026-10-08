@@ -58,6 +58,7 @@ type CombatEvent struct {
 type Talk struct {
 	UnitID        uuid.UUID
 	NCUIdentifier string
+	Map           string // the map the player's on
 	AcceptQuest   string
 	TurnInQuest   string
 }
