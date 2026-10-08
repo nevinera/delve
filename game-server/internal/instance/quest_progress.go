@@ -74,8 +74,8 @@ func (inst *Instance) matches(objective instanceconfig.QuestObjective, event que
 }
 
 // collectQuestEvents finds this tick's quest events: conversations started,
-// kills of units a player tagged, and players arriving on a map (including
-// spawning). Tick loop only.
+// kills (credited to everyone who can loot them), and players arriving on
+// a map (including spawning). Tick loop only.
 func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState) []questEvent {
 	if len(inst.Quests) == 0 {
 		return nil
@@ -95,9 +95,12 @@ func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState
 			continue
 		}
 		justDied := unit.Status == instancestate.UnitStatusDead && (before == nil || before.Status != instancestate.UnitStatusDead)
-		if justDied && unit.TaggedBy != nil {
+		if !justDied {
+			continue
+		}
+		for _, player := range killCredited(unit) {
 			events = append(events, questEvent{
-				UnitID: *unit.TaggedBy, Type: "kill",
+				UnitID: player, Type: "kill",
 				Unit: unit.ZoneUnitIdentifier, UnitType: unit.UnitTypeIdentifier, Map: unit.MapIdentifier,
 			})
 		}
