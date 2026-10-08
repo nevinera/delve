@@ -10,6 +10,7 @@ import {unitTypeData, unitTypeKeys} from "../state/unitTypeOps";
 import {itemData, itemKeys} from "../state/itemOps";
 import {LibraryReader} from "../state/libraryReader";
 import {fakeClient} from "../state/__tests__/fakeLibrary";
+import {questData} from "../state/questOps";
 
 // The unit type editor's preview mounts a WebGL renderer jsdom can't back.
 vi.mock("../../unitTypeEditor/UnitTypePreviewPane", () => ({default: () => <div data-testid="preview" />}));
@@ -179,5 +180,39 @@ describe("ZoneLevel maps", () => {
 
     expect(result.draft.paths("worlds/w/zones/forest/hub")).toEqual([]);
     expect(zoneData(result.draft, "forest").maps).toEqual([]);
+  });
+
+  describe("NCU quests", () => {
+    function renderWithQuests() {
+      const result = {draft: null, onOpenQuest: vi.fn()};
+      function Harness() {
+        const [draft, setDraft] = useState(() => fixtureDraft()
+          .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle", position: {x: 5, y: 5}}]}))
+          .write("worlds/w/quests.json", [
+            {identifier: "rat-hunt", name: "Rat Hunt", offeredBy: {zone: "forest", ncu: "grizzle"}},
+            {identifier: "delivery", name: "Delivery", offeredBy: {zone: "cave", ncu: "x"}, turnIn: {zone: "forest", ncu: "grizzle"}},
+          ]));
+        result.draft = draft;
+        return <MapLevel draft={draft} onChange={setDraft} zone="forest" map="hub" repo="o/content" stockAssets={{icons: {}, graphics: {}, sounds: {}}} onOpenQuest={result.onOpenQuest} />;
+      }
+      render(<Harness />);
+      fireEvent.click(screen.getByRole("tab", {name: "Quests"}));
+      fireEvent.click(screen.getByText("Grizzle"));
+      return result;
+    }
+
+    it("lists an NCU's offered and turned-in quests, each opening the quest editor", () => {
+      const result = renderWithQuests();
+      fireEvent.click(screen.getByRole("button", {name: "Rat Hunt"}));
+      fireEvent.click(screen.getByRole("button", {name: "Delivery"}));
+      expect(result.onOpenQuest.mock.calls).toEqual([["rat-hunt"], ["delivery"]]);
+    });
+
+    it("starts a new quest offered by the NCU", () => {
+      const result = renderWithQuests();
+      fireEvent.click(screen.getByRole("button", {name: "New quest offered here"}));
+      expect(questData(result.draft, "grizzle-quest")).toMatchObject({offeredBy: {zone: "forest", ncu: "grizzle"}});
+      expect(result.onOpenQuest).toHaveBeenCalledWith("grizzle-quest");
+    });
   });
 });

@@ -119,6 +119,15 @@ export function ncuQuests(draft, zone, ncu) {
   };
 }
 
+// A free identifier for a new quest offered by ncu: "<ncu>-quest", then
+// "<ncu>-quest-2" and so on.
+export function newQuestIdentifier(draft, ncu) {
+  const base = `${ncu}-quest`.slice(0, 50);
+  let identifier = base;
+  for (let n = 2; questData(draft, identifier); n++) identifier = `${base}-${n}`;
+  return identifier;
+}
+
 // A colour for a chain, the same every time for the same identifier.
 export function chainColor(chainIdentifier) {
   let hash = 0;

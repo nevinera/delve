@@ -68,9 +68,13 @@ const TAB_LAYERS = {
 // - tokenImages {options: [{value, label, url}], upload(file)}: the token
 //   images an NCU can use, and storing a new one (see ImagePicker).
 // - sidebarHeader: rendered at the top of the sidebar (e.g. a save bar).
+// - ncuQuests {byNcu: {ncuIdentifier: {offers, turnIns}}, onOpenQuest(id),
+//   onNewQuest(ncuIdentifier)} (optional): each NCU's quests ([{identifier,
+//   name}]), listed in its row and badged on its token, opening the quest
+//   editor.
 export default function MapWorkbench({
   mapKey, mapData, onMapChange, imageUrl, onImageUpload, unitTypes, items,
-  ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl,
+  ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null,
 }) {
   const [tab, setTab] = useState("map");
   // Unit types added to the Units tab's palette with "+" (see UnitsTab).
@@ -606,6 +610,7 @@ export default function MapWorkbench({
         hoveredPatrolStep={uiState.hoveredPatrolStep}
         expandedUnitIndices={uiState.expandedUnitIndices}
         ncuTokenUrls={ncuTokenUrls}
+        ncuQuests={ncuQuests}
         selectedNcuIndex={selectedNcuIndex}
         onSelectNcu={setSelectedNcuIndex}
         hoveredNcuIndex={hoveredNcuIndex}
@@ -718,11 +723,11 @@ export default function MapWorkbench({
           />
         ) : (
           <>
-            <p className="map-sidebar-hint">Quests aren't built yet. Non-combat characters (NCUs) live here meanwhile.</p>
             <NcusPanel
               ncus={mapData.ncus ?? []}
               tokenUrls={ncuTokenUrls}
               tokenImages={tokenImages}
+              ncuQuests={ncuQuests}
               selectedIndex={selectedNcuIndex}
               onSelect={setSelectedNcuIndex}
               hoveredIndex={hoveredNcuIndex}
