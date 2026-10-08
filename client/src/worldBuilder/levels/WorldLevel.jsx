@@ -10,9 +10,10 @@ import {assetUrlFor} from "../state/assetUrls";
 import ZoneList from "./ZoneList";
 import UnitTypeList from "./UnitTypeList";
 import ItemList from "./ItemList";
+import {worldQuests} from "../state/questOps";
 
 // The world level: graph (top-left), world attributes (bottom-left),
-// zones, unit types, items, links and entry points (right). The old world editor's panels
+// zones, quests, unit types, items, links and entry points (right). The old world editor's panels
 // are reused as-is - they take the old per-file WorldDraft class, so they
 // get one wrapping the world file's current data, and whatever they hand
 // back is written straight into the live draft.
@@ -56,6 +57,12 @@ export default function WorldLevel({draft, onChange, navigate, repo, library, pl
       </div>
       <div className="content-editor-fields">
         <ZoneList draft={draft} onChange={onChange} onOpen={(zone) => navigate({zone})} play={play} />
+        <section className="content-list">
+          <h3>Quests</h3>
+          <button type="button" className="add-entry" onClick={() => navigate({quests: true})}>
+            Open quests ({worldQuests(draft).length})
+          </button>
+        </section>
         <UnitTypeList draft={draft} onChange={onChange} onOpen={(unitType) => navigate({unitType})} repo={repo} library={library} />
         <ItemList draft={draft} onChange={onChange} onOpen={(item) => navigate({item})} library={library} />
         <WorldLinksPanel draft={file} onChange={onFileChange} zoneDetailsByKey={details} />

@@ -1,7 +1,7 @@
 import {describe, it, expect} from "vitest";
 import {fixtureDraft} from "./fixtureWorld";
 import {
-  chainColor, createQuest, deleteQuest, followUps, ncuQuests, prerequisites, questData, questGraph, questPositions,
+  chainColor, createQuest, questChains, questChoices, questLayout, positionKey, deleteQuest, followUps, ncuQuests, prerequisites, questData, questGraph, questPositions,
   questsFile, questsLayoutFile, renameQuest, setQuestPositions, updateQuest, worldQuests,
 } from "../questOps";
 
@@ -87,5 +87,42 @@ describe("questOps", () => {
       {from: "flag:custom/brave", to: "quest:b", kind: "requires"},
       {from: "flag:quest/completed/gone", to: "quest:b", kind: "requires"},
     ]);
+  });
+
+  it("offers each zone's maps, NCUs, units, unit types and items for picking", () => {
+    const draft = fixtureDraft()
+      .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle"}]}))
+      .update("worlds/w/zones/forest/forest.json", (zone) => ({...zone, items: {"iron-ring": {$ref: "../../items/iron-ring.json"}}}));
+    const [forest, cave] = questChoices(draft);
+    expect(forest).toEqual({
+      key: "forest", name: "Forest",
+      maps: [{key: "hub", name: "Hub", ncus: [{identifier: "grizzle", name: "Grizzle"}],
+        units: [{identifier: "goblin-a", unitType: "goblin"}, {identifier: "archer-a", unitType: "archer"}]}],
+      unitTypes: [{key: "goblin", name: "Goblin"}],
+      items: [{key: "iron-ring", name: "Iron Ring"}],
+    });
+    expect(cave).toMatchObject({key: "cave", maps: [], unitTypes: [], items: []});
+  });
+
+  it("lists chains by name", () => {
+    const draft = withQuests(quest("a"), quest("b"), quest("c", {chainIdentifier: "apes", chainName: "Apes"}));
+    expect(questChains(draft)).toEqual([{identifier: "apes", name: "Apes"}, {identifier: "rats", name: "Rats"}]);
+  });
+
+  it("lays out unsaved nodes in columns by depth, keeping saved positions", () => {
+    const graph = questGraph([quest("a", {grantsFlags: ["custom/x"]}), quest("b", {requiresFlags: ["quest/completed/a"]}), quest("c")]);
+    expect(questLayout(graph, {c: {x: 9, y: 9}})).toEqual({
+      "quest:a": {x: 0, y: 0},
+      "quest:b": {x: 240, y: 0},
+      "quest:c": {x: 9, y: 9},
+      "flag:custom/x": {x: 240, y: 110},
+    });
+    expect(positionKey(graph.nodes[0])).toBe("a");
+    expect(positionKey(graph.nodes[3])).toBe("flag:custom/x");
+  });
+
+  it("survives a requirement cycle", () => {
+    const graph = questGraph([quest("a", {requiresFlags: ["quest/completed/b"]}), quest("b", {requiresFlags: ["quest/completed/a"]})]);
+    expect(Object.keys(questLayout(graph))).toEqual(["quest:a", "quest:b"]);
   });
 });

@@ -3,8 +3,11 @@
 // questsPath (default ./quests.json, beside the world file); the quests
 // graph's positions live beside it, in <name>.layout.json.
 import {stableStringify} from "./WorldDraft";
-import {DEFAULT_QUESTS_PATH, worldQuests} from "./zoneOps";
-import {worldData} from "./worldOps";
+import {worldData, zoneKeys} from "./worldOps";
+import {worldMaps} from "./mapOps";
+import {unitTypeData} from "./unitTypeOps";
+import {itemData} from "./itemOps";
+import {DEFAULT_QUESTS_PATH, worldQuests, zoneData} from "./zoneOps";
 import {isValidIdentifier, resolvePath, worldFile} from "./worldPaths";
 
 const COMPLETED = "quest/completed/";
@@ -153,4 +156,73 @@ export function questGraph(quests) {
   }
   for (const flag of [...flags].sort()) nodes.push({id: `flag:${flag}`, kind: "flag", flag, name: flag});
   return {nodes, edges};
+}
+
+// What the quest editor's pickers offer, from the draft: each zone (key,
+// name) with its maps (key, name, NCUs, units), unit types and items.
+export function questChoices(draft) {
+  const maps = worldMaps(draft);
+  return zoneKeys(draft).map((zone) => {
+    const data = zoneData(draft, zone) ?? {};
+    return {
+      key: zone,
+      name: data.name || zone,
+      maps: maps.filter(([z]) => z === zone).map(([, map, mapFileData]) => ({
+        key: map,
+        name: mapFileData.name || map,
+        ncus: (mapFileData.ncus ?? []).map((ncu) => ({identifier: ncu.identifier, name: ncu.name || ncu.identifier})),
+        units: (mapFileData.units ?? []).map((unit) => ({identifier: unit.identifier, unitType: unit.unitType})),
+      })),
+      unitTypes: Object.keys(data.unitTypes ?? {}).sort().map((key) => ({key, name: unitTypeData(draft, key)?.name || key})),
+      items: Object.keys(data.items ?? {}).sort().map((key) => ({key, name: itemData(draft, key)?.name || key})),
+    };
+  });
+}
+
+// The world's chains: [{identifier, name}], by name.
+export function questChains(draft) {
+  const chains = new Map();
+  for (const quest of worldQuests(draft)) {
+    if (quest.chainIdentifier && !chains.has(quest.chainIdentifier)) chains.set(quest.chainIdentifier, quest.chainName || quest.chainIdentifier);
+  }
+  return [...chains].map(([identifier, name]) => ({identifier, name})).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Where a graph node's position is saved: a quest's under its identifier
+// (so renames carry it), a flag's under its node id.
+export const positionKey = (node) => (node.kind === "quest" ? node.identifier : node.id);
+
+const COLUMN_WIDTH = 240;
+const ROW_HEIGHT = 110;
+
+// Every node's position: saved ones as they are, the rest laid out in
+// columns by how many links lead to them (so prerequisites sit left of
+// what they unlock), stacked within each column. Keyed by node id.
+export function questLayout(graph, saved = {}) {
+  const incoming = new Map(graph.nodes.map((node) => [node.id, []]));
+  for (const edge of graph.edges) incoming.get(edge.to)?.push(edge.from);
+  const depths = new Map();
+  const depthOf = (id, visiting = new Set()) => {
+    if (depths.has(id)) return depths.get(id);
+    if (visiting.has(id)) return 0; // a cycle; Validate doesn't forbid them
+    visiting.add(id);
+    const depth = Math.max(-1, ...(incoming.get(id) ?? []).map((from) => depthOf(from, visiting))) + 1;
+    visiting.delete(id);
+    depths.set(id, depth);
+    return depth;
+  };
+  const rows = new Map();
+  const positions = {};
+  for (const node of graph.nodes) {
+    const position = saved[positionKey(node)];
+    if (position) {
+      positions[node.id] = position;
+      continue;
+    }
+    const depth = depthOf(node.id);
+    const row = rows.get(depth) ?? 0;
+    rows.set(depth, row + 1);
+    positions[node.id] = {x: depth * COLUMN_WIDTH, y: row * ROW_HEIGHT};
+  }
+  return positions;
 }

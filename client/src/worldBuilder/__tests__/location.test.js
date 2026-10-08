@@ -23,6 +23,13 @@ describe("location", () => {
     expect(formatLocation({item: "iron-ring"})).toEqual("#/item/iron-ring");
   });
 
+  it("round-trips the quests level, with a quest open or not", () => {
+    expect(parseLocation("#/quests")).toEqual({quests: true});
+    expect(formatLocation({quests: true})).toEqual("#/quests");
+    expect(parseLocation("#/quests/rat-hunt")).toEqual({quests: true, quest: "rat-hunt"});
+    expect(formatLocation({quests: true, quest: "rat-hunt"})).toEqual("#/quests/rat-hunt");
+  });
+
   it("ignores segments it doesn't understand", () => {
     expect(parseLocation("#/nonsense/x")).toEqual({});
     expect(parseLocation("#/zone")).toEqual({});
