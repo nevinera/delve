@@ -9,11 +9,15 @@
 // 3. Each zone, fully resolved, passes the server's zone validator.
 // 4. The world passes its validator, and its links and entry points name
 //    real zone connections.
-import {validateWorld, validateWorldReferences, validateZone} from "../../validators/validateContent";
+// 5. The quests file (if any) passes the server's quest validators, and
+//    everything its quests name exists in the world's zones.
+import {validateQuests, validateWorld, validateWorldReferences, validateZone} from "../../validators/validateContent";
 import {isValidIdentifier, resolvePath, worldDir, worldFile, zonesDir} from "./worldPaths";
 import {isJsonPath} from "./RepoSnapshot";
 import {zoneKeys} from "./worldOps";
-import {mapKeysInZone, resolveZone} from "./zoneOps";
+import {mapKeysInZone, resolveZone, zoneData} from "./zoneOps";
+import {mapData} from "./mapOps";
+import {questsFile} from "./questOps";
 
 const ASSET_FIELDS = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl", "icon_url"]);
 
@@ -109,7 +113,37 @@ async function checkWorld(draft) {
   return refs.valid ? [] : [{file, location: {}, message: refs.error.message}];
 }
 
+// What the quest reference checks need of each zone: its unit type and
+// item keys, and its maps' identifiers, NCUs and units.
+function questZones(draft) {
+  const identifiers = (list) => (list ?? []).map(({identifier}) => ({identifier}));
+  return Object.fromEntries(zoneKeys(draft).map((zone) => {
+    const data = zoneData(draft, zone) ?? {};
+    const maps = mapKeysInZone(draft, zone).map((map) => {
+      const mapFileData = mapData(draft, zone, map) ?? {};
+      return {identifier: map, ncus: identifiers(mapFileData.ncus), units: identifiers(mapFileData.units)};
+    });
+    const keys = (section) => Object.fromEntries(Object.keys(data[section] ?? {}).map((key) => [key, {}]));
+    return [zone, {unitTypes: keys("unitTypes"), items: keys("items"), maps}];
+  }));
+}
+
+// Where to look for a problem at a quests-file path like "$[2].objectives[0]".
+function questLocation(quests, path) {
+  const index = /^\$\[(\d+)\]/.exec(path ?? "")?.[1];
+  const identifier = index !== undefined ? quests[Number(index)]?.identifier : null;
+  return identifier ? {quests: true, quest: identifier} : {quests: true};
+}
+
+async function checkQuests(draft) {
+  const file = questsFile(draft);
+  if (!file || !draft.exists(file)) return [];
+  const quests = draft.read(file);
+  const {valid, error} = await validateQuests(quests, questZones(draft));
+  return valid ? [] : [{file, location: questLocation(Array.isArray(quests) ? quests : [], error.path), message: error.message}];
+}
+
 export async function validateDraft(draft) {
-  const [zoneProblems, worldProblems] = await Promise.all([checkZones(draft), checkWorld(draft)]);
-  return [...checkReferences(draft), ...checkIdentifiers(draft), ...worldProblems, ...zoneProblems];
+  const [zoneProblems, worldProblems, questProblems] = await Promise.all([checkZones(draft), checkWorld(draft), checkQuests(draft)]);
+  return [...checkReferences(draft), ...checkIdentifiers(draft), ...worldProblems, ...zoneProblems, ...questProblems];
 }

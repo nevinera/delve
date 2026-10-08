@@ -3,7 +3,7 @@
 # requires for FetchAbilityContentJob/FetchCharacterClassContentJob, rather
 # than re-implementing that (constantly-changing) schema a second time in JS.
 class Build::ValidatorsController < Build::BaseController
-  skip_authorization_check only: [:ability, :character_class, :unit_type, :item, :map, :zone, :world, :world_references]
+  skip_authorization_check only: [:ability, :character_class, :unit_type, :item, :map, :zone, :world, :world_references, :quests]
 
   def ability
     validate_with(Validators::AbilityValidator)
@@ -61,6 +61,21 @@ class Build::ValidatorsController < Build::BaseController
   def world_references
     data = request_data
     Validators::WorldReferences.validate!(data["world"] || {}, data["zones"] || {})
+    render json: {valid: true}
+  rescue Validators::ValidationError => e
+    render json: {valid: false, error: {message: e.message, path: e.path}}
+  rescue JSON::ParserError
+    render json: {valid: false, error: {message: "request body must be valid JSON", path: "$"}}, status: :bad_request
+  end
+
+  # A world's quests file, then its references into the world's zones (see
+  # Validators::QuestsValidator and Validators::QuestReferences), the same
+  # checks import runs. Takes {quests, zones: {key: zone}}; each zone needs
+  # its unitTypes and items keys, and its maps' identifiers, NCUs and units.
+  def quests
+    data = request_data
+    Validators::QuestsValidator.validate!(data["quests"])
+    Validators::QuestReferences.validate!(data["quests"], data["zones"] || {})
     render json: {valid: true}
   rescue Validators::ValidationError => e
     render json: {valid: false, error: {message: e.message, path: e.path}}
