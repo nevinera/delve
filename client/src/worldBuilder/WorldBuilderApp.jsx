@@ -335,7 +335,7 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
       </header>
       {level}
       {editingQuest && (
-        <QuestEditor key={editingQuest} draft={draft} quest={editingQuest} onChange={setDraft} onOpenQuest={openQuest} onClose={closeQuest} />
+        <QuestEditor key={editingQuest} draft={draft} quest={editingQuest} onChange={setDraft} onOpenQuest={openQuest} onClose={closeQuest} library={library} repo={repo} />
       )}
     </div>
   );

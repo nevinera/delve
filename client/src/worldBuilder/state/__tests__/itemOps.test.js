@@ -2,7 +2,12 @@ import {describe, it, expect} from "vitest";
 import {fixtureDraft} from "./fixtureWorld";
 import {zoneData} from "../zoneOps";
 import {mapData} from "../mapOps";
-import {createItem, deleteItem, itemData, itemKeys, itemUses, renameItem, updateItem} from "../itemOps";
+import {addItemToZone, createItem, deleteItem, itemData, itemKeys, itemRewards, itemUses, renameItem, updateItem} from "../itemOps";
+import {questData} from "../questOps";
+
+const rewarding = (draft) => draft.write("worlds/w/quests.json", [
+  {identifier: "q", name: "Q", rewards: [{zone: "forest", item: "spare"}, {zone: "forest", item: "other"}]},
+]);
 
 describe("itemOps", () => {
   it("lists the world's items, and keeps an item's identifier its key", () => {
@@ -36,5 +41,19 @@ describe("itemOps", () => {
   it("refuses to delete an item a unit drops, saying where", () => {
     expect(() => deleteItem(fixtureDraft(), "iron-ring")).toThrow('"iron-ring" is still dropped on forest/hub (1)');
     expect(itemKeys(deleteItem(createItem(fixtureDraft(), "spare"), "spare"))).toEqual(["iron-ring"]);
+  });
+
+  it("adds an item to a zone's items once", () => {
+    const draft = addItemToZone(fixtureDraft(), "cave", "iron-ring");
+    expect(zoneData(draft, "cave").items).toEqual({"iron-ring": {$ref: "../../items/iron-ring.json", referenceTo: "item"}});
+    expect(addItemToZone(draft, "cave", "iron-ring")).toBe(draft);
+    expect(addItemToZone(draft, "nowhere", "iron-ring")).toBe(draft);
+  });
+
+  it("finds, renames and protects quest rewards", () => {
+    const draft = rewarding(createItem(fixtureDraft(), "spare"));
+    expect(itemRewards(draft, "spare")).toEqual(["q"]);
+    expect(() => deleteItem(draft, "spare")).toThrow('"spare" is still a reward of q');
+    expect(questData(renameItem(draft, "spare", "gift"), "q").rewards).toEqual([{zone: "forest", item: "gift"}, {zone: "forest", item: "other"}]);
   });
 });

@@ -6,7 +6,6 @@ import {stableStringify} from "./WorldDraft";
 import {worldData, zoneKeys} from "./worldOps";
 import {worldMaps} from "./mapOps";
 import {unitTypeData} from "./unitTypeOps";
-import {itemData} from "./itemOps";
 import {DEFAULT_QUESTS_PATH, worldQuests, zoneData} from "./zoneOps";
 import {isValidIdentifier, resolvePath, worldFile} from "./worldPaths";
 
@@ -168,7 +167,8 @@ export function questGraph(quests) {
 }
 
 // What the quest editor's pickers offer, from the draft: each zone (key,
-// name) with its maps (key, name, NCUs, units), unit types and items.
+// name) with its maps (key, name, NCUs, units) and unit types. (Rewards
+// can be any of the world's items; see itemOps.addItemToZone.)
 export function questChoices(draft) {
   const maps = worldMaps(draft);
   return zoneKeys(draft).map((zone) => {
@@ -183,7 +183,6 @@ export function questChoices(draft) {
         units: (mapFileData.units ?? []).map((unit) => ({identifier: unit.identifier, unitType: unit.unitType})),
       })),
       unitTypes: Object.keys(data.unitTypes ?? {}).sort().map((key) => ({key, name: unitTypeData(draft, key)?.name || key})),
-      items: Object.keys(data.items ?? {}).sort().map((key) => ({key, name: itemData(draft, key)?.name || key})),
     };
   });
 }

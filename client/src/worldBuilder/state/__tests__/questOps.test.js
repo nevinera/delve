@@ -89,7 +89,7 @@ describe("questOps", () => {
     ]);
   });
 
-  it("offers each zone's maps, NCUs, units, unit types and items for picking", () => {
+  it("offers each zone's maps, NCUs, units and unit types for picking", () => {
     const draft = fixtureDraft()
       .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle"}]}))
       .update("worlds/w/zones/forest/forest.json", (zone) => ({...zone, items: {"iron-ring": {$ref: "../../items/iron-ring.json"}}}));
@@ -99,9 +99,8 @@ describe("questOps", () => {
       maps: [{key: "hub", name: "Hub", ncus: [{identifier: "grizzle", name: "Grizzle"}],
         units: [{identifier: "goblin-a", unitType: "goblin"}, {identifier: "archer-a", unitType: "archer"}]}],
       unitTypes: [{key: "goblin", name: "Goblin"}],
-      items: [{key: "iron-ring", name: "Iron Ring"}],
     });
-    expect(cave).toMatchObject({key: "cave", maps: [], unitTypes: [], items: []});
+    expect(cave).toMatchObject({key: "cave", maps: [], unitTypes: []});
   });
 
   it("lists chains by name", () => {

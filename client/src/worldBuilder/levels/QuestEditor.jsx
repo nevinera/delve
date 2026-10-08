@@ -1,5 +1,9 @@
 import {useState} from "react";
 import EditModal from "./EditModal";
+import ContentAdder from "./ContentAdder";
+import ItemLevel from "./ItemLevel";
+import {addItemToZone, createItem, itemData, itemKeys} from "../state/itemOps";
+import {libraryItems, prepareItemImport} from "../state/importing";
 import {
   chainColor, completionFlag, deleteQuest, followUps, prerequisites, questChains, questChoices, questData,
   renameQuest, updateQuest, worldQuests,
@@ -121,13 +125,13 @@ function ObjectiveFields({objective, choices, onChange, onRemove}) {
   );
 }
 
-function RewardFields({reward, choices, onChange, onRemove}) {
-  const zone = zoneOf(choices, reward.zone);
+// A reward: any of the world's items (items), awarded from a zone, which
+// gets the item in its items when picked (see addItemToZone).
+function RewardFields({reward, choices, items, onChange, onRemove}) {
   return (
     <li className="quest-pair">
-      <Choice value={reward.zone} options={zoneOptions(choices)} blank="Zone…" onChange={(z) => onChange({zone: z ?? "", item: ""})} />
-      <Choice value={reward.item} options={(zone?.items ?? []).map((i) => ({value: i.key, label: i.name}))} blank="Item…"
-        onChange={(item) => onChange({...reward, item: item ?? ""})} />
+      <Choice value={reward.zone} options={zoneOptions(choices)} blank="Zone…" onChange={(z) => onChange({...reward, zone: z ?? ""})} />
+      <Choice value={reward.item} options={items} blank="Item…" onChange={(item) => onChange({...reward, item: item ?? ""})} />
       <button type="button" aria-label="Remove reward" onClick={onRemove}>✕</button>
     </li>
   );
@@ -152,9 +156,11 @@ function QuestLinks({label, identifiers, draft, onOpen}) {
 // (the quests page, an NCU on a map, another quest). Edits go straight
 // into the draft; links to related quests swap it to that quest. Key it
 // by the quest's identifier, so opening another quest starts afresh.
-export default function QuestEditor({draft, quest: identifier, onChange, onOpenQuest, onClose}) {
+export default function QuestEditor({draft, quest: identifier, onChange, onOpenQuest, onClose, library = null, repo = null}) {
   const [renaming, setRenaming] = useState(identifier);
   const [error, setError] = useState(null);
+  const [addingItem, setAddingItem] = useState(false);
+  const [creatingItem, setCreatingItem] = useState(null); // a just-created item's key, open for editing
   const quest = questData(draft, identifier);
   if (!quest) {
     return <EditModal title="Quest" label="Quest" onDone={onClose}><p className="notice-error">No quest "{identifier}".</p></EditModal>;
@@ -163,6 +169,15 @@ export default function QuestEditor({draft, quest: identifier, onChange, onOpenQ
   const quests = worldQuests(draft).filter((q) => q.identifier !== identifier);
   const chains = questChains(draft);
   const set = (fields) => onChange(updateQuest(draft, identifier, compact({...quest, ...fields})));
+  const items = itemKeys(draft).map((key) => ({value: key, label: itemData(draft, key)?.name || key}));
+  // Rewards whose item the zone now needs in its items.
+  const setRewards = (next) => {
+    let updated = updateQuest(draft, identifier, compact({...quest, rewards: next.length ? next : undefined}));
+    for (const reward of next) if (reward.zone && reward.item) updated = addItemToZone(updated, reward.zone, reward.item);
+    onChange(updated);
+  };
+  const rewardZone = quest.offeredBy?.zone ?? "";
+  const addReward = (item) => setRewards([...(quest.rewards ?? []), {zone: rewardZone, item}]);
   const attempt = (fn) => {
     try {
       setError(null);
@@ -255,12 +270,40 @@ export default function QuestEditor({draft, quest: identifier, onChange, onOpenQ
         <h3>Rewards</h3>
         <ul className="quest-rewards">
           {rewards.map((reward, i) => (
-            <RewardFields key={i} reward={reward} choices={choices}
-              onChange={(next) => set({rewards: setAt(rewards, i, next)})}
-              onRemove={() => set({rewards: rewards.length > 1 ? rewards.filter((_, j) => j !== i) : undefined})} />
+            <RewardFields key={i} reward={reward} choices={choices} items={items}
+              onChange={(next) => setRewards(setAt(rewards, i, next))}
+              onRemove={() => setRewards(rewards.filter((_, j) => j !== i))} />
           ))}
         </ul>
-        <button type="button" className="add-entry" onClick={() => set({rewards: [...rewards, {zone: quest.offeredBy?.zone ?? "", item: ""}]})}>Add reward</button>
+        <span className="quest-pair">
+          <button type="button" className="add-entry" onClick={() => addReward("")}>Add reward</button>
+          <button type="button" className="add-entry" aria-expanded={addingItem} onClick={() => setAddingItem((a) => !a)}>New item…</button>
+        </span>
+        {addingItem && (
+          <div className="map-loot-item-popover quest-item-popover" role="dialog" aria-label="Add a new item">
+            <ContentAdder
+              noun="item" draft={draft} library={library} list={libraryItems} prepare={prepareItemImport} create={createItem}
+              onChange={onChange}
+              onAdded={(key) => {
+                setAddingItem(false);
+                onChange((current) => addItemToZone(updateQuest(current, identifier, {...quest, rewards: [...rewards, {zone: rewardZone, item: key}]}), rewardZone, key));
+              }}
+              onCreated={(key) => {
+                setAddingItem(false);
+                setCreatingItem(key);
+              }}
+            />
+          </div>
+        )}
+        {creatingItem && (
+          <EditModal title={`Item: ${itemData(draft, creatingItem)?.name || creatingItem}`} label={`Edit item ${creatingItem}`}
+            onDone={() => {
+              addReward(creatingItem);
+              setCreatingItem(null);
+            }}>
+            <ItemLevel draft={draft} item={creatingItem} onChange={onChange} repo={repo} />
+          </EditModal>
+        )}
 
         <h3>Delete</h3>
         <button type="button" className="add-entry"
