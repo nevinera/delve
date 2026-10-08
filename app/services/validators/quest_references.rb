@@ -1,6 +1,7 @@
 module Validators
   # Cross-checks a world's quests against its zones: every NCU, unit, unit
-  # type, map and item a quest names must exist in the named zone. Run after
+  # type, map and item a quest names must exist in the named zone (and an
+  # objective's NCU or unit on its map, when it names one). Run after
   # QuestsValidator and each zone's ZoneValidator have passed.
   class QuestReferences
     include Helpers
@@ -31,7 +32,7 @@ module Validators
         objective_path = index_path(child_path(path, "objectives"), i)
         case objective["type"]
         when "talk" then validate_ncu!(objective, path: objective_path)
-        when "reach" then map(objective, path: objective_path)
+        when "reach" then objective["map"] ? map(objective, path: objective_path) : zone!(objective, path: objective_path)
         when "kill" then validate_kill!(objective, path: objective_path)
         end
       end
@@ -45,10 +46,12 @@ module Validators
       end
     end
 
+    # With a map (talk objectives only), the NCU must be on that map.
     def validate_ncu!(ref, path:)
-      ncus = maps(zone!(ref, path: path)).flat_map { |map| map["ncus"] || [] }
-      return if ncus.any? { |ncu| ncu["identifier"] == ref["ncu"] }
-      raise missing(ref, "NCU", ref["ncu"], path: path)
+      on_maps = ref["map"] ? [map(ref, path: path)] : maps(zone!(ref, path: path))
+      return if on_maps.any? { |map| ncu_on?(map, ref["ncu"]) }
+      on_map = " on map \"#{ref["map"]}\"" if ref["map"]
+      raise ValidationError.new("zone \"#{ref["zone"]}\" has no NCU \"#{ref["ncu"]}\"#{on_map}", path: path)
     end
 
     def validate_kill!(objective, path:)
@@ -73,6 +76,8 @@ module Validators
       on_map = " on map \"#{objective["map"]}\"" if objective["map"]
       raise ValidationError.new("zone \"#{objective["zone"]}\" has no unit \"#{objective["unit"]}\"#{on_map}", path: path)
     end
+
+    def ncu_on?(map, identifier) = (map["ncus"] || []).any? { |ncu| ncu["identifier"] == identifier }
 
     def unit_on?(map, identifier) = (map["units"] || []).any? { |unit| unit["identifier"] == identifier }
 

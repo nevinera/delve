@@ -17,8 +17,9 @@ module Validators
     def validate!(data, path: "$")
       require_object!(data, path: path)
       validate_identifier!(data, path: path)
-      %w[name chainIdentifier chainName offerText].each { |key| require_non_empty_string!(data, key, path: path) }
+      %w[name chainIdentifier chainName offerText description].each { |key| require_non_empty_string!(data, key, path: path) }
       validate_texts!(data, path: path)
+      require_boolean!(data, "marker", path: path) if given?(data, "marker")
       validate_ncus!(data, path: path)
       validate_flags!(data, path: path)
       validate_timer!(data, path: path) if given?(data, "timer")
@@ -41,7 +42,7 @@ module Validators
     end
 
     def validate_texts!(data, path:)
-      %w[description progressText completionText].each do |key|
+      %w[progressText completionText].each do |key|
         require_string!(data, key, path: path) if given?(data, key)
       end
     end
@@ -90,10 +91,10 @@ module Validators
     def validate_objective!(data, path:)
       require_object!(data, path: path)
       require_one_of!(data["type"], OBJECTIVE_TYPES, path: child_path(path, "type"))
-      require_non_empty_string!(data, "zone", path: path)
+      %w[zone text].each { |key| require_non_empty_string!(data, key, path: path) }
+      require_non_empty_string!(data, "map", path: path) if given?(data, "map")
       case data["type"]
       when "talk" then require_non_empty_string!(data, "ncu", path: path)
-      when "reach" then require_non_empty_string!(data, "map", path: path)
       when "kill" then validate_kill!(data, path: path)
       end
     end
@@ -102,17 +103,18 @@ module Validators
       unless given?(data, "unit") ^ given?(data, "unitType")
         raise ValidationError.new("exactly one of unit or unitType is required", path: path)
       end
-      %w[unit unitType map].each { |key| require_non_empty_string!(data, key, path: path) if given?(data, key) }
+      %w[unit unitType].each { |key| require_non_empty_string!(data, key, path: path) if given?(data, key) }
       return unless given?(data, "count")
       count = require_integer!(data, "count", path: path)
       raise ValidationError.new("count must be at least 1", path: child_path(path, "count")) if count < 1
     end
 
-    # Progress is tracked by an objective's content, so two identical
-    # objectives would share it.
+    # Progress is tracked by an objective's content (its hash, which leaves
+    # out its text), so two objectives with the same content would share it.
     def validate_distinct_objectives!(objectives, path:)
-      objectives.each_with_index do |objective, i|
-        next unless objectives.first(i).include?(objective)
+      hashes = objectives.map { |objective| QuestObjective.hash_of(objective) }
+      hashes.each_with_index do |hash, i|
+        next unless hashes.first(i).include?(hash)
         raise ValidationError.new("duplicates an earlier objective", path: index_path(path, i))
       end
     end

@@ -3,9 +3,10 @@ require "digest"
 # A quest objective's hash identifies it across world versions: progress
 # is kept on a QuestProgress row under the hash, so the same objective in
 # a new version keeps its progress and a changed one starts over (see
-# docs/quests.md#world-versions). Only these fields count, in this order,
-# with blanks and the default count of 1 dropped; the game server and
-# client use the hashes Rails returns rather than computing their own.
+# docs/quests.md#world-versions). Only these fields count (not its text),
+# in this order, with blanks and the default count of 1 dropped; the game
+# server and client use the hashes Rails returns rather than computing
+# their own.
 module QuestObjective
   FIELDS = %w[type zone ncu unit unitType count map].freeze
 
@@ -20,4 +21,8 @@ module QuestObjective
   end
 
   def hash_of(objective) = Digest::SHA1.hexdigest(normalize(objective).to_json)
+
+  # What's kept of an objective: its normalized content plus its text,
+  # which can change without resetting progress.
+  def stored(objective) = normalize(objective).merge(objective.slice("text"))
 end

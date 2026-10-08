@@ -3,8 +3,8 @@ require "rails_helper"
 RSpec.describe CharacterQuest do
   let(:version) { create(:world_version) }
   let(:world_character) { create(:world_character, world: version.world, world_version: version) }
-  let(:kill) { {"type" => "kill", "zone" => "cave", "unitType" => "rat", "count" => 5} }
-  let(:talk) { {"type" => "talk", "zone" => "cave", "ncu" => "grizzle"} }
+  let(:kill) { {"type" => "kill", "zone" => "cave", "unitType" => "rat", "count" => 5, "text" => "Kill rats"} }
+  let(:talk) { {"type" => "talk", "zone" => "cave", "ncu" => "grizzle", "text" => "Talk to Grizzle"} }
   let(:definition) do
     {
       "identifier" => "rat-hunt", "name" => "Rat Hunt", "chainIdentifier" => "hunts", "chainName" => "Hunts",
@@ -42,11 +42,6 @@ RSpec.describe CharacterQuest do
       expect { described_class.accept!(world_character, definition) }.to raise_error(described_class::AlreadyCompleted)
     end
 
-    it "refuses more than 20 active quests" do
-      20.times { |i| described_class.accept!(world_character, definition.merge("identifier" => "q#{i}")) }
-      expect { described_class.accept!(world_character, definition) }.to raise_error(described_class::TooManyActive)
-    end
-
     it "refuses an invalid identifier, leaving nothing behind" do
       expect { described_class.accept!(world_character, definition.merge("identifier" => "a/b")) }.to raise_error(ActiveRecord::RecordInvalid)
       expect(QuestProgress.count).to eq(0)
@@ -67,6 +62,12 @@ RSpec.describe CharacterQuest do
       quest.sync!(definition.merge("objectives" => [talk, changed], "timer" => "10m"))
       expect(quest.reload).to have_attributes(world_version: newer, definition: include("timer" => "10m"))
       expect(quest.quest_progresses.map { |p| [p.position, p.objective, p.count] }).to eq([[0, talk, 1], [1, changed, 0]])
+    end
+
+    it "keeps progress on a reworded objective, taking its new text" do
+      reworded = kill.merge("text" => "Thin out the rats")
+      quest.sync!(definition.merge("objectives" => [reworded, talk]))
+      expect(quest.reload.quest_progresses.map { |p| [p.objective["text"], p.count] }).to eq([["Thin out the rats", 3], ["Talk to Grizzle", 1]])
     end
 
     it "keeps the timer" do

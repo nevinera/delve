@@ -123,8 +123,9 @@ class ImportWorldVersionJob < ApplicationJob
   end
 
   # Stores references, checksums, and the structure Rails needs without
-  # re-reading the files: the display name, which zone connection is the
-  # default entry point, and where each zone's exits lead.
+  # re-reading the files: the display names (the world's, and each zone's
+  # and its maps'), which zone connection is the default entry point, and
+  # where each zone's exits lead.
   def save!(sha:, base_url:, world_data:, zones:, entry:)
     WorldVersion.transaction do
       replace_zones!(zones, entry)
@@ -137,13 +138,17 @@ class ImportWorldVersionJob < ApplicationJob
     end
   end
 
+  # {map identifier: name} for the zone's named maps.
+  def map_names(data) = (data["maps"] || []).filter_map { |map| [map["identifier"], map["name"]] if map["name"].present? }.to_h
+
   def replace_zones!(zones, entry)
     entry_zone, entry_connection = entry
     Zone.where(world_version: @version).delete_all
     zones.each do |key, zone|
       @version.zones.create!(
         identifier: key, path: zone[:path], content_sha: zone[:content_sha],
-        links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone)
+        links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone),
+        name: zone[:data]["name"], map_names: map_names(zone[:data])
       )
     end
   end

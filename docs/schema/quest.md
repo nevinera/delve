@@ -1,6 +1,6 @@
 # Quest
 
-A task a player accepts from an NCU, completes by meeting its objectives, and optionally turns in to an NCU for rewards. Quests are defined in a world's quests file (see `questsPath` in [World](world.md)), and may reference NCUs and items in any zone of that world.
+A task a player takes on by talking to an NCU, completes by meeting its objectives, and optionally turns in to an NCU for rewards. Quests are defined in a world's quests file (see `questsPath` in [World](world.md)), and may reference NCUs and items in any zone of that world.
 
 ## Quests file
 
@@ -16,8 +16,9 @@ A JSON array of Quest objects. Importing a world version validates it, and check
 | `chainName` | string | yes | Display name for the chain. Must be the same for every quest sharing a `chainIdentifier`. |
 | `offeredBy` | NcuRef | yes | The NCU that offers the quest. |
 | `turnIn` | NcuRef | no | The NCU the quest is turned in to. Without one, the quest completes wherever its objectives are met. |
-| `description` | string | no | Quest log text. Defaults to `<NCU name> said: <offerText>`. |
-| `offerText` | string | yes | What the offering NCU says when offering the quest. |
+| `offerText` | string | yes | The dialogue option that starts the quest: a short line the player says to the offering NCU. |
+| `description` | string | yes | The offering NCU's reply when the quest starts, also shown in the quest log. |
+| `marker` | boolean | no | Default `false`. When `true`, the offering NCU shows a quest marker while the quest is on offer, and its dialogue option shows the same marker. Otherwise the dialogue is the only hint. |
 | `progressText` | string | no | What the turn-in NCU says while the quest is incomplete. |
 | `completionText` | string | no | What the turn-in NCU says on completion. |
 | `requiresFlags` | array of strings | no | Flags the character must have to be offered the quest. |
@@ -48,41 +49,36 @@ Failing (for example, timer expiry) or abandoning a quest sets no flags; the pla
 
 ## Objective
 
-Every objective has a `type`; its other fields depend on the type.
+Every objective has a `type`, `text`, and a `zone`, and may name a `map` in that zone; its other fields depend on the type.
 
-| Type | Meaning |
-|---|---|
-| `talk` | Talk to an NCU. |
-| `kill` | Kill some number of a unit type. |
-| `reach` | Enter a map. |
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `type` | string | yes | `talk`, `kill` or `reach` (below). |
+| `text` | string | yes | What the quest log shows for the objective, like `"Kill 5 rats in the cellar"`. Never generated. |
+| `zone` | string | yes | Zone identifier, within the quest's world. The quest log lists the objective under this zone. |
+| `map` | string | no | Map identifier within that zone. What it means depends on the type. |
 
-No two objectives in one quest may be identical. Progress is tracked per objective by its content, which is what lets it carry over to a new world version (see [Quests](../quests.md#world-versions)).
+No two objectives in one quest may have the same content (every field but `text`). Progress is tracked per objective by its content, which is what lets it carry over to a new world version (see [Quests](../quests.md#world-versions)); rewording `text` keeps progress.
 
 A `talk` objective and `turnIn` are independent, and may name the same NCU (talk first for a full dialogue tree, then turn in).
 
-**`talk` fields:**
+**`talk`:** talk to an NCU.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `zone` | string | yes | Zone defining the NCU. |
-| `ncu` | string | yes | NCU identifier within that zone. |
+| `ncu` | string | yes | NCU identifier within the zone. With `map`, the NCU must be on that map. |
 
-**`kill` fields:**
+**`kill`:** kill some number of a unit or unit type. With `map`, only kills on that map count.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
-| `zone` | string | yes | | Zone defining the unit or unit type. |
 | `unit` | string | no | | A specific unit's identifier (unique within the zone). Exactly one of `unit` or `unitType` is required. With `map`, the unit must be on that map. |
 | `unitType` | string | no | | A unit type identifier; any unit of that type counts. |
 | `count` | integer | no | `1` | Number of kills required. At least 1. |
-| `map` | string | no | | Only count kills on this map. |
 
-**`reach` fields:**
+Every player who can loot the unit gets credit for the kill.
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `zone` | string | yes | Zone identifier. |
-| `map` | string | yes | Map identifier within that zone. |
+**`reach`:** enter the zone, or with `map`, that map. Arriving or spawning there both count.
 
 ## Example
 
@@ -95,14 +91,16 @@ A `talk` objective and `turnIn` are independent, and may name the same NCU (talk
     "chainName": "Grizzle's Troubles",
     "offeredBy": { "zone": "goblin-cave", "ncu": "grizzle" },
     "turnIn": { "zone": "goblin-cave", "ncu": "grizzle" },
-    "offerText": "Psst. Clear out those rats and I'll make it worth your while.",
+    "offerText": "Got any work for me?",
+    "description": "Psst. Clear out those rats and I'll make it worth your while.",
+    "marker": true,
     "progressText": "Still rats down there?",
     "completionText": "Heh. Knew you had it in you.",
     "requiresFlags": ["custom/grizzle-likes-you"],
     "grantsFlags": ["custom/grizzle-trusts-you"],
     "timer": "5m",
     "objectives": [
-      { "type": "kill", "zone": "goblin-cave", "unitType": "rat", "count": 5, "map": "gc1-goblin-cave-entrance" }
+      { "type": "kill", "text": "Kill 5 rats at the cave entrance", "zone": "goblin-cave", "unitType": "rat", "count": 5, "map": "gc1-goblin-cave-entrance" }
     ],
     "rewards": [
       { "zone": "goblin-cave", "item": "rusty-dagger" }

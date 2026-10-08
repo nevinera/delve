@@ -1,10 +1,10 @@
 # Quests
 
-A quest is a task a player accepts, usually from an NCU. It has zero or more objectives, all of
+A quest is a task a player takes on by talking to an NCU. It has zero or more objectives, all of
 which must be met, and may name an NCU to turn it in to. Completing a quest can grant flags and
 item rewards. Quests can have a time limit (in-game time, up to 60 minutes); running out fails the
 quest. Any quest can be abandoned. Failing or abandoning a quest has no lasting effect, and the
-player can pick it up again. A character can have up to 20 active quests per world.
+player can pick it up again. There's no limit on how many quests a character can have active.
 
 Schemas: [Quest](schema/quest.md), and `questsPath` in [World](schema/world.md). All of a world's quests
 live in one quests file.
@@ -14,7 +14,9 @@ live in one quests file.
 - **talk**: talk to a specific NCU. Starting any conversation with it counts.
 - **kill**: kill a number of units of a unit type, or one specific unit (a named mob), optionally
   only on one map.
-- **reach**: enter a specific map.
+- **reach**: enter a zone, or a specific map in it.
+
+Every objective names its zone (and may name a map), and has author-written `text` for the log.
 
 A quest with no objectives is a breadcrumb: it exists to send the player to its turn-in NCU.
 
@@ -54,16 +56,30 @@ in the usual completion-flag requirements for authors.
 
 An NCU offers a quest to a character who isn't on it, hasn't completed it, and holds every flag
 in its `requiresFlags`. The game server works out each player's offers on connecting, after they
-talk to an NCU, and after they accept a quest. An NCU with a quest for the player shows a pale
-blue diamond over its token, and its quests are listed at the top of its conversation (an NCU
-with quests but no dialogue can still be talked to). Accepting goes through the game server,
-which checks the offer again.
+talk to an NCU, and after they start a quest. Offers are only made in conversation, for now.
+
+Each quest on offer is a top-level dialogue option, labeled with its `offerText` (an NCU with
+quests but no dialogue can still be talked to). Choosing it starts the quest right away (there's
+no accept step), and the NCU replies with the quest's `description`. Starting goes through the
+game server, which checks the offer again.
+
+By default the dialogue is the only hint that an NCU has a quest. A quest with `marker: true`
+puts a pale blue diamond over its NCU's token while it's on offer, and the same diamond on its
+dialogue option.
 
 ## Quest log
 
-The quest log (default key `J`) lists a player's active quests grouped by chain, with each quest's
-description (or `<NCU name> said: <offerText>`), its objectives' progress, and the time left on
-a timed quest. The client keeps the log itself: it reads the active quests from Rails on load,
+The quest log (default key `J`) is organized by zone, within the current world. It lists the
+zones with something to do, each with a count of entries. A zone's entries are:
+
+- each unfinished objective in that zone: its `text`, progress, map (if it names one), and quest;
+- each quest whose objectives are all met and whose `turnIn` NCU is in that zone.
+
+The current zone's entries are shown; other zones' can be opened, which fetches that zone's name
+and map names from Rails (from its `Zone` row, not its file). Opened zones aren't remembered
+across reloads or zone changes. Timed quests show the time left.
+
+The client keeps the log itself: it reads the active quests from Rails on load,
 then applies the game server's events (`quest-received`, `quest-updated`, `quest-progress`,
 `quest-completed`, `quest-failed`, `quest-abandoned`). Names and texts come from the quests file.
 Abandoning a quest from the log goes through the game server.
@@ -71,8 +87,8 @@ Abandoning a quest from the log goes through the game server.
 ## Progress and completion
 
 The game server tracks objectives in the zone the player is in: `talk` when they start a
-conversation with the NCU, `kill` when a matching unit they tagged (damaged first) dies, and
-`reach` when they arrive on the map. Each step is saved to Rails as it happens.
+conversation with the NCU, `kill` when a matching unit they can loot dies, and
+`reach` when they arrive in the zone or on the map. Each step is saved to Rails as it happens.
 
 A quest with no `turnIn` completes as soon as every objective is met. One with a `turnIn` is
 listed in that NCU's conversation: its `progressText` until it's finished, then its
@@ -105,9 +121,10 @@ to the new definition, or abandons it if the new version doesn't have it (see
 
 | Endpoint | For | Does |
 |---|---|---|
-| `GET /play/characters/:id/worlds/:world_id/quests` | Client | Active quests. |
+| `GET /play/characters/:id/worlds/:world_id/quests` | Client | Active quests, and `zone_names` (`{identifier: name}`) for the character's world version. |
+| `GET /play/characters/:id/worlds/:world_id/quests/zones/:zone` | Client | `{identifier, name, map_names}` for a zone in the character's world version. |
 | `GET /internal_api/world_characters/:id/quests` | Game server | Active quests. |
-| `POST /internal_api/world_characters/:id/quests` `{quest: definition}` | Game server | Accepts it. Idempotent; 422 if completed, or 20 are active. |
+| `POST /internal_api/world_characters/:id/quests` `{quest: definition}` | Game server | Accepts it. Idempotent; 422 if completed. |
 | `POST /internal_api/world_characters/:id/quests/:quest/sync` `{quest: definition}` | Game server | Moves it to a newer definition, keeping progress on unchanged objectives. |
 | `PATCH /internal_api/world_characters/:id/quests/:quest` `{progress: {hash: count}, timer_elapsed_seconds}` | Game server | Sets progress and the timer (absolute values). |
 | `POST /internal_api/world_characters/:id/quests/:quest/complete` | Game server | Grants `quest/completed/<quest>`, the stored `grantsFlags` and rewards; ends the quest. Returns `{flags, items: [{identifier, name}]}` (items newly held). |
@@ -115,5 +132,4 @@ to the new definition, or abandons it if the new version doesn't have it (see
 
 Each quest is `{quest_identifier, world_version_id, timer_elapsed_seconds, definition,
 objectives: [{hash, objective, count, required}]}`. The game server owns the rules
-(requirements, objectives, timers); Rails only checks the 20-quest cap and that a quest isn't
-already completed.
+(requirements, objectives, timers); Rails only checks that a quest isn't already completed.

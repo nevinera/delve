@@ -4,7 +4,7 @@ RSpec.describe Validators::QuestsValidator, type: :validator do
   def quest(identifier, chain: "chain", chain_name: "Chain")
     {
       "identifier" => identifier, "name" => identifier, "chainIdentifier" => chain, "chainName" => chain_name,
-      "offeredBy" => {"zone" => "z", "ncu" => "n"}, "turnIn" => {"zone" => "z", "ncu" => "n"}, "offerText" => "Hi."
+      "offeredBy" => {"zone" => "z", "ncu" => "n"}, "turnIn" => {"zone" => "z", "ncu" => "n"}, "offerText" => "Hi.", "description" => "Hello."
     }
   end
 

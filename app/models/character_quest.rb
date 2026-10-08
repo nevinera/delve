@@ -9,14 +9,12 @@
 # is a QuestProgress row. world_version is the version the definition is
 # from.
 class CharacterQuest < ApplicationRecord
-  MAX_ACTIVE = 20
   # The quest-level fields kept from a definition; objectives become
   # QuestProgress rows.
   STRUCTURE = %w[chainIdentifier offeredBy turnIn requiresFlags grantsFlags timer rewards].freeze
 
   Error = Class.new(StandardError)
   AlreadyCompleted = Class.new(Error)
-  TooManyActive = Class.new(Error)
   UnknownObjective = Class.new(Error)
 
   belongs_to :world_character
@@ -33,19 +31,13 @@ class CharacterQuest < ApplicationRecord
     quest_identifier = definition["identifier"].to_s
     existing = world_character.character_quests.find_by(quest_identifier:)
     return existing if existing
-    check_acceptable!(world_character, quest_identifier)
+    raise AlreadyCompleted, "#{quest_identifier} is already completed" if CharacterFlag.held?(world_character, completion_flag(quest_identifier))
 
     transaction do
       world_character.character_quests.create!(quest_identifier:, world_version_id: world_character.world_version_id)
         .tap { |quest| quest.sync!(definition) }
     end
   end
-
-  def self.check_acceptable!(world_character, quest_identifier)
-    raise AlreadyCompleted, "#{quest_identifier} is already completed" if CharacterFlag.held?(world_character, completion_flag(quest_identifier))
-    raise TooManyActive, "at most #{MAX_ACTIVE} quests can be active at once" if world_character.character_quests.count >= MAX_ACTIVE
-  end
-  private_class_method :check_acceptable!
 
   def self.completion_flag(quest_identifier) = "quest/completed/#{quest_identifier}"
 
@@ -101,7 +93,7 @@ class CharacterQuest < ApplicationRecord
 
   def sync_objective!(objective, position)
     objective_hash = QuestObjective.hash_of(objective)
-    quest_progresses.find_or_initialize_by(objective_hash:).update!(position:, objective: QuestObjective.normalize(objective))
+    quest_progresses.find_or_initialize_by(objective_hash:).update!(position:, objective: QuestObjective.stored(objective))
     objective_hash
   end
 end

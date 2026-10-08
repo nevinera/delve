@@ -21,7 +21,9 @@ RSpec.describe Validators::QuestReferences do
         {"type" => "kill", "zone" => "goblin-cave", "unitType" => "rat", "map" => "depths"},
         {"type" => "kill", "zone" => "goblin-cave", "unit" => "rat-king", "map" => "entrance"},
         {"type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle"},
-        {"type" => "reach", "zone" => "goblin-cave", "map" => "depths"}
+        {"type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle", "map" => "entrance"},
+        {"type" => "reach", "zone" => "goblin-cave", "map" => "depths"},
+        {"type" => "reach", "zone" => "goblin-cave"}
       ],
       "rewards" => [{"zone" => "goblin-cave", "item" => "rusty-dagger"}]
     }
@@ -49,6 +51,14 @@ RSpec.describe Validators::QuestReferences do
 
   it "rejects a talk objective's unknown NCU" do
     expect_invalid(/no NCU "nobody".*objectives\[0\]/, with_objective("type" => "talk", "zone" => "goblin-cave", "ncu" => "nobody"))
+  end
+
+  it "rejects a talk objective's NCU that isn't on its map" do
+    expect_invalid(/no NCU "grizzle" on map "depths"/, with_objective("type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle", "map" => "depths"))
+  end
+
+  it "rejects a zone-only reach objective's unknown zone" do
+    expect_invalid(/unknown zone "nowhere"/, with_objective("type" => "reach", "zone" => "nowhere"))
   end
 
   it "rejects an unknown map" do

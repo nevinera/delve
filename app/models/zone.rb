@@ -1,7 +1,7 @@
 # One zone of an imported WorldVersion: its world zone key (identifier), the
 # path of its .full.json relative to the version's raw_base_url, the file's
 # checksum, and the structure ImportWorldVersionJob extracts from it (entry
-# point, links).
+# point, links, and the zone's and its maps' display names).
 class Zone < ApplicationRecord
   belongs_to :world_version
 

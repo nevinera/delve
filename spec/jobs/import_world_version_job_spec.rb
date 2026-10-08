@@ -105,6 +105,13 @@ RSpec.describe ImportWorldVersionJob, type: :job do
       )
     end
 
+    it "stores each zone's name and its maps' names" do
+      perform
+      zone = version.zones.find_by!(identifier: "goblin-cave")
+      expect(zone.name).to eq("Goblin Cave")
+      expect(zone.map_names).to eq("cave_entrance" => "Cave Entrance", "cave_interior" => "Cave Interior")
+    end
+
     it "creates a zone per world zone, with references and checksums only" do
       perform
       zones = version.zones.order(:identifier)
@@ -184,8 +191,9 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     let(:quests) do
       [{
         "identifier" => "goblin-hunt", "name" => "Goblin Hunt", "chainIdentifier" => "hunts", "chainName" => "Hunts",
-        "offeredBy" => {"zone" => "goblin-cave", "ncu" => "grizzle"}, "offerText" => "Thin them out.",
-        "objectives" => [{"type" => "kill", "zone" => "goblin-cave", "unitType" => "goblin", "count" => 3}]
+        "offeredBy" => {"zone" => "goblin-cave", "ncu" => "grizzle"}, "offerText" => "Any work?",
+        "description" => "Thin them out.",
+        "objectives" => [{"type" => "kill", "text" => "Kill goblins", "zone" => "goblin-cave", "unitType" => "goblin", "count" => 3}]
       }]
     end
     let(:goblin_cave) do

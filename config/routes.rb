@@ -98,6 +98,7 @@ Rails.application.routes.draw do
         resources :character_items, only: [:index, :show]
         get "flags/*flag", to: "character_flags#show", as: :flag, format: false
         resources :character_quests, only: [:index], path: "quests"
+        get "quests/zones/:zone", to: "quest_zones#show", as: :quest_zone
         resources :equipped_items, only: [:index, :update], param: :equipped_slot do
           post :best_available, on: :collection
         end

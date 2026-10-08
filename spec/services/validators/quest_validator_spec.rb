@@ -9,17 +9,20 @@ RSpec.describe Validators::QuestValidator, type: :validator do
       "chainName" => "Grizzle's Troubles",
       "offeredBy" => {"zone" => "goblin-cave", "ncu" => "grizzle"},
       "turnIn" => {"zone" => "goblin-cave", "ncu" => "grizzle"},
-      "offerText" => "Clear out those rats.",
+      "offerText" => "Got any work?",
+      "description" => "Clear out those rats.",
+      "marker" => true,
       "progressText" => "Still rats down there?",
       "completionText" => "Heh.",
       "requiresFlags" => ["custom/grizzle-likes-you"],
       "grantsFlags" => ["custom/grizzle-trusts-you"],
       "timer" => "5m",
       "objectives" => [
-        {"type" => "kill", "zone" => "goblin-cave", "unitType" => "rat", "count" => 5, "map" => "entrance"},
-        {"type" => "kill", "zone" => "goblin-cave", "unit" => "rat-king"},
-        {"type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle"},
-        {"type" => "reach", "zone" => "goblin-cave", "map" => "depths"}
+        {"type" => "kill", "text" => "Kill rats", "zone" => "goblin-cave", "unitType" => "rat", "count" => 5, "map" => "entrance"},
+        {"type" => "kill", "text" => "Kill the Rat King", "zone" => "goblin-cave", "unit" => "rat-king"},
+        {"type" => "talk", "text" => "Talk to Grizzle", "zone" => "goblin-cave", "ncu" => "grizzle", "map" => "entrance"},
+        {"type" => "reach", "text" => "Find the depths", "zone" => "goblin-cave", "map" => "depths"},
+        {"type" => "reach", "text" => "Find the goblin cave", "zone" => "goblin-cave"}
       ],
       "rewards" => [{"zone" => "goblin-cave", "item" => "rusty-dagger"}]
     }
@@ -47,10 +50,18 @@ RSpec.describe Validators::QuestValidator, type: :validator do
     expect_invalid(/at least one objective or a turnIn/, quest.except("turnIn").merge("objectives" => []))
   end
 
-  %w[identifier name chainIdentifier chainName offeredBy offerText].each do |key|
+  %w[identifier name chainIdentifier chainName offeredBy offerText description].each do |key|
     it "requires #{key}" do
       expect_invalid(/#{key} is required/, quest.except(key))
     end
+  end
+
+  it "accepts a quest without a marker" do
+    expect { validate!(quest.except("marker")) }.not_to raise_error
+  end
+
+  it "rejects a marker that isn't a boolean" do
+    expect_invalid(/marker/, quest.merge("marker" => "yes"))
   end
 
   it "rejects an empty name" do
@@ -97,7 +108,7 @@ RSpec.describe Validators::QuestValidator, type: :validator do
   end
 
   describe "objectives" do
-    def with_objective(objective) = quest.merge("objectives" => [objective])
+    def with_objective(objective) = quest.merge("objectives" => [{"text" => "Do it"}.merge(objective)])
 
     it "rejects an unknown type" do
       expect_invalid(/must be one of/, with_objective("type" => "escort", "zone" => "goblin-cave"))
@@ -107,12 +118,13 @@ RSpec.describe Validators::QuestValidator, type: :validator do
       expect_invalid(/zone is required/, with_objective("type" => "reach", "map" => "depths"))
     end
 
-    it "requires a talk objective's ncu" do
-      expect_invalid(/ncu is required/, with_objective("type" => "talk", "zone" => "goblin-cave"))
+    it "requires text" do
+      expect_invalid(/text is required/, quest.merge("objectives" => [{"type" => "reach", "zone" => "goblin-cave"}]))
+      expect_invalid(/text must not be empty/, with_objective("type" => "reach", "zone" => "goblin-cave", "text" => " "))
     end
 
-    it "requires a reach objective's map" do
-      expect_invalid(/map is required/, with_objective("type" => "reach", "zone" => "goblin-cave"))
+    it "requires a talk objective's ncu" do
+      expect_invalid(/ncu is required/, with_objective("type" => "talk", "zone" => "goblin-cave"))
     end
 
     it "requires exactly one of a kill objective's unit or unitType" do
@@ -125,9 +137,9 @@ RSpec.describe Validators::QuestValidator, type: :validator do
       expect_invalid(/count must be at least 1/, with_objective("type" => "kill", "zone" => "z", "unitType" => "rat", "count" => 0))
     end
 
-    it "rejects identical objectives, regardless of key order" do
-      objective = {"type" => "reach", "zone" => "goblin-cave", "map" => "depths"}
-      reordered = {"map" => "depths", "zone" => "goblin-cave", "type" => "reach"}
+    it "rejects identical objectives, regardless of key order or text" do
+      objective = {"type" => "reach", "text" => "Go down", "zone" => "goblin-cave", "map" => "depths"}
+      reordered = {"map" => "depths", "zone" => "goblin-cave", "type" => "reach", "text" => "Go deeper"}
       expect_invalid(/duplicates an earlier objective.*\$\.objectives\[1\]/, quest.merge("objectives" => [objective, reordered]))
     end
   end
