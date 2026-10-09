@@ -208,6 +208,12 @@ ul.entry-list .entry-error {
 ul.entry-list form {
   margin: 0;
 }
+ul.entry-list .entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
 
 /* wide screens: line the rows up in columns, like a table */
 @media (min-width: 768px) {

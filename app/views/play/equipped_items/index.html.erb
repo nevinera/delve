@@ -1,34 +1,27 @@
 <h1><%= @character.name %> - Equipped Items</h1>
 
-<table>
-  <thead>
-    <tr>
-      <th>Slot</th>
-      <th>Item</th>
-      <th>elvl</th>
-      <th>From</th>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <% EquippedItem::EQUIPPED_SLOTS.each do |slot| %>
-      <% equipped_item = @equipped_items_by_slot[slot] %>
-      <tr>
-        <td><%= EquippedItem::SLOT_LABELS[slot] %></td>
+<ul class="entry-list">
+  <% EquippedItem::EQUIPPED_SLOTS.each do |slot| %>
+    <% equipped_item = @equipped_items_by_slot[slot] %>
+    <li>
+      <span class="entry-title"><%= EquippedItem::SLOT_LABELS[slot] %></span>
+      <% if equipped_item %>
+        <div class="entry-meta">
+          <span><%= equipped_item.character_item.name %></span>
+          <span>elvl <%= equipped_item.character_item.elvl %></span>
+          <span><%= equipped_item.character_item.provenance_label %></span>
+        </div>
+      <% else %>
+        <div class="entry-meta"><em>Empty</em></div>
+      <% end %>
+      <span class="entry-actions">
         <% if equipped_item %>
-          <td><%= equipped_item.character_item.name %></td>
-          <td><%= equipped_item.character_item.elvl %></td>
-          <td><%= equipped_item.character_item.provenance_label %></td>
-          <td><%= link_to "View item", play_character_world_character_item_path(@character, @world, equipped_item.character_item) %></td>
-        <% else %>
-          <td colspan="3"><em>Empty</em></td>
-          <td></td>
+          <%= link_to "View item", play_character_world_character_item_path(@character, @world, equipped_item.character_item) %>
         <% end %>
-        <td><%= link_to "Equippable", play_character_world_character_items_path(@character, @world, slot: EquippedItem.item_slots_for(slot)) %></td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+        <%= link_to "Equippable", play_character_world_character_items_path(@character, @world, slot: EquippedItem.item_slots_for(slot)) %>
+      </span>
+    </li>
+  <% end %>
+</ul>
 
 <%= link_to "Back to #{@world.name || @world.key}", play_character_world_path(@character, @world) %>

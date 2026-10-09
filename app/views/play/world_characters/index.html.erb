@@ -9,38 +9,34 @@
   <% end %>
 </p>
 
-<table>
-  <tbody>
-    <% @rows.each do |row| %>
-      <% world, world_character, current, latest = row.values_at(:world, :world_character, :current, :latest) %>
-      <tr>
-        <td><%= link_to row[:name], play_character_world_path(@character, world) %></td>
-        <td>
-          <% if current %>
-            <%= current.ref %><%= " (expired)" if current.expired? %>
-          <% elsif latest %>
-            <%= latest.ref %>
-          <% end %>
-        </td>
-        <td>
-          <% if row[:upgradable] %>
-            <%= button_to "Upgrade to #{latest.ref}", version_play_character_world_path(@character, world),
-                  method: :patch, params: {world_version_id: latest.id}, class: "compact upgrade",
-                  disabled: @in_world_id == world.id,
-                  title: (@in_world_id == world.id ? "Leave the world to upgrade" : nil) %>
-          <% end %>
-        </td>
-        <td><%= link_to "Enter", play_play_character_world_path(@character, world) if latest %></td>
-        <td>
-          <% if world_character.nil? || world_character.active? %>
-            <%= button_to "Hide", active_play_character_world_path(@character, world), method: :patch, params: {active: false}, class: "compact secondary outline" %>
-          <% else %>
-            <%= button_to "Show", active_play_character_world_path(@character, world), method: :patch, params: {active: true}, class: "compact secondary outline" %>
-          <% end %>
-        </td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<ul class="entry-list">
+  <% @rows.each do |row| %>
+    <% world, world_character, current, latest = row.values_at(:world, :world_character, :current, :latest) %>
+    <li>
+      <span class="entry-title"><%= link_to row[:name], play_character_world_path(@character, world) %></span>
+      <span class="entry-state">
+        <% if current %>
+          <%= current.ref %><%= " (expired)" if current.expired? %>
+        <% elsif latest %>
+          <%= latest.ref %>
+        <% end %>
+      </span>
+      <span class="entry-actions">
+        <% if row[:upgradable] %>
+          <%= button_to "Upgrade to #{latest.ref}", version_play_character_world_path(@character, world),
+                method: :patch, params: {world_version_id: latest.id}, class: "compact upgrade",
+                disabled: @in_world_id == world.id,
+                title: (@in_world_id == world.id ? "Leave the world to upgrade" : nil) %>
+        <% end %>
+        <%= link_to "Enter", play_play_character_world_path(@character, world) if latest %>
+        <% if world_character.nil? || world_character.active? %>
+          <%= button_to "Hide", active_play_character_world_path(@character, world), method: :patch, params: {active: false}, class: "compact secondary outline" %>
+        <% else %>
+          <%= button_to "Show", active_play_character_world_path(@character, world), method: :patch, params: {active: true}, class: "compact secondary outline" %>
+        <% end %>
+      </span>
+    </li>
+  <% end %>
+</ul>
 
 <%= link_to "Back to #{@character.name}", play_character_path(@character) %>

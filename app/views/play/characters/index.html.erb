@@ -1,38 +1,26 @@
 <h1>Characters</h1>
 
-<table>
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Class</th>
-      <th>Last Played</th>
-      <th>Latest World</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% @characters.each do |character| %>
-      <% last = character.last_world_character %>
-      <tr>
-        <td><%= link_to character.name, play_character_path(character) %></td>
-        <td><%= "#{character.character_class.identifier} #{character.character_class.version}" %></td>
-        <td><%= last&.last_played_at&.strftime("%Y-%m-%d") || "Never" %></td>
-        <td>
-          <% if last %>
-            <%= link_to last.world.name || last.world.key, play_character_world_path(character, last.world) %>
-            <% if (latest = last.world.released_versions.first) %>
-              <% if last.world_version.nil? || last.world_version == latest %>
-                <%= button_to "Enter", play_play_character_world_path(character, last.world), method: :get, class: "compact", form_class: "inline" %>
-              <% else %>
-                <%= button_to "Upgrade from #{last.world_version.ref.split("/").last}->#{latest.ref.split("/").last}",
-                      version_play_character_world_path(character, last.world), method: :patch,
-                      params: {world_version_id: latest.id}, class: "compact upgrade", form_class: "inline" %>
-              <% end %>
-            <% end %>
-          <% end %>
-        </td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<ul class="entry-list">
+  <% @characters.each do |character| %>
+    <% last = character.last_world_character %>
+    <li>
+      <span class="entry-title"><%= link_to character.name, play_character_path(character) %></span>
+      <span class="entry-state"><%= "#{character.character_class.identifier} #{character.character_class.version}" %></span>
+      <div class="entry-meta">
+        <span>played <%= last&.last_played_at&.strftime("%Y-%m-%d") || "never" %></span>
+        <% if last %><span><%= link_to last.world.name || last.world.key, play_character_world_path(character, last.world) %></span><% end %>
+      </div>
+      <% if last && (latest = last.world.released_versions.first) %>
+        <% if last.world_version.nil? || last.world_version == latest %>
+          <%= button_to "Enter", play_play_character_world_path(character, last.world), method: :get, class: "compact" %>
+        <% else %>
+          <%= button_to "Upgrade from #{last.world_version.ref.split("/").last}->#{latest.ref.split("/").last}",
+                version_play_character_world_path(character, last.world), method: :patch,
+                params: {world_version_id: latest.id}, class: "compact upgrade" %>
+        <% end %>
+      <% end %>
+    </li>
+  <% end %>
+</ul>
 
 <%= link_to "New character", new_play_character_path %>
