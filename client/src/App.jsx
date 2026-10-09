@@ -3069,6 +3069,8 @@ export default function App({
   // Set on a world's zones: where the menu's "Leave world" sends
   // its DELETE (see game/leaveWorld.js).
   leaveWorldUrl,
+  // Set on a build play-test: where the menu's "Leave zone" goes.
+  exitUrl,
   // Set on a world's zones: the zone's listed flags the character holds,
   // and the base of the has-flag endpoint for any others (see game/flags.js).
   heldFlags = [],
@@ -4372,6 +4374,11 @@ export default function App({
               Leave world
             </button>
           )}
+          {!leaveWorldUrl && exitUrl && (
+            <button style={styles.menuDialogButton} onClick={() => redirectTo(exitUrl)}>
+              Leave zone
+            </button>
+          )}
         </div>
       )}
     </>
@@ -4642,6 +4649,11 @@ export default function App({
           {leaveWorldUrl && (
             <button style={styles.utilityButton} title="Leave world" onClick={handleLeaveWorld}>
               Leave world
+            </button>
+          )}
+          {!leaveWorldUrl && exitUrl && (
+            <button style={styles.utilityButton} title="Leave zone" onClick={() => redirectTo(exitUrl)}>
+              Leave zone
             </button>
           )}
         </div>

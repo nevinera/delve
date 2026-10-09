@@ -1,4 +1,5 @@
 <%= render "play/shared/game_client",
       result: @result, zone_source_url: @zone_source_url, zone_source_sha: @zone_source_sha, character: @character,
       owned_zone_items: {}, equipped_items: @equipped_items,
-      character_settings: @character_settings, stock_assets: @stock_assets %>
+      character_settings: @character_settings, stock_assets: @stock_assets,
+      exit_url: (@world ? edit_build_world_path(id: @world) : (@local ? build_local_zones_path : build_zones_path)) %>
