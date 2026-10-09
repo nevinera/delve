@@ -8,6 +8,7 @@ import NcuQuestBadges from "./NcuQuestBadges";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
 import MapPreviewCanvas from "./MapPreviewCanvas";
+import {pinchSpan, pinchView} from "./pinchZoom";
 import {randomIdentifierSuffix} from "./randomIdentifier";
 
 // Connections need a required, zone-unique `identifier` the moment they're
@@ -153,6 +154,10 @@ export default function MapCanvas({
   const pendingOffsetRef = useRef(null); // latest not-yet-applied offset from pointermove
   const zoomRafRef = useRef(null); // pending requestAnimationFrame id, or null
   const pendingZoomRef = useRef(null); // {factor, cursorX, cursorY} accumulated since the last flush
+  const touchesRef = useRef(new Map()); // pointerId -> {x, y} (wrapper-relative) for each finger down
+  const pinchRef = useRef(null); // {distance, midpoint, zoom, offset} at the start of a two-finger pinch
+  const pinchRafRef = useRef(null);
+  const pendingPinchRef = useRef(null); // latest {zoom, offset} from a pinch, not yet applied
   // {type: "wall-point", barrierIndex, pointIndex} | {type: "circle-move" | "circle-resize", barrierIndex} | null
   const barrierDragRef = useRef(null);
   // {type: "point-move", connectionIndex} | {type: "line-endpoint", connectionIndex, endpoint: "start" | "end"} | null
@@ -200,6 +205,7 @@ export default function MapCanvas({
     return () => {
       if (panRafRef.current != null) cancelAnimationFrame(panRafRef.current);
       if (zoomRafRef.current != null) cancelAnimationFrame(zoomRafRef.current);
+      if (pinchRafRef.current != null) cancelAnimationFrame(pinchRafRef.current);
     };
   }, []);
 
@@ -658,6 +664,57 @@ export default function MapCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
+  function touchPoint(e) {
+    const rect = wrapperRef.current.getBoundingClientRect();
+    return {x: e.clientX - rect.left, y: e.clientY - rect.top};
+  }
+
+  // Two fingers pinch-zoom (and pan) the map. These run in the capture
+  // phase, ahead of the shapes' and the wrapper's own handlers: a second
+  // finger cancels whatever the first one started, and neither finger
+  // reaches them again until the pinch ends.
+  function handleTouchDownCapture(e) {
+    if (e.pointerType !== "touch" || !wrapperRef.current) return;
+    touchesRef.current.set(e.pointerId, touchPoint(e));
+    if (touchesRef.current.size !== 2) return;
+    const [a, b] = [...touchesRef.current.values()];
+    pinchRef.current = {...pinchSpan(a, b), zoom, offset};
+    dragRef.current = null;
+    barrierDragRef.current = null;
+    connectionDragRef.current = null;
+    unitDragRef.current = null;
+    ncuDragRef.current = null;
+    setDrawingCircle(null);
+    setDrawingLine(null);
+    setDrawingUnit(null);
+    e.stopPropagation();
+  }
+
+  function handleTouchMoveCapture(e) {
+    if (!touchesRef.current.has(e.pointerId)) return;
+    touchesRef.current.set(e.pointerId, touchPoint(e));
+    if (!pinchRef.current) return;
+    e.stopPropagation();
+    if (touchesRef.current.size < 2) return;
+    const [a, b] = [...touchesRef.current.values()];
+    pendingPinchRef.current = pinchView(pinchRef.current, pinchSpan(a, b), clampZoom);
+    if (pinchRafRef.current == null) {
+      pinchRafRef.current = requestAnimationFrame(() => {
+        pinchRafRef.current = null;
+        if (!pendingPinchRef.current) return;
+        setZoom(pendingPinchRef.current.zoom);
+        setOffset(pendingPinchRef.current.offset);
+      });
+    }
+  }
+
+  function handleTouchUpCapture(e) {
+    if (!touchesRef.current.delete(e.pointerId)) return;
+    if (!pinchRef.current) return;
+    e.stopPropagation();
+    if (touchesRef.current.size === 0) pinchRef.current = null;
+  }
+
   function handlePointerDown(e) {
     if (!image) return;
 
@@ -1053,6 +1110,10 @@ export default function MapCanvas({
         <div
           ref={wrapperRef}
           className={`map-canvas-wrapper${isPlacing ? " map-canvas-wrapper-placing" : ""}`}
+          onPointerDownCapture={handleTouchDownCapture}
+          onPointerMoveCapture={handleTouchMoveCapture}
+          onPointerUpCapture={handleTouchUpCapture}
+          onPointerCancelCapture={handleTouchUpCapture}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

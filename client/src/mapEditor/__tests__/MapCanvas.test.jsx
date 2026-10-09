@@ -104,6 +104,24 @@ describe("MapCanvas", () => {
     expect(after.y - base.y).toBeCloseTo(50, 5);
   });
 
+  it("pinch-zooms with two fingers, the point between them following their midpoint", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    const before = transformParts();
+    const touch = (pointerId, clientX, clientY) => ({pointerId, pointerType: "touch", clientX, clientY});
+
+    fireEvent.pointerDown(wrapper, touch(1, 90, 50));
+    fireEvent.pointerDown(wrapper, touch(2, 110, 50));
+    fireEvent.pointerMove(wrapper, touch(2, 150, 50)); // from 20px to 60px apart, midpoint 100 -> 120
+    fireEvent.pointerUp(wrapper, touch(1, 90, 50));
+    fireEvent.pointerUp(wrapper, touch(2, 150, 50));
+
+    const after = transformParts();
+    expect(after.scale).toBeCloseTo(before.scale * 3, 5);
+    const pixelUnderMidpoint = (100 - before.x) / before.scale;
+    expect(after.x + pixelUnderMidpoint * after.scale).toBeCloseTo(120, 5);
+  });
+
   it("coalesces several pointermoves within one frame into a single flush at the latest position", () => {
     let scheduleCount = 0;
     let scheduledCallback = null;
