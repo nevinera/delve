@@ -4,19 +4,14 @@
 
 <p><%= link_to "New Class", new_build_class_path(branch: @branch) %></p>
 
-<table>
-  <thead>
-    <tr><th>Key</th><th>Publishing</th></tr>
-  </thead>
-  <tbody>
-    <% @classes.each do |entry| %>
-      <% identifier = entry["path"].delete_prefix("classes/").delete_suffix(".json") %>
-      <tr>
-        <td><%= link_to identifier, edit_build_class_path(id: identifier, branch: @branch) %></td>
-        <td><%= link_to "Versions", build_class_versions_path(id: identifier) %></td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<ul class="entry-list">
+  <% @classes.each do |entry| %>
+    <% identifier = entry["path"].delete_prefix("classes/").delete_suffix(".json") %>
+    <li>
+      <span class="entry-title"><%= link_to identifier, edit_build_class_path(id: identifier, branch: @branch) %></span>
+      <%= link_to "Versions", build_class_versions_path(id: identifier) %>
+    </li>
+  <% end %>
+</ul>
 
 <%= link_to "Back to Build", build_root_path %>

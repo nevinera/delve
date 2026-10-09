@@ -13,34 +13,29 @@
 <% if @rows.empty? %>
   <p>No versions yet. The class editor's Publish button tags and imports one.</p>
 <% else %>
-  <table>
-    <thead>
-      <tr><th>Version</th><th>State</th><th>Name</th><th>Imported</th><th></th></tr>
-    </thead>
-    <tbody>
-      <% @rows.each do |row| %>
-        <% if row.is_a?(String) %>
-          <tr>
-            <td><%= row %></td>
-            <td>not imported</td>
-            <td colspan="2"></td>
-            <td><%= button_to "Import", build_class_versions_path(id: @key), params: {version: row} %></td>
-          </tr>
-        <% else %>
-          <tr>
-            <td><%= row.version %></td>
-            <td><%= row.provided? ? "importing" : row.state %></td>
-            <td><%= row.name %></td>
-            <td><%= row.created_at.to_fs(:short) %></td>
-            <td></td>
-          </tr>
+  <ul class="entry-list">
+    <% @rows.each do |row| %>
+      <% if row.is_a?(String) %>
+        <li>
+          <span class="entry-title"><%= row %></span>
+          <span class="entry-state">not imported</span>
+          <%= button_to "Import", build_class_versions_path(id: @key), params: {version: row}, class: "compact" %>
+        </li>
+      <% else %>
+        <li>
+          <span class="entry-title"><%= row.version %></span>
+          <span class="entry-state"><%= row.provided? ? "importing" : row.state %></span>
+          <div class="entry-meta">
+            <% if row.name.present? %><span><%= row.name %></span><% end %>
+            <span>imported <%= row.created_at.to_fs(:short) %></span>
+          </div>
           <% if row.validity_error.present? %>
-            <tr><td colspan="5"><strong>Import error:</strong> <%= row.validity_error %></td></tr>
+            <div class="entry-error"><strong>Import error:</strong> <%= row.validity_error %></div>
           <% end %>
-        <% end %>
+        </li>
       <% end %>
-    </tbody>
-  </table>
+    <% end %>
+  </ul>
 <% end %>
 
 <%= link_to "All classes", build_classes_path %>

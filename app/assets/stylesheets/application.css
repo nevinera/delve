@@ -166,3 +166,45 @@ form.inline {
   margin: 0 0 0 0.5rem;
   vertical-align: middle;
 }
+
+/* index lists (build pages): one row per entry, a title with its actions
+   beside it, and details wrapping onto their own line, so they fit a phone */
+ul.entry-list {
+  padding: 0;
+  margin: 0 0 var(--pico-spacing);
+}
+ul.entry-list > li {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+ul.entry-list .entry-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+ul.entry-list .entry-state {
+  font-size: 0.85em;
+  color: var(--pico-muted-color);
+}
+ul.entry-list .entry-meta {
+  flex-basis: 100%;
+  font-size: 0.85em;
+  color: var(--pico-muted-color);
+}
+ul.entry-list .entry-meta > span + span::before {
+  content: " · ";
+}
+ul.entry-list .entry-error {
+  flex-basis: 100%;
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+ul.entry-list form {
+  margin: 0;
+}

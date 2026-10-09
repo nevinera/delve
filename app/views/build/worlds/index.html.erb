@@ -7,25 +7,18 @@
 <% if @world_paths.empty? %>
   <p>No worlds on <%= @branch %> yet.</p>
 <% else %>
-  <table>
-    <thead>
-      <tr><th>Key</th><th>Publishing</th></tr>
-    </thead>
-    <tbody>
-      <% @world_paths.each do |path| %>
-        <tr>
-          <td><%= link_to World.key_for(path), edit_build_world_path(id: World.key_for(path), branch: @branch) %></td>
-          <td>
-            <% if (published = @published_worlds[path]) %>
-              <%= link_to "Versions", build_publishing_world_path(published) %>
-            <% else %>
-              <%= button_to "Set up publishing", build_publishing_worlds_path, params: {path:} %>
-            <% end %>
-          </td>
-        </tr>
-      <% end %>
-    </tbody>
-  </table>
+  <ul class="entry-list">
+    <% @world_paths.each do |path| %>
+      <li>
+        <span class="entry-title"><%= link_to World.key_for(path), edit_build_world_path(id: World.key_for(path), branch: @branch) %></span>
+        <% if (published = @published_worlds[path]) %>
+          <%= link_to "Versions", build_publishing_world_path(published) %>
+        <% else %>
+          <%= button_to "Set up publishing", build_publishing_worlds_path, params: {path:}, class: "compact" %>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
 <% end %>
 
 <p><%= link_to "Published worlds", build_publishing_worlds_path %></p>
