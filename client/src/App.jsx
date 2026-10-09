@@ -3066,7 +3066,7 @@ export default function App({
   // back to when the player leaves through an exit or the world version
   // expires (see game/worldMessages.js).
   worldReturnUrl,
-  // Set on a world's zones: where the Settings menu's "Leave world" sends
+  // Set on a world's zones: where the menu's "Leave world" sends
   // its DELETE (see game/leaveWorld.js).
   leaveWorldUrl,
   // Set on a world's zones: the zone's listed flags the character holds,
@@ -3918,7 +3918,7 @@ export default function App({
   // Frees the slot through Rails (which closes our socket, so onClose is
   // muted while leaving), then goes to the world's page.
   const handleLeaveWorld = useCallback(async () => {
-    setSettingsOpen(false);
+    setMenuOpen(false);
     leavingRef.current = true;
     const { redirectUrl, error } = await leaveWorld(leaveWorldUrl);
     if (redirectUrl) {
@@ -4281,7 +4281,6 @@ export default function App({
           setSettingsOpen(false);
         }}
         onReload={() => window.location.reload()}
-        onLeaveWorld={leaveWorldUrl ? handleLeaveWorld : undefined}
         hotkeys={hotkeys}
         onSaveHotkeys={saveHotkeys}
         showHotkeys={!viewportMode.isPhoneLayout}
@@ -4368,6 +4367,11 @@ export default function App({
           >
             Settings
           </button>
+          {leaveWorldUrl && (
+            <button style={styles.menuDialogButton} onClick={handleLeaveWorld}>
+              Leave world
+            </button>
+          )}
         </div>
       )}
     </>
@@ -4635,6 +4639,11 @@ export default function App({
           >
             Settings
           </button>
+          {leaveWorldUrl && (
+            <button style={styles.utilityButton} title="Leave world" onClick={handleLeaveWorld}>
+              Leave world
+            </button>
+          )}
         </div>
       )}
       <ExpiryBanner expiresAt={expiresAt} />

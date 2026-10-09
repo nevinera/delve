@@ -163,7 +163,7 @@ function CameraPane({ value, onChange, error }) {
 export default function SettingsDialog({
   open, powers, layout, onAssign, onReset, onToggleLatency, onReload, onClose, error,
   cameraSensitivity = 1, onCameraSensitivityChange, hotkeys = DEFAULT_HOTKEYS, onSaveHotkeys,
-  showHotkeys = true, onLeaveWorld,
+  showHotkeys = true,
 }) {
   const [pane, setPane] = useState(null);
   useEffect(() => { if (!open) setPane(null); }, [open]);
@@ -205,11 +205,6 @@ export default function SettingsDialog({
             <button type="button" style={styles.menuButton} onClick={onReload}>
               Reload
             </button>
-            {onLeaveWorld && (
-              <button type="button" style={styles.menuButton} onClick={onLeaveWorld}>
-                Leave world
-              </button>
-            )}
           </div>
         )}
       </div>
