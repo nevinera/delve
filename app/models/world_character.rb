@@ -9,6 +9,7 @@ class WorldCharacter < ApplicationRecord
   has_many :character_items, dependent: :destroy
   has_many :equipped_items, dependent: :destroy
   has_many :character_flags, dependent: :destroy
+  has_many :character_quests, dependent: :destroy
 
   validates :character_id, uniqueness: {scope: :world_id}
 

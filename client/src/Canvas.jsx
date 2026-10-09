@@ -6,6 +6,7 @@ const Canvas = forwardRef(function Canvas({
   zoneSourceSha,
   units,
   ncus,
+  questNcus,
   selfIdentifier,
   characterTokenUrl,
   movementKeysRef,
@@ -60,6 +61,10 @@ const Canvas = forwardRef(function Canvas({
   useEffect(() => {
     managerRef.current?.updateNcus(ncus ?? {});
   }, [ncus, units]);
+
+  useEffect(() => {
+    managerRef.current?.setNcuQuestMarkers(questNcus ?? new Set());
+  }, [questNcus]);
 
   useEffect(() => {
     managerRef.current?.setTarget(targetId);

@@ -50,6 +50,21 @@ RSpec.describe JoinWorldZone do
     ))
   end
 
+  it "sends the character's active quests, and no quests file when the world has none" do
+    quest = create(:character_quest, world_character:, quest_identifier: "rat-hunt")
+    call
+    expect(slots_client).to have_received(:request).with(hash_including(active_quests: [CharacterQuestJson.call(quest)]))
+    expect(slots_client).to have_received(:request).with(hash_excluding(:quests_url, :quests_sha))
+  end
+
+  it "sends the world's quests file" do
+    version.update!(quests_path: "worlds/quests.json", quests_sha: "abc123")
+    call
+    expect(slots_client).to have_received(:request).with(hash_including(
+      quests_url: "#{version.raw_base_url}worlds/quests.json", quests_sha: "abc123"
+    ))
+  end
+
   it "leaves out expires_at when the version isn't expiring" do
     version.update!(expires_at: nil)
     call
@@ -62,6 +77,7 @@ RSpec.describe JoinWorldZone do
   end
 
   it "passes every key the game API client accepts" do
+    version.update!(quests_path: "worlds/quests.json", quests_sha: "abc123")
     allow(GameApi).to receive(:slots).and_call_original
     stub_request(:post, %r{/slots/request}).to_return(status: 201, headers: {"Content-Type" => "application/json"},
       body: {instance_identifier: "inst", slot_id: "slot", token: "tok"}.to_json)

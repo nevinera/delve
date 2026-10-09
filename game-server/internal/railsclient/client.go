@@ -3,6 +3,7 @@ package railsclient
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -233,6 +234,145 @@ func (c *Client) GrantFlag(worldCharacterDatabaseID, flag string) error {
 
 	if res.StatusCode != http.StatusCreated {
 		return fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	return nil
+}
+
+// ErrQuestRefused is returned by AcceptQuest when Rails refuses the quest
+// (already completed, or too many active).
+var ErrQuestRefused = errors.New("quest refused")
+
+// AcceptQuest starts a quest for a world character from its definition
+// (POST /internal_api/world_characters/:id/quests), returning it as Rails
+// stores it. Accepting an active quest returns it unchanged.
+func (c *Client) AcceptQuest(worldCharacterDatabaseID string, quest instanceconfig.Quest) (instanceconfig.ActiveQuest, error) {
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests", c.baseURL, worldCharacterDatabaseID)
+	return c.postQuest(url, quest, http.StatusCreated)
+}
+
+// SyncQuest moves a world character's active quest to a newer definition
+// (POST .../quests/:quest/sync), keeping progress on unchanged objectives.
+func (c *Client) SyncQuest(worldCharacterDatabaseID string, quest instanceconfig.Quest) (instanceconfig.ActiveQuest, error) {
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s/sync", c.baseURL, worldCharacterDatabaseID, quest.Identifier)
+	return c.postQuest(url, quest, http.StatusOK)
+}
+
+func (c *Client) postQuest(url string, quest instanceconfig.Quest, wantStatus int) (instanceconfig.ActiveQuest, error) {
+	var none instanceconfig.ActiveQuest
+	data, err := json.Marshal(map[string]instanceconfig.Quest{"quest": quest})
+	if err != nil {
+		return none, fmt.Errorf("marshal: %w", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return none, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return none, fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	var body struct {
+		Quest instanceconfig.ActiveQuest `json:"quest"`
+		Error string                     `json:"error"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&body)
+	switch res.StatusCode {
+	case wantStatus:
+		return body.Quest, nil
+	case http.StatusUnprocessableEntity:
+		return none, fmt.Errorf("%w: %s", ErrQuestRefused, body.Error)
+	default:
+		return none, fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+}
+
+// AbandonQuest ends a world character's active quest without completing it
+// (DELETE /internal_api/world_characters/:id/quests/:quest). Idempotent.
+func (c *Client) AbandonQuest(worldCharacterDatabaseID, questIdentifier string) error {
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s", c.baseURL, worldCharacterDatabaseID, questIdentifier)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	return nil
+}
+
+// QuestProgress sets an active quest's objective counts (by objective
+// hash) and, when timerElapsedSeconds isn't nil, its timer (PATCH
+// .../quests/:quest), returning the quest as Rails now stores it.
+func (c *Client) QuestProgress(worldCharacterDatabaseID, questIdentifier string, progress map[string]int, timerElapsedSeconds *int) (instanceconfig.ActiveQuest, error) {
+	var none instanceconfig.ActiveQuest
+	body := map[string]any{"progress": progress}
+	if timerElapsedSeconds != nil {
+		body["timer_elapsed_seconds"] = *timerElapsedSeconds
+	}
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s", c.baseURL, worldCharacterDatabaseID, questIdentifier)
+	var resp struct {
+		Quest instanceconfig.ActiveQuest `json:"quest"`
+	}
+	if err := c.questCall(http.MethodPatch, url, body, http.StatusOK, &resp); err != nil {
+		return none, err
+	}
+	return resp.Quest, nil
+}
+
+// CompletedQuest is what completing a quest granted: flags, and the items
+// newly held.
+type CompletedQuest struct {
+	Flags []string `json:"flags"`
+	Items []struct {
+		Identifier string `json:"identifier"`
+		Name       string `json:"name"`
+	} `json:"items"`
+}
+
+// CompleteQuest completes an active quest (POST .../quests/:quest/complete):
+// Rails grants its flags and rewards from the definition it stored.
+func (c *Client) CompleteQuest(worldCharacterDatabaseID, questIdentifier string) (CompletedQuest, error) {
+	var resp CompletedQuest
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/quests/%s/complete", c.baseURL, worldCharacterDatabaseID, questIdentifier)
+	err := c.questCall(http.MethodPost, url, map[string]any{}, http.StatusOK, &resp)
+	return resp, err
+}
+
+func (c *Client) questCall(method, url string, body any, wantStatus int, out any) error {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	req, err := http.NewRequest(method, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	if res.StatusCode != wantStatus {
+		return fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	if err := json.NewDecoder(res.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode: %w", err)
 	}
 	return nil
 }

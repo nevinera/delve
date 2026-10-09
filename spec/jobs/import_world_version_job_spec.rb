@@ -38,6 +38,7 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     stub_raw("worlds/demo.json", world_data)
     stub_raw("zones/darkwood/darkwood.full.json", darkwood)
     stub_raw("zones/goblin-cave/goblin-cave.full.json", goblin_cave)
+    stub_request(:get, %r{/quests\.json\z}).to_return(status: 404)
   end
 
   def perform = described_class.perform_now(version.id)
@@ -102,6 +103,13 @@ RSpec.describe ImportWorldVersionJob, type: :job do
       expect(version.zones.find_by!(identifier: "goblin-cave").links).to eq(
         "cave_entrance/clearing_entrance" => {"zone" => "darkwood", "connection" => "cave_entrance/clearing_entrance"}
       )
+    end
+
+    it "stores each zone's name and its maps' names" do
+      perform
+      zone = version.zones.find_by!(identifier: "goblin-cave")
+      expect(zone.name).to eq("Goblin Cave")
+      expect(zone.map_names).to eq("cave_entrance" => "Cave Entrance", "cave_interior" => "Cave Interior")
     end
 
     it "creates a zone per world zone, with references and checksums only" do
@@ -177,6 +185,88 @@ RSpec.describe ImportWorldVersionJob, type: :job do
     end
 
     it_behaves_like "a failed import", /outside the repo/
+  end
+
+  context "with a quests file" do
+    let(:quests) do
+      [{
+        "identifier" => "goblin-hunt", "name" => "Goblin Hunt", "chainIdentifier" => "hunts", "chainName" => "Hunts",
+        "offeredBy" => {"zone" => "goblin-cave", "ncu" => "grizzle"}, "offerText" => "Any work?",
+        "description" => "Thin them out.",
+        "objectives" => [{"type" => "kill", "text" => "Kill goblins", "zone" => "goblin-cave", "unitType" => "goblin", "count" => 3}]
+      }]
+    end
+    let(:goblin_cave) do
+      maps = zone_fixture["maps"].dup
+      maps[0] = maps[0].merge("ncus" => [ncu_fixture])
+      zone_fixture.merge("maps" => maps)
+    end
+    let(:ncu_fixture) do
+      {"identifier" => "grizzle", "name" => "Grizzle", "tokenImageUrl" => "g.webp", "tokenRadius" => 2.0,
+       "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
+    end
+
+    before do
+      world_data["questsPath"] = "./demo.quests.json"
+      stub_raw("worlds/demo.json", world_data)
+      stub_raw("worlds/demo.quests.json", quests)
+    end
+
+    it "pins the quests file's path and checksum on the version" do
+      perform
+      version.reload
+      expect(version).to be_unreleased
+      expect(version.quests_path).to eq("worlds/demo.quests.json")
+      expect(version.quests_sha).to eq(Digest::SHA1.hexdigest(quests.to_json))
+    end
+
+    context "when a quest fails validation" do
+      before { stub_raw("worlds/demo.quests.json", [quests[0].except("name")]) }
+
+      it_behaves_like "a failed import", %r{worlds/demo.quests.json: name is required}
+    end
+
+    context "when a quest references something missing" do
+      let(:ncu_fixture) { super().merge("identifier" => "someone-else") }
+
+      it_behaves_like "a failed import", %r{worlds/demo.quests.json: zone "goblin-cave" has no NCU "grizzle"}
+    end
+
+    context "when the quests path leaves the repo" do
+      before do
+        world_data["questsPath"] = "../../elsewhere/demo.quests.json"
+        stub_raw("worlds/demo.json", world_data)
+      end
+
+      it_behaves_like "a failed import", /quests path .* is outside the repo/
+    end
+  end
+
+  context "with a quests file at the default path" do
+    before { stub_raw("worlds/quests.json", []) }
+
+    it "pins it" do
+      perform
+      expect(version.reload).to have_attributes(quests_path: "worlds/quests.json", quests_sha: Digest::SHA1.hexdigest("[]"))
+    end
+  end
+
+  context "with no questsPath and nothing at the default path" do
+    it "imports with no quests file" do
+      perform
+      expect(version.reload).to be_unreleased
+      expect(version).to have_attributes(quests_path: nil, quests_sha: nil)
+    end
+  end
+
+  context "when the questsPath file is missing" do
+    before do
+      world_data["questsPath"] = "./demo.quests.json"
+      stub_raw("worlds/demo.json", world_data)
+      stub_raw("worlds/demo.quests.json", "Not Found", status: 404)
+    end
+
+    it_behaves_like "a failed import", %r{worlds/demo.quests.json: HTTP 404}
   end
 
   context "when the tag doesn't exist" do

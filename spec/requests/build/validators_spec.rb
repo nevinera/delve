@@ -229,6 +229,40 @@ RSpec.describe "Build::Validators", type: :request do
       end
     end
 
+    describe "POST /build/validators/quests" do
+      let(:quest) do
+        {
+          "identifier" => "rat-hunt", "name" => "Rat Hunt", "chainIdentifier" => "rats", "chainName" => "Rats",
+          "offeredBy" => {"zone" => "forest", "ncu" => "grizzle"}, "offerText" => "Work?", "description" => "Rats.",
+          "objectives" => [{"type" => "kill", "text" => "Kill rats", "zone" => "forest", "unitType" => "rat"}]
+        }
+      end
+      let(:zones) do
+        {"forest" => {"unitTypes" => {"rat" => {}}, "items" => {}, "maps" => [{"identifier" => "hub", "ncus" => [{"identifier" => "grizzle"}], "units" => []}]}}
+      end
+
+      def post_quests(body)
+        post "/build/validators/quests", params: body.to_json, headers: {"Content-Type" => "application/json"}
+        JSON.parse(response.body)
+      end
+
+      it "returns valid: true for quests whose references resolve" do
+        expect(post_quests({quests: [quest], zones:})).to eq({"valid" => true})
+      end
+
+      it "reports a schema problem with its path" do
+        body = post_quests({quests: [quest.except("description")], zones:})
+        expect(body).to include("valid" => false)
+        expect(body["error"]["path"]).to eq("$[0].description")
+      end
+
+      it "reports a reference the zones don't have" do
+        zones["forest"]["unitTypes"] = {}
+        body = post_quests({quests: [quest], zones:})
+        expect(body["error"]["message"]).to include('zone "forest" has no unit type "rat"')
+      end
+    end
+
     describe "POST /build/validators/zone" do
       let(:valid_map) do
         {

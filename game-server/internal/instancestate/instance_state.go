@@ -52,6 +52,17 @@ type CombatEvent struct {
 	PowerName  string
 }
 
+// Talk is a player starting a conversation with an NCU in range, or
+// accepting one of its quests (AcceptQuest set), or turning one in to it
+// (TurnInQuest set).
+type Talk struct {
+	UnitID        uuid.UUID
+	NCUIdentifier string
+	Map           string // the map the player's on
+	AcceptQuest   string
+	TurnInQuest   string
+}
+
 // InstanceState is the full runtime state of one zone instance.
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
@@ -63,6 +74,7 @@ type InstanceState struct {
 	PendingLootFailures     []LootFailure                  // drained each tick into delta message
 	PendingOwnershipUpdates []OwnershipUpdate              // drained each tick to update slot OwnedZoneItems
 	PendingCombatEvents     []CombatEvent                  // drained each tick into delta message; appended by command handlers
+	PendingTalks            []Talk                         // drained each tick; conversations started, quests accepted and turned in
 	PendingImpacts          []PendingImpact                // projectile effects in flight; resolved once each lands
 }
 

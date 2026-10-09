@@ -1,7 +1,10 @@
 package handler_test
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
@@ -9,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/delve-mmo/game-server/internal/instance"
+	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
 func worldRequest(extras map[string]any) []byte {
@@ -142,4 +146,54 @@ func TestSlotsRequest_World_CachesHeldFlags(t *testing.T) {
 	slots := inst.ListSlots()
 	require.Len(t, slots, 1)
 	assert.Equal(t, map[string]bool{"zone/reached/goblin-cave": false, "key/gate": true}, slots[0].Flags)
+}
+
+func TestSlotsRequest_World_LoadsQuestsAndActiveQuests(t *testing.T) {
+	const quests = `[{"identifier":"rat-hunt","offeredBy":{"zone":"goblin-cave","ncu":"grizzle"}}]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(quests))
+	}))
+	t.Cleanup(srv.Close)
+	sum := sha1.Sum([]byte(quests))
+
+	reg := instance.NewRegistry()
+	router := mountRequest(newSlotsHandler(reg, 200))
+	rec := postRequest(t, router, worldRequest(map[string]any{
+		"quests_url": srv.URL + "/quests.json",
+		"quests_sha": hex.EncodeToString(sum[:]),
+		"active_quests": []map[string]any{{
+			"quest_identifier": "rat-hunt", "world_version_id": "wv-3", "timer_elapsed_seconds": 7, "definition": map[string]any{},
+			"objectives": []map[string]any{{"hash": "abc", "objective": map[string]any{"type": "talk", "zone": "z", "ncu": "n"}, "count": 1, "required": 1}},
+		}},
+	}))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	inst := onlyInstance(t, reg)
+	t.Cleanup(inst.Stop)
+	require.Len(t, inst.Quests, 1)
+	assert.Equal(t, "rat-hunt", inst.Quests[0].Identifier)
+	slots := inst.ListSlots()
+	require.Len(t, slots, 1)
+	quest := slots[0].Quests["rat-hunt"]
+	assert.Equal(t, "wv-3", quest.WorldVersionID)
+	assert.Equal(t, 7, quest.TimerElapsedSeconds)
+	assert.Equal(t, []instanceconfig.ActiveObjective{{
+		Hash: "abc", Objective: instanceconfig.QuestObjective{Type: "talk", Zone: "z", NCU: "n"}, Count: 1, Required: 1,
+	}}, quest.Objectives)
+}
+
+func TestSlotsRequest_World_StartsWithoutQuestsItCantRead(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := instance.NewRegistry()
+	router := mountRequest(newSlotsHandler(reg, 200))
+	rec := postRequest(t, router, worldRequest(map[string]any{"quests_url": srv.URL, "quests_sha": "abc"}))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	inst := onlyInstance(t, reg)
+	t.Cleanup(inst.Stop)
+	assert.Empty(t, inst.Quests)
 }

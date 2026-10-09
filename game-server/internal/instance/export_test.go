@@ -257,3 +257,14 @@ func UpdateStealthForTest(state, prev *instancestate.InstanceState, zone instanc
 func StealthViewForTest(payload []byte, state *instancestate.InstanceState, observer uuid.UUID, zone instanceconfig.Zone) ([]byte, error) {
 	return withStealthView(payload, stealthView(state.Units[observer], stealthedUnits(state), zone))
 }
+
+// QuestEventForTest is a quest event (see quest_progress.go).
+type QuestEventForTest = questEvent
+
+func (inst *Instance) CollectQuestEventsForTest(prev, curr *instancestate.InstanceState) []QuestEventForTest {
+	return inst.collectQuestEvents(prev, curr)
+}
+
+func (inst *Instance) TickQuestTimersForTest(ctx context.Context, now time.Time) {
+	inst.tickQuestTimers(ctx, now)
+}

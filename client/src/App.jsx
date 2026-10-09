@@ -11,6 +11,8 @@ import { canTargetUnit, isUntargetableStatus } from "./game/state";
 import { hasLineOfSight } from "./game/collision";
 import { canKeepTalking, canTalkTo } from "./game/dialogue";
 import { DialogueWindow } from "./DialogueWindow";
+import { activeQuestsById, applyQuestAction, offersFor, questLogZones, questMessageAction, questNcus, questsById, turnInsFor, zoneNames } from "./game/quests";
+import { QuestLog } from "./QuestLog";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
@@ -3071,6 +3073,10 @@ export default function App({
   // and the base of the has-flag endpoint for any others (see game/flags.js).
   heldFlags = [],
   flagsUrl,
+  zoneIdentifier,
+  activeQuestsUrl,
+  questsUrl,
+  questsSha,
 }) {
   const viewportMode = useViewportMode(); // { isTouch, isPhoneLayout, isPortraitPhone, isLandscapePhone }
   const connRef = useRef(null);
@@ -3114,6 +3120,24 @@ export default function App({
   const [log, setLog] = useState(["Connecting…"]);
   const [lootWindowUnitId, setLootWindowUnitId] = useState(null);
   const [dialogueNcuId, setDialogueNcuId] = useState(null);
+  const [questDefinitions, setQuestDefinitions] = useState({});
+  const questDefinitionsRef = useRef({});
+  const [questOffers, setQuestOffers] = useState({});
+  const questOffersRef = useRef({});
+  const questNcuSet = useMemo(() => questNcus(questOffers, questDefinitions), [questOffers, questDefinitions]);
+  const [activeQuests, setActiveQuests] = useState({});
+  const activeQuestsRef = useRef({});
+  activeQuestsRef.current = activeQuests;
+  // Quest events that arrive before the log has loaded from Rails, replayed
+  // over it once it has (null once loaded).
+  const pendingQuestActionsRef = useRef([]);
+  const [questLogOpen, setQuestLogOpen] = useState(false);
+  const [currentZoneNames, setCurrentZoneNames] = useState(null);
+  const [questZoneNames, setQuestZoneNames] = useState({});
+  const questZones = useMemo(
+    () => questLogZones(activeQuests, questDefinitions, {zoneIdentifier, zoneNames: questZoneNames}),
+    [activeQuests, questDefinitions, zoneIdentifier, questZoneNames]
+  );
   const [ncus, setNcus] = useState({});
   const ncusRef = useRef({});
   const [charSheetOpen, setCharSheetOpen] = useState(false);
@@ -3266,6 +3290,7 @@ export default function App({
         mapBarriersByIdRef.current = barriersByMapId;
         setMapElvls(elvls);
         flagCacheRef.current.preload(zone.flags);
+        setCurrentZoneNames(zoneNames(zone));
         // Every unit type's powers, not just spawned units' - a status
         // applied by a unit type nobody's spawned yet at load time would
         // otherwise never resolve.
@@ -3276,6 +3301,32 @@ export default function App({
         if (error instanceof ContentChecksumError) setContentError("This zone's file has changed since it was checked.");
       });
   }, [zoneSourceUrl, zoneSourceSha]);
+
+  useEffect(() => {
+    if (!activeQuestsUrl) return;
+    fetch(activeQuestsUrl)
+      .then((r) => r.json())
+      .then(({quests, zone_names}) => {
+        setQuestZoneNames(zone_names ?? {});
+        const pending = pendingQuestActionsRef.current ?? [];
+        pendingQuestActionsRef.current = null;
+        setActiveQuests(pending.reduce((current, action) => applyQuestAction(current, action), activeQuestsById(quests)));
+      })
+      .catch(() => addLog("Couldn't load your quests."));
+  }, [activeQuestsUrl]);
+
+  useEffect(() => {
+    if (!questsUrl) return;
+    fetchVerifiedJson(questsUrl, questsSha)
+      .then((quests) => {
+        const byId = questsById(quests);
+        questDefinitionsRef.current = byId;
+        setQuestDefinitions(byId);
+      })
+      .catch((error) => {
+        if (error instanceof ContentChecksumError) setContentError("This world's quests file has changed since it was checked.");
+      });
+  }, [questsUrl, questsSha]);
 
   const addLog = (msg) => setLog((prev) => [...prev.slice(-99), msg]);
 
@@ -3508,6 +3559,7 @@ export default function App({
           setLootWindowUnitId(null);
           setDialogueNcuId(null);
           setCharSheetOpen(false);
+          setQuestLogOpen(false);
           setClassOpen(false);
           setSettingsOpen(false);
           setMenuOpen(false);
@@ -3522,6 +3574,8 @@ export default function App({
       if (!action) return;
       if (action === "toggle_character_sheet") {
         setCharSheetOpen(o => !o);
+      } else if (action === "toggle_quest_log") {
+        setQuestLogOpen(o => !o);
       } else if (action === "toggle_latency") {
         setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
       } else if (action === "attack_start") {
@@ -3599,6 +3653,16 @@ export default function App({
         addLog("Disconnected.");
       },
       onServerMessage: (msg) => {
+        const questAction = questMessageAction(msg, questDefinitionsRef.current);
+        if (questAction?.type === "offers") {
+          questOffersRef.current = questAction.offers;
+          setQuestOffers(questAction.offers);
+        }
+        if (["upsert", "progress", "remove"].includes(questAction?.type)) {
+          if (pendingQuestActionsRef.current) pendingQuestActionsRef.current.push(questAction);
+          else setActiveQuests((current) => applyQuestAction(current, questAction));
+        }
+        if (questAction?.log) addLog(questAction.log);
         const action = worldMessageAction(msg);
         if (!action) return;
         if (action.log) addLog(action.log);
@@ -3832,8 +3896,24 @@ export default function App({
     const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
     const ncu = ncusRef.current[id];
     const dialogue = ncu && canvasRef.current?.ncuInfo(ncu.zone_ncu_identifier)?.dialogue;
-    if (canTalkTo(self, ncu, dialogue)) setDialogueNcuId(id);
+    const hasOffers = !!ncu && (questOffersRef.current[ncu.zone_ncu_identifier]?.length > 0 ||
+      turnInsFor(activeQuestsRef.current, ncu.zone_ncu_identifier, zoneIdentifier, {}).length > 0);
+    if (!canTalkTo(self, ncu, dialogue, hasOffers)) return;
+    setDialogueNcuId(id);
+    connRef.current?.send({ type: "talk", ncu_id: id });
+  }, [zoneIdentifier]);
+
+  const handleAbandonQuest = useCallback((quest) => {
+    connRef.current?.send({ type: "abandon_quest", quest });
   }, []);
+
+  const handleAcceptQuest = useCallback((quest) => {
+    if (dialogueNcuId) connRef.current?.send({ type: "accept_quest", ncu_id: dialogueNcuId, quest });
+  }, [dialogueNcuId]);
+
+  const handleTurnInQuest = useCallback((quest) => {
+    if (dialogueNcuId) connRef.current?.send({ type: "turn_in_quest", ncu_id: dialogueNcuId, quest });
+  }, [dialogueNcuId]);
 
   // Frees the slot through Rails (which closes our socket, so onClose is
   // muted while leaving), then goes to the world's page.
@@ -3956,7 +4036,7 @@ export default function App({
   // is only ever non-empty when the target happens to be self.
   const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
-  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || classOpen || settingsOpen || menuOpen;
+  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || questLogOpen || classOpen || settingsOpen || menuOpen;
 
   // Walking away (or dying) ends the conversation.
   const dialogueNcu = dialogueNcuId ? ncus[dialogueNcuId] : null;
@@ -4137,6 +4217,7 @@ export default function App({
         zoneSourceSha={zoneSourceSha}
         units={units}
         ncus={ncus}
+        questNcus={questNcuSet}
         selfIdentifier={selfIdentifier}
         characterTokenUrl={characterTokenUrl}
         movementKeysRef={movementKeysRef}
@@ -4173,6 +4254,10 @@ export default function App({
           key={dialogueNcuId}
           name={dialogueInfo?.name ?? dialogueNcu.zone_ncu_identifier}
           dialogue={dialogueInfo?.dialogue}
+          offers={offersFor(questOffers, dialogueNcu.zone_ncu_identifier, questDefinitions)}
+          turnIns={turnInsFor(activeQuests, dialogueNcu.zone_ncu_identifier, zoneIdentifier, questDefinitions)}
+          onAcceptQuest={handleAcceptQuest}
+          onTurnInQuest={handleTurnInQuest}
           onClose={() => setDialogueNcuId(null)}
         />
       )}
@@ -4219,6 +4304,17 @@ export default function App({
         portrait={viewportMode.isPortraitPhone}
         landscape={viewportMode.isLandscapePhone}
       />
+      <QuestLog
+        open={questLogOpen}
+        zones={questZones}
+        currentZone={zoneIdentifier}
+        currentNames={currentZoneNames}
+        zonesUrl={activeQuestsUrl && `${activeQuestsUrl}/zones`}
+        onAbandon={handleAbandonQuest}
+        onClose={() => setQuestLogOpen(false)}
+        portrait={viewportMode.isPortraitPhone}
+        landscape={viewportMode.isLandscapePhone}
+      />
       <ClassSheet
         open={classOpen}
         powers={powers}
@@ -4253,6 +4349,12 @@ export default function App({
             onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
           >
             Character
+          </button>
+          <button
+            style={styles.menuDialogButton}
+            onClick={() => { setQuestLogOpen((o) => !o); setMenuOpen(false); }}
+          >
+            Quests
           </button>
           <button
             style={styles.menuDialogButton}
@@ -4511,6 +4613,13 @@ export default function App({
             onClick={() => setCharSheetOpen(o => !o)}
           >
             Char
+          </button>
+          <button
+            style={styles.utilityButton}
+            title="Quest log (J)"
+            onClick={() => setQuestLogOpen(o => !o)}
+          >
+            Quests
           </button>
           <button
             style={styles.utilityButton}

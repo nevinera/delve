@@ -54,6 +54,7 @@ Rails.application.routes.draw do
     post "validators/zone", to: "validators#zone"
     post "validators/world", to: "validators#world"
     post "validators/world_references", to: "validators#world_references"
+    post "validators/quests", to: "validators#quests"
     post "dps_sims/unit_type", to: "dps_sims#unit_type"
     post "class_dps_sims/character_class", to: "class_dps_sims#character_class"
     post "class_ttd_sims/character_class", to: "class_ttd_sims#character_class"
@@ -97,6 +98,8 @@ Rails.application.routes.draw do
         end
         resources :character_items, only: [:index, :show]
         get "flags/*flag", to: "character_flags#show", as: :flag, format: false
+        resources :character_quests, only: [:index], path: "quests"
+        get "quests/zones/:zone", to: "quest_zones#show", as: :quest_zone
         resources :equipped_items, only: [:index, :update], param: :equipped_slot do
           post :best_available, on: :collection
         end
@@ -111,6 +114,12 @@ Rails.application.routes.draw do
       resources :zone_exits, only: [:create]
       resources :character_flags, only: [:create], path: "flags"
       get "flags/*flag", to: "character_flags#show", as: :character_flag, format: false
+      resources :character_quests, only: [:index, :create, :update, :destroy], path: "quests", param: :quest_identifier do
+        member do
+          post :sync
+          post :complete
+        end
+      end
     end
   end
 

@@ -340,6 +340,7 @@ export function createNpcToken(radius, hostility, tokenImageUrl, zoneBaseUrl) {
 
 const NCU_BODY_COLOR = 0xb08a3e;
 const NCU_CONE_COLOR = 0xf0dca0;
+const QUEST_MARKER_COLOR = 0x7fe0ff;
 
 // Floating name above a token. Returns null where canvas 2D isn't available
 // (e.g. jsdom), in which case the token just goes unlabeled.
@@ -392,7 +393,22 @@ export function createNcuToken(radius, name, tokenImageUrl, zoneBaseUrl) {
     label.position.set(0, 2.5, 0);
     group.add(label);
   }
+  attachQuestMarker(group);
   return group;
+}
+
+// A pale blue diamond floating above an NCU that has a quest for the
+// player. Hidden until setNcuQuestMarkers shows it.
+function attachQuestMarker(group) {
+  const marker = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.6),
+    new THREE.MeshBasicMaterial({ color: QUEST_MARKER_COLOR })
+  );
+  marker.scale.set(0.7, 1.2, 0.7);
+  marker.position.y = 4;
+  marker.visible = false;
+  group.add(marker);
+  group._questMarker = marker;
 }
 
 // Creates the dead-state overlay (gray circle + red X) and attaches it to group,
@@ -479,6 +495,7 @@ export class SceneManager {
     this._tokenMap = new Map();
     this._ncuTokenMap = new Map(); // ncuId → { group, targetX, targetZ, targetRotY, lastRenderedMap }
     this._ncuInfo = new Map();     // zone_ncu_identifier → the NCU's zone config
+    this._questNcus = new Set();   // zone_ncu_identifiers with a quest for the player
     this._ncus = {};
     this._mapToWorldByMap = new Map(); // mapId → (x,y)=>[wx,wz]
     this._mapGroups = new Map();       // mapId → THREE.Group (visibility-toggled on map change)
@@ -1360,8 +1377,9 @@ export class SceneManager {
       const group = createNcuToken(ncu.radius ?? info?.tokenRadius ?? TOKEN_RADIUS, info?.name, info?.tokenImageUrl, this._zoneBaseUrl);
       group.position.set(wx, 0, wz);
       group.rotation.y = angle;
+      group._questMarker.visible = this._questNcus.has(ncu.zone_ncu_identifier);
       this._scene.add(group);
-      this._ncuTokenMap.set(id, { group, targetX: wx, targetZ: wz, targetRotY: angle });
+      this._ncuTokenMap.set(id, { group, targetX: wx, targetZ: wz, targetRotY: angle, zoneNcuIdentifier: ncu.zone_ncu_identifier });
     }
 
     for (const [id, { group }] of this._ncuTokenMap) {
@@ -1369,6 +1387,15 @@ export class SceneManager {
         this._scene.remove(group);
         this._ncuTokenMap.delete(id);
       }
+    }
+  }
+
+  // Shows the quest marker over each NCU (by zone_ncu_identifier) in
+  // identifiers, and hides the rest.
+  setNcuQuestMarkers(identifiers) {
+    this._questNcus = identifiers;
+    for (const { group, zoneNcuIdentifier } of this._ncuTokenMap.values()) {
+      group._questMarker.visible = identifiers.has(zoneNcuIdentifier);
     }
   }
 

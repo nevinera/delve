@@ -10,9 +10,9 @@ import {ZoneDraft as ZoneFile} from "../../zoneEditor/ZoneDraft";
 import {keyFromRef, refFromKey} from "../../zoneEditor/mapRef";
 import {aggregateItemUsage, aggregateUnitTypeUsage} from "../../zoneEditor/zoneRefUsage";
 import {rebaseRelativeUrls, dirname} from "../../content/rebaseRelativeUrls";
-import {syncZoneEntry} from "./worldOps";
+import {syncZoneEntry, worldData} from "./worldOps";
 import {stableStringify} from "./WorldDraft";
-import {itemFile, mapFile, relativePath, resolvePath, unitTypeFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
+import {itemFile, mapFile, relativePath, resolvePath, unitTypeFile, worldFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
 
 export const zoneData = (draft, zone) => draft.read(zoneFile(draft.worldKey, zone));
 
@@ -130,14 +130,30 @@ export function resolveZone(draft, zone) {
     return node;
   }
 
-  return {...inline(zoneData(draft, zone), path), flags: zoneFlags(zone)};
+  return {...inline(zoneData(draft, zone), path), flags: zoneFlags(draft, zone)};
+}
+
+// The default questsPath (see docs/schema/world.md).
+export const DEFAULT_QUESTS_PATH = "./quests.json";
+
+// The world's quests (docs/schema/quest.md), or [] when it has none.
+export function worldQuests(draft) {
+  const path = resolvePath(worldFile(draft.worldKey), worldData(draft)?.questsPath || DEFAULT_QUESTS_PATH);
+  const quests = path && draft.read(path);
+  return Array.isArray(quests) ? quests : [];
 }
 
 // The flags a zone preloads for each character on entry (see
-// plans/flags.md): compiled from the zone's nested data, never edited.
-// For now that's only the one every character gets on reaching it.
-export function zoneFlags(zone) {
-  return [`zone/reached/${zone}`];
+// plans/flags.md): compiled from the zone's nested data, never edited. The
+// zone's reached flag, then what deciding its NCUs' quest offers needs:
+// each offered quest's completion flag and required flags.
+export function zoneFlags(draft, zone) {
+  const flags = [`zone/reached/${zone}`];
+  for (const quest of worldQuests(draft)) {
+    if (quest.offeredBy?.zone !== zone) continue;
+    flags.push(`quest/completed/${quest.identifier}`, ...(quest.requiresFlags ?? []));
+  }
+  return [...new Set(flags)];
 }
 
 // The old zone editor's action shapes (see zoneEditor/ZoneEditor.jsx's

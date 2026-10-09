@@ -1,0 +1,64 @@
+[
+  {
+    "objective": {
+      "type": "talk",
+      "zone": "goblin-cave",
+      "ncu": "grizzle"
+    },
+    "hash": "d71ea1e636226bb0d5fe7bd49358388fafa225da"
+  },
+  {
+    "objective": {
+      "type": "kill",
+      "zone": "goblin-cave",
+      "unitType": "rat"
+    },
+    "hash": "a67b3c50c9a026ffb3063f2db07323a2b2a87eb0"
+  },
+  {
+    "objective": {
+      "type": "kill",
+      "zone": "goblin-cave",
+      "unitType": "rat",
+      "count": 1
+    },
+    "hash": "a67b3c50c9a026ffb3063f2db07323a2b2a87eb0"
+  },
+  {
+    "objective": {
+      "type": "kill",
+      "zone": "goblin-cave",
+      "unitType": "rat",
+      "count": 5,
+      "map": "depths"
+    },
+    "hash": "3e88e51d0f9c35a3b77f6b8533be3a547ccaef28"
+  },
+  {
+    "objective": {
+      "map": "depths",
+      "count": 5,
+      "unitType": "rat",
+      "zone": "goblin-cave",
+      "type": "kill"
+    },
+    "hash": "3e88e51d0f9c35a3b77f6b8533be3a547ccaef28"
+  },
+  {
+    "objective": {
+      "type": "kill",
+      "zone": "goblin-cave",
+      "unit": "rat-king",
+      "map": ""
+    },
+    "hash": "4c88f9e8e196d10f222aa27d97485568c7bed474"
+  },
+  {
+    "objective": {
+      "type": "reach",
+      "zone": "cave<&>",
+      "map": "dépths"
+    },
+    "hash": "75468bd9288a87340a03f9fa9a3532caad3951c5"
+  }
+]

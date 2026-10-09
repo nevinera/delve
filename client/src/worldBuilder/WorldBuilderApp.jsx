@@ -22,6 +22,9 @@ import ZoneLevel from "./levels/ZoneLevel";
 import MapLevel from "./levels/MapLevel";
 import UnitTypeLevel from "./levels/UnitTypeLevel";
 import ItemLevel from "./levels/ItemLevel";
+import QuestsLevel from "./levels/QuestsLevel";
+import QuestEditor from "./levels/QuestEditor";
+import {questData} from "./state/questOps";
 import {itemData} from "./state/itemOps";
 import {unitTypeData} from "./state/unitTypeOps";
 import {LibraryReader} from "./state/libraryReader";
@@ -36,6 +39,7 @@ function crumbsFor(location, draft) {
   if (location.map) crumbs.push({label: mapData(draft, location.zone, location.map)?.name || location.map, target: location});
   if (location.unitType) crumbs.push({label: `Unit type: ${unitTypeData(draft, location.unitType)?.name || location.unitType}`, target: location});
   if (location.item) crumbs.push({label: `Item: ${itemData(draft, location.item)?.name || location.item}`, target: location});
+  if (location.quests) crumbs.push({label: "Quests", target: {quests: true}});
   return crumbs;
 }
 
@@ -61,6 +65,9 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   const [validation, setValidation] = useState(null);
   const [validating, setValidating] = useState(false);
   const [location, navigate] = useHashLocation();
+  // The quest whose editor is open over a level other than the quests
+  // page (which keeps its open quest in the location instead).
+  const [overlayQuest, setOverlayQuest] = useState(null);
   const storeKey = useRef(null);
   const persistedHash = useRef(null);
 
@@ -278,7 +285,8 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   };
   // A location whose zone or map no longer exists (deleted, renamed) falls
   // back to the nearest level that does.
-  const shown = location.unitType ? (unitTypeData(draft, location.unitType) ? location : {})
+  const shown = location.quests ? (location.quest && !questData(draft, location.quest) ? {quests: true} : location)
+    : location.unitType ? (unitTypeData(draft, location.unitType) ? location : {})
     : location.item ? (itemData(draft, location.item) ? location : {})
       : !location.zone || !zoneData(draft, location.zone) ? {}
       : location.map && !mapData(draft, location.zone, location.map) ? {zone: location.zone} : location;
@@ -288,11 +296,17 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
     : draft.hasChanges ? {blocker: "Save, validate and expand to play"}
       : !expanded ? {blocker: "Validate and expand to play"}
         : {url: (zone) => `${zonePlayUrl.replace("ZONE", encodeURIComponent(zone))}?commit=${draft.snapshot.commitSha}`};
+  // The quest editor opens from many places: on the quests page it's part
+  // of the location; anywhere else it's an overlay.
+  const openQuest = (quest) => (shown.quests ? navigate({quests: true, quest}) : setOverlayQuest(quest));
+  const closeQuest = () => (shown.quests ? navigate({quests: true}) : setOverlayQuest(null));
+  const editingQuest = shown.quests ? shown.quest : overlayQuest && questData(draft, overlayQuest) ? overlayQuest : null;
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
+  else if (shown.quests) level = <QuestsLevel draft={draft} onChange={setDraft} onOpenQuest={openQuest} />;
   else if (shown.item) level = <ItemLevel draft={draft} item={shown.item} onChange={setDraft} repo={repo} />;
   else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
-  else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;
+  else if (shown.map) level = <MapLevel draft={draft} zone={shown.zone} map={shown.map} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} onOpenQuest={openQuest} />;
   else if (shown.zone) level = <ZoneLevel draft={draft} zone={shown.zone} onChange={setDraft} navigate={navigate} repo={repo} play={play} />;
   else level = <WorldLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} library={library} play={play} />;
 
@@ -320,6 +334,9 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
         <ValidationProblems problems={validation?.hash === draft.hash() ? validation.problems : null} onSelect={navigate} />
       </header>
       {level}
+      {editingQuest && (
+        <QuestEditor key={editingQuest} draft={draft} quest={editingQuest} onChange={setDraft} onOpenQuest={openQuest} onClose={closeQuest} library={library} repo={repo} />
+      )}
     </div>
   );
 }

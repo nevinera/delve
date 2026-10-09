@@ -107,10 +107,19 @@ RSpec.describe "Play::WorldCharacters", type: :request do
         %(data-leave-world-url="#{base}/#{world.id}/leave"),
         %(data-held-flags="[]"),
         %(data-flags-url="#{base}/#{world.id}/flags"),
+        %(data-zone-identifier="darkwood"),
+        %(data-active-quests-url="#{base}/#{world.id}/quests"),
         %(data-zone-source-url="#{version.raw_base_url}zones/darkwood/darkwood.full.json"),
         %(data-zone-source-sha="#{version.zones.find_by!(identifier: "darkwood").content_sha}"),
         %(data-class-config-sha="#{character_class.content_sha}"))
-      expect(response.body).not_to include("<nav>")
+      expect(response.body).not_to include("<nav>", "data-quests-url")
+    end
+
+    it "passes the world's quests file to the client" do
+      allow(JoinWorldZone).to receive(:call).and_return(join_result)
+      version.update!(quests_path: "worlds/quests.json", quests_sha: "abc123")
+      get "#{base}/#{world.id}/play"
+      expect(response.body).to include(%(data-quests-url="#{version.raw_base_url}worlds/quests.json" data-quests-sha="abc123"))
     end
 
     it "offers to refetch the class when its file changed" do

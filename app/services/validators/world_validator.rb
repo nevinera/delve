@@ -16,6 +16,7 @@ module Validators
 
     def validate_optional_fields!(data, path:)
       require_string!(data, "thumbnailUrl", path: path) if given?(data, "thumbnailUrl")
+      require_string!(data, "questsPath", path: path) if given?(data, "questsPath")
       validate_elevation_range!(data, path: path) if given?(data, "elevationRange")
       validate_world_links!(data, path: path) if given?(data, "worldLinks")
       validate_provenance_restrictions!(data, path: path) if given?(data, "provenanceRestrictions")

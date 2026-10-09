@@ -31,6 +31,7 @@ export function canKeepTalking(self, ncu) {
   return !!self && !isUntargetableStatus(self.status) && inTalkRange(self, ncu);
 }
 
-export function canTalkTo(self, ncu, dialogue) {
-  return hasDialogue(dialogue) && canKeepTalking(self, ncu);
+// An NCU can be talked to when it has dialogue or quests to offer.
+export function canTalkTo(self, ncu, dialogue, hasOffers = false) {
+  return (hasDialogue(dialogue) || hasOffers) && canKeepTalking(self, ncu);
 }

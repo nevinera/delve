@@ -7,7 +7,8 @@ import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFiel
 // type to pick. "+ Add NCU" arms MapCanvas's single-shot "add-ncu" tool;
 // position/movement editing is the same as a unit's (see MovementFields),
 // with every placement tagged section "ncus". tokenImages {options,
-// upload} feeds the token's ImagePicker.
+// upload} feeds the token's ImagePicker. ncuQuests (optional; see
+// MapWorkbench) lists each NCU's quests in its row.
 
 function inNcusSection(placement) {
   return placement?.section === "ncus" ? placement : null;
@@ -36,8 +37,33 @@ export function NcuTokenThumb({tokenUrl, className = "map-unit-token-thumb"}) {
   return <span className={className} style={{background: "#b08a3e"}} />;
 }
 
+// The quests an NCU offers and takes turned in (quests: {offers, turnIns},
+// each [{identifier, name}]), each opening its editor, and a way to start
+// a new one offered here.
+function NcuQuests({quests, onOpenQuest, onNewQuest}) {
+  const list = (label, entries) => entries.length > 0 && (
+    <p className="map-ncu-quests-list">
+      {label}:{" "}
+      {entries.map((quest, i) => (
+        <span key={quest.identifier}>
+          {i > 0 && ", "}
+          <button type="button" className="link-button" onClick={() => onOpenQuest(quest.identifier)}>{quest.name}</button>
+        </span>
+      ))}
+    </p>
+  );
+  return (
+    <div className="map-ncu-quests">
+      <h4>Quests</h4>
+      {list("Offers", quests.offers)}
+      {list("Takes turned in", quests.turnIns)}
+      {onNewQuest && <button type="button" className="add-entry" onClick={onNewQuest}>New quest offered here</button>}
+    </div>
+  );
+}
+
 function NcuRow({
-  ncu, index, expanded, hovered, tokenUrl, tokenImages, onRowClick, onHover, onRemove, update, dispatch,
+  ncu, index, expanded, hovered, tokenUrl, tokenImages, onRowClick, onHover, onRemove, update, dispatch, ncuQuests,
   unitPlacement, onStartUnitPlacement,
   patrolStepPlacement, onStartPatrolStepPlacement, onStartPatrolStepEdit, onHoverPatrolStep,
   wanderLocationPlacement, onStartWanderLocationPlacement, onUpdateMovement,
@@ -129,6 +155,13 @@ function NcuRow({
             onUpdateMovement={onUpdateMovement}
           />
           <DialogueFields dialogue={ncu.dialogue} onChange={(v) => update(index, {dialogue: v})} />
+          {ncuQuests && ncu.identifier && (
+            <NcuQuests
+              quests={ncuQuests.byNcu[ncu.identifier] ?? {offers: [], turnIns: []}}
+              onOpenQuest={ncuQuests.onOpenQuest}
+              onNewQuest={ncuQuests.onNewQuest && (() => ncuQuests.onNewQuest(ncu.identifier))}
+            />
+          )}
         </>
       )}
     </div>
@@ -140,7 +173,7 @@ export default function NcusPanel({
   tool, placement, canPlaceOnMap, onStartAddNcu, dispatch, onExpandedIndicesChange,
   unitPlacement, onStartUnitPlacement,
   patrolStepPlacement, onStartPatrolStepPlacement, onStartPatrolStepEdit, onHoverPatrolStep,
-  wanderLocationPlacement, onStartWanderLocationPlacement, onUpdateMovement,
+  wanderLocationPlacement, onStartWanderLocationPlacement, onUpdateMovement, ncuQuests,
 }) {
   const [sectionCollapsed, setSectionCollapsed] = useState(false);
   const [expandedIndices, setExpandedIndices] = useState(() => new Set());
@@ -211,6 +244,7 @@ export default function NcusPanel({
               onHoverPatrolStep={onHoverPatrolStep}
               wanderLocationPlacement={inNcusSection(wanderLocationPlacement)} onStartWanderLocationPlacement={onStartWanderLocationPlacement}
               onUpdateMovement={onUpdateMovement}
+              ncuQuests={ncuQuests}
             />
           ))}
         </>

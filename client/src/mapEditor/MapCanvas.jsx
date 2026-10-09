@@ -4,6 +4,7 @@ import {collectSnapPoints, nearestSnapPoint} from "./mapSnap";
 import BarrierShapes from "./BarrierShapes";
 import ConnectionShapes from "./ConnectionShapes";
 import UnitShapes from "./UnitShapes";
+import NcuQuestBadges from "./NcuQuestBadges";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
 import MapPreviewCanvas from "./MapPreviewCanvas";
@@ -120,7 +121,7 @@ export default function MapCanvas({
   patrolStepPlacement, onPlacePatrolStep, onCancelPatrolStepPlacement,
   wanderLocationPlacement, onPlaceWanderLocation, onCancelWanderLocationPlacement,
   hoveredPatrolStep, expandedUnitIndices,
-  ncuTokenUrls = {}, selectedNcuIndex = null, onSelectNcu, hoveredNcuIndex = null, onHoverNcu, expandedNcuIndices,
+  ncuTokenUrls = {}, ncuQuests = null, selectedNcuIndex = null, onSelectNcu, hoveredNcuIndex = null, onHoverNcu, expandedNcuIndices,
   openGroup = null, onToggleGroupMember, hoveredGroupIdentifier, highlightedUnitIndices = null,
   activeLayers = ALL_LAYERS, onDoubleClickUnit, onDoubleClickEmpty, keepUnitToolArmed = false, prepareUnit = (entry) => entry,
   onPlaceEncounter,
@@ -1217,6 +1218,15 @@ export default function MapCanvas({
                 onSelect={onSelectNcu}
                 onStartDrag={startDragNcu}
                 onHoverUnit={onHoverNcu}
+              />
+            )}
+            {canDrawBarriers && ncuQuests && mapData.ncus?.length > 0 && layer("ncus",
+              <NcuQuestBadges
+                ncus={mapData.ncus}
+                questsByNcu={ncuQuests.byNcu}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                onOpenQuest={ncuQuests.onOpenQuest}
               />
             )}
             {canDrawBarriers && mapData.units.length > 0 && layer("units",

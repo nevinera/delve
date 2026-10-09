@@ -3,6 +3,7 @@ require "digest"
 # Imports a WorldVersion from its repo: resolves the ref to a commit SHA,
 # fetches and validates the world file and every zone's .full.json at that
 # SHA, cross-checks the world's links and entry points against the zones,
+# fetches and validates the world's quests file (if it has one) against the zones,
 # then replaces the version's Zone rows. Only references and checksums are
 # stored - never the content itself (see plans/worlds.md). On any failure
 # the version is marked failed and its existing zones are left alone.
@@ -12,6 +13,8 @@ class ImportWorldVersionJob < ApplicationJob
   ImportError = Class.new(StandardError)
 
   RAW_BASE = "https://raw.githubusercontent.com"
+  # Where a world's quests file is when its questsPath doesn't say.
+  DEFAULT_QUESTS_PATH = "./quests.json"
 
   def perform(world_version_id)
     @version = WorldVersion.find(world_version_id)
@@ -35,6 +38,7 @@ class ImportWorldVersionJob < ApplicationJob
     world_data = fetch_world!(base_url)
     zones = world_data["zones"].to_h { |key, entry| [key, fetch_zone!(base_url, key, entry)] }
     entry = link_zones!(world_data, zones)
+    @quests = fetch_quests!(base_url, world_data["questsPath"], zones)
     save!(sha:, base_url:, world_data:, zones:, entry:)
   end
 
@@ -53,6 +57,20 @@ class ImportWorldVersionJob < ApplicationJob
     raise ImportError, "#{world.path}: every entry point needs a key, so nobody could enter" unless entry
     zones.each { |key, zone| zone[:links] = WorldContent::Links.links_for(world_data, key, zones_by_key) }
     entry
+  end
+
+  # Validates the quests file and its references into the world's zones;
+  # returns its path and checksum. A world without a questsPath uses
+  # DEFAULT_QUESTS_PATH, and has no quests if there's nothing there.
+  def fetch_quests!(base_url, relative_path, zones)
+    path = repo_path(relative_path.presence || DEFAULT_QUESTS_PATH, "quests path")
+    body = fetch!(base_url, path, missing_ok: relative_path.blank?) or return
+    quests = parse!(body, path)
+    in_file(path) do
+      Validators::QuestsValidator.validate!(quests)
+      Validators::QuestReferences.validate!(quests, zones.transform_values { |z| z[:data] })
+    end
+    {path:, content_sha: Digest::SHA1.hexdigest(body)}
   end
 
   def resolve_commit_sha
@@ -74,13 +92,20 @@ class ImportWorldVersionJob < ApplicationJob
   # A world's zone paths are relative to the world file, and point at the
   # zone's abstract file; the importable one is its .full.json sibling.
   def full_zone_path(relative_path)
-    path = Pathname(world.path).dirname.join(relative_path).cleanpath.to_s
-    raise ImportError, "#{world.path}: zone path #{relative_path} is outside the repo" if path.start_with?("..", "/")
-    path.sub(/\.json\z/, ".full.json")
+    repo_path(relative_path, "zone path").sub(/\.json\z/, ".full.json")
   end
 
-  def fetch!(base_url, path)
+  # A path relative to the world file, as a path within the repo.
+  def repo_path(relative_path, what)
+    path = Pathname(world.path).dirname.join(relative_path).cleanpath.to_s
+    raise ImportError, "#{world.path}: #{what} #{relative_path} is outside the repo" if path.start_with?("..", "/")
+    path
+  end
+
+  # nil for a missing file when missing_ok.
+  def fetch!(base_url, path, missing_ok: false)
     response = Net::HTTP.get_response(URI("#{base_url}#{path}"))
+    return if missing_ok && response.is_a?(Net::HTTPNotFound)
     raise ImportError, "#{path}: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
     response.body
   end
@@ -98,18 +123,23 @@ class ImportWorldVersionJob < ApplicationJob
   end
 
   # Stores references, checksums, and the structure Rails needs without
-  # re-reading the files: the display name, which zone connection is the
-  # default entry point, and where each zone's exits lead.
+  # re-reading the files: the display names (the world's, and each zone's
+  # and its maps'), which zone connection is the default entry point, and
+  # where each zone's exits lead.
   def save!(sha:, base_url:, world_data:, zones:, entry:)
     WorldVersion.transaction do
       replace_zones!(zones, entry)
       @version.update!(
         commit_sha: sha, raw_base_url: base_url, name: world_data["name"], state: :unreleased, imported_at: Time.current,
-        provenance_restrictions: world_data["provenanceRestrictions"]
+        provenance_restrictions: world_data["provenanceRestrictions"],
+        quests_path: @quests&.dig(:path), quests_sha: @quests&.dig(:content_sha)
       )
       world.update!(name: world_data["name"]) if world.name.blank?
     end
   end
+
+  # {map identifier: name} for the zone's named maps.
+  def map_names(data) = (data["maps"] || []).filter_map { |map| [map["identifier"], map["name"]] if map["name"].present? }.to_h
 
   def replace_zones!(zones, entry)
     entry_zone, entry_connection = entry
@@ -117,7 +147,8 @@ class ImportWorldVersionJob < ApplicationJob
     zones.each do |key, zone|
       @version.zones.create!(
         identifier: key, path: zone[:path], content_sha: zone[:content_sha],
-        links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone)
+        links: zone[:links], entry_connection_key: (entry_connection if key == entry_zone),
+        name: zone[:data]["name"], map_names: map_names(zone[:data])
       )
     end
   end

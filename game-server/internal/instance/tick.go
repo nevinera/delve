@@ -195,6 +195,11 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			for _, pending := range state.PendingLootClaims {
 				go inst.fireLootAward(ctx, pending)
 			}
+			if events := inst.collectQuestEvents(prevState, state); len(events) > 0 {
+				go inst.ApplyQuestEvents(ctx, events)
+			}
+			inst.processTalks(ctx, state.PendingTalks)
+			inst.tickQuestTimers(ctx, now)
 			for _, exit := range zoneExits {
 				go inst.fireZoneExit(ctx, exit)
 			}
@@ -209,6 +214,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			state.PendingLootFailures = nil
 			state.PendingOwnershipUpdates = nil
 			state.PendingCombatEvents = nil
+			state.PendingTalks = nil
 			prevState = state.Clone()
 			prevHeartbeatSeqs = heartbeatSeqs
 			prevMoveSeqs = moveSeqs

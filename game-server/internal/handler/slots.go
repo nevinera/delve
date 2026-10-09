@@ -11,6 +11,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instance"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/questbook"
 	"github.com/delve-mmo/game-server/internal/railsclient"
 )
 
@@ -20,10 +21,11 @@ type Slots struct {
 	maxInstances int
 	maxSlots     int
 	railsClient  *railsclient.Client
+	questBook    *questbook.Book
 }
 
 func NewSlots(registry *instance.Registry, maxInstances, maxSlots int, railsClient *railsclient.Client) *Slots {
-	return &Slots{registry: registry, maxInstances: maxInstances, maxSlots: maxSlots, railsClient: railsClient}
+	return &Slots{registry: registry, maxInstances: maxInstances, maxSlots: maxSlots, railsClient: railsClient, questBook: questbook.New()}
 }
 
 type createSlotRequest struct {

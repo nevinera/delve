@@ -21,6 +21,15 @@ RSpec.describe Validators::WorldValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /thumbnailUrl must be a string/)
     end
 
+    it "accepts a questsPath" do
+      expect { described_class.validate!(world_fixture.merge("questsPath" => "./demo.quests.json")) }.not_to raise_error
+    end
+
+    it "raises when questsPath is not a string" do
+      expect { described_class.validate!(world_fixture.merge("questsPath" => 42)) }
+        .to raise_error(Validators::ValidationError, /questsPath must be a string/)
+    end
+
     context "elevationRange" do
       it "raises when it is not a two-element array" do
         expect { described_class.validate!(world_fixture.merge("elevationRange" => [0])) }

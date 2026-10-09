@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"maps"
+	"slices"
 
 	"github.com/google/uuid"
 
@@ -148,14 +149,14 @@ func (inst *Instance) processLootEvents(ctx context.Context, state *instancestat
 		if !ok {
 			continue
 		}
-		if unit.TaggedBy == nil {
+		eligible := killCredited(unit)
+		if len(eligible) == 0 {
 			continue // no player contributed to this kill; nothing to claim
 		}
 		var eligibleSlots []slotSnapshot
 		for _, s := range slots {
-			if s.CharacterUnitID == *unit.TaggedBy {
+			if slices.Contains(eligible, s.CharacterUnitID) {
 				eligibleSlots = append(eligibleSlots, s)
-				break
 			}
 		}
 		for i := range unit.LootItems {
@@ -213,4 +214,14 @@ func (inst *Instance) fireAutoUpgrade(ctx context.Context, target autoUpgradeTar
 	default:
 		slog.WarnContext(ctx, "auto-upgrade result channel full, result dropped", "item", item.Identifier)
 	}
+}
+
+// killCredited is the player units credited with killing unit: those who
+// can loot it, and whose kill objectives it counts toward. Today that's
+// just the one who tagged it.
+func killCredited(unit *instancestate.UnitState) []uuid.UUID {
+	if unit.TaggedBy == nil {
+		return nil
+	}
+	return []uuid.UUID{*unit.TaggedBy}
 }

@@ -8,6 +8,7 @@ beforeEach(() => {
   vi.spyOn(validators, "validateZone").mockResolvedValue({valid: true});
   vi.spyOn(validators, "validateWorld").mockResolvedValue({valid: true});
   vi.spyOn(validators, "validateWorldReferences").mockResolvedValue({valid: true});
+  vi.spyOn(validators, "validateQuests").mockResolvedValue({valid: true});
 });
 
 // The fixture's maps reference images and unit types it doesn't fully
@@ -75,5 +76,28 @@ describe("validateDraft", () => {
 
     expect(problems).toContainEqual({file: "worlds/w/w.json", location: {}, message: 'zone "cave" has no openConnection "entrance"'});
     expect(problems).toContainEqual({file: "worlds/w/zones/cave/cave.json", location: {zone: "cave"}, message: "elvl must be an integer (at $.elvl)"});
+  });
+
+  it("skips quests when the world has no quests file", async () => {
+    await validateDraft(cleanDraft());
+    expect(validators.validateQuests).not.toHaveBeenCalled();
+  });
+
+  it("posts the quests with what each zone has, and reports a problem at its quest", async () => {
+    const quests = [{identifier: "a"}, {identifier: "b"}];
+    validators.validateQuests.mockResolvedValue({valid: false, error: {message: "description is required", path: "$[1].description"}});
+    const problems = await validateDraft(cleanDraft().write("worlds/w/quests.json", quests));
+
+    expect(validators.validateQuests).toHaveBeenCalledWith(quests, {
+      forest: {
+        unitTypes: {goblin: {}}, items: {},
+        maps: [
+          {identifier: "hub", ncus: [], units: [{identifier: "goblin-a"}, {identifier: "archer-a"}]},
+          {identifier: "passage", ncus: [], units: []},
+        ],
+      },
+      cave: {unitTypes: {}, items: {}, maps: []},
+    });
+    expect(problems).toEqual([{file: "worlds/w/quests.json", location: {quests: true, quest: "b"}, message: "description is required"}]);
   });
 });

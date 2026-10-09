@@ -80,6 +80,10 @@
     "label": "Character sheet"
   },
   {
+    "id": "toggle_quest_log",
+    "label": "Quest log"
+  },
+  {
     "id": "toggle_latency",
     "label": "Toggle latency display"
   }

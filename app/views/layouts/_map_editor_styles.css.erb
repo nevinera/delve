@@ -108,6 +108,13 @@
          wrapper underneath for panning/add-tool clicks. */
       .map-canvas-shapes { position: absolute; top: 0; left: 0; pointer-events: none; }
       .map-canvas-shapes polyline, .map-canvas-shapes circle, .map-canvas-shapes line, .map-canvas-shapes image { pointer-events: auto; }
+      /* NcuQuestBadges.jsx - a quest badge on NCUs with quests (world editor only). */
+      .map-ncu-quest-badge circle { fill: #7fe0ff; stroke: #123; stroke-width: 1; cursor: pointer; }
+      .map-ncu-quest-badge text { fill: #123; font-weight: bold; pointer-events: none; }
+      .map-ncu-quest-badge text.map-ncu-quest-option { fill: #bfefff; stroke: #000; stroke-width: 0.6px; paint-order: stroke; pointer-events: auto; cursor: pointer; font-weight: normal; }
+      .map-ncu-quests { margin-top: 8px; }
+      .map-ncu-quests h4 { margin: 0 0 4px; }
+      .map-ncu-quests-list { margin: 0 0 4px; font-size: 12px; }
       .map-canvas-shapes circle, .map-canvas-shapes line, .map-canvas-shapes image { cursor: grab; }
       /* The 3ft hover ring around a wall point (from hovering its row in
          BarriersPanel) is a pure visual marker, not an interactive handle -

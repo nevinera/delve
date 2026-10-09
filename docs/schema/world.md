@@ -18,6 +18,7 @@ See [zone.md](zone.md) for the `Zone` type referenced by `zones`.
 | `zones` | object | yes | Maps local zone-identifier strings to WorldZoneEntry. At least one. |
 | `worldLinks` | array of WorldLink | no | Connections between pairs of zone connection points (either an `openConnection` or an `entryPoint`) across zones in this world. |
 | `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Default: this world's items only, any elevation. |
+| `questsPath` | string | no | Path to this world's quests file (a JSON array of [Quests](quest.md)), relative to the world file. Default: `./quests.json`, and a world with nothing there has no quests. |
 | `entryPoints` | object | yes | Maps serialized WorldEntryPointIdentifier keys (`"zoneId/entryPointKey"`) to required key strings (or `null`). At least one. |
 
 > Skipped for now, tracked separately: `allowedClasses` (blocked on ClassSets).
@@ -125,6 +126,7 @@ traversing one transports a unit to the other.
       "description": "A murky watering hole ringed by dead trees."
     }
   },
+  "questsPath": "./northern-barrens.quests.json",
   "worldLinks": [
     {
       "zoneA": { "zone": "goblin_cave", "kind": "open", "connection": "cliff_above" },

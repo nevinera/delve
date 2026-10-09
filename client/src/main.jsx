@@ -28,6 +28,10 @@ createRoot(el).render(
       leaveWorldUrl={el.dataset.leaveWorldUrl}
       heldFlags={JSON.parse(el.dataset.heldFlags || "[]")}
       flagsUrl={el.dataset.flagsUrl}
+      zoneIdentifier={el.dataset.zoneIdentifier}
+      activeQuestsUrl={el.dataset.activeQuestsUrl}
+      questsUrl={el.dataset.questsUrl}
+      questsSha={el.dataset.questsSha}
     />
   </StrictMode>
 );

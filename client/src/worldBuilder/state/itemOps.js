@@ -3,10 +3,11 @@
 // worlds/<w>/items/<key>.json, the key also being the item's identifier -
 // what map units' loot tables and zones' items dicts refer to it by.
 import {blankItem} from "../../itemEditor/blankItem";
-import {zoneData} from "./zoneOps";
+import {worldQuests, zoneData} from "./zoneOps";
 import {worldMaps} from "./mapOps";
 import {zoneKeys} from "./worldOps";
 import {isValidIdentifier, itemFile, mapFile, relativePath, worldDir, zoneFile} from "./worldPaths";
+import {updateQuest} from "./questOps";
 
 const itemsDir = (draft) => `${worldDir(draft.worldKey)}/items`;
 
@@ -44,8 +45,23 @@ export function itemUses(draft, key) {
   });
 }
 
+// Adds the item to the zone's items (a no-op if it's there), so quest
+// rewards can name it without any unit dropping it.
+export function addItemToZone(draft, zone, key) {
+  const data = zoneData(draft, zone);
+  if (!data || Object.hasOwn(data.items ?? {}, key)) return draft;
+  const ref = {$ref: relativePath(zoneFile(draft.worldKey, zone), itemFile(draft.worldKey, key)), referenceTo: "item"};
+  return draft.write(zoneFile(draft.worldKey, zone), {...data, items: {...(data.items ?? {}), [key]: ref}});
+}
+
+// The quests that reward it, by identifier.
+export function itemRewards(draft, key) {
+  return worldQuests(draft).filter((quest) => (quest.rewards ?? []).some((reward) => reward.item === key)).map((quest) => quest.identifier);
+}
+
 // Moves the file (setting its identifier) and rewrites every reference:
-// each map unit's loot table entry, and each zone's items entry.
+// each map unit's loot table entry, each zone's items entry, and each
+// quest reward.
 export function renameItem(draft, from, to) {
   if (from === to) return draft;
   checkNewKey(draft, to);
@@ -64,16 +80,23 @@ export function renameItem(draft, from, to) {
       : [key, ref])));
     next = next.write(zoneFile(world, zone), {...data, items});
   }
+  for (const identifier of itemRewards(next, from)) {
+    const quest = worldQuests(next).find((q) => q.identifier === identifier);
+    next = updateQuest(next, identifier, {...quest, rewards: quest.rewards.map((reward) => (reward.item === from ? {...reward, item: to} : reward))});
+  }
   return next;
 }
 
-// Refused while any unit drops it (the error lists where); otherwise
+// Refused while any unit drops it or quest rewards it (the error lists
+// where); otherwise
 // removes the file and every zone's items entry for it.
 export function deleteItem(draft, key) {
   const uses = itemUses(draft, key);
   if (uses.length) {
     throw new Error(`"${key}" is still dropped on ${uses.map(({zone, map, count}) => `${zone}/${map} (${count})`).join(", ")}`);
   }
+  const rewards = itemRewards(draft, key);
+  if (rewards.length) throw new Error(`"${key}" is still a reward of ${rewards.join(", ")}`);
   let next = draft.remove(itemFile(draft.worldKey, key));
   for (const zone of zoneKeys(next)) {
     const data = zoneData(next, zone);

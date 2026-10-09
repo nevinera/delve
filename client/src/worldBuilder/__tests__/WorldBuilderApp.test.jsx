@@ -97,6 +97,40 @@ describe("WorldBuilderApp", () => {
     expect(screen.getByLabelText("Lighting")).toHaveValue("daylight");
   });
 
+  describe("quests", () => {
+    const quest = {identifier: "rat-hunt", name: "Rat Hunt", chainIdentifier: "rats", chainName: "Rats",
+      offeredBy: {zone: "forest", ncu: "grizzle"}, offerText: "Work?", description: "Rats.", objectives: []};
+    const withQuests = () => {
+      const json = fixtureJson();
+      json["worlds/w/quests.json"] = [quest];
+      json["worlds/w/zones/forest/hub/hub.json"].ncus = [{identifier: "grizzle", name: "Grizzle", position: {x: 5, y: 5}}];
+      return json;
+    };
+
+    it("opens the quests page from the world level, and a quest's editor in the URL", async () => {
+      renderApp({branches: {main: withQuests()}});
+      fireEvent.click(await screen.findByRole("button", {name: "Open quests (1)"}));
+      expect(window.location.hash).toBe("#/quests");
+      fireEvent.click(screen.getByRole("button", {name: "Rat Hunt"}));
+      expect(window.location.hash).toBe("#/quests/rat-hunt");
+      expect(screen.getByRole("dialog", {name: "Quest rat-hunt"})).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", {name: "Done"}));
+      expect(window.location.hash).toBe("#/quests");
+    });
+
+    it("opens a quest's editor over the map level from its NCU", async () => {
+      window.location.hash = "#/zone/forest/map/hub";
+      renderApp({branches: {main: withQuests()}});
+      fireEvent.click(await screen.findByRole("tab", {name: "Quests"}));
+      fireEvent.click(screen.getByText("Grizzle"));
+      fireEvent.click(screen.getByRole("button", {name: "Rat Hunt"}));
+      expect(screen.getByRole("dialog", {name: "Quest rat-hunt"})).toBeInTheDocument();
+      expect(window.location.hash).toBe("#/zone/forest/map/hub");
+      fireEvent.click(screen.getByRole("button", {name: "Done"}));
+      expect(screen.queryByRole("dialog", {name: "Quest rat-hunt"})).not.toBeInTheDocument();
+    });
+  });
+
   it("falls back to the zone when the URL names a map that isn't there", async () => {
     window.location.hash = "#/zone/forest/map/nowhere";
     renderApp();
