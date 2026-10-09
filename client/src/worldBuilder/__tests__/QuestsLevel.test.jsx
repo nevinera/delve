@@ -56,4 +56,24 @@ describe("QuestsLevel", () => {
     fireEvent.click(screen.getByRole("button", {name: "New quest"}));
     expect(screen.getByText('Quest "rat-hunt" already exists')).toBeInTheDocument();
   });
+
+  it("pinch-zooms the graph, a pinch starting on a quest not opening it", () => {
+    vi.stubGlobal("requestAnimationFrame", (cb) => {
+      cb();
+      return 1;
+    });
+    const {onOpenQuest} = renderLevel([quest("rat-hunt", {name: "Rat Hunt"})]);
+    const node = screen.getByRole("button", {name: "Quest Rat Hunt"});
+    const touch = (pointerId, clientX, clientY) => ({pointerId, pointerType: "touch", clientX, clientY});
+
+    fireEvent.pointerDown(node, touch(1, 90, 50));
+    fireEvent.pointerDown(document.querySelector(".quest-graph"), touch(2, 110, 50));
+    fireEvent.pointerMove(node, touch(2, 150, 50)); // from 20px to 60px apart, midpoint 100 -> 120
+    fireEvent.pointerUp(node, touch(1, 90, 50));
+    fireEvent.pointerUp(node, touch(2, 150, 50));
+
+    expect(document.querySelector(".quest-graph svg > g")).toHaveAttribute("transform", "translate(-180 -100) scale(3)");
+    expect(onOpenQuest).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });

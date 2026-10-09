@@ -1,5 +1,6 @@
 import {useEffect, useMemo, useRef, useState} from "react";
 import {chainColor, positionKey, questLayout} from "../state/questOps";
+import usePinchZoom from "../../usePinchZoom";
 
 const QUEST_WIDTH = 160;
 const QUEST_HEIGHT = 44;
@@ -43,8 +44,8 @@ function fitView(positions, width, height) {
 // chain's badge, and a diamond for marker quests), other flags as small
 // circles, and arrows for prerequisites, grants and requirements. Drag
 // nodes to arrange them (reported, keyed by positionKey, when a drag
-// ends), drag the background to pan, wheel to zoom; clicking a quest
-// opens it.
+// ends), drag the background to pan, wheel or pinch to zoom; clicking a
+// quest opens it.
 export default function QuestGraphCanvas({graph, initialPositions, onPositionsChange, onOpenQuest}) {
   const wrapper = useRef(null);
   const [positions, setPositions] = useState(() => questLayout(graph, initialPositions));
@@ -71,6 +72,15 @@ export default function QuestGraphCanvas({graph, initialPositions, onPositionsCh
     // Fit once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const pinchHandlers = usePinchZoom(wrapper, view && {zoom: view.zoom, offset: {x: view.panX, y: view.panY}}, {
+    clampZoom: (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom)),
+    onPinch: ({zoom, offset}) => setView({zoom, panX: offset.x, panY: offset.y}),
+    onPinchStart: () => {
+      if (press.current?.node && press.current.moved) report(latest.current);
+      press.current = null;
+    },
+  });
 
   const toGraph = (e) => {
     const rect = wrapper.current.getBoundingClientRect();
@@ -119,7 +129,7 @@ export default function QuestGraphCanvas({graph, initialPositions, onPositionsCh
   }
 
   return (
-    <div className="quest-graph" ref={wrapper} onPointerDown={(e) => onPointerDown(e)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
+    <div className="quest-graph" ref={wrapper} {...pinchHandlers} onPointerDown={(e) => onPointerDown(e)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
       {graph.nodes.length === 0 && <p className="quest-graph-empty">No quests yet.</p>}
       {view && (
         <svg width="100%" height="100%" role="img" aria-label="Quests graph">

@@ -377,4 +377,26 @@ describe("ZoneGraphCanvas", () => {
     expect(nodeCenter(container, "gc1-goblin-cave-entrance")).toEqual({x: 500, y: 500});
     expect(onPositionsChange).toHaveBeenLastCalledWith(initialPositions);
   });
+
+  it("pinch-zooms with two fingers, cancelling the first finger's node drag", () => {
+    vi.stubGlobal("requestAnimationFrame", (cb) => {
+      cb();
+      return 1;
+    });
+    const {container} = render(<ZoneGraphCanvas zoneData={zoneData()} mapDetailsByKey={mapDetailsByKey} dispatch={vi.fn()} />);
+    const group = container.querySelector(".zone-graph-svg > g");
+    const node = container.querySelector('[data-node-key="gc1-goblin-cave-entrance"] .zone-graph-node');
+    const before = nodeCenter(container, "gc1-goblin-cave-entrance");
+    const touch = (pointerId, clientX, clientY) => ({pointerId, pointerType: "touch", clientX, clientY});
+
+    fireEvent.pointerDown(node, touch(1, 90, 50));
+    fireEvent.pointerDown(container.querySelector(".zone-graph-wrapper"), touch(2, 110, 50));
+    fireEvent.pointerMove(node, touch(2, 150, 50)); // from 20px to 60px apart, midpoint 100 -> 120
+    fireEvent.pointerUp(node, touch(1, 90, 50));
+    fireEvent.pointerUp(node, touch(2, 150, 50));
+
+    expect(group).toHaveAttribute("transform", "translate(-180, -100) scale(3)");
+    expect(nodeCenter(container, "gc1-goblin-cave-entrance")).toEqual(before);
+    vi.unstubAllGlobals();
+  });
 });

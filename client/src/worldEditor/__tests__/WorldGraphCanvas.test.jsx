@@ -174,4 +174,24 @@ describe("WorldGraphCanvas", () => {
     expect(transform).toBe("translate(500, 500)");
     expect(onPositionsChange).toHaveBeenLastCalledWith(initialPositions);
   });
+
+  it("pinch-zooms with two fingers", () => {
+    vi.stubGlobal("requestAnimationFrame", (cb) => {
+      cb();
+      return 1;
+    });
+    const draft = draftWith({zones: {goblin_cave: {path: "./x.json", name: "Goblin Cave"}}});
+    const {container} = render(<WorldGraphCanvas draft={draft} onChange={vi.fn()} zoneDetailsByKey={{}} onRefresh={vi.fn()} refreshStatus="" />);
+    const wrapper = container.querySelector(".zone-graph-wrapper");
+    const touch = (pointerId, clientX, clientY) => ({pointerId, pointerType: "touch", clientX, clientY});
+
+    fireEvent.pointerDown(wrapper, touch(1, 90, 50));
+    fireEvent.pointerDown(wrapper, touch(2, 110, 50));
+    fireEvent.pointerMove(wrapper, touch(2, 150, 50));
+    fireEvent.pointerUp(wrapper, touch(1, 90, 50));
+    fireEvent.pointerUp(wrapper, touch(2, 150, 50));
+
+    expect(container.querySelector(".zone-graph-svg > g")).toHaveAttribute("transform", "translate(-180, -100) scale(3)");
+    vi.unstubAllGlobals();
+  });
 });
