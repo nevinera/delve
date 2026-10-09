@@ -31,7 +31,8 @@ describe("ClassDpsEstimatePanel", () => {
     renderPanel();
 
     expect(screen.getByRole("button", {name: "Estimate DPS"})).toBeEnabled();
-    expect(screen.getAllByRole("table")).toHaveLength(1); // strategy table always present, no results table yet
+    expect(screen.getByRole("list")).toBeInTheDocument(); // the strategy editor
+    expect(screen.queryByRole("table")).not.toBeInTheDocument(); // no results yet
     expect(screen.queryByText(/dps$/)).not.toBeInTheDocument();
   });
 

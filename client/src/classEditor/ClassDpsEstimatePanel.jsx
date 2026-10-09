@@ -40,48 +40,40 @@ function StrategyRow({entry, index, total, powerNames, onChange, onRemove, onMov
   }
 
   return (
-    <tr className="strategy-row">
-      <td>{index + 1}</td>
-      <td>
-        <select value={entry.power} onChange={(e) => updatePower(e.target.value)}>
-          <option value="">(choose a power)</option>
-          {powerNames.map((name) => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <select value={entry.condition?.type ?? ""} onChange={(e) => updateConditionType(e.target.value)}>
-          <option value="">always</option>
-          <option value="missingStatus">if missing status</option>
-          <option value="hasStatus">if has status</option>
-        </select>
-      </td>
+    <li className="strategy-row">
+      <span className="strategy-row-number">{index + 1}</span>
+      <select aria-label="Power" value={entry.power} onChange={(e) => updatePower(e.target.value)}>
+        <option value="">(choose a power)</option>
+        {powerNames.map((name) => (
+          <option key={name} value={name}>{name}</option>
+        ))}
+      </select>
+      <select aria-label="Condition" value={entry.condition?.type ?? ""} onChange={(e) => updateConditionType(e.target.value)}>
+        <option value="">always</option>
+        <option value="missingStatus">if missing status</option>
+        <option value="hasStatus">if has status</option>
+      </select>
       {entry.condition && (
         <>
-          <td>
-            <select value={entry.condition.on} onChange={(e) => updateConditionField("on", e.target.value)}>
-              <option value="target">target</option>
-              <option value="self">self</option>
-            </select>
-          </td>
-          <td>
-            <input
-              type="text"
-              value={entry.condition.status}
-              placeholder="status name"
-              onChange={(e) => updateConditionField("status", e.target.value)}
-            />
-          </td>
+          <select aria-label="Condition on" value={entry.condition.on} onChange={(e) => updateConditionField("on", e.target.value)}>
+            <option value="target">target</option>
+            <option value="self">self</option>
+          </select>
+          <input
+            type="text"
+            aria-label="Condition status"
+            value={entry.condition.status}
+            placeholder="status name"
+            onChange={(e) => updateConditionField("status", e.target.value)}
+          />
         </>
       )}
-      {!entry.condition && <td colSpan={2} />}
-      <td>
+      <span className="strategy-row-actions">
         <button type="button" onClick={() => onMove(index, -1)} disabled={index === 0}>↑</button>
         <button type="button" onClick={() => onMove(index, 1)} disabled={index === total - 1}>↓</button>
         <button type="button" onClick={() => onRemove(index)}>Remove</button>
-      </td>
-    </tr>
+      </span>
+    </li>
   );
 }
 
@@ -108,31 +100,20 @@ function StrategyEditor({strategy, powerNames, onChange}) {
 
   return (
     <div className="strategy-editor">
-      <table className="strategy-editor-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Power</th>
-            <th>Condition</th>
-            <th colSpan={2}>Condition detail</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {strategy.map((entry, i) => (
-            <StrategyRow
-              key={i}
-              entry={entry}
-              index={i}
-              total={strategy.length}
-              powerNames={powerNames}
-              onChange={updateEntry}
-              onRemove={removeEntry}
-              onMove={moveEntry}
-            />
-          ))}
-        </tbody>
-      </table>
+      <ol className="strategy-editor-list">
+        {strategy.map((entry, i) => (
+          <StrategyRow
+            key={i}
+            entry={entry}
+            index={i}
+            total={strategy.length}
+            powerNames={powerNames}
+            onChange={updateEntry}
+            onRemove={removeEntry}
+            onMove={moveEntry}
+          />
+        ))}
+      </ol>
       <button type="button" className="strategy-editor-add" onClick={addEntry}>+ Add power</button>
     </div>
   );
