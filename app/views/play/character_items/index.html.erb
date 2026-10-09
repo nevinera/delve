@@ -10,30 +10,20 @@
 <% if @items.empty? %>
   <p>No items<%= " matching this filter" if @filter_slots.present? %>.</p>
 <% else %>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Slot</th>
-        <th>elvl</th>
-        <th>From</th>
-        <th>Received</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      <% @items.each do |item| %>
-        <tr>
-          <td><%= item.name %></td>
-          <td><%= item.slot %></td>
-          <td><%= item.elvl %></td>
-          <td><%= item.provenance_label %></td>
-          <td><%= item.created_at.strftime("%Y-%m-%d") %></td>
-          <td><%= link_to "View", play_character_world_character_item_path(@character, @world, item) %></td>
-        </tr>
-      <% end %>
-    </tbody>
-  </table>
+  <ul class="entry-list">
+    <% @items.each do |item| %>
+      <li>
+        <span class="entry-title"><%= item.name %></span>
+        <span class="entry-state"><%= item.slot %></span>
+        <div class="entry-meta">
+          <span>elvl <%= item.elvl %></span>
+          <span><%= item.provenance_label %></span>
+          <span>received <%= item.created_at.strftime("%Y-%m-%d") %></span>
+        </div>
+        <%= link_to "View", play_character_world_character_item_path(@character, @world, item) %>
+      </li>
+    <% end %>
+  </ul>
 <% end %>
 
 <%= link_to "Back to #{@world.name || @world.key}", play_character_world_path(@character, @world) %>

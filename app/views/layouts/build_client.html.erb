@@ -25,9 +25,10 @@
          than side-by-side; the canvas keeps a fixed height and stays put
          while the form scrolls beneath it. */
       @media (max-width: 700px) {
-        .ability-editor { flex-direction: column; }
+        body { overflow: auto; }
+        .ability-editor { flex-direction: column; height: auto; min-height: 100%; }
         .ability-editor-preview { flex: none; height: 38vh; }
-        .ability-editor-fields { flex: 1; width: 100%; border-left: none; border-top: 1px solid #333; }
+        .ability-editor-fields { flex: none; overflow-y: visible; width: 100%; border-left: none; border-top: 1px solid #333; }
       }
 
       .ability-editor-fields table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
@@ -98,6 +99,7 @@
       .preview-controls > label.preview-swap-tokens { flex-direction: row; align-items: center; gap: 6px; }
       .preview-status { font-size: 12px; color: #999; min-height: 1.2em; }
 
+<%= render partial: "layouts/editor_phone_styles", formats: [:css] %>
       a.back-link { position: absolute; top: 10px; left: 10px; color: #9ab; font-size: 13px; z-index: 1; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 3px; text-decoration: none; }
     </style>
   </head>

@@ -23,7 +23,7 @@ RSpec.describe "Build::ClassVersions", type: :request do
       create(:character_class, user:, identifier: "puncher", version: "0.2", name: "Puncher")
       get "/build/classes/puncher/versions"
       expect(response).to have_http_status(:ok)
-      order = ["0.10", "0.2", "0.1"].map { |v| response.body.index("<td>#{v}</td>") }
+      order = ["0.10", "0.2", "0.1"].map { |v| response.body.index(%(<span class="entry-title">#{v}</span>)) }
       expect(order).to eq(order.sort)
       expect(response.body.scan("not imported").size).to eq(2)
       expect(response.body).not_to include("1.0")

@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {ClassDraft} from "./ClassDraft";
 import {blankClass} from "./blankClass";
 import ClassPreviewPane from "./ClassPreviewPane";
@@ -80,6 +80,17 @@ export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl,
   const [draft, setDraft] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [selection, setSelection] = useState({area: "class"});
+  // On a phone the config sits below the preview and area list, so picking
+  // an area scrolls it into view (not on load, though).
+  const fieldsRef = useRef(null);
+  const selectionChanged = useRef(false);
+  useEffect(() => {
+    if (!selectionChanged.current) {
+      selectionChanged.current = true;
+      return;
+    }
+    if (window.matchMedia?.("(max-width: 700px)").matches) fieldsRef.current?.scrollIntoView?.({block: "start"});
+  }, [selection]);
   // A <key>.full.json left over from when powers were $refs - deleted on
   // the next save, since nothing reads it any more.
   const [staleFullPath, setStaleFullPath] = useState(null);
@@ -398,7 +409,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl,
           onNewPassive={addPassive}
         />
       </div>
-      <div className="content-editor-fields">
+      <div className="content-editor-fields" ref={fieldsRef}>
         <Breadcrumbs crumbs={breadcrumbsFor(current, draft.data)} onSelect={setSelection} />
         {renderConfig()}
       </div>

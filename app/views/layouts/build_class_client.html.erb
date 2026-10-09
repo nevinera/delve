@@ -10,16 +10,24 @@
 
       .config-warning { font-size: 12px; color: #eb7; margin: 0 0 8px; }
 
-      .class-dps-estimate .strategy-editor-table { font-size: 12px; }
-      .class-dps-estimate .strategy-editor-table select, .class-dps-estimate .strategy-editor-table input[type=text] { width: auto; min-width: 80px; }
-      .class-dps-estimate .strategy-editor-table button { background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 2px 6px; border-radius: 3px; cursor: pointer; margin-right: 2px; }
-      .class-dps-estimate .strategy-editor-table button:disabled { opacity: 0.4; cursor: default; }
+      /* The rotation: one row per power, its fields wrapping as space runs out. */
+      .class-dps-estimate .strategy-editor-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; font-size: 12px; }
+      .class-dps-estimate .strategy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; background: #171b1f; border: 1px solid #2a2f35; border-radius: 4px; }
+      .class-dps-estimate .strategy-row-number { color: #9ab; min-width: 1.2em; }
+      .class-dps-estimate .strategy-row select, .class-dps-estimate .strategy-row input[type=text] { width: auto; min-width: 80px; flex: 1 1 8rem; }
+      .class-dps-estimate .strategy-row-actions { display: flex; gap: 2px; margin-left: auto; }
+      .class-dps-estimate .strategy-row button { background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+      .class-dps-estimate .strategy-row button:disabled { opacity: 0.4; cursor: default; }
+      @media (max-width: 700px) {
+        .class-dps-estimate .strategy-row button { min-width: 36px; min-height: 36px; font-size: 14px; }
+      }
       .class-dps-estimate button.strategy-editor-add { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-bottom: 14px; }
-      .class-dps-estimate-header { display: flex; align-items: center; gap: 10px; }
-      .class-dps-estimate .estimate-dps-button { background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
-      .class-dps-estimate .estimate-dps-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
+      .class-dps-estimate-header, .class-survivability-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+      .class-dps-estimate .estimate-dps-button, .class-survivability .estimate-survivability-button { background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+      .class-dps-estimate .estimate-dps-button:disabled, .class-survivability .estimate-survivability-button:disabled { background: #333; border-color: #555; color: #888; cursor: default; }
       .class-dps-estimate-error { font-size: 12px; color: #e79; }
       .content-editor-fields .class-dps-estimate-table { margin-top: 10px; font-size: 12px; }
+<%= render partial: "layouts/editor_phone_styles", formats: [:css] %>
     </style>
   </head>
   <body>

@@ -3,6 +3,7 @@ import {createPortal} from "react-dom";
 import {circleLayout, NODE_RADIUS} from "./circleLayout";
 import {worldLinkStatus, worldEntryPointKey} from "./worldLinkStatus";
 import {computeFitView, MIN_ZOOM, MAX_ZOOM} from "./graphView";
+import usePinchZoom from "../usePinchZoom";
 
 const TOOLTIP_STYLE = {
   position: "fixed",
@@ -187,6 +188,19 @@ export default function WorldGraphCanvas({draft, onChange, zoneDetailsByKey, onR
     return best;
   }
 
+  // Two fingers pinch-zoom (and pan), cancelling whatever the first
+  // finger started.
+  const pinchHandlers = usePinchZoom(containerRef, {zoom: view.zoom, offset: {x: view.panX, y: view.panY}}, {
+    clampZoom: (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom)),
+    onPinch: ({zoom, offset}) => setView({zoom, panX: offset.x, panY: offset.y}),
+    onPinchStart: () => {
+      setPan(null);
+      setNodeDrag(null);
+      setLinkDrag(null);
+      setPortTooltip(null);
+    },
+  });
+
   function zoomBy(factor) {
     setView((v) => ({...v, zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom * factor))}));
   }
@@ -321,7 +335,7 @@ export default function WorldGraphCanvas({draft, onChange, zoneDetailsByKey, onR
       {nodes.length === 0 ? (
         <p className="map-sidebar-hint">No zones yet.</p>
       ) : (
-        <div className="zone-graph-wrapper" ref={containerRef} onPointerDown={handleBackgroundPointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
+        <div className="zone-graph-wrapper" ref={containerRef} {...pinchHandlers} onPointerDown={handleBackgroundPointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onWheel={handleWheel}>
           <svg className="zone-graph-svg" width="100%" height="100%">
             <g transform={`translate(${view.panX}, ${view.panY}) scale(${view.zoom})`}>
               {edges.map(({index, a, b}) => (

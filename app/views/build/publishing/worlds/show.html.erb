@@ -15,48 +15,37 @@
   <p><small>Tags in <%= @world.repo %> can't be listed here; connect GitHub to that repo to import them.</small></p>
 <% end %>
 
-<table>
-  <thead>
-    <tr>
-      <th>Tag</th><th>State</th><th>Commit</th>
-      <th>Imported</th><th>Released</th><th>Expires</th><th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <% @rows.each do |row| %>
-      <% if row.is_a?(String) %>
-        <tr>
-          <td><%= row %></td>
-          <td>not imported</td>
-          <td colspan="4"></td>
-          <td>
-            <%= button_to "Import", build_publishing_world_versions_path(@world), params: {world_version: {ref: row}} %>
-          </td>
-        </tr>
-      <% else %>
-        <tr>
-          <td><%= row.ref %></td>
-          <td><%= row.expired? ? "expired" : row.state %></td>
-          <td><%= row.commit_sha&.first(7) %></td>
-          <td><%= row.imported_at&.to_fs(:short) %></td>
-          <td><%= row.released_at&.to_fs(:short) %></td>
-          <td><%= row.expires_at&.to_fs(:short) %></td>
-          <td>
-            <% if row.unreleased? %>
-              <%= button_to "Release", release_build_publishing_world_version_path(@world, row),
-                    data: {confirm: "Release #{row.ref}? Earlier versions expire in 24 hours."} %>
-            <% end %>
-            <% if row.failed? %>
-              <%= button_to "Reimport", reimport_build_publishing_world_version_path(@world, row) %>
-            <% end %>
-          </td>
-        </tr>
-        <% if row.validity_error.present? %>
-          <tr><td colspan="7"><strong>Import error:</strong> <%= row.validity_error %></td></tr>
+<ul class="entry-list">
+  <% @rows.each do |row| %>
+    <% if row.is_a?(String) %>
+      <li>
+        <span class="entry-title"><%= row %></span>
+        <span class="entry-state">not imported</span>
+        <%= button_to "Import", build_publishing_world_versions_path(@world), params: {world_version: {ref: row}}, class: "compact" %>
+      </li>
+    <% else %>
+      <li>
+        <span class="entry-title"><%= row.ref %></span>
+        <span class="entry-state"><%= row.expired? ? "expired" : row.state %></span>
+        <% if row.unreleased? %>
+          <%= button_to "Release", release_build_publishing_world_version_path(@world, row), class: "compact",
+                data: {confirm: "Release #{row.ref}? Earlier versions expire in 24 hours."} %>
         <% end %>
-      <% end %>
+        <% if row.failed? %>
+          <%= button_to "Reimport", reimport_build_publishing_world_version_path(@world, row), class: "compact" %>
+        <% end %>
+        <div class="entry-meta">
+          <% if row.commit_sha %><span><code><%= row.commit_sha.first(7) %></code></span><% end %>
+          <% if row.imported_at %><span>imported <%= row.imported_at.to_fs(:short) %></span><% end %>
+          <% if row.released_at %><span>released <%= row.released_at.to_fs(:short) %></span><% end %>
+          <% if row.expires_at %><span>expires <%= row.expires_at.to_fs(:short) %></span><% end %>
+        </div>
+        <% if row.validity_error.present? %>
+          <div class="entry-error"><strong>Import error:</strong> <%= row.validity_error %></div>
+        <% end %>
+      </li>
     <% end %>
-  </tbody>
-</table>
+  <% end %>
+</ul>
 
 <%= link_to "All published worlds", build_publishing_worlds_path %>

@@ -8,6 +8,7 @@ import NcuQuestBadges from "./NcuQuestBadges";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
 import MapPreviewCanvas from "./MapPreviewCanvas";
+import usePinchZoom from "../usePinchZoom";
 import {randomIdentifierSuffix} from "./randomIdentifier";
 
 // Connections need a required, zone-unique `identifier` the moment they're
@@ -658,6 +659,26 @@ export default function MapCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
+  // Two fingers pinch-zoom (and pan) the map, cancelling whatever the
+  // first finger started.
+  const pinchHandlers = usePinchZoom(wrapperRef, {zoom, offset}, {
+    clampZoom,
+    onPinch: (view) => {
+      setZoom(view.zoom);
+      setOffset(view.offset);
+    },
+    onPinchStart: () => {
+      dragRef.current = null;
+      barrierDragRef.current = null;
+      connectionDragRef.current = null;
+      unitDragRef.current = null;
+      ncuDragRef.current = null;
+      setDrawingCircle(null);
+      setDrawingLine(null);
+      setDrawingUnit(null);
+    },
+  });
+
   function handlePointerDown(e) {
     if (!image) return;
 
@@ -1053,6 +1074,7 @@ export default function MapCanvas({
         <div
           ref={wrapperRef}
           className={`map-canvas-wrapper${isPlacing ? " map-canvas-wrapper-placing" : ""}`}
+          {...pinchHandlers}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

@@ -4,18 +4,11 @@
 
 <p><%= link_to "New Ability", new_build_ability_path(branch: @branch) %></p>
 
-<table>
-  <thead>
-    <tr><th>Path</th></tr>
-  </thead>
-  <tbody>
-    <% @abilities.each do |entry| %>
-      <% identifier = entry["path"].delete_prefix("abilities/").delete_suffix(".json") %>
-      <tr>
-        <td><%= link_to identifier, edit_build_ability_path(id: identifier, branch: @branch) %></td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<ul class="entry-list">
+  <% @abilities.each do |entry| %>
+    <% identifier = entry["path"].delete_prefix("abilities/").delete_suffix(".json") %>
+    <li><span class="entry-title"><%= link_to identifier, edit_build_ability_path(id: identifier, branch: @branch) %></span></li>
+  <% end %>
+</ul>
 
 <%= link_to "Back to Build", build_root_path %>

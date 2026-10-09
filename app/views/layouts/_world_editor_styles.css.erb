@@ -213,3 +213,18 @@
       .quest-chain ul { margin: 0; padding-left: 18px; }
       .quest-chain code { color: #789; font-size: 11px; }
       .quest-editor .quest-item-popover { max-width: 420px; margin-top: 6px; padding: 8px 10px; background: #1b2026; border: 1px solid #457; border-radius: 4px; }
+
+      @media (max-width: 700px) {
+        /* The map gets a fixed share of the screen (the page scrolls on a
+           phone, so it has no height to fill), with the sidebar below it. */
+        .map-level .map-canvas-area { flex: none; height: 60vh; }
+
+        /* Field tables (no header row): each label above its input. */
+        .world-builder table:not(:has(thead)), .world-builder table:not(:has(thead)) :is(tbody, tr, th, td) { display: block; width: auto; }
+        .world-builder table:not(:has(thead)) th { padding: 8px 0 2px; white-space: normal; }
+        .world-builder table:not(:has(thead)) td { padding: 0 0 4px; }
+
+        /* 16px text keeps iOS from zooming in when an input is focused. */
+        .world-builder :is(input, select, textarea) { font-size: 16px; }
+        .world-builder :is(input[type=text], input[type=number], select) { min-height: 36px; max-width: 100%; }
+      }

@@ -99,6 +99,14 @@
          (after the first animated frame or two), which is exactly when a
          big image visibly stutters before catching up. */
       .map-canvas-content { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+      /* Not on touch devices, though: a promoted layer is kept at the
+         image's full size (a 4000px map is hundreds of MB at a phone's
+         pixel density), which mobile Safari can't hold, so it drops tiles
+         and the map shows holes that move as it pans. Unpromoted, it's
+         drawn at the current zoom instead. */
+      @media (pointer: coarse) {
+        .map-canvas-content { will-change: auto; }
+      }
       .map-canvas-content img { display: block; user-select: none; }
       /* Same pixel-space box as the image, so its grid lines pan/zoom
          together with it for free via the shared parent's transform. */

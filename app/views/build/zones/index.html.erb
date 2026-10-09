@@ -1,17 +1,12 @@
 <h1>Zones</h1>
 
-<table>
-  <thead>
-    <tr><th>Key</th><th></th></tr>
-  </thead>
-  <tbody>
-    <% @zone_keys.each do |identifier| %>
-      <tr>
-        <td><%= identifier %></td>
-        <td><%= link_to "Play", build_zone_play_path(id: identifier) %></td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<ul class="entry-list">
+  <% @zone_keys.each do |identifier| %>
+    <li>
+      <span class="entry-title"><%= identifier %></span>
+      <%= link_to "Play", build_zone_play_path(id: identifier) %>
+    </li>
+  <% end %>
+</ul>
 
 <%= link_to "Back to Build", build_root_path %>
