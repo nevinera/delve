@@ -4,6 +4,7 @@ import { resolveBarrierCollisions } from "./collision.js";
 import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 import { loadSvgToCanvas } from "./svgRaster.js";
 import { isUntargetableStatus } from "./state.js";
+import { computeMapFill } from "./mapFill.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -115,6 +116,50 @@ export function buildCircleBarrier(centerWorld, radiusFeet, { height = 0.8, colo
   group.add(mesh, edges);
   const [worldX, worldZ] = centerWorld;
   group.position.set(worldX, 0, worldZ);
+  return group;
+}
+
+// A map's fill (see mapFill.js) as a translucent plateau at wall height,
+// with the walls' look: its top over every filled region, a side wherever
+// it meets open ground or the map's edge, and an outline only on the sides
+// facing open ground. toWorld maps feet to [worldX, worldZ].
+export function buildMapFill(fill, toWorld, { height = 0.8, color = 0x333333, opacity = 0.4 } = {}) {
+  const group = new THREE.Group();
+  const material = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide });
+  const shapePoint = ([x, y]) => {
+    const [wx, wz] = toWorld(x, y);
+    return new THREE.Vector2(wx, -wz);
+  };
+
+  for (const { outer, holes } of fill.filled) {
+    const shape = new THREE.Shape(outer.map(shapePoint));
+    shape.holes = holes.map((ring) => new THREE.Path(ring.map(shapePoint)));
+    const top = new THREE.Mesh(new THREE.ShapeGeometry(shape), material);
+    top.rotation.x = -Math.PI / 2;
+    top.position.y = height;
+    group.add(top);
+  }
+
+  const sides = [];
+  const outline = [];
+  for (const { a, b, left, right } of fill.edges) {
+    const states = [left, right];
+    if (!states.includes("filled") || states.every((s) => s === "filled")) continue;
+    const [ax, az] = toWorld(...a), [bx, bz] = toWorld(...b);
+    sides.push(ax, 0, az, bx, 0, bz, bx, height, bz, ax, 0, az, bx, height, bz, ax, height, az);
+    if (states.includes("open")) outline.push(ax, 0, az, bx, 0, bz, ax, height, az, bx, height, bz);
+  }
+  if (sides.length) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(sides, 3));
+    geo.computeVertexNormals();
+    group.add(new THREE.Mesh(geo, material));
+  }
+  if (outline.length) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(outline, 3));
+    group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: opacity * 2 })));
+  }
   return group;
 }
 
@@ -898,11 +943,16 @@ export class SceneManager {
         }
       }
 
+      // Everything outside the playable area rises as a plateau; walls
+      // only show where both their sides are open ground (the rest are
+      // its cliff edges, or buried in it).
+      const fill = computeMapFill(m);
+      group.add(buildMapFill(fill, toWorld));
+      for (const { a, b, kind, left, right } of fill.edges) {
+        if (kind === "wall" && left === "open" && right === "open") group.add(buildWall([toWorld(...a), toWorld(...b)]));
+      }
       for (const barrier of m.barriers ?? []) {
-        if (barrier.type === "wall") {
-          const pts = barrier.locations.map(({ x, y }) => toWorld(x, y));
-          group.add(buildWall(pts));
-        } else if (barrier.type === "circle" && barrier.location) {
+        if (barrier.type === "circle" && barrier.location) {
           group.add(buildCircleBarrier(toWorld(barrier.location.x, barrier.location.y), barrier.radius ?? 0));
         }
       }

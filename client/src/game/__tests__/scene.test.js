@@ -18,7 +18,9 @@ import {
   orbitFromStick,
   isTap,
   buildCircleBarrier,
+  buildMapFill,
 } from "../scene";
+import { computeMapFill } from "../mapFill";
 
 describe("createNpcToken", () => {
   it("stores the hostility body color for later dimming", () => {
@@ -337,5 +339,25 @@ describe("buildCircleBarrier", () => {
     const [mesh] = group.children;
     expect(mesh.geometry.parameters.radiusTop).toBe(4);
     expect(mesh.geometry.parameters.radiusBottom).toBe(4);
+  });
+});
+
+describe("buildMapFill", () => {
+  const room = { type: "wall", locations: [[20, 20], [80, 20], [80, 80], [20, 80], [20, 20]].map(([x, y]) => ({ x, y })) };
+  const fill = computeMapFill({ feetDimensions: { width: 100, height: 100 }, barriers: [room] });
+  const group = buildMapFill(fill, (x, y) => [x - 50, 50 - y]);
+
+  it("draws the plateau's top at wall height", () => {
+    const top = group.children.find((c) => c.geometry instanceof THREE.ShapeGeometry);
+    expect(top.position.y).toBe(0.8);
+    expect(top.material.opacity).toBe(0.4);
+  });
+
+  it("outlines only the sides facing open ground, top and bottom", () => {
+    const outline = group.children.find((c) => c.isLineSegments);
+    // Four room walls, a top and a bottom line each; the map's edge gets a side but no outline.
+    expect(outline.geometry.getAttribute("position").count).toBe(4 * 4);
+    const sides = group.children.find((c) => c.isMesh && c.geometry instanceof THREE.BufferGeometry && !(c.geometry instanceof THREE.ShapeGeometry));
+    expect(sides.geometry.getAttribute("position").count).toBe(8 * 6);
   });
 });
