@@ -12,7 +12,7 @@ class Play::CharactersController < Play::BaseController
 
   def new
     @character = current_user.characters.new
-    @character_classes = CharacterClass.where(state: :fetched).order(:identifier)
+    @character_classes = fetched_classes
     authorize! :create, @character
   end
 
@@ -22,7 +22,7 @@ class Play::CharactersController < Play::BaseController
     if @character.save
       redirect_to play_character_path(@character), notice: "Character created."
     else
-      @character_classes = CharacterClass.where(state: :fetched).order(:identifier)
+      @character_classes = fetched_classes
       render :new, status: :unprocessable_content
     end
   end
@@ -30,14 +30,16 @@ class Play::CharactersController < Play::BaseController
   def edit
     @character = current_user.characters.find(params[:id])
     authorize! :update, @character
+    @character_classes = class_choices
   end
 
   def update
     @character = current_user.characters.find(params[:id])
     authorize! :update, @character
-    if @character.update(token_url_params)
-      redirect_to play_character_path(@character), notice: "Token updated."
+    if @character.update(update_params)
+      redirect_to play_character_path(@character), notice: "Character updated."
     else
+      @character_classes = class_choices
       render :edit, status: :unprocessable_content
     end
   end
@@ -53,9 +55,17 @@ class Play::CharactersController < Play::BaseController
     params.require(:character).permit(:name, :character_class_id).merge(token_url: token_value)
   end
 
-  def token_url_params
-    {token_url: token_value}
+  # The class only changes when one is picked (Character blocks it while
+  # in a zone).
+  def update_params
+    params.require(:character).permit(:character_class_id).compact_blank.merge(token_url: token_value)
   end
+
+  def fetched_classes = CharacterClass.where(state: :fetched).order(:identifier)
+
+  # Keeps the current class listed even when it isn't fetched, so saving
+  # the token doesn't switch it.
+  def class_choices = fetched_classes.or(CharacterClass.where(id: @character.character_class_id_was))
 
   # A stock token picked in the form becomes ":name:"; "custom" (or no
   # choice) keeps the typed URL.
