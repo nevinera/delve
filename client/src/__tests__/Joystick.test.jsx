@@ -32,6 +32,20 @@ function fire(event, data) {
 }
 
 describe("Joystick", () => {
+  it("locks a horizontal stick to the x axis and draws its left/right track", () => {
+    const { queryByTestId } = render(<Joystick onMove={() => {}} onEnd={() => {}} style={{}} horizontal />);
+
+    expect(createMock.mock.calls[0][0]).toMatchObject({ lockX: true, color: { back: "transparent" } });
+    expect(queryByTestId("joystick-horizontal-track")).not.toBeNull();
+  });
+
+  it("leaves a plain stick free on both axes, with no track", () => {
+    const { queryByTestId } = render(<Joystick onMove={() => {}} onEnd={() => {}} style={{}} />);
+
+    expect(createMock.mock.calls[0][0]).toMatchObject({ lockX: false, color: "white" });
+    expect(queryByTestId("joystick-horizontal-track")).toBeNull();
+  });
+
   it("creates the nipplejs manager against its own zone element", () => {
     render(<Joystick onMove={() => {}} onEnd={() => {}} style={{}} />);
 
