@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import * as THREE from "three";
 import {
   createNpcToken,
@@ -7,6 +7,7 @@ import {
   classColor,
   isPlayerUnit,
   setTokenTagDimmed,
+  setTokenFade,
   computeTargetLineDots,
   targetLineColor,
   edgeTowards,
@@ -172,6 +173,43 @@ describe("setTokenTagDimmed", () => {
 
     expect(group._dimmed).toBe(false);
     expect(group._bodyMaterial.color.getHex()).toBe(0xc62828);
+  });
+});
+
+describe("setTokenFade", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const bodyOpacity = (group) => group._bodyMaterial.opacity;
+  // A canvas 2D context that draws nothing, so the sigil gets built.
+  const stubCanvas = () => vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    new Proxy({}, { get: () => () => {}, set: () => true })
+  );
+
+  it("fades a disconnected player and shows the sigil, unfaded", () => {
+    stubCanvas();
+    const group = createNpcToken(2, "hostile", null, null);
+    setTokenFade(group, { disconnected: true });
+
+    expect(bodyOpacity(group)).toBeCloseTo(0.4);
+    expect(group._disconnectedSigil.visible).toBe(true);
+    expect(group._disconnectedSigil.material.opacity).toBe(1);
+  });
+
+  it("restores the token and hides the sigil on reconnect", () => {
+    stubCanvas();
+    const group = createNpcToken(2, "hostile", null, null);
+    setTokenFade(group, { disconnected: true });
+    setTokenFade(group, { disconnected: false });
+
+    expect(bodyOpacity(group)).toBe(1);
+    expect(group._disconnectedSigil.visible).toBe(false);
+  });
+
+  it("combines with the stealth fade", () => {
+    const group = createNpcToken(2, "hostile", null, null);
+    setTokenFade(group, { stealthVisibility: "full", disconnected: true });
+
+    expect(bodyOpacity(group)).toBeCloseTo(0.55 * 0.4);
   });
 });
 

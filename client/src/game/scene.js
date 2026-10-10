@@ -280,11 +280,18 @@ export function setTokenTagDimmed(group, dimmed) {
 // enough to read as stealthed.
 const STEALTH_OPACITY = {faint: 0.2, full: 0.55};
 
-export function setTokenStealth(group, visibility) {
-  const opacity = STEALTH_OPACITY[visibility] ?? 1;
-  if (group._stealthOpacity === opacity) return;
-  group._stealthOpacity = opacity;
+// How opaque a disconnected player's token is (on top of any stealth fade).
+const DISCONNECTED_OPACITY = 0.4;
+
+// Fades a token for stealth (by how well this player sees it) and for a
+// player who has disconnected, who also gets a sigil floating above them.
+export function setTokenFade(group, { stealthVisibility, disconnected = false } = {}) {
+  setDisconnectedSigil(group, disconnected);
+  const opacity = (STEALTH_OPACITY[stealthVisibility] ?? 1) * (disconnected ? DISCONNECTED_OPACITY : 1);
+  if (group._fadeOpacity === opacity) return;
+  group._fadeOpacity = opacity;
   group.traverse((node) => {
+    if (node === group._disconnectedSigil) return;
     const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
     for (const mat of materials) {
       mat.userData.baseOpacity ??= mat.opacity;
@@ -294,6 +301,48 @@ export function setTokenStealth(group, visibility) {
       mat.needsUpdate = true;
     }
   });
+}
+
+// Shows or hides the disconnected sigil, building it the first time it's
+// shown. Where canvas 2D isn't available (jsdom) the token goes without.
+function setDisconnectedSigil(group, shown) {
+  if (group._disconnected === shown) return;
+  group._disconnected = shown;
+  if (shown && !group._disconnectedSigil) {
+    const sigil = createDisconnectedSigil();
+    if (sigil) {
+      sigil.position.set(0, 4, 0);
+      group.add(sigil);
+      group._disconnectedSigil = sigil;
+    }
+  }
+  if (group._disconnectedSigil) group._disconnectedSigil.visible = shown;
+}
+
+// A red disc with a white plug pulled apart from its socket.
+function createDisconnectedSigil() {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext?.("2d");
+  if (!ctx) return null;
+  canvas.width = canvas.height = 64;
+  ctx.fillStyle = "rgba(183,28,28,0.9)";
+  ctx.beginPath();
+  ctx.arc(32, 32, 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#ffffff";
+  ctx.fillStyle = "#ffffff";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  // Plug: cord, body and two prongs, on the left.
+  ctx.beginPath(); ctx.moveTo(8, 32); ctx.lineTo(16, 32); ctx.stroke();
+  ctx.fillRect(16, 24, 9, 16);
+  ctx.beginPath(); ctx.moveTo(25, 28); ctx.lineTo(29, 28); ctx.moveTo(25, 36); ctx.lineTo(29, 36); ctx.stroke();
+  // Socket, with its cord, on the right.
+  ctx.fillRect(38, 24, 9, 16);
+  ctx.beginPath(); ctx.moveTo(47, 32); ctx.lineTo(56, 32); ctx.stroke();
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false }));
+  sprite.scale.set(2, 2, 1);
+  return sprite;
 }
 
 const TARGET_LINE_COLOR = 0x00ff44;
@@ -1054,7 +1103,7 @@ export class SceneManager {
           }
         }
         setTokenDead(entry.group, isUntargetableStatus(unit.status));
-        setTokenStealth(entry.group, unit.stealth_visibility);
+        setTokenFade(entry.group, { stealthVisibility: unit.stealth_visibility, disconnected: !!unit.disconnected });
         if (!isSelf) {
           setTokenTagDimmed(entry.group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
         }
@@ -1069,7 +1118,7 @@ export class SceneManager {
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
         setTokenDead(group, isUntargetableStatus(unit.status));
-        setTokenStealth(group, unit.stealth_visibility);
+        setTokenFade(group, { stealthVisibility: unit.stealth_visibility, disconnected: !!unit.disconnected });
         if (!isSelf) {
           setTokenTagDimmed(group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
         }

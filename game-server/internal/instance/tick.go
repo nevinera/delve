@@ -126,6 +126,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			roundPositions(state)
 			sweepLootClaims(state)
 			inst.processLootEvents(ctx, state)
+			inst.markDisconnected(state)
 
 		drainAutoUpgrades:
 			for {

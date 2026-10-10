@@ -284,6 +284,12 @@ type UnitState struct {
 	// instance/stealth.go.
 	Stealthed bool
 
+	// Disconnected is whether the unit is a player whose client has
+	// dropped: its slot is waiting for a reconnect, and the unit stays in
+	// the world until it does or the slot is pruned. Synced from the slots
+	// each tick; see Instance.markDisconnected.
+	Disconnected bool
+
 	Speed  float64 // movement speed in feet per second
 	Radius float64 // collision radius in feet; 0 means no collision (NPCs for now)
 

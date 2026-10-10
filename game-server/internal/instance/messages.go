@@ -58,6 +58,7 @@ type unitJSON struct {
 	Hostility            string                   `json:"hostility,omitempty"`
 	Position             *instanceconfig.Position `json:"position"` // nil while stealthed - see stealthViewJSON
 	Stealthed            bool                     `json:"stealthed,omitempty"`
+	Disconnected         bool                     `json:"disconnected,omitempty"`
 	Health               float64                  `json:"health"`
 	MaxHealth            float64                  `json:"max_health"`
 	Resources            map[string]resourceJSON  `json:"resources"`
@@ -314,6 +315,7 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Hostility:            u.Hostility,
 			Position:             sharedPosition(u),
 			Stealthed:            u.Stealthed,
+			Disconnected:         u.Disconnected,
 			Health:               u.Health,
 			MaxHealth:            u.MaxHealth,
 			Resources:            resourcesJSON(u.Resources),
@@ -450,6 +452,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			if cu.TokenImageURL != "" {
 				update["token_image_url"] = cu.TokenImageURL
 			}
+			if cu.Disconnected {
+				update["disconnected"] = true
+			}
 			if cc := classColorsJSON(cu); cc != nil {
 				update["class_colors"] = cc
 			}
@@ -476,6 +481,9 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			patch["position"] = sharedPosition(cu)
 		} else if !cu.Stealthed && cu.Position != pu.Position {
 			patch["position"] = cu.Position
+		}
+		if cu.Disconnected != pu.Disconnected {
+			patch["disconnected"] = cu.Disconnected
 		}
 		if cu.Health != pu.Health {
 			patch["health"] = cu.Health

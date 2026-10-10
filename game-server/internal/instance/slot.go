@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/instancestate"
 	"github.com/delve-mmo/game-server/internal/itemstats"
 )
 
@@ -380,6 +381,23 @@ func (inst *Instance) DisconnectSlot(id uuid.UUID) {
 		slot.State = SlotStateWaiting
 		slot.stateEnteredAt = time.Now()
 		inst.recomputeSlotCounts()
+	}
+}
+
+// markDisconnected flags each unit whose slot is waiting for a reconnect,
+// and clears the flag on every other unit, so other players can see who
+// has dropped. Called from the tick loop.
+func (inst *Instance) markDisconnected(state *instancestate.InstanceState) {
+	inst.slotsMu.RLock()
+	waiting := make(map[uuid.UUID]bool, len(inst.slots))
+	for _, s := range inst.slots {
+		if s.State == SlotStateWaiting {
+			waiting[s.CharacterUnitID] = true
+		}
+	}
+	inst.slotsMu.RUnlock()
+	for id, u := range state.Units {
+		u.Disconnected = waiting[id]
 	}
 }
 

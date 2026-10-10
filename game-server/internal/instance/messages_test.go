@@ -612,6 +612,34 @@ func TestDeltaMsg_MapChanged(t *testing.T) {
 	}
 }
 
+func TestFullStateMsg_Disconnected(t *testing.T) {
+	state := stateWithUnit(t)
+	for _, u := range fullState(t, state)["units"].(map[string]any) {
+		assert.NotContains(t, u.(map[string]any), "disconnected")
+	}
+
+	for _, u := range state.Units {
+		u.Disconnected = true
+	}
+	for _, u := range fullState(t, state)["units"].(map[string]any) {
+		assert.Equal(t, true, u.(map[string]any)["disconnected"])
+	}
+}
+
+func TestDeltaMsg_DisconnectedChanges(t *testing.T) {
+	prev := stateWithUnit(t)
+	curr := prev.Clone()
+	for _, u := range curr.Units {
+		u.Disconnected = true
+	}
+	for _, p := range delta(t, prev, curr)["unit_updates"].(map[string]any) {
+		assert.Equal(t, true, p.(map[string]any)["disconnected"])
+	}
+	for _, p := range delta(t, curr, prev)["unit_updates"].(map[string]any) {
+		assert.Equal(t, false, p.(map[string]any)["disconnected"])
+	}
+}
+
 func TestDeltaMsg_RemovedUnit(t *testing.T) {
 	prev := stateWithUnit(t)
 	curr := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
@@ -693,6 +721,54 @@ func TestTick_Delta_EmptyWhenStateUnchanged(t *testing.T) {
 	assert.Empty(t, delta["unit_removals"])
 	assert.Empty(t, delta["effect_adds"])
 	assert.Empty(t, delta["effect_removes"])
+}
+
+// TestTick_MarksWaitingSlotsDisconnected: other players see a dropped
+// player's unit flagged until it reconnects.
+func TestTick_MarksWaitingSlotsDisconnected(t *testing.T) {
+	inst := startedGoblinInstance(t)
+	watcher, err := inst.AddSlot("Aldric", "42", puncherClass, nil, nil)
+	require.NoError(t, err)
+	dropper, err := inst.AddSlot("Brenna", "43", puncherClass, nil, nil)
+	require.NoError(t, err)
+
+	watchCh, _, watchDone, ok := inst.ConnectSlot(watcher.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(watchDone) })
+	_, _, dropDone, ok := inst.ConnectSlot(dropper.ID)
+	require.True(t, ok)
+
+	dropperUnit := dropper.CharacterUnitID.String()
+	waitFor := func(want bool) {
+		t.Helper()
+		deadline := time.After(2 * time.Second)
+		for {
+			select {
+			case <-deadline:
+				t.Fatalf("never saw disconnected=%v for the dropped player", want)
+			default:
+			}
+			msg := readMsg(t, watchCh)
+			var u map[string]any
+			if msg["type"] == "instance-state" {
+				u, _ = msg["units"].(map[string]any)[dropperUnit].(map[string]any)
+			} else {
+				u, _ = msg["unit_updates"].(map[string]any)[dropperUnit].(map[string]any)
+			}
+			if got, has := u["disconnected"]; has && got == want {
+				return
+			}
+		}
+	}
+
+	inst.DisconnectSlot(dropper.ID)
+	close(dropDone)
+	waitFor(true)
+
+	_, _, redropDone, ok := inst.ConnectSlot(dropper.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(redropDone) })
+	waitFor(false)
 }
 
 func TestTick_ReconnectGetsFreshFullState(t *testing.T) {
