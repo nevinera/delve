@@ -43,9 +43,13 @@ module Bot
       @controls = Controls.new(method(:send_move))
     end
 
-    def send_move(move)
-      @log.verbose("[move] facing #{move[:facing].round(1)}, keys #{move[:keys].inspect} at #{where(@state.me)}")
-      @connection.send_message(move)
+    def send_move(msg)
+      if msg[:type] == "move"
+        @log.verbose("[move] facing #{msg[:facing].round(1)}, keys #{msg[:keys].inspect} at #{where(@state.me)}")
+      else
+        @log.verbose("[#{msg[:type]}] #{msg.except(:type).to_json}")
+      end
+      @connection.send_message(msg)
     end
 
     def loop_until_done

@@ -10,7 +10,9 @@
 #
 # Strategies: null (stands still), spin ({"degrees_per_second": 15}),
 # script ({"steps": [{"after": 0, "do": "move", "keys": ["forward"]}, ...]}),
-# follow ({"target": "<character name>", "notice_feet": 30, "stop_feet": 5}).
+# follow ({"target": "<character name>", "notice_feet": 30, "stop_feet": 5}),
+# goto ({"x": 120, "y": 340, "stop_within": 1, "then": "stop"}),
+# brawler ({"reach": 15, "then": {"strategy": "goto", "config": {...}}}).
 #
 # Environment: GAME_SERVER_URL (default http://localhost:8090), as Rails
 # reaches the game server.

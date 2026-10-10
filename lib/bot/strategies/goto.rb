@@ -14,6 +14,7 @@ module Bot
       STUCK_SECONDS = 2.0
       STUCK_FEET = 1.0
       REPLANS = 3
+      ARRIVAL_SLACK = 3.0 # feet past stop_within that still counts as there, once stopped
 
       def initialize(config = {})
         super
@@ -29,11 +30,17 @@ module Bot
         return if @done || !(me = state.me)
         @map ||= me["map_identifier"]
         return finish(controls, "left the map") unless me["map_identifier"] == @map
-        return arrive(controls) if @heading && controls.goal.nil?
+        return arrive(controls) if arrived?(me, controls)
         follow_route(state, me, controls, now)
       end
 
       private
+
+      # Stopped on the last leg, near the target (the goal can also be
+      # cleared by something else steering, such as a Brawler wrapping this).
+      def arrived?(me, controls)
+        @heading && controls.goal.nil? && distance(me["position"].values_at("x", "y"), @target) <= @stop_within + ARRIVAL_SLACK
+      end
 
       def follow_route(state, me, controls, now)
         at = me["position"].values_at("x", "y")
