@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 import {cachedCellMapImage, renderScale} from "../cellMap/render";
 import {cellCorners, mapSize} from "../cellMap/hexGrid";
-import {validateCellMap} from "../cellMap/format";
+import {TERRAINS, validateCellMap} from "../cellMap/format";
 import clearing from "../cellMap/examples/clearing.json";
 import forestEdge from "../cellMap/examples/forest-edge.json";
 import woodlandTrail from "../cellMap/examples/woodland-trail.json";
@@ -10,12 +10,18 @@ export const EXAMPLES = {clearing, "forest-edge": forestEdge, "woodland-trail": 
 
 const PIXELS_PER_FOOT = 10;
 
+// What the overlay shows on top of the render: nothing, the hex outlines, or
+// every cell filled with its terrain's color.
+export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
+
+const CELL_COLORS = {meadow: "rgba(250, 220, 90, 0.55)", trees: "rgba(30, 110, 200, 0.55)"};
+
 // Slice 1 of the cell editor (plans/cell-editor.md): view the hand-made
 // examples rendered, with a seed to re-roll and a grid to check them against.
 export default function CellEditor({backUrl}) {
   const [exampleKey, setExampleKey] = useState("clearing");
   const [seed, setSeed] = useState(EXAMPLES.clearing.seed);
-  const [showGrid, setShowGrid] = useState(false);
+  const [overlay, setOverlay] = useState("none");
   const [status, setStatus] = useState("");
   const mapCanvas = useRef(null);
   const gridCanvas = useRef(null);
@@ -48,8 +54,8 @@ export default function CellEditor({backUrl}) {
     const scale = renderScale(size, PIXELS_PER_FOOT);
     canvas.width = Math.round(size.width * scale);
     canvas.height = Math.round(size.height * scale);
-    if (showGrid) drawGrid(canvas.getContext("2d"), map.grid, scale);
-  }, [mapKey, showGrid]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (overlay !== "none") drawOverlay(canvas.getContext("2d"), map, scale, overlay === "cells");
+  }, [mapKey, overlay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chooseExample = (key) => {
     setExampleKey(key);
@@ -77,8 +83,20 @@ export default function CellEditor({backUrl}) {
         </label>
         <button type="button" onClick={() => setSeed(Math.floor(Math.random() * 1_000_000))}>Re-roll</button>
         <label>
-          <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid
+          Overlay{" "}
+          <select value={overlay} onChange={(e) => setOverlay(e.target.value)}>
+            {Object.entries(OVERLAYS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
         </label>
+        {overlay === "cells" && (
+          <span className="cell-editor-legend">
+            {Object.entries(TERRAINS).map(([ch, terrain]) => (
+              <span key={ch}><i style={{background: CELL_COLORS[terrain]}} />{terrain}</span>
+            ))}
+          </span>
+        )}
         <span className="cell-editor-status">{status}</span>
       </div>
       {errors.length > 0 ? (
@@ -93,18 +111,23 @@ export default function CellEditor({backUrl}) {
   );
 }
 
-function drawGrid(ctx, grid, scale) {
+function drawOverlay(ctx, map, scale, filled) {
+  const {grid} = map;
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
   ctx.lineWidth = 1 / scale;
-  ctx.beginPath();
   for (let col = 0; col < grid.cols; col++) {
     for (let row = 0; row < grid.rows; row++) {
       const corners = cellCorners(col, row, grid.cellSize);
+      ctx.beginPath();
       ctx.moveTo(corners[0].x, corners[0].y);
       for (const {x, y} of corners.slice(1)) ctx.lineTo(x, y);
       ctx.closePath();
+      if (filled) {
+        ctx.fillStyle = CELL_COLORS[TERRAINS[map.cells[row][col]]];
+        ctx.fill();
+      }
+      ctx.stroke();
     }
   }
-  ctx.stroke();
 }

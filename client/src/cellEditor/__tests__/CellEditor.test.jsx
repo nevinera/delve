@@ -16,9 +16,17 @@ describe("CellEditor", () => {
     render(<CellEditor backUrl="/build" />);
     expect(await screen.findByText(/Rendered in \d+ms \(4×3\)/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("combobox"), {target: {value: "forest-edge"}});
+    fireEvent.change(screen.getByLabelText("Map"), {target: {value: "forest-edge"}});
     fireEvent.change(screen.getByRole("spinbutton"), {target: {value: "42"}});
 
     expect(cachedCellMapImage).toHaveBeenLastCalledWith(expect.objectContaining({name: "Forest edge", seed: 42}), {pixelsPerFoot: 10});
+  });
+
+  it("shows a legend for the cells overlay", () => {
+    render(<CellEditor />);
+    expect(screen.queryByText("trees")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Overlay"), {target: {value: "cells"}});
+    expect(screen.getByText("trees")).toBeInTheDocument();
+    expect(screen.getByText("meadow")).toBeInTheDocument();
   });
 });
