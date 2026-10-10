@@ -10,6 +10,7 @@ module Validators
     CIRCLE_BARRIER_SEGMENTS = 6
     CONNECTION_TYPES = %w[point line].freeze
     LIGHTING_OPTIONS = %w[daylight torchlight].freeze
+    MAX_FILL_POINTS = 100
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
@@ -28,6 +29,7 @@ module Validators
 
     def validate_content!(data, path:)
       validate_barriers!(data, path: path) if given?(data, "barriers")
+      validate_fill_points!(data, path: path) if given?(data, "fillPoints")
       validate_connections!(data, path: path) if given?(data, "connections")
       validate_units!(data, path: path) if given?(data, "units")
       validate_ncus!(data, path: path) if given?(data, "ncus")
@@ -92,6 +94,13 @@ module Validators
     def barrier_segment_count(barrier)
       return CIRCLE_BARRIER_SEGMENTS if barrier["type"] == "circle"
       [(barrier["locations"] || []).length - 1, 0].max
+    end
+
+    def validate_fill_points!(data, path:)
+      points = require_array!(data, "fillPoints", path: path)
+      list_path = child_path(path, "fillPoints")
+      raise ValidationError.new("fillPoints has #{points.length} points, more than the maximum of #{MAX_FILL_POINTS}", path: list_path) if points.length > MAX_FILL_POINTS
+      points.each_with_index { |loc, i| validate_location!(loc, path: index_path(list_path, i)) }
     end
 
     def validate_connections!(data, path:)

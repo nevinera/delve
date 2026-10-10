@@ -1,6 +1,7 @@
 // The parts of a map nobody can stand in: every region whose outline
-// reaches the map's edge somewhere a wall doesn't cover it (see
-// plans/map-fill.md, and docs/schema/map.md for the map's shape). Pure
+// reaches the map's edge somewhere a wall doesn't cover it, and every
+// region holding one of the map's fillPoints (see plans/map-fill.md, and
+// docs/schema/map.md for the map's shape). Pure
 // geometry in map feet (x east, y north); scene.js draws the result.
 //
 // The outlines are the walls, the line connections and the map edge. Near
@@ -23,7 +24,7 @@ export function computeMapFill(map) {
   const edges = splitAtCrossings(raw);
   const graph = buildGraph(edges);
   const cycles = traceCycles(graph);
-  classify(graph, cycles);
+  classify(graph, cycles, (map.fillPoints ?? []).map(point));
   return {
     filled: cycles
       .filter((c) => c.area > 0 && c.state === "filled")
@@ -232,13 +233,18 @@ function traceCycles(graph) {
 
 // Marks each cycle's state ("filled"/"open" for faces, the containing
 // face's for a hole) and side (what a half-edge on it has to its left).
-function classify(graph, cycles) {
+function classify(graph, cycles, fillPoints) {
   const component = connectedPieces(graph);
   const faces = cycles.filter((c) => c.area > 0);
   for (const face of faces) {
     face.state = face.halfEdges.some((h) => h.edge.kind === "border") ? "filled" : "open";
-    face.side = face.state;
   }
+  // A fill point fills the innermost region around it.
+  for (const p of fillPoints) {
+    const face = faces.filter((f) => pointInRing(p, f.points)).reduce((best, f) => (!best || f.area < best.area ? f : best), null);
+    if (face) face.state = "filled";
+  }
+  for (const face of faces) face.side = face.state;
   for (const ring of cycles.filter((c) => c.area <= 0)) {
     const piece = component.get(ring.halfEdges[0].from);
     if (ring.halfEdges.some((h) => h.edge.kind === "border")) {

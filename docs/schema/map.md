@@ -17,6 +17,7 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `feetDimensions` | object | yes | Map dimensions in feet: `{ "width": float, "height": float }`. Used to convert pixel coordinates to world coordinates. |
 | `lighting` | string | no | `"daylight"` or `"torchlight"`, controls the map editor's walk-preview lighting/view-distance style. Defaults to `"daylight"` when omitted. Client-only (a display setting for the map editor's own preview) - the game server does not read this field. |
 | `barriers` | array of Barrier | no | Impassable obstacles on this map. |
+| `fillPoints` | array of Location | no | At most 100. Each one fills the region of the map it sits in, making it impassable like the area outside the map's walls (see **Fill** below) - for voids inside the playable area, like a closed-off rock. |
 | `connections` | array of MapConnection | no | Entry/exit points on this map. The zone defines how connections pair up and which are entry points. |
 | `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |
 | `ncus` | array of NCU | no | Non-combat units initially present on this map. See [ncu.md](ncu.md). |
@@ -41,6 +42,15 @@ Distance carries across one map crossing (from the leash point to the connection
 through, plus its distance from the connection it arrived at); following onto a third map gives
 up immediately. Giving up is a reset: the NPC, and its whole group, drop the fight, heal fully,
 lose their debuffs, and walk home immune to everything until they arrive.
+### Fill
+
+The walls, line connections and the map's edge divide a map into regions. Every region that
+reaches the map's edge (somewhere a wall doesn't run along it) is filled, as is every region
+holding a `fillPoints` entry; circles are always filled. The client draws the fill as raised
+ground. Before regions are traced, near misses are closed: wall and line-connection ends within
+0.5 feet of each other or of any wall or line get joined to it, and an end within 0.5 feet of a
+circle's edge joins its center.
+
 ---
 
 ## Barrier

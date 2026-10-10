@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from "react";
 import {pixelToFeet, feetToPixel, feetSpacingToPixelsX, feetSpacingToPixelsY} from "./mapCoords";
 import {collectSnapPoints, nearestSnapPoint} from "./mapSnap";
 import BarrierShapes from "./BarrierShapes";
+import FillShapes from "./FillShapes";
 import ConnectionShapes from "./ConnectionShapes";
 import UnitShapes from "./UnitShapes";
 import NcuQuestBadges from "./NcuQuestBadges";
@@ -114,7 +115,7 @@ const ALL_LAYERS = {barriers: true, connections: true, units: true, ncus: true};
 
 export default function MapCanvas({
   image, displayImageUrl, imageError, onImageFile, backUrl, mapData, dispatch,
-  selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, placement, onPlacePoint, onCancelPlacement,
+  selectedBarrierIndex, onSelectBarrier, hoveredBarrierIndex, hoveredPoint, hoveredFillPoint = null, placement, onPlacePoint, onCancelPlacement,
   selectedConnectionIndex, onSelectConnection, hoveredConnectionIndex,
   connectionPlacement, onPlaceConnectionField, onCancelConnectionPlacement,
   selectedUnitIndex, onSelectUnit, hoveredUnitIndex, onHoverUnit, pendingUnitType, availableUnitTypes = {},
@@ -460,7 +461,7 @@ export default function MapCanvas({
   useEffect(() => {
     const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection"
       || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit) || tool === "add-ncu"
-      || tool === "add-encounter";
+      || tool === "add-encounter" || tool === "add-fill-point";
     if (!armed) return;
 
     function onKeyDown(e) {
@@ -767,6 +768,13 @@ export default function MapCanvas({
       return;
     }
 
+    if (tool === "add-fill-point") {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (feet) dispatch({type: "ADD_ENTRY", section: "fillPoints", entry: {x: feet.x, y: feet.y}});
+      onToolChange?.("select");
+      return;
+    }
+
     if (tool === "add-line-connection") {
       const feet = snapFeet(feetFromClient(e.clientX, e.clientY), null, e.shiftKey);
       if (!feet) return;
@@ -999,6 +1007,7 @@ export default function MapCanvas({
     : {
       "add-circle": "Placing Circle - drag on the map",
       "add-point-connection": "Placing Point Connection - click the map",
+      "add-fill-point": "Placing Fill Point - click inside the area to fill",
       "add-line-connection": "Placing Line Connection - drag on the map",
       "add-unit": "Placing Unit - click the map",
       "add-encounter": "Placing Encounter - click the map",
@@ -1119,6 +1128,14 @@ export default function MapCanvas({
                 </defs>
                 <rect width="100%" height="100%" fill="url(#map-canvas-grid-pattern)" />
               </svg>
+            )}
+            {canDrawBarriers && layer("barriers",
+              <FillShapes
+                mapData={mapData}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                hoveredFillPoint={hoveredFillPoint}
+              />
             )}
             {canDrawBarriers && mapData.barriers.length > 0 && layer("barriers",
               <BarrierShapes

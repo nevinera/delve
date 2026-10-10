@@ -582,6 +582,7 @@ export default function MapWorkbench({
         onSelectBarrier={(i) => setUiState(uiState.with({selectedBarrierIndex: i}))}
         hoveredBarrierIndex={uiState.hoveredBarrierIndex}
         hoveredPoint={uiState.hoveredPoint}
+        hoveredFillPoint={uiState.hoveredFillPoint}
         placement={uiState.placement}
         onPlacePoint={placePoint}
         onCancelPlacement={() => setUiState(uiState.clearPlacement())}
@@ -665,6 +666,9 @@ export default function MapWorkbench({
               onStartPointEdit={(barrierIndex, pointIndex) => setUiState(uiState.startBarrierPointEdit(barrierIndex, pointIndex))}
               tool={uiState.tool}
               onStartAddCircle={() => setUiState(uiState.startTool("add-circle"))}
+              fillPoints={mapData.fillPoints ?? []}
+              onStartAddFillPoint={() => setUiState(uiState.startTool("add-fill-point"))}
+              onHoverFillPoint={(i) => setUiState(uiState.with({hoveredFillPoint: i}))}
               canPlaceOnMap={canPlaceOnMap}
               otherPlacementActive={!!uiState.connectionPlacement}
               dispatch={dispatch}

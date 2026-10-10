@@ -10,6 +10,29 @@ RSpec.describe Validators::MapValidator, type: :validator do
       expect { described_class.validate!(zone_fixture["maps"][1]) }.not_to raise_error
     end
 
+    describe "fillPoints" do
+      it "accepts a list of locations" do
+        data = cave_entrance_map.merge("fillPoints" => [{"x" => 5, "y" => 6.5}])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when it isn't an array" do
+        expect { described_class.validate!(cave_entrance_map.merge("fillPoints" => {"x" => 5, "y" => 6})) }
+          .to raise_error(Validators::ValidationError, /fillPoints must be an array/)
+      end
+
+      it "raises when a point isn't a location" do
+        expect { described_class.validate!(cave_entrance_map.merge("fillPoints" => [{"x" => 5}])) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to eq("$.fillPoints[0].y") }
+      end
+
+      it "raises past #{described_class::MAX_FILL_POINTS} points" do
+        points = Array.new(described_class::MAX_FILL_POINTS + 1) { {"x" => 1, "y" => 1} }
+        expect { described_class.validate!(cave_entrance_map.merge("fillPoints" => points)) }
+          .to raise_error(Validators::ValidationError, /more than the maximum/)
+      end
+    end
+
     it "raises when identifier is missing" do
       expect { described_class.validate!(cave_entrance_map.except("identifier")) }
         .to raise_error(Validators::ValidationError, /identifier is required/)

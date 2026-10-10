@@ -94,6 +94,21 @@ describe("computeMapFill", () => {
     expect(fill.edges.every((e) => e.a.every((c) => c >= 0 && c <= 100))).toBe(true);
   });
 
+  it("fills the region around each fill point", () => {
+    const rock = wall([40, 40], [60, 40], [60, 60], [40, 60], [40, 40]);
+    const open = computeMapFill(map([wall(...room), rock]));
+    expect(filledArea(open)).toBeCloseTo(10000 - 3600);
+    const filled = computeMapFill({ ...map([wall(...room), rock]), fillPoints: [{ x: 50, y: 50 }] });
+    expect(filledArea(filled)).toBeCloseTo(10000 - 3600 + 400);
+    const side = filled.edges.find((e) => e.kind === "wall" && e.a[0] === 40 && e.b[0] === 40);
+    expect([side.left, side.right].sort()).toEqual(["filled", "open"]);
+  });
+
+  it("ignores a fill point already in the fill", () => {
+    const fill = computeMapFill({ ...map([wall(...room)]), fillPoints: [{ x: 5, y: 5 }] });
+    expect(filledArea(fill)).toBeCloseTo(10000 - 3600);
+  });
+
   it("handles an empty map", () => {
     expect(filledArea(computeMapFill(map([])))).toBeCloseTo(10000);
   });
