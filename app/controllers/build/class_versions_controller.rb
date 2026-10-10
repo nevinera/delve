@@ -8,7 +8,7 @@ class Build::ClassVersionsController < Build::BaseController
 
   def index
     @key = params[:id]
-    @versions = CharacterClass.where(identifier: @key).to_a
+    @versions = listed_versions.to_a
     @unimported_versions = UnimportedClassTags.call(key: @key, user: current_user)
     @rows = newest_first(@versions + Array(@unimported_versions))
   end
@@ -28,6 +28,15 @@ class Build::ClassVersionsController < Build::BaseController
 
   private
 
+  # Expired versions only with ?expired=1.
+  def listed_versions
+    versions = CharacterClass.where(identifier: @key)
+    show_expired? ? versions : versions.unexpired
+  end
+
+  def show_expired? = params[:expired].present?
+  helper_method :show_expired?
+
   def import_class!(client, key, version)
     location = class_url(client, "refs/tags/#{class_tag(key, version)}", key)
     CharacterClass.create!(user: current_user, identifier: key, version:, location:)
@@ -35,6 +44,6 @@ class Build::ClassVersionsController < Build::BaseController
 
   # Registered versions and not-imported version strings together, by version.
   def newest_first(rows)
-    rows.sort_by { |row| (row.is_a?(String) ? row : row.version).split(".").map(&:to_i) }.reverse
+    rows.sort_by { |row| CharacterClass.version_key(row.is_a?(String) ? row : row.version) }.reverse
   end
 end

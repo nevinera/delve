@@ -4,7 +4,14 @@
 
 <h1><%= @key %> versions</h1>
 
-<p><%= link_to "Edit", edit_build_class_path(id: @key) %></p>
+<p>
+  <%= link_to "Edit", edit_build_class_path(id: @key) %> ·
+  <% if show_expired? %>
+    <%= link_to "Hide expired versions", build_class_versions_path(id: @key) %>
+  <% else %>
+    <%= link_to "Show expired versions", build_class_versions_path(id: @key, expired: 1) %>
+  <% end %>
+</p>
 
 <% if @unimported_versions.nil? %>
   <p><small>Tags in your repo couldn't be listed, so versions that aren't imported here are missing.</small></p>
@@ -24,10 +31,11 @@
       <% else %>
         <li>
           <span class="entry-title"><%= row.version %></span>
-          <span class="entry-state"><%= row.provided? ? "importing" : row.state %></span>
+          <span class="entry-state"><%= row.provided? ? "importing" : (row.expired? ? "expired" : row.state) %></span>
           <div class="entry-meta">
             <% if row.name.present? %><span><%= row.name %></span><% end %>
             <span>imported <%= row.created_at.to_fs(:short) %></span>
+            <% if row.expires_at %><span>expires <%= row.expires_at.to_fs(:short) %></span><% end %>
           </div>
           <% if row.validity_error.present? %>
             <div class="entry-error"><strong>Import error:</strong> <%= row.validity_error %></div>

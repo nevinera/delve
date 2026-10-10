@@ -187,6 +187,14 @@ RSpec.describe "Play::Characters", type: :request do
         expect(response.body).to include("#{other.identifier} #{other.version}")
       end
 
+      it "leaves expired classes out of the class choices, bar the character's own" do
+        expired = create(:character_class, state: :fetched, expires_at: 1.hour.ago)
+        character_class.update!(expires_at: 1.hour.ago)
+        get "/play/characters/#{character.id}/edit"
+        expect(response.body).not_to include("#{expired.identifier} #{expired.version}")
+        expect(response.body).to include("#{character_class.identifier} #{character_class.version}")
+      end
+
       it "says to leave the world while in a zone" do
         create(:slot_session, character:)
         get "/play/characters/#{character.id}/edit"

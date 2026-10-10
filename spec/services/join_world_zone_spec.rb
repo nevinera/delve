@@ -43,6 +43,21 @@ RSpec.describe JoinWorldZone do
     ))
   end
 
+  context "when the character's class version has expired" do
+    let!(:newer) do
+      create(:character_class, identifier: character.character_class.identifier, version: "9.0", state: :fetched,
+        content_sha: Digest::SHA1.hexdigest(class_content))
+    end
+
+    before { character.character_class.update!(state: :fetched, expires_at: 1.hour.ago) }
+
+    it "moves them to the newest version first, even while in a zone" do
+      create(:slot_session, character:)
+      call
+      expect(character.reload.character_class).to eq(newer)
+    end
+  end
+
   it "sends the character's token image" do
     call
     expect(slots_client).to have_received(:request).with(hash_including(token_image_url: "https://example.com/token.webp"))
