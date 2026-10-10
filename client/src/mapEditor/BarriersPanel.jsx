@@ -122,39 +122,11 @@ function CircleFields({barrier, onChange}) {
   );
 }
 
-// Points marking areas inside the walls as filled - raised and impassable,
-// like everything outside them (see game/mapFill.js). The canvas shades
-// the fill as it stands, so it's clear which area a point will take.
-function FillPoints({fillPoints, armed, canAdd, onStartAdd, onHover, onRemove}) {
-  return (
-    <div className="entry-block map-fill-points">
-      <div className="entry-heading-row">
-        <h3>Fill points{fillPoints.length > 0 ? ` (${fillPoints.length})` : ""}</h3>
-        <button type="button" className="add-entry" disabled={!canAdd} onClick={(e) => { e.stopPropagation(); onStartAdd?.(); }}>
-          + Add Fill Point
-        </button>
-      </div>
-      {fillPoints.length === 0 && !armed && (
-        <p className="map-sidebar-hint">The area outside the walls fills itself. Add a point to fill a void inside them too.</p>
-      )}
-      <div className="map-fill-point-pills">
-        {fillPoints.map((p, i) => (
-          <span key={i} className="map-point-pill" onMouseEnter={() => onHover?.(i)} onMouseLeave={() => onHover?.(null)}>
-            ({round1(p.x)}, {round1(p.y)})
-            <button type="button" className="map-point-pill-remove" aria-label={`Remove fill point ${i + 1}`} onClick={() => onRemove(i)}>×</button>
-          </span>
-        ))}
-        {armed && <span className="map-point-pill map-point-pill-pending">…</span>}
-      </div>
-    </div>
-  );
-}
-
 function barrierSummary(barrier) {
   return barrier.type === "wall" ? `${barrier.locations.length} points` : `r=${barrier.radius}ft`;
 }
 
-export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, onStartPointEdit, tool, onStartAddCircle, fillPoints = [], onStartAddFillPoint, onHoverFillPoint, canPlaceOnMap, otherPlacementActive, dispatch}) {
+export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, onStartPointEdit, tool, onStartAddCircle, canPlaceOnMap, otherPlacementActive, dispatch}) {
   // The "Barriers" section as a whole starts collapsed - a list of every
   // point in every wall would otherwise dominate the sidebar before
   // there's much else to look at.
@@ -276,14 +248,6 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
               </div>
             </div>
           )}
-          <FillPoints
-            fillPoints={fillPoints}
-            armed={tool === "add-fill-point"}
-            canAdd={tool === "select" && !placement && !otherPlacementActive && canPlaceOnMap}
-            onStartAdd={onStartAddFillPoint}
-            onHover={onHoverFillPoint}
-            onRemove={(index) => { dispatch({type: "REMOVE_ENTRY", section: "fillPoints", index}); onHoverFillPoint?.(null); }}
-          />
         </>
       )}
     </>

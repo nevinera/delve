@@ -3,6 +3,7 @@ import MapCanvas, {nextUnitIdentifier} from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
+import FillPointsPanel from "./FillPointsPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsTab, {paletteKeys} from "./UnitsTab";
 import NcusPanel from "./NcusPanel";
@@ -666,9 +667,6 @@ export default function MapWorkbench({
               onStartPointEdit={(barrierIndex, pointIndex) => setUiState(uiState.startBarrierPointEdit(barrierIndex, pointIndex))}
               tool={uiState.tool}
               onStartAddCircle={() => setUiState(uiState.startTool("add-circle"))}
-              fillPoints={mapData.fillPoints ?? []}
-              onStartAddFillPoint={() => setUiState(uiState.startTool("add-fill-point"))}
-              onHoverFillPoint={(i) => setUiState(uiState.with({hoveredFillPoint: i}))}
               canPlaceOnMap={canPlaceOnMap}
               otherPlacementActive={!!uiState.connectionPlacement}
               dispatch={dispatch}
@@ -685,6 +683,14 @@ export default function MapWorkbench({
               onStartConnectionPlacement={(connectionIndex, field) => setUiState(uiState.startConnectionFieldPlacement(connectionIndex, field))}
               onStartAddPointConnection={() => setUiState(uiState.startTool("add-point-connection"))}
               onStartAddLineConnection={() => setUiState(uiState.startTool("add-line-connection"))}
+              dispatch={dispatch}
+            />
+            <FillPointsPanel
+              fillPoints={mapData.fillPoints ?? []}
+              tool={uiState.tool}
+              canAdd={uiState.nothingArmed && canPlaceOnMap}
+              onStartAdd={() => setUiState(uiState.startTool("add-fill-point"))}
+              onHover={(i) => setUiState(uiState.with({hoveredFillPoint: i}))}
               dispatch={dispatch}
             />
           </>

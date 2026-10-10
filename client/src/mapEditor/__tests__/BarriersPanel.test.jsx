@@ -365,29 +365,4 @@ describe("BarriersPanel", () => {
     expect(dispatch).toHaveBeenCalledWith({type: "REMOVE_ENTRY", section: "barriers", index: 0});
     expect(onSelect).toHaveBeenCalledWith(null);
   });
-
-  describe("fill points", () => {
-    it("arms the fill-point tool from its button", () => {
-      const onStartAddFillPoint = vi.fn();
-      render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} onStartAddFillPoint={onStartAddFillPoint} />);
-      expandSection();
-      fireEvent.click(screen.getByText("+ Add Fill Point"));
-      expect(onStartAddFillPoint).toHaveBeenCalled();
-    });
-
-    it("lists each fill point, and removes one from its ×", () => {
-      const dispatch = vi.fn();
-      render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} fillPoints={[{x: 1.25, y: 2}, {x: 3, y: 4}]} dispatch={dispatch} />);
-      expandSection();
-      expect(screen.getByText("Fill points (2)")).toBeInTheDocument();
-      fireEvent.click(screen.getByLabelText("Remove fill point 2"));
-      expect(dispatch).toHaveBeenCalledWith({type: "REMOVE_ENTRY", section: "fillPoints", index: 1});
-    });
-
-    it("can't be armed while something else is", () => {
-      render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} tool="add-circle" />);
-      expandSection();
-      expect(screen.getByText("+ Add Fill Point")).toBeDisabled();
-    });
-  });
 });
