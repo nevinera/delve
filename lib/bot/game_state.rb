@@ -31,7 +31,8 @@ module Bot
     # The bot's own unit.
     def me = @units.values.find { |u| u["zone_unit_identifier"] == @self_identifier }
 
-    def player(name) = @units.values.find { |u| u["zone_unit_identifier"] == "player:#{name}" }
+    # Another player's unit, by character name (ignoring case).
+    def player(name) = @units.values.find { |u| u["zone_unit_identifier"].casecmp?("player:#{name}") }
 
     # The space between two units' token edges, in feet: nil unless both are
     # placed on the same map.

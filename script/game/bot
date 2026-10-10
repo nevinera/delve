@@ -9,7 +9,8 @@
 #   script/game/bot --character <id|name> --world <id|name|key> --strategy <name> [--config <json|file>] [-v]
 #
 # Strategies: null (stands still), spin ({"degrees_per_second": 15}),
-# script ({"steps": [{"after": 0, "do": "move", "keys": ["forward"]}, ...]}).
+# script ({"steps": [{"after": 0, "do": "move", "keys": ["forward"]}, ...]}),
+# follow ({"target": "<character name>", "notice_feet": 30, "stop_feet": 5}).
 #
 # Environment: GAME_SERVER_URL (default http://localhost:8090), as Rails
 # reaches the game server.
@@ -32,7 +33,8 @@ abort "Error: --world is required" unless options[:world]
 require_relative "../../config/environment"
 
 def find_character(key)
-  (/\A\d+\z/.match?(key) ? Character.find_by(id: key) : Character.find_by(name: key)) or abort "Character not found: #{key}"
+  character = /\A\d+\z/.match?(key) ? Character.find_by(id: key) : Character.where("lower(name) = ?", key.downcase).first
+  character or abort "Character not found: #{key}"
 end
 
 def find_world(key)
