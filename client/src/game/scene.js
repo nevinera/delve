@@ -141,18 +141,57 @@ function addFacingArrow(group, radius, color) {
   group.add(new THREE.LineLoop(borderGeo, new THREE.LineBasicMaterial({ color: 0x000000 })));
 }
 
-export function createPlayerToken(radius, tokenUrl) {
+const SELF_TOKEN_COLORS = { body: 0x2e7d32, cone: 0x81c784 };
+// Other players: a dull blue, apart from every hostility color.
+const OTHER_PLAYER_TOKEN_COLORS = { body: 0x4a6080, cone: 0xa3b4c8 };
+
+// Where a player token's class rings sit, as fractions of its radius: the
+// body shows as a rim outside the major ring, then the minor ring, then the
+// portrait. Without class colors the portrait fills to PORTRAIT_PLAIN.
+const CLASS_RINGS = [
+  { key: "major", inner: 0.82, outer: 0.92 },
+  { key: "minor", inner: 0.72, outer: 0.82 },
+];
+const PORTRAIT_RINGED = 0.72;
+const PORTRAIT_PLAIN = 0.8;
+
+// A class color ("8B4513" or "#8B4513", see docs/schema/common.md), or null.
+export function classColor(hex) {
+  return /^#?[0-9a-f]{6}$/i.test(hex ?? "") ? new THREE.Color(`#${hex.replace(/^#/, "")}`) : null;
+}
+
+// A player's token, theirs or another's: the body, its class's major and
+// minor colors as rings around the portrait (when classColors has both),
+// and the portrait itself. `other` gives the dull blue body for someone
+// else's character.
+export function createPlayerToken(radius, tokenUrl, { classColors = null, other = false } = {}) {
+  const { body: bodyColor, cone: coneColor } = other ? OTHER_PLAYER_TOKEN_COLORS : SELF_TOKEN_COLORS;
   const group = new THREE.Group();
 
   const body = new THREE.Mesh(
     new THREE.CylinderGeometry(radius, radius, 0.3, 32),
-    new THREE.MeshLambertMaterial({ color: 0x2e7d32 })
+    new THREE.MeshLambertMaterial({ color: bodyColor })
   );
   body.position.y = 0.15;
   group.add(body);
 
+  const rings = CLASS_RINGS.map((ring) => ({ ...ring, color: classColor(classColors?.[ring.key]) }));
+  const ringed = rings.every((ring) => ring.color);
+  if (ringed) {
+    for (const { inner, outer, color } of rings) {
+      const mesh = new THREE.Mesh(
+        new THREE.RingGeometry(radius * inner, radius * outer, 48),
+        new THREE.MeshLambertMaterial({ color })
+      );
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = 0.305;
+      group.add(mesh);
+    }
+  }
+
   const portraitMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const portrait = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.8, 32), portraitMat);
+  const portraitRadius = radius * (ringed ? PORTRAIT_RINGED : PORTRAIT_PLAIN);
+  const portrait = new THREE.Mesh(new THREE.CircleGeometry(portraitRadius, 32), portraitMat);
   portrait.rotation.x = -Math.PI / 2;
   portrait.position.y = 0.31;
   group.add(portrait);
@@ -164,9 +203,14 @@ export function createPlayerToken(radius, tokenUrl) {
     });
   }
 
-  addFacingArrow(group, radius, 0x81c784);
+  addFacingArrow(group, radius, coneColor);
   attachDeadMarkers(group, radius);
   return group;
+}
+
+// Whether a unit is a player character (see the game server's spawn.go).
+export function isPlayerUnit(unit) {
+  return unit?.zone_unit_identifier?.startsWith("player:") ?? false;
 }
 
 const HOSTILITY_COLORS = {
@@ -967,8 +1011,8 @@ export class SceneManager {
       } else {
         const info = this._unitInfo.get(unit.zone_unit_identifier);
         const radius = info?.tokenRadius ?? TOKEN_RADIUS;
-        const group = isSelf
-          ? createPlayerToken(radius, characterTokenUrl)
+        const group = isPlayerUnit(unit)
+          ? createPlayerToken(radius, isSelf ? characterTokenUrl : unit.token_image_url, { classColors: unit.class_colors, other: !isSelf })
           : createNpcToken(radius, info?.hostility, info?.tokenImageUrl, this._zoneBaseUrl);
         group.position.set(wx, 0, wz);
         group.rotation.y = angle;

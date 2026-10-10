@@ -29,6 +29,7 @@ type slotRequestBody struct {
 	EquippedItems       map[string]instanceconfig.EquippedItem `json:"equipped_items"`   // optional; nil if not provided
 	HeldFlags           []string                               `json:"held_flags"`       // optional; the zone's listed flags the character holds
 	ActiveQuests        []instanceconfig.ActiveQuest           `json:"active_quests"`    // optional; the character's active quests in the world
+	TokenImageURL       string                                 `json:"token_image_url"`  // optional; the character's portrait
 
 	// How the player reached the zone, and the world-join settings (see
 	// game-server/README.md).
@@ -190,6 +191,7 @@ func (h *Slots) addSlotAndRespond(w http.ResponseWriter, r *http.Request, inst *
 		SpawnAt:                  req.SpawnAt,
 		HeldFlags:                req.HeldFlags,
 		ActiveQuests:             req.ActiveQuests,
+		TokenImageURL:            req.TokenImageURL,
 	})
 	if err != nil {
 		if errors.Is(err, instance.ErrInstanceFull) {

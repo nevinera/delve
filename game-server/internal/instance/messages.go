@@ -76,6 +76,8 @@ type unitJSON struct {
 	ActiveStatusEffects  []effectJSON             `json:"active_status_effects"`
 	LootItems            []lootItemJSON           `json:"loot_items,omitempty"`
 	CombatStats          *combatStatsJSON         `json:"combat_stats,omitempty"`
+	TokenImageURL        string                   `json:"token_image_url,omitempty"`
+	ClassColors          *instanceconfig.Colors   `json:"class_colors,omitempty"`
 
 	// Set only for player-character units with a connected slot that has sent
 	// at least one heartbeat/move - see Instance.LastSeqsByUnit. Echoing the
@@ -330,6 +332,8 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			ActiveStatusEffects:  effects,
 			LootItems:            lootItemsToJSON(u.LootItems),
 			CombatStats:          combatStatsToJSON(u),
+			TokenImageURL:        u.TokenImageURL,
+			ClassColors:          classColorsJSON(u),
 			LastHeartbeatSeq:     hbSeq,
 			LastMoveSeq:          moveSeq,
 		}
@@ -355,6 +359,16 @@ func sharedPosition(u *instancestate.UnitState) *instanceconfig.Position {
 	}
 	pos := u.Position
 	return &pos
+}
+
+// classColorsJSON is a player unit's class colors, or nil for a unit
+// without them (NPCs).
+func classColorsJSON(u *instancestate.UnitState) *instanceconfig.Colors {
+	if u.ClassColors == (instanceconfig.Colors{}) {
+		return nil
+	}
+	colors := u.ClassColors
+	return &colors
 }
 
 func expiresAtJSON(t time.Time) *int64 {
@@ -432,6 +446,12 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 			}
 			if cs := combatStatsToJSON(cu); cs != nil {
 				update["combat_stats"] = cs
+			}
+			if cu.TokenImageURL != "" {
+				update["token_image_url"] = cu.TokenImageURL
+			}
+			if cc := classColorsJSON(cu); cc != nil {
+				update["class_colors"] = cc
 			}
 			if seq, ok := currHeartbeatSeqs[id]; ok {
 				update["last_heartbeat_seq"] = seq

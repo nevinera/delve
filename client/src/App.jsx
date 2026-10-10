@@ -4015,17 +4015,15 @@ export default function App({
         (targetUnit.position.y - selfUnit.position.y) ** 2
       ).toFixed(1)
     : null;
-  // Only resolvable for self (characterTokenUrl, a prop) and NPC targets
-  // (npcTokenUrlByZoneIdRef, built from the zone config) - another
-  // player's token art isn't known client-side at all (same gap as
-  // statusCatalog not covering other players' powers), so their frame
-  // just shows no image rather than guessing.
+  // Self's comes from characterTokenUrl (a prop), another player's from
+  // their unit (token_image_url), and an NPC's from the zone config
+  // (npcTokenUrlByZoneIdRef).
   const targetTokenUrl = targetUnit
     ? (targetUnit.zone_unit_identifier === selfIdentifier
         ? characterTokenUrl
-        : (npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
+        : (targetUnit.token_image_url ?? npcTokenUrlByZoneIdRef.current[targetUnit.zone_unit_identifier] ?? null))
     : null;
-  // Same reasoning as targetTokenUrl - another player's resource
+  // Unlike token art, another player's resource
   // name/color isn't known client-side, so their resource bar/meter just
   // falls back to ResourceBar's own default gray and no meter label.
   const targetResource = targetUnit

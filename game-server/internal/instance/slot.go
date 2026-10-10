@@ -87,6 +87,9 @@ type SlotOptions struct {
 	// ActiveQuests are the character's active quests in the world; world
 	// mode only.
 	ActiveQuests []instanceconfig.ActiveQuest
+	// TokenImageURL is the character's portrait, for drawing its token;
+	// empty draws the plain one.
+	TokenImageURL string
 }
 
 // recomputeStats sums the raw (em=1.0) stats of every equipped item into
@@ -356,6 +359,7 @@ func (inst *Instance) ConnectSlot(id uuid.UUID) (chan []byte, context.Context, c
 		class:         slot.CharacterClass,
 		equippedItems: slot.EquippedItems,
 		spawnAt:       slot.SpawnAt,
+		tokenImageURL: slot.TokenImageURL,
 	}:
 	default:
 	}

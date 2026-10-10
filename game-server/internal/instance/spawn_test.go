@@ -91,6 +91,30 @@ func TestPlayerSpawn_AppearsInFullState(t *testing.T) {
 	assert.True(t, found, "player unit should appear in full state message")
 }
 
+func TestPlayerSpawn_CarriesTokenImageAndClassColors(t *testing.T) {
+	reg := instance.NewRegistry()
+	inst := startedInstance(t, reg)
+	t.Cleanup(inst.Stop)
+
+	class := puncherClass
+	class.Colors = instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"}
+	slot, err := inst.AddSlotWithOptions("Aldric", "42", class, nil, nil, instance.SlotOptions{TokenImageURL: "/tokens/aldric.png"})
+	require.NoError(t, err)
+
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	for _, u := range receiveFullState(t, writeCh) {
+		if u["zone_unit_identifier"] == "player:Aldric" {
+			assert.Equal(t, "/tokens/aldric.png", u["token_image_url"])
+			assert.Equal(t, map[string]any{"major": "8B4513", "minor": "F4A460"}, u["class_colors"])
+			return
+		}
+	}
+	t.Fatal("player unit should appear in full state message")
+}
+
 // TestPlayerSpawn_MaxHealthReflectsEquippedStamina guards against the bug
 // where a player's MaxHealth was a flat 100 regardless of equipped Stamina
 // (see docs/stats.md's "Stamina" section: MaxHP = 280 + Stamina) -
