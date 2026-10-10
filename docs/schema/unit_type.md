@@ -10,6 +10,7 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 |---|---|---|---|---|
 | `name` | string | yes | | Display name. |
 | `description` | string | no | | Short description shown in UI. |
+| `category` | string | no | | The unit's family, as a lowercase slug (`goblins`, `wolves`, `fire-elementals`). Editors group and filter unit types by it; no mechanical effect. Importing a library unit type into a world defaults it to the library folder it came from. |
 | `tokenImageUrl` | string \| array of strings | yes | | Portrait image URL(s). If an array, one is chosen at random each time a unit is created from this type. |
 | `tokenRadius` | float | yes | | Token radius in feet. Range: 1.0-20.0. |
 | `speedFactor` | float | no | `1.0` | Movement speed multiplier relative to base character speed. Range: 0.0-10.0. |

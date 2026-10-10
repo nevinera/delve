@@ -12,6 +12,8 @@ module Validators
     }.freeze
     ROLE_TAGS = %w[healer tough debuffs buffs glass].freeze
     TAGS = (EXCLUSIVE_TAG_CATEGORIES.values.flatten + ROLE_TAGS).freeze
+    # A family like "goblins" - lowercase words joined by dashes.
+    CATEGORY_FORMAT = /\A[a-z0-9]+(-[a-z0-9]+)*\z/
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
@@ -29,9 +31,21 @@ module Validators
       validate_positive_numeric!(data, "basicAttackRange", path: path) if given?(data, "basicAttackRange")
       validate_basic_attack_school!(data, path: path) if given?(data, "basicAttackSchool")
       validate_basic_attack_style!(data, path: path) if given?(data, "basicAttackStyle")
-      validate_unit_tags!(data, path: path) if given?(data, "tags")
+      validate_labels!(data, path: path)
       validate_resource!(data, path: path) if given?(data, "resource")
       validate_stealth_ratings!(data, path: path)
+    end
+
+    # The editors' labels: balance tags and the category.
+    def validate_labels!(data, path:)
+      validate_unit_tags!(data, path: path) if given?(data, "tags")
+      validate_category!(data, path: path) if given?(data, "category")
+    end
+
+    def validate_category!(data, path:)
+      category = require_string!(data, "category", path: path)
+      return if category.match?(CATEGORY_FORMAT)
+      raise ValidationError.new("category must be a lowercase slug (letters, digits and dashes)", path: child_path(path, "category"))
     end
 
     def validate_stealth_ratings!(data, path:)

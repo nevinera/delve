@@ -7,7 +7,9 @@ const capitalized = (text) => text[0].toUpperCase() + text.slice(1);
 // delete. The operations are the kind's own (see unitTypeOps/itemOps) -
 // each returns the next draft or throws, and a throw shows inline with the
 // draft untouched. describe(key) gives each row's {name, detail, thumbUrl}.
-export default function ContentList({title, noun, keys, describe, create, rename, remove, onChange, onOpen, renderImport}) {
+// groupOf(key), if given, sorts the rows under headings by what it returns
+// (null last, as "Other") once any key has one.
+export default function ContentList({title, noun, keys, describe, create, rename, remove, onChange, onOpen, renderImport, groupOf}) {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [renaming, setRenaming] = useState(null);
@@ -59,40 +61,51 @@ export default function ContentList({title, noun, keys, describe, create, rename
       {error && <p className="zone-list-error" role="alert">{error}</p>}
       {keys.length === 0 && !creating && <p className="config-empty">No {noun}s yet.</p>}
       <ul>
-        {keys.map((key) => {
-          const {name, detail, thumbUrl} = describe(key);
-          return (
-            <li key={key} className="zone-row">
-              {renaming === key ? (
-                <RenameForm
-                  current={key}
-                  onCancel={() => setRenaming(null)}
-                  onRename={(to) => attempt(() => rename(key, to)) && setRenaming(null)}
-                />
-              ) : (
-                <>
-                  <button type="button" className="zone-row-open content-row-open" onClick={() => onOpen(key)}>
-                    {thumbUrl !== undefined && (thumbUrl ? <img className="content-row-thumb" src={thumbUrl} alt="" /> : <span className="content-row-thumb" />)}
-                    <span>
-                      <span className="zone-row-name">{name || key}</span>
-                      <span className="zone-row-key">{key} · {detail}</span>
-                    </span>
-                  </button>
-                  <button type="button" className="add-entry" onClick={() => setRenaming(key)} aria-label={`Rename ${key}`}>Rename</button>
-                  <button
-                    type="button" className="remove-entry" aria-label={`Delete ${key}`}
-                    onClick={() => window.confirm(`Delete ${noun} "${key}"? Nothing is committed until you save.`) && attempt(() => remove(key))}
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
-            </li>
-          );
-        })}
+        {grouped(keys, groupOf).map(({group, keys: groupKeys}) => [
+          group !== undefined && <li key={`group:${group ?? ""}`} className="content-list-group">{group ?? "Other"}</li>,
+          ...groupKeys.map((key) => {
+            const {name, detail, thumbUrl} = describe(key);
+            return (
+              <li key={key} className="zone-row">
+                {renaming === key ? (
+                  <RenameForm
+                    current={key}
+                    onCancel={() => setRenaming(null)}
+                    onRename={(to) => attempt(() => rename(key, to)) && setRenaming(null)}
+                  />
+                ) : (
+                  <>
+                    <button type="button" className="zone-row-open content-row-open" onClick={() => onOpen(key)}>
+                      {thumbUrl !== undefined && (thumbUrl ? <img className="content-row-thumb" src={thumbUrl} alt="" /> : <span className="content-row-thumb" />)}
+                      <span>
+                        <span className="zone-row-name">{name || key}</span>
+                        <span className="zone-row-key">{key} · {detail}</span>
+                      </span>
+                    </button>
+                    <button type="button" className="add-entry" onClick={() => setRenaming(key)} aria-label={`Rename ${key}`}>Rename</button>
+                    <button
+                      type="button" className="remove-entry" aria-label={`Delete ${key}`}
+                      onClick={() => window.confirm(`Delete ${noun} "${key}"? Nothing is committed until you save.`) && attempt(() => remove(key))}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+              </li>
+            );
+          }),
+        ])}
       </ul>
     </section>
   );
+}
+
+// [{group, keys}] for groupOf's groups (group undefined: no headings).
+function grouped(keys, groupOf) {
+  const groups = groupOf ? [...new Set(keys.map(groupOf).filter(Boolean))].sort() : [];
+  if (groups.length === 0) return [{group: undefined, keys}];
+  return [...groups, null].map((group) => ({group, keys: keys.filter((key) => (groupOf(key) || null) === group)}))
+    .filter((entry) => entry.keys.length > 0);
 }
 
 export function NewEntryForm({noun, onCreate, onCancel}) {

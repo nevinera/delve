@@ -5,8 +5,9 @@ import {libraryUnitTypes, prepareUnitTypeImport} from "../state/importing";
 import {resolvePath, unitTypeFile} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
 
-// The world's own unit types (see ContentList): rename rewrites every map
-// unit and zone entry using it; delete is refused while it's placed.
+// The world's own unit types (see ContentList), grouped by category:
+// rename rewrites every map unit and zone entry using it; delete is
+// refused while it's placed.
 export default function UnitTypeList({draft, onChange, onOpen, repo, library}) {
   function describe(key) {
     const data = unitTypeData(draft, key);
@@ -23,6 +24,7 @@ export default function UnitTypeList({draft, onChange, onOpen, repo, library}) {
       rename={(from, to) => renameUnitType(draft, from, to)}
       remove={(key) => deleteUnitType(draft, key)}
       onChange={onChange} onOpen={onOpen}
+      groupOf={(key) => unitTypeData(draft, key)?.category}
       renderImport={library && ((props) => (
         <ImportForm noun="unit type" draft={draft} library={library} list={libraryUnitTypes} prepare={prepareUnitTypeImport} onChange={onChange} {...props} />
       ))}

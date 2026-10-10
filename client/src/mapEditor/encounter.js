@@ -12,6 +12,12 @@ export const PULL_SIZES = ["solo", "pair", "group", "swarm"];
 // candidates actually have (see buildEncounter).
 export const RANDOM_PULL_SIZE = "random";
 
+// The category filter: ANY_CATEGORY mixes the candidates' categories,
+// SAME_CATEGORY builds each encounter from one of them, and any other value
+// is the one category to use (see buildEncounterFrom).
+export const ANY_CATEGORY = "";
+export const SAME_CATEGORY = "same";
+
 const WEIGHT = {swarm: 1, group: 2, pair: 4, solo: 8};
 const BUDGET = {solo: [8, 8], pair: [8, 8], group: [6, 8], swarm: [5, 8]};
 // How often a slot is filled from the chosen size itself (when it fits)
@@ -56,6 +62,26 @@ export function buildEncounter({candidates, intendedFor, pullSize, random = Math
   let result = null;
   for (const size of shuffled(sizes, random)) {
     result = buildSized({candidates, intendedFor, pullSize: size, random});
+    if (!result.error) return result;
+  }
+  return result;
+}
+
+// candidates: [{key, tags, category}]. buildEncounter, from the candidates
+// category allows. SAME_CATEGORY tries the candidates' categories (the
+// uncategorized being one) in random order until one builds, so a family
+// stays together.
+export function buildEncounterFrom({candidates, category = ANY_CATEGORY, random = Math.random, ...settings}) {
+  if (category === ANY_CATEGORY) return buildEncounter({candidates, random, ...settings});
+  if (category !== SAME_CATEGORY) {
+    const inCategory = candidates.filter((c) => c.category === category);
+    if (inCategory.length === 0) return {error: `No ${category} unit types to choose from.`};
+    return buildEncounter({candidates: inCategory, random, ...settings});
+  }
+  const families = [...new Set(candidates.map((c) => c.category ?? null))];
+  let result = {error: "No unit types to choose from."};
+  for (const family of shuffled(families, random)) {
+    result = buildEncounter({candidates: candidates.filter((c) => (c.category ?? null) === family), random, ...settings});
     if (!result.error) return result;
   }
   return result;

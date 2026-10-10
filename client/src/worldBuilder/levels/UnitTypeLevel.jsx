@@ -2,7 +2,7 @@ import {useRef} from "react";
 import UnitTypeWorkbench from "../../unitTypeEditor/UnitTypeWorkbench";
 import {collectAssetUrls} from "../../abilityEditor/collectAssetUrls";
 import {currentFieldValue} from "../../abilityEditor/resolveAbilityForPlayback";
-import {unitTypeData, unitTypeKeys, updateUnitType} from "../state/unitTypeOps";
+import {unitTypeCategories, unitTypeData, unitTypeKeys, updateUnitType} from "../state/unitTypeOps";
 import {inMemory, newAssetPath, pendingPowerAssets, tokenImageOptions, uploadPowerAsset} from "../state/assetOps";
 import {relativePath, resolvePath, unitTypeFile} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
@@ -95,6 +95,7 @@ export default function UnitTypeLevel({draft, unitType, onChange, repo, stockAss
       powerAssets={powerAssets}
       importSources={powerSources(draft, unitType, path, library, onChange, importCopies)}
       stockAssets={stockAssets}
+      categories={unitTypeCategories(draft)}
     />
   );
 }

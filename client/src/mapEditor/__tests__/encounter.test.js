@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {buildEncounter, scatterPositions} from "../encounter";
+import {SAME_CATEGORY, buildEncounter, buildEncounterFrom, scatterPositions} from "../encounter";
 
 // A deterministic stand-in for Math.random.
 function seeded(seed = 1) {
@@ -127,5 +127,36 @@ describe("buildEncounter with a random pull size", () => {
       const result = buildEncounter({candidates, intendedFor: "open", pullSize: "random", random: seeded(seed)});
       expect(result.pullSize).toBe("solo");
     }
+  });
+});
+
+describe("buildEncounterFrom", () => {
+  const wolves = [
+    {key: "wolf", tags: ["open", "group", "melee"], category: "wolves"},
+    {key: "wolf-howler", tags: ["open", "group", "melee", "buffs"], category: "wolves"},
+  ];
+  const mixed = [...goblins.map((c) => ({...c, category: "goblins"})), ...wolves];
+  const categoriesIn = (keys) => new Set(keys.map((key) => mixed.find((c) => c.key === key).category));
+
+  it("builds from one named category", () => {
+    for (let seed = 1; seed < 20; seed++) {
+      const {keys} = buildEncounterFrom({candidates: mixed, category: "wolves", intendedFor: "open", pullSize: "group", random: seeded(seed)});
+      expect([...categoriesIn(keys)]).toEqual(["wolves"]);
+    }
+  });
+
+  it("keeps each encounter to one category with SAME_CATEGORY, using each of them", () => {
+    const seen = new Set();
+    for (let seed = 1; seed < 40; seed++) {
+      const {keys} = buildEncounterFrom({candidates: mixed, category: SAME_CATEGORY, intendedFor: "open", pullSize: "group", random: seeded(seed)});
+      const categories = categoriesIn(keys);
+      expect(categories.size).toEqual(1);
+      seen.add([...categories][0]);
+    }
+    expect(seen).toEqual(new Set(["goblins", "wolves"]));
+  });
+
+  it("explains a category with no candidates", () => {
+    expect(buildEncounterFrom({candidates: mixed, category: "cats", intendedFor: "open", pullSize: "group"}).error).toMatch(/No cats unit types/);
   });
 });

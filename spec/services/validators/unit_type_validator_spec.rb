@@ -31,6 +31,19 @@ RSpec.describe Validators::UnitTypeValidator, type: :validator do
       end
     end
 
+    describe "category" do
+      it "accepts a lowercase slug" do
+        expect { described_class.validate!(goblin_unit_type.merge("category" => "fire-elementals")) }.not_to raise_error
+      end
+
+      it "raises on anything else" do
+        ["Goblins", "goblins_2", "-goblins", 3].each do |category|
+          expect { described_class.validate!(goblin_unit_type.merge("category" => category)) }
+            .to raise_error(Validators::ValidationError, /category must be/)
+        end
+      end
+    end
+
     describe "tags" do
       it "accepts one tag per category plus several roles" do
         data = goblin_unit_type.merge("tags" => %w[open pair melee healer buffs])
