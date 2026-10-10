@@ -16,7 +16,13 @@ const PIXELS_PER_FOOT = 10;
 // every cell filled with its terrain's color.
 export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
 
-const CELL_COLORS = {meadow: "rgba(250, 220, 90, 0.55)", trees: "rgba(30, 110, 200, 0.55)"};
+const CELL_COLORS = {
+  meadow: "rgba(250, 220, 90, 0.55)",
+  tallGrass: "rgba(120, 220, 60, 0.55)",
+  marsh: "rgba(40, 200, 190, 0.55)",
+  trail: "rgba(220, 110, 40, 0.6)",
+  trees: "rgba(30, 110, 200, 0.55)",
+};
 
 // Slice 1 of the cell editor (plans/cell-editor.md): view the example maps
 // rendered, with a seed to re-roll, an overlay to check them against, and

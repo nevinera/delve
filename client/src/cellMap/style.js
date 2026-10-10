@@ -18,12 +18,22 @@ export const GLADE = {
     crownLight: [96, 138, 72],
     highlight: "rgba(140, 180, 100, 0.55)",
     ink: "#1d2818",
+    tallGrass: "#a6bd70",
+    tallTuft: "#6f8f45",
+    tallTuftLight: "#c2d68a",
+    marsh: "#98a874",
+    pool: "#6f8f8a",
+    poolRim: "rgba(220, 235, 220, 0.6)",
+    reed: "#5f7442",
+    trailEdge: "#8b7a55",
+    trail: "#cdb98a",
   },
   // Line widths, in feet, and the shadows' fall, in cell sizes.
   crownInk: 0.16,
   tuftInk: 0.1,
+  trailEdge: 0.3,
   shadowOffset: {x: 0.3, y: 0.45},
-  variants: {crowns: 32, patches: 12, tufts: 8},
+  variants: {crowns: 32, patches: 12, tufts: 8, tallTufts: 8, pools: 12, reeds: 8},
 };
 
 // Each shape below is for a unit radius, made from variant i's own hashes.
@@ -55,6 +65,26 @@ export function tuftShape(style, i) {
   const h = variantHash(style, 3, i);
   const count = 1 + Math.floor(h(1) * 3);
   return Array.from({length: count}, (_, j) => ({x: (h(10 + j) - 0.5) * 1.6, y: (h(20 + j) - 0.5) * 1.6, size: 0.25 + 0.15 * h(30 + j)}));
+}
+
+// A dense clump of five to eight tall blades, over a unit radius.
+export function tallTuftShape(style, i) {
+  const h = variantHash(style, 4, i);
+  const count = 5 + Math.floor(h(1) * 4);
+  return Array.from({length: count}, (_, j) => ({x: (h(10 + j) - 0.5) * 1.2, y: (h(20 + j) - 0.5) * 0.6, lean: (h(30 + j) - 0.5) * 0.9, size: 0.6 + 0.4 * h(40 + j), light: h(50 + j) < 0.3}));
+}
+
+// A pool of standing water.
+export function poolShape(style, i) {
+  const h = variantHash(style, 5, i);
+  return lumps(10, 0.22, h, 1);
+}
+
+// Three to five reeds rising from a point.
+export function reedShape(style, i) {
+  const h = variantHash(style, 6, i);
+  const count = 3 + Math.floor(h(1) * 3);
+  return Array.from({length: count}, (_, j) => ({lean: (j / (count - 1) - 0.5) * 0.9 + (h(10 + j) - 0.5) * 0.2, size: 0.7 + 0.3 * h(20 + j)}));
 }
 
 // Radius multipliers for a lumpy circle of n points.

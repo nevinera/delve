@@ -12,10 +12,20 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
 
   ctx.fillStyle = palette.meadow;
   ctx.fillRect(0, 0, scene.width, scene.height);
+  for (const {terrain, loops: rings} of scene.grounds) {
+    ctx.fillStyle = palette[terrain];
+    loops(ctx, rings);
+    ctx.fill("evenodd");
+  }
   stamp(ctx, scene.patches, sprites.patches);
+  stamp(ctx, scene.pools, sprites.pools);
   stamp(ctx, scene.tufts, sprites.tufts);
+  stamp(ctx, scene.reeds, sprites.reeds);
+  stamp(ctx, scene.tallTufts, sprites.tallTufts);
 
   const cs = scene.cellSize;
+  paintTrails(ctx, scene.trails, style);
+
   ctx.fillStyle = palette.shadow;
   ctx.save();
   ctx.translate(style.shadowOffset.x * cs, style.shadowOffset.y * cs);
@@ -39,6 +49,17 @@ function stamp(ctx, placements, sprites) {
     const half = sprite.extent * (radius / sprite.radius);
     ctx.drawImage(sprite.canvas, x - half, y - half, half * 2, half * 2);
   }
+}
+
+// Trails are filled, with a darker edge.
+function paintTrails(ctx, trails, style) {
+  ctx.lineJoin = "round";
+  loops(ctx, trails);
+  ctx.fillStyle = style.palette.trail;
+  ctx.fill("evenodd");
+  ctx.strokeStyle = style.palette.trailEdge;
+  ctx.lineWidth = style.trailEdge;
+  ctx.stroke();
 }
 
 function loops(ctx, rings) {

@@ -6,6 +6,9 @@ export const VERSION = 1;
 
 export const TERRAINS = {
   ".": "meadow",
+  "%": "tallGrass",
+  "~": "marsh",
+  "#": "trail",
   T: "trees",
 };
 

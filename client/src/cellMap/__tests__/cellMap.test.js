@@ -119,6 +119,24 @@ describe("buildScene placements", () => {
   });
 });
 
+describe("ground terrains", () => {
+  const map = tiny(["......", ".%%~~.", ".####.", "......"]);
+
+  it("outlines tall grass, marsh and trails as their own regions", () => {
+    const scene = buildScene(map);
+    expect(scene.grounds.map((g) => [g.terrain, g.loops.length])).toEqual([["tallGrass", 1], ["marsh", 1]]);
+    expect(scene.trails).toHaveLength(1);
+  });
+
+  it("decorates each kind of ground with its own sprites", () => {
+    const scene = buildScene({...map, cells: ["%%%%%%", "~~~~~~", "%%%%%%", "~~~~~~"]});
+    expect(scene.tallTufts.length).toBeGreaterThan(0);
+    expect(scene.pools.length + scene.reeds.length).toBeGreaterThan(0);
+    expect(scene.tufts).toEqual([]);
+    expect(scene.crowns).toEqual([]);
+  });
+});
+
 describe("sprites and rendering", () => {
   const fakeCanvas = (width, height) => ({width, height, getContext: () => new Proxy({}, {get: () => () => {}})});
 
@@ -126,7 +144,7 @@ describe("sprites and rendering", () => {
     const sprites = buildSprites(GLADE, 5, 10, fakeCanvas);
     expect(sprites.crowns).toHaveLength(GLADE.variants.crowns);
     expect(sprites.patches).toHaveLength(GLADE.variants.patches);
-    expect(sprites.tufts).toHaveLength(GLADE.variants.tufts);
+    for (const kind of Object.keys(GLADE.variants)) expect(sprites[kind]).toHaveLength(GLADE.variants[kind]);
     expect(sprites.crowns[0].canvas.width).toBe(Math.ceil(2 * sprites.crowns[0].extent * 10));
   });
 

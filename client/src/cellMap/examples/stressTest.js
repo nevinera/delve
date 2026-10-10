@@ -1,5 +1,6 @@
 // A big generated map for timing the renderer at the sizes real maps will
-// be: smooth value noise, thresholded into forest and meadow.
+// be: smooth value noise, thresholded into forest and the kinds of meadow,
+// with a few winding trails across it.
 import {hash01} from "../random";
 
 export function stressTestMap(size = 200, seed = 5) {
@@ -16,12 +17,22 @@ export function stressTestMap(size = 200, seed = 5) {
     let line = "";
     for (let col = 0; col < size; col++) {
       const n = 0.65 * noise(col / 14, row / 14) + 0.35 * noise(col / 5 + 100, row / 5);
-      line += n > 0.45 ? "T" : ".";
+      const ground = noise(col / 9 + 300, row / 9 + 300);
+      // Wider where the trail is steep, so its cells stay connected.
+      const onTrail = TRAILS.some(([period, phase, offset]) => {
+        const a = 0.12 * size;
+        const slope = (a / period) * Math.cos(col / period + phase);
+        return Math.abs(row - (offset * size + a * Math.sin(col / period + phase))) < 0.6 + Math.abs(slope) / 2;
+      });
+      line += onTrail ? "#" : n > 0.45 ? "T" : ground < 0.3 ? "~" : ground > 0.68 ? "%" : ".";
     }
     cells.push(line);
   }
   return {format: "cellmap", version: 1, name: `Stress test (${size}×${size})`, grid: {type: "hex", cols: size, rows: size, cellSize: 5}, seed, cells};
 }
+
+// [period, phase, offset] for each trail: a sine across the map.
+const TRAILS = [[19, 0, 0.25], [27, 2, 0.55], [15, 4, 0.8]];
 
 const smooth = (t) => t * t * (3 - 2 * t);
 const lerp = (a, b, t) => a + (b - a) * t;

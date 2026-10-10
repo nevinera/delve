@@ -17,6 +17,15 @@ const FOREST_SMOOTHING = {irregularity: 0.2, roughness: 0};
 // (which the map's rectangle reaches past) isn't bare.
 const DECORATION_PAD = 1;
 
+// Ground that's painted as its own region over the meadow, in this order.
+const GROUND_REGIONS = ["tallGrass", "marsh"];
+
+// Trails are smoothed harder than other regions, so a trail one or two
+// cells wide reads as a path rather than a row of hexes, and sit inside
+// their cells (in cell sizes) so they're narrower than the cells.
+const TRAIL_SMOOTHING = {irregularity: 0.1, roughness: 0.04, relax: 3};
+const TRAIL_INSET = 0.05;
+
 // Crowns fill a band along the forest's edge, one entry per cell of depth
 // (the chance a cell that deep gets a crown); deeper in, the dark mass shows.
 const BAND = [1, 0.85, 0.6];
@@ -24,8 +33,10 @@ const BAND = [1, 0.85, 0.6];
 export function buildScene(map, style = GLADE) {
   const {cellSize} = map.grid;
   const {seed} = map;
-  const scene = {...mapSize(map.grid), cellSize, forest: [], crowns: [], patches: [], tufts: []};
+  const scene = {...mapSize(map.grid), cellSize, grounds: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
 
+  scene.grounds = GROUND_REGIONS.map((terrain) => ({terrain, loops: regionLoops(map, terrain).map((loop) => smoothLoop(loop, cellSize, seed))}));
+  scene.trails = regionLoops(map, "trail").map((loop) => insetLoop(smoothLoop(loop, cellSize, seed, TRAIL_SMOOTHING), TRAIL_INSET * cellSize));
   scene.forest = regionLoops(map, "trees").map((loop) => insetLoop(smoothLoop(loop, cellSize, seed, FOREST_SMOOTHING), FOREST_INSET * cellSize));
 
   const depth = forestDepths(map);
@@ -49,12 +60,23 @@ export function buildScene(map, style = GLADE) {
       } else {
         scene.crowns.push({x: x + (h(1) - 0.5) * 0.5 * cellSize, y: y + (h(2) - 0.5) * 0.5 * cellSize, radius: cellSize * (0.8 + 0.25 * h(3)), variant: variant("crowns", 7)});
       }
-    } else {
+    } else if (terrain === "meadow") {
       if (h(10) < 0.15) {
         scene.patches.push({x: x + (h(11) - 0.5) * cellSize, y: y + (h(12) - 0.5) * cellSize, radius: cellSize * (1.2 + 1.2 * h(13)), variant: variant("patches", 14)});
       }
       if (h(30) < 0.65) {
         scene.tufts.push({x: x + (h(31) - 0.5) * 0.4 * cellSize, y: y + (h(32) - 0.5) * 0.4 * cellSize, radius: cellSize * (0.4 + 0.1 * h(33)), variant: variant("tufts", 34)});
+      }
+    } else if (terrain === "tallGrass") {
+      for (let i = 0; i < 3; i++) {
+        scene.tallTufts.push({x: x + (h(40 + i * 4) - 0.5) * 0.8 * cellSize, y: y + (h(41 + i * 4) - 0.5) * 0.8 * cellSize, radius: cellSize * (0.4 + 0.15 * h(42 + i * 4)), variant: variant("tallTufts", 43 + i * 4)});
+      }
+    } else if (terrain === "marsh") {
+      if (h(50) < 0.55) {
+        scene.pools.push({x: x + (h(51) - 0.5) * 0.5 * cellSize, y: y + (h(52) - 0.5) * 0.5 * cellSize, radius: cellSize * (0.3 + 0.35 * h(53)), variant: variant("pools", 54)});
+      }
+      if (h(55) < 0.6) {
+        scene.reeds.push({x: x + (h(56) - 0.5) * 0.7 * cellSize, y: y + (h(57) - 0.5) * 0.7 * cellSize, radius: cellSize * (0.35 + 0.1 * h(58)), variant: variant("reeds", 59)});
       }
     }
   });
