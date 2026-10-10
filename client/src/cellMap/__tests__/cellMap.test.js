@@ -3,7 +3,9 @@ import {validateCellMap} from "../format";
 import {cellAt, cellCenter, cellCorners, mapSize, neighbor} from "../hexGrid";
 import {regionLoops, smoothLoop} from "../regions";
 import {buildScene} from "../scene";
-import {cacheKey} from "../render";
+import {cacheKey, renderCellMap} from "../render";
+import {buildSprites} from "../sprites";
+import {GLADE} from "../style";
 import clearing from "../examples/clearing.json";
 import forestEdge from "../examples/forest-edge.json";
 import woodlandTrail from "../examples/woodland-trail.json";
@@ -98,5 +100,40 @@ describe("cacheKey", () => {
     expect(cacheKey({...clearing, name: "Other"}, 10)).toEqual(cacheKey(clearing, 10));
     expect(cacheKey({...clearing, seed: 99}, 10)).not.toEqual(cacheKey(clearing, 10));
     expect(cacheKey(clearing, 20)).not.toEqual(cacheKey(clearing, 10));
+  });
+});
+
+describe("buildScene placements", () => {
+  it("only puts crowns in the band along the forest's edge", () => {
+    const solid = tiny(Array.from({length: 20}, () => "T".repeat(20)).map((row, r) => (r < 2 ? ".".repeat(20) : row)));
+    const deepest = Math.max(...buildScene(solid).crowns.map((c) => c.y));
+    expect(deepest).toBeLessThan(cellCenter(0, 6, 5).y);
+  });
+
+  it("picks variants that exist", () => {
+    const scene = buildScene(clearing);
+    for (const kind of ["crowns", "patches", "tufts"]) {
+      expect(scene[kind].length).toBeGreaterThan(0);
+      expect(scene[kind].every((p) => Number.isInteger(p.variant) && p.variant >= 0 && p.variant < GLADE.variants[kind])).toBe(true);
+    }
+  });
+});
+
+describe("sprites and rendering", () => {
+  const fakeCanvas = (width, height) => ({width, height, getContext: () => new Proxy({}, {get: () => () => {}})});
+
+  it("makes each style's variants, sized for the largest placement", () => {
+    const sprites = buildSprites(GLADE, 5, 10, fakeCanvas);
+    expect(sprites.crowns).toHaveLength(GLADE.variants.crowns);
+    expect(sprites.patches).toHaveLength(GLADE.variants.patches);
+    expect(sprites.tufts).toHaveLength(GLADE.variants.tufts);
+    expect(sprites.crowns[0].canvas.width).toBe(Math.ceil(2 * sprites.crowns[0].extent * 10));
+  });
+
+  it("times each step and reports what it drew", () => {
+    const {canvas, timings, stats} = renderCellMap(clearing, {createCanvas: fakeCanvas});
+    expect(Object.keys(timings)).toEqual(["scene", "sprites", "paint"]);
+    expect(stats).toMatchObject({width: canvas.width, height: canvas.height});
+    expect(stats.crowns).toBeGreaterThan(0);
   });
 });

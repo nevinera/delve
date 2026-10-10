@@ -1,11 +1,13 @@
-// Renders a cellmap to a canvas, and caches the result: in memory for this
-// page, and in IndexedDB across visits. Any cache failure just re-renders.
+// Renders a cellmap to a canvas, timing each step. cache.js wraps this
+// with a worker and caching.
 import {buildScene} from "./scene";
 import {paintScene} from "./paint";
+import {buildSprites} from "./sprites";
+import {GLADE} from "./style";
 import {hashString} from "./random";
 
 // Bump when the renderer's output changes, so old cached images are ignored.
-export const RENDER_VERSION = 1;
+export const RENDER_VERSION = 2;
 
 // iOS Safari won't draw a canvas past about 16.7M pixels.
 const MAX_PIXELS = 16_000_000;
@@ -15,15 +17,36 @@ export function renderScale(scene, pixelsPerFoot) {
   return Math.min(pixelsPerFoot, fit);
 }
 
-export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCanvas} = {}) {
-  const scene = buildScene(map);
+// Sprites depend only on the style, cell size and scale, so they're kept
+// for the next render of any map that shares them.
+const spriteSets = new Map();
+
+// Returns {canvas, timings, stats}: timings in ms for each step, stats
+// on the size of what was drawn.
+export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCanvas, style = GLADE} = {}) {
+  const timings = {};
+  const time = (step, fn) => {
+    const started = performance.now();
+    const result = fn();
+    timings[step] = performance.now() - started;
+    return result;
+  };
+
+  const scene = time("scene", () => buildScene(map, style));
   const scale = renderScale(scene, pixelsPerFoot);
+  const spriteKey = `${style.key}:${scene.cellSize}:${scale}`;
+  const sprites = time("sprites", () => {
+    if (!spriteSets.has(spriteKey)) spriteSets.set(spriteKey, buildSprites(style, scene.cellSize, scale, createCanvas));
+    return spriteSets.get(spriteKey);
+  });
   const canvas = createCanvas(Math.round(scene.width * scale), Math.round(scene.height * scale));
-  paintScene(canvas.getContext("2d"), scene, scale);
-  return canvas;
+  time("paint", () => paintScene(canvas.getContext("2d"), scene, scale, style, sprites));
+  const stats = {width: canvas.width, height: canvas.height, crowns: scene.crowns.length, patches: scene.patches.length, tufts: scene.tufts.length};
+  return {canvas, timings, stats};
 }
 
 function defaultCanvas(width, height) {
+  if (typeof document === "undefined") return new OffscreenCanvas(width, height);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -32,79 +55,4 @@ function defaultCanvas(width, height) {
 
 export function cacheKey(map, pixelsPerFoot) {
   return `v${RENDER_VERSION}:${pixelsPerFoot}:${hashString(JSON.stringify([map.grid, map.seed, map.cells]))}`;
-}
-
-const MEMORY_LIMIT = 8;
-const memory = new Map();
-
-// Resolves {image, source}: image is something drawImage takes, source is
-// "memory", "stored" or "rendered".
-export async function cachedCellMapImage(map, {pixelsPerFoot = 10} = {}) {
-  const key = cacheKey(map, pixelsPerFoot);
-  if (memory.has(key)) return {image: remember(key, memory.get(key)), source: "memory"};
-
-  const stored = await readStored(key);
-  if (stored) return {image: remember(key, stored), source: "stored"};
-
-  const canvas = renderCellMap(map, {pixelsPerFoot});
-  remember(key, canvas);
-  writeStored(key, canvas);
-  return {image: canvas, source: "rendered"};
-}
-
-function remember(key, image) {
-  memory.delete(key);
-  memory.set(key, image);
-  while (memory.size > MEMORY_LIMIT) memory.delete(memory.keys().next().value);
-  return image;
-}
-
-const DB_NAME = "delve-cellmap";
-const STORE = "renders";
-const STORED_LIMIT = 30;
-
-function openDb() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function request(req) {
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function readStored(key) {
-  try {
-    const db = await openDb();
-    const entry = await request(db.transaction(STORE).objectStore(STORE).get(key));
-    db.close();
-    return entry ? await createImageBitmap(entry.blob) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function writeStored(key, canvas) {
-  try {
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
-    if (!blob) return;
-    const db = await openDb();
-    const store = db.transaction(STORE, "readwrite").objectStore(STORE);
-    await request(store.put({blob, at: Date.now()}, key));
-    const keys = await request(store.getAllKeys());
-    if (keys.length > STORED_LIMIT) {
-      const entries = await Promise.all(keys.map(async (k) => [k, (await request(store.get(k))).at]));
-      entries.sort((a, b) => a[1] - b[1]);
-      for (const [k] of entries.slice(0, keys.length - STORED_LIMIT)) store.delete(k);
-    }
-    db.close();
-  } catch {
-    // A failed store only means the next visit renders it again.
-  }
 }

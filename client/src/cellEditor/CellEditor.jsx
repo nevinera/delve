@@ -1,12 +1,14 @@
 import {useEffect, useRef, useState} from "react";
-import {cachedCellMapImage, renderScale} from "../cellMap/render";
+import {renderScale} from "../cellMap/render";
+import {cachedCellMapImage} from "../cellMap/cache";
+import {stressTestMap} from "../cellMap/examples/stressTest";
 import {cellCorners, mapSize} from "../cellMap/hexGrid";
 import {TERRAINS, validateCellMap} from "../cellMap/format";
 import clearing from "../cellMap/examples/clearing.json";
 import forestEdge from "../cellMap/examples/forest-edge.json";
 import woodlandTrail from "../cellMap/examples/woodland-trail.json";
 
-export const EXAMPLES = {clearing, "forest-edge": forestEdge, "woodland-trail": woodlandTrail};
+export const EXAMPLES = {clearing, "forest-edge": forestEdge, "woodland-trail": woodlandTrail, "stress-test": stressTestMap()};
 
 const PIXELS_PER_FOOT = 10;
 
@@ -16,13 +18,14 @@ export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
 
 const CELL_COLORS = {meadow: "rgba(250, 220, 90, 0.55)", trees: "rgba(30, 110, 200, 0.55)"};
 
-// Slice 1 of the cell editor (plans/cell-editor.md): view the hand-made
-// examples rendered, with a seed to re-roll and a grid to check them against.
+// Slice 1 of the cell editor (plans/cell-editor.md): view the example maps
+// rendered, with a seed to re-roll, an overlay to check them against, and
+// how long each step of the render took.
 export default function CellEditor({backUrl}) {
   const [exampleKey, setExampleKey] = useState("clearing");
   const [seed, setSeed] = useState(EXAMPLES.clearing.seed);
   const [overlay, setOverlay] = useState("none");
-  const [status, setStatus] = useState("");
+  const [timing, setTiming] = useState(null);
   const mapCanvas = useRef(null);
   const gridCanvas = useRef(null);
 
@@ -34,13 +37,19 @@ export default function CellEditor({backUrl}) {
     if (errors.length) return;
     let cancelled = false;
     const started = performance.now();
-    cachedCellMapImage(map, {pixelsPerFoot: PIXELS_PER_FOOT}).then(({image, source}) => {
+    setTiming(null);
+    cachedCellMapImage(map, {pixelsPerFoot: PIXELS_PER_FOOT}).then(({image, source, timings, stats, stored}) => {
       if (cancelled) return;
+      const shown = performance.now();
       const canvas = mapCanvas.current;
       canvas.width = image.width;
       canvas.height = image.height;
       canvas.getContext("2d").drawImage(image, 0, 0);
-      setStatus(`${source === "rendered" ? "Rendered" : `From ${source} cache`} in ${Math.round(performance.now() - started)}ms (${image.width}×${image.height})`);
+      const steps = {...timings, display: performance.now() - shown};
+      setTiming({source, steps, stats, total: performance.now() - started});
+      stored.then((done) => {
+        if (!cancelled && done) setTiming((t) => t && {...t, steps: {...t.steps, encode: done.encode}});
+      });
     });
     return () => {
       cancelled = true;
@@ -97,7 +106,7 @@ export default function CellEditor({backUrl}) {
             ))}
           </span>
         )}
-        <span className="cell-editor-status">{status}</span>
+        {timing && <TimingReport {...timing} />}
       </div>
       {errors.length > 0 ? (
         <ul className="cell-editor-errors">{errors.map((e) => <li key={e}>{e}</li>)}</ul>
@@ -108,6 +117,33 @@ export default function CellEditor({backUrl}) {
         </div>
       )}
     </div>
+  );
+}
+
+const STEP_LABELS = {
+  read: "read",
+  decode: "decode",
+  scene: "scene",
+  sprites: "sprites",
+  paint: "paint",
+  transfer: "transfer",
+  display: "display",
+  encode: "encode (after)",
+};
+
+// The render's total time and each step's, in ms. Encoding for the cache
+// happens after the map is shown, so it's listed but not in the total.
+export function TimingReport({source, steps, stats, total}) {
+  const ms = (v) => `${Math.round(v)}ms`;
+  const where = source === "rendered" ? `Rendered (${steps.thread === "worker" ? "worker" : "main thread"})` : `From ${source} cache`;
+  const parts = Object.entries(STEP_LABELS).filter(([key]) => steps[key] !== undefined).map(([key, label]) => `${label} ${ms(steps[key])}`);
+  const sizes = [`${stats.width}×${stats.height}px`, ...["crowns", "patches", "tufts"].filter((k) => stats[k] !== undefined).map((k) => `${stats[k]} ${k}`)];
+  return (
+    <span className="cell-editor-status">
+      <strong>{where} in {ms(total)}</strong>
+      {parts.length > 0 && <> · {parts.join(" · ")}</>}
+      <span className="cell-editor-sizes">{sizes.join(", ")}</span>
+    </span>
   );
 }
 
