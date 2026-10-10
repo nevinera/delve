@@ -30,6 +30,7 @@ type playerSpawn struct {
 	class         instanceconfig.CharacterClass
 	equippedItems map[string]instanceconfig.EquippedItem
 	spawnAt       string // "mapId/connectionId"; see spawnPlacement
+	tokenImageURL string
 }
 
 // drainPlayerSpawns processes all pending player spawn requests. Called at the
@@ -58,6 +59,8 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 				ActiveStatusEffects: []instancestate.ActiveStatusEffect{},
 				EquippedItems:       spawn.equippedItems,
 				DamageStatKey:       spawn.class.DamageStatKey(),
+				TokenImageURL:       spawn.tokenImageURL,
+				ClassColors:         spawn.class.Colors,
 			}
 			// Spawn at full health against the real (Stamina-scaled) cap,
 			// derived from a full stats snapshot like every later tick's.

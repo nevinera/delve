@@ -30,8 +30,9 @@ class JoinZone
     {
       character_name: @character.name,
       character_database_id: @character.id.to_s,
-      character_class: class_config
-    }
+      character_class: class_config,
+      token_image_url: @character.token_image_url
+    }.compact
   end
 
   # The class file, as long as it still matches what was validated when the

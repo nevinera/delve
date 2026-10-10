@@ -3,6 +3,9 @@ import * as THREE from "three";
 import {
   createNpcToken,
   createNcuToken,
+  createPlayerToken,
+  classColor,
+  isPlayerUnit,
   setTokenTagDimmed,
   computeTargetLineDots,
   targetLineColor,
@@ -41,6 +44,47 @@ describe("createNcuToken", () => {
 
   it("builds fine without a name", () => {
     expect(() => createNcuToken(2, undefined, null, null)).not.toThrow();
+  });
+});
+
+describe("createPlayerToken", () => {
+  const meshes = (group, type) => group.children.filter((c) => c.geometry instanceof type);
+  const colors = {major: "8B4513", minor: "#F4A460"};
+
+  it("rings the portrait with the class's major color outside its minor color", () => {
+    const rings = meshes(createPlayerToken(2, null, {classColors: colors}), THREE.RingGeometry);
+    expect(rings.map((r) => r.material.color.getHexString())).toEqual(["8b4513", "f4a460"]);
+    expect(rings[0].geometry.parameters.innerRadius).toBeCloseTo(rings[1].geometry.parameters.outerRadius);
+    const [portrait] = meshes(createPlayerToken(2, null, {classColors: colors}), THREE.CircleGeometry);
+    expect(portrait.geometry.parameters.radius).toBeCloseTo(rings[1].geometry.parameters.innerRadius);
+  });
+
+  it("gives another player's token a dull blue body, and keeps self's green", () => {
+    const bodyHex = (group) => meshes(group, THREE.CylinderGeometry)[0].material.color.getHex();
+    expect(bodyHex(createPlayerToken(2, null, {classColors: colors, other: true}))).toBe(0x4a6080);
+    expect(bodyHex(createPlayerToken(2, null, {classColors: colors}))).toBe(0x2e7d32);
+  });
+
+  it("leaves the rings off without both class colors", () => {
+    expect(meshes(createPlayerToken(2, null), THREE.RingGeometry)).toHaveLength(0);
+    expect(meshes(createPlayerToken(2, null, {classColors: {major: "8B4513"}}), THREE.RingGeometry)).toHaveLength(0);
+  });
+});
+
+describe("classColor", () => {
+  it("reads six hex digits with or without a #, and nothing else", () => {
+    expect(classColor("8B4513").getHex()).toBe(0x8b4513);
+    expect(classColor("#8b4513").getHex()).toBe(0x8b4513);
+    expect(classColor("red")).toBeNull();
+    expect(classColor(undefined)).toBeNull();
+  });
+});
+
+describe("isPlayerUnit", () => {
+  it("is true only for player: units", () => {
+    expect(isPlayerUnit({zone_unit_identifier: "player:Botbot"})).toBe(true);
+    expect(isPlayerUnit({zone_unit_identifier: "goblin_a"})).toBe(false);
+    expect(isPlayerUnit(undefined)).toBe(false);
   });
 });
 

@@ -294,6 +294,12 @@ type UnitState struct {
 	EquippedItems map[string]instanceconfig.EquippedItem
 	DamageStatKey string // "strength", "agility", or "" - see CharacterClass.DamageStatKey
 
+	// How other clients draw a player's token: the character's portrait and
+	// its class's colors. Fixed at spawn; ""/zero for NPCs, whose look comes
+	// from the zone config.
+	TokenImageURL string
+	ClassColors   instanceconfig.Colors
+
 	// CombatStats is recomputed for every unit at the start of each tick (after
 	// status conditions refresh, before commands run), so all combat math in a
 	// tick sees the same numbers whatever the order of execution. nil until a

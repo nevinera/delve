@@ -335,6 +335,29 @@ func TestDeltaMsg_NewUnit(t *testing.T) {
 	}
 }
 
+func TestDeltaMsg_NewPlayerUnitIncludesItsLook(t *testing.T) {
+	prev := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	curr := stateWithUnit(t)
+	for _, u := range curr.Units {
+		u.TokenImageURL = "/tokens/aldric.png"
+		u.ClassColors = instanceconfig.Colors{Major: "8B4513", Minor: "F4A460"}
+	}
+
+	for _, u := range delta(t, prev, curr)["unit_updates"].(map[string]any) {
+		p := u.(map[string]any)
+		assert.Equal(t, "/tokens/aldric.png", p["token_image_url"])
+		assert.Equal(t, map[string]any{"major": "8B4513", "minor": "F4A460"}, p["class_colors"])
+	}
+}
+
+func TestFullStateMsg_NpcOmitsPlayerLook(t *testing.T) {
+	for _, u := range fullState(t, stateWithUnit(t))["units"].(map[string]any) {
+		p := u.(map[string]any)
+		assert.NotContains(t, p, "token_image_url")
+		assert.NotContains(t, p, "class_colors")
+	}
+}
+
 func TestFullStateMsg_UnitWithTarget(t *testing.T) {
 	s := stateWithUnit(t)
 	targetID := uuid.New()

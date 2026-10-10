@@ -43,6 +43,11 @@ RSpec.describe JoinWorldZone do
     ))
   end
 
+  it "sends the character's token image" do
+    call
+    expect(slots_client).to have_received(:request).with(hash_including(token_image_url: "https://example.com/token.webp"))
+  end
+
   it "sends the world key and the world's restriction layer" do
     call
     expect(slots_client).to have_received(:request).with(hash_including(
