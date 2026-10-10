@@ -10,7 +10,7 @@ class Build::Publishing::WorldsController < Build::BaseController
   def show
     @world = current_user.worlds.find(params[:id])
     authorize! :read, @world
-    @versions = @world.world_versions.to_a
+    @versions = listed_versions.to_a
     @unimported_tags = UnimportedWorldTags.call(world: @world, user: current_user)
     @rows = newest_ref_first(@versions + Array(@unimported_tags))
   end
@@ -28,6 +28,12 @@ class Build::Publishing::WorldsController < Build::BaseController
   end
 
   private
+
+  # Expired versions only with ?expired=1.
+  def listed_versions = show_expired? ? @world.world_versions : @world.world_versions.unexpired
+
+  def show_expired? = params[:expired].present?
+  helper_method :show_expired?
 
   # Versions and not-imported tags (strings) together, by ref.
   def newest_ref_first(rows)

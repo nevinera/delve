@@ -65,6 +65,24 @@ RSpec.describe "Build::Publishing::Worlds", type: :request do
         expect(response.body).to include("demo/v1", "zones/x.full.json: HTTP 404", "Release", "Reimport")
       end
 
+      context "with an expired version" do
+        before do
+          create(:world_version, :released, world:, ref: "demo/v1", expires_at: 1.hour.ago)
+          create(:world_version, :released, world:, ref: "demo/v2", expires_at: 1.hour.from_now)
+        end
+
+        it "hides it by default" do
+          get "/build/publishing/worlds/#{world.id}"
+          expect(response.body).to include("demo/v2", "Show expired versions")
+          expect(response.body).not_to include("demo/v1")
+        end
+
+        it "shows it with expired=1" do
+          get "/build/publishing/worlds/#{world.id}", params: {expired: 1}
+          expect(response.body).to include("demo/v1", "demo/v2", "Hide expired versions")
+        end
+      end
+
       it "auto-refreshes while a version is importing" do
         create(:world_version, :importing, world:)
         get "/build/publishing/worlds/#{world.id}"

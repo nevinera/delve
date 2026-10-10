@@ -14,7 +14,8 @@ class WorldVersion < ApplicationRecord
   # only; content is always read by commit_sha.
   validates :ref, presence: true, uniqueness: {scope: :world_id}
 
-  scope :available, -> { released.where("expires_at IS NULL OR expires_at > ?", Time.current) }
+  scope :unexpired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
+  scope :available, -> { released.unexpired }
 
   after_commit :import, on: :create
 
