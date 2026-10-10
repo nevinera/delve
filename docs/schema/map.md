@@ -51,6 +51,12 @@ ground. Before regions are traced, near misses are closed: wall and line-connect
 0.5 feet of each other or of any wall or line get joined to it, and an end within 0.5 feet of a
 circle's edge joins its center.
 
+Nobody can stand in the fill. The validator requires every line connection to have open ground on
+exactly one side, and every point connection to sit on it. The game server moves a unit whose
+center ends up in the fill out to the nearest open ground, routes NPCs around it, and sets units
+arriving through a line connection down on its open side, facing into it. A map that fails the
+validator's fill rules (one published before them) has no fill on the game server.
+
 ---
 
 ## Barrier

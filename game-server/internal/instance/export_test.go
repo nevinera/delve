@@ -13,6 +13,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/mapfill"
 	"github.com/delve-mmo/game-server/internal/pathing"
 )
 
@@ -68,7 +69,7 @@ func PushOutOfCircleForTest(px, py, unitRadius, cx, cy, barrierRadius float64) (
 
 func ResolveCollisionsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone) {
 	updateCombatStats(state, zone)
-	resolveCollisions(state, zone)
+	resolveCollisions(state, zone, zoneFills(zone))
 }
 
 func ApplyUnitBehaviorsForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
@@ -83,7 +84,7 @@ func ApplyUnitBehaviorsWithPathGraphForTest(state *instancestate.InstanceState, 
 
 func ApplyMapTransitionsForTest(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
 	updateCombatStats(state, zone)
-	applyMapTransitions(state, prevState, zone)
+	applyMapTransitions(state, prevState, zone, zoneFills(zone))
 }
 
 func ApplyNPCSeparationForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, dt float64) {
@@ -93,7 +94,7 @@ func ApplyNPCSeparationForTest(state *instancestate.InstanceState, zone instance
 
 func RestoreUnitsThatCrossedBarriersForTest(state, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
 	updateCombatStats(state, zone)
-	restoreUnitsThatCrossedBarriers(state, prevState, zone)
+	restoreUnitsThatCrossedBarriers(state, prevState, zone, zoneFills(zone))
 }
 
 func FacingTowardDegForTest(x1, y1, x2, y2 float64) float64 {
@@ -187,7 +188,12 @@ func (inst *Instance) FireLootAwardForTest(ctx context.Context, pending instance
 }
 
 func SpawnPlacementForTest(zone instanceconfig.Zone, spawnAt string) (string, instanceconfig.Position) {
-	return spawnPlacement(zone, spawnAt)
+	return spawnPlacement(zone, spawnAt, zoneFills(zone))
+}
+
+func zoneFills(zone instanceconfig.Zone) map[string]*mapfill.Fill {
+	fills, _ := mapfill.ForZone(zone)
+	return fills
 }
 
 type PendingZoneExitForTest struct {

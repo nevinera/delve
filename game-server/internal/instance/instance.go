@@ -12,6 +12,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/mapfill"
 	"github.com/delve-mmo/game-server/internal/pathing"
 	"github.com/delve-mmo/game-server/internal/railsclient"
 )
@@ -75,6 +76,11 @@ type Instance struct {
 	// units fall back to straight-line pursuit. Not shared across separate
 	// Instances of the same zone.
 	PathGraph *pathing.Graph
+
+	// Fills is each map's fill (see mapfill): where nobody can stand.
+	// Built once in NewInstance; a map whose fill fails mapfill's check has
+	// none, so its units move as they did before fills existed.
+	Fills map[string]*mapfill.Fill
 
 	// Rand is the source for every random roll this instance's tick loop
 	// and command handlers make (combat avoidance/miss/crit/variance, loot,
@@ -209,6 +215,12 @@ func NewInstance(
 	inst.commandProcessor.Register(command.TalkHandler{})
 	inst.commandProcessor.Register(command.AcceptQuestHandler{})
 	inst.commandProcessor.Register(command.TurnInQuestHandler{})
+
+	fills, rejected := mapfill.ForZone(zone)
+	for mapID, err := range rejected {
+		slog.Warn("map fill rejected; the map has no fill", "zoneIdentifier", zoneIdentifier, "map", mapID, "error", err)
+	}
+	inst.Fills = fills
 
 	if graph, err := pathing.Build(zone, fallbackPathingRadius); err != nil {
 		slog.Error("pathing graph build failed; chasing units will fall back to straight-line pursuit",

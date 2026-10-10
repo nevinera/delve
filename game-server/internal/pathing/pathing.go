@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/mapfill"
 )
 
 // Graph is a zone's set of visibility graphs, one per (map, size bucket)
@@ -71,8 +72,10 @@ func bucketRadius(r float64) float64 {
 // links to - see FindPathTowardMap. A bucket's graphs are entirely
 // independent of every other bucket's: a connection or route that doesn't
 // fit a larger bucket's agent size simply doesn't appear in that bucket's
-// graph, while smaller buckets route through it normally.
+// graph, while smaller buckets route through it normally. Each map's fill
+// (see mapfill.ForZone) is impassable.
 func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
+	fills, _ := mapfill.ForZone(zone)
 	indexes := make(map[string]*barrierIndex, len(zone.Maps))
 	for _, m := range zone.Maps {
 		if err := validateGeometry(m); err != nil {
@@ -83,7 +86,7 @@ func Build(zone instanceconfig.Zone, fallbackRadius float64) (*Graph, error) {
 
 	g := &Graph{buckets: make(map[float64]*zoneGraph)}
 	for _, radius := range neededBucketRadii(zone, fallbackRadius) {
-		zg, err := buildZoneGraph(zone, indexes, radius)
+		zg, err := buildZoneGraph(zone, indexes, fills, radius)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +121,7 @@ func neededBucketRadii(zone instanceconfig.Zone, fallbackRadius float64) []float
 
 // buildZoneGraph builds one size bucket's worth of per-map graphs and
 // stitches their connection nodes into a cross-map meta-graph.
-func buildZoneGraph(zone instanceconfig.Zone, indexes map[string]*barrierIndex, agentRadius float64) (*zoneGraph, error) {
+func buildZoneGraph(zone instanceconfig.Zone, indexes map[string]*barrierIndex, fills map[string]*mapfill.Fill, agentRadius float64) (*zoneGraph, error) {
 	zg := &zoneGraph{
 		maps:      make(map[string]*MapGraph, len(zone.Maps)),
 		metaIndex: make(map[mapNode]int),
@@ -137,7 +140,7 @@ func buildZoneGraph(zone instanceconfig.Zone, indexes map[string]*barrierIndex, 
 			anchorConnIDs = append(anchorConnIDs, c.Identifier)
 		}
 
-		mg, anchorIdx, err := buildMapGraph(m, indexes[m.Identifier], agentRadius, anchors)
+		mg, anchorIdx, err := buildMapGraph(m, indexes[m.Identifier], fills[m.Identifier], agentRadius, anchors)
 		if err != nil {
 			return nil, err
 		}

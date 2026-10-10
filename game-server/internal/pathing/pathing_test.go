@@ -244,3 +244,24 @@ func TestBuild_LargerBucketRespectsNarrowerClearance(t *testing.T) {
 	assert.True(t, g.SegmentClear(1.0, "map1", 0, 0, 0, 10), "a 1ft-radius unit should fit through a 3ft gap")
 	assert.False(t, g.SegmentClear(5.0, "map1", 0, 0, 0, 10), "a 5ft-radius unit should not fit through a 3ft gap")
 }
+
+func TestBuild_TreatsTheFillAsImpassable(t *testing.T) {
+	// A room with a 10ft door in its bottom wall; everything outside it is fill.
+	m := instanceconfig.Map{
+		Identifier:     "room",
+		FeetDimensions: instanceconfig.Dimensions{Width: 100, Height: 100},
+		Barriers: []instanceconfig.Barrier{wallBarrier(
+			instanceconfig.Location{X: 45, Y: 20}, instanceconfig.Location{X: 20, Y: 20}, instanceconfig.Location{X: 20, Y: 80},
+			instanceconfig.Location{X: 80, Y: 80}, instanceconfig.Location{X: 80, Y: 20}, instanceconfig.Location{X: 55, Y: 20},
+		)},
+		Connections: []instanceconfig.MapConnection{{Identifier: "door", Type: "line",
+			Start: &instanceconfig.Location{X: 45, Y: 20}, End: &instanceconfig.Location{X: 55, Y: 20}}},
+	}
+	g, err := Build(instanceconfig.Zone{Maps: []instanceconfig.Map{m}}, 1)
+	require.NoError(t, err)
+
+	_, ok := g.FindPath(1, "room", 30, 30, 70, 70)
+	assert.True(t, ok, "across the room")
+	_, ok = g.FindPath(1, "room", 50, 50, 10, 10)
+	assert.False(t, ok, "out the door into the fill")
+}

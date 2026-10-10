@@ -5,13 +5,19 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/mapfill"
 )
 
 const wallHalfThickness = 0.2 // feet; half the rendered wall thickness
 
-// resolveCollisions pushes all units with Radius > 0 out of any barriers on
-// their current map. Called after applyMovement each tick.
-func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Zone) {
+// fillClearance is how far past a fill's edge a unit whose center was in the
+// fill is set down, beyond its own radius.
+const fillClearance = 0.1 // feet
+
+// resolveCollisions moves every unit whose center is in its map's fill out to
+// the nearest open ground, then pushes all units with Radius > 0 out of any
+// barriers on their current map. Called after applyMovement each tick.
+func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Zone, fills map[string]*mapfill.Fill) {
 	barriersByMap := make(map[string][]instanceconfig.Barrier, len(zone.Maps))
 	dimsByMap := make(map[string]instanceconfig.Dimensions, len(zone.Maps))
 	for _, m := range zone.Maps {
@@ -20,10 +26,16 @@ func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Z
 	}
 
 	for _, unit := range state.Units {
+		x, y := unit.Position.X, unit.Position.Y
+		if fill := fills[unit.MapIdentifier]; fill.Filled(x, y) {
+			if p, ok := fill.NearestOpen(x, y, unit.Radius+fillClearance); ok {
+				x, y = p.X, p.Y
+			}
+		}
 		if unit.Radius == 0 {
+			unit.Position.X, unit.Position.Y = x, y
 			continue
 		}
-		x, y := unit.Position.X, unit.Position.Y
 		for _, b := range barriersByMap[unit.MapIdentifier] {
 			switch b.Type {
 			case "wall":
@@ -57,14 +69,19 @@ func resolveCollisions(state *instancestate.InstanceState, zone instanceconfig.Z
 // through a wall in one tick, landing it on the far side with no overlap at
 // its final position for resolveCollisions to push back out of. A unit
 // whose map changed this tick (applyMapTransitions) is left alone; that's a
-// legitimate teleport, not a shove-through-wall.
-func restoreUnitsThatCrossedBarriers(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
+// legitimate teleport, not a shove-through-wall. Nor is a unit that started
+// the tick in the fill: resolveCollisions may have carried it across a wall
+// on its way out.
+func restoreUnitsThatCrossedBarriers(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone, fills map[string]*mapfill.Fill) {
 	for id, unit := range state.Units {
 		prev, ok := prevState.Units[id]
 		if !ok || prev.MapIdentifier != unit.MapIdentifier {
 			continue
 		}
 		if prev.Position.X == unit.Position.X && prev.Position.Y == unit.Position.Y {
+			continue
+		}
+		if fills[unit.MapIdentifier].Filled(prev.Position.X, prev.Position.Y) {
 			continue
 		}
 		if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, prev.Position.X, prev.Position.Y, unit.Position.X, unit.Position.Y) {

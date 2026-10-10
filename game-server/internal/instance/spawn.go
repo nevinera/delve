@@ -12,6 +12,7 @@ import (
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/mapfill"
 )
 
 // permanentPassiveDurationSeconds is the "duration" (command.ApplyStatus
@@ -42,7 +43,7 @@ func (inst *Instance) drainPlayerSpawns(ctx context.Context, state *instancestat
 			if _, exists := state.Units[spawn.unitID]; exists {
 				continue // reconnect: unit already present
 			}
-			mapID, pos := spawnPlacement(inst.ZoneConfig, spawn.spawnAt)
+			mapID, pos := spawnPlacement(inst.ZoneConfig, spawn.spawnAt, inst.Fills)
 			resources, primaryResourceName := playerResources(spawn.class)
 			unit := &instancestate.UnitState{
 				ZoneUnitIdentifier:  "player:" + spawn.characterName,
@@ -125,7 +126,7 @@ func applyClassPassives(unit *instancestate.UnitState, unitID uuid.UUID, class i
 // entryPosition returns the spawn position for the first entry point found on
 // the map, falling back to the map center. Mirrors the entryPosition function
 // in tools/demo.html.
-func entryPosition(zone instanceconfig.Zone, m instanceconfig.Map) instanceconfig.Position {
+func entryPosition(zone instanceconfig.Zone, m instanceconfig.Map, fill *mapfill.Fill) instanceconfig.Position {
 	center := instanceconfig.Position{
 		X: m.FeetDimensions.Width / 2,
 		Y: m.FeetDimensions.Height / 2,
@@ -143,7 +144,7 @@ func entryPosition(zone instanceconfig.Zone, m instanceconfig.Map) instanceconfi
 		return center
 	}
 
-	if pos, ok := connectionPosition(m, connID); ok {
+	if pos, ok := connectionPosition(m, connID, fill); ok {
 		return pos
 	}
 	return center
@@ -151,9 +152,10 @@ func entryPosition(zone instanceconfig.Zone, m instanceconfig.Map) instanceconfi
 
 // connectionPosition returns where a unit spawning at one of m's
 // connections starts: a point connection's own position, or a line
-// connection's midpoint nudged 4 feet toward the map center so the token
-// starts inside the map. ok is false for an unknown or malformed connection.
-func connectionPosition(m instanceconfig.Map, connID string) (instanceconfig.Position, bool) {
+// connection's midpoint nudged 4 feet onto its open side (see mapfill),
+// facing into it - or toward the map center, when fill doesn't say which
+// side that is. ok is false for an unknown or malformed connection.
+func connectionPosition(m instanceconfig.Map, connID string, fill *mapfill.Fill) (instanceconfig.Position, bool) {
 	var conn *instanceconfig.MapConnection
 	for i := range m.Connections {
 		if m.Connections[i].Identifier == connID {
@@ -174,6 +176,9 @@ func connectionPosition(m instanceconfig.Map, connID string) (instanceconfig.Pos
 		if conn.Start != nil && conn.End != nil {
 			mx := (conn.Start.X + conn.End.X) / 2
 			my := (conn.Start.Y + conn.End.Y) / 2
+			if nx, ny, ok := fill.OpenSide(*conn.Start, *conn.End); ok {
+				return instanceconfig.Position{X: mx + nx*4, Y: my + ny*4, Angle: facingAlong(nx, ny)}, true
+			}
 			dx := m.FeetDimensions.Width/2 - mx
 			dy := m.FeetDimensions.Height/2 - my
 			dist := math.Sqrt(dx*dx + dy*dy)
@@ -190,10 +195,10 @@ func connectionPosition(m instanceconfig.Map, connID string) (instanceconfig.Pos
 // spawnPlacement returns the map and position a player unit spawns at:
 // spawnAt ("mapId/connectionId") when it names a real connection, else the
 // first map's entry position.
-func spawnPlacement(zone instanceconfig.Zone, spawnAt string) (string, instanceconfig.Position) {
+func spawnPlacement(zone instanceconfig.Zone, spawnAt string, fills map[string]*mapfill.Fill) (string, instanceconfig.Position) {
 	if mapID, connID, ok := strings.Cut(spawnAt, "/"); ok {
 		if m := findMap(zone, mapID); m != nil {
-			if pos, ok := connectionPosition(*m, connID); ok {
+			if pos, ok := connectionPosition(*m, connID, fills[mapID]); ok {
 				return mapID, pos
 			}
 		}
@@ -202,5 +207,5 @@ func spawnPlacement(zone instanceconfig.Zone, spawnAt string) (string, instancec
 		return "", instanceconfig.Position{}
 	}
 	m := zone.Maps[0]
-	return m.Identifier, entryPosition(zone, m)
+	return m.Identifier, entryPosition(zone, m, fills[m.Identifier])
 }
