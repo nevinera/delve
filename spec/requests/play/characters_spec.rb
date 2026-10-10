@@ -180,6 +180,18 @@ RSpec.describe "Play::Characters", type: :request do
         get "/play/characters/#{character.id}/edit"
         expect(response).to have_http_status(:ok)
       end
+
+      it "offers a class change when not in a zone" do
+        other = create(:character_class, state: :fetched)
+        get "/play/characters/#{character.id}/edit"
+        expect(response.body).to include("#{other.identifier} #{other.version}")
+      end
+
+      it "says to leave the world while in a zone" do
+        create(:slot_session, character:)
+        get "/play/characters/#{character.id}/edit"
+        expect(response.body).to include("Leave the world to change class.")
+      end
     end
 
     describe "PATCH /play/characters/:id" do
@@ -197,6 +209,30 @@ RSpec.describe "Play::Characters", type: :request do
           expect(character.reload.token_url).to eq(":halfling-female-4:")
           get "/play/characters/#{character.id}"
           expect(response.body).to include("/tokens/stock/halfling-female-4.webp")
+        end
+      end
+
+      context "changing class" do
+        let(:other_class) { create(:character_class, state: :fetched) }
+
+        it "changes the class when not in a zone" do
+          patch "/play/characters/#{character.id}", params: {character: {character_class_id: other_class.id, token_url: character.token_url}}
+          expect(response).to redirect_to(play_character_path(character))
+          expect(character.reload.character_class).to eq(other_class)
+        end
+
+        it "refuses while in a zone" do
+          create(:slot_session, character:)
+          patch "/play/characters/#{character.id}", params: {character: {character_class_id: other_class.id, token_url: character.token_url}}
+          expect(response).to have_http_status(:unprocessable_content)
+          expect(response.body).to include("leave the world first")
+          expect(character.reload.character_class).to eq(character_class)
+        end
+
+        it "still updates the token while in a zone" do
+          create(:slot_session, character:)
+          patch "/play/characters/#{character.id}", params: {character: {character_class_id: character_class.id, token_url: "https://example.com/new-token.webp"}}
+          expect(character.reload.token_url).to eq("https://example.com/new-token.webp")
         end
       end
 

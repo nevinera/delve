@@ -16,6 +16,11 @@ class Character < ApplicationRecord
 
   validates :token_url, presence: true
   validate :token_url_is_stock_or_url
+  validate :class_unchanged_in_a_zone, on: :update
+
+  # Whether the character holds a game-server slot (a SlotSession), live or
+  # not yet pruned.
+  def in_zone? = SlotSession.exists?(character: self)
 
   def setting_or_default = character_setting || build_character_setting
 
@@ -37,6 +42,13 @@ class Character < ApplicationRecord
   end
 
   private
+
+  # A class change while in a zone would leave the game server running the
+  # old class; they leave first.
+  def class_unchanged_in_a_zone
+    return unless will_save_change_to_character_class_id? && in_zone?
+    errors.add(:character_class, "can't be changed while in a zone; leave the world first")
+  end
 
   def token_url_is_stock_or_url
     return if token_url.blank?

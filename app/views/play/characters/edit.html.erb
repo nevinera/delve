@@ -11,6 +11,16 @@
 
   <%= render "token_fields", f:, character: @character %>
 
+  <div>
+    <%= f.label :character_class_id, "Class" %>
+    <% if @character.in_zone? %>
+      <%= "#{@character.character_class.identifier} #{@character.character_class.version}" %>
+      <p><small>Leave the world to change class.</small></p>
+    <% else %>
+      <%= f.select :character_class_id, @character_classes.map { |cc| ["#{cc.identifier} #{cc.version}", cc.id] } %>
+    <% end %>
+  </div>
+
   <%= f.submit "Save" %>
 <% end %>
 
