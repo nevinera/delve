@@ -32,6 +32,7 @@ export class UiState {
     this.selectedUnitIndex = fields.selectedUnitIndex ?? null;
     this.hoveredBarrierIndex = fields.hoveredBarrierIndex ?? null;
     this.hoveredPoint = fields.hoveredPoint ?? null; // {barrierIndex, pointIndex} | null
+    this.hoveredFillPoint = fields.hoveredFillPoint ?? null; // index into mapData.fillPoints | null
     this.hoveredConnectionIndex = fields.hoveredConnectionIndex ?? null;
     this.hoveredUnitIndex = fields.hoveredUnitIndex ?? null;
     this.hoveredPatrolStep = fields.hoveredPatrolStep ?? null; // {unitIndex, stepIndex} | null

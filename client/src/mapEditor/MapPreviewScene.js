@@ -14,7 +14,8 @@
 // scene.js's SceneManager, which is tightly coupled to live network state -
 // same reasoning as editor/previewScene.js's own header comment.
 import * as THREE from "three";
-import {buildWall, buildCircleBarrier, createPlayerToken, createNpcToken, orbitFromDrag, clampZoom} from "../game/scene.js";
+import {buildWall, buildCircleBarrier, buildMapFill, createPlayerToken, createNpcToken, orbitFromDrag, clampZoom} from "../game/scene.js";
+import {computeMapFill} from "../game/mapFill.js";
 import {resolveBarrierCollisions} from "../game/collision.js";
 import {loadSvgToCanvas} from "../game/svgRaster.js";
 import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement.js";
@@ -163,7 +164,7 @@ export class MapPreviewScene {
   // resolution (see game/svgRaster.js) versus loading a raster image
   // directly - see MapEditor's handleImageFile for why a map's background
   // is committed as the original SVG rather than a pre-baked PNG.
-  loadMap({feetDimensions, barriers, connections, units, imageUrl, isSvg}, availableUnitTypes, startX, startY) {
+  loadMap({feetDimensions, barriers, connections, fillPoints, units, imageUrl, isSvg}, availableUnitTypes, startX, startY) {
     this._feetDimensions = feetDimensions;
     this._barriers = barriers ?? [];
     this._playerX = startX;
@@ -189,11 +190,15 @@ export class MapPreviewScene {
       }
     }
 
+    // The fill and open-ground walls, as the game draws them (see
+    // game/scene.js's loadZone).
+    const fill = computeMapFill({feetDimensions, barriers: this._barriers, connections, fillPoints});
+    this.scene.add(buildMapFill(fill, (x, y) => this._toWorld(x, y)));
+    for (const {a, b, kind, left, right} of fill.edges) {
+      if (kind === "wall" && left === "open" && right === "open") this.scene.add(buildWall([this._toWorld(...a), this._toWorld(...b)]));
+    }
     for (const barrier of this._barriers) {
-      if (barrier.type === "wall" && barrier.locations && barrier.locations.length >= 2) {
-        const pts = barrier.locations.map(({x, y}) => this._toWorld(x, y));
-        this.scene.add(buildWall(pts));
-      } else if (barrier.type === "circle" && barrier.location) {
+      if (barrier.type === "circle" && barrier.location) {
         this.scene.add(buildCircleBarrier(this._toWorld(barrier.location.x, barrier.location.y), barrier.radius ?? 0));
       }
     }

@@ -42,7 +42,7 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
     // load the bytes), since that carries no file extension to sniff.
     const isSvg = Boolean(mapData.imageUrl?.toLowerCase().endsWith(".svg"));
     scene.loadMap(
-      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, units: mapData.units, imageUrl, isSvg},
+      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, fillPoints: mapData.fillPoints, units: mapData.units, imageUrl, isSvg},
       availableUnitTypes, x, y
     );
     scene.handleResize();

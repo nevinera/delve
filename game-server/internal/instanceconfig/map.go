@@ -10,6 +10,7 @@ type Map struct {
 	FeetDimensions Dimensions      `json:"feetDimensions"` // Required: world bounds in feet
 	Barriers       []Barrier       `json:"barriers,omitempty"`
 	Connections    []MapConnection `json:"connections,omitempty"`
+	FillPoints     []Location      `json:"fillPoints,omitempty"` // marks voids inside the walls as filled - see mapfill
 	Units          []Unit          `json:"units,omitempty"`
 	NCUs           []NCU           `json:"ncus,omitempty"`
 	Respawn        *RespawnConfig  `json:"respawn,omitempty"`     // overrides the zone's respawn for every unit on this map - see Zone.UnitRespawn

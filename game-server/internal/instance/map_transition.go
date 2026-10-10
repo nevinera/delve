@@ -6,6 +6,7 @@ import (
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
+	"github.com/delve-mmo/game-server/internal/mapfill"
 )
 
 const connectionTriggerDist = 1.5 // feet — how close a unit must be to a line connection to trigger it
@@ -15,7 +16,9 @@ const connectionTriggerDist = 1.5 // feet — how close a unit must be to a line
 // Called after applyMovement, before resolveCollisions.
 // prevState is the InstanceState from before applyMovement this tick; it is
 // used to determine which side of a connection each unit approached from.
-func applyMapTransitions(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone) {
+// fills (see Instance.Fills) orients arrivals through a line connection
+// toward its open side.
+func applyMapTransitions(state *instancestate.InstanceState, prevState *instancestate.InstanceState, zone instanceconfig.Zone, fills map[string]*mapfill.Fill) {
 	linkIndex := buildLinkIndex(zone)
 	connsByMap := buildConnectionsByMap(zone)
 
@@ -51,7 +54,7 @@ func applyMapTransitions(state *instancestate.InstanceState, prevState *instance
 			} else {
 				prevX, prevY = unit.Position.X, unit.Position.Y
 			}
-			traverseConnection(unit, conn, *destMap, *destConn, prevX, prevY, state)
+			traverseConnection(unit, conn, *destMap, *destConn, prevX, prevY, fills[destMap.Identifier])
 			break // one transition per tick per unit
 		}
 	}
@@ -61,10 +64,10 @@ func applyMapTransitions(state *instancestate.InstanceState, prevState *instance
 // prevX/prevY is the unit's position from the previous tick, used to determine
 // which side of fromConn the unit approached from.
 // Drops aggro on the unit and on any unit that was targeting it.
-func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.MapConnection, destMap instanceconfig.Map, destConn instanceconfig.MapConnection, prevX, prevY float64, state *instancestate.InstanceState) {
+func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.MapConnection, destMap instanceconfig.Map, destConn instanceconfig.MapConnection, prevX, prevY float64, destFill *mapfill.Fill) {
 	fromMapID := unit.MapIdentifier
 	unit.MapIdentifier = destMap.Identifier
-	unit.Position = spawnPosition(fromConn, destConn, prevX, prevY, unit.Position.Angle)
+	unit.Position = spawnPosition(fromConn, destConn, prevX, prevY, unit.Position.Angle, destFill)
 	if unit.Status == instancestate.UnitStatusEngaged {
 		recordLeashCrossing(unit, fromMapID, prevX, prevY)
 	}
@@ -94,7 +97,9 @@ const spawnNudge = 2.0 // feet past the destination connection
 // The t-position along fromConn is preserved onto destConn (first point of each
 // segment corresponds). The spawn point is then nudged spawnNudge feet to the
 // far side of the connection — opposite the side the unit approached from.
-func spawnPosition(fromConn, destConn instanceconfig.MapConnection, prevX, prevY float64, facingDeg float64) instanceconfig.Position {
+// When destFill shows which side of destConn is open ground, the unit is
+// nudged onto that side instead, facing straight into it.
+func spawnPosition(fromConn, destConn instanceconfig.MapConnection, prevX, prevY float64, facingDeg float64, destFill *mapfill.Fill) instanceconfig.Position {
 	if fromConn.Start == nil || fromConn.End == nil || destConn.Start == nil || destConn.End == nil {
 		if destConn.Position != nil {
 			return *destConn.Position
@@ -117,6 +122,10 @@ func spawnPosition(fromConn, destConn instanceconfig.MapConnection, prevX, prevY
 	dDY := destConn.End.Y - destConn.Start.Y
 	sx := destConn.Start.X + t*dDX
 	sy := destConn.Start.Y + t*dDY
+
+	if nx, ny, ok := destFill.OpenSide(*destConn.Start, *destConn.End); ok {
+		return instanceconfig.Position{X: sx + nx*spawnNudge, Y: sy + ny*spawnNudge, Angle: facingAlong(nx, ny)}
+	}
 
 	// Use the previous position's signed distance from the fromConn line to
 	// determine which side the unit approached from, then nudge to the FAR side
@@ -143,6 +152,16 @@ func spawnPosition(fromConn, destConn instanceconfig.MapConnection, prevX, prevY
 	sy += destNudgeY * spawnNudge
 
 	return instanceconfig.Position{X: sx, Y: sy, Angle: facingDeg}
+}
+
+// facingAlong returns the facing (degrees clockwise from north) of the
+// direction (dx, dy).
+func facingAlong(dx, dy float64) float64 {
+	deg := math.Atan2(dx, dy) * 180 / math.Pi
+	if deg < 0 {
+		deg += 360
+	}
+	return deg
 }
 
 // touchingConnection reports whether unit is close enough to conn to trigger it.

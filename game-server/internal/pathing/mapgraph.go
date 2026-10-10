@@ -23,8 +23,10 @@ package pathing
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
+	"github.com/delve-mmo/game-server/internal/mapfill"
 )
 
 // cornerClearancePadding is added to every agent radius before it's used
@@ -79,25 +81,33 @@ type MapGraph struct {
 // geometry - map-connection points, for stitching separate maps' graphs
 // together. The returned anchorIndex[i] is anchors[i]'s anchor index (for
 // anchorDistance/distFromPoint), or -1 if that position was blocked by a
-// barrier. Returns an error if the map's geometry contains non-finite
-// coordinates.
+// barrier. The map's fill (see mapfill) is impassable, unless it fails
+// mapfill's check. Returns an error if the map's geometry contains
+// non-finite coordinates.
 func BuildMapGraph(m instanceconfig.Map, agentRadius float64, anchors []Point) (*MapGraph, []int, error) {
 	if err := validateGeometry(m); err != nil {
 		return nil, nil, err
 	}
-	return buildMapGraph(m, newBarrierIndex(m.Barriers), agentRadius, anchors)
+	fill := mapfill.Compute(m)
+	if fill != nil && fill.Check(m) != nil {
+		fill = nil
+	}
+	return buildMapGraph(m, newBarrierIndex(m.Barriers), fill, agentRadius, anchors)
 }
 
 // buildMapGraph is BuildMapGraph over an already-built barrier index for m.
 // The index doesn't depend on agent size, so a zone building several size
 // buckets of the same map builds it once and shares it.
-func buildMapGraph(m instanceconfig.Map, idx *barrierIndex, agentRadius float64, anchors []Point) (*MapGraph, []int, error) {
+func buildMapGraph(m instanceconfig.Map, idx *barrierIndex, fill *mapfill.Fill, agentRadius float64, anchors []Point) (*MapGraph, []int, error) {
 	agentRadius += cornerClearancePadding
 
 	g := &MapGraph{agentRadius: agentRadius, idx: idx}
 	g.grid = chooseGrid(m, idx, agentRadius, anchors)
 	g.blocked = newBitGrid(g.grid.w * g.grid.h)
 	g.markBlocked()
+	if fill != nil {
+		g.markFilled(fill, m.FeetDimensions)
+	}
 	g.labelComponents()
 
 	anchorIndex := make([]int, len(anchors))
@@ -204,6 +214,53 @@ func (g *MapGraph) markBlocked() {
 		// in the cell, so expand the search by that much to never miss one.
 		reach := g.agentRadius + p.r + g.grid.cell
 		g.grid.forCellsNear(p.x1, p.y1, p.x2, p.y2, reach, mark)
+	}
+}
+
+// markFilled flags every cell whose center is in the fill or off the map,
+// a row at a time: each filled region's rings cross the row's center line
+// at a few points, and the cells between alternate crossings are inside.
+func (g *MapGraph) markFilled(fill *mapfill.Fill, dims instanceconfig.Dimensions) {
+	var xs []float64
+	for cy := 0; cy < g.grid.h; cy++ {
+		y := g.grid.centerY(cy)
+		if y < 0 || y > dims.Height {
+			g.blockSpan(cy, math.Inf(-1), math.Inf(1))
+			continue
+		}
+		g.blockSpan(cy, math.Inf(-1), -clearanceEpsilon)
+		g.blockSpan(cy, dims.Width+clearanceEpsilon, math.Inf(1))
+		for _, r := range fill.Regions {
+			xs = ringCrossings(xs[:0], r.Outer, y)
+			for _, hole := range r.Holes {
+				xs = ringCrossings(xs, hole, y)
+			}
+			slices.Sort(xs)
+			for i := 0; i+1 < len(xs); i += 2 {
+				g.blockSpan(cy, xs[i], xs[i+1])
+			}
+		}
+	}
+}
+
+// ringCrossings appends the x of every point where ring crosses the
+// horizontal line at y.
+func ringCrossings(xs []float64, ring []mapfill.Point, y float64) []float64 {
+	for i, j := 0, len(ring)-1; i < len(ring); j, i = i, i+1 {
+		a, b := ring[i], ring[j]
+		if (a.Y > y) != (b.Y > y) {
+			xs = append(xs, a.X+(y-a.Y)*(b.X-a.X)/(b.Y-a.Y))
+		}
+	}
+	return xs
+}
+
+// blockSpan flags the cells in row cy whose centers lie within [x0, x1].
+func (g *MapGraph) blockSpan(cy int, x0, x1 float64) {
+	lo := int(math.Max(0, math.Ceil((x0-g.grid.minX)/g.grid.cell-0.5)))
+	hi := int(math.Min(float64(g.grid.w-1), math.Floor((x1-g.grid.minX)/g.grid.cell-0.5)))
+	for cx := lo; cx <= hi; cx++ {
+		g.blocked.set(cy*g.grid.w + cx)
 	}
 }
 

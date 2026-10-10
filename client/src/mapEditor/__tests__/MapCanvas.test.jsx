@@ -722,6 +722,36 @@ describe("MapCanvas", () => {
       expect(onToolChange).toHaveBeenCalledWith("select");
     });
 
+    it("places a fill point on one click, then reverts the tool", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-fill-point" onToolChange={onToolChange}
+        />
+      );
+      fitToImageSize();
+      fireEvent.pointerDown(document.querySelector(".map-canvas-wrapper"), {clientX: 50, clientY: 0});
+
+      expect(dispatch).toHaveBeenCalledWith({type: "ADD_ENTRY", section: "fillPoints", entry: {x: 10, y: 120}});
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("shades the fill and marks each fill point", () => {
+      const room = {type: "wall", locations: [{x: 2, y: 2}, {x: 20, y: 2}, {x: 20, y: 20}, {x: 2, y: 20}, {x: 2, y: 2}]};
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} dispatch={noop} onSelectBarrier={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, barriers: [room], fillPoints: [{x: 10, y: 10}]})}
+        />
+      );
+      fitToImageSize();
+
+      expect(screen.getAllByTestId("map-fill-region").length).toBeGreaterThan(0);
+      expect(screen.getAllByTestId("map-fill-point")).toHaveLength(1);
+    });
+
     it("picks the first unused connection-N identifier", () => {
       const dispatch = vi.fn();
       const connections = [{identifier: "connection-1", type: "point", position: {x: 0, y: 0, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}];
