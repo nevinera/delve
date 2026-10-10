@@ -52,6 +52,12 @@ describe("importing", () => {
     expect(assetUrlFor(draft, "o/content", "worlds/w/tokens/unit/troll.webp")).toEqual("https://raw.githubusercontent.com/o/content/c1/tokens/unit/troll.webp");
   });
 
+  it("keeps a unit type's category", async () => {
+    const repo = {...LIBRARY, "unit_types/demo/troll.json": {...LIBRARY["unit_types/demo/troll.json"], category: "trolls"}};
+    const prepared = await prepareUnitTypeImport(fixtureDraft(), new LibraryReader(fakeClient(repo), "c1"), "unit_types/demo/troll.json", "troll");
+    expect(unitTypeData(prepared.apply(fixtureDraft()), "troll").category).toEqual("trolls");
+  });
+
   it("refuses a taken key, and reports assets the library lacks", async () => {
     await expect(prepareUnitTypeImport(fixtureDraft(), reader(), "unit_types/demo/troll.json", "goblin")).rejects.toThrow(/already exists/);
 

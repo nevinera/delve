@@ -37,6 +37,17 @@ describe("UnitTypeLevel", () => {
     expect(result.draft.dirtyPaths()).toEqual(["worlds/w/unit_types/goblin.json"]);
   });
 
+  it("sets a category, suggesting the world's others", () => {
+    const withWolf = fixtureDraft().write("worlds/w/unit_types/wolf.json", {name: "Wolf", tokenImageUrl: [], category: "wolves"});
+    const result = renderWith(UnitTypeLevel, {unitType: "goblin"}, withWolf);
+
+    const field = screen.getByRole("combobox", {name: "Category"});
+    expect([...document.querySelectorAll("#unit-type-categories option")].map((o) => o.value)).toEqual(["wolves"]);
+    fireEvent.change(field, {target: {value: "Goblins"}});
+
+    expect(unitTypeData(result.draft, "goblin").category).toEqual("goblins");
+  });
+
   it("picks a token from the world's tokens, and stores an upload under tokens/unit/", async () => {
     const result = renderWith(UnitTypeLevel, {unitType: "goblin"});
 
@@ -86,6 +97,16 @@ describe("UnitTypeList", () => {
     fireEvent.click(list().getByRole("button", {name: "Rename"}));
 
     expect(mapData(result.draft, "forest", "hub").units[0].unitType).toEqual("grunt");
+  });
+
+  it("groups the unit types by category once any has one", () => {
+    const draft = fixtureDraft()
+      .write("worlds/w/unit_types/wolf.json", {name: "Wolf", tokenImageUrl: [], category: "wolves"})
+      .write("worlds/w/unit_types/alpha.json", {name: "Alpha", tokenImageUrl: [], category: "wolves"});
+    renderWith(UnitTypeList, {onOpen: vi.fn()}, draft);
+
+    const rows = list().getAllByRole("listitem").map((li) => li.className === "content-list-group" ? `# ${li.textContent}` : li.querySelector(".zone-row-name").textContent);
+    expect(rows).toEqual(["# wolves", "Alpha", "Wolf", "# Other", "Goblin"]);
   });
 
   it("explains why a placed unit type can't be deleted", () => {

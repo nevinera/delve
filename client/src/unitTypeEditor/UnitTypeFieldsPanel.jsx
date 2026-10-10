@@ -18,6 +18,21 @@ function TextField({value, onChange}) {
   return <input type="text" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} />;
 }
 
+// A family slug like "goblins", suggesting the world's other categories.
+function CategoryField({value, categories, onChange}) {
+  return (
+    <>
+      <input
+        type="text" list="unit-type-categories" aria-label="Category" placeholder="e.g. goblins" value={value ?? ""}
+        onChange={(e) => onChange(e.target.value.trim() === "" ? null : e.target.value.trim().toLowerCase())}
+      />
+      <datalist id="unit-type-categories">
+        {categories.map((category) => <option key={category} value={category} />)}
+      </datalist>
+    </>
+  );
+}
+
 function NumberField({value, onChange}) {
   return (
     <input
@@ -210,7 +225,7 @@ function TargetHint({value, range, digits}) {
 // renders draft's current values and calls its mutator methods. Powers
 // aren't edited here - each one is its own area in the editor.
 export default function UnitTypeFieldsPanel({
-  draft, onChange, tokenImages,
+  draft, onChange, tokenImages, categories = [],
 }) {
   const unitTypeData = draft.data;
   const names = draft.powerNames;
@@ -226,6 +241,7 @@ export default function UnitTypeFieldsPanel({
         <tbody>
           <tr><th>Name</th><td><TextField value={unitTypeData.name} onChange={setField("name")} /></td></tr>
           <tr><th>Description</th><td><TextField value={unitTypeData.description} onChange={setField("description")} /></td></tr>
+          <tr><th>Category</th><td><CategoryField value={unitTypeData.category} categories={categories} onChange={setField("category")} /></td></tr>
           <tr><th>Token radius (ft)</th><td><NumberField value={unitTypeData.tokenRadius} onChange={setField("tokenRadius")} /></td></tr>
           <tr><th>Speed factor</th><td><NumberField value={unitTypeData.speedFactor} onChange={setField("speedFactor")} /></td></tr>
           <tr><th>Aggro radius (ft)</th><td><NumberField value={unitTypeData.aggroRadius} onChange={setField("aggroRadius")} /></td></tr>

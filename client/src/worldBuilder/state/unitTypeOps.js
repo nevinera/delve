@@ -25,6 +25,11 @@ export function unitTypeData(draft, key) {
   return data && normalizeUnitType(data);
 }
 
+// The categories the world's unit types use, sorted.
+export function unitTypeCategories(draft) {
+  return [...new Set(unitTypeKeys(draft).map((key) => unitTypeData(draft, key)?.category).filter(Boolean))].sort();
+}
+
 export function updateUnitType(draft, key, data) {
   return draft.write(unitTypeFile(draft.worldKey, key), data);
 }

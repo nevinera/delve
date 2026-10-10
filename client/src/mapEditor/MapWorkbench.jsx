@@ -14,13 +14,13 @@ import {PatrolSimState} from "./PatrolSimState";
 import {WalkSimState} from "./WalkSimState";
 import {loadSvgToCanvas} from "../game/svgRaster";
 import {newGroupIdentifier} from "./groupIdentifiers";
-import {buildEncounter, scatterPositions} from "./encounter";
+import {ANY_CATEGORY, buildEncounterFrom, scatterPositions} from "./encounter";
 
 const ENCOUNTER_SETTINGS_KEY = "delve.mapEditor.encounter";
 
 function loadEncounterSettings() {
   try {
-    return {intendedFor: "open", pullSize: null, ...JSON.parse(localStorage.getItem(ENCOUNTER_SETTINGS_KEY) ?? "{}")};
+    return {intendedFor: "open", pullSize: null, category: ANY_CATEGORY, ...JSON.parse(localStorage.getItem(ENCOUNTER_SETTINGS_KEY) ?? "{}")};
   } catch {
     return {intendedFor: "open", pullSize: null};
   }
@@ -233,8 +233,8 @@ export default function MapWorkbench({
   // their own, spread around the point (see encounter.js).
   function placeEncounter(feet, paletteKeys) {
     const keys = paletteSelection.length ? paletteSelection : paletteKeys;
-    const candidates = keys.map((key) => ({key, tags: unitTypeDetails[key]?.tags ?? []}));
-    const {keys: picked, error} = buildEncounter({candidates, ...encounterSettings});
+    const candidates = keys.map((key) => ({key, tags: unitTypeDetails[key]?.tags ?? [], category: unitTypeDetails[key]?.category ?? null}));
+    const {keys: picked, error} = buildEncounterFrom({candidates, ...encounterSettings});
     if (error) {
       setEncounterError(error);
       return;

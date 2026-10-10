@@ -110,7 +110,7 @@ export function worldUnitTypes(draft, assetUrl) {
     const unitType = draft.read(path) ?? {};
     const raw = Array.isArray(unitType.tokenImageUrl) ? unitType.tokenImageUrl[0] : unitType.tokenImageUrl;
     const tokenPath = raw && !raw.startsWith(":") ? resolvePath(path, raw) : null;
-    return [key, {name: unitType.name, tokenRadius: unitType.tokenRadius, tokenImageUrl: tokenPath ? assetUrl(tokenPath) : null, speedFactor: unitType.speedFactor, tags: unitType.tags ?? []}];
+    return [key, {name: unitType.name, tokenRadius: unitType.tokenRadius, tokenImageUrl: tokenPath ? assetUrl(tokenPath) : null, speedFactor: unitType.speedFactor, tags: unitType.tags ?? [], category: unitType.category || null}];
   }));
   return {keys, details};
 }

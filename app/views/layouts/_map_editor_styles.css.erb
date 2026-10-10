@@ -274,6 +274,12 @@
       .map-editor-sidebar-content .map-unit-palette-entry.armed { background: #1d3550; border-color: #9cf; box-shadow: inset 0 1px 4px rgba(0,0,0,0.7); }
       .map-editor-sidebar-content .map-unit-palette-entry:disabled { opacity: 0.4; cursor: default; }
       .map-editor-sidebar-content .map-unit-palette-entry.selected:not(.armed) { border-color: #e8c35a; }
+      .map-editor-sidebar-content .map-unit-palette-group { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .map-editor-sidebar-content .map-unit-palette-category {
+        flex-basis: 100%; text-align: left; background: none; border: none; padding: 2px 0 0; color: #889;
+        font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;
+      }
+      .map-editor-sidebar-content .map-unit-palette-category:hover:not(:disabled) { color: #e8c35a; }
       .map-editor-sidebar-content .map-encounter-controls { margin-top: 8px; }
       .map-editor-sidebar-content .map-encounter-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
       .map-editor-sidebar-content .map-encounter-row select { width: auto; }

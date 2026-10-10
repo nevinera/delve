@@ -55,7 +55,9 @@ function breadcrumbsFor(selection, data) {
 //   adopt?(power)}: where powers can be copied from; adopt, if given, is
 //   called with the power being imported and returns what to add.
 // - stockAssets.
-export default function UnitTypeWorkbench({unitTypeKey, data, onChange, tokenImages, assetMap, powerAssets, importSources, stockAssets}) {
+// - categories: the categories to suggest for this one (see
+//   docs/schema/unit_type.md).
+export default function UnitTypeWorkbench({unitTypeKey, data, onChange, tokenImages, assetMap, powerAssets, importSources, stockAssets, categories = []}) {
   const draft = new UnitTypeDraft(data, unitTypeKey);
   const [selection, setSelection] = useState({area: "unit"});
   // The estimate describes the data it was made from; any edit drops it.
@@ -156,7 +158,7 @@ export default function UnitTypeWorkbench({unitTypeKey, data, onChange, tokenIma
           />
         );
       default:
-        return <UnitTypeFieldsPanel draft={draft} onChange={handleChange} tokenImages={tokenImages} />;
+        return <UnitTypeFieldsPanel draft={draft} onChange={handleChange} tokenImages={tokenImages} categories={categories} />;
     }
   }
 

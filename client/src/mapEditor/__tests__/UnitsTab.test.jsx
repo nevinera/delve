@@ -603,6 +603,21 @@ describe("UnitsTab", () => {
       expect(onExtendSelection).toHaveBeenLastCalledWith("slime", ["goblin-raider", "slime"]);
     });
 
+    it("groups the palette by category, a heading selecting all of it", () => {
+      const onSelect = vi.fn();
+      const encounter = {selection: [], settings: {intendedFor: "open", pullSize: "group"}, onChangeSettings: vi.fn(), onSelect, onExtendSelection: vi.fn(),
+        armed: false, onArm: vi.fn(), onDisarm: vi.fn(), error: ""};
+      const details = {...UNIT_TYPE_DETAILS, "goblin-raider": {...UNIT_TYPE_DETAILS["goblin-raider"], category: "goblins"}};
+      render(<UnitsTab {...DEFAULT_PROPS} unitTypes={{keys: AVAILABLE_UNIT_TYPE_KEYS, details}} units={[unit("a"), unit("b", {unitType: "slime"})]} encounter={encounter} />);
+      const palette = within(screen.getByRole("region", {name: "Unit palette"}));
+
+      expect(within(palette.getByRole("group", {name: "goblins"})).getByRole("button", {name: "Goblin Raider"})).toBeInTheDocument();
+      expect(within(palette.getByRole("group", {name: "other"})).getByRole("button", {name: "Slime"})).toBeInTheDocument();
+      fireEvent.click(palette.getByRole("button", {name: "Select every goblins unit type"}));
+      expect(onSelect).toHaveBeenCalledWith(["goblin-raider"]);
+      expect(palette.getByRole("combobox", {name: "Encounter category"})).toHaveValue("");
+    });
+
     it("offers a palette of the unit types on the map, pressing one arms it and pressing it again disarms", () => {
       const onArmUnitType = vi.fn();
       const units = [unit("a"), unit("b", {unitType: "slime"}), unit("c")];

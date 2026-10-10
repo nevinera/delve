@@ -2,9 +2,10 @@ import {useEffect, useRef, useState} from "react";
 import LeashFields from "./LeashFields";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 import {unitGroups} from "./groupIdentifiers";
-import {INTENDED_FOR, PULL_SIZES, RANDOM_PULL_SIZE} from "./encounter";
+import {ANY_CATEGORY, INTENDED_FOR, PULL_SIZES, RANDOM_PULL_SIZE, SAME_CATEGORY} from "./encounter";
+import {categoriesOf, groupByCategory} from "../unitTypeCategories";
 
-const NO_ENCOUNTER = {selection: [], settings: {intendedFor: "open", pullSize: null}, onChangeSettings: () => {}, onSelect: () => {}, onExtendSelection: () => {}, armed: false, onArm: () => {}, onDisarm: () => {}, error: ""};
+const NO_ENCOUNTER = {selection: [], settings: {intendedFor: "open", pullSize: null, category: ANY_CATEGORY}, onChangeSettings: () => {}, onSelect: () => {}, onExtendSelection: () => {}, armed: false, onArm: () => {}, onDisarm: () => {}, error: ""};
 
 // The map editor's Units tab. With no group open: a palette of the unit
 // types on this map (plus "+" for the world's others) above the list of
@@ -330,10 +331,33 @@ function GroupNameField({identifier, onRename}) {
 }
 
 // The unit types placeable from the palette: those already on the map and
-// any added with "+" (paletteAdditions, kept by the host), alphabetically -
-// so a family (goblin-*) sits together for range-selecting.
+// any added with "+" (paletteAdditions, kept by the host), alphabetically.
 export function paletteKeys(units, added) {
   return [...new Set([...units.map((unit) => unit.unitType).filter(Boolean), ...added])].sort();
+}
+
+function PaletteEntry({unitKey, orderedKeys, unitTypes, armedUnitType, onArmUnitType, onHoverUnitType, canPlaceOnMap, encounter}) {
+  const armed = armedUnitType === unitKey;
+  const selected = encounter.selection.includes(unitKey);
+  return (
+    <button
+      type="button" aria-pressed={armed} disabled={!canPlaceOnMap}
+      className={`map-unit-palette-entry${armed ? " armed" : ""}${selected ? " selected" : ""}`}
+      onClick={(e) => {
+        if (e.shiftKey) {
+          encounter.onExtendSelection(unitKey, orderedKeys);
+          return;
+        }
+        encounter.onSelect(armed ? [] : [unitKey]);
+        onArmUnitType(armed ? null : unitKey);
+      }}
+      onMouseEnter={() => onHoverUnitType(unitKey)}
+      onMouseLeave={() => onHoverUnitType(null)}
+    >
+      <TokenThumb unit={{unitType: unitKey}} unitTypeDetails={unitTypes.details} className="map-unit-token-thumb map-unit-palette-token" />
+      <span>{unitTypeLabel(unitTypes.details, unitKey)}</span>
+    </button>
+  );
 }
 
 // renderAdder({onAdded(key), close()}), if given, renders more ways to get
@@ -349,32 +373,35 @@ function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, 
     if (canPlaceOnMap) onArmUnitType(key);
   }
 
+  // Grouped by category once any has one (see unitTypeCategories); a
+  // category's heading selects all of it, for "+ Encounter".
+  const groups = categoriesOf(keys, unitTypes.details).length ? groupByCategory(keys, unitTypes.details) : [{category: null, keys}];
+  const orderedKeys = groups.flatMap((group) => group.keys);
+  const entry = (key) => (
+    <PaletteEntry
+      key={key} unitKey={key} orderedKeys={orderedKeys} unitTypes={unitTypes} armedUnitType={armedUnitType}
+      onArmUnitType={onArmUnitType} onHoverUnitType={onHoverUnitType} canPlaceOnMap={canPlaceOnMap} encounter={encounter}
+    />
+  );
+
   return (
     <section className="map-unit-palette" aria-label="Unit palette">
       <div className="map-unit-palette-entries">
-        {keys.map((key) => {
-          const armed = armedUnitType === key;
-          const selected = encounter.selection.includes(key);
-          return (
+        {groups.length === 1 && !groups[0].category ? groups[0].keys.map(entry) : groups.map((group) => (
+          <div key={group.category ?? ""} className="map-unit-palette-group" role="group" aria-label={group.category ?? "other"}>
             <button
-              key={key} type="button" aria-pressed={armed} disabled={!canPlaceOnMap}
-              className={`map-unit-palette-entry${armed ? " armed" : ""}${selected ? " selected" : ""}`}
-              onClick={(e) => {
-                if (e.shiftKey) {
-                  encounter.onExtendSelection(key, keys);
-                  return;
-                }
-                encounter.onSelect(armed ? [] : [key]);
-                onArmUnitType(armed ? null : key);
+              type="button" className="map-unit-palette-category" disabled={!canPlaceOnMap}
+              aria-label={`Select every ${group.category ?? "uncategorized"} unit type`}
+              onClick={() => {
+                encounter.onSelect(group.keys);
+                onArmUnitType(null);
               }}
-              onMouseEnter={() => onHoverUnitType(key)}
-              onMouseLeave={() => onHoverUnitType(null)}
             >
-              <TokenThumb unit={{unitType: key}} unitTypeDetails={unitTypes.details} className="map-unit-token-thumb map-unit-palette-token" />
-              <span>{unitTypeLabel(unitTypes.details, key)}</span>
+              {group.category ?? "other"}
             </button>
-          );
-        })}
+            {group.keys.map(entry)}
+          </div>
+        ))}
         <button type="button" className="map-unit-palette-add" aria-label="Add a unit type" onClick={() => setAdding((a) => !a)}>+</button>
       </div>
       {adding && (
@@ -392,16 +419,23 @@ function Palette({units, unitTypes, added, onAdd, armedUnitType, onArmUnitType, 
       )}
       {!canPlaceOnMap && <p className="map-sidebar-hint">Set feet dimensions (Map tab) before placing units.</p>}
       {armedUnitType && <p className="map-sidebar-hint">Click the map to place {unitTypeLabel(unitTypes.details, armedUnitType)}. Escape to stop.</p>}
-      <EncounterControls encounter={encounter} canPlaceOnMap={canPlaceOnMap} />
+      <EncounterControls encounter={encounter} canPlaceOnMap={canPlaceOnMap} categories={categoriesOf(keys, unitTypes.details)} />
     </section>
   );
 }
 
+function categoryPhrase(category) {
+  if (category === SAME_CATEGORY) return ", one category each";
+  return category ? `, ${category} only` : "";
+}
+
 // "+ Encounter": places a balanced pull per map click, built from the
-// selected palette entries (shift-click to range-select) or the whole
-// palette - see encounter.js.
-function EncounterControls({encounter, canPlaceOnMap}) {
+// selected palette entries (shift-click to range-select, or a category's
+// heading) or the whole palette, filtered by category - see encounter.js.
+function EncounterControls({encounter, canPlaceOnMap, categories}) {
   const {settings, onChangeSettings, armed, onArm, error, selection} = encounter;
+  const category = settings.category ?? ANY_CATEGORY;
+  const categoryOptions = category && category !== SAME_CATEGORY && !categories.includes(category) ? [...categories, category] : categories;
   return (
     <div className="map-encounter-controls">
       <div className="map-encounter-row">
@@ -416,9 +450,18 @@ function EncounterControls({encounter, canPlaceOnMap}) {
         <button type="button" className={`add-entry${armed ? " armed" : ""}`} aria-pressed={armed} disabled={!canPlaceOnMap}
           onClick={() => (armed ? encounter.onDisarm() : onArm())}>+ Encounter</button>
       </div>
+      {(categories.length > 0 || category) && (
+        <div className="map-encounter-row">
+          <select aria-label="Encounter category" value={category} onChange={(e) => onChangeSettings({category: e.target.value})}>
+            <option value={ANY_CATEGORY}>any category</option>
+            <option value={SAME_CATEGORY}>one category each</option>
+            {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      )}
       {armed && (
         <p className="map-sidebar-hint">
-          Click the map to place a {settings.intendedFor} {settings.pullSize === RANDOM_PULL_SIZE ? "random-size" : settings.pullSize} encounter from {selection.length ? `the ${selection.length} selected unit types` : "the whole palette"}. Escape to stop.
+          Click the map to place a {settings.intendedFor} {settings.pullSize === RANDOM_PULL_SIZE ? "random-size" : settings.pullSize} encounter from {selection.length ? `the ${selection.length} selected unit types` : "the whole palette"}{categoryPhrase(category)}. Escape to stop.
         </p>
       )}
       {error && <p className="map-sidebar-hint map-encounter-error" role="alert">{error}</p>}
