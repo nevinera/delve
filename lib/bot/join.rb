@@ -3,9 +3,10 @@
 module Bot
   # Puts a character into a world the way the play page does (EnterWorld),
   # and returns where to connect: the slot's websocket URL on the game
-  # server (GAME_SERVER_URL, as Rails reaches it), and the zone joined.
+  # server (GAME_SERVER_URL, as Rails reaches it), and the zone joined,
+  # with its content (maps and their barriers).
   class Join
-    Result = Data.define(:url, :zone, :instance_identifier, :slot_id)
+    Result = Data.define(:url, :zone, :zone_data, :instance_identifier, :slot_id)
 
     def self.call(...) = new(...).call
 
@@ -17,7 +18,7 @@ module Bot
     def call
       entry = EnterWorld.call(character: @character, world: @world)
       join = entry.join
-      Result.new(url: url(join), zone: entry.zone, instance_identifier: join.instance_identifier, slot_id: join.slot_id)
+      Result.new(url: url(join), zone: entry.zone, zone_data: entry.zone_data, instance_identifier: join.instance_identifier, slot_id: join.slot_id)
     end
 
     private

@@ -7,10 +7,21 @@ module Bot
   class GameState
     attr_reader :units
 
-    def initialize(character_name:)
+    # zone_data is the zone's content (as WorldContent.zone reads it), for
+    # its maps.
+    def initialize(character_name:, zone_data: {})
       @self_identifier = "player:#{character_name}"
+      @maps = Array(zone_data["maps"]).index_by { |m| m["identifier"] }
+      @pathfinders = {}
       @units = {}
       @loaded = false
+    end
+
+    def map(identifier) = @maps[identifier]
+
+    # A Pathfinder for one of the zone's maps, built once per clearance.
+    def pathfinder(identifier, clearance:)
+      @pathfinders[[identifier, clearance]] ||= map(identifier)&.then { |m| Pathfinder.new(m, clearance:) }
     end
 
     # Applies an instance-state or delta message. Returns false when the

@@ -29,7 +29,7 @@ module Bot
       join = Join.call(character: @character, world: @world)
       @joined = true
       @log.info("Joined #{join.zone.identifier} (instance #{join.instance_identifier}, slot #{join.slot_id})")
-      connect(join.url)
+      connect(join)
       loop_until_done
     ensure
       shut_down
@@ -37,13 +37,15 @@ module Bot
 
     private
 
-    def connect(url)
-      @connection = @connect.call(url)
-      @state = GameState.new(character_name: @character.name)
-      @controls = Controls.new(->(move) {
-        @log.verbose("[move] facing #{move[:facing].round(1)}, keys #{move[:keys].inspect} at #{where(@state.me)}")
-        @connection.send_message(move)
-      })
+    def connect(join)
+      @connection = @connect.call(join.url)
+      @state = GameState.new(character_name: @character.name, zone_data: join.zone_data)
+      @controls = Controls.new(method(:send_move))
+    end
+
+    def send_move(move)
+      @log.verbose("[move] facing #{move[:facing].round(1)}, keys #{move[:keys].inspect} at #{where(@state.me)}")
+      @connection.send_message(move)
     end
 
     def loop_until_done
@@ -71,9 +73,15 @@ module Bot
     end
 
     def done?
-      return true if @signals.positive? || @controls.quit?
+      return true if @signals.positive?
+      return quitting if @controls.quit?
       return false unless @connection.closed?
       @log.info("Server closed the connection: #{@connection.close_reason}")
+      true
+    end
+
+    def quitting
+      @log.info("The strategy quit#{": #{@controls.quit_reason}" if @controls.quit_reason}.")
       true
     end
 

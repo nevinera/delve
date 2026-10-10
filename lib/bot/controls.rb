@@ -70,9 +70,13 @@ module Bot
 
     def arrival_distance(unit, lookahead) = [@goal[:stop_within], unit["speed"].to_f * lookahead].max
 
-    def quit
+    # Ends the run, saying why when there's a reason worth logging.
+    def quit(reason = nil)
       @quit = true
+      @quit_reason = reason
     end
+
+    attr_reader :quit_reason
 
     def quit? = @quit
 

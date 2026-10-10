@@ -49,7 +49,7 @@ RSpec.describe Bot::Runner do
 
   before do
     zone = instance_double(Zone, identifier: "forest")
-    allow(Bot::Join).to receive(:call).and_return(Bot::Join::Result.new(url: "ws://x", zone:, instance_identifier: "i", slot_id: "s"))
+    allow(Bot::Join).to receive(:call).and_return(Bot::Join::Result.new(url: "ws://x", zone:, zone_data: {}, instance_identifier: "i", slot_id: "s"))
     allow(LeaveWorld).to receive(:call)
   end
 
