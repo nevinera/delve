@@ -185,11 +185,12 @@ function buildGraph(pieces) {
     const pair = u.key < v.key ? `${u.key}|${v.key}` : `${v.key}|${u.key}`;
     const existing = byPair.get(pair);
     if (existing) {
+      existing.onBorder ||= piece.kind === "border";
       // A wall along the map's edge seals it: the barrier wins.
       if (KIND_RANK[piece.kind] > KIND_RANK[existing.kind]) existing.kind = piece.kind;
       continue;
     }
-    const edge = { a: u.p, b: v.p, kind: piece.kind };
+    const edge = { a: u.p, b: v.p, kind: piece.kind, onBorder: piece.kind === "border" };
     edge.forward = { from: u, to: v, edge };
     edge.backward = { from: v, to: u, edge };
     edge.forward.twin = edge.backward;
@@ -247,8 +248,8 @@ function classify(graph, cycles, fillPoints) {
   for (const face of faces) face.side = face.state;
   for (const ring of cycles.filter((c) => c.area <= 0)) {
     const piece = component.get(ring.halfEdges[0].from);
-    if (ring.halfEdges.some((h) => h.edge.kind === "border")) {
-      ring.side = "outside"; // the map edge's own outside
+    if (ring.halfEdges.some((h) => h.edge.onBorder)) {
+      ring.side = "outside"; // the map edge's own outside, walled or not
       continue;
     }
     const probe = ring.points[0];

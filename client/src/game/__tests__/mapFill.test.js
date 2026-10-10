@@ -22,6 +22,15 @@ describe("computeMapFill", () => {
     expect(computeMapFill(map([wall([0, 0], [100, 0], [100, 100], [0, 100], [0, 0])])).filled).toEqual([]);
   });
 
+  it("knows a door's far side is off the map even when walls cover the rest of its edge", () => {
+    const fill = computeMapFill(map(
+      [wall([40, 0], [0, 0], [0, 100], [100, 100], [100, 0], [60, 0])],
+      [line([40, 0], [60, 0])],
+    ));
+    const door = fill.edges.find((e) => e.kind === "connection");
+    expect([door.left, door.right].sort()).toEqual(["open", "outside"]);
+  });
+
   it("closes a gap of up to half a foot between wall ends", () => {
     const fill = computeMapFill(map([wall([20, 20], [80, 20], [80, 80], [20, 80], [20, 20.4])]));
     expect(filledArea(fill)).toBeCloseTo(10000 - 3600, 0);

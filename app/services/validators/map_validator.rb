@@ -16,6 +16,7 @@ module Validators
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
       validate_optional_fields!(data, path: path)
+      MapFillValidator.validate!(data, path: path)
     end
 
     private
@@ -24,12 +25,12 @@ module Validators
       validate_elvl!(data, path: path) if given?(data, "elvl")
       validate_lighting!(data, path: path) if given?(data, "lighting")
       require_string!(data, "thumbnailUrl", path: path) if given?(data, "thumbnailUrl")
+      validate_fill_points!(data, path: path) if given?(data, "fillPoints")
       validate_content!(data, path: path)
     end
 
     def validate_content!(data, path:)
       validate_barriers!(data, path: path) if given?(data, "barriers")
-      validate_fill_points!(data, path: path) if given?(data, "fillPoints")
       validate_connections!(data, path: path) if given?(data, "connections")
       validate_units!(data, path: path) if given?(data, "units")
       validate_ncus!(data, path: path) if given?(data, "ncus")

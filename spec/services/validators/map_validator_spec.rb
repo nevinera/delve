@@ -10,6 +10,51 @@ RSpec.describe Validators::MapValidator, type: :validator do
       expect { described_class.validate!(zone_fixture["maps"][1]) }.not_to raise_error
     end
 
+    describe "connections against the fill" do
+      def room_map(connections, wall_points = [[45, 20], [20, 20], [20, 80], [80, 80], [80, 20], [55, 20]])
+        cave_entrance_map.merge(
+          "feetDimensions" => {"width" => 100, "height" => 100},
+          "barriers" => [{"type" => "wall", "locations" => wall_points.map { |x, y| {"x" => x, "y" => y} }}],
+          "connections" => connections
+        )
+      end
+      let(:door) { {"identifier" => "door", "type" => "line", "start" => {"x" => 45, "y" => 20}, "end" => {"x" => 55, "y" => 20}} }
+      def point_at(x, y) = {"identifier" => "spot", "type" => "point", "position" => {"x" => x, "y" => y, "angle" => 0}, "fuzzRadius" => 1, "fuzzAngle" => 0}
+
+      it "accepts a line connection with open ground on one side and fill on the other" do
+        expect { described_class.validate!(room_map([door])) }.not_to raise_error
+      end
+
+      it "accepts a line connection on the map's edge" do
+        edge_door = door.merge("start" => {"x" => 40, "y" => 0}, "end" => {"x" => 60, "y" => 0})
+        data = room_map([edge_door], [[0, 0], [40, 0]]).merge("barriers" => [
+          {"type" => "wall", "locations" => [[40, 0], [0, 0], [0, 100], [100, 100], [100, 0], [60, 0]].map { |x, y| {"x" => x, "y" => y} }}
+        ])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when both sides of a line connection are filled" do
+        leaky = [[45, 20], [20, 20], [20, 80], [70, 80]]
+        expect { described_class.validate!(room_map([door], leaky)) }
+          .to raise_error(Validators::ValidationError, /door must have open ground on exactly one side, but has fill on both sides/) { |e| expect(e.path).to eq("$.connections[0]") }
+      end
+
+      it "raises when both sides of a line connection are open" do
+        inner = door.merge("identifier" => "arch", "start" => {"x" => 40, "y" => 50}, "end" => {"x" => 60, "y" => 50})
+        expect { described_class.validate!(room_map([door, inner])) }
+          .to raise_error(Validators::ValidationError, /arch must have open ground on exactly one side, but has open ground on both sides/) { |e| expect(e.path).to eq("$.connections[1]") }
+      end
+
+      it "raises when a point connection is in the fill" do
+        expect { described_class.validate!(room_map([door, point_at(5, 5)])) }
+          .to raise_error(Validators::ValidationError, /spot is in the fill/) { |e| expect(e.path).to eq("$.connections[1].position") }
+      end
+
+      it "accepts a point connection on open ground" do
+        expect { described_class.validate!(room_map([door, point_at(50, 50)])) }.not_to raise_error
+      end
+    end
+
     describe "fillPoints" do
       it "accepts a list of locations" do
         data = cave_entrance_map.merge("fillPoints" => [{"x" => 5, "y" => 6.5}])
@@ -151,7 +196,7 @@ RSpec.describe Validators::MapValidator, type: :validator do
 
       it "accepts a circle barrier" do
         barrier = {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 10.0}
-        data = cave_entrance_map.merge("barriers" => [barrier])
+        data = cave_entrance_map.merge("barriers" => [barrier], "connections" => [])
         expect { described_class.validate!(data) }.not_to raise_error
       end
 
@@ -167,7 +212,7 @@ RSpec.describe Validators::MapValidator, type: :validator do
       end
 
       it "accepts walls totaling exactly 3000 segments" do
-        data = cave_entrance_map.merge("barriers" => [wall_with_locations(3001)])
+        data = cave_entrance_map.merge("barriers" => [wall_with_locations(3001)], "connections" => [])
         expect { described_class.validate!(data) }.not_to raise_error
       end
 
@@ -179,7 +224,7 @@ RSpec.describe Validators::MapValidator, type: :validator do
 
       it "accepts 500 circles (3000 segments)" do
         circle = {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 10.0}
-        data = cave_entrance_map.merge("barriers" => Array.new(500) { circle })
+        data = cave_entrance_map.merge("barriers" => Array.new(500) { circle }, "connections" => [])
         expect { described_class.validate!(data) }.not_to raise_error
       end
 
@@ -244,11 +289,11 @@ RSpec.describe Validators::MapValidator, type: :validator do
         conn = {
           "identifier" => "entrance",
           "type" => "point",
-          "position" => {"x" => 50.0, "y" => 50.0, "angle" => 0.0},
+          "position" => {"x" => 40.0, "y" => 45.0, "angle" => 0.0},
           "fuzzRadius" => 5.0,
           "fuzzAngle" => 45.0
         }
-        data = cave_entrance_map.merge("connections" => [conn])
+        data = cave_entrance_map.merge("connections" => cave_entrance_map["connections"] + [conn])
         expect { described_class.validate!(data) }.not_to raise_error
       end
 
