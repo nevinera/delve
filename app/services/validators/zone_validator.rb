@@ -20,8 +20,7 @@ module Validators
       validate_unit_types!(data, path: path) if given?(data, "unitTypes")
       validate_items!(data, path: path) if given?(data, "items")
       validate_zone_links!(data, path: path) if given?(data, "zoneLinks")
-      validate_entry_points!(data, path: path) if given?(data, "entryPoints")
-      validate_open_connections!(data, path: path) if given?(data, "openConnections")
+      ZoneConnectionPoolsValidator.validate!(data, path: path)
       validate_flags!(data, path: path) if given?(data, "flags")
       validate_settings!(data, path: path)
     end
@@ -123,24 +122,6 @@ module Validators
       raise ValidationError.new("zoneLinks must be an array", path: child_path(path, "zoneLinks")) unless zone_links.is_a?(Array)
       zone_links.each_with_index do |link, i|
         validate_zone_link!(link, path: index_path(child_path(path, "zoneLinks"), i))
-      end
-    end
-
-    def validate_entry_points!(data, path:)
-      entry_points = data["entryPoints"]
-      raise ValidationError.new("entryPoints must be an object", path: child_path(path, "entryPoints")) unless entry_points.is_a?(Hash)
-      entry_points.each do |key, value|
-        ep_path = child_path(child_path(path, "entryPoints"), key)
-        raise ValidationError.new("entryPoint value must be a string or null", path: ep_path) unless value.nil? || value.is_a?(String)
-      end
-    end
-
-    def validate_open_connections!(data, path:)
-      open_connections = data["openConnections"]
-      raise ValidationError.new("openConnections must be an object", path: child_path(path, "openConnections")) unless open_connections.is_a?(Hash)
-      open_connections.each do |key, value|
-        oc_path = child_path(child_path(path, "openConnections"), key)
-        raise ValidationError.new("openConnection value must be a string", path: oc_path) unless value.is_a?(String)
       end
     end
 

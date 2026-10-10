@@ -13,11 +13,49 @@ import {isValidIdentifier, itemFile, mapDir, mapFile, resolvePath, unitTypeFile,
 export const mapData = (draft, zone, map) => draft.read(mapFile(draft.worldKey, zone, map));
 
 // Applies a MapDraft (old map editor class) method chain to the map file,
-// then fills in the zone's refs for any unit type or item it now uses.
+// then fills in the zone's refs for any unit type or item it now uses, and
+// follows any connection it renamed.
 export function updateMap(draft, zone, map, fn) {
   const path = mapFile(draft.worldKey, zone, map);
-  const next = draft.write(path, fn(new MapDraft(draft.read(path))).data);
-  return mapIndex(next, zone, map) === -1 ? next : syncZoneRefs(next, zone);
+  const before = draft.read(path);
+  const after = fn(new MapDraft(before)).data;
+  let next = draft.write(path, after);
+  if (mapIndex(next, zone, map) === -1) return next;
+  for (const [from, to] of renamedConnections(before, after)) next = renameConnection(next, zone, map, from, to);
+  return syncZoneRefs(next, zone);
+}
+
+// [from, to] for each connection whose identifier changed in place (same
+// index, same number of connections - a rename, not an add or delete).
+function renamedConnections(before, after) {
+  const was = before?.connections ?? [];
+  const now = after?.connections ?? [];
+  if (was.length !== now.length) return [];
+  return was.flatMap((c, i) => (c?.identifier && now[i]?.identifier && c.identifier !== now[i].identifier ? [[c.identifier, now[i].identifier]] : []));
+}
+
+// Rewrites every reference to one of map's connections: the zone's links,
+// entry points, open connections and graph positions, and the world's entry
+// points - so a renamed connection doesn't leave a stale key behind for a
+// world link to land players on.
+function renameConnection(draft, zone, map, from, to) {
+  const world = draft.worldKey;
+  const oldKey = `${map}/${from}`;
+  const newKey = `${map}/${to}`;
+  const renameKeys = (dict, prefix = "") => Object.fromEntries(Object.entries(dict ?? {}).map(([k, v]) => [k === `${prefix}${oldKey}` ? `${prefix}${newKey}` : k, v]));
+  const side = (s) => (s?.map === map && s?.connection === from ? {...s, connection: to} : s);
+  let next = draft.update(zoneFile(world, zone), (data) => ({
+    ...data,
+    zoneLinks: (data.zoneLinks ?? []).map((link) => ({...link, connectionA: side(link.connectionA), connectionB: side(link.connectionB)})),
+    entryPoints: renameKeys(data.entryPoints),
+    openConnections: renameKeys(data.openConnections),
+  }));
+  next = next.update(`${worldDir(world)}/${world}.json`, (data) => ({...data, entryPoints: renameKeys(data.entryPoints, `${zone}/`)}));
+  const positions = zonePositions(next, zone);
+  return setZonePositions(next, zone, Object.fromEntries(Object.entries(positions).map(([key, pos]) => {
+    const colon = key.indexOf(":");
+    return colon !== -1 && key.slice(colon + 1) === oldKey ? [`${key.slice(0, colon + 1)}${newKey}`, pos] : [key, pos];
+  })));
 }
 
 function mapIndex(draft, zone, map) {
