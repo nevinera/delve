@@ -16,6 +16,24 @@ describe("mapOps", () => {
     expect(zoneData(draft, "forest").items["gold-ring"]).toBeDefined();
   });
 
+  it("follows a renamed connection in the zone's and the world's references to it", () => {
+    const positioned = setZonePositions(fixtureDraft(), "forest", {hub: {x: 1, y: 1}, "entryPoint:hub/central": {x: 2, y: 2}});
+    const draft = updateMap(updateMap(positioned, "forest", "hub", (m) => m.updateEntryField("connections", 0, "identifier", "middle")),
+      "forest", "hub", (m) => m.updateEntryField("connections", 1, "identifier", "top"));
+    const zone = zoneData(draft, "forest");
+
+    expect(zone.entryPoints).toEqual({"hub/middle": null});
+    expect(zone.openConnections).toEqual({"hub/top": "north-exit"});
+    expect(worldData(draft).entryPoints).toEqual({"forest/hub/middle": null});
+    expect(zonePositions(draft, "forest")).toEqual({hub: {x: 1, y: 1}, "entryPoint:hub/middle": {x: 2, y: 2}});
+  });
+
+  it("leaves the zone's references alone when a connection is added or removed", () => {
+    const draft = updateMap(fixtureDraft(), "forest", "hub", (m) => m.removeEntry("connections", 0));
+
+    expect(zoneData(draft, "forest").openConnections).toEqual({"hub/north": "north-exit"});
+  });
+
   it("creates a blank map in the zone's directory and adds it to the zone", () => {
     const draft = createMap(fixtureDraft(), "cave", "mouth", "Cave Mouth");
 

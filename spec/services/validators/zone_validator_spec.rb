@@ -212,11 +212,30 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
         expect { described_class.validate!(data) }
           .to raise_error(Validators::ValidationError, /must be a string or null/)
       end
+
+      it "raises when a key doesn't name one of the zone's map connections" do
+        data = zone_fixture.merge("entryPoints" => {"cave_entrance/gone" => nil})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /entryPoints key "cave_entrance\/gone" doesn't name a connection/)
+      end
+    end
+
+    context "openConnections" do
+      it "accepts keys naming the zone's map connections" do
+        data = zone_fixture.merge("openConnections" => {"cave_entrance/clearing_entrance" => "entrance"})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when a key doesn't name one of the zone's map connections" do
+        data = zone_fixture.merge("openConnections" => {"cave_entrance/connection-1" => "entrance"})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /openConnections key "cave_entrance\/connection-1" doesn't name a connection/)
+      end
     end
 
     context "unit identifier uniqueness across maps" do
       def zone_with_maps(maps)
-        zone_fixture.merge("maps" => maps)
+        zone_fixture.merge("maps" => maps, "entryPoints" => {}, "openConnections" => {})
       end
 
       def minimal_map(identifier, unit_identifiers)
