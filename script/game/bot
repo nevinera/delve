@@ -1,0 +1,66 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Plays a character as a bot (see lib/bot/): enters the world as the play
+# page would, connects to the slot, and runs a strategy until it quits or
+# is interrupted, then disconnects and leaves the world.
+#
+# Usage:
+#   script/game/bot --character <id|name> --world <id|name|key> --strategy <name> [--config <json|file>] [-v]
+#
+# Strategies: null (stands still), spin ({"degrees_per_second": 15}),
+# script ({"steps": [{"after": 0, "do": "move", "keys": ["forward"]}, ...]}).
+#
+# Environment: GAME_SERVER_URL (default http://localhost:8090), as Rails
+# reaches the game server.
+
+require "optparse"
+
+options = {verbosity: 0, strategy: "null", config: "{}"}
+OptionParser.new do |opts|
+  opts.banner = "Usage: script/game/bot --character <id|name> --world <id|name|key> --strategy <name> [--config <json|file>]"
+  opts.on("-C", "--character ID_OR_NAME", "Character ID or name") { |v| options[:character] = v }
+  opts.on("-W", "--world ID_OR_NAME_OR_KEY", "World ID, name, or key") { |v| options[:world] = v }
+  opts.on("-s", "--strategy NAME", "Strategy (default: null)") { |v| options[:strategy] = v }
+  opts.on("-c", "--config JSON_OR_FILE", "The strategy's config, as JSON or a JSON file") { |v| options[:config] = v }
+  opts.on("-v", "--verbose", "Log other messages (-vv: every state message too)") { options[:verbosity] += 1 }
+end.parse!
+
+abort "Error: --character is required" unless options[:character]
+abort "Error: --world is required" unless options[:world]
+
+require_relative "../../config/environment"
+
+def find_character(key)
+  (/\A\d+\z/.match?(key) ? Character.find_by(id: key) : Character.find_by(name: key)) or abort "Character not found: #{key}"
+end
+
+def find_world(key)
+  world = /\A\d+\z/.match?(key) ? World.find_by(id: key) : World.find_by(name: key) || World.all.find { |w| w.key == key }
+  world or abort "World not found: #{key}"
+end
+
+def read_config(arg)
+  json = arg.lstrip.start_with?("{") ? arg : File.read(arg)
+  JSON.parse(json).tap { |c| abort "Error: --config must be a JSON object" unless c.is_a?(Hash) }
+rescue Errno::ENOENT
+  abort "Config file not found: #{arg}"
+rescue JSON::ParserError => e
+  abort "Config isn't valid JSON: #{e.message}"
+end
+
+log = Bot::Log.new(verbosity: options[:verbosity])
+strategy = begin
+  Bot::Strategies.build(options[:strategy], read_config(options[:config]))
+rescue Bot::Strategy::ConfigError => e
+  abort "Error: #{e.message}"
+end
+
+runner = Bot::Runner.new(character: find_character(options[:character]), world: find_world(options[:world]), strategy:, log:)
+%w[INT TERM].each { |signal| trap(signal) { runner.interrupt! } }
+
+begin
+  runner.run
+rescue EnterWorld::Error, VerifiedContent::Error, GameApi::Error => e
+  abort "Couldn't enter the world: #{e.message}"
+end
