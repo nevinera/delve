@@ -29,6 +29,16 @@ RSpec.describe "Build::ClassVersions", type: :request do
       expect(response.body).not_to include("1.0")
     end
 
+    it "hides expired versions unless asked" do
+      create(:character_class, user:, identifier: "puncher", version: "0.1", state: :fetched, expires_at: 1.hour.ago)
+      create(:character_class, user:, identifier: "puncher", version: "0.2", state: :fetched, expires_at: 1.hour.from_now)
+      get "/build/classes/puncher/versions"
+      expect(response.body).to include(%(<span class="entry-title">0.2</span>), "expires", "Show expired versions")
+      expect(response.body).not_to include(%(<span class="entry-title">0.1</span>))
+      get "/build/classes/puncher/versions", params: {expired: 1}
+      expect(response.body).to include(%(<span class="entry-title">0.1</span>), "expired", "Hide expired versions")
+    end
+
     it "notes when the repo's tags can't be listed" do
       stub_json("#{api}/git/matching-refs/tags/puncher-", {message: "boom"}, status: 500)
       get "/build/classes/puncher/versions"

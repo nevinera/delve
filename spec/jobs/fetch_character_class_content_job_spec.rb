@@ -21,6 +21,13 @@ RSpec.describe FetchCharacterClassContentJob, type: :job do
     expect(character_class.reload.state).to eq("fetched")
   end
 
+  it "starts the expiry of the versions it supersedes" do
+    older = create(:character_class, user:, identifier: character_class.identifier, version: "0.1", state: :fetched)
+    described_class.perform_now(character_class.id)
+    expect(older.reload.expires_at).to be_within(1.minute).of(1.week.from_now)
+    expect(character_class.reload.expires_at).to be_nil
+  end
+
   it "stores a SHA1 hash of the response body" do
     described_class.perform_now(character_class.id)
     expect(character_class.reload.content_sha).to eq(Digest::SHA1.hexdigest(content))

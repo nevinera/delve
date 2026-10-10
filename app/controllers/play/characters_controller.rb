@@ -61,9 +61,9 @@ class Play::CharactersController < Play::BaseController
     params.require(:character).permit(:character_class_id).compact_blank.merge(token_url: token_value)
   end
 
-  def fetched_classes = CharacterClass.where(state: :fetched).order(:identifier)
+  def fetched_classes = CharacterClass.available.order(:identifier)
 
-  # Keeps the current class listed even when it isn't fetched, so saving
+  # Keeps the current class listed even when it isn't available, so saving
   # the token doesn't switch it.
   def class_choices = fetched_classes.or(CharacterClass.where(id: @character.character_class_id_was))
 

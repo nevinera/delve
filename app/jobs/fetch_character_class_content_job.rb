@@ -12,6 +12,7 @@ class FetchCharacterClassContentJob < ApplicationJob
       character_class.update!(fetched_attrs(body, data))
       CharacterClasses::ExtractAbilities.call(character_class: character_class, data: data)
     end
+    CharacterClass.expire_superseded!(character_class.identifier)
   rescue JSON::ParserError => e
     record_failure(character_class, "invalid JSON: #{e.message}")
   rescue Validators::ValidationError => e

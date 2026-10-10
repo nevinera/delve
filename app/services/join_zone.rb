@@ -13,6 +13,7 @@ class JoinZone
   end
 
   def call
+    CharacterClasses::UpgradeExpired.call(character: @character)
     response = GameApi.slots.request(build_attrs)
     session = upsert_session(response)
     Result.new(
