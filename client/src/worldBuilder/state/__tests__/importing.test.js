@@ -3,7 +3,7 @@ import {fixtureDraft} from "./fixtureWorld";
 import {ExistingBlob} from "../../../github/commitFiles";
 import {LibraryReader} from "../libraryReader";
 import {fakeClient} from "./fakeLibrary";
-import {applyCopies, libraryCategory, libraryItems, libraryUnitTypes, prepareItemImport, preparePowerImport, prepareUnitTypeImport, relocateAssets} from "../importing";
+import {applyCopies, libraryItems, libraryUnitTypes, prepareItemImport, preparePowerImport, prepareUnitTypeImport, relocateAssets} from "../importing";
 import {itemData} from "../itemOps";
 import {unitTypeData} from "../unitTypeOps";
 import {assetUrlFor} from "../assetUrls";
@@ -42,7 +42,7 @@ describe("importing", () => {
     const draft = prepared.apply(fixtureDraft());
 
     expect(unitTypeData(draft, "troll")).toEqual({
-      name: "Troll", category: "demo", tokenImageUrl: ["../tokens/unit/troll.webp"],
+      name: "Troll", tokenImageUrl: ["../tokens/unit/troll.webp"],
       powers: [{name: "Smash", iconURL: "../graphics/icons/smash.png", soundEffects: [{sourceURL: ":thud:"}]}],
     });
     expect(draft.read("worlds/w/tokens/unit/troll.webp")).toEqual(new ExistingBlob("sha:tokens/unit/troll.webp", "tokens/unit/troll.webp"));
@@ -52,10 +52,7 @@ describe("importing", () => {
     expect(assetUrlFor(draft, "o/content", "worlds/w/tokens/unit/troll.webp")).toEqual("https://raw.githubusercontent.com/o/content/c1/tokens/unit/troll.webp");
   });
 
-  it("defaults a unit type's category to its library folder, keeping one it has", async () => {
-    expect(libraryCategory("unit_types/goblins/goblin-archer.json")).toEqual("goblins");
-    expect(libraryCategory("unit_types/rat.json")).toBeNull();
-
+  it("keeps a unit type's category", async () => {
     const repo = {...LIBRARY, "unit_types/demo/troll.json": {...LIBRARY["unit_types/demo/troll.json"], category: "trolls"}};
     const prepared = await prepareUnitTypeImport(fixtureDraft(), new LibraryReader(fakeClient(repo), "c1"), "unit_types/demo/troll.json", "troll");
     expect(unitTypeData(prepared.apply(fixtureDraft()), "troll").category).toEqual("trolls");

@@ -73,23 +73,14 @@ async function libraryFiles(reader, dir) {
 export const libraryUnitTypes = (reader) => libraryFiles(reader, "unit_types");
 export const libraryItems = (reader) => libraryFiles(reader, "items");
 
-// The library folder a unit type sits in, as its category:
-// unit_types/goblins/goblin-archer.json -> "goblins"; null at the top.
-export function libraryCategory(sourcePath) {
-  const parts = sourcePath.split("/");
-  return parts.length > 2 && parts[0] === "unit_types" ? parts[1] : null;
-}
-
 // Imports a library unit type as the world's unit type `key`: powers
-// inline (any $ref expanded), every asset copied in, and its category
-// defaulting to its library folder. Resolves to
+// inline (any $ref expanded), every asset copied in. Resolves to
 // {apply(draft) -> nextDraft, missing: [asset paths not found]}, so the
 // (async) reading happens before the draft is touched.
 export async function prepareUnitTypeImport(draft, reader, sourcePath, key) {
   createUnitType(draft, key); // checks the key is valid and free
   const raw = JSON.parse(await reader.fetchFile(sourcePath));
-  const category = raw.category || libraryCategory(sourcePath);
-  const expanded = normalizeUnitType(await expandPowers(reader, category ? {...raw, category} : raw, sourcePath));
+  const expanded = normalizeUnitType(await expandPowers(reader, raw, sourcePath));
   const target = unitTypeFile(draft.worldKey, key);
   const {content, assets} = relocateAssets(expanded, sourcePath, target, draft.worldKey);
   const {copies, missing} = await assetCopies(draft, reader, assets);
