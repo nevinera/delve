@@ -3503,8 +3503,10 @@ export default function App({
     sendMove();
   }, [sendMove]);
 
+  // Left/right only: tilting the camera from the stick was rarely wanted
+  // (dragging the scene still does it).
   const handleCameraStickMove = useCallback((data) => {
-    cameraStickRef.current = { x: data.vector.x, y: data.vector.y };
+    cameraStickRef.current = { x: data.vector.x, y: 0 };
   }, []);
 
   const handleCameraStickEnd = useCallback(() => {
@@ -4497,6 +4499,7 @@ export default function App({
                 onMove={handleCameraStickMove}
                 onEnd={handleCameraStickEnd}
                 style={styles.landscapeJoystickZone}
+                horizontal
               />
             </div>
           </div>
@@ -4558,6 +4561,7 @@ export default function App({
               onMove={handleCameraStickMove}
               onEnd={handleCameraStickEnd}
               style={styles.landscapeJoystickZone}
+              horizontal
             />
           </div>
           <div style={styles.portraitBottomButtonsBand}>
