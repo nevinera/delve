@@ -1,0 +1,36 @@
+{
+  "format": "cellmap",
+  "version": 1,
+  "name": "Clearing",
+  "grid": {
+    "type": "hex",
+    "cols": 32,
+    "rows": 22,
+    "cellSize": 5
+  },
+  "seed": 11,
+  "cells": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTT.....TTTTTTTTTTTTTTT",
+    "TTTTTTTTT............TTTTTTTTTTT",
+    "TTTTTTT.................TTTTTTTT",
+    "TTTTTT...................TTTTTTT",
+    "TTTTT......................TTTTT",
+    "TTTT.........TT.............TTTT",
+    "TTTT........TTTT..............TT",
+    "TTT..........TT.................",
+    "TTT.............................",
+    "TTT.............................",
+    "TTTT............................",
+    "TTTT.......................TTTTT",
+    "TTTTT.....................TTTTTT",
+    "TTTTTT...................TTTTTTT",
+    "TTTTTTT.................TTTTTTTT",
+    "TTTTTTTTT.............TTTTTTTTTT",
+    "TTTTTTTTTTTT......TTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "format": "cellmap",
+  "version": 1,
+  "name": "Forest edge",
+  "grid": {
+    "type": "hex",
+    "cols": 32,
+    "rows": 22,
+    "cellSize": 5
+  },
+  "seed": 23,
+  "cells": [
+    ".................TTTTTTTTTTTTTTT",
+    "................TTTTTTTTTTTTTTTT",
+    "...T.............TTTTTTTTTTTTTTT",
+    "..TTT.............TTTTTTTTTTTTTT",
+    "...T..............TTTTTTTTTTTTTT",
+    "...................TTTTTTTTTTTTT",
+    ".........T........TTTTTTTTTTTTTT",
+    ".................TTTTTTTTTTTTTTT",
+    "................TTTTTTTTTTTTTTTT",
+    "...............TTTTTTTTTTTTTTTTT",
+    ".....TT.........TTTTTTTTTTTTTTTT",
+    "....TTTT.........TTTTTTTTTTTTTTT",
+    ".....TT...........T.TTTTTTTTTTTT",
+    "....................TTTTTTTTTTTT",
+    ".....................TTTTTTTTTTT",
+    "..............T......TTTTTTTTTTT",
+    "....................TTTTTTTTTTTT",
+    "..................TTTTTTTTTTTTTT",
+    ".........T.......TTTTTTTTTTTTTTT",
+    "................TTTTTTTTTTTTTTTT",
+    "...............TTTTTTTTTTTTTTTTT",
+    "................TTTTTTTTTTTTTTTT"
+  ]
+}
