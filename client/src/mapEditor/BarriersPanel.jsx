@@ -223,7 +223,7 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
           {autoResult?.error && <p className="map-sidebar-hint">{autoResult.error}</p>}
           {autoResult && !autoResult.error && (
             <p className="map-sidebar-hint">
-              Added {autoResult.added.barriers} walls ({autoResult.added.segments} segments) and {autoResult.added.fillPoints} fill points.
+              Added {autoResult.added.walls} walls, {autoResult.added.circles} circles ({autoResult.added.segments} segments) and {autoResult.added.fillPoints} fill points.
               {autoResult.openEdge && " Open ground reaches the map's edge, so it will be filled - ring the map with trees."}
             </p>
           )}

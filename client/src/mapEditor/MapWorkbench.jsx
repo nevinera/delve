@@ -116,7 +116,7 @@ export default function MapWorkbench({
     if (result.error) return {error: result.error};
     onMapChange((d) => d.setField("barriers", result.barriers).setField("fillPoints", result.fillPoints));
     return {
-      added: {barriers: result.barriers.length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length},
+      added: {walls: result.barriers.filter((b) => b.type === "wall").length, circles: result.barriers.filter((b) => b.type === "circle").length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length},
       openEdge: result.openEdge, error: null,
     };
   }

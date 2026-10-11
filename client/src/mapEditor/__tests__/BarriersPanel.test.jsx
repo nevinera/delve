@@ -393,13 +393,13 @@ describe("BarriersPanel's Delete All and Auto Barriers", () => {
     const {rerender} = render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} />);
     expandSection();
     expect(screen.queryByRole("button", {name: "Auto Barriers"})).not.toBeInTheDocument();
-    const onAutoBarriers = vi.fn(() => ({added: {barriers: 3, segments: 120, fillPoints: 1}, openEdge: true, error: null}));
+    const onAutoBarriers = vi.fn(() => ({added: {walls: 3, circles: 2, segments: 120, fillPoints: 1}, openEdge: true, error: null}));
     rerender(<BarriersPanel {...DEFAULT_PROPS} barriers={[wall]} onAutoBarriers={onAutoBarriers} />);
     expect(screen.getByRole("button", {name: "Auto Barriers"})).toBeDisabled();
     rerender(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} onAutoBarriers={onAutoBarriers} />);
     fireEvent.click(screen.getByRole("button", {name: "Auto Barriers"}));
     expect(onAutoBarriers).toHaveBeenCalled();
-    expect(screen.getByText(/Added 3 walls \(120 segments\) and 1 fill points\. Open ground reaches the map's edge/)).toBeInTheDocument();
+    expect(screen.getByText(/Added 3 walls, 2 circles \(120 segments\) and 1 fill points\. Open ground reaches the map's edge/)).toBeInTheDocument();
   });
 
   it("says why Auto Barriers couldn't make any", () => {

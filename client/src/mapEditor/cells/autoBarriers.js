@@ -5,18 +5,22 @@
 // then smoothed so a row's is too, then simplified. Walls stop at the
 // map's edge - forest reaching it is filled by the map's own rule (see
 // game/mapFill.js) - and each patch of forest
-// inside the map gets a fill point. Open ground reaching the edge would be
+// inside the map gets a fill point. A lone patch that's a whole hex ball
+// (one cell, or one and its six neighbors, ...) gets a circle instead. Open ground reaching the edge would be
 // filled too, so that's reported, not fixed.
 //
 // Works in map feet (y up); the scene is in cellmap feet (y down).
 import {trailClearedCells} from "../../cellMap/scene";
 import {regionLoops} from "../../cellMap/regions";
-import {CELL_SIZE, cellCenter, hexRadius, mapSize} from "../../cellMap/hexGrid";
+import {CELL_SIZE, cellCenter, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
 import {terrainsOf} from "../../cellMap/format";
 
 // See docs/schema/map.md (and MapValidator).
 export const MAX_BARRIER_SEGMENTS = 3000;
 export const MAX_FILL_POINTS = 100;
+// A circle's radius is at most 30 ft, and counts as this many segments.
+const MAX_CIRCLE_RADIUS = 30;
+const CIRCLE_SEGMENTS = 6;
 
 // How far, in feet, a wall may stray from the forest's edge - loose, so
 // walls are long straight lines rather than following each cell;
@@ -34,18 +38,23 @@ const SMOOTHING_PASSES = 3;
 export function autoBarriers(cellMap, existingFillPoints = []) {
   const {width, height} = mapSize(cellMap.grid);
   const toMap = ({x, y}) => [x, height - y];
-  const forest = regionLoops(cellMap, "trees", trailClearedCells(cellMap)).map((loop) => smoothOutline(loop).map(toMap));
+  const cleared = trailClearedCells(cellMap);
+  const groves = hexBallGroves(cellMap, cleared);
+  const inGrove = new Set(groves.flatMap(({cells}) => cells));
+  const circles = groves.map(({center: [col, row], steps}) => ({type: "circle", location: roundPoint(mapPoint(col, row, height)), radius: (steps + 0.5) * CELL_SIZE}));
+  const forest = regionLoops(cellMap, "trees", (c, r) => cleared(c, r) || inGrove.has(`${c},${r}`)).map((loop) => smoothOutline(loop).map(toMap));
   const forestBoxes = forest.map(bounds);
   const isForest = (p) => forest.filter((loop, i) => inBounds(p, forestBoxes[i]) && insidePolygon(p, loop)).length % 2 === 1;
 
   const runs = forest.flatMap((loop) => clipLoop(loop, width, height));
   let tolerance = START_TOLERANCE;
   let walls = simplifyAll(runs, tolerance);
-  while (segmentCount(walls) > MAX_BARRIER_SEGMENTS && tolerance < MAX_TOLERANCE) {
+  const circleSegments = circles.length * CIRCLE_SEGMENTS;
+  while (segmentCount(walls) + circleSegments > MAX_BARRIER_SEGMENTS && tolerance < MAX_TOLERANCE) {
     tolerance *= 2;
     walls = simplifyAll(runs, tolerance);
   }
-  const segments = segmentCount(walls);
+  const segments = segmentCount(walls) + circleSegments;
   if (segments > MAX_BARRIER_SEGMENTS) {
     return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The forest's edge needs ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify the forest and try again.`};
   }
@@ -68,8 +77,52 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
     return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The forest has ${fillPoints.length - existingFillPoints.length} separate patches inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
   }
 
-  const barriers = walls.map(({points}) => ({type: "wall", locations: points.map(([x, y]) => ({x: round(x), y: round(y)}))}));
+  // Circles are always filled, so they need no fill points.
+  const barriers = [...walls.map(({points}) => ({type: "wall", locations: points.map(roundPoint)})), ...circles];
   return {barriers, fillPoints, segments, openEdge: edgeCellCenters(cellMap, height).some((p) => !isForest(p)), error: null};
+}
+
+// Patches of trees (less cleared cells) that are exactly the cells within
+// some steps of a center, away from the map's edge: {center, steps, cells}.
+function hexBallGroves(cellMap, cleared) {
+  const {cols, rows} = cellMap.grid;
+  const terrains = terrainsOf(cellMap);
+  const isTree = (c, r) => c >= 0 && c < cols && r >= 0 && r < rows && terrains[cellMap.cells[r][c]] === "trees" && !cleared(c, r);
+  const seen = new Set();
+  const groves = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (seen.has(`${col},${row}`) || !isTree(col, row)) continue;
+      const patch = [[col, row]];
+      seen.add(`${col},${row}`);
+      for (let i = 0; i < patch.length; i++) {
+        for (let edge = 0; edge < 6; edge++) {
+          const [c, r] = neighbor(...patch[i], edge);
+          if (!seen.has(`${c},${r}`) && isTree(c, r)) {
+            seen.add(`${c},${r}`);
+            patch.push([c, r]);
+          }
+        }
+      }
+      const grove = asHexBall(patch, cols, rows);
+      if (grove) groves.push(grove);
+    }
+  }
+  return groves;
+}
+
+// A ball of k steps has 3k(k+1)+1 cells; its center is the middle of its
+// bounding columns and rows.
+function asHexBall(patch, cols, rows) {
+  const steps = Math.round((Math.sqrt(12 * patch.length - 3) - 3) / 6);
+  if (3 * steps * (steps + 1) + 1 !== patch.length || (steps + 0.5) * CELL_SIZE > MAX_CIRCLE_RADIUS) return null;
+  const colsOf = patch.map(([c]) => c);
+  const col = (Math.min(...colsOf) + Math.max(...colsOf)) / 2;
+  const rowsOf = patch.filter(([c]) => c === col).map(([, r]) => r);
+  const center = [col, (Math.min(...rowsOf) + Math.max(...rowsOf)) / 2];
+  if (!center.every(Number.isInteger) || !patch.every((cell) => hexDistance(cell, center) <= steps)) return null;
+  if (patch.some(([c, r]) => c === 0 || r === 0 || c === cols - 1 || r === rows - 1)) return null;
+  return {center, steps, cells: patch.map(([c, r]) => `${c},${r}`)};
 }
 
 // A loop of lattice corners (see regions.js) as the midpoints of its edges,
@@ -229,3 +282,4 @@ function segmentDistance([px, py], [ax, ay], [bx, by]) {
 const lerp = ([ax, ay], [bx, by], t) => [ax + (bx - ax) * t, ay + (by - ay) * t];
 const samePoint = (a, b) => a[0] === b[0] && a[1] === b[1];
 const round = (n) => Math.round(n * 100) / 100;
+const roundPoint = ([x, y]) => ({x: round(x), y: round(y)});
