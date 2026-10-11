@@ -225,7 +225,7 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
             {onAutoBarriers && (
               <button
                 type="button" className="add-entry" disabled={barriers.length > 0 || !!placement || tool !== "select"}
-                title={barriers.length > 0 ? "Only for a map with no barriers yet" : "Walls along the forest's edge"}
+                title={barriers.length > 0 ? "Only for a map with no barriers yet" : "Walls along the trees' and water's edges"}
                 onClick={(e) => { e.stopPropagation(); autoBarriers(); }}
               >
                 Auto Barriers
