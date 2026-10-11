@@ -1,3 +1,5 @@
+import {mapSize} from "../cellMap/hexGrid";
+
 // Owns a map draft's data and every mutation the editor can make to it -
 // barriers/connections/units, plus the image-derived fields
 // (imageUrl/pixelDimensions). The UI (MapEditor.jsx and, via its
@@ -139,6 +141,20 @@ export class MapDraft {
     return this.setField("units", next);
   }
 
+  // ---- Cells (see cells/) ----
+
+  // Without an image the cells are the ground, so the map is their size.
+  setCellMap(cellMap) {
+    const next = this.setField("cellMap", cellMap);
+    return this.data.imageUrl ? next : next.setField("feetDimensions", cellMapFeet(cellMap));
+  }
+
+  // Drops the background image; a map with cells falls back to them.
+  removeImage() {
+    const {imageUrl: _image, pixelDimensions: _pixels, thumbnailUrl: _thumbnail, ...rest} = this.data;
+    return new MapDraft(rest.cellMap ? {...rest, feetDimensions: cellMapFeet(rest.cellMap)} : rest);
+  }
+
   // ---- Image ----
   // pixelDimensions is derived from whatever image is actually loaded, not
   // authored - see MapEditor.jsx's sync effect, which calls this without
@@ -149,4 +165,10 @@ export class MapDraft {
   setPixelDimensions(pixelDimensions) {
     return this.setField("pixelDimensions", pixelDimensions);
   }
+}
+
+// A cell map's size in feet, to the thousandth (the validator allows 0.01).
+function cellMapFeet(cellMap) {
+  const {width, height} = mapSize(cellMap.grid);
+  return {width: Math.round(width * 1000) / 1000, height: Math.round(height * 1000) / 1000};
 }

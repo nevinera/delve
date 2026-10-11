@@ -24,7 +24,9 @@ export function startPositionFor(mapData) {
 // MapEditor's togglePreview) - a controllable token plus every unit on the
 // map, each following its own configured movement, walking around the
 // current draft's barriers.
-export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl, onExit}) {
+// groundImage (a bitmap or canvas) is the ground instead of imageUrl, for a
+// map drawn in cells.
+export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl, groundImage = null, onExit}) {
   const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
 
@@ -42,7 +44,7 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
     // load the bytes), since that carries no file extension to sniff.
     const isSvg = Boolean(mapData.imageUrl?.toLowerCase().endsWith(".svg"));
     scene.loadMap(
-      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, fillPoints: mapData.fillPoints, units: mapData.units, imageUrl, isSvg},
+      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, fillPoints: mapData.fillPoints, units: mapData.units, imageUrl, isSvg, groundImage},
       availableUnitTypes, x, y
     );
     scene.handleResize();

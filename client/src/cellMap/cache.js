@@ -9,7 +9,8 @@ const memory = new Map();
 // Resolves {image, source, timings, stats, stored}: image is something
 // drawImage takes; source is "memory", "stored" or "rendered"; timings are
 // ms per step; stored resolves {encode} once a fresh render is cached.
-export async function cachedCellMapImage(map, {pixelsPerFoot = 10} = {}) {
+// persist: false keeps it in memory only, for previews that change often.
+export async function cachedCellMapImage(map, {pixelsPerFoot = 10, persist = true} = {}) {
   const key = cacheKey(map, pixelsPerFoot);
   if (memory.has(key)) {
     const entry = remember(key, memory.get(key));
@@ -17,7 +18,7 @@ export async function cachedCellMapImage(map, {pixelsPerFoot = 10} = {}) {
   }
 
   let started = performance.now();
-  const blob = await readStored(key);
+  const blob = persist ? await readStored(key) : null;
   if (blob) {
     const read = performance.now() - started;
     started = performance.now();
@@ -30,10 +31,10 @@ export async function cachedCellMapImage(map, {pixelsPerFoot = 10} = {}) {
     }
   }
 
-  const {image, timings, stats, encoded} = await render(map, pixelsPerFoot);
+  const {image, timings, stats, encoded} = await render(map, pixelsPerFoot, persist);
   remember(key, {image, stats});
   const stored = encoded.then(async ({blob, encode}) => {
-    if (blob) await writeStored(key, blob);
+    if (blob && persist) await writeStored(key, blob);
     return {encode};
   }).catch(() => null);
   return {image, stats, source: "rendered", timings, stored};
@@ -50,20 +51,20 @@ function remember(key, entry) {
 // browser that has OffscreenCanvas but can't paint 2D in a worker.
 let workerBroken = false;
 
-async function render(map, pixelsPerFoot) {
-  if (workerBroken || typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return renderHere(map, pixelsPerFoot);
+async function render(map, pixelsPerFoot, encode) {
+  if (workerBroken || typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return renderHere(map, pixelsPerFoot, encode);
   try {
-    return await renderInWorker(map, pixelsPerFoot);
+    return await renderInWorker(map, pixelsPerFoot, encode);
   } catch {
     workerBroken = true;
-    return renderHere(map, pixelsPerFoot);
+    return renderHere(map, pixelsPerFoot, encode);
   }
 }
 
-function renderHere(map, pixelsPerFoot) {
+function renderHere(map, pixelsPerFoot, encode) {
   const {canvas, timings, stats} = renderCellMap(map, {pixelsPerFoot});
   const started = performance.now();
-  const encoded = new Promise((resolve) => canvas.toBlob((blob) => resolve({blob, encode: performance.now() - started}), "image/webp", 0.9));
+  const encoded = !encode ? Promise.resolve({blob: null, encode: 0}) : new Promise((resolve) => canvas.toBlob((blob) => resolve({blob, encode: performance.now() - started}), "image/webp", 0.9));
   return {image: canvas, timings: {...timings, thread: "main"}, stats, encoded};
 }
 
@@ -71,7 +72,7 @@ let worker = null;
 let nextId = 0;
 const pending = new Map();
 
-function renderInWorker(map, pixelsPerFoot) {
+function renderInWorker(map, pixelsPerFoot, encode) {
   if (!worker) {
     worker = new Worker(new URL("./renderWorker.js", import.meta.url), {type: "module"});
     worker.onmessage = ({data}) => pending.get(data.id)?.(data);
@@ -95,7 +96,7 @@ function renderInWorker(map, pixelsPerFoot) {
         resolveEncoded({blob: data.blob, encode: data.encode});
       }
     });
-    worker.postMessage({id, map, pixelsPerFoot});
+    worker.postMessage({id, map, pixelsPerFoot, encode});
   });
 }
 

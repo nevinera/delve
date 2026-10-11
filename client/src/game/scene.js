@@ -5,6 +5,7 @@ import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 import { loadSvgToCanvas } from "./svgRaster.js";
 import { isUntargetableStatus } from "./state.js";
 import { computeMapFill } from "./mapFill.js";
+import { CellGroundQueue, groundPixelsPerFoot } from "./cellGrounds.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -950,6 +951,19 @@ export class SceneManager {
       }
     }
 
+    // Maps drawn in cells (and no image) get their ground once it renders -
+    // the current map's first (see updateUnits), then the rest.
+    this._cellGrounds?.stop();
+    const maxTextureSize = this._renderer.capabilities.maxTextureSize;
+    this._cellGrounds = new CellGroundQueue({
+      pixelsPerFoot: (feet) => groundPixelsPerFoot(feet, maxTextureSize),
+      onGround: (mapId, canvas) => {
+        const group = this._mapGroups.get(mapId);
+        const { width, height } = this._dimsByMap.get(mapId);
+        if (group) this._addGround(group, new THREE.CanvasTexture(canvas), width, height);
+      },
+    });
+
     // Build per-map coordinate transforms and scene groups.
     // Each map's geometry lives in its own Group; only the current map's group is visible.
     for (const m of json.maps) {
@@ -966,19 +980,7 @@ export class SceneManager {
 
       if (m.imageUrl) {
         const mapUrl = new URL(m.imageUrl, baseUrl).href;
-        const addGround = (texture) => {
-          // See MapPreviewScene.js's loadMap for why this matters - a
-          // ground texture viewed at a shallow, walking-height angle blurs
-          // heavily without anisotropic filtering, regardless of the
-          // source image's own resolution.
-          texture.anisotropy = this._renderer.capabilities.getMaxAnisotropy();
-          const plane = new THREE.Mesh(
-            new THREE.PlaneGeometry(width, height),
-            new THREE.MeshLambertMaterial({ map: texture })
-          );
-          plane.rotation.x = -Math.PI / 2;
-          group.add(plane);
-        };
+        const addGround = (texture) => this._addGround(group, texture, width, height);
         // A map background is committed as its original SVG (smaller than a
         // pre-baked raster, and losslessly re-renderable at any resolution -
         // see the map editor plan's Phase 3 note) rather than a raster
@@ -990,6 +992,8 @@ export class SceneManager {
         } else {
           new THREE.TextureLoader().load(mapUrl, addGround);
         }
+      } else if (m.cellMap) {
+        this._cellGrounds.add(m.identifier, m.cellMap, m.feetDimensions);
       }
 
       // Everything outside the playable area rises as a plateau; walls
@@ -1013,6 +1017,20 @@ export class SceneManager {
         }
       }
     }
+  }
+
+  _addGround(group, texture, width, height) {
+    // See MapPreviewScene.js's loadMap for why this matters - a ground
+    // texture viewed at a shallow, walking-height angle blurs heavily
+    // without anisotropic filtering, regardless of the source image's own
+    // resolution.
+    texture.anisotropy = this._renderer.capabilities.getMaxAnisotropy();
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshLambertMaterial({ map: texture })
+    );
+    plane.rotation.x = -Math.PI / 2;
+    group.add(plane);
   }
 
   // Converts map coordinates to world coordinates for the player's current map.
@@ -1047,6 +1065,7 @@ export class SceneManager {
       for (const [mid, group] of this._mapGroups) {
         group.visible = mid === selfUnit.map_identifier;
       }
+      this._cellGrounds?.prefer(selfUnit.map_identifier);
       this._selfMapIdentifier = selfUnit.map_identifier;
       this._selfMapX = selfUnit.position.x;
       this._selfMapY = selfUnit.position.y;
@@ -1578,6 +1597,7 @@ export class SceneManager {
 
   dispose() {
     if (this._animId) cancelAnimationFrame(this._animId);
+    this._cellGrounds?.stop();
     for (const aura of this._statusAuras.values()) {
       if (aura.plane) {
         aura.plane.removeFromParent();

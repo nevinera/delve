@@ -1,7 +1,7 @@
 package instanceconfig
 
 // Map is one visual floor or area within a Zone.
-// imageUrl and pixelDimensions are client-only and omitted; the JSON decoder
+// imageUrl, pixelDimensions and cellMap are client-only and omitted; the JSON decoder
 // silently ignores them.
 type Map struct {
 	Identifier     string          `json:"identifier"`     // Required

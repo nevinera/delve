@@ -366,3 +366,46 @@ describe("BarriersPanel", () => {
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 });
+
+describe("BarriersPanel's Delete All and Auto Barriers", () => {
+  const wall = {type: "wall", locations: [{x: 0, y: 0}, {x: 10, y: 0}]};
+
+  it("deletes every barrier once confirmed", () => {
+    const dispatch = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={[wall, wall]} dispatch={dispatch} />);
+    expandSection();
+    fireEvent.click(screen.getByRole("button", {name: "Delete All"}));
+    expect(dispatch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", {name: "Delete All"}));
+    expect(confirm).toHaveBeenLastCalledWith("Delete all 2 barriers? Nothing is committed until you save.");
+    expect(dispatch).toHaveBeenCalledWith({type: "SET_FIELD", field: "barriers", value: []});
+    confirm.mockRestore();
+  });
+
+  it("offers no Delete All without barriers", () => {
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} />);
+    expandSection();
+    expect(screen.queryByRole("button", {name: "Delete All"})).not.toBeInTheDocument();
+  });
+
+  it("offers Auto Barriers only for cells, and only with no barriers yet", () => {
+    const {rerender} = render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} />);
+    expandSection();
+    expect(screen.queryByRole("button", {name: "Auto Barriers"})).not.toBeInTheDocument();
+    const onAutoBarriers = vi.fn(() => ({added: {walls: 3, circles: 2, segments: 120, fillPoints: 1}, openEdge: true, error: null}));
+    rerender(<BarriersPanel {...DEFAULT_PROPS} barriers={[wall]} onAutoBarriers={onAutoBarriers} />);
+    expect(screen.getByRole("button", {name: "Auto Barriers"})).toBeDisabled();
+    rerender(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} onAutoBarriers={onAutoBarriers} />);
+    fireEvent.click(screen.getByRole("button", {name: "Auto Barriers"}));
+    expect(onAutoBarriers).toHaveBeenCalled();
+    expect(screen.getByText(/Added 3 walls, 2 circles \(120 segments\) and 1 fill points\. Open ground reaches the map's edge/)).toBeInTheDocument();
+  });
+
+  it("says why Auto Barriers couldn't make any", () => {
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} onAutoBarriers={() => ({error: "Too many segments."})} />);
+    expandSection();
+    fireEvent.click(screen.getByRole("button", {name: "Auto Barriers"}));
+    expect(screen.getByText("Too many segments.")).toBeInTheDocument();
+  });
+});

@@ -29,7 +29,7 @@ export function stressTestMap(size = 200, seed = 5) {
       return [col, offset * size + 0.12 * size * Math.sin(col / period + phase)];
     }),
   }));
-  return {format: "cellmap", version: 1, name: `Stress test (${size}×${size})`, grid: {type: "hex", cols: size, rows: size, cellSize: 5}, seed, cells, trails};
+  return {version: 1, theme: "glade", grid: {type: "hex", cols: size, rows: size}, seed, cells, trails};
 }
 
 // [period, phase, offset] for each trail: a sine across the map, in cells.

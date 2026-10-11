@@ -1,12 +1,10 @@
 {
-  "format": "cellmap",
   "version": 1,
-  "name": "Woodland trail",
+  "theme": "glade",
   "grid": {
     "type": "hex",
     "cols": 48,
-    "rows": 36,
-    "cellSize": 5
+    "rows": 36
   },
   "seed": 7,
   "cells": [

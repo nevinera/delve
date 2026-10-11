@@ -8,7 +8,7 @@ import {createUnitType, unitTypeData} from "../state/unitTypeOps";
 import {createItem, itemData} from "../state/itemOps";
 import {libraryItems, libraryUnitTypes, prepareItemImport, prepareUnitTypeImport} from "../state/importing";
 import {generateThumbnail} from "../../content/generateThumbnail";
-import {mapData, ncuTokenUrls, setMapImage, updateMap, worldItems, worldUnitTypes} from "../state/mapOps";
+import {mapData, ncuTokenUrls, removeMapImage, setMapImage, setMapThumbnail, updateMap, worldItems, worldUnitTypes} from "../state/mapOps";
 import {inMemory, newAssetPath, tokenImageOptions} from "../state/assetOps";
 import {mapFile, relativePath, resolvePath} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
@@ -74,6 +74,8 @@ export default function MapLevel({draft, zone, map, onChange, repo, stockAssets,
         onMapChange={(fn) => onChange((current) => updateMap(current, zone, map, fn))}
         imageUrl={data.imageUrl ? assetUrl(resolvePath(path, data.imageUrl)) : null}
         onImageUpload={handleImageUpload}
+        onImageRemove={() => onChange((current) => removeMapImage(current, zone, map))}
+        onCellThumbnail={(thumbnail) => onChange((current) => setMapThumbnail(current, zone, map, thumbnail))}
         unitTypes={{keys: unitTypeKeys, details: unitTypeDetails}}
         items={{keys: itemKeys, details: itemDetails}}
         ncuTokenUrls={ncuTokenUrls(draft, zone, map, assetUrl)}

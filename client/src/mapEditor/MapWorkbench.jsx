@@ -7,6 +7,9 @@ import FillPointsPanel from "./FillPointsPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsTab, {paletteKeys} from "./UnitsTab";
 import NcusPanel from "./NcusPanel";
+import CellsPanel from "./cells/CellsPanel";
+import {useCellsTab} from "./cells/useCellsTab";
+import {autoBarriers} from "./cells/autoBarriers";
 import HotkeyHelp from "./HotkeyHelp";
 import {MapDraft} from "./MapDraft";
 import {UiState} from "./UiState";
@@ -34,9 +37,11 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
 // The sidebar's tabs, and which of the map's shapes each one edits (the
 // rest are drawn dimmed and ignore the pointer - see MapCanvas's
-// activeLayers). Quests don't exist yet; NCUs live there meanwhile.
-const TABS = [["map", "Map"], ["units", "Units"], ["quests", "Quests"]];
+// activeLayers). Quests don't exist yet; NCUs live there meanwhile. Cells
+// draws the map's cellMap, with every shape dimmed.
+const TABS = [["cells", "Cells"], ["map", "Map"], ["units", "Units"], ["quests", "Quests"]];
 const TAB_LAYERS = {
+  cells: {barriers: false, connections: false, units: false, ncus: false},
   map: {barriers: true, connections: true, units: false, ncus: false},
   units: {barriers: false, connections: false, units: true, ncus: false},
   quests: {barriers: false, connections: false, units: false, ncus: true},
@@ -57,6 +62,10 @@ const TAB_LAYERS = {
 // - mapData, and onMapChange(fn) - fn maps the current MapDraft to the next.
 // - imageUrl: the background's displayable URL (null for none); with
 //   mapData.pixelDimensions it becomes the canvas image.
+// - onImageRemove() (optional): drop the background image and its files,
+//   for a map that has cells to fall back to (see MapDraft's removeImage).
+// - onCellThumbnail(blob) (optional): store a thumbnail of the cells, for a
+//   map without an image, made after each burst of cell edits.
 // - onImageUpload(file): store a just-picked background (already read into
 //   memory); this component sets imageUrl/pixelDimensions on the map.
 // - unitTypes {keys, details}, items {keys, details}: what units can be and
@@ -74,7 +83,7 @@ const TAB_LAYERS = {
 //   name}]), listed in its row and badged on its token, opening the quest
 //   editor.
 export default function MapWorkbench({
-  mapKey, mapData, onMapChange, imageUrl, onImageUpload, unitTypes, items,
+  mapKey, mapData, onMapChange, imageUrl, onImageUpload, onImageRemove = null, onCellThumbnail = null, unitTypes, items,
   ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null,
 }) {
   const [tab, setTab] = useState("map");
@@ -90,6 +99,33 @@ export default function MapWorkbench({
   const [imageError, setImageError] = useState("");
   const draft = new MapDraft(mapData);
   const image = imageUrl && mapData.pixelDimensions ? {url: imageUrl, pixelDimensions: mapData.pixelDimensions} : null;
+  // Without an image, a map's cells are its ground on every tab; the Cells
+  // tab shows and edits them either way.
+  const cells = useCellsTab({
+    mapKey, cellMap: mapData.cellMap,
+    onCellMapChange: (cellMap) => onMapChange((d) => d.setCellMap(cellMap)),
+    editing: tab === "cells", rendering: tab === "cells" || !image,
+    onThumbnail: image ? null : onCellThumbnail,
+  });
+  const cellCanvas = tab === "cells" ? (cells.canvas ?? {placeholder: true}) : null;
+  const ground = cellCanvas || !image ? cells.ground : null;
+
+  // Walls from the cells, for a map whose ground they are.
+  function makeAutoBarriers() {
+    const result = autoBarriers(mapData.cellMap, mapData.fillPoints ?? []);
+    if (result.error) return {error: result.error};
+    onMapChange((d) => d.setField("barriers", result.barriers).setField("fillPoints", result.fillPoints));
+    return {
+      added: {walls: result.barriers.filter((b) => b.type === "wall").length, circles: result.barriers.filter((b) => b.type === "circle").length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length},
+      openEdge: result.openEdge, error: null,
+    };
+  }
+
+  function removeImage() {
+    if (!window.confirm("Remove this map's background image? It will use its cells instead. Nothing is committed until you save.")) return;
+    if (onImageRemove) onImageRemove();
+    else onMapChange((d) => d.removeImage());
+  }
   const unitTypeDetails = unitTypes.details;
 
   function dispatch(action) {
@@ -572,12 +608,14 @@ export default function MapWorkbench({
   return (
     <div className="map-editor" data-map-key={mapKey}>
       <MapCanvas
-        image={image}
-        displayImageUrl={displayImageUrl}
+        image={ground ? ground.image : cellCanvas ? null : image}
+        displayImageUrl={ground ? null : displayImageUrl}
+        ground={ground}
+        cellEditing={cellCanvas}
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}
-        mapData={effectiveMapData}
+        mapData={ground ? {...effectiveMapData, feetDimensions: ground.feetDimensions} : effectiveMapData}
         dispatch={dispatch}
         selectedBarrierIndex={uiState.selectedBarrierIndex}
         onSelectBarrier={(i) => setUiState(uiState.with({selectedBarrierIndex: i}))}
@@ -653,9 +691,11 @@ export default function MapWorkbench({
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Walk preview running - editing is disabled while this runs.</h3>
           </div>
+        ) : tab === "cells" ? (
+          <CellsPanel cells={cells} feetDimensions={mapData.feetDimensions} hasImage={Boolean(mapData.imageUrl)} onRemoveImage={removeImage} />
         ) : tab === "map" ? (
           <>
-            <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
+            <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions ?? ground?.image.pixelDimensions} feetFromCells={!image && Boolean(mapData.cellMap)} dispatch={dispatch} />
             <BarriersPanel
               barriers={mapData.barriers}
               selectedIndex={uiState.selectedBarrierIndex}
@@ -669,6 +709,7 @@ export default function MapWorkbench({
               onStartAddCircle={() => setUiState(uiState.startTool("add-circle"))}
               canPlaceOnMap={canPlaceOnMap}
               otherPlacementActive={!!uiState.connectionPlacement}
+              onAutoBarriers={!image && mapData.cellMap ? makeAutoBarriers : null}
               dispatch={dispatch}
             />
             <ConnectionsPanel

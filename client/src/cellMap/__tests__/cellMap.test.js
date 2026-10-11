@@ -5,12 +5,12 @@ import {regionLoops, smoothLoop} from "../regions";
 import {buildScene} from "../scene";
 import {cacheKey, renderCellMap} from "../render";
 import {buildSprites} from "../sprites";
-import {GLADE} from "../style";
+import {GLADE, resolveStyle} from "../style";
 import clearing from "../examples/clearing.json";
 import forestEdge from "../examples/forest-edge.json";
 import woodlandTrail from "../examples/woodland-trail.json";
 
-const tiny = (cells, seed = 1) => ({format: "cellmap", version: 1, seed, grid: {type: "hex", cols: cells[0].length, rows: cells.length, cellSize: 5}, cells});
+const tiny = (cells, seed = 1) => ({version: 1, theme: "glade", seed, grid: {type: "hex", cols: cells[0].length, rows: cells.length}, cells});
 
 describe("validateCellMap", () => {
   it("accepts the examples", () => {
@@ -20,12 +20,38 @@ describe("validateCellMap", () => {
   it("names what's wrong", () => {
     const map = {...tiny(["..", ".."]), cells: ["..", ".x."]};
     expect(validateCellMap(map)).toEqual(['cells[1] has 3 cells, grid.cols is 2', 'cells[1] has unknown cells: "x"']);
-    expect(validateCellMap({...tiny([".."]), grid: {type: "square", cols: 0, rows: 1, cellSize: -1}})).toEqual([
-      'grid.type must be "hex"',
+    expect(validateCellMap({...tiny([".."]), grid: {type: "square", cols: 0, rows: 1}})).toEqual([
+      "grid.type must be one of: hex",
       "grid.cols must be an integer from 1 to 200",
-      "grid.cellSize must be a positive number",
       "cells[0] has 2 cells, grid.cols is 0",
     ]);
+  });
+
+  it("checks the theme and its colors", () => {
+    expect(validateCellMap({...tiny([".."]), theme: "caves"})).toEqual(["theme must be one of: glade"]);
+    expect(validateCellMap({...tiny([".."]), colors: {meadow: "#aabbcc"}})).toEqual([]);
+    expect(validateCellMap({...tiny([".."]), colors: {meadow: "green", sky: "#000000"}})).toEqual([
+      'colors.meadow must be a "#rrggbb" color',
+      "colors.sky is not one of the theme's colors: meadow, tallGrass, marsh, forest, crown, tuft, tallTuft, pool, reed, trail, ink",
+    ]);
+  });
+});
+
+describe("resolveStyle", () => {
+  it("is the theme's style without overrides", () => {
+    expect(resolveStyle(tiny([".."]))).toBe(GLADE);
+  });
+
+  it("puts a map's colors over the palette, with their derived shades", () => {
+    const style = resolveStyle({...tiny([".."]), colors: {crown: "#646464", trail: "#ffffff"}});
+    expect(style.palette).toMatchObject({crown: "#646464", crownDark: [90, 90, 90], crownLight: [110, 110, 110], trail: "#ffffff", trailEdge: "#adadad"});
+    expect(style.palette.meadow).toBe(GLADE.palette.meadow);
+    expect(style.key).toBe("glade:crown=#646464,trail=#ffffff");
+  });
+
+  it("keys the cache by colors", () => {
+    const map = tiny([".."]);
+    expect(cacheKey({...map, colors: {meadow: "#000000"}}, 10)).not.toBe(cacheKey(map, 10));
   });
 });
 
@@ -51,7 +77,7 @@ describe("hexGrid", () => {
   });
 
   it("sizes the map to the grid", () => {
-    const {width, height} = mapSize({cols: 2, rows: 1, cellSize: Math.sqrt(3)});
+    const {width, height} = mapSize({cols: 2, rows: 1}, Math.sqrt(3));
     expect(width).toBeCloseTo(3.5);
     expect(height).toBeCloseTo(1.5 * Math.sqrt(3));
   });

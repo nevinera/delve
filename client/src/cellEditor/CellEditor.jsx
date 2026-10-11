@@ -2,13 +2,19 @@ import {useEffect, useRef, useState} from "react";
 import {renderScale} from "../cellMap/render";
 import {cachedCellMapImage} from "../cellMap/cache";
 import {stressTestMap} from "../cellMap/examples/stressTest";
-import {cellCorners, cellPoint, mapSize} from "../cellMap/hexGrid";
-import {TERRAINS, validateCellMap} from "../cellMap/format";
+import {mapSize} from "../cellMap/hexGrid";
+import {CELL_COLORS, TRAIL_COLOR, drawCells, drawTrails} from "../cellMap/overlay";
+import {terrainsOf, validateCellMap} from "../cellMap/format";
 import clearing from "../cellMap/examples/clearing.json";
 import forestEdge from "../cellMap/examples/forest-edge.json";
 import woodlandTrail from "../cellMap/examples/woodland-trail.json";
 
-export const EXAMPLES = {clearing, "forest-edge": forestEdge, "woodland-trail": woodlandTrail, "stress-test": stressTestMap()};
+export const EXAMPLES = {
+  clearing: {name: "Clearing", cellMap: clearing},
+  "forest-edge": {name: "Forest edge", cellMap: forestEdge},
+  "woodland-trail": {name: "Woodland trail", cellMap: woodlandTrail},
+  "stress-test": {name: "Stress test (200×200)", cellMap: stressTestMap()},
+};
 
 const PIXELS_PER_FOOT = 10;
 
@@ -16,27 +22,19 @@ const PIXELS_PER_FOOT = 10;
 // every cell filled with its terrain's color.
 export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
 
-const TRAIL_COLOR = "rgba(230, 70, 30, 0.9)";
-
-const CELL_COLORS = {
-  meadow: "rgba(250, 220, 90, 0.55)",
-  tallGrass: "rgba(120, 220, 60, 0.55)",
-  marsh: "rgba(40, 200, 190, 0.55)",
-  trees: "rgba(30, 110, 200, 0.55)",
-};
 
 // Slice 1 of the cell editor (plans/cell-editor.md): view the example maps
 // rendered, with a seed to re-roll, an overlay to check them against, and
 // how long each step of the render took.
 export default function CellEditor({backUrl}) {
   const [exampleKey, setExampleKey] = useState("clearing");
-  const [seed, setSeed] = useState(EXAMPLES.clearing.seed);
+  const [seed, setSeed] = useState(EXAMPLES.clearing.cellMap.seed);
   const [overlay, setOverlay] = useState("none");
   const [timing, setTiming] = useState(null);
   const mapCanvas = useRef(null);
   const gridCanvas = useRef(null);
 
-  const map = {...EXAMPLES[exampleKey], seed};
+  const map = {...EXAMPLES[exampleKey].cellMap, seed};
   const errors = validateCellMap(map);
   const mapKey = JSON.stringify(map);
 
@@ -75,7 +73,7 @@ export default function CellEditor({backUrl}) {
 
   const chooseExample = (key) => {
     setExampleKey(key);
-    setSeed(EXAMPLES[key].seed);
+    setSeed(EXAMPLES[key].cellMap.seed);
   };
 
   return (
@@ -108,7 +106,7 @@ export default function CellEditor({backUrl}) {
         </label>
         {overlay === "cells" && (
           <span className="cell-editor-legend">
-            {Object.entries(TERRAINS).map(([ch, terrain]) => (
+            {Object.entries(terrainsOf(map)).map(([ch, terrain]) => (
               <span key={ch}><i style={{background: CELL_COLORS[terrain]}} />{terrain}</span>
             ))}
             <span><i style={{background: TRAIL_COLOR}} />trail points</span>
@@ -157,39 +155,7 @@ export function TimingReport({source, steps, stats, total}) {
 }
 
 function drawOverlay(ctx, map, scale, filled) {
-  const {grid} = map;
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
-  ctx.lineWidth = 1 / scale;
-  for (let col = 0; col < grid.cols; col++) {
-    for (let row = 0; row < grid.rows; row++) {
-      const corners = cellCorners(col, row, grid.cellSize);
-      ctx.beginPath();
-      ctx.moveTo(corners[0].x, corners[0].y);
-      for (const {x, y} of corners.slice(1)) ctx.lineTo(x, y);
-      ctx.closePath();
-      if (filled) {
-        ctx.fillStyle = CELL_COLORS[TERRAINS[map.cells[row][col]]];
-        ctx.fill();
-      }
-      ctx.stroke();
-    }
-  }
-  // Trails as authored: straight lines between their points, each marked.
-  if (!filled) return;
-  ctx.strokeStyle = TRAIL_COLOR;
-  ctx.fillStyle = TRAIL_COLOR;
-  ctx.lineWidth = 3 / scale;
-  for (const trail of map.trails ?? []) {
-    const points = trail.points.map(([col, row]) => cellPoint(col, row, grid.cellSize));
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (const {x, y} of points.slice(1)) ctx.lineTo(x, y);
-    ctx.stroke();
-    for (const {x, y} of points) {
-      ctx.beginPath();
-      ctx.arc(x, y, 6 / scale, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  drawCells(ctx, map, scale, {filled});
+  if (filled) drawTrails(ctx, map, scale);
 }

@@ -41,30 +41,12 @@ module Validators
     def validate_fixed_fields!(data, path:)
       require_string!(data, "identifier", path: path)
       require_string!(data, "name", path: path)
-      require_string!(data, "imageUrl", path: path)
-      validate_pixel_dimensions!(require_hash!(data, "pixelDimensions", path: path), path: child_path(path, "pixelDimensions"))
-      validate_feet_dimensions!(require_hash!(data, "feetDimensions", path: path), path: child_path(path, "feetDimensions"))
+      MapBackgroundValidator.validate!(data, path: path)
     end
 
     def validate_elvl!(data, path:)
       elvl = require_integer!(data, "elvl", path: path)
       raise ValidationError.new("elvl must be at least 0", path: child_path(path, "elvl")) if elvl < 0
-    end
-
-    def validate_pixel_dimensions!(data, path:)
-      require_object!(data, path: path)
-      width = require_integer!(data, "width", path: path)
-      raise ValidationError.new("width must be positive", path: child_path(path, "width")) unless width > 0
-      height = require_integer!(data, "height", path: path)
-      raise ValidationError.new("height must be positive", path: child_path(path, "height")) unless height > 0
-    end
-
-    def validate_feet_dimensions!(data, path:)
-      require_object!(data, path: path)
-      width = require_numeric!(data, "width", path: path)
-      raise ValidationError.new("width must be positive", path: child_path(path, "width")) unless width > 0
-      height = require_numeric!(data, "height", path: path)
-      raise ValidationError.new("height must be positive", path: child_path(path, "height")) unless height > 0
     end
 
     # Client-only - purely a walk-preview display setting (see

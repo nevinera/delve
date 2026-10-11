@@ -164,14 +164,16 @@ export class MapPreviewScene {
   // resolution (see game/svgRaster.js) versus loading a raster image
   // directly - see MapEditor's handleImageFile for why a map's background
   // is committed as the original SVG rather than a pre-baked PNG.
-  loadMap({feetDimensions, barriers, connections, fillPoints, units, imageUrl, isSvg}, availableUnitTypes, startX, startY) {
+  // groundImage (a bitmap or canvas, e.g. a cell map's render) stands in
+  // for imageUrl.
+  loadMap({feetDimensions, barriers, connections, fillPoints, units, imageUrl, isSvg, groundImage = null}, availableUnitTypes, startX, startY) {
     this._feetDimensions = feetDimensions;
     this._barriers = barriers ?? [];
     this._playerX = startX;
     this._playerY = startY;
 
     const {width, height} = feetDimensions;
-    if (imageUrl) {
+    if (imageUrl || groundImage) {
       const addGround = (texture) => {
         // Ground textures are viewed at a shallow, walking-height angle,
         // which minifies them much more steeply along depth than width -
@@ -183,7 +185,14 @@ export class MapPreviewScene {
         ground.rotation.x = -Math.PI / 2;
         this.scene.add(ground);
       };
-      if (isSvg) {
+      if (groundImage) {
+        // Copied onto a canvas, which textures the same way an image does.
+        const canvas = document.createElement("canvas");
+        canvas.width = groundImage.width;
+        canvas.height = groundImage.height;
+        canvas.getContext("2d").drawImage(groundImage, 0, 0);
+        addGround(new THREE.CanvasTexture(canvas));
+      } else if (isSvg) {
         loadSvgToCanvas(imageUrl, feetDimensions).then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
       } else {
         new THREE.TextureLoader().load(imageUrl, addGround);

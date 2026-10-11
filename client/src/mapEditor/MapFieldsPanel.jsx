@@ -29,7 +29,9 @@ function LightingSelect({value, onChange}) {
 // pixelDimensions is never hand-edited - it's read straight off the loaded
 // image (see MapEditor's sync effect), only feetDimensions is an authoring
 // decision.
-export default function MapFieldsPanel({mapData, pixelDimensions, dispatch}) {
+// feetFromCells: the map is drawn in cells, so its size is theirs (set in
+// the Cells tab), not typed here.
+export default function MapFieldsPanel({mapData, pixelDimensions, feetFromCells = false, dispatch}) {
   function setField(field, value) {
     dispatch({type: "SET_FIELD", field, value});
   }
@@ -77,11 +79,15 @@ export default function MapFieldsPanel({mapData, pixelDimensions, dispatch}) {
         </tr>
         <tr>
           <th>Feet Dimensions</th>
-          <td className="map-fields-dimension-pair">
-            <NumberField value={mapData.feetDimensions?.width} onChange={(v) => setFeetDimension("width", v)} />
-            <span>×</span>
-            <NumberField value={mapData.feetDimensions?.height} onChange={(v) => setFeetDimension("height", v)} />
-          </td>
+          {feetFromCells ? (
+            <td>{mapData.feetDimensions?.width} × {mapData.feetDimensions?.height} (the cells&apos; size)</td>
+          ) : (
+            <td className="map-fields-dimension-pair">
+              <NumberField value={mapData.feetDimensions?.width} onChange={(v) => setFeetDimension("width", v)} />
+              <span>×</span>
+              <NumberField value={mapData.feetDimensions?.height} onChange={(v) => setFeetDimension("height", v)} />
+            </td>
+          )}
         </tr>
         <tr>
           <th>Lighting</th>

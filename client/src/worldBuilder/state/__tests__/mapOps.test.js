@@ -2,7 +2,8 @@ import {describe, it, expect} from "vitest";
 import {fixtureDraft} from "./fixtureWorld";
 import {worldData} from "../worldOps";
 import {setZonePositions, zoneData, zonePositions} from "../zoneOps";
-import {createMap, deleteMap, mapData, ncuTokenUrls, renameMap, setMapImage, updateMap, worldItems, worldUnitTypes} from "../mapOps";
+import {createMap, deleteMap, mapData, ncuTokenUrls, removeMapImage, renameMap, setMapImage, setMapThumbnail, updateMap, worldItems, worldUnitTypes} from "../mapOps";
+import {CellMapDraft} from "../../../mapEditor/cells/CellMapDraft";
 import {ExistingBlob} from "../../../github/commitFiles";
 
 const assetUrl = (path) => `url:${path}`;
@@ -83,6 +84,29 @@ describe("mapOps", () => {
     expect(draft.assetSource("worlds/w/zones/forest/hub/hub.webp")).toEqual({blob: file});
     expect(draft.assetSource("worlds/w/zones/forest/hub/hub.thumb.webp")).toEqual({blob: thumbnail});
     expect(draft.exists("worlds/w/zones/forest/hub/hub.png")).toBe(false);
+  });
+
+  it("removes a map's image and its thumbnail, falling back to its cells", () => {
+    const file = new Blob(["png"]);
+    const thumbnail = new Blob(["thumb"]);
+    const cellMap = CellMapDraft.blank({cols: 4, rows: 3}).data;
+    const withImage = setMapImage(updateMap(fixtureDraft(), "forest", "hub", (m) => m.setField("cellMap", cellMap)), "forest", "hub", {file, name: "hub.webp", pixelDimensions: {width: 10, height: 20}, thumbnail});
+    const draft = removeMapImage(withImage, "forest", "hub");
+
+    const map = mapData(draft, "forest", "hub");
+    expect(map).not.toHaveProperty("imageUrl");
+    expect(map).not.toHaveProperty("pixelDimensions");
+    expect(map).not.toHaveProperty("thumbnailUrl");
+    expect(map.feetDimensions).toEqual({width: 18.764, height: 17.5});
+    expect(draft.exists("worlds/w/zones/forest/hub/hub.webp")).toBe(false);
+    expect(draft.exists("worlds/w/zones/forest/hub/hub.thumb.webp")).toBe(false);
+  });
+
+  it("stores a cell map's thumbnail", () => {
+    const thumbnail = new Blob(["thumb"]);
+    const draft = setMapThumbnail(fixtureDraft(), "forest", "hub", thumbnail);
+    expect(mapData(draft, "forest", "hub").thumbnailUrl).toBe("hub.thumb.webp");
+    expect(draft.assetSource("worlds/w/zones/forest/hub/hub.thumb.webp")).toEqual({blob: thumbnail});
   });
 
   it("lists the world's own unit types and items for the map panels", () => {
