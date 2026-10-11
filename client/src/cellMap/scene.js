@@ -30,8 +30,15 @@ const DEEP_INSET = 0.3;
 const TRAIL_CLEARANCE = 0.4;
 
 // Crowns fill a band along the forest's edge, one entry per cell of depth
-// (the chance a cell that deep gets a crown); deeper in, the dark mass shows.
-const BAND = [1, 0.85, 0.6];
+// (the chance a cell that deep gets a crown; see the style's forest.band);
+// deeper in, the dark mass shows. Rock is hatched along its edge instead,
+// this thickly.
+const HATCH_BAND = [1, 0.45];
+
+// Ice along winter water's edge: this far in from it on average, in cell
+// sizes, and this jagged.
+const ICE_DEPTH = 0.4;
+const ICE_JAGGED = 0.8;
 
 // The trails as drawn: curves in feet, their free ends fading out.
 function sceneTrails(map, size) {
@@ -60,18 +67,22 @@ export function trailClearedCells(map) {
 export function buildScene(map, style = resolveStyle(map)) {
   const cellSize = CELL_SIZE;
   const {seed} = map;
-  const scene = {...mapSize(map.grid), cellSize, grounds: [], water: [], deepWater: [], bridges: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
+  const scene = {...mapSize(map.grid), cellSize, grounds: [], water: [], deepWater: [], ice: [], bridges: [], trails: [], forest: [], crowns: [], hatches: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
+  const rock = style.forest.mass === "rock";
 
   scene.grounds = GROUND_REGIONS.map((terrain) => ({terrain, loops: regionLoops(map, terrain).map((loop) => smoothLoop(loop, cellSize, seed))}));
   scene.water = regionLoops(map, "water").map((loop) => softLoop(loop, cellSize, seed));
   const shallow = (c, r) => [0, 1, 2, 3, 4, 5].some((edge) => terrainAt(map, ...neighbor(c, r, edge)) !== "water");
   scene.deepWater = regionLoops(map, "water", shallow).map((loop) => insetLoop(softLoop(loop, cellSize, seed), DEEP_INSET * cellSize));
+  if (style.water.edge === "ice") scene.ice = scene.water.map((loop) => jaggedInset(loop, ICE_DEPTH * cellSize, ICE_JAGGED, seed));
   scene.bridges = (map.bridges ?? []).map(bridgeDeck);
   scene.trails = sceneTrails(map, scene);
   const cleared = trailCleared(scene.trails);
-  // The forest's mass leaves out what trails clear, as its crowns do.
-  scene.forest = regionLoops(map, "trees", cleared).map((loop) => insetLoop(smoothLoop(loop, cellSize, seed, FOREST_SMOOTHING), FOREST_INSET * cellSize));
-  const depth = forestDepths(map, cleared);
+  // The forest's mass leaves out what trails clear, as its crowns do. Rock
+  // is rough, and comes right to its cells' edge.
+  scene.forest = regionLoops(map, "trees", cleared).map((loop) => (rock ? smoothLoop(loop, cellSize, seed) : insetLoop(smoothLoop(loop, cellSize, seed, FOREST_SMOOTHING), FOREST_INSET * cellSize)));
+  const band = rock ? HATCH_BAND : style.forest.band;
+  const depth = forestDepths(map, cleared, band.length);
   eachCell(map, (col, row, terrain) => {
     const h = (salt) => hash01(seed, col, row, salt);
     const variant = (kind, salt) => Math.floor(h(salt) * style.variants[kind]);
@@ -79,7 +90,14 @@ export function buildScene(map, style = resolveStyle(map)) {
     if (terrain === "trees") {
       if (cleared(col, row)) return;
       const d = depth.get(`${col},${row}`);
-      if (!(h(4) < BAND[d - 1])) return;
+      if (!(h(4) < band[d - 1])) return;
+      if (rock) {
+        for (let i = 0; i < 2; i++) {
+          scene.hatches.push({x: x + (h(60 + i * 4) - 0.5) * 0.7 * cellSize, y: y + (h(61 + i * 4) - 0.5) * 0.7 * cellSize, radius: cellSize * (0.5 + 0.2 * h(62 + i * 4)), variant: variant("hatches", 63 + i * 4)});
+        }
+        return;
+      }
+      if (!style.forest.crowns) return;
       if (d === 1) {
         // Edge crowns are pulled back from the open cells beside them, so
         // the forest ends about where its cells do.
@@ -97,21 +115,21 @@ export function buildScene(map, style = resolveStyle(map)) {
         scene.crowns.push({x: x + (h(1) - 0.5) * 0.5 * cellSize, y: y + (h(2) - 0.5) * 0.5 * cellSize, radius: cellSize * (0.8 + 0.25 * h(3)), variant: variant("crowns", 7)});
       }
     } else if (terrain === "meadow") {
-      if (h(10) < 0.15) {
+      if (h(10) < style.meadow.patches) {
         scene.patches.push({x: x + (h(11) - 0.5) * cellSize, y: y + (h(12) - 0.5) * cellSize, radius: cellSize * (1.2 + 1.2 * h(13)), variant: variant("patches", 14)});
       }
-      if (h(30) < 0.65) {
+      if (h(30) < style.meadow.tufts) {
         scene.tufts.push({x: x + (h(31) - 0.5) * 0.4 * cellSize, y: y + (h(32) - 0.5) * 0.4 * cellSize, radius: cellSize * (0.4 + 0.1 * h(33)), variant: variant("tufts", 34)});
       }
     } else if (terrain === "tallGrass") {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < style.tallGrass.clumps; i++) {
         scene.tallTufts.push({x: x + (h(40 + i * 4) - 0.5) * 0.8 * cellSize, y: y + (h(41 + i * 4) - 0.5) * 0.8 * cellSize, radius: cellSize * (0.4 + 0.15 * h(42 + i * 4)), variant: variant("tallTufts", 43 + i * 4)});
       }
     } else if (terrain === "marsh") {
-      if (h(50) < 0.55) {
+      if (h(50) < style.marsh.pools) {
         scene.pools.push({x: x + (h(51) - 0.5) * 0.5 * cellSize, y: y + (h(52) - 0.5) * 0.5 * cellSize, radius: cellSize * (0.3 + 0.35 * h(53)), variant: variant("pools", 54)});
       }
-      if (h(55) < 0.6) {
+      if (h(55) < style.marsh.reeds) {
         scene.reeds.push({x: x + (h(56) - 0.5) * 0.7 * cellSize, y: y + (h(57) - 0.5) * 0.7 * cellSize, radius: cellSize * (0.35 + 0.1 * h(58)), variant: variant("reeds", 59)});
       }
     }
@@ -134,11 +152,11 @@ export function buildScene(map, style = resolveStyle(map)) {
 }
 
 // How many cells each decorated tree cell is from open ground (1 on the
-// edge), up to one past the band; deeper cells count as that. Tree cells a
-// trail clears count as open.
-function forestDepths(map, cleared) {
+// edge), up to one past the band (bandLength cells deep); deeper cells
+// count as that. Tree cells a trail clears count as open.
+function forestDepths(map, cleared, bandLength) {
   const {cols, rows} = map.grid;
-  const reach = DECORATION_PAD + BAND.length;
+  const reach = DECORATION_PAD + bandLength;
   const inside = (c, r) => c >= -reach && c < cols + reach && r >= -reach && r < rows + reach;
   const depth = new Map();
   let frontier = [];
@@ -147,7 +165,7 @@ function forestDepths(map, cleared) {
       if (terrainAt(map, c, r) !== "trees" || cleared(c, r)) frontier.push([c, r]);
     }
   }
-  for (let d = 1; d <= BAND.length && frontier.length; d++) {
+  for (let d = 1; d <= bandLength && frontier.length; d++) {
     const next = [];
     for (const [c, r] of frontier) {
       for (let edge = 0; edge < 6; edge++) {
@@ -160,7 +178,7 @@ function forestDepths(map, cleared) {
     }
     frontier = next;
   }
-  return {get: (key) => depth.get(key) ?? BAND.length + 1};
+  return {get: (key) => depth.get(key) ?? bandLength + 1};
 }
 
 function eachCell(map, fn) {
@@ -294,6 +312,26 @@ function segmentDistance(x, y, a, b) {
   const dy = b.y - a.y;
   const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(x - a.x - t * dx, y - a.y - t * dy);
+}
+
+// A loop moved in by about depth, more or less at each point, so its edge
+// is jagged (see insetLoop). Small loops get a thinner edge.
+function jaggedInset(loop, depth, jagged, seed) {
+  const n = loop.length;
+  let area = 0;
+  for (let i = 0; i < n; i++) area += loop[i].x * loop[(i + 1) % n].y - loop[(i + 1) % n].x * loop[i].y;
+  const thin = Math.min(1, Math.sqrt(Math.abs(area) / 2) / (depth * 12));
+  return loop.map((p, i) => {
+    const a = loop[(i + n - 1) % n];
+    const b = loop[(i + 1) % n];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l = Math.hypot(dx, dy) || 1;
+    // Every third point juts out, by a hashed amount, so the edge is teeth.
+    const tooth = i % 3 === 0 ? pointHash01(seed, Math.round(p.x * 10), Math.round(p.y * 10), 300) : -0.5;
+    const d = depth * thin * (1 + jagged * tooth);
+    return {x: p.x - (dy / l) * d, y: p.y + (dx / l) * d};
+  });
 }
 
 // The unit direction from a cell's center across edge i.

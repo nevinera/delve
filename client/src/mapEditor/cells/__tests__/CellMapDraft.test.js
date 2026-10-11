@@ -15,9 +15,12 @@ describe("CellMapDraft", () => {
 
   it("changes theme, keeping the cells and dropping the old colors", () => {
     const draft = blank().paint(1, 1, "w").setColor("meadow", "#112233");
-    const glade = draft.setTheme("glade");
-    expect(glade).toBe(draft);
-    expect(validateCellMap(glade.data)).toEqual([]);
+    expect(draft.setTheme("glade")).toBe(draft);
+    const cave = draft.setTheme("cave");
+    expect(cave.data.theme).toBe("cave");
+    expect(cave.data.cells).toEqual(draft.data.cells);
+    expect(cave.data).not.toHaveProperty("colors");
+    expect(validateCellMap(cave.data)).toEqual([]);
   });
 
   it("paints a cell, or a cell and its neighbors", () => {

@@ -200,7 +200,7 @@ function ColorsSection({draft, change}) {
         {Object.entries(defaults).map(([key, fallback]) => (
           <label key={key}>
             <input type="color" value={colors[key] ?? fallback} onChange={(e) => change((d) => d.setColor(key, e.target.value), {group: `color:${key}`})} />
-            {key}
+            {terrainLabel(draft.data.theme, key)}
             {key in colors && <button type="button" aria-label={`Reset ${key}`} onClick={() => change((d) => d.setColor(key, null))}>↺</button>}
           </label>
         ))}

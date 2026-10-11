@@ -21,16 +21,19 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   stamp(ctx, scene.patches, sprites.patches);
 
   const cs = scene.cellSize;
-  ctx.fillStyle = palette.shadow;
-  ctx.save();
-  ctx.translate(style.shadowOffset.x * cs, style.shadowOffset.y * cs);
-  loops(ctx, scene.forest);
-  ctx.fill("evenodd");
-  ctx.restore();
+  if (style.forest.mass === "rock") paintRock(ctx, scene, style, sprites);
+  else {
+    ctx.fillStyle = palette.shadow;
+    ctx.save();
+    ctx.translate(style.shadowOffset.x * cs, style.shadowOffset.y * cs);
+    loops(ctx, scene.forest);
+    ctx.fill("evenodd");
+    ctx.restore();
 
-  ctx.fillStyle = palette.forest;
-  loops(ctx, scene.forest);
-  ctx.fill("evenodd");
+    ctx.fillStyle = palette.forest;
+    loops(ctx, scene.forest);
+    ctx.fill("evenodd");
+  }
 
   // Trails go over the ground and the forest's mass, which they cut
   // through, and under the decorations and water, which they don't cross.
@@ -45,7 +48,33 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   ctx.restore();
 }
 
-// Water, darker away from its shore, with a pale line along the shore.
+// Rock, like a hand-drawn cave map: a dark mass, hatched along its edge
+// (only inside it), with a heavy inked line around it.
+function paintRock(ctx, scene, style, sprites) {
+  const {palette} = style;
+  ctx.fillStyle = palette.shadow;
+  ctx.save();
+  ctx.translate(style.shadowOffset.x * scene.cellSize * 0.4, style.shadowOffset.y * scene.cellSize * 0.4);
+  loops(ctx, scene.forest);
+  ctx.fill("evenodd");
+  ctx.restore();
+  ctx.fillStyle = palette.forest;
+  loops(ctx, scene.forest);
+  ctx.fill("evenodd");
+  ctx.save();
+  loops(ctx, scene.forest);
+  ctx.clip("evenodd");
+  stamp(ctx, scene.hatches, sprites.hatches);
+  ctx.restore();
+  ctx.strokeStyle = palette.ink;
+  ctx.lineWidth = style.crownInk * 3;
+  ctx.lineJoin = "round";
+  loops(ctx, scene.forest);
+  ctx.stroke();
+}
+
+// Water, darker away from its shore, with a pale line along the shore - or
+// a jagged rim of ice.
 function paintWater(ctx, scene, style) {
   if (!scene.water.length) return;
   const {palette} = style;
@@ -55,6 +84,17 @@ function paintWater(ctx, scene, style) {
   ctx.fillStyle = palette.waterDeep;
   loops(ctx, scene.deepWater);
   ctx.fill("evenodd");
+  if (scene.ice.length) {
+    ctx.fillStyle = palette.ice;
+    loops(ctx, [...scene.water, ...scene.ice]);
+    ctx.fill("evenodd");
+    ctx.strokeStyle = palette.iceEdge;
+    ctx.lineWidth = style.tuftInk;
+    ctx.lineJoin = "miter";
+    loops(ctx, scene.ice);
+    ctx.stroke();
+    return;
+  }
   ctx.strokeStyle = palette.waterRim;
   ctx.lineWidth = style.tuftInk * 1.5;
   ctx.lineJoin = "round";

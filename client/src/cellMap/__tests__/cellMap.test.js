@@ -5,7 +5,8 @@ import {regionLoops, smoothLoop} from "../regions";
 import {buildScene} from "../scene";
 import {cacheKey, renderCellMap} from "../render";
 import {buildSprites} from "../sprites";
-import {GLADE, resolveStyle} from "../style";
+import {CAVE, GLADE, STYLES, WINTER, resolveStyle} from "../style";
+import {THEMES} from "../format";
 import clearing from "../examples/clearing.json";
 import forestEdge from "../examples/forest-edge.json";
 import woodlandTrail from "../examples/woodland-trail.json";
@@ -28,7 +29,7 @@ describe("validateCellMap", () => {
   });
 
   it("checks the theme and its colors", () => {
-    expect(validateCellMap({...tiny([".."]), theme: "caves"})).toEqual(["theme must be one of: glade"]);
+    expect(validateCellMap({...tiny([".."]), theme: "caves"})).toEqual(["theme must be one of: glade, autumn, winter, cave"]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "#aabbcc"}})).toEqual([]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "green", sky: "#000000"}})).toEqual([
       'colors.meadow must be a "#rrggbb" color',
@@ -72,7 +73,7 @@ describe("resolveStyle", () => {
 
   it("puts a map's colors over the palette, with their derived shades", () => {
     const style = resolveStyle({...tiny([".."]), colors: {crown: "#646464", trail: "#ffffff"}});
-    expect(style.palette).toMatchObject({crown: "#646464", crownDark: [90, 90, 90], crownLight: [110, 110, 110], trail: "#ffffff", trailEdge: "#adadad"});
+    expect(style.palette).toMatchObject({crown: "#646464", crownTones: [[[90, 90, 90], [110, 110, 110]]], trail: "#ffffff", trailEdge: "#adadad"});
     expect(style.palette.meadow).toBe(GLADE.palette.meadow);
     expect(style.key).toBe("glade:crown=#646464,trail=#ffffff");
   });
@@ -267,7 +268,12 @@ describe("sprites and rendering", () => {
     const sprites = buildSprites(GLADE, 5, 10, fakeCanvas);
     expect(sprites.crowns).toHaveLength(GLADE.variants.crowns);
     expect(sprites.patches).toHaveLength(GLADE.variants.patches);
-    for (const kind of Object.keys(GLADE.variants)) expect(sprites[kind]).toHaveLength(GLADE.variants[kind]);
+    for (const kind of Object.keys(GLADE.variants).filter((k) => k !== "hatches")) expect(sprites[kind]).toHaveLength(GLADE.variants[kind]);
+    // Only rock is hatched, and it has no crowns.
+    expect(sprites.hatches).toEqual([]);
+    const cave = buildSprites(CAVE, 5, 10, fakeCanvas);
+    expect(cave.hatches).toHaveLength(CAVE.variants.hatches);
+    expect(cave.crowns).toEqual([]);
     expect(sprites.crowns[0].canvas.width).toBe(Math.ceil(2 * sprites.crowns[0].extent * 10));
   });
 
@@ -276,5 +282,28 @@ describe("sprites and rendering", () => {
     expect(Object.keys(timings)).toEqual(["scene", "sprites", "paint"]);
     expect(stats).toMatchObject({width: canvas.width, height: canvas.height});
     expect(stats.crowns).toBeGreaterThan(0);
+  });
+});
+
+describe("themes", () => {
+  const map = (theme) => ({...tiny(["TTTTTTTT", "T..%%~~T", "T.www..T", "T.wTw..T", "T..ww..T", "TTTTTTTT"]), theme, trails: [{width: 1, points: [[1, 1], [6, 4]]}], bridges: [{from: [1, 2], to: [5, 4]}]});
+
+  it("share their cells, so a map can change theme", () => {
+    const [first, ...rest] = Object.values(THEMES);
+    for (const theme of rest) expect(theme.terrains).toEqual(first.terrains);
+    for (const key of Object.keys(THEMES)) {
+      expect(STYLES[key]).toBeDefined();
+      expect(validateCellMap(map(key))).toEqual([]);
+    }
+  });
+
+  it("each render, with their own decorations", () => {
+    const fakeCanvas = (width, height) => ({width, height, getContext: () => new Proxy({}, {get: (_, name) => (name === "createLinearGradient" ? () => ({addColorStop: () => {}}) : () => {})})});
+    for (const key of Object.keys(THEMES)) expect(() => renderCellMap(map(key), {createCanvas: fakeCanvas})).not.toThrow();
+    const cave = buildScene(map("cave"));
+    expect(cave.crowns).toEqual([]);
+    expect(cave.hatches.length).toBeGreaterThan(0);
+    expect(buildScene(map("winter"), WINTER).ice.length).toBeGreaterThan(0);
+    expect(buildScene(map("glade")).ice).toEqual([]);
   });
 });

@@ -57,6 +57,12 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
     end
   end
 
+  it "accepts every theme, with the same cells" do
+    described_class.themes.each_key do |theme|
+      expect { described_class.validate!(cell_map.merge("theme" => theme, "cells" => ["Tw.", "%~."])) }.not_to raise_error
+    end
+  end
+
   it "raises on an unsupported version" do
     expect_invalid(cell_map.merge("version" => 2), /version must be 1/, "$.version")
   end

@@ -7,7 +7,7 @@ import {resolveStyle} from "./style";
 import {hashString} from "./random";
 
 // Bump when the renderer's output changes, so old cached images are ignored.
-export const RENDER_VERSION = 7;
+export const RENDER_VERSION = 8;
 
 // iOS Safari won't draw a canvas past about 16.7M pixels.
 const MAX_PIXELS = 16_000_000;
@@ -47,7 +47,7 @@ export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCa
   const canvas = createCanvas(Math.round(scene.width * scale), Math.round(scene.height * scale));
   time("paint", () => paintScene(canvas.getContext("2d"), scene, scale, style, sprites));
   const stats = {width: canvas.width, height: canvas.height};
-  for (const kind of ["crowns", "patches", "tufts", "tallTufts", "pools", "reeds"]) stats[kind] = scene[kind].length;
+  for (const kind of ["crowns", "hatches", "patches", "tufts", "tallTufts", "pools", "reeds"]) stats[kind] = scene[kind].length;
   return {canvas, timings, stats};
 }
 
