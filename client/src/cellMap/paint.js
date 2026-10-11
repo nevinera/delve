@@ -17,11 +17,6 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
     loops(ctx, rings);
     ctx.fill("evenodd");
   }
-  stamp(ctx, scene.patches, sprites.patches);
-  stamp(ctx, scene.pools, sprites.pools);
-  stamp(ctx, scene.tufts, sprites.tufts);
-  stamp(ctx, scene.reeds, sprites.reeds);
-  stamp(ctx, scene.tallTufts, sprites.tallTufts);
 
   const cs = scene.cellSize;
   ctx.fillStyle = palette.shadow;
@@ -35,9 +30,14 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   loops(ctx, scene.forest);
   ctx.fill("evenodd");
 
-  // Over the forest's mass, which they cut through, and under the crowns
-  // lining them.
+  // Trails go over the ground and the forest's mass, which they cut
+  // through, and under every decoration.
   paintTrails(ctx, scene.trails, style);
+  stamp(ctx, scene.patches, sprites.patches);
+  stamp(ctx, scene.pools, sprites.pools);
+  stamp(ctx, scene.tufts, sprites.tufts);
+  stamp(ctx, scene.reeds, sprites.reeds);
+  stamp(ctx, scene.tallTufts, sprites.tallTufts);
   stamp(ctx, scene.crowns, sprites.crowns);
   ctx.restore();
 }
@@ -52,21 +52,85 @@ function stamp(ctx, placements, sprites) {
   }
 }
 
-// Each trail is stroked twice, wide and dark then narrower and light, so it
-// gets an edge.
+// Each trail's solid part is stroked twice, wide and dark then narrower and
+// light, so it gets an edge. Its fading ends are outlines that spread as
+// they go, filled with the same colors fading out.
+const FADE_SPREAD = 0.7;
+
 function paintTrails(ctx, trails, style) {
+  const {palette} = style;
   ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  for (const [color, extra] of [[style.palette.trailEdge, style.trailEdge * 2], [style.palette.trail, 0]]) {
-    ctx.strokeStyle = color;
-    for (const {width, points} of trails) {
+  ctx.lineCap = "butt";
+  for (const [color, extra, fadeTo] of [[palette.trailEdge, style.trailEdge * 2, 0.3], [palette.trail, 0, 1]]) {
+    for (const {width, body, fades, caps} of trails) {
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
       ctx.lineWidth = width + extra;
+      if (body.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(body[0].x, body[0].y);
+        for (const p of body.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
       ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
-      ctx.stroke();
+      for (const {x, y} of caps) {
+        ctx.moveTo(x + (width + extra) / 2, y);
+        ctx.arc(x, y, (width + extra) / 2, 0, Math.PI * 2);
+      }
+      ctx.fill();
+      for (const line of fades) {
+        // Starts a little back over the solid part, so there's no seam.
+        const [a, b] = line;
+        const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        const fade = [{x: a.x - ((b.x - a.x) / l) * width * 0.3, y: a.y - ((b.y - a.y) / l) * width * 0.3}, ...line];
+        const start = line[0];
+        const end = fade[fade.length - 1];
+        const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y);
+        gradient.addColorStop(0, withAlpha(color, 1));
+        gradient.addColorStop(fadeTo * 0.4, withAlpha(color, 0.85));
+        gradient.addColorStop(fadeTo, withAlpha(color, 0));
+        ctx.fillStyle = gradient;
+        spreadingOutline(ctx, fade, width, extra);
+        ctx.fill();
+      }
     }
   }
+  ctx.fillStyle = withAlpha(palette.trail, 0.7);
+  ctx.beginPath();
+  for (const {spots} of trails) {
+    for (const {x, y, radius} of spots) {
+      ctx.moveTo(x + radius, y);
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+    }
+  }
+  ctx.fill();
+}
+
+// The outline of a line whose width grows by FADE_SPREAD along it.
+function spreadingOutline(ctx, points, width, extra) {
+  const total = points.reduce((sum, p, i) => (i ? sum + Math.hypot(p.x - points[i - 1].x, p.y - points[i - 1].y) : 0), 0) || 1;
+  const left = [];
+  const right = [];
+  let walked = 0;
+  points.forEach((p, i) => {
+    if (i) walked += Math.hypot(p.x - points[i - 1].x, p.y - points[i - 1].y);
+    const a = points[Math.max(0, i - 1)];
+    const b = points[Math.min(points.length - 1, i + 1)];
+    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const half = (width * (1 + FADE_SPREAD * (walked / total)) + extra) / 2;
+    left.push({x: p.x - ((b.y - a.y) / l) * half, y: p.y + ((b.x - a.x) / l) * half});
+    right.push({x: p.x + ((b.y - a.y) / l) * half, y: p.y - ((b.x - a.x) / l) * half});
+  });
+  ctx.beginPath();
+  ctx.moveTo(left[0].x, left[0].y);
+  for (const p of [...left.slice(1), ...right.reverse()]) ctx.lineTo(p.x, p.y);
+  ctx.closePath();
+}
+
+// A "#rrggbb" color with an alpha.
+function withAlpha(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 function loops(ctx, rings) {

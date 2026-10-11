@@ -165,6 +165,27 @@ describe("trails", () => {
     expect(buildScene({...forest, trails: []}).crowns).toEqual([]);
   });
 
+  it("fades out where a trail just stops, but not where it meets another", () => {
+    const map = {...tiny(Array.from({length: 12}, () => ".".repeat(12))), trails: [
+      {width: 1, points: [[2, 6], [9, 6]]},
+      {width: 1, points: [[6, 2], [6, 6]]},
+    ]};
+    const [main, branch] = buildScene(map).trails;
+    expect(main.fades).toHaveLength(2);
+    expect(main.caps).toEqual([]);
+    expect(main.spots.length).toBeGreaterThan(0);
+    expect(branch.fades).toHaveLength(1);
+    expect(branch.caps).toHaveLength(1);
+    expect(branch.caps[0].x).toBeCloseTo(cellPoint(6, 6, 5).x);
+    expect(branch.caps[0].y).toBeCloseTo(cellPoint(6, 6, 5).y);
+  });
+
+  it("leaves out of the forest's mass what a trail clears", () => {
+    const area = (scene) => scene.forest.reduce((sum, loop) => sum + loop.length, 0);
+    expect(area(buildScene(forest))).toBeGreaterThan(area(buildScene({...forest, trails: []})));
+    expect(buildScene(forest).forest.length).toBeGreaterThan(1);
+  });
+
   it("validates trails", () => {
     expect(validateCellMap({...forest, trails: [{width: 0, points: [[1, 1]]}, {width: 1, points: [[1, 1], [2]]}]})).toEqual([
       "trails[0].width must be a positive number",
@@ -175,7 +196,8 @@ describe("trails", () => {
 });
 
 describe("sprites and rendering", () => {
-  const fakeCanvas = (width, height) => ({width, height, getContext: () => new Proxy({}, {get: () => () => {}})});
+  const fakeContext = () => new Proxy({}, {get: (_, name) => (name === "createLinearGradient" ? () => ({addColorStop: () => {}}) : () => {})});
+  const fakeCanvas = (width, height) => ({width, height, getContext: fakeContext});
 
   it("makes each style's variants, sized for the largest placement", () => {
     const sprites = buildSprites(GLADE, 5, 10, fakeCanvas);
