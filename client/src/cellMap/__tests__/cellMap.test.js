@@ -1,11 +1,11 @@
 import {describe, it, expect} from "vitest";
 import {validateCellMap} from "../format";
 import {cellAt, cellCenter, cellCorners, cellPoint, hexDistance, hexLine, hexRays, mapSize, neighbor} from "../hexGrid";
-import {regionLoops, smoothLoop} from "../regions";
+import {regionLoops, smoothLoop, unwarp, warp} from "../regions";
 import {buildScene} from "../scene";
 import {cacheKey, renderCellMap} from "../render";
 import {buildSprites} from "../sprites";
-import {CAVE, GLADE, STYLES, WINTER, resolveStyle} from "../style";
+import {CAVE, GLADE, STYLES, WINTER, pineShape, resolveStyle} from "../style";
 import {THEMES} from "../format";
 import clearing from "../examples/clearing.json";
 import forestEdge from "../examples/forest-edge.json";
@@ -131,6 +131,22 @@ describe("regionLoops", () => {
   });
 });
 
+describe("warp", () => {
+  it("bends gently, the same way wherever a point is shared, and can be undone", () => {
+    const points = Array.from({length: 200}, (_, i) => ({x: (i * 7.3) % 150, y: (i * 3.1) % 110}));
+    for (const p of points) {
+      const w = warp(p, 4);
+      expect(warp({...p}, 4)).toEqual(w);
+      expect(Math.hypot(w.x - p.x, w.y - p.y)).toBeLessThan(3);
+      const back = unwarp(w, 4);
+      expect(Math.hypot(back.x - p.x, back.y - p.y)).toBeLessThan(0.01);
+    }
+    // Not just a shift: points far apart move differently.
+    const moves = points.map((p) => warp(p, 4).x - p.x);
+    expect(Math.max(...moves) - Math.min(...moves)).toBeGreaterThan(1.5);
+  });
+});
+
 describe("buildScene", () => {
   it("builds the same scene from the same map", () => {
     expect(buildScene(clearing)).toEqual(buildScene(structuredClone(clearing)));
@@ -185,7 +201,8 @@ describe("ground terrains", () => {
   it("decorates each kind of ground with its own sprites", () => {
     const scene = buildScene({...map, cells: ["%%%%%%", "~~~~~~", "%%%%%%", "~~~~~~"]});
     expect(scene.tallTufts.length).toBeGreaterThan(0);
-    expect(scene.pools.length + scene.reeds.length).toBeGreaterThan(0);
+    expect(scene.hummocks.length).toBeGreaterThan(0);
+    expect(scene.marshWater.length).toBe(scene.grounds.find((g) => g.terrain === "marsh").loops.length);
     expect(scene.tufts).toEqual([]);
     expect(scene.crowns).toEqual([]);
   });
@@ -202,11 +219,11 @@ describe("trails", () => {
     expect(mid.y).toBeCloseTo((cellCenter(3, 2, 5).y + cellCenter(4, 2, 5).y) / 2);
   });
 
-  it("curves through every point it was given, in feet", () => {
+  it("curves through every point it was given, in feet, bent as the map's edges are", () => {
     const [trail] = buildScene(forest).trails;
     expect(trail.width).toBe(5);
     for (const [col, row] of forest.trails[0].points) {
-      const p = cellPoint(col, row, 5);
+      const p = warp(cellPoint(col, row, 5), forest.seed);
       expect(trail.points.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1e-9)).toBe(true);
     }
   });
@@ -231,8 +248,9 @@ describe("trails", () => {
     expect(main.spots.length).toBeGreaterThan(0);
     expect(branch.fades).toHaveLength(1);
     expect(branch.caps).toHaveLength(1);
-    expect(branch.caps[0].x).toBeCloseTo(cellPoint(6, 6, 5).x);
-    expect(branch.caps[0].y).toBeCloseTo(cellPoint(6, 6, 5).y);
+    const joint = warp(cellPoint(6, 6, 5), map.seed);
+    expect(branch.caps[0].x).toBeCloseTo(joint.x);
+    expect(branch.caps[0].y).toBeCloseTo(joint.y);
   });
 
   it("leaves out of the forest's mass what a trail clears", () => {
@@ -241,14 +259,35 @@ describe("trails", () => {
     expect(buildScene(forest).forest.length).toBeGreaterThan(1);
   });
 
-  it("keeps grass, reeds and pools off the trail", () => {
+  it("keeps grass and reeds off the trail", () => {
     const ground = {...tiny(["%%%%%%%%%%%%", "~~~~~~~~~~~~", "%%%%%%%%%%%%", "~~~~~~~~~~~~", "............"]), trails: [{width: 1.5, points: [[-1, 2], [12, 2]]}]};
     const scene = buildScene(ground);
     const [trail] = scene.trails;
-    for (const kind of ["tufts", "tallTufts", "pools", "reeds"]) {
+    for (const kind of ["tufts", "tallTufts", "reeds"]) {
       expect(scene[kind].every((p) => Math.min(...trail.points.map((q) => Math.hypot(p.x - q.x, p.y - q.y))) > trail.width / 2)).toBe(true);
     }
     expect(scene.tallTufts.length).toBeLessThan(buildScene({...ground, trails: []}).tallTufts.length);
+  });
+
+  it("draws narrower trails first, so wider ones run over them", () => {
+    const map = {...tiny(Array.from({length: 12}, () => ".".repeat(12))), trails: [
+      {type: "road", width: 1.6, points: [[1, 6], [10, 6]]},
+      {type: "deerPath", width: 0.4, points: [[6, 1], [6, 11]]},
+    ]};
+    const strokes = [];
+    let lineWidth = 0;
+    const ctx = new Proxy({}, {
+      get: (_, name) => (name === "createLinearGradient" ? () => ({addColorStop: () => {}}) : name === "stroke" ? () => strokes.push(lineWidth) : () => {}),
+      set: (_, name, value) => {
+        if (name === "lineWidth") lineWidth = value;
+        return true;
+      },
+    });
+    renderCellMap(map, {createCanvas: (width, height) => ({width, height, getContext: () => ctx})});
+    const deer = 0.4 * 5;
+    const road = 1.6 * 5;
+    expect(strokes.lastIndexOf(deer)).toBeGreaterThan(-1);
+    expect(strokes.lastIndexOf(deer)).toBeLessThan(strokes.indexOf(road));
   });
 
   it("validates trails", () => {
@@ -268,7 +307,7 @@ describe("sprites and rendering", () => {
     const sprites = buildSprites(GLADE, 5, 10, fakeCanvas);
     expect(sprites.crowns).toHaveLength(GLADE.variants.crowns);
     expect(sprites.patches).toHaveLength(GLADE.variants.patches);
-    for (const kind of Object.keys(GLADE.variants).filter((k) => k !== "hatches")) expect(sprites[kind]).toHaveLength(GLADE.variants[kind]);
+    for (const kind of Object.keys(GLADE.variants).filter((k) => k !== "hatches" && k !== "hummocks")) expect(sprites[kind]).toHaveLength(GLADE.variants[kind]);
     // Only rock is hatched, and it has no crowns.
     expect(sprites.hatches).toEqual([]);
     const cave = buildSprites(CAVE, 5, 10, fakeCanvas);
@@ -305,5 +344,11 @@ describe("themes", () => {
     expect(cave.hatches.length).toBeGreaterThan(0);
     expect(buildScene(map("winter"), WINTER).ice.length).toBeGreaterThan(0);
     expect(buildScene(map("glade")).ice).toEqual([]);
+  });
+
+  it("snow some pines heavily and leave others bare", () => {
+    const snow = Array.from({length: WINTER.variants.crowns}, (_, i) => pineShape(WINTER, i).dabs.length);
+    expect(Math.min(...snow)).toBeLessThanOrEqual(1);
+    expect(Math.max(...snow)).toBeGreaterThanOrEqual(6);
   });
 });

@@ -4,7 +4,8 @@
 // it), and where trees meet water the trees' wall does. Walls follow the
 // cells' edges (less the tree cells trails clear - see cellMap/scene.js),
 // through the middle of each hex edge so a column's zigzag is a straight
-// line, then smoothed so a row's is too, then simplified. Where trees,
+// line, then smoothed so a row's is too, bent as the drawn edges are
+// (see cellMap/regions.js's warp), then simplified. Where trees,
 // water and open ground meet, their walls share that corner exactly, so
 // nothing leaks between them.
 //
@@ -22,7 +23,7 @@
 //
 // Works in map feet (y up); the scene is in cellmap feet (y down).
 import {trailClearedCells} from "../../cellMap/scene";
-import {latticeCorner, PAD} from "../../cellMap/regions";
+import {latticeCorner, PAD, unwarp, warp} from "../../cellMap/regions";
 import {CELL_SIZE, cellAt, cellCenter, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
 import {terrainAt} from "../../cellMap/format";
 import {bridgeCells, bridgeDeck} from "../../cellMap/bridges";
@@ -66,9 +67,9 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   // Water under a bridge's middle splits the water into patches either
   // side of it, each needing its own fill point.
   const patchKindAt = (c, r) => (kindAt(c, r) === "water" && onBridge.has(`${c},${r}`) ? null : kindAt(c, r));
-  const circles = groves.map(({kind, center: {x, y}, radius}) => barrier({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}, kind));
+  const circles = groves.map(({kind, center, radius}) => ({kind, radius, ...warp(center, cellMap.seed)})).map(({kind, x, y, radius}) => barrier({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}, kind));
 
-  const outlined = outlines(cellMap, kindAt).map((line) => ({...line, points: linePoints(line).map(toMap)}));
+  const outlined = outlines(cellMap, kindAt).map((line) => ({...line, points: linePoints(line).map((p) => toMap(warp(p, cellMap.seed)))}));
   const decks = bridges.map((bridge) => {
     const {a, b, halfWidth} = bridgeDeck(bridge);
     return {a: toMap(a), b: toMap(b), halfWidth};
@@ -439,14 +440,18 @@ const segmentCount = (walls) => walls.reduce((sum, {points}) => sum + points.len
 
 // A fill point for each patch inside the map that none of existing is in,
 // at its deepest cell's center (in map feet).
+// Fill points are where the cells are drawn, bent as the walls are.
 function newFillPoints(cellMap, kindAt, existing, height) {
-  const marked = new Set(existing.map(({x, y}) => cellAt(x, height - y, CELL_SIZE).join(",")));
+  const marked = new Set(existing.map(({x, y}) => {
+    const p = unwarp({x, y: height - y}, cellMap.seed);
+    return cellAt(p.x, p.y, CELL_SIZE).join(",");
+  }));
   return patches(cellMap, kindAt).flatMap(({cells, edge}) => {
     const keys = new Set(cells.map(([c, r]) => `${c},${r}`));
     if (edge || [...keys].some((k) => marked.has(k))) return [];
     const [col, row] = deepest(cells, keys);
-    const [x, y] = mapPoint(col, row, height);
-    return [{x: round(x), y: round(y)}];
+    const {x, y} = warp(cellCenter(col, row, CELL_SIZE), cellMap.seed);
+    return [{x: round(x), y: round(height - y)}];
   });
 }
 
@@ -480,11 +485,6 @@ function borderCells({grid}) {
   for (let col = 0; col < grid.cols; col++) cells.push([col, 0], [col, grid.rows - 1]);
   for (let row = 0; row < grid.rows; row++) cells.push([0, row], [grid.cols - 1, row]);
   return cells;
-}
-
-function mapPoint(col, row, height) {
-  const {x, y} = cellCenter(col, row, CELL_SIZE);
-  return [x, height - y];
 }
 
 function segmentDistance([px, py], [ax, ay], [bx, by]) {

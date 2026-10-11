@@ -1,7 +1,7 @@
 // Outlines of the areas a terrain covers, as closed loops, then smoothed so
 // the hexes they're made of don't show.
 import {hexRadius, neighbor} from "./hexGrid";
-import {pointHash01} from "./random";
+import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
 
 // Regions run this many cells past the grid (copying its edge cells), so
@@ -68,7 +68,7 @@ export function smoothLoop(loop, cellSize, seed, {irregularity = IRREGULARITY, r
   points = jitter(subdivide(points), r * roughness, seed, 2);
   let out = points.map(({x, y}) => ({x, y}));
   for (let i = 0; i < CHAIKIN_PASSES; i++) out = chaikin(out);
-  return out;
+  return out.map((p) => warp(p, seed));
 }
 
 // A loop of lattice points as a round, gently wobbling curve of {x, y} in
@@ -92,7 +92,48 @@ export function softLoop(loop, cellSize, seed, {passes = 4, wobble = 0.3} = {}) 
       return {x: (a.x + 2 * p.x + b.x) / 4, y: (a.y + 2 * p.y + b.y) / 4};
     });
   }
-  return chaikin(points);
+  return chaikin(points).map((p) => warp(p, seed));
+}
+
+// A slow drift over the whole map, so edges along a row or column of
+// cells (and long trails) bend rather than run ruler-straight. It's a
+// function of where a point is, so lines that share points still meet.
+// Two layers of smooth noise: wavelengths and amounts in feet.
+const WARP = [
+  {wavelength: 20, amount: 2},
+  {wavelength: 7, amount: 0.7},
+];
+
+export function warp({x, y}, seed) {
+  let dx = 0;
+  let dy = 0;
+  WARP.forEach(({wavelength, amount}, layer) => {
+    dx += (noise(seed, x / wavelength, y / wavelength, 400 + layer * 2) - 0.5) * 2 * amount;
+    dy += (noise(seed, x / wavelength, y / wavelength, 401 + layer * 2) - 0.5) * 2 * amount;
+  });
+  return {x: x + dx, y: y + dy};
+}
+
+// The point warp moves to p, found by stepping back from it (the warp
+// bends gently enough for that to settle quickly).
+export function unwarp(p, seed) {
+  let q = p;
+  for (let i = 0; i < 8; i++) {
+    const w = warp(q, seed);
+    q = {x: q.x + p.x - w.x, y: q.y + p.y - w.y};
+  }
+  return q;
+}
+
+// Value noise in [0, 1): hashed lattice values, smoothly blended.
+export function noise(seed, u, v, salt) {
+  const [i, j] = [Math.floor(u), Math.floor(v)];
+  const ease = (t) => t * t * (3 - 2 * t);
+  const [s, t] = [ease(u - i), ease(v - j)];
+  const at = (a, b) => hash01(seed, i + a, j + b, salt);
+  const top = at(0, 0) + (at(1, 0) - at(0, 0)) * s;
+  const bottom = at(0, 1) + (at(1, 1) - at(0, 1)) * s;
+  return top + (bottom - top) * t;
 }
 
 function subdivide(points) {

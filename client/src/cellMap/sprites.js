@@ -2,11 +2,11 @@
 // canvas, so the painter can stamp thousands of them with drawImage instead
 // of tracing every path again.
 // Which shape each kind of decoration takes is the style's (see style.js).
-import {crownShape, hatchShape, leafShape, patchShape, pineShape, poolShape, reedShape, stoneShape, tallTuftShape, tuftShape, twigShape} from "./style";
+import {crownShape, hatchShape, leafShape, patchShape, pineShape, reedShape, stoneShape, tallTuftShape, tuftShape, twigShape} from "./style";
 
 // Sprites are drawn at the largest size the scene places them (in cell
 // sizes), so stamping only ever scales them down.
-export const MAX_SIZE = {crowns: 1.05, patches: 2.4, tufts: 0.5, tallTufts: 0.55, pools: 0.65, reeds: 0.45, hatches: 0.7};
+export const MAX_SIZE = {crowns: 1.05, patches: 2.4, tufts: 0.5, tallTufts: 0.55, reeds: 0.45, hatches: 0.7};
 
 // Each sprite is {canvas, extent}: extent is half the canvas's width, in
 // feet, when drawn at the MAX_SIZE radius.
@@ -88,18 +88,6 @@ export function buildSprites(style, cellSize, pixelsPerFoot, createCanvas) {
         }
         ctx.stroke();
       }
-    }),
-    pools: make("pools", style.variants.pools, (r) => r * 1.3 + style.tuftInk, (ctx, i, r) => {
-      const shape = poolShape(style, i);
-      ctx.fillStyle = palette.pool;
-      ctx.beginPath();
-      blob(ctx, 0, 0, r, shape);
-      ctx.fill();
-      ctx.strokeStyle = palette.poolRim;
-      ctx.lineWidth = style.tuftInk;
-      ctx.beginPath();
-      blob(ctx, -r * 0.08, -r * 0.1, r * 0.75, shape);
-      ctx.stroke();
     }),
     hatches: make("hatches", style.forest.mass === "rock" ? style.variants.hatches : 0, (r) => r * 1.2 + style.tuftInk, (ctx, i, r) => {
       const {angle, strokes} = hatchShape(style, i);
@@ -226,7 +214,7 @@ function lobes(ctx, shape, r, ox, oy, size, shift = 0) {
 
 // Adds a lumpy circle to the current path, curved through the midpoints
 // between its points.
-function blob(ctx, x, y, radius, shape) {
+export function blob(ctx, x, y, radius, shape) {
   const n = shape.length;
   const pts = shape.map((k, i) => {
     const a = (i / n) * Math.PI * 2;

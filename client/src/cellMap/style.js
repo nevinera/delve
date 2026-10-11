@@ -14,7 +14,7 @@ const BASE = {
   crownInk: 0.16,
   tuftInk: 0.1,
   shadowOffset: {x: 0.3, y: 0.45},
-  variants: {crowns: 32, patches: 12, tufts: 8, tallTufts: 8, pools: 12, reeds: 8, hatches: 8},
+  variants: {crowns: 32, patches: 12, tufts: 8, tallTufts: 8, hummocks: 12, reeds: 8, hatches: 8},
   // Trees: their mass ("canopy", dark under the crowns; or "rock", inked
   // and hatched along its edge), its crowns ("broadleaf", "pine" or none)
   // and the chance a cell that deep in from the edge gets one.
@@ -24,8 +24,9 @@ const BASE = {
   meadow: {patches: 0.15, tufts: 0.65, tuft: "grass"},
   // Tall grass: clumps per cell, and what they are ("grass" or "rubble").
   tallGrass: {clumps: 3, clump: "grass"},
-  // Marsh: chances per cell of a pool and of reeds.
-  marsh: {pools: 0.55, reeds: 0.6},
+  // Marsh: hummocks of ground per cell (on average, less a half), rising
+  // out of its shallow water, and the chance of reeds.
+  marsh: {hummocks: 1.3, reeds: 0.6},
   // Water's edge: a pale "shore" line, or jagged "ice".
   water: {edge: "shore"},
 };
@@ -190,7 +191,7 @@ export const CAVE = style("cave", {
   forest: {mass: "rock", crowns: null},
   meadow: {patches: 0.12, tufts: 0.35, tuft: "pebbles"},
   tallGrass: {clumps: 2, clump: "rubble"},
-  marsh: {pools: 0.7, reeds: 0},
+  marsh: {hummocks: 1.4, reeds: 0},
 });
 
 export const STYLES = {glade: GLADE, autumn: AUTUMN, winter: WINTER, cave: CAVE};
@@ -285,10 +286,16 @@ export function tallTuftShape(style, i) {
   return Array.from({length: count}, (_, j) => ({x: (h(10 + j) - 0.5) * 1.2, y: (h(20 + j) - 0.5) * 0.6, lean: (h(30 + j) - 0.5) * 0.9, size: 0.6 + 0.4 * h(40 + j), light: h(50 + j) < 0.3}));
 }
 
-// A pool of standing water.
-export function poolShape(style, i) {
+// A hummock of ground in a marsh: lumpy, and drawn out (up to twice as
+// long as it's wide) in some direction.
+export function hummockShape(style, i) {
   const h = variantHash(style, 5, i);
-  return lumps(10, 0.22, h, 1);
+  const stretch = Math.sqrt(1 + h(40));
+  const turn = h(41) * Math.PI;
+  return lumps(12, 0.3, h, 1).map((k, j) => {
+    const a = (j / 12) * Math.PI * 2 - turn;
+    return k / Math.hypot(Math.cos(a) / stretch, Math.sin(a) * stretch);
+  });
 }
 
 // Three to five reeds rising from a point.
@@ -306,13 +313,19 @@ function lumps(n, amount, h, salt) {
 }
 
 // A pine from above: a star of boughs (eight to eleven points) over a
-// smaller one turned half a point, with a few dabs of snow or light on it.
+// smaller one turned half a point, with dabs of snow or light on it - from
+// none to most of the tree, mostly toward the top left.
 export function pineShape(style, i) {
   const h = variantHash(style, 7, i);
   const points = 8 + Math.floor(h(1) * 4);
   const turn = h(2) * Math.PI * 2;
   const star = (inner, salt) => Array.from({length: points * 2}, (_, j) => (j % 2 ? inner + 0.08 * h(salt + j) : 0.92 + 0.12 * h(salt + j)));
-  const dabs = Array.from({length: 2 + Math.floor(h(3) * 3)}, (_, j) => ({x: -0.1 - 0.35 * h(40 + j), y: -0.1 - 0.35 * h(50 + j), r: 0.12 + 0.1 * h(60 + j)}));
+  const snow = h(3) ** 1.3;
+  const dabs = Array.from({length: Math.round(snow * 9)}, (_, j) => {
+    const a = -2.36 + (h(40 + j) - 0.5) * (1 + 3.5 * snow);
+    const out = 0.1 + 0.55 * h(50 + j);
+    return {x: Math.cos(a) * out, y: Math.sin(a) * out, r: 0.08 + (0.08 + 0.14 * snow) * h(60 + j)};
+  });
   return {tone: h(7), turn, outer: star(0.62, 100), inner: star(0.6, 200), dabs};
 }
 

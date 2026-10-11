@@ -3,6 +3,7 @@ import {autoBarriers, clipLoop, simplify} from "../autoBarriers";
 import {computeMapFill} from "../../../game/mapFill";
 import {hasLineOfSight} from "../../../game/collision";
 import {CELL_SIZE, cellCenter, mapSize} from "../../../cellMap/hexGrid";
+import {warp} from "../../../cellMap/regions";
 import woodland from "../../../cellMap/examples/woodland-trail.json";
 
 // A map of trees with a clearing in the middle, and a grove in the
@@ -27,7 +28,8 @@ const round = (n) => Math.round(n * 100) / 100;
 function filledAt(cellMap, result, col, row) {
   const feetDimensions = mapSize(cellMap.grid);
   const fill = computeMapFill({feetDimensions, barriers: result.barriers, connections: [], fillPoints: result.fillPoints});
-  const {x, y} = cellCenter(col, row, CELL_SIZE);
+  // Where the cell's drawn: walls bend with the drawing.
+  const {x, y} = warp(cellCenter(col, row, CELL_SIZE), cellMap.seed);
   const p = [x, feetDimensions.height - y];
   const inside = (ring) => {
     let hit = false;
@@ -86,7 +88,7 @@ describe("autoBarriers", () => {
     const result = autoBarriers(map);
     const circles = result.barriers.filter((b) => b.type === "circle");
     expect(circles.map(({radius}) => radius).sort()).toEqual([2.5, 4.55, 7.5]);
-    const one = cellCenter(4, 5, CELL_SIZE);
+    const one = warp(cellCenter(4, 5, CELL_SIZE), map.seed);
     expect(circles).toContainEqual({type: "circle", location: {x: round(one.x), y: round(mapSize(map.grid).height - one.y)}, radius: 2.5});
     expect(result.barriers.filter((b) => b.type === "wall")).toHaveLength(1);
     expect(result.fillPoints).toHaveLength(1);

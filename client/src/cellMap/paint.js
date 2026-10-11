@@ -1,7 +1,8 @@
 // Draws a scene (see scene.js) onto a 2D canvas context: fills for the
 // ground and forest, and decorations stamped from sprites (see sprites.js).
 // No filters, shadow blur or text, so it's quick on phones.
-import {DEFAULT_PATH, PATHS} from "./style";
+import {DEFAULT_PATH, PATHS, hummockShape} from "./style";
+import {blob} from "./sprites";
 
 export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   const {palette} = style;
@@ -14,6 +15,10 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   ctx.fillStyle = palette.meadow;
   ctx.fillRect(0, 0, scene.width, scene.height);
   for (const {terrain, loops: rings} of scene.grounds) {
+    if (terrain === "marsh") {
+      paintMarsh(ctx, rings, scene.marshWater, scene.hummocks, style);
+      continue;
+    }
     ctx.fillStyle = palette[terrain];
     loops(ctx, rings);
     ctx.fill("evenodd");
@@ -40,7 +45,6 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   paintTrails(ctx, scene.trails, style);
   paintWater(ctx, scene, style);
   paintBridges(ctx, scene.bridges, style, cs);
-  stamp(ctx, scene.pools, sprites.pools);
   stamp(ctx, scene.tufts, sprites.tufts);
   stamp(ctx, scene.reeds, sprites.reeds);
   stamp(ctx, scene.tallTufts, sprites.tallTufts);
@@ -71,6 +75,35 @@ function paintRock(ctx, scene, style, sprites) {
   ctx.lineJoin = "round";
   loops(ctx, scene.forest);
   ctx.stroke();
+}
+
+// Marsh: ground inside its edge, and shallow water inside that, with
+// hummocks rising out of it. Hummocks are traced in the rim color first,
+// a little wider, so they get a pale edge where they meet the water and
+// merge where they touch each other.
+function paintMarsh(ctx, rings, water, hummocks, style) {
+  const {palette} = style;
+  const rim = style.tuftInk;
+  ctx.fillStyle = palette.marsh;
+  loops(ctx, rings);
+  ctx.fill("evenodd");
+  ctx.save();
+  loops(ctx, water);
+  ctx.clip("evenodd");
+  ctx.fillStyle = palette.pool;
+  loops(ctx, water);
+  ctx.fill("evenodd");
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = palette.poolRim;
+  ctx.lineWidth = rim * 2;
+  loops(ctx, water);
+  ctx.stroke();
+  ctx.beginPath();
+  for (const {x, y, radius, variant} of hummocks) blob(ctx, x, y, radius, hummockShape(style, variant));
+  ctx.stroke();
+  ctx.fillStyle = palette.marsh;
+  ctx.fill();
+  ctx.restore();
 }
 
 // Water, darker away from its shore, with a pale line along the shore - or
@@ -150,9 +183,16 @@ function stamp(ctx, placements, sprites) {
 // light, so it gets an edge. Its fading ends are outlines that spread as
 // they go, filled with the same colors fading out. Its look is its path
 // type's (see style.js's PATHS): colors, edge, and a road's ruts.
+// Narrower trails go first, so wider ones run over where they meet;
+// trails as wide as each other are drawn together, so they merge.
 const FADE_SPREAD = 0.7;
 
 function paintTrails(ctx, trails, style) {
+  const widths = [...new Set(trails.map((t) => t.width))].sort((a, b) => a - b);
+  for (const width of widths) paintTrailGroup(ctx, trails.filter((t) => t.width === width), style);
+}
+
+function paintTrailGroup(ctx, trails, style) {
   const {palette} = style;
   const pathOf = (trail) => PATHS[trail.type] ?? PATHS[DEFAULT_PATH];
   ctx.lineJoin = "round";
