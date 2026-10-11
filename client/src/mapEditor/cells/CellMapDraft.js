@@ -91,7 +91,11 @@ export class CellMapDraft {
     const kept = added >= 0 ? this.data.cells : this.data.cells.slice(-added);
     const cells = [...Array.from({length: Math.max(0, added)}, () => ""), ...kept].map((line) => line.slice(0, cols).padEnd(cols, fill));
     const trails = this.trails.map((trail) => ({...trail, points: trail.points.map(([col, row]) => [col, row + added])}));
-    return this.with({grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {})});
+    // Bridges move with their cells too, and go if they'd leave the grid.
+    const inside = ([col, row]) => col >= 0 && row >= 0 && col < cols && row < rows;
+    const bridges = this.bridges.map(({from, to}) => ({from: [from[0], from[1] + added], to: [to[0], to[1] + added]})).filter(({from, to}) => inside(from) && inside(to));
+    const {bridges: _old, ...rest} = this.data;
+    return new CellMapDraft({...rest, grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {}), ...(bridges.length ? {bridges} : {})});
   }
 
   // ---- Look ----
@@ -143,6 +147,23 @@ export class CellMapDraft {
   removeTrailPoint(index, at) {
     const points = this.trails[index].points.filter((_, i) => i !== at);
     return points.length < 2 ? this.removeTrail(index) : this.updateTrail(index, (trail) => ({...trail, points}));
+  }
+
+  // ---- Bridges ----
+
+  get bridges() {
+    return this.data.bridges ?? [];
+  }
+
+  addBridge(from, to) {
+    return this.with({bridges: [...this.bridges, {from, to}]});
+  }
+
+  removeBridge(index) {
+    const bridges = this.bridges.filter((_, i) => i !== index);
+    if (bridges.length) return this.with({bridges});
+    const {bridges: _old, ...rest} = this.data;
+    return new CellMapDraft(rest);
   }
 
   updateTrail(index, fn) {

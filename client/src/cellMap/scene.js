@@ -6,6 +6,7 @@ import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
 import {insetLoop, regionLoops, smoothLoop, softLoop} from "./regions";
 import {resolveStyle} from "./style";
+import {bridgeDeck} from "./bridges";
 
 // The forest's dark mass only shows in the gaps between crowns, so it's
 // smoothed gently (sharp wiggles turn into spikes when inset) and sits this
@@ -58,12 +59,13 @@ export function trailClearedCells(map) {
 export function buildScene(map, style = resolveStyle(map)) {
   const cellSize = CELL_SIZE;
   const {seed} = map;
-  const scene = {...mapSize(map.grid), cellSize, grounds: [], water: [], deepWater: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
+  const scene = {...mapSize(map.grid), cellSize, grounds: [], water: [], deepWater: [], bridges: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
 
   scene.grounds = GROUND_REGIONS.map((terrain) => ({terrain, loops: regionLoops(map, terrain).map((loop) => smoothLoop(loop, cellSize, seed))}));
   scene.water = regionLoops(map, "water").map((loop) => softLoop(loop, cellSize, seed));
   const shallow = (c, r) => [0, 1, 2, 3, 4, 5].some((edge) => terrainAt(map, ...neighbor(c, r, edge)) !== "water");
   scene.deepWater = regionLoops(map, "water", shallow).map((loop) => insetLoop(softLoop(loop, cellSize, seed), DEEP_INSET * cellSize));
+  scene.bridges = (map.bridges ?? []).map(bridgeDeck);
   scene.trails = sceneTrails(map, scene);
   const cleared = trailCleared(scene.trails);
   // The forest's mass leaves out what trails clear, as its crowns do.
@@ -121,6 +123,9 @@ export function buildScene(map, style = resolveStyle(map)) {
     return scene.trails.every((t) => lineDistance(p.x, p.y, t.points) > t.width / 2 + p.radius * 0.6);
   };
   for (const kind of ["tufts", "tallTufts", "pools", "reeds"]) scene[kind] = scene[kind].filter(offTrail);
+  // Nor on a bridge, and no tree hangs over one.
+  const offBridges = (p) => scene.bridges.every(({a, b, halfWidth}) => segmentDistance(p.x, p.y, a, b) > halfWidth + p.radius * 0.5);
+  for (const kind of ["tufts", "tallTufts", "pools", "reeds", "crowns"]) scene[kind] = scene[kind].filter(offBridges);
 
   // Painted top to bottom, so lower crowns overlap the ones behind them.
   scene.crowns.sort((a, b) => a.y - b.y || a.x - b.x);

@@ -28,6 +28,9 @@ export const GLADE = {
     water: "#5f8f9a",
     waterDeep: "#4f7d8b",
     waterRim: "rgba(222, 238, 232, 0.7)",
+    bridge: "#a98053",
+    bridgeEdge: "#6f4f2f",
+    bridgeBeam: "#7d5a36",
     reed: "#5f7442",
     trailEdge: "#8b7a55",
     trail: "#cdb98a",
@@ -51,6 +54,7 @@ const DERIVED = {
   tallTuft: (c) => ({tallTuftLight: hex(mix(c, WHITE, 0.5))}),
   trail: (c) => ({trailEdge: hex(scale(c, 0.68))}),
   water: (c) => ({waterDeep: hex(scale(c, 0.86))}),
+  bridge: (c) => ({bridgeEdge: hex(scale(c, 0.66)), bridgeBeam: hex(scale(c, 0.74))}),
   ink: (c) => ({shadow: rgba(c, 0.32)}),
 };
 

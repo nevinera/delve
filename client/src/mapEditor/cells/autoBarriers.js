@@ -16,11 +16,16 @@
 // Open ground reaching the edge would be filled too, so that's reported,
 // not fixed.
 //
+// A bridge cuts the water's walls where its deck is, and gets a rail down
+// each side (see cellMap/bridges.js), so it's open from bank to bank; a
+// rail across an end too, if that end's over water.
+//
 // Works in map feet (y up); the scene is in cellmap feet (y down).
 import {trailClearedCells} from "../../cellMap/scene";
 import {latticeCorner, PAD} from "../../cellMap/regions";
 import {CELL_SIZE, cellAt, cellCenter, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
 import {terrainAt} from "../../cellMap/format";
+import {bridgeCells, bridgeDeck} from "../../cellMap/bridges";
 
 // See docs/schema/map.md (and MapValidator).
 export const MAX_BARRIER_SEGMENTS = 3000;
@@ -53,15 +58,23 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
     const terrain = terrainAt(cellMap, c, r);
     return terrain in BLOCKERS && !(terrain === "trees" && cleared(c, r)) ? terrain : null;
   };
-  const groves = roundPatches(cellMap, blocking);
+  const bridges = cellMap.bridges ?? [];
+  const onBridge = new Set(bridges.flatMap((bridge) => bridgeCells(bridge).map((cell) => cell.join(","))));
+  const groves = roundPatches(cellMap, blocking).filter(({cells}) => !cells.some((cell) => onBridge.has(cell)));
   const inGrove = new Set(groves.flatMap(({cells}) => cells));
   const kindAt = (c, r) => (inGrove.has(`${c},${r}`) ? null : blocking(c, r));
+  // Water under a bridge's middle splits the water into patches either
+  // side of it, each needing its own fill point.
+  const patchKindAt = (c, r) => (kindAt(c, r) === "water" && onBridge.has(`${c},${r}`) ? null : kindAt(c, r));
   const circles = groves.map(({kind, center: {x, y}, radius}) => barrier({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}, kind));
 
-  const runs = outlines(cellMap, kindAt).flatMap((line) => {
-    const points = linePoints(line).map(toMap);
-    return (line.closed ? clipLoop(points, width, height) : clipRun(points, width, height)).map((run) => ({...run, kind: line.kind}));
+  const outlined = outlines(cellMap, kindAt).map((line) => ({...line, points: linePoints(line).map(toMap)}));
+  const decks = bridges.map((bridge) => {
+    const {a, b, halfWidth} = bridgeDeck(bridge);
+    return {a: toMap(a), b: toMap(b), halfWidth};
   });
+  const runs = [...bridged(outlined, decks), ...decks.flatMap((deck) => rails(deck, outlined))].flatMap((line) =>
+    (line.closed ? clipLoop(line.points, width, height) : clipRun(line.points, width, height)).map((run) => ({...run, kind: line.kind})));
   let tolerance = START_TOLERANCE;
   let walls = simplifyAll(runs, tolerance);
   const circleSegments = circles.length * CIRCLE_SEGMENTS;
@@ -74,7 +87,7 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
     return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The trees' and water's edges need ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify them and try again.`};
   }
 
-  const fillPoints = [...existingFillPoints, ...newFillPoints(cellMap, kindAt, existingFillPoints, height)];
+  const fillPoints = [...existingFillPoints, ...newFillPoints(cellMap, patchKindAt, existingFillPoints, height)];
   if (fillPoints.length > MAX_FILL_POINTS) {
     return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `There are ${fillPoints.length - existingFillPoints.length} separate patches of trees and water inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
   }
@@ -225,6 +238,96 @@ function linePoints({corners, closed}) {
   return points;
 }
 
+// The lines with the water's cut out of each bridge's deck: the parts
+// outside it, as open lines (or the whole line, if it misses the decks).
+function bridged(lines, decks) {
+  if (!decks.length) return lines;
+  return lines.flatMap((line) => {
+    if (line.kind !== "water") return [line];
+    const whole = line.closed ? [...line.points, line.points[0]] : line.points;
+    let pieces = [whole];
+    for (const deck of decks) pieces = pieces.flatMap((points) => outsideDeck(points, deck));
+    return pieces.length === 1 && pieces[0] === whole ? [line] : pieces.map((points) => ({points, closed: false, kind: line.kind}));
+  });
+}
+
+// A deck's corners, in map feet: the a end's right and left, then the b
+// end's left and right (so its long sides are 0-1 and 2-3).
+function deckCorners({a, b, halfWidth}) {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const [nx, ny] = [(-(b[1] - a[1]) / l) * halfWidth, ((b[0] - a[0]) / l) * halfWidth];
+  return [[a[0] - nx, a[1] - ny], [b[0] - nx, b[1] - ny], [b[0] + nx, b[1] + ny], [a[0] + nx, a[1] + ny]];
+}
+
+// The [t0, t1] of p→q inside a deck, or null (Liang-Barsky, along and
+// across the deck).
+function deckClip(p, q, {a, b, halfWidth}) {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const [ux, uy] = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+  const along = ([x, y]) => (x - a[0]) * ux + (y - a[1]) * uy;
+  const across = ([x, y]) => (y - a[1]) * ux - (x - a[0]) * uy;
+  const [u0, v0] = [along(p), across(p)];
+  const [du, dv] = [along(q) - u0, across(q) - v0];
+  let t0 = 0;
+  let t1 = 1;
+  for (const [d, room] of [[-du, u0], [du, l - u0], [-dv, v0 + halfWidth], [dv, halfWidth - v0]]) {
+    if (d === 0) {
+      if (room < 0) return null;
+      continue;
+    }
+    const t = room / d;
+    if (d < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 >= t1) return null;
+  }
+  return [t0, t1];
+}
+
+// The parts of a line outside a deck.
+function outsideDeck(points, deck) {
+  const pieces = [];
+  let piece = null;
+  let cut = false;
+  for (let i = 0; i + 1 < points.length; i++) {
+    const [p, q] = [points[i], points[i + 1]];
+    const inside = deckClip(p, q, deck);
+    if (!inside) {
+      if (!piece) pieces.push((piece = [p]));
+      piece.push(q);
+      continue;
+    }
+    cut = true;
+    const [t0, t1] = inside;
+    if (t0 > 0) {
+      if (!piece) pieces.push((piece = [p]));
+      piece.push(lerp(p, q, t0));
+    }
+    piece = null;
+    if (t1 < 1) pieces.push((piece = [lerp(p, q, t1), q]));
+  }
+  return cut ? pieces.filter((piece) => piece.length >= 2) : [points];
+}
+
+// A deck's rails: its long sides, and an end any water wall crosses.
+function rails(deck, lines) {
+  const [c0, c1, c2, c3] = deckCorners(deck);
+  const water = lines.filter((line) => line.kind === "water");
+  const crossed = (p, q) => water.some(({points, closed}) => {
+    const n = closed ? points.length : points.length - 1;
+    for (let i = 0; i < n; i++) if (segmentsCross(p, q, points[i], points[(i + 1) % points.length])) return true;
+    return false;
+  });
+  const sides = [[c0, c1], [c2, c3]];
+  if (crossed(c1, c2)) sides.push([c1, c2]);
+  if (crossed(c3, c0)) sides.push([c3, c0]);
+  return sides.map((points) => ({points, closed: false, kind: "water"}));
+}
+
+function segmentsCross(p1, p2, p3, p4) {
+  const side = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+  return side(p1, p2, p3) !== side(p1, p2, p4) && side(p3, p4, p1) !== side(p3, p4, p2);
+}
+
 // The parts of a closed loop inside the map: {points, closed}. A loop that
 // never leaves the map stays closed (its first point repeated at the end);
 // one that does becomes runs that start and end on the map's edge.
@@ -347,22 +450,29 @@ function newFillPoints(cellMap, kindAt, existing, height) {
   });
 }
 
-// The cell farthest, in steps, from the patch's edge.
+// The patch's most inward cell, where the walls' smoothing can't have cut
+// it off: the farthest in steps from the patch's edge, then the one with
+// the most of the patch around it, then the nearest its middle.
 function deepest(cells, keys) {
-  const onEdge = cells.filter(([c, r]) => [0, 1, 2, 3, 4, 5].some((e) => !keys.has(neighbor(c, r, e).join(","))));
-  const seen = new Set(onEdge.map((cell) => cell.join(",")));
-  let frontier = onEdge;
-  let last = onEdge;
-  while (frontier.length) {
-    last = frontier;
-    frontier = frontier.flatMap(([c, r]) => [0, 1, 2, 3, 4, 5].map((e) => neighbor(c, r, e))).filter((cell) => {
-      const k = cell.join(",");
-      if (!keys.has(k) || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+  const around = ([c, r]) => [0, 1, 2, 3, 4, 5].filter((e) => keys.has(neighbor(c, r, e).join(","))).length;
+  const depth = new Map();
+  let frontier = cells.filter((cell) => around(cell) < 6);
+  for (let d = 1; frontier.length; d++) {
+    for (const cell of frontier) depth.set(cell.join(","), d);
+    frontier = frontier.flatMap(([c, r]) => [0, 1, 2, 3, 4, 5].map((e) => neighbor(c, r, e))).filter((cell) => keys.has(cell.join(",")) && !depth.has(cell.join(",")));
+    frontier = [...new Map(frontier.map((cell) => [cell.join(","), cell])).values()];
   }
-  return last[0];
+  const centers = cells.map(([c, r]) => cellCenter(c, r, CELL_SIZE));
+  const middle = {x: centers.reduce((sum, {x}) => sum + x, 0) / cells.length, y: centers.reduce((sum, {y}) => sum + y, 0) / cells.length};
+  const score = (cell, i) => [depth.get(cell.join(",")) ?? 1, around(cell), -Math.hypot(centers[i].x - middle.x, centers[i].y - middle.y)];
+  let best = 0;
+  let bestScore = score(cells[0], 0);
+  cells.forEach((cell, i) => {
+    const s = score(cell, i);
+    const better = s[0] !== bestScore[0] ? s[0] > bestScore[0] : s[1] !== bestScore[1] ? s[1] > bestScore[1] : s[2] > bestScore[2];
+    if (better) [best, bestScore] = [i, s];
+  });
+  return cells[best];
 }
 
 function borderCells({grid}) {

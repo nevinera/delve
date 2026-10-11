@@ -6,6 +6,7 @@
 // alphabet and the grid types it supports (themes.json, shared with the
 // Ruby validator); colors override the theme's palette.
 import THEMES from "./themes.json";
+import {validateBridges} from "./bridges";
 
 export {THEMES};
 export const VERSION = 1;
@@ -40,6 +41,7 @@ export function validateCellMap(map) {
     if (bad.length) errors.push(`cells[${r}] has unknown cells: ${bad.map((ch) => JSON.stringify(ch)).join(", ")}`);
   });
 
+  errors.push(...validateBridges(map.bridges, grid));
   if (map.trails === undefined) return errors;
   if (!Array.isArray(map.trails)) return [...errors, "trails must be a list"];
   map.trails.forEach((trail, i) => {

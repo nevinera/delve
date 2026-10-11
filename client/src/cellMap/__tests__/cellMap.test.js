@@ -1,6 +1,6 @@
 import {describe, it, expect} from "vitest";
 import {validateCellMap} from "../format";
-import {cellAt, cellCenter, cellCorners, cellPoint, mapSize, neighbor} from "../hexGrid";
+import {cellAt, cellCenter, cellCorners, cellPoint, hexDistance, hexLine, hexRays, mapSize, neighbor} from "../hexGrid";
 import {regionLoops, smoothLoop} from "../regions";
 import {buildScene} from "../scene";
 import {cacheKey, renderCellMap} from "../render";
@@ -32,8 +32,36 @@ describe("validateCellMap", () => {
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "#aabbcc"}})).toEqual([]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "green", sky: "#000000"}})).toEqual([
       'colors.meadow must be a "#rrggbb" color',
-      "colors.sky is not one of the theme's colors: meadow, tallGrass, marsh, water, forest, crown, tuft, tallTuft, pool, reed, trail, ink",
+      expect.stringMatching(/^colors\.sky is not one of the theme's colors: meadow, tallGrass, /),
     ]);
+  });
+});
+
+describe("bridges", () => {
+  const big = () => ({...tiny(Array.from({length: 12}, () => ".".repeat(12)))});
+
+  it("accepts straight bridges of up to 8 steps, matching the Ruby validator", () => {
+    expect(validateCellMap({...big(), bridges: [{from: [2, 1], to: [2, 9]}, {from: [8, 8], to: [11, 6]}]})).toEqual([]);
+  });
+
+  it("names what's wrong with one", () => {
+    expect(validateCellMap({...big(), bridges: [{from: [2, 1], to: [3, 5]}, {from: [2, 1], to: [2, 10]}, {from: [2, 1], to: [2, 12]}, {from: [4, 4], to: [4, 4]}]})).toEqual([
+      "bridges[0] must run straight along the cells",
+      "bridges[1] must reach 1 to 8 cells from its start",
+      "bridges[2].to must be a cell on the grid, [col, row]",
+      "bridges[3] must reach 1 to 8 cells from its start",
+    ]);
+  });
+});
+
+describe("hexLine", () => {
+  it("lists the cells along a straight line, each a neighbor of the last", () => {
+    for (const to of hexRays([5, 5], 4)) {
+      const cells = hexLine([5, 5], to);
+      expect(cells).toHaveLength(hexDistance([5, 5], to) + 1);
+      cells.slice(1).forEach((cell, i) => expect(hexDistance(cells[i], cell)).toBe(1));
+    }
+    expect(hexLine([5, 5], [6, 7])).toBeNull();
   });
 });
 

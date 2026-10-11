@@ -128,6 +128,34 @@ describe("autoBarriers", () => {
     expect(hasLineOfSight(...at(12, 4), ...at(12, 13), result.barriers)).toBe(false);
   });
 
+  it("cuts a bridge's deck out of the water, with rails, filling the water either side", () => {
+    // Trees ring the map; a river runs down it, and a bridge crosses.
+    const map = blank(24, 16);
+    map.cells = map.cells.map((line, r) => [...line].map((ch, c) => {
+      if (c === 0 || r === 0 || c === 23 || r === 15) return "T";
+      return c >= 10 && c <= 13 ? "w" : ".";
+    }).join(""));
+    map.bridges = [{from: [8, 8], to: [15, 11]}];
+    const result = autoBarriers(map);
+    expect(result.error).toBeNull();
+    expect(filledAt(map, result, 6, 8)).toBe(false);
+    expect(filledAt(map, result, 17, 11)).toBe(false);
+    expect(filledAt(map, result, 11, 9)).toBe(false);
+    expect(filledAt(map, result, 11, 3)).toBe(true);
+    expect(filledAt(map, result, 11, 13)).toBe(true);
+
+    // Nothing stands in the way along the deck, and its rails are straight.
+    const {height} = mapSize(map.grid);
+    const at = (c, r) => {
+      const {x, y} = cellCenter(c, r, CELL_SIZE);
+      return [x, height - y];
+    };
+    const solid = result.barriers.map((b) => ({...b, blocksSight: true}));
+    expect(hasLineOfSight(...at(8, 8), ...at(15, 11), solid)).toBe(true);
+    const rails = result.barriers.filter((b) => b.type === "wall" && b.locations.length === 2 && b.blocksSight === false);
+    expect(rails.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("gives a lone round pond a circle you can see across", () => {
     const map = blank(12, 10);
     map.cells[4] = replaceAt(map.cells[4], 5, "w");

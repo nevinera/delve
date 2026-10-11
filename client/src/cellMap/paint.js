@@ -35,6 +35,7 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   // through, and under the decorations and water, which they don't cross.
   paintTrails(ctx, scene.trails, style);
   paintWater(ctx, scene, style);
+  paintBridges(ctx, scene.bridges, style, cs);
   stamp(ctx, scene.pools, sprites.pools);
   stamp(ctx, scene.tufts, sprites.tufts);
   stamp(ctx, scene.reeds, sprites.reeds);
@@ -58,6 +59,40 @@ function paintWater(ctx, scene, style) {
   ctx.lineJoin = "round";
   loops(ctx, scene.water);
   ctx.stroke();
+}
+
+// A wooden deck: a shadow on the water, planks across, a beam down each
+// side, and an inked edge.
+const PLANK = 0.9; // feet
+const BEAM = 0.55; // feet
+
+function paintBridges(ctx, bridges, style, cellSize) {
+  const {palette} = style;
+  for (const {a, b, halfWidth} of bridges) {
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(Math.atan2(b.y - a.y, b.x - a.x));
+    ctx.fillStyle = palette.shadow;
+    ctx.fillRect(style.shadowOffset.x * cellSize * 0.5, -halfWidth + style.shadowOffset.y * cellSize * 0.5, length, halfWidth * 2);
+    ctx.fillStyle = palette.bridge;
+    ctx.fillRect(0, -halfWidth, length, halfWidth * 2);
+    ctx.strokeStyle = palette.bridgeEdge;
+    ctx.lineWidth = style.tuftInk;
+    ctx.beginPath();
+    for (let x = PLANK; x < length; x += PLANK) {
+      ctx.moveTo(x, -halfWidth + BEAM);
+      ctx.lineTo(x, halfWidth - BEAM);
+    }
+    ctx.stroke();
+    ctx.fillStyle = palette.bridgeBeam;
+    ctx.fillRect(0, -halfWidth, length, BEAM);
+    ctx.fillRect(0, halfWidth - BEAM, length, BEAM);
+    ctx.strokeStyle = palette.ink;
+    ctx.lineWidth = style.crownInk;
+    ctx.strokeRect(0, -halfWidth, length, halfWidth * 2);
+    ctx.restore();
+  }
 }
 
 // Each placement is {x, y, radius, variant}; its sprite is scaled down

@@ -60,5 +60,5 @@ function defaultCanvas(width, height) {
 }
 
 export function cacheKey(map, pixelsPerFoot) {
-  return `v${RENDER_VERSION}:${pixelsPerFoot}:${hashString(JSON.stringify([map.theme, map.colors ?? {}, map.grid, map.seed, map.cells, map.trails ?? []]))}`;
+  return `v${RENDER_VERSION}:${pixelsPerFoot}:${hashString(JSON.stringify([map.theme, map.colors ?? {}, map.grid, map.seed, map.cells, map.trails ?? [], map.bridges ?? []]))}`;
 }

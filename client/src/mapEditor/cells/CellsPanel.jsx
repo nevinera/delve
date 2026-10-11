@@ -2,7 +2,8 @@
 // edit trails, the grid, seed and colors. All state is in useCellsTab.
 import {useState} from "react";
 import {THEMES, terrainLabel, terrainsOf} from "../../cellMap/format";
-import {CELL_SIZE, gridFor} from "../../cellMap/hexGrid";
+import {CELL_SIZE, gridFor, hexDistance} from "../../cellMap/hexGrid";
+import {MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
 import {CELL_COLORS} from "../../cellMap/overlay";
 import {CellMapDraft} from "./CellMapDraft";
 import {BRUSHES, OVERLAYS, TOOLS} from "./useCellsTab";
@@ -27,7 +28,7 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
       </div>
       {errors.length > 0 && <ul className="cells-panel-errors">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
 
-      <Choices label="Tool" options={TOOLS} value={ui.tool} onChange={(tool) => update({tool, pendingPoint: null, newTrail: false})} />
+      <Choices label="Tool" options={TOOLS} value={ui.tool} onChange={(tool) => update({tool, pendingPoint: null, newTrail: false, pendingBridge: null})} />
       {(ui.tool === "paint" || ui.tool === "fill") && (
         <>
           <div className="cells-panel-row" role="group" aria-label="Terrain">
@@ -43,6 +44,7 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
         </>
       )}
       {ui.tool === "trail" && <TrailsSection cells={cells} />}
+      {ui.tool === "bridge" && <BridgesSection cells={cells} />}
       <Choices label="Overlay" options={OVERLAYS} value={ui.overlay} onChange={(overlay) => update({overlay})} />
 
       <GridSection draft={draft} change={change} />
@@ -154,6 +156,28 @@ function TrailsSection({cells}) {
             <button type="button" aria-label={`Delete trail ${t + 1}`} onClick={() => {
               change((d) => d.removeTrail(t));
               update({selected: null});
+            }}>×</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function BridgesSection({cells}) {
+  const {draft, change, ui, update} = cells;
+  return (
+    <div className="cells-panel-section">
+      <h4>Bridges</h4>
+      <p className="cells-panel-help">Click where a bridge starts, then where it ends: it runs straight along the cells, up to {MAX_BRIDGE_LENGTH} from its start. Start and end it on land. Click a bridge to select it; Delete removes it.</p>
+      {ui.pendingBridge && <p className="cells-panel-help">Click again to place the bridge&apos;s other end (Escape cancels).</p>}
+      <ul className="cells-panel-trails">
+        {draft.bridges.map((bridge, b) => (
+          <li key={b} className={ui.selectedBridge === b ? "active" : ""}>
+            <button type="button" onClick={() => update({selectedBridge: b, pendingBridge: null})}>Bridge {b + 1} ({hexDistance(bridge.from, bridge.to)} cells)</button>
+            <button type="button" aria-label={`Delete bridge ${b + 1}`} onClick={() => {
+              change((d) => d.removeBridge(b));
+              update({selectedBridge: null});
             }}>×</button>
           </li>
         ))}

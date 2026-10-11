@@ -12,9 +12,10 @@
 // them (rendering), and makes the map's thumbnail after an edit
 // (onThumbnail(blob)).
 import {useEffect, useRef, useState} from "react";
-import {CELL_SIZE, cellAt, cellPoint, hexDistance, mapSize, pointAt} from "../../cellMap/hexGrid";
+import {CELL_SIZE, cellAt, cellCenter, cellPoint, hexDistance, hexRays, mapSize, pointAt} from "../../cellMap/hexGrid";
+import {bridgeCells, MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
 import {renderScale} from "../../cellMap/render";
-import {drawCells, drawTrails, hexPath, SELECTED_COLOR} from "../../cellMap/overlay";
+import {drawBridges, drawCells, drawTrails, hexPath, SELECTED_COLOR} from "../../cellMap/overlay";
 import {useCellHistory} from "./useCellHistory";
 import {SNAP_RADIUS_FEET} from "../mapSnap";
 import {useCellMapRender} from "./useCellMapRender";
@@ -28,12 +29,28 @@ const OVERLAY_PIXELS_PER_FOOT = 4;
 // How close, in cells, a click must be to a trail point to grab it.
 const GRAB_CELLS = 0.45;
 
-export const TOOLS = {pan: "Pan", paint: "Paint", fill: "Fill", trail: "Trails"};
+export const TOOLS = {pan: "Pan", paint: "Paint", fill: "Fill", trail: "Trails", bridge: "Bridges"};
 export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
 export const BRUSHES = [1, 2, 3];
 
 // newTrail: the next trail click starts a trail, even on another's point.
-const INITIAL_UI = {tool: "paint", terrain: ".", brush: 1, overlay: "grid", hover: null, selected: null, pendingPoint: null, newTrail: false};
+// pendingBridge is the cell a bridge being placed starts at;
+// selectedBridge, the index of the selected one.
+const INITIAL_UI = {tool: "paint", terrain: ".", brush: 1, overlay: "grid", hover: null, selected: null, pendingPoint: null, newTrail: false, pendingBridge: null, selectedBridge: null};
+
+// Where a bridge from a cell would end, toward another: the cell, in a
+// straight line from it and at most MAX_BRIDGE_LENGTH away, nearest that
+// one.
+export function bridgeEnd(from, toward) {
+  const target = cellCenter(...toward, CELL_SIZE);
+  let best = null;
+  for (const cell of hexRays(from, MAX_BRIDGE_LENGTH)) {
+    const {x, y} = cellCenter(...cell, CELL_SIZE);
+    const d = Math.hypot(x - target.x, y - target.y);
+    if (!best || d < best.d) best = {cell, d};
+  }
+  return best.cell;
+}
 
 export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, rendering = editing, onThumbnail = null}) {
   const history = useCellHistory(cellMap ?? null, onCellMapChange, mapKey);
@@ -63,18 +80,22 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
       } else if (mod && e.key.toLowerCase() === "y") {
         e.preventDefault();
         history.redo();
+      } else if ((e.key === "Delete" || e.key === "Backspace") && ui.tool === "bridge" && ui.selectedBridge != null) {
+        e.preventDefault();
+        change((d) => d.removeBridge(ui.selectedBridge));
+        update({selectedBridge: null});
       } else if ((e.key === "Delete" || e.key === "Backspace") && ui.selected?.point != null) {
         e.preventDefault();
         const {trail, point} = ui.selected;
         change((d) => d.removeTrailPoint(trail, point));
         update({selected: null});
       } else if (e.key === "Escape") {
-        update({selected: null, pendingPoint: null, newTrail: false});
+        update({selected: null, pendingPoint: null, newTrail: false, pendingBridge: null, selectedBridge: null});
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [editing, ui.selected, history, change]);
+  }, [editing, ui.selected, ui.tool, ui.selectedBridge, history, change]);
 
   // Cell coordinates (fractional, for trails) and the cell under a canvas
   // pixel.
@@ -154,6 +175,23 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
     update({pendingPoint: point, newTrail: false});
   }
 
+  // The first click starts a bridge (or selects the one there), the second
+  // ends it, in a straight line.
+  function bridgeDown(cell, inside) {
+    if (ui.pendingBridge) {
+      const end = bridgeEnd(ui.pendingBridge, cell);
+      const from = ui.pendingBridge;
+      if (draft.inside(...end)) {
+        change((d) => d.addBridge(from, end));
+        update({pendingBridge: null, selectedBridge: draft.bridges.length});
+      }
+      return;
+    }
+    const on = draft.bridges.findIndex((bridge) => bridgeCells(bridge).some(([c, r]) => c === cell[0] && r === cell[1]));
+    if (on !== -1) update({selectedBridge: on});
+    else if (inside) update({pendingBridge: cell, selectedBridge: null});
+  }
+
   // phase is "down", "drag", "up", "hover" or "cancel"; returns true when
   // a "down" starts an edit (so MapCanvas doesn't pan).
   function onPointer(phase, px, {shiftKey = false} = {}) {
@@ -179,6 +217,8 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
         change((d) => d.fill(...at.cell, ui.terrain));
       } else if (ui.tool === "trail") {
         trailDown(at, shiftKey);
+      } else if (ui.tool === "bridge") {
+        bridgeDown(at.cell, inside);
       }
       return true;
     }
@@ -270,7 +310,7 @@ function overlayContext(canvas, {width, height, scale}) {
 function CellOverlay({draft, renderedCells, ui, scale, width, height}) {
   const ref = useRef(null);
   const map = draft.data;
-  const {overlay, tool, selected, pendingPoint} = ui;
+  const {overlay, tool, selected, pendingPoint, pendingBridge, selectedBridge, hover} = ui;
   useEffect(() => {
     const {ctx, overlayScale} = overlayContext(ref.current, {width, height, scale});
     if (!ctx) return;
@@ -280,6 +320,10 @@ function CellOverlay({draft, renderedCells, ui, scale, width, height}) {
       drawCells(ctx, map, overlayScale, {filled: true, outline: false, only: (col, row) => renderedCells[row]?.[col] !== map.cells[row][col]});
     }
     if (tool === "trail" || overlay === "cells") drawTrails(ctx, map, overlayScale, {selected: tool === "trail" ? selected : null});
+    if (tool === "bridge" || overlay === "cells") {
+      const preview = pendingBridge && hover ? {from: pendingBridge, to: bridgeEnd(pendingBridge, hover)} : null;
+      drawBridges(ctx, map, overlayScale, {selected: tool === "bridge" ? selectedBridge : null, pending: pendingBridge, preview});
+    }
     if (pendingPoint) {
       const p = cellPoint(...pendingPoint, CELL_SIZE);
       ctx.fillStyle = SELECTED_COLOR;
@@ -287,7 +331,7 @@ function CellOverlay({draft, renderedCells, ui, scale, width, height}) {
       ctx.arc(p.x, p.y, 9 / overlayScale, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [map, renderedCells, overlay, tool, selected, pendingPoint, scale, width, height]);
+  }, [map, renderedCells, overlay, tool, selected, pendingPoint, pendingBridge, selectedBridge, hover, scale, width, height]);
   return <canvas ref={ref} className="map-canvas-cell-overlay" style={{width, height}} />;
 }
 

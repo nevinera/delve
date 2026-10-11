@@ -10,6 +10,8 @@ module Validators
     CELL_SIZE = 5
     THEMES_PATH = Rails.root.join("client/src/cellMap/themes.json")
     COLOR_RE = /\A#[0-9a-fA-F]{6}\z/
+    # Steps from end to end (see client/src/cellMap/bridges.js).
+    MAX_BRIDGE_LENGTH = 8
 
     def self.themes
       @themes ||= JSON.parse(File.read(THEMES_PATH)).freeze
@@ -38,6 +40,7 @@ module Validators
       grid = validate_grid!(require_hash!(data, "grid", path: path), theme, path: child_path(path, "grid"))
       validate_cells!(require_array!(data, "cells", path: path), grid, theme, path: child_path(path, "cells"))
       validate_trails!(require_array!(data, "trails", path: path), path: child_path(path, "trails")) unless data["trails"].nil?
+      validate_bridges!(data, grid, path: path) unless data["bridges"].nil?
     end
 
     def validate_version!(data, path:)
@@ -97,6 +100,40 @@ module Validators
       raise ValidationError.new("width must be positive", path: child_path(path, "width")) unless width > 0
       points = require_array!(trail, "points", path: path, min: 2)
       points.each_with_index { |point, j| validate_point!(point, path: index_path(child_path(path, "points"), j)) }
+    end
+
+    def validate_bridges!(data, grid, path:)
+      bridges = require_array!(data, "bridges", path: path)
+      bridges.each_with_index { |bridge, i| validate_bridge!(bridge, grid, path: index_path(child_path(path, "bridges"), i)) }
+    end
+
+    def validate_bridge!(bridge, grid, path:)
+      require_object!(bridge, path: path)
+      ends = %w[from to].map { |key| validate_cell!(require_key!(bridge, key, path: path), grid, path: child_path(path, key)) }
+      steps = straight_steps(*ends)
+      raise ValidationError.new("must run straight along the cells", path: path) if steps.nil?
+      return if steps.between?(1, MAX_BRIDGE_LENGTH)
+      raise ValidationError.new("must reach 1 to #{MAX_BRIDGE_LENGTH} cells from its start", path: path)
+    end
+
+    def validate_cell!(cell, grid, path:)
+      on_grid = cell.is_a?(Array) && cell.length == 2 && cell.all?(Integer) &&
+        cell[0].between?(0, grid["cols"] - 1) && cell[1].between?(0, grid["rows"] - 1)
+      raise ValidationError.new("must be a cell on the grid, [col, row]", path: path) unless on_grid
+      cell
+    end
+
+    # Steps between two cells on a straight line through neighbors, or nil
+    # when they aren't on one (cube coordinates, as in
+    # client/src/cellMap/hexGrid.js).
+    def straight_steps(from, to)
+      deltas = cube(*to).zip(cube(*from)).map { |b, a| b - a }
+      deltas.include?(0) ? deltas.map(&:abs).max : nil
+    end
+
+    def cube(col, row)
+      z = row - (col - (col & 1)) / 2
+      [col, -col - z, z]
     end
 
     def validate_point!(point, path:)

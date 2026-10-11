@@ -53,6 +53,27 @@ describe("useCellsTab", () => {
     expect(result.current.draft.data.cells[0]).toBe("TTTT..");
   });
 
+  it("places a bridge in a straight line, and deletes it", () => {
+    const {result} = setup();
+    act(() => result.current.update({tool: "bridge"}));
+    act(() => {
+      result.current.canvas.onPointer("down", at(1, 0));
+    });
+    act(() => {
+      result.current.canvas.onPointer("up");
+    });
+    // Off the line down column 1, so it snaps onto it.
+    act(() => {
+      result.current.canvas.onPointer("down", at(1.2, 3));
+    });
+    expect(result.current.draft.bridges).toEqual([{from: [1, 0], to: [1, 3]}]);
+    expect(result.current.ui.selectedBridge).toBe(0);
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", {key: "Delete"}));
+    });
+    expect(result.current.draft.bridges).toEqual([]);
+  });
+
   it("pans with the pan tool", () => {
     const {result} = setup();
     act(() => result.current.update({tool: "pan"}));
