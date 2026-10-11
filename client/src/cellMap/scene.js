@@ -28,23 +28,37 @@ const TRAIL_CLEARANCE = 0.4;
 // (the chance a cell that deep gets a crown); deeper in, the dark mass shows.
 const BAND = [1, 0.85, 0.6];
 
+// The trails as drawn: curves in feet, their free ends fading out.
+function sceneTrails(map, size) {
+  return fadeTrailEnds(
+    (map.trails ?? []).map(({width, points}) => ({
+      width: width * CELL_SIZE,
+      points: throughPoints(points.map(([col, row]) => cellPoint(col, row, CELL_SIZE))),
+    })),
+    size,
+    map.seed,
+  );
+}
+
+function trailCleared(trails) {
+  const cells = trailClearings(trails, CELL_SIZE, TRAIL_CLEARANCE);
+  return (col, row) => cells.has(`${col},${row}`);
+}
+
+// Whether a trail clears the cell at (col, row) - nothing grows there, and
+// it's open ground (see mapEditor/cells/autoBarriers.js).
+export function trailClearedCells(map) {
+  return trailCleared(sceneTrails(map, mapSize(map.grid)));
+}
+
 export function buildScene(map, style = resolveStyle(map)) {
   const cellSize = CELL_SIZE;
   const {seed} = map;
   const scene = {...mapSize(map.grid), cellSize, grounds: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
 
   scene.grounds = GROUND_REGIONS.map((terrain) => ({terrain, loops: regionLoops(map, terrain).map((loop) => smoothLoop(loop, cellSize, seed))}));
-  scene.trails = fadeTrailEnds(
-    (map.trails ?? []).map(({width, points}) => ({
-      width: width * cellSize,
-      points: throughPoints(points.map(([col, row]) => cellPoint(col, row, cellSize))),
-    })),
-    scene,
-    seed,
-  );
-
-  const clearedCells = trailClearings(scene.trails, cellSize, TRAIL_CLEARANCE);
-  const cleared = (col, row) => clearedCells.has(`${col},${row}`);
+  scene.trails = sceneTrails(map, scene);
+  const cleared = trailCleared(scene.trails);
   // The forest's mass leaves out what trails clear, as its crowns do.
   scene.forest = regionLoops(map, "trees", cleared).map((loop) => insetLoop(smoothLoop(loop, cellSize, seed, FOREST_SMOOTHING), FOREST_INSET * cellSize));
   const depth = forestDepths(map, cleared);

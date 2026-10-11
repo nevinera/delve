@@ -1,23 +1,31 @@
-// Barriers for a map drawn in cells: walls along the forest's edge, as the
-// renderer draws it (cellMap/scene.js), so trees block and everything else
-// is open. Walls stop at the map's edge - forest reaching it is filled by
-// the map's own rule (see game/mapFill.js) - and each patch of forest
+// Barriers for a map drawn in cells: walls along the forest's edge, so
+// trees block and everything else is open. The edge is the tree cells'
+// outline (less the cells trails clear - see cellMap/scene.js), through
+// the middle of each hex edge so a column's zigzag is a straight line,
+// then smoothed so a row's is too, then simplified. Walls stop at the
+// map's edge - forest reaching it is filled by the map's own rule (see
+// game/mapFill.js) - and each patch of forest
 // inside the map gets a fill point. Open ground reaching the edge would be
 // filled too, so that's reported, not fixed.
 //
 // Works in map feet (y up); the scene is in cellmap feet (y down).
-import {buildScene} from "../../cellMap/scene";
-import {CELL_SIZE, cellCenter, mapSize} from "../../cellMap/hexGrid";
+import {trailClearedCells} from "../../cellMap/scene";
+import {regionLoops} from "../../cellMap/regions";
+import {CELL_SIZE, cellCenter, hexRadius, mapSize} from "../../cellMap/hexGrid";
 import {terrainsOf} from "../../cellMap/format";
 
 // See docs/schema/map.md (and MapValidator).
 export const MAX_BARRIER_SEGMENTS = 3000;
 export const MAX_FILL_POINTS = 100;
 
-// How far, in feet, a simplified wall may stray from the forest's edge;
+// How far, in feet, a wall may stray from the forest's edge - loose, so
+// walls are long straight lines rather than following each cell;
 // doubled until the walls fit MAX_BARRIER_SEGMENTS.
-const START_TOLERANCE = 0.4;
-const MAX_TOLERANCE = 2;
+const START_TOLERANCE = 1.5;
+const MAX_TOLERANCE = 6;
+
+// Averaging passes over the outline: each halves a row's zigzag.
+const SMOOTHING_PASSES = 3;
 
 // Returns {barriers, fillPoints, segments, openEdge, error}: the new walls
 // and fill points (existingFillPoints, plus one per forest patch none of
@@ -26,7 +34,7 @@ const MAX_TOLERANCE = 2;
 export function autoBarriers(cellMap, existingFillPoints = []) {
   const {width, height} = mapSize(cellMap.grid);
   const toMap = ({x, y}) => [x, height - y];
-  const forest = buildScene(cellMap).forest.map((loop) => loop.map(toMap));
+  const forest = regionLoops(cellMap, "trees", trailClearedCells(cellMap)).map((loop) => smoothOutline(loop).map(toMap));
   const forestBoxes = forest.map(bounds);
   const isForest = (p) => forest.filter((loop, i) => inBounds(p, forestBoxes[i]) && insidePolygon(p, loop)).length % 2 === 1;
 
@@ -62,6 +70,26 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
 
   const barriers = walls.map(({points}) => ({type: "wall", locations: points.map(([x, y]) => ({x: round(x), y: round(y)}))}));
   return {barriers, fillPoints, segments, openEdge: edgeCellCenters(cellMap, height).some((p) => !isForest(p)), error: null};
+}
+
+// A loop of lattice corners (see regions.js) as the midpoints of its edges,
+// in feet, smoothed.
+export function smoothOutline(loop) {
+  const r = hexRadius(CELL_SIZE);
+  const corners = loop.map(([lx, ly]) => ({x: (lx * r) / 2, y: (ly * CELL_SIZE) / 2}));
+  let points = corners.map((p, i) => {
+    const q = corners[(i + 1) % corners.length];
+    return {x: (p.x + q.x) / 2, y: (p.y + q.y) / 2};
+  });
+  for (let pass = 0; pass < SMOOTHING_PASSES; pass++) {
+    const n = points.length;
+    points = points.map((p, i) => {
+      const a = points[(i + n - 1) % n];
+      const b = points[(i + 1) % n];
+      return {x: (a.x + 2 * p.x + b.x) / 4, y: (a.y + 2 * p.y + b.y) / 4};
+    });
+  }
+  return points;
 }
 
 // The parts of a closed loop inside the map: {points, closed}. A loop that
