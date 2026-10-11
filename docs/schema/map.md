@@ -78,6 +78,7 @@ walls around water don't.
 | `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters: `.` meadow, `%` tall grass, `~` marsh, `w` water, `T` trees. A cave calls them floor, gravel, puddles, water and rock. A new map starts all `T`. |
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |
 | `bridges` | array of Bridge | no | Wooden bridges, drawn over the water. |
+| `exits` | array of Exit | no | Gaps in the map's edge where connections lead off it, at most one per side. |
 
 A hex grid has flat-topped hexes, always 5 feet across the flats (so trees and grass are the same
 size on every map), with odd columns half a cell lower. Its size in feet is
@@ -97,6 +98,12 @@ A **Bridge** is `{ "from": [col, row], "to": [col, row] }`: a deck from one cell
 straight line through neighboring cells (one of the six ways a hex's edges face), 1 to 8 cells
 from its start. Start and end it on land. Auto Barriers cuts the water's walls where the deck is
 and rails it down both sides (railing an end too, if it's over water); the deck is 6 feet wide.
+
+An **Exit** is `{ "side": "north" | "east" | "south" | "west", "from": int, "to": int }`: the
+cells along one side of the grid from index `from` to `to` (columns along the north and south
+sides, rows along the east and west), open ground leading off the map. Auto Barriers makes each a
+line connection named for its side (`"north"`, ...), along the map's edge between the walls either
+side of the gap, so the map's fill stops there; one already named that is replaced.
 
 ```json
 "cellMap": {

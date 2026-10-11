@@ -85,7 +85,6 @@ describe("MapWorkbench's Auto Barriers", () => {
     const cells = ["TTTTTT", "T....T", "T....T", "TTTTTT"];
     const map = {...CELL_MAP, cellMap: {...cellMap, grid: {type: "hex", cols: 6, rows: 4}, cells}, feetDimensions: {width: 27.424, height: 22.5}};
     renderHost(map);
-    fireEvent.click(screen.getByText("Barriers"));
     fireEvent.click(screen.getByRole("button", {name: "Auto Barriers"}));
     expect(current.mapData.barriers.length).toBeGreaterThan(0);
     expect(current.mapData.barriers[0].type).toBe("wall");

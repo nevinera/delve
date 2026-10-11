@@ -57,6 +57,30 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
     end
   end
 
+  context "exits" do
+    let(:big_map) do
+      cell_map.merge("grid" => {"type" => "hex", "cols" => 12, "rows" => 8}, "cells" => Array.new(8) { "." * 12 }, "trails" => [])
+    end
+
+    it "accepts a run of edge cells on each side" do
+      exits = [{"side" => "north", "from" => 3, "to" => 5}, {"side" => "east", "from" => 0, "to" => 7}, {"side" => "west", "from" => 2, "to" => 2}]
+      expect { described_class.validate!(big_map.merge("exits" => exits)) }.not_to raise_error
+    end
+
+    it "raises on an exit past its side's end" do
+      expect_invalid(big_map.merge("exits" => [{"side" => "east", "from" => 3, "to" => 8}]), /0 to 7/, "$.exits[0]")
+    end
+
+    it "raises on an unknown side" do
+      expect_invalid(big_map.merge("exits" => [{"side" => "up", "from" => 0, "to" => 1}]), /must be one of:/, "$.exits[0].side")
+    end
+
+    it "raises on two exits on one side" do
+      exits = [{"side" => "north", "from" => 0, "to" => 1}, {"side" => "north", "from" => 4, "to" => 5}]
+      expect_invalid(big_map.merge("exits" => exits), /more than one exit on a side/, "$.exits")
+    end
+  end
+
   it "accepts every theme, with the same cells" do
     described_class.themes.each_key do |theme|
       expect { described_class.validate!(cell_map.merge("theme" => theme, "cells" => ["Tw.", "%~."])) }.not_to raise_error

@@ -12,6 +12,8 @@ module Validators
     COLOR_RE = /\A#[0-9a-fA-F]{6}\z/
     # Steps from end to end (see client/src/cellMap/bridges.js).
     MAX_BRIDGE_LENGTH = 8
+    # The grid's sides an exit can be on (see client/src/cellMap/exits.js).
+    SIDES = %w[north east south west].freeze
 
     def self.themes
       @themes ||= JSON.parse(File.read(THEMES_PATH)).freeze
@@ -39,8 +41,14 @@ module Validators
     def validate_layout!(data, theme, path:)
       grid = validate_grid!(require_hash!(data, "grid", path: path), theme, path: child_path(path, "grid"))
       validate_cells!(require_array!(data, "cells", path: path), grid, theme, path: child_path(path, "cells"))
+      validate_extras!(data, grid, theme, path: path)
+    end
+
+    # The optional lists drawn over the cells.
+    def validate_extras!(data, grid, theme, path:)
       validate_trails!(require_array!(data, "trails", path: path), theme, path: child_path(path, "trails")) unless data["trails"].nil?
       validate_bridges!(data, grid, path: path) unless data["bridges"].nil?
+      validate_exits!(data, grid, path: path) unless data["exits"].nil?
     end
 
     def validate_version!(data, path:)
@@ -99,8 +107,11 @@ module Validators
       require_one_of!(require_string!(trail, "type", path: path), theme["paths"], path: child_path(path, "type")) unless trail["type"].nil?
       width = require_numeric!(trail, "width", path: path)
       raise ValidationError.new("width must be positive", path: child_path(path, "width")) unless width > 0
-      points = require_array!(trail, "points", path: path, min: 2)
-      points.each_with_index { |point, j| validate_point!(point, path: index_path(child_path(path, "points"), j)) }
+      validate_trail_points!(require_array!(trail, "points", path: path, min: 2), path: child_path(path, "points"))
+    end
+
+    def validate_trail_points!(points, path:)
+      points.each_with_index { |point, j| validate_point!(point, path: index_path(path, j)) }
     end
 
     def validate_bridges!(data, grid, path:)
@@ -115,6 +126,23 @@ module Validators
       raise ValidationError.new("must run straight along the cells", path: path) if steps.nil?
       return if steps.between?(1, MAX_BRIDGE_LENGTH)
       raise ValidationError.new("must reach 1 to #{MAX_BRIDGE_LENGTH} cells from its start", path: path)
+    end
+
+    def validate_exits!(data, grid, path:)
+      exits = require_array!(data, "exits", path: path)
+      exits.each_with_index { |exit, i| validate_exit!(exit, grid, path: index_path(child_path(path, "exits"), i)) }
+      sides = exits.map { |exit| exit["side"] }
+      raise ValidationError.new("has more than one exit on a side", path: child_path(path, "exits")) unless sides.uniq.length == sides.length
+    end
+
+    def validate_exit!(exit, grid, path:)
+      require_object!(exit, path: path)
+      side = require_string!(exit, "side", path: path)
+      require_one_of!(side, SIDES, path: child_path(path, "side"))
+      length = %w[north south].include?(side) ? grid["cols"] : grid["rows"]
+      from, to = %w[from to].map { |key| require_integer!(exit, key, path: path) }
+      return if from.between?(0, to) && to < length
+      raise ValidationError.new("must run from one cell to another along its side, 0 to #{length - 1}", path: path)
     end
 
     def validate_cell!(cell, grid, path:)

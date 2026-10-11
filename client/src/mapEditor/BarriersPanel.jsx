@@ -141,11 +141,10 @@ function BlocksSightField({barrier, onChange}) {
   );
 }
 
-// onAutoBarriers (a map drawn in cells, with no image - see
-// cells/autoBarriers.js) makes walls from the cells, returning
-// {added, error, openEdge}; it's only offered while there are no barriers,
-// so it never fights hand-made ones. Delete All (confirmed) clears them.
-export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, onStartPointEdit, tool, onStartAddCircle, canPlaceOnMap, otherPlacementActive, onAutoBarriers = null, dispatch}) {
+// Delete All (confirmed) clears every barrier - so Auto Barriers (see
+// AutoBarriersPanel.jsx), which only runs on a map without any, can run
+// again.
+export default function BarriersPanel({barriers, selectedIndex, onSelect, onHover, onHoverPoint, placement, onStartPlacement, onStartPointEdit, tool, onStartAddCircle, canPlaceOnMap, otherPlacementActive, dispatch}) {
   // The "Barriers" section as a whole starts collapsed - a list of every
   // point in every wall would otherwise dominate the sidebar before
   // there's much else to look at.
@@ -157,8 +156,6 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
   // clicking the shape itself on the map) - same split as units, where a
   // row's expand state and its on-canvas selection ring are independent.
   const [expandedIndices, setExpandedIndices] = useState(() => new Set());
-  // What the last Auto Barriers did: {added, error, openEdge}.
-  const [autoResult, setAutoResult] = useState(null);
 
   function toggleExpanded(index) {
     setExpandedIndices((current) => {
@@ -190,11 +187,6 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
     dispatch({type: "SET_FIELD", field: "barriers", value: []});
     onSelect(null);
     setExpandedIndices(new Set());
-    setAutoResult(null);
-  }
-
-  function autoBarriers() {
-    setAutoResult(onAutoBarriers());
   }
 
   function addWall() {
@@ -222,26 +214,10 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
             >
               + Add Circle
             </button>
-            {onAutoBarriers && (
-              <button
-                type="button" className="add-entry" disabled={barriers.length > 0 || !!placement || tool !== "select"}
-                title={barriers.length > 0 ? "Only for a map with no barriers yet" : "Walls along the trees' and water's edges"}
-                onClick={(e) => { e.stopPropagation(); autoBarriers(); }}
-              >
-                Auto Barriers
-              </button>
-            )}
             {barriers.length > 0 && (
               <button type="button" className="remove-entry" onClick={(e) => { e.stopPropagation(); deleteAll(); }}>Delete All</button>
             )}
           </div>
-          {autoResult?.error && <p className="map-sidebar-hint">{autoResult.error}</p>}
-          {autoResult && !autoResult.error && (
-            <p className="map-sidebar-hint">
-              Added {autoResult.added.walls} walls, {autoResult.added.circles} circles ({autoResult.added.segments} segments) and {autoResult.added.fillPoints} fill points.
-              {autoResult.openEdge && " Open ground reaches the map's edge, so it will be filled - ring the map with trees."}
-            </p>
-          )}
           {!canPlaceOnMap && <p className="map-sidebar-hint">Set feet dimensions (above) before placing barriers.</p>}
           {barriers.length === 0 && tool !== "add-circle"
             ? <p className="map-editor-sidebar-placeholder">No barriers yet - use the buttons above to add one.</p>

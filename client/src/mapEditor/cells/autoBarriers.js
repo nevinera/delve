@@ -27,6 +27,7 @@ import {latticeCorner, PAD, unwarp, warp} from "../../cellMap/regions";
 import {CELL_SIZE, cellAt, cellCenter, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
 import {terrainAt} from "../../cellMap/format";
 import {bridgeCells, bridgeDeck} from "../../cellMap/bridges";
+import {exitCells, exitEdge} from "../../cellMap/exits";
 
 // See docs/schema/map.md (and MapValidator).
 export const MAX_BARRIER_SEGMENTS = 3000;
@@ -47,10 +48,11 @@ const MAX_TOLERANCE = 6;
 // Averaging passes over the outline: each halves a row's zigzag.
 const SMOOTHING_PASSES = 3;
 
-// Returns {barriers, fillPoints, segments, openEdge, error}: the new walls
-// and fill points (existingFillPoints, plus one per patch none of them is
-// in), how many segments the walls use, whether open ground reaches the
-// map's edge, and why nothing could be made (or null).
+// Returns {barriers, connections, fillPoints, segments, openEdge, error}:
+// the new walls, a line connection for each of the cells' exits, and fill
+// points (existingFillPoints, plus one per patch none of them is in), how
+// many segments the walls use, whether open ground reaches the map's edge
+// outside the exits, and why nothing could be made (or null).
 export function autoBarriers(cellMap, existingFillPoints = []) {
   const {width, height} = mapSize(cellMap.grid);
   const toMap = ({x, y}) => [x, height - y];
@@ -85,17 +87,42 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   }
   const segments = segmentCount(walls) + circleSegments;
   if (segments > MAX_BARRIER_SEGMENTS) {
-    return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The trees' and water's edges need ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify them and try again.`};
+    return {barriers: [], connections: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The trees' and water's edges need ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify them and try again.`};
   }
 
   const fillPoints = [...existingFillPoints, ...newFillPoints(cellMap, patchKindAt, existingFillPoints, height)];
   if (fillPoints.length > MAX_FILL_POINTS) {
-    return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `There are ${fillPoints.length - existingFillPoints.length} separate patches of trees and water inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
+    return {barriers: [], connections: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `There are ${fillPoints.length - existingFillPoints.length} separate patches of trees and water inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
   }
 
   // Circles are always filled, so they need no fill points.
   const barriers = [...walls.map(({points, kind}) => barrier({type: "wall", locations: points.map(roundPoint)}, kind)), ...circles];
-  return {barriers, fillPoints, segments, openEdge: borderCells(cellMap).some(([c, r]) => !kindAt(c, r)), error: null};
+  const connections = (cellMap.exits ?? []).map((exit) => exitConnection(exit, cellMap.grid, barriers, toMap));
+  const inExit = new Set((cellMap.exits ?? []).flatMap((exit) => exitCells(exit, cellMap.grid).map((cell) => cell.join(","))));
+  const openEdge = borderCells(cellMap).some(([c, r]) => !kindAt(c, r) && !inExit.has(`${c},${r}`));
+  return {barriers, connections, fillPoints, segments, openEdge, error: null};
+}
+
+// An exit's line connection, named for its side: along the map's edge,
+// from the wall ending there on one side of the exit's gap to the one on
+// the other, so it closes the gap and the map's fill stops at it. Where
+// there's no wall ending by the gap, the line runs to the exit's cells' end.
+function exitConnection(exit, grid, barriers, toMap) {
+  const [a, b] = exitEdge(exit, grid).map(toMap);
+  const along = exit.side === "north" || exit.side === "south" ? 0 : 1;
+  const [lo, hi] = [Math.min(a[along], b[along]), Math.max(a[along], b[along])];
+  const middle = (lo + hi) / 2;
+  const ends = barriers
+    .filter((b) => b.type === "wall")
+    .flatMap(({locations}) => [locations[0], locations[locations.length - 1]])
+    .map(({x, y}) => [x, y])
+    .filter((p) => Math.abs(p[1 - along] - a[1 - along]) < 0.01);
+  const reach = CELL_SIZE * 1.5;
+  const below = ends.map((p) => p[along]).filter((v) => v <= middle && v >= lo - reach);
+  const above = ends.map((p) => p[along]).filter((v) => v >= middle && v <= hi + reach);
+  const [start, end] = [below.length ? Math.max(...below) : lo, above.length ? Math.min(...above) : hi];
+  const at = (v) => (along === 0 ? [v, a[1]] : [a[0], v]);
+  return {identifier: exit.side, type: "line", start: roundPoint(at(start)), end: roundPoint(at(end))};
 }
 
 const barrier = (fields, kind) => (BLOCKERS[kind] ? fields : {...fields, blocksSight: false});
@@ -497,5 +524,6 @@ function segmentDistance([px, py], [ax, ay], [bx, by]) {
 
 const lerp = ([ax, ay], [bx, by], t) => [ax + (bx - ax) * t, ay + (by - ay) * t];
 const samePoint = (a, b) => a[0] === b[0] && a[1] === b[1];
-const round = (n) => Math.round(n * 100) / 100;
+// (Never -0, which reads as a different number to some.)
+const round = (n) => Math.round(n * 100) / 100 || 0;
 const roundPoint = ([x, y]) => ({x: round(x), y: round(y)});

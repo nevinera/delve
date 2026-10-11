@@ -27,7 +27,7 @@ const round = (n) => Math.round(n * 100) / 100;
 // Whether a cell's center is filled, under the map's fill rules.
 function filledAt(cellMap, result, col, row) {
   const feetDimensions = mapSize(cellMap.grid);
-  const fill = computeMapFill({feetDimensions, barriers: result.barriers, connections: [], fillPoints: result.fillPoints});
+  const fill = computeMapFill({feetDimensions, barriers: result.barriers, connections: result.connections ?? [], fillPoints: result.fillPoints});
   // Where the cell's drawn: walls bend with the drawing.
   const {x, y} = warp(cellCenter(col, row, CELL_SIZE), cellMap.seed);
   const p = [x, feetDimensions.height - y];
@@ -77,6 +77,36 @@ describe("autoBarriers", () => {
     const map = ringed();
     const first = autoBarriers(map);
     expect(autoBarriers(map, first.fillPoints).fillPoints).toEqual(first.fillPoints);
+  });
+
+  it("closes each exit's gap in the trees with a line connection named for its side", () => {
+    // Trees ring the map, with a gap through them on the north and west.
+    const map = blank(20, 14);
+    map.cells = map.cells.map((line, r) => [...line].map((ch, c) => {
+      const ring = c < 3 || r < 3 || c >= 17 || r >= 11;
+      const gap = (r < 3 && c >= 8 && c <= 11) || (c < 3 && r >= 6 && r <= 8);
+      return ring && !gap ? "T" : ".";
+    }).join(""));
+    map.exits = [{side: "north", from: 8, to: 11}, {side: "west", from: 6, to: 8}];
+    const result = autoBarriers(map);
+    expect(result.error).toBeNull();
+    expect(result.openEdge).toBe(false);
+    const {height} = mapSize(map.grid);
+    const [north, west] = result.connections;
+    expect(north).toMatchObject({identifier: "north", type: "line", start: {y: height}, end: {y: height}});
+    expect(west).toMatchObject({identifier: "west", type: "line", start: {x: 0}, end: {x: 0}});
+    // About as wide as the gap, and it ends on the walls either side.
+    const gapWidth = cellCenter(11, 0, CELL_SIZE).x - cellCenter(8, 0, CELL_SIZE).x;
+    expect(Math.abs(north.end.x - north.start.x)).toBeGreaterThan(gapWidth * 0.8);
+    expect(Math.abs(north.end.x - north.start.x)).toBeLessThan(gapWidth + 2 * CELL_SIZE);
+    const ends = result.barriers.filter((b) => b.type === "wall").flatMap(({locations}) => [locations[0], locations[locations.length - 1]]);
+    for (const p of [north.start, north.end, west.start, west.end]) expect(ends).toContainEqual(p);
+    // So the clearing and the gaps are open, and the trees filled.
+    expect(filledAt(map, result, 10, 1)).toBe(false);
+    expect(filledAt(map, result, 1, 7)).toBe(false);
+    expect(filledAt(map, result, 10, 7)).toBe(false);
+    expect(filledAt(map, result, 1, 1)).toBe(true);
+    expect(filledAt(map, result, 18, 7)).toBe(true);
   });
 
   it("gives a lone grove that's round a circle, and others walls", () => {

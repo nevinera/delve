@@ -1,5 +1,6 @@
 import {describe, it, expect} from "vitest";
 import {validateCellMap} from "../format";
+import {exitCells, exitEdge, validateExits} from "../exits";
 import {cellAt, cellCenter, cellCorners, cellPoint, hexDistance, hexLine, hexRays, mapSize, neighbor, pointAt} from "../hexGrid";
 import {regionLoops, smoothLoop, unwarp, warp} from "../regions";
 import {buildScene} from "../scene";
@@ -35,6 +36,28 @@ describe("validateCellMap", () => {
       'colors.meadow must be a "#rrggbb" color',
       expect.stringMatching(/^colors\.sky is not one of the theme's colors: meadow, tallGrass, /),
     ]);
+  });
+});
+
+describe("exits", () => {
+  const grid = {type: "hex", cols: 6, rows: 4};
+  it("validates them", () => {
+    expect(validateExits([{side: "north", from: 0, to: 5}, {side: "east", from: 1, to: 2}], grid)).toEqual([]);
+    expect(validateExits([{side: "up", from: 0, to: 1}, {side: "south", from: 2, to: 6}, {side: "east", from: 3, to: 3}, {side: "east", from: 0, to: 0}], grid)).toEqual([
+      "exits[0].side must be one of: north, east, south, west",
+      "exits[1] must run from one cell to another along its side, 0 to 5",
+      "exits[3] is a second exit on the east side",
+    ]);
+  });
+
+  it("span their cells along the map's edge", () => {
+    const {width, height} = mapSize(grid);
+    expect(exitCells({side: "west", from: 1, to: 2}, grid)).toEqual([[0, 1], [0, 2]]);
+    const [a, b] = exitEdge({side: "south", from: 0, to: 5}, grid);
+    expect([a, b]).toEqual([{x: 0, y: height}, {x: width, y: height}]);
+    const [c, d] = exitEdge({side: "east", from: 1, to: 1}, grid);
+    expect(c.x).toBe(width);
+    expect(d.y - c.y).toBeCloseTo(5);
   });
 });
 

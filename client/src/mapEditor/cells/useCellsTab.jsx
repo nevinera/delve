@@ -15,7 +15,7 @@ import {useEffect, useRef, useState} from "react";
 import {CELL_SIZE, cellAt, cellCenter, cellPoint, hexDistance, hexRays, mapSize, pointAt} from "../../cellMap/hexGrid";
 import {bridgeCells, MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
 import {renderScale} from "../../cellMap/render";
-import {drawBridges, drawCells, drawTrails, hexPath, SELECTED_COLOR} from "../../cellMap/overlay";
+import {drawBridges, drawCells, drawExits, drawTrails, hexPath, SELECTED_COLOR} from "../../cellMap/overlay";
 import {useCellHistory} from "./useCellHistory";
 import {SNAP_RADIUS_FEET} from "../mapSnap";
 import {useCellMapRender} from "./useCellMapRender";
@@ -326,6 +326,7 @@ function CellOverlay({draft, renderedCells, ui, scale, width, height}) {
     if (renderedCells && overlay !== "cells" && map.cells.some((line, r) => line !== renderedCells[r])) {
       drawCells(ctx, map, overlayScale, {filled: true, outline: false, only: (col, row) => renderedCells[row]?.[col] !== map.cells[row][col]});
     }
+    drawExits(ctx, map, overlayScale);
     if (tool === "trail" || overlay === "cells") drawTrails(ctx, map, overlayScale, {selected: tool === "trail" ? selected : null});
     if (tool === "bridge" || overlay === "cells") {
       const preview = pendingBridge && hover ? {from: pendingBridge, to: bridgeEnd(pendingBridge, hover)} : null;
