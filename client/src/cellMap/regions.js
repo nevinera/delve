@@ -12,7 +12,7 @@ export const PAD = 2;
 // cell size, so neighboring cells agree on them exactly.
 const CORNER_STEPS = [[2, 0], [1, 1], [-1, 1], [-2, 0], [-1, -1], [1, -1]];
 
-function latticeCorner(col, row, i) {
+export function latticeCorner(col, row, i) {
   const [dx, dy] = CORNER_STEPS[i];
   return [2 + 3 * col + dx, 1 + 2 * row + (col & 1) + dy];
 }
@@ -69,6 +69,30 @@ export function smoothLoop(loop, cellSize, seed, {irregularity = IRREGULARITY, r
   let out = points.map(({x, y}) => ({x, y}));
   for (let i = 0; i < CHAIKIN_PASSES; i++) out = chaikin(out);
   return out;
+}
+
+// A loop of lattice points as a round, gently wobbling curve of {x, y} in
+// feet, for shores: through its edges' middles, averaged until the hexes
+// are gone. Wobbles are hashed from where they are, as in smoothLoop.
+export function softLoop(loop, cellSize, seed, {passes = 4, wobble = 0.3} = {}) {
+  const r = hexRadius(cellSize);
+  const n = loop.length;
+  let points = loop.map(([ax, ay], i) => {
+    const [bx, by] = loop[(i + 1) % n];
+    const [x, y] = [((ax + bx) * r) / 4, ((ay + by) * cellSize) / 4];
+    return {
+      x: x + (pointHash01(seed, ax + bx, ay + by, 7) - 0.5) * 2 * wobble * r,
+      y: y + (pointHash01(seed, ax + bx, ay + by, 8) - 0.5) * 2 * wobble * r,
+    };
+  });
+  for (let pass = 0; pass < passes; pass++) {
+    points = points.map((p, i) => {
+      const a = points[(i + n - 1) % n];
+      const b = points[(i + 1) % n];
+      return {x: (a.x + 2 * p.x + b.x) / 4, y: (a.y + 2 * p.y + b.y) / 4};
+    });
+  }
+  return chaikin(points);
 }
 
 function subdivide(points) {

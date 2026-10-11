@@ -2,7 +2,7 @@
 // the tab can make to it (see docs/schema/map.md#cellmap). Immutable, like
 // MapDraft: every edit returns a new CellMapDraft.
 import {hexDistance, neighbor} from "../../cellMap/hexGrid";
-import {THEMES} from "../../cellMap/format";
+import {THEMES, fillOf} from "../../cellMap/format";
 
 // Trail points are kept to this many decimal places of a cell.
 const POINT_PLACES = 2;
@@ -12,9 +12,9 @@ export class CellMapDraft {
     this.data = data;
   }
 
-  // An all-meadow (the theme's first terrain) map.
+  // A map that's all trees (or rock), to carve open ground out of.
   static blank({theme = "glade", cols, rows, seed = 1}) {
-    const fill = Object.keys(THEMES[theme].terrains)[0];
+    const fill = fillOf(theme);
     return new CellMapDraft({version: 1, theme, grid: {type: THEMES[theme].grids[0], cols, rows}, seed, cells: Array.from({length: rows}, () => fill.repeat(cols)), trails: []});
   }
 
@@ -84,9 +84,9 @@ export class CellMapDraft {
   // Keeps the bottom-left corner in place: rows come and go at the top,
   // columns at the right. Map feet run up from the bottom-left, so walls,
   // units and connections stay over the same cells. New cells are the
-  // theme's first terrain; trails move with their cells.
+  // theme's fill (trees, or rock); trails move with their cells.
   resize({cols = this.grid.cols, rows = this.grid.rows}) {
-    const fill = Object.keys(THEMES[this.data.theme].terrains)[0];
+    const fill = fillOf(this.data.theme);
     const added = rows - this.grid.rows;
     const kept = added >= 0 ? this.data.cells : this.data.cells.slice(-added);
     const cells = [...Array.from({length: Math.max(0, added)}, () => ""), ...kept].map((line) => line.slice(0, cols).padEnd(cols, fill));
@@ -98,6 +98,14 @@ export class CellMapDraft {
 
   setSeed(seed) {
     return this.with({seed});
+  }
+
+  // Themes share their letters, so the cells stay; color overrides were for
+  // the old look, so they go.
+  setTheme(theme) {
+    if (theme === this.data.theme) return this;
+    const {colors: _old, ...rest} = this.data;
+    return new CellMapDraft({...rest, theme});
   }
 
   // null goes back to the theme's color.

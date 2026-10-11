@@ -60,9 +60,21 @@ function validateColors(colors, theme) {
   });
 }
 
-// The cell alphabet of a map's theme.
+// The cell alphabet of a map's theme. Every theme has the same letters
+// and terrains (a cave's "trees" are its rock), so a map can change theme;
+// labels are what the theme calls them.
 export function terrainsOf(map) {
   return THEMES[map.theme].terrains;
+}
+
+export function terrainLabel(theme, terrain) {
+  return THEMES[theme].labels?.[terrain] ?? terrain;
+}
+
+// The letter a new map, and new cells, start as: the theme's trees (or
+// rock), carved into.
+export function fillOf(theme) {
+  return THEMES[theme].fill;
 }
 
 // The terrain at (col, row), clamping to the nearest cell off the grid so

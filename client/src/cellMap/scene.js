@@ -4,7 +4,7 @@
 import {CELL_SIZE, cellAt, cellCenter, cellPoint, mapSize, neighbor} from "./hexGrid";
 import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
-import {insetLoop, regionLoops, smoothLoop} from "./regions";
+import {insetLoop, regionLoops, smoothLoop, softLoop} from "./regions";
 import {resolveStyle} from "./style";
 
 // The forest's dark mass only shows in the gaps between crowns, so it's
@@ -19,6 +19,10 @@ const DECORATION_PAD = 1;
 
 // Ground that's painted as its own region over the meadow, in this order.
 const GROUND_REGIONS = ["tallGrass", "marsh"];
+
+// Shores are smooth curves. Water is darker in cells with water all
+// around, and this far in from them, in cell sizes.
+const DEEP_INSET = 0.3;
 
 // Trails clear trees this far past their edge (in cell sizes): cells that
 // near count as open ground for the forest's band, so crowns line them.
@@ -54,9 +58,12 @@ export function trailClearedCells(map) {
 export function buildScene(map, style = resolveStyle(map)) {
   const cellSize = CELL_SIZE;
   const {seed} = map;
-  const scene = {...mapSize(map.grid), cellSize, grounds: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
+  const scene = {...mapSize(map.grid), cellSize, grounds: [], water: [], deepWater: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
 
   scene.grounds = GROUND_REGIONS.map((terrain) => ({terrain, loops: regionLoops(map, terrain).map((loop) => smoothLoop(loop, cellSize, seed))}));
+  scene.water = regionLoops(map, "water").map((loop) => softLoop(loop, cellSize, seed));
+  const shallow = (c, r) => [0, 1, 2, 3, 4, 5].some((edge) => terrainAt(map, ...neighbor(c, r, edge)) !== "water");
+  scene.deepWater = regionLoops(map, "water", shallow).map((loop) => insetLoop(softLoop(loop, cellSize, seed), DEEP_INSET * cellSize));
   scene.trails = sceneTrails(map, scene);
   const cleared = trailCleared(scene.trails);
   // The forest's mass leaves out what trails clear, as its crowns do.

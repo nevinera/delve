@@ -1,20 +1,26 @@
-// Barriers for a map drawn in cells: walls along the forest's edge, so
-// trees block and everything else is open. The edge is the tree cells'
-// outline (less the cells trails clear - see cellMap/scene.js), through
-// the middle of each hex edge so a column's zigzag is a straight line,
-// then smoothed so a row's is too, then simplified. Walls stop at the
-// map's edge - forest reaching it is filled by the map's own rule (see
-// game/mapFill.js) - and each patch of forest
+// Barriers for a map drawn in cells: walls where trees (a cave's rock) and
+// water meet open ground, so they block and everything else is open.
+// Trees' walls block sight; water's don't (you can see and shoot across
+// it), and where trees meet water the trees' wall does. Walls follow the
+// cells' edges (less the tree cells trails clear - see cellMap/scene.js),
+// through the middle of each hex edge so a column's zigzag is a straight
+// line, then smoothed so a row's is too, then simplified. Where trees,
+// water and open ground meet, their walls share that corner exactly, so
+// nothing leaks between them.
+//
+// Walls stop at the map's edge - a patch reaching it is filled by the
+// map's own rule (see game/mapFill.js) - and each patch of trees or water
 // inside the map gets a fill point. A lone patch that's round - three
 // cells around a corner, or a whole hex ball (one cell, or one and its six
-// neighbors, ...) - gets a circle instead. Open ground reaching the edge would be
-// filled too, so that's reported, not fixed.
+// neighbors, ...) - with open ground all around gets a circle instead.
+// Open ground reaching the edge would be filled too, so that's reported,
+// not fixed.
 //
 // Works in map feet (y up); the scene is in cellmap feet (y down).
 import {trailClearedCells} from "../../cellMap/scene";
-import {regionLoops} from "../../cellMap/regions";
-import {CELL_SIZE, cellCenter, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
-import {terrainsOf} from "../../cellMap/format";
+import {latticeCorner, PAD} from "../../cellMap/regions";
+import {CELL_SIZE, cellAt, cellCenter, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
+import {terrainAt} from "../../cellMap/format";
 
 // See docs/schema/map.md (and MapValidator).
 export const MAX_BARRIER_SEGMENTS = 3000;
@@ -23,7 +29,10 @@ export const MAX_FILL_POINTS = 100;
 const MAX_CIRCLE_RADIUS = 30;
 const CIRCLE_SEGMENTS = 6;
 
-// How far, in feet, a wall may stray from the forest's edge - loose, so
+// The terrains that block, and whether their barriers block sight.
+const BLOCKERS = {trees: true, water: false};
+
+// How far, in feet, a wall may stray from the cells' edge - loose, so
 // walls are long straight lines rather than following each cell;
 // doubled until the walls fit MAX_BARRIER_SEGMENTS.
 const START_TOLERANCE = 1.5;
@@ -33,21 +42,26 @@ const MAX_TOLERANCE = 6;
 const SMOOTHING_PASSES = 3;
 
 // Returns {barriers, fillPoints, segments, openEdge, error}: the new walls
-// and fill points (existingFillPoints, plus one per forest patch none of
-// them is in), how many segments the walls use, whether open ground
-// reaches the map's edge, and why nothing could be made (or null).
+// and fill points (existingFillPoints, plus one per patch none of them is
+// in), how many segments the walls use, whether open ground reaches the
+// map's edge, and why nothing could be made (or null).
 export function autoBarriers(cellMap, existingFillPoints = []) {
   const {width, height} = mapSize(cellMap.grid);
   const toMap = ({x, y}) => [x, height - y];
   const cleared = trailClearedCells(cellMap);
-  const groves = roundGroves(cellMap, cleared);
+  const blocking = (c, r) => {
+    const terrain = terrainAt(cellMap, c, r);
+    return terrain in BLOCKERS && !(terrain === "trees" && cleared(c, r)) ? terrain : null;
+  };
+  const groves = roundPatches(cellMap, blocking);
   const inGrove = new Set(groves.flatMap(({cells}) => cells));
-  const circles = groves.map(({center: {x, y}, radius}) => ({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}));
-  const forest = regionLoops(cellMap, "trees", (c, r) => cleared(c, r) || inGrove.has(`${c},${r}`)).map((loop) => smoothOutline(loop).map(toMap));
-  const forestBoxes = forest.map(bounds);
-  const isForest = (p) => forest.filter((loop, i) => inBounds(p, forestBoxes[i]) && insidePolygon(p, loop)).length % 2 === 1;
+  const kindAt = (c, r) => (inGrove.has(`${c},${r}`) ? null : blocking(c, r));
+  const circles = groves.map(({kind, center: {x, y}, radius}) => barrier({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}, kind));
 
-  const runs = forest.flatMap((loop) => clipLoop(loop, width, height));
+  const runs = outlines(cellMap, kindAt).flatMap((line) => {
+    const points = linePoints(line).map(toMap);
+    return (line.closed ? clipLoop(points, width, height) : clipRun(points, width, height)).map((run) => ({...run, kind: line.kind}));
+  });
   let tolerance = START_TOLERANCE;
   let walls = simplifyAll(runs, tolerance);
   const circleSegments = circles.length * CIRCLE_SEGMENTS;
@@ -57,60 +71,60 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   }
   const segments = segmentCount(walls) + circleSegments;
   if (segments > MAX_BARRIER_SEGMENTS) {
-    return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The forest's edge needs ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify the forest and try again.`};
+    return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The trees' and water's edges need ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify them and try again.`};
   }
 
-  // Each closed wall around forest (not a clearing) gets a fill point at a
-  // tree cell's center inside it, unless one is already there. Nested
-  // walls (a grove in a clearing) are their own regions, so a point inside
-  // one doesn't count for the wall around it.
-  const treeCenters = forestCellCenters(cellMap, height);
-  const closed = walls.filter((w) => w.closed).map((wall) => ({...wall, box: bounds(wall.points)}));
-  const fillPoints = [...existingFillPoints];
-  for (const wall of closed) {
-    const inside = (p) => inBounds(p, wall.box) && insidePolygon(p, wall.points);
-    if (fillPoints.some(({x, y}) => inside([x, y]))) continue;
-    const nested = closed.filter((other) => other !== wall && inside(other.points[0]));
-    const center = treeCenters.find((p) => inside(p) && !nested.some((other) => inBounds(p, other.box) && insidePolygon(p, other.points)) && isForest(p));
-    if (center) fillPoints.push({x: round(center[0]), y: round(center[1])});
-  }
+  const fillPoints = [...existingFillPoints, ...newFillPoints(cellMap, kindAt, existingFillPoints, height)];
   if (fillPoints.length > MAX_FILL_POINTS) {
-    return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The forest has ${fillPoints.length - existingFillPoints.length} separate patches inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
+    return {barriers: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `There are ${fillPoints.length - existingFillPoints.length} separate patches of trees and water inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
   }
 
   // Circles are always filled, so they need no fill points.
-  const barriers = [...walls.map(({points}) => ({type: "wall", locations: points.map(roundPoint)})), ...circles];
-  return {barriers, fillPoints, segments, openEdge: edgeCellCenters(cellMap, height).some((p) => !isForest(p)), error: null};
+  const barriers = [...walls.map(({points, kind}) => barrier({type: "wall", locations: points.map(roundPoint)}, kind)), ...circles];
+  return {barriers, fillPoints, segments, openEdge: borderCells(cellMap).some(([c, r]) => !kindAt(c, r)), error: null};
 }
 
-// Round patches of trees (less cleared cells), away from the map's edge:
-// {center (cellmap feet), radius, cells}.
-function roundGroves(cellMap, cleared) {
+const barrier = (fields, kind) => (BLOCKERS[kind] ? fields : {...fields, blocksSight: false});
+
+// Each joined patch of one blocking terrain on the grid: {kind, cells
+// ([col, row]), edge (whether it touches the map's edge)}.
+function patches(cellMap, kindAt) {
   const {cols, rows} = cellMap.grid;
-  const terrains = terrainsOf(cellMap);
-  const isTree = (c, r) => c >= 0 && c < cols && r >= 0 && r < rows && terrains[cellMap.cells[r][c]] === "trees" && !cleared(c, r);
   const seen = new Set();
-  const groves = [];
+  const found = [];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      if (seen.has(`${col},${row}`) || !isTree(col, row)) continue;
-      const patch = [[col, row]];
+      const kind = kindAt(col, row);
+      if (!kind || seen.has(`${col},${row}`)) continue;
+      const cells = [[col, row]];
       seen.add(`${col},${row}`);
-      for (let i = 0; i < patch.length; i++) {
+      for (let i = 0; i < cells.length; i++) {
         for (let edge = 0; edge < 6; edge++) {
-          const [c, r] = neighbor(...patch[i], edge);
-          if (!seen.has(`${c},${r}`) && isTree(c, r)) {
-            seen.add(`${c},${r}`);
-            patch.push([c, r]);
-          }
+          const [c, r] = neighbor(...cells[i], edge);
+          if (c < 0 || r < 0 || c >= cols || r >= rows || seen.has(`${c},${r}`) || kindAt(c, r) !== kind) continue;
+          seen.add(`${c},${r}`);
+          cells.push([c, r]);
         }
       }
-      if (patch.some(([c, r]) => c === 0 || r === 0 || c === cols - 1 || r === rows - 1)) continue;
-      const grove = asTriad(patch) ?? asHexBall(patch);
-      if (grove) groves.push({...grove, cells: patch.map(([c, r]) => `${c},${r}`)});
+      found.push({kind, cells, edge: cells.some(([c, r]) => c === 0 || r === 0 || c === cols - 1 || r === rows - 1)});
     }
   }
-  return groves;
+  return found;
+}
+
+// Round patches away from the map's edge, with open ground all around:
+// {kind, center (cellmap feet), radius, cells ("col,row")}.
+function roundPatches(cellMap, kindAt) {
+  return patches(cellMap, kindAt).flatMap(({kind, cells, edge}) => {
+    if (edge) return [];
+    const keys = new Set(cells.map(([c, r]) => `${c},${r}`));
+    const alone = cells.every(([c, r]) => [0, 1, 2, 3, 4, 5].every((e) => {
+      const [nc, nr] = neighbor(c, r, e);
+      return keys.has(`${nc},${nr}`) || !kindAt(nc, nr);
+    }));
+    const round = alone && (asTriad(cells) ?? asHexBall(cells));
+    return round ? [{...round, kind, cells: [...keys]}] : [];
+  });
 }
 
 // Three cells around a corner: a circle on the corner, as big as they are.
@@ -136,20 +150,75 @@ function asHexBall(patch) {
   return {center: cellCenter(...center, CELL_SIZE), radius: (steps + 0.5) * CELL_SIZE};
 }
 
-// A loop of lattice corners (see regions.js) as the midpoints of its edges,
-// in feet, smoothed.
-export function smoothOutline(loop) {
+// The edges between a blocking cell and a cell that isn't its kind, joined
+// into lines of lattice corners (see regions.js): {corners, closed, kind}.
+// A line runs between corners where three kinds meet, or is a loop. The
+// grid runs PAD cells past the map (copying its edge cells), so lines
+// reaching the edge carry on past it and get clipped.
+function outlines(cellMap, kindAt) {
+  const {cols, rows} = cellMap.grid;
+  const kind = (c, r) => (c >= -PAD && c < cols + PAD && r >= -PAD && r < rows + PAD ? kindAt(c, r) : null);
+  const edges = [];
+  for (let c = -PAD; c < cols + PAD; c++) {
+    for (let r = -PAD; r < rows + PAD; r++) {
+      const here = kind(c, r);
+      if (!here) continue;
+      for (let i = 0; i < 6; i++) {
+        const there = kind(...neighbor(c, r, i));
+        // Where two blocking kinds meet, the wall is the one blocking sight.
+        if (there === here || (there && !BLOCKERS[here])) continue;
+        edges.push({a: latticeCorner(c, r, i), b: latticeCorner(c, r, (i + 1) % 6), kind: here});
+      }
+    }
+  }
+
+  const key = ([x, y]) => `${x},${y}`;
+  const from = new Map();
+  const into = new Map();
+  for (const edge of edges) {
+    if (!from.has(key(edge.a))) from.set(key(edge.a), []);
+    from.get(key(edge.a)).push(edge);
+    into.set(key(edge.b), (into.get(key(edge.b)) ?? 0) + 1);
+  }
+  const junction = (p) => from.get(key(p))?.length !== 1 || into.get(key(p)) !== 1;
+  const used = new Set();
+  const lines = [];
+  for (const start of edges) {
+    if (used.has(start) || !junction(start.a)) continue;
+    const corners = [start.a];
+    for (let edge = start; ; edge = from.get(key(edge.b))[0]) {
+      used.add(edge);
+      corners.push(edge.b);
+      if (junction(edge.b)) break;
+    }
+    lines.push({corners, closed: false, kind: start.kind});
+  }
+  for (const start of edges) {
+    if (used.has(start)) continue;
+    const corners = [];
+    for (let edge = start; !used.has(edge); edge = from.get(key(edge.b))[0]) {
+      used.add(edge);
+      corners.push(edge.a);
+    }
+    lines.push({corners, closed: true, kind: start.kind});
+  }
+  return lines;
+}
+
+// A line of lattice corners as the midpoints of its edges, in feet,
+// smoothed. A line between junctions keeps its ends on them.
+function linePoints({corners, closed}) {
   const r = hexRadius(CELL_SIZE);
-  const corners = loop.map(([lx, ly]) => ({x: (lx * r) / 2, y: (ly * CELL_SIZE) / 2}));
-  let points = corners.map((p, i) => {
-    const q = corners[(i + 1) % corners.length];
-    return {x: (p.x + q.x) / 2, y: (p.y + q.y) / 2};
-  });
+  const feet = corners.map(([lx, ly]) => ({x: (lx * r) / 2, y: (ly * CELL_SIZE) / 2}));
+  const mid = (p, q) => ({x: (p.x + q.x) / 2, y: (p.y + q.y) / 2});
+  const n = feet.length;
+  let points = closed ? feet.map((p, i) => mid(p, feet[(i + 1) % n])) : [feet[0], ...feet.slice(1).map((q, i) => mid(feet[i], q)), feet[n - 1]];
+  const m = points.length;
   for (let pass = 0; pass < SMOOTHING_PASSES; pass++) {
-    const n = points.length;
     points = points.map((p, i) => {
-      const a = points[(i + n - 1) % n];
-      const b = points[(i + 1) % n];
+      if (!closed && (i === 0 || i === m - 1)) return p;
+      const a = points[(i + m - 1) % m];
+      const b = points[(i + 1) % m];
       return {x: (a.x + 2 * p.x + b.x) / 4, y: (a.y + 2 * p.y + b.y) / 4};
     });
   }
@@ -190,6 +259,29 @@ export function clipLoop(loop, width, height) {
   return runs.map(({points}) => ({points, closed: false}));
 }
 
+// The parts of an open line inside the map.
+export function clipRun(points, width, height) {
+  const runs = [];
+  let run = null;
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const clipped = clipSegment(a, b, width, height);
+    if (!clipped) {
+      run = null;
+      continue;
+    }
+    const [t0, t1] = clipped;
+    if (!run || t0 > 0) {
+      run = [lerp(a, b, t0)];
+      runs.push(run);
+    }
+    run.push(lerp(a, b, t1));
+    if (t1 < 1) run = null;
+  }
+  return runs.map((run) => ({points: run, closed: false}));
+}
+
 // Liang-Barsky: the [t0, t1] of a→b inside the map, or null.
 function clipSegment([ax, ay], [bx, by], width, height) {
   const dx = bx - ax;
@@ -210,7 +302,7 @@ function clipSegment([ax, ay], [bx, by], width, height) {
 }
 
 function simplifyAll(runs, tolerance) {
-  return runs.map(({points, closed}) => ({points: simplify(points, tolerance), closed})).filter(({points}) => points.length >= (2));
+  return runs.map((run) => ({...run, points: simplify(run.points, tolerance)})).filter(({points}) => points.length >= 2);
 }
 
 // Douglas-Peucker, keeping both ends (so a closed run stays closed).
@@ -242,45 +334,48 @@ export function simplify(points, tolerance) {
 
 const segmentCount = (walls) => walls.reduce((sum, {points}) => sum + points.length - 1, 0);
 
-// Tree cells' centers, in map feet: the forest's deepest points.
-function forestCellCenters(cellMap, height) {
-  const terrains = terrainsOf(cellMap);
-  const centers = [];
-  cellMap.cells.forEach((line, row) => [...line].forEach((ch, col) => {
-    if (terrains[ch] === "trees") centers.push(mapPoint(col, row, height));
-  }));
-  return centers;
+// A fill point for each patch inside the map that none of existing is in,
+// at its deepest cell's center (in map feet).
+function newFillPoints(cellMap, kindAt, existing, height) {
+  const marked = new Set(existing.map(({x, y}) => cellAt(x, height - y, CELL_SIZE).join(",")));
+  return patches(cellMap, kindAt).flatMap(({cells, edge}) => {
+    const keys = new Set(cells.map(([c, r]) => `${c},${r}`));
+    if (edge || [...keys].some((k) => marked.has(k))) return [];
+    const [col, row] = deepest(cells, keys);
+    const [x, y] = mapPoint(col, row, height);
+    return [{x: round(x), y: round(y)}];
+  });
 }
 
-function edgeCellCenters({grid}, height) {
-  const centers = [];
-  for (let col = 0; col < grid.cols; col++) centers.push(mapPoint(col, 0, height), mapPoint(col, grid.rows - 1, height));
-  for (let row = 0; row < grid.rows; row++) centers.push(mapPoint(0, row, height), mapPoint(grid.cols - 1, row, height));
-  return centers;
+// The cell farthest, in steps, from the patch's edge.
+function deepest(cells, keys) {
+  const onEdge = cells.filter(([c, r]) => [0, 1, 2, 3, 4, 5].some((e) => !keys.has(neighbor(c, r, e).join(","))));
+  const seen = new Set(onEdge.map((cell) => cell.join(",")));
+  let frontier = onEdge;
+  let last = onEdge;
+  while (frontier.length) {
+    last = frontier;
+    frontier = frontier.flatMap(([c, r]) => [0, 1, 2, 3, 4, 5].map((e) => neighbor(c, r, e))).filter((cell) => {
+      const k = cell.join(",");
+      if (!keys.has(k) || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+  return last[0];
+}
+
+function borderCells({grid}) {
+  const cells = [];
+  for (let col = 0; col < grid.cols; col++) cells.push([col, 0], [col, grid.rows - 1]);
+  for (let row = 0; row < grid.rows; row++) cells.push([0, row], [grid.cols - 1, row]);
+  return cells;
 }
 
 function mapPoint(col, row, height) {
   const {x, y} = cellCenter(col, row, CELL_SIZE);
   return [x, height - y];
 }
-
-export function insidePolygon([x, y], polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
-
-function bounds(points) {
-  const xs = points.map(([x]) => x);
-  const ys = points.map(([, y]) => y);
-  return {minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys)};
-}
-
-const inBounds = ([x, y], box) => x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY;
 
 function segmentDistance([px, py], [ax, ay], [bx, by]) {
   const dx = bx - ax;

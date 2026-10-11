@@ -12,7 +12,8 @@ import {CellMapDraft} from "../CellMapDraft";
 import {cellCenter, cellPoint} from "../../../cellMap/hexGrid";
 import {cachedCellMapImage} from "../../../cellMap/cache";
 
-const start = () => CellMapDraft.blank({cols: 6, rows: 5}).data;
+// An all-meadow map (a new one starts all trees).
+const start = () => CellMapDraft.blank({cols: 6, rows: 5}).with({cells: Array.from({length: 5}, () => "......")}).data;
 
 // A canvas pixel over the given cell coordinates.
 const at = (col, row) => {

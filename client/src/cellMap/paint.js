@@ -32,14 +32,32 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   ctx.fill("evenodd");
 
   // Trails go over the ground and the forest's mass, which they cut
-  // through, and under the decorations.
+  // through, and under the decorations and water, which they don't cross.
   paintTrails(ctx, scene.trails, style);
+  paintWater(ctx, scene, style);
   stamp(ctx, scene.pools, sprites.pools);
   stamp(ctx, scene.tufts, sprites.tufts);
   stamp(ctx, scene.reeds, sprites.reeds);
   stamp(ctx, scene.tallTufts, sprites.tallTufts);
   stamp(ctx, scene.crowns, sprites.crowns);
   ctx.restore();
+}
+
+// Water, darker away from its shore, with a pale line along the shore.
+function paintWater(ctx, scene, style) {
+  if (!scene.water.length) return;
+  const {palette} = style;
+  ctx.fillStyle = palette.water;
+  loops(ctx, scene.water);
+  ctx.fill("evenodd");
+  ctx.fillStyle = palette.waterDeep;
+  loops(ctx, scene.deepWater);
+  ctx.fill("evenodd");
+  ctx.strokeStyle = palette.waterRim;
+  ctx.lineWidth = style.tuftInk * 1.5;
+  ctx.lineJoin = "round";
+  loops(ctx, scene.water);
+  ctx.stroke();
 }
 
 // Each placement is {x, y, radius, variant}; its sprite is scaled down

@@ -3,13 +3,21 @@ import {CellMapDraft} from "../CellMapDraft";
 import {validateCellMap} from "../../../cellMap/format";
 import {cellPoint, gridFor, hexDistance, mapSize, neighbor, pointAt} from "../../../cellMap/hexGrid";
 
-const blank = () => CellMapDraft.blank({cols: 5, rows: 4});
+// Starts all trees; most tests want open meadow to work on.
+const blank = () => CellMapDraft.blank({cols: 5, rows: 4}).with({cells: [".....", ".....", ".....", "....."]});
 
 describe("CellMapDraft", () => {
-  it("starts all meadow, and valid", () => {
-    const draft = blank();
-    expect(draft.data.cells).toEqual([".....", ".....", ".....", "....."]);
+  it("starts all trees, and valid", () => {
+    const draft = CellMapDraft.blank({cols: 5, rows: 4});
+    expect(draft.data.cells).toEqual(["TTTTT", "TTTTT", "TTTTT", "TTTTT"]);
     expect(validateCellMap(draft.data)).toEqual([]);
+  });
+
+  it("changes theme, keeping the cells and dropping the old colors", () => {
+    const draft = blank().paint(1, 1, "w").setColor("meadow", "#112233");
+    const glade = draft.setTheme("glade");
+    expect(glade).toBe(draft);
+    expect(validateCellMap(glade.data)).toEqual([]);
   });
 
   it("paints a cell, or a cell and its neighbors", () => {
@@ -36,7 +44,7 @@ describe("CellMapDraft", () => {
   it("resizes from the bottom-left, moving trails with their cells", () => {
     const draft = blank().paint(0, 3, "T").addTrail([[0, 3], [2, 1]]);
     const taller = draft.resize({cols: 2, rows: 6});
-    expect(taller.data.cells).toEqual(["..", "..", "..", "..", "..", "T."]);
+    expect(taller.data.cells).toEqual(["TT", "TT", "..", "..", "..", "T."]);
     expect(taller.trails[0].points).toEqual([[0, 5], [2, 3]]);
     expect(taller.grid).toEqual({type: "hex", cols: 2, rows: 6});
     const shorter = draft.resize({rows: 2});

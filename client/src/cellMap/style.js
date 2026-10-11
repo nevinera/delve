@@ -25,6 +25,9 @@ export const GLADE = {
     marsh: "#98a874",
     pool: "#6f8f8a",
     poolRim: "rgba(220, 235, 220, 0.6)",
+    water: "#5f8f9a",
+    waterDeep: "#4f7d8b",
+    waterRim: "rgba(222, 238, 232, 0.7)",
     reed: "#5f7442",
     trailEdge: "#8b7a55",
     trail: "#cdb98a",
@@ -47,6 +50,7 @@ const DERIVED = {
   crown: (c) => ({crownDark: scale(c, 0.9), crownLight: scale(c, 1.1), highlight: rgba(scale(c, 1.5), 0.55)}),
   tallTuft: (c) => ({tallTuftLight: hex(mix(c, WHITE, 0.5))}),
   trail: (c) => ({trailEdge: hex(scale(c, 0.68))}),
+  water: (c) => ({waterDeep: hex(scale(c, 0.86))}),
   ink: (c) => ({shadow: rgba(c, 0.32)}),
 };
 

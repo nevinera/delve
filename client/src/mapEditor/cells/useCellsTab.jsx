@@ -33,7 +33,7 @@ export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
 export const BRUSHES = [1, 2, 3];
 
 // newTrail: the next trail click starts a trail, even on another's point.
-const INITIAL_UI = {tool: "paint", terrain: "T", brush: 1, overlay: "grid", hover: null, selected: null, pendingPoint: null, newTrail: false};
+const INITIAL_UI = {tool: "paint", terrain: ".", brush: 1, overlay: "grid", hover: null, selected: null, pendingPoint: null, newTrail: false};
 
 export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, rendering = editing, onThumbnail = null}) {
   const history = useCellHistory(cellMap ?? null, onCellMapChange, mapKey);

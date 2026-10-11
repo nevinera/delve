@@ -64,16 +64,18 @@ validator's fill rules (one published before them) has no fill on the game serve
 
 A grid of terrain cells, one character each, plus trails drawn across them. The client renders it
 into the map's ground (client/src/cellMap/), the same every time for the same data. Client-only:
-the game server doesn't read it, and cells don't block movement; walls are still barriers.
+the game server doesn't read it, and cells don't block movement; walls are still barriers. The map
+editor's Auto Barriers makes them from the cells: walls around trees (rock) block sight, and
+walls around water don't.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `version` | integer | yes | `1`. |
-| `theme` | string | yes | The look, and the cell alphabet and grid types that go with it. Only `"glade"` for now. Themes live in client/src/cellMap/themes.json. |
-| `colors` | object | no | Overrides some of the theme's colors, as `"#rrggbb"`: `{ "meadow": "#b8c98a" }`. Keys must be the theme's colors (glade: `meadow`, `tallGrass`, `marsh`, `forest`, `crown`, `tuft`, `tallTuft`, `pool`, `reed`, `trail`, `ink`). |
+| `theme` | string | yes | The look, and the grid types that go with it. Themes live in client/src/cellMap/themes.json. Every theme has the same cell alphabet, so a map can change theme. |
+| `colors` | object | no | Overrides some of the theme's colors, as `"#rrggbb"`: `{ "meadow": "#b8c98a" }`. Keys must be the theme's colors (its `colors` in themes.json; glade: `meadow`, `tallGrass`, `marsh`, `water`, `forest`, `crown`, `tuft`, `tallTuft`, `pool`, `reed`, `trail`, `ink`). |
 | `grid` | object | yes | `{ "type": "hex", "cols": int, "rows": int }`. `type` must be one the theme supports (glade: `"hex"`). `cols` and `rows` are 1 to 200. |
 | `seed` | integer | yes | Varies the decorations (tree crowns, grass tufts and so on) without changing the terrain. |
-| `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters. Glade: `.` meadow, `%` tall grass, `~` marsh, `T` trees. |
+| `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters: `.` meadow, `%` tall grass, `~` marsh, `w` water, `T` trees. A cave calls them floor, rubble, puddles, water and rock. A new map starts all `T`. |
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |
 
 A hex grid has flat-topped hexes, always 5 feet across the flats (so trees and grass are the same

@@ -32,7 +32,7 @@ describe("validateCellMap", () => {
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "#aabbcc"}})).toEqual([]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "green", sky: "#000000"}})).toEqual([
       'colors.meadow must be a "#rrggbb" color',
-      "colors.sky is not one of the theme's colors: meadow, tallGrass, marsh, forest, crown, tuft, tallTuft, pool, reed, trail, ink",
+      "colors.sky is not one of the theme's colors: meadow, tallGrass, marsh, water, forest, crown, tuft, tallTuft, pool, reed, trail, ink",
     ]);
   });
 });

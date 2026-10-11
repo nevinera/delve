@@ -1,7 +1,7 @@
 // The Cells tab's sidebar: start a cell map, pick a tool, terrain and brush,
 // edit trails, the grid, seed and colors. All state is in useCellsTab.
 import {useState} from "react";
-import {THEMES, terrainsOf} from "../../cellMap/format";
+import {THEMES, terrainLabel, terrainsOf} from "../../cellMap/format";
 import {CELL_SIZE, gridFor} from "../../cellMap/hexGrid";
 import {CELL_COLORS} from "../../cellMap/overlay";
 import {CellMapDraft} from "./CellMapDraft";
@@ -33,7 +33,7 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
           <div className="cells-panel-row" role="group" aria-label="Terrain">
             {Object.entries(terrains).map(([ch, terrain]) => (
               <button key={ch} type="button" aria-pressed={ui.terrain === ch} className={ui.terrain === ch ? "active" : ""} onClick={() => update({terrain: ch})}>
-                <i className="cells-panel-swatch" style={{background: CELL_COLORS[terrain]}} />{terrain}
+                <i className="cells-panel-swatch" style={{background: CELL_COLORS[terrain]}} />{terrainLabel(draft.data.theme, terrain)}
               </button>
             ))}
           </div>
@@ -46,6 +46,14 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
       <Choices label="Overlay" options={OVERLAYS} value={ui.overlay} onChange={(overlay) => update({overlay})} />
 
       <GridSection draft={draft} change={change} />
+      <div className="cells-panel-row">
+        <label>
+          Theme{" "}
+          <select value={draft.data.theme} onChange={(e) => change((d) => d.setTheme(e.target.value))}>
+            {Object.keys(THEMES).map((key) => <option key={key} value={key}>{key}</option>)}
+          </select>
+        </label>
+      </div>
       <div className="cells-panel-row">
         <label>
           Seed <input type="number" value={draft.data.seed} onChange={(e) => change((d) => d.setSeed(parseInt(e.target.value, 10) || 0), {group: "seed"})} />
@@ -74,7 +82,7 @@ function NewCellMap({feetDimensions, onCreate}) {
   const [theme, setTheme] = useState(Object.keys(THEMES)[0]);
   return (
     <div className="cells-panel">
-      <p>This map has no cells yet. Start one, all meadow, and paint it. Cells are {CELL_SIZE} ft across.</p>
+      <p>This map has no cells yet. Start one, all trees (or rock, in a cave), and carve open ground out of it. Cells are {CELL_SIZE} ft across.</p>
       <label>
         Theme{" "}
         <select value={theme} onChange={(e) => setTheme(e.target.value)}>

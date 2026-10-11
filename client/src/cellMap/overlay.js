@@ -11,6 +11,7 @@ export const CELL_COLORS = {
   meadow: "rgba(250, 220, 90, 0.55)",
   tallGrass: "rgba(120, 220, 60, 0.55)",
   marsh: "rgba(40, 200, 190, 0.55)",
+  water: "rgba(150, 60, 230, 0.55)",
   trees: "rgba(30, 110, 200, 0.55)",
 };
 

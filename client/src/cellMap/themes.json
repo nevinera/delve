@@ -1,11 +1,14 @@
 {
   "glade": {
     "grids": ["hex"],
-    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "T": "trees"},
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "meadow", "tallGrass": "tall grass", "marsh": "marsh", "water": "water", "trees": "trees"},
     "colors": {
       "meadow": "#b3c788",
       "tallGrass": "#a6bd70",
       "marsh": "#98a874",
+      "water": "#5f8f9a",
       "forest": "#34502f",
       "crown": "#567d44",
       "tuft": "#7f9b5a",
