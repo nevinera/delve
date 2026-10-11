@@ -38,7 +38,14 @@ type Barrier struct {
 	// circle
 	Location *Location `json:"location,omitempty"` // Required for circle: center
 	Radius   float64   `json:"radius,omitempty"`   // Required for circle: feet, max 30.0
+
+	// BlocksSight is nil (true) unless the barrier says otherwise; false
+	// blocks movement only, like water.
+	BlocksSight *bool `json:"blocksSight,omitempty"`
 }
+
+// SightBlocking reports whether the barrier blocks line of sight.
+func (b Barrier) SightBlocking() bool { return b.BlocksSight == nil || *b.BlocksSight }
 
 // MapConnection is an entry/exit point on a map.
 // Type discriminator: "point" or "line".

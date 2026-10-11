@@ -37,6 +37,20 @@ describe("BarriersPanel", () => {
     expect(screen.queryByText(/Barrier 1:/)).not.toBeInTheDocument();
   });
 
+  it("toggles whether a barrier blocks sight", () => {
+    const dispatch = vi.fn();
+    const barriers = [{type: "circle", location: {x: 5, y: 5}, radius: 3, blocksSight: false}];
+    render(<BarriersPanel {...DEFAULT_PROPS} barriers={barriers} dispatch={dispatch} />);
+    expandSection();
+    expect(screen.getByText(/see-through/)).toBeInTheDocument();
+    expandBarrier(0);
+
+    const box = screen.getByLabelText("Blocks sight");
+    expect(box).not.toBeChecked();
+    fireEvent.click(box);
+    expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "barriers", index: 0, field: "blocksSight", value: undefined});
+  });
+
   it("shows a placeholder when there are no barriers yet, once expanded", () => {
     render(<BarriersPanel {...DEFAULT_PROPS} barriers={[]} />);
     expandSection();

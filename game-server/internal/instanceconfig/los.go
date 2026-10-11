@@ -1,15 +1,28 @@
 package instanceconfig
 
 // LineOfSightClear reports whether the straight line between (x1,y1) and
-// (x2,y2) on the given map is unobstructed by any of that map's barriers.
-// Returns true (clear) if the map isn't found.
+// (x2,y2) on the given map is unobstructed by any of that map's barriers
+// that block sight. Returns true (clear) if the map isn't found.
 func LineOfSightClear(zone Zone, mapIdentifier string, x1, y1, x2, y2 float64) bool {
+	return lineClear(zone, mapIdentifier, x1, y1, x2, y2, true)
+}
+
+// MovementClear is LineOfSightClear for movement: every barrier counts,
+// including ones you can see across (water).
+func MovementClear(zone Zone, mapIdentifier string, x1, y1, x2, y2 float64) bool {
+	return lineClear(zone, mapIdentifier, x1, y1, x2, y2, false)
+}
+
+func lineClear(zone Zone, mapIdentifier string, x1, y1, x2, y2 float64, sight bool) bool {
 	for i := range zone.Maps {
 		m := &zone.Maps[i]
 		if m.Identifier != mapIdentifier {
 			continue
 		}
 		for _, b := range m.Barriers {
+			if sight && !b.SightBlocking() {
+				continue
+			}
 			if barrierBlocksLine(b, x1, y1, x2, y2) {
 				return false
 			}

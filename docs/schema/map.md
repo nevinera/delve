@@ -102,7 +102,9 @@ points, in cell coordinates (whole numbers are cell centers; fractions fall betw
 
 ## Barrier
 
-Barriers block unit movement and line-of-sight.
+Barriers block unit movement and, unless `blocksSight` is `false`, line-of-sight. Both kinds
+take an optional `blocksSight` (boolean, default `true`): `false` is for things you can see and
+shoot across but not walk through, like water.
 
 ### wall
 
@@ -110,6 +112,7 @@ Barriers block unit movement and line-of-sight.
 |---|---|---|---|
 | `type` | `"wall"` | yes | |
 | `locations` | array of Location | yes | At least two points. Adjacent points are joined into wall segments. |
+| `blocksSight` | boolean | no | Default `true`. |
 
 ```json
 {
@@ -129,6 +132,7 @@ Barriers block unit movement and line-of-sight.
 | `type` | `"circle"` | yes | |
 | `location` | Location | yes | Center of the circle. |
 | `radius` | float | yes | Radius in feet. Maximum 30.0. |
+| `blocksSight` | boolean | no | Default `true`. |
 
 ```json
 {

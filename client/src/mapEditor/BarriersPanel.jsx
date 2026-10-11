@@ -123,7 +123,22 @@ function CircleFields({barrier, onChange}) {
 }
 
 function barrierSummary(barrier) {
-  return barrier.type === "wall" ? `${barrier.locations.length} points` : `r=${barrier.radius}ft`;
+  const shape = barrier.type === "wall" ? `${barrier.locations.length} points` : `r=${barrier.radius}ft`;
+  return barrier.blocksSight === false ? `${shape}, see-through` : shape;
+}
+
+// Unchecked is blocksSight: false (you can see and shoot across it, like
+// water); checked drops the field, since true is the default.
+function BlocksSightField({barrier, onChange}) {
+  return (
+    <label className="map-barrier-blocks-sight">
+      <input
+        type="checkbox" checked={barrier.blocksSight !== false}
+        onChange={(e) => onChange({blocksSight: e.target.checked ? undefined : false})}
+      />
+      Blocks sight
+    </label>
+  );
 }
 
 // onAutoBarriers (a map drawn in cells, with no image - see
@@ -271,6 +286,7 @@ export default function BarriersPanel({barriers, selectedIndex, onSelect, onHove
                       />
                     )
                     : <CircleFields barrier={barrier} onChange={(next) => updateBarrier(i, next)} />)}
+                  {expanded && <BlocksSightField barrier={barrier} onChange={(next) => updateBarrier(i, next)} />}
                 </div>
               );
             })}

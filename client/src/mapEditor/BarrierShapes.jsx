@@ -5,6 +5,8 @@ import {feetToPixel, feetSpacingToPixelsX} from "./mapCoords";
 // in-progress draft shapes); this just turns feet-space barrier data into
 // pixel-space SVG, and reports pointerdowns back up.
 const BARRIER_COLOR = "#e0b64a";
+// One you can see across (blocksSight: false, like water).
+const SEE_THROUGH_COLOR = "#5ab4e0";
 const SELECTED_COLOR = "#ffde7a";
 const HANDLE_RADIUS = 5;
 const STROKE_WIDTH = 3;
@@ -29,7 +31,8 @@ export default function BarrierShapes({barriers, pixelDimensions, feetDimensions
     <svg className="map-canvas-shapes" width={pixelDimensions.width} height={pixelDimensions.height}>
       {barriers.map((barrier, i) => {
         const selected = selectable && selectedIndex === i;
-        const color = selected ? SELECTED_COLOR : BARRIER_COLOR;
+        const seeThrough = barrier.blocksSight === false;
+        const color = selected ? SELECTED_COLOR : seeThrough ? SEE_THROUGH_COLOR : BARRIER_COLOR;
         const strokeWidth = hoveredIndex === i ? HOVERED_STROKE_WIDTH : STROKE_WIDTH;
 
         if (barrier.type === "wall") {
@@ -75,7 +78,7 @@ export default function BarrierShapes({barriers, pixelDimensions, feetDimensions
           <g key={i}>
             <circle
               cx={center.x} cy={center.y} r={radiusPx}
-              fill="rgba(224,182,74,0.15)" stroke={color} strokeWidth={strokeWidth}
+              fill={seeThrough ? "rgba(90,180,224,0.15)" : "rgba(224,182,74,0.15)"} stroke={color} strokeWidth={strokeWidth}
               onPointerDown={selectable ? (e) => onStartDragCircleMove(i, e) : undefined}
             />
             {selected && (

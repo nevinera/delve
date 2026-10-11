@@ -84,7 +84,7 @@ func restoreUnitsThatCrossedBarriers(state *instancestate.InstanceState, prevSta
 		if fills[unit.MapIdentifier].Filled(prev.Position.X, prev.Position.Y) {
 			continue
 		}
-		if !instanceconfig.LineOfSightClear(zone, unit.MapIdentifier, prev.Position.X, prev.Position.Y, unit.Position.X, unit.Position.Y) {
+		if !instanceconfig.MovementClear(zone, unit.MapIdentifier, prev.Position.X, prev.Position.Y, unit.Position.X, unit.Position.Y) {
 			unit.Position.X, unit.Position.Y = prev.Position.X, prev.Position.Y
 		}
 	}
