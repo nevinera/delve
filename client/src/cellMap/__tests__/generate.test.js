@@ -1,8 +1,8 @@
 import {describe, it, expect} from "vitest";
 import {generateCellMap, TAGS} from "../generate";
 import {validateCellMap} from "../format";
-import {exitCells} from "../exits";
-import {neighbor} from "../hexGrid";
+import {exitCells, exitEdge} from "../exits";
+import {CELL_SIZE, cellPoint, neighbor} from "../hexGrid";
 
 const GROUNDS = ".%~";
 const open = (map, c, r) => GROUNDS.includes(map.cells[r]?.[c] ?? "T");
@@ -79,6 +79,23 @@ describe("generateCellMap", () => {
     expect(share(["rough"])["%"]).toBeGreaterThan(0.5);
     // Of tags that clash, the first wins.
     expect(share(["dry", "wet"])["~"]).toBe(0);
+  });
+
+  it("joins the exits with trails for paths, from the map's edge", () => {
+    for (const connections of [1, 2, 3, 4]) {
+      const map = generateCellMap({...options, connections, tags: ["paths"]});
+      expect(validateCellMap(map)).toEqual([]);
+      expect(map.trails).toHaveLength(Math.max(1, connections - 1));
+      expect(map.trails.every((t) => t.type === "trail" && t.width === 0.8)).toBe(true);
+      // Every exit has a trail starting at the edge in its stretch.
+      for (const exit of map.exits) {
+        const [a, b] = exitEdge(exit, map.grid);
+        const ends = map.trails.flatMap((t) => [t.points[0], t.points[t.points.length - 1]]).map(([c, r]) => cellPoint(c, r, CELL_SIZE));
+        expect(ends.some((p) => Math.hypot(p.x - (a.x + b.x) / 2, p.y - (a.y + b.y) / 2) < 0.2)).toBe(true);
+      }
+    }
+    expect(generateCellMap({...options, connections: 0, tags: ["paths"]})).not.toHaveProperty("trails");
+    expect(generateCellMap({...options, tags: ["paths"], theme: "cave"}).trails[0].type).toBe("worn");
   });
 
   it("refuses tags it doesn't know, and too many connections", () => {

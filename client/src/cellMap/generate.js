@@ -19,16 +19,19 @@
 //   dry       no marsh
 //   wet       marsh is the main ground, not meadow
 //   rough     tall grass is the main ground
+//   paths     trails joining the exits, as a tree (or, with one exit, from
+//             it into the map)
 //
 // Besides the main ground, some areas are tall grass or marsh throughout,
 // and patches of them are sprinkled about (by noise, as watabou does his
 // water).
-import {hexDistance, neighbor} from "./hexGrid";
-import {SIDES, sideCell, sideLength} from "./exits";
+import {CELL_SIZE, cellCenter, hexDistance, neighbor, pointAt} from "./hexGrid";
+import {SIDES, exitEdge, sideCell, sideLength} from "./exits";
 import {THEMES, VERSION, fillOf} from "./format";
 import {noise} from "./regions";
+import {PATHS} from "./style";
 
-export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough"];
+export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
 
 // Which tags can't go together (the first of a group given wins).
 const EXCLUSIVE = [["chamber", "hub", "burrow"], ["cavities", "coral", "chaotic"], ["wet", "rough"], ["wet", "dry"]];
@@ -86,7 +89,8 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, tags = [
   const fill = fillOf(theme);
   const ground = grounds(grid, areas, has, seed, rng);
   const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (grid.isOpen(c, r) ? GROUND[ground(grid.key(c, r), c, r)] : fill)).join(""));
-  return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(exits.length ? {exits} : {})};
+  const trails = has.has("paths") ? pathTrails(grid, exits, theme, rng) : [];
+  return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(trails.length ? {trails} : {}), ...(exits.length ? {exits} : {})};
 }
 
 function tagSet(tags) {
@@ -180,14 +184,15 @@ class Grid {
   }
 
   // The shortest way from any of from to any of to (keys), wandering a
-  // little so cuts aren't ruler-straight, or null. Open cells cost less,
-  // so cuts reuse the ground there is.
-  path(from, to, rng, {through = () => true} = {}) {
+  // little so cuts aren't ruler-straight, or null. Each cell costs
+  // weight(key): by default open cells cost less, so cuts reuse the ground
+  // there is.
+  path(from, to, rng, {through = () => true, weight: base = (k) => (this.open[k] ? 0.3 : 1)} = {}) {
     const goal = new Set(to);
     const cost = new Map();
     const back = new Map();
     const jitter = new Map();
-    const weight = (k) => (this.open[k] ? 0.3 : 1) + (jitter.get(k) ?? jitter.set(k, rng() * 0.6).get(k));
+    const weight = (k) => base(k) + (jitter.get(k) ?? jitter.set(k, rng() * 0.6).get(k));
     // A simple binary heap of [cost, key].
     const heap = [];
     const push = (item) => {
@@ -512,4 +517,119 @@ function grounds(grid, areas, has, seed, rng) {
     }
     return main;
   };
+}
+
+// ---- Paths ----
+
+// How far a trail's line may stray from the cells it follows, in feet.
+const PATH_TOLERANCE = 3;
+
+// Trails joining the exits: the first two by the best way through the
+// open ground (keeping to its middle), then each other exit by the best
+// way to the trails so far, joining them at a point they share. One exit
+// gets a trail into the open ground's heart. Each starts at the map's
+// edge.
+function pathTrails(grid, exits, theme, rng) {
+  if (!exits.length) return [];
+  const depth = openDepth(grid);
+  // Open cells cost more the nearer the trees, so trails keep to the middle.
+  const through = (k) => grid.open[k] === 1;
+  const middle = (exit) => grid.key(...sideCell(exit.side, Math.round((exit.from + exit.to) / 2), grid));
+  const paths = [];
+  const onTrail = new Map(); // key -> [path index, at]
+  const add = (path) => {
+    path.forEach((k, at) => onTrail.has(k) || onTrail.set(k, [paths.length, at]));
+    paths.push(path);
+  };
+  const route = (from, to) => grid.path(from, to, rng, {through, weight: (k) => 1 + 3 / depth[k]});
+  if (exits.length === 1) {
+    let heart = 0;
+    for (let k = 0; k < depth.length; k++) if (depth[k] > depth[heart]) heart = k;
+    const path = route([middle(exits[0])], [heart]);
+    if (path) add(path);
+  } else {
+    const path = route([middle(exits[0])], [middle(exits[1])]);
+    if (path) add(path);
+  }
+  // Junctions: where a later trail meets an earlier one, the earlier one
+  // keeps that point.
+  const pinned = paths.map(() => new Set());
+  for (const exit of exits.slice(2)) {
+    if (!paths.length) break;
+    const path = route([middle(exit)], [...onTrail.keys()]);
+    if (!path) continue;
+    const [index, at] = onTrail.get(path[path.length - 1]);
+    pinned[index].add(at);
+    pinned.push(new Set());
+    add(path);
+  }
+  const type = THEMES[theme].paths[0];
+  return paths.map((path, i) => {
+    const points = simplify(path.map((k) => cellCenter(...grid.at(k), CELL_SIZE)), pinned[i], PATH_TOLERANCE);
+    const cellPoints = points.map(({x, y}) => pointAt(x, y, CELL_SIZE).map((n) => Number(n.toFixed(2))));
+    // Out to the edge, where the trail leaves through its exit.
+    const ends = [path[0], path[path.length - 1]].map((k) => exits.find((e) => middle(e) === k));
+    if (ends[0]) cellPoints.unshift(edgePoint(ends[0], grid));
+    if (ends[1] && i === 0 && exits.length > 1) cellPoints.push(edgePoint(ends[1], grid));
+    return {type, width: PATHS[type].width, points: cellPoints};
+  });
+}
+
+// The middle of an exit's stretch of the map's edge, in cell coordinates.
+function edgePoint(exit, grid) {
+  const [a, b] = exitEdge(exit, grid);
+  return pointAt((a.x + b.x) / 2, (a.y + b.y) / 2, CELL_SIZE).map((n) => Number(n.toFixed(2)));
+}
+
+// Steps from each open cell to the nearest tree (1 beside one).
+function openDepth(grid) {
+  const depth = new Float64Array(grid.open.length);
+  let frontier = [];
+  for (let k = 0; k < depth.length; k++) {
+    if (grid.open[k]) continue;
+    depth[k] = 0;
+    frontier.push(k);
+  }
+  for (let d = 1; frontier.length; d++) {
+    const next = [];
+    for (const k of frontier) {
+      for (const n of grid.neighbors(k)) {
+        if (grid.open[n] && depth[n] === 0) {
+          depth[n] = d;
+          next.push(n);
+        }
+      }
+    }
+    frontier = next;
+  }
+  // Open cells with no trees anywhere near (or none at all) are deep.
+  for (let k = 0; k < depth.length; k++) if (grid.open[k] && depth[k] === 0) depth[k] = 99;
+  return depth;
+}
+
+// Douglas-Peucker, keeping the pinned indices.
+function simplify(points, pinned, tolerance) {
+  const keep = new Set([0, points.length - 1, ...pinned]);
+  const sorted = [...keep].sort((a, b) => a - b);
+  const reduce = (i, j) => {
+    let worst = -1;
+    let worstD = tolerance;
+    for (let k = i + 1; k < j; k++) {
+      const d = lineDistance(points[k], points[i], points[j]);
+      if (d > worstD) [worst, worstD] = [k, d];
+    }
+    if (worst < 0) return;
+    keep.add(worst);
+    reduce(i, worst);
+    reduce(worst, j);
+  };
+  for (let n = 0; n + 1 < sorted.length; n++) reduce(sorted[n], sorted[n + 1]);
+  return [...keep].sort((a, b) => a - b).map((i) => points[i]);
+}
+
+function lineDistance(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
 }
