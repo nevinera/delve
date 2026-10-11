@@ -128,8 +128,14 @@ function TrailsSection({cells}) {
   return (
     <div className="cells-panel-section">
       <h4>Trails</h4>
-      <p className="cells-panel-help">Click to extend the selected trail, or to start one. Drag a point to move it; Delete removes the selected point.</p>
-      <button type="button" disabled={!ui.selected && !ui.pendingPoint} onClick={() => update({selected: null, pendingPoint: null})}>New trail</button>
+      <p className="cells-panel-help">Click to extend the selected trail, or to start one. Drag a point to move it; Delete (the key or the button) removes the selected point.</p>
+      <div className="cells-panel-row">
+        <button type="button" disabled={!ui.selected && !ui.pendingPoint} onClick={() => update({selected: null, pendingPoint: null})}>New trail</button>
+        <button type="button" disabled={ui.selected?.point == null} onClick={() => {
+          change((d) => d.removeTrailPoint(ui.selected.trail, ui.selected.point));
+          update({selected: null});
+        }}>Delete point</button>
+      </div>
       {ui.pendingPoint && <p className="cells-panel-help">Click again to place the trail&apos;s second point.</p>}
       <ul className="cells-panel-trails">
         {draft.trails.map((trail, t) => (

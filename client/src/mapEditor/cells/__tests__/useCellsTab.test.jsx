@@ -201,3 +201,23 @@ describe("useCellsTab thumbnails", () => {
     vi.useRealTimers();
   });
 });
+
+describe("CellsPanel's Delete point", () => {
+  it("removes the selected trail point, for touch screens", () => {
+    let cells;
+    function Panel() {
+      cells = useHosted({...start(), trails: [{width: 1, points: [[0, 0], [2, 2], [4, 1]]}]}, {editing: true});
+      return <CellsPanel cells={cells} feetDimensions={null} hasImage={false} />;
+    }
+    render(<Panel />);
+    fireEvent.click(screen.getByRole("button", {name: "Trails"}));
+    expect(screen.getByRole("button", {name: "Delete point"})).toBeDisabled();
+    act(() => {
+      cells.canvas.onPointer("down", at(2, 2));
+      cells.canvas.onPointer("up");
+    });
+    fireEvent.click(screen.getByRole("button", {name: "Delete point"}));
+    expect(cells.draft.trails[0].points).toEqual([[0, 0], [4, 1]]);
+    expect(screen.getByRole("button", {name: "Delete point"})).toBeDisabled();
+  });
+});
