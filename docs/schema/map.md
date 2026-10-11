@@ -64,17 +64,20 @@ validator's fill rules (one published before them) has no fill on the game serve
 
 A grid of terrain cells, one character each, plus trails drawn across them. The client renders it
 into the map's ground (client/src/cellMap/), the same every time for the same data. Client-only:
-the game server doesn't read it, and cells don't block movement; walls are still barriers.
+the game server doesn't read it, and cells don't block movement; walls are still barriers. The map
+editor's Auto Barriers makes them from the cells: walls around trees (rock) block sight, and
+walls around water don't.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `version` | integer | yes | `1`. |
-| `theme` | string | yes | The look, and the cell alphabet and grid types that go with it. Only `"glade"` for now. Themes live in client/src/cellMap/themes.json. |
-| `colors` | object | no | Overrides some of the theme's colors, as `"#rrggbb"`: `{ "meadow": "#b8c98a" }`. Keys must be the theme's colors (glade: `meadow`, `tallGrass`, `marsh`, `forest`, `crown`, `tuft`, `tallTuft`, `pool`, `reed`, `trail`, `ink`). |
+| `theme` | string | yes | The look, and the grid types that go with it: `"glade"` (a summer wood), `"autumn"` (turning leaves), `"winter"` (snow, pines, iced water) or `"cave"` (rock, inked and hatched like a hand-drawn cave map). Themes live in client/src/cellMap/themes.json, their looks in client/src/cellMap/style.js. Every theme has the same cell alphabet, so a map can change theme. |
+| `colors` | object | no | Overrides some of the theme's colors, as `"#rrggbb"`: `{ "meadow": "#b8c98a" }`. Keys must be the theme's colors (its `colors` in themes.json; glade: `meadow`, `tallGrass`, `marsh`, `water`, `forest`, `crown`, `tuft`, `tallTuft`, `pool`, `reed`, `trail`, `road`, `bridge`, `ink`). |
 | `grid` | object | yes | `{ "type": "hex", "cols": int, "rows": int }`. `type` must be one the theme supports (glade: `"hex"`). `cols` and `rows` are 1 to 200. |
 | `seed` | integer | yes | Varies the decorations (tree crowns, grass tufts and so on) without changing the terrain. |
-| `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters. Glade: `.` meadow, `%` tall grass, `~` marsh, `T` trees. |
+| `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters: `.` meadow, `%` tall grass, `~` marsh, `w` water, `T` trees. A cave calls them floor, gravel, puddles, water and rock. A new map starts all `T`. |
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |
+| `bridges` | array of Bridge | no | Wooden bridges, drawn over the water. |
 
 A hex grid has flat-topped hexes, always 5 feet across the flats (so trees and grass are the same
 size on every map), with odd columns half a cell lower. Its size in feet is
@@ -82,9 +85,18 @@ size on every map), with odd columns half a cell lower. Its size in feet is
 column), where `r = 5 / sqrt(3)`. Cells are
 y-down from the top-left, like the image: row 0 is the map's top edge.
 
-A **Trail** is `{ "width": float, "points": [[col, row], ...] }`: a curve through at least two
-points, in cell coordinates (whole numbers are cell centers; fractions fall between them), and
-`width` in cells. A free end fades out; an end on another trail joins it.
+A **Trail** is `{ "type": string, "width": float, "points": [[col, row], ...] }`: a curve through
+at least two points, in cell coordinates (whole numbers are cell centers; fractions fall between
+them), and `width` in cells. A free end fades out; an end on another trail joins it. `type` is
+optional, `"trail"` by default: `"trail"`, `"deerPath"` (narrow, faint), `"road"` (wide, rutted) or
+`"worn"` (a worn floor, for caves); each has its own look and default width (see
+client/src/cellMap/style.js's PATHS). A theme's `paths` in themes.json lists its types, the
+first for new trails.
+
+A **Bridge** is `{ "from": [col, row], "to": [col, row] }`: a deck from one cell to another, in a
+straight line through neighboring cells (one of the six ways a hex's edges face), 1 to 8 cells
+from its start. Start and end it on land. Auto Barriers cuts the water's walls where the deck is
+and rails it down both sides (railing an end too, if it's over water); the deck is 6 feet wide.
 
 ```json
 "cellMap": {
@@ -102,7 +114,9 @@ points, in cell coordinates (whole numbers are cell centers; fractions fall betw
 
 ## Barrier
 
-Barriers block unit movement and line-of-sight.
+Barriers block unit movement and, unless `blocksSight` is `false`, line-of-sight. Both kinds
+take an optional `blocksSight` (boolean, default `true`): `false` is for things you can see and
+shoot across but not walk through, like water.
 
 ### wall
 
@@ -110,6 +124,7 @@ Barriers block unit movement and line-of-sight.
 |---|---|---|---|
 | `type` | `"wall"` | yes | |
 | `locations` | array of Location | yes | At least two points. Adjacent points are joined into wall segments. |
+| `blocksSight` | boolean | no | Default `true`. |
 
 ```json
 {
@@ -129,6 +144,7 @@ Barriers block unit movement and line-of-sight.
 | `type` | `"circle"` | yes | |
 | `location` | Location | yes | Center of the circle. |
 | `radius` | float | yes | Radius in feet. Maximum 30.0. |
+| `blocksSight` | boolean | no | Default `true`. |
 
 ```json
 {

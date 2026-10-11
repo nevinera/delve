@@ -901,7 +901,7 @@ func applyNPCSeparation(state *instancestate.InstanceState, zone instanceconfig.
 		}
 		if fx != 0 || fy != 0 {
 			newX, newY := npcs[i].x+fx*dt, npcs[i].y+fy*dt
-			if instanceconfig.LineOfSightClear(zone, npcs[i].mapID, npcs[i].x, npcs[i].y, newX, newY) {
+			if instanceconfig.MovementClear(zone, npcs[i].mapID, npcs[i].x, npcs[i].y, newX, newY) {
 				npcs[i].unit.Position.X, npcs[i].unit.Position.Y = newX, newY
 			}
 		}

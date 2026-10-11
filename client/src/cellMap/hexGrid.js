@@ -77,16 +77,41 @@ export function pointAt(x, y, cellSize) {
   return [col, (y - cellSize / 2 - drop) / cellSize];
 }
 
+// Cube coordinates [x, y, z] (x + y + z = 0), where straight lines and
+// distances are simple.
+function cube(col, row) {
+  const z = row - (col - (col & 1)) / 2;
+  return [col, -col - z, z];
+}
+
+function uncube([x, , z]) {
+  return [x, z + (x - (x & 1)) / 2];
+}
+
 // Steps between two cells, through neighbors.
 export function hexDistance([c1, r1], [c2, r2]) {
-  const cube = (col, row) => {
-    const x = col;
-    const z = row - (col - (col & 1)) / 2;
-    return [x, -x - z, z];
-  };
   const a = cube(c1, r1);
   const b = cube(c2, r2);
   return Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+}
+
+// The cells from one cell to another, both included, when they're on a
+// straight line through neighbors (one of the six ways a cell's edges
+// face); otherwise null.
+export function hexLine(from, to) {
+  const a = cube(...from);
+  const b = cube(...to);
+  const d = b.map((v, i) => v - a[i]);
+  if (!d.includes(0)) return null;
+  const steps = Math.max(...d.map(Math.abs));
+  return Array.from({length: steps + 1}, (_, k) => uncube(a.map((v, i) => v + (steps ? (d[i] * k) / steps : 0))));
+}
+
+// Every cell 1 to max steps from a cell in a straight line.
+export function hexRays(from, max) {
+  const a = cube(...from);
+  const directions = [[1, -1, 0], [1, 0, -1], [0, 1, -1], [-1, 1, 0], [-1, 0, 1], [0, -1, 1]];
+  return directions.flatMap((d) => Array.from({length: max}, (_, k) => uncube(a.map((v, i) => v + d[i] * (k + 1)))));
 }
 
 // The size a grid needs to cover about width x height feet.

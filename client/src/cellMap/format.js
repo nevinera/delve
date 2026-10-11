@@ -6,6 +6,7 @@
 // alphabet and the grid types it supports (themes.json, shared with the
 // Ruby validator); colors override the theme's palette.
 import THEMES from "./themes.json";
+import {validateBridges} from "./bridges";
 
 export {THEMES};
 export const VERSION = 1;
@@ -40,9 +41,11 @@ export function validateCellMap(map) {
     if (bad.length) errors.push(`cells[${r}] has unknown cells: ${bad.map((ch) => JSON.stringify(ch)).join(", ")}`);
   });
 
+  errors.push(...validateBridges(map.bridges, grid));
   if (map.trails === undefined) return errors;
   if (!Array.isArray(map.trails)) return [...errors, "trails must be a list"];
   map.trails.forEach((trail, i) => {
+    if (trail?.type !== undefined && !theme.paths.includes(trail.type)) errors.push(`trails[${i}].type must be one of: ${theme.paths.join(", ")}`);
     if (!(typeof trail?.width === "number" && trail.width > 0)) errors.push(`trails[${i}].width must be a positive number`);
     const points = trail?.points;
     if (!Array.isArray(points) || points.length < 2) return errors.push(`trails[${i}].points must list at least two points`);
@@ -60,9 +63,21 @@ function validateColors(colors, theme) {
   });
 }
 
-// The cell alphabet of a map's theme.
+// The cell alphabet of a map's theme. Every theme has the same letters
+// and terrains (a cave's "trees" are its rock), so a map can change theme;
+// labels are what the theme calls them.
 export function terrainsOf(map) {
   return THEMES[map.theme].terrains;
+}
+
+export function terrainLabel(theme, terrain) {
+  return THEMES[theme].labels?.[terrain] ?? terrain;
+}
+
+// The letter a new map, and new cells, start as: the theme's trees (or
+// rock), carved into.
+export function fillOf(theme) {
+  return THEMES[theme].fill;
 }
 
 // The terrain at (col, row), clamping to the nearest cell off the grid so

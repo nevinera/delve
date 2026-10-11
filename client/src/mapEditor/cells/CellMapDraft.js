@@ -2,7 +2,8 @@
 // the tab can make to it (see docs/schema/map.md#cellmap). Immutable, like
 // MapDraft: every edit returns a new CellMapDraft.
 import {hexDistance, neighbor} from "../../cellMap/hexGrid";
-import {THEMES} from "../../cellMap/format";
+import {THEMES, fillOf} from "../../cellMap/format";
+import {PATHS} from "../../cellMap/style";
 
 // Trail points are kept to this many decimal places of a cell.
 const POINT_PLACES = 2;
@@ -12,9 +13,9 @@ export class CellMapDraft {
     this.data = data;
   }
 
-  // An all-meadow (the theme's first terrain) map.
+  // A map that's all trees (or rock), to carve open ground out of.
   static blank({theme = "glade", cols, rows, seed = 1}) {
-    const fill = Object.keys(THEMES[theme].terrains)[0];
+    const fill = fillOf(theme);
     return new CellMapDraft({version: 1, theme, grid: {type: THEMES[theme].grids[0], cols, rows}, seed, cells: Array.from({length: rows}, () => fill.repeat(cols)), trails: []});
   }
 
@@ -84,20 +85,32 @@ export class CellMapDraft {
   // Keeps the bottom-left corner in place: rows come and go at the top,
   // columns at the right. Map feet run up from the bottom-left, so walls,
   // units and connections stay over the same cells. New cells are the
-  // theme's first terrain; trails move with their cells.
+  // theme's fill (trees, or rock); trails move with their cells.
   resize({cols = this.grid.cols, rows = this.grid.rows}) {
-    const fill = Object.keys(THEMES[this.data.theme].terrains)[0];
+    const fill = fillOf(this.data.theme);
     const added = rows - this.grid.rows;
     const kept = added >= 0 ? this.data.cells : this.data.cells.slice(-added);
     const cells = [...Array.from({length: Math.max(0, added)}, () => ""), ...kept].map((line) => line.slice(0, cols).padEnd(cols, fill));
     const trails = this.trails.map((trail) => ({...trail, points: trail.points.map(([col, row]) => [col, row + added])}));
-    return this.with({grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {})});
+    // Bridges move with their cells too, and go if they'd leave the grid.
+    const inside = ([col, row]) => col >= 0 && row >= 0 && col < cols && row < rows;
+    const bridges = this.bridges.map(({from, to}) => ({from: [from[0], from[1] + added], to: [to[0], to[1] + added]})).filter(({from, to}) => inside(from) && inside(to));
+    const {bridges: _old, ...rest} = this.data;
+    return new CellMapDraft({...rest, grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {}), ...(bridges.length ? {bridges} : {})});
   }
 
   // ---- Look ----
 
   setSeed(seed) {
     return this.with({seed});
+  }
+
+  // Themes share their letters, so the cells stay; color overrides were for
+  // the old look, so they go.
+  setTheme(theme) {
+    if (theme === this.data.theme) return this;
+    const {colors: _old, ...rest} = this.data;
+    return new CellMapDraft({...rest, theme});
   }
 
   // null goes back to the theme's color.
@@ -111,8 +124,15 @@ export class CellMapDraft {
 
   // ---- Trails ----
 
-  addTrail(points, width = 0.8) {
-    return this.with({trails: [...this.trails, {width, points: points.map(roundPoint)}]});
+  // A trail is the theme's first path type unless it says otherwise, and
+  // its type's width unless given one.
+  addTrail(points, width = null, type = THEMES[this.data.theme].paths[0]) {
+    return this.with({trails: [...this.trails, {type, width: width ?? PATHS[type].width, points: points.map(roundPoint)}]});
+  }
+
+  // Changing type takes the new type's width.
+  setTrailType(index, type) {
+    return this.updateTrail(index, (trail) => ({...trail, type, width: PATHS[type].width}));
   }
 
   removeTrail(index) {
@@ -135,6 +155,23 @@ export class CellMapDraft {
   removeTrailPoint(index, at) {
     const points = this.trails[index].points.filter((_, i) => i !== at);
     return points.length < 2 ? this.removeTrail(index) : this.updateTrail(index, (trail) => ({...trail, points}));
+  }
+
+  // ---- Bridges ----
+
+  get bridges() {
+    return this.data.bridges ?? [];
+  }
+
+  addBridge(from, to) {
+    return this.with({bridges: [...this.bridges, {from, to}]});
+  }
+
+  removeBridge(index) {
+    const bridges = this.bridges.filter((_, i) => i !== index);
+    if (bridges.length) return this.with({bridges});
+    const {bridges: _old, ...rest} = this.data;
+    return new CellMapDraft(rest);
   }
 
   updateTrail(index, fn) {

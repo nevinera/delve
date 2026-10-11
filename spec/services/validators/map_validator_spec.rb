@@ -227,6 +227,19 @@ RSpec.describe Validators::MapValidator, type: :validator do
         expect { described_class.validate!(data) }.not_to raise_error
       end
 
+      it "accepts blocksSight on a barrier" do
+        barrier = {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 10.0, "blocksSight" => false}
+        data = cave_entrance_map.merge("barriers" => [barrier], "connections" => [])
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "raises when blocksSight isn't a boolean" do
+        barrier = {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 10.0, "blocksSight" => "no"}
+        data = cave_entrance_map.merge("barriers" => [barrier], "connections" => [])
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /blocksSight/)
+      end
+
       it "raises when circle radius exceeds 30" do
         barrier = {"type" => "circle", "location" => {"x" => 50.0, "y" => 50.0}, "radius" => 31.0}
         data = cave_entrance_map.merge("barriers" => [barrier])

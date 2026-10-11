@@ -114,6 +114,7 @@ module Validators
       require_object!(data, path: path)
       type = require_string!(data, "type", path: path)
       require_one_of!(type, BARRIER_TYPES, path: child_path(path, "type"))
+      require_boolean!(data, "blocksSight", path: path) if given?(data, "blocksSight")
       case type
       when "wall" then validate_wall_barrier!(data, path: path)
       when "circle" then validate_circle_barrier!(data, path: path)

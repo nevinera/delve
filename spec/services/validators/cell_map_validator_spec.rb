@@ -29,6 +29,40 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
     expect { described_class.validate!(cell_map.merge("colors" => {"meadow" => "#aabbcc", "forest" => "#2F4A2C"})) }.not_to raise_error
   end
 
+  it "accepts a trail's path type, and raises on one the theme doesn't have" do
+    trail = cell_map["trails"][0]
+    expect { described_class.validate!(cell_map.merge("trails" => [trail.merge("type" => "road")])) }.not_to raise_error
+    expect_invalid(cell_map.merge("trails" => [trail.merge("type" => "highway")]), /must be one of:/, "$.trails[0].type")
+  end
+
+  context "bridges" do
+    let(:big_map) do
+      cell_map.merge("grid" => {"type" => "hex", "cols" => 12, "rows" => 12}, "cells" => Array.new(12) { "." * 12 }, "trails" => [])
+    end
+
+    it "accepts a straight bridge of up to 8 steps" do
+      expect { described_class.validate!(big_map.merge("bridges" => [{"from" => [2, 1], "to" => [2, 9]}, {"from" => [8, 8], "to" => [11, 6]}])) }.not_to raise_error
+    end
+
+    it "raises on a bridge that isn't straight" do
+      expect_invalid(big_map.merge("bridges" => [{"from" => [2, 1], "to" => [3, 5]}]), /must run straight/, "$.bridges[0]")
+    end
+
+    it "raises on a bridge longer than 8 steps" do
+      expect_invalid(big_map.merge("bridges" => [{"from" => [2, 1], "to" => [2, 10]}]), /reach 1 to 8 cells/, "$.bridges[0]")
+    end
+
+    it "raises on a bridge end off the grid" do
+      expect_invalid(big_map.merge("bridges" => [{"from" => [2, 1], "to" => [2, 12]}]), /must be a cell on the grid/, "$.bridges[0].to")
+    end
+  end
+
+  it "accepts every theme, with the same cells" do
+    described_class.themes.each_key do |theme|
+      expect { described_class.validate!(cell_map.merge("theme" => theme, "cells" => ["Tw.", "%~."])) }.not_to raise_error
+    end
+  end
+
   it "raises on an unsupported version" do
     expect_invalid(cell_map.merge("version" => 2), /version must be 1/, "$.version")
   end

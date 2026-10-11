@@ -1,7 +1,7 @@
 // Editor overlays drawn over a cellmap's render, in feet (the caller sets
 // the scale): hex outlines, cells tinted by terrain, and trails as authored.
 // Shared by the cell editor page and the map editor's Cells tab.
-import {CELL_SIZE, cellCorners, cellPoint} from "./hexGrid";
+import {CELL_SIZE, cellCenter, cellCorners, cellPoint} from "./hexGrid";
 import {terrainsOf} from "./format";
 
 export const TRAIL_COLOR = "rgba(230, 70, 30, 0.9)";
@@ -11,6 +11,7 @@ export const CELL_COLORS = {
   meadow: "rgba(250, 220, 90, 0.55)",
   tallGrass: "rgba(120, 220, 60, 0.55)",
   marsh: "rgba(40, 200, 190, 0.55)",
+  water: "rgba(150, 60, 230, 0.55)",
   trees: "rgba(30, 110, 200, 0.55)",
 };
 
@@ -78,4 +79,33 @@ export function drawTrails(ctx, map, scale, {selected = null} = {}) {
       ctx.fill();
     });
   });
+}
+
+export const BRIDGE_COLOR = "rgba(160, 90, 30, 0.9)";
+
+// Bridges as lines from end to end. selected is a bridge's index; pending,
+// the cell a bridge being placed starts at; preview, the bridge it'd be.
+export function drawBridges(ctx, map, scale, {selected = null, pending = null, preview = null} = {}) {
+  const line = ({from, to}, color, dashed = false) => {
+    const a = cellCenter(...from, CELL_SIZE);
+    const b = cellCenter(...to, CELL_SIZE);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 8 / scale;
+    ctx.lineCap = "round";
+    ctx.setLineDash(dashed ? [10 / scale, 8 / scale] : []);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  (map.bridges ?? []).forEach((bridge, i) => line(bridge, i === selected ? SELECTED_COLOR : BRIDGE_COLOR));
+  if (preview) line(preview, SELECTED_COLOR, true);
+  if (pending) {
+    const p = cellCenter(...pending, CELL_SIZE);
+    ctx.fillStyle = SELECTED_COLOR;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 9 / scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }

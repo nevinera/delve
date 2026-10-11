@@ -1,7 +1,9 @@
 import {describe, it, expect} from "vitest";
 import {autoBarriers, clipLoop, simplify} from "../autoBarriers";
 import {computeMapFill} from "../../../game/mapFill";
+import {hasLineOfSight} from "../../../game/collision";
 import {CELL_SIZE, cellCenter, mapSize} from "../../../cellMap/hexGrid";
+import {warp} from "../../../cellMap/regions";
 import woodland from "../../../cellMap/examples/woodland-trail.json";
 
 // A map of trees with a clearing in the middle, and a grove in the
@@ -26,7 +28,8 @@ const round = (n) => Math.round(n * 100) / 100;
 function filledAt(cellMap, result, col, row) {
   const feetDimensions = mapSize(cellMap.grid);
   const fill = computeMapFill({feetDimensions, barriers: result.barriers, connections: [], fillPoints: result.fillPoints});
-  const {x, y} = cellCenter(col, row, CELL_SIZE);
+  // Where the cell's drawn: walls bend with the drawing.
+  const {x, y} = warp(cellCenter(col, row, CELL_SIZE), cellMap.seed);
   const p = [x, feetDimensions.height - y];
   const inside = (ring) => {
     let hit = false;
@@ -85,7 +88,7 @@ describe("autoBarriers", () => {
     const result = autoBarriers(map);
     const circles = result.barriers.filter((b) => b.type === "circle");
     expect(circles.map(({radius}) => radius).sort()).toEqual([2.5, 4.55, 7.5]);
-    const one = cellCenter(4, 5, CELL_SIZE);
+    const one = warp(cellCenter(4, 5, CELL_SIZE), map.seed);
     expect(circles).toContainEqual({type: "circle", location: {x: round(one.x), y: round(mapSize(map.grid).height - one.y)}, radius: 2.5});
     expect(result.barriers.filter((b) => b.type === "wall")).toHaveLength(1);
     expect(result.fillPoints).toHaveLength(1);
@@ -93,6 +96,75 @@ describe("autoBarriers", () => {
     expect(filledAt(map, result, 4, 5)).toBe(true);
     expect(filledAt(map, result, 4, 12)).toBe(true);
     expect(filledAt(map, result, 17, 4)).toBe(true);
+  });
+
+  it("walls water off with walls you can see across, trees' walls blocking sight where they meet it", () => {
+    // Trees ring the map; a lake in the clearing, with an island of trees,
+    // and a stretch of shore where the lake meets the forest.
+    const map = blank(24, 18);
+    map.cells = map.cells.map((line, r) => [...line].map((ch, c) => {
+      if (c < 3 || r < 3 || c >= 21 || r >= 15) return "T";
+      if (c >= 7 && c <= 16 && r >= 6 && r <= 11) return c >= 11 && c <= 12 && r >= 8 && r <= 9 ? "T" : "w";
+      if (c >= 3 && c <= 7 && r >= 9 && r <= 11) return "w";
+      return ".";
+    }).join(""));
+    const result = autoBarriers(map);
+    expect(result.error).toBeNull();
+    const walls = result.barriers.filter((b) => b.type === "wall");
+    expect(walls.some((b) => b.blocksSight === false)).toBe(true);
+    expect(walls.some((b) => b.blocksSight === undefined)).toBe(true);
+    // The lake and the island are each filled; the meadow isn't.
+    expect(filledAt(map, result, 8, 7)).toBe(true);
+    expect(filledAt(map, result, 11, 8)).toBe(true);
+    expect(filledAt(map, result, 5, 10)).toBe(true);
+    expect(filledAt(map, result, 18, 5)).toBe(false);
+    expect(filledAt(map, result, 10, 13)).toBe(false);
+
+    // Across the lake you can see, but not through the island.
+    const {height} = mapSize(map.grid);
+    const at = (c, r) => {
+      const {x, y} = cellCenter(c, r, CELL_SIZE);
+      return [x, height - y];
+    };
+    expect(hasLineOfSight(...at(9, 4), ...at(9, 13), result.barriers)).toBe(true);
+    expect(hasLineOfSight(...at(12, 4), ...at(12, 13), result.barriers)).toBe(false);
+  });
+
+  it("cuts a bridge's deck out of the water, with rails, filling the water either side", () => {
+    // Trees ring the map; a river runs down it, and a bridge crosses.
+    const map = blank(24, 16);
+    map.cells = map.cells.map((line, r) => [...line].map((ch, c) => {
+      if (c === 0 || r === 0 || c === 23 || r === 15) return "T";
+      return c >= 10 && c <= 13 ? "w" : ".";
+    }).join(""));
+    map.bridges = [{from: [8, 8], to: [15, 11]}];
+    const result = autoBarriers(map);
+    expect(result.error).toBeNull();
+    expect(filledAt(map, result, 6, 8)).toBe(false);
+    expect(filledAt(map, result, 17, 11)).toBe(false);
+    expect(filledAt(map, result, 11, 9)).toBe(false);
+    expect(filledAt(map, result, 11, 3)).toBe(true);
+    expect(filledAt(map, result, 11, 13)).toBe(true);
+
+    // Nothing stands in the way along the deck, and its rails are straight.
+    const {height} = mapSize(map.grid);
+    const at = (c, r) => {
+      const {x, y} = cellCenter(c, r, CELL_SIZE);
+      return [x, height - y];
+    };
+    const solid = result.barriers.map((b) => ({...b, blocksSight: true}));
+    expect(hasLineOfSight(...at(8, 8), ...at(15, 11), solid)).toBe(true);
+    const rails = result.barriers.filter((b) => b.type === "wall" && b.locations.length === 2 && b.blocksSight === false);
+    expect(rails.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("gives a lone round pond a circle you can see across", () => {
+    const map = blank(12, 10);
+    map.cells[4] = replaceAt(map.cells[4], 5, "w");
+    const {barriers, fillPoints} = autoBarriers(map);
+    expect(barriers).toHaveLength(1);
+    expect(barriers[0]).toMatchObject({type: "circle", radius: 2.5, blocksSight: false});
+    expect(fillPoints).toEqual([]);
   });
 
   it("handles the woodland example within the segment limit", () => {

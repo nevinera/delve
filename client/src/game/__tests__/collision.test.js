@@ -25,4 +25,12 @@ describe("hasLineOfSight", () => {
     const barriers = [{ type: "circle", location: { x: 5, y: 20 }, radius: 2 }];
     expect(hasLineOfSight(0, 0, 10, 0, barriers)).toBe(true);
   });
+
+  it("ignores barriers that don't block sight", () => {
+    const barriers = [
+      { type: "wall", locations: [{ x: 5, y: -5 }, { x: 5, y: 5 }], blocksSight: false },
+      { type: "circle", location: { x: 5, y: 0 }, radius: 2, blocksSight: false },
+    ];
+    expect(hasLineOfSight(0, 0, 10, 0, barriers)).toBe(true);
+  });
 });

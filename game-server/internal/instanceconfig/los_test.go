@@ -86,3 +86,17 @@ func TestLineOfSightClear_CircleFarFromLineIsClear(t *testing.T) {
 	zone := circleZone(5, 20, 2)
 	assert.True(t, instanceconfig.LineOfSightClear(zone, "map1", 0, 0, 10, 0))
 }
+
+func TestLineOfSightClear_IgnoresBarriersThatDontBlockSight(t *testing.T) {
+	zone := wallZone(instanceconfig.Location{X: 5, Y: -5}, instanceconfig.Location{X: 5, Y: 5})
+	no := false
+	zone.Maps[0].Barriers[0].BlocksSight = &no
+	assert.True(t, instanceconfig.LineOfSightClear(zone, "map1", 0, 0, 10, 0))
+	assert.False(t, instanceconfig.MovementClear(zone, "map1", 0, 0, 10, 0))
+}
+
+func TestMovementClear_BlockedBySightBlockingBarriersToo(t *testing.T) {
+	zone := circleZone(5, 0, 2)
+	assert.False(t, instanceconfig.MovementClear(zone, "map1", 0, 0, 10, 0))
+	assert.True(t, instanceconfig.MovementClear(zone, "map1", 0, 10, 10, 10))
+}

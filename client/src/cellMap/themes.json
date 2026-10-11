@@ -1,11 +1,15 @@
 {
   "glade": {
     "grids": ["hex"],
-    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "T": "trees"},
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "meadow", "tallGrass": "tall grass", "marsh": "marsh", "water": "water", "trees": "trees"},
+    "paths": ["trail", "deerPath", "road", "worn"],
     "colors": {
       "meadow": "#b3c788",
       "tallGrass": "#a6bd70",
       "marsh": "#98a874",
+      "water": "#5f8f9a",
       "forest": "#34502f",
       "crown": "#567d44",
       "tuft": "#7f9b5a",
@@ -13,7 +17,74 @@
       "pool": "#6f8f8a",
       "reed": "#5f7442",
       "trail": "#cdb98a",
+      "road": "#c4ad80",
+      "bridge": "#a98053",
       "ink": "#1d2818"
+    }
+  },
+  "autumn": {
+    "grids": ["hex"],
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "meadow", "tallGrass": "tall grass", "marsh": "marsh", "water": "water", "trees": "trees"},
+    "paths": ["trail", "deerPath", "road", "worn"],
+    "colors": {
+      "meadow": "#bdb779",
+      "tallGrass": "#b8a564",
+      "marsh": "#a39b66",
+      "water": "#5b8590",
+      "forest": "#4a3b24",
+      "crown": "#c4762f",
+      "tallTuft": "#8f7a3c",
+      "pool": "#6d847f",
+      "reed": "#6e5f34",
+      "trail": "#c9ad7e",
+      "road": "#c4ad80",
+      "bridge": "#a98053",
+      "ink": "#2a1d12"
+    }
+  },
+  "winter": {
+    "grids": ["hex"],
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "snow", "tallGrass": "drifts", "marsh": "frozen marsh", "water": "water", "trees": "pines", "forest": "forest"},
+    "paths": ["trail", "deerPath", "road", "worn"],
+    "colors": {
+      "meadow": "#e6edf1",
+      "tallGrass": "#dde5ea",
+      "marsh": "#cbd7de",
+      "water": "#3f6478",
+      "ice": "#e8f2f7",
+      "forest": "#1f3328",
+      "crown": "#2e573f",
+      "tuft": "#6f6a58",
+      "tallTuft": "#8a8468",
+      "pool": "#a7c1ce",
+      "trail": "#cfd2cc",
+      "road": "#c2bcae",
+      "bridge": "#a98053",
+      "ink": "#15221b"
+    }
+  },
+  "cave": {
+    "grids": ["hex"],
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "floor", "tallGrass": "gravel", "marsh": "puddles", "water": "water", "trees": "rock", "forest": "rock", "tuft": "pebbles", "tallTuft": "stones", "worn": "worn floor"},
+    "paths": ["worn", "trail", "deerPath", "road"],
+    "colors": {
+      "meadow": "#d2c9b6",
+      "tallGrass": "#c6bca8",
+      "marsh": "#bfb8a8",
+      "water": "#4f6f80",
+      "forest": "#4b4640",
+      "tuft": "#9c9282",
+      "tallTuft": "#8c8272",
+      "pool": "#738992",
+      "worn": "#bcaf97",
+      "bridge": "#a98053",
+      "ink": "#1a1714"
     }
   }
 }

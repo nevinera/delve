@@ -1,8 +1,10 @@
 // The Cells tab's sidebar: start a cell map, pick a tool, terrain and brush,
 // edit trails, the grid, seed and colors. All state is in useCellsTab.
 import {useState} from "react";
-import {THEMES, terrainsOf} from "../../cellMap/format";
-import {CELL_SIZE, gridFor} from "../../cellMap/hexGrid";
+import {THEMES, terrainLabel, terrainsOf} from "../../cellMap/format";
+import {CELL_SIZE, gridFor, hexDistance} from "../../cellMap/hexGrid";
+import {MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
+import {DEFAULT_PATH, PATHS} from "../../cellMap/style";
 import {CELL_COLORS} from "../../cellMap/overlay";
 import {CellMapDraft} from "./CellMapDraft";
 import {BRUSHES, OVERLAYS, TOOLS} from "./useCellsTab";
@@ -27,13 +29,13 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
       </div>
       {errors.length > 0 && <ul className="cells-panel-errors">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
 
-      <Choices label="Tool" options={TOOLS} value={ui.tool} onChange={(tool) => update({tool, pendingPoint: null, newTrail: false})} />
+      <Choices label="Tool" options={TOOLS} value={ui.tool} onChange={(tool) => update({tool, pendingPoint: null, newTrail: false, pendingBridge: null})} />
       {(ui.tool === "paint" || ui.tool === "fill") && (
         <>
           <div className="cells-panel-row" role="group" aria-label="Terrain">
             {Object.entries(terrains).map(([ch, terrain]) => (
               <button key={ch} type="button" aria-pressed={ui.terrain === ch} className={ui.terrain === ch ? "active" : ""} onClick={() => update({terrain: ch})}>
-                <i className="cells-panel-swatch" style={{background: CELL_COLORS[terrain]}} />{terrain}
+                <i className="cells-panel-swatch" style={{background: CELL_COLORS[terrain]}} />{terrainLabel(draft.data.theme, terrain)}
               </button>
             ))}
           </div>
@@ -43,9 +45,18 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
         </>
       )}
       {ui.tool === "trail" && <TrailsSection cells={cells} />}
+      {ui.tool === "bridge" && <BridgesSection cells={cells} />}
       <Choices label="Overlay" options={OVERLAYS} value={ui.overlay} onChange={(overlay) => update({overlay})} />
 
       <GridSection draft={draft} change={change} />
+      <div className="cells-panel-row">
+        <label>
+          Theme{" "}
+          <select value={draft.data.theme} onChange={(e) => change((d) => d.setTheme(e.target.value))}>
+            {Object.keys(THEMES).map((key) => <option key={key} value={key}>{key}</option>)}
+          </select>
+        </label>
+      </div>
       <div className="cells-panel-row">
         <label>
           Seed <input type="number" value={draft.data.seed} onChange={(e) => change((d) => d.setSeed(parseInt(e.target.value, 10) || 0), {group: "seed"})} />
@@ -74,7 +85,7 @@ function NewCellMap({feetDimensions, onCreate}) {
   const [theme, setTheme] = useState(Object.keys(THEMES)[0]);
   return (
     <div className="cells-panel">
-      <p>This map has no cells yet. Start one, all meadow, and paint it. Cells are {CELL_SIZE} ft across.</p>
+      <p>This map has no cells yet. Start one, all trees (or rock, in a cave), and carve open ground out of it. Cells are {CELL_SIZE} ft across.</p>
       <label>
         Theme{" "}
         <select value={theme} onChange={(e) => setTheme(e.target.value)}>
@@ -142,10 +153,35 @@ function TrailsSection({cells}) {
         {draft.trails.map((trail, t) => (
           <li key={t} className={ui.selected?.trail === t ? "active" : ""}>
             <button type="button" onClick={() => update({selected: {trail: t, point: null}, pendingPoint: null, newTrail: false})}>Trail {t + 1} ({trail.points.length} points)</button>
+            <select aria-label={`Trail ${t + 1}'s type`} value={trail.type ?? DEFAULT_PATH} onChange={(e) => change((d) => d.setTrailType(t, e.target.value))}>
+              {THEMES[draft.data.theme].paths.map((type) => <option key={type} value={type}>{PATHS[type].label}</option>)}
+            </select>
             <NumberField label="Width" value={trail.width} min={0.1} max={4} step={0.1} onChange={(w) => change((d) => d.setTrailWidth(t, w), {group: `width:${t}`})} />
             <button type="button" aria-label={`Delete trail ${t + 1}`} onClick={() => {
               change((d) => d.removeTrail(t));
               update({selected: null});
+            }}>×</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function BridgesSection({cells}) {
+  const {draft, change, ui, update} = cells;
+  return (
+    <div className="cells-panel-section">
+      <h4>Bridges</h4>
+      <p className="cells-panel-help">Click where a bridge starts, then where it ends: it runs straight along the cells, up to {MAX_BRIDGE_LENGTH} from its start. Start and end it on land. Click a bridge to select it; Delete removes it.</p>
+      {ui.pendingBridge && <p className="cells-panel-help">Click again to place the bridge&apos;s other end (Escape cancels).</p>}
+      <ul className="cells-panel-trails">
+        {draft.bridges.map((bridge, b) => (
+          <li key={b} className={ui.selectedBridge === b ? "active" : ""}>
+            <button type="button" onClick={() => update({selectedBridge: b, pendingBridge: null})}>Bridge {b + 1} ({hexDistance(bridge.from, bridge.to)} cells)</button>
+            <button type="button" aria-label={`Delete bridge ${b + 1}`} onClick={() => {
+              change((d) => d.removeBridge(b));
+              update({selectedBridge: null});
             }}>×</button>
           </li>
         ))}
@@ -164,7 +200,7 @@ function ColorsSection({draft, change}) {
         {Object.entries(defaults).map(([key, fallback]) => (
           <label key={key}>
             <input type="color" value={colors[key] ?? fallback} onChange={(e) => change((d) => d.setColor(key, e.target.value), {group: `color:${key}`})} />
-            {key}
+            {terrainLabel(draft.data.theme, key)}
             {key in colors && <button type="button" aria-label={`Reset ${key}`} onClick={() => change((d) => d.setColor(key, null))}>↺</button>}
           </label>
         ))}

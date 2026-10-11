@@ -72,10 +72,12 @@ function segmentIntersectsCircle(x1, y1, x2, y2, cx, cy, radius) {
 }
 
 // Reports whether the straight line between (x1,y1) and (x2,y2) is
-// unobstructed by any of the given barriers. Mirrors
-// instanceconfig.LineOfSightClear on the server.
+// unobstructed by any of the given barriers that block sight (all but
+// blocksSight: false, like water). Mirrors instanceconfig.LineOfSightClear
+// on the server.
 export function hasLineOfSight(x1, y1, x2, y2, barriers) {
   for (const barrier of barriers) {
+    if (barrier.blocksSight === false) continue;
     if (barrier.type === "wall") {
       const locs = barrier.locations;
       if (!locs || locs.length < 2) continue;

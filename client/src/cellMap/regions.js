@@ -1,7 +1,7 @@
 // Outlines of the areas a terrain covers, as closed loops, then smoothed so
 // the hexes they're made of don't show.
 import {hexRadius, neighbor} from "./hexGrid";
-import {pointHash01} from "./random";
+import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
 
 // Regions run this many cells past the grid (copying its edge cells), so
@@ -12,18 +12,19 @@ export const PAD = 2;
 // cell size, so neighboring cells agree on them exactly.
 const CORNER_STEPS = [[2, 0], [1, 1], [-1, 1], [-2, 0], [-1, -1], [1, -1]];
 
-function latticeCorner(col, row, i) {
+export function latticeCorner(col, row, i) {
   const [dx, dy] = CORNER_STEPS[i];
   return [2 + 3 * col + dx, 1 + 2 * row + (col & 1) + dy];
 }
 
 // Each loop is a list of lattice points, clockwise on screen around the
 // terrain (counterclockwise around holes in it).
-// Cells skip says yes to are left out of the region.
-export function regionLoops(map, terrain, skip = () => false) {
+// Cells skip says yes to are left out of the region; at(col, row) is
+// each cell's terrain, if not the map's.
+export function regionLoops(map, terrain, skip = () => false, at = (c, r) => terrainAt(map, c, r)) {
   const {cols, rows} = map.grid;
   const inDomain = (c, r) => c >= -PAD && c < cols + PAD && r >= -PAD && r < rows + PAD;
-  const isTerrain = (c, r) => inDomain(c, r) && terrainAt(map, c, r) === terrain && !skip(c, r);
+  const isTerrain = (c, r) => inDomain(c, r) && at(c, r) === terrain && !skip(c, r);
 
   const next = new Map();
   for (let c = -PAD; c < cols + PAD; c++) {
@@ -68,7 +69,72 @@ export function smoothLoop(loop, cellSize, seed, {irregularity = IRREGULARITY, r
   points = jitter(subdivide(points), r * roughness, seed, 2);
   let out = points.map(({x, y}) => ({x, y}));
   for (let i = 0; i < CHAIKIN_PASSES; i++) out = chaikin(out);
-  return out;
+  return out.map((p) => warp(p, seed));
+}
+
+// A loop of lattice points as a round, gently wobbling curve of {x, y} in
+// feet, for shores: through its edges' middles, averaged until the hexes
+// are gone. Wobbles are hashed from where they are, as in smoothLoop.
+export function softLoop(loop, cellSize, seed, {passes = 4, wobble = 0.3} = {}) {
+  const r = hexRadius(cellSize);
+  const n = loop.length;
+  let points = loop.map(([ax, ay], i) => {
+    const [bx, by] = loop[(i + 1) % n];
+    const [x, y] = [((ax + bx) * r) / 4, ((ay + by) * cellSize) / 4];
+    return {
+      x: x + (pointHash01(seed, ax + bx, ay + by, 7) - 0.5) * 2 * wobble * r,
+      y: y + (pointHash01(seed, ax + bx, ay + by, 8) - 0.5) * 2 * wobble * r,
+    };
+  });
+  for (let pass = 0; pass < passes; pass++) {
+    points = points.map((p, i) => {
+      const a = points[(i + n - 1) % n];
+      const b = points[(i + 1) % n];
+      return {x: (a.x + 2 * p.x + b.x) / 4, y: (a.y + 2 * p.y + b.y) / 4};
+    });
+  }
+  return chaikin(points).map((p) => warp(p, seed));
+}
+
+// A slow drift over the whole map, so edges along a row or column of
+// cells (and long trails) bend rather than run ruler-straight. It's a
+// function of where a point is, so lines that share points still meet.
+// Two layers of smooth noise: wavelengths and amounts in feet.
+const WARP = [
+  {wavelength: 20, amount: 2},
+  {wavelength: 7, amount: 0.7},
+];
+
+export function warp({x, y}, seed) {
+  let dx = 0;
+  let dy = 0;
+  WARP.forEach(({wavelength, amount}, layer) => {
+    dx += (noise(seed, x / wavelength, y / wavelength, 400 + layer * 2) - 0.5) * 2 * amount;
+    dy += (noise(seed, x / wavelength, y / wavelength, 401 + layer * 2) - 0.5) * 2 * amount;
+  });
+  return {x: x + dx, y: y + dy};
+}
+
+// The point warp moves to p, found by stepping back from it (the warp
+// bends gently enough for that to settle quickly).
+export function unwarp(p, seed) {
+  let q = p;
+  for (let i = 0; i < 8; i++) {
+    const w = warp(q, seed);
+    q = {x: q.x + p.x - w.x, y: q.y + p.y - w.y};
+  }
+  return q;
+}
+
+// Value noise in [0, 1): hashed lattice values, smoothly blended.
+export function noise(seed, u, v, salt) {
+  const [i, j] = [Math.floor(u), Math.floor(v)];
+  const ease = (t) => t * t * (3 - 2 * t);
+  const [s, t] = [ease(u - i), ease(v - j)];
+  const at = (a, b) => hash01(seed, i + a, j + b, salt);
+  const top = at(0, 0) + (at(1, 0) - at(0, 0)) * s;
+  const bottom = at(0, 1) + (at(1, 1) - at(0, 1)) * s;
+  return top + (bottom - top) * t;
 }
 
 function subdivide(points) {

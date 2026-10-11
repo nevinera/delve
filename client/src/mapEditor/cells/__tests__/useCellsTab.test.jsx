@@ -9,10 +9,11 @@ vi.mock("../../../cellMap/cache", () => ({
 import {useCellsTab, EDITOR_PIXELS_PER_FOOT} from "../useCellsTab";
 import CellsPanel from "../CellsPanel";
 import {CellMapDraft} from "../CellMapDraft";
-import {cellCenter, cellPoint} from "../../../cellMap/hexGrid";
+import {CELL_SIZE, cellCenter, cellPoint} from "../../../cellMap/hexGrid";
 import {cachedCellMapImage} from "../../../cellMap/cache";
 
-const start = () => CellMapDraft.blank({cols: 6, rows: 5}).data;
+// An all-meadow map (a new one starts all trees).
+const start = () => CellMapDraft.blank({cols: 6, rows: 5}).with({cells: Array.from({length: 5}, () => "......")}).data;
 
 // A canvas pixel over the given cell coordinates.
 const at = (col, row) => {
@@ -50,6 +51,27 @@ describe("useCellsTab", () => {
     expect(result.current.draft.data.cells[0]).toBe("......");
     act(() => result.current.history.redo());
     expect(result.current.draft.data.cells[0]).toBe("TTTT..");
+  });
+
+  it("places a bridge in a straight line, and deletes it", () => {
+    const {result} = setup();
+    act(() => result.current.update({tool: "bridge"}));
+    act(() => {
+      result.current.canvas.onPointer("down", at(1, 0));
+    });
+    act(() => {
+      result.current.canvas.onPointer("up");
+    });
+    // Off the line down column 1, so it snaps onto it.
+    act(() => {
+      result.current.canvas.onPointer("down", at(1.2, 3));
+    });
+    expect(result.current.draft.bridges).toEqual([{from: [1, 0], to: [1, 3]}]);
+    expect(result.current.ui.selectedBridge).toBe(0);
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", {key: "Delete"}));
+    });
+    expect(result.current.draft.bridges).toEqual([]);
   });
 
   it("pans with the pan tool", () => {
@@ -239,6 +261,14 @@ describe("useCellsTab trail snapping", () => {
     tap(result, near(5, 1));
     expect(result.current.draft.trails[1].points).toEqual([[2, 4], [3, 3], [5, 1]]);
     expect(result.current.draft.trails[0].points).toEqual([[0, 1], [5, 1]]);
+  });
+
+  it("snaps a point near the map's edge onto it", () => {
+    const {result} = setup(twoTrails());
+    act(() => result.current.update({tool: "trail", selected: {trail: 1, point: 1}}));
+    tap(result, {x: 1 * EDITOR_PIXELS_PER_FOOT, y: at(3, 6).y});
+    const [col, row] = result.current.draft.trails[1].points[2];
+    expect(cellPoint(col, row, CELL_SIZE).x).toBeCloseTo(0, 1);
   });
 
   it("doesn't snap with Shift", () => {

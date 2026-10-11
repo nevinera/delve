@@ -1006,7 +1006,9 @@ export class SceneManager {
       }
       for (const barrier of m.barriers ?? []) {
         if (barrier.type === "circle" && barrier.location) {
-          group.add(buildCircleBarrier(toWorld(barrier.location.x, barrier.location.y), barrier.radius ?? 0));
+          // A see-through one (a pond) is lower and bluish.
+          const style = barrier.blocksSight === false ? { height: 0.2, color: 0x2f5f86 } : {};
+          group.add(buildCircleBarrier(toWorld(barrier.location.x, barrier.location.y), barrier.radius ?? 0, style));
         }
       }
 
