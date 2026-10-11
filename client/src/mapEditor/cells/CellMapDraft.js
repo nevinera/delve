@@ -92,6 +92,7 @@ export class CellMapDraft {
     const kept = added >= 0 ? this.data.cells : this.data.cells.slice(-added);
     const cells = [...Array.from({length: Math.max(0, added)}, () => ""), ...kept].map((line) => line.slice(0, cols).padEnd(cols, fill));
     const trails = this.trails.map((trail) => ({...trail, points: trail.points.map(([col, row]) => [col, row + added])}));
+    const places = (this.data.places ?? []).map((place) => ({...place, polygon: place.polygon.map(([col, row]) => [col, row + added])}));
     // Bridges move with their cells too, and go if they'd leave the grid.
     const inside = ([col, row]) => col >= 0 && row >= 0 && col < cols && row < rows;
     const bridges = this.bridges.map(({from, to}) => ({from: [from[0], from[1] + added], to: [to[0], to[1] + added]})).filter(({from, to}) => inside(from) && inside(to));
@@ -102,7 +103,7 @@ export class CellMapDraft {
       return {...exit, from: Math.max(0, exit.from + shift), to: Math.min(length - 1, exit.to + shift)};
     }).filter(({from, to}) => from <= to);
     const {bridges: _old, exits: _oldExits, ...rest} = this.data;
-    return new CellMapDraft({...rest, grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {}), ...(bridges.length ? {bridges} : {}), ...(exits.length ? {exits} : {})});
+    return new CellMapDraft({...rest, grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {}), ...(this.data.places ? {places} : {}), ...(bridges.length ? {bridges} : {}), ...(exits.length ? {exits} : {})});
   }
 
   // ---- Exits ----
@@ -112,11 +113,12 @@ export class CellMapDraft {
   }
 
   // A generated map (see cellMap/generate.js) in place of this one's
-  // cells, grid, trails, bridges and exits; the theme and colors stay.
+  // cells, grid, trails, bridges, exits and places; the theme and colors
+  // stay.
   generated(map) {
-    const {cells, grid, seed, trails, exits} = map;
-    const {bridges: _b, trails: _t, exits: _e, ...rest} = this.data;
-    return new CellMapDraft({...rest, cells, grid, seed, ...(trails ? {trails} : {}), ...(exits ? {exits} : {})});
+    const {cells, grid, seed, trails, exits, places} = map;
+    const {bridges: _b, trails: _t, exits: _e, places: _p, ...rest} = this.data;
+    return new CellMapDraft({...rest, cells, grid, seed, ...(trails ? {trails} : {}), ...(exits ? {exits} : {}), ...(places ? {places} : {})});
   }
 
   // ---- Look ----

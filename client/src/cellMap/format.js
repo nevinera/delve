@@ -8,6 +8,7 @@
 import THEMES from "./themes.json";
 import {validateBridges} from "./bridges";
 import {validateExits} from "./exits";
+import {validateCellPlaces} from "./places";
 
 export {THEMES};
 export const VERSION = 1;
@@ -44,6 +45,7 @@ export function validateCellMap(map) {
 
   errors.push(...validateBridges(map.bridges, grid));
   errors.push(...validateExits(map.exits, grid));
+  errors.push(...validateCellPlaces(map.places));
   if (map.trails === undefined) return errors;
   if (!Array.isArray(map.trails)) return [...errors, "trails must be a list"];
   map.trails.forEach((trail, i) => {

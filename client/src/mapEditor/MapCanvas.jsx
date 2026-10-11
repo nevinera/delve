@@ -4,6 +4,7 @@ import {collectSnapPoints, nearestSnapPoint} from "./mapSnap";
 import BarrierShapes from "./BarrierShapes";
 import FillShapes from "./FillShapes";
 import ConnectionShapes from "./ConnectionShapes";
+import PlaceShapes from "./PlaceShapes";
 import UnitShapes from "./UnitShapes";
 import NcuQuestBadges from "./NcuQuestBadges";
 import GroupShapes from "./GroupShapes";
@@ -106,7 +107,8 @@ const PAN_KEY_DIRECTIONS = {
 //
 // activeLayers says which kinds of shape can be edited ({barriers,
 // connections, units, ncus}, all by default) - the rest are drawn dimmed and
-// ignore the pointer. With a group open (openGroup), shift-clicking a unit
+// ignore the pointer. Places (read-only) are drawn only when
+// activeLayers.places is set. With a group open (openGroup), shift-clicking a unit
 // toggles its membership. onDoubleClickUnit(index)/onDoubleClickEmpty fire
 // on a double-click on a unit's token or anywhere else. keepUnitToolArmed
 // leaves "add-unit" armed after each placement, and prepareUnit(entry)
@@ -133,6 +135,7 @@ export default function MapCanvas({
   hoveredPatrolStep, expandedUnitIndices,
   ncuTokenUrls = {}, ncuQuests = null, selectedNcuIndex = null, onSelectNcu, hoveredNcuIndex = null, onHoverNcu, expandedNcuIndices,
   openGroup = null, onToggleGroupMember, hoveredGroupIdentifier, highlightedUnitIndices = null,
+  selectedPlaceIndex = null, hoveredPlaceIndex = null, onSelectPlace,
   activeLayers = ALL_LAYERS, onDoubleClickUnit, onDoubleClickEmpty, keepUnitToolArmed = false, prepareUnit = (entry) => entry,
   onPlaceEncounter,
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
@@ -1224,6 +1227,16 @@ export default function MapCanvas({
                   fill="rgba(255,222,122,0.15)" stroke="#ffde7a" strokeWidth={3} strokeDasharray="6,4"
                 />
               </svg>
+            )}
+            {canDrawBarriers && activeLayers.places && mapData.places?.length > 0 && (
+              <PlaceShapes
+                places={mapData.places}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                selectedIndex={selectedPlaceIndex}
+                hoveredIndex={hoveredPlaceIndex}
+                onSelect={(i) => onSelectPlace?.(i)}
+              />
             )}
             {canDrawBarriers && mapData.connections.length > 0 && layer("connections",
               <ConnectionShapes

@@ -61,6 +61,12 @@ describe("CellMapDraft", () => {
     expect(draft.resize({rows: 2}).exits).toEqual([{side: "north", from: 1, to: 3}, {side: "west", from: 0, to: 1}]);
   });
 
+  it("moves places with their cells when resizing, and takes a generated map's", () => {
+    const draft = blank().with({places: [{identifier: "area_1", polygon: [[0, 0], [2, 0], [1, 2]]}]});
+    expect(draft.resize({rows: 6}).data.places[0].polygon).toEqual([[0, 2], [2, 2], [1, 4]]);
+    expect(draft.generated({cells: ["..", ".."], grid: {type: "hex", cols: 2, rows: 2}, seed: 1}).data).not.toHaveProperty("places");
+  });
+
   it("sets and resets colors", () => {
     const draft = blank().setColor("meadow", "#112233");
     expect(draft.data.colors).toEqual({meadow: "#112233"});

@@ -22,6 +22,7 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `connections` | array of MapConnection | no | Entry/exit points on this map. The zone defines how connections pair up and which are entry points. |
 | `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |
 | `ncus` | array of NCU | no | Non-combat units initially present on this map. See [ncu.md](ncu.md). |
+| `places` | array of Place | no | Named, tagged areas of the map, for building a zone in layers (see **Place** below). The game ignores them. |
 | `respawn` | RespawnConfig | no | Overrides the zone's `respawn` for every unit on this map, unless a unit overrides it again. See [common.md](common.md#respawnconfig). |
 | `leashRadius` | number | no | Feet. How far an engaged NPC on this map may get from where it was pulled before it gives up (see **Leashing** below). Default 120 (about WoW's 40 yards). A unit may override it. |
 | `hardLeash` | boolean | no | `true` makes NPCs on this map leash the moment they pass `leashRadius`, fight or no fight - for boss arenas and tight dungeon rooms. Default `false`. A unit may override it. |
@@ -79,6 +80,7 @@ walls around water don't.
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |
 | `bridges` | array of Bridge | no | Wooden bridges, drawn over the water. |
 | `exits` | array of Exit | no | Gaps in the map's edge where connections lead off it, at most one per side. |
+| `places` | array of CellPlace | no | Areas of the map, which Auto Barriers turns into its places (see **Place**). The generator writes one per area. |
 
 A hex grid has flat-topped hexes, always 5 feet across the flats (so trees and grass are the same
 size on every map), with odd columns half a cell lower. Its size in feet is
@@ -104,6 +106,12 @@ cells along one side of the grid from index `from` to `to` (columns along the no
 sides, rows along the east and west), open ground leading off the map. Auto Barriers makes each a
 line connection named for its side (`"north"`, ...), along the map's edge between the walls either
 side of the gap, so the map's fill stops there; one already named that is replaced.
+
+A **CellPlace** is `{ "identifier": string, "polygon": [[col, row], ...] }`: an outline in cell
+coordinates (like a trail's points), at least 3 points. Auto Barriers makes each a Place with the
+same identifier, bent as the walls are; a Place already named that keeps its name, description,
+tags and annotations and takes the new outline. The generator's places (`area_1`, `area_2`, ...)
+put every cell in one, each area's doors and corridors split between the areas they join.
 
 ```json
 "cellMap": {
@@ -158,6 +166,40 @@ shoot across but not walk through, like water.
   "type": "circle",
   "location": { "x": 25.0, "y": 40.0 },
   "radius": 5.0
+}
+```
+
+---
+
+## Place
+
+A named area of a map: "Arren's Camp", a goblin village, the far end of a cave. Places give a map
+structure for building a zone in layers (the layout, then places, then who lives there, then
+quests), so a person or an LLM can say "goblins in `goblin_village_5`" rather than giving
+coordinates. The game never reads them; the map editor shows them, and tools read and write them.
+
+They're optional, and needn't cover the map or keep apart; but those Auto Barriers makes from a
+generated cell map (see **CellMap**) partition it, every bit of open ground in exactly one place,
+each running out over the fill to the walls that bound it. So places are adjacent where open
+ground passes from one to the other. Where places nest (one inside another's outline), a point
+is in the smallest place around it.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `identifier` | string | yes | Lowercase letters, digits, `-` and `_`; unique on the map. |
+| `name` | string | no | Display name, at most 80 characters. |
+| `description` | string | no | Free text, at most 4000 characters. |
+| `tags` | array of string | no | Free-form, at most 24, each at most 16 characters. |
+| `polygon` | array of Location | yes | 3 to 1000 points in map feet, the outline (closed back to the first). |
+| `annotations` | object | no | Notes for an LLM, kept between the steps of building a zone: up to 32 keys (lowercase words of letters, digits, `-` and `_`, at most 40 characters) to English prose or keywords (strings of at most 4000 characters). |
+
+```json
+{
+  "identifier": "arrens_camp",
+  "name": "Arren's Camp",
+  "tags": ["camp", "friendly"],
+  "polygon": [{ "x": 10, "y": 10 }, { "x": 60, "y": 12 }, { "x": 55, "y": 50 }, { "x": 8, "y": 45 }],
+  "annotations": { "population": "Arren and two guards; quiet by day." }
 }
 ```
 

@@ -16,6 +16,7 @@ module Validators
       require_object!(data, path: path)
       validate_fixed_fields!(data, path: path)
       validate_optional_fields!(data, path: path)
+      PlacesValidator.validate!(data["places"], path: child_path(path, "places")) if given?(data, "places")
       MapFillValidator.validate!(data, path: path)
     end
 

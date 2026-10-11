@@ -18,7 +18,7 @@ const USAGE = `Usage: bin/cellmap-generate [flags]
   --tags a,b      generator tags: ${TAGS.join(", ")}
   --theme NAME    ${Object.keys(THEMES).join(", ")} (default glade)
   --map ID        write a whole map file around it (identifier ID), not just the cellMap
-  --barriers      with --map, run Auto Barriers on it: walls, fill points and exit connections
+  --barriers      with --map, run Auto Barriers on it: walls, fill points, exit connections and places
   -o, --out FILE  write here (default: stdout)
   --compact       one line of JSON
   -h, --help
@@ -73,9 +73,9 @@ if (values.map) {
   data = {identifier: values.map, name: values.map, feetDimensions: mapSize(cellMap.grid), cellMap, barriers: [], connections: []};
   if (values.barriers) {
     const {autoBarriers} = await client("mapEditor/cells/autoBarriers.js");
-    const {barriers, connections, fillPoints, error} = autoBarriers(cellMap);
+    const {barriers, connections, places, fillPoints, error} = autoBarriers(cellMap);
     if (error) fail(error);
-    data = {...data, barriers, connections, fillPoints};
+    data = {...data, barriers, connections, fillPoints, ...(places.length ? {places} : {})};
   }
 }
 const json = JSON.stringify(data, null, values.compact ? 0 : 2) + "\n";

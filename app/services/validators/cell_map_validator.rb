@@ -14,6 +14,7 @@ module Validators
     MAX_BRIDGE_LENGTH = 8
     # The grid's sides an exit can be on (see client/src/cellMap/exits.js).
     SIDES = %w[north east south west].freeze
+    PLACE_IDENTIFIER_RE = /\A[a-z0-9][a-z0-9_-]*\z/
 
     def self.themes
       @themes ||= JSON.parse(File.read(THEMES_PATH)).freeze
@@ -49,6 +50,24 @@ module Validators
       validate_trails!(require_array!(data, "trails", path: path), theme, path: child_path(path, "trails")) unless data["trails"].nil?
       validate_bridges!(data, grid, path: path) unless data["bridges"].nil?
       validate_exits!(data, grid, path: path) unless data["exits"].nil?
+      validate_places!(data, path: path) unless data["places"].nil?
+    end
+
+    # Polygons in cell coordinates, which Auto Barriers turns into the map's
+    # places (see client/src/cellMap/places.js).
+    def validate_places!(data, path:)
+      places = require_array!(data, "places", path: path)
+      places_path = child_path(path, "places")
+      places.each_with_index { |place, i| validate_place!(place, path: index_path(places_path, i)) }
+      identifiers = places.map { |place| place["identifier"] }
+      raise ValidationError.new("has more than one place with an identifier", path: places_path) unless identifiers.uniq.length == identifiers.length
+    end
+
+    def validate_place!(place, path:)
+      require_object!(place, path: path)
+      identifier = require_string!(place, "identifier", path: path)
+      raise ValidationError.new("must be lowercase letters, digits, - and _", path: child_path(path, "identifier")) unless PLACE_IDENTIFIER_RE.match?(identifier)
+      validate_trail_points!(require_array!(place, "polygon", path: path, min: 3), path: child_path(path, "polygon"))
     end
 
     def validate_version!(data, path:)
