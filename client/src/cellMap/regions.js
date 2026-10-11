@@ -59,23 +59,14 @@ const CHAIKIN_PASSES = 2;
 
 // A loop of lattice points as a smoothed loop of {x, y} in feet. Points are
 // moved by a hash of where they are, so shared edits stay local.
-// relax averages each point with its neighbors that many times first, which
-// irons out the zigzag of hex edges along a straight-ish run.
-export function smoothLoop(loop, cellSize, seed, {irregularity = IRREGULARITY, roughness = ROUGHNESS, passes = CHAIKIN_PASSES, relax = 0} = {}) {
+export function smoothLoop(loop, cellSize, seed, {irregularity = IRREGULARITY, roughness = ROUGHNESS} = {}) {
   const r = hexRadius(cellSize);
   // ids are lattice points scaled by 4, so midpoints of midpoints stay integers.
   let points = loop.map(([lx, ly]) => ({id: [lx * 4, ly * 4], x: (lx * r) / 2, y: (ly * cellSize) / 2}));
-  for (let i = 0; i < relax; i++) {
-    points = points.map((p, j) => {
-      const a = points[(j + points.length - 1) % points.length];
-      const b = points[(j + 1) % points.length];
-      return {id: p.id, x: 0.5 * p.x + 0.25 * (a.x + b.x), y: 0.5 * p.y + 0.25 * (a.y + b.y)};
-    });
-  }
   points = jitter(subdivide(points), r * irregularity, seed, 1);
   points = jitter(subdivide(points), r * roughness, seed, 2);
   let out = points.map(({x, y}) => ({x, y}));
-  for (let i = 0; i < passes; i++) out = chaikin(out);
+  for (let i = 0; i < CHAIKIN_PASSES; i++) out = chaikin(out);
   return out;
 }
 

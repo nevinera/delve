@@ -1,5 +1,7 @@
 // The cellmap format (see plans/cell-editor.md): a grid of cells, one
-// character each, that the renderer turns into a map image.
+// character each, plus trails drawn across them, that the renderer turns
+// into a map image. Trails are lines through points in cell coordinates,
+// [col, row] (see hexGrid.js's cellPoint), with a width in cells.
 
 export const FORMAT = "cellmap";
 export const VERSION = 1;
@@ -8,7 +10,6 @@ export const TERRAINS = {
   ".": "meadow",
   "%": "tallGrass",
   "~": "marsh",
-  "#": "trail",
   T: "trees",
 };
 
@@ -39,6 +40,15 @@ export function validateCellMap(map) {
     if (row.length !== grid.cols) errors.push(`cells[${r}] has ${row.length} cells, grid.cols is ${grid.cols}`);
     const bad = [...new Set([...row].filter((ch) => !(ch in TERRAINS)))];
     if (bad.length) errors.push(`cells[${r}] has unknown cells: ${bad.map((ch) => JSON.stringify(ch)).join(", ")}`);
+  });
+
+  if (map.trails === undefined) return errors;
+  if (!Array.isArray(map.trails)) return [...errors, "trails must be a list"];
+  map.trails.forEach((trail, i) => {
+    if (!(typeof trail?.width === "number" && trail.width > 0)) errors.push(`trails[${i}].width must be a positive number`);
+    const points = trail?.points;
+    if (!Array.isArray(points) || points.length < 2) return errors.push(`trails[${i}].points must list at least two points`);
+    if (!points.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))) errors.push(`trails[${i}].points must each be [col, row]`);
   });
   return errors;
 }

@@ -18,6 +18,17 @@ export function cellCenter(col, row, cellSize) {
   return {x: r + 1.5 * r * col, y: cellSize / 2 + cellSize * row + (col & 1 ? cellSize / 2 : 0)};
 }
 
+// A point in cell coordinates: whole numbers are cell centers, and fractions
+// interpolate between them - including the half-cell drop of odd columns, so
+// a point moving across columns moves smoothly.
+export function cellPoint(col, row, cellSize) {
+  const r = hexRadius(cellSize);
+  const c0 = Math.floor(col);
+  const t = col - c0;
+  const drop = (c0 & 1 ? 1 - t : t) * (cellSize / 2);
+  return {x: r + 1.5 * r * col, y: cellSize / 2 + cellSize * row + drop};
+}
+
 // Corner i is at 60*i degrees, clockwise on screen from the right-hand one.
 export function cellCorners(col, row, cellSize) {
   const {x, y} = cellCenter(col, row, cellSize);

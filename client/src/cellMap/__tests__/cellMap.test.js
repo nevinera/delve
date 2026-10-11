@@ -1,6 +1,6 @@
 import {describe, it, expect} from "vitest";
 import {validateCellMap} from "../format";
-import {cellAt, cellCenter, cellCorners, mapSize, neighbor} from "../hexGrid";
+import {cellAt, cellCenter, cellCorners, cellPoint, mapSize, neighbor} from "../hexGrid";
 import {regionLoops, smoothLoop} from "../regions";
 import {buildScene} from "../scene";
 import {cacheKey, renderCellMap} from "../render";
@@ -120,12 +120,11 @@ describe("buildScene placements", () => {
 });
 
 describe("ground terrains", () => {
-  const map = tiny(["......", ".%%~~.", ".####.", "......"]);
+  const map = tiny(["......", ".%%~~.", "......", "......"]);
 
-  it("outlines tall grass, marsh and trails as their own regions", () => {
+  it("outlines tall grass and marsh as their own regions", () => {
     const scene = buildScene(map);
     expect(scene.grounds.map((g) => [g.terrain, g.loops.length])).toEqual([["tallGrass", 1], ["marsh", 1]]);
-    expect(scene.trails).toHaveLength(1);
   });
 
   it("decorates each kind of ground with its own sprites", () => {
@@ -134,6 +133,44 @@ describe("ground terrains", () => {
     expect(scene.pools.length + scene.reeds.length).toBeGreaterThan(0);
     expect(scene.tufts).toEqual([]);
     expect(scene.crowns).toEqual([]);
+  });
+});
+
+describe("trails", () => {
+  const forest = {...tiny(Array.from({length: 12}, () => "T".repeat(12))), trails: [{width: 1, points: [[0, 6], [5, 3], [11, 6]]}]};
+
+  it("puts cell points at cell centers, interpolating between them", () => {
+    expect(cellPoint(3, 2, 5)).toEqual(cellCenter(3, 2, 5));
+    expect(cellPoint(4, 2, 5)).toEqual(cellCenter(4, 2, 5));
+    const mid = cellPoint(3.5, 2, 5);
+    expect(mid.x).toBeCloseTo((cellCenter(3, 2, 5).x + cellCenter(4, 2, 5).x) / 2);
+    expect(mid.y).toBeCloseTo((cellCenter(3, 2, 5).y + cellCenter(4, 2, 5).y) / 2);
+  });
+
+  it("curves through every point it was given, in feet", () => {
+    const [trail] = buildScene(forest).trails;
+    expect(trail.width).toBe(5);
+    for (const [col, row] of forest.trails[0].points) {
+      const p = cellPoint(col, row, 5);
+      expect(trail.points.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1e-9)).toBe(true);
+    }
+  });
+
+  it("clears crowns off the trail, and lines it with them", () => {
+    const scene = buildScene(forest);
+    const [trail] = scene.trails;
+    const near = (c) => Math.min(...trail.points.map((p) => Math.hypot(c.x - p.x, c.y - p.y)));
+    expect(scene.crowns.length).toBeGreaterThan(0);
+    expect(scene.crowns.every((c) => near(c) > trail.width / 2)).toBe(true);
+    expect(buildScene({...forest, trails: []}).crowns).toEqual([]);
+  });
+
+  it("validates trails", () => {
+    expect(validateCellMap({...forest, trails: [{width: 0, points: [[1, 1]]}, {width: 1, points: [[1, 1], [2]]}]})).toEqual([
+      "trails[0].width must be a positive number",
+      "trails[0].points must list at least two points",
+      "trails[1].points must each be [col, row]",
+    ]);
   });
 });
 

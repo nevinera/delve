@@ -39,6 +39,6 @@ describe("CellEditor", () => {
     expect(screen.queryByText("trees")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Overlay"), {target: {value: "cells"}});
     expect(screen.getByText("trees")).toBeInTheDocument();
-    for (const terrain of ["meadow", "tallGrass", "marsh", "trail"]) expect(screen.getByText(terrain)).toBeInTheDocument();
+    for (const label of ["meadow", "tallGrass", "marsh", "trail points"]) expect(screen.getByText(label)).toBeInTheDocument();
   });
 });

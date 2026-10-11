@@ -7,7 +7,7 @@ import {GLADE} from "./style";
 import {hashString} from "./random";
 
 // Bump when the renderer's output changes, so old cached images are ignored.
-export const RENDER_VERSION = 3;
+export const RENDER_VERSION = 4;
 
 // iOS Safari won't draw a canvas past about 16.7M pixels.
 const MAX_PIXELS = 16_000_000;
@@ -55,5 +55,5 @@ function defaultCanvas(width, height) {
 }
 
 export function cacheKey(map, pixelsPerFoot) {
-  return `v${RENDER_VERSION}:${pixelsPerFoot}:${hashString(JSON.stringify([map.grid, map.seed, map.cells]))}`;
+  return `v${RENDER_VERSION}:${pixelsPerFoot}:${hashString(JSON.stringify([map.grid, map.seed, map.cells, map.trails ?? []]))}`;
 }

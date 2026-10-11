@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from "react";
 import {renderScale} from "../cellMap/render";
 import {cachedCellMapImage} from "../cellMap/cache";
 import {stressTestMap} from "../cellMap/examples/stressTest";
-import {cellCorners, mapSize} from "../cellMap/hexGrid";
+import {cellCorners, cellPoint, mapSize} from "../cellMap/hexGrid";
 import {TERRAINS, validateCellMap} from "../cellMap/format";
 import clearing from "../cellMap/examples/clearing.json";
 import forestEdge from "../cellMap/examples/forest-edge.json";
@@ -16,11 +16,12 @@ const PIXELS_PER_FOOT = 10;
 // every cell filled with its terrain's color.
 export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
 
+const TRAIL_COLOR = "rgba(230, 70, 30, 0.9)";
+
 const CELL_COLORS = {
   meadow: "rgba(250, 220, 90, 0.55)",
   tallGrass: "rgba(120, 220, 60, 0.55)",
   marsh: "rgba(40, 200, 190, 0.55)",
-  trail: "rgba(220, 110, 40, 0.6)",
   trees: "rgba(30, 110, 200, 0.55)",
 };
 
@@ -110,6 +111,7 @@ export default function CellEditor({backUrl}) {
             {Object.entries(TERRAINS).map(([ch, terrain]) => (
               <span key={ch}><i style={{background: CELL_COLORS[terrain]}} />{terrain}</span>
             ))}
+            <span><i style={{background: TRAIL_COLOR}} />trail points</span>
           </span>
         )}
         {timing && <TimingReport {...timing} />}
@@ -143,7 +145,8 @@ export function TimingReport({source, steps, stats, total}) {
   const ms = (v) => `${Math.round(v)}ms`;
   const where = source === "rendered" ? `Rendered (${steps.thread === "worker" ? "worker" : "main thread"})` : `From ${source} cache`;
   const parts = Object.entries(STEP_LABELS).filter(([key]) => steps[key] !== undefined).map(([key, label]) => `${label} ${ms(steps[key])}`);
-  const sizes = [`${stats.width}×${stats.height}px`, ...["crowns", "patches", "tufts"].filter((k) => stats[k] !== undefined).map((k) => `${stats[k]} ${k}`)];
+  const counts = Object.entries(stats).filter(([k]) => k !== "width" && k !== "height");
+  const sizes = [`${stats.width}×${stats.height}px`, ...counts.map(([k, n]) => `${n} ${k}`)];
   return (
     <span className="cell-editor-status">
       <strong>{where} in {ms(total)}</strong>
@@ -170,6 +173,23 @@ function drawOverlay(ctx, map, scale, filled) {
         ctx.fill();
       }
       ctx.stroke();
+    }
+  }
+  // Trails as authored: straight lines between their points, each marked.
+  if (!filled) return;
+  ctx.strokeStyle = TRAIL_COLOR;
+  ctx.fillStyle = TRAIL_COLOR;
+  ctx.lineWidth = 3 / scale;
+  for (const trail of map.trails ?? []) {
+    const points = trail.points.map(([col, row]) => cellPoint(col, row, grid.cellSize));
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (const {x, y} of points.slice(1)) ctx.lineTo(x, y);
+    ctx.stroke();
+    for (const {x, y} of points) {
+      ctx.beginPath();
+      ctx.arc(x, y, 6 / scale, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 }

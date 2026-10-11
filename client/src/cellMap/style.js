@@ -31,6 +31,7 @@ export const GLADE = {
   // Line widths, in feet, and the shadows' fall, in cell sizes.
   crownInk: 0.16,
   tuftInk: 0.1,
+  // Each side of a trail's darker edge.
   trailEdge: 0.3,
   shadowOffset: {x: 0.3, y: 0.45},
   variants: {crowns: 32, patches: 12, tufts: 8, tallTufts: 8, pools: 12, reeds: 8},

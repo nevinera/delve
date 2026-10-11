@@ -24,8 +24,6 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   stamp(ctx, scene.tallTufts, sprites.tallTufts);
 
   const cs = scene.cellSize;
-  paintTrails(ctx, scene.trails, style);
-
   ctx.fillStyle = palette.shadow;
   ctx.save();
   ctx.translate(style.shadowOffset.x * cs, style.shadowOffset.y * cs);
@@ -37,6 +35,9 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   loops(ctx, scene.forest);
   ctx.fill("evenodd");
 
+  // Over the forest's mass, which they cut through, and under the crowns
+  // lining them.
+  paintTrails(ctx, scene.trails, style);
   stamp(ctx, scene.crowns, sprites.crowns);
   ctx.restore();
 }
@@ -51,15 +52,21 @@ function stamp(ctx, placements, sprites) {
   }
 }
 
-// Trails are filled, with a darker edge.
+// Each trail is stroked twice, wide and dark then narrower and light, so it
+// gets an edge.
 function paintTrails(ctx, trails, style) {
   ctx.lineJoin = "round";
-  loops(ctx, trails);
-  ctx.fillStyle = style.palette.trail;
-  ctx.fill("evenodd");
-  ctx.strokeStyle = style.palette.trailEdge;
-  ctx.lineWidth = style.trailEdge;
-  ctx.stroke();
+  ctx.lineCap = "round";
+  for (const [color, extra] of [[style.palette.trailEdge, style.trailEdge * 2], [style.palette.trail, 0]]) {
+    ctx.strokeStyle = color;
+    for (const {width, points} of trails) {
+      ctx.lineWidth = width + extra;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+  }
 }
 
 function loops(ctx, rings) {
