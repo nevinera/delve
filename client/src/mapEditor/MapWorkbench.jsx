@@ -61,6 +61,10 @@ const TAB_LAYERS = {
 // - mapData, and onMapChange(fn) - fn maps the current MapDraft to the next.
 // - imageUrl: the background's displayable URL (null for none); with
 //   mapData.pixelDimensions it becomes the canvas image.
+// - onImageRemove() (optional): drop the background image and its files,
+//   for a map that has cells to fall back to (see MapDraft's removeImage).
+// - onCellThumbnail(blob) (optional): store a thumbnail of the cells, for a
+//   map without an image, made after each burst of cell edits.
 // - onImageUpload(file): store a just-picked background (already read into
 //   memory); this component sets imageUrl/pixelDimensions on the map.
 // - unitTypes {keys, details}, items {keys, details}: what units can be and
@@ -78,12 +82,10 @@ const TAB_LAYERS = {
 //   name}]), listed in its row and badged on its token, opening the quest
 //   editor.
 export default function MapWorkbench({
-  mapKey, mapData, onMapChange, imageUrl, onImageUpload, unitTypes, items,
+  mapKey, mapData, onMapChange, imageUrl, onImageUpload, onImageRemove = null, onCellThumbnail = null, unitTypes, items,
   ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null,
 }) {
   const [tab, setTab] = useState("map");
-  const cells = useCellsTab({mapKey, cellMap: mapData.cellMap, active: tab === "cells"});
-  const cellCanvas = tab === "cells" ? (cells.canvas ?? {placeholder: true}) : null;
   // Unit types added to the Units tab's palette with "+" (see UnitsTab).
   const [paletteAdditions, setPaletteAdditions] = useState([]);
   // Palette entries selected for "+ Encounter" (click selects one,
@@ -96,6 +98,22 @@ export default function MapWorkbench({
   const [imageError, setImageError] = useState("");
   const draft = new MapDraft(mapData);
   const image = imageUrl && mapData.pixelDimensions ? {url: imageUrl, pixelDimensions: mapData.pixelDimensions} : null;
+  // Without an image, a map's cells are its ground on every tab; the Cells
+  // tab shows and edits them either way.
+  const cells = useCellsTab({
+    mapKey, cellMap: mapData.cellMap,
+    onCellMapChange: (cellMap) => onMapChange((d) => d.setCellMap(cellMap)),
+    editing: tab === "cells", rendering: tab === "cells" || !image,
+    onThumbnail: image ? null : onCellThumbnail,
+  });
+  const cellCanvas = tab === "cells" ? (cells.canvas ?? {placeholder: true}) : null;
+  const ground = cellCanvas || !image ? cells.ground : null;
+
+  function removeImage() {
+    if (!window.confirm("Remove this map's background image? It will use its cells instead. Nothing is committed until you save.")) return;
+    if (onImageRemove) onImageRemove();
+    else onMapChange((d) => d.removeImage());
+  }
   const unitTypeDetails = unitTypes.details;
 
   function dispatch(action) {
@@ -578,13 +596,14 @@ export default function MapWorkbench({
   return (
     <div className="map-editor" data-map-key={mapKey}>
       <MapCanvas
-        image={cellCanvas ? (cellCanvas.image ?? null) : image}
-        displayImageUrl={cellCanvas ? null : displayImageUrl}
+        image={ground ? ground.image : cellCanvas ? null : image}
+        displayImageUrl={ground ? null : displayImageUrl}
+        ground={ground}
         cellEditing={cellCanvas}
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}
-        mapData={cellCanvas?.feetDimensions ? {...effectiveMapData, feetDimensions: cellCanvas.feetDimensions} : effectiveMapData}
+        mapData={ground ? {...effectiveMapData, feetDimensions: ground.feetDimensions} : effectiveMapData}
         dispatch={dispatch}
         selectedBarrierIndex={uiState.selectedBarrierIndex}
         onSelectBarrier={(i) => setUiState(uiState.with({selectedBarrierIndex: i}))}
@@ -661,10 +680,10 @@ export default function MapWorkbench({
             <h3>Walk preview running - editing is disabled while this runs.</h3>
           </div>
         ) : tab === "cells" ? (
-          <CellsPanel cells={cells} feetDimensions={mapData.feetDimensions} hasImage={Boolean(mapData.imageUrl)} />
+          <CellsPanel cells={cells} feetDimensions={mapData.feetDimensions} hasImage={Boolean(mapData.imageUrl)} onRemoveImage={removeImage} />
         ) : tab === "map" ? (
           <>
-            <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />
+            <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions ?? ground?.image.pixelDimensions} feetFromCells={!image && Boolean(mapData.cellMap)} dispatch={dispatch} />
             <BarriersPanel
               barriers={mapData.barriers}
               selectedIndex={uiState.selectedBarrierIndex}

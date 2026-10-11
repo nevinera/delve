@@ -7,8 +7,10 @@
 // gives cellMap feet, which are y-down like the render (map feet are y-up,
 // but the Cells tab never deals in them).
 //
-// Edits stay here for now; writing them into the map file comes next (see
-// plans/cell-maps.md, slice 3).
+// Every edit goes straight into the map (onCellMapChange). With no image
+// the cells are the map's ground on every tab, so this also renders for
+// them (rendering), and makes the map's thumbnail after an edit
+// (onThumbnail(blob)).
 import {useEffect, useRef, useState} from "react";
 import {cellAt, cellPoint, hexDistance, mapSize, pointAt} from "../../cellMap/hexGrid";
 import {renderScale} from "../../cellMap/render";
@@ -31,11 +33,12 @@ export const BRUSHES = [1, 2, 3];
 
 const INITIAL_UI = {tool: "paint", terrain: "T", brush: 1, overlay: "grid", hover: null, selected: null, pendingPoint: null};
 
-export function useCellsTab({mapKey, cellMap, active}) {
-  const history = useCellHistory(cellMap ?? null, mapKey);
+export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, rendering = editing, onThumbnail = null}) {
+  const history = useCellHistory(cellMap ?? null, onCellMapChange, mapKey);
   const {draft, change} = history;
   const [ui, setUi] = useState(INITIAL_UI);
-  const {render, errors, pending} = useCellMapRender(active ? draft?.data : null, EDITOR_PIXELS_PER_FOOT);
+  const {render, errors, pending} = useCellMapRender(rendering ? draft?.data : null, EDITOR_PIXELS_PER_FOOT);
+  useThumbnail(onThumbnail && history.edits > 0 && !pending ? render : null, onThumbnail);
   const dragRef = useRef(null);
   // Each drag is its own undo step (see useCellHistory's groups).
   const nextDrag = useRef(0);
@@ -47,7 +50,7 @@ export function useCellsTab({mapKey, cellMap, active}) {
   const update = (fields) => setUi((current) => ({...current, ...fields}));
 
   useEffect(() => {
-    if (!active) return undefined;
+    if (!editing) return undefined;
     function onKeyDown(e) {
       if (e.target.closest?.("input, select, textarea")) return;
       const mod = e.metaKey || e.ctrlKey;
@@ -69,7 +72,7 @@ export function useCellsTab({mapKey, cellMap, active}) {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [active, ui.selected, history, change]);
+  }, [editing, ui.selected, history, change]);
 
   // Cell coordinates (fractional, for trails) and the cell under a canvas
   // pixel.
@@ -172,10 +175,16 @@ export function useCellsTab({mapKey, cellMap, active}) {
     return true;
   }
 
-  const canvas = draft && {
+  // What MapCanvas needs to show the cells as the ground (ground), and to
+  // edit them (canvas, for the Cells tab).
+  const ground = draft && {
     image: {url: `cellmap:${mapKey}`, pixelDimensions},
     feetDimensions: size,
     background: <RenderBackground image={render?.image} {...pixelDimensions} />,
+    rendered: render?.image ?? null,
+  };
+  const canvas = ground && {
+    ...ground,
     overlay: (
       <>
         <CellOverlay draft={draft} renderedCells={render?.cellMap.cells} ui={ui} scale={scale} {...pixelDimensions} />
@@ -186,7 +195,31 @@ export function useCellsTab({mapKey, cellMap, active}) {
     cursor: ui.tool === "pan" ? "grab" : "crosshair",
   };
 
-  return {history, draft, change, ui, update, render, errors, pending, canvas};
+  return {history, draft, change, ui, update, render, errors, pending, ground, canvas};
+}
+
+const THUMBNAIL_DELAY_MS = 1500;
+const THUMBNAIL_MAX_DIMENSION = 256;
+
+// A small webp of the latest render, a moment after edits stop.
+function useThumbnail(render, onThumbnail) {
+  const onThumbnailRef = useRef(onThumbnail);
+  onThumbnailRef.current = onThumbnail;
+  useEffect(() => {
+    if (!render) return undefined;
+    const timer = setTimeout(() => {
+      const {image} = render;
+      const shrink = Math.min(1, THUMBNAIL_MAX_DIMENSION / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * shrink));
+      canvas.height = Math.max(1, Math.round(image.height * shrink));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => blob && onThumbnailRef.current?.(blob), "image/webp");
+    }, THUMBNAIL_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [render]);
 }
 
 // The last render, stretched to the current size while a resize renders.

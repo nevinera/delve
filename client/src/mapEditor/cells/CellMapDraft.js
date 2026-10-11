@@ -81,12 +81,17 @@ export class CellMapDraft {
     return this.with({cells: this.data.cells.map((line, r) => (rows.has(r) ? rows.get(r).join("") : line))});
   }
 
-  // New cells (right and below) are the theme's first terrain; the top-left
-  // stays put, and so do the trails.
+  // Keeps the bottom-left corner in place: rows come and go at the top,
+  // columns at the right. Map feet run up from the bottom-left, so walls,
+  // units and connections stay over the same cells. New cells are the
+  // theme's first terrain; trails move with their cells.
   resize({cols = this.grid.cols, rows = this.grid.rows, cellSize = this.grid.cellSize}) {
     const fill = Object.keys(THEMES[this.data.theme].terrains)[0];
-    const cells = Array.from({length: rows}, (_, r) => (this.data.cells[r] ?? "").slice(0, cols).padEnd(cols, fill));
-    return this.with({grid: {...this.grid, cols, rows, cellSize}, cells});
+    const added = rows - this.grid.rows;
+    const kept = added >= 0 ? this.data.cells : this.data.cells.slice(-added);
+    const cells = [...Array.from({length: Math.max(0, added)}, () => ""), ...kept].map((line) => line.slice(0, cols).padEnd(cols, fill));
+    const trails = this.trails.map((trail) => ({...trail, points: trail.points.map(([col, row]) => [col, row + added])}));
+    return this.with({grid: {...this.grid, cols, rows, cellSize}, cells, ...(this.data.trails ? {trails} : {})});
   }
 
   // ---- Look ----

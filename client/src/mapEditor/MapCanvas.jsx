@@ -112,11 +112,13 @@ const PAN_KEY_DIRECTIONS = {
 // leaves "add-unit" armed after each placement, and prepareUnit(entry)
 // fills in each new unit before it's added (e.g. its group).
 //
-// cellEditing (the Cells tab - see cells/useCellsTab.jsx) swaps the image
-// for {background, overlay} nodes in the same pixel space, and hands
-// pointer events to onPointer(phase, contentPixel): a "down" it returns
-// true for is an edit, not a pan. {placeholder: true} stands in until
-// there's a cell map. The units/walk tools and the 5ft grid are hidden.
+// ground ({background, rendered} - see cells/useCellsTab.jsx) is a cell
+// map's render in place of the image: background is drawn in the image's
+// pixel box, and the walk preview uses rendered (a bitmap). The 5ft square
+// grid is hidden over hexes. cellEditing (the Cells tab) adds an overlay
+// node and hands pointer events to onPointer(phase, contentPixel): a
+// "down" it returns true for is an edit, not a pan. {placeholder: true}
+// stands in until there's a cell map. The units/walk tools are hidden.
 const ALL_LAYERS = {barriers: true, connections: true, units: true, ncus: true};
 
 export default function MapCanvas({
@@ -136,7 +138,7 @@ export default function MapCanvas({
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   previewing = false, onTogglePreview,
   tool = "select", onToolChange,
-  cellEditing = null,
+  ground = null, cellEditing = null,
 }) {
   const wrapperRef = useRef(null);
   const replaceInputRef = useRef(null);
@@ -1092,7 +1094,7 @@ export default function MapCanvas({
       {image && !cellEditing && (
         <div className="map-canvas-toolbar-row">
           <button type="button" className="map-canvas-replace" onClick={() => replaceInputRef.current?.click()}>
-            Replace image
+            {ground ? "Use an image instead" : "Replace image"}
           </button>
           <input
             ref={replaceInputRef} type="file" accept="image/*"
@@ -1102,7 +1104,7 @@ export default function MapCanvas({
       )}
       {imageError && <div className="map-canvas-error">{imageError}</div>}
       {previewing ? (
-        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={image.url} onExit={() => onTogglePreview?.()} />
+        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} onExit={() => onTogglePreview?.()} />
       ) : image ? (
         <div
           ref={wrapperRef}
@@ -1119,7 +1121,7 @@ export default function MapCanvas({
             className="map-canvas-content"
             style={{transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`}}
           >
-            {cellEditing?.background ?? <img
+            {ground?.background ?? <img
               // displayImageUrl swaps in a higher-res rasterized bitmap for
               // an SVG source (see MapEditor's own effect) - image.url
               // itself stays the raw asset, used for saving and the walk
@@ -1132,7 +1134,7 @@ export default function MapCanvas({
               draggable={false}
               alt=""
             />}
-            {!cellEditing && hasBothAxes(feetDimensions) && (
+            {!ground && hasBothAxes(feetDimensions) && (
               <svg
                 className="map-canvas-grid"
                 width={image.pixelDimensions.width}

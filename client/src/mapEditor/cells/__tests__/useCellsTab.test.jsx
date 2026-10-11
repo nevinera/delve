@@ -1,4 +1,5 @@
 import {describe, it, expect, vi, beforeEach} from "vitest";
+import {useState} from "react";
 import {act, fireEvent, render, renderHook, screen} from "@testing-library/react";
 
 vi.mock("../../../cellMap/cache", () => ({
@@ -19,8 +20,14 @@ const at = (col, row) => {
   return {x: x * EDITOR_PIXELS_PER_FOOT, y: y * EDITOR_PIXELS_PER_FOOT};
 };
 
+// The hook as MapWorkbench hosts it: the cellMap lives in the host's state.
+function useHosted(initial, options) {
+  const [cellMap, setCellMap] = useState(initial);
+  return useCellsTab({mapKey: "m", cellMap, onCellMapChange: setCellMap, ...options});
+}
+
 function setup(cellMap = start()) {
-  return renderHook(({active}) => useCellsTab({mapKey: "m", cellMap, active}), {initialProps: {active: true}});
+  return renderHook(({editing}) => useHosted(cellMap, {editing}), {initialProps: {editing: true}});
 }
 
 describe("useCellsTab", () => {
@@ -111,13 +118,13 @@ describe("useCellsTab", () => {
     expect(result.current.draft.trails[0].points).toHaveLength(3);
   });
 
-  it("renders only while active, without storing previews", async () => {
+  it("renders only while editing, without storing previews", async () => {
     vi.useFakeTimers();
     const {rerender} = setup();
     await act(async () => vi.advanceTimersByTime(500));
     expect(cachedCellMapImage).toHaveBeenCalledWith(expect.objectContaining({cells: start().cells}), {pixelsPerFoot: EDITOR_PIXELS_PER_FOOT, persist: false});
     vi.clearAllMocks();
-    rerender({active: false});
+    rerender({editing: false});
     await act(async () => vi.advanceTimersByTime(500));
     expect(cachedCellMapImage).not.toHaveBeenCalled();
     vi.useRealTimers();
@@ -126,7 +133,7 @@ describe("useCellsTab", () => {
 
 describe("CellsPanel", () => {
   function Panel({cellMap = null, feetDimensions = {width: 100, height: 80}, hasImage = false}) {
-    const cells = useCellsTab({mapKey: "m", cellMap, active: false});
+    const cells = useHosted(cellMap, {editing: false});
     return <CellsPanel cells={cells} feetDimensions={feetDimensions} hasImage={hasImage} />;
   }
 
@@ -164,7 +171,7 @@ describe("CellsPanel", () => {
 describe("CellsPanel's grid fields", () => {
   it("follow an undone resize", () => {
     function Panel() {
-      const cells = useCellsTab({mapKey: "m", cellMap: start(), active: false});
+      const cells = useHosted(start(), {editing: false});
       return <CellsPanel cells={cells} feetDimensions={null} hasImage={false} />;
     }
     render(<Panel />);
@@ -172,5 +179,25 @@ describe("CellsPanel's grid fields", () => {
     fireEvent.click(screen.getByRole("button", {name: "Resize"}));
     fireEvent.click(screen.getByRole("button", {name: "Undo"}));
     expect(screen.getByLabelText("Columns")).toHaveValue(6);
+  });
+});
+
+describe("useCellsTab thumbnails", () => {
+  it("makes one after an edit, once the render catches up - not on open", async () => {
+    vi.useFakeTimers();
+    HTMLCanvasElement.prototype.getContext = () => ({drawImage: () => {}});
+    HTMLCanvasElement.prototype.toBlob = function (done) {
+      done(new Blob(["thumb"]));
+    };
+    const onThumbnail = vi.fn();
+    const {result} = renderHook(() => useHosted(start(), {editing: true, onThumbnail}));
+    await act(async () => vi.advanceTimersByTime(500));
+    await act(async () => vi.advanceTimersByTime(3000));
+    expect(onThumbnail).not.toHaveBeenCalled();
+    act(() => result.current.change((d) => d.paint(0, 0, "T")));
+    await act(async () => vi.advanceTimersByTime(500));
+    await act(async () => vi.advanceTimersByTime(3000));
+    expect(onThumbnail).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 });

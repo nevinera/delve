@@ -137,6 +137,26 @@ export function setMapImage(draft, zone, map, {file, name, pixelDimensions = nul
   });
 }
 
+// Removes the map's background image and its thumbnail, files and all; a
+// map with cells falls back to them (see MapDraft's removeImage).
+export function removeMapImage(draft, zone, map) {
+  const path = mapFile(draft.worldKey, zone, map);
+  const data = mapData(draft, zone, map);
+  let next = draft;
+  for (const name of [data?.imageUrl, data?.thumbnailUrl]) {
+    const file = name && resolvePath(path, name);
+    if (file && next.exists(file)) next = next.remove(file);
+  }
+  return updateMap(next, zone, map, (d) => d.removeImage());
+}
+
+// Stores a thumbnail of a map drawn in cells, beside the map file.
+export function setMapThumbnail(draft, zone, map, thumbnail) {
+  const name = `${map}.thumb.webp`;
+  const next = draft.write(resolvePath(mapFile(draft.worldKey, zone, map), name), thumbnail);
+  return updateMap(next, zone, map, (d) => d.setField("thumbnailUrl", name));
+}
+
 // The world's own unit types and items, as the map panels take them (see
 // MapWorkbench's unitTypes/items props). assetUrl(repoPath) makes token
 // images displayable.

@@ -198,3 +198,23 @@ describe("MapDraft", () => {
     });
   });
 });
+
+describe("MapDraft cell maps", () => {
+  const cellMap = {version: 1, theme: "glade", seed: 1, grid: {type: "hex", cols: 4, rows: 3, cellSize: 5}, cells: ["....", "....", "...."]};
+
+  it("sizes a map without an image to its cells", () => {
+    const draft = new MapDraft({feetDimensions: {width: 100, height: 100}}).setCellMap(cellMap);
+    expect(draft.data.cellMap).toBe(cellMap);
+    expect(draft.data.feetDimensions).toEqual({width: 18.764, height: 17.5});
+  });
+
+  it("leaves a map with an image its own size", () => {
+    const draft = new MapDraft({imageUrl: "m.png", feetDimensions: {width: 100, height: 100}}).setCellMap(cellMap);
+    expect(draft.data.feetDimensions).toEqual({width: 100, height: 100});
+  });
+
+  it("falls back to the cells when the image goes", () => {
+    const draft = new MapDraft({imageUrl: "m.png", pixelDimensions: {width: 1, height: 1}, thumbnailUrl: "t.webp", feetDimensions: {width: 100, height: 100}, cellMap}).removeImage();
+    expect(draft.data).toEqual({cellMap, feetDimensions: {width: 18.764, height: 17.5}});
+  });
+});

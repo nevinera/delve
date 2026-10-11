@@ -33,10 +33,15 @@ describe("CellMapDraft", () => {
     expect(walled.fill(2, 0, "%").data.cells).toEqual(["..%..", "..%..", "%%%..", "....."]);
   });
 
-  it("resizes from the top-left", () => {
-    const draft = blank().paint(0, 0, "T").resize({cols: 2, rows: 5});
-    expect(draft.data.cells).toEqual(["T.", "..", "..", "..", ".."]);
-    expect(draft.grid).toMatchObject({cols: 2, rows: 5, cellSize: 5});
+  it("resizes from the bottom-left, moving trails with their cells", () => {
+    const draft = blank().paint(0, 3, "T").addTrail([[0, 3], [2, 1]]);
+    const taller = draft.resize({cols: 2, rows: 6});
+    expect(taller.data.cells).toEqual(["..", "..", "..", "..", "..", "T."]);
+    expect(taller.trails[0].points).toEqual([[0, 5], [2, 3]]);
+    expect(taller.grid).toMatchObject({cols: 2, rows: 6, cellSize: 5});
+    const shorter = draft.resize({rows: 2});
+    expect(shorter.data.cells).toEqual([".....", "T...."]);
+    expect(shorter.trails[0].points).toEqual([[0, 1], [2, -1]]);
   });
 
   it("sets and resets colors", () => {

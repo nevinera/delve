@@ -9,14 +9,19 @@ import {BRUSHES, OVERLAYS, TOOLS} from "./useCellsTab";
 
 const DEFAULT_CELL_SIZE = 5;
 
-export default function CellsPanel({cells, feetDimensions, hasImage}) {
+export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveImage}) {
   const {draft, change, history, ui, update, errors, pending, render} = cells;
   if (!draft) return <NewCellMap feetDimensions={feetDimensions} onCreate={(created) => change(() => created)} />;
   const terrains = terrainsOf(draft.data);
 
   return (
     <div className="cells-panel">
-      {hasImage && <p className="cells-panel-note">This map has an image, so these cells aren&apos;t shown in play. Remove the image to use them.</p>}
+      {hasImage && (
+        <div className="cells-panel-note">
+          This map has an image, so these cells aren&apos;t shown in play.{" "}
+          {onRemoveImage && <button type="button" onClick={onRemoveImage}>Remove the image</button>}
+        </div>
+      )}
       <div className="cells-panel-row">
         <button type="button" disabled={!history.canUndo} onClick={history.undo}>Undo</button>
         <button type="button" disabled={!history.canRedo} onClick={history.redo}>Redo</button>
@@ -110,6 +115,13 @@ function GridSection({draft, change}) {
         <NumberField label="Rows" value={next.rows} min={1} max={200} onChange={(v) => setNext({...next, rows: v})} />
         <NumberField label="Cell size (ft)" value={next.cellSize} min={1} step={0.5} onChange={(v) => setNext({...next, cellSize: v})} />
       </div>
+      {changed && (
+        <p className="cells-panel-help">
+          {next.cellSize !== cellSize
+            ? "A new cell size scales the cells, so they'll move out from under walls, connections and units."
+            : "Rows come and go at the top and columns at the right, so walls, connections and units stay over the same cells."}
+        </p>
+      )}
       {changed && (
         <div className="cells-panel-row">
           <button type="button" onClick={() => change((d) => d.resize(next))}>Resize</button>
