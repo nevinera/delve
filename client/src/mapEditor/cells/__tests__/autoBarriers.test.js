@@ -84,15 +84,17 @@ describe("autoBarriers", () => {
     const map = blank(20, 14);
     map.cells = map.cells.map((line, r) => [...line].map((ch, c) => {
       const ring = c < 3 || r < 3 || c >= 17 || r >= 11;
-      const gap = (r < 3 && c >= 8 && c <= 11) || (c < 3 && r >= 6 && r <= 8);
+      const gap = (r < 3 && c >= 8 && c <= 11) || (c < 3 && r >= 6 && r <= 8) || (c >= 17 && r >= 5 && r <= 7);
       return ring && !gap ? "T" : ".";
     }).join(""));
-    map.exits = [{side: "north", from: 8, to: 11}, {side: "west", from: 6, to: 8}];
+    map.exits = [{side: "north", from: 8, to: 11}, {side: "east", from: 5, to: 7}, {side: "west", from: 6, to: 8}];
     const result = autoBarriers(map);
     expect(result.error).toBeNull();
     expect(result.openEdge).toBe(false);
-    const {height} = mapSize(map.grid);
-    const [north, west] = result.connections;
+    const {width, height} = mapSize(map.grid);
+    const [north, east, west] = result.connections;
+    // Right on the east edge, not rounded past it.
+    expect(east).toMatchObject({identifier: "east", start: {x: width}, end: {x: width}});
     expect(north).toMatchObject({identifier: "north", type: "line", start: {y: height}, end: {y: height}});
     expect(west).toMatchObject({identifier: "west", type: "line", start: {x: 0}, end: {x: 0}});
     // About as wide as the gap, and it ends on the walls either side.
@@ -104,9 +106,10 @@ describe("autoBarriers", () => {
     // So the clearing and the gaps are open, and the trees filled.
     expect(filledAt(map, result, 10, 1)).toBe(false);
     expect(filledAt(map, result, 1, 7)).toBe(false);
+    expect(filledAt(map, result, 18, 6)).toBe(false);
     expect(filledAt(map, result, 10, 7)).toBe(false);
     expect(filledAt(map, result, 1, 1)).toBe(true);
-    expect(filledAt(map, result, 18, 7)).toBe(true);
+    expect(filledAt(map, result, 18, 9)).toBe(true);
   });
 
   it("gives a lone grove that's round a circle, and others walls", () => {

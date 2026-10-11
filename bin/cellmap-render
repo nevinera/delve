@@ -1,0 +1,126 @@
+#!/usr/bin/env node
+// Renders a cell map to a PNG, as the game draws it (see
+// client/src/cellMap/render.js), with optional overlays. Takes a cellMap's
+// JSON or a whole map file's (one with a cellMap). Run with --help.
+import {parseArgs} from "node:util";
+import {readFileSync, writeFileSync} from "node:fs";
+import {createCanvas} from "@napi-rs/canvas";
+import {client} from "../client/cli/load.mjs";
+
+const {renderCellMap} = await client("cellMap/render.js");
+const {validateCellMap, THEMES} = await client("cellMap/format.js");
+const {drawCells, drawExits, drawTrails, drawBridges} = await client("cellMap/overlay.js");
+const {mapSize} = await client("cellMap/hexGrid.js");
+
+const USAGE = `Usage: bin/cellmap-render FILE [flags]
+
+  FILE            a cellMap, or a map file with one; - reads stdin
+  -o, --out FILE  the PNG to write (default: FILE with .png, or map.png from stdin)
+  --scale N       pixels per foot (default 6; cells are 5 ft)
+  --theme NAME    draw it in another theme: ${Object.keys(THEMES).join(", ")}
+  --seed N        another decoration seed
+  --cells         tint each cell by its terrain, with hex outlines
+  --grid          hex outlines only
+  --trails        trails and bridges as drawn in the editor
+  --exits         the cellMap's exits along the edge
+  --barriers      the map's barriers, connections and fill (a map file's; or, with
+                  --auto, made by Auto Barriers)
+  --auto          make the barriers with Auto Barriers instead of the file's
+  -h, --help`;
+
+const {values, positionals} = parseArgs({allowPositionals: true, options: {
+  out: {type: "string", short: "o"},
+  scale: {type: "string", default: "6"},
+  theme: {type: "string"},
+  seed: {type: "string"},
+  cells: {type: "boolean", default: false},
+  grid: {type: "boolean", default: false},
+  trails: {type: "boolean", default: false},
+  exits: {type: "boolean", default: false},
+  barriers: {type: "boolean", default: false},
+  auto: {type: "boolean", default: false},
+  help: {type: "boolean", short: "h", default: false},
+}});
+if (values.help) {
+  console.log(USAGE);
+  process.exit(0);
+}
+function fail(message) {
+  console.error(`${message}\n\n${USAGE}`);
+  process.exit(1);
+}
+const [file] = positionals;
+if (!file) fail("Which file?");
+
+const data = JSON.parse(file === "-" ? readFileSync(0, "utf8") : readFileSync(file, "utf8"));
+let cellMap = data.cellMap ?? data;
+if (values.theme) cellMap = {...cellMap, theme: values.theme};
+if (values.seed !== undefined) cellMap = {...cellMap, seed: Number(values.seed)};
+const errors = validateCellMap(cellMap);
+if (errors.length) fail(`Not a valid cellMap:\n  ${errors.join("\n  ")}`);
+
+const scale = Number(values.scale);
+if (!(scale > 0)) fail("--scale must be a positive number");
+const {canvas} = renderCellMap(cellMap, {pixelsPerFoot: scale, createCanvas});
+const ctx = canvas.getContext("2d");
+ctx.setTransform(scale, 0, 0, scale, 0, 0);
+if (values.cells || values.grid) drawCells(ctx, cellMap, scale, {filled: values.cells});
+if (values.trails) {
+  drawTrails(ctx, cellMap, scale);
+  drawBridges(ctx, cellMap, scale);
+}
+if (values.exits) drawExits(ctx, cellMap, scale);
+if (values.barriers || values.auto) await drawBarriers(ctx, data, cellMap, scale);
+
+const out = values.out ?? (file === "-" ? "map.png" : file.replace(/\.json$/, "") + ".png");
+writeFileSync(out, canvas.toBuffer("image/png"));
+console.error(`Wrote ${out} (${canvas.width}x${canvas.height})`);
+
+// Barriers in map feet (y up): the fill shaded, walls (blue where you can
+// see across them), circles, and line connections in green.
+async function drawBarriers(ctx, data, cellMap, scale) {
+  const {computeMapFill} = await client("game/mapFill.js");
+  let {barriers = [], connections = [], fillPoints = []} = data.cellMap ? data : {};
+  if (values.auto) {
+    const {autoBarriers} = await client("mapEditor/cells/autoBarriers.js");
+    const result = autoBarriers(cellMap);
+    if (result.error) fail(result.error);
+    const named = new Set(result.connections.map((c) => c.identifier));
+    ({barriers, fillPoints} = result);
+    connections = [...connections.filter((c) => !named.has(c.identifier)), ...result.connections];
+  }
+  const feetDimensions = mapSize(cellMap.grid);
+  const y = (v) => feetDimensions.height - v;
+  const fill = computeMapFill({feetDimensions, barriers, connections, fillPoints});
+  ctx.fillStyle = "rgba(200, 30, 60, 0.3)";
+  ctx.beginPath();
+  for (const {outer, holes} of fill.filled) {
+    for (const ring of [outer, ...holes]) {
+      ring.forEach(([px, py], i) => (i ? ctx.lineTo(px, y(py)) : ctx.moveTo(px, y(py))));
+      ctx.closePath();
+    }
+  }
+  ctx.fill("evenodd");
+  ctx.lineWidth = 3 / scale;
+  for (const barrier of barriers) {
+    ctx.strokeStyle = barrier.blocksSight === false ? "rgba(60, 170, 230, 0.95)" : "rgba(230, 40, 40, 0.95)";
+    ctx.beginPath();
+    if (barrier.type === "circle") ctx.arc(barrier.location.x, y(barrier.location.y), barrier.radius, 0, Math.PI * 2);
+    else barrier.locations.forEach((p, i) => (i ? ctx.lineTo(p.x, y(p.y)) : ctx.moveTo(p.x, y(p.y))));
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(40, 220, 90, 0.95)";
+  ctx.lineWidth = 6 / scale;
+  for (const c of connections.filter((c) => c.type === "line")) {
+    ctx.beginPath();
+    ctx.moveTo(c.start.x, y(c.start.y));
+    ctx.lineTo(c.end.x, y(c.end.y));
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  for (const p of fillPoints) {
+    ctx.beginPath();
+    ctx.arc(p.x, y(p.y), 6 / scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}

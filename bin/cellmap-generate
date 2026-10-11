@@ -1,0 +1,83 @@
+#!/usr/bin/env node
+// Generates a cell map (see client/src/cellMap/generate.js) and writes its
+// JSON. Run with --help for the flags.
+import {parseArgs} from "node:util";
+import {writeFileSync} from "node:fs";
+import {client} from "../client/cli/load.mjs";
+
+const {generateCellMap, TAGS} = await client("cellMap/generate.js");
+const {THEMES} = await client("cellMap/format.js");
+const {mapSize} = await client("cellMap/hexGrid.js");
+
+const USAGE = `Usage: bin/cellmap-generate [flags]
+
+  --cols N        columns (default 40)
+  --rows N        rows (default 30)
+  --exits N       exits, each on a different side: 0 to 4 (default 2)
+  --seed N        seed (default: random); the same flags and seed give the same map
+  --tags a,b      generator tags: ${TAGS.join(", ")}
+  --theme NAME    ${Object.keys(THEMES).join(", ")} (default glade)
+  --map ID        write a whole map file around it (identifier ID), not just the cellMap
+  --barriers      with --map, run Auto Barriers on it: walls, fill points and exit connections
+  -o, --out FILE  write here (default: stdout)
+  --compact       one line of JSON
+  -h, --help
+
+Pipe it to bin/cellmap-render to see it:
+  bin/cellmap-generate --tags chamber,paths --exits 3 | bin/cellmap-render - -o map.png`;
+
+const {values} = parseArgs({options: {
+  cols: {type: "string", default: "40"},
+  rows: {type: "string", default: "30"},
+  exits: {type: "string", default: "2"},
+  seed: {type: "string"},
+  tags: {type: "string", default: ""},
+  theme: {type: "string", default: "glade"},
+  map: {type: "string"},
+  barriers: {type: "boolean", default: false},
+  out: {type: "string", short: "o"},
+  compact: {type: "boolean", default: false},
+  help: {type: "boolean", short: "h", default: false},
+}});
+if (values.help) {
+  console.log(USAGE);
+  process.exit(0);
+}
+
+const int = (name) => {
+  const n = Number(values[name]);
+  if (!Number.isInteger(n)) fail(`--${name} must be a whole number`);
+  return n;
+};
+function fail(message) {
+  console.error(`${message}\n\n${USAGE}`);
+  process.exit(1);
+}
+
+let cellMap;
+try {
+  cellMap = generateCellMap({
+    cols: int("cols"),
+    rows: int("rows"),
+    connections: int("exits"),
+    seed: values.seed === undefined ? Math.floor(Math.random() * 1_000_000) : int("seed"),
+    tags: values.tags.split(",").map((t) => t.trim()).filter(Boolean),
+    theme: values.theme,
+  });
+} catch (error) {
+  fail(error.message);
+}
+if (values.barriers && !values.map) fail("--barriers needs --map");
+let data = cellMap;
+if (values.map) {
+  data = {identifier: values.map, name: values.map, feetDimensions: mapSize(cellMap.grid), cellMap, barriers: [], connections: []};
+  if (values.barriers) {
+    const {autoBarriers} = await client("mapEditor/cells/autoBarriers.js");
+    const {barriers, connections, fillPoints, error} = autoBarriers(cellMap);
+    if (error) fail(error);
+    data = {...data, barriers, connections, fillPoints};
+  }
+}
+const json = JSON.stringify(data, null, values.compact ? 0 : 2) + "\n";
+if (values.out) writeFileSync(values.out, json);
+else process.stdout.write(json);

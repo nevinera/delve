@@ -47,3 +47,15 @@ bin/rails server
 ```sh
 bundle exec rspec
 ```
+
+### Cell maps from the command line
+
+Generate a cell map (see client/src/cellMap/generate.js) and render one to a PNG, the way the game
+draws it. Both need `npm install`; `--help` lists their flags.
+
+```sh
+bin/cellmap-generate --cols 40 --rows 30 --exits 3 --tags chamber,paths --seed 11 -o woods.json
+bin/cellmap-render woods.json --scale 8 --auto   # with Auto Barriers' walls and fill
+bin/cellmap-generate --tags burrow,coral --theme cave | bin/cellmap-render - -o cave.png
+bin/cellmap-generate --map woods --barriers -o woods-map.json   # a whole map file
+```

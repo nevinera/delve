@@ -121,8 +121,9 @@ function exitConnection(exit, grid, barriers, toMap) {
   const below = ends.map((p) => p[along]).filter((v) => v <= middle && v >= lo - reach);
   const above = ends.map((p) => p[along]).filter((v) => v >= middle && v <= hi + reach);
   const [start, end] = [below.length ? Math.max(...below) : lo, above.length ? Math.min(...above) : hi];
-  const at = (v) => (along === 0 ? [v, a[1]] : [a[0], v]);
-  return {identifier: exit.side, type: "line", start: roundPoint(at(start)), end: roundPoint(at(end))};
+  // On the edge exactly: rounded, the east edge could land past the map.
+  const at = (v) => (along === 0 ? {x: round(v), y: a[1]} : {x: a[0], y: round(v)});
+  return {identifier: exit.side, type: "line", start: at(start), end: at(end)};
 }
 
 const barrier = (fields, kind) => (BLOCKERS[kind] ? fields : {...fields, blocksSight: false});

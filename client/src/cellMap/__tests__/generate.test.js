@@ -2,7 +2,9 @@ import {describe, it, expect} from "vitest";
 import {generateCellMap, TAGS} from "../generate";
 import {validateCellMap} from "../format";
 import {exitCells, exitEdge} from "../exits";
-import {CELL_SIZE, cellPoint, neighbor} from "../hexGrid";
+import {CELL_SIZE, cellPoint, mapSize, neighbor} from "../hexGrid";
+import {autoBarriers} from "../../mapEditor/cells/autoBarriers";
+import {computeMapFill} from "../../game/mapFill";
 
 const GROUNDS = ".%~";
 const open = (map, c, r) => GROUNDS.includes(map.cells[r]?.[c] ?? "T");
@@ -96,6 +98,23 @@ describe("generateCellMap", () => {
     }
     expect(generateCellMap({...options, connections: 0, tags: ["paths"]})).not.toHaveProperty("trails");
     expect(generateCellMap({...options, tags: ["paths"], theme: "cave"}).trails[0].type).toBe("worn");
+  });
+
+  it("gets walls from Auto Barriers that leave its open ground open, through every exit", () => {
+    for (const tags of [[], ["burrow", "coral"], ["hub", "cavities", "paths"]]) {
+      const map = generateCellMap({...options, connections: 4, tags});
+      const result = autoBarriers(map);
+      expect(result.error).toBeNull();
+      expect(result.openEdge).toBe(false);
+      expect(result.connections.map((c) => c.identifier).sort()).toEqual(["east", "north", "south", "west"]);
+      const feetDimensions = mapSize(map.grid);
+      const fill = computeMapFill({feetDimensions, barriers: result.barriers, connections: result.connections, fillPoints: result.fillPoints});
+      // Each line connection has open ground on one side (past slivers
+      // where the walls' rounded ends split it).
+      const lines = fill.edges.filter((e) => e.kind === "connection" && Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) > 0.01);
+      expect(lines.length).toBeGreaterThanOrEqual(4);
+      expect(lines.every((e) => [e.left, e.right].includes("open"))).toBe(true);
+    }
   });
 
   it("refuses tags it doesn't know, and too many connections", () => {
