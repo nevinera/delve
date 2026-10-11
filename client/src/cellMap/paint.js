@@ -17,6 +17,7 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
     loops(ctx, rings);
     ctx.fill("evenodd");
   }
+  stamp(ctx, scene.patches, sprites.patches);
 
   const cs = scene.cellSize;
   ctx.fillStyle = palette.shadow;
@@ -31,9 +32,8 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   ctx.fill("evenodd");
 
   // Trails go over the ground and the forest's mass, which they cut
-  // through, and under every decoration.
+  // through, and under the decorations.
   paintTrails(ctx, scene.trails, style);
-  stamp(ctx, scene.patches, sprites.patches);
   stamp(ctx, scene.pools, sprites.pools);
   stamp(ctx, scene.tufts, sprites.tufts);
   stamp(ctx, scene.reeds, sprites.reeds);

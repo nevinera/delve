@@ -186,6 +186,16 @@ describe("trails", () => {
     expect(buildScene(forest).forest.length).toBeGreaterThan(1);
   });
 
+  it("keeps grass, reeds and pools off the trail", () => {
+    const ground = {...tiny(["%%%%%%%%%%%%", "~~~~~~~~~~~~", "%%%%%%%%%%%%", "~~~~~~~~~~~~", "............"]), trails: [{width: 1.5, points: [[-1, 2], [12, 2]]}]};
+    const scene = buildScene(ground);
+    const [trail] = scene.trails;
+    for (const kind of ["tufts", "tallTufts", "pools", "reeds"]) {
+      expect(scene[kind].every((p) => Math.min(...trail.points.map((q) => Math.hypot(p.x - q.x, p.y - q.y))) > trail.width / 2)).toBe(true);
+    }
+    expect(scene.tallTufts.length).toBeLessThan(buildScene({...ground, trails: []}).tallTufts.length);
+  });
+
   it("validates trails", () => {
     expect(validateCellMap({...forest, trails: [{width: 0, points: [[1, 1]]}, {width: 1, points: [[1, 1], [2]]}]})).toEqual([
       "trails[0].width must be a positive number",

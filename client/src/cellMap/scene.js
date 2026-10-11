@@ -43,7 +43,7 @@ export function buildScene(map, style = GLADE) {
     seed,
   );
 
-  const clearedCells = trailClearings(scene.trails, cellSize);
+  const clearedCells = trailClearings(scene.trails, cellSize, TRAIL_CLEARANCE);
   const cleared = (col, row) => clearedCells.has(`${col},${row}`);
   // The forest's mass leaves out what trails clear, as its crowns do.
   scene.forest = regionLoops(map, "trees", cleared).map((loop) => insetLoop(smoothLoop(loop, cellSize, seed, FOREST_SMOOTHING), FOREST_INSET * cellSize));
@@ -92,6 +92,15 @@ export function buildScene(map, style = GLADE) {
       }
     }
   });
+  // Nothing grows on a trail: ground decorations that would overlap one
+  // are left out. Only placements in cells near a trail need checking.
+  const nearCells = trailClearings(scene.trails, cellSize, 1);
+  const offTrail = (p) => {
+    if (!nearCells.has(cellAt(p.x, p.y, cellSize).join(","))) return true;
+    return scene.trails.every((t) => lineDistance(p.x, p.y, t.points) > t.width / 2 + p.radius * 0.6);
+  };
+  for (const kind of ["tufts", "tallTufts", "pools", "reeds"]) scene[kind] = scene[kind].filter(offTrail);
+
   // Painted top to bottom, so lower crowns overlap the ones behind them.
   scene.crowns.sort((a, b) => a.y - b.y || a.x - b.x);
   return scene;
@@ -230,12 +239,12 @@ function lineDistance(x, y, points) {
   return best;
 }
 
-// The cells whose centers are within a trail's clearance: each segment
-// checks only the cells around it.
-function trailClearings(trails, cellSize) {
+// The cells whose centers are within margin (in cell sizes) of a trail's
+// edge: each segment checks only the cells around it.
+function trailClearings(trails, cellSize, margin) {
   const cleared = new Set();
   for (const {width, points} of trails) {
-    const reach = width / 2 + TRAIL_CLEARANCE * cellSize;
+    const reach = width / 2 + margin * cellSize;
     for (let i = 0; i + 1 < points.length; i++) {
       const a = points[i];
       const b = points[i + 1];
