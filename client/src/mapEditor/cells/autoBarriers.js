@@ -5,8 +5,9 @@
 // then smoothed so a row's is too, then simplified. Walls stop at the
 // map's edge - forest reaching it is filled by the map's own rule (see
 // game/mapFill.js) - and each patch of forest
-// inside the map gets a fill point. A lone patch that's a whole hex ball
-// (one cell, or one and its six neighbors, ...) gets a circle instead. Open ground reaching the edge would be
+// inside the map gets a fill point. A lone patch that's round - three
+// cells around a corner, or a whole hex ball (one cell, or one and its six
+// neighbors, ...) - gets a circle instead. Open ground reaching the edge would be
 // filled too, so that's reported, not fixed.
 //
 // Works in map feet (y up); the scene is in cellmap feet (y down).
@@ -39,9 +40,9 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   const {width, height} = mapSize(cellMap.grid);
   const toMap = ({x, y}) => [x, height - y];
   const cleared = trailClearedCells(cellMap);
-  const groves = hexBallGroves(cellMap, cleared);
+  const groves = roundGroves(cellMap, cleared);
   const inGrove = new Set(groves.flatMap(({cells}) => cells));
-  const circles = groves.map(({center: [col, row], steps}) => ({type: "circle", location: roundPoint(mapPoint(col, row, height)), radius: (steps + 0.5) * CELL_SIZE}));
+  const circles = groves.map(({center: {x, y}, radius}) => ({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}));
   const forest = regionLoops(cellMap, "trees", (c, r) => cleared(c, r) || inGrove.has(`${c},${r}`)).map((loop) => smoothOutline(loop).map(toMap));
   const forestBoxes = forest.map(bounds);
   const isForest = (p) => forest.filter((loop, i) => inBounds(p, forestBoxes[i]) && insidePolygon(p, loop)).length % 2 === 1;
@@ -82,9 +83,9 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   return {barriers, fillPoints, segments, openEdge: edgeCellCenters(cellMap, height).some((p) => !isForest(p)), error: null};
 }
 
-// Patches of trees (less cleared cells) that are exactly the cells within
-// some steps of a center, away from the map's edge: {center, steps, cells}.
-function hexBallGroves(cellMap, cleared) {
+// Round patches of trees (less cleared cells), away from the map's edge:
+// {center (cellmap feet), radius, cells}.
+function roundGroves(cellMap, cleared) {
   const {cols, rows} = cellMap.grid;
   const terrains = terrainsOf(cellMap);
   const isTree = (c, r) => c >= 0 && c < cols && r >= 0 && r < rows && terrains[cellMap.cells[r][c]] === "trees" && !cleared(c, r);
@@ -104,16 +105,27 @@ function hexBallGroves(cellMap, cleared) {
           }
         }
       }
-      const grove = asHexBall(patch, cols, rows);
-      if (grove) groves.push(grove);
+      if (patch.some(([c, r]) => c === 0 || r === 0 || c === cols - 1 || r === rows - 1)) continue;
+      const grove = asTriad(patch) ?? asHexBall(patch);
+      if (grove) groves.push({...grove, cells: patch.map(([c, r]) => `${c},${r}`)});
     }
   }
   return groves;
 }
 
+// Three cells around a corner: a circle on the corner, as big as they are.
+function asTriad(patch) {
+  if (patch.length !== 3 || hexDistance(patch[0], patch[1]) + hexDistance(patch[1], patch[2]) + hexDistance(patch[0], patch[2]) !== 3) return null;
+  const centers = patch.map(([c, r]) => cellCenter(c, r, CELL_SIZE));
+  const center = {x: centers.reduce((sum, {x}) => sum + x, 0) / 3, y: centers.reduce((sum, {y}) => sum + y, 0) / 3};
+  const hexArea = (3 * Math.sqrt(3) / 2) * hexRadius(CELL_SIZE) ** 2;
+  return {center, radius: Math.sqrt((3 * hexArea) / Math.PI)};
+}
+
 // A ball of k steps has 3k(k+1)+1 cells; its center is the middle of its
-// bounding columns and rows.
-function asHexBall(patch, cols, rows) {
+// bounding columns and rows. Its circle runs through its edges' middles,
+// like the walls do.
+function asHexBall(patch) {
   const steps = Math.round((Math.sqrt(12 * patch.length - 3) - 3) / 6);
   if (3 * steps * (steps + 1) + 1 !== patch.length || (steps + 0.5) * CELL_SIZE > MAX_CIRCLE_RADIUS) return null;
   const colsOf = patch.map(([c]) => c);
@@ -121,8 +133,7 @@ function asHexBall(patch, cols, rows) {
   const rowsOf = patch.filter(([c]) => c === col).map(([, r]) => r);
   const center = [col, (Math.min(...rowsOf) + Math.max(...rowsOf)) / 2];
   if (!center.every(Number.isInteger) || !patch.every((cell) => hexDistance(cell, center) <= steps)) return null;
-  if (patch.some(([c, r]) => c === 0 || r === 0 || c === cols - 1 || r === rows - 1)) return null;
-  return {center, steps, cells: patch.map(([c, r]) => `${c},${r}`)};
+  return {center: cellCenter(...center, CELL_SIZE), radius: (steps + 0.5) * CELL_SIZE};
 }
 
 // A loop of lattice corners (see regions.js) as the midpoints of its edges,

@@ -76,14 +76,15 @@ describe("autoBarriers", () => {
     expect(autoBarriers(map, first.fillPoints).fillPoints).toEqual(first.fillPoints);
   });
 
-  it("gives a lone grove that's a hex ball a circle, and others walls", () => {
+  it("gives a lone grove that's round a circle, and others walls", () => {
     const map = blank(20, 16);
     map.cells[5] = replaceAt(map.cells[5], 4, "T"); // one cell
     for (const [c, r] of [[12, 8], [12, 7], [12, 9], [11, 7], [11, 8], [13, 7], [13, 8]]) map.cells[r] = replaceAt(map.cells[r], c, "T"); // a cell and its six neighbors
     map.cells[12] = replaceAt(map.cells[12], 4, "TT"); // two cells
+    for (const [c, r] of [[16, 4], [16, 5], [17, 4]]) map.cells[r] = replaceAt(map.cells[r], c, "T"); // three around a corner
     const result = autoBarriers(map);
     const circles = result.barriers.filter((b) => b.type === "circle");
-    expect(circles.map(({radius}) => radius).sort()).toEqual([2.5, 7.5]);
+    expect(circles.map(({radius}) => radius).sort()).toEqual([2.5, 4.55, 7.5]);
     const one = cellCenter(4, 5, CELL_SIZE);
     expect(circles).toContainEqual({type: "circle", location: {x: round(one.x), y: round(mapSize(map.grid).height - one.y)}, radius: 2.5});
     expect(result.barriers.filter((b) => b.type === "wall")).toHaveLength(1);
@@ -91,6 +92,7 @@ describe("autoBarriers", () => {
     expect(filledAt(map, result, 12, 8)).toBe(true);
     expect(filledAt(map, result, 4, 5)).toBe(true);
     expect(filledAt(map, result, 4, 12)).toBe(true);
+    expect(filledAt(map, result, 17, 4)).toBe(true);
   });
 
   it("handles the woodland example within the segment limit", () => {
