@@ -83,9 +83,36 @@ RSpec.describe Validators::MapValidator, type: :validator do
         .to raise_error(Validators::ValidationError, /identifier is required/)
     end
 
-    it "raises when imageUrl is missing" do
+    it "raises when there's neither imageUrl nor cellMap" do
       expect { described_class.validate!(cave_entrance_map.except("imageUrl")) }
-        .to raise_error(Validators::ValidationError, /imageUrl is required/)
+        .to raise_error(Validators::ValidationError, /imageUrl or cellMap is required/)
+    end
+
+    describe "with a cellMap" do
+      let(:cell_map) do
+        {"version" => 1, "theme" => "glade", "seed" => 3, "grid" => {"type" => "hex", "cols" => 3, "rows" => 2, "cellSize" => 5}, "cells" => ["T..", "%~."]}
+      end
+      let(:feet) { Validators::CellMapValidator.feet_size(cell_map["grid"]) }
+      let(:cells_only) { cave_entrance_map.except("imageUrl", "pixelDimensions", "connections").merge("cellMap" => cell_map, "feetDimensions" => feet) }
+
+      it "accepts a map with cells and no image or pixelDimensions" do
+        expect { described_class.validate!(cells_only) }.not_to raise_error
+      end
+
+      it "raises when feetDimensions doesn't match the cells' size" do
+        data = cells_only.merge("feetDimensions" => {"width" => 100, "height" => 100})
+        expect { described_class.validate!(data) }
+          .to raise_error(Validators::ValidationError, /must match the cell map's size, 14.43 x 12.50/) { |e| expect(e.path).to eq("$.feetDimensions") }
+      end
+
+      it "ignores the cells' size when there's an image too" do
+        expect { described_class.validate!(cave_entrance_map.merge("cellMap" => cell_map)) }.not_to raise_error
+      end
+
+      it "still checks the cells when there's an image" do
+        expect { described_class.validate!(cave_entrance_map.merge("cellMap" => cell_map.merge("cells" => ["T.."]))) }
+          .to raise_error(Validators::ValidationError, /has 1 rows/) { |e| expect(e.path).to eq("$.cellMap.cells") }
+      end
     end
 
     it "raises when pixelDimensions is missing" do

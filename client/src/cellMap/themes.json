@@ -1,0 +1,19 @@
+{
+  "glade": {
+    "grids": ["hex"],
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "T": "trees"},
+    "colors": {
+      "meadow": "#b3c788",
+      "tallGrass": "#a6bd70",
+      "marsh": "#98a874",
+      "forest": "#34502f",
+      "crown": "#567d44",
+      "tuft": "#7f9b5a",
+      "tallTuft": "#6f8f45",
+      "pool": "#6f8f8a",
+      "reed": "#5f7442",
+      "trail": "#cdb98a",
+      "ink": "#1d2818"
+    }
+  }
+}

@@ -13,6 +13,7 @@ vi.mock("../../cellMap/cache", () => ({
 
 import CellEditor from "../CellEditor";
 import {cachedCellMapImage} from "../../cellMap/cache";
+import forestEdge from "../../cellMap/examples/forest-edge.json";
 
 HTMLCanvasElement.prototype.getContext = () => new Proxy({}, {get: () => () => {}});
 
@@ -26,7 +27,7 @@ describe("CellEditor", () => {
     fireEvent.change(screen.getByLabelText("Map"), {target: {value: "forest-edge"}});
     fireEvent.change(screen.getByRole("spinbutton"), {target: {value: "42"}});
 
-    expect(cachedCellMapImage).toHaveBeenLastCalledWith(expect.objectContaining({name: "Forest edge", seed: 42}), {pixelsPerFoot: 10});
+    expect(cachedCellMapImage).toHaveBeenLastCalledWith(expect.objectContaining({cells: forestEdge.cells, seed: 42}), {pixelsPerFoot: 10});
   });
 
   it("offers the stress test map", () => {

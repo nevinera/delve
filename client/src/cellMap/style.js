@@ -3,6 +3,7 @@
 // that the painter stamps wherever the scene places one. Forest types will
 // be other styles.
 import {hash01} from "./random";
+import THEMES from "./themes.json";
 
 export const GLADE = {
   key: "glade",
@@ -36,6 +37,42 @@ export const GLADE = {
   shadowOffset: {x: 0.3, y: 0.45},
   variants: {crowns: 32, patches: 12, tufts: 8, tallTufts: 8, pools: 12, reeds: 8},
 };
+
+export const STYLES = {glade: GLADE};
+
+// Shades derived from a theme color, for when a map overrides it: the
+// defaults above are hand-tuned, so they're only replaced then.
+const DERIVED = {
+  meadow: (c) => ({patchLight: rgba(mix(c, WHITE, 0.35), 0.22), patchDark: rgba(scale(c, 0.75), 0.14)}),
+  crown: (c) => ({crownDark: scale(c, 0.9), crownLight: scale(c, 1.1), highlight: rgba(scale(c, 1.5), 0.55)}),
+  tallTuft: (c) => ({tallTuftLight: hex(mix(c, WHITE, 0.5))}),
+  trail: (c) => ({trailEdge: hex(scale(c, 0.68))}),
+  ink: (c) => ({shadow: rgba(c, 0.32)}),
+};
+
+// A cellmap's style: its theme's, with the map's colors over the palette.
+export function resolveStyle(map) {
+  const base = STYLES[map.theme] ?? GLADE;
+  const colors = Object.entries(map.colors ?? {}).filter(([key]) => key in (THEMES[base.key]?.colors ?? {}));
+  if (!colors.length) return base;
+  const palette = {...base.palette};
+  for (const [key, value] of colors) {
+    palette[key] = value;
+    Object.assign(palette, DERIVED[key]?.(rgb(value)));
+  }
+  return {...base, palette, key: `${base.key}:${colors.map(([k, v]) => `${k}=${v}`).sort().join(",")}`};
+}
+
+const WHITE = [255, 255, 255];
+const rgb = (value) => {
+  const n = parseInt(value.slice(1), 16);
+  return [n >> 16, (n >> 8) & 255, n & 255];
+};
+const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+const scale = (c, f) => c.map((v) => clamp(v * f));
+const mix = (a, b, t) => a.map((v, i) => clamp(v + (b[i] - v) * t));
+const rgba = (c, alpha) => `rgba(${c.join(", ")}, ${alpha})`;
+const hex = (c) => `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 
 // Each shape below is for a unit radius, made from variant i's own hashes.
 const variantHash = (style, kind, i) => (salt) => hash01(style.seed, kind, i, salt);

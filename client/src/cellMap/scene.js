@@ -5,7 +5,7 @@ import {cellAt, cellCenter, cellPoint, mapSize, neighbor} from "./hexGrid";
 import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
 import {insetLoop, regionLoops, smoothLoop} from "./regions";
-import {GLADE} from "./style";
+import {resolveStyle} from "./style";
 
 // The forest's dark mass only shows in the gaps between crowns, so it's
 // smoothed gently (sharp wiggles turn into spikes when inset) and sits this
@@ -28,7 +28,7 @@ const TRAIL_CLEARANCE = 0.4;
 // (the chance a cell that deep gets a crown); deeper in, the dark mass shows.
 const BAND = [1, 0.85, 0.6];
 
-export function buildScene(map, style = GLADE) {
+export function buildScene(map, style = resolveStyle(map)) {
   const {cellSize} = map.grid;
   const {seed} = map;
   const scene = {...mapSize(map.grid), cellSize, grounds: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};

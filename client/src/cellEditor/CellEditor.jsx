@@ -3,12 +3,17 @@ import {renderScale} from "../cellMap/render";
 import {cachedCellMapImage} from "../cellMap/cache";
 import {stressTestMap} from "../cellMap/examples/stressTest";
 import {cellCorners, cellPoint, mapSize} from "../cellMap/hexGrid";
-import {TERRAINS, validateCellMap} from "../cellMap/format";
+import {terrainsOf, validateCellMap} from "../cellMap/format";
 import clearing from "../cellMap/examples/clearing.json";
 import forestEdge from "../cellMap/examples/forest-edge.json";
 import woodlandTrail from "../cellMap/examples/woodland-trail.json";
 
-export const EXAMPLES = {clearing, "forest-edge": forestEdge, "woodland-trail": woodlandTrail, "stress-test": stressTestMap()};
+export const EXAMPLES = {
+  clearing: {name: "Clearing", cellMap: clearing},
+  "forest-edge": {name: "Forest edge", cellMap: forestEdge},
+  "woodland-trail": {name: "Woodland trail", cellMap: woodlandTrail},
+  "stress-test": {name: "Stress test (200×200)", cellMap: stressTestMap()},
+};
 
 const PIXELS_PER_FOOT = 10;
 
@@ -30,13 +35,13 @@ const CELL_COLORS = {
 // how long each step of the render took.
 export default function CellEditor({backUrl}) {
   const [exampleKey, setExampleKey] = useState("clearing");
-  const [seed, setSeed] = useState(EXAMPLES.clearing.seed);
+  const [seed, setSeed] = useState(EXAMPLES.clearing.cellMap.seed);
   const [overlay, setOverlay] = useState("none");
   const [timing, setTiming] = useState(null);
   const mapCanvas = useRef(null);
   const gridCanvas = useRef(null);
 
-  const map = {...EXAMPLES[exampleKey], seed};
+  const map = {...EXAMPLES[exampleKey].cellMap, seed};
   const errors = validateCellMap(map);
   const mapKey = JSON.stringify(map);
 
@@ -75,7 +80,7 @@ export default function CellEditor({backUrl}) {
 
   const chooseExample = (key) => {
     setExampleKey(key);
-    setSeed(EXAMPLES[key].seed);
+    setSeed(EXAMPLES[key].cellMap.seed);
   };
 
   return (
@@ -108,7 +113,7 @@ export default function CellEditor({backUrl}) {
         </label>
         {overlay === "cells" && (
           <span className="cell-editor-legend">
-            {Object.entries(TERRAINS).map(([ch, terrain]) => (
+            {Object.entries(terrainsOf(map)).map(([ch, terrain]) => (
               <span key={ch}><i style={{background: CELL_COLORS[terrain]}} />{terrain}</span>
             ))}
             <span><i style={{background: TRAIL_COLOR}} />trail points</span>
@@ -158,6 +163,7 @@ export function TimingReport({source, steps, stats, total}) {
 
 function drawOverlay(ctx, map, scale, filled) {
   const {grid} = map;
+  const terrains = terrainsOf(map);
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
   ctx.lineWidth = 1 / scale;
@@ -169,7 +175,7 @@ function drawOverlay(ctx, map, scale, filled) {
       for (const {x, y} of corners.slice(1)) ctx.lineTo(x, y);
       ctx.closePath();
       if (filled) {
-        ctx.fillStyle = CELL_COLORS[TERRAINS[map.cells[row][col]]];
+        ctx.fillStyle = CELL_COLORS[terrains[map.cells[row][col]]];
         ctx.fill();
       }
       ctx.stroke();

@@ -1,7 +1,6 @@
 {
-  "format": "cellmap",
   "version": 1,
-  "name": "Forest edge",
+  "theme": "glade",
   "grid": {
     "type": "hex",
     "cols": 48,
