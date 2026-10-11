@@ -9,6 +9,7 @@ import UnitsTab, {paletteKeys} from "./UnitsTab";
 import NcusPanel from "./NcusPanel";
 import CellsPanel from "./cells/CellsPanel";
 import {useCellsTab} from "./cells/useCellsTab";
+import {autoBarriers} from "./cells/autoBarriers";
 import HotkeyHelp from "./HotkeyHelp";
 import {MapDraft} from "./MapDraft";
 import {UiState} from "./UiState";
@@ -108,6 +109,17 @@ export default function MapWorkbench({
   });
   const cellCanvas = tab === "cells" ? (cells.canvas ?? {placeholder: true}) : null;
   const ground = cellCanvas || !image ? cells.ground : null;
+
+  // Walls from the cells, for a map whose ground they are.
+  function makeAutoBarriers() {
+    const result = autoBarriers(mapData.cellMap, mapData.fillPoints ?? []);
+    if (result.error) return {error: result.error};
+    onMapChange((d) => d.setField("barriers", result.barriers).setField("fillPoints", result.fillPoints));
+    return {
+      added: {barriers: result.barriers.length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length},
+      openEdge: result.openEdge, error: null,
+    };
+  }
 
   function removeImage() {
     if (!window.confirm("Remove this map's background image? It will use its cells instead. Nothing is committed until you save.")) return;
@@ -697,6 +709,7 @@ export default function MapWorkbench({
               onStartAddCircle={() => setUiState(uiState.startTool("add-circle"))}
               canPlaceOnMap={canPlaceOnMap}
               otherPlacementActive={!!uiState.connectionPlacement}
+              onAutoBarriers={!image && mapData.cellMap ? makeAutoBarriers : null}
               dispatch={dispatch}
             />
             <ConnectionsPanel

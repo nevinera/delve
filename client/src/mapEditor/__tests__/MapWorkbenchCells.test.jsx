@@ -79,3 +79,16 @@ describe("MapWorkbench with cells", () => {
     expect(onImageRemove).toHaveBeenCalled();
   });
 });
+
+describe("MapWorkbench's Auto Barriers", () => {
+  it("walls off a cell map's trees", () => {
+    const cells = ["TTTTTT", "T....T", "T....T", "TTTTTT"];
+    const map = {...CELL_MAP, cellMap: {...cellMap, grid: {type: "hex", cols: 6, rows: 4}, cells}, feetDimensions: {width: 27.424, height: 22.5}};
+    renderHost(map);
+    fireEvent.click(screen.getByText("Barriers"));
+    fireEvent.click(screen.getByRole("button", {name: "Auto Barriers"}));
+    expect(current.mapData.barriers.length).toBeGreaterThan(0);
+    expect(current.mapData.barriers[0].type).toBe("wall");
+    expect(screen.getByRole("button", {name: "Auto Barriers"})).toBeDisabled();
+  });
+});
