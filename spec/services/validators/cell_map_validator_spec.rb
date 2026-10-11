@@ -29,6 +29,12 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
     expect { described_class.validate!(cell_map.merge("colors" => {"meadow" => "#aabbcc", "forest" => "#2F4A2C"})) }.not_to raise_error
   end
 
+  it "accepts a trail's path type, and raises on one the theme doesn't have" do
+    trail = cell_map["trails"][0]
+    expect { described_class.validate!(cell_map.merge("trails" => [trail.merge("type" => "road")])) }.not_to raise_error
+    expect_invalid(cell_map.merge("trails" => [trail.merge("type" => "highway")]), /must be one of:/, "$.trails[0].type")
+  end
+
   context "bridges" do
     let(:big_map) do
       cell_map.merge("grid" => {"type" => "hex", "cols" => 12, "rows" => 12}, "cells" => Array.new(12) { "." * 12 }, "trails" => [])

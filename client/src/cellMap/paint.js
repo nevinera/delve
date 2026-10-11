@@ -1,6 +1,7 @@
 // Draws a scene (see scene.js) onto a 2D canvas context: fills for the
 // ground and forest, and decorations stamped from sprites (see sprites.js).
 // No filters, shadow blur or text, so it's quick on phones.
+import {DEFAULT_PATH, PATHS} from "./style";
 
 export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   const {palette} = style;
@@ -107,15 +108,21 @@ function stamp(ctx, placements, sprites) {
 
 // Each trail's solid part is stroked twice, wide and dark then narrower and
 // light, so it gets an edge. Its fading ends are outlines that spread as
-// they go, filled with the same colors fading out.
+// they go, filled with the same colors fading out. Its look is its path
+// type's (see style.js's PATHS): colors, edge, and a road's ruts.
 const FADE_SPREAD = 0.7;
 
 function paintTrails(ctx, trails, style) {
   const {palette} = style;
+  const pathOf = (trail) => PATHS[trail.type] ?? PATHS[DEFAULT_PATH];
   ctx.lineJoin = "round";
   ctx.lineCap = "butt";
-  for (const [color, extra, fadeTo] of [[palette.trailEdge, style.trailEdge * 2, 0.3], [palette.trail, 0, 1]]) {
-    for (const {width, body, fades, caps} of trails) {
+  for (const pass of ["edge", "fill"]) {
+    for (const trail of trails) {
+      const path = pathOf(trail);
+      const {width, body, fades, caps} = trail;
+      const [color, extra, fadeTo] = pass === "edge" ? [palette[path.edgeColor], path.edge * 2, 0.3] : [palette[path.color], 0, 1];
+      if (pass === "edge" && !path.edge) continue;
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
       ctx.lineWidth = width + extra;
@@ -148,15 +155,37 @@ function paintTrails(ctx, trails, style) {
       }
     }
   }
-  ctx.fillStyle = withAlpha(palette.trail, 0.7);
-  ctx.beginPath();
-  for (const {spots} of trails) {
-    for (const {x, y, radius} of spots) {
+  // A road's ruts: two darker lines along its solid part.
+  ctx.strokeStyle = palette.roadRut;
+  for (const {width, body} of trails.filter((t) => pathOf(t).ruts && t.body.length > 1)) {
+    ctx.lineWidth = width * 0.08;
+    ctx.beginPath();
+    for (const side of [-0.24, 0.24]) {
+      const line = offsetLine(body, width * side);
+      ctx.moveTo(line[0].x, line[0].y);
+      for (const p of line.slice(1)) ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+  for (const trail of trails) {
+    ctx.fillStyle = withAlpha(palette[pathOf(trail).color], 0.7);
+    ctx.beginPath();
+    for (const {x, y, radius} of trail.spots) {
       ctx.moveTo(x + radius, y);
       ctx.arc(x, y, radius, 0, Math.PI * 2);
     }
+    ctx.fill();
   }
-  ctx.fill();
+}
+
+// A line moved sideways by distance (to its left on screen, when negative).
+function offsetLine(points, distance) {
+  return points.map((p, i) => {
+    const a = points[Math.max(0, i - 1)];
+    const b = points[Math.min(points.length - 1, i + 1)];
+    const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return {x: p.x - ((b.y - a.y) / l) * distance, y: p.y + ((b.x - a.x) / l) * distance};
+  });
 }
 
 // The outline of a line whose width grows by FADE_SPREAD along it.

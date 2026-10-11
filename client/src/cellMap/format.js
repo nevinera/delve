@@ -45,6 +45,7 @@ export function validateCellMap(map) {
   if (map.trails === undefined) return errors;
   if (!Array.isArray(map.trails)) return [...errors, "trails must be a list"];
   map.trails.forEach((trail, i) => {
+    if (trail?.type !== undefined && !theme.paths.includes(trail.type)) errors.push(`trails[${i}].type must be one of: ${theme.paths.join(", ")}`);
     if (!(typeof trail?.width === "number" && trail.width > 0)) errors.push(`trails[${i}].width must be a positive number`);
     const points = trail?.points;
     if (!Array.isArray(points) || points.length < 2) return errors.push(`trails[${i}].points must list at least two points`);

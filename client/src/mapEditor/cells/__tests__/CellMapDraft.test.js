@@ -60,9 +60,10 @@ describe("CellMapDraft", () => {
 
   it("edits trails", () => {
     let draft = blank().addTrail([[0, 0], [2.123, 1]]);
-    expect(draft.trails).toEqual([{width: 0.8, points: [[0, 0], [2.12, 1]]}]);
+    expect(draft.trails).toEqual([{type: "trail", width: 0.8, points: [[0, 0], [2.12, 1]]}]);
     draft = draft.insertTrailPoint(0, 1, [1, 2]).moveTrailPoint(0, 2, [3, 3]).setTrailWidth(0, 1.2);
-    expect(draft.trails).toEqual([{width: 1.2, points: [[0, 0], [1, 2], [3, 3]]}]);
+    expect(draft.trails).toEqual([{type: "trail", width: 1.2, points: [[0, 0], [1, 2], [3, 3]]}]);
+    expect(draft.setTrailType(0, "road").trails[0]).toMatchObject({type: "road", width: 1.6});
     draft = draft.removeTrailPoint(0, 0);
     expect(draft.trails[0].points).toEqual([[1, 2], [3, 3]]);
     expect(draft.removeTrailPoint(0, 0).trails).toEqual([]);

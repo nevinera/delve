@@ -39,7 +39,7 @@ module Validators
     def validate_layout!(data, theme, path:)
       grid = validate_grid!(require_hash!(data, "grid", path: path), theme, path: child_path(path, "grid"))
       validate_cells!(require_array!(data, "cells", path: path), grid, theme, path: child_path(path, "cells"))
-      validate_trails!(require_array!(data, "trails", path: path), path: child_path(path, "trails")) unless data["trails"].nil?
+      validate_trails!(require_array!(data, "trails", path: path), theme, path: child_path(path, "trails")) unless data["trails"].nil?
       validate_bridges!(data, grid, path: path) unless data["bridges"].nil?
     end
 
@@ -90,12 +90,13 @@ module Validators
       raise ValidationError.new("has unknown cells: #{unknown.map(&:inspect).join(", ")}", path: path)
     end
 
-    def validate_trails!(trails, path:)
-      trails.each_with_index { |trail, i| validate_trail!(trail, path: index_path(path, i)) }
+    def validate_trails!(trails, theme, path:)
+      trails.each_with_index { |trail, i| validate_trail!(trail, theme, path: index_path(path, i)) }
     end
 
-    def validate_trail!(trail, path:)
+    def validate_trail!(trail, theme, path:)
       require_object!(trail, path: path)
+      require_one_of!(require_string!(trail, "type", path: path), theme["paths"], path: child_path(path, "type")) unless trail["type"].nil?
       width = require_numeric!(trail, "width", path: path)
       raise ValidationError.new("width must be positive", path: child_path(path, "width")) unless width > 0
       points = require_array!(trail, "points", path: path, min: 2)

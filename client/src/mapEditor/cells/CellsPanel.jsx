@@ -4,6 +4,7 @@ import {useState} from "react";
 import {THEMES, terrainLabel, terrainsOf} from "../../cellMap/format";
 import {CELL_SIZE, gridFor, hexDistance} from "../../cellMap/hexGrid";
 import {MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
+import {DEFAULT_PATH, PATHS} from "../../cellMap/style";
 import {CELL_COLORS} from "../../cellMap/overlay";
 import {CellMapDraft} from "./CellMapDraft";
 import {BRUSHES, OVERLAYS, TOOLS} from "./useCellsTab";
@@ -152,6 +153,9 @@ function TrailsSection({cells}) {
         {draft.trails.map((trail, t) => (
           <li key={t} className={ui.selected?.trail === t ? "active" : ""}>
             <button type="button" onClick={() => update({selected: {trail: t, point: null}, pendingPoint: null, newTrail: false})}>Trail {t + 1} ({trail.points.length} points)</button>
+            <select aria-label={`Trail ${t + 1}'s type`} value={trail.type ?? DEFAULT_PATH} onChange={(e) => change((d) => d.setTrailType(t, e.target.value))}>
+              {THEMES[draft.data.theme].paths.map((type) => <option key={type} value={type}>{PATHS[type].label}</option>)}
+            </select>
             <NumberField label="Width" value={trail.width} min={0.1} max={4} step={0.1} onChange={(w) => change((d) => d.setTrailWidth(t, w), {group: `width:${t}`})} />
             <button type="button" aria-label={`Delete trail ${t + 1}`} onClick={() => {
               change((d) => d.removeTrail(t));

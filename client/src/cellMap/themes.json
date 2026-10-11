@@ -1,9 +1,29 @@
 {
   "glade": {
-    "grids": ["hex"],
+    "grids": [
+      "hex"
+    ],
     "fill": "T",
-    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
-    "labels": {"meadow": "meadow", "tallGrass": "tall grass", "marsh": "marsh", "water": "water", "trees": "trees"},
+    "terrains": {
+      ".": "meadow",
+      "%": "tallGrass",
+      "~": "marsh",
+      "w": "water",
+      "T": "trees"
+    },
+    "labels": {
+      "meadow": "meadow",
+      "tallGrass": "tall grass",
+      "marsh": "marsh",
+      "water": "water",
+      "trees": "trees"
+    },
+    "paths": [
+      "trail",
+      "deerPath",
+      "road",
+      "worn"
+    ],
     "colors": {
       "meadow": "#b3c788",
       "tallGrass": "#a6bd70",
@@ -16,6 +36,7 @@
       "pool": "#6f8f8a",
       "reed": "#5f7442",
       "trail": "#cdb98a",
+      "road": "#c4ad80",
       "bridge": "#a98053",
       "ink": "#1d2818"
     }

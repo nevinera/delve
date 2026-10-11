@@ -3,6 +3,7 @@
 // MapDraft: every edit returns a new CellMapDraft.
 import {hexDistance, neighbor} from "../../cellMap/hexGrid";
 import {THEMES, fillOf} from "../../cellMap/format";
+import {PATHS} from "../../cellMap/style";
 
 // Trail points are kept to this many decimal places of a cell.
 const POINT_PLACES = 2;
@@ -123,8 +124,15 @@ export class CellMapDraft {
 
   // ---- Trails ----
 
-  addTrail(points, width = 0.8) {
-    return this.with({trails: [...this.trails, {width, points: points.map(roundPoint)}]});
+  // A trail is the theme's first path type unless it says otherwise, and
+  // its type's width unless given one.
+  addTrail(points, width = null, type = THEMES[this.data.theme].paths[0]) {
+    return this.with({trails: [...this.trails, {type, width: width ?? PATHS[type].width, points: points.map(roundPoint)}]});
+  }
+
+  // Changing type takes the new type's width.
+  setTrailType(index, type) {
+    return this.updateTrail(index, (trail) => ({...trail, type, width: PATHS[type].width}));
   }
 
   removeTrail(index) {

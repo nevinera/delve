@@ -34,6 +34,13 @@ export const GLADE = {
     reed: "#5f7442",
     trailEdge: "#8b7a55",
     trail: "#cdb98a",
+    road: "#c4ad80",
+    roadEdge: "#857252",
+    roadRut: "rgba(110, 90, 60, 0.35)",
+    deerPath: "#c2b688",
+    deerPathEdge: "#9a8d63",
+    worn: "#a9b97c",
+    wornEdge: "#a9b97c",
   },
   // Line widths, in feet, and the shadows' fall, in cell sizes.
   crownInk: 0.16,
@@ -46,13 +53,25 @@ export const GLADE = {
 
 export const STYLES = {glade: GLADE};
 
+// Kinds of path a trail can be: its width (in cells) when picked, its
+// colors (palette keys), the darker edge's width each side (feet), how
+// long a free end takes to fade (in widths), and whether it has ruts.
+export const PATHS = {
+  trail: {label: "trail", width: 0.8, color: "trail", edgeColor: "trailEdge", edge: 0.3, fade: 2.5},
+  deerPath: {label: "deer path", width: 0.4, color: "deerPath", edgeColor: "deerPathEdge", edge: 0.12, fade: 4},
+  road: {label: "road", width: 1.6, color: "road", edgeColor: "roadEdge", edge: 0.35, fade: 1, ruts: true},
+  worn: {label: "worn floor", width: 1, color: "worn", edgeColor: "wornEdge", edge: 0, fade: 3},
+};
+export const DEFAULT_PATH = "trail";
+
 // Shades derived from a theme color, for when a map overrides it: the
 // defaults above are hand-tuned, so they're only replaced then.
 const DERIVED = {
   meadow: (c) => ({patchLight: rgba(mix(c, WHITE, 0.35), 0.22), patchDark: rgba(scale(c, 0.75), 0.14)}),
   crown: (c) => ({crownDark: scale(c, 0.9), crownLight: scale(c, 1.1), highlight: rgba(scale(c, 1.5), 0.55)}),
   tallTuft: (c) => ({tallTuftLight: hex(mix(c, WHITE, 0.5))}),
-  trail: (c) => ({trailEdge: hex(scale(c, 0.68))}),
+  trail: (c) => ({trailEdge: hex(scale(c, 0.68)), deerPath: hex(scale(c, 0.95)), deerPathEdge: hex(scale(c, 0.76))}),
+  road: (c) => ({roadEdge: hex(scale(c, 0.68)), roadRut: rgba(scale(c, 0.55), 0.35)}),
   water: (c) => ({waterDeep: hex(scale(c, 0.86))}),
   bridge: (c) => ({bridgeEdge: hex(scale(c, 0.66)), bridgeBeam: hex(scale(c, 0.74))}),
   ink: (c) => ({shadow: rgba(c, 0.32)}),

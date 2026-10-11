@@ -5,7 +5,7 @@ import {CELL_SIZE, cellAt, cellCenter, cellPoint, mapSize, neighbor} from "./hex
 import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
 import {insetLoop, regionLoops, smoothLoop, softLoop} from "./regions";
-import {resolveStyle} from "./style";
+import {DEFAULT_PATH, PATHS, resolveStyle} from "./style";
 import {bridgeDeck} from "./bridges";
 
 // The forest's dark mass only shows in the gaps between crowns, so it's
@@ -36,7 +36,8 @@ const BAND = [1, 0.85, 0.6];
 // The trails as drawn: curves in feet, their free ends fading out.
 function sceneTrails(map, size) {
   return fadeTrailEnds(
-    (map.trails ?? []).map(({width, points}) => ({
+    (map.trails ?? []).map(({type = DEFAULT_PATH, width, points}) => ({
+      type,
       width: width * CELL_SIZE,
       points: throughPoints(points.map(([col, row]) => cellPoint(col, row, CELL_SIZE))),
     })),
@@ -196,17 +197,18 @@ function throughPoints(points) {
 // trail, or run off the map, don't. Each trail becomes {width, points,
 // body, fades, spots, caps}: body is the part drawn solid, each fade runs
 // from where the solid part stops out to the trail's end, and caps are
-// the ends that don't fade.
-const FADE_LENGTH = 2.5;
+// the ends that don't fade. How long a fade is, in widths, is the path
+// type's (see style.js's PATHS).
 
 function fadeTrailEnds(trails, {width: mapWidth, height: mapHeight}, seed) {
   return trails.map((trail, i) => {
-    const {width, points} = trail;
+    const {type, width, points} = trail;
+    const fadeLength = (PATHS[type] ?? PATHS[DEFAULT_PATH]).fade;
     const free = (p) =>
       p.x > width && p.y > width && p.x < mapWidth - width && p.y < mapHeight - width &&
       trails.every((other, j) => j === i || lineDistance(p.x, p.y, other.points) > other.width);
     const total = lineLength(points);
-    const fadeAt = (p) => (free(p) ? Math.min(FADE_LENGTH * width, total / 2) : 0);
+    const fadeAt = (p) => (free(p) ? Math.min(fadeLength * width, total / 2) : 0);
     const startFade = fadeAt(points[0]);
     const endFade = fadeAt(points[points.length - 1]);
 
@@ -225,14 +227,14 @@ function fadeTrailEnds(trails, {width: mapWidth, height: mapHeight}, seed) {
       for (let k = 0; k < 9; k++) {
         const h = (salt) => pointHash01(seed, end.x, end.y, 200 + k * 4 + salt);
         const t = h(0);
-        const along = (t * 1.6 - 1) * FADE_LENGTH * 0.6 * width;
+        const along = (t * 1.6 - 1) * fadeLength * 0.6 * width;
         const across = (h(1) - 0.5) * (0.6 + 1.2 * t) * width;
         spots.push({x: end.x + dir.x * along - dir.y * across, y: end.y + dir.y * along + dir.x * across, radius: width * (0.08 + 0.14 * h(2) * (1 - 0.5 * t))});
       }
     }
     // Where the solid part doesn't fade out, it gets a round end.
     const caps = [!startFade && points[0], !endFade && points[points.length - 1]].filter(Boolean);
-    return {width, points, body, fades, spots, caps};
+    return {type, width, points, body, fades, spots, caps};
   });
 }
 
