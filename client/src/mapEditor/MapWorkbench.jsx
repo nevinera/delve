@@ -7,6 +7,8 @@ import FillPointsPanel from "./FillPointsPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsTab, {paletteKeys} from "./UnitsTab";
 import NcusPanel from "./NcusPanel";
+import CellsPanel from "./cells/CellsPanel";
+import {useCellsTab} from "./cells/useCellsTab";
 import HotkeyHelp from "./HotkeyHelp";
 import {MapDraft} from "./MapDraft";
 import {UiState} from "./UiState";
@@ -34,9 +36,11 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
 // The sidebar's tabs, and which of the map's shapes each one edits (the
 // rest are drawn dimmed and ignore the pointer - see MapCanvas's
-// activeLayers). Quests don't exist yet; NCUs live there meanwhile.
-const TABS = [["map", "Map"], ["units", "Units"], ["quests", "Quests"]];
+// activeLayers). Quests don't exist yet; NCUs live there meanwhile. Cells
+// draws the map's cellMap, with every shape dimmed.
+const TABS = [["cells", "Cells"], ["map", "Map"], ["units", "Units"], ["quests", "Quests"]];
 const TAB_LAYERS = {
+  cells: {barriers: false, connections: false, units: false, ncus: false},
   map: {barriers: true, connections: true, units: false, ncus: false},
   units: {barriers: false, connections: false, units: true, ncus: false},
   quests: {barriers: false, connections: false, units: false, ncus: true},
@@ -78,6 +82,8 @@ export default function MapWorkbench({
   ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null,
 }) {
   const [tab, setTab] = useState("map");
+  const cells = useCellsTab({mapKey, cellMap: mapData.cellMap, active: tab === "cells"});
+  const cellCanvas = tab === "cells" ? (cells.canvas ?? {placeholder: true}) : null;
   // Unit types added to the Units tab's palette with "+" (see UnitsTab).
   const [paletteAdditions, setPaletteAdditions] = useState([]);
   // Palette entries selected for "+ Encounter" (click selects one,
@@ -572,12 +578,13 @@ export default function MapWorkbench({
   return (
     <div className="map-editor" data-map-key={mapKey}>
       <MapCanvas
-        image={image}
-        displayImageUrl={displayImageUrl}
+        image={cellCanvas ? (cellCanvas.image ?? null) : image}
+        displayImageUrl={cellCanvas ? null : displayImageUrl}
+        cellEditing={cellCanvas}
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}
-        mapData={effectiveMapData}
+        mapData={cellCanvas?.feetDimensions ? {...effectiveMapData, feetDimensions: cellCanvas.feetDimensions} : effectiveMapData}
         dispatch={dispatch}
         selectedBarrierIndex={uiState.selectedBarrierIndex}
         onSelectBarrier={(i) => setUiState(uiState.with({selectedBarrierIndex: i}))}
@@ -653,6 +660,8 @@ export default function MapWorkbench({
           <div className="map-sidebar-section-heading map-simulate-notice">
             <h3>Walk preview running - editing is disabled while this runs.</h3>
           </div>
+        ) : tab === "cells" ? (
+          <CellsPanel cells={cells} feetDimensions={mapData.feetDimensions} hasImage={Boolean(mapData.imageUrl)} />
         ) : tab === "map" ? (
           <>
             <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions} dispatch={dispatch} />

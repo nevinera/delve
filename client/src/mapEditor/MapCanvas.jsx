@@ -111,6 +111,12 @@ const PAN_KEY_DIRECTIONS = {
 // on a double-click on a unit's token or anywhere else. keepUnitToolArmed
 // leaves "add-unit" armed after each placement, and prepareUnit(entry)
 // fills in each new unit before it's added (e.g. its group).
+//
+// cellEditing (the Cells tab - see cells/useCellsTab.jsx) swaps the image
+// for {background, overlay} nodes in the same pixel space, and hands
+// pointer events to onPointer(phase, contentPixel): a "down" it returns
+// true for is an edit, not a pan. {placeholder: true} stands in until
+// there's a cell map. The units/walk tools and the 5ft grid are hidden.
 const ALL_LAYERS = {barriers: true, connections: true, units: true, ncus: true};
 
 export default function MapCanvas({
@@ -130,6 +136,7 @@ export default function MapCanvas({
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   previewing = false, onTogglePreview,
   tool = "select", onToolChange,
+  cellEditing = null,
 }) {
   const wrapperRef = useRef(null);
   const replaceInputRef = useRef(null);
@@ -163,6 +170,8 @@ export default function MapCanvas({
   const unitDragRef = useRef(null);
   // {ncuIndex} | null - same whole-token drag as a unit's.
   const ncuDragRef = useRef(null);
+  // True while a pointer press is editing cells (see cellEditing).
+  const cellDragRef = useRef(false);
   const panKeysRef = useRef(new Set()); // currently-held WASD KeyboardEvent.code values
   const panKeysLoopRef = useRef(null); // pending requestAnimationFrame id while any pan key is held, or null
   const panKeysLastTimeRef = useRef(null);
@@ -669,6 +678,8 @@ export default function MapCanvas({
       setOffset(view.offset);
     },
     onPinchStart: () => {
+      if (cellDragRef.current) cellEditing?.onPointer?.("cancel");
+      cellDragRef.current = false;
       dragRef.current = null;
       barrierDragRef.current = null;
       connectionDragRef.current = null;
@@ -682,6 +693,12 @@ export default function MapCanvas({
 
   function handlePointerDown(e) {
     if (!image) return;
+
+    if (cellEditing?.onPointer && e.button === 0 && cellEditing.onPointer("down", contentPixelFromClient(e.clientX, e.clientY))) {
+      cellDragRef.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
 
     if (tool === "add-encounter") {
       // Stays armed - each click places another encounter (see encounter.js).
@@ -813,6 +830,11 @@ export default function MapCanvas({
   function handlePointerMove(e) {
     updateCursorPixel(e);
 
+    if (cellEditing?.onPointer && image && wrapperRef.current) {
+      cellEditing.onPointer(cellDragRef.current ? "drag" : "hover", contentPixelFromClient(e.clientX, e.clientY));
+      if (cellDragRef.current) return;
+    }
+
     if (barrierDragRef.current) {
       const feet = feetFromClient(e.clientX, e.clientY);
       if (!feet) return;
@@ -919,6 +941,8 @@ export default function MapCanvas({
   }
 
   function handlePointerUp() {
+    if (cellDragRef.current) cellEditing?.onPointer?.("up");
+    cellDragRef.current = false;
     dragRef.current = null;
     barrierDragRef.current = null;
     connectionDragRef.current = null;
@@ -1032,7 +1056,7 @@ export default function MapCanvas({
             <button type="button" onClick={() => zoomAroundCenter(ZOOM_STEP)}>+</button>
           </div>
         )}
-        {image && mapData.units.length > 0 && (
+        {image && !cellEditing && mapData.units.length > 0 && (
           <div className="map-toolbar-button-group map-simulate-group">
             <button
               type="button" className={simulating ? "map-simulate-active" : ""}
@@ -1052,7 +1076,7 @@ export default function MapCanvas({
             )}
           </div>
         )}
-        {image && canDrawBarriers && (
+        {image && !cellEditing && canDrawBarriers && (
           <div className="map-toolbar-button-group map-preview-group">
             <button
               type="button" className={previewing ? "map-simulate-active" : ""}
@@ -1065,7 +1089,7 @@ export default function MapCanvas({
         )}
         {isPlacing && <span className="map-canvas-placing-status">{placingStatusText}</span>}
       </div>
-      {image && (
+      {image && !cellEditing && (
         <div className="map-canvas-toolbar-row">
           <button type="button" className="map-canvas-replace" onClick={() => replaceInputRef.current?.click()}>
             Replace image
@@ -1083,6 +1107,7 @@ export default function MapCanvas({
         <div
           ref={wrapperRef}
           className={`map-canvas-wrapper${isPlacing ? " map-canvas-wrapper-placing" : ""}`}
+          style={cellEditing?.cursor ? {cursor: cellEditing.cursor} : undefined}
           {...pinchHandlers}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -1094,7 +1119,7 @@ export default function MapCanvas({
             className="map-canvas-content"
             style={{transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`}}
           >
-            <img
+            {cellEditing?.background ?? <img
               // displayImageUrl swaps in a higher-res rasterized bitmap for
               // an SVG source (see MapEditor's own effect) - image.url
               // itself stays the raw asset, used for saving and the walk
@@ -1106,8 +1131,8 @@ export default function MapCanvas({
               height={image.pixelDimensions.height}
               draggable={false}
               alt=""
-            />
-            {hasBothAxes(feetDimensions) && (
+            />}
+            {!cellEditing && hasBothAxes(feetDimensions) && (
               <svg
                 className="map-canvas-grid"
                 width={image.pixelDimensions.width}
@@ -1328,8 +1353,11 @@ export default function MapCanvas({
                 </svg>
               );
             })()}
+            {cellEditing?.overlay}
           </div>
         </div>
+      ) : cellEditing ? (
+        <div className="map-canvas-dropzone">Start a cell map from the panel.</div>
       ) : (
         <div className="map-canvas-dropzone" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
           <label>

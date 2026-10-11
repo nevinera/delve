@@ -61,3 +61,31 @@ export function cellAt(x, y, cellSize) {
   }
   return [best.col, best.row];
 }
+
+// The inverse of cellPoint: the cell coordinates of a point in feet.
+export function pointAt(x, y, cellSize) {
+  const r = hexRadius(cellSize);
+  const col = (x - r) / (1.5 * r);
+  const c0 = Math.floor(col);
+  const t = col - c0;
+  const drop = (c0 & 1 ? 1 - t : t) * (cellSize / 2);
+  return [col, (y - cellSize / 2 - drop) / cellSize];
+}
+
+// Steps between two cells, through neighbors.
+export function hexDistance([c1, r1], [c2, r2]) {
+  const cube = (col, row) => {
+    const x = col;
+    const z = row - (col - (col & 1)) / 2;
+    return [x, -x - z, z];
+  };
+  const a = cube(c1, r1);
+  const b = cube(c2, r2);
+  return Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+}
+
+// The size a grid needs to cover about width x height feet.
+export function gridFor({width, height}, cellSize) {
+  const r = hexRadius(cellSize);
+  return {cols: Math.max(1, Math.round((width / r - 0.5) / 1.5)), rows: Math.max(1, Math.round(height / cellSize - 0.5))};
+}
