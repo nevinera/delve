@@ -1,11 +1,13 @@
 // The Cells tab's sidebar: start a cell map, pick a tool, terrain and brush,
-// edit trails, the grid, seed and colors. All state is in useCellsTab.
+// edit trails, the grid, seed and colors, or generate a map. All state is
+// in useCellsTab.
 import {useState} from "react";
 import {THEMES, terrainLabel, terrainsOf} from "../../cellMap/format";
 import {CELL_SIZE, gridFor, hexDistance} from "../../cellMap/hexGrid";
 import {MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
 import {DEFAULT_PATH, PATHS} from "../../cellMap/style";
 import {CELL_COLORS} from "../../cellMap/overlay";
+import {generateCellMap} from "../../cellMap/generate";
 import {CellMapDraft} from "./CellMapDraft";
 import {BRUSHES, OVERLAYS, TOOLS} from "./useCellsTab";
 
@@ -64,6 +66,13 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
         <button type="button" onClick={() => change((d) => d.setSeed(Math.floor(Math.random() * 1_000_000)))}>Re-roll</button>
       </div>
       <ColorsSection draft={draft} change={change} />
+      <GenerateSection
+        grid={draft.grid}
+        onGenerate={(options) => {
+          if (!window.confirm("Replace this map's cells, trails, bridges and exits with a generated map? Undo brings them back.")) return;
+          change((d) => d.generated(generateCellMap({...options, theme: d.data.theme})));
+        }}
+      />
     </div>
   );
 }
@@ -100,6 +109,74 @@ function NewCellMap({feetDimensions, onCreate}) {
         <button type="button" onClick={() => setSize(gridFor(feetDimensions))}>Fit to the map ({feetDimensions.width} × {feetDimensions.height} ft)</button>
       )}
       <button type="button" onClick={() => onCreate(CellMapDraft.blank({theme, ...size}))}>New cell map</button>
+      <GenerateSection grid={size} sized={false} onGenerate={(options) => onCreate(new CellMapDraft(generateCellMap({...options, theme})))} />
+    </div>
+  );
+}
+
+// The generator's options (see cellMap/generate.js): one of each group,
+// and the tags that go with any.
+const GENERATE_GROUPS = {
+  Areas: {"": "mixed", chamber: "chambers", hub: "hub", burrow: "burrow"},
+  Shape: {"": "plain", cavities: "round", coral: "coral", chaotic: "chaotic"},
+  Ground: {"": "meadow", wet: "wet", rough: "rough"},
+};
+const GENERATE_TAGS = {tight: "tight", tree: "no loops", connected: "connected", dry: "no marsh", paths: "paths"};
+
+// Folded until opened. With sized, the size is its own; otherwise it's
+// grid (the new map form's own fields).
+function GenerateSection({grid, sized = true, onGenerate}) {
+  const [open, setOpen] = useState(false);
+  const [ownSize, setSize] = useState({cols: grid.cols, rows: grid.rows});
+  const size = sized ? ownSize : {cols: grid.cols, rows: grid.rows};
+  const [connections, setConnections] = useState(2);
+  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
+  const [groups, setGroups] = useState({Areas: "", Shape: "", Ground: ""});
+  const [tags, setTags] = useState(new Set(["paths"]));
+  const toggle = (tag) => setTags((current) => {
+    const next = new Set(current);
+    if (next.has(tag)) next.delete(tag);
+    else next.add(tag);
+    return next;
+  });
+  const chosen = [...Object.values(groups).filter(Boolean), ...[...tags].filter((t) => !(t === "dry" && groups.Ground === "wet"))];
+  if (!open) {
+    return (
+      <div className="cells-panel-section">
+        <button type="button" onClick={() => setOpen(true)}>Generate…</button>
+      </div>
+    );
+  }
+  return (
+    <div className="cells-panel-section">
+      <h4>Generate</h4>
+      {sized && (
+        <div className="cells-panel-row">
+          <NumberField label="Columns" value={size.cols} min={8} max={200} onChange={(cols) => setSize({...size, cols})} />
+          <NumberField label="Rows" value={size.rows} min={8} max={200} onChange={(rows) => setSize({...size, rows})} />
+        </div>
+      )}
+      <div className="cells-panel-row">
+        <NumberField label="Exits" value={connections} min={0} max={4} onChange={setConnections} />
+        <label>
+          Seed <input type="number" value={seed} onChange={(e) => setSeed(parseInt(e.target.value, 10) || 0)} />
+        </label>
+        <button type="button" onClick={() => setSeed(Math.floor(Math.random() * 1_000_000))}>Re-roll</button>
+      </div>
+      {Object.entries(GENERATE_GROUPS).map(([group, options]) => (
+        <Choices key={group} label={group} options={options} value={groups[group]} onChange={(value) => setGroups({...groups, [group]: value})} />
+      ))}
+      <div className="cells-panel-row" role="group" aria-label="Tags">
+        {Object.entries(GENERATE_TAGS).map(([tag, label]) => (
+          <label key={tag}>
+            <input type="checkbox" checked={tags.has(tag)} disabled={tag === "dry" && groups.Ground === "wet"} onChange={() => toggle(tag)} /> {label}
+          </label>
+        ))}
+      </div>
+      <div className="cells-panel-row">
+        <button type="button" onClick={() => onGenerate({...size, connections, seed, tags: chosen})}>Generate</button>
+        <button type="button" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
     </div>
   );
 }

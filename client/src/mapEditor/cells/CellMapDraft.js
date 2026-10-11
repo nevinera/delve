@@ -111,6 +111,14 @@ export class CellMapDraft {
     return this.data.exits ?? [];
   }
 
+  // A generated map (see cellMap/generate.js) in place of this one's
+  // cells, grid, trails, bridges and exits; the theme and colors stay.
+  generated(map) {
+    const {cells, grid, seed, trails, exits} = map;
+    const {bridges: _b, trails: _t, exits: _e, ...rest} = this.data;
+    return new CellMapDraft({...rest, cells, grid, seed, ...(trails ? {trails} : {}), ...(exits ? {exits} : {})});
+  }
+
   // ---- Look ----
 
   setSeed(seed) {

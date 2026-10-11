@@ -181,6 +181,40 @@ describe("CellsPanel", () => {
     expect(screen.queryByRole("button", {name: "Reset meadow"})).not.toBeInTheDocument();
   });
 
+  it("generates a map in place of this one, once confirmed, and undoes it", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    let latest = null;
+    function Spy() {
+      const cells = useHosted(start(), {editing: false});
+      latest = cells;
+      return <CellsPanel cells={cells} feetDimensions={null} hasImage={false} />;
+    }
+    render(<Spy />);
+    fireEvent.click(screen.getByRole("button", {name: "Generate…"}));
+    fireEvent.change(screen.getAllByLabelText("Columns")[1], {target: {value: "30"}});
+    fireEvent.change(screen.getAllByLabelText("Rows")[1], {target: {value: "20"}});
+    fireEvent.change(screen.getByLabelText("Exits"), {target: {value: "3"}});
+    fireEvent.click(screen.getByRole("button", {name: "chambers"}));
+    fireEvent.click(screen.getByRole("button", {name: "Generate"}));
+    expect(latest.draft.grid.cols).toBe(6);
+    fireEvent.click(screen.getByRole("button", {name: "Generate"}));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(latest.draft.grid).toMatchObject({cols: 30, rows: 20});
+    expect(latest.draft.exits).toHaveLength(3);
+    expect(latest.draft.trails.length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", {name: "Undo"}));
+    expect(latest.draft.grid.cols).toBe(6);
+    confirm.mockRestore();
+  });
+
+  it("generates a new map from the start form, at its size", () => {
+    render(<Panel />);
+    fireEvent.click(screen.getByRole("button", {name: "Generate…"}));
+    fireEvent.click(screen.getByRole("button", {name: "Generate"}));
+    expect(screen.getByRole("group", {name: "Tool"})).toBeInTheDocument();
+    expect(screen.getByLabelText("Columns")).toHaveValue(23);
+  });
+
   it("resizes the grid", () => {
     render(<Panel cellMap={start()} />);
     fireEvent.change(screen.getByLabelText("Columns"), {target: {value: "8"}});
