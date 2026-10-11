@@ -7,7 +7,7 @@ import {resolveStyle} from "./style";
 import {hashString} from "./random";
 
 // Bump when the renderer's output changes, so old cached images are ignored.
-export const RENDER_VERSION = 9;
+export const RENDER_VERSION = 10;
 
 // iOS Safari won't draw a canvas past about 16.7M pixels.
 const MAX_PIXELS = 16_000_000;

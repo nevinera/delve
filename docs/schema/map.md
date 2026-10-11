@@ -75,7 +75,7 @@ walls around water don't.
 | `colors` | object | no | Overrides some of the theme's colors, as `"#rrggbb"`: `{ "meadow": "#b8c98a" }`. Keys must be the theme's colors (its `colors` in themes.json; glade: `meadow`, `tallGrass`, `marsh`, `water`, `forest`, `crown`, `tuft`, `tallTuft`, `pool`, `reed`, `trail`, `road`, `bridge`, `ink`). |
 | `grid` | object | yes | `{ "type": "hex", "cols": int, "rows": int }`. `type` must be one the theme supports (glade: `"hex"`). `cols` and `rows` are 1 to 200. |
 | `seed` | integer | yes | Varies the decorations (tree crowns, grass tufts and so on) without changing the terrain. |
-| `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters: `.` meadow, `%` tall grass, `~` marsh, `w` water, `T` trees. A cave calls them floor, rubble, puddles, water and rock. A new map starts all `T`. |
+| `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters: `.` meadow, `%` tall grass, `~` marsh, `w` water, `T` trees. A cave calls them floor, gravel, puddles, water and rock. A new map starts all `T`. |
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |
 | `bridges` | array of Bridge | no | Wooden bridges, drawn over the water. |
 

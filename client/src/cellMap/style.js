@@ -22,7 +22,7 @@ const BASE = {
   // Meadow: chances per cell of a patch of lighter or darker ground and of
   // a tuft, and what a tuft is ("grass", "leaves", "twigs" or "pebbles").
   meadow: {patches: 0.15, tufts: 0.65, tuft: "grass"},
-  // Tall grass: clumps per cell, and what they are ("grass" or "rubble").
+  // Tall grass: clumps per cell, and what they are ("grass" or "gravel").
   tallGrass: {clumps: 3, clump: "grass"},
   // Marsh: hummocks of ground per cell (on average, less a half), rising
   // out of its shallow water, and the chance of reeds.
@@ -190,7 +190,7 @@ export const CAVE = style("cave", {
   },
   forest: {mass: "rock", crowns: null},
   meadow: {patches: 0.12, tufts: 0.35, tuft: "pebbles"},
-  tallGrass: {clumps: 2, clump: "rubble"},
+  tallGrass: {clumps: 3, clump: "gravel"},
   marsh: {hummocks: 1.4, reeds: 0},
 });
 
@@ -344,11 +344,13 @@ export function twigShape(style, i) {
   return Array.from({length: count}, (_, j) => ({x: (h(10 + j) - 0.5) * 1.2, y: (h(20 + j) - 0.5) * 1.2, lean: (h(30 + j) - 0.5) * 1.2, size: 0.4 + 0.4 * h(40 + j), fork: h(50 + j) < 0.5}));
 }
 
-// Stones: one to three pebbles, or four to seven for rubble.
-export function stoneShape(style, i, {min, extra, kind}) {
+// Stones: min to min + extra of them, scattered over spread unit radii,
+// each size to twice that (and now and then a bigger one, for gravel).
+// One to three pebbles; for gravel, a scatter of small stones.
+export function stoneShape(style, i, {min, extra, kind, size = 0.16, spread = 1.4}) {
   const h = variantHash(style, kind, i);
   const count = min + Math.floor(h(1) * (extra + 1));
-  return Array.from({length: count}, (_, j) => ({x: (h(10 + j) - 0.5) * 1.4, y: (h(20 + j) - 0.5) * 1.4, size: 0.16 + 0.16 * h(30 + j), light: h(35 + j) < 0.4, shape: lumps(7, 0.2, h, 100 + j * 10)}));
+  return Array.from({length: count}, (_, j) => ({x: (h(10 + j) - 0.5) * spread, y: (h(20 + j) - 0.5) * spread, size: size * (1 + h(30 + j)) * (h(36 + j) < 0.1 ? 1.8 : 1), light: h(35 + j) < 0.4, shape: lumps(7, 0.2, h, 100 + j * 10)}));
 }
 
 // A few strokes side by side, for hatching rock.

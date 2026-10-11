@@ -75,7 +75,7 @@ export function buildSprites(style, cellSize, pixelsPerFoot, createCanvas) {
       ctx.stroke();
     }),
     tallTufts: make("tallTufts", style.variants.tallTufts, (r) => r * 1.3 + style.tuftInk, (ctx, i, r) => {
-      if (style.tallGrass.clump === "rubble") return drawStones(ctx, style, stoneShape(style, i, {min: 4, extra: 3, kind: 11}), r * 0.8);
+      if (style.tallGrass.clump === "gravel") return drawStones(ctx, style, stoneShape(style, i, {min: 4, extra: 4, kind: 11, size: 0.06, spread: 1.9}), r * 0.8);
       ctx.lineWidth = style.tuftInk * 1.3;
       for (const light of [false, true]) {
         ctx.strokeStyle = light ? palette.tallTuftLight : palette.tallTuft;
@@ -198,8 +198,9 @@ function drawStones(ctx, style, stones, r) {
     blob(ctx, stone.x * r, stone.y * r, stone.size * r * 1.6, stone.shape);
     ctx.fillStyle = stone.light ? palette.tallTuftLight : palette.tallTuft;
     ctx.fill();
+    // Small stones get thinner ink, so they don't turn to dots of it.
     ctx.strokeStyle = palette.ink;
-    ctx.lineWidth = style.tuftInk * 0.8;
+    ctx.lineWidth = Math.min(style.tuftInk * 0.8, stone.size * r * 0.4);
     ctx.stroke();
   }
 }

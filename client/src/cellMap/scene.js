@@ -28,6 +28,25 @@ const DEEP_INSET = 0.3;
 // How far apart, in feet, a marsh's wetter and drier stretches are.
 const HUMMOCK_SPREAD = 18;
 
+// The ground each cell is drawn on: water's edge cells take the ground
+// beside them (the most of it, among their neighbors), so whatever's on
+// the shore runs right under the water's curve, with no stripe of meadow
+// between them.
+function shoreGround(map) {
+  const grounds = new Set(GROUND_REGIONS);
+  return (c, r) => {
+    const terrain = terrainAt(map, c, r);
+    if (terrain !== "water") return terrain;
+    const counts = {};
+    for (let edge = 0; edge < 6; edge++) {
+      const t = terrainAt(map, ...neighbor(c, r, edge));
+      if (t !== "water" && t !== "trees") counts[t] = (counts[t] ?? 0) + 1;
+    }
+    const [best] = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    return best && grounds.has(best[0]) ? best[0] : terrain;
+  };
+}
+
 // A marsh's edge wanders a long way from its cells', so a block of marsh
 // doesn't look like one: in and out by up to MARSH_WANDER feet, over about
 // MARSH_WAVELENGTH. Its water sits back from that edge by about
@@ -57,11 +76,21 @@ function sceneTrails(map, size) {
     (map.trails ?? []).map(({type = DEFAULT_PATH, width, points}) => ({
       type,
       width: width * CELL_SIZE,
-      points: throughPoints(points.map(([col, row]) => cellPoint(col, row, CELL_SIZE))).map((p) => warp(p, map.seed)),
+      points: throughPoints(points.map(([col, row]) => cellPoint(col, row, CELL_SIZE))).map((p) => edgeWarp(p, size, map.seed)),
     })),
     size,
     map.seed,
   );
+}
+
+// Trails bend as the map's edges do (see regions.js's warp), less so
+// near the map's edge, so one that runs to it still does.
+const EDGE_HOLD = 5; // feet
+
+function edgeWarp(p, {width, height}, seed) {
+  const w = warp(p, seed);
+  const hold = Math.max(0, Math.min(1, Math.min(p.x, p.y, width - p.x, height - p.y) / EDGE_HOLD));
+  return {x: p.x + (w.x - p.x) * hold, y: p.y + (w.y - p.y) * hold};
 }
 
 function trailCleared(trails) {
@@ -81,7 +110,8 @@ export function buildScene(map, style = resolveStyle(map)) {
   const scene = {...mapSize(map.grid), cellSize, grounds: [], marshWater: [], water: [], deepWater: [], ice: [], bridges: [], trails: [], forest: [], crowns: [], hatches: [], patches: [], tufts: [], tallTufts: [], hummocks: [], reeds: []};
   const rock = style.forest.mass === "rock";
 
-  scene.grounds = GROUND_REGIONS.map((terrain) => ({terrain, loops: regionLoops(map, terrain).map((loop) => (terrain === "marsh" ? marshEdge(loop, seed) : smoothLoop(loop, cellSize, seed)))}));
+  const under = shoreGround(map);
+  scene.grounds = GROUND_REGIONS.map((terrain) => ({terrain, loops: regionLoops(map, terrain, undefined, under).map((loop) => (terrain === "marsh" ? marshEdge(loop, seed) : smoothLoop(loop, cellSize, seed)))}));
   scene.marshWater = scene.grounds.find(({terrain}) => terrain === "marsh").loops.map((loop) => marshWaterEdge(loop, seed));
   scene.water = regionLoops(map, "water").map((loop) => softLoop(loop, cellSize, seed));
   const shallow = (c, r) => [0, 1, 2, 3, 4, 5].some((edge) => terrainAt(map, ...neighbor(c, r, edge)) !== "water");

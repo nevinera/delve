@@ -19,11 +19,12 @@ export function latticeCorner(col, row, i) {
 
 // Each loop is a list of lattice points, clockwise on screen around the
 // terrain (counterclockwise around holes in it).
-// Cells skip says yes to are left out of the region.
-export function regionLoops(map, terrain, skip = () => false) {
+// Cells skip says yes to are left out of the region; at(col, row) is
+// each cell's terrain, if not the map's.
+export function regionLoops(map, terrain, skip = () => false, at = (c, r) => terrainAt(map, c, r)) {
   const {cols, rows} = map.grid;
   const inDomain = (c, r) => c >= -PAD && c < cols + PAD && r >= -PAD && r < rows + PAD;
-  const isTerrain = (c, r) => inDomain(c, r) && terrainAt(map, c, r) === terrain && !skip(c, r);
+  const isTerrain = (c, r) => inDomain(c, r) && at(c, r) === terrain && !skip(c, r);
 
   const next = new Map();
   for (let c = -PAD; c < cols + PAD; c++) {

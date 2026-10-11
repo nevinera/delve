@@ -120,10 +120,17 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
 
   // Like barrier points (see mapSnap.js): a trail point placed or dragged
   // within SNAP_RADIUS_FEET of another lands on it, so trails meet
-  // exactly. Shift turns it off. exclude(trail, point) is the point itself.
+  // exactly; failing that, one that near the map's edge lands on the edge,
+  // so the trail runs off the map. Shift turns it off. exclude(trail,
+  // point) is the point itself.
   function snapped(at, shiftKey, exclude = () => false) {
     if (shiftKey) return at.point;
-    return nearestTrailPoint(at, SNAP_RADIUS_FEET, (t, i) => !exclude(t, i))?.at ?? at.point;
+    const joined = nearestTrailPoint(at, SNAP_RADIUS_FEET, (t, i) => !exclude(t, i));
+    if (joined) return joined.at;
+    const {width, height} = mapSize(draft.grid);
+    const onEdge = (v, size) => (v <= SNAP_RADIUS_FEET ? 0 : v >= size - SNAP_RADIUS_FEET ? size : v);
+    const [x, y] = [onEdge(at.x, width), onEdge(at.y, height)];
+    return x === at.x && y === at.y ? at.point : pointAt(x, y, CELL_SIZE);
   }
 
   // Paints every cell along the line from the last cell to this one, so a

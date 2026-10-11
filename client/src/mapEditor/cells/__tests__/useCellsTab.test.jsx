@@ -9,7 +9,7 @@ vi.mock("../../../cellMap/cache", () => ({
 import {useCellsTab, EDITOR_PIXELS_PER_FOOT} from "../useCellsTab";
 import CellsPanel from "../CellsPanel";
 import {CellMapDraft} from "../CellMapDraft";
-import {cellCenter, cellPoint} from "../../../cellMap/hexGrid";
+import {CELL_SIZE, cellCenter, cellPoint} from "../../../cellMap/hexGrid";
 import {cachedCellMapImage} from "../../../cellMap/cache";
 
 // An all-meadow map (a new one starts all trees).
@@ -261,6 +261,14 @@ describe("useCellsTab trail snapping", () => {
     tap(result, near(5, 1));
     expect(result.current.draft.trails[1].points).toEqual([[2, 4], [3, 3], [5, 1]]);
     expect(result.current.draft.trails[0].points).toEqual([[0, 1], [5, 1]]);
+  });
+
+  it("snaps a point near the map's edge onto it", () => {
+    const {result} = setup(twoTrails());
+    act(() => result.current.update({tool: "trail", selected: {trail: 1, point: 1}}));
+    tap(result, {x: 1 * EDITOR_PIXELS_PER_FOOT, y: at(3, 6).y});
+    const [col, row] = result.current.draft.trails[1].points[2];
+    expect(cellPoint(col, row, CELL_SIZE).x).toBeCloseTo(0, 1);
   });
 
   it("doesn't snap with Shift", () => {

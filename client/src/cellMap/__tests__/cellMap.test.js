@@ -1,6 +1,6 @@
 import {describe, it, expect} from "vitest";
 import {validateCellMap} from "../format";
-import {cellAt, cellCenter, cellCorners, cellPoint, hexDistance, hexLine, hexRays, mapSize, neighbor} from "../hexGrid";
+import {cellAt, cellCenter, cellCorners, cellPoint, hexDistance, hexLine, hexRays, mapSize, neighbor, pointAt} from "../hexGrid";
 import {regionLoops, smoothLoop, unwarp, warp} from "../regions";
 import {buildScene} from "../scene";
 import {cacheKey, renderCellMap} from "../render";
@@ -198,6 +198,13 @@ describe("ground terrains", () => {
     expect(scene.grounds.map((g) => [g.terrain, g.loops.length])).toEqual([["tallGrass", 1], ["marsh", 1]]);
   });
 
+  it("runs the ground beside water under its shore", () => {
+    const map = tiny(["......", ".~~ww.", ".~~ww.", "......"]);
+    const [marsh] = buildScene(map).grounds.filter((g) => g.terrain === "marsh");
+    const drawnTo = Math.max(...marsh.loops.flat().map((p) => p.x));
+    expect(drawnTo).toBeGreaterThan(cellCenter(3, 1, 5).x);
+  });
+
   it("decorates each kind of ground with its own sprites", () => {
     const scene = buildScene({...map, cells: ["%%%%%%", "~~~~~~", "%%%%%%", "~~~~~~"]});
     expect(scene.tallTufts.length).toBeGreaterThan(0);
@@ -222,7 +229,8 @@ describe("trails", () => {
   it("curves through every point it was given, in feet, bent as the map's edges are", () => {
     const [trail] = buildScene(forest).trails;
     expect(trail.width).toBe(5);
-    for (const [col, row] of forest.trails[0].points) {
+    // (The ends are near the map's edge, so bend less.)
+    for (const [col, row] of [forest.trails[0].points[1]]) {
       const p = warp(cellPoint(col, row, 5), forest.seed);
       expect(trail.points.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1e-9)).toBe(true);
     }
@@ -267,6 +275,13 @@ describe("trails", () => {
       expect(scene[kind].every((p) => Math.min(...trail.points.map((q) => Math.hypot(p.x - q.x, p.y - q.y))) > trail.width / 2)).toBe(true);
     }
     expect(scene.tallTufts.length).toBeLessThan(buildScene({...ground, trails: []}).tallTufts.length);
+  });
+
+  it("keeps a trail that runs to the map's edge on it", () => {
+    const map = {...tiny(Array.from({length: 12}, () => ".".repeat(12))), trails: [{width: 1, points: [[4, 6], [pointAt(0, 30, 5)[0], pointAt(0, 30, 5)[1]]]}]};
+    const [trail] = buildScene(map).trails;
+    expect(trail.points[trail.points.length - 1].x).toBeCloseTo(0);
+    expect(trail.fades).toHaveLength(1);
   });
 
   it("draws narrower trails first, so wider ones run over them", () => {

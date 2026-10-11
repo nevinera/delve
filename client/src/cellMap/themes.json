@@ -71,7 +71,7 @@
     "grids": ["hex"],
     "fill": "T",
     "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
-    "labels": {"meadow": "floor", "tallGrass": "rubble", "marsh": "puddles", "water": "water", "trees": "rock", "forest": "rock", "tuft": "pebbles", "tallTuft": "stones", "worn": "worn floor"},
+    "labels": {"meadow": "floor", "tallGrass": "gravel", "marsh": "puddles", "water": "water", "trees": "rock", "forest": "rock", "tuft": "pebbles", "tallTuft": "stones", "worn": "worn floor"},
     "paths": ["worn", "trail", "deerPath", "road"],
     "colors": {
       "meadow": "#d2c9b6",
