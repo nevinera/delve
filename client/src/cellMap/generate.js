@@ -16,14 +16,22 @@
 //   tree      no loops: one way between any two areas
 //   connected every pair of touching areas linked (normally, of three that
 //             all touch, one pair isn't)
+//   dry       no marsh
+//   wet       marsh is the main ground, not meadow
+//   rough     tall grass is the main ground
+//
+// Besides the main ground, some areas are tall grass or marsh throughout,
+// and patches of them are sprinkled about (by noise, as watabou does his
+// water).
 import {hexDistance, neighbor} from "./hexGrid";
 import {SIDES, sideCell, sideLength} from "./exits";
 import {THEMES, VERSION, fillOf} from "./format";
+import {noise} from "./regions";
 
-export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected"];
+export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough"];
 
 // Which tags can't go together (the first of a group given wins).
-const EXCLUSIVE = [["chamber", "hub", "burrow"], ["cavities", "coral", "chaotic"]];
+const EXCLUSIVE = [["chamber", "hub", "burrow"], ["cavities", "coral", "chaotic"], ["wet", "rough"], ["wet", "dry"]];
 
 // Trees between areas, in cells: areas never come nearer each other than
 // this (so there's forest between them) or the map's edge.
@@ -31,14 +39,24 @@ const GAP = 4;
 const MARGIN = 3;
 
 // How much of the map (inside the margin) areas cover.
-const COVER = 0.28;
-const TIGHT_COVER = 0.36;
+const COVER = 0.3;
+const TIGHT_COVER = 0.38;
+
+// How many free cells a new area's start is picked from (see pickSeed).
+const SEED_PICKS = 8;
 
 // Doors, corridors and exits are cut this many cells either side of
 // their middle line, so they're wide enough to walk through.
 const CUT_RADIUS = 1;
 
-const OPEN = ".";
+// Letters for the grounds (see themes.json).
+const GROUND = {meadow: ".", tallGrass: "%", marsh: "~"};
+
+// The chance an area is one other ground throughout, and how much of the
+// rest is sprinkled with each (noise this far apart, in cells).
+const WHOLE_AREA = 0.22;
+const SPRINKLE = {marsh: 0.74, tallGrass: 0.72, meadow: 0.68};
+const SPRINKLE_WAVELENGTH = 5;
 
 // Returns a cellMap (see docs/schema/map.md#cellmap). Unknown tags throw;
 // of exclusive ones, the first given wins.
@@ -66,7 +84,8 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, tags = [
   grid.smooth();
 
   const fill = fillOf(theme);
-  const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (grid.isOpen(c, r) ? OPEN : fill)).join(""));
+  const ground = grounds(grid, areas, has, seed, rng);
+  const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (grid.isOpen(c, r) ? GROUND[ground(grid.key(c, r), c, r)] : fill)).join(""));
   return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(exits.length ? {exits} : {})};
 }
 
@@ -321,8 +340,8 @@ function growAreas(grid, has, rng) {
   return areas;
 }
 
-// Where the next area starts: the first (for a hub) in the middle;
-// otherwise anywhere free - for tight, as near the others as it can be.
+// Where the next area starts: the first (for a hub) in the middle; for
+// tight, as near the others as it can be; otherwise away from them.
 function pickSeed(grid, areas, blocked, has, rng) {
   const free = [];
   for (let k = 0; k < blocked.length; k++) if (!blocked[k]) free.push(k);
@@ -336,7 +355,19 @@ function pickSeed(grid, areas, blocked, has, rng) {
     const near = free.filter((k) => grid.neighbors(k).some((n) => blocked[n] && grid.edgeDistance(n) >= MARGIN));
     if (near.length) return rng.pick(near);
   }
-  return rng.pick(free);
+  // The farthest from the other areas of a few picks, so areas spread
+  // over the map rather than clumping.
+  const others = areas.flatMap(({cells}) => cells.filter((_, i) => i % 3 === 0)).map((k) => grid.at(k));
+  if (!others.length) return rng.pick(free);
+  let best = null;
+  let bestDistance = -1;
+  for (let i = 0; i < SEED_PICKS; i++) {
+    const k = rng.pick(free);
+    const at = grid.at(k);
+    const d = Math.min(...others.map((o) => hexDistance(at, o)));
+    if (d > bestDistance) [best, bestDistance] = [k, d];
+  }
+  return best;
 }
 
 // An area grown from seed, a cell at a time, up to size cells it may take,
@@ -453,7 +484,32 @@ function thinToCorridors(grid, areas, doors, has, rng) {
       for (const k of path ?? []) for (const b of grid.ball(k, CUT_RADIUS)) keep.add(b);
     }
     for (const k of cells) if (!keep.has(k)) grid.open[k] = 0;
+    areas[i].corridor = true;
     // Door ends stay open, so the doors still meet the corridor.
     grid.openCells(doors[i], CUT_RADIUS);
   });
+}
+
+// ---- Ground ----
+
+// The ground of each open cell, as ground(key, col, row): the main ground,
+// except in areas that are one other ground throughout (not corridors),
+// and where it's sprinkled with the others.
+function grounds(grid, areas, has, seed, rng) {
+  const main = has.has("wet") ? "marsh" : has.has("rough") ? "tallGrass" : "meadow";
+  const others = ["meadow", "tallGrass", "marsh"].filter((g) => g !== main && !(g === "marsh" && has.has("dry")));
+  const whole = new Map();
+  for (const area of areas) {
+    if (area.corridor || rng() >= WHOLE_AREA) continue;
+    const g = rng.pick(others);
+    for (const k of area.cells) whole.set(k, g);
+  }
+  return (key, c, r) => {
+    if (whole.has(key)) return whole.get(key);
+    for (const g of others) {
+      const salt = 600 + Object.keys(GROUND).indexOf(g);
+      if (noise(seed, c / SPRINKLE_WAVELENGTH, r / SPRINKLE_WAVELENGTH, salt) > SPRINKLE[g]) return g;
+    }
+    return main;
+  };
 }

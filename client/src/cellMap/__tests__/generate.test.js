@@ -4,14 +4,15 @@ import {validateCellMap} from "../format";
 import {exitCells} from "../exits";
 import {neighbor} from "../hexGrid";
 
-const open = (map, c, r) => map.cells[r]?.[c] === ".";
+const GROUNDS = ".%~";
+const open = (map, c, r) => GROUNDS.includes(map.cells[r]?.[c] ?? "T");
 
 // The open cells, in groups that join up.
 function groups(map) {
   const seen = new Set();
   const out = [];
   map.cells.forEach((line, r) => [...line].forEach((ch, c) => {
-    if (ch !== "." || seen.has(`${c},${r}`)) return;
+    if (!GROUNDS.includes(ch) || seen.has(`${c},${r}`)) return;
     const group = [[c, r]];
     seen.add(`${c},${r}`);
     for (let i = 0; i < group.length; i++) {
@@ -48,9 +49,9 @@ describe("generateCellMap", () => {
         for (const key of exitCellKeys) expect(open(map, ...key.split(",").map(Number))).toBe(true);
         map.cells.forEach((line, r) => [...line].forEach((ch, c) => {
           const edge = c === 0 || r === 0 || c === map.grid.cols - 1 || r === map.grid.rows - 1;
-          if (edge && ch === ".") expect(exitCellKeys.has(`${c},${r}`)).toBe(true);
+          if (edge && GROUNDS.includes(ch)) expect(exitCellKeys.has(`${c},${r}`)).toBe(true);
         }));
-        const openCount = map.cells.join("").split("").filter((ch) => ch === ".").length;
+        const openCount = map.cells.join("").split("").filter((ch) => GROUNDS.includes(ch)).length;
         expect(openCount / (40 * 30)).toBeGreaterThan(0.15);
         expect(openCount / (40 * 30)).toBeLessThan(0.6);
       }
@@ -61,7 +62,23 @@ describe("generateCellMap", () => {
     const map = generateCellMap({...options, connections: 0, theme: "cave"});
     expect(map).not.toHaveProperty("exits");
     expect(map.theme).toBe("cave");
-    expect(map.cells.join("")).toMatch(/^[.T]+$/);
+    expect(map.cells.join("")).toMatch(/^[.%~T]+$/);
+  });
+
+  it("lays meadow mostly, with tall grass and marsh about, unless tags say otherwise", () => {
+    const share = (tags) => {
+      const all = [1, 2, 3, 4].flatMap((seed) => generateCellMap({...options, seed, tags}).cells.join("").split("")).filter((ch) => GROUNDS.includes(ch));
+      return Object.fromEntries([...GROUNDS].map((ch) => [ch, all.filter((x) => x === ch).length / all.length]));
+    };
+    const plain = share([]);
+    expect(plain["."]).toBeGreaterThan(0.5);
+    expect(plain["%"]).toBeGreaterThan(0.02);
+    expect(plain["~"]).toBeGreaterThan(0.02);
+    expect(share(["dry"])["~"]).toBe(0);
+    expect(share(["wet"])["~"]).toBeGreaterThan(0.5);
+    expect(share(["rough"])["%"]).toBeGreaterThan(0.5);
+    // Of tags that clash, the first wins.
+    expect(share(["dry", "wet"])["~"]).toBe(0);
   });
 
   it("refuses tags it doesn't know, and too many connections", () => {
