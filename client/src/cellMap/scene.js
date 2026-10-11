@@ -1,7 +1,7 @@
 // Everything the painter draws, in feet: pure data, so it's testable and the
 // same map always builds the same scene. Decorations are placements of a
 // style's sprite variants: {x, y, radius, variant}.
-import {cellAt, cellCenter, cellPoint, mapSize, neighbor} from "./hexGrid";
+import {CELL_SIZE, cellAt, cellCenter, cellPoint, mapSize, neighbor} from "./hexGrid";
 import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
 import {insetLoop, regionLoops, smoothLoop} from "./regions";
@@ -29,7 +29,7 @@ const TRAIL_CLEARANCE = 0.4;
 const BAND = [1, 0.85, 0.6];
 
 export function buildScene(map, style = resolveStyle(map)) {
-  const {cellSize} = map.grid;
+  const cellSize = CELL_SIZE;
   const {seed} = map;
   const scene = {...mapSize(map.grid), cellSize, grounds: [], trails: [], forest: [], crowns: [], patches: [], tufts: [], tallTufts: [], pools: [], reeds: []};
 

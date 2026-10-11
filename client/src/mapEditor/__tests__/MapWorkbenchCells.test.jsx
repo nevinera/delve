@@ -12,7 +12,7 @@ import {cachedCellMapImage} from "../../cellMap/cache";
 
 // MapWorkbench with a map drawn in cells, hosted like the world editor
 // hosts it.
-const cellMap = {version: 1, theme: "glade", seed: 1, grid: {type: "hex", cols: 4, rows: 3, cellSize: 5}, cells: ["....", "....", "...."]};
+const cellMap = {version: 1, theme: "glade", seed: 1, grid: {type: "hex", cols: 4, rows: 3}, cells: ["....", "....", "...."]};
 const CELL_MAP = {
   identifier: "m", name: "M", feetDimensions: {width: 18.764, height: 17.5}, cellMap,
   barriers: [], connections: [], units: [],

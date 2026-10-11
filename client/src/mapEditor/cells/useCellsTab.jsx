@@ -12,7 +12,7 @@
 // them (rendering), and makes the map's thumbnail after an edit
 // (onThumbnail(blob)).
 import {useEffect, useRef, useState} from "react";
-import {cellAt, cellPoint, hexDistance, mapSize, pointAt} from "../../cellMap/hexGrid";
+import {CELL_SIZE, cellAt, cellPoint, hexDistance, mapSize, pointAt} from "../../cellMap/hexGrid";
 import {renderScale} from "../../cellMap/render";
 import {drawCells, drawTrails, hexPath, SELECTED_COLOR} from "../../cellMap/overlay";
 import {useCellHistory} from "./useCellHistory";
@@ -79,14 +79,14 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
   function locate(px) {
     const x = px.x / scale;
     const y = px.y / scale;
-    return {point: pointAt(x, y, draft.grid.cellSize), cell: cellAt(x, y, draft.grid.cellSize), x, y};
+    return {point: pointAt(x, y, CELL_SIZE), cell: cellAt(x, y, CELL_SIZE), x, y};
   }
 
   function nearestTrailPoint({x, y}) {
     let best = null;
     draft.trails.forEach((trail, t) => trail.points.forEach(([col, row], i) => {
-      const p = cellPoint(col, row, draft.grid.cellSize);
-      const d = Math.hypot(p.x - x, p.y - y) / draft.grid.cellSize;
+      const p = cellPoint(col, row, CELL_SIZE);
+      const d = Math.hypot(p.x - x, p.y - y) / CELL_SIZE;
       if (d <= GRAB_CELLS && (!best || d < best.d)) best = {trail: t, point: i, d};
     }));
     return best && {trail: best.trail, point: best.point};
@@ -99,9 +99,9 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
     change((d) => {
       let next = d;
       for (let i = 0; i <= steps; i++) {
-        const a = cellPoint(from[0], from[1], d.grid.cellSize);
-        const b = cellPoint(to[0], to[1], d.grid.cellSize);
-        const [c, r] = cellAt(a.x + ((b.x - a.x) * i) / steps, a.y + ((b.y - a.y) * i) / steps, d.grid.cellSize);
+        const a = cellPoint(from[0], from[1], CELL_SIZE);
+        const b = cellPoint(to[0], to[1], CELL_SIZE);
+        const [c, r] = cellAt(a.x + ((b.x - a.x) * i) / steps, a.y + ((b.y - a.y) * i) / steps, CELL_SIZE);
         next = next.paint(c, r, ui.terrain, ui.brush);
       }
       return next;
@@ -261,7 +261,7 @@ function CellOverlay({draft, renderedCells, ui, scale, width, height}) {
     }
     if (tool === "trail" || overlay === "cells") drawTrails(ctx, map, overlayScale, {selected: tool === "trail" ? selected : null});
     if (pendingPoint) {
-      const p = cellPoint(...pendingPoint, map.grid.cellSize);
+      const p = cellPoint(...pendingPoint, CELL_SIZE);
       ctx.fillStyle = SELECTED_COLOR;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 9 / overlayScale, 0, Math.PI * 2);
@@ -285,7 +285,7 @@ function BrushOverlay({draft, ui, scale, width, height}) {
     ctx.beginPath();
     for (let c = hc - reach; c <= hc + reach; c++) {
       for (let r = hr - reach - 1; r <= hr + reach + 1; r++) {
-        if (draft.inside(c, r) && hexDistance([hc, hr], [c, r]) <= reach) hexPath(ctx, c, r, draft.grid.cellSize);
+        if (draft.inside(c, r) && hexDistance([hc, hr], [c, r]) <= reach) hexPath(ctx, c, r, CELL_SIZE);
       }
     }
     ctx.stroke();

@@ -4,7 +4,7 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
   let(:cell_map) do
     {
       "version" => 1, "theme" => "glade", "seed" => 3,
-      "grid" => {"type" => "hex", "cols" => 3, "rows" => 2, "cellSize" => 5},
+      "grid" => {"type" => "hex", "cols" => 3, "rows" => 2},
       "cells" => ["T..", "%~."],
       "trails" => [{"width" => 0.8, "points" => [[0, 1], [2.5, 0.25]]}]
     }
@@ -75,7 +75,7 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
 
   describe ".feet_size" do
     it "matches the client's hex layout" do
-      size = described_class.feet_size({"cols" => 2, "rows" => 1, "cellSize" => Math.sqrt(3)})
+      size = described_class.feet_size({"cols" => 2, "rows" => 1}, Math.sqrt(3))
       expect(size["width"]).to be_within(1e-9).of(3.5)
       expect(size["height"]).to be_within(1e-9).of(1.5 * Math.sqrt(3))
     end

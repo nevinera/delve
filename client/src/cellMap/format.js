@@ -30,7 +30,6 @@ export function validateCellMap(map) {
       errors.push(`grid.${key} must be an integer from 1 to ${MAX_DIMENSION}`);
     }
   }
-  if (!(typeof grid.cellSize === "number" && grid.cellSize > 0)) errors.push("grid.cellSize must be a positive number");
 
   if (!Array.isArray(map.cells)) return [...errors, "cells must be a list of row strings"];
   if (map.cells.length !== grid.rows) errors.push(`cells has ${map.cells.length} rows, grid.rows is ${grid.rows}`);

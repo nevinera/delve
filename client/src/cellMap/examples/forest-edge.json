@@ -4,8 +4,7 @@
   "grid": {
     "type": "hex",
     "cols": 48,
-    "rows": 36,
-    "cellSize": 5
+    "rows": 36
   },
   "seed": 23,
   "cells": [

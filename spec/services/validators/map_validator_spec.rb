@@ -90,7 +90,7 @@ RSpec.describe Validators::MapValidator, type: :validator do
 
     describe "with a cellMap" do
       let(:cell_map) do
-        {"version" => 1, "theme" => "glade", "seed" => 3, "grid" => {"type" => "hex", "cols" => 3, "rows" => 2, "cellSize" => 5}, "cells" => ["T..", "%~."]}
+        {"version" => 1, "theme" => "glade", "seed" => 3, "grid" => {"type" => "hex", "cols" => 3, "rows" => 2}, "cells" => ["T..", "%~."]}
       end
       let(:feet) { Validators::CellMapValidator.feet_size(cell_map["grid"]) }
       let(:cells_only) { cave_entrance_map.except("imageUrl", "pixelDimensions", "connections").merge("cellMap" => cell_map, "feetDimensions" => feet) }

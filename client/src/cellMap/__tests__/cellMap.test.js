@@ -10,7 +10,7 @@ import clearing from "../examples/clearing.json";
 import forestEdge from "../examples/forest-edge.json";
 import woodlandTrail from "../examples/woodland-trail.json";
 
-const tiny = (cells, seed = 1) => ({version: 1, theme: "glade", seed, grid: {type: "hex", cols: cells[0].length, rows: cells.length, cellSize: 5}, cells});
+const tiny = (cells, seed = 1) => ({version: 1, theme: "glade", seed, grid: {type: "hex", cols: cells[0].length, rows: cells.length}, cells});
 
 describe("validateCellMap", () => {
   it("accepts the examples", () => {
@@ -20,10 +20,9 @@ describe("validateCellMap", () => {
   it("names what's wrong", () => {
     const map = {...tiny(["..", ".."]), cells: ["..", ".x."]};
     expect(validateCellMap(map)).toEqual(['cells[1] has 3 cells, grid.cols is 2', 'cells[1] has unknown cells: "x"']);
-    expect(validateCellMap({...tiny([".."]), grid: {type: "square", cols: 0, rows: 1, cellSize: -1}})).toEqual([
+    expect(validateCellMap({...tiny([".."]), grid: {type: "square", cols: 0, rows: 1}})).toEqual([
       "grid.type must be one of: hex",
       "grid.cols must be an integer from 1 to 200",
-      "grid.cellSize must be a positive number",
       "cells[0] has 2 cells, grid.cols is 0",
     ]);
   });
@@ -78,7 +77,7 @@ describe("hexGrid", () => {
   });
 
   it("sizes the map to the grid", () => {
-    const {width, height} = mapSize({cols: 2, rows: 1, cellSize: Math.sqrt(3)});
+    const {width, height} = mapSize({cols: 2, rows: 1}, Math.sqrt(3));
     expect(width).toBeCloseTo(3.5);
     expect(height).toBeCloseTo(1.5 * Math.sqrt(3));
   });

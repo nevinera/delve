@@ -71,14 +71,15 @@ the game server doesn't read it, and cells don't block movement; walls are still
 | `version` | integer | yes | `1`. |
 | `theme` | string | yes | The look, and the cell alphabet and grid types that go with it. Only `"glade"` for now. Themes live in client/src/cellMap/themes.json. |
 | `colors` | object | no | Overrides some of the theme's colors, as `"#rrggbb"`: `{ "meadow": "#b8c98a" }`. Keys must be the theme's colors (glade: `meadow`, `tallGrass`, `marsh`, `forest`, `crown`, `tuft`, `tallTuft`, `pool`, `reed`, `trail`, `ink`). |
-| `grid` | object | yes | `{ "type": "hex", "cols": int, "rows": int, "cellSize": float }`. `type` must be one the theme supports (glade: `"hex"`). `cols` and `rows` are 1 to 200; `cellSize` is in feet. |
+| `grid` | object | yes | `{ "type": "hex", "cols": int, "rows": int }`. `type` must be one the theme supports (glade: `"hex"`). `cols` and `rows` are 1 to 200. |
 | `seed` | integer | yes | Varies the decorations (tree crowns, grass tufts and so on) without changing the terrain. |
 | `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters. Glade: `.` meadow, `%` tall grass, `~` marsh, `T` trees. |
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |
 
-A hex grid has flat-topped hexes, `cellSize` feet across the flats, with odd columns half a cell
-lower. Its size in feet is `width = r * (1.5 * cols + 0.5)` and `height = cellSize * rows +
-cellSize / 2` (no half cell when there's one column), where `r = cellSize / sqrt(3)`. Cells are
+A hex grid has flat-topped hexes, always 5 feet across the flats (so trees and grass are the same
+size on every map), with odd columns half a cell lower. Its size in feet is
+`width = r * (1.5 * cols + 0.5)` and `height = 5 * rows + 2.5` (no half cell when there's one
+column), where `r = 5 / sqrt(3)`. Cells are
 y-down from the top-left, like the image: row 0 is the map's top edge.
 
 A **Trail** is `{ "width": float, "points": [[col, row], ...] }`: a curve through at least two
@@ -90,7 +91,7 @@ points, in cell coordinates (whole numbers are cell centers; fractions fall betw
   "version": 1,
   "theme": "glade",
   "colors": { "forest": "#2f4a2c" },
-  "grid": { "type": "hex", "cols": 4, "rows": 3, "cellSize": 5 },
+  "grid": { "type": "hex", "cols": 4, "rows": 3 },
   "seed": 11,
   "cells": ["TTT.", "T...", "..%~"],
   "trails": [{ "width": 0.8, "points": [[0, 2], [3, 0.5]]}]

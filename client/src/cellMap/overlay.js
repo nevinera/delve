@@ -1,7 +1,7 @@
 // Editor overlays drawn over a cellmap's render, in feet (the caller sets
 // the scale): hex outlines, cells tinted by terrain, and trails as authored.
 // Shared by the cell editor page and the map editor's Cells tab.
-import {cellCorners, cellPoint} from "./hexGrid";
+import {CELL_SIZE, cellCorners, cellPoint} from "./hexGrid";
 import {terrainsOf} from "./format";
 
 export const TRAIL_COLOR = "rgba(230, 70, 30, 0.9)";
@@ -14,7 +14,7 @@ export const CELL_COLORS = {
   trees: "rgba(30, 110, 200, 0.55)",
 };
 
-export function hexPath(ctx, col, row, cellSize) {
+export function hexPath(ctx, col, row, cellSize = CELL_SIZE) {
   const corners = cellCorners(col, row, cellSize);
   ctx.moveTo(corners[0].x, corners[0].y);
   for (const {x, y} of corners.slice(1)) ctx.lineTo(x, y);
@@ -44,14 +44,14 @@ export function drawCells(ctx, map, scale, {filled = false, outline = true, only
     for (const [terrain, cells] of paths) {
       ctx.fillStyle = CELL_COLORS[terrain];
       ctx.beginPath();
-      for (const [col, row] of cells) hexPath(ctx, col, row, grid.cellSize);
+      for (const [col, row] of cells) hexPath(ctx, col, row);
       ctx.fill();
     }
   }
   if (outline) {
     ctx.beginPath();
     for (let row = 0; row < grid.rows; row++) {
-      for (let col = 0; col < grid.cols; col++) if (!only || only(col, row)) hexPath(ctx, col, row, grid.cellSize);
+      for (let col = 0; col < grid.cols; col++) if (!only || only(col, row)) hexPath(ctx, col, row);
     }
     ctx.stroke();
   }
@@ -61,11 +61,10 @@ export function drawCells(ctx, map, scale, {filled = false, outline = true, only
 // Trails as authored: straight lines between their points, each marked.
 // selected is {trail, point} (either may be null).
 export function drawTrails(ctx, map, scale, {selected = null} = {}) {
-  const {cellSize} = map.grid;
   (map.trails ?? []).forEach((trail, t) => {
     const isSelected = selected?.trail === t;
     const color = isSelected ? SELECTED_COLOR : TRAIL_COLOR;
-    const points = trail.points.map(([col, row]) => cellPoint(col, row, cellSize));
+    const points = trail.points.map(([col, row]) => cellPoint(col, row, CELL_SIZE));
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 3 / scale;

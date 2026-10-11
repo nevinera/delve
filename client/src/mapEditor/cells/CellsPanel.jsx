@@ -2,12 +2,10 @@
 // edit trails, the grid, seed and colors. All state is in useCellsTab.
 import {useState} from "react";
 import {THEMES, terrainsOf} from "../../cellMap/format";
-import {gridFor} from "../../cellMap/hexGrid";
+import {CELL_SIZE, gridFor} from "../../cellMap/hexGrid";
 import {CELL_COLORS} from "../../cellMap/overlay";
 import {CellMapDraft} from "./CellMapDraft";
 import {BRUSHES, OVERLAYS, TOOLS} from "./useCellsTab";
-
-const DEFAULT_CELL_SIZE = 5;
 
 export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveImage}) {
   const {draft, change, history, ui, update, errors, pending, render} = cells;
@@ -72,12 +70,11 @@ function Choices({label, options, value, onChange}) {
 
 function NewCellMap({feetDimensions, onCreate}) {
   const fits = feetDimensions?.width && feetDimensions?.height;
-  const [cellSize, setCellSize] = useState(DEFAULT_CELL_SIZE);
-  const [size, setSize] = useState(() => (fits ? gridFor(feetDimensions, DEFAULT_CELL_SIZE) : {cols: 48, rows: 36}));
+  const [size, setSize] = useState(() => (fits ? gridFor(feetDimensions) : {cols: 48, rows: 36}));
   const [theme, setTheme] = useState(Object.keys(THEMES)[0]);
   return (
     <div className="cells-panel">
-      <p>This map has no cells yet. Start one, all meadow, and paint it.</p>
+      <p>This map has no cells yet. Start one, all meadow, and paint it. Cells are {CELL_SIZE} ft across.</p>
       <label>
         Theme{" "}
         <select value={theme} onChange={(e) => setTheme(e.target.value)}>
@@ -87,45 +84,39 @@ function NewCellMap({feetDimensions, onCreate}) {
       <div className="cells-panel-row">
         <NumberField label="Columns" value={size.cols} min={1} max={200} onChange={(cols) => setSize({...size, cols})} />
         <NumberField label="Rows" value={size.rows} min={1} max={200} onChange={(rows) => setSize({...size, rows})} />
-        <NumberField label="Cell size (ft)" value={cellSize} min={1} step={0.5} onChange={setCellSize} />
       </div>
       {fits && (
-        <button type="button" onClick={() => setSize(gridFor(feetDimensions, cellSize))}>Fit to the map ({feetDimensions.width} × {feetDimensions.height} ft)</button>
+        <button type="button" onClick={() => setSize(gridFor(feetDimensions))}>Fit to the map ({feetDimensions.width} × {feetDimensions.height} ft)</button>
       )}
-      <button type="button" onClick={() => onCreate(CellMapDraft.blank({theme, ...size, cellSize}))}>New cell map</button>
+      <button type="button" onClick={() => onCreate(CellMapDraft.blank({theme, ...size}))}>New cell map</button>
     </div>
   );
 }
 
 function GridSection({draft, change}) {
-  const {cols, rows, cellSize} = draft.grid;
-  const [next, setNext] = useState({cols, rows, cellSize});
+  const {cols, rows} = draft.grid;
+  const [next, setNext] = useState({cols, rows});
   // Follows the grid when it changes underneath (an undo, say).
   const [current, setCurrent] = useState(draft.grid);
   if (current !== draft.grid) {
     setCurrent(draft.grid);
-    setNext({cols, rows, cellSize});
+    setNext({cols, rows});
   }
-  const changed = next.cols !== cols || next.rows !== rows || next.cellSize !== cellSize;
+  const changed = next.cols !== cols || next.rows !== rows;
   return (
     <div className="cells-panel-section">
       <h4>Grid</h4>
       <div className="cells-panel-row">
         <NumberField label="Columns" value={next.cols} min={1} max={200} onChange={(v) => setNext({...next, cols: v})} />
         <NumberField label="Rows" value={next.rows} min={1} max={200} onChange={(v) => setNext({...next, rows: v})} />
-        <NumberField label="Cell size (ft)" value={next.cellSize} min={1} step={0.5} onChange={(v) => setNext({...next, cellSize: v})} />
       </div>
       {changed && (
-        <p className="cells-panel-help">
-          {next.cellSize !== cellSize
-            ? "A new cell size scales the cells, so they'll move out from under walls, connections and units."
-            : "Rows come and go at the top and columns at the right, so walls, connections and units stay over the same cells."}
-        </p>
+        <p className="cells-panel-help">Rows come and go at the top and columns at the right, so walls, connections and units stay over the same cells.</p>
       )}
       {changed && (
         <div className="cells-panel-row">
           <button type="button" onClick={() => change((d) => d.resize(next))}>Resize</button>
-          <button type="button" onClick={() => setNext({cols, rows, cellSize})}>Cancel</button>
+          <button type="button" onClick={() => setNext({cols, rows})}>Cancel</button>
         </div>
       )}
     </div>

@@ -200,7 +200,7 @@ describe("MapDraft", () => {
 });
 
 describe("MapDraft cell maps", () => {
-  const cellMap = {version: 1, theme: "glade", seed: 1, grid: {type: "hex", cols: 4, rows: 3, cellSize: 5}, cells: ["....", "....", "...."]};
+  const cellMap = {version: 1, theme: "glade", seed: 1, grid: {type: "hex", cols: 4, rows: 3}, cells: ["....", "....", "...."]};
 
   it("sizes a map without an image to its cells", () => {
     const draft = new MapDraft({feetDimensions: {width: 100, height: 100}}).setCellMap(cellMap);

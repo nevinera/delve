@@ -13,9 +13,9 @@ export class CellMapDraft {
   }
 
   // An all-meadow (the theme's first terrain) map.
-  static blank({theme = "glade", cols, rows, cellSize = 5, seed = 1}) {
+  static blank({theme = "glade", cols, rows, seed = 1}) {
     const fill = Object.keys(THEMES[theme].terrains)[0];
-    return new CellMapDraft({version: 1, theme, grid: {type: THEMES[theme].grids[0], cols, rows, cellSize}, seed, cells: Array.from({length: rows}, () => fill.repeat(cols)), trails: []});
+    return new CellMapDraft({version: 1, theme, grid: {type: THEMES[theme].grids[0], cols, rows}, seed, cells: Array.from({length: rows}, () => fill.repeat(cols)), trails: []});
   }
 
   get grid() {
@@ -85,13 +85,13 @@ export class CellMapDraft {
   // columns at the right. Map feet run up from the bottom-left, so walls,
   // units and connections stay over the same cells. New cells are the
   // theme's first terrain; trails move with their cells.
-  resize({cols = this.grid.cols, rows = this.grid.rows, cellSize = this.grid.cellSize}) {
+  resize({cols = this.grid.cols, rows = this.grid.rows}) {
     const fill = Object.keys(THEMES[this.data.theme].terrains)[0];
     const added = rows - this.grid.rows;
     const kept = added >= 0 ? this.data.cells : this.data.cells.slice(-added);
     const cells = [...Array.from({length: Math.max(0, added)}, () => ""), ...kept].map((line) => line.slice(0, cols).padEnd(cols, fill));
     const trails = this.trails.map((trail) => ({...trail, points: trail.points.map(([col, row]) => [col, row + added])}));
-    return this.with({grid: {...this.grid, cols, rows, cellSize}, cells, ...(this.data.trails ? {trails} : {})});
+    return this.with({grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {})});
   }
 
   // ---- Look ----

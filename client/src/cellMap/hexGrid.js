@@ -3,12 +3,17 @@
 
 const SQRT3 = Math.sqrt(3);
 
+// Every cell map's cells are this many feet across the flats, so trees and
+// grass are always the same size. The functions below take a cellSize for
+// the geometry, and default to it.
+export const CELL_SIZE = 5;
+
 // cellSize is the flat-to-flat width; the corner radius follows from it.
 export function hexRadius(cellSize) {
   return cellSize / SQRT3;
 }
 
-export function mapSize({cols, rows, cellSize}) {
+export function mapSize({cols, rows}, cellSize = CELL_SIZE) {
   const r = hexRadius(cellSize);
   return {width: 1.5 * r * cols + 0.5 * r, height: cellSize * rows + (cols > 1 ? cellSize / 2 : 0)};
 }
@@ -85,7 +90,7 @@ export function hexDistance([c1, r1], [c2, r2]) {
 }
 
 // The size a grid needs to cover about width x height feet.
-export function gridFor({width, height}, cellSize) {
+export function gridFor({width, height}, cellSize = CELL_SIZE) {
   const r = hexRadius(cellSize);
   return {cols: Math.max(1, Math.round((width / r - 0.5) / 1.5)), rows: Math.max(1, Math.round(height / cellSize - 0.5))};
 }

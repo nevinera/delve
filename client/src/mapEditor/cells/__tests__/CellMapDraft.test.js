@@ -38,7 +38,7 @@ describe("CellMapDraft", () => {
     const taller = draft.resize({cols: 2, rows: 6});
     expect(taller.data.cells).toEqual(["..", "..", "..", "..", "..", "T."]);
     expect(taller.trails[0].points).toEqual([[0, 5], [2, 3]]);
-    expect(taller.grid).toMatchObject({cols: 2, rows: 6, cellSize: 5});
+    expect(taller.grid).toEqual({type: "hex", cols: 2, rows: 6});
     const shorter = draft.resize({rows: 2});
     expect(shorter.data.cells).toEqual([".....", "T...."]);
     expect(shorter.trails[0].points).toEqual([[0, 1], [2, -1]]);
@@ -77,7 +77,7 @@ describe("hexGrid helpers", () => {
   });
 
   it("sizes a grid to cover an area", () => {
-    const grid = {...gridFor({width: 100, height: 80}, 5), cellSize: 5};
+    const grid = gridFor({width: 100, height: 80});
     const size = mapSize(grid);
     expect(Math.abs(size.width - 100)).toBeLessThan(5);
     expect(Math.abs(size.height - 80)).toBeLessThan(5);

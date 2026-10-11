@@ -5,6 +5,9 @@ module Validators
   class CellMapValidator < Base
     VERSION = 1
     MAX_DIMENSION = 200
+    # Feet across a cell's flats, the same on every map (see
+    # client/src/cellMap/hexGrid.js's CELL_SIZE).
+    CELL_SIZE = 5
     THEMES_PATH = Rails.root.join("client/src/cellMap/themes.json")
     COLOR_RE = /\A#[0-9a-fA-F]{6}\z/
 
@@ -14,8 +17,8 @@ module Validators
 
     # The rendered size in feet: flat-top hexes, odd columns half a cell
     # lower (see client/src/cellMap/hexGrid.js's mapSize).
-    def self.feet_size(grid)
-      cols, rows, cell_size = grid.values_at("cols", "rows", "cellSize")
+    def self.feet_size(grid, cell_size = CELL_SIZE)
+      cols, rows = grid.values_at("cols", "rows")
       r = cell_size / Math.sqrt(3)
       {"width" => 1.5 * r * cols + 0.5 * r, "height" => cell_size * rows + ((cols > 1) ? cell_size / 2.0 : 0)}
     end
@@ -59,8 +62,6 @@ module Validators
     def validate_grid!(grid, theme, path:)
       require_one_of!(require_string!(grid, "type", path: path), theme["grids"], path: child_path(path, "type"))
       %w[cols rows].each { |key| validate_dimension!(grid, key, path: path) }
-      cell_size = require_numeric!(grid, "cellSize", path: path)
-      raise ValidationError.new("cellSize must be positive", path: child_path(path, "cellSize")) unless cell_size > 0
       grid
     end
 
