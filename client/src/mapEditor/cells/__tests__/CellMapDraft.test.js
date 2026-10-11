@@ -55,6 +55,12 @@ describe("CellMapDraft", () => {
     expect(shorter.trails[0].points).toEqual([[0, 1], [2, -1]]);
   });
 
+  it("keeps exits on their sides when resizing, cut to fit", () => {
+    const draft = blank().with({exits: [{side: "north", from: 1, to: 3}, {side: "west", from: 2, to: 3}, {side: "east", from: 0, to: 0}]});
+    expect(draft.resize({cols: 3, rows: 6}).exits).toEqual([{side: "north", from: 1, to: 2}, {side: "west", from: 4, to: 5}, {side: "east", from: 2, to: 2}]);
+    expect(draft.resize({rows: 2}).exits).toEqual([{side: "north", from: 1, to: 3}, {side: "west", from: 0, to: 1}]);
+  });
+
   it("sets and resets colors", () => {
     const draft = blank().setColor("meadow", "#112233");
     expect(draft.data.colors).toEqual({meadow: "#112233"});

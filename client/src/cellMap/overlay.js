@@ -3,6 +3,7 @@
 // Shared by the cell editor page and the map editor's Cells tab.
 import {CELL_SIZE, cellCenter, cellCorners, cellPoint} from "./hexGrid";
 import {terrainsOf} from "./format";
+import {exitEdge} from "./exits";
 
 export const TRAIL_COLOR = "rgba(230, 70, 30, 0.9)";
 export const SELECTED_COLOR = "rgba(40, 140, 255, 0.95)";
@@ -108,4 +109,20 @@ export function drawBridges(ctx, map, scale, {selected = null, pending = null, p
     ctx.arc(p.x, p.y, 9 / scale, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+export const EXIT_COLOR = "rgba(40, 200, 90, 0.95)";
+
+// Exits as thick lines along the map's edge.
+export function drawExits(ctx, map, scale) {
+  ctx.strokeStyle = EXIT_COLOR;
+  ctx.lineWidth = 10 / scale;
+  ctx.lineCap = "butt";
+  ctx.beginPath();
+  for (const exit of map.exits ?? []) {
+    const [a, b] = exitEdge(exit, map.grid);
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  ctx.stroke();
 }

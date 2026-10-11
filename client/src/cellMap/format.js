@@ -7,6 +7,7 @@
 // Ruby validator); colors override the theme's palette.
 import THEMES from "./themes.json";
 import {validateBridges} from "./bridges";
+import {validateExits} from "./exits";
 
 export {THEMES};
 export const VERSION = 1;
@@ -42,6 +43,7 @@ export function validateCellMap(map) {
   });
 
   errors.push(...validateBridges(map.bridges, grid));
+  errors.push(...validateExits(map.exits, grid));
   if (map.trails === undefined) return errors;
   if (!Array.isArray(map.trails)) return [...errors, "trails must be a list"];
   map.trails.forEach((trail, i) => {

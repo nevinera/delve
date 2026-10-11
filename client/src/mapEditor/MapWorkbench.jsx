@@ -3,6 +3,7 @@ import MapCanvas, {nextUnitIdentifier} from "./MapCanvas";
 import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
+import AutoBarriersPanel from "./AutoBarriersPanel";
 import FillPointsPanel from "./FillPointsPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsTab, {paletteKeys} from "./UnitsTab";
@@ -114,9 +115,12 @@ export default function MapWorkbench({
   function makeAutoBarriers() {
     const result = autoBarriers(mapData.cellMap, mapData.fillPoints ?? []);
     if (result.error) return {error: result.error};
-    onMapChange((d) => d.setField("barriers", result.barriers).setField("fillPoints", result.fillPoints));
+    // Exits' connections replace any of the same name (an earlier run's).
+    const named = new Set(result.connections.map((c) => c.identifier));
+    const connections = [...(mapData.connections ?? []).filter((c) => !named.has(c.identifier)), ...result.connections];
+    onMapChange((d) => d.setField("barriers", result.barriers).setField("fillPoints", result.fillPoints).setField("connections", connections));
     return {
-      added: {walls: result.barriers.filter((b) => b.type === "wall").length, circles: result.barriers.filter((b) => b.type === "circle").length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length},
+      added: {walls: result.barriers.filter((b) => b.type === "wall").length, circles: result.barriers.filter((b) => b.type === "circle").length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length, connections: result.connections.length},
       openEdge: result.openEdge, error: null,
     };
   }
@@ -696,6 +700,9 @@ export default function MapWorkbench({
         ) : tab === "map" ? (
           <>
             <MapFieldsPanel mapData={mapData} pixelDimensions={image?.pixelDimensions ?? ground?.image.pixelDimensions} feetFromCells={!image && Boolean(mapData.cellMap)} dispatch={dispatch} />
+            {!image && mapData.cellMap && (
+              <AutoBarriersPanel barriers={mapData.barriers ?? []} busy={!!uiState.placement || uiState.tool !== "select"} onAutoBarriers={makeAutoBarriers} />
+            )}
             <BarriersPanel
               barriers={mapData.barriers}
               selectedIndex={uiState.selectedBarrierIndex}
@@ -709,7 +716,6 @@ export default function MapWorkbench({
               onStartAddCircle={() => setUiState(uiState.startTool("add-circle"))}
               canPlaceOnMap={canPlaceOnMap}
               otherPlacementActive={!!uiState.connectionPlacement}
-              onAutoBarriers={!image && mapData.cellMap ? makeAutoBarriers : null}
               dispatch={dispatch}
             />
             <ConnectionsPanel

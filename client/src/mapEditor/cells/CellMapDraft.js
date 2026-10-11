@@ -95,8 +95,28 @@ export class CellMapDraft {
     // Bridges move with their cells too, and go if they'd leave the grid.
     const inside = ([col, row]) => col >= 0 && row >= 0 && col < cols && row < rows;
     const bridges = this.bridges.map(({from, to}) => ({from: [from[0], from[1] + added], to: [to[0], to[1] + added]})).filter(({from, to}) => inside(from) && inside(to));
-    const {bridges: _old, ...rest} = this.data;
-    return new CellMapDraft({...rest, grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {}), ...(bridges.length ? {bridges} : {})});
+    // Exits stay on their sides, cut to fit, and go if nothing's left.
+    const exits = this.exits.map((exit) => {
+      const across = exit.side === "east" || exit.side === "west";
+      const [shift, length] = across ? [added, rows] : [0, cols];
+      return {...exit, from: Math.max(0, exit.from + shift), to: Math.min(length - 1, exit.to + shift)};
+    }).filter(({from, to}) => from <= to);
+    const {bridges: _old, exits: _oldExits, ...rest} = this.data;
+    return new CellMapDraft({...rest, grid: {...this.grid, cols, rows}, cells, ...(this.data.trails ? {trails} : {}), ...(bridges.length ? {bridges} : {}), ...(exits.length ? {exits} : {})});
+  }
+
+  // ---- Exits ----
+
+  get exits() {
+    return this.data.exits ?? [];
+  }
+
+  // A generated map (see cellMap/generate.js) in place of this one's
+  // cells, grid, trails, bridges and exits; the theme and colors stay.
+  generated(map) {
+    const {cells, grid, seed, trails, exits} = map;
+    const {bridges: _b, trails: _t, exits: _e, ...rest} = this.data;
+    return new CellMapDraft({...rest, cells, grid, seed, ...(trails ? {trails} : {}), ...(exits ? {exits} : {})});
   }
 
   // ---- Look ----
