@@ -59,3 +59,11 @@ bin/cellmap-render woods.json --scale 8 --auto   # with Auto Barriers' walls and
 bin/cellmap-generate --tags burrow,coral --theme cave | bin/cellmap-render - -o cave.png
 bin/cellmap-generate --map woods --barriers -o woods-map.json   # a whole map file
 ```
+
+`bin/zone-outline` prints a zone's outline for an LLM to work from: each map's places (their
+tags, annotations, area, neighbors, connections and units) and the links between maps.
+
+```sh
+bin/zone-outline ../content/zones/darkwood/darkwood.json          # text
+bin/zone-outline --json ../content/zones/darkwood/darkwood.json   # JSON
+```
