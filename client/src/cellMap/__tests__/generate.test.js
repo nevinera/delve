@@ -60,6 +60,26 @@ describe("generateCellMap", () => {
     }
   });
 
+  it("leaves no way through it a single cell wide", () => {
+    for (const tags of [[], ["coral"], ["chaotic"], ["coral", "tight", "burrow"], ["chaotic", "hub"]]) {
+      for (const seed of [1, 2, 3, 4]) {
+        const map = generateCellMap({...options, seed, tags, connections: 4});
+        const {cols, rows} = map.grid;
+        map.cells.forEach((line, r) => [...line].forEach((ch, c) => {
+          if (!GROUNDS.includes(ch) || c === 0 || r === 0 || c === cols - 1 || r === rows - 1) return;
+          // Its open neighbors run unbroken around it, two or more of them.
+          const around = [0, 1, 2, 3, 4, 5].map((e) => {
+            const [nc, nr] = neighbor(c, r, e);
+            return nc < 0 || nr < 0 || nc >= cols || nr >= rows || open(map, nc, nr);
+          });
+          const runs = around.filter((o, e) => o && !around[(e + 5) % 6]).length;
+          const count = around.filter(Boolean).length;
+          if (count < 6) expect({c, r, runs, count, ok: runs === 1 && count >= 2}).toMatchObject({ok: true});
+        }));
+      }
+    }
+  });
+
   it("leaves out exits when there are no connections, and starts from the theme's fill", () => {
     const map = generateCellMap({...options, connections: 0, theme: "cave"});
     expect(map).not.toHaveProperty("exits");
@@ -101,8 +121,8 @@ describe("generateCellMap", () => {
   });
 
   it("gets walls from Auto Barriers that leave its open ground open, through every exit", () => {
-    for (const tags of [[], ["burrow", "coral"], ["hub", "cavities", "paths"]]) {
-      const map = generateCellMap({...options, connections: 4, tags});
+    for (const [seed, tags] of [[7, []], [7, ["burrow", "coral"]], [7, ["hub", "cavities", "paths"]], ...[1, 2, 3, 4, 5, 6].map((n) => [n, [TAGS[n], TAGS[n + 5]]])]) {
+      const map = generateCellMap({...options, seed, connections: 4, tags});
       const result = autoBarriers(map);
       expect(result.error).toBeNull();
       expect(result.openEdge).toBe(false);

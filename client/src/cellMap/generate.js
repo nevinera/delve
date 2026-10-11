@@ -85,6 +85,7 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, tags = [
   thinToCorridors(grid, areas, doors, has, rng);
   grid.joinAll(rng);
   grid.smooth();
+  grid.widen();
 
   const fill = fillOf(theme);
   const ground = grounds(grid, areas, has, seed, rng);
@@ -294,6 +295,64 @@ class Grid {
       }
       for (const k of opening) this.open[k] = 1;
     }
+  }
+  // Which of a cell's six neighbors are open, as booleans by edge; cells
+  // off the grid count as open, so exits read as running on off the map.
+  around(key) {
+    const [c, r] = this.at(key);
+    return [0, 1, 2, 3, 4, 5].map((edge) => {
+      const [nc, nr] = neighbor(c, r, edge);
+      return !this.inside(nc, nr) || this.open[this.key(nc, nr)] === 1;
+    });
+  }
+
+  // Widens every way through the open ground to at least two cells: one
+  // cell is too narrow to walk, since the walls Auto Barriers draws round
+  // and loosen the cells' edges. A cell's open neighbors must run
+  // unbroken around it, at least two of them: one alone is a dead end a
+  // cell wide, and two runs are a pinch a cell wide. Opens trees until no
+  // cell is either (first the trees between a pinch's runs, the fewer
+  // side).
+  widen() {
+    for (let pass = 0; pass < 50; pass++) {
+      let changed = false;
+      for (let k = 0; k < this.open.length; k++) {
+        if (!this.open[k] || this.edgeDistance(k) < 1) continue;
+        const fix = this.narrowFix(k);
+        for (const n of fix) {
+          if (this.edgeDistance(n) < 1 || this.open[n]) continue;
+          this.open[n] = 1;
+          changed = true;
+        }
+      }
+      if (!changed) return;
+    }
+  }
+
+  // The trees to open so cell k isn't narrow (see widen), or none.
+  narrowFix(k) {
+    const open = this.around(k);
+    const count = open.filter(Boolean).length;
+    if (count === 6) return [];
+    // Runs of trees around the cell, as lists of edges.
+    const start = open.indexOf(true);
+    if (start < 0) return [];
+    const gaps = [];
+    for (let i = 1; i <= 6; i++) {
+      const edge = (start + i) % 6;
+      if (open[edge]) continue;
+      if (open[(edge + 5) % 6]) gaps.push([]);
+      gaps[gaps.length - 1].push(edge);
+    }
+    const [c, r] = this.at(k);
+    const cell = (edge) => this.key(...neighbor(c, r, edge));
+    if (gaps.length > 1) {
+      const fewest = gaps.reduce((a, b) => (b.length < a.length ? b : a));
+      return fewest.map(cell);
+    }
+    if (count >= 2) return [];
+    // A dead end: open the tree on either side of its one way in.
+    return [(start + 1) % 6, (start + 5) % 6].filter((edge) => this.inside(...neighbor(c, r, edge))).map(cell).slice(0, 1);
   }
 }
 

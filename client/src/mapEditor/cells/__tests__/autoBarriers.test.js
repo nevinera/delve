@@ -112,6 +112,18 @@ describe("autoBarriers", () => {
     expect(filledAt(map, result, 18, 9)).toBe(true);
   });
 
+  it("keeps a little copse's wall around its fill point, so the open ground isn't filled", () => {
+    // Two trees side by side, in rows and columns all over a clearing, so
+    // the warp bends them every which way.
+    const map = ringed();
+    for (const [c, r] of [[5, 5], [6, 5], [13, 10], [13, 11], [8, 12], [9, 11]]) map.cells[r] = replaceAt(map.cells[r], c, "T");
+    const result = autoBarriers(map);
+    expect(filledAt(map, result, 5, 5)).toBe(true);
+    expect(filledAt(map, result, 13, 10)).toBe(true);
+    expect(filledAt(map, result, 7, 7)).toBe(false);
+    expect(filledAt(map, result, 11, 12)).toBe(false);
+  });
+
   it("gives a lone grove that's round a circle, and others walls", () => {
     const map = blank(20, 16);
     map.cells[5] = replaceAt(map.cells[5], 4, "T"); // one cell

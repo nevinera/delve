@@ -433,9 +433,22 @@ function clipSegment([ax, ay], [bx, by], width, height) {
   return t0 === t1 ? null : [t0, t1];
 }
 
+// Small loops are simplified less (to a tolerance of at most
+// SMALL_LOOP_SHARE of their length), so a little copse keeps its shape -
+// cut to a sliver, it could leave its own fill point outside it, which
+// would fill the open ground instead.
+const SMALL_LOOP_SHARE = 1 / 40;
+
 function simplifyAll(runs, tolerance) {
-  return runs.map((run) => ({...run, points: simplify(run.points, tolerance)})).filter(({points}) => points.length >= 2);
+  return runs.map((run) => {
+    const closed = run.points.length > 2 && distance(run.points[0], run.points[run.points.length - 1]) < 1e-6;
+    const limit = closed ? Math.min(tolerance, pathLength(run.points) * SMALL_LOOP_SHARE) : tolerance;
+    return {...run, points: simplify(run.points, limit)};
+  }).filter(({points}) => points.length >= 2);
 }
+
+const distance = ([ax, ay], [bx, by]) => Math.hypot(bx - ax, by - ay);
+const pathLength = (points) => points.reduce((sum, p, i) => (i ? sum + distance(points[i - 1], p) : 0), 0);
 
 // Douglas-Peucker, keeping both ends (so a closed run stays closed).
 export function simplify(points, tolerance) {
