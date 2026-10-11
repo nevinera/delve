@@ -1,0 +1,63 @@
+{
+  "format": "cellmap",
+  "version": 1,
+  "name": "Forest edge",
+  "grid": {
+    "type": "hex",
+    "cols": 48,
+    "rows": 36,
+    "cellSize": 5
+  },
+  "seed": 23,
+  "cells": [
+    "........................%%%%TTTTTTTTTTTTTTTTTTTT",
+    ".........................%%%%TTTTTTTTTTTTTTTTTTT",
+    "..........................%%%%TTTTTTTTTTTTTTTTTT",
+    "..........................%%%%TTTTTTTTTTTTTTTTTT",
+    "...................%......%%%%TTTTTTTTTTTTTTTTTT",
+    "................%%%%%%...%%%%TTTTTTTTTTTTTTTTTTT",
+    ".......T.......%%%%%%%%..%%%%TTTTTTTTTTTTTTTTTTT",
+    ".....TTT.......%%%%%%%%.%%%%TTTTTTTTTTTTTTTTTTTT",
+    "......TT........%%%%%%%%%%%%TTTTTTTTTTTTTTTTTTTT",
+    "..................%.%..%%%%%TTTTTTTTTTTTTTTTTTTT",
+    "........................%%%%TTTTTTTTTTTTTTTTTTTT",
+    ".....................T..%%%%TTTTTTTTTTTTTTTTTTTT",
+    "........................%%%%%TTTTTTTTTTTTTTTTTTT",
+    "........................%%%%TTTTTTTTTTTTTTTTTTTT",
+    ".......................%%%%TTTTTTTTTTTTTTTTTTTTT",
+    "......................%%%%%TTTTTTTTTTTTTTTTTTTTT",
+    ".....................%%%%TTTTTTTTTTTTTTTTTTTTTTT",
+    "...................%%%%TTTTTTTTTTTTTTTTTTTTTTTTT",
+    "..................%%%%TTTTTTTTTTTTTTTTTTTTTTTTTT",
+    ".................%%%%TTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "..................%%%%TTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "..................%%%%TTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "...~~~~~...TTT......%%%%TTTTTTTTTTTTTTTTTTTTTTTT",
+    "...~~~~~~..TTTT......%%%%TTTTTTTTTTTTTTTTTTTTTTT",
+    "..~~~~~~~~.TTTT.......%%%%TTTTTTTTTTTTTTTTTTTTTT",
+    ".~~~~~~~~~..T..........%%%%TTTTTTTTTTTTTTTTTTTTT",
+    ".~~~~~~~~~.............%%%%TTTTTTTTTTTTTTTTTTTTT",
+    ".~~~~~~~~~.............%%%%TTTTTTTTTTTTTTTTTTTTT",
+    ".~~~~~~~~~.............%%%%TTTTTTTTTTTTTTTTTTTTT",
+    "..~~~~~~~~.......TT...%%%%%TTTTTTTTTTTTTTTTTTTTT",
+    "..~~~~~~~.........T...%%%%%TTTTTTTTTTTTTTTTTTTTT",
+    "....~~~~...............%%%%TTTTTTTTTTTTTTTTTTTTT",
+    "........................%%%%TTTTTTTTTTTTTTTTTTTT",
+    "........TT................%%%%TTTTTTTTTTTTTTTTTT",
+    "........T.................%%%%TTTTTTTTTTTTTTTTTT",
+    "...........................%%%%TTTTTTTTTTTTTTTTT"
+  ],
+  "trails": [
+    {
+      "width": 0.8,
+      "points": [
+        [11.42, -2.79],
+        [13.83, 10.37],
+        [9.97, 21.38],
+        [16.25, 28.57],
+        [33.17, 33.76],
+        [49.98, 32.34]
+      ]
+    }
+  ]
+}

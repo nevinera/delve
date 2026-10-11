@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Delve - Cell Editor</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #editor-root { width: 100%; height: 100%; }
+      body { background: #14181c; color: #ddd; font-family: system-ui, sans-serif; }
+
+      .cell-editor { display: flex; flex-direction: column; height: 100%; }
+      .cell-editor-header { display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: #1c2126; border-bottom: 1px solid #333; }
+      .cell-editor-header h1 { font-size: 15px; color: #cce; font-weight: 600; }
+      .cell-editor-header a.back-link { color: #9ab; font-size: 13px; text-decoration: none; }
+      .cell-editor-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 8px 14px; font-size: 13px; color: #9ab; border-bottom: 1px solid #333; }
+      .cell-editor-controls select, .cell-editor-controls input[type=number] { background: #222; border: 1px solid #444; color: #ddd; padding: 4px 6px; border-radius: 3px; font-size: 13px; }
+      .cell-editor-controls input[type=number] { width: 7em; }
+      .cell-editor-controls button { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+      .cell-editor-legend { display: flex; gap: 10px; }
+      .cell-editor-legend i { display: inline-block; width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; border: 1px solid #555; }
+      .cell-editor-status { color: #789; font-size: 12px; }
+      .cell-editor-status strong { color: #9ab; font-weight: 600; }
+      .cell-editor-sizes { display: block; }
+      .cell-editor-errors { padding: 14px 32px; color: #e79; font-size: 13px; }
+
+      /* The map scaled to fit; the grid overlay sits exactly on top of it. */
+      .cell-editor-view { position: relative; flex: 1; min-height: 0; margin: 14px; }
+      .cell-editor-view canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+      .cell-editor-grid { pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <%= yield %>
+    <%= vite_script_tags("src/cellEditor/main.jsx", "/client/cellEditor.js") %>
+  </body>
+</html>

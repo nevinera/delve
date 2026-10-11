@@ -5,8 +5,12 @@ import { fileURLToPath } from "url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
-export default defineConfig({
+export default defineConfig(({command}) => ({
   root: "client",
+  // Built files are served from /client/ (public/client), and URLs vite
+  // writes into the bundle, like the cell map render worker's, need that.
+  // The dev server (zz-harness) still serves from the root.
+  base: command === "build" ? "/client/" : "/",
   build: {
     outDir: "../public/client",
     emptyOutDir: true,
@@ -21,6 +25,7 @@ export default defineConfig({
         abilityEditor: resolve(__dirname, "client/src/abilityEditor/main.jsx"),
         classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
         worldBuilder: resolve(__dirname, "client/src/worldBuilder/main.jsx"),
+        cellEditor: resolve(__dirname, "client/src/cellEditor/main.jsx"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",
@@ -29,5 +34,7 @@ export default defineConfig({
       },
     },
   },
+  // Module workers (client/src/cellMap/renderWorker.js) import other modules.
+  worker: {format: "es"},
   plugins: [react()],
-});
+}));

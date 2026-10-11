@@ -1,0 +1,61 @@
+{
+  "format": "cellmap",
+  "version": 1,
+  "name": "Clearing",
+  "grid": {
+    "type": "hex",
+    "cols": 48,
+    "rows": 36,
+    "cellSize": 5
+  },
+  "seed": 11,
+  "cells": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTT%%%%%%%%%TTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTT%%%%%%%%%%%%%TTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTT%%%%.%.....%.%%%%TTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTT%%%%.............%%%%TTTTTTTTTTTTTTTT",
+    "TTTTTTTTTT%%%.................%%%TTTTTTTTTTTTTTT",
+    "TTTTTTTTT%%%%.................%%%%TTTTTTTTTTTTTT",
+    "TTTTTTTTT%%.....................%%TTTTTTTTTTTTTT",
+    "TTTTTTTT%%%......T..............%%%TTTTTTTTTTTT.",
+    "TTTTTTTT%%.....TTTT..............%%%TTTTTTTTT...",
+    "TTTTTTT%%%.....TTTT..............%%%TTTTT.......",
+    "TTTTTTT%%%......T.................%%T.T.........",
+    "TTTTTTT%%%........................%%............",
+    "TTTTTTT%%%........................%%...........T",
+    "TTTTTTT%%%.......................%%%.......TTTTT",
+    "TTTTTTT%%%.......................%%%...T.TTTTTTT",
+    "TTTTTTTT%%.......................%%T.TTTTTTTTTTT",
+    "TTTTTTTT%%%~~~~~~~..............%%%TTTTTTTTTTTTT",
+    "TTTTTTTTT~~~~~~~~~~............%%%%TTTTTTTTTTTTT",
+    "TTTTTTTTTT~~~~~~~~~............%%%TTTTTTTTTTTTTT",
+    "TTTTTTTTTT~~~~~~~~~..........%%%%TTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTT~~~~~~.........%%%%%TTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTT%%~%%%.%...%.%%%%%%TTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTT%%%%%%%%%%%%%%%TTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTT%T%%%%%%%T%TTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "trails": [
+    {
+      "width": 0.8,
+      "points": [
+        [16.73, 21.76],
+        [28.33, 20.5],
+        [40.42, 17.54],
+        [49.98, 14.82]
+      ]
+    }
+  ]
+}

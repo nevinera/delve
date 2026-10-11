@@ -30,6 +30,7 @@ Rails.application.routes.draw do
     resources :classes, only: [:index, :new, :create]
     resources :zones, only: [:index]
     resources :worlds, only: [:index, :new, :create]
+    resource :cell_editor, only: [:show]
     resources :character_classes, only: [] do
       member { post :refetch }
     end

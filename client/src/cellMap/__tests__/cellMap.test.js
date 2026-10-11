@@ -1,0 +1,226 @@
+import {describe, it, expect} from "vitest";
+import {validateCellMap} from "../format";
+import {cellAt, cellCenter, cellCorners, cellPoint, mapSize, neighbor} from "../hexGrid";
+import {regionLoops, smoothLoop} from "../regions";
+import {buildScene} from "../scene";
+import {cacheKey, renderCellMap} from "../render";
+import {buildSprites} from "../sprites";
+import {GLADE} from "../style";
+import clearing from "../examples/clearing.json";
+import forestEdge from "../examples/forest-edge.json";
+import woodlandTrail from "../examples/woodland-trail.json";
+
+const tiny = (cells, seed = 1) => ({format: "cellmap", version: 1, seed, grid: {type: "hex", cols: cells[0].length, rows: cells.length, cellSize: 5}, cells});
+
+describe("validateCellMap", () => {
+  it("accepts the examples", () => {
+    for (const map of [clearing, forestEdge, woodlandTrail]) expect(validateCellMap(map)).toEqual([]);
+  });
+
+  it("names what's wrong", () => {
+    const map = {...tiny(["..", ".."]), cells: ["..", ".x."]};
+    expect(validateCellMap(map)).toEqual(['cells[1] has 3 cells, grid.cols is 2', 'cells[1] has unknown cells: "x"']);
+    expect(validateCellMap({...tiny([".."]), grid: {type: "square", cols: 0, rows: 1, cellSize: -1}})).toEqual([
+      'grid.type must be "hex"',
+      "grid.cols must be an integer from 1 to 200",
+      "grid.cellSize must be a positive number",
+      "cells[0] has 2 cells, grid.cols is 0",
+    ]);
+  });
+});
+
+describe("hexGrid", () => {
+  it("puts neighbors one cell apart, across the edge they share", () => {
+    for (const col of [2, 3]) {
+      const corners = cellCorners(col, 4, 5);
+      for (let edge = 0; edge < 6; edge++) {
+        const [c, r] = neighbor(col, 4, edge);
+        const a = cellCenter(col, 4, 5);
+        const b = cellCenter(c, r, 5);
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(5);
+        const mid = {x: (corners[edge].x + corners[(edge + 1) % 6].x) / 2, y: (corners[edge].y + corners[(edge + 1) % 6].y) / 2};
+        expect(mid.x).toBeCloseTo((a.x + b.x) / 2);
+        expect(mid.y).toBeCloseTo((a.y + b.y) / 2);
+      }
+    }
+  });
+
+  it("finds the cell under a point", () => {
+    const {x, y} = cellCenter(7, 3, 5);
+    expect(cellAt(x + 1, y - 1.5, 5)).toEqual([7, 3]);
+  });
+
+  it("sizes the map to the grid", () => {
+    const {width, height} = mapSize({cols: 2, rows: 1, cellSize: Math.sqrt(3)});
+    expect(width).toBeCloseTo(3.5);
+    expect(height).toBeCloseTo(1.5 * Math.sqrt(3));
+  });
+});
+
+describe("regionLoops", () => {
+  it("outlines a lone cell with its six corners", () => {
+    const loops = regionLoops(tiny(["...", ".T.", "..."]), "trees");
+    expect(loops).toHaveLength(1);
+    expect(loops[0]).toHaveLength(6);
+  });
+
+  it("gives a meadow hole in the forest its own loop", () => {
+    expect(regionLoops(tiny(["TTTTT", "TT.TT", "TTTTT"]), "trees")).toHaveLength(2);
+  });
+
+  it("keeps outlines off the map, past its edge", () => {
+    const map = tiny(["TT", "TT"]);
+    const {width, height} = mapSize(map.grid);
+    const [loop] = regionLoops(map, "trees").map((l) => smoothLoop(l, 5, 1));
+    expect(loop.every(({x, y}) => x < 0 || y < 0 || x > width || y > height)).toBe(true);
+  });
+});
+
+describe("buildScene", () => {
+  it("builds the same scene from the same map", () => {
+    expect(buildScene(clearing)).toEqual(buildScene(structuredClone(clearing)));
+  });
+
+  it("changes with the seed", () => {
+    expect(buildScene({...clearing, seed: 12}).crowns).not.toEqual(buildScene(clearing).crowns);
+  });
+
+  it("only changes what's near an edited cell", () => {
+    const edited = {...clearing, cells: clearing.cells.map((row, r) => (r === 10 ? row.slice(0, 20) + "T" + row.slice(21) : row))};
+    const before = new Set(buildScene(clearing).crowns.map((c) => `${c.x},${c.y}`));
+    const added = buildScene(edited).crowns.filter((c) => !before.has(`${c.x},${c.y}`));
+    const {x, y} = cellCenter(20, 10, 5);
+    expect(added.length).toBeGreaterThan(0);
+    expect(added.every((c) => Math.hypot(c.x - x, c.y - y) < 5)).toBe(true);
+  });
+});
+
+describe("cacheKey", () => {
+  it("ignores the map's name but not its cells or seed", () => {
+    expect(cacheKey({...clearing, name: "Other"}, 10)).toEqual(cacheKey(clearing, 10));
+    expect(cacheKey({...clearing, seed: 99}, 10)).not.toEqual(cacheKey(clearing, 10));
+    expect(cacheKey(clearing, 20)).not.toEqual(cacheKey(clearing, 10));
+  });
+});
+
+describe("buildScene placements", () => {
+  it("only puts crowns in the band along the forest's edge", () => {
+    const solid = tiny(Array.from({length: 20}, () => "T".repeat(20)).map((row, r) => (r < 2 ? ".".repeat(20) : row)));
+    const deepest = Math.max(...buildScene(solid).crowns.map((c) => c.y));
+    expect(deepest).toBeLessThan(cellCenter(0, 6, 5).y);
+  });
+
+  it("picks variants that exist", () => {
+    const scene = buildScene(clearing);
+    for (const kind of ["crowns", "patches", "tufts"]) {
+      expect(scene[kind].length).toBeGreaterThan(0);
+      expect(scene[kind].every((p) => Number.isInteger(p.variant) && p.variant >= 0 && p.variant < GLADE.variants[kind])).toBe(true);
+    }
+  });
+});
+
+describe("ground terrains", () => {
+  const map = tiny(["......", ".%%~~.", "......", "......"]);
+
+  it("outlines tall grass and marsh as their own regions", () => {
+    const scene = buildScene(map);
+    expect(scene.grounds.map((g) => [g.terrain, g.loops.length])).toEqual([["tallGrass", 1], ["marsh", 1]]);
+  });
+
+  it("decorates each kind of ground with its own sprites", () => {
+    const scene = buildScene({...map, cells: ["%%%%%%", "~~~~~~", "%%%%%%", "~~~~~~"]});
+    expect(scene.tallTufts.length).toBeGreaterThan(0);
+    expect(scene.pools.length + scene.reeds.length).toBeGreaterThan(0);
+    expect(scene.tufts).toEqual([]);
+    expect(scene.crowns).toEqual([]);
+  });
+});
+
+describe("trails", () => {
+  const forest = {...tiny(Array.from({length: 12}, () => "T".repeat(12))), trails: [{width: 1, points: [[0, 6], [5, 3], [11, 6]]}]};
+
+  it("puts cell points at cell centers, interpolating between them", () => {
+    expect(cellPoint(3, 2, 5)).toEqual(cellCenter(3, 2, 5));
+    expect(cellPoint(4, 2, 5)).toEqual(cellCenter(4, 2, 5));
+    const mid = cellPoint(3.5, 2, 5);
+    expect(mid.x).toBeCloseTo((cellCenter(3, 2, 5).x + cellCenter(4, 2, 5).x) / 2);
+    expect(mid.y).toBeCloseTo((cellCenter(3, 2, 5).y + cellCenter(4, 2, 5).y) / 2);
+  });
+
+  it("curves through every point it was given, in feet", () => {
+    const [trail] = buildScene(forest).trails;
+    expect(trail.width).toBe(5);
+    for (const [col, row] of forest.trails[0].points) {
+      const p = cellPoint(col, row, 5);
+      expect(trail.points.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < 1e-9)).toBe(true);
+    }
+  });
+
+  it("clears crowns off the trail, and lines it with them", () => {
+    const scene = buildScene(forest);
+    const [trail] = scene.trails;
+    const near = (c) => Math.min(...trail.points.map((p) => Math.hypot(c.x - p.x, c.y - p.y)));
+    expect(scene.crowns.length).toBeGreaterThan(0);
+    expect(scene.crowns.every((c) => near(c) > trail.width / 2)).toBe(true);
+    expect(buildScene({...forest, trails: []}).crowns).toEqual([]);
+  });
+
+  it("fades out where a trail just stops, but not where it meets another", () => {
+    const map = {...tiny(Array.from({length: 12}, () => ".".repeat(12))), trails: [
+      {width: 1, points: [[2, 6], [9, 6]]},
+      {width: 1, points: [[6, 2], [6, 6]]},
+    ]};
+    const [main, branch] = buildScene(map).trails;
+    expect(main.fades).toHaveLength(2);
+    expect(main.caps).toEqual([]);
+    expect(main.spots.length).toBeGreaterThan(0);
+    expect(branch.fades).toHaveLength(1);
+    expect(branch.caps).toHaveLength(1);
+    expect(branch.caps[0].x).toBeCloseTo(cellPoint(6, 6, 5).x);
+    expect(branch.caps[0].y).toBeCloseTo(cellPoint(6, 6, 5).y);
+  });
+
+  it("leaves out of the forest's mass what a trail clears", () => {
+    const area = (scene) => scene.forest.reduce((sum, loop) => sum + loop.length, 0);
+    expect(area(buildScene(forest))).toBeGreaterThan(area(buildScene({...forest, trails: []})));
+    expect(buildScene(forest).forest.length).toBeGreaterThan(1);
+  });
+
+  it("keeps grass, reeds and pools off the trail", () => {
+    const ground = {...tiny(["%%%%%%%%%%%%", "~~~~~~~~~~~~", "%%%%%%%%%%%%", "~~~~~~~~~~~~", "............"]), trails: [{width: 1.5, points: [[-1, 2], [12, 2]]}]};
+    const scene = buildScene(ground);
+    const [trail] = scene.trails;
+    for (const kind of ["tufts", "tallTufts", "pools", "reeds"]) {
+      expect(scene[kind].every((p) => Math.min(...trail.points.map((q) => Math.hypot(p.x - q.x, p.y - q.y))) > trail.width / 2)).toBe(true);
+    }
+    expect(scene.tallTufts.length).toBeLessThan(buildScene({...ground, trails: []}).tallTufts.length);
+  });
+
+  it("validates trails", () => {
+    expect(validateCellMap({...forest, trails: [{width: 0, points: [[1, 1]]}, {width: 1, points: [[1, 1], [2]]}]})).toEqual([
+      "trails[0].width must be a positive number",
+      "trails[0].points must list at least two points",
+      "trails[1].points must each be [col, row]",
+    ]);
+  });
+});
+
+describe("sprites and rendering", () => {
+  const fakeContext = () => new Proxy({}, {get: (_, name) => (name === "createLinearGradient" ? () => ({addColorStop: () => {}}) : () => {})});
+  const fakeCanvas = (width, height) => ({width, height, getContext: fakeContext});
+
+  it("makes each style's variants, sized for the largest placement", () => {
+    const sprites = buildSprites(GLADE, 5, 10, fakeCanvas);
+    expect(sprites.crowns).toHaveLength(GLADE.variants.crowns);
+    expect(sprites.patches).toHaveLength(GLADE.variants.patches);
+    for (const kind of Object.keys(GLADE.variants)) expect(sprites[kind]).toHaveLength(GLADE.variants[kind]);
+    expect(sprites.crowns[0].canvas.width).toBe(Math.ceil(2 * sprites.crowns[0].extent * 10));
+  });
+
+  it("times each step and reports what it drew", () => {
+    const {canvas, timings, stats} = renderCellMap(clearing, {createCanvas: fakeCanvas});
+    expect(Object.keys(timings)).toEqual(["scene", "sprites", "paint"]);
+    expect(stats).toMatchObject({width: canvas.width, height: canvas.height});
+    expect(stats.crowns).toBeGreaterThan(0);
+  });
+});
