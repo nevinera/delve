@@ -4,6 +4,7 @@ import MapSidebar from "./MapSidebar";
 import MapFieldsPanel from "./MapFieldsPanel";
 import BarriersPanel from "./BarriersPanel";
 import AutoBarriersPanel from "./AutoBarriersPanel";
+import PlacesPanel from "./PlacesPanel";
 import FillPointsPanel from "./FillPointsPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsTab, {paletteKeys} from "./UnitsTab";
@@ -40,13 +41,15 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 // The sidebar's tabs, and which of the map's shapes each one edits (the
 // rest are drawn dimmed and ignore the pointer - see MapCanvas's
 // activeLayers). Quests don't exist yet; NCUs live there meanwhile. Cells
-// draws the map's cellMap, with every shape dimmed.
-const TABS = [["cells", "Cells"], ["map", "Map"], ["units", "Units"], ["quests", "Quests"]];
+// draws the map's cellMap, with every shape dimmed. Places are drawn only
+// on their own tab.
+const TABS = [["cells", "Cells"], ["map", "Map"], ["places", "Places"], ["units", "Units"], ["quests", "Quests"]];
 const TAB_LAYERS = {
-  cells: {barriers: false, connections: false, units: false, ncus: false},
-  map: {barriers: true, connections: true, units: false, ncus: false},
-  units: {barriers: false, connections: false, units: true, ncus: false},
-  quests: {barriers: false, connections: false, units: false, ncus: true},
+  cells: {barriers: false, connections: false, places: false, units: false, ncus: false},
+  map: {barriers: true, connections: true, places: false, units: false, ncus: false},
+  places: {barriers: false, connections: false, places: true, units: false, ncus: false},
+  units: {barriers: false, connections: false, places: false, units: true, ncus: false},
+  quests: {barriers: false, connections: false, places: false, units: false, ncus: true},
 };
 
 // The map editor's whole editing surface - canvas, tabbed sidebar, tools,
@@ -89,6 +92,9 @@ export default function MapWorkbench({
   ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null,
 }) {
   const [tab, setTab] = useState("map");
+  // The Places tab's open and hovered place (index into mapData.places).
+  const [selectedPlaceIndex, setSelectedPlaceIndex] = useState(null);
+  const [hoveredPlaceIndex, setHoveredPlaceIndex] = useState(null);
   // Unit types added to the Units tab's palette with "+" (see UnitsTab).
   const [paletteAdditions, setPaletteAdditions] = useState([]);
   // Palette entries selected for "+ Encounter" (click selects one,
@@ -223,6 +229,7 @@ export default function MapWorkbench({
 
   function switchTab(next) {
     setUiState(uiState.clearModes().with({hoveredUnitType: null, hoveredGroupIdentifier: null, hoveredUnitIndex: null}));
+    setHoveredPlaceIndex(null);
     setTab(next);
   }
 
@@ -665,6 +672,9 @@ export default function MapWorkbench({
         hoveredNcuIndex={hoveredNcuIndex}
         onHoverNcu={setHoveredNcuIndex}
         expandedNcuIndices={expandedNcuIndices}
+        selectedPlaceIndex={selectedPlaceIndex}
+        hoveredPlaceIndex={hoveredPlaceIndex}
+        onSelectPlace={setSelectedPlaceIndex}
         activeLayers={TAB_LAYERS[tab]}
         openGroup={tab === "units" ? uiState.openGroup : null}
         onToggleGroupMember={toggleGroupMember}
@@ -746,6 +756,8 @@ export default function MapWorkbench({
               dispatch={dispatch}
             />
           </>
+        ) : tab === "places" ? (
+          <PlacesPanel places={mapData.places ?? []} selectedIndex={selectedPlaceIndex} onSelect={setSelectedPlaceIndex} onHover={setHoveredPlaceIndex} />
         ) : tab === "units" ? (
           <UnitsTab
             units={mapData.units}

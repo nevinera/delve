@@ -816,4 +816,32 @@ describe("MapWorkbench", () => {
       expect(current.mapData.imageUrl).toEqual("gc1-entrance.webp");
     });
   });
+
+  describe("the Places tab", () => {
+    const places = [
+      {identifier: "area_1", polygon: [{x: 0, y: 0}, {x: 80, y: 0}, {x: 80, y: 120}, {x: 0, y: 120}]},
+      {identifier: "camp", name: "Arren's Camp", tags: ["camp", "friendly"], annotations: {population: "Arren and two guards."}, polygon: [{x: 80, y: 0}, {x: 160, y: 0}, {x: 160, y: 120}]},
+    ];
+    const map = {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}, places};
+
+    it("draws places only on their own tab, and lists them to read", async () => {
+      await renderReady({map, imageUrl: "data:image/webp;base64,AAAA"});
+      expect(screen.queryAllByTestId("map-place")).toHaveLength(0);
+      showTab("Places");
+      expect(screen.getAllByTestId("map-place")).toHaveLength(2);
+      expect(screen.getByRole("heading", {name: "Places (2)"})).toBeInTheDocument();
+      expect(screen.queryByText("Arren and two guards.")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("heading", {name: /Arren's Camp/}));
+      expect(screen.getByText("population")).toBeInTheDocument();
+      expect(screen.getByText("Arren and two guards.")).toBeInTheDocument();
+      expect(screen.getByText("friendly")).toBeInTheDocument();
+    });
+
+    it("opens a place clicked on the map", async () => {
+      await renderReady({map, imageUrl: "data:image/webp;base64,AAAA"});
+      showTab("Places");
+      fireEvent.click(screen.getAllByTestId("map-place").find((el) => el.getAttribute("stroke").startsWith("hsla(0,")));
+      expect(screen.getByText("No tags, description or annotations.")).toBeInTheDocument();
+    });
+  });
 });
