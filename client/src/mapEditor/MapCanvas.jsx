@@ -116,7 +116,7 @@ const PAN_KEY_DIRECTIONS = {
 // map's render in place of the image: background is drawn in the image's
 // pixel box, and the walk preview uses rendered (a bitmap). The 5ft square
 // grid is hidden over hexes. cellEditing (the Cells tab) adds an overlay
-// node and hands pointer events to onPointer(phase, contentPixel): a
+// node and hands pointer events to onPointer(phase, contentPixel, event): a
 // "down" it returns true for is an edit, not a pan. {placeholder: true}
 // stands in until there's a cell map. The units/walk tools are hidden.
 const ALL_LAYERS = {barriers: true, connections: true, units: true, ncus: true};
@@ -696,7 +696,7 @@ export default function MapCanvas({
   function handlePointerDown(e) {
     if (!image) return;
 
-    if (cellEditing?.onPointer && e.button === 0 && cellEditing.onPointer("down", contentPixelFromClient(e.clientX, e.clientY))) {
+    if (cellEditing?.onPointer && e.button === 0 && cellEditing.onPointer("down", contentPixelFromClient(e.clientX, e.clientY), e)) {
       cellDragRef.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
@@ -833,7 +833,7 @@ export default function MapCanvas({
     updateCursorPixel(e);
 
     if (cellEditing?.onPointer && image && wrapperRef.current) {
-      cellEditing.onPointer(cellDragRef.current ? "drag" : "hover", contentPixelFromClient(e.clientX, e.clientY));
+      cellEditing.onPointer(cellDragRef.current ? "drag" : "hover", contentPixelFromClient(e.clientX, e.clientY), e);
       if (cellDragRef.current) return;
     }
 

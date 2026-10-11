@@ -27,7 +27,7 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
       </div>
       {errors.length > 0 && <ul className="cells-panel-errors">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
 
-      <Choices label="Tool" options={TOOLS} value={ui.tool} onChange={(tool) => update({tool, pendingPoint: null})} />
+      <Choices label="Tool" options={TOOLS} value={ui.tool} onChange={(tool) => update({tool, pendingPoint: null, newTrail: false})} />
       {(ui.tool === "paint" || ui.tool === "fill") && (
         <>
           <div className="cells-panel-row" role="group" aria-label="Terrain">
@@ -128,19 +128,20 @@ function TrailsSection({cells}) {
   return (
     <div className="cells-panel-section">
       <h4>Trails</h4>
-      <p className="cells-panel-help">Click to extend the selected trail, or to start one. Drag a point to move it; Delete (the key or the button) removes the selected point.</p>
+      <p className="cells-panel-help">Click to extend the selected trail, or to start one. Drag a point to move it; Delete (the key or the button) removes the selected point. Points snap to other trails' points (hold Shift not to).</p>
       <div className="cells-panel-row">
-        <button type="button" disabled={!ui.selected && !ui.pendingPoint} onClick={() => update({selected: null, pendingPoint: null})}>New trail</button>
+        <button type="button" disabled={ui.newTrail} onClick={() => update({selected: null, pendingPoint: null, newTrail: true})}>New trail</button>
         <button type="button" disabled={ui.selected?.point == null} onClick={() => {
           change((d) => d.removeTrailPoint(ui.selected.trail, ui.selected.point));
           update({selected: null});
         }}>Delete point</button>
       </div>
+      {ui.newTrail && <p className="cells-panel-help">Click to place the new trail&apos;s first point.</p>}
       {ui.pendingPoint && <p className="cells-panel-help">Click again to place the trail&apos;s second point.</p>}
       <ul className="cells-panel-trails">
         {draft.trails.map((trail, t) => (
           <li key={t} className={ui.selected?.trail === t ? "active" : ""}>
-            <button type="button" onClick={() => update({selected: {trail: t, point: null}, pendingPoint: null})}>Trail {t + 1} ({trail.points.length} points)</button>
+            <button type="button" onClick={() => update({selected: {trail: t, point: null}, pendingPoint: null, newTrail: false})}>Trail {t + 1} ({trail.points.length} points)</button>
             <NumberField label="Width" value={trail.width} min={0.1} max={4} step={0.1} onChange={(w) => change((d) => d.setTrailWidth(t, w), {group: `width:${t}`})} />
             <button type="button" aria-label={`Delete trail ${t + 1}`} onClick={() => {
               change((d) => d.removeTrail(t));

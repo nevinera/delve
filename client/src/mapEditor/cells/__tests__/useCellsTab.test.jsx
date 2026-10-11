@@ -221,3 +221,61 @@ describe("CellsPanel's Delete point", () => {
     expect(screen.getByRole("button", {name: "Delete point"})).toBeDisabled();
   });
 });
+
+describe("useCellsTab trail snapping", () => {
+  const twoTrails = () => ({...start(), trails: [{width: 1, points: [[0, 1], [5, 1]]}, {width: 1, points: [[2, 4], [3, 3]]}]});
+  const near = (col, row, dx = 1.2) => {
+    const p = at(col, row);
+    return {x: p.x + dx * EDITOR_PIXELS_PER_FOOT, y: p.y};
+  };
+  const tap = (result, px, event) => act(() => {
+    result.current.canvas.onPointer("down", px, event);
+    result.current.canvas.onPointer("up");
+  });
+
+  it("joins the selected trail onto another trail's point", () => {
+    const {result} = setup(twoTrails());
+    act(() => result.current.update({tool: "trail", selected: {trail: 1, point: 1}}));
+    tap(result, near(5, 1));
+    expect(result.current.draft.trails[1].points).toEqual([[2, 4], [3, 3], [5, 1]]);
+    expect(result.current.draft.trails[0].points).toEqual([[0, 1], [5, 1]]);
+  });
+
+  it("doesn't snap with Shift", () => {
+    const {result} = setup(twoTrails());
+    act(() => result.current.update({tool: "trail", selected: {trail: 1, point: 1}}));
+    tap(result, near(5, 1), {shiftKey: true});
+    expect(result.current.draft.trails[1].points[2]).not.toEqual([5, 1]);
+  });
+
+  it("starts a new trail on another's point after New trail", () => {
+    const {result} = setup(twoTrails());
+    act(() => result.current.update({tool: "trail", newTrail: true}));
+    tap(result, near(0, 1, 0.5));
+    tap(result, at(1, 3));
+    expect(result.current.draft.trails[2].points).toEqual([[0, 1], [1, 3]]);
+  });
+
+  it("snaps a dragged point onto another trail's, but not onto itself", () => {
+    const {result} = setup(twoTrails());
+    act(() => result.current.update({tool: "trail"}));
+    act(() => {
+      result.current.canvas.onPointer("down", at(3, 3));
+    });
+    act(() => {
+      result.current.canvas.onPointer("drag", near(5, 1));
+    });
+    act(() => {
+      result.current.canvas.onPointer("up");
+    });
+    expect(result.current.draft.trails[1].points[1]).toEqual([5, 1]);
+  });
+
+  it("still grabs a point when nothing is selected", () => {
+    const {result} = setup(twoTrails());
+    act(() => result.current.update({tool: "trail"}));
+    tap(result, near(5, 1, 0.5));
+    expect(result.current.ui.selected).toEqual({trail: 0, point: 1});
+    expect(result.current.draft.trails).toHaveLength(2);
+  });
+});

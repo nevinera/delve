@@ -16,6 +16,7 @@ import {CELL_SIZE, cellAt, cellPoint, hexDistance, mapSize, pointAt} from "../..
 import {renderScale} from "../../cellMap/render";
 import {drawCells, drawTrails, hexPath, SELECTED_COLOR} from "../../cellMap/overlay";
 import {useCellHistory} from "./useCellHistory";
+import {SNAP_RADIUS_FEET} from "../mapSnap";
 import {useCellMapRender} from "./useCellMapRender";
 
 export const EDITOR_PIXELS_PER_FOOT = 8;
@@ -31,7 +32,8 @@ export const TOOLS = {pan: "Pan", paint: "Paint", fill: "Fill", trail: "Trails"}
 export const OVERLAYS = {none: "None", grid: "Grid", cells: "Cells"};
 export const BRUSHES = [1, 2, 3];
 
-const INITIAL_UI = {tool: "paint", terrain: "T", brush: 1, overlay: "grid", hover: null, selected: null, pendingPoint: null};
+// newTrail: the next trail click starts a trail, even on another's point.
+const INITIAL_UI = {tool: "paint", terrain: "T", brush: 1, overlay: "grid", hover: null, selected: null, pendingPoint: null, newTrail: false};
 
 export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, rendering = editing, onThumbnail = null}) {
   const history = useCellHistory(cellMap ?? null, onCellMapChange, mapKey);
@@ -67,7 +69,7 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
         change((d) => d.removeTrailPoint(trail, point));
         update({selected: null});
       } else if (e.key === "Escape") {
-        update({selected: null, pendingPoint: null});
+        update({selected: null, pendingPoint: null, newTrail: false});
       }
     }
     document.addEventListener("keydown", onKeyDown);
@@ -82,14 +84,25 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
     return {point: pointAt(x, y, CELL_SIZE), cell: cellAt(x, y, CELL_SIZE), x, y};
   }
 
-  function nearestTrailPoint({x, y}) {
+  // The trail point nearest (x, y) within reach feet, as {trail, point,
+  // at}, among those include(trail, point) allows.
+  function nearestTrailPoint({x, y}, reach, include = () => true) {
     let best = null;
     draft.trails.forEach((trail, t) => trail.points.forEach(([col, row], i) => {
+      if (!include(t, i)) return;
       const p = cellPoint(col, row, CELL_SIZE);
-      const d = Math.hypot(p.x - x, p.y - y) / CELL_SIZE;
-      if (d <= GRAB_CELLS && (!best || d < best.d)) best = {trail: t, point: i, d};
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d <= reach && (!best || d < best.d)) best = {trail: t, point: i, at: [col, row], d};
     }));
-    return best && {trail: best.trail, point: best.point};
+    return best;
+  }
+
+  // Like barrier points (see mapSnap.js): a trail point placed or dragged
+  // within SNAP_RADIUS_FEET of another lands on it, so trails meet
+  // exactly. Shift turns it off. exclude(trail, point) is the point itself.
+  function snapped(at, shiftKey, exclude = () => false) {
+    if (shiftKey) return at.point;
+    return nearestTrailPoint(at, SNAP_RADIUS_FEET, (t, i) => !exclude(t, i))?.at ?? at.point;
   }
 
   // Paints every cell along the line from the last cell to this one, so a
@@ -108,36 +121,42 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
     }, {group});
   }
 
-  function trailDown(at) {
-    const grabbed = nearestTrailPoint(at);
+  // A click grabs a point to drag - only the selected trail's, while one
+  // is (so clicking another trail's point joins it instead), and none
+  // right after New trail. Otherwise it places a point, snapped.
+  function trailDown(at, shiftKey) {
+    const {selected} = ui;
+    const grabbable = ui.newTrail || ui.pendingPoint ? null : (t) => !selected || t === selected.trail;
+    const grabbed = grabbable && nearestTrailPoint(at, GRAB_CELLS * CELL_SIZE, grabbable);
     if (grabbed) {
-      update({selected: grabbed, pendingPoint: null});
-      dragRef.current = {kind: "trail-point", ...grabbed, group: `drag:${nextDrag.current++}`};
+      const {trail, point} = grabbed;
+      update({selected: {trail, point}, pendingPoint: null});
+      dragRef.current = {kind: "trail-point", trail, point, group: `drag:${nextDrag.current++}`};
       return;
     }
+    const point = snapped(at, shiftKey);
     if (ui.pendingPoint) {
       const trail = draft.trails.length;
-      change((d) => d.addTrail([ui.pendingPoint, at.point]));
+      change((d) => d.addTrail([ui.pendingPoint, point]));
       update({pendingPoint: null, selected: {trail, point: 1}});
       return;
     }
-    const {selected} = ui;
     if (selected) {
       // Extends the trail after the selected point, or before it when it's
       // the first point - so either end can grow.
       const points = draft.trails[selected.trail].points;
-      const point = selected.point ?? points.length - 1;
-      const index = point === 0 && points.length > 1 ? 0 : point + 1;
-      change((d) => d.insertTrailPoint(selected.trail, index, at.point));
+      const from = selected.point ?? points.length - 1;
+      const index = from === 0 && points.length > 1 ? 0 : from + 1;
+      change((d) => d.insertTrailPoint(selected.trail, index, point));
       update({selected: {trail: selected.trail, point: index}});
       return;
     }
-    update({pendingPoint: at.point});
+    update({pendingPoint: point, newTrail: false});
   }
 
   // phase is "down", "drag", "up", "hover" or "cancel"; returns true when
   // a "down" starts an edit (so MapCanvas doesn't pan).
-  function onPointer(phase, px) {
+  function onPointer(phase, px, {shiftKey = false} = {}) {
     if (!draft) return false;
     if (phase === "up" || phase === "cancel") {
       dragRef.current = null;
@@ -159,7 +178,7 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
       } else if (ui.tool === "fill" && inside) {
         change((d) => d.fill(...at.cell, ui.terrain));
       } else if (ui.tool === "trail") {
-        trailDown(at);
+        trailDown(at, shiftKey);
       }
       return true;
     }
@@ -170,7 +189,8 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
       drag.last = at.cell;
       if (at.cell[0] !== ui.hover?.[0] || at.cell[1] !== ui.hover?.[1]) update({hover: at.cell});
     } else if (drag?.kind === "trail-point") {
-      change((d) => d.moveTrailPoint(drag.trail, drag.point, at.point), {group: drag.group});
+      const point = snapped(at, shiftKey, (t, i) => t === drag.trail && i === drag.point);
+      change((d) => d.moveTrailPoint(drag.trail, drag.point, point), {group: drag.group});
     }
     return true;
   }
