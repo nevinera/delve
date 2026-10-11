@@ -24,7 +24,7 @@
 // Works in map feet (y up); the scene is in cellmap feet (y down).
 import {trailClearedCells} from "../../cellMap/scene";
 import {latticeCorner, PAD, unwarp, warp} from "../../cellMap/regions";
-import {CELL_SIZE, cellAt, cellCenter, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
+import {CELL_SIZE, cellAt, cellCenter, cellPoint, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
 import {terrainAt} from "../../cellMap/format";
 import {bridgeCells, bridgeDeck} from "../../cellMap/bridges";
 import {exitCells, exitEdge} from "../../cellMap/exits";
@@ -48,8 +48,9 @@ const MAX_TOLERANCE = 6;
 // Averaging passes over the outline: each halves a row's zigzag.
 const SMOOTHING_PASSES = 3;
 
-// Returns {barriers, connections, fillPoints, segments, openEdge, error}:
-// the new walls, a line connection for each of the cells' exits, and fill
+// Returns {barriers, connections, places, fillPoints, segments, openEdge,
+// error}: the new walls, a line connection for each of the cells' exits,
+// the cells' places in map feet (bent as the walls are), and fill
 // points (existingFillPoints, plus one per patch none of them is in), how
 // many segments the walls use, whether open ground reaches the map's edge
 // outside the exits, and why nothing could be made (or null).
@@ -87,12 +88,12 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   }
   const segments = segmentCount(walls) + circleSegments;
   if (segments > MAX_BARRIER_SEGMENTS) {
-    return {barriers: [], connections: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The trees' and water's edges need ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify them and try again.`};
+    return {barriers: [], connections: [], places: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The trees' and water's edges need ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify them and try again.`};
   }
 
   const fillPoints = [...existingFillPoints, ...newFillPoints(cellMap, patchKindAt, existingFillPoints, height)];
   if (fillPoints.length > MAX_FILL_POINTS) {
-    return {barriers: [], connections: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `There are ${fillPoints.length - existingFillPoints.length} separate patches of trees and water inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
+    return {barriers: [], connections: [], places: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `There are ${fillPoints.length - existingFillPoints.length} separate patches of trees and water inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
   }
 
   // Circles are always filled, so they need no fill points.
@@ -100,7 +101,8 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   const connections = (cellMap.exits ?? []).map((exit) => exitConnection(exit, cellMap.grid, barriers, toMap));
   const inExit = new Set((cellMap.exits ?? []).flatMap((exit) => exitCells(exit, cellMap.grid).map((cell) => cell.join(","))));
   const openEdge = borderCells(cellMap).some(([c, r]) => !kindAt(c, r) && !inExit.has(`${c},${r}`));
-  return {barriers, connections, fillPoints, segments, openEdge, error: null};
+  const places = (cellMap.places ?? []).map(({identifier, polygon}) => ({identifier, polygon: polygon.map(([c, r]) => roundPoint(toMap(warp(cellPoint(c, r, CELL_SIZE), cellMap.seed))))}));
+  return {barriers, connections, places, fillPoints, segments, openEdge, error: null};
 }
 
 // An exit's line connection, named for its side: along the map's edge,

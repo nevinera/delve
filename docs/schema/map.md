@@ -80,6 +80,7 @@ walls around water don't.
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |
 | `bridges` | array of Bridge | no | Wooden bridges, drawn over the water. |
 | `exits` | array of Exit | no | Gaps in the map's edge where connections lead off it, at most one per side. |
+| `places` | array of CellPlace | no | Areas of the map, which Auto Barriers turns into its places (see **Place**). The generator writes one per area. |
 
 A hex grid has flat-topped hexes, always 5 feet across the flats (so trees and grass are the same
 size on every map), with odd columns half a cell lower. Its size in feet is
@@ -105,6 +106,12 @@ cells along one side of the grid from index `from` to `to` (columns along the no
 sides, rows along the east and west), open ground leading off the map. Auto Barriers makes each a
 line connection named for its side (`"north"`, ...), along the map's edge between the walls either
 side of the gap, so the map's fill stops there; one already named that is replaced.
+
+A **CellPlace** is `{ "identifier": string, "polygon": [[col, row], ...] }`: an outline in cell
+coordinates (like a trail's points), at least 3 points. Auto Barriers makes each a Place with the
+same identifier, bent as the walls are; a Place already named that keeps its name, description,
+tags and annotations and takes the new outline. The generator's places (`area_1`, `area_2`, ...)
+put every cell in one, each area's doors and corridors split between the areas they join.
 
 ```json
 "cellMap": {
@@ -174,7 +181,8 @@ coordinates. The game never reads them; the map editor shows them, and tools rea
 They're optional, and needn't cover the map or keep apart; but those Auto Barriers makes from a
 generated cell map (see **CellMap**) partition it, every bit of open ground in exactly one place,
 each running out over the fill to the walls that bound it. So places are adjacent where open
-ground passes from one to the other.
+ground passes from one to the other. Where places nest (one inside another's outline), a point
+is in the smallest place around it.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|

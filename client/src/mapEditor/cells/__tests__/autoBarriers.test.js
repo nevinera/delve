@@ -2,7 +2,7 @@ import {describe, it, expect} from "vitest";
 import {autoBarriers, clipLoop, simplify} from "../autoBarriers";
 import {computeMapFill} from "../../../game/mapFill";
 import {hasLineOfSight} from "../../../game/collision";
-import {CELL_SIZE, cellCenter, mapSize} from "../../../cellMap/hexGrid";
+import {CELL_SIZE, cellCenter, cellPoint, mapSize} from "../../../cellMap/hexGrid";
 import {warp} from "../../../cellMap/regions";
 import woodland from "../../../cellMap/examples/woodland-trail.json";
 
@@ -110,6 +110,17 @@ describe("autoBarriers", () => {
     expect(filledAt(map, result, 10, 7)).toBe(false);
     expect(filledAt(map, result, 1, 1)).toBe(true);
     expect(filledAt(map, result, 18, 9)).toBe(true);
+  });
+
+  it("turns the cellMap's places into the map's, in feet and bent like the walls", () => {
+    const map = ringed();
+    map.places = [{identifier: "glade", polygon: [[2, 2], [8, 2], [8, 6], [2, 6]]}];
+    const result = autoBarriers(map);
+    const {height} = mapSize(map.grid);
+    expect(result.places).toEqual([{identifier: "glade", polygon: map.places[0].polygon.map(([c, r]) => {
+      const {x, y} = warp(cellPoint(c, r, CELL_SIZE), map.seed);
+      return {x: expect.closeTo(x, 1), y: expect.closeTo(height - y, 1)};
+    })}]);
   });
 
   it("keeps a little copse's wall around its fill point, so the open ground isn't filled", () => {

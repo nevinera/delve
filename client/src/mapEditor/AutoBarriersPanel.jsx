@@ -1,6 +1,6 @@
 // Auto Barriers, for a map drawn in cells: walls along the trees' and
-// water's edges, fill points, and a line connection for each of the
-// cells' exits (see cells/autoBarriers.js). It makes more than barriers,
+// water's edges, fill points, a line connection for each of the cells'
+// exits, and the cells' places (see cells/autoBarriers.js). It makes more than barriers,
 // so it has its own section in the Map tab.
 import {useState} from "react";
 
@@ -25,7 +25,7 @@ export default function AutoBarriersPanel({barriers, busy, onAutoBarriers}) {
       {result?.error && <p className="map-sidebar-hint">{result.error}</p>}
       {result && !result.error && (
         <p className="map-sidebar-hint">
-          Added {result.added.walls} walls, {result.added.circles} circles ({result.added.segments} segments), {result.added.fillPoints} fill points and {result.added.connections} connections.
+          Added {result.added.walls} walls, {result.added.circles} circles ({result.added.segments} segments), {result.added.fillPoints} fill points, {result.added.connections} connections and {result.added.places ?? 0} places.
           {result.openEdge && " Open ground reaches the map's edge, so it will be filled - ring the map with trees."}
         </p>
       )}

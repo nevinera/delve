@@ -11,6 +11,7 @@ import NcusPanel from "./NcusPanel";
 import CellsPanel from "./cells/CellsPanel";
 import {useCellsTab} from "./cells/useCellsTab";
 import {autoBarriers} from "./cells/autoBarriers";
+import {mergePlaces} from "../cellMap/places";
 import HotkeyHelp from "./HotkeyHelp";
 import {MapDraft} from "./MapDraft";
 import {UiState} from "./UiState";
@@ -118,9 +119,13 @@ export default function MapWorkbench({
     // Exits' connections replace any of the same name (an earlier run's).
     const named = new Set(result.connections.map((c) => c.identifier));
     const connections = [...(mapData.connections ?? []).filter((c) => !named.has(c.identifier)), ...result.connections];
-    onMapChange((d) => d.setField("barriers", result.barriers).setField("fillPoints", result.fillPoints).setField("connections", connections));
+    const places = mergePlaces(mapData.places ?? [], result.places);
+    onMapChange((d) => {
+      const next = d.setField("barriers", result.barriers).setField("fillPoints", result.fillPoints).setField("connections", connections);
+      return places.length ? next.setField("places", places) : next;
+    });
     return {
-      added: {walls: result.barriers.filter((b) => b.type === "wall").length, circles: result.barriers.filter((b) => b.type === "circle").length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length, connections: result.connections.length},
+      added: {walls: result.barriers.filter((b) => b.type === "wall").length, circles: result.barriers.filter((b) => b.type === "circle").length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length, connections: result.connections.length, places: result.places.length},
       openEdge: result.openEdge, error: null,
     };
   }

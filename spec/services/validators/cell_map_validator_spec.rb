@@ -81,6 +81,19 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
     end
   end
 
+  context "places" do
+    let(:place) { {"identifier" => "area_1", "polygon" => [[0, 0], [2.5, 0], [1, 1.5]]} }
+
+    it "accepts polygons in cell coordinates" do
+      expect { described_class.validate!(cell_map.merge("places" => [place, place.merge("identifier" => "area_2")])) }.not_to raise_error
+    end
+
+    it "raises on a polygon of fewer than three points, or a repeated identifier" do
+      expect_invalid(cell_map.merge("places" => [place.merge("polygon" => [[0, 0], [1, 1]])]), /at least 3/, "$.places[0].polygon")
+      expect_invalid(cell_map.merge("places" => [place, place]), /more than one place/, "$.places")
+    end
+  end
+
   it "accepts every theme, with the same cells" do
     described_class.themes.each_key do |theme|
       expect { described_class.validate!(cell_map.merge("theme" => theme, "cells" => ["Tw.", "%~."])) }.not_to raise_error

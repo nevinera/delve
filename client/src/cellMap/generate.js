@@ -22,6 +22,11 @@
 //   paths     trails joining the exits, as a tree (or, with one exit, from
 //             it into the map)
 //
+// Every cell is in one of its places, one per area (area_1, area_2, ...):
+// open ground the nearest area's by the ways through it, so doors and
+// corridors split between the areas they join, and the trees the nearest
+// place's.
+//
 // Besides the main ground, some areas are tall grass or marsh throughout,
 // and patches of them are sprinkled about (by noise, as watabou does his
 // water).
@@ -30,6 +35,7 @@ import {SIDES, exitEdge, sideCell, sideLength} from "./exits";
 import {THEMES, VERSION, fillOf} from "./format";
 import {noise} from "./regions";
 import {PATHS} from "./style";
+import {traceLabels} from "./places";
 
 export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
 
@@ -91,7 +97,8 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, tags = [
   const ground = grounds(grid, areas, has, seed, rng);
   const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (grid.isOpen(c, r) ? GROUND[ground(grid.key(c, r), c, r)] : fill)).join(""));
   const trails = has.has("paths") ? pathTrails(grid, exits, theme, rng) : [];
-  return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(trails.length ? {trails} : {}), ...(exits.length ? {exits} : {})};
+  const places = placesOf(grid, areas);
+  return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(trails.length ? {trails} : {}), ...(exits.length ? {exits} : {}), ...(places.length ? {places} : {})};
 }
 
 function tagSet(tags) {
@@ -691,4 +698,43 @@ function lineDistance(p, a, b) {
   const dy = b.y - a.y;
   const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+
+// ---- Places ----
+
+// One place per area, partitioning the map (see the top).
+function placesOf(grid, areas) {
+  const label = new Int32Array(grid.open.length).fill(-1);
+  // Open ground, from the areas' own cells still open.
+  let frontier = [];
+  areas.forEach(({cells}, i) => cells.forEach((k) => {
+    if (!grid.open[k]) return;
+    label[k] = i;
+    frontier.push(k);
+  }));
+  const spread = (may) => {
+    while (frontier.length) {
+      const next = [];
+      for (const k of frontier) {
+        for (const n of grid.neighbors(k)) {
+          if (label[n] >= 0 || !may(n)) continue;
+          label[n] = label[k];
+          next.push(n);
+        }
+      }
+      frontier = next;
+    }
+  };
+  spread((k) => grid.open[k] === 1);
+  // Then the trees, from every cell with a place.
+  frontier = [];
+  for (let k = 0; k < label.length; k++) if (label[k] >= 0) frontier.push(k);
+  spread(() => true);
+  // Numbered in order down the map, so names read sensibly.
+  const outlines = traceLabels(grid, (c, r) => {
+    const l = label[grid.key(c, r)];
+    return l >= 0 ? l : null;
+  });
+  const order = [...outlines.keys()].sort((a, b) => Math.min(...areas[a].cells) - Math.min(...areas[b].cells));
+  return order.map((l, i) => ({identifier: `area_${i + 1}`, polygon: outlines.get(l)}));
 }
