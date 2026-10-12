@@ -97,7 +97,10 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   }
 
   // Circles are always filled, so they need no fill points.
-  const barriers = [...walls.map(({points, kind}) => barrier({type: "wall", locations: points.map(roundPoint)}, kind)), ...circles];
+  // Rounded, a point on the east or north edge could land past the map, and
+  // the fill would clip the wall back off it, short of the exit's line.
+  const inMap = ([x, y]) => ({x: Math.min(width, round(x)), y: Math.min(height, round(y))});
+  const barriers = [...walls.map(({points, kind}) => barrier({type: "wall", locations: points.map(inMap)}, kind)), ...circles];
   const connections = (cellMap.exits ?? []).map((exit) => exitConnection(exit, cellMap.grid, barriers, toMap));
   const inExit = new Set((cellMap.exits ?? []).flatMap((exit) => exitCells(exit, cellMap.grid).map((cell) => cell.join(","))));
   const openEdge = borderCells(cellMap).some(([c, r]) => !kindAt(c, r) && !inExit.has(`${c},${r}`));

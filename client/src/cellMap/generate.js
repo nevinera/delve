@@ -36,6 +36,7 @@ import {THEMES, VERSION, fillOf} from "./format";
 import {noise} from "./regions";
 import {PATHS} from "./style";
 import {traceLabels} from "./places";
+import {trailClearedCells} from "./scene";
 
 export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
 
@@ -104,6 +105,7 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, exits, t
   const ground = grounds(grid, areas, has, seed, rng);
   const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (grid.isOpen(c, r) ? GROUND[ground(grid.key(c, r), c, r)] : fill)).join(""));
   const trails = has.has("paths") ? pathTrails(grid, cut, theme, rng) : [];
+  if (trails.length) widenToTrails(cut, {theme, grid: {type: "hex", cols, rows}, cells, trails});
   const places = placesOf(grid, areas);
   return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(trails.length ? {trails} : {}), ...(cut.length ? {exits: cut} : {}), ...(places.length ? {places} : {})};
 }
@@ -560,6 +562,35 @@ function cutExits(grid, areas, doors, plan, rng) {
     exits.push({side, from, to});
   }
   return SIDES.flatMap((side) => exits.filter((e) => e.side === side));
+}
+
+// A trail can clear the trees on the map's edge beside its exit, where it
+// comes in at a slant: those edge cells become open ground like the exit's
+// own, and the exit grows over them, so the open ground still only reaches
+// the edge at exits. Changes map.cells (its rows) and the exits in place.
+function widenToTrails(exits, map) {
+  const cleared = trailClearedCells(map);
+  const fill = fillOf(map.theme);
+  const rows = map.cells.map((line) => [...line]);
+  const at = (side, i) => {
+    const [c, r] = sideCell(side, i, map.grid);
+    return {c, r, ch: rows[r][c]};
+  };
+  const clearedTree = (side, i) => {
+    const {c, r, ch} = at(side, i);
+    return ch === fill && cleared(c, r);
+  };
+  for (const exit of exits) {
+    const length = sideLength(exit.side, map.grid);
+    const ground = at(exit.side, exit.from).ch;
+    const open = (i) => {
+      const {c, r} = at(exit.side, i);
+      rows[r][c] = ground;
+    };
+    while (exit.from > 0 && clearedTree(exit.side, exit.from - 1)) open(--exit.from);
+    while (exit.to < length - 1 && clearedTree(exit.side, exit.to + 1)) open(++exit.to);
+  }
+  map.cells.splice(0, map.cells.length, ...rows.map((line) => line.join("")));
 }
 
 // ---- Corridors ----
