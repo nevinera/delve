@@ -3,6 +3,7 @@ import * as THREE from "three";
 import {
   createNpcToken,
   createNcuToken,
+  createInteractable,
   createPlayerToken,
   classColor,
   isPlayerUnit,
@@ -47,6 +48,26 @@ describe("createNcuToken", () => {
 
   it("builds fine without a name", () => {
     expect(() => createNcuToken(2, undefined, null, null)).not.toThrow();
+  });
+});
+
+describe("createInteractable", () => {
+  const snare = {name: "Goblin Snare", size: {width: 4, height: 2}, position: {x: 10, y: 20, angle: 90}};
+  const toWorld = (x, y) => [x - 50, 50 - y];
+
+  it("lays its image flat on the ground at its spot, turned, hidden until shown", () => {
+    const {group, available, used, glow, label} = createInteractable(snare, null, toWorld);
+    expect(group.position.toArray()).toEqual([-40, 0, 30]);
+    expect(group.rotation.y).toBeCloseTo(-Math.PI / 2);
+    expect(available.geometry.parameters).toMatchObject({width: 4, height: 2});
+    expect(available.rotation.x).toBeCloseTo(-Math.PI / 2);
+    expect([available.visible, glow.visible, label?.visible ?? false]).toEqual([false, false, false]);
+    expect(used).toBeNull();
+    expect(glow.scale.x).toBeGreaterThan(1);
+  });
+
+  it("has a used image only when it names one", () => {
+    expect(createInteractable({...snare, usedImageUrl: "./cut.webp"}, null, toWorld).used).toBeInstanceOf(THREE.Mesh);
   });
 });
 

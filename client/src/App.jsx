@@ -12,6 +12,7 @@ import { hasLineOfSight } from "./game/collision";
 import { canKeepTalking, canTalkTo } from "./game/dialogue";
 import { DialogueWindow } from "./DialogueWindow";
 import { activeQuestsById, applyQuestAction, offersFor, questLogZones, questMessageAction, questNcus, questsById, turnInsFor, zoneNames } from "./game/quests";
+import { inUseRange } from "./game/interactables";
 import { QuestLog } from "./QuestLog";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
@@ -3907,6 +3908,15 @@ export default function App({
     connRef.current?.send({ type: "talk", ncu_id: id });
   }, [zoneIdentifier]);
 
+  // Right-clicking an available interactable (the scene only picks those)
+  // in range uses it; the game server checks again.
+  const handleInteractableRightClick = useCallback((identifier) => {
+    const self = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current);
+    const info = canvasRef.current?.interactableInfo(identifier);
+    if (!self || !info || info.map !== self.map_identifier || !inUseRange(self.position, self.radius ?? 0, info)) return;
+    connRef.current?.send({ type: "use_interactable", interactable: identifier });
+  }, []);
+
   const handleAbandonQuest = useCallback((quest) => {
     connRef.current?.send({ type: "abandon_quest", quest });
   }, []);
@@ -4234,6 +4244,9 @@ export default function App({
         onUnitRightClick={handleUnitRightClick}
         onUnitHover={setHoveredUnitId}
         onNcuRightClick={handleNcuRightClick}
+        onInteractableRightClick={handleInteractableRightClick}
+        activeQuests={activeQuests}
+        zoneIdentifier={zoneIdentifier}
         lootableUnitIds={new Set(Object.entries(units).filter(([, u]) => u.loot_items?.some(i => i.claims?.find(c => c.character_unit_id === selfUnitId)?.state === "available")).map(([id]) => id))}
         targetId={targetId}
         attacking={attacking}

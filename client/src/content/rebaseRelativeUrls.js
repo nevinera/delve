@@ -14,7 +14,7 @@
 // casing ("iconURL"/"sourceURL" vs "imageUrl"/"thumbnailUrl"/
 // "tokenImageUrl") comes straight from the schema itself, not a typo, so
 // both are matched here.
-const URL_FIELD_NAMES = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl"]);
+const URL_FIELD_NAMES = new Set(["iconURL", "sourceURL", "imageUrl", "usedImageUrl", "thumbnailUrl", "tokenImageUrl"]);
 
 function isStockReference(value) {
   return value.startsWith(":") && value.endsWith(":");

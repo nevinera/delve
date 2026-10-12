@@ -11,7 +11,7 @@ import {createUnitType} from "./unitTypeOps";
 import {createItem} from "./itemOps";
 import {itemFile, relativePath, resolvePath, unitTypeFile, worldDir} from "./worldPaths";
 
-const URL_FIELD_NAMES = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl", "icon_url"]);
+const URL_FIELD_NAMES = new Set(["iconURL", "sourceURL", "imageUrl", "usedImageUrl", "thumbnailUrl", "tokenImageUrl", "icon_url"]);
 
 function isRelative(value) {
   return typeof value === "string" && value !== "" && !(value.startsWith(":") && value.endsWith(":"))

@@ -6,6 +6,7 @@ import { loadSvgToCanvas } from "./svgRaster.js";
 import { isUntargetableStatus } from "./state.js";
 import { computeMapFill } from "./mapFill.js";
 import { CellGroundQueue, groundPixelsPerFoot } from "./cellGrounds.js";
+import { inUseRange, interactableStates } from "./interactables.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -536,6 +537,45 @@ export function createNcuToken(radius, name, tokenImageUrl, zoneBaseUrl) {
   return group;
 }
 
+// A quest interactable (docs/schema/map.md#interactable): its image laid
+// on the ground like a stamp, no ring or label, so it blends in; its used
+// image, if it has one; a faint glow of the same image, shown on hover or
+// in range; and its name, shown on hover. Placed in map coordinates by
+// toWorld. Starts hidden (see GameScene.setInteractableStates).
+export function createInteractable(config, zoneBaseUrl, toWorld) {
+  const group = new THREE.Group();
+  const [wx, wz] = toWorld(config.position.x, config.position.y);
+  group.position.set(wx, 0, wz);
+  group.rotation.y = -((config.position.angle ?? 0) * DEG);
+  const { width, height } = config.size;
+  const image = (url, material, y) => {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = y;
+    mesh.visible = false;
+    if (url && zoneBaseUrl) {
+      new THREE.TextureLoader().load(new URL(url, zoneBaseUrl).href, (texture) => {
+        material.map = texture;
+        material.needsUpdate = true;
+      });
+    }
+    group.add(mesh);
+    return mesh;
+  };
+  const flat = () => new THREE.MeshLambertMaterial({ transparent: true, alphaTest: 0.05, depthWrite: false });
+  const available = image(config.imageUrl, flat(), 0.03);
+  const used = config.usedImageUrl ? image(config.usedImageUrl, flat(), 0.03) : null;
+  const glow = image(config.imageUrl, new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }), 0.04);
+  glow.scale.set(1.12, 1.12, 1);
+  const label = createNameLabel(config.name);
+  if (label) {
+    label.position.y = 2.5;
+    label.visible = false;
+    group.add(label);
+  }
+  return { group, available, used, glow, label };
+}
+
 // A pale blue diamond floating above an NCU that has a quest for the
 // player. Hidden until setNcuQuestMarkers shows it.
 function attachQuestMarker(group) {
@@ -603,7 +643,7 @@ function setTokenDead(group, dead) {
 // ---------------------------------------------------------------------------
 
 export class SceneManager {
-  constructor(canvas, { turnKeysRef, movementKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onNcuRightClick, onCanvasResize } = {}) {
+  constructor(canvas, { turnKeysRef, movementKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onNcuRightClick, onInteractableRightClick, onCanvasResize } = {}) {
     this._canvas = canvas;
     this._turnKeysRef = turnKeysRef;
     this._movementKeysRef = movementKeysRef;
@@ -617,6 +657,7 @@ export class SceneManager {
     this._onUnitRightClick = onUnitRightClick;
     this._onUnitHover = onUnitHover;
     this._onNcuRightClick = onNcuRightClick;
+    this._onInteractableRightClick = onInteractableRightClick;
     this._lastPosSendTime = 0;
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -636,6 +677,11 @@ export class SceneManager {
     this._ncuInfo = new Map();     // zone_ncu_identifier → the NCU's zone config
     this._questNcus = new Set();   // zone_ncu_identifiers with a quest for the player
     this._ncus = {};
+    // identifier → { group, available, used, glow, label, config, map,
+    // state } (see createInteractable and setInteractableStates).
+    this._interactables = new Map();
+    this._hoveredInteractable = null;
+    this._interactableQuests = { activeQuests: {}, zoneIdentifier: null };
     this._mapToWorldByMap = new Map(); // mapId → (x,y)=>[wx,wz]
     this._mapGroups = new Map();       // mapId → THREE.Group (visibility-toggled on map change)
     this._zoneBaseUrl = null;
@@ -868,10 +914,16 @@ export class SceneManager {
       return;
     }
     const ncuId = this._ncuUnderPointer(e);
-    if (ncuId) this._onNcuRightClick?.(ncuId);
+    if (ncuId) {
+      this._onNcuRightClick?.(ncuId);
+      return;
+    }
+    const interactable = this._interactableUnderPointer(e);
+    if (interactable) this._onInteractableRightClick?.(interactable);
   }
 
   _handleHover(e) {
+    this._setHoveredInteractable(this._interactables.size ? this._interactableUnderPointer(e) : null);
     if (!this._onUnitHover) return;
     const id = this._unitUnderPointer(e);
     this._onUnitHover(id ?? null);
@@ -883,6 +935,74 @@ export class SceneManager {
 
   _ncuUnderPointer(e) {
     return this._tokenUnderPointer(e, this._ncuTokenMap);
+  }
+
+  // The available interactable on the current map under the pointer, by
+  // identifier, or null.
+  _interactableUnderPointer(e) {
+    const meshes = [];
+    const meshToID = new Map();
+    for (const [identifier, entry] of this._interactables) {
+      if (entry.state !== "available" || entry.map !== this._selfMapIdentifier) continue;
+      meshes.push(entry.available);
+      meshToID.set(entry.available.uuid, identifier);
+    }
+    if (!meshes.length) return null;
+    const rect = this._canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, this._camera);
+    const hits = raycaster.intersectObjects(meshes, false);
+    return hits.length > 0 ? (meshToID.get(hits[0].object.uuid) ?? null) : null;
+  }
+
+  _setHoveredInteractable(identifier) {
+    if (identifier === this._hoveredInteractable) return;
+    this._hoveredInteractable = identifier;
+    this._refreshInteractableHighlights();
+  }
+
+  // An available interactable glows while hovered or in range, and shows
+  // its name while hovered.
+  _refreshInteractableHighlights() {
+    for (const [identifier, entry] of this._interactables) {
+      const available = entry.state === "available";
+      const hovered = available && identifier === this._hoveredInteractable;
+      const near = available && entry.map === this._selfMapIdentifier &&
+        inUseRange({ x: this._selfMapX, y: this._selfMapY }, TOKEN_RADIUS, entry.config);
+      entry.glow.visible = hovered || near;
+      if (entry.label) entry.label.visible = hovered;
+    }
+  }
+
+  // Shows the interactables as this player's active quests (by identifier,
+  // as Rails sends them) in this zone have them; kept, and applied again
+  // once the zone has loaded.
+  setInteractableQuests(activeQuests, zoneIdentifier) {
+    this._interactableQuests = { activeQuests: activeQuests ?? {}, zoneIdentifier };
+    this.setInteractableStates(interactableStates(this.interactableConfigs(), activeQuests, zoneIdentifier));
+  }
+
+  // Shows each interactable as states says ({identifier: "available" |
+  // "used" | "hidden"}; see interactables.js's interactableStates).
+  setInteractableStates(states) {
+    for (const [identifier, entry] of this._interactables) {
+      entry.state = states[identifier] ?? "hidden";
+      entry.available.visible = entry.state === "available";
+      if (entry.used) entry.used.visible = entry.state === "used";
+    }
+    this._refreshInteractableHighlights();
+  }
+
+  // The zone's interactables' configs, by identifier.
+  interactableConfigs() {
+    return Object.fromEntries([...this._interactables].map(([identifier, { config }]) => [identifier, config]));
+  }
+
+  // An interactable's zone config (with its map), or null.
+  interactableInfo(identifier) {
+    const entry = this._interactables.get(identifier);
+    return entry ? { ...entry.config, map: entry.map } : null;
   }
 
   _tokenUnderPointer(e, tokenMap) {
@@ -1012,6 +1132,12 @@ export class SceneManager {
         }
       }
 
+      for (const config of m.interactables ?? []) {
+        const entry = createInteractable(config, baseUrl, toWorld);
+        group.add(entry.group);
+        this._interactables.set(config.identifier, { ...entry, config, map: m.identifier, state: "hidden" });
+      }
+
       for (const conn of m.connections ?? []) {
         if (conn.type === "line") {
           const pts = [conn.start, conn.end].map(({ x, y }) => toWorld(x, y));
@@ -1019,6 +1145,8 @@ export class SceneManager {
         }
       }
     }
+    const { activeQuests, zoneIdentifier } = this._interactableQuests;
+    if (this._interactables.size) this.setInteractableQuests(activeQuests, zoneIdentifier);
   }
 
   _addGround(group, texture, width, height) {
@@ -1339,6 +1467,8 @@ export class SceneManager {
           this._onSelfPosition({ x: this._selfMapX, y: this._selfMapY });
           this._lastPosSendTime = time;
         }
+
+        if (this._interactables.size) this._refreshInteractableHighlights();
 
         const [sx, sz] = this._toWorld(this._selfMapX, this._selfMapY);
         this._selfToken.position.set(sx, 0, sz);

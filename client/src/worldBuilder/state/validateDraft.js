@@ -19,7 +19,7 @@ import {mapKeysInZone, resolveZone, zoneData} from "./zoneOps";
 import {mapData} from "./mapOps";
 import {questsFile} from "./questOps";
 
-const ASSET_FIELDS = new Set(["iconURL", "sourceURL", "imageUrl", "thumbnailUrl", "tokenImageUrl", "icon_url"]);
+const ASSET_FIELDS = new Set(["iconURL", "sourceURL", "imageUrl", "usedImageUrl", "thumbnailUrl", "tokenImageUrl", "icon_url"]);
 
 const isLocalPath = (value) => typeof value === "string" && value !== "" &&
   !(value.startsWith(":") && value.endsWith(":")) && !value.startsWith("/") && !/^[a-z][a-z0-9+.-]*:\/\//i.test(value);

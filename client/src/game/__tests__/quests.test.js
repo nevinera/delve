@@ -50,6 +50,8 @@ describe("questMessageAction", () => {
   it("reads progress, completion and failure", () => {
     expect(questMessageAction({type: "quest-progress", quest: "rat-hunt", objective: "h1", count: 2}, definitions))
       .toEqual({type: "progress", quest: "rat-hunt", objective: "h1", count: 2});
+    expect(questMessageAction({type: "quest-progress", quest: "snares", objective: "h2", count: 1, used: ["snare-1"]}, definitions))
+      .toEqual({type: "progress", quest: "snares", objective: "h2", count: 1, used: ["snare-1"]});
     expect(questMessageAction({type: "quest-completed", quest: "rat-hunt", flags: [], items: ["Rat Tail", "Cheese"]}, definitions))
       .toEqual({type: "remove", quest: "rat-hunt", log: "Quest complete: Rat Hunt. Received: Rat Tail, Cheese."});
     expect(questMessageAction({type: "quest-completed", quest: "rat-hunt", items: []}, definitions).log).toBe("Quest complete: Rat Hunt.");
@@ -81,6 +83,8 @@ describe("applyQuestAction", () => {
     const quests = {a: {quest_identifier: "a", objectives: [{hash: "h1", count: 0, required: 2}, {hash: "h2", count: 0, required: 1}]}};
     const updated = applyQuestAction(quests, {type: "progress", quest: "a", objective: "h1", count: 1});
     expect(updated.a.objectives).toEqual([{hash: "h1", count: 1, required: 2}, {hash: "h2", count: 0, required: 1}]);
+    const used = applyQuestAction(quests, {type: "progress", quest: "a", objective: "h1", count: 1, used: ["snare-2"]});
+    expect(used.a.objectives[0]).toEqual({hash: "h1", count: 1, required: 2, used: ["snare-2"]});
     expect(applyQuestAction(quests, {type: "progress", quest: "gone", objective: "h1", count: 1})).toBe(quests);
   });
 });

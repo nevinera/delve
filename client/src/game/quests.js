@@ -48,7 +48,7 @@ export function questMessageAction(msg, definitions) {
     case "quest-abandon-failed":
       return {type: "log", log: `Couldn't abandon ${name(msg.quest)}: ${msg.error}`};
     case "quest-progress":
-      return {type: "progress", quest: msg.quest, objective: msg.objective, count: msg.count};
+      return {type: "progress", quest: msg.quest, objective: msg.objective, count: msg.count, ...(msg.used ? {used: msg.used} : {})};
     case "quest-completed":
       return {type: "remove", quest: msg.quest, log: completedLog(name(msg.quest), msg.items)};
     case "quest-failed":
@@ -73,7 +73,7 @@ export function applyQuestAction(activeQuests, action, now = Date.now()) {
     const quest = activeQuests[action.quest];
     if (!quest) return activeQuests;
     const objectives = (quest.objectives ?? []).map((objective) =>
-      objective.hash === action.objective ? {...objective, count: action.count} : objective
+      objective.hash === action.objective ? {...objective, count: action.count, ...(action.used ? {used: action.used} : {})} : objective
     );
     return {...activeQuests, [action.quest]: {...quest, objectives}};
   }
