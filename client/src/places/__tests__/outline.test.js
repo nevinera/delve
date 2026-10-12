@@ -91,4 +91,32 @@ describe("outlineZone", () => {
     expect(text).toContain("  room/door (east) <-> hall/door");
     expect(text).toContain("Map hall, 100x50 ft\n  (no places)");
   });
+
+  it("carries the zone's, unit types', maps', units' and NCUs' annotations, units and NCUs by place", () => {
+    const map = {...room(), annotations: {plan: "The first room."}};
+    map.units[0] = {...map.units[0], identifier: "boss", annotations: {backstory: "Grew up here.\nNever left."}};
+    map.ncus = [{identifier: "sesh", name: "Sesh", position: {x: 70, y: 30, angle: 0}, annotations: {personality: "wary"}}, {identifier: "quiet", position: {x: 75, y: 30, angle: 0}}];
+    const zone = {name: "Test", annotations: {plan: "A test zone."}, unitTypes: {goblin: {name: "Goblin", annotations: {variants: "the Old Goblin"}}}, maps: [map]};
+    const outline = outlineZone(zone);
+    expect(outline.zone.annotations).toEqual({plan: "A test zone."});
+    expect(outline.unitTypes.goblin.annotations).toEqual({variants: "the Old Goblin"});
+    expect(outline.maps[0].annotations).toEqual({plan: "The first room."});
+    expect(outline.maps[0].annotated).toEqual([
+      {kind: "unit", identifier: "boss", unitType: "goblin", annotations: {backstory: "Grew up here.\nNever left."}, place: "west"},
+      {kind: "ncu", identifier: "sesh", name: "Sesh", annotations: {personality: "wary"}, place: "east"},
+    ]);
+    const text = outlineText(outline);
+    expect(text).toContain("Zone: Test\n  plan: A test zone.");
+    expect(text).toContain("  goblin:\n    variants: the Old Goblin");
+    expect(text).toContain('Map room "The Room", 100x50 ft\n  plan: The first room.');
+    expect(text).toContain("    unit boss (goblin):\n      backstory: Grew up here.\n        Never left.");
+    expect(text).toContain('    ncu sesh "Sesh":\n      personality: wary');
+  });
+
+  it("leaves out annotations nothing has", () => {
+    const outline = outlineZone({name: "Bare", maps: [room()]});
+    expect(outline.zone).not.toHaveProperty("annotations");
+    expect(outline.maps[0]).not.toHaveProperty("annotations");
+    expect(outline.maps[0]).not.toHaveProperty("annotated");
+  });
 });

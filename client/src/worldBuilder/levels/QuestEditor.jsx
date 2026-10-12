@@ -1,5 +1,6 @@
 import {useState} from "react";
 import EditModal from "./EditModal";
+import AnnotationsSection from "../../annotations/AnnotationsSection";
 import ContentAdder from "./ContentAdder";
 import ItemLevel from "./ItemLevel";
 import {addItemToZone, createItem, itemData, itemKeys} from "../state/itemOps";
@@ -295,6 +296,7 @@ export default function QuestEditor({draft, quest: identifier, onChange, onOpenQ
             />
           </div>
         )}
+        <AnnotationsSection annotations={quest.annotations} onChange={(annotations) => set({annotations})} />
         {creatingItem && (
           <EditModal title={`Item: ${itemData(draft, creatingItem)?.name || creatingItem}`} label={`Edit item ${creatingItem}`}
             onDone={() => {

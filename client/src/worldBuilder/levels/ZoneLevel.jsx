@@ -7,6 +7,7 @@ import {applyZoneAction, mapDetails, mapKeysInZone, missingZoneRefs, setZoneFiel
 import {assetUrlFor} from "../state/assetUrls";
 import ProvenanceRestrictionsField from "../../worldEditor/ProvenanceRestrictionsField";
 import PlayLink from "./PlayLink";
+import AnnotationsSection from "../../annotations/AnnotationsSection";
 import {createMap, deleteMap, renameMap} from "../state/mapOps";
 
 // The zone level: graph (top-left), zone fields (bottom-left), maps with
@@ -101,6 +102,7 @@ export default function ZoneLevel({draft, zone, onChange, navigate, repo, play})
               </tr>
             </tbody>
           </table>
+          <AnnotationsSection annotations={data.annotations} onChange={(v) => setField("annotations", v)} />
         </div>
       </div>
       <div className="content-editor-fields">

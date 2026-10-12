@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from "react";
 import LeashFields from "./LeashFields";
+import AnnotationsSection from "../annotations/AnnotationsSection";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 import {unitGroups} from "./groupIdentifiers";
 import {ANY_CATEGORY, INTENDED_FOR, PULL_SIZES, RANDOM_PULL_SIZE, SAME_CATEGORY} from "./encounter";
@@ -300,6 +301,7 @@ function UnitRow({
             availableItemKeys={availableItemKeys} itemDetails={itemDetails} onChooseItem={onChooseItem}
             dispatch={dispatch} renderItemAdder={renderItemAdder}
           />
+          <AnnotationsSection annotations={unit.annotations} onChange={(v) => updateUnit(index, {annotations: v})} />
         </>
       )}
     </div>

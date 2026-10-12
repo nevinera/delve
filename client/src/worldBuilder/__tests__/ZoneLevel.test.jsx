@@ -76,4 +76,15 @@ describe("ZoneLevel", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("unit type(s) archer");
   });
+
+  it("shows no annotations for a zone without any", () => {
+    renderLevel();
+    expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
+  });
+
+  it("edits annotations the zone has", () => {
+    const result = renderLevel("forest", fixtureDraft((json) => { json["worlds/w/zones/forest/forest.json"].annotations = {plan: "The start."}; }));
+    fireEvent.change(screen.getByLabelText("plan"), {target: {value: "The starting zone."}});
+    expect(zoneData(result.draft, "forest").annotations).toEqual({plan: "The starting zone."});
+  });
 });

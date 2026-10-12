@@ -23,6 +23,7 @@ module Validators
       ZoneConnectionPoolsValidator.validate!(data, path: path)
       validate_flags!(data, path: path) if given?(data, "flags")
       validate_settings!(data, path: path)
+      AnnotationsValidator.validate_on!(data, path: path)
     end
 
     def validate_settings!(data, path:)

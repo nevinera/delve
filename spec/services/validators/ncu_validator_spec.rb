@@ -1,6 +1,10 @@
 require "rails_helper"
 
 RSpec.describe Validators::NcuValidator, type: :validator do
+  it_behaves_like "annotatable" do
+    let(:annotatable) { ncu }
+  end
+
   let(:ncu) do
     {
       "identifier" => "grizzle",

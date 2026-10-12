@@ -156,4 +156,16 @@ describe("importing from the library", () => {
     await waitFor(() => expect(unitTypeData(result.draft, "goblin").powers).toEqual([{name: "Smash", iconURL: "../graphics/icons/smash.png"}]));
     expect(result.draft.exists("worlds/w/graphics/icons/smash.png")).toBe(true);
   });
+
+  it("shows no annotations for a unit type without any", () => {
+    renderWith(UnitTypeLevel, {unitType: "goblin"});
+    expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
+  });
+
+  it("edits annotations a unit type has", () => {
+    const draft = fixtureDraft((json) => { json["worlds/w/unit_types/goblin.json"].annotations = {variants: "the Old Goblin"}; });
+    const result = renderWith(UnitTypeLevel, {unitType: "goblin"}, draft);
+    fireEvent.change(screen.getByLabelText("variants"), {target: {value: "the Old Goblin, Grutt"}});
+    expect(unitTypeData(result.draft, "goblin").annotations).toEqual({variants: "the Old Goblin, Grutt"});
+  });
 });

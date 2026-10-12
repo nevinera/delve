@@ -22,12 +22,17 @@ module Validators
       require_boolean!(data, "marker", path: path) if given?(data, "marker")
       validate_ncus!(data, path: path)
       validate_flags!(data, path: path)
+      validate_progress!(data, path: path)
+      AnnotationsValidator.validate_on!(data, path: path)
+    end
+
+    private
+
+    def validate_progress!(data, path:)
       validate_timer!(data, path: path) if given?(data, "timer")
       validate_objectives!(data, path: path)
       validate_rewards!(data, path: path) if given?(data, "rewards")
     end
-
-    private
 
     def require_non_empty_string!(data, key, path:)
       value = require_string!(data, key, path: path)

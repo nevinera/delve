@@ -1,6 +1,10 @@
 require "rails_helper"
 
 RSpec.describe Validators::ZoneValidator, type: :validator do
+  it_behaves_like "annotatable" do
+    let(:annotatable) { zone_fixture }
+  end
+
   describe ".validate!" do
     it "accepts the full goblin cave fixture" do
       expect { described_class.validate!(zone_fixture) }.not_to raise_error

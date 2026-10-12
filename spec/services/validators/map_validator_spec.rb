@@ -1,6 +1,10 @@
 require "rails_helper"
 
 RSpec.describe Validators::MapValidator, type: :validator do
+  it_behaves_like "annotatable" do
+    let(:annotatable) { cave_entrance_map }
+  end
+
   describe ".validate!" do
     it "accepts the cave entrance map from the fixture" do
       expect { described_class.validate!(cave_entrance_map) }.not_to raise_error

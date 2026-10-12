@@ -20,6 +20,7 @@ See [zone.md](zone.md) for the `Zone` type referenced by `zones`.
 | `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Default: this world's items only, any elevation. |
 | `questsPath` | string | no | Path to this world's quests file (a JSON array of [Quests](quest.md)), relative to the world file. Default: `./quests.json`, and a world with nothing there has no quests. |
 | `entryPoints` | object | yes | Maps serialized WorldEntryPointIdentifier keys (`"zoneId/entryPointKey"`) to required key strings (or `null`). At least one. |
+| `annotations` | Annotations | no | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 > Skipped for now, tracked separately: `allowedClasses` (blocked on ClassSets).
 

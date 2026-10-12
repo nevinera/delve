@@ -61,9 +61,21 @@ bin/cellmap-generate --map woods --barriers -o woods-map.json   # a whole map fi
 ```
 
 `bin/zone-outline` prints a zone's outline for an LLM to work from: each map's places (their
-tags, annotations, area, neighbors, connections and units) and the links between maps.
+tags, annotations, area, neighbors, connections and units) and the links between maps, with the
+annotations of the zone, its unit types, maps, units and NCUs.
 
 ```sh
 bin/zone-outline ../content/zones/darkwood/darkwood.json          # text
 bin/zone-outline --json ../content/zones/darkwood/darkwood.json   # JSON
+```
+
+`bin/annotate` prints, sets or removes one annotation (an LLM's notes, see
+[docs/schema/common.md](docs/schema/common.md#annotations)) on a world, zone, map, place, unit
+type, unit, quest or NCU, following `$ref`s to the file that holds it:
+
+```sh
+bin/annotate ZONE.json grutts-hall/throne --set population "dense; goblin 4; group"
+bin/annotate WORLD.json quest:l3-grutt --set plan - < plan.txt
+bin/annotate ZONE.json grutts-hall/unit:grutt              # print
+bin/annotate ZONE.json grutts-hall/unit:grutt --remove plan
 ```

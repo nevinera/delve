@@ -132,3 +132,26 @@ A zone inside a world must satisfy both its own restrictions and the world's. A 
 ```json
 { "worlds": ["northern-barrens"], "maxElevation": 400 }
 ```
+
+## Annotations
+
+Notes for an LLM (and the author), kept between the steps of building a world: the intended shape
+and use of a thing at the level it's planned at, and on units, unit types and NCUs their
+personality, backstory and motives. The same shape everywhere it's allowed: [World](world.md),
+[Zone](zone.md), [Map](map.md), [Place](map.md#place), [UnitType](unit_type.md), [Unit](unit.md),
+[Quest](quest.md) and [NCU](ncu.md).
+
+An object of up to 32 keys to strings. Keys are lowercase words (a letter, then letters, digits,
+`-` and `_`), at most 40 characters; values are English prose or keyword lines, at most 4000
+characters. Some keys have conventions (a place's `population`, a `plan`), but any key is allowed.
+
+Nothing reads annotations at runtime, and they're never copied into game state (database rows,
+server state, or messages between Rails, the game server and clients). They're written by an LLM
+through `bin/annotate`, and shown in the editors only where they exist.
+
+```json
+"annotations": {
+  "plan": "The warboss's hall: the end of L3, and the way down to the Goblin King.",
+  "population": "dense; goblin 4, goblin-archer 2; group; still"
+}
+```

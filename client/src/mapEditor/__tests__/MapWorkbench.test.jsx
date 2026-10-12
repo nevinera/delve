@@ -832,9 +832,19 @@ describe("MapWorkbench", () => {
       expect(screen.getByRole("heading", {name: "Places (2)"})).toBeInTheDocument();
       expect(screen.queryByText("Arren and two guards.")).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("heading", {name: /Arren's Camp/}));
-      expect(screen.getByText("population")).toBeInTheDocument();
-      expect(screen.getByText("Arren and two guards.")).toBeInTheDocument();
+      expect(screen.getByLabelText("population")).toHaveValue("Arren and two guards.");
       expect(screen.getByText("friendly")).toBeInTheDocument();
+    });
+
+    it("edits and removes a place's annotations", async () => {
+      await renderReady({map, imageUrl: "data:image/webp;base64,AAAA"});
+      showTab("Places");
+      fireEvent.click(screen.getByRole("heading", {name: /Arren's Camp/}));
+      fireEvent.change(screen.getByLabelText("population"), {target: {value: "Arren alone."}});
+      expect(current.mapData.places[1].annotations).toEqual({population: "Arren alone."});
+      fireEvent.click(screen.getByRole("button", {name: "Remove annotation population"}));
+      expect(current.mapData.places[1].annotations).toBeUndefined();
+      expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
     });
 
     it("opens a place clicked on the map", async () => {
@@ -842,6 +852,19 @@ describe("MapWorkbench", () => {
       showTab("Places");
       fireEvent.click(screen.getAllByTestId("map-place").find((el) => el.getAttribute("stroke").startsWith("hsla(0,")));
       expect(screen.getByText("No tags, description or annotations.")).toBeInTheDocument();
+    });
+  });
+
+  describe("annotations", () => {
+    it("shows no annotations for a map without any", async () => {
+      await renderReady({map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA"});
+      expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
+    });
+
+    it("edits a map's annotations", async () => {
+      await renderReady({map: {...BLANK_MAP, annotations: {plan: "The way in."}}, imageUrl: "data:image/webp;base64,AAAA"});
+      fireEvent.change(screen.getByLabelText("plan"), {target: {value: "The way in, past the pens."}});
+      expect(current.mapData.annotations).toEqual({plan: "The way in, past the pens."});
     });
   });
 });

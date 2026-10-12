@@ -26,6 +26,7 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `respawn` | RespawnConfig | no | Overrides the zone's `respawn` for every unit on this map, unless a unit overrides it again. See [common.md](common.md#respawnconfig). |
 | `leashRadius` | number | no | Feet. How far an engaged NPC on this map may get from where it was pulled before it gives up (see **Leashing** below). Default 120 (about WoW's 40 yards). A unit may override it. |
 | `hardLeash` | boolean | no | `true` makes NPCs on this map leash the moment they pass `leashRadius`, fight or no fight - for boss arenas and tight dungeon rooms. Default `false`. A unit may override it. |
+| `annotations` | Annotations | no | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 ### Leashing
 
@@ -191,7 +192,7 @@ is in the smallest place around it.
 | `description` | string | no | Free text, at most 4000 characters. |
 | `tags` | array of string | no | Free-form, at most 24, each at most 16 characters. |
 | `polygon` | array of Location | yes | 3 to 1000 points in map feet, the outline (closed back to the first). |
-| `annotations` | object | no | Notes for an LLM, kept between the steps of building a zone: up to 32 keys (lowercase words of letters, digits, `-` and `_`, at most 40 characters) to English prose or keywords (strings of at most 4000 characters). |
+| `annotations` | Annotations | no | Notes for an LLM, kept between the steps of building a zone. See [common.md](common.md#annotations). |
 
 ```json
 {

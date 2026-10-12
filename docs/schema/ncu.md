@@ -18,6 +18,7 @@ See [common.md](common.md) for `Position`, and [unit.md](unit.md#unitmovement) f
 | `position` | Position | yes | | Placement location and initial facing direction. |
 | `movement` | UnitMovement | no | `{ "type": "still" }` | Same movement types as a unit's. |
 | `dialogue` | Dialogue | no | | A branching conversation tree. Without dialogue, an NCU can't be talked to. |
+| `annotations` | Annotations | no | | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 ## Dialogue
 

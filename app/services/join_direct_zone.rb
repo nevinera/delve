@@ -21,7 +21,7 @@ class JoinDirectZone < JoinZone
       version: @commit_sha,
       database_id: "",
       source_url: @source_url,
-      zone_config: @zone_data,
+      zone_config: WithoutAnnotations.zone(@zone_data),
       mode: "direct",
       instance_key: "direct:#{@character.user_id}:#{@commit_sha}:#{@zone_key}",
       owned_zone_items: {},

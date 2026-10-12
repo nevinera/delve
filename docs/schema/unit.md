@@ -13,13 +13,14 @@ See [common.md](common.md) for `Location`, `Position`, and `RespawnConfig`.
 | `hostility` | string | yes | | `"hostile"`, `"neutral"`, or `"friendly"`. Determines token color and aggro behavior. |
 | `currentHpFraction` | float | no | `1.0` | Starting HP as a fraction of `maxHP`. Range: 0.0-1.0. |
 | `movement` | UnitMovement | no | `{ "type": "still" }` | How the unit moves when un-aggro'd. |
-| `identifier` | string | no | | Optional identifier for this unit, unique within the zone. |
+| `identifier` | string | yes | | Unique among the zone's units. The editors assign one when a unit is made. |
 | `groupIdentifier` | string | no | | Grouping label. Every unit on the *same map* sharing a non-empty `groupIdentifier` aggros together: when one engages, the rest idle-transition to engaged against the same target too, same as a kill does. Grouping never crosses maps, even if two maps happen to reuse the same string. |
 | `lootTable` | LootTable | no | | Items this unit can drop on death. See [zone.md](zone.md) for the LootTable type. All referenced identifiers must be defined in the zone's `items` map. |
 | `lootCount` | number \| [number, number] | no | `1` | Number of items to award from `lootTable` per kill. A range is resolved to a single value uniformly between min and max first. A resolved value >= 1 awards that many items (truncated to an integer); a resolved value between 0 and 1 is instead the *probability* of awarding exactly one item (0 otherwise) - e.g. `0.25` drops one item 25% of the time. Ignored if `lootTable` is absent. |
 | `respawn` | RespawnConfig | no | | Overrides the map's (or zone's) `respawn` for this specific unit. See [common.md](common.md#respawnconfig). |
 | `leashRadius` | number | no | | Feet. Overrides the map's `leashRadius` for this unit (see [map.md](map.md#leashing)), e.g. to give a boss its own range. |
 | `hardLeash` | boolean | no | | Overrides the map's `hardLeash` for this unit; `false` opts a unit out on a hard-leash map. |
+| `annotations` | Annotations | no | | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 ---
 

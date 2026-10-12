@@ -29,6 +29,7 @@ See [ability.md](ability.md) for the `Ability` type embedded in `powers`.
 | `onDeath` | string | no | | Name of one of `powers` to fire once when the unit dies, instead of in combat. Tactics never use it. See [On death](#on-death). |
 | `stealth` | float | no | | When set, the unit spawns stealthed (and re-stealths whenever it resets), with this stealth rating. See [Stealth](#stealth). |
 | `detection` | float | no | `0` | Detection rating, for spotting stealthed characters. Not used yet. |
+| `annotations` | Annotations | no | | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 ---
 

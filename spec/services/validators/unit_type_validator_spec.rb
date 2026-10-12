@@ -1,6 +1,10 @@
 require "rails_helper"
 
 RSpec.describe Validators::UnitTypeValidator, type: :validator do
+  it_behaves_like "annotatable" do
+    let(:annotatable) { goblin_unit_type }
+  end
+
   describe ".validate!" do
     it "accepts the goblin unit type from the fixture" do
       expect { described_class.validate!(goblin_unit_type) }.not_to raise_error

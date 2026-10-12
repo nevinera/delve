@@ -738,4 +738,14 @@ describe("UnitsTab", () => {
       expect(document.querySelectorAll(".map-unit-block")[0]).not.toHaveClass("map-unit-expanded");
     });
   });
+
+  it("edits a unit's annotations, shown only when it has some", () => {
+    const dispatch = vi.fn();
+    render(<GroupView {...DEFAULT_PROPS} dispatch={dispatch} units={[unit("grutt", {annotations: {backstory: "Was a sapper."}}), unit("plain")]} />);
+    expandUnitRow(1);
+    expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
+    expandUnitRow(0);
+    fireEvent.change(screen.getByLabelText("backstory"), {target: {value: "Was a sapper, once."}});
+    expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "units", index: 0, field: "annotations", value: {backstory: "Was a sapper, once."}});
+  });
 });

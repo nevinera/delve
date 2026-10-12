@@ -26,6 +26,7 @@ A JSON array of Quest objects. Importing a world version validates it, and check
 | `timer` | string | no | Time limit in in-game time: a positive whole number of seconds or minutes, like `"124s"` or `"5m"`. Max `"60m"`. Running out fails the quest. |
 | `objectives` | array of Objective | no | All must be met to complete the quest. |
 | `rewards` | array of Reward | no | Items granted on completion. |
+| `annotations` | Annotations | no | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 A quest must have at least one objective or a `turnIn` (zero objectives plus a `turnIn` is a breadcrumb quest).
 

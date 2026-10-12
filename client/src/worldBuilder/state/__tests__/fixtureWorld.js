@@ -46,8 +46,10 @@ export function fixtureJson() {
   };
 }
 
-export function fixtureDraft() {
+// The fixture as a draft; edit(json) may change the files first.
+export function fixtureDraft(edit = () => {}) {
   const json = fixtureJson();
+  edit(json);
   const files = Object.fromEntries(Object.keys(json).map((path) => [path, {sha: `sha:${path}`, size: 1}]));
   files["worlds/w/zones/forest/hub/hub.png"] = {sha: "png-sha", size: 1000};
   files["worlds/w/tokens/goblin.webp"] = {sha: "tok-sha", size: 10};

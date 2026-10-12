@@ -1,6 +1,7 @@
 import {humanize} from "../abilityEditor/abilityFormatting";
 import {RESOURCE_TYPES} from "../resourceTypes";
 import ImagePicker from "../content/ImagePicker";
+import AnnotationsSection from "../annotations/AnnotationsSection";
 import {TAG_CATEGORIES, TAG_DESCRIPTIONS, unitTargets, targetFit} from "../balanceTargets";
 
 const TARGETING_TYPES = ["aggroTable", "nearest", "healerAggro"];
@@ -287,6 +288,8 @@ export default function UnitTypeFieldsPanel({
         <option value="">None</option>
         {names.map((n) => <option key={n} value={n}>{n}</option>)}
       </select>
+
+      <AnnotationsSection annotations={unitTypeData.annotations} onChange={setField("annotations")} />
     </div>
   );
 }

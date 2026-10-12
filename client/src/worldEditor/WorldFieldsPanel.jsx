@@ -1,5 +1,6 @@
 import {useState} from "react";
 import ProvenanceRestrictionsField from "./ProvenanceRestrictionsField";
+import AnnotationsSection from "../annotations/AnnotationsSection";
 
 function TextField({value, onChange, placeholder}) {
   return <input type="text" value={value ?? ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} />;
@@ -66,43 +67,46 @@ export default function WorldFieldsPanel({draft, onChange, thumbnailPreviewUrl, 
   const {data} = draft;
 
   return (
-    <table>
-      <tbody>
-        <tr>
-          <th>Name</th>
-          <td><TextField value={data.name} onChange={(v) => onChange(draft.setField("name", v))} placeholder="Northern Barrens" /></td>
-        </tr>
-        <tr>
-          <th>Description</th>
-          <td><TextField value={data.description} onChange={(v) => onChange(draft.setField("description", v))} /></td>
-        </tr>
-        <tr>
-          <th>Thumbnail URL</th>
-          <td>
-            <ThumbnailField
-              value={data.thumbnailUrl}
-              previewUrl={thumbnailPreviewUrl}
-              onChange={(v) => onChange(draft.setField("thumbnailUrl", v))}
-              onUpload={onUploadThumbnail}
-            />
-          </td>
-        </tr>
-        <tr>
-          <th>Elevation Range</th>
-          <td><ElevationRangeField value={data.elevationRange} onChange={(v) => onChange(draft.setField("elevationRange", v))} /></td>
-        </tr>
-        <tr>
-          <th>Gear Restrictions</th>
-          <td>
-            <ProvenanceRestrictionsField
-              idPrefix="world-provenance"
-              value={data.provenanceRestrictions}
-              worldsDefault="none (this world's gear only)"
-              onChange={(v) => onChange(draft.setField("provenanceRestrictions", v))}
-            />
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <>
+      <table>
+        <tbody>
+          <tr>
+            <th>Name</th>
+            <td><TextField value={data.name} onChange={(v) => onChange(draft.setField("name", v))} placeholder="Northern Barrens" /></td>
+          </tr>
+          <tr>
+            <th>Description</th>
+            <td><TextField value={data.description} onChange={(v) => onChange(draft.setField("description", v))} /></td>
+          </tr>
+          <tr>
+            <th>Thumbnail URL</th>
+            <td>
+              <ThumbnailField
+                value={data.thumbnailUrl}
+                previewUrl={thumbnailPreviewUrl}
+                onChange={(v) => onChange(draft.setField("thumbnailUrl", v))}
+                onUpload={onUploadThumbnail}
+              />
+            </td>
+          </tr>
+          <tr>
+            <th>Elevation Range</th>
+            <td><ElevationRangeField value={data.elevationRange} onChange={(v) => onChange(draft.setField("elevationRange", v))} /></td>
+          </tr>
+          <tr>
+            <th>Gear Restrictions</th>
+            <td>
+              <ProvenanceRestrictionsField
+                idPrefix="world-provenance"
+                value={data.provenanceRestrictions}
+                worldsDefault="none (this world's gear only)"
+                onChange={(v) => onChange(draft.setField("provenanceRestrictions", v))}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <AnnotationsSection annotations={data.annotations} onChange={(v) => onChange(draft.setField("annotations", v))} />
+    </>
   );
 }

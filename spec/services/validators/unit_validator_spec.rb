@@ -1,6 +1,10 @@
 require "rails_helper"
 
 RSpec.describe Validators::UnitValidator, type: :validator do
+  it_behaves_like "annotatable" do
+    let(:annotatable) { cave_entrance_map["units"][0] }
+  end
+
   let(:wander_unit) { cave_entrance_map["units"][0] }
   let(:still_unit) { cave_entrance_map["units"][3] }
   let(:patrol_unit) { cave_entrance_map["units"][7] }

@@ -12,6 +12,7 @@ module Validators
       require_string!(data, "name", path: path)
       validate_zones!(data, path: path)
       validate_entry_points!(data, path: path)
+      AnnotationsValidator.validate_on!(data, path: path)
     end
 
     def validate_optional_fields!(data, path:)
