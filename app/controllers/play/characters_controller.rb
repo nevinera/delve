@@ -48,7 +48,7 @@ class Play::CharactersController < Play::BaseController
 
   # Never-played characters last, keeping their name order.
   def most_recently_played_first(characters)
-    characters.sort_by.with_index { |character, i| [-(character.last_world_character&.last_played_at.to_f), i] }
+    characters.sort_by.with_index { |character, i| [-character.last_world_character&.last_played_at.to_f, i] }
   end
 
   def character_params

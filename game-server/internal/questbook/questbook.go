@@ -61,7 +61,7 @@ func (b *Book) fetch(url, sha1Hex string) ([]instanceconfig.Quest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch quests: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fetch quests %s: HTTP %d", url, resp.StatusCode)
 	}

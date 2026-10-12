@@ -148,7 +148,8 @@ func (f *Fill) NearestOpen(x, y, clearance float64) (Point, bool) {
 	bestD := math.Inf(1)
 	for _, e := range f.Edges {
 		openLeft := e.Left == Open && e.Right != Open
-		if !openLeft && !(e.Right == Open && e.Left != Open) {
+		openRight := e.Right == Open && e.Left != Open
+		if !openLeft && !openRight {
 			continue
 		}
 		q := closestOnSegment(Point{x, y}, e.A, e.B)

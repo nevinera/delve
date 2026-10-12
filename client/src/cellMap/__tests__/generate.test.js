@@ -41,7 +41,9 @@ describe("generateCellMap", () => {
     expect(generateCellMap({...options, seed: 8}).cells).not.toEqual(map.cells);
   });
 
-  it("joins all its open ground, which only reaches the edge at its exits, each on its own side", () => {
+  // 45 maps: over a second alone, and past vitest's 5s default under a full
+  // parallel run.
+  it("joins all its open ground, which only reaches the edge at its exits, each on its own side", {timeout: 30000}, () => {
     for (const tags of [[], ...TAGS.map((t) => [t]), ["burrow", "coral", "tight", "tree"]]) {
       for (const seed of [1, 2, 3]) {
         const map = generateCellMap({...options, seed, tags, connections: 4});
