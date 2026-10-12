@@ -51,6 +51,17 @@ export function setAnnotation(object, key, text) {
   object.annotations = annotations;
 }
 
+// Names a place (in place), as the map validator allows: at most 80
+// characters, and no other place in `places` (its map's) named the same.
+const MAX_NAME = 80;
+export function setPlaceName(places, place, name) {
+  if (typeof name !== "string" || !name.trim()) throw new Error("the name must not be empty");
+  if (name.length > MAX_NAME) throw new Error(`the name is ${name.length} characters, more than the maximum of ${MAX_NAME}`);
+  const other = places.find((p) => p !== place && p.name === name);
+  if (other) throw new Error(`place ${other.identifier} is already named ${JSON.stringify(name)}`);
+  place.name = name;
+}
+
 // Removes annotation `key` from `object` (in place), and the annotations
 // field with its last one. Returns whether there was one.
 export function removeAnnotation(object, key) {
@@ -125,7 +136,7 @@ function findInZone(read, path, zone, target) {
   }
   const place = (map.object.places ?? []).find((p) => p?.identifier === rest);
   if (!place) throw new Error(`map ${mapId} has no place ${JSON.stringify(rest)} (places: ${(map.object.places ?? []).map((p) => p.identifier).join(", ") || "none"})`);
-  return {file: map.file, data: map.data, object: place, label: `place ${rest} on map ${mapId}`};
+  return {file: map.file, data: map.data, object: place, label: `place ${rest} on map ${mapId}`, places: map.object.places};
 }
 
 function findMap(read, path, zone, mapId) {

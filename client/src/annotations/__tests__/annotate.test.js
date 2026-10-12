@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {annotationsOf, findTarget, formatLike, removeAnnotation, setAnnotation} from "../annotate";
+import {annotationsOf, findTarget, formatLike, removeAnnotation, setAnnotation, setPlaceName} from "../annotate";
 import {normalize} from "../paths";
 
 // A world, its quests and one zone, its map in a file of its own, its unit
@@ -94,6 +94,18 @@ describe("setAnnotation and removeAnnotation", () => {
     for (let i = 0; i < 32; i++) setAnnotation(place, `note${i}`, "x");
     expect(() => setAnnotation(place, "one-more", "x")).toThrow(/already has 32 annotations/);
     expect(() => setAnnotation(place, "note0", "replaced")).not.toThrow();
+  });
+});
+
+describe("setPlaceName", () => {
+  it("names a place, unless another on the map has the name or it's too long", () => {
+    const places = [{identifier: "a", name: "The Den"}, {identifier: "b"}];
+    setPlaceName(places, places[1], "The Camp");
+    expect(places[1].name).toBe("The Camp");
+    setPlaceName(places, places[0], "The Den");
+    expect(() => setPlaceName(places, places[1], "The Den")).toThrow(/place a is already named "The Den"/);
+    expect(() => setPlaceName(places, places[1], " ")).toThrow(/must not be empty/);
+    expect(() => setPlaceName(places, places[1], "x".repeat(81))).toThrow(/maximum of 80/);
   });
 });
 

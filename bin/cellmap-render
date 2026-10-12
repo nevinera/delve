@@ -26,6 +26,7 @@ const USAGE = `Usage: bin/cellmap-render FILE [flags]
   --barriers      the map's barriers, connections and fill (a map file's; or, with
                   --auto, made by Auto Barriers)
   --auto          make the barriers with Auto Barriers instead of the file's
+  --places        the map's places, outlined and labeled (a map file's; or Auto Barriers')
   -h, --help`;
 
 const {values, positionals} = parseArgs({allowPositionals: true, options: {
@@ -39,6 +40,7 @@ const {values, positionals} = parseArgs({allowPositionals: true, options: {
   exits: {type: "boolean", default: false},
   barriers: {type: "boolean", default: false},
   auto: {type: "boolean", default: false},
+  places: {type: "boolean", default: false},
   help: {type: "boolean", short: "h", default: false},
 }});
 if (values.help) {
@@ -71,6 +73,7 @@ if (values.trails) {
 }
 if (values.exits) drawExits(ctx, cellMap, scale);
 if (values.barriers || values.auto) await drawBarriers(ctx, data, cellMap, scale);
+if (values.places) await drawPlaces(ctx, data, cellMap, scale);
 
 const out = values.out ?? (file === "-" ? "map.png" : file.replace(/\.json$/, "") + ".png");
 writeFileSync(out, canvas.toBuffer("image/png"));
@@ -122,5 +125,37 @@ async function drawBarriers(ctx, data, cellMap, scale) {
     ctx.beginPath();
     ctx.arc(p.x, y(p.y), 6 / scale, 0, Math.PI * 2);
     ctx.fill();
+  }
+}
+
+// Places in map feet (y up), each outlined, with its identifier (less
+// "area_") at its outline's middle.
+async function drawPlaces(ctx, data, cellMap, scale) {
+  let places = data.cellMap ? data.places ?? [] : [];
+  if (!places.length) {
+    const {autoBarriers} = await client("mapEditor/cells/autoBarriers.js");
+    places = autoBarriers(cellMap).places ?? [];
+  }
+  const {height} = mapSize(cellMap.grid);
+  ctx.lineWidth = 2 / scale;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `bold ${16 / scale}px sans-serif`;
+  for (const {identifier, polygon} of places) {
+    ctx.beginPath();
+    polygon.forEach(({x, y}, i) => (i ? ctx.lineTo(x, height - y) : ctx.moveTo(x, height - y)));
+    ctx.closePath();
+    ctx.stroke();
+  }
+  for (const {identifier, polygon} of places) {
+    const x = polygon.reduce((sum, p) => sum + p.x, 0) / polygon.length;
+    const y = height - polygon.reduce((sum, p) => sum + p.y, 0) / polygon.length;
+    const text = identifier.replace(/^area_/, "");
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    const w = ctx.measureText(text).width + 8 / scale;
+    ctx.fillRect(x - w / 2, y - 10 / scale, w, 20 / scale);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(text, x, y);
   }
 }

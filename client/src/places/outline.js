@@ -8,6 +8,8 @@
 // prints it.
 import {computeMapFill} from "../game/mapFill";
 import {hasLineOfSight} from "../game/collision";
+import {CELL_SIZE, cellCenter, cellPoint} from "../cellMap/hexGrid";
+import {terrainAt, terrainLabel} from "../cellMap/format";
 
 // Feet between the points open ground is sampled at.
 const STEP = 2.5;
@@ -17,6 +19,8 @@ const REACH = 7.5;
 // Open ground in no place goes unmentioned under this share of it all: the
 // slivers left where places' outlines and the walls bend differently.
 const SLIVERS = 0.02;
+// A place's terrains go unmentioned under this share of its cells.
+const TERRAIN_SHARE = 0.1;
 
 // {zone, unitTypes, maps, links, entryPoints, openConnections}; see
 // outlineMap for each map's.
@@ -122,6 +126,23 @@ export function outlineMap(map) {
     }
     return counts;
   };
+  // Where each place sits, from its open ground's middle: the map in
+  // thirds, north up.
+  const middle = places.map(() => ({x: 0, y: 0, n: 0}));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const own = label[r * cols + c];
+      if (own < 0) continue;
+      const [x, y] = center(c, r);
+      Object.assign(middle[own], {x: middle[own].x + x, y: middle[own].y + y, n: middle[own].n + 1});
+    }
+  }
+  const at = middle.map(({x, y, n}) => (n ? compass(x / n / width, y / n / height) : undefined));
+  const {terrains, trails} = map.cellMap ? cellFeatures(map.cellMap, height, (x, y) => {
+    const [c, r] = [Math.floor(x / STEP), Math.floor(y / STEP)];
+    return c >= 0 && r >= 0 && c < cols && r < rows ? label[r * cols + c] : -2;
+  }, places.length) : {};
+
   const units = tally(map.units, (u) => u.unitType);
   const ncus = tally(map.ncus, (n) => n.identifier);
 
@@ -130,6 +151,9 @@ export function outlineMap(map) {
     places: places.map((place, i) => compact({
       ...describe(place),
       area: Math.round(area[i]),
+      at: at[i],
+      terrain: terrains?.[i],
+      trail: trails?.[i] || undefined,
       adjacent: [...adjacent[i]].sort((a, b) => a - b).map((j) => places[j].identifier),
       units: Object.keys(units[i]).length ? units[i] : undefined,
       ncus: Object.keys(ncus[i]).length ? Object.keys(ncus[i]) : undefined,
@@ -141,6 +165,47 @@ export function outlineMap(map) {
     ...compact({annotated: annotated(map, (p) => (p ? nearest(p.x, p.y) : null))}),
     ...(places.length && unplaced > SLIVERS * (unplaced + area.reduce((a, b) => a + b, 0)) ? {unplacedArea: Math.round(unplaced)} : {}),
   };
+}
+
+// "north-west" ... "middle" ... "south-east", for a point as a share of
+// the map's width and height (y up, as map feet are).
+function compass(fx, fy) {
+  const ns = fy > 2 / 3 ? "north" : fy < 1 / 3 ? "south" : "";
+  const ew = fx < 1 / 3 ? "west" : fx > 2 / 3 ? "east" : "";
+  return [ns, ew].filter(Boolean).join("-") || "middle";
+}
+
+// From the cellMap: each place's open terrains, by share of its cells
+// ("meadow 70%, marsh 20%"), and whether a trail runs through it. labelAt
+// gives the place index at map feet (y up).
+function cellFeatures(cellMap, height, labelAt, count) {
+  const tallies = Array.from({length: count}, () => ({}));
+  const totals = new Array(count).fill(0);
+  cellMap.cells.forEach((line, row) => [...line].forEach((_, col) => {
+    const {x, y} = cellCenter(col, row, CELL_SIZE);
+    const own = labelAt(x, height - y);
+    if (own < 0) return;
+    const terrain = terrainLabel(cellMap.theme, terrainAt(cellMap, col, row));
+    tallies[own][terrain] = (tallies[own][terrain] ?? 0) + 1;
+    totals[own]++;
+  }));
+  const terrains = tallies.map((tally, i) => {
+    const shares = Object.entries(tally).map(([t, n]) => [t, n / totals[i]]).filter(([, f]) => f >= TERRAIN_SHARE).sort((a, b) => b[1] - a[1]);
+    return shares.length ? shares.map(([t, f]) => `${t} ${Math.round(f * 100)}%`).join(", ") : undefined;
+  });
+  const trails = new Array(count).fill(false);
+  for (const {points} of cellMap.trails ?? []) {
+    for (let i = 0; i + 1 < points.length; i++) {
+      const a = cellPoint(...points[i], CELL_SIZE);
+      const b = cellPoint(...points[i + 1], CELL_SIZE);
+      const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / STEP);
+      for (let k = 0; k <= steps; k++) {
+        const own = labelAt(a.x + ((b.x - a.x) * k) / steps, height - (a.y + ((b.y - a.y) * k) / steps));
+        if (own >= 0) trails[own] = true;
+      }
+    }
+  }
+  return {terrains, trails};
 }
 
 // The map's units and NCUs that have annotations, each with the place it's
@@ -178,7 +243,8 @@ export function outlineText(outline) {
     for (const place of map.places) {
       const tags = place.tags?.length ? ` [${place.tags.join(", ")}]` : "";
       const area = place.area !== undefined ? `, ${place.area} sq ft` : "";
-      lines.push(`  ${place.identifier}${place.name ? ` "${place.name}"` : ""}${tags}${area}`);
+      const where = [place.at, place.terrain, place.trail && "trail"].filter(Boolean).join("; ");
+      lines.push(`  ${place.identifier}${place.name ? ` "${place.name}"` : ""}${tags}${area}${where ? ` (${where})` : ""}`);
       if (place.description) lines.push(`    ${place.description}`);
       if (place.adjacent?.length) lines.push(`    next to: ${place.adjacent.join(", ")}`);
       const exits = map.connections.filter((c) => c.place === place.identifier).map((c) => c.identifier);
