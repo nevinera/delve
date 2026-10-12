@@ -1,6 +1,10 @@
 require "rails_helper"
 
 RSpec.describe Validators::QuestValidator, type: :validator do
+  it_behaves_like "annotatable" do
+    let(:annotatable) { quest }
+  end
+
   let(:quest) do
     {
       "identifier" => "grizzle-warning",

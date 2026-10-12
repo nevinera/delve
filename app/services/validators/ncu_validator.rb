@@ -9,6 +9,7 @@ module Validators
       validate_speed_factor!(data, path: path) if given?(data, "speedFactor")
       validate_movement!(data, path: path) if given?(data, "movement")
       validate_dialogue!(data, path: path) if given?(data, "dialogue")
+      AnnotationsValidator.validate_on!(data, path: path)
     end
 
     private

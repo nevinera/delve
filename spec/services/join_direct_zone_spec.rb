@@ -34,6 +34,12 @@ RSpec.describe JoinDirectZone do
     ))
   end
 
+  it "sends the zone without its annotations" do
+    described_class.call(character:, zone_key: "demo", commit_sha: "c0ffee", source_url: url, equipped_items: {},
+      zone_data: {"name" => "Demo", "annotations" => {"plan" => "A test."}})
+    expect(slots_client).to have_received(:request).with(hash_including(zone_config: {"name" => "Demo"}))
+  end
+
   it "sends no world and no layers when the zone has no restrictions" do
     call
     expect(slots_client).to have_received(:request).with(hash_including(

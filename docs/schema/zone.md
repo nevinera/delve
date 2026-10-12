@@ -23,6 +23,7 @@ See [item.md](item.md) for the `Item` type embedded in `items`.
 | `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Inside a world it is ANDed with the world's; default is no restriction. |
 | `openConnections` | object | no | Maps `"mapId/connectionId"` keys to zone-level name strings. Exposes connections for other zones to link against. Each key must name a connection on one of the zone's maps. |
 | `flags` | array of string | no | Compiled by the world editor's Expand, never written by hand. The `type/identifier` flags (see [flags.md](../flags.md)) the zone preloads for each character on entry. Always includes `zone/reached/<zone>`, plus, for each quest an NCU in the zone offers, its `quest/completed/` flag and `requiresFlags`. Flags not listed still work; they're fetched when needed. |
+| `annotations` | Annotations | no | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 > A zone must have at least one `entryPoint` or be reachable via an `openConnection` linked by another zone  -  otherwise there is no way for players to enter it.
 

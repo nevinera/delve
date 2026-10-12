@@ -22,6 +22,7 @@ module Validators
       validate_powers!(data, path: path) if given?(data, "powers")
       validate_targeting!(data["targeting"], path: child_path(path, "targeting")) if given?(data, "targeting")
       validate_behavior!(data, path: path)
+      AnnotationsValidator.validate_on!(data, path: path)
     end
 
     private

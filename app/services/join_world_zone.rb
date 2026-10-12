@@ -28,7 +28,7 @@ class JoinWorldZone < JoinZone
       version: version.commit_sha,
       database_id: @zone.id.to_s,
       source_url: version.zone_url(@zone),
-      zone_config: @zone_data,
+      zone_config: WithoutAnnotations.zone(@zone_data),
       exits: @zone.exits
     }
   end

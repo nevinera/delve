@@ -18,6 +18,7 @@ module Validators
       validate_optional_fields!(data, path: path)
       PlacesValidator.validate!(data["places"], path: child_path(path, "places")) if given?(data, "places")
       MapFillValidator.validate!(data, path: path)
+      AnnotationsValidator.validate_on!(data, path: path)
     end
 
     private

@@ -1,6 +1,10 @@
 require "rails_helper"
 
 RSpec.describe Validators::WorldValidator, type: :validator do
+  it_behaves_like "annotatable" do
+    let(:annotatable) { world_fixture }
+  end
+
   describe ".validate!" do
     it "accepts the full northern barrens fixture" do
       expect { described_class.validate!(world_fixture) }.not_to raise_error

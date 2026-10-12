@@ -9,6 +9,7 @@ module Validators
       validate_core_fields!(data, path: path)
       validate_optional_fields!(data, path: path)
       validate_leash_fields!(data, path:)
+      AnnotationsValidator.validate_on!(data, path: path)
     end
 
     private
