@@ -68,6 +68,21 @@ describe("outlineMap", () => {
     expect(outline.connections.every((c) => c.place)).toBe(true);
     expect(outline).not.toHaveProperty("unplacedArea");
   });
+
+  it("says where each place is, its terrains and whether a trail runs through it", () => {
+    const cellMap = generateCellMap({cols: 40, rows: 30, seed: 7, connections: 2, tags: ["paths"]});
+    const walls = autoBarriers(cellMap);
+    const {width, height} = mapSize(cellMap.grid);
+    const {places} = outlineMap({identifier: "gen", feetDimensions: {width, height}, barriers: walls.barriers, fillPoints: walls.fillPoints, connections: walls.connections, places: walls.places, cellMap});
+    expect(places.every((p) => /^(north|south)?-?(west|east)?$|^middle$/.test(p.at))).toBe(true);
+    expect(places.every((p) => /^[a-z ]+ \d+%(, [a-z ]+ \d+%)*$/.test(p.terrain))).toBe(true);
+    expect(places.some((p) => p.trail)).toBe(true);
+    expect(places.some((p) => !p.trail)).toBe(true);
+    // The room's east place: middle of the map's east third, no cellMap.
+    const [, east] = outlineMap(room()).places;
+    expect(east).toMatchObject({at: "east"});
+    expect(east).not.toHaveProperty("terrain");
+  });
 });
 
 describe("outlineZone", () => {
