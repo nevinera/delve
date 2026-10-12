@@ -56,6 +56,7 @@ draws it. Both need `npm install`; `--help` lists their flags.
 ```sh
 bin/cellmap-generate --cols 40 --rows 30 --exits 3 --tags chamber,paths --seed 11 -o woods.json
 bin/cellmap-render woods.json --scale 8 --auto   # with Auto Barriers' walls and fill
+bin/cellmap-render woods-map.json --places        # each place outlined and numbered
 bin/cellmap-generate --tags burrow,coral --theme cave | bin/cellmap-render - -o cave.png
 bin/cellmap-generate --exits north:0.2,east -o woods.json   # exits on given sides, the north one near its west end
 bin/cellmap-generate --map woods --barriers -o woods-map.json   # a whole map file
@@ -71,7 +72,7 @@ bin/zone-build --force old-growth ../content/worlds/demo-wild/zones/thornwood/zo
 ```
 
 `bin/zone-outline` prints a zone's outline for an LLM to work from: each map's places (their
-tags, annotations, area, neighbors, connections and units) and the links between maps, with the
+tags, annotations, area, where on the map, terrains, trails, neighbors, connections and units) and the links between maps, with the
 annotations of the zone, its unit types, maps, units and NCUs.
 
 ```sh
