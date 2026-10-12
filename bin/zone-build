@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+// Builds a zone from its zone-build.json (see docs/zone-build.md and
+// client/src/zoneBuild/zoneBuild.js). Run with --help for the flags.
+import {parseArgs} from "node:util";
+import {copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync} from "node:fs";
+import {basename, dirname, join, relative, resolve} from "node:path";
+import {client} from "../client/cli/load.mjs";
+
+const {validateSpec, buildMap, buildZone, buildWorld, pendingLinks, worldUnitType} = await client("zoneBuild/zoneBuild.js");
+
+const USAGE = `Usage: bin/zone-build [flags] worlds/WORLD/zones/ZONE/zone-build.json
+
+  --force MAPS    regenerate these maps (comma-separated, or "all"), replacing their files;
+                  without it, maps that already have a file are kept as they are
+  --dry-run       say what would be written, and write nothing
+  -h, --help
+
+Writes, beside the spec: the zone file (ZONE.json) and a file per map (MAP/MAP.json), each
+map generated and walled by Auto Barriers. Copies the spec's unit types (and their tokens)
+from the content library (unit_types/, tokens/) into the world, unless the world has them
+already. Adds the zone to the world file (WORLD.json, made if it's missing), with its entry
+points if it's a start zone, and links its exits to other zones that are built and have the
+exit back.`;
+
+const {values, positionals} = parseArgs({allowPositionals: true, options: {
+  force: {type: "string", default: ""},
+  "dry-run": {type: "boolean", default: false},
+  help: {type: "boolean", short: "h", default: false},
+}});
+if (values.help || positionals.length !== 1) {
+  console.log(USAGE);
+  process.exit(values.help ? 0 : 1);
+}
+const fail = (message) => {
+  console.error(message);
+  process.exit(1);
+};
+
+const specFile = resolve(positionals[0]);
+const zoneDir = dirname(specFile);
+const zone = basename(zoneDir);
+const worldDir = resolve(zoneDir, "../..");
+const world = basename(worldDir);
+const contentRoot = resolve(worldDir, "../..");
+if (basename(dirname(zoneDir)) !== "zones" || basename(dirname(worldDir)) !== "worlds") fail(`${positionals[0]} isn't at worlds/WORLD/zones/ZONE/zone-build.json`);
+
+const readJson = (path) => (existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null);
+const spec = readJson(specFile);
+const errors = validateSpec(spec, zone);
+if (errors.length) fail(`${positionals[0]}:\n${errors.map((e) => `  ${e}`).join("\n")}`);
+
+const dry = values["dry-run"];
+const said = [];
+const write = (path, data) => {
+  said.push(`write ${relative(contentRoot, path)}`);
+  if (dry) return;
+  mkdirSync(dirname(path), {recursive: true});
+  writeFileSync(path, JSON.stringify(data, null, 2) + "\n");
+};
+const copy = (from, to) => {
+  said.push(`copy  ${relative(contentRoot, from)} -> ${relative(contentRoot, to)}`);
+  if (dry) return;
+  mkdirSync(dirname(to), {recursive: true});
+  copyFileSync(from, to);
+};
+
+// Maps.
+const force = values.force === "all" ? new Set(Object.keys(spec.maps)) : new Set(values.force.split(",").map((s) => s.trim()).filter(Boolean));
+const unknownForced = [...force].filter((id) => !spec.maps[id]);
+if (unknownForced.length) fail(`--force: no maps ${unknownForced.join(", ")} in the spec`);
+for (const [id, mapSpec] of Object.entries(spec.maps)) {
+  const file = join(zoneDir, id, `${id}.json`);
+  if (existsSync(file) && !force.has(id)) {
+    said.push(`keep  ${relative(contentRoot, file)} (--force ${id} to regenerate it)`);
+    continue;
+  }
+  try {
+    write(file, buildMap(id, mapSpec, spec));
+  } catch (error) {
+    fail(error.message);
+  }
+}
+
+// Unit types, from the library into the world.
+const library = libraryIndex(join(contentRoot, "unit_types"));
+for (const key of spec.unitTypes ?? []) {
+  const to = join(worldDir, "unit_types", `${key}.json`);
+  if (existsSync(to)) {
+    said.push(`keep  ${relative(contentRoot, to)}`);
+    continue;
+  }
+  const from = library[key];
+  if (!from) fail(`unit type ${key} isn't in ${relative(process.cwd(), join(contentRoot, "unit_types"))}`);
+  const {data, tokens} = worldUnitType(readJson(join(contentRoot, from)), from);
+  write(to, data);
+  for (const [token, target] of tokens) {
+    const dest = join(worldDir, target);
+    if (!existsSync(dest)) copy(join(contentRoot, token), dest);
+  }
+}
+
+// The zone file, and the world.
+const zoneFile = join(zoneDir, `${zone}.json`);
+write(zoneFile, buildZone(spec, zone, readJson(zoneFile)));
+const worldFile = join(worldDir, `${world}.json`);
+const specs = Object.fromEntries(readdirSync(join(worldDir, "zones"))
+  .filter((z) => existsSync(join(worldDir, "zones", z, `${z}.json`)) || z === zone)
+  .map((z) => [z, z === zone ? spec : readJson(join(worldDir, "zones", z, "zone-build.json"))])
+  .filter(([, s]) => s));
+write(worldFile, buildWorld(readJson(worldFile), titleOf(world), zone, spec, specs));
+
+console.log(said.join("\n"));
+const pending = pendingLinks(zone, spec, specs);
+if (pending.length) {
+  console.log(`\nNot linked yet (build the other zone, with an exit back):`);
+  for (const {map, side, zone: other, target} of pending) console.log(`  ${map} ${side} -> ${other}/${target}`);
+}
+if (dry) console.log("\n(dry run: nothing written)");
+
+// {key: path relative to the content root} for every unit type in the
+// library: those in a family directory first, then loose ones.
+function libraryIndex(dir) {
+  const index = {};
+  if (!existsSync(dir)) return index;
+  const loose = [];
+  for (const name of readdirSync(dir).sort()) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) {
+      if (name === "demo") continue;
+      for (const file of readdirSync(path).sort()) if (file.endsWith(".json") && !file.endsWith(".full.json")) index[file.slice(0, -5)] ??= relative(contentRoot, join(path, file));
+    } else if (name.endsWith(".json") && !name.endsWith(".full.json")) loose.push(name);
+  }
+  for (const name of loose) index[name.slice(0, -5)] ??= relative(contentRoot, join(dir, name));
+  return index;
+}
+
+function titleOf(id) {
+  return id.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
