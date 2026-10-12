@@ -87,4 +87,16 @@ describe("NcusPanel", () => {
     fireEvent.click(screen.getByText("Remove"));
     expect(dispatch).toHaveBeenCalledWith({type: "REMOVE_ENTRY", section: "ncus", index: 0});
   });
+
+  it("edits an NCU's annotations, shown only when it has some", () => {
+    const {dispatch, unmount} = renderPanel();
+    openRow();
+    expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
+    unmount();
+    const again = renderPanel({ncus: [{...GRIZZLE, annotations: {personality: "nervous"}}]});
+    openRow();
+    fireEvent.change(screen.getByLabelText("personality"), {target: {value: "nervous, greedy"}});
+    expect(again.dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "ncus", index: 0, field: "annotations", value: {personality: "nervous, greedy"}});
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });

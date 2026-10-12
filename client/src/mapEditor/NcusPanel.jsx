@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import DialogueFields from "./DialogueFields";
+import AnnotationsSection from "../annotations/AnnotationsSection";
 import ImagePicker from "../content/ImagePicker";
 import {MovementFields, MovementTypeSelect, PositionButton} from "./MovementFields";
 
@@ -162,6 +163,7 @@ function NcuRow({
               onNewQuest={ncuQuests.onNewQuest && (() => ncuQuests.onNewQuest(ncu.identifier))}
             />
           )}
+          <AnnotationsSection annotations={ncu.annotations} onChange={(v) => update(index, {annotations: v})} />
         </>
       )}
     </div>

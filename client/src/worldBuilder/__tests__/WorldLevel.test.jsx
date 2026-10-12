@@ -108,4 +108,21 @@ describe("WorldLevel", () => {
 
     expect(result.draft.hasChanges).toBe(false);
   });
+
+  it("shows no annotations for a world without any", () => {
+    renderLevel();
+    expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
+  });
+
+  it("edits annotations the world has", () => {
+    const result = {draft: null};
+    function Harness() {
+      const [draft, setDraft] = useState(() => fixtureDraft((json) => { json["worlds/w/w.json"].annotations = {plan: "Two zones."}; }));
+      result.draft = draft;
+      return <WorldLevel draft={draft} onChange={setDraft} navigate={vi.fn()} repo="o/content" />;
+    }
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText("plan"), {target: {value: "Two zones, one cave."}});
+    expect(worldData(result.draft).annotations).toEqual({plan: "Two zones, one cave."});
+  });
 });

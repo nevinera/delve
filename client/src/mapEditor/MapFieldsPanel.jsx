@@ -1,4 +1,5 @@
 import LeashFields, {DEFAULT_LEASH_RADIUS} from "./LeashFields";
+import AnnotationsSection from "../annotations/AnnotationsSection";
 
 function TextField({value, onChange, placeholder}) {
   return <input type="text" value={value ?? ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)} />;
@@ -55,50 +56,53 @@ export default function MapFieldsPanel({mapData, pixelDimensions, feetFromCells 
   }
 
   return (
-    <table>
-      <tbody>
-        <tr>
-          <th>Identifier</th>
-          <td><TextField value={mapData.identifier} onChange={(v) => setField("identifier", v)} placeholder="gc1-goblin-cave-entrance" /></td>
-        </tr>
-        <tr>
-          <th>Name</th>
-          <td><TextField value={mapData.name} onChange={(v) => setField("name", v)} placeholder="Goblin Cave Entrance" /></td>
-        </tr>
-        <tr>
-          <th>Elevation</th>
-          <td><NumberField value={mapData.elvl} onChange={(v) => setField("elvl", v)} /></td>
-        </tr>
-        <tr>
-          <th>Pixel Dimensions</th>
-          <td>
-            {pixelDimensions
-              ? `${pixelDimensions.width} × ${pixelDimensions.height}`
-              : "(choose an image first)"}
-          </td>
-        </tr>
-        <tr>
-          <th>Feet Dimensions</th>
-          {feetFromCells ? (
-            <td>{mapData.feetDimensions?.width} × {mapData.feetDimensions?.height} (the cells&apos; size)</td>
-          ) : (
-            <td className="map-fields-dimension-pair">
-              <NumberField value={mapData.feetDimensions?.width} onChange={(v) => setFeetDimension("width", v)} />
-              <span>×</span>
-              <NumberField value={mapData.feetDimensions?.height} onChange={(v) => setFeetDimension("height", v)} />
+    <>
+      <table>
+        <tbody>
+          <tr>
+            <th>Identifier</th>
+            <td><TextField value={mapData.identifier} onChange={(v) => setField("identifier", v)} placeholder="gc1-goblin-cave-entrance" /></td>
+          </tr>
+          <tr>
+            <th>Name</th>
+            <td><TextField value={mapData.name} onChange={(v) => setField("name", v)} placeholder="Goblin Cave Entrance" /></td>
+          </tr>
+          <tr>
+            <th>Elevation</th>
+            <td><NumberField value={mapData.elvl} onChange={(v) => setField("elvl", v)} /></td>
+          </tr>
+          <tr>
+            <th>Pixel Dimensions</th>
+            <td>
+              {pixelDimensions
+                ? `${pixelDimensions.width} × ${pixelDimensions.height}`
+                : "(choose an image first)"}
             </td>
-          )}
-        </tr>
-        <tr>
-          <th>Lighting</th>
-          <td><LightingSelect value={mapData.lighting} onChange={(v) => setField("lighting", v)} /></td>
-        </tr>
-        <LeashFields
-          leashRadius={mapData.leashRadius} hardLeash={mapData.hardLeash}
-          onChange={(fields) => Object.entries(fields).forEach(([field, value]) => setField(field, value))}
-          inheritLabel={{radius: `${DEFAULT_LEASH_RADIUS} (default)`, hard: "Default (off)"}}
-        />
-      </tbody>
-    </table>
+          </tr>
+          <tr>
+            <th>Feet Dimensions</th>
+            {feetFromCells ? (
+              <td>{mapData.feetDimensions?.width} × {mapData.feetDimensions?.height} (the cells&apos; size)</td>
+            ) : (
+              <td className="map-fields-dimension-pair">
+                <NumberField value={mapData.feetDimensions?.width} onChange={(v) => setFeetDimension("width", v)} />
+                <span>×</span>
+                <NumberField value={mapData.feetDimensions?.height} onChange={(v) => setFeetDimension("height", v)} />
+              </td>
+            )}
+          </tr>
+          <tr>
+            <th>Lighting</th>
+            <td><LightingSelect value={mapData.lighting} onChange={(v) => setField("lighting", v)} /></td>
+          </tr>
+          <LeashFields
+            leashRadius={mapData.leashRadius} hardLeash={mapData.hardLeash}
+            onChange={(fields) => Object.entries(fields).forEach(([field, value]) => setField(field, value))}
+            inheritLabel={{radius: `${DEFAULT_LEASH_RADIUS} (default)`, hard: "Default (off)"}}
+          />
+        </tbody>
+      </table>
+      <AnnotationsSection annotations={mapData.annotations} onChange={(v) => setField("annotations", v)} />
+    </>
   );
 }

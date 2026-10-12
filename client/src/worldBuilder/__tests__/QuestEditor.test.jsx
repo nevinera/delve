@@ -107,4 +107,21 @@ describe("QuestEditor", () => {
     expect(questData(result.draft, "rat-hunt").rewards).toEqual([{zone: "forest", item: "rat-tail"}]);
     expect(zoneData(result.draft, "forest").items).toHaveProperty("rat-tail");
   });
+
+  it("shows no annotations for a quest without any", () => {
+    renderEditor("rat-hunt");
+    expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
+  });
+
+  it("edits annotations a quest has", () => {
+    const result = {draft: null};
+    function Harness() {
+      const [current, setCurrent] = useState(() => questDraft().write("worlds/w/quests.json", [quest("rat-hunt", {annotations: {plan: "The first kill quest."}})]));
+      result.draft = current;
+      return <QuestEditor draft={current} quest="rat-hunt" onChange={setCurrent} onOpenQuest={() => {}} onClose={() => {}} />;
+    }
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText("plan"), {target: {value: "The first quest."}});
+    expect(questData(result.draft, "rat-hunt").annotations).toEqual({plan: "The first quest."});
+  });
 });

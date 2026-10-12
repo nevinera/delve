@@ -1,11 +1,13 @@
 import {useEffect, useRef} from "react";
 import {placeColor} from "./PlaceShapes";
+import AnnotationsSection from "../annotations/AnnotationsSection";
 
 // The Places tab's list: each of the map's places (see docs/schema/map.md
-// #place) with its name, description, tags and annotations, to read.
-// Places are written by the generator, Auto Barriers (Map tab) and
-// tooling, not here. Selecting one (here or on the map) opens it.
-export default function PlacesPanel({places, selectedIndex, onSelect, onHover}) {
+// #place) with its name, description and tags, to read, and its
+// annotations, to edit (onAnnotate(index, annotations)). Places are written
+// by the generator, Auto Barriers (Map tab) and tooling, not here.
+// Selecting one (here or on the map) opens it.
+export default function PlacesPanel({places, selectedIndex, onSelect, onHover, onAnnotate}) {
   const selectedRef = useRef(null);
   useEffect(() => {
     selectedRef.current?.scrollIntoView?.({block: "nearest"});
@@ -23,7 +25,7 @@ export default function PlacesPanel({places, selectedIndex, onSelect, onHover}) 
       )}
       {places.map((place, i) => {
         const open = selectedIndex === i;
-        const annotations = Object.entries(place.annotations ?? {});
+        const annotated = Object.keys(place.annotations ?? {}).length > 0;
         return (
           <div
             key={place.identifier} ref={open ? selectedRef : null}
@@ -46,17 +48,8 @@ export default function PlacesPanel({places, selectedIndex, onSelect, onHover}) 
                   <div className="map-place-tags">{place.tags.map((tag) => <span key={tag} className="map-place-tag">{tag}</span>)}</div>
                 )}
                 {place.description && <p className="map-place-description">{place.description}</p>}
-                {annotations.length > 0 && (
-                  <dl className="map-place-annotations">
-                    {annotations.map(([key, text]) => (
-                      <div key={key}>
-                        <dt>{key}</dt>
-                        <dd>{text}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {!place.tags?.length && !place.description && annotations.length === 0 && (
+                <AnnotationsSection annotations={place.annotations} onChange={(v) => onAnnotate(i, v)} />
+                {!place.tags?.length && !place.description && !annotated && (
                   <p className="map-sidebar-hint">No tags, description or annotations.</p>
                 )}
               </div>

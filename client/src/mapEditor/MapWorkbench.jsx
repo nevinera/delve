@@ -757,7 +757,10 @@ export default function MapWorkbench({
             />
           </>
         ) : tab === "places" ? (
-          <PlacesPanel places={mapData.places ?? []} selectedIndex={selectedPlaceIndex} onSelect={setSelectedPlaceIndex} onHover={setHoveredPlaceIndex} />
+          <PlacesPanel
+            places={mapData.places ?? []} selectedIndex={selectedPlaceIndex} onSelect={setSelectedPlaceIndex} onHover={setHoveredPlaceIndex}
+            onAnnotate={(index, value) => dispatch({type: "UPDATE_ENTRY_FIELD", section: "places", index, field: "annotations", value})}
+          />
         ) : tab === "units" ? (
           <UnitsTab
             units={mapData.units}
