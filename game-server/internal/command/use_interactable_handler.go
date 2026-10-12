@@ -44,6 +44,8 @@ func (UseInteractableHandler) Handle(unitID uuid.UUID, payload CommandPayload, z
 		Interactable: &interactable,
 		StartedAt:    now,
 		EndsAt:       now.Add(time.Duration(seconds * float64(time.Second))),
+		StartX:       unit.Position.X,
+		StartY:       unit.Position.Y,
 	}
 	return nil
 }

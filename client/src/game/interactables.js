@@ -9,18 +9,24 @@ export const USE_RANGE = 10;
 // {identifier: "available" | "used" | "hidden"} for the zone's
 // interactables ({identifier: config}): available to a player with an
 // active use objective in this zone listing it that they haven't used it
-// for yet; otherwise as its whenUnavailable says (hidden by default).
+// for yet; "used" once they have, if its whenUnavailable is "used" (and it
+// has a usedImageUrl); otherwise hidden, as it is to anyone without such an
+// objective.
 export function interactableStates(interactables, activeQuests, zoneIdentifier) {
   const wanted = new Set();
+  const done = new Set();
   for (const quest of Object.values(activeQuests ?? {})) {
     for (const {objective, used = [], count, required} of quest.objectives ?? []) {
-      if (objective?.type !== "use" || objective.zone !== zoneIdentifier || count >= required) continue;
-      for (const identifier of objective.interactables ?? []) if (!used.includes(identifier)) wanted.add(identifier);
+      if (objective?.type !== "use" || objective.zone !== zoneIdentifier) continue;
+      for (const identifier of objective.interactables ?? []) {
+        if (used.includes(identifier)) done.add(identifier);
+        else if (count < required) wanted.add(identifier);
+      }
     }
   }
   return Object.fromEntries(Object.entries(interactables ?? {}).map(([identifier, config]) => [
     identifier,
-    wanted.has(identifier) ? "available" : config.whenUnavailable === "used" && config.usedImageUrl ? "used" : "hidden",
+    wanted.has(identifier) ? "available" : done.has(identifier) && config.whenUnavailable === "used" && config.usedImageUrl ? "used" : "hidden",
   ]));
 }
 

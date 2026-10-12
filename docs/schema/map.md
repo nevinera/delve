@@ -217,16 +217,17 @@ highlighted on hover or in range.
 Each player uses it for themselves, and it does nothing outside a quest that lists it. To a player
 with an active `use` objective that lists it, and who hasn't used it yet, it's **available**: drawn
 from `imageUrl`, and used by right-clicking it within 10 feet of its edge. That takes `useTime`
-seconds, with a cast bar, under the rules of a power's cast: moving cancels it, and a landed hit
-pushes it back. To anyone else it's drawn as `whenUnavailable` says.
+seconds, with a cast bar, under the rules of a power's cast: moving (more than half a foot)
+cancels it, and a landed hit pushes it back. Once they've used it, while that quest is active,
+it's drawn as `whenUnavailable` says; to anyone else it's hidden.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `identifier` | string | yes | | Unique among the zone's interactables. |
 | `name` | string | yes | | Shown on hover and in the cast bar. |
 | `imageUrl` | string | yes | | A transparent-background image, relative to the file it's written in. |
-| `usedImageUrl` | string | no | | Drawn when it's unavailable and `whenUnavailable` is `used` (a cut snare). |
-| `whenUnavailable` | string | no | `hidden` | `hidden` (not drawn) or `used` (drawn from `usedImageUrl`, which it then needs). |
+| `usedImageUrl` | string | no | | Drawn once the player has used it, when `whenUnavailable` is `used` (a cut snare). |
+| `whenUnavailable` | string | no | `hidden` | After using it: `hidden` (not drawn) or `used` (drawn from `usedImageUrl`, which it then needs). |
 | `size` | object | yes | | `{width, height}` in feet, each 0.5 to 40: the image's size, centered on `position`. |
 | `position` | Position | yes | | Its middle, and its turn (`angle`). |
 | `useTime` | number | no | `1` | Seconds to use it, 0 to 30; 0 is instant. |

@@ -390,6 +390,9 @@ type CastState struct {
 	TargetID  *uuid.UUID // snapshot of unit.Target at cast start; nil for self-only powers
 	StartedAt time.Time
 	EndsAt    time.Time
+	// StartX/StartY are where the unit stood when the cast began: moving
+	// further than command.CastMoveTolerance from there cancels it.
+	StartX, StartY float64
 
 	// PushbackHits counts how many times a landed hit has extended EndsAt -
 	// see command.ApplyCastPushback.

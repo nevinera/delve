@@ -20,12 +20,17 @@ describe("interactableStates", () => {
   });
 
   it("hides them all with no quest wanting them, or one in another zone, or a finished objective", () => {
-    const none = {"snare-1": "hidden", "snare-2": "used", "snare-3": "hidden", "totem-1": "hidden"};
+    const none = {"snare-1": "hidden", "snare-2": "hidden", "snare-3": "hidden", "totem-1": "hidden"};
     expect(interactableStates(interactables, {}, "hills")).toEqual(none);
     expect(interactableStates(interactables, {q: quest([use(["snare-1"], [], {zone: "woods"})])}, "hills")).toEqual(none);
     const done = {...use(["snare-1"], []), count: 1};
     expect(interactableStates(interactables, {q: quest([done])}, "hills")).toEqual(none);
     expect(interactableStates(interactables, {q: quest([{objective: {type: "kill", zone: "hills"}, count: 0, required: 1}])}, "hills")).toEqual(none);
+  });
+
+  it("shows the used image only for ones this player used, while the quest is active", () => {
+    const finished = use(["snare-1", "snare-2"], ["snare-1", "snare-2"]);
+    expect(interactableStates(interactables, {q: quest([finished])}, "hills")).toMatchObject({"snare-1": "hidden", "snare-2": "used"});
   });
 });
 
