@@ -2,8 +2,10 @@
 // a zone in layers (see plans/places.md), instead of the raw maps. Each map
 // is a graph of its places (see docs/schema/map.md#place), adjacent where
 // open ground passes from one to the other; the zone is a graph of maps,
-// through its zoneLinks, each end saying which place it opens into. Pure;
-// bin/zone-outline prints it.
+// through its zoneLinks, each end saying which place it opens into. The
+// zone's, unit types', maps', places', units' and NCUs' annotations come
+// along (see docs/schema/common.md#annotations). Pure; bin/zone-outline
+// prints it.
 import {computeMapFill} from "../game/mapFill";
 import {hasLineOfSight} from "../game/collision";
 
@@ -24,8 +26,8 @@ export function outlineZone(zone) {
   const placeOf = ({map, connection}) => byId.get(map)?.connections.find((c) => c.identifier === connection)?.place ?? null;
   const end = (ref) => compact({map: ref.map, connection: ref.connection, place: placeOf(ref)});
   return compact({
-    zone: compact({name: zone.name, description: zone.description, elvl: zone.elvl, private: zone.private}),
-    unitTypes: Object.fromEntries(Object.entries(zone.unitTypes ?? {}).map(([key, type]) => [key, type?.$ref ? {ref: type.$ref} : compact({name: type.name, description: type.description, maxHP: type.maxHP, dps: type.dps})])),
+    zone: compact({name: zone.name, description: zone.description, elvl: zone.elvl, private: zone.private, annotations: notes(zone.annotations)}),
+    unitTypes: Object.fromEntries(Object.entries(zone.unitTypes ?? {}).map(([key, type]) => [key, type?.$ref ? {ref: type.$ref} : compact({name: type.name, description: type.description, maxHP: type.maxHP, dps: type.dps, annotations: notes(type.annotations)})])),
     maps,
     links: (zone.zoneLinks ?? []).map((link) => compact({a: end(link.connectionA), b: end(link.connectionB), oneWay: link.oneWay || undefined, requiredKey: link.requiredKey ?? undefined})),
     entryPoints: zone.entryPoints && Object.keys(zone.entryPoints),
@@ -35,12 +37,15 @@ export function outlineZone(zone) {
 
 // A map's places, each with its open ground's area (square feet), the
 // places next to it, and the units and NCUs in it; its connections, each
-// with the place it opens into; and the open ground in no place.
+// with the place it opens into; its annotated units and NCUs, each with
+// the place it's in; and the open ground in no place.
 export function outlineMap(map) {
   const places = map.places ?? [];
   const {width, height} = map.feetDimensions ?? {};
-  const out = compact({identifier: map.identifier, name: map.name, elvl: map.elvl, size: width && height ? {width: round(width), height: round(height)} : undefined, theme: map.cellMap?.theme, units: counts(map.units)});
-  if (!width || !height) return {...out, places: places.map(describe), connections: (map.connections ?? []).map(({identifier, type}) => ({identifier, type, place: null}))};
+  const out = compact({identifier: map.identifier, name: map.name, elvl: map.elvl, size: width && height ? {width: round(width), height: round(height)} : undefined, theme: map.cellMap?.theme, units: counts(map.units), annotations: notes(map.annotations)});
+  if (!width || !height) {
+    return compact({...out, places: places.map(describe), connections: (map.connections ?? []).map(({identifier, type}) => ({identifier, type, place: null})), annotated: annotated(map, () => null)});
+  }
 
   const open = openGround(map);
   const sizes = places.map((p) => polygonArea(p.polygon));
@@ -133,8 +138,20 @@ export function outlineMap(map) {
       const at = c.type === "line" && c.start && c.end ? {x: (c.start.x + c.end.x) / 2, y: (c.start.y + c.end.y) / 2} : c.location ?? c.position;
       return {identifier: c.identifier, type: c.type, place: at ? nearest(at.x, at.y) : null};
     }),
+    ...compact({annotated: annotated(map, (p) => (p ? nearest(p.x, p.y) : null))}),
     ...(places.length && unplaced > SLIVERS * (unplaced + area.reduce((a, b) => a + b, 0)) ? {unplacedArea: Math.round(unplaced)} : {}),
   };
+}
+
+// The map's units and NCUs that have annotations, each with the place it's
+// in (placeAt(position)), or undefined for none.
+function annotated(map, placeAt) {
+  const list = [
+    ...(map.units ?? []).map((u) => ({kind: "unit", identifier: u.identifier, unitType: u.unitType, position: u.position, annotations: notes(u.annotations)})),
+    ...(map.ncus ?? []).map((n) => ({kind: "ncu", identifier: n.identifier, name: n.name, position: n.position, annotations: notes(n.annotations)})),
+  ].filter((entry) => entry.annotations);
+  if (!list.length) return undefined;
+  return list.map(({position, ...entry}) => compact({...entry, place: placeAt(position)}));
 }
 
 // A short text form of the outline, for reading or pasting into a prompt.
@@ -143,12 +160,19 @@ export function outlineText(outline) {
   const {zone} = outline;
   lines.push(`Zone: ${zone.name ?? "(unnamed)"}${zone.elvl !== undefined ? `, elvl ${zone.elvl}` : ""}${zone.private ? ", private" : ""}`);
   if (zone.description) lines.push(`  ${zone.description}`);
+  noteLines(lines, zone.annotations, "  ");
   const types = Object.entries(outline.unitTypes ?? {});
   if (types.length) lines.push(`Unit types: ${types.map(([key, t]) => (t.name ? `${key} (${t.name})` : key)).join(", ")}`);
+  for (const [key, type] of types) {
+    if (!type.annotations) continue;
+    lines.push(`  ${key}:`);
+    noteLines(lines, type.annotations, "    ");
+  }
   for (const map of outline.maps) {
     lines.push("");
     const size = map.size ? `, ${map.size.width}x${map.size.height} ft` : "";
     lines.push(`Map ${map.identifier}${map.name ? ` "${map.name}"` : ""}${size}${map.theme ? `, ${map.theme}` : ""}`);
+    noteLines(lines, map.annotations, "  ");
     if (map.units) lines.push(`  units: ${unitList(map.units)}`);
     if (!map.places.length) lines.push("  (no places)");
     for (const place of map.places) {
@@ -161,8 +185,10 @@ export function outlineText(outline) {
       if (exits.length) lines.push(`    connections: ${exits.join(", ")}`);
       if (place.units) lines.push(`    units: ${unitList(place.units)}`);
       if (place.ncus) lines.push(`    ncus: ${place.ncus.join(", ")}`);
-      for (const [key, text] of Object.entries(place.annotations ?? {})) lines.push(`    ${key}: ${text}`);
+      noteLines(lines, place.annotations, "    ");
+      for (const entry of (map.annotated ?? []).filter((e) => e.place === place.identifier)) annotatedLines(lines, entry, "    ");
     }
+    for (const entry of (map.annotated ?? []).filter((e) => !e.place)) annotatedLines(lines, entry, "  ");
     const loose = map.connections.filter((c) => !c.place).map((c) => c.identifier);
     if (loose.length && map.places.length) lines.push(`  connections in no place: ${loose.join(", ")}`);
     if (map.unplacedArea) lines.push(`  open ground in no place: ${map.unplacedArea} sq ft`);
@@ -179,6 +205,22 @@ export function outlineText(outline) {
 }
 
 const unitList = (units) => Object.entries(units).map(([type, n]) => `${type} x${n}`).join(", ");
+
+// An annotation per line, `key: text`, a long text's later lines indented
+// under it.
+function noteLines(lines, annotations, indent) {
+  for (const [key, text] of Object.entries(annotations ?? {})) {
+    const [first, ...rest] = text.split("\n");
+    lines.push(`${indent}${key}: ${first}`);
+    for (const line of rest) lines.push(`${indent}  ${line}`);
+  }
+}
+
+function annotatedLines(lines, entry, indent) {
+  const label = entry.kind === "unit" ? `unit ${entry.identifier} (${entry.unitType})` : `ncu ${entry.identifier}${entry.name ? ` "${entry.name}"` : ""}`;
+  lines.push(`${indent}${label}:`);
+  noteLines(lines, entry.annotations, `${indent}  `);
+}
 
 // ---- Geometry ----
 
@@ -233,8 +275,11 @@ function counts(units) {
 }
 
 function describe({identifier, name, description, tags, annotations}) {
-  return compact({identifier, name, description, tags: tags?.length ? tags : undefined, annotations: annotations && Object.keys(annotations).length ? annotations : undefined});
+  return compact({identifier, name, description, tags: tags?.length ? tags : undefined, annotations: notes(annotations)});
 }
+
+// Annotations, or undefined for none.
+const notes = (annotations) => (annotations && Object.keys(annotations).length ? annotations : undefined);
 
 function compact(object) {
   return Object.fromEntries(Object.entries(object).filter(([, v]) => v !== undefined && v !== null));

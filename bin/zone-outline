@@ -19,7 +19,8 @@ const USAGE = `Usage: bin/zone-outline [flags] ZONE.json
   -h, --help
 
 Each map's places come with their open ground's area (square feet), the places next to
-them, their connections and the units in them; links say which place each end opens into.`;
+them, their connections and the units in them; links say which place each end opens into.
+The zone's, unit types', maps', places', units' and NCUs' annotations come along.`;
 
 const {values, positionals} = parseArgs({allowPositionals: true, options: {
   json: {type: "boolean", default: false},
