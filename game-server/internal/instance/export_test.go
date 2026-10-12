@@ -274,3 +274,9 @@ func (inst *Instance) CollectQuestEventsForTest(prev, curr *instancestate.Instan
 func (inst *Instance) TickQuestTimersForTest(ctx context.Context, now time.Time) {
 	inst.tickQuestTimers(ctx, now)
 }
+
+// CastingNameForTest is the cast bar's label for a cast (castingJSON's).
+func CastingNameForTest(c *instancestate.CastState) string {
+	name, _, _ := castingJSON(c)
+	return *name
+}

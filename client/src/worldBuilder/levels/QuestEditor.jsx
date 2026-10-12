@@ -10,9 +10,9 @@ import {
   renameQuest, updateQuest, worldQuests,
 } from "../state/questOps";
 
-const OBJECTIVE_TYPES = ["talk", "kill", "reach"];
+const OBJECTIVE_TYPES = ["talk", "kill", "reach", "use"];
 // A new or re-zoned objective's blank required fields, by type.
-const TYPE_FIELDS = {talk: {ncu: ""}, kill: {unitType: ""}, reach: {}};
+const TYPE_FIELDS = {talk: {ncu: ""}, kill: {unitType: ""}, reach: {}, use: {interactables: []}};
 
 // Drops unset fields (null or undefined), so the quests file only holds
 // what's set. A blank required field stays, for Validate to point at.
@@ -40,6 +40,30 @@ const zoneOf = (choices, key) => choices.find((zone) => zone.key === key);
 const ncuOptions = (zone, map = null) => (zone?.maps ?? [])
   .filter((m) => !map || m.key === map)
   .flatMap((m) => m.ncus.map((ncu) => ({value: ncu.identifier, label: map ? ncu.name : `${ncu.name} (${m.name})`})));
+
+const interactableOptions = (zone, map = null) => (zone?.maps ?? [])
+  .filter((m) => !map || m.key === map)
+  .flatMap((m) => (m.interactables ?? []).map((i) => ({value: i.identifier, label: map ? `${i.identifier} (${i.name})` : `${i.identifier} (${i.name}, ${m.name})`})));
+
+// A use objective's interactables: a box per one in the zone (or its map),
+// in the order ticked. Ones listed but no longer there stay, for Validate.
+function InteractableList({value, zone, map, onChange}) {
+  const options = interactableOptions(zone, map);
+  const known = new Set(options.map((o) => o.value));
+  const all = [...options, ...value.filter((id) => !known.has(id)).map((id) => ({value: id, label: `${id} (missing)`}))];
+  if (all.length === 0) return <span className="quest-pair">No interactables {map ? "on this map" : "in this zone"}.</span>;
+  return (
+    <span className="quest-pair quest-interactables">
+      {all.map((o) => (
+        <label key={o.value}>
+          <input type="checkbox" checked={value.includes(o.value)}
+            onChange={(e) => onChange(e.target.checked ? [...value, o.value] : value.filter((id) => id !== o.value))} />
+          {o.label}
+        </label>
+      ))}
+    </span>
+  );
+}
 
 // A zone, then an NCU in it: {zone, ncu}.
 function NcuPicker({value, choices, onChange}) {
@@ -107,6 +131,10 @@ function ObjectiveFields({objective, choices, onChange, onRemove}) {
         <span className="quest-pair">
           <Choice value={objective.ncu} options={ncuOptions(zone, objective.map)} blank="NCU…" onChange={(ncu) => set({ncu: ncu ?? ""})} />
         </span>
+      )}
+      {objective.type === "use" && (
+        <InteractableList value={objective.interactables ?? []} zone={zone} map={objective.map}
+          onChange={(interactables) => set({interactables})} />
       )}
       {objective.type === "kill" && (
         <span className="quest-pair">

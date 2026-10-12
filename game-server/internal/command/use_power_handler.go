@@ -51,6 +51,8 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 			TargetID:  unit.Target,
 			StartedAt: now,
 			EndsAt:    now.Add(time.Duration(castTime * float64(time.Second))),
+			StartX:    unit.Position.X,
+			StartY:    unit.Position.Y,
 		}
 		commitCooldowns(unit, p.Power, now)
 		return nil

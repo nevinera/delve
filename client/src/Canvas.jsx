@@ -7,6 +7,8 @@ const Canvas = forwardRef(function Canvas({
   units,
   ncus,
   questNcus,
+  activeQuests,
+  zoneIdentifier,
   selfIdentifier,
   characterTokenUrl,
   movementKeysRef,
@@ -21,6 +23,7 @@ const Canvas = forwardRef(function Canvas({
   onUnitRightClick,
   onUnitHover,
   onNcuRightClick,
+  onInteractableRightClick,
   targetId,
   attacking,
   lootableUnitIds,
@@ -33,12 +36,13 @@ const Canvas = forwardRef(function Canvas({
   useImperativeHandle(ref, () => ({
     isInView: (mapX, mapY) => managerRef.current?.isInView(mapX, mapY) ?? true,
     ncuInfo: (zoneNcuIdentifier) => managerRef.current?.ncuInfo(zoneNcuIdentifier) ?? null,
+    interactableInfo: (identifier) => managerRef.current?.interactableInfo(identifier) ?? null,
     playGraphicEffects: (effects, positions, baseUrl, travelOverrideMs) =>
       managerRef.current?.playGraphicEffects(effects, positions, baseUrl, travelOverrideMs),
   }));
 
   useEffect(() => {
-    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onCanvasResize, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onNcuRightClick });
+    const manager = new SceneManager(canvasRef.current, { movementKeysRef, turnKeysRef, cameraStickRef, cameraSensitivityRef, onFacingChange, onCanvasResize, onSelfPosition, positionForMoveSeq, onUnitClick, onUnitRightClick, onUnitHover, onNcuRightClick, onInteractableRightClick });
     managerRef.current = manager;
     manager.handleResize();
     manager.startLoop();
@@ -65,6 +69,10 @@ const Canvas = forwardRef(function Canvas({
   useEffect(() => {
     managerRef.current?.setNcuQuestMarkers(questNcus ?? new Set());
   }, [questNcus]);
+
+  useEffect(() => {
+    managerRef.current?.setInteractableQuests(activeQuests ?? {}, zoneIdentifier);
+  }, [activeQuests, zoneIdentifier]);
 
   useEffect(() => {
     managerRef.current?.setTarget(targetId);

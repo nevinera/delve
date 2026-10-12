@@ -337,6 +337,24 @@ func TestMoveHandler_WithPositionUnchangedDoesNotCancelCast(t *testing.T) {
 	assert.NotNil(t, state.Units[unitID].Casting)
 }
 
+// A stopped client settling onto the server's position sends tiny moves;
+// only drifting past CastMoveTolerance from the cast's start cancels it.
+func TestMoveHandler_SmallDriftDoesNotCancelCast(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := castingUnit(unitID)
+	state.Units[unitID].Speed = 20.0
+
+	for _, x := range []float64{0.1, 0.25, 0.4} {
+		state.Units[unitID].LastMoveAt = time.Now().Add(-100 * time.Millisecond)
+		require.NoError(t, h.Handle(unitID, command.MovePayload{X: ptr(x), Y: ptr(0.0)}, instanceconfig.Zone{}, state))
+		assert.NotNil(t, state.Units[unitID].Casting, "at x=%v", x)
+	}
+	state.Units[unitID].LastMoveAt = time.Now().Add(-100 * time.Millisecond)
+	require.NoError(t, h.Handle(unitID, command.MovePayload{X: ptr(0.6), Y: ptr(0.0)}, instanceconfig.Zone{}, state))
+	assert.Nil(t, state.Units[unitID].Casting)
+}
+
 func TestMoveHandler_ExactDiagonalDistance(t *testing.T) {
 	// Sanity check on the distance math itself, independent of clamping.
 	h := command.MoveHandler{}

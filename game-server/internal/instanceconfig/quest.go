@@ -38,6 +38,8 @@ type QuestObjective struct {
 	UnitType string `json:"unitType,omitempty"`
 	Count    int    `json:"count,omitempty"`
 	Map      string `json:"map,omitempty"`
+	// Interactables are a use objective's: each, once (not a count).
+	Interactables []string `json:"interactables,omitempty"`
 }
 
 // QuestReward is an item granted on completing a quest.
@@ -68,6 +70,7 @@ type ActiveObjective struct {
 	Objective QuestObjective `json:"objective"`
 	Count     int            `json:"count"`
 	Required  int            `json:"required"`
+	Used      []string       `json:"used,omitempty"` // a use objective's interactables used
 }
 
 // TimerSeconds is the quest's time limit in seconds ("90s", "5m"), or 0

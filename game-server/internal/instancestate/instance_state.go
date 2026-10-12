@@ -63,6 +63,14 @@ type Talk struct {
 	TurnInQuest   string
 }
 
+// Use is a player finishing using an interactable (see
+// command.UseInteractableHandler), for its quest objectives.
+type Use struct {
+	UnitID       uuid.UUID
+	Interactable string // its identifier
+	Map          string
+}
+
 // InstanceState is the full runtime state of one zone instance.
 // It is pure data: the tick system reads and writes it; no behavior lives here.
 type InstanceState struct {
@@ -75,6 +83,7 @@ type InstanceState struct {
 	PendingOwnershipUpdates []OwnershipUpdate              // drained each tick to update slot OwnedZoneItems
 	PendingCombatEvents     []CombatEvent                  // drained each tick into delta message; appended by command handlers
 	PendingTalks            []Talk                         // drained each tick; conversations started, quests accepted and turned in
+	PendingUses             []Use                          // drained each tick; interactables used
 	PendingImpacts          []PendingImpact                // projectile effects in flight; resolved once each lands
 }
 

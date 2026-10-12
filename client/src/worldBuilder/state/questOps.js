@@ -167,7 +167,7 @@ export function questGraph(quests) {
 }
 
 // What the quest editor's pickers offer, from the draft: each zone (key,
-// name) with its maps (key, name, NCUs, units) and unit types. (Rewards
+// name) with its maps (key, name, NCUs, units, interactables) and unit types. (Rewards
 // can be any of the world's items; see itemOps.addItemToZone.)
 export function questChoices(draft) {
   const maps = worldMaps(draft);
@@ -181,6 +181,7 @@ export function questChoices(draft) {
         name: mapFileData.name || map,
         ncus: (mapFileData.ncus ?? []).map((ncu) => ({identifier: ncu.identifier, name: ncu.name || ncu.identifier})),
         units: (mapFileData.units ?? []).map((unit) => ({identifier: unit.identifier, unitType: unit.unitType})),
+        interactables: (mapFileData.interactables ?? []).map((i) => ({identifier: i.identifier, name: i.name || i.identifier})),
       })),
       unitTypes: Object.keys(data.unitTypes ?? {}).sort().map((key) => ({key, name: unitTypeData(draft, key)?.name || key})),
     };

@@ -117,12 +117,17 @@ func TestQuestProgress(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	timer := 30
-	quest, err := railsclient.New(srv.URL, "t").QuestProgress("42", "rat-hunt", map[string]int{"abc": 2}, &timer)
+	quest, err := railsclient.New(srv.URL, "t").QuestProgress("42", "rat-hunt", map[string]int{"abc": 2}, nil, &timer)
 	require.NoError(t, err)
 	assert.Equal(t, "rat-hunt", quest.QuestIdentifier)
 	assert.Equal(t, http.MethodPatch, gotMethod)
 	assert.Equal(t, "/internal_api/world_characters/42/quests/rat-hunt", gotPath)
 	assert.Equal(t, map[string]any{"progress": map[string]any{"abc": float64(2)}, "timer_elapsed_seconds": float64(30)}, gotBody)
+
+	gotBody = nil
+	_, err = railsclient.New(srv.URL, "t").QuestProgress("42", "rat-hunt", map[string]int{"def": 1}, map[string][]string{"def": {"snare-1"}}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"progress": map[string]any{"def": float64(1)}, "used": map[string]any{"def": []any{"snare-1"}}}, gotBody)
 }
 
 func TestCompleteQuest(t *testing.T) {

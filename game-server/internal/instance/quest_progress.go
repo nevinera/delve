@@ -26,22 +26,25 @@ var errNotReady = errors.New("that quest isn't finished yet")
 var errNotTurnedInHere = errors.New("that quest isn't turned in here")
 
 // questEvent is something a player did that can meet an objective: talked
-// to an NCU, killed a unit (one they tagged), or reached a map.
+// to an NCU, killed a unit (one they tagged), reached a map, or used an
+// interactable.
 type questEvent struct {
-	UnitID   uuid.UUID // the player's unit
-	Type     string    // "talk", "kill" or "reach", as objective types
-	NCU      string
-	Unit     string
-	UnitType string
-	Map      string
+	UnitID       uuid.UUID // the player's unit
+	Type         string    // "talk", "kill", "reach" or "use", as objective types
+	NCU          string
+	Unit         string
+	UnitType     string
+	Map          string
+	Interactable string
 }
 
 // questProgressMsg is quest-progress: one objective's new count.
 type questProgressMsg struct {
 	downBase
-	Quest     string `json:"quest"`
-	Objective string `json:"objective"` // its hash
-	Count     int    `json:"count"`
+	Quest     string   `json:"quest"`
+	Objective string   `json:"objective"` // its hash
+	Count     int      `json:"count"`
+	Used      []string `json:"used,omitempty"` // a use objective's interactables used
 }
 
 // questCompletedMsg is quest-completed: what completing it granted.
@@ -61,6 +64,8 @@ func (inst *Instance) matches(objective instanceconfig.QuestObjective, event que
 		return objective.NCU == event.NCU
 	case "reach":
 		return objective.Map == "" || objective.Map == event.Map
+	case "use":
+		return (objective.Map == "" || objective.Map == event.Map) && slices.Contains(objective.Interactables, event.Interactable)
 	case "kill":
 		if objective.Map != "" && objective.Map != event.Map {
 			return false
@@ -74,8 +79,8 @@ func (inst *Instance) matches(objective instanceconfig.QuestObjective, event que
 }
 
 // collectQuestEvents finds this tick's quest events: conversations started,
-// kills (credited to everyone who can loot them), and players arriving on
-// a map (including spawning). Tick loop only.
+// kills (credited to everyone who can loot them), players arriving on a
+// map (including spawning), and interactables used. Tick loop only.
 func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState) []questEvent {
 	if len(inst.Quests) == 0 {
 		return nil
@@ -85,6 +90,9 @@ func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState
 		if talk.AcceptQuest == "" && talk.TurnInQuest == "" {
 			events = append(events, questEvent{UnitID: talk.UnitID, Type: "talk", NCU: talk.NCUIdentifier})
 		}
+	}
+	for _, use := range curr.PendingUses {
+		events = append(events, questEvent{UnitID: use.UnitID, Type: "use", Interactable: use.Interactable, Map: use.Map})
 	}
 	for id, unit := range curr.Units {
 		before := prev.Units[id]
@@ -129,22 +137,31 @@ func (inst *Instance) ApplyQuestEvents(ctx context.Context, events []questEvent)
 
 func (inst *Instance) advanceQuest(ctx context.Context, slotID uuid.UUID, worldCharacterID string, active instanceconfig.ActiveQuest, event questEvent) error {
 	progress := map[string]int{}
+	used := map[string][]string{}
 	for _, objective := range active.Objectives {
-		if objective.Count < objective.Required && inst.matches(objective.Objective, event) {
-			progress[objective.Hash] = objective.Count + 1
+		if objective.Count >= objective.Required || !inst.matches(objective.Objective, event) {
+			continue
 		}
+		if event.Type == "use" {
+			// Each interactable counts once.
+			if slices.Contains(objective.Used, event.Interactable) {
+				continue
+			}
+			used[objective.Hash] = append(slices.Clone(objective.Used), event.Interactable)
+		}
+		progress[objective.Hash] = objective.Count + 1
 	}
 	if len(progress) == 0 {
 		return nil
 	}
-	updated, err := inst.RailsClient.QuestProgress(worldCharacterID, active.QuestIdentifier, progress, nil)
+	updated, err := inst.RailsClient.QuestProgress(worldCharacterID, active.QuestIdentifier, progress, used, nil)
 	if err != nil {
 		return err
 	}
 	inst.setActiveQuest(slotID, updated)
 	for _, hash := range slices.Sorted(maps.Keys(progress)) {
 		inst.sendJSONToSlot(slotID, questProgressMsg{
-			downBase: inst.downBase("quest-progress"), Quest: active.QuestIdentifier, Objective: hash, Count: progress[hash],
+			downBase: inst.downBase("quest-progress"), Quest: active.QuestIdentifier, Objective: hash, Count: progress[hash], Used: used[hash],
 		})
 	}
 	if quest, ok := inst.quest(active.QuestIdentifier); ok && quest.TurnIn == nil && updated.Ready() {
@@ -328,7 +345,7 @@ func (inst *Instance) saveQuestTimer(ctx context.Context, timer questTimer) {
 	if !inst.questActive(timer.slotID, timer.quest) {
 		return
 	}
-	if _, err := inst.RailsClient.QuestProgress(timer.worldCharacterID, timer.quest, map[string]int{}, &timer.elapsed); err != nil {
+	if _, err := inst.RailsClient.QuestProgress(timer.worldCharacterID, timer.quest, map[string]int{}, nil, &timer.elapsed); err != nil {
 		slog.WarnContext(ctx, "failed to save quest timer", "error", err, "quest", timer.quest)
 	}
 }

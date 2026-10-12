@@ -14,7 +14,8 @@ const quest = (identifier, fields = {}) => ({
 
 function questDraft() {
   return fixtureDraft()
-    .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle"}, {identifier: "warden", name: "Warden"}]}))
+    .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle"}, {identifier: "warden", name: "Warden"}],
+      interactables: [{identifier: "snare-1", name: "Goblin Snare"}, {identifier: "snare-2", name: "Goblin Snare"}]}))
     .write("worlds/w/quests.json", [
       quest("rat-hunt", {objectives: [{type: "kill", text: "Kill goblins", zone: "forest", unitType: "goblin", count: 3}]}),
       quest("rat-king", {name: "The Rat King", requiresFlags: ["quest/completed/rat-hunt"]}),
@@ -55,6 +56,17 @@ describe("QuestEditor", () => {
     expect(questData(result.draft, "rat-hunt").objectives).toEqual([
       {type: "kill", text: "Kill goblins", zone: "forest", count: 3, unit: "goblin-a"},
     ]);
+  });
+
+  it("switches an objective to use, ticking the zone's interactables", () => {
+    const {result} = renderEditor("rat-hunt");
+    fireEvent.change(screen.getByDisplayValue("kill"), {target: {value: "use"}});
+    expect(questData(result.draft, "rat-hunt").objectives).toEqual([{type: "use", text: "Kill goblins", zone: "forest", interactables: []}]);
+    fireEvent.click(screen.getByLabelText(/^snare-2 /));
+    fireEvent.click(screen.getByLabelText(/^snare-1 /));
+    fireEvent.click(screen.getByLabelText(/^snare-2 /));
+    expect(questData(result.draft, "rat-hunt").objectives[0].interactables).toEqual(["snare-1"]);
+    expect(screen.getByLabelText(/^snare-1 /).closest("label").textContent).toBe("snare-1 (Goblin Snare, Hub)");
   });
 
   it("adds a requirement on another quest", () => {

@@ -286,6 +286,24 @@ RSpec.describe Validators::MapValidator, type: :validator do
       end
     end
 
+    context "interactables" do
+      let(:snare) do
+        {"identifier" => "snare-1", "name" => "Snare", "imageUrl" => "./s.webp", "size" => {"width" => 2, "height" => 2},
+         "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
+      end
+
+      it "accepts a list of interactables" do
+        expect { described_class.validate!(cave_entrance_map.merge("interactables" => [snare])) }.not_to raise_error
+      end
+
+      it "raises when interactables isn't an array, with path context for each one's errors" do
+        expect { described_class.validate!(cave_entrance_map.merge("interactables" => snare)) }
+          .to raise_error(Validators::ValidationError, /interactables must be an array/)
+        expect { described_class.validate!(cave_entrance_map.merge("interactables" => [snare.except("name")])) }
+          .to raise_error(Validators::ValidationError) { |e| expect(e.path).to eq("$.interactables[0].name") }
+      end
+    end
+
     context "ncus" do
       let(:ncu) do
         {"identifier" => "grizzle", "name" => "Grizzle", "tokenImageUrl" => "./g.webp", "tokenRadius" => 2.0,

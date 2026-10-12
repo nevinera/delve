@@ -1,6 +1,7 @@
 package command
 
 import (
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -8,6 +9,19 @@ import (
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
+
+// CastMoveTolerance is how far (feet) a unit can drift from where it began
+// a cast before the move cancels it. Not zero: a stopped client keeps
+// sending its position while it settles onto the server's (scene.js's
+// reconciledTarget), in steps far smaller than any real move.
+const CastMoveTolerance = 0.5
+
+func cancelCastIfMoved(unit *instancestate.UnitState) {
+	cast := unit.Casting
+	if cast != nil && math.Hypot(unit.Position.X-cast.StartX, unit.Position.Y-cast.StartY) > CastMoveTolerance {
+		unit.Casting = nil
+	}
+}
 
 // MoveHandler applies MovePayload commands to a unit's facing and MovementIntent.
 type MoveHandler struct{}
@@ -43,7 +57,7 @@ func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanc
 		unit.MovementIntent = instancestate.MovementIntent{}
 		unit.LastMoveAt = now
 		if unit.Position.X != prevX || unit.Position.Y != prevY {
-			unit.Casting = nil // moving cancels an in-progress cast; a facing-only update does not
+			cancelCastIfMoved(unit) // a facing-only update doesn't
 		}
 		return nil
 	}

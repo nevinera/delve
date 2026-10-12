@@ -87,8 +87,9 @@ func (f *fakeQuestRails) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (f *fakeQuestRails) patch(w http.ResponseWriter, r *http.Request, identifier string) {
 	var body struct {
-		Progress map[string]int `json:"progress"`
-		Timer    *int           `json:"timer_elapsed_seconds"`
+		Progress map[string]int      `json:"progress"`
+		Used     map[string][]string `json:"used"`
+		Timer    *int                `json:"timer_elapsed_seconds"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	quest := f.active[identifier]
@@ -96,6 +97,10 @@ func (f *fakeQuestRails) patch(w http.ResponseWriter, r *http.Request, identifie
 	for i, objective := range quest.Objectives {
 		if count, ok := body.Progress[objective.Hash]; ok {
 			quest.Objectives[i].Count = count
+		}
+		if used, ok := body.Used[objective.Hash]; ok {
+			quest.Objectives[i].Used = used
+			quest.Objectives[i].Count = len(used)
 		}
 	}
 	if body.Timer != nil {

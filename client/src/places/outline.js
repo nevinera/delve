@@ -3,7 +3,8 @@
 // is a graph of its places (see docs/schema/map.md#place), adjacent where
 // open ground passes from one to the other; the zone is a graph of maps,
 // through its zoneLinks, each end saying which place it opens into. The
-// zone's, unit types', maps', places', units' and NCUs' annotations come
+// zone's, unit types', maps', places', units', NCUs' and interactables'
+// annotations come
 // along (see docs/schema/common.md#annotations). Pure; bin/zone-outline
 // prints it.
 import {computeMapFill} from "../game/mapFill";
@@ -40,8 +41,9 @@ export function outlineZone(zone) {
 }
 
 // A map's places, each with its open ground's area (square feet), the
-// places next to it, and the units and NCUs in it; its connections, each
-// with the place it opens into; its annotated units and NCUs, each with
+// places next to it, and the units, NCUs and interactables in it; its
+// connections, each with the place it opens into; its annotated units, NCUs
+// and interactables, each with
 // the place it's in; and the open ground in no place.
 export function outlineMap(map) {
   const places = map.places ?? [];
@@ -145,6 +147,7 @@ export function outlineMap(map) {
 
   const units = tally(map.units, (u) => u.unitType);
   const ncus = tally(map.ncus, (n) => n.identifier);
+  const interactables = tally(map.interactables, (n) => n.identifier);
 
   return {
     ...out,
@@ -157,6 +160,7 @@ export function outlineMap(map) {
       adjacent: [...adjacent[i]].sort((a, b) => a - b).map((j) => places[j].identifier),
       units: Object.keys(units[i]).length ? units[i] : undefined,
       ncus: Object.keys(ncus[i]).length ? Object.keys(ncus[i]) : undefined,
+      interactables: Object.keys(interactables[i]).length ? Object.keys(interactables[i]) : undefined,
     })),
     connections: (map.connections ?? []).map((c) => {
       const at = c.type === "line" && c.start && c.end ? {x: (c.start.x + c.end.x) / 2, y: (c.start.y + c.end.y) / 2} : c.location ?? c.position;
@@ -208,12 +212,13 @@ function cellFeatures(cellMap, height, labelAt, count) {
   return {terrains, trails};
 }
 
-// The map's units and NCUs that have annotations, each with the place it's
+// The map's units, NCUs and interactables that have annotations, each with the place it's
 // in (placeAt(position)), or undefined for none.
 function annotated(map, placeAt) {
   const list = [
     ...(map.units ?? []).map((u) => ({kind: "unit", identifier: u.identifier, unitType: u.unitType, position: u.position, annotations: notes(u.annotations)})),
     ...(map.ncus ?? []).map((n) => ({kind: "ncu", identifier: n.identifier, name: n.name, position: n.position, annotations: notes(n.annotations)})),
+    ...(map.interactables ?? []).map((n) => ({kind: "interactable", identifier: n.identifier, name: n.name, position: n.position, annotations: notes(n.annotations)})),
   ].filter((entry) => entry.annotations);
   if (!list.length) return undefined;
   return list.map(({position, ...entry}) => compact({...entry, place: placeAt(position)}));
@@ -251,6 +256,7 @@ export function outlineText(outline) {
       if (exits.length) lines.push(`    connections: ${exits.join(", ")}`);
       if (place.units) lines.push(`    units: ${unitList(place.units)}`);
       if (place.ncus) lines.push(`    ncus: ${place.ncus.join(", ")}`);
+      if (place.interactables) lines.push(`    interactables: ${place.interactables.join(", ")}`);
       noteLines(lines, place.annotations, "    ");
       for (const entry of (map.annotated ?? []).filter((e) => e.place === place.identifier)) annotatedLines(lines, entry, "    ");
     }
@@ -283,7 +289,7 @@ function noteLines(lines, annotations, indent) {
 }
 
 function annotatedLines(lines, entry, indent) {
-  const label = entry.kind === "unit" ? `unit ${entry.identifier} (${entry.unitType})` : `ncu ${entry.identifier}${entry.name ? ` "${entry.name}"` : ""}`;
+  const label = entry.kind === "unit" ? `unit ${entry.identifier} (${entry.unitType})` : `${entry.kind} ${entry.identifier}${entry.name ? ` "${entry.name}"` : ""}`;
   lines.push(`${indent}${label}:`);
   noteLines(lines, entry.annotations, `${indent}  `);
 }

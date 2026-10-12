@@ -6,7 +6,8 @@ module Validators
     IDENTIFIER_FORMAT = /\A[A-Za-z0-9_-]{1,54}\z/
     TIMER_FORMAT = /\A([1-9]\d*)([sm])\z/
     MAX_TIMER_SECONDS = 60 * 60
-    OBJECTIVE_TYPES = %w[talk kill reach].freeze
+    OBJECTIVE_TYPES = %w[talk kill reach use].freeze
+    MAX_INTERACTABLES = 32
 
     # The timer in seconds, or nil for a malformed one.
     def self.timer_seconds(timer)
@@ -101,7 +102,23 @@ module Validators
       case data["type"]
       when "talk" then require_non_empty_string!(data, "ncu", path: path)
       when "kill" then validate_kill!(data, path: path)
+      when "use" then validate_use!(data, path: path)
       end
+    end
+
+    # The interactables to use, each once: a list, not a count.
+    def validate_use!(data, path:)
+      list = require_array!(data, "interactables", path: path, min: 1)
+      list_path = child_path(path, "interactables")
+      raise ValidationError.new("interactables must have #{MAX_INTERACTABLES} or fewer", path: list_path) if list.length > MAX_INTERACTABLES
+      list.each_with_index { |id, i| validate_use_entry!(list, id, i, path: index_path(list_path, i)) }
+      return unless given?(data, "count")
+      raise ValidationError.new("count isn't used by use objectives (each interactable counts once)", path: child_path(path, "count"))
+    end
+
+    def validate_use_entry!(list, id, i, path:)
+      raise ValidationError.new("must be a non-empty string", path: path) unless id.is_a?(String) && !id.strip.empty?
+      raise ValidationError.new("duplicates an earlier interactable", path: path) if list.first(i).include?(id)
     end
 
     def validate_kill!(data, path:)

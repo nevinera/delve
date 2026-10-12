@@ -13,6 +13,7 @@ type Map struct {
 	FillPoints     []Location      `json:"fillPoints,omitempty"` // marks voids inside the walls as filled - see mapfill
 	Units          []Unit          `json:"units,omitempty"`
 	NCUs           []NCU           `json:"ncus,omitempty"`
+	Interactables  []Interactable  `json:"interactables,omitempty"`
 	Respawn        *RespawnConfig  `json:"respawn,omitempty"`     // overrides the zone's respawn for every unit on this map - see Zone.UnitRespawn
 	LeashRadius    *float64        `json:"leashRadius,omitempty"` // feet; see UnitLeash
 	HardLeash      *bool           `json:"hardLeash,omitempty"`   // see UnitLeash

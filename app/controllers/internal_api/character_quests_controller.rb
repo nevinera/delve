@@ -29,11 +29,12 @@ class InternalApi::CharacterQuestsController < InternalApi::BaseController
     render json: {quest: CharacterQuestJson.call(@quest)}
   end
 
-  # Sets objective counts ({progress: {hash => count}}) and the timer, both
+  # Sets objective counts ({progress: {hash => count}}), use objectives'
+  # used interactables ({used: {hash => [identifier]}}) and the timer, all
   # absolute.
   def update
     CharacterQuest.transaction do
-      @quest.record_progress!(progress_params)
+      @quest.record_progress!(progress_params, used_params)
       @quest.update!(timer_elapsed_seconds: params[:timer_elapsed_seconds]) if params.key?(:timer_elapsed_seconds)
     end
     render json: {quest: CharacterQuestJson.call(@quest.reload)}
@@ -70,6 +71,10 @@ class InternalApi::CharacterQuestsController < InternalApi::BaseController
 
   def progress_params
     params.fetch(:progress, {}).permit!.to_h.transform_values(&:to_i)
+  end
+
+  def used_params
+    params.fetch(:used, {}).permit!.to_h.transform_values { |ids| Array(ids).map(&:to_s) }
   end
 
   def render_unprocessable(err)

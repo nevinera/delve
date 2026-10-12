@@ -139,7 +139,7 @@ Notes for an LLM (and the author), kept between the steps of building a world: t
 and use of a thing at the level it's planned at, and on units, unit types and NCUs their
 personality, backstory and motives. The same shape everywhere it's allowed: [World](world.md),
 [Zone](zone.md), [Map](map.md), [Place](map.md#place), [UnitType](unit_type.md), [Unit](unit.md),
-[Quest](quest.md) and [NCU](ncu.md).
+[Quest](quest.md), [NCU](ncu.md) and [Interactable](map.md#interactable).
 
 An object of up to 32 keys to strings. Keys are lowercase words (a letter, then letters, digits,
 `-` and `_`), at most 40 characters; values are English prose or keyword lines, at most 4000

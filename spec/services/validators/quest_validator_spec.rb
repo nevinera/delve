@@ -137,6 +137,17 @@ RSpec.describe Validators::QuestValidator, type: :validator do
       expect_invalid(/exactly one of unit or unitType/, with_objective(both))
     end
 
+    it "requires a use objective's interactables, each once, and no count" do
+      use = {"type" => "use", "zone" => "goblin-cave"}
+      expect_invalid(/interactables is required/, with_objective(use))
+      expect_invalid(/interactables must have at least 1/, with_objective(use.merge("interactables" => [])))
+      expect_invalid(/duplicates an earlier interactable/, with_objective(use.merge("interactables" => ["a", "a"])))
+      expect_invalid(/must be a non-empty string/, with_objective(use.merge("interactables" => ["a", ""])))
+      expect_invalid(/32 or fewer/, with_objective(use.merge("interactables" => (1..33).map { |i| "s#{i}" })))
+      expect_invalid(/count isn't used by use objectives/, with_objective(use.merge("interactables" => ["a"], "count" => 2)))
+      expect { described_class.validate!(with_objective(use.merge("interactables" => ["a", "b"]))) }.not_to raise_error
+    end
+
     it "rejects a count below 1" do
       expect_invalid(/count must be at least 1/, with_objective("type" => "kill", "zone" => "z", "unitType" => "rat", "count" => 0))
     end

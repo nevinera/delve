@@ -92,6 +92,7 @@ module Validators
       end
       validate_identifier_uniqueness!(maps, "units", "unit", path: path)
       validate_identifier_uniqueness!(maps, "ncus", "ncu", path: path)
+      validate_identifier_uniqueness!(maps, "interactables", "interactable", path: path)
     end
 
     def validate_identifier_uniqueness!(maps, section, label, path:)

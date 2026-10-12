@@ -6,6 +6,7 @@ import FillShapes from "./FillShapes";
 import ConnectionShapes from "./ConnectionShapes";
 import PlaceShapes from "./PlaceShapes";
 import UnitShapes from "./UnitShapes";
+import InteractableShapes from "./InteractableShapes";
 import NcuQuestBadges from "./NcuQuestBadges";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
@@ -47,6 +48,15 @@ function newNcu(ncus, feet) {
   return {
     identifier: nextUnitIdentifier(ncus, "ncu"), name: "New NCU", tokenImageUrl: "", tokenRadius: DEFAULT_NCU_RADIUS_FEET,
     position: {x: feet.x, y: feet.y, angle: 0}, movement: {type: "still"},
+  };
+}
+
+// A freshly placed quest interactable (docs/schema/map.md#interactable) -
+// its image is left for the author to pick; validation flags it empty.
+function newInteractable(interactables, feet) {
+  return {
+    identifier: nextUnitIdentifier(interactables, "interactable"), name: "New Interactable", imageUrl: "",
+    size: {width: 3, height: 3}, position: {x: feet.x, y: feet.y, angle: 0},
   };
 }
 
@@ -134,6 +144,7 @@ export default function MapCanvas({
   wanderLocationPlacement, onPlaceWanderLocation, onCancelWanderLocationPlacement,
   hoveredPatrolStep, expandedUnitIndices,
   ncuTokenUrls = {}, ncuQuests = null, selectedNcuIndex = null, onSelectNcu, hoveredNcuIndex = null, onHoverNcu, expandedNcuIndices,
+  selectedInteractableIndex = null, onSelectInteractable, hoveredInteractableIndex = null, onHoverInteractable,
   openGroup = null, onToggleGroupMember, hoveredGroupIdentifier, highlightedUnitIndices = null,
   selectedPlaceIndex = null, hoveredPlaceIndex = null, onSelectPlace,
   activeLayers = ALL_LAYERS, onDoubleClickUnit, onDoubleClickEmpty, keepUnitToolArmed = false, prepareUnit = (entry) => entry,
@@ -175,6 +186,7 @@ export default function MapCanvas({
   const unitDragRef = useRef(null);
   // {ncuIndex} | null - same whole-token drag as a unit's.
   const ncuDragRef = useRef(null);
+  const interactableDragRef = useRef(null);
   // True while a pointer press is editing cells (see cellEditing).
   const cellDragRef = useRef(false);
   const panKeysRef = useRef(new Set()); // currently-held WASD KeyboardEvent.code values
@@ -474,7 +486,7 @@ export default function MapCanvas({
   // it (see commitCircle/commitLineConnection/commitUnit).
   useEffect(() => {
     const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection"
-      || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit) || tool === "add-ncu"
+      || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit) || tool === "add-ncu" || tool === "add-interactable"
       || tool === "add-encounter" || tool === "add-fill-point";
     if (!armed) return;
 
@@ -674,6 +686,14 @@ export default function MapCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
+  function startDragInteractable(index, e) {
+    e.stopPropagation();
+    if (simulating) return;
+    onSelectInteractable?.(index);
+    interactableDragRef.current = {index};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
   // Two fingers pinch-zoom (and pan) the map, cancelling whatever the
   // first finger started.
   const pinchHandlers = usePinchZoom(wrapperRef, {zoom, offset}, {
@@ -690,6 +710,7 @@ export default function MapCanvas({
       connectionDragRef.current = null;
       unitDragRef.current = null;
       ncuDragRef.current = null;
+      interactableDragRef.current = null;
       setDrawingCircle(null);
       setDrawingLine(null);
       setDrawingUnit(null);
@@ -719,6 +740,16 @@ export default function MapCanvas({
       const ncus = mapData.ncus ?? [];
       dispatch({type: "ADD_ENTRY", section: "ncus", entry: newNcu(ncus, feet)});
       onSelectNcu?.(ncus.length);
+      onToolChange?.("select");
+      return;
+    }
+
+    if (tool === "add-interactable") {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const interactables = mapData.interactables ?? [];
+      dispatch({type: "ADD_ENTRY", section: "interactables", entry: newInteractable(interactables, feet)});
+      onSelectInteractable?.(interactables.length);
       onToolChange?.("select");
       return;
     }
@@ -888,6 +919,15 @@ export default function MapCanvas({
       return;
     }
 
+    if (interactableDragRef.current) {
+      const feet = feetFromClient(e.clientX, e.clientY);
+      if (!feet) return;
+      const {index} = interactableDragRef.current;
+      const interactable = mapData.interactables[index];
+      dispatch({type: "UPDATE_ENTRY_FIELD", section: "interactables", index, field: "position", value: {...interactable.position, x: feet.x, y: feet.y}});
+      return;
+    }
+
     if (unitDragRef.current) {
       const feet = feetFromClient(e.clientX, e.clientY);
       if (!feet) return;
@@ -953,6 +993,7 @@ export default function MapCanvas({
     connectionDragRef.current = null;
     unitDragRef.current = null;
     ncuDragRef.current = null;
+    interactableDragRef.current = null;
     if (tool === "add-circle" && drawingCircle) commitCircle();
     if (tool === "add-line-connection" && drawingLine) commitLineConnection();
     if (tool === "add-unit" && drawingUnit) commitUnit();
@@ -1041,6 +1082,7 @@ export default function MapCanvas({
       "add-unit": "Placing Unit - click the map",
       "add-encounter": "Placing Encounter - click the map",
       "add-ncu": "Placing NCU - click the map",
+      "add-interactable": "Placing Interactable - click the map",
     }[tool];
   const isPlacing = !!placingStatusText;
 
@@ -1271,6 +1313,19 @@ export default function MapCanvas({
                 hoveredPatrolStep={hoveredPatrolStep?.section === "ncus" ? null : hoveredPatrolStep}
                 hoveredUnitIndex={hoveredUnitIndex}
                 expandedUnitIndices={expandedUnitIndices}
+              />
+            )}
+            {canDrawBarriers && mapData.interactables?.length > 0 && layer("ncus",
+              <InteractableShapes
+                interactables={mapData.interactables}
+                pixelDimensions={image.pixelDimensions}
+                feetDimensions={feetDimensions}
+                imageUrls={ncuTokenUrls}
+                interactive={!isPlacing && activeLayers.ncus}
+                selectedIndex={selectedInteractableIndex}
+                hoveredIndex={hoveredInteractableIndex}
+                onStartDrag={startDragInteractable}
+                onHover={onHoverInteractable}
               />
             )}
             {canDrawBarriers && mapData.ncus?.length > 0 && layer("ncus",

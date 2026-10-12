@@ -10,6 +10,7 @@ RSpec.describe WithoutAnnotations do
         "identifier" => "hall", "annotations" => notes,
         "places" => [{"identifier" => "throne", "annotations" => notes}],
         "units" => [{"identifier" => "grutt", "annotations" => notes}],
+        "interactables" => [{"identifier" => "cell-door", "annotations" => notes}],
         "ncus" => [{"identifier" => "maren", "annotations" => notes,
                     "dialogue" => {"nodes" => {"annotations" => {"text" => "A node named annotations."}}}}]
       }]
@@ -25,6 +26,7 @@ RSpec.describe WithoutAnnotations do
         "identifier" => "hall",
         "places" => [{"identifier" => "throne"}],
         "units" => [{"identifier" => "grutt"}],
+        "interactables" => [{"identifier" => "cell-door"}],
         "ncus" => [{"identifier" => "maren", "dialogue" => {"nodes" => {"annotations" => {"text" => "A node named annotations."}}}}]
       }]
     )

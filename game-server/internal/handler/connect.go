@@ -151,6 +151,7 @@ type incomingMsg struct {
 	ItemIndex    *int     `json:"item_index"`
 	NCUID        *string  `json:"ncu_id"`
 	Quest        string   `json:"quest"`
+	Interactable string   `json:"interactable"`
 	// Seq is a per-connection, monotonically increasing hex id the client
 	// stamps on every outgoing message (see GameConnection._send). Recorded
 	// per message type that needs acking (heartbeat, move) via RecordSeq, and
@@ -250,6 +251,10 @@ func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.I
 			payload = command.TurnInQuestPayload{NCUID: ncuID, Quest: msg.Quest}
 		}
 		inst.SendCommand(command.Command{UnitID: unitID, ReceivedAt: time.Now(), Payload: payload})
+	case "use_interactable":
+		if msg.Interactable != "" {
+			inst.SendCommand(command.Command{UnitID: unitID, ReceivedAt: time.Now(), Payload: command.UseInteractablePayload{Interactable: msg.Interactable}})
+		}
 	case "abandon_quest":
 		if msg.Quest != "" {
 			go inst.AbandonQuest(context.Background(), slotID, msg.Quest)

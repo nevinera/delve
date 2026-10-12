@@ -67,7 +67,7 @@ export function validateWorldReferences(world, zones) {
 
 // A world's quests file, and its references into the zones (see
 // Validators::QuestsValidator and Validators::QuestReferences). zones:
-// {key: {unitTypes, items, maps: [{identifier, ncus, units}]}}.
+// {key: {unitTypes, items, maps: [{identifier, ncus, units, interactables}]}}.
 export function validateQuests(quests, zones) {
   return postValidation("/build/validators/quests", {quests, zones});
 }

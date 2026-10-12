@@ -18,6 +18,7 @@ function files() {
       places: [{identifier: "throne", polygon: []}],
       units: [{identifier: "grutt", unitType: "goblin"}],
       ncus: [{identifier: "maren", name: "Maren"}],
+      interactables: [{identifier: "cage-1", name: "Cage"}],
     },
     "/c/unit_types/goblin.json": {name: "Goblin"},
   };
@@ -45,6 +46,8 @@ describe("findTarget", () => {
     expect(find(store, zone, "hall/throne")).toMatchObject({file: hall, object: {identifier: "throne"}, label: "place throne on map hall"});
     expect(find(store, zone, "hall/unit:grutt")).toMatchObject({file: hall, object: {identifier: "grutt"}, label: "unit grutt on map hall"});
     expect(find(store, zone, "hall/ncu:maren")).toMatchObject({file: hall, object: {name: "Maren"}});
+    expect(find(store, zone, "hall/interactable:cage-1")).toMatchObject({file: hall, object: {name: "Cage"}, label: "interactable cage-1 on map hall"});
+    expect(() => find(store, zone, "hall/interactable:cage-2")).toThrow('map hall has no interactable "cage-2"');
     expect(find(store, zone, "unit-type:goblin")).toMatchObject({file: "/c/unit_types/goblin.json", object: {name: "Goblin"}});
     expect(find(store, zone, "unit-type:rat")).toMatchObject({file: zone, object: {name: "Rat"}});
   });
