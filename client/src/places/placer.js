@@ -138,6 +138,15 @@ export function placeMap(map, {unitTypes = {}, unitIds = new Set(), ncuIds = new
   return {map: {...map, units, ncus}, placed, errors};
 }
 
+// The map's units in a place (by index into map.places), as the placer
+// counts them: within REACH of its open ground. For the Places tab's Clear
+// units.
+export function unitsInPlace(map, index) {
+  if (!map.feetDimensions || !map.places?.[index]) return [];
+  const ground = groundOf(map);
+  return (map.units ?? []).filter((u) => u.position && ground.placeNear(u.position.x, u.position.y) === index);
+}
+
 // ---- Ground ----
 
 // The grid (see ground.js) with what placing needs: each cell's clearance

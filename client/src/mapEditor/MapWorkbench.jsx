@@ -22,6 +22,7 @@ import {WalkSimState} from "./WalkSimState";
 import {loadSvgToCanvas} from "../game/svgRaster";
 import {newGroupIdentifier} from "./groupIdentifiers";
 import {ANY_CATEGORY, buildEncounterFrom, scatterPositions} from "./encounter";
+import {unitsInPlace} from "../places/placer";
 
 const ENCOUNTER_SETTINGS_KEY = "delve.mapEditor.encounter";
 
@@ -135,6 +136,20 @@ export default function MapWorkbench({
       added: {walls: result.barriers.filter((b) => b.type === "wall").length, circles: result.barriers.filter((b) => b.type === "circle").length, segments: result.segments, fillPoints: result.fillPoints.length - (mapData.fillPoints ?? []).length, connections: result.connections.length, places: result.places.length},
       openEdge: result.openEdge, error: null,
     };
+  }
+
+  // Removes the units in a place (as the placer counts them), so
+  // bin/place-units can fill it afresh.
+  function handleClearPlaceUnits(index) {
+    const place = mapData.places?.[index];
+    const doomed = new Set(unitsInPlace(mapData, index));
+    if (!place) return;
+    if (!doomed.size) {
+      window.alert(`No units in ${place.name ?? place.identifier}.`);
+      return;
+    }
+    if (!window.confirm(`Remove the ${doomed.size} unit${doomed.size === 1 ? "" : "s"} in ${place.name ?? place.identifier}? Nothing is committed until you save.`)) return;
+    dispatch({type: "SET_FIELD", field: "units", value: (mapData.units ?? []).filter((u) => !doomed.has(u))});
   }
 
   function removeImage() {
@@ -767,6 +782,7 @@ export default function MapWorkbench({
           <PlacesPanel
             places={mapData.places ?? []} selectedIndex={selectedPlaceIndex} onSelect={setSelectedPlaceIndex} onHover={setHoveredPlaceIndex}
             onAnnotate={(index, value) => dispatch({type: "UPDATE_ENTRY_FIELD", section: "places", index, field: "annotations", value})}
+            onClearUnits={handleClearPlaceUnits}
           />
         ) : tab === "units" ? (
           <UnitsTab
