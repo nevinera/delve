@@ -85,8 +85,16 @@ bin/zone-outline --json ../content/zones/darkwood/darkwood.json   # JSON
 type, unit, quest, NCU or interactable, following `$ref`s to the file that holds it:
 
 ```sh
-bin/annotate ZONE.json grutts-hall/throne --set population "dense; goblin 4; group"
+bin/annotate ZONE.json grutts-hall/throne --set intent "Grutt's throne, by the sealed stair"
 bin/annotate WORLD.json quest:l3-grutt --set plan - < plan.txt
 bin/annotate ZONE.json grutts-hall/unit:grutt              # print
 bin/annotate ZONE.json grutts-hall/unit:grutt --remove plan
+```
+
+`bin/place-units` (the placer) fills each place that has a `population` annotation with units
+and NCUs, up to its density, never removing any: see [docs/population.md](docs/population.md).
+
+```sh
+bin/place-units ZONE.json
+bin/place-units ZONE.json --map grutts-hall --dry-run
 ```

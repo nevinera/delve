@@ -6,8 +6,10 @@ import AnnotationsSection from "../annotations/AnnotationsSection";
 // #place) with its name, description and tags, to read, and its
 // annotations, to edit (onAnnotate(index, annotations)). Places are written
 // by the generator, Auto Barriers (Map tab) and tooling, not here.
-// Selecting one (here or on the map) opens it.
-export default function PlacesPanel({places, selectedIndex, onSelect, onHover, onAnnotate}) {
+// Selecting one (here or on the map) opens it. Clear units (onClearUnits(
+// index)) removes the units in it, so the placer (bin/place-units) can fill
+// it afresh.
+export default function PlacesPanel({places, selectedIndex, onSelect, onHover, onAnnotate, onClearUnits}) {
   const selectedRef = useRef(null);
   useEffect(() => {
     selectedRef.current?.scrollIntoView?.({block: "nearest"});
@@ -52,6 +54,7 @@ export default function PlacesPanel({places, selectedIndex, onSelect, onHover, o
                 {!place.tags?.length && !place.description && !annotated && (
                   <p className="map-sidebar-hint">No tags, description or annotations.</p>
                 )}
+                {onClearUnits && <button type="button" className="add-entry" onClick={() => onClearUnits(i)}>Clear units</button>}
               </div>
             )}
           </div>

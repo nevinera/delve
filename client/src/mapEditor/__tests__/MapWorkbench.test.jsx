@@ -847,6 +847,21 @@ describe("MapWorkbench", () => {
       expect(screen.queryByText("Annotations")).not.toBeInTheDocument();
     });
 
+    it("clears a place's units, once confirmed, leaving the rest", async () => {
+      const unit = (identifier, x) => ({identifier, unitType: "goblin", hostility: "hostile", position: {x, y: 60, angle: 0}});
+      const ring = {type: "wall", locations: [{x: 2, y: 2}, {x: 158, y: 2}, {x: 158, y: 118}, {x: 2, y: 118}, {x: 2, y: 2}]};
+      await renderReady({map: {...map, barriers: [ring], units: [unit("west", 30), unit("east-1", 130), unit("east-2", 140)]}, imageUrl: "data:image/webp;base64,AAAA"});
+      showTab("Places");
+      fireEvent.click(screen.getByRole("heading", {name: /Arren's Camp/}));
+      const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+      fireEvent.click(screen.getByRole("button", {name: "Clear units"}));
+      expect(current.mapData.units).toHaveLength(3);
+      fireEvent.click(screen.getByRole("button", {name: "Clear units"}));
+      expect(confirm).toHaveBeenLastCalledWith("Remove the 2 units in Arren's Camp? Nothing is committed until you save.");
+      expect(current.mapData.units.map((u) => u.identifier)).toEqual(["west"]);
+      confirm.mockRestore();
+    });
+
     it("opens a place clicked on the map", async () => {
       await renderReady({map, imageUrl: "data:image/webp;base64,AAAA"});
       showTab("Places");

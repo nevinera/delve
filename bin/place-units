@@ -1,0 +1,74 @@
+#!/usr/bin/env node
+// Applies a zone's population plans (places' `population` annotations; see
+// docs/population.md) with the placer (client/src/places/placer.js): adds
+// units and NCUs to its maps' files. Run with --help for the flags.
+import {parseArgs} from "node:util";
+import {readFileSync, writeFileSync} from "node:fs";
+import {dirname, resolve} from "node:path";
+import {client} from "../client/cli/load.mjs";
+
+const {placeMap} = await client("places/placer.js");
+const {formatLike} = await client("annotations/annotate.js");
+
+const USAGE = `Usage: bin/place-units [flags] ZONE.json
+
+  ZONE.json       a zone file; its maps' and unit types' $refs are read relative to it
+  --map MAP       only this map (repeatable; default: all of them)
+  --dry-run       say what would be placed, write nothing
+  -h, --help
+
+Fills each place that has a population annotation up to its density, never removing a unit:
+units already in a place count toward it, so running it again adds nothing. Prints what it
+placed per place, and any plan it couldn't read (exit 1 then; the other places are still
+placed).`;
+
+const {values, positionals} = parseArgs({allowPositionals: true, options: {
+  map: {type: "string", multiple: true},
+  "dry-run": {type: "boolean", default: false},
+  help: {type: "boolean", short: "h", default: false},
+}});
+if (values.help || positionals.length !== 1) {
+  console.log(USAGE);
+  process.exit(values.help ? 0 : 1);
+}
+
+const [file] = positionals;
+const base = dirname(resolve(file));
+const zone = JSON.parse(readFileSync(file, "utf8"));
+// Each map: {path (null when inline in the zone file), text, data}.
+const maps = (zone.maps ?? []).map((entry) => {
+  if (!entry?.$ref) return {path: null, data: entry};
+  const path = resolve(base, entry.$ref);
+  const text = readFileSync(path, "utf8");
+  return {path, text, data: JSON.parse(text)};
+});
+const unitTypes = Object.fromEntries(Object.entries(zone.unitTypes ?? {}).map(([key, type]) => [key, type?.$ref ? JSON.parse(readFileSync(resolve(base, type.$ref), "utf8")) : type]));
+const unitIds = new Set(maps.flatMap(({data}) => (data.units ?? []).map((u) => u.identifier)));
+const ncuIds = new Set(maps.flatMap(({data}) => (data.ncus ?? []).map((n) => n.identifier)));
+
+const known = new Set(maps.map(({data}) => data.identifier));
+for (const id of values.map ?? []) if (!known.has(id)) {
+  console.error(`no map ${id} in the zone (maps: ${[...known].join(", ")})`);
+  process.exit(1);
+}
+
+let failed = false;
+let zoneChanged = false;
+for (const entry of maps) {
+  if (values.map && !values.map.includes(entry.data.identifier)) continue;
+  const {map, placed, errors} = placeMap(entry.data, {unitTypes, unitIds, ncuIds});
+  for (const error of errors) console.error(`error: ${error}`);
+  failed ||= errors.length > 0;
+  for (const {place, units, ncus, notes} of placed) {
+    const what = [units && `${units} unit${units === 1 ? "" : "s"}`, ncus && `${ncus} NCU${ncus === 1 ? "" : "s"}`].filter(Boolean).join(", ") || "nothing";
+    console.log(`${map.identifier}/${place}: ${what}${notes.length ? ` (${notes.join("; ")})` : ""}`);
+  }
+  if (map === entry.data || values["dry-run"]) continue;
+  if (entry.path) writeFileSync(entry.path, formatLike(entry.text, map));
+  else {
+    zone.maps[maps.indexOf(entry)] = map;
+    zoneChanged = true;
+  }
+}
+if (zoneChanged) writeFileSync(file, formatLike(readFileSync(file, "utf8"), zone));
+process.exit(failed ? 1 : 0);
