@@ -287,6 +287,16 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
           .to raise_error(Validators::ValidationError, /ncu identifier "grizzle".*already used/)
       end
 
+      it "raises when two interactables share an identifier across maps" do
+        snare = {"identifier" => "snare-1", "name" => "Snare", "imageUrl" => "./s.webp", "size" => {"width" => 2, "height" => 2}, "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
+        maps = [
+          minimal_map("map_a", ["goblin_1"]).merge("interactables" => [snare]),
+          minimal_map("map_b", ["goblin_2"]).merge("interactables" => [snare])
+        ]
+        expect { described_class.validate!(zone_with_maps(maps)) }
+          .to raise_error(Validators::ValidationError, /interactable identifier "snare-1".*already used/)
+      end
+
       it "raises when the same identifier appears twice within one map" do
         maps = [minimal_map("map_a", ["goblin_1", "goblin_1"])]
         expect { described_class.validate!(zone_with_maps(maps)) }

@@ -34,6 +34,7 @@ module Validators
         when "talk" then validate_ncu!(objective, path: objective_path)
         when "reach" then objective["map"] ? map(objective, path: objective_path) : zone!(objective, path: objective_path)
         when "kill" then validate_kill!(objective, path: objective_path)
+        when "use" then validate_interactables!(objective, path: objective_path)
         end
       end
     end
@@ -52,6 +53,20 @@ module Validators
       return if on_maps.any? { |map| ncu_on?(map, ref["ncu"]) }
       on_map = " on map \"#{ref["map"]}\"" if ref["map"]
       raise ValidationError.new("zone \"#{ref["zone"]}\" has no NCU \"#{ref["ncu"]}\"#{on_map}", path: path)
+    end
+
+    # With a map, they must all be on that map.
+    def validate_interactables!(objective, path:)
+      on_maps = objective["map"] ? [map(objective, path: path)] : maps(zone!(objective, path: path))
+      objective["interactables"].each_with_index do |id, i|
+        next if on_maps.any? { |map| interactable_on?(map, id) }
+        raise missing_interactable(objective, id, path: index_path(child_path(path, "interactables"), i))
+      end
+    end
+
+    def missing_interactable(objective, id, path:)
+      on_map = " on map \"#{objective["map"]}\"" if objective["map"]
+      ValidationError.new("zone \"#{objective["zone"]}\" has no interactable \"#{id}\"#{on_map}", path: path)
     end
 
     def validate_kill!(objective, path:)
@@ -78,6 +93,8 @@ module Validators
     end
 
     def ncu_on?(map, identifier) = (map["ncus"] || []).any? { |ncu| ncu["identifier"] == identifier }
+
+    def interactable_on?(map, identifier) = (map["interactables"] || []).any? { |entry| entry["identifier"] == identifier }
 
     def unit_on?(map, identifier) = (map["units"] || []).any? { |unit| unit["identifier"] == identifier }
 

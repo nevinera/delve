@@ -1,7 +1,7 @@
 # A zone's data without its annotations (docs/schema/common.md#annotations),
-# at every level they're allowed: the zone, its maps, places, units, NCUs
-# and unit types. Annotations are notes for an LLM, never game state, so
-# they're dropped before a zone goes to the game server. Only those levels:
+# at every level they're allowed: the zone, its maps, places, units, NCUs,
+# interactables and unit types. Annotations are notes for an LLM, never
+# game state, so they're dropped before a zone goes to the game server. Only those levels:
 # a dialogue node or an item could be keyed "annotations".
 module WithoutAnnotations
   module_function
@@ -17,7 +17,7 @@ module WithoutAnnotations
   def map(data)
     return data unless data.is_a?(Hash)
     data.except("annotations").tap do |map|
-      %w[places units ncus].each { |key| map[key] = each_of(map[key]) { |entry| drop(entry) } if map.key?(key) }
+      %w[places units ncus interactables].each { |key| map[key] = each_of(map[key]) { |entry| drop(entry) } if map.key?(key) }
     end
   end
 

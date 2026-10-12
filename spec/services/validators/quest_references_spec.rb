@@ -8,7 +8,7 @@ RSpec.describe Validators::QuestReferences do
         "items" => {"rusty-dagger" => {}},
         "maps" => [
           {"identifier" => "entrance", "ncus" => [{"identifier" => "grizzle"}], "units" => [{"identifier" => "rat-king"}]},
-          {"identifier" => "depths"}
+          {"identifier" => "depths", "interactables" => [{"identifier" => "snare-1"}, {"identifier" => "snare-2"}]}
         ]
       }
     }
@@ -23,7 +23,9 @@ RSpec.describe Validators::QuestReferences do
         {"type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle"},
         {"type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle", "map" => "entrance"},
         {"type" => "reach", "zone" => "goblin-cave", "map" => "depths"},
-        {"type" => "reach", "zone" => "goblin-cave"}
+        {"type" => "reach", "zone" => "goblin-cave"},
+        {"type" => "use", "zone" => "goblin-cave", "interactables" => ["snare-1", "snare-2"]},
+        {"type" => "use", "zone" => "goblin-cave", "map" => "depths", "interactables" => ["snare-1"]}
       ],
       "rewards" => [{"zone" => "goblin-cave", "item" => "rusty-dagger"}]
     }
@@ -76,6 +78,11 @@ RSpec.describe Validators::QuestReferences do
   it "rejects a unit that isn't on the objective's map" do
     expect_invalid(/no unit "rat-king" on map "depths"/,
       with_objective("type" => "kill", "zone" => "goblin-cave", "unit" => "rat-king", "map" => "depths"))
+  end
+
+  it "rejects a use objective's unknown interactable, or one off its map" do
+    expect_invalid(/no interactable "snare-9".*interactables\[1\]/, with_objective("type" => "use", "zone" => "goblin-cave", "interactables" => ["snare-1", "snare-9"]))
+    expect_invalid(/no interactable "snare-1" on map "entrance"/, with_objective("type" => "use", "zone" => "goblin-cave", "map" => "entrance", "interactables" => ["snare-1"]))
   end
 
   it "rejects an unknown reward item" do

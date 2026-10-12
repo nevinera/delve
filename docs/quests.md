@@ -15,6 +15,8 @@ live in one quests file.
 - **kill**: kill a number of units of a unit type, or one specific unit (a named mob), optionally
   only on one map.
 - **reach**: enter a zone, or a specific map in it.
+- **use**: use each of a list of [interactables](schema/map.md#interactable) (snares, totems,
+  cages) on the zone's maps. Each player uses them for themselves.
 
 Every objective names its zone (and may name a map), and has author-written `text` for the log.
 

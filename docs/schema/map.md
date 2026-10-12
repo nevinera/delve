@@ -22,6 +22,7 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `connections` | array of MapConnection | no | Entry/exit points on this map. The zone defines how connections pair up and which are entry points. |
 | `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |
 | `ncus` | array of NCU | no | Non-combat units initially present on this map. See [ncu.md](ncu.md). |
+| `interactables` | array of Interactable | no | Things players use for quests: snares, totems, cages. See **Interactable**. |
 | `places` | array of Place | no | Named, tagged areas of the map, for building a zone in layers (see **Place** below). The game ignores them. |
 | `respawn` | RespawnConfig | no | Overrides the zone's `respawn` for every unit on this map, unless a unit overrides it again. See [common.md](common.md#respawnconfig). |
 | `leashRadius` | number | no | Feet. How far an engaged NPC on this map may get from where it was pulled before it gives up (see **Leashing** below). Default 120 (about WoW's 40 yards). A unit may override it. |
@@ -201,6 +202,47 @@ is in the smallest place around it.
   "tags": ["camp", "friendly"],
   "polygon": [{ "x": 10, "y": 10 }, { "x": 60, "y": 12 }, { "x": 55, "y": 50 }, { "x": 8, "y": 45 }],
   "annotations": { "population": "Arren and two guards; quiet by day." }
+}
+```
+
+---
+
+## Interactable
+
+Something on the map a player uses for a quest's `use` objective (see [quest.md](quest.md#objective)):
+a snare to cut, a totem to break, a cage to open. It's an image drawn into the map, not a token (no
+ring, no label), so it can blend in; its name shows on hover and while using it, and it's softly
+highlighted on hover or in range.
+
+Each player uses it for themselves, and it does nothing outside a quest that lists it. To a player
+with an active `use` objective that lists it, and who hasn't used it yet, it's **available**: drawn
+from `imageUrl`, and used by right-clicking it within 10 feet of its edge. That takes `useTime`
+seconds, with a cast bar, under the rules of a power's cast: moving cancels it, and a landed hit
+pushes it back. To anyone else it's drawn as `whenUnavailable` says.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `identifier` | string | yes | | Unique among the zone's interactables. |
+| `name` | string | yes | | Shown on hover and in the cast bar. |
+| `imageUrl` | string | yes | | A transparent-background image, relative to the file it's written in. |
+| `usedImageUrl` | string | no | | Drawn when it's unavailable and `whenUnavailable` is `used` (a cut snare). |
+| `whenUnavailable` | string | no | `hidden` | `hidden` (not drawn) or `used` (drawn from `usedImageUrl`, which it then needs). |
+| `size` | object | yes | | `{width, height}` in feet, each 0.5 to 40: the image's size, centered on `position`. |
+| `position` | Position | yes | | Its middle, and its turn (`angle`). |
+| `useTime` | number | no | `1` | Seconds to use it, 0 to 30; 0 is instant. |
+| `useText` | string | no | | The cast bar's label ("Cutting"), at most 40 characters; without it, the name. |
+| `annotations` | Annotations | no | | Notes for an LLM. Never read at runtime. See [common.md](common.md#annotations). |
+
+```json
+{
+  "identifier": "snare-1",
+  "name": "Goblin Snare",
+  "imageUrl": "../../images/interactable/snare.webp",
+  "usedImageUrl": "../../images/interactable/snare-cut.webp",
+  "whenUnavailable": "used",
+  "size": {"width": 4, "height": 3},
+  "position": {"x": 120.0, "y": 340.0, "angle": 0.0},
+  "useText": "Cutting"
 }
 ```
 

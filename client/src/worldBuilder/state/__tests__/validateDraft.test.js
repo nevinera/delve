@@ -92,8 +92,8 @@ describe("validateDraft", () => {
       forest: {
         unitTypes: {goblin: {}}, items: {},
         maps: [
-          {identifier: "hub", ncus: [], units: [{identifier: "goblin-a"}, {identifier: "archer-a"}]},
-          {identifier: "passage", ncus: [], units: []},
+          {identifier: "hub", ncus: [], units: [{identifier: "goblin-a"}, {identifier: "archer-a"}], interactables: []},
+          {identifier: "passage", ncus: [], units: [], interactables: []},
         ],
       },
       cave: {unitTypes: {}, items: {}, maps: []},

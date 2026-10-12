@@ -54,7 +54,7 @@ Every objective has a `type`, `text`, and a `zone`, and may name a `map` in that
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `type` | string | yes | `talk`, `kill` or `reach` (below). |
+| `type` | string | yes | `talk`, `kill`, `reach` or `use` (below). |
 | `text` | string | yes | What the quest log shows for the objective, like `"Kill 5 rats in the cellar"`. Never generated. |
 | `zone` | string | yes | Zone identifier, within the quest's world. The quest log lists the objective under this zone. |
 | `map` | string | no | Map identifier within that zone. What it means depends on the type. |
@@ -80,6 +80,13 @@ A `talk` objective and `turnIn` are independent, and may name the same NCU (talk
 Every player who can loot the unit gets credit for the kill.
 
 **`reach`:** enter the zone, or with `map`, that map. Arriving or spawning there both count.
+
+**`use`:** use each of a list of [interactables](map.md#interactable), once each, in any order.
+Progress records which ones the player has used; the objective needs all of them.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `interactables` | array of string | yes | 1 to 32 interactable identifiers in the zone, no repeats. With `map`, all on that map. No `count`: the list is the count. |
 
 ## Example
 

@@ -38,6 +38,8 @@ type QuestObjective struct {
 	UnitType string `json:"unitType,omitempty"`
 	Count    int    `json:"count,omitempty"`
 	Map      string `json:"map,omitempty"`
+	// Interactables are a use objective's: each, once (not a count).
+	Interactables []string `json:"interactables,omitempty"`
 }
 
 // QuestReward is an item granted on completing a quest.

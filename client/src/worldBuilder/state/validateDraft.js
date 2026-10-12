@@ -114,14 +114,14 @@ async function checkWorld(draft) {
 }
 
 // What the quest reference checks need of each zone: its unit type and
-// item keys, and its maps' identifiers, NCUs and units.
+// item keys, and its maps' identifiers, NCUs, units and interactables.
 function questZones(draft) {
   const identifiers = (list) => (list ?? []).map(({identifier}) => ({identifier}));
   return Object.fromEntries(zoneKeys(draft).map((zone) => {
     const data = zoneData(draft, zone) ?? {};
     const maps = mapKeysInZone(draft, zone).map((map) => {
       const mapFileData = mapData(draft, zone, map) ?? {};
-      return {identifier: map, ncus: identifiers(mapFileData.ncus), units: identifiers(mapFileData.units)};
+      return {identifier: map, ncus: identifiers(mapFileData.ncus), units: identifiers(mapFileData.units), interactables: identifiers(mapFileData.interactables)};
     });
     const keys = (section) => Object.fromEntries(Object.keys(data[section] ?? {}).map((key) => [key, {}]));
     return [zone, {unitTypes: keys("unitTypes"), items: keys("items"), maps}];
