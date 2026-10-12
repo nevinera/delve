@@ -8,7 +8,7 @@ import {readFileSync, writeFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {client} from "../client/cli/load.mjs";
 
-const {findTarget, annotationsOf, setAnnotation, removeAnnotation, formatLike} = await client("annotations/annotate.js");
+const {findTarget, annotationsOf, setAnnotation, removeAnnotation, setPlaceName, formatLike} = await client("annotations/annotate.js");
 
 const USAGE = `Usage: bin/annotate [flags] FILE TARGET [TEXT]
 
@@ -19,20 +19,24 @@ const USAGE = `Usage: bin/annotate [flags] FILE TARGET [TEXT]
                   from a world file: world, quest:<id>, zone:<key>[/<zone target>]
   --set KEY       set annotation KEY to TEXT (or - for stdin)
   --remove KEY    remove annotation KEY
+  --name TEXT     name a place (its display name, not an annotation); with --set,
+                  both
   --json          print the annotations as JSON, not text
   -h, --help
 
-With neither --set nor --remove, prints the target's annotations. Writes the
+With none of --set, --remove and --name, prints the target's annotations. Writes the
 source files (2-space JSON, as the editors do); a zone's .full.json picks the
 change up at its next Expand.
 
   bin/annotate zones/gnawdeep/gnawdeep.json grutts-hall/throne --set population "dense; goblin 4; group"
   bin/annotate worlds/demo-wild/demo-wild.json quest:l3-grutt --set plan - < plan.txt
+  bin/annotate zones/gnawdeep/gnawdeep.json grutts-hall/area_3 --name "Grutt's Throne" --set intent "Grutt's seat."
   bin/annotate zones/gnawdeep/gnawdeep.json grutts-hall/unit:grutt`;
 
 const {values, positionals} = parseArgs({allowPositionals: true, options: {
   set: {type: "string"},
   remove: {type: "string"},
+  name: {type: "string"},
   json: {type: "boolean", default: false},
   help: {type: "boolean", short: "h", default: false},
 }});
@@ -68,6 +72,15 @@ try {
 
 const save = () => writeFileSync(found.file, formatLike(texts.get(found.file), found.data));
 
+if (values.name !== undefined) {
+  if (!found.places) fail(`${found.label}: --name is for places`);
+  try {
+    setPlaceName(found.places, found.object, values.name);
+  } catch (error) {
+    fail(`${found.label}: ${error.message}`);
+  }
+  if (values.set === undefined) save();
+}
 if (values.set !== undefined) {
   try {
     setAnnotation(found.object, values.set, text === "-" ? readFileSync(0, "utf8").trimEnd() : text);
@@ -75,6 +88,8 @@ if (values.set !== undefined) {
     fail(`${found.label}: ${error.message}`);
   }
   save();
+} else if (values.name !== undefined) {
+  // Named above.
 } else if (values.remove !== undefined) {
   if (!removeAnnotation(found.object, values.remove)) fail(`${found.label} has no annotation ${JSON.stringify(values.remove)}`);
   save();
