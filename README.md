@@ -72,8 +72,8 @@ bin/zone-build --force old-growth ../content/worlds/demo-wild/zones/thornwood/zo
 ```
 
 `bin/zone-outline` prints a zone's outline for an LLM to work from: each map's places (their
-tags, annotations, area, where on the map, terrains, trails, neighbors, connections and units) and the links between maps, with the
-annotations of the zone, its unit types, maps, units and NCUs.
+tags, annotations, area, where on the map, terrains, trails, neighbors, connections, units, NCUs and interactables) and the links between maps,
+with the annotations of the zone, its unit types, maps, units, NCUs and interactables.
 
 ```sh
 bin/zone-outline ../content/zones/darkwood/darkwood.json          # text
@@ -82,7 +82,7 @@ bin/zone-outline --json ../content/zones/darkwood/darkwood.json   # JSON
 
 `bin/annotate` prints, sets or removes one annotation (an LLM's notes, see
 [docs/schema/common.md](docs/schema/common.md#annotations)) on a world, zone, map, place, unit
-type, unit, quest or NCU, following `$ref`s to the file that holds it:
+type, unit, quest, NCU or interactable, following `$ref`s to the file that holds it:
 
 ```sh
 bin/annotate ZONE.json grutts-hall/throne --set population "dense; goblin 4; group"

@@ -16,12 +16,13 @@ const KEY_RE = /^[a-z][a-z0-9_-]{0,39}$/;
 //   <map>/<place>        a place on it
 //   <map>/unit:<id>      a unit on it
 //   <map>/ncu:<id>       an NCU on it
+//   <map>/interactable:<id>  an interactable on it
 // and from a world file:
 //   world                the world
 //   quest:<id>           a quest in its quests file
 //   zone:<key>/<target>  any zone target, in one of its zones (zone:<key>
 //                        alone is the zone)
-export const TARGETS = ["zone", "unit-type:<key>", "<map>", "<map>/<place>", "<map>/unit:<id>", "<map>/ncu:<id>", "world", "quest:<id>", "zone:<key>/<target>"];
+export const TARGETS = ["zone", "unit-type:<key>", "<map>", "<map>/<place>", "<map>/unit:<id>", "<map>/ncu:<id>", "<map>/interactable:<id>", "world", "quest:<id>", "zone:<key>/<target>"];
 
 // Finds `target` from the file at `path`. Returns {file, data, object,
 // label}: the file holding the thing (following $refs), its parsed contents,
@@ -123,13 +124,13 @@ function findInZone(read, path, zone, target) {
     return {...follow(read, path, zone, zone.unitTypes[key]), label: `unit type ${key}`};
   }
   const [mapId, rest, ...extra] = target.split("/");
-  if (extra.length) throw new Error(`${JSON.stringify(target)} isn't a zone target: ${TARGETS.slice(0, 6).join(", ")}`);
+  if (extra.length) throw new Error(`${JSON.stringify(target)} isn't a zone target: ${TARGETS.slice(0, 7).join(", ")}`);
   const map = findMap(read, path, zone, mapId);
   if (rest === undefined) return {...map, label: `map ${mapId}`};
-  const entry = rest.match(/^(unit|ncu):(.+)$/);
+  const entry = rest.match(/^(unit|ncu|interactable):(.+)$/);
   if (entry) {
     const [, kind, id] = entry;
-    const list = map.object[kind === "unit" ? "units" : "ncus"] ?? [];
+    const list = map.object[`${kind}s`] ?? [];
     const found = list.find((e) => e?.identifier === id);
     if (!found) throw new Error(`map ${mapId} has no ${kind} ${JSON.stringify(id)}`);
     return {file: map.file, data: map.data, object: found, label: `${kind} ${id} on map ${mapId}`};

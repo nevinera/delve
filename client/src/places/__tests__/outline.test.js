@@ -107,10 +107,11 @@ describe("outlineZone", () => {
     expect(text).toContain("Map hall, 100x50 ft\n  (no places)");
   });
 
-  it("carries the zone's, unit types', maps', units' and NCUs' annotations, units and NCUs by place", () => {
+  it("carries the zone's, unit types', maps', units', NCUs' and interactables' annotations, and lists them by place", () => {
     const map = {...room(), annotations: {plan: "The first room."}};
     map.units[0] = {...map.units[0], identifier: "boss", annotations: {backstory: "Grew up here.\nNever left."}};
     map.ncus = [{identifier: "sesh", name: "Sesh", position: {x: 70, y: 30, angle: 0}, annotations: {personality: "wary"}}, {identifier: "quiet", position: {x: 75, y: 30, angle: 0}}];
+    map.interactables = [{identifier: "snare-1", name: "Snare", position: {x: 20, y: 30, angle: 0}, annotations: {why: "the trappers'"}}, {identifier: "snare-2", position: {x: 80, y: 30, angle: 0}}];
     const zone = {name: "Test", annotations: {plan: "A test zone."}, unitTypes: {goblin: {name: "Goblin", annotations: {variants: "the Old Goblin"}}}, maps: [map]};
     const outline = outlineZone(zone);
     expect(outline.zone.annotations).toEqual({plan: "A test zone."});
@@ -119,13 +120,17 @@ describe("outlineZone", () => {
     expect(outline.maps[0].annotated).toEqual([
       {kind: "unit", identifier: "boss", unitType: "goblin", annotations: {backstory: "Grew up here.\nNever left."}, place: "west"},
       {kind: "ncu", identifier: "sesh", name: "Sesh", annotations: {personality: "wary"}, place: "east"},
+      {kind: "interactable", identifier: "snare-1", name: "Snare", annotations: {why: "the trappers'"}, place: "west"},
     ]);
+    expect(outline.maps[0].places.map((p) => p.interactables)).toEqual([["snare-1"], ["snare-2"]]);
     const text = outlineText(outline);
     expect(text).toContain("Zone: Test\n  plan: A test zone.");
     expect(text).toContain("  goblin:\n    variants: the Old Goblin");
     expect(text).toContain('Map room "The Room", 100x50 ft\n  plan: The first room.');
     expect(text).toContain("    unit boss (goblin):\n      backstory: Grew up here.\n        Never left.");
     expect(text).toContain('    ncu sesh "Sesh":\n      personality: wary');
+    expect(text).toContain("    interactables: snare-2");
+    expect(text).toContain('    interactable snare-1 "Snare":\n      why: the trappers\'');
   });
 
   it("leaves out annotations nothing has", () => {

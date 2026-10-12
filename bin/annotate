@@ -15,7 +15,7 @@ const USAGE = `Usage: bin/annotate [flags] FILE TARGET [TEXT]
   FILE            a world or zone file; $refs (maps, unit types, the quests file, a
                   world's zones) are followed to the file that holds the target
   TARGET          from a zone file: zone, unit-type:<key>, <map>, <map>/<place>,
-                  <map>/unit:<id>, <map>/ncu:<id>
+                  <map>/unit:<id>, <map>/ncu:<id>, <map>/interactable:<id>
                   from a world file: world, quest:<id>, zone:<key>[/<zone target>]
   --set KEY       set annotation KEY to TEXT (or - for stdin)
   --remove KEY    remove annotation KEY
