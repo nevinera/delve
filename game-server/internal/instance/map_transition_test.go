@@ -121,16 +121,30 @@ func TestMapTransition_SetsPositionOnDestination(t *testing.T) {
 func TestMapTransition_TPositionPreserved(t *testing.T) {
 	zone := transitionZone()
 	s := emptyInstanceState()
-	// Player near the Start end of the exit (t≈0.1), approaching from south.
-	id, p := playerOnMap(s, "map_a", 42, 99)
-	prev := prevStateWithUnit(id, "map_a", 42, 97)
+	// Player a quarter of the way along the exit (t=0.25), approaching from south.
+	id, p := playerOnMap(s, "map_a", 45, 99)
+	prev := prevStateWithUnit(id, "map_a", 45, 97)
 
 	instance.ApplyMapTransitionsForTest(s, prev, zone)
 
-	// t=0.1 on map_b entrance → x≈42, nudged north → y≈2.
+	// t=0.25 on map_b entrance → x=45, nudged north → y≈2.
 	assert.Equal(t, "map_b", p.MapIdentifier)
-	assert.InDelta(t, 42.0, p.Position.X, 0.1)
+	assert.InDelta(t, 45.0, p.Position.X, 0.1)
 	assert.InDelta(t, 2.0, p.Position.Y, 0.1)
+}
+
+// The ends of a connection meet walls: coming through near one, a unit is
+// set down 3 ft in from it, not past the wall.
+func TestMapTransition_KeepsClearOfTheEnds(t *testing.T) {
+	zone := transitionZone()
+	s := emptyInstanceState()
+	id, p := playerOnMap(s, "map_a", 40.5, 99)
+	prev := prevStateWithUnit(id, "map_a", 40.5, 97)
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	assert.Equal(t, "map_b", p.MapIdentifier)
+	assert.InDelta(t, 43.0, p.Position.X, 0.1)
 }
 
 func TestMapTransition_BidirectionalReturnTrip(t *testing.T) {

@@ -13,6 +13,7 @@ import {
   targetLineColor,
   edgeTowards,
   reconciledTarget,
+  sendOnMap,
   clampZoom,
   pinchZoom,
   pointerDistance,
@@ -231,6 +232,15 @@ describe("setTokenFade", () => {
     setTokenFade(group, { stealthVisibility: "full", disconnected: true });
 
     expect(bodyOpacity(group)).toBeCloseTo(0.55 * 0.4);
+  });
+});
+
+describe("sendOnMap", () => {
+  it("drops a send from another map, so a map transition doesn't slide us", () => {
+    expect(sendOnMap({ x: 1, y: 2, map: "camp" }, "camp")).toEqual({ x: 1, y: 2, map: "camp" });
+    expect(sendOnMap({ x: 1, y: 2, map: "camp" }, "woods")).toBeNull();
+    expect(sendOnMap({ x: 1, y: 2 }, "woods")).toEqual({ x: 1, y: 2 });
+    expect(sendOnMap(null, "woods")).toBeNull();
   });
 });
 

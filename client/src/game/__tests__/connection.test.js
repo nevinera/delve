@@ -125,6 +125,15 @@ describe("GameConnection seq stamping", () => {
     expect(conn.positionForSeq(seq)).toMatchObject({x: 5, y: 7});
   });
 
+  it("records the map a move was sent from", () => {
+    const {conn, ws} = connectAndOpen();
+
+    conn.send({type: "move", x: 5, y: 7, map: "camp"});
+    const seq = ws.sent.find((m) => m.type === "move").seq;
+
+    expect(conn.positionForSeq(seq)).toMatchObject({x: 5, y: 7, map: "camp"});
+  });
+
   it("returns null for a move's seq when it had no x/y", () => {
     const {conn, ws} = connectAndOpen();
 

@@ -38,6 +38,12 @@ func (MoveHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone instanc
 	if !ok || unit.Status == instancestate.UnitStatusDead {
 		return nil
 	}
+	if p.Map != "" && p.Map != unit.MapIdentifier {
+		// Sent from the map the unit just left: its position (and keys) are
+		// in that map's coordinates. Acting on it would drag the unit across
+		// this one toward where it was.
+		return nil
+	}
 	unit.Position.Angle = p.Facing
 	now := time.Now()
 	if p.X != nil && p.Y != nil {

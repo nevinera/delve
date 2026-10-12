@@ -91,6 +91,10 @@ func traverseConnection(unit *instancestate.UnitState, fromConn instanceconfig.M
 
 const spawnNudge = 2.0 // feet past the destination connection
 
+// spawnEndMargin is how far (feet) from either end of the destination
+// connection a unit comes through it.
+const spawnEndMargin = 3.0
+
 // spawnPosition computes where a unit emerges on destConn given that it was at
 // (prevX, prevY) last tick (before triggering) and is now touching fromConn.
 //
@@ -117,9 +121,16 @@ func spawnPosition(fromConn, destConn instanceconfig.MapConnection, prevX, prevY
 		t = math.Max(0, math.Min(1, t))
 	}
 
-	// Interpolate the same t onto destConn.
+	// Interpolate the same t onto destConn, kept spawnEndMargin feet in from
+	// its ends: they meet walls, and a unit set down there can land past one.
 	dDX := destConn.End.X - destConn.Start.X
 	dDY := destConn.End.Y - destConn.Start.Y
+	if dLen := math.Hypot(dDX, dDY); dLen > 2*spawnEndMargin {
+		m := spawnEndMargin / dLen
+		t = math.Max(m, math.Min(1-m, t))
+	} else {
+		t = 0.5
+	}
 	sx := destConn.Start.X + t*dDX
 	sy := destConn.Start.Y + t*dDY
 

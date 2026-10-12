@@ -32,6 +32,10 @@ type MovePayload struct {
 	Keys   []MoveKey
 	X      *float64
 	Y      *float64
+	// Map is the map the client was on when it sent the move ("" if it
+	// didn't say). A move from another map is stale - sent before the
+	// client heard of a map transition - and is ignored.
+	Map string
 }
 
 func (MovePayload) CommandType() string { return "move" }
