@@ -139,8 +139,28 @@ describe("generateCellMap", () => {
     }
   });
 
-  it("refuses tags it doesn't know, and too many connections", () => {
+  it("puts exits on the sides it's given, at the spot along each it's given", () => {
+    const {connections: _count, ...rest} = options;
+    for (const seed of [1, 7, 11]) {
+      const map = generateCellMap({...rest, seed, exits: ["east", "north"]});
+      expect(validateCellMap(map)).toEqual([]);
+      expect(map.exits.map((e) => e.side)).toEqual(["north", "east"]);
+    }
+    // Near the north side's start (west) and the west side's end (south).
+    const map = generateCellMap({...rest, exits: [{side: "north", at: 0.1}, {side: "west", at: 0.9}]});
+    const [north, west] = map.exits;
+    expect(north.from).toBeLessThanOrEqual(4);
+    expect(west.to).toBeGreaterThanOrEqual(26);
+    expect(generateCellMap({...rest, exits: []})).not.toHaveProperty("exits");
+  });
+
+  it("refuses tags it doesn't know, too many connections, and bad exits", () => {
+    const {connections: _count, ...rest} = options;
     expect(() => generateCellMap({...options, tags: ["huge"]})).toThrow(/unknown tags: huge/);
     expect(() => generateCellMap({...options, connections: 5})).toThrow(/connections must be 0 to 4/);
+    expect(() => generateCellMap({...options, exits: ["north"]})).toThrow(/not both/);
+    expect(() => generateCellMap({...rest, exits: ["up"]})).toThrow(/unknown exit side: up/);
+    expect(() => generateCellMap({...rest, exits: ["north", {side: "north"}]})).toThrow(/two exits on the north side/);
+    expect(() => generateCellMap({...rest, exits: [{side: "east", at: 1.5}]})).toThrow(/at must be 0 to 1/);
   });
 });

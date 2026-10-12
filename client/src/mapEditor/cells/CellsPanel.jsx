@@ -8,6 +8,7 @@ import {MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
 import {DEFAULT_PATH, PATHS} from "../../cellMap/style";
 import {CELL_COLORS} from "../../cellMap/overlay";
 import {generateCellMap} from "../../cellMap/generate";
+import {SIDES} from "../../cellMap/exits";
 import {CellMapDraft} from "./CellMapDraft";
 import {BRUSHES, OVERLAYS, TOOLS} from "./useCellsTab";
 
@@ -129,16 +130,11 @@ function GenerateSection({grid, sized = true, onGenerate}) {
   const [open, setOpen] = useState(false);
   const [ownSize, setSize] = useState({cols: grid.cols, rows: grid.rows});
   const size = sized ? ownSize : {cols: grid.cols, rows: grid.rows};
-  const [connections, setConnections] = useState(2);
+  const [sides, setSides] = useState(new Set(["west", "east"]));
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
   const [groups, setGroups] = useState({Areas: "", Shape: "", Ground: ""});
   const [tags, setTags] = useState(new Set(["paths"]));
-  const toggle = (tag) => setTags((current) => {
-    const next = new Set(current);
-    if (next.has(tag)) next.delete(tag);
-    else next.add(tag);
-    return next;
-  });
+  const toggle = (tag) => setTags((current) => toggled(current, tag));
   const chosen = [...Object.values(groups).filter(Boolean), ...[...tags].filter((t) => !(t === "dry" && groups.Ground === "wet"))];
   if (!open) {
     return (
@@ -156,8 +152,13 @@ function GenerateSection({grid, sized = true, onGenerate}) {
           <NumberField label="Rows" value={size.rows} min={8} max={200} onChange={(rows) => setSize({...size, rows})} />
         </div>
       )}
+      <div className="cells-panel-row" role="group" aria-label="Exits">
+        <span className="cells-panel-label">Exits</span>
+        {SIDES.map((side) => (
+          <button key={side} type="button" aria-pressed={sides.has(side)} className={sides.has(side) ? "active" : ""} onClick={() => setSides((current) => toggled(current, side))}>{side}</button>
+        ))}
+      </div>
       <div className="cells-panel-row">
-        <NumberField label="Exits" value={connections} min={0} max={4} onChange={setConnections} />
         <label>
           Seed <input type="number" value={seed} onChange={(e) => setSeed(parseInt(e.target.value, 10) || 0)} />
         </label>
@@ -174,11 +175,19 @@ function GenerateSection({grid, sized = true, onGenerate}) {
         ))}
       </div>
       <div className="cells-panel-row">
-        <button type="button" onClick={() => onGenerate({...size, connections, seed, tags: chosen})}>Generate</button>
+        <button type="button" onClick={() => onGenerate({...size, exits: SIDES.filter((side) => sides.has(side)), seed, tags: chosen})}>Generate</button>
         <button type="button" onClick={() => setOpen(false)}>Cancel</button>
       </div>
     </div>
   );
+}
+
+// A copy of set with value added, or taken out if it's there.
+function toggled(set, value) {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
 }
 
 function GridSection({draft, change}) {

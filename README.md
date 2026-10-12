@@ -57,6 +57,7 @@ draws it. Both need `npm install`; `--help` lists their flags.
 bin/cellmap-generate --cols 40 --rows 30 --exits 3 --tags chamber,paths --seed 11 -o woods.json
 bin/cellmap-render woods.json --scale 8 --auto   # with Auto Barriers' walls and fill
 bin/cellmap-generate --tags burrow,coral --theme cave | bin/cellmap-render - -o cave.png
+bin/cellmap-generate --exits north:0.2,east -o woods.json   # exits on given sides, the north one near its west end
 bin/cellmap-generate --map woods --barriers -o woods-map.json   # a whole map file
 ```
 
