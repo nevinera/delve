@@ -61,6 +61,15 @@ bin/cellmap-generate --exits north:0.2,east -o woods.json   # exits on given sid
 bin/cellmap-generate --map woods --barriers -o woods-map.json   # a whole map file
 ```
 
+`bin/zone-build` builds a zone from its `zone-build.json` (see docs/zone-build.md): every map
+generated and walled, the zone file linking them, its unit types copied into the world, and the
+world file's links to other built zones. `--dry-run` says what it would write.
+
+```sh
+bin/zone-build ../content/worlds/demo-wild/zones/thornwood/zone-build.json
+bin/zone-build --force old-growth ../content/worlds/demo-wild/zones/thornwood/zone-build.json
+```
+
 `bin/zone-outline` prints a zone's outline for an LLM to work from: each map's places (their
 tags, annotations, area, neighbors, connections and units) and the links between maps, with the
 annotations of the zone, its unit types, maps, units and NCUs.
