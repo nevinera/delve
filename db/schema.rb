@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_10_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_12_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -148,6 +148,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_10_120000) do
     t.string "objective_hash", null: false
     t.integer "position", null: false
     t.datetime "updated_at", null: false
+    t.json "used", default: [], null: false
     t.index ["character_quest_id", "objective_hash"], name: "idx_on_character_quest_id_objective_hash_b0890fad2a", unique: true
   end
 

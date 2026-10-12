@@ -92,6 +92,16 @@ RSpec.describe "InternalApi::CharacterQuests", type: :request do
       expect(response.parsed_body["quest"]).to include("timer_elapsed_seconds" => 90, "objectives" => [include("count" => 1)])
     end
 
+    it "sets a use objective's used interactables, listing them with its progress" do
+      use = {"type" => "use", "zone" => "cave", "interactables" => ["snare-1", "snare-2"]}
+      CharacterQuest.accept!(world_character, definition.merge("objectives" => [talk, use]))
+      patch("#{base}/rat-hunt", params: {used: {QuestObjective.hash_of(use) => ["snare-2"]}}, headers:, as: :json)
+      expect(response.parsed_body["quest"]["objectives"]).to eq([
+        {"hash" => talk_hash, "objective" => talk, "count" => 0, "required" => 1},
+        {"hash" => QuestObjective.hash_of(use), "objective" => use, "count" => 1, "required" => 2, "used" => ["snare-2"]}
+      ])
+    end
+
     it "refuses an unknown objective" do
       active_quest
       patch("#{base}/rat-hunt", params: {progress: {"nope" => 1}}, headers:, as: :json)

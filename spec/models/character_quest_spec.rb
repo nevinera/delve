@@ -93,6 +93,30 @@ RSpec.describe CharacterQuest do
     it "refuses a negative count" do
       expect { quest.record_progress!(QuestObjective.hash_of(kill) => -1) }.to raise_error(ActiveRecord::RecordInvalid)
     end
+
+    context "with a use objective" do
+      let(:use) { {"type" => "use", "zone" => "cave", "interactables" => ["snare-1", "snare-2", "snare-3"], "text" => "Cut the snares"} }
+      let(:definition) { super().merge("objectives" => [kill, use]) }
+      let(:use_hash) { QuestObjective.hash_of(use) }
+      let(:progress) { quest.quest_progresses.reload.find_by(objective_hash: use_hash) }
+
+      it "records which interactables are used, and counts them, out of all it lists" do
+        quest.record_progress!({}, use_hash => ["snare-2"])
+        quest.record_progress!({}, use_hash => ["snare-2", "snare-3", "snare-3"])
+        expect(progress).to have_attributes(used: ["snare-2", "snare-3"], count: 2, required: 3)
+      end
+
+      it "refuses interactables the objective doesn't list, or used on another kind of objective" do
+        expect { quest.record_progress!({}, use_hash => ["snare-9"]) }.to raise_error(ActiveRecord::RecordInvalid, /snare-9/)
+        expect { quest.record_progress!({}, QuestObjective.hash_of(kill) => ["snare-1"]) }.to raise_error(ActiveRecord::RecordInvalid, /only for use objectives/)
+      end
+
+      it "keeps them through a sync that leaves the objective unchanged" do
+        quest.record_progress!({}, use_hash => ["snare-1"])
+        quest.sync!(definition.merge("objectives" => [use]))
+        expect(progress.used).to eq(["snare-1"])
+      end
+    end
   end
 
   describe "#complete!" do

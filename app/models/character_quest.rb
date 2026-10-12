@@ -55,14 +55,13 @@ class CharacterQuest < ApplicationRecord
     self
   end
 
-  # Sets each objective's count by hash (absolute, so a retried call is
-  # harmless).
-  def record_progress!(counts)
+  # Sets each objective's count by hash, and each use objective's used
+  # interactables (which sets its count too); absolute, so a retried call
+  # is harmless.
+  def record_progress!(counts, used = {})
     transaction do
-      counts.each do |objective_hash, count|
-        progress = quest_progresses.find_by(objective_hash:) or raise UnknownObjective, "#{quest_identifier} has no objective #{objective_hash}"
-        progress.update!(count:)
-      end
+      counts.each { |objective_hash, count| progress!(objective_hash).update!(count:) }
+      used.each { |objective_hash, identifiers| progress!(objective_hash).record_used!(Array(identifiers)) }
     end
   end
 
@@ -85,6 +84,10 @@ class CharacterQuest < ApplicationRecord
   def rewards = Array(definition["rewards"])
 
   private
+
+  def progress!(objective_hash)
+    quest_progresses.find_by(objective_hash:) or raise UnknownObjective, "#{quest_identifier} has no objective #{objective_hash}"
+  end
 
   def sync_objectives!(objectives)
     hashes = objectives.each_with_index.map { |objective, position| sync_objective!(objective, position) }

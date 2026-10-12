@@ -110,7 +110,8 @@ changes.
   `timer`, `rewards`), the world version that definition is from, and the timer's elapsed
   seconds. No prose: names and texts stay in the quests file.
 - **`QuestProgress`:** one per objective: its definition, its position, its count, and its hash
-  (`QuestObjective.hash_of`), which identifies it across versions.
+  (`QuestObjective.hash_of`), which identifies it across versions. A `use` objective's also lists
+  the interactables used (`used`); its count is how many, out of all it lists.
 
 The game server counts the timer and saves it (see
 [Progress and completion](#progress-and-completion)).
@@ -128,10 +129,10 @@ to the new definition, or abandons it if the new version doesn't have it (see
 | `GET /internal_api/world_characters/:id/quests` | Game server | Active quests. |
 | `POST /internal_api/world_characters/:id/quests` `{quest: definition}` | Game server | Accepts it. Idempotent; 422 if completed. |
 | `POST /internal_api/world_characters/:id/quests/:quest/sync` `{quest: definition}` | Game server | Moves it to a newer definition, keeping progress on unchanged objectives. |
-| `PATCH /internal_api/world_characters/:id/quests/:quest` `{progress: {hash: count}, timer_elapsed_seconds}` | Game server | Sets progress and the timer (absolute values). |
+| `PATCH /internal_api/world_characters/:id/quests/:quest` `{progress: {hash: count}, used: {hash: [interactable]}, timer_elapsed_seconds}` | Game server | Sets progress, `use` objectives' used interactables (which sets their counts) and the timer (absolute values). |
 | `POST /internal_api/world_characters/:id/quests/:quest/complete` | Game server | Grants `quest/completed/<quest>`, the stored `grantsFlags` and rewards; ends the quest. Returns `{flags, items: [{identifier, name}]}` (items newly held). |
 | `DELETE /internal_api/world_characters/:id/quests/:quest` | Game server | Fails or abandons it. Idempotent. |
 
 Each quest is `{quest_identifier, world_version_id, timer_elapsed_seconds, definition,
-objectives: [{hash, objective, count, required}]}`. The game server owns the rules
+objectives: [{hash, objective, count, required, used?}]}`, with `used` on `use` objectives. The game server owns the rules
 (requirements, objectives, timers); Rails only checks that a quest isn't already completed.
