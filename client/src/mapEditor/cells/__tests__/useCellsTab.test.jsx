@@ -1,6 +1,6 @@
 import {describe, it, expect, vi, beforeEach} from "vitest";
 import {useState} from "react";
-import {act, fireEvent, render, renderHook, screen} from "@testing-library/react";
+import {act, fireEvent, render, renderHook, screen, within} from "@testing-library/react";
 
 vi.mock("../../../cellMap/cache", () => ({
   cachedCellMapImage: vi.fn(async () => ({image: {width: 10, height: 10}, timings: {}, stats: {}, stored: Promise.resolve(null)})),
@@ -193,14 +193,18 @@ describe("CellsPanel", () => {
     fireEvent.click(screen.getByRole("button", {name: "Generate…"}));
     fireEvent.change(screen.getAllByLabelText("Columns")[1], {target: {value: "30"}});
     fireEvent.change(screen.getAllByLabelText("Rows")[1], {target: {value: "20"}});
-    fireEvent.change(screen.getByLabelText("Exits"), {target: {value: "3"}});
+    // West and east are on to start with: add north, take west off.
+    const exits = within(screen.getByRole("group", {name: "Exits"}));
+    fireEvent.click(exits.getByRole("button", {name: "north"}));
+    fireEvent.click(exits.getByRole("button", {name: "west"}));
+    expect(exits.getByRole("button", {name: "west"})).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(screen.getByRole("button", {name: "chambers"}));
     fireEvent.click(screen.getByRole("button", {name: "Generate"}));
     expect(latest.draft.grid.cols).toBe(6);
     fireEvent.click(screen.getByRole("button", {name: "Generate"}));
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(latest.draft.grid).toMatchObject({cols: 30, rows: 20});
-    expect(latest.draft.exits).toHaveLength(3);
+    expect(latest.draft.exits.map((e) => e.side)).toEqual(["north", "east"]);
     expect(latest.draft.trails.length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", {name: "Undo"}));
     expect(latest.draft.grid.cols).toBe(6);

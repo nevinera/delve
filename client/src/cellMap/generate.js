@@ -69,11 +69,18 @@ const SPRINKLE_WAVELENGTH = 5;
 
 // Returns a cellMap (see docs/schema/map.md#cellmap). Unknown tags throw;
 // of exclusive ones, the first given wins.
-export function generateCellMap({cols, rows, seed = 1, connections = 0, tags = [], theme = "glade"}) {
+//
+// Exits are either `connections`, a count of them on sides picked at
+// random, or `exits`, the sides to put them on: each a side's name, or
+// {side, at} with `at` how far along the side it's centered, 0 to 1 (west
+// to east, or north to south). Without `at`, it's somewhere 30-70% along.
+export function generateCellMap({cols, rows, seed = 1, connections = 0, exits, tags = [], theme = "glade"}) {
   const unknown = tags.filter((t) => !TAGS.includes(t));
   if (unknown.length) throw new Error(`unknown tags: ${unknown.join(", ")} (known: ${TAGS.join(", ")})`);
   if (!THEMES[theme]) throw new Error(`unknown theme: ${theme}`);
   if (!(Number.isInteger(connections) && connections >= 0 && connections <= SIDES.length)) throw new Error(`connections must be 0 to ${SIDES.length}`);
+  if (exits !== undefined && connections) throw new Error("give exits or connections, not both");
+  const wanted = exits === undefined ? null : exitPlan(exits);
   const has = tagSet(tags);
   const rng = random(seed);
   const grid = new Grid(cols, rows);
@@ -87,7 +94,7 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, tags = [
     doors[a].push(path[0]);
     doors[b].push(path[path.length - 1]);
   }
-  const exits = cutExits(grid, areas, doors, connections, rng);
+  const cut = cutExits(grid, areas, doors, wanted ?? rng.shuffle(SIDES).slice(0, connections).map((side) => ({side})), rng);
   thinToCorridors(grid, areas, doors, has, rng);
   grid.joinAll(rng);
   grid.smooth();
@@ -96,9 +103,9 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, tags = [
   const fill = fillOf(theme);
   const ground = grounds(grid, areas, has, seed, rng);
   const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (grid.isOpen(c, r) ? GROUND[ground(grid.key(c, r), c, r)] : fill)).join(""));
-  const trails = has.has("paths") ? pathTrails(grid, exits, theme, rng) : [];
+  const trails = has.has("paths") ? pathTrails(grid, cut, theme, rng) : [];
   const places = placesOf(grid, areas);
-  return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(trails.length ? {trails} : {}), ...(exits.length ? {exits} : {}), ...(places.length ? {places} : {})};
+  return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(trails.length ? {trails} : {}), ...(cut.length ? {exits: cut} : {}), ...(places.length ? {places} : {})};
 }
 
 function tagSet(tags) {
@@ -510,19 +517,34 @@ function pickLinks(grid, areas, has, rng) {
 
 // ---- Exits ----
 
-// One exit on each of `count` different sides, cut from the open ground
-// nearest a spot near that side's middle out to the edge. Returns the
-// exits, as the cellMap stores them.
-function cutExits(grid, areas, doors, count, rng) {
+// The exits option as [{side, at}] (at undefined for anywhere near the
+// middle). Throws on an unknown or repeated side, or an at outside 0-1.
+function exitPlan(exits) {
+  if (!Array.isArray(exits)) throw new Error("exits must be a list of sides");
+  const plan = exits.map((exit) => (typeof exit === "string" ? {side: exit} : exit));
+  const seen = new Set();
+  for (const {side, at} of plan) {
+    if (!SIDES.includes(side)) throw new Error(`unknown exit side: ${side} (sides: ${SIDES.join(", ")})`);
+    if (seen.has(side)) throw new Error(`two exits on the ${side} side (at most one per side)`);
+    if (at !== undefined && !(Number.isFinite(at) && at >= 0 && at <= 1)) throw new Error(`the ${side} exit's at must be 0 to 1`);
+    seen.add(side);
+  }
+  return plan;
+}
+
+// An exit on each side `plan` names ([{side, at}]), cut from the open
+// ground nearest a spot `at` along that side (or near its middle) out to
+// the edge. Returns the exits, as the cellMap stores them.
+function cutExits(grid, areas, doors, plan, rng) {
   const open = [];
   for (let k = 0; k < grid.open.length; k++) if (grid.open[k]) open.push(k);
   if (!open.length) return [];
   const owner = new Map();
   areas.forEach(({cells}, i) => cells.forEach((k) => owner.set(k, i)));
   const exits = [];
-  for (const side of rng.shuffle(SIDES).slice(0, count)) {
+  for (const {side, at: along} of plan) {
     const length = sideLength(side, grid);
-    const spot = Math.round(length * (0.3 + 0.4 * rng()));
+    const spot = along === undefined ? Math.round(length * (0.3 + 0.4 * rng())) : Math.round(along * (length - 1));
     const edge = grid.key(...sideCell(side, Math.max(1, Math.min(length - 2, spot)), grid));
     const path = grid.path([edge], open, rng);
     if (!path) continue;

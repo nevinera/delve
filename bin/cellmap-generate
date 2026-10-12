@@ -13,7 +13,10 @@ const USAGE = `Usage: bin/cellmap-generate [flags]
 
   --cols N        columns (default 40)
   --rows N        rows (default 30)
-  --exits N       exits, each on a different side: 0 to 4 (default 2)
+  --exits SPEC    exits, at most one per side (default 2): a count, 0 to 4, on sides
+                  picked at random; or the sides, like north,east, each optionally
+                  with how far along it the exit sits, 0 to 1 (west to east, north to
+                  south): north:0.2,east
   --seed N        seed (default: random); the same flags and seed give the same map
   --tags a,b      generator tags: ${TAGS.join(", ")}
   --theme NAME    ${Object.keys(THEMES).join(", ")} (default glade)
@@ -24,7 +27,8 @@ const USAGE = `Usage: bin/cellmap-generate [flags]
   -h, --help
 
 Pipe it to bin/cellmap-render to see it:
-  bin/cellmap-generate --tags chamber,paths --exits 3 | bin/cellmap-render - -o map.png`;
+  bin/cellmap-generate --tags chamber,paths --exits 3 | bin/cellmap-render - -o map.png
+  bin/cellmap-generate --exits north:0.2,east,south | bin/cellmap-render - -o map.png`;
 
 const {values} = parseArgs({options: {
   cols: {type: "string", default: "40"},
@@ -54,12 +58,22 @@ function fail(message) {
   process.exit(1);
 }
 
+// --exits as generateCellMap's connections (a count) or exits (sides).
+function exitOptions(spec) {
+  if (/^\d+$/.test(spec)) return {connections: Number(spec)};
+  return {exits: spec.split(",").map((part) => part.trim()).filter(Boolean).map((part) => {
+    const [side, at, ...rest] = part.split(":");
+    if (rest.length || (at !== undefined && !/^(0|1|0?\.\d+|1\.0*)$/.test(at))) fail(`--exits: ${part} isn't a side, or side:at with at 0 to 1`);
+    return at === undefined ? side : {side, at: Number(at)};
+  })};
+}
+
 let cellMap;
 try {
   cellMap = generateCellMap({
     cols: int("cols"),
     rows: int("rows"),
-    connections: int("exits"),
+    ...exitOptions(values.exits),
     seed: values.seed === undefined ? Math.floor(Math.random() * 1_000_000) : int("seed"),
     tags: values.tags.split(",").map((t) => t.trim()).filter(Boolean),
     theme: values.theme,
