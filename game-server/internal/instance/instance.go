@@ -213,6 +213,7 @@ func NewInstance(
 	inst.commandProcessor.Register(command.RespawnHandler{})
 	inst.commandProcessor.Register(command.LootItemHandler{})
 	inst.commandProcessor.Register(command.TalkHandler{})
+	inst.commandProcessor.Register(command.UseInteractableHandler{})
 	inst.commandProcessor.Register(command.AcceptQuestHandler{})
 	inst.commandProcessor.Register(command.TurnInQuestHandler{})
 

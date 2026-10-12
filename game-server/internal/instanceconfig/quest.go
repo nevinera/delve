@@ -70,6 +70,7 @@ type ActiveObjective struct {
 	Objective QuestObjective `json:"objective"`
 	Count     int            `json:"count"`
 	Required  int            `json:"required"`
+	Used      []string       `json:"used,omitempty"` // a use objective's interactables used
 }
 
 // TimerSeconds is the quest's time limit in seconds ("90s", "5m"), or 0

@@ -313,12 +313,16 @@ func (c *Client) AbandonQuest(worldCharacterDatabaseID, questIdentifier string) 
 	return nil
 }
 
-// QuestProgress sets an active quest's objective counts (by objective
-// hash) and, when timerElapsedSeconds isn't nil, its timer (PATCH
+// QuestProgress sets an active quest's objective counts and use
+// objectives' used interactables (each by objective hash; used may be
+// nil) and, when timerElapsedSeconds isn't nil, its timer (PATCH
 // .../quests/:quest), returning the quest as Rails now stores it.
-func (c *Client) QuestProgress(worldCharacterDatabaseID, questIdentifier string, progress map[string]int, timerElapsedSeconds *int) (instanceconfig.ActiveQuest, error) {
+func (c *Client) QuestProgress(worldCharacterDatabaseID, questIdentifier string, progress map[string]int, used map[string][]string, timerElapsedSeconds *int) (instanceconfig.ActiveQuest, error) {
 	var none instanceconfig.ActiveQuest
 	body := map[string]any{"progress": progress}
+	if len(used) > 0 {
+		body["used"] = used
+	}
 	if timerElapsedSeconds != nil {
 		body["timer_elapsed_seconds"] = *timerElapsedSeconds
 	}

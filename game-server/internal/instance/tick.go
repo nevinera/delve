@@ -216,6 +216,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			state.PendingOwnershipUpdates = nil
 			state.PendingCombatEvents = nil
 			state.PendingTalks = nil
+			state.PendingUses = nil
 			prevState = state.Clone()
 			prevHeartbeatSeqs = heartbeatSeqs
 			prevMoveSeqs = moveSeqs

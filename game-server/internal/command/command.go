@@ -101,6 +101,13 @@ type TalkPayload struct {
 
 func (TalkPayload) CommandType() string { return "talk" }
 
+// UseInteractablePayload starts using an interactable (by its identifier).
+type UseInteractablePayload struct {
+	Interactable string
+}
+
+func (UseInteractablePayload) CommandType() string { return "use_interactable" }
+
 // AcceptQuestPayload accepts a quest an NCU offers.
 type AcceptQuestPayload struct {
 	NCUID uuid.UUID

@@ -381,7 +381,12 @@ type UnitState struct {
 
 // CastState tracks a unit's in-progress cast-time power - see UnitState.Casting.
 type CastState struct {
-	Power     instanceconfig.Power
+	Power instanceconfig.Power
+	// Interactable is set instead of Power while the unit is using one (a
+	// quest interactable; see command.UseInteractableHandler): no target,
+	// and its end is a use, not a power's effects.
+	Interactable *instanceconfig.Interactable
+
 	TargetID  *uuid.UUID // snapshot of unit.Target at cast start; nil for self-only powers
 	StartedAt time.Time
 	EndsAt    time.Time

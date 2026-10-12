@@ -25,10 +25,20 @@ import (
 //     if the cast actually resolved - starting a cast requires having
 //     enough resources, but doesn't spend them until it completes
 //     successfully (see command.SpendPowerCost).
+//
+// A unit using an interactable (Casting.Interactable) has nothing to
+// resolve: at EndsAt it's a Use, for its quest objectives.
 func tickCasts(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time, events *[]CombatEvent, rng *rand.Rand) {
 	for id, unit := range state.Units {
 		cast := unit.Casting
 		if cast == nil {
+			continue
+		}
+		if cast.Interactable != nil {
+			if !now.Before(cast.EndsAt) {
+				state.PendingUses = append(state.PendingUses, instancestate.Use{UnitID: id, Interactable: cast.Interactable.Identifier, Map: unit.MapIdentifier})
+				unit.Casting = nil
+			}
 			continue
 		}
 

@@ -722,6 +722,12 @@ func castingJSON(c *instancestate.CastState) (power *string, startedAt, endsAt *
 		return nil, nil, nil
 	}
 	name := c.Power.Name
+	if c.Interactable != nil {
+		name = c.Interactable.UseText
+		if name == "" {
+			name = c.Interactable.Name
+		}
+	}
 	started := c.StartedAt.UnixMilli()
 	ends := c.EndsAt.UnixMilli()
 	return &name, &started, &ends
