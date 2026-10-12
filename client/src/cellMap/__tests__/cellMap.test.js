@@ -259,13 +259,14 @@ describe("trails", () => {
     }
   });
 
-  it("clears crowns off the trail, and lines it with them", () => {
-    const scene = buildScene(forest);
-    const [trail] = scene.trails;
-    const near = (c) => Math.min(...trail.points.map((p) => Math.hypot(c.x - p.x, c.y - p.y)));
+  it("clears no trees for a trail: crowns and the forest's mass are as without it", () => {
+    // Trees, with an open strip through the middle for the trail.
+    const strip = {...tiny(Array.from({length: 12}, (_, r) => (r >= 5 && r <= 7 ? "." : "T").repeat(12))), trails: [{width: 1, points: [[0, 6], [11, 6]]}]};
+    const scene = buildScene(strip);
+    const bare = buildScene({...strip, trails: []});
     expect(scene.crowns.length).toBeGreaterThan(0);
-    expect(scene.crowns.every((c) => near(c) > trail.width / 2)).toBe(true);
-    expect(buildScene({...forest, trails: []}).crowns).toEqual([]);
+    expect(scene.crowns).toEqual(bare.crowns);
+    expect(scene.forest).toEqual(bare.forest);
   });
 
   it("fades out where a trail just stops, but not where it meets another", () => {
@@ -282,12 +283,6 @@ describe("trails", () => {
     const joint = warp(cellPoint(6, 6, 5), map.seed);
     expect(branch.caps[0].x).toBeCloseTo(joint.x);
     expect(branch.caps[0].y).toBeCloseTo(joint.y);
-  });
-
-  it("leaves out of the forest's mass what a trail clears", () => {
-    const area = (scene) => scene.forest.reduce((sum, loop) => sum + loop.length, 0);
-    expect(area(buildScene(forest))).toBeGreaterThan(area(buildScene({...forest, trails: []})));
-    expect(buildScene(forest).forest.length).toBeGreaterThan(1);
   });
 
   it("keeps grass and reeds off the trail", () => {

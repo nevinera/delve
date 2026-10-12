@@ -141,8 +141,7 @@ describe("generateCellMap", () => {
 
   // As the validators check them: every piece of every exit's line, however
   // short, with open ground on exactly one side. At zone-build's sizes,
-  // trails used to clear edge trees beside their exits, and rounding left
-  // walls short of the east and north exits' lines.
+  // rounding used to leave walls short of the east and north exits' lines.
   it("walls big maps so every piece of every exit's line has open ground on one side", {timeout: 60000}, () => {
     for (const [seed, tags] of [[41, ["hub", "paths"]], [5, ["coral", "paths"]], [12, ["wet", "paths"]], [3, ["cavities", "paths"]], [8, ["burrow", "rough", "paths"]], [21, ["chamber", "paths"]]]) {
       const map = generateCellMap({cols: 100, rows: 100, seed, tags, exits: ["north", "east", "south", "west"]});

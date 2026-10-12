@@ -228,6 +228,10 @@ describe("autoBarriers", () => {
     expect(result.error).toBeNull();
     expect(result.segments).toBeLessThanOrEqual(3000);
   });
+
+  it("walls trees a trail runs through, as if it weren't there", () => {
+    expect(autoBarriers(woodland).barriers).toEqual(autoBarriers({...woodland, trails: []}).barriers);
+  });
 });
 
 describe("clipLoop", () => {

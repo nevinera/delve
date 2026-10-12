@@ -36,7 +36,6 @@ import {THEMES, VERSION, fillOf} from "./format";
 import {noise} from "./regions";
 import {PATHS} from "./style";
 import {traceLabels} from "./places";
-import {trailClearedCells} from "./scene";
 
 export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
 
@@ -48,12 +47,22 @@ const EXCLUSIVE = [["chamber", "hub", "burrow"], ["cavities", "coral", "chaotic"
 const GAP = 4;
 const MARGIN = 3;
 
+// Areas' sizes are for a 40x30 map (this much room inside the margin), and
+// grow with the square root of a bigger map's room, so a big map has
+// bigger areas as well as more of them.
+const REF_ROOM = 34 * 24;
+
 // How much of the map (inside the margin) areas cover.
 const COVER = 0.3;
 const TIGHT_COVER = 0.38;
 
 // How many free cells a new area's start is picked from (see pickSeed).
 const SEED_PICKS = 8;
+
+// A thin dead-end area (no wider than this many cells from the trees to
+// its middle) ends in a clearing this many cells across its middle.
+const SPUR_DEPTH = 2;
+const CLEARING_RADIUS = 4;
 
 // Doors, corridors and exits are cut this many cells either side of
 // their middle line, so they're wide enough to walk through.
@@ -98,6 +107,7 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, exits, t
   const cut = cutExits(grid, areas, doors, wanted ?? rng.shuffle(SIDES).slice(0, connections).map((side) => ({side})), rng);
   thinToCorridors(grid, areas, doors, has, rng);
   grid.joinAll(rng);
+  clearSpurs(grid, areas, doors);
   grid.smooth();
   grid.widen();
 
@@ -105,7 +115,6 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, exits, t
   const ground = grounds(grid, areas, has, seed, rng);
   const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (grid.isOpen(c, r) ? GROUND[ground(grid.key(c, r), c, r)] : fill)).join(""));
   const trails = has.has("paths") ? pathTrails(grid, cut, theme, rng) : [];
-  if (trails.length) widenToTrails(cut, {theme, grid: {type: "hex", cols, rows}, cells, trails});
   const places = placesOf(grid, areas);
   return {version: VERSION, theme, grid: {type: "hex", cols, rows}, seed, cells, ...(trails.length ? {trails} : {}), ...(cut.length ? {exits: cut} : {}), ...(places.length ? {places} : {})};
 }
@@ -402,12 +411,13 @@ function growAreas(grid, has, rng) {
   const target = room * (has.has("tight") ? TIGHT_COVER : COVER);
   const weight = growthWeight(has);
   const base = rng.int(35, 45);
+  const scale = Math.max(1, Math.sqrt(room / REF_ROOM));
   const areas = [];
   let covered = 0;
   for (let attempts = 0; covered < target && attempts < 200; attempts++) {
     const seed = pickSeed(grid, areas, blocked, has, rng);
     if (seed === null) break;
-    const size = areas.length === 0 && has.has("hub") ? Math.round(room * 0.28) : areaSize(has, rng, base);
+    const size = areas.length === 0 && has.has("hub") ? Math.round(room * 0.28) : Math.round(areaSize(has, rng, base) * scale);
     const id = areas.length;
     const cells = grow(grid, seed, size, (k) => !blocked[k] && owner[k] < 0, weight, rng);
     if (cells.length < Math.min(size, 10)) continue;
@@ -559,41 +569,43 @@ function cutExits(grid, areas, doors, plan, rng) {
     let [from, to] = [at, at];
     while (isOpen(from - 1)) from--;
     while (isOpen(to + 1)) to++;
+    // Where the way out runs along the edge, it can open edge cells apart
+    // from that stretch: nothing else opens this side's edge, so the exit
+    // spans them all, opening the trees between.
+    for (let i = 0; i < length; i++) if (isOpen(i)) [from, to] = [Math.min(from, i), Math.max(to, i)];
+    grid.openCells(Array.from({length: to - from + 1}, (_, i) => grid.key(...sideCell(side, from + i, grid))), 0, {edge: true});
     exits.push({side, from, to});
   }
   return SIDES.flatMap((side) => exits.filter((e) => e.side === side));
 }
 
-// A trail can clear the trees on the map's edge beside its exit, where it
-// comes in at a slant: those edge cells become open ground like the exit's
-// own, and the exit grows over them, so the open ground still only reaches
-// the edge at exits. Changes map.cells (its rows) and the exits in place.
-function widenToTrails(exits, map) {
-  const cleared = trailClearedCells(map);
-  const fill = fillOf(map.theme);
-  const rows = map.cells.map((line) => [...line]);
-  const at = (side, i) => {
-    const [c, r] = sideCell(side, i, map.grid);
-    return {c, r, ch: rows[r][c]};
-  };
-  const clearedTree = (side, i) => {
-    const {c, r, ch} = at(side, i);
-    return ch === fill && cleared(c, r);
-  };
-  for (const exit of exits) {
-    const length = sideLength(exit.side, map.grid);
-    const ground = at(exit.side, exit.from).ch;
-    const open = (i) => {
-      const {c, r} = at(exit.side, i);
-      rows[r][c] = ground;
-    };
-    while (exit.from > 0 && clearedTree(exit.side, exit.from - 1)) open(--exit.from);
-    while (exit.to < length - 1 && clearedTree(exit.side, exit.to + 1)) open(++exit.to);
-  }
-  map.cells.splice(0, map.cells.length, ...rows.map((line) => line.join("")));
-}
-
 // ---- Corridors ----
+
+// Thin areas with one way in or none (joined by a corridor later) read as
+// tunnels to nowhere: each gets a clearing at its far end, kept off the
+// map's edge and away from other areas.
+function clearSpurs(grid, areas, doors) {
+  const depth = openDepth(grid);
+  const owner = new Map();
+  areas.forEach(({cells}, i) => cells.forEach((k) => owner.set(k, i)));
+  areas.forEach(({cells}, i) => {
+    if (doors[i].length > 1) return;
+    const open = cells.filter((k) => grid.open[k]);
+    if (!open.length || Math.max(...open.map((k) => depth[k])) > SPUR_DEPTH) return;
+    // Its farthest cell from its door, through it.
+    const inArea = new Set(open);
+    const start = inArea.has(doors[i][0]) ? doors[i][0] : open[0];
+    const seen = new Set([start]);
+    let frontier = [start];
+    let far = start;
+    while (frontier.length) {
+      far = frontier[0];
+      frontier = frontier.flatMap((k) => grid.neighbors(k)).filter((n) => inArea.has(n) && !seen.has(n) && seen.add(n));
+    }
+    const away = (k) => grid.ball(k, GAP / 2).every((b) => !owner.has(b) || owner.get(b) === i || !grid.open[b]);
+    for (const k of grid.ball(far, CLEARING_RADIUS)) if (grid.edgeDistance(k) >= MARGIN && away(k)) grid.open[k] = 1;
+  });
+}
 
 // Some areas with two or more doors shrink to the ways between their
 // doors.

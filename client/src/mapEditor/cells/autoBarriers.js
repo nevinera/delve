@@ -2,7 +2,7 @@
 // water meet open ground, so they block and everything else is open.
 // Trees' walls block sight; water's don't (you can see and shoot across
 // it), and where trees meet water the trees' wall does. Walls follow the
-// cells' edges (less the tree cells trails clear - see cellMap/scene.js),
+// cells' edges (trails clear nothing: they run on open ground),
 // through the middle of each hex edge so a column's zigzag is a straight
 // line, then smoothed so a row's is too, bent as the drawn edges are
 // (see cellMap/regions.js's warp), then simplified. Where trees,
@@ -22,7 +22,6 @@
 // rail across an end too, if that end's over water.
 //
 // Works in map feet (y up); the scene is in cellmap feet (y down).
-import {trailClearedCells} from "../../cellMap/scene";
 import {latticeCorner, PAD, unwarp, warp} from "../../cellMap/regions";
 import {CELL_SIZE, cellAt, cellCenter, cellPoint, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
 import {terrainAt} from "../../cellMap/format";
@@ -57,10 +56,9 @@ const SMOOTHING_PASSES = 3;
 export function autoBarriers(cellMap, existingFillPoints = []) {
   const {width, height} = mapSize(cellMap.grid);
   const toMap = ({x, y}) => [x, height - y];
-  const cleared = trailClearedCells(cellMap);
   const blocking = (c, r) => {
     const terrain = terrainAt(cellMap, c, r);
-    return terrain in BLOCKERS && !(terrain === "trees" && cleared(c, r)) ? terrain : null;
+    return terrain in BLOCKERS ? terrain : null;
   };
   const bridges = cellMap.bridges ?? [];
   const onBridge = new Set(bridges.flatMap((bridge) => bridgeCells(bridge).map((cell) => cell.join(","))));

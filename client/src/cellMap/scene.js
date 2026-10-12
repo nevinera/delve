@@ -55,10 +55,6 @@ const MARSH_WANDER = 2.5;
 const MARSH_WAVELENGTH = 9;
 const MARSH_BANK = 1.6;
 
-// Trails clear trees this far past their edge (in cell sizes): cells that
-// near count as open ground for the forest's band, so crowns line them.
-const TRAIL_CLEARANCE = 0.4;
-
 // Crowns fill a band along the forest's edge, one entry per cell of depth
 // (the chance a cell that deep gets a crown; see the style's forest.band);
 // deeper in, the dark mass shows. Rock is hatched along its edge instead,
@@ -93,17 +89,6 @@ function edgeWarp(p, {width, height}, seed) {
   return {x: p.x + (w.x - p.x) * hold, y: p.y + (w.y - p.y) * hold};
 }
 
-function trailCleared(trails) {
-  const cells = trailClearings(trails, CELL_SIZE, TRAIL_CLEARANCE);
-  return (col, row) => cells.has(`${col},${row}`);
-}
-
-// Whether a trail clears the cell at (col, row) - nothing grows there, and
-// it's open ground (see mapEditor/cells/autoBarriers.js).
-export function trailClearedCells(map) {
-  return trailCleared(sceneTrails(map, mapSize(map.grid)));
-}
-
 export function buildScene(map, style = resolveStyle(map)) {
   const cellSize = CELL_SIZE;
   const {seed} = map;
@@ -119,18 +104,16 @@ export function buildScene(map, style = resolveStyle(map)) {
   if (style.water.edge === "ice") scene.ice = scene.water.map((loop) => jaggedInset(loop, ICE_DEPTH * cellSize, ICE_JAGGED, seed));
   scene.bridges = (map.bridges ?? []).map(bridgeDeck);
   scene.trails = sceneTrails(map, scene);
-  const cleared = trailCleared(scene.trails);
-  // The forest's mass leaves out what trails clear, as its crowns do. Rock
-  // is rough, and comes right to its cells' edge.
-  scene.forest = regionLoops(map, "trees", cleared).map((loop) => (rock ? smoothLoop(loop, cellSize, seed) : insetLoop(smoothLoop(loop, cellSize, seed, FOREST_SMOOTHING), FOREST_INSET * cellSize)));
+  // Trails run on open ground only, and clear no trees. Rock is rough, and
+  // comes right to its cells' edge.
+  scene.forest = regionLoops(map, "trees").map((loop) => (rock ? smoothLoop(loop, cellSize, seed) : insetLoop(smoothLoop(loop, cellSize, seed, FOREST_SMOOTHING), FOREST_INSET * cellSize)));
   const band = rock ? HATCH_BAND : style.forest.band;
-  const depth = forestDepths(map, cleared, band.length);
+  const depth = forestDepths(map, band.length);
   eachCell(map, (col, row, terrain) => {
     const h = (salt) => hash01(seed, col, row, salt);
     const variant = (kind, salt) => Math.floor(h(salt) * style.variants[kind]);
     const {x, y} = cellCenter(col, row, cellSize);
     if (terrain === "trees") {
-      if (cleared(col, row)) return;
       const d = depth.get(`${col},${row}`);
       if (!(h(4) < band[d - 1])) return;
       if (rock) {
@@ -146,7 +129,7 @@ export function buildScene(map, style = resolveStyle(map)) {
         const pull = [0, 1, 2, 3, 4, 5]
           .filter((edge) => {
             const [nc, nr] = neighbor(col, row, edge);
-            return terrainAt(map, nc, nr) !== "trees" || cleared(nc, nr);
+            return terrainAt(map, nc, nr) !== "trees";
           })
           .reduce((v, edge) => ({x: v.x - edgeDir(edge).x, y: v.y - edgeDir(edge).y}), {x: 0, y: 0});
         const l = Math.hypot(pull.x, pull.y) || 1;
@@ -211,8 +194,8 @@ export function buildScene(map, style = resolveStyle(map)) {
 
 // How many cells each decorated tree cell is from open ground (1 on the
 // edge), up to one past the band (bandLength cells deep); deeper cells
-// count as that. Tree cells a trail clears count as open.
-function forestDepths(map, cleared, bandLength) {
+// count as that.
+function forestDepths(map, bandLength) {
   const {cols, rows} = map.grid;
   const reach = DECORATION_PAD + bandLength;
   const inside = (c, r) => c >= -reach && c < cols + reach && r >= -reach && r < rows + reach;
@@ -220,7 +203,7 @@ function forestDepths(map, cleared, bandLength) {
   let frontier = [];
   for (let c = -reach; c < cols + reach; c++) {
     for (let r = -reach; r < rows + reach; r++) {
-      if (terrainAt(map, c, r) !== "trees" || cleared(c, r)) frontier.push([c, r]);
+      if (terrainAt(map, c, r) !== "trees") frontier.push([c, r]);
     }
   }
   for (let d = 1; d <= bandLength && frontier.length; d++) {
@@ -229,7 +212,7 @@ function forestDepths(map, cleared, bandLength) {
       for (let edge = 0; edge < 6; edge++) {
         const [nc, nr] = neighbor(c, r, edge);
         const key = `${nc},${nr}`;
-        if (!inside(nc, nr) || depth.has(key) || terrainAt(map, nc, nr) !== "trees" || cleared(nc, nr)) continue;
+        if (!inside(nc, nr) || depth.has(key) || terrainAt(map, nc, nr) !== "trees") continue;
         depth.set(key, d);
         next.push([nc, nr]);
       }
