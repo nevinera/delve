@@ -89,15 +89,16 @@ describe("questOps", () => {
     ]);
   });
 
-  it("offers each zone's maps, NCUs, units and unit types for picking", () => {
+  it("offers each zone's maps, NCUs, units, interactables and unit types for picking", () => {
     const draft = fixtureDraft()
-      .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle"}]}))
+      .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle"}], interactables: [{identifier: "snare-1"}]}))
       .update("worlds/w/zones/forest/forest.json", (zone) => ({...zone, items: {"iron-ring": {$ref: "../../items/iron-ring.json"}}}));
     const [forest, cave] = questChoices(draft);
     expect(forest).toEqual({
       key: "forest", name: "Forest",
       maps: [{key: "hub", name: "Hub", ncus: [{identifier: "grizzle", name: "Grizzle"}],
-        units: [{identifier: "goblin-a", unitType: "goblin"}, {identifier: "archer-a", unitType: "archer"}]}],
+        units: [{identifier: "goblin-a", unitType: "goblin"}, {identifier: "archer-a", unitType: "archer"}],
+        interactables: [{identifier: "snare-1", name: "snare-1"}]}],
       unitTypes: [{key: "goblin", name: "Goblin"}],
     });
     expect(cave).toMatchObject({key: "cave", maps: [], unitTypes: []});

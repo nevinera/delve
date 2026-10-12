@@ -183,10 +183,13 @@ export function worldItems(draft) {
   return {keys, details};
 }
 
-// raw NCU tokenImageUrl -> displayable URL, for every NCU on the map.
+// raw image URL -> displayable URL, for every NCU's token and every
+// interactable's images on the map (all relative to the map's file).
 export function ncuTokenUrls(draft, zone, map, assetUrl) {
   const path = mapFile(draft.worldKey, zone, map);
-  const raws = [...new Set((mapData(draft, zone, map)?.ncus ?? []).map((n) => n.tokenImageUrl).filter(Boolean))];
+  const data = mapData(draft, zone, map) ?? {};
+  const images = [...(data.ncus ?? []).map((n) => n.tokenImageUrl), ...(data.interactables ?? []).flatMap((i) => [i.imageUrl, i.usedImageUrl])];
+  const raws = [...new Set(images.filter(Boolean))];
   return Object.fromEntries(raws.map((raw) => [raw, raw.startsWith(":") ? raw : assetUrl(resolvePath(path, raw))]));
 }
 

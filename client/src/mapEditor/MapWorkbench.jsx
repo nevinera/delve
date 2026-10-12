@@ -9,6 +9,7 @@ import FillPointsPanel from "./FillPointsPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import UnitsTab, {paletteKeys} from "./UnitsTab";
 import NcusPanel from "./NcusPanel";
+import InteractablesPanel from "./InteractablesPanel";
 import CellsPanel from "./cells/CellsPanel";
 import {useCellsTab} from "./cells/useCellsTab";
 import {autoBarriers} from "./cells/autoBarriers";
@@ -226,6 +227,8 @@ export default function MapWorkbench({
   const [selectedNcuIndex, setSelectedNcuIndex] = useState(null);
   const [hoveredNcuIndex, setHoveredNcuIndex] = useState(null);
   const [expandedNcuIndices, setExpandedNcuIndices] = useState(() => new Set());
+  const [selectedInteractableIndex, setSelectedInteractableIndex] = useState(null);
+  const [hoveredInteractableIndex, setHoveredInteractableIndex] = useState(null);
 
   function switchTab(next) {
     setUiState(uiState.clearModes().with({hoveredUnitType: null, hoveredGroupIdentifier: null, hoveredUnitIndex: null}));
@@ -672,6 +675,10 @@ export default function MapWorkbench({
         hoveredNcuIndex={hoveredNcuIndex}
         onHoverNcu={setHoveredNcuIndex}
         expandedNcuIndices={expandedNcuIndices}
+        selectedInteractableIndex={selectedInteractableIndex}
+        onSelectInteractable={setSelectedInteractableIndex}
+        hoveredInteractableIndex={hoveredInteractableIndex}
+        onHoverInteractable={setHoveredInteractableIndex}
         selectedPlaceIndex={selectedPlaceIndex}
         hoveredPlaceIndex={hoveredPlaceIndex}
         onSelectPlace={setSelectedPlaceIndex}
@@ -823,6 +830,22 @@ export default function MapWorkbench({
               wanderLocationPlacement={uiState.wanderLocationPlacement}
               onStartWanderLocationPlacement={(i) => setUiState(uiState.startWanderLocationPlacement(i, "ncus"))}
               onUpdateMovement={(i, fields) => updateMovement(i, fields, "ncus")}
+              dispatch={dispatch}
+            />
+            <InteractablesPanel
+              interactables={mapData.interactables ?? []}
+              imageUrls={ncuTokenUrls}
+              images={tokenImages}
+              selectedIndex={selectedInteractableIndex}
+              onSelect={setSelectedInteractableIndex}
+              hoveredIndex={hoveredInteractableIndex}
+              onHover={setHoveredInteractableIndex}
+              tool={uiState.tool}
+              placement={uiState.placement}
+              canPlaceOnMap={canPlaceOnMap}
+              onStartAdd={() => setUiState(uiState.startTool("add-interactable"))}
+              unitPlacement={uiState.unitPlacement}
+              onStartUnitPlacement={(i) => setUiState(uiState.startUnitPlacement(i, "interactables"))}
               dispatch={dispatch}
             />
           </>

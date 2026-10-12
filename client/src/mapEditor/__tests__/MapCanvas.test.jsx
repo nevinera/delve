@@ -915,6 +915,50 @@ describe("MapCanvas", () => {
       expect(onToolChange).toHaveBeenCalledWith("select");
     });
 
+    it("places an interactable on a single click with add-interactable, selects it, then reverts the tool", () => {
+      const dispatch = vi.fn();
+      const onToolChange = vi.fn();
+      const onSelectInteractable = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-interactable" onToolChange={onToolChange} onSelectInteractable={onSelectInteractable}
+        />
+      );
+      fitToImageSize();
+      fireEvent.pointerDown(document.querySelector(".map-canvas-wrapper"), {clientX: 50, clientY: 0}); // (10, 120)ft
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "ADD_ENTRY", section: "interactables",
+        entry: {
+          identifier: expect.stringMatching(/^interactable-[a-z]{6}$/), name: "New Interactable", imageUrl: "",
+          size: {width: 3, height: 3}, position: {x: 10, y: 120, angle: 0},
+        },
+      });
+      expect(onSelectInteractable).toHaveBeenCalledWith(0);
+      expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("draws an interactable at its size and turn, and dragging it moves it", () => {
+      const dispatch = vi.fn();
+      const interactables = [{identifier: "snare-1", name: "Snare", imageUrl: "", size: {width: 4, height: 2}, position: {x: 5, y: 5, angle: 90}}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop}
+          mapData={mapData({feetDimensions: FEET_DIMENSIONS, interactables})}
+          dispatch={dispatch} onSelectBarrier={noop} onSelectInteractable={noop}
+        />
+      );
+      fitToImageSize();
+      const shape = document.querySelector("[data-interactable='0']");
+      expect(shape.getAttribute("transform")).toMatch(/rotate\(90\)/);
+      expect(shape.querySelector("rect").getAttribute("width")).toBe("20"); // 4 ft at 5 px/ft
+
+      fireEvent.pointerDown(shape, {pointerId: 1});
+      fireEvent.pointerMove(document.querySelector(".map-canvas-wrapper"), {clientX: 50, clientY: 575, pointerId: 1});
+      expect(dispatch.mock.calls[0][0]).toMatchObject({type: "UPDATE_ENTRY_FIELD", section: "interactables", index: 0, field: "position", value: {angle: 90}});
+    });
+
     it("dragging an NCU's token moves it within the ncus section", () => {
       const dispatch = vi.fn();
       const ncus = [{identifier: "grizzle", name: "Grizzle", tokenImageUrl: "", tokenRadius: 2, position: {x: 5, y: 5, angle: 90}}];
