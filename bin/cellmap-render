@@ -27,6 +27,8 @@ const USAGE = `Usage: bin/cellmap-render FILE [flags]
                   --auto, made by Auto Barriers)
   --auto          make the barriers with Auto Barriers instead of the file's
   --places        the map's places, outlined and labeled (a map file's; or Auto Barriers')
+  --units         a map file's units (red hostile, yellow neutral, green friendly) with
+                  their wander circles and patrols, and its NCUs (blue)
   -h, --help`;
 
 const {values, positionals} = parseArgs({allowPositionals: true, options: {
@@ -41,6 +43,7 @@ const {values, positionals} = parseArgs({allowPositionals: true, options: {
   barriers: {type: "boolean", default: false},
   auto: {type: "boolean", default: false},
   places: {type: "boolean", default: false},
+  units: {type: "boolean", default: false},
   help: {type: "boolean", short: "h", default: false},
 }});
 if (values.help) {
@@ -74,6 +77,7 @@ if (values.trails) {
 if (values.exits) drawExits(ctx, cellMap, scale);
 if (values.barriers || values.auto) await drawBarriers(ctx, data, cellMap, scale);
 if (values.places) await drawPlaces(ctx, data, cellMap, scale);
+if (values.units) drawUnits(ctx, data, cellMap, scale);
 
 const out = values.out ?? (file === "-" ? "map.png" : file.replace(/\.json$/, "") + ".png");
 writeFileSync(out, canvas.toBuffer("image/png"));
@@ -158,4 +162,38 @@ async function drawPlaces(ctx, data, cellMap, scale) {
     ctx.fillStyle = "#fff";
     ctx.fillText(text, x, y);
   }
+}
+
+// A map file's units and NCUs, in map feet (y up): a dot each, a faint
+// circle for a wanderer's range, a line for a patrol.
+function drawUnits(ctx, data, cellMap, scale) {
+  const {height} = mapSize(cellMap.grid);
+  const COLORS = {hostile: "#e03030", neutral: "#e8c020", friendly: "#30c040"};
+  ctx.lineWidth = 1.5 / scale;
+  for (const {position, hostility, movement} of data.units ?? []) {
+    if (!position) continue;
+    if (movement?.type === "wander" && movement.location) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.beginPath();
+      ctx.arc(movement.location.x, height - movement.location.y, movement.radius, 0, 2 * Math.PI);
+      ctx.stroke();
+    } else if (movement?.type === "patrol") {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.beginPath();
+      movement.steps.forEach(({position: p}, i) => (i ? ctx.lineTo(p.x, height - p.y) : ctx.moveTo(p.x, height - p.y)));
+      ctx.stroke();
+    }
+    dot(ctx, position.x, height - position.y, 2, COLORS[hostility] ?? "#fff", scale);
+  }
+  for (const {position} of data.ncus ?? []) if (position) dot(ctx, position.x, height - position.y, 3, "#30a0ff", scale);
+}
+
+function dot(ctx, x, y, radius, color, scale) {
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2 / scale;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
 }

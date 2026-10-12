@@ -45,6 +45,8 @@ ncu: ranger-sela "Ranger Sela" ../../../tokens/ncu/ranger-2.webp wander 5
 
 - On open ground in the place, kept clear of walls by their token radius, and 20 ft from the map's
   connections, so players don't arrive into a fight.
+- As many encounters as density x area, rounded at random (but the same way every run), so a
+  sparse place too small for one gets one now and then.
 - Spaced by density: encounters about 0.75 x sqrt(1000 / density) feet apart (10 to 40), and from
   units and NCUs already there.
 - Off the trails (7.5 ft either side) where they can be, unless the place is `dense` or more.

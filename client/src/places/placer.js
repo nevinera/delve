@@ -54,6 +54,7 @@ export function placeMap(map, {unitTypes = {}, unitIds = new Set(), ncuIds = new
     const cells = ground.cellsOf(index);
     if (!cells.length) return;
     const rng = seeded(`${map.identifier}/${place.identifier}`);
+    const roll = rng();
     const here = units.filter((u) => u.position && ground.placeNear(u.position.x, u.position.y) === index);
     const notes = [];
     let encounters = new Set(here.map((u) => u.groupIdentifier || u.identifier)).size;
@@ -101,7 +102,10 @@ export function placeMap(map, {unitTypes = {}, unitIds = new Set(), ncuIds = new
     }
 
     // Then the mix, up to the density, off the trail unless it's dense.
-    const target = Math.round((plan.density * cells.length * STEP * STEP) / 1000);
+    // Rounded at random (the place's own draw), so small places get their
+    // share: a sparse place a third the size gets a unit a third of the time.
+    const exact = (plan.density * cells.length * STEP * STEP) / 1000;
+    const target = Math.floor(exact) + (roll < exact - Math.floor(exact) ? 1 : 0);
     const offTrail = plan.density < 1;
     const order = shuffle(cells, rng);
     const candidates = offTrail ? [...order.filter((c) => !ground.trail[c]), ...order.filter((c) => ground.trail[c])] : order;

@@ -97,6 +97,15 @@ describe("placeMap", () => {
     expect(again.placed.every((p) => p.units === 0)).toBe(true);
   });
 
+  it("rounds at random, so places too small for a whole encounter get one now and then", () => {
+    const map = camp();
+    map.places = map.places.map((p) => ({...p, annotations: {population: "density: 0.2\nmix: wolf"}}));
+    const {placed} = placeMap(map, {unitTypes});
+    const counts = placed.map((p) => p.units);
+    expect(counts.some((n) => n === 0)).toBe(true);
+    expect(counts.some((n) => n > 0)).toBe(true);
+  });
+
   it("counts the units already there toward the density", () => {
     const {map} = planned("density: normal\nmix: wolf");
     const full = placeMap(map, {unitTypes}).map;
