@@ -32,7 +32,7 @@ describe("AtlasLevel", () => {
     const {result} = renderLevel();
     expect(screen.getByText("Forest (the whole zone)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", {name: "Guess atlas"}));
-    expect(atlasData(result.draft).zones.forest.maps).toEqual({hub: {x: 0, y: 0}});
+    expect(atlasData(result.draft).zones.forest.maps).toEqual({hub: {x: 60, y: 60}});
     expect(screen.queryByText("Not laid out")).toBeNull();
     expect(screen.getByLabelText("Map hub")).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Reset atlas"})).toBeInTheDocument();
@@ -49,21 +49,22 @@ describe("AtlasLevel", () => {
   it("drags a corner outward, north up", () => {
     const {result} = renderLevel(resetAtlas(fixtureDraft()));
     drag(screen.getByLabelText("Corner 4 of forest"), -20, -20);
-    expect(atlasData(result.draft).zones.forest.outline[3]).toEqual({x: -100, y: 200});
+    expect(atlasData(result.draft).zones.forest.outline[3]).toEqual({x: -100, y: 320});
   });
 
   it("stops a corner at another zone", () => {
-    // The empty cave zone is a 1 ft square just east of the forest.
+    // The forest is a 220 ft square; the empty cave zone's starts 120 ft
+    // east of it.
     const {result} = renderLevel(resetAtlas(fixtureDraft()));
-    drag(screen.getByLabelText("Corner 3 of forest"), 20, -20);
-    expect(atlasData(result.draft).zones.forest.outline[2].x).toBeLessThanOrEqual(100);
+    drag(screen.getByLabelText("Corner 2 of forest"), 40, 0);
+    expect(atlasData(result.draft).zones.forest.outline[1].x).toBeLessThanOrEqual(340);
   });
 
   it("won't drag a corner into a map", () => {
     const {result} = renderLevel(resetAtlas(fixtureDraft()));
-    const before = atlasData(result.draft).zones.forest.outline[2];
-    drag(screen.getByLabelText("Corner 3 of forest"), -10, 10);
-    expect(atlasData(result.draft).zones.forest.outline[2]).toEqual(before);
+    drag(screen.getByLabelText("Corner 3 of forest"), -20, 20); // to (120, 120), inside the hub
+    expect(atlasData(result.draft).zones.forest.outline[2]).not.toEqual({x: 120, y: 120});
+    expect(screen.queryByText("Problems")).toBeNull();
   });
 
   it("drags a zone with its maps", () => {
@@ -71,7 +72,7 @@ describe("AtlasLevel", () => {
     drag(screen.getByLabelText("Zone forest"), -20, 0);
     const forest = atlasData(result.draft).zones.forest;
     expect(forest.outline[0]).toEqual({x: -100, y: 0});
-    expect(forest.maps.hub).toEqual({x: -100, y: 0});
+    expect(forest.maps.hub).toEqual({x: -40, y: 60});
   });
 
   it("opens a map on double-click", () => {

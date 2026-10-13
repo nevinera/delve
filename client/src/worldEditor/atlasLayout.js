@@ -2,19 +2,23 @@
 // zone's maps sit geographically, for the author to adjust from.
 //
 // Maps are laid out a zone at a time, walking its zoneLinks: each map is set
-// beside the one it links from, past the edge that map's connection is on,
-// lined up along it so the two connections meet. A map that would overlap
-// one already placed is pushed further out the same way. A zone's maps that
-// link to nothing it has go east of the rest. Each zone's outline is then
-// the smallest square around its maps, and zones are laid out the same way
-// as maps, walking the worldLinks, so linked maps face each other across
-// zone edges. Zones linked to nothing go east of the rest.
+// beside the one it links from, MAP_GAP feet past the edge that map's
+// connection is on, lined up along it so the two connections face each
+// other. A map that would overlap (or crowd) one already placed is pushed
+// further out the same way. A zone's maps that link to nothing it has go
+// east of the rest. Each zone's outline is then the smallest square around
+// its maps, ZONE_MARGIN feet clear of them, and zones are laid out the same
+// way as maps, ZONE_GAP feet apart, walking the worldLinks, so linked maps
+// face each other across zone edges. Zones linked to nothing go east of the
+// rest. The gaps leave room to see the links.
 //
 // Input: {zones: {key: {maps, zoneLinks, openConnections}}, worldLinks},
 // each map {identifier, feetDimensions, connections} as in its map file.
 // Positions are rounded to whole feet.
 
-const GAP = 0; // feet between unlinked maps (and zones) set side by side
+const MAP_GAP = 60; // feet between maps
+const ZONE_MARGIN = 60; // feet between a zone's outline and its maps
+const ZONE_GAP = 120; // feet between zones
 
 // The side of a map (feet: width x height, origin at its south-west
 // corner, y north) nearest to a point on it.
@@ -43,50 +47,53 @@ function overlaps(a, b) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
-// Pushes rect out along side until it overlaps none of placed.
-function pushClear(rect, side, placed) {
+const grown = (r, by) => ({x: r.x - by, y: r.y - by, width: r.width + 2 * by, height: r.height + 2 * by});
+
+// Pushes rect out along side until it's at least gap from all of placed.
+function pushClear(rect, side, placed, gap) {
   const moved = {...rect};
-  for (let blocker = placed.find((p) => overlaps(moved, p)); blocker; blocker = placed.find((p) => overlaps(moved, p))) {
-    if (side === "north") moved.y = blocker.y + blocker.height;
-    else if (side === "south") moved.y = blocker.y - moved.height;
-    else if (side === "east") moved.x = blocker.x + blocker.width;
-    else moved.x = blocker.x - moved.width;
+  const blocking = () => placed.find((p) => overlaps(grown(moved, gap - 1e-6), p));
+  for (let blocker = blocking(); blocker; blocker = blocking()) {
+    if (side === "north") moved.y = blocker.y + blocker.height + gap;
+    else if (side === "south") moved.y = blocker.y - moved.height - gap;
+    else if (side === "east") moved.x = blocker.x + blocker.width + gap;
+    else moved.x = blocker.x - moved.width - gap;
   }
   return moved;
 }
 
 // Where `to` (width x height) goes beside `from` (a placed rect), so that
-// fromPoint (on from, in its own feet) meets toPoint (on to): past the side
-// of from that fromPoint is nearest, lined up along it.
-function besideRect(from, fromPoint, to, toPoint) {
+// fromPoint (on from, in its own feet) faces toPoint (on to): gap past the
+// side of from that fromPoint is nearest, lined up along it.
+function besideRect(from, fromPoint, to, toPoint, gap) {
   const side = nearestSide(fromPoint, from.width, from.height);
-  const x = side === "east" ? from.x + from.width : side === "west" ? from.x - to.width : from.x + fromPoint.x - toPoint.x;
-  const y = side === "north" ? from.y + from.height : side === "south" ? from.y - to.height : from.y + fromPoint.y - toPoint.y;
+  const x = side === "east" ? from.x + from.width + gap : side === "west" ? from.x - to.width - gap : from.x + fromPoint.x - toPoint.x;
+  const y = side === "north" ? from.y + from.height + gap : side === "south" ? from.y - to.height - gap : from.y + fromPoint.y - toPoint.y;
   return {rect: {x: Math.round(x), y: Math.round(y), width: to.width, height: to.height}, side};
 }
 
-const eastOf = (placed, rect) => ({...rect, x: placed.length ? Math.max(...placed.map((p) => p.x + p.width)) + GAP : 0, y: 0});
+const eastOf = (placed, rect, gap) => ({...rect, x: placed.length ? Math.max(...placed.map((p) => p.x + p.width)) + gap : 0, y: 0});
 
 // Lays out nodes ({key, width, height}) walking edges ({a, b, aPoint,
 // bPoint}: aPoint on a, bPoint on b, both in their own feet), each
-// component from its first node, components east of each other. Returns
-// {key: rect}.
-function layOut(nodes, edges) {
+// component from its first node, components east of each other, each
+// node at least gap from the rest. Returns {key: rect}.
+function layOut(nodes, edges, gap) {
   const rects = {};
   const placed = [];
   const neighbors = (key) => edges.flatMap((e) => (e.a === key ? [{to: e.b, fromPoint: e.aPoint, toPoint: e.bPoint}] : e.b === key ? [{to: e.a, fromPoint: e.bPoint, toPoint: e.aPoint}] : []));
   const byKey = Object.fromEntries(nodes.map((n) => [n.key, n]));
   for (const root of nodes) {
     if (rects[root.key]) continue;
-    rects[root.key] = eastOf(placed, {width: root.width, height: root.height});
+    rects[root.key] = eastOf(placed, {width: root.width, height: root.height}, gap);
     placed.push(rects[root.key]);
     const queue = [root.key];
     while (queue.length) {
       const key = queue.shift();
       for (const {to, fromPoint, toPoint} of neighbors(key)) {
         if (rects[to] || !byKey[to]) continue;
-        const {rect, side} = besideRect(rects[key], fromPoint, byKey[to], toPoint);
-        rects[to] = pushClear(rect, side, placed);
+        const {rect, side} = besideRect(rects[key], fromPoint, byKey[to], toPoint, gap);
+        rects[to] = pushClear(rect, side, placed, gap);
         placed.push(rects[to]);
         queue.push(to);
       }
@@ -120,23 +127,24 @@ function layOutZone(zone) {
     const aPoint = connectionPoint(maps[a?.map], a?.connection), bPoint = connectionPoint(maps[b?.map], b?.connection);
     return aPoint && bPoint && a.map !== b.map ? [{a: a.map, b: b.map, aPoint, bPoint}] : [];
   });
-  const rects = layOut(nodes, edges);
+  const rects = layOut(nodes, edges, MAP_GAP);
   const all = Object.values(rects);
   const minX = Math.min(0, ...all.map((r) => r.x)), minY = Math.min(0, ...all.map((r) => r.y));
   return Object.fromEntries(Object.entries(rects).map(([key, r]) => [key, {...r, x: r.x - minX, y: r.y - minY}]));
 }
 
-// The smallest square around rects (from (0, 0)), and rects centered in it.
-function squareAround(rects) {
+// The smallest square around rects (from (0, 0)), margin clear of them,
+// and rects centered in it.
+function squareAround(rects, margin) {
   const all = Object.values(rects);
   const width = Math.max(0, ...all.map((r) => r.x + r.width)), height = Math.max(0, ...all.map((r) => r.y + r.height));
-  const side = Math.max(width, height, 1);
+  const side = Math.max(width, height) + 2 * margin;
   const dx = Math.round((side - width) / 2), dy = Math.round((side - height) / 2);
   return {side, maps: Object.fromEntries(Object.entries(rects).map(([key, r]) => [key, {...r, x: r.x + dx, y: r.y + dy}]))};
 }
 
 export function guessAtlas({zones = {}, worldLinks = []}) {
-  const squares = Object.fromEntries(Object.entries(zones).map(([key, zone]) => [key, squareAround(layOutZone(zone))]));
+  const squares = Object.fromEntries(Object.entries(zones).map(([key, zone]) => [key, squareAround(layOutZone(zone), ZONE_MARGIN)]));
 
   // Zones are laid out like maps: a link between maps becomes one between
   // the zones' squares, at each map's connection as placed in its square.
@@ -151,7 +159,7 @@ export function guessAtlas({zones = {}, worldLinks = []}) {
     const aPoint = point(a), bPoint = point(b);
     return aPoint && bPoint ? [{a: a.zone, b: b.zone, aPoint, bPoint}] : [];
   });
-  const zoneRects = layOut(Object.entries(squares).map(([key, s]) => ({key, width: s.side, height: s.side})), zoneEdges);
+  const zoneRects = layOut(Object.entries(squares).map(([key, s]) => ({key, width: s.side, height: s.side})), zoneEdges, ZONE_GAP);
 
   const atlasZones = {};
   for (const [key, {side, maps}] of Object.entries(squares)) {

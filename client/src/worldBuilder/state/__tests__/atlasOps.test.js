@@ -46,7 +46,7 @@ describe("resetAtlas", () => {
     const {resetAtlas} = await import("../atlasOps");
     const zones = atlasZones(resetAtlas(fixtureDraft()));
     expect(Object.keys(zones).sort()).toEqual(["cave", "forest"]);
-    expect(zones.forest.maps).toEqual({hub: {x: 0, y: 0}});
+    expect(zones.forest.maps).toEqual({hub: {x: 60, y: 60}});
     expect(zones.cave.maps).toEqual({});
   });
 });

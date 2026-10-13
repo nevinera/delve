@@ -22,14 +22,14 @@ function expectNoOverlaps(list) {
 }
 
 describe("guessAtlas", () => {
-  it("sets a linked map past the edge its connection is on, the connections meeting", () => {
+  it("sets a linked map a gap past the edge its connection is on, the connections facing", () => {
     const zones = {forest: {
       maps: [map("camp", 100, 100, [line("north", 40, 100, 60, 100)]), map("road", 100, 50, [line("south", 20, 0, 40, 0)])],
       zoneLinks: [link("camp", "north", "road", "south")],
     }};
     const {maps} = guessAtlas({zones}).zones.forest;
     expect(maps.road.x - maps.camp.x).toBe(20);
-    expect(maps.road.y - maps.camp.y).toBe(100);
+    expect(maps.road.y - maps.camp.y).toBe(160);
   });
 
   it("works from either end of the link", () => {
@@ -39,7 +39,7 @@ describe("guessAtlas", () => {
     }};
     const {maps} = guessAtlas({zones}).zones.forest;
     expect(maps.road.x - maps.camp.x).toBe(20);
-    expect(maps.road.y - maps.camp.y).toBe(100);
+    expect(maps.road.y - maps.camp.y).toBe(160);
   });
 
   it("pushes a map that would overlap one already placed further out", () => {
@@ -48,21 +48,21 @@ describe("guessAtlas", () => {
       zoneLinks: [link("camp", "n1", "a", "s"), link("camp", "n2", "b", "s")],
     }};
     const {maps} = guessAtlas({zones}).zones.forest;
-    expect(maps.b.y - maps.camp.y).toBe(140);
+    expect(maps.b.y - maps.camp.y).toBe(260); // past a, a gap from it
     expectNoOverlaps(rects(guessAtlas({zones}), zones));
   });
 
   it("puts maps that link to nothing east of the rest", () => {
     const zones = {forest: {maps: [map("camp", 100, 100), map("lonely", 50, 50)], zoneLinks: []}};
     const {maps} = guessAtlas({zones}).zones.forest;
-    expect(maps.lonely.x - maps.camp.x).toBe(100);
+    expect(maps.lonely.x - maps.camp.x).toBe(160);
   });
 
-  it("outlines each zone with the smallest square around its maps, centered", () => {
+  it("outlines each zone with the smallest square a margin around its maps, centered", () => {
     const zones = {forest: {maps: [map("camp", 100, 40)], zoneLinks: []}};
     const {outline, maps} = guessAtlas({zones}).zones.forest;
-    expect(outline).toEqual([{x: 0, y: 0}, {x: 100, y: 0}, {x: 100, y: 100}, {x: 0, y: 100}]);
-    expect(maps.camp).toEqual({x: 0, y: 30});
+    expect(outline).toEqual([{x: 0, y: 0}, {x: 220, y: 0}, {x: 220, y: 220}, {x: 0, y: 220}]);
+    expect(maps.camp).toEqual({x: 60, y: 90});
   });
 
   it("sets linked zones beside each other, through their open connections and entry points", () => {
@@ -72,19 +72,19 @@ describe("guessAtlas", () => {
     };
     const worldLinks = [{zoneA: {zone: "forest", kind: "open", connection: "east-exit"}, zoneB: {zone: "cave", kind: "entryPoint", connection: "mouth/west"}, oneWay: false, requiredKey: null}];
     const atlas = guessAtlas({zones, worldLinks});
-    expect(atlas.zones.cave.outline[0].x).toBe(100);
-    expect(atlas.zones.cave.maps.mouth.y + 30).toBe(50); // the connections meet at y 50
+    expect(atlas.zones.cave.outline[0].x).toBe(340); // forest's 220 square, then the gap
+    expect(atlas.zones.cave.maps.mouth.y + 30).toBe(atlas.zones.forest.maps.camp.y + 50); // the connections face each other
     expectNoOverlaps(rects(atlas, zones));
   });
 
   it("puts zones linked to nothing east of the rest", () => {
     const zones = {forest: {maps: [map("camp", 100, 100)]}, cave: {maps: [map("mouth", 60, 60)]}};
     const atlas = guessAtlas({zones});
-    expect(atlas.zones.cave.outline[0]).toEqual({x: 100, y: 0});
+    expect(atlas.zones.cave.outline[0]).toEqual({x: 340, y: 0});
   });
 
-  it("gives a zone with no maps a small square", () => {
+  it("gives a zone with no maps just its margins", () => {
     const atlas = guessAtlas({zones: {empty: {maps: []}}});
-    expect(atlas.zones.empty).toEqual({outline: [{x: 0, y: 0}, {x: 1, y: 0}, {x: 1, y: 1}, {x: 0, y: 1}], maps: {}});
+    expect(atlas.zones.empty).toEqual({outline: [{x: 0, y: 0}, {x: 120, y: 0}, {x: 120, y: 120}, {x: 0, y: 120}], maps: {}});
   });
 });
