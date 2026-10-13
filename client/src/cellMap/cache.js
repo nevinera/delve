@@ -6,38 +6,41 @@ import {cacheKey, renderCellMap} from "./render";
 const MEMORY_LIMIT = 8;
 const memory = new Map();
 
-// Resolves {image, source, timings, stats, stored}: image is something
-// drawImage takes; source is "memory", "stored" or "rendered"; timings are
-// ms per step; stored resolves {encode} once a fresh render is cached.
-// persist: false keeps it in memory only, for previews that change often.
-export async function cachedCellMapImage(map, {pixelsPerFoot = 10, persist = true} = {}) {
-  const key = cacheKey(map, pixelsPerFoot);
+// Resolves {image, canopy, source, timings, stats, stored}: image is
+// something drawImage takes; source is "memory", "stored" or "rendered";
+// timings are ms per step; stored resolves {encode} once a fresh render is
+// cached. persist: false keeps it in memory only, for previews that change
+// often. layers: true leaves the tree crowns out of image, as canopy (see
+// render.js), else canopy is null.
+export async function cachedCellMapImage(map, {pixelsPerFoot = 10, persist = true, layers = false} = {}) {
+  const key = cacheKey(map, pixelsPerFoot, layers);
   if (memory.has(key)) {
     const entry = remember(key, memory.get(key));
     return {...entry, source: "memory", timings: {}, stored: Promise.resolve(null)};
   }
 
   let started = performance.now();
-  const blob = persist ? await readStored(key) : null;
-  if (blob) {
+  const stored = persist ? await readStored(key) : null;
+  if (stored?.blob && (!layers || stored.canopy)) {
     const read = performance.now() - started;
     started = performance.now();
     try {
-      const image = await createImageBitmap(blob);
-      const entry = remember(key, {image, stats: {width: image.width, height: image.height}});
+      const image = await createImageBitmap(stored.blob);
+      const canopy = layers ? await createImageBitmap(stored.canopy) : null;
+      const entry = remember(key, {image, canopy, stats: {width: image.width, height: image.height}});
       return {...entry, source: "stored", timings: {read, decode: performance.now() - started}, stored: Promise.resolve(null)};
     } catch {
       // A bad stored image is re-rendered below.
     }
   }
 
-  const {image, timings, stats, encoded} = await render(map, pixelsPerFoot, persist);
-  remember(key, {image, stats});
-  const stored = encoded.then(async ({blob, encode}) => {
-    if (blob && persist) await writeStored(key, blob);
+  const {image, canopy, timings, stats, encoded} = await render(map, pixelsPerFoot, persist, layers);
+  remember(key, {image, canopy, stats});
+  const storing = encoded.then(async ({blob, canopyBlob, encode}) => {
+    if (blob && persist) await writeStored(key, blob, canopyBlob);
     return {encode};
   }).catch(() => null);
-  return {image, stats, source: "rendered", timings, stored};
+  return {image, canopy, stats, source: "rendered", timings, stored: storing};
 }
 
 function remember(key, entry) {
@@ -51,28 +54,31 @@ function remember(key, entry) {
 // browser that has OffscreenCanvas but can't paint 2D in a worker.
 let workerBroken = false;
 
-async function render(map, pixelsPerFoot, encode) {
-  if (workerBroken || typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return renderHere(map, pixelsPerFoot, encode);
+async function render(map, pixelsPerFoot, encode, layers) {
+  if (workerBroken || typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") return renderHere(map, pixelsPerFoot, encode, layers);
   try {
-    return await renderInWorker(map, pixelsPerFoot, encode);
+    return await renderInWorker(map, pixelsPerFoot, encode, layers);
   } catch {
     workerBroken = true;
-    return renderHere(map, pixelsPerFoot, encode);
+    return renderHere(map, pixelsPerFoot, encode, layers);
   }
 }
 
-function renderHere(map, pixelsPerFoot, encode) {
-  const {canvas, timings, stats} = renderCellMap(map, {pixelsPerFoot});
+const toWebp = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+
+function renderHere(map, pixelsPerFoot, encode, layers) {
+  const {canvas, canopy, timings, stats} = renderCellMap(map, {pixelsPerFoot, layers});
   const started = performance.now();
-  const encoded = !encode ? Promise.resolve({blob: null, encode: 0}) : new Promise((resolve) => canvas.toBlob((blob) => resolve({blob, encode: performance.now() - started}), "image/webp", 0.9));
-  return {image: canvas, timings: {...timings, thread: "main"}, stats, encoded};
+  const encoded = !encode ? Promise.resolve({blob: null, encode: 0})
+    : Promise.all([toWebp(canvas), canopy && toWebp(canopy)]).then(([blob, canopyBlob]) => ({blob, canopyBlob, encode: performance.now() - started}));
+  return {image: canvas, canopy, timings: {...timings, thread: "main"}, stats, encoded};
 }
 
 let worker = null;
 let nextId = 0;
 const pending = new Map();
 
-function renderInWorker(map, pixelsPerFoot, encode) {
+function renderInWorker(map, pixelsPerFoot, encode, layers) {
   if (!worker) {
     worker = new Worker(new URL("./renderWorker.js", import.meta.url), {type: "module"});
     worker.onmessage = ({data}) => pending.get(data.id)?.(data);
@@ -90,13 +96,13 @@ function renderInWorker(map, pixelsPerFoot, encode) {
         pending.delete(id);
         reject(new Error(data.error));
       } else if (data.image) {
-        resolve({image: data.image, stats: data.stats, timings: {...data.timings, thread: "worker", wall: performance.now() - started}, encoded});
+        resolve({image: data.image, canopy: data.canopy ?? null, stats: data.stats, timings: {...data.timings, thread: "worker", wall: performance.now() - started}, encoded});
       } else {
         pending.delete(id);
-        resolveEncoded({blob: data.blob, encode: data.encode});
+        resolveEncoded({blob: data.blob, canopyBlob: data.canopyBlob ?? null, encode: data.encode});
       }
     });
-    worker.postMessage({id, map, pixelsPerFoot, encode});
+    worker.postMessage({id, map, pixelsPerFoot, encode, layers});
   });
 }
 
@@ -125,17 +131,17 @@ async function readStored(key) {
     const db = await openDb();
     const entry = await request(db.transaction(STORE).objectStore(STORE).get(key));
     db.close();
-    return entry?.blob ?? null;
+    return entry ?? null;
   } catch {
     return null;
   }
 }
 
-async function writeStored(key, blob) {
+async function writeStored(key, blob, canopy = null) {
   try {
     const db = await openDb();
     const store = db.transaction(STORE, "readwrite").objectStore(STORE);
-    await request(store.put({blob, at: Date.now()}, key));
+    await request(store.put({blob, ...(canopy ? {canopy} : {}), at: Date.now()}, key));
     const keys = await request(store.getAllKeys());
     if (keys.length > STORED_LIMIT) {
       const entries = await Promise.all(keys.map(async (k) => [k, (await request(store.get(k))).at]));

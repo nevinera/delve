@@ -144,7 +144,7 @@ describe("useCellsTab", () => {
     vi.useFakeTimers();
     const {rerender} = setup();
     await act(async () => vi.advanceTimersByTime(500));
-    expect(cachedCellMapImage).toHaveBeenCalledWith(expect.objectContaining({cells: start().cells}), {pixelsPerFoot: EDITOR_PIXELS_PER_FOOT, persist: false});
+    expect(cachedCellMapImage).toHaveBeenCalledWith(expect.objectContaining({cells: start().cells}), {pixelsPerFoot: EDITOR_PIXELS_PER_FOOT, persist: false, layers: false});
     vi.clearAllMocks();
     rerender({editing: false});
     await act(async () => vi.advanceTimersByTime(500));

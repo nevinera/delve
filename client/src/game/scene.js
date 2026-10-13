@@ -3,6 +3,7 @@ import { fetchVerifiedJson } from "./verifiedFetch";
 import { resolveBarrierCollisions } from "./collision.js";
 import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 import { loadSvgToCanvas } from "./svgRaster.js";
+import { bakeStamps, loadStampSheets } from "./stamps.js";
 import { isUntargetableStatus } from "./state.js";
 import { computeMapFill } from "./mapFill.js";
 import { SceneLighting } from "./lighting.js";
@@ -1167,13 +1168,27 @@ export class SceneManager {
       }
     }
 
+    // Decoration stamps are baked into each map's ground once its sheets
+    // load (see stamps.js).
+    const stampSets = json.stamps ?? {};
+    const needsSheets = json.maps.some((m) => m.stamps?.length);
+    const sheets = needsSheets ? loadStampSheets(stampSets, (imageUrl) => new URL(imageUrl, baseUrl).href) : Promise.resolve({});
+    const stampsByMap = new Map(json.maps.map((m) => [m.identifier, m.stamps ?? []]));
+    const withStamps = async (mapId, canvas) => {
+      const placed = stampsByMap.get(mapId);
+      return placed?.length ? bakeStamps(canvas, this._dimsByMap.get(mapId), placed, stampSets, await sheets) : canvas;
+    };
+
     // Maps drawn in cells (and no image) get their ground once it renders -
     // the current map's first (see updateUnits), then the rest.
     this._cellGrounds?.stop();
     const maxTextureSize = this._renderer.capabilities.maxTextureSize;
     this._cellGrounds = new CellGroundQueue({
       pixelsPerFoot: (feet) => groundPixelsPerFoot(feet, maxTextureSize),
-      onGround: (mapId, canvas) => {
+      onGround: async (mapId, canvas, canopy) => {
+        await withStamps(mapId, canvas);
+        // Trees stand over the stamps.
+        if (canopy) canvas.getContext("2d").drawImage(canopy, 0, 0, canvas.width, canvas.height);
         const group = this._mapGroups.get(mapId);
         const { width, height } = this._dimsByMap.get(mapId);
         if (group) this._addGround(group, new THREE.CanvasTexture(canvas), width, height);
@@ -1204,12 +1219,21 @@ export class SceneManager {
         // resolution instead of trusting the browser's default SVG decode
         // size, same as the map editor's own walk preview.
         if (m.imageUrl.toLowerCase().endsWith(".svg")) {
-          loadSvgToCanvas(mapUrl, { width, height }).then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
+          loadSvgToCanvas(mapUrl, { width, height })
+            .then((canvas) => withStamps(m.identifier, canvas))
+            .then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
+        } else if (m.stamps?.length) {
+          // A raster drawn onto a canvas at its own resolution, for the
+          // stamps to bake into.
+          const pixelsPerFoot = (m.pixelDimensions?.width ?? width * 8) / width;
+          loadSvgToCanvas(mapUrl, { width, height }, { pixelsPerFoot, maxDimension: maxTextureSize })
+            .then((canvas) => withStamps(m.identifier, canvas))
+            .then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
         } else {
           new THREE.TextureLoader().load(mapUrl, addGround);
         }
       } else if (m.cellMap) {
-        this._cellGrounds.add(m.identifier, m.cellMap, m.feetDimensions);
+        this._cellGrounds.add(m.identifier, m.cellMap, m.feetDimensions, { layers: Boolean(m.stamps?.length) });
       }
 
       // Everything outside the playable area rises as a plateau; walls

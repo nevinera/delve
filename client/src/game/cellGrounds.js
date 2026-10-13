@@ -11,8 +11,11 @@ export function groundPixelsPerFoot({width, height}, maxTextureSize) {
   return Math.min(GROUND_PIXELS_PER_FOOT, maxTextureSize / Math.max(width, height));
 }
 
-// Renders a canvas for each map added, calling onGround(mapId, canvas) as
-// each is ready. prefer(mapId) moves a map to the front of the line.
+// Renders a canvas for each map added, calling onGround(mapId, canvas,
+// canopy) as each is ready. A map added with {layers: true} (one with
+// decoration stamps) gets its tree crowns apart, as canopy, to draw over
+// the stamps; else canopy is null. prefer(mapId) moves a map to the front
+// of the line.
 export class CellGroundQueue {
   constructor({pixelsPerFoot, onGround, render = renderGround}) {
     this._pixelsPerFoot = pixelsPerFoot;
@@ -24,8 +27,8 @@ export class CellGroundQueue {
     this._stopped = false;
   }
 
-  add(mapId, cellMap, feetDimensions) {
-    this._waiting.set(mapId, {cellMap, feetDimensions});
+  add(mapId, cellMap, feetDimensions, {layers = false} = {}) {
+    this._waiting.set(mapId, {cellMap, feetDimensions, layers});
   }
 
   // Starts rendering (if it hasn't), with mapId next.
@@ -42,11 +45,11 @@ export class CellGroundQueue {
     this._running = true;
     while (this._waiting.size && !this._stopped) {
       const mapId = this._waiting.has(this._preferred) ? this._preferred : this._waiting.keys().next().value;
-      const {cellMap, feetDimensions} = this._waiting.get(mapId);
+      const {cellMap, feetDimensions, layers} = this._waiting.get(mapId);
       this._waiting.delete(mapId);
       try {
-        const canvas = await this._render(cellMap, this._pixelsPerFoot(feetDimensions));
-        if (!this._stopped) this._onGround(mapId, canvas);
+        const {canvas, canopy} = await this._render(cellMap, this._pixelsPerFoot(feetDimensions), {layers});
+        if (!this._stopped) await this._onGround(mapId, canvas, canopy);
       } catch (error) {
         console.warn(`Couldn't draw map ${mapId}'s cells`, error);
       }
@@ -55,12 +58,13 @@ export class CellGroundQueue {
   }
 }
 
-// The render, copied onto a canvas (which textures like an image).
-async function renderGround(cellMap, pixelsPerFoot) {
-  const {image} = await cachedCellMapImage(cellMap, {pixelsPerFoot});
+// The render, copied onto a canvas (which textures like an image), and its
+// canopy when it was rendered in layers.
+async function renderGround(cellMap, pixelsPerFoot, {layers = false} = {}) {
+  const {image, canopy} = await cachedCellMapImage(cellMap, {pixelsPerFoot, layers});
   const canvas = document.createElement("canvas");
   canvas.width = image.width;
   canvas.height = image.height;
   canvas.getContext("2d").drawImage(image, 0, 0);
-  return canvas;
+  return {canvas, canopy: canopy ?? null};
 }

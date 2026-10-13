@@ -5,6 +5,7 @@ module Validators
       validate_fixed_fields!(data, path: path)
       validate_optional_sections!(data, path: path)
       validate_unit_type_references!(data, path: path)
+      StampReferences.validate!(data, path: path)
     end
 
     private

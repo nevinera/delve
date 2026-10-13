@@ -111,6 +111,35 @@
       /* Same pixel-space box as the image, so its grid lines pan/zoom
          together with it for free via the shared parent's transform. */
       .map-canvas-grid { position: absolute; top: 0; left: 0; pointer-events: none; }
+      /* StampCanvas.jsx - the map's decoration stamps, over the ground. */
+      .map-canvas-stamps { position: absolute; top: 0; left: 0; pointer-events: none; }
+      /* useCellsTab.jsx - a cell map's tree crowns, over the stamps. */
+      .map-canvas-canopy { position: absolute; top: 0; left: 0; pointer-events: none; }
+      /* Stamps tab (mapEditor/stamps/) - the selected stamp's outline and handles, and its palettes. */
+      .map-canvas-stamp-overlay { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+      .map-canvas-stamp-overlay polygon { fill: none; stroke-width: var(--stroke); }
+      .map-canvas-stamp-overlay .stamp-hover { stroke: rgba(255,255,255,0.6); stroke-dasharray: 4 3; }
+      .map-canvas-stamp-overlay .stamp-selected { stroke: #ffd24a; }
+      .map-canvas-stamp-overlay .stamp-handle { fill: #ffd24a; stroke: #3a2a00; stroke-width: var(--stroke); }
+      .map-canvas-stamp-overlay .stamp-handle-arm { stroke: #ffd24a; stroke-width: var(--stroke); }
+      .stamps-panel { padding: 0 12px 12px; }
+      .stamps-help, .stamps-empty, .stamps-count { color: #9aa; font-size: 12px; }
+      .stamp-palette { margin: 8px 0; }
+      .stamp-palette summary { cursor: pointer; font-weight: bold; color: #cdd; }
+      .stamp-palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; margin-top: 6px; }
+      .stamp-palette-entry { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; background: #2a2f36; border: 1px solid #3a414a; border-radius: 4px; color: #cdd; font-size: 11px; cursor: pointer; }
+      .stamp-palette-entry.active { border-color: #ffd24a; background: #3a3622; }
+      .stamp-palette-entry span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .stamp-thumb { background: #4f6a3a; border-radius: 3px; }
+      .stamps-vary { display: block; margin: 6px 0; font-size: 12px; color: #cdd; }
+      .stamp-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .stamp-fields label { display: flex; flex-direction: column; font-size: 12px; color: #cdd; }
+      .stamp-fields input, .stamp-fields select { width: 100%; }
+      .stamp-order { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+      .stamp-license { margin-left: 6px; padding: 0 4px; border-radius: 3px; background: #3a414a; color: #aab; font-size: 10px; font-weight: normal; }
+      .stamp-license.share-alike { background: #5a3d1a; color: #ffd9a0; }
+      .stamp-attribution { margin: 2px 0 0; color: #889; font-size: 11px; }
+      .stamps-share-alike { color: #ffd9a0; font-size: 12px; }
       /* Same idea, but its shapes DO take pointer events (for select/drag) -
          the SVG root stays passthrough so empty space still reaches the
          wrapper underneath for panning/add-tool clicks. */

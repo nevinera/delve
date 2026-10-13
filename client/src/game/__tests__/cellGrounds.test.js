@@ -8,13 +8,13 @@ function queue() {
   const grounds = [];
   const q = new CellGroundQueue({
     pixelsPerFoot: () => 4,
-    onGround: (mapId, canvas) => grounds.push([mapId, canvas]),
-    render: async (cellMap, ppf) => {
+    onGround: (mapId, canvas, canopy) => grounds.push(canopy ? [mapId, canvas, canopy] : [mapId, canvas]),
+    render: async (cellMap, ppf, {layers}) => {
       rendered.push([cellMap.name, ppf]);
-      return `canvas:${cellMap.name}`;
+      return {canvas: `canvas:${cellMap.name}`, canopy: layers ? `canopy:${cellMap.name}` : null};
     },
   });
-  for (const name of ["a", "b", "c"]) q.add(name, {name}, feet);
+  for (const name of ["a", "b", "c"]) q.add(name, {name}, feet, {layers: name === "c"});
   return {q, rendered, grounds};
 }
 
@@ -28,7 +28,7 @@ describe("CellGroundQueue", () => {
     q.prefer("b");
     await settle();
     expect(rendered.map(([name]) => name)).toEqual(["b", "a", "c"]);
-    expect(grounds).toEqual([["b", "canvas:b"], ["a", "canvas:a"], ["c", "canvas:c"]]);
+    expect(grounds).toEqual([["b", "canvas:b"], ["a", "canvas:a"], ["c", "canvas:c", "canopy:c"]]);
     expect(rendered[0][1]).toBe(4);
   });
 

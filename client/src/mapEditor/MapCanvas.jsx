@@ -10,6 +10,7 @@ import InteractableShapes from "./InteractableShapes";
 import NcuQuestBadges from "./NcuQuestBadges";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
+import StampCanvas from "./stamps/StampCanvas";
 import MapPreviewCanvas from "./MapPreviewCanvas";
 import usePinchZoom from "../usePinchZoom";
 import {randomIdentifierSuffix} from "./randomIdentifier";
@@ -131,6 +132,10 @@ const PAN_KEY_DIRECTIONS = {
 // node and hands pointer events to onPointer(phase, contentPixel, event): a
 // "down" it returns true for is an edit, not a pan. {placeholder: true}
 // stands in until there's a cell map. The units/walk tools are hidden.
+// stampLayer ({sets, sheets}: the zone's stamps and their loaded sheets)
+// draws the map's decoration stamps over the ground. overlayEditing
+// ({overlay, onPointer, cursor}, as cellEditing's) lets another tab (Stamps)
+// take the pointer the same way; its overlay may be a function of {zoom}.
 const ALL_LAYERS = {barriers: true, connections: true, units: true, ncus: true};
 
 export default function MapCanvas({
@@ -152,8 +157,10 @@ export default function MapCanvas({
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   previewing = false, onTogglePreview,
   tool = "select", onToolChange,
-  ground = null, cellEditing = null,
+  ground = null, cellEditing = null, stampLayer = null, overlayEditing = null,
 }) {
+  // Whichever tab takes the pointer over (see cellEditing, overlayEditing).
+  const editing = cellEditing ?? overlayEditing;
   const wrapperRef = useRef(null);
   const replaceInputRef = useRef(null);
   const [zoom, setZoom] = useState(1);
@@ -703,7 +710,7 @@ export default function MapCanvas({
       setOffset(view.offset);
     },
     onPinchStart: () => {
-      if (cellDragRef.current) cellEditing?.onPointer?.("cancel");
+      if (cellDragRef.current) editing?.onPointer?.("cancel");
       cellDragRef.current = false;
       dragRef.current = null;
       barrierDragRef.current = null;
@@ -720,7 +727,7 @@ export default function MapCanvas({
   function handlePointerDown(e) {
     if (!image) return;
 
-    if (cellEditing?.onPointer && e.button === 0 && cellEditing.onPointer("down", contentPixelFromClient(e.clientX, e.clientY), e)) {
+    if (editing?.onPointer && e.button === 0 && editing.onPointer("down", contentPixelFromClient(e.clientX, e.clientY), e)) {
       cellDragRef.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
@@ -866,8 +873,8 @@ export default function MapCanvas({
   function handlePointerMove(e) {
     updateCursorPixel(e);
 
-    if (cellEditing?.onPointer && image && wrapperRef.current) {
-      cellEditing.onPointer(cellDragRef.current ? "drag" : "hover", contentPixelFromClient(e.clientX, e.clientY), e);
+    if (editing?.onPointer && image && wrapperRef.current) {
+      editing.onPointer(cellDragRef.current ? "drag" : "hover", contentPixelFromClient(e.clientX, e.clientY), e);
       if (cellDragRef.current) return;
     }
 
@@ -986,7 +993,7 @@ export default function MapCanvas({
   }
 
   function handlePointerUp() {
-    if (cellDragRef.current) cellEditing?.onPointer?.("up");
+    if (cellDragRef.current) editing?.onPointer?.("up");
     cellDragRef.current = false;
     dragRef.current = null;
     barrierDragRef.current = null;
@@ -1103,7 +1110,7 @@ export default function MapCanvas({
             <button type="button" onClick={() => zoomAroundCenter(ZOOM_STEP)}>+</button>
           </div>
         )}
-        {image && !cellEditing && mapData.units.length > 0 && (
+        {image && !editing && mapData.units.length > 0 && (
           <div className="map-toolbar-button-group map-simulate-group">
             <button
               type="button" className={simulating ? "map-simulate-active" : ""}
@@ -1123,7 +1130,7 @@ export default function MapCanvas({
             )}
           </div>
         )}
-        {image && !cellEditing && canDrawBarriers && (
+        {image && !editing && canDrawBarriers && (
           <div className="map-toolbar-button-group map-preview-group">
             <button
               type="button" className={previewing ? "map-simulate-active" : ""}
@@ -1136,7 +1143,7 @@ export default function MapCanvas({
         )}
         {isPlacing && <span className="map-canvas-placing-status">{placingStatusText}</span>}
       </div>
-      {image && !cellEditing && (
+      {image && !editing && (
         <div className="map-canvas-toolbar-row">
           <button type="button" className="map-canvas-replace" onClick={() => replaceInputRef.current?.click()}>
             {ground ? "Use an image instead" : "Replace image"}
@@ -1149,12 +1156,12 @@ export default function MapCanvas({
       )}
       {imageError && <div className="map-canvas-error">{imageError}</div>}
       {previewing ? (
-        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} onExit={() => onTogglePreview?.()} />
+        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} groundCanopy={ground?.renderedCanopy ?? null} stampLayer={stampLayer} onExit={() => onTogglePreview?.()} />
       ) : image ? (
         <div
           ref={wrapperRef}
           className={`map-canvas-wrapper${isPlacing ? " map-canvas-wrapper-placing" : ""}`}
-          style={cellEditing?.cursor ? {cursor: cellEditing.cursor} : undefined}
+          style={editing?.cursor ? {cursor: editing.cursor} : undefined}
           {...pinchHandlers}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -1179,6 +1186,13 @@ export default function MapCanvas({
               draggable={false}
               alt=""
             />}
+            {stampLayer && mapData.stamps?.length > 0 && hasBothAxes(feetDimensions) && (
+              <StampCanvas
+                placed={mapData.stamps} sets={stampLayer.sets} sheets={stampLayer.sheets}
+                pixelDimensions={image.pixelDimensions} feetDimensions={feetDimensions}
+              />
+            )}
+            {ground?.canopy}
             {!ground && hasBothAxes(feetDimensions) && (
               <svg
                 className="map-canvas-grid"
@@ -1423,7 +1437,7 @@ export default function MapCanvas({
                 </svg>
               );
             })()}
-            {cellEditing?.overlay}
+            {typeof editing?.overlay === "function" ? editing.overlay({zoom}) : editing?.overlay}
           </div>
         </div>
       ) : cellEditing ? (

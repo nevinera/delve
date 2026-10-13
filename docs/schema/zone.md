@@ -23,6 +23,7 @@ See [item.md](item.md) for the `Item` type embedded in `items`.
 | `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Inside a world it is ANDed with the world's; default is no restriction. |
 | `openConnections` | object | no | Maps `"mapId/connectionId"` keys to zone-level name strings. Exposes connections for other zones to link against. Each key must name a connection on one of the zone's maps. |
 | `flags` | array of string | no | Compiled by the world editor's Expand, never written by hand. The `type/identifier` flags (see [flags.md](../flags.md)) the zone preloads for each character on entry. Always includes `zone/reached/<zone>`, plus, for each quest an NCU in the zone offers, its `quest/completed/` flag and `requiresFlags`. Flags not listed still work; they're fetched when needed. |
+| `stamps` | object \| AssetReference(`referenceTo: "stamps"`) | no | The decoration stamps the zone's maps can place, by set key. See **Stamps**. The world editor keeps them in `stamps.json` beside the zone file. |
 | `annotations` | Annotations | no | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 > A zone must have at least one `entryPoint` or be reachable via an `openConnection` linked by another zone  -  otherwise there is no way for players to enter it.
@@ -54,6 +55,55 @@ Links two MapConnections within the zone so that traversing one transports a uni
 | `connectionB` | ConnectionIdentifier | yes | |
 | `oneWay` | boolean | yes | If `true`, travel is only permitted from `connectionA` to `connectionB`. |
 | `requiredKey` | string \| null | yes | Identifier of the key item required to traverse. `null` if no key is needed. |
+
+---
+
+## Stamps
+
+Decorations for the zone's maps to place (see [map.md](map.md#placedstamp)), grouped in sets.
+Each set is one image, a sheet holding many stamps, so a map loads a few images, not hundreds.
+Sets come from the shared library (`graphics/stamps/<set>.json` and its image) and are copied in;
+the sheet is copied to the world's `graphics/stamps/`. Backgrounds are transparent. Not animated.
+
+Stamps are baked into the ground in the player's browser, so the game shares only the sheets
+(under their own licenses, credited) and never a combined image. An image we publish with
+stamps baked in (a thumbnail, a screenshot) is a derived work: if any set in it is share-alike,
+so is the image, with each set's credit. The map editor's Stamps tab says when a map uses one.
+
+An object mapping set keys (lowercase letters, digits, `-` and `_`) to StampSet.
+
+### StampSet
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | no | Shown in the editor's palette. |
+| `imageUrl` | string | yes | The sheet image, relative to the file it's in. |
+| `license` | string | yes | The art's license, as an SPDX id: `CC0-1.0`, `CC-BY-4.0`, `CC-BY-SA-4.0`, `MIT`. One per set, so art under different licenses goes in different sets (a sheet mixing share-alike art with other art is itself share-alike). |
+| `attribution` | string | for BY licenses | The credit the license asks for. At most 400 characters. |
+| `stamps` | object | yes | Stamp keys (same form as set keys) to Stamp. |
+
+### Stamp
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | no | Shown in the editor's palette. |
+| `feetWidth` | number | yes | How wide the stamp is in the world, in feet, at scale 1: a tent is 12, a campfire 4. Its height follows the frame's shape. |
+| `frames` | array of `{x, y, width, height}` | no | Rectangles of the sheet, in pixels: the stamp's variants. Left out, the stamp is the whole sheet. |
+
+```json
+{
+  "camp": {
+    "name": "Camp",
+    "imageUrl": "../../graphics/stamps/camp.png",
+    "license": "CC-BY-4.0",
+    "attribution": "Drawn for delve by Eric Mueller",
+    "stamps": {
+      "tent": { "name": "Tent", "feetWidth": 12, "frames": [{ "x": 0, "y": 0, "width": 256, "height": 256 }] },
+      "log": { "name": "Log", "feetWidth": 7, "frames": [{ "x": 256, "y": 0, "width": 192, "height": 64 }, { "x": 256, "y": 64, "width": 192, "height": 64 }] }
+    }
+  }
+}
+```
 
 ---
 

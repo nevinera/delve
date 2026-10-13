@@ -52,11 +52,13 @@ export function bridgeEnd(from, toward) {
   return best.cell;
 }
 
-export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, rendering = editing, onThumbnail = null}) {
+// layers (a map with decoration stamps) renders the tree crowns apart, so
+// the stamps can go under them: ground.canopy and ground.renderedCanopy.
+export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, rendering = editing, onThumbnail = null, layers = false}) {
   const history = useCellHistory(cellMap ?? null, onCellMapChange, mapKey);
   const {draft, change} = history;
   const [ui, setUi] = useState(INITIAL_UI);
-  const {render, errors, pending} = useCellMapRender(rendering ? draft?.data : null, EDITOR_PIXELS_PER_FOOT);
+  const {render, errors, pending} = useCellMapRender(rendering ? draft?.data : null, EDITOR_PIXELS_PER_FOOT, {layers});
   useThumbnail(onThumbnail && history.edits > 0 && !pending ? render : null, onThumbnail);
   const dragRef = useRef(null);
   // Each drag is its own undo step (see useCellHistory's groups).
@@ -249,6 +251,8 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
     feetDimensions: size,
     background: <RenderBackground image={render?.image} {...pixelDimensions} />,
     rendered: render?.image ?? null,
+    canopy: render?.canopy ? <RenderBackground image={render.canopy} className="map-canvas-canopy" {...pixelDimensions} /> : null,
+    renderedCanopy: render?.canopy ?? null,
   };
   const canvas = ground && {
     ...ground,
@@ -283,6 +287,7 @@ function useThumbnail(render, onThumbnail) {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      if (render.canopy) ctx.drawImage(render.canopy, 0, 0, canvas.width, canvas.height);
       canvas.toBlob((blob) => blob && onThumbnailRef.current?.(blob), "image/webp");
     }, THUMBNAIL_DELAY_MS);
     return () => clearTimeout(timer);
@@ -290,7 +295,7 @@ function useThumbnail(render, onThumbnail) {
 }
 
 // The last render, stretched to the current size while a resize renders.
-function RenderBackground({image, width, height}) {
+function RenderBackground({image, width, height, className = "map-canvas-cell-render"}) {
   const ref = useRef(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -299,7 +304,7 @@ function RenderBackground({image, width, height}) {
     canvas.height = image.height;
     canvas.getContext("2d")?.drawImage(image, 0, 0);
   }, [image]);
-  return <canvas ref={ref} className="map-canvas-cell-render" style={{width, height}} />;
+  return <canvas ref={ref} className={className} style={{width, height}} />;
 }
 
 // Sizes an overlay canvas to the map at the overlay's resolution and sets

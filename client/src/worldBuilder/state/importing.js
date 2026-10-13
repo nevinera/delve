@@ -45,7 +45,7 @@ export function relocateAssets(content, sourceFile, targetFile, world) {
 
 // [{to: world path, sha}] for each library asset the world doesn't have
 // yet, and the paths of any that don't exist in the library.
-async function assetCopies(draft, reader, assets) {
+export async function assetCopies(draft, reader, assets) {
   const copies = [];
   const missing = [];
   for (const path of assets) {
