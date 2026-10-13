@@ -66,6 +66,7 @@ func (h *Slots) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 	go func(ctx context.Context) {
 		inst.GrantZoneReached(ctx, slotID)
+		inst.RecordZoneVisit(ctx, slotID)
 		inst.UpgradeQuests(ctx, slotID)
 		inst.SendQuestOffers(ctx, slotID)
 	}(context.WithoutCancel(r.Context()))

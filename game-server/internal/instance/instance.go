@@ -132,6 +132,14 @@ type Instance struct {
 	// questTimerAt is when quest timers last advanced; tick loop only.
 	questTimerAt time.Time
 
+	// visitMu serializes recording visits, so one isn't sent to Rails twice
+	// at once. Never taken while holding slotsMu. visitWhere is the visit
+	// each player unit was last in, and placeShapes each map's places (built
+	// on first use); both tick loop only. See visits.go.
+	visitMu     sync.Mutex
+	visitWhere  map[uuid.UUID]Visit
+	placeShapes map[string][]placeShape
+
 	// Provenance limits which equipped items count as worn here; disallowed
 	// ones stay equipped in Rails but are ignored (see instanceconfig).
 	Provenance instanceconfig.ProvenanceRestrictions

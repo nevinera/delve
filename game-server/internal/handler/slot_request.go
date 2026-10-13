@@ -28,6 +28,7 @@ type slotRequestBody struct {
 	OwnedZoneItems      map[string]bool                        `json:"owned_zone_items"` // optional; nil if not provided
 	EquippedItems       map[string]instanceconfig.EquippedItem `json:"equipped_items"`   // optional; nil if not provided
 	HeldFlags           []string                               `json:"held_flags"`       // optional; the zone's listed flags the character holds
+	Visits              []instance.Visit                       `json:"visits"`           // optional; where the character has been in the zone
 	ActiveQuests        []instanceconfig.ActiveQuest           `json:"active_quests"`    // optional; the character's active quests in the world
 	TokenImageURL       string                                 `json:"token_image_url"`  // optional; the character's portrait
 
@@ -190,6 +191,7 @@ func (h *Slots) addSlotAndRespond(w http.ResponseWriter, r *http.Request, inst *
 		WorldCharacterDatabaseID: req.WorldCharacterDatabaseID,
 		SpawnAt:                  req.SpawnAt,
 		HeldFlags:                req.HeldFlags,
+		Visits:                   req.Visits,
 		ActiveQuests:             req.ActiveQuests,
 		TokenImageURL:            req.TokenImageURL,
 	})

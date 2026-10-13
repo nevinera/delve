@@ -122,6 +122,16 @@ RSpec.describe JoinWorldZone do
     ))
   end
 
+  it "sends the world character's visits in this zone, and none elsewhere" do
+    create(:character_visit, world_character:, zone_identifier: "darkwood")
+    create(:character_visit, world_character:, zone_identifier: "darkwood", map_identifier: "glade", place_identifier: "pond")
+    create(:character_visit, world_character:, zone_identifier: "cave")
+    call
+    expect(slots_client).to have_received(:request).with(hash_including(
+      visits: [{map: "", place: ""}, {map: "glade", place: "pond"}]
+    ))
+  end
+
   it "refuses a class file that changed since the class was fetched" do
     character.character_class.update!(content_sha: "stale")
     expect { call }.to raise_error(VerifiedContent::ChecksumMismatch, /class file has changed since it was checked; it needs refetching/)

@@ -148,6 +148,21 @@ func TestSlotsRequest_World_CachesHeldFlags(t *testing.T) {
 	assert.Equal(t, map[string]bool{"zone/reached/goblin-cave": false, "key/gate": true}, slots[0].Flags)
 }
 
+func TestSlotsRequest_World_CachesVisits(t *testing.T) {
+	reg := instance.NewRegistry()
+	router := mountRequest(newSlotsHandler(reg, 200))
+	visits := []map[string]string{{"map": "", "place": ""}, {"map": "main", "place": "camp"}}
+
+	rec := postRequest(t, router, worldRequest(map[string]any{"zone_config": validZoneConfig(), "visits": visits}))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	inst := onlyInstance(t, reg)
+	t.Cleanup(inst.Stop)
+	slots := inst.ListSlots()
+	require.Len(t, slots, 1)
+	assert.Equal(t, map[string]bool{"": true, "main/camp": true}, slots[0].Visited)
+}
+
 func TestSlotsRequest_World_LoadsQuestsAndActiveQuests(t *testing.T) {
 	const quests = `[{"identifier":"rat-hunt","offeredBy":{"zone":"goblin-cave","ncu":"grizzle"}}]`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

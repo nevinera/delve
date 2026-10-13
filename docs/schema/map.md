@@ -23,7 +23,7 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `units` | array of Unit | no | Units initially present on this map. See [unit.md](unit.md). UnitType keys must be defined in the enclosing zone's `unitTypes`. |
 | `ncus` | array of NCU | no | Non-combat units initially present on this map. See [ncu.md](ncu.md). |
 | `interactables` | array of Interactable | no | Things players use for quests: snares, totems, cages. See **Interactable**. |
-| `places` | array of Place | no | Named, tagged areas of the map, for building a zone in layers (see **Place** below). The game ignores them. |
+| `places` | array of Place | no | Named, tagged areas of the map, for building a zone in layers (see **Place** below). The game reads only their outlines, to record which a player has visited. |
 | `respawn` | RespawnConfig | no | Overrides the zone's `respawn` for every unit on this map, unless a unit overrides it again. See [common.md](common.md#respawnconfig). |
 | `leashRadius` | number | no | Feet. How far an engaged NPC on this map may get from where it was pulled before it gives up (see **Leashing** below). Default 120 (about WoW's 40 yards). A unit may override it. |
 | `hardLeash` | boolean | no | `true` makes NPCs on this map leash the moment they pass `leashRadius`, fight or no fight - for boss arenas and tight dungeon rooms. Default `false`. A unit may override it. |
@@ -178,7 +178,8 @@ shoot across but not walk through, like water.
 A named area of a map: "Arren's Camp", a goblin village, the far end of a cave. Places give a map
 structure for building a zone in layers (the layout, then places, then who lives there, then
 quests), so a person or an LLM can say "goblins in `goblin_village_5`" rather than giving
-coordinates. The game never reads them; the map editor shows them, and tools read and write them.
+coordinates. The map editor shows them, and tools read and write them; the game records which a
+player has visited, for the in-game map.
 
 They're optional, and needn't cover the map or keep apart; but those Auto Barriers makes from a
 generated cell map (see **CellMap**) partition it, every bit of open ground in exactly one place,

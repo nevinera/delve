@@ -280,3 +280,23 @@ func CastingNameForTest(c *instancestate.CastState) string {
 	name, _, _ := castingJSON(c)
 	return *name
 }
+
+// VisitEventForTest is a visitEvent with exported fields.
+type VisitEventForTest struct {
+	UnitID uuid.UUID
+	Visit  Visit
+}
+
+// CollectVisitsForTest runs collectVisits on state, then (when record is
+// set) RecordVisits on what it found, synchronously.
+func (inst *Instance) CollectVisitsForTest(ctx context.Context, state *instancestate.InstanceState, record bool) []VisitEventForTest {
+	events := inst.collectVisits(state)
+	if record {
+		inst.RecordVisits(ctx, events)
+	}
+	out := make([]VisitEventForTest, len(events))
+	for i, e := range events {
+		out[i] = VisitEventForTest(e)
+	}
+	return out
+}

@@ -54,6 +54,7 @@ type InstanceSlot struct {
 	Stats               map[string]float64                     // cached raw (em=1.0) sum of EquippedItems' stats; kept in sync by recomputeStats
 	Flags               map[string]bool                        // "type/identifier" → held; a flag missing from it is unknown (see flags.go)
 	Quests              map[string]instanceconfig.ActiveQuest  // quest identifier → the character's active quest (see quests.go); values are replaced, never mutated
+	Visited             map[string]bool                        // Visit.Key() → true for every visit in this zone already recorded (see visits.go)
 	SlotOptions
 
 	// Connection fields; protected by the instance's slotsMu.
@@ -88,6 +89,9 @@ type SlotOptions struct {
 	// ActiveQuests are the character's active quests in the world; world
 	// mode only.
 	ActiveQuests []instanceconfig.ActiveQuest
+	// Visits are where the character has been in this zone (see
+	// visits.go); world mode only.
+	Visits []Visit
 	// TokenImageURL is the character's portrait, for drawing its token;
 	// empty draws the plain one.
 	TokenImageURL string
@@ -137,6 +141,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 			slot.SlotOptions = opts
 			slot.Flags = inst.initialFlags(opts.HeldFlags)
 			slot.Quests = activeQuestsByIdentifier(opts.ActiveQuests)
+			slot.Visited = visitedKeys(opts.Visits)
 			slot.recomputeStats()
 			return slot.snapshot(), nil
 		}
@@ -159,6 +164,7 @@ func (inst *Instance) AddSlotWithOptions(characterName, characterDatabaseID stri
 		SlotOptions:         opts,
 		Flags:               inst.initialFlags(opts.HeldFlags),
 		Quests:              activeQuestsByIdentifier(opts.ActiveQuests),
+		Visited:             visitedKeys(opts.Visits),
 		stateEnteredAt:      time.Now(),
 	}
 	slot.recomputeStats()
@@ -180,6 +186,8 @@ func (s *InstanceSlot) snapshot() *InstanceSlot {
 	c.HeldFlags = slices.Clone(s.HeldFlags)
 	c.Quests = maps.Clone(s.Quests)
 	c.ActiveQuests = slices.Clone(s.ActiveQuests)
+	c.Visited = maps.Clone(s.Visited)
+	c.Visits = slices.Clone(s.Visits)
 	c.lastSeqByType = maps.Clone(s.lastSeqByType)
 	c.writeCh, c.connCancel, c.connDone = nil, nil, nil
 	return &c
