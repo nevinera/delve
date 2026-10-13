@@ -489,25 +489,38 @@ const NCU_BODY_COLOR = 0xb08a3e;
 const NCU_CONE_COLOR = 0xf0dca0;
 const QUEST_MARKER_COLOR = 0x7fe0ff;
 
-// Floating name above a token. Returns null where canvas 2D isn't available
-// (e.g. jsdom), in which case the token just goes unlabeled.
-function createNameLabel(text) {
+// Floating name above a token, 2 ft tall and as wide as its text needs.
+// Returns null where canvas 2D isn't available (e.g. jsdom), in which case
+// the token just goes unlabeled.
+const LABEL_FONT = "bold 30px sans-serif";
+function createNameLabel(text, color = "#f3e2b0") {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext?.("2d");
   if (!ctx) return null;
-  canvas.width = 256;
+  ctx.font = LABEL_FONT;
+  canvas.width = Math.max(256, Math.ceil(ctx.measureText(text).width) + 24);
   canvas.height = 64;
-  ctx.font = "bold 30px sans-serif";
+  ctx.font = LABEL_FONT; // resizing the canvas resets it
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.lineWidth = 6;
   ctx.strokeStyle = "rgba(0,0,0,0.85)";
-  ctx.strokeText(text, 128, 32);
-  ctx.fillStyle = "#f3e2b0";
-  ctx.fillText(text, 128, 32);
+  ctx.strokeText(text, canvas.width / 2, 32);
+  ctx.fillStyle = color;
+  ctx.fillText(text, canvas.width / 2, 32);
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthTest: false }));
-  sprite.scale.set(8, 2, 1);
+  sprite.scale.set((canvas.width / 64) * 2, 2, 1);
   return sprite;
+}
+
+// A unit's name (its type's, or a player's character name) over its token,
+// in its hostility's light color.
+export function attachUnitName(group, name, radius, hostility) {
+  const label = name ? createNameLabel(name, `#${new THREE.Color(HOSTILITY_COLORS[hostility]?.cone ?? HOSTILITY_COLORS.hostile.cone).getHexString()}`) : null;
+  if (!label) return;
+  label.position.set(0, radius + 0.5, 0);
+  group.add(label);
+  group._nameLabel = label;
 }
 
 // Token for a non-combat unit: a muted gold body (distinct from every
@@ -1059,13 +1072,14 @@ export class SceneManager {
       this._lightingByMap.set(m.identifier, m.lighting);
     }
 
-    // Build lookup across all maps: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
+    // Build lookup across all maps: zone_unit_identifier → { name, tokenImageUrl, hostility, tokenRadius }
     const unitTypes = json.unitTypes ?? {};
     for (const m of json.maps) {
       for (const unit of m.units ?? []) {
         const utype = unitTypes[unit.unitType];
         if (unit.identifier && utype) {
           this._unitInfo.set(unit.identifier, {
+            name: utype.name,
             tokenImageUrl: utype.tokenImageUrl,
             hostility: unit.hostility,
             tokenRadius: utype.tokenRadius ?? TOKEN_RADIUS,
@@ -1276,6 +1290,11 @@ export class SceneManager {
         const group = isPlayerUnit(unit)
           ? createPlayerToken(radius, isSelf ? characterTokenUrl : unit.token_image_url, { classColors: unit.class_colors, other: !isSelf })
           : createNpcToken(radius, info?.hostility, info?.tokenImageUrl, this._zoneBaseUrl);
+        if (isPlayerUnit(unit)) {
+          if (!isSelf) attachUnitName(group, unit.zone_unit_identifier.slice("player:".length), radius, "friendly");
+        } else {
+          attachUnitName(group, info?.name, radius, info?.hostility);
+        }
         group.position.set(wx, 0, wz);
         group.rotation.y = angle;
         group._zoneUnitIdentifier = unit.zone_unit_identifier;

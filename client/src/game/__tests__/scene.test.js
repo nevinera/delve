@@ -3,6 +3,7 @@ import * as THREE from "three";
 import {
   createNpcToken,
   createNcuToken,
+  attachUnitName,
   createInteractable,
   createPlayerToken,
   classColor,
@@ -428,5 +429,34 @@ describe("buildMapFill", () => {
     expect(outline.geometry.getAttribute("position").count).toBe(4 * 4);
     const sides = group.children.find((c) => c.isMesh && c.geometry instanceof THREE.BufferGeometry && !(c.geometry instanceof THREE.ShapeGeometry));
     expect(sides.geometry.getAttribute("position").count).toBe(8 * 6);
+  });
+});
+
+describe("attachUnitName", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  // A canvas 2D context that draws nothing and measures text at 15px a letter.
+  const stubCanvas = () => vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    new Proxy({}, { get: (_, k) => (k === "measureText" ? (t) => ({ width: t.length * 15 }) : () => {}), set: () => true })
+  );
+
+  it("floats the name just over the token, widening for a long one", () => {
+    stubCanvas();
+    const short = createNpcToken(2, "hostile", null, null);
+    attachUnitName(short, "Wolf", 2, "hostile");
+    const long = createNpcToken(3, "hostile", null, null);
+    attachUnitName(long, "Brazza, Keeper of the Fire", 3, "hostile");
+
+    expect(short._nameLabel.position.y).toBe(2.5);
+    expect(short._nameLabel.scale.x).toBe(8);
+    expect(long._nameLabel.position.y).toBe(3.5);
+    expect(long._nameLabel.scale.x).toBeGreaterThan(8);
+  });
+
+  it("leaves a nameless unit unlabeled", () => {
+    stubCanvas();
+    const group = createNpcToken(2, "hostile", null, null);
+    attachUnitName(group, undefined, 2, "hostile");
+    expect(group._nameLabel).toBeUndefined();
   });
 });
