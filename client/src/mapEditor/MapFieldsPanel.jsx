@@ -14,9 +14,9 @@ function NumberField({value, onChange}) {
   );
 }
 
-// Client-only display setting for the walk preview (see
-// MapPreviewScene.js's setLightingMode) - the game server never reads this
-// field (see docs/schema/map.md). Defaults to "daylight" when unset, same
+// Client-only display setting for the game and the walk preview (see
+// game/lighting.js) - the game server never reads this field (see
+// docs/schema/map.md). Defaults to "daylight" when unset, same
 // as Build::MapsController#blank_map.
 function LightingSelect({value, onChange}) {
   return (

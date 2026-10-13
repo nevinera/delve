@@ -5,6 +5,7 @@ import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 import { loadSvgToCanvas } from "./svgRaster.js";
 import { isUntargetableStatus } from "./state.js";
 import { computeMapFill } from "./mapFill.js";
+import { SceneLighting } from "./lighting.js";
 import { CellGroundQueue, groundPixelsPerFoot } from "./cellGrounds.js";
 import { inUseRange, interactableStates } from "./interactables.js";
 
@@ -670,11 +671,9 @@ export class SceneManager {
     this._renderer.setPixelRatio(window.devicePixelRatio);
 
     this._scene = new THREE.Scene();
-    this._scene.background = new THREE.Color(0x000000);
-    this._scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-    sun.position.set(5, 10, 5);
-    this._scene.add(sun);
+    // Each map's own lighting, set as the player arrives on it.
+    this._lighting = new SceneLighting(this._scene);
+    this._lightingByMap = new Map(); // mapId → "daylight" | "torchlight"
 
     this._camera = new THREE.PerspectiveCamera(34, 1, 0.1, 500);
 
@@ -1057,6 +1056,7 @@ export class SceneManager {
     for (const m of json.maps) {
       this._barriersByMap.set(m.identifier, m.barriers ?? []);
       this._dimsByMap.set(m.identifier, m.feetDimensions);
+      this._lightingByMap.set(m.identifier, m.lighting);
     }
 
     // Build lookup across all maps: zone_unit_identifier → { tokenImageUrl, hostility, tokenRadius }
@@ -1205,6 +1205,7 @@ export class SceneManager {
         group.visible = mid === selfUnit.map_identifier;
       }
       this._cellGrounds?.prefer(selfUnit.map_identifier);
+      this._lighting.setMode(this._lightingByMap.get(selfUnit.map_identifier));
       this._selfMapIdentifier = selfUnit.map_identifier;
       this._selfMapX = selfUnit.position.x;
       this._selfMapY = selfUnit.position.y;
@@ -1509,6 +1510,7 @@ export class SceneManager {
       this._updateStatusAuras(time);
       this._updateLootBeams(time);
       this._positionCamera();
+      if (this._selfToken) this._lighting.setCenter(this._selfToken.position.x, this._selfToken.position.z);
       this._renderer.render(this._scene, this._camera);
     };
     tick();
