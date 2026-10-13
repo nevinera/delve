@@ -29,6 +29,7 @@ export const DEFAULT_HOTKEYS = {
   attack_stop: "s+t",
   toggle_character_sheet: "p",
   toggle_quest_log: "j",
+  toggle_atlas: "m",
   toggle_latency: "l",
 };
 

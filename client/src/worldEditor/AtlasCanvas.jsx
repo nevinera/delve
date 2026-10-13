@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from "react";
-import usePinchZoom from "../../usePinchZoom";
-import {bendLink, insertVertex, moveCorner, moveMap, moveZone, removeVertex} from "../../worldEditor/atlasEdit";
+import usePinchZoom from "../usePinchZoom";
+import {bendLink, insertVertex, moveCorner, moveMap, moveZone, removeVertex} from "./atlasEdit";
 
 const MIN_ZOOM = 0.005;
 const MAX_ZOOM = 4;
@@ -15,6 +15,31 @@ const ZONE_COLORS = ["#e76f51", "#2a9d8f", "#e9c46a", "#8ab17d", "#9b5de5", "#f4
 
 export const zoneColor = (index) => ZONE_COLORS[index % ZONE_COLORS.length];
 
+// The canvas's own styles, so it looks the same in the world editor and in
+// the game (whose layout has no stylesheet for it).
+const STYLES = `
+.atlas-canvas { position: relative; width: 100%; height: 100%; background: #101316; cursor: grab; touch-action: none; user-select: none; overflow: hidden; }
+.atlas-canvas-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #889; margin: 0; }
+.atlas-zone { stroke-width: 2; cursor: move; }
+.atlas-zone-name { font-size: 13px; pointer-events: none; }
+.atlas-map { cursor: move; }
+.atlas-map-frame { fill: none; stroke: #000a; stroke-width: 1; }
+.atlas-map:hover .atlas-map-frame { stroke: #fff; stroke-width: 2; }
+.atlas-link { fill: none; stroke: #9cf; stroke-width: 2; pointer-events: none; }
+.atlas-link-world { stroke: #fc6; stroke-dasharray: 6 4; }
+.atlas-corner { fill: #101316; stroke-width: 2; cursor: crosshair; }
+.atlas-corner:hover { fill: #fff; }
+.atlas-edge { fill: #101316; stroke-width: 1.5; cursor: copy; opacity: 0.8; }
+.atlas-edge:hover { fill: #fff; }
+.atlas-bend { fill: #101316; stroke: #9cf; stroke-width: 1.5; cursor: move; opacity: 0.7; }
+.atlas-bend-bent { fill: #9cf; }
+.atlas-bend:hover { fill: #fff; opacity: 1; }
+.atlas-marker { fill: #fff; stroke: #000; stroke-width: 1.5; pointer-events: none; }
+.atlas-label { position: absolute; pointer-events: none; background: rgba(20,16,12,0.97); border: 1px solid #556; border-radius: 6px; padding: 4px 8px; color: #cce; font-size: 12px; white-space: nowrap; }
+.atlas-canvas-locked .atlas-zone, .atlas-canvas-locked .atlas-map { cursor: inherit; }
+.atlas-canvas-locked .atlas-map:hover .atlas-map-frame { stroke: #000a; stroke-width: 1; }
+`;
+
 const midpoint = (a, b) => ({x: (a.x + b.x) / 2, y: (a.y + b.y) / 2});
 
 // A link's line: straight, or a curve through `through` (its control point
@@ -25,8 +50,10 @@ function linkPath({from, to, through}) {
   return `M ${from.x} ${from.y} Q ${2 * through.x - mid.x} ${2 * through.y - mid.y} ${to.x} ${to.y}`;
 }
 
-function fitView(atlas, width, height) {
-  const points = Object.values(atlas?.zones ?? {}).flatMap((z) => z.outline ?? []);
+// The view that fits the focus zone's outline, or every zone's without one.
+function fitView(atlas, width, height, focus) {
+  const zones = atlas?.zones?.[focus] ? [atlas.zones[focus]] : Object.values(atlas?.zones ?? {});
+  const points = zones.flatMap((z) => z.outline ?? []);
   if (!points.length || width <= 0 || height <= 0) return {panX: width / 2, panY: height / 2, zoom: 0.2};
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
@@ -49,8 +76,10 @@ function fitView(atlas, width, height) {
 // (onChange, with the new atlas) when the drag ends. Drag outside the
 // zones to pan, wheel or pinch to zoom. Hovering (or tapping) a map shows
 // its name. With editable false, there are no handles and nothing moves:
-// the atlas as the in-game map will show it, everything explored.
-export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap, editable = true}) {
+// the atlas as the in-game map will show it, everything explored. marker
+// ({x, y, angle}: world feet, degrees clockwise from north) draws an arrow
+// there, and focus (a zone) is what the view starts fitted to.
+export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap, editable = true, marker = null, focus = null}) {
   const wrapper = useRef(null);
   const [view, setView] = useState(null);
   const [dragged, setDragged] = useState(null); // the atlas mid-drag
@@ -63,7 +92,7 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
 
   useEffect(() => {
     const rect = wrapper.current?.getBoundingClientRect();
-    setView(fitView(atlas, rect?.width ?? 800, rect?.height ?? 600));
+    setView(fitView(atlas, rect?.width ?? 800, rect?.height ?? 600, focus));
     // Fit once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -163,6 +192,7 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
   const commit = (next) => next !== atlas && onChange(next);
   return (
     <div className={`atlas-canvas${editable ? "" : " atlas-canvas-locked"}`} ref={wrapper} {...pinchHandlers} onPointerDown={(e) => onPointerDown(e)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
+      <style>{STYLES}</style>
       {!zones.length && <p className="atlas-canvas-empty">Nothing laid out yet.</p>}
       {view && (
         <svg width="100%" height="100%" role="img" aria-label="Atlas">
@@ -207,6 +237,13 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
             const corner = toScreen(entry.outline.reduce((best, p) => (p.y - p.x > best.y - best.x ? p : best)));
             return <text key={zone} className="atlas-zone-name" x={corner.x + 6} y={corner.y + 16} fill={zoneColor(i)}>{zoneNames[zone] ?? zone}</text>;
           })}
+          {marker && (() => {
+            const at = toScreen(marker);
+            return (
+              <path className="atlas-marker" d="M 0 -10 L 7 8 L 0 4 L -7 8 Z" aria-label="You are here"
+                transform={`translate(${at.x} ${at.y}) rotate(${marker.angle ?? 0})`} />
+            );
+          })()}
           {editable && links.map((link) => {
             const at = toScreen(link.through ?? midpoint(link.from, link.to));
             return (

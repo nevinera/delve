@@ -112,7 +112,14 @@ RSpec.describe "Play::WorldCharacters", type: :request do
         %(data-zone-source-url="#{version.raw_base_url}zones/darkwood/darkwood.full.json"),
         %(data-zone-source-sha="#{version.zones.find_by!(identifier: "darkwood").content_sha}"),
         %(data-class-config-sha="#{character_class.content_sha}"))
-      expect(response.body).not_to include("<nav>", "data-quests-url")
+      expect(response.body).not_to include("<nav>", "data-quests-url", "data-atlas")
+    end
+
+    it "passes the world's atlas to the client" do
+      allow(JoinWorldZone).to receive(:call).and_return(join_result)
+      version.update!(atlas: {"zones" => {}, "maps" => [], "links" => []})
+      get "#{base}/#{world.id}/play"
+      expect(response.body).to include(%(data-atlas="{&quot;zones&quot;:{},&quot;maps&quot;:[],&quot;links&quot;:[]}"))
     end
 
     it "passes the world's quests file to the client" do

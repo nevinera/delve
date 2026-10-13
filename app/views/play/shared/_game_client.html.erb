@@ -19,6 +19,7 @@
   <% if local_assigns[:active_quests_url] %>data-active-quests-url="<%= active_quests_url %>"<% end %>
   <% if local_assigns[:quests_url] %>data-quests-url="<%= quests_url %>" data-quests-sha="<%= quests_sha %>"<% end %>
   <% if local_assigns[:provenance_restrictions] %>data-provenance-restrictions="<%= provenance_restrictions.to_json %>"<% end %>
+  <% if local_assigns[:atlas] %>data-atlas="<%= atlas.to_json %>"<% end %>
   data-character-settings="<%= character_settings.to_json %>"
   data-character-settings-url="<%= play_character_setting_path(character) %>"
   data-stock-assets="<%= stock_assets.to_json %>"

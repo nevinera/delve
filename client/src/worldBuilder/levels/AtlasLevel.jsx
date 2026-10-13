@@ -1,5 +1,5 @@
 import {useMemo, useState} from "react";
-import AtlasCanvas, {zoneColor} from "./AtlasCanvas";
+import AtlasCanvas, {zoneColor} from "../../worldEditor/AtlasCanvas";
 import {atlasData, atlasInput, atlasSizes, atlasThumbnails, resetAtlas, setAtlas} from "../state/atlasOps";
 import {atlasLinks} from "../../worldEditor/atlasLayout";
 import {atlasProblems} from "../../worldEditor/atlasGeometry";

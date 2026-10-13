@@ -1,7 +1,7 @@
 import {describe, it, expect, vi} from "vitest";
 import {render, screen, fireEvent} from "@testing-library/react";
-import AtlasCanvas from "../levels/AtlasCanvas";
-import {atlasLinks} from "../../worldEditor/atlasLayout";
+import AtlasCanvas from "../AtlasCanvas";
+import {atlasLinks} from "../atlasLayout";
 
 const line = (identifier, x1, y1, x2, y2) => ({identifier, type: "line", start: {x: x1, y: y1}, end: {x: x2, y: y2}});
 const input = {zones: {forest: {

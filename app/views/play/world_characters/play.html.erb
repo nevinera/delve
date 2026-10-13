@@ -5,6 +5,7 @@
       held_flags: @entry.held_flags, flags_url: "#{play_character_world_path(@character, @world)}/flags",
       zone_identifier: @zone.identifier, quests_url: @zone.world_version.quests_url,
       active_quests_url: play_character_world_character_quests_path(@character, @world), quests_sha: @zone.world_version.quests_sha,
+      atlas: @zone.world_version.atlas,
       provenance_restrictions: @entry.provenance_restrictions,
       character_settings: @character_settings, stock_assets: @stock_assets,
       world_return_url: play_play_character_world_path(@character, @world),
