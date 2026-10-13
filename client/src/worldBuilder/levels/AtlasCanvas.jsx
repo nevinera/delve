@@ -9,6 +9,7 @@ const FIT_MARGIN = 0.9;
 const CORNER_RADIUS = 7; // pixels
 const EDGE_HANDLE = 8; // pixels across
 const BEND_RADIUS = 5; // pixels
+const MERGE_RADIUS = 10; // pixels: a vertex dropped this near a neighbor merges into it
 const MASK_EXTENT = 1e7; // feet: a link mask's reach, past anything drawn
 const ZONE_COLORS = ["#e76f51", "#2a9d8f", "#e9c46a", "#8ab17d", "#9b5de5", "#f4a261", "#4cc9f0", "#f15bb5"];
 
@@ -41,7 +42,8 @@ function fitView(atlas, width, height) {
 // as linksFor(atlas) gives them (see atlasLinks). Drag a map to move it in
 // its zone, a zone (between its maps) to move it whole, an outline's
 // vertex to reshape it, or the handle in the middle of an outline's edge to
-// split it there; double-click a vertex to remove it. Drag a link's handle
+// split it there; double-click a vertex, or drop it on a neighbor, to
+// remove it. Drag a link's handle
 // to bend it, double-click it to straighten it. Every move stops where it
 // would break the atlas's rules (see atlasEdit.js), and is reported
 // (onChange, with the new atlas) when the drag ends. Drag outside the
@@ -117,8 +119,15 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
       const from = base.zones[moving.zone].maps[moving.map];
       setDragged(moveMap(base, sizes, moving.zone, moving.map, {x: from.x + by.x, y: from.y + by.y}));
     } else if (moving.corner != null) {
-      const from = base.zones[moving.zone].outline[moving.corner];
-      setDragged(moveCorner(base, sizes, moving.zone, moving.corner, {x: from.x + by.x, y: from.y + by.y}));
+      const outline = base.zones[moving.zone].outline;
+      const from = outline[moving.corner];
+      const to = {x: from.x + by.x, y: from.y + by.y};
+      // Dropped on a neighbor, the vertex merges into it (when the outline
+      // can do without it).
+      const neighbors = [outline[(moving.corner + outline.length - 1) % outline.length], outline[(moving.corner + 1) % outline.length]];
+      const merging = neighbors.some((n) => Math.hypot(n.x - to.x, n.y - to.y) * view.zoom <= MERGE_RADIUS);
+      const removed = merging ? removeVertex(base, sizes, moving.zone, moving.corner) : base;
+      setDragged(removed !== base ? removed : moveCorner(base, sizes, moving.zone, moving.corner, to));
     } else if (moving.link) {
       const from = base.bends?.[moving.link.key] ?? {x: 0, y: 0};
       setDragged(bendLink(base, moving.link.key, {x: from.x + by.x, y: from.y + by.y}));

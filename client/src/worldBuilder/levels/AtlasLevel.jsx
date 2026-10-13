@@ -62,7 +62,7 @@ export default function AtlasLevel({draft, onChange, navigate, repo}) {
         <h3>Atlas</h3>
         <p className="world-key">
           Where each zone&apos;s maps sit, north up and to scale, for the in-game map. Drag a map, a zone, or a zone&apos;s corners;
-          drag the middle of an outline&apos;s edge to add a corner there, and double-click a corner to remove it. Drag a link&apos;s dot
+          drag the middle of an outline&apos;s edge to add a corner there, and double-click a corner (or drop it on the next one) to remove it. Drag a link&apos;s dot
           to bend it, and double-click the dot to straighten it. Double-click a map to open it.
         </p>
         <button type="button" className="add-entry" onClick={onReset}>{atlas ? "Reset atlas" : "Guess atlas"}</button>

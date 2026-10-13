@@ -91,6 +91,22 @@ describe("AtlasCanvas", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
+  it("removes a vertex dropped on a neighbor, when the outline can do without it", () => {
+    const five = {zones: {forest: {...atlas.zones.forest, outline: [...atlas.zones.forest.outline.slice(0, 2), {x: 320, y: 105}, ...atlas.zones.forest.outline.slice(2)]}}};
+    const onChange = renderCanvas(five);
+    // Corner 3 (320, 105) onto corner 2 (220, -60): 100 ft west, 165 ft south.
+    drag(screen.getByLabelText("Corner 3 of forest"), -20, 33);
+    expect(onChange).toHaveBeenCalledWith(atlas);
+  });
+
+  it("doesn't remove a vertex the maps need, dropped on a neighbor", () => {
+    const onChange = renderCanvas();
+    // Corner 1 (-60, -60) onto corner 2 (220, -60) would leave a triangle cutting the maps.
+    drag(screen.getByLabelText("Corner 1 of forest"), 56, 0);
+    const outline = onChange.mock.calls[0]?.[0].zones.forest.outline ?? atlas.zones.forest.outline;
+    expect(outline).toHaveLength(4);
+  });
+
   it("moves a link with the map it's on, mid-drag", () => {
     renderCanvas();
     const camp = screen.getByLabelText("Map camp");
