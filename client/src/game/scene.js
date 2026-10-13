@@ -256,6 +256,14 @@ export function createPlayerToken(radius, tokenUrl, { classColors = null, other 
   return group;
 }
 
+// setUnitBars's view of a unit's server state.
+function unitBarState(unit) {
+  return {
+    health: unit.health, maxHealth: unit.max_health, dead: isUntargetableStatus(unit.status),
+    castStartedAt: unit.cast_started_at, castEndsAt: unit.cast_ends_at,
+  };
+}
+
 // Whether a unit is a player character (see the game server's spawn.go).
 export function isPlayerUnit(unit) {
   return unit?.zone_unit_identifier?.startsWith("player:") ?? false;
@@ -521,6 +529,71 @@ export function attachUnitName(group, name, radius, hostility) {
   label.position.set(0, radius + 0.5, 0);
   group.add(label);
   group._nameLabel = label;
+}
+
+// Thin bars under a unit's name: its health once it's taken damage, and
+// its cast's progress while it's casting (no power name).
+const BAR_WIDTH = 4;     // feet
+const BAR_HEIGHT = 0.22; // feet
+const BAR_DROP = 0.75;   // feet from the name's center down to the health bar's
+const BAR_GAP = 0.34;    // feet between the bars' centers
+const BAR_BACK_COLOR = 0x111111;
+const HEALTH_BAR_COLOR = 0x5ccf5c;
+const CAST_BAR_COLOR = 0xffc23d;
+
+// A bar drop feet below its anchor, on screen: a sprite's center moves it
+// in its own plane, so the camera's pitch doesn't squash the spacing the
+// way it would a drop in height.
+function createBar(color, drop) {
+  const sprite = (c, order, w, h) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ color: c, depthTest: false, transparent: true }));
+    s.renderOrder = order;
+    s.scale.set(w, h, 1);
+    s.center.y = 0.5 + drop / h;
+    return s;
+  };
+  const back = sprite(BAR_BACK_COLOR, 1, BAR_WIDTH + 0.1, BAR_HEIGHT + 0.1);
+  const fill = sprite(color, 2, BAR_WIDTH, BAR_HEIGHT);
+  const bar = new THREE.Group();
+  bar.add(back, fill);
+  bar.visible = false;
+  bar._fill = fill;
+  return bar;
+}
+
+// Fills a bar to fraction (0-1) from its left: a sprite is anchored by its
+// center, so the fill's anchor is moved out to keep its left edge put.
+function setBarFraction(bar, fraction) {
+  const f = Math.max(0.001, Math.min(1, fraction));
+  bar._fill.scale.x = BAR_WIDTH * f;
+  bar._fill.center.x = 0.5 / f;
+}
+
+// Shows, hides and fills a unit token's bars. now is in epoch ms, as the
+// server's cast times are.
+export function setUnitBars(group, { health, maxHealth, dead = false, castStartedAt, castEndsAt }, now = Date.now()) {
+  if (!group._healthBar) {
+    const anchor = group._nameLabel?.position.y ?? 2.5;
+    group._healthBar = createBar(HEALTH_BAR_COLOR, BAR_DROP);
+    group._castBar = createBar(CAST_BAR_COLOR, BAR_DROP + BAR_GAP);
+    group._healthBar.position.set(0, anchor, 0);
+    group._castBar.position.set(0, anchor, 0);
+    group.add(group._healthBar, group._castBar);
+  }
+  const hurt = !dead && maxHealth > 0 && health < maxHealth;
+  group._healthBar.visible = hurt;
+  if (hurt) setBarFraction(group._healthBar, health / maxHealth);
+
+  const casting = !dead && castStartedAt != null && castEndsAt > castStartedAt;
+  group._castBar.visible = casting;
+  group._cast = casting ? { startedAt: castStartedAt, endsAt: castEndsAt } : null;
+  if (casting) setBarFraction(group._castBar, (now - castStartedAt) / (castEndsAt - castStartedAt));
+}
+
+// Advances a casting token's cast bar; called every frame.
+export function tickCastBar(group, now = Date.now()) {
+  const cast = group._cast;
+  if (cast) setBarFraction(group._castBar, (now - cast.startedAt) / (cast.endsAt - cast.startedAt));
 }
 
 // Token for a non-combat unit: a muted gold body (distinct from every
@@ -1280,6 +1353,7 @@ export class SceneManager {
           }
         }
         setTokenDead(entry.group, isUntargetableStatus(unit.status));
+        if (!isSelf) setUnitBars(entry.group, unitBarState(unit));
         setTokenFade(entry.group, { stealthVisibility: unit.stealth_visibility, disconnected: !!unit.disconnected });
         if (!isSelf) {
           setTokenTagDimmed(entry.group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
@@ -1300,6 +1374,7 @@ export class SceneManager {
         group._zoneUnitIdentifier = unit.zone_unit_identifier;
         this._scene.add(group);
         setTokenDead(group, isUntargetableStatus(unit.status));
+        if (!isSelf) setUnitBars(group, unitBarState(unit));
         setTokenFade(group, { stealthVisibility: unit.stealth_visibility, disconnected: !!unit.disconnected });
         if (!isSelf) {
           setTokenTagDimmed(group, unit.tagged_by != null && unit.tagged_by !== selfUnitId);
@@ -1514,8 +1589,10 @@ export class SceneManager {
 
       // Interpolate NPC tokens toward their server-side target positions.
       const f = elapsed > 0 ? 1 - Math.exp(-20 * elapsed) : 0;
+      const now = Date.now();
       for (const { group, isSelf, targetX, targetZ, targetRotY } of [...this._tokenMap.values(), ...this._ncuTokenMap.values()]) {
         if (isSelf) continue;
+        tickCastBar(group, now);
         group.position.x += (targetX - group.position.x) * f;
         group.position.z += (targetZ - group.position.z) * f;
         let dRot = targetRotY - group.rotation.y;

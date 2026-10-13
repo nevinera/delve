@@ -4,6 +4,8 @@ import {
   createNpcToken,
   createNcuToken,
   attachUnitName,
+  setUnitBars,
+  tickCastBar,
   createInteractable,
   createPlayerToken,
   classColor,
@@ -458,5 +460,37 @@ describe("attachUnitName", () => {
     const group = createNpcToken(2, "hostile", null, null);
     attachUnitName(group, undefined, 2, "hostile");
     expect(group._nameLabel).toBeUndefined();
+  });
+});
+
+describe("setUnitBars", () => {
+  const filled = (bar) => bar._fill.scale.x / 4;
+
+  it("shows health only once a unit has taken damage", () => {
+    const group = createNpcToken(2, "hostile", null, null);
+    setUnitBars(group, { health: 50, maxHealth: 50 });
+    expect(group._healthBar.visible).toBe(false);
+
+    setUnitBars(group, { health: 20, maxHealth: 50 });
+    expect(group._healthBar.visible).toBe(true);
+    expect(filled(group._healthBar)).toBeCloseTo(0.4);
+    // Still left-aligned: the fill's anchor moves out as it shrinks.
+    expect(group._healthBar._fill.center.x * group._healthBar._fill.scale.x).toBeCloseTo(2);
+
+    setUnitBars(group, { health: 0, maxHealth: 50, dead: true });
+    expect(group._healthBar.visible).toBe(false);
+  });
+
+  it("fills the cast bar over the cast, and hides it after", () => {
+    const group = createNpcToken(2, "hostile", null, null);
+    setUnitBars(group, { health: 50, maxHealth: 50, castStartedAt: 1000, castEndsAt: 3000 }, 1500);
+    expect(group._castBar.visible).toBe(true);
+    expect(filled(group._castBar)).toBeCloseTo(0.25);
+
+    tickCastBar(group, 2500);
+    expect(filled(group._castBar)).toBeCloseTo(0.75);
+
+    setUnitBars(group, { health: 50, maxHealth: 50 }, 3100);
+    expect(group._castBar.visible).toBe(false);
   });
 });
