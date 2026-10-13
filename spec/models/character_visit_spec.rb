@@ -38,6 +38,15 @@ RSpec.describe CharacterVisit do
     end
   end
 
+  describe ".in_world" do
+    it "lists all the world character's visits, oldest first" do
+      described_class.record!(world_character, zone: "darkwood")
+      described_class.record!(world_character, zone: "cave", map: "mouth", place: "ledge")
+      expect(described_class.in_world(world_character))
+        .to eq([{zone: "darkwood", map: "", place: ""}, {zone: "cave", map: "mouth", place: "ledge"}])
+    end
+  end
+
   describe ".in_zone" do
     it "lists the zone's visits, oldest first" do
       described_class.record!(world_character, zone: "darkwood")

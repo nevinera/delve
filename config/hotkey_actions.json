@@ -84,6 +84,10 @@
     "label": "Quest log"
   },
   {
+    "id": "toggle_atlas",
+    "label": "Map"
+  },
+  {
     "id": "toggle_latency",
     "label": "Toggle latency display"
   }

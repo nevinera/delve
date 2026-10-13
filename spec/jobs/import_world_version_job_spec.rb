@@ -105,6 +105,20 @@ RSpec.describe ImportWorldVersionJob, type: :job do
       )
     end
 
+    it "stores what the in-game map draws of the atlas" do
+      outline = [{"x" => 0, "y" => 0}, {"x" => 250, "y" => 0}, {"x" => 250, "y" => 400}, {"x" => 0, "y" => 400}]
+      atlas = {"zones" => {"goblin-cave" => {"outline" => outline, "maps" => {"cave_entrance" => {"x" => 0, "y" => 0}}}}}
+      stub_raw("worlds/demo.json", world_data.merge("atlas" => atlas))
+      perform
+      expect(version.reload.atlas["maps"].map { |m| m["map"] }).to eq(%w[cave_entrance])
+      expect(version.atlas["zones"].keys).to eq(%w[goblin-cave])
+    end
+
+    it "stores no atlas for a world without one" do
+      perform
+      expect(version.reload.atlas).to be_nil
+    end
+
     it "stores each zone's name and its maps' names" do
       perform
       zone = version.zones.find_by!(identifier: "goblin-cave")

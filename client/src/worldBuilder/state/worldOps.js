@@ -6,6 +6,7 @@
 // Per-file logic is reused from the old editor's WorldDraft class
 // (worldEditor/WorldDraft.js), applied to the world file's data in place -
 // nothing holds it as separate state.
+import {dropAtlasZone, renameAtlasZone} from "./atlasOps";
 import {WorldDraft as WorldFile} from "../../worldEditor/WorldDraft";
 import {stableStringify} from "./WorldDraft";
 import {isValidIdentifier, relativePath, worldDir, worldFile, worldLayoutFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
@@ -100,7 +101,7 @@ export function renameZone(draft, from, to) {
       entryPoints: Object.fromEntries(Object.entries(data.entryPoints ?? {}).map(([key, value]) => [renameKey(key, from, to), value])),
     };
   });
-  next = syncZoneEntry(next, to);
+  next = renameAtlasZone(syncZoneEntry(next, to), from, to);
 
   const positions = worldPositions(next);
   const renamed = Object.fromEntries(Object.entries(positions).map(([key, pos]) => {
@@ -113,7 +114,7 @@ export function renameZone(draft, from, to) {
 // Removes the zone's directory, its world entry, and every worldLink and
 // entry point that used it.
 export function deleteZone(draft, key) {
-  const next = updateWorld(draft.removeDir(zoneDir(draft.worldKey, key)), (w) => w.removeZone(key));
+  const next = dropAtlasZone(updateWorld(draft.removeDir(zoneDir(draft.worldKey, key)), (w) => w.removeZone(key)), key);
   const positions = worldPositions(next);
   const kept = Object.fromEntries(Object.entries(positions).filter(([k]) => {
     const target = k.startsWith("entryPoint:") ? k.slice("entryPoint:".length) : k;

@@ -14,6 +14,8 @@ import { DialogueWindow } from "./DialogueWindow";
 import { activeQuestsById, applyQuestAction, offersFor, questLogZones, questMessageAction, questNcus, questsById, turnInsFor, zoneNames } from "./game/quests";
 import { inUseRange } from "./game/interactables";
 import { QuestLog } from "./QuestLog";
+import { AtlasWindow } from "./AtlasWindow";
+import { visitedMessageKey, visitKeys } from "./game/atlasVisibility";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
@@ -3063,6 +3065,12 @@ export default function App({
   characterSettings,
   characterSettingsUrl,
   stockAssets,
+  // The world's atlas, for the map (see WorldContent::Atlas.payload), or
+  // null outside a world or before one is laid out.
+  atlas = null,
+  // Everywhere in the world the character has been ([{zone, map, place}],
+  // see CharacterVisit.in_world), for what the map shows.
+  visits: initialVisits = [],
   // Set on a world's zones: the world's play page, which the client goes
   // back to when the player leaves through an exit or the world version
   // expires (see game/worldMessages.js).
@@ -3135,6 +3143,10 @@ export default function App({
   // over it once it has (null once loaded).
   const pendingQuestActionsRef = useRef([]);
   const [questLogOpen, setQuestLogOpen] = useState(false);
+  const [atlasOpen, setAtlasOpen] = useState(false);
+  // Where the character has been, for the map: the visits Rails sent, plus
+  // the ones the game server records since (its "visited" messages).
+  const [visited, setVisited] = useState(() => visitKeys(initialVisits));
   const [currentZoneNames, setCurrentZoneNames] = useState(null);
   const [questZoneNames, setQuestZoneNames] = useState({});
   const questZones = useMemo(
@@ -3576,6 +3588,7 @@ export default function App({
           setDialogueNcuId(null);
           setCharSheetOpen(false);
           setQuestLogOpen(false);
+          setAtlasOpen(false);
           setClassOpen(false);
           setSettingsOpen(false);
           setMenuOpen(false);
@@ -3592,6 +3605,8 @@ export default function App({
         setCharSheetOpen(o => !o);
       } else if (action === "toggle_quest_log") {
         setQuestLogOpen(o => !o);
+      } else if (action === "toggle_atlas") {
+        setAtlasOpen(o => !o);
       } else if (action === "toggle_latency") {
         setLatencyOverride((current) => nextLatencyOverride(current, autoShowLatencyRef.current));
       } else if (action === "attack_start") {
@@ -3669,6 +3684,8 @@ export default function App({
         addLog("Disconnected.");
       },
       onServerMessage: (msg) => {
+        const visit = visitedMessageKey(msg);
+        if (visit) setVisited((current) => (current.has(visit) ? current : new Set([...current, visit])));
         const questAction = questMessageAction(msg, questDefinitionsRef.current);
         if (questAction?.type === "offers") {
           questOffersRef.current = questAction.offers;
@@ -3781,6 +3798,7 @@ export default function App({
   const selfEntry = Object.entries(units).find(([, u]) => u.zone_unit_identifier === selfIdentifier);
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
+
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
   const targetUnit = targetId ? units[targetId] : null;
 
@@ -4059,7 +4077,7 @@ export default function App({
   // is only ever non-empty when the target happens to be self.
   const targetSecondaryResources = targetUnit?.zone_unit_identifier === selfIdentifier ? secondaryResources : [];
 
-  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || questLogOpen || classOpen || settingsOpen || menuOpen;
+  overlayOpenRef.current = lootWindowUnitId != null || dialogueNcuId != null || charSheetOpen || questLogOpen || atlasOpen || classOpen || settingsOpen || menuOpen;
 
   // Walking away (or dying) ends the conversation.
   const dialogueNcu = dialogueNcuId ? ncus[dialogueNcuId] : null;
@@ -4340,6 +4358,17 @@ export default function App({
         portrait={viewportMode.isPortraitPhone}
         landscape={viewportMode.isLandscapePhone}
       />
+      <AtlasWindow
+        open={atlasOpen}
+        atlas={atlas}
+        visited={visited}
+        zone={zoneIdentifier}
+        map={selfUnit?.map_identifier}
+        position={selfUnit?.position}
+        onClose={() => setAtlasOpen(false)}
+        portrait={viewportMode.isPortraitPhone}
+        landscape={viewportMode.isLandscapePhone}
+      />
       <ClassSheet
         open={classOpen}
         powers={powers}
@@ -4381,6 +4410,14 @@ export default function App({
           >
             Quests
           </button>
+          {atlas && (
+            <button
+              style={styles.menuDialogButton}
+              onClick={() => { setAtlasOpen((o) => !o); setMenuOpen(false); }}
+            >
+              Map
+            </button>
+          )}
           <button
             style={styles.menuDialogButton}
             onClick={() => { setClassOpen((o) => !o); setMenuOpen(false); }}
@@ -4658,6 +4695,15 @@ export default function App({
           >
             Quests
           </button>
+          {atlas && (
+            <button
+              style={styles.utilityButton}
+              title="Map (M)"
+              onClick={() => setAtlasOpen(o => !o)}
+            >
+              Map
+            </button>
+          )}
           <button
             style={styles.utilityButton}
             title="Class"

@@ -20,6 +20,7 @@ See [zone.md](zone.md) for the `Zone` type referenced by `zones`.
 | `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Default: this world's items only, any elevation. |
 | `questsPath` | string | no | Path to this world's quests file (a JSON array of [Quests](quest.md)), relative to the world file. Default: `./quests.json`, and a world with nothing there has no quests. |
 | `entryPoints` | object | yes | Maps serialized WorldEntryPointIdentifier keys (`"zoneId/entryPointKey"`) to required key strings (or `null`). At least one. |
+| `atlas` | Atlas | no | Where the zones' maps sit geographically, for the in-game map. Published to the client only; the game server ignores it. See **Atlas** below. |
 | `annotations` | Annotations | no | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 > Skipped for now, tracked separately: `allowedClasses` (blocked on ClassSets).
@@ -102,6 +103,42 @@ traversing one transports a unit to the other.
 | `zoneB` | ZoneReference | yes | |
 | `oneWay` | boolean | yes | If `true`, travel is only permitted from `zoneA` to `zoneB`. |
 | `requiredKey` | string \| null | yes | Identifier of the key item required to traverse. `null` if no key is needed. |
+
+---
+
+## Atlas
+
+Lays the world's maps out geographically, for the in-game map: each zone an outline, its maps
+placed inside it. Everything is in world feet, x east and y north (as on a map), so maps are
+drawn to scale, and always north-up. The world editor makes a first guess from the links and
+lets you drag maps, outline corners and link bends from there.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `zones` | object | yes | Maps zone keys (from `zones`) to AtlasZone. A zone left out isn't laid out yet. |
+| `bends` | object | no | Curves for links between maps, keyed by the link's two ends: `"zone/map/connection"` each, sorted, joined by `\|` (a zoneLink's ends are in its zone; a worldLink's are the maps and connections its sides resolve to). Each value is a Location: an offset in feet from the midpoint of the straight line between the two connections, which the curve passes through (a quadratic curve, its control point at twice that point less the midpoint). A link with no bend is straight; a bend for no link is ignored. |
+
+An **AtlasZone**:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `outline` | array of Location | yes | 3 to 64 points: a polygon around the zone's maps, any shape that doesn't cross or touch itself. |
+| `maps` | object | yes | Maps the zone's map identifiers to the Location of each map's origin, its own (0, 0), in world feet. A map spans its `feetDimensions` east and north from there. A map left out isn't laid out yet. |
+
+Every placed map must lie inside its zone's outline. Maps may touch but never overlap, in a zone
+or across zones, and neither may outlines.
+
+```json
+"atlas": {
+  "zones": {
+    "goblin_cave": {
+      "outline": [{"x": 0, "y": 0}, {"x": 400, "y": 0}, {"x": 400, "y": 400}, {"x": 0, "y": 400}],
+      "maps": {"entrance": {"x": 0, "y": 0}, "depths": {"x": 200, "y": 0}}
+    }
+  },
+  "bends": {"goblin_cave/depths/west|goblin_cave/entrance/east": {"x": 0, "y": 40}}
+}
+```
 
 ---
 

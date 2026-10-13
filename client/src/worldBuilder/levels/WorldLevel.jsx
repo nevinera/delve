@@ -63,6 +63,12 @@ export default function WorldLevel({draft, onChange, navigate, repo, library, pl
             Open quests ({worldQuests(draft).length})
           </button>
         </section>
+        <section className="content-list">
+          <h3>Atlas</h3>
+          <button type="button" className="add-entry" onClick={() => navigate({atlas: true})}>
+            Open atlas
+          </button>
+        </section>
         <UnitTypeList draft={draft} onChange={onChange} onOpen={(unitType) => navigate({unitType})} repo={repo} library={library} />
         <ItemList draft={draft} onChange={onChange} onOpen={(item) => navigate({item})} library={library} />
         <WorldLinksPanel draft={file} onChange={onFileChange} zoneDetailsByKey={details} />

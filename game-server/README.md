@@ -40,7 +40,7 @@ Every slot request says how the player reached the zone (`mode`), along with the
 | `spawn_at` | slot | `"mapId/connectionId"` to spawn at; unknown keys fall back to the default entry position. |
 | `world_character_database_id` | slot | Required for `world`; sent to Rails when the player exits. |
 | `held_flags` | slot | The zone config's `flags` the character holds. The slot caches these, asks Rails about any other flag when needed, and grants `zone/reached/<zone>` on connect. See `docs/flags.md`. |
-| `visits` | slot | Where the character has been in this zone: `[{map, place}]`, blank for the zone itself and for a map. The game server records new visits (the zone on connect, maps and places as players arrive) through Rails, skipping these. See `plans/map-visits.md`. |
+| `visits` | slot | Where the character has been in this zone: `[{map, place}]`, blank for the zone itself and for a map. The game server records new visits (the zone on connect, maps and places as players arrive) through Rails, skipping these, and sends the client `visited` (`{zone, map, place}`) for each once recorded, for its map. See `plans/map-visits.md`. |
 | `active_quests` | slot | The character's active quests in the world, as Rails stores them (`{quest_identifier, timer_elapsed_seconds, progress}`). |
 | `token_image_url` | slot | The character's portrait. Sent, with the class's `colors`, on the player's unit as `token_image_url` and `class_colors`, so clients can draw its token. |
 
