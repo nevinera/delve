@@ -10,6 +10,7 @@ import InteractableShapes from "./InteractableShapes";
 import NcuQuestBadges from "./NcuQuestBadges";
 import GroupShapes from "./GroupShapes";
 import MovementShapes from "./MovementShapes";
+import StampCanvas from "./stamps/StampCanvas";
 import MapPreviewCanvas from "./MapPreviewCanvas";
 import usePinchZoom from "../usePinchZoom";
 import {randomIdentifierSuffix} from "./randomIdentifier";
@@ -131,6 +132,8 @@ const PAN_KEY_DIRECTIONS = {
 // node and hands pointer events to onPointer(phase, contentPixel, event): a
 // "down" it returns true for is an edit, not a pan. {placeholder: true}
 // stands in until there's a cell map. The units/walk tools are hidden.
+// stampLayer ({sets, sheets}: the zone's stamps and their loaded sheets)
+// draws the map's decoration stamps over the ground.
 const ALL_LAYERS = {barriers: true, connections: true, units: true, ncus: true};
 
 export default function MapCanvas({
@@ -152,7 +155,7 @@ export default function MapCanvas({
   simulating = false, onToggleSimulate, simSpeed = 1, onSimSpeedChange,
   previewing = false, onTogglePreview,
   tool = "select", onToolChange,
-  ground = null, cellEditing = null,
+  ground = null, cellEditing = null, stampLayer = null,
 }) {
   const wrapperRef = useRef(null);
   const replaceInputRef = useRef(null);
@@ -1149,7 +1152,7 @@ export default function MapCanvas({
       )}
       {imageError && <div className="map-canvas-error">{imageError}</div>}
       {previewing ? (
-        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} onExit={() => onTogglePreview?.()} />
+        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} stampLayer={stampLayer} onExit={() => onTogglePreview?.()} />
       ) : image ? (
         <div
           ref={wrapperRef}
@@ -1179,6 +1182,12 @@ export default function MapCanvas({
               draggable={false}
               alt=""
             />}
+            {stampLayer && mapData.stamps?.length > 0 && hasBothAxes(feetDimensions) && (
+              <StampCanvas
+                placed={mapData.stamps} sets={stampLayer.sets} sheets={stampLayer.sheets}
+                pixelDimensions={image.pixelDimensions} feetDimensions={feetDimensions}
+              />
+            )}
             {!ground && hasBothAxes(feetDimensions) && (
               <svg
                 className="map-canvas-grid"

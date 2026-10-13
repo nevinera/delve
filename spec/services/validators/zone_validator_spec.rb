@@ -72,6 +72,34 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
       end
     end
 
+    describe "stamps" do
+      let(:sets) { {"camp" => {"imageUrl" => "camp.png", "stamps" => {"log" => {"feetWidth" => 6, "frames" => [{"x" => 0, "y" => 0, "width" => 8, "height" => 4}] * 2}}}} }
+
+      def with_stamps(placed, stamps: sets)
+        maps = zone_fixture["maps"].each_with_index.map { |map, i| i.zero? ? map.merge("stamps" => placed) : map }
+        zone_fixture.merge("stamps" => stamps, "maps" => maps)
+      end
+
+      it "accepts stamps placed from the zone's sets" do
+        expect { described_class.validate!(with_stamps([{"stamp" => "camp/log", "x" => 1, "y" => 2, "variant" => 1}])) }.not_to raise_error
+      end
+
+      it "rejects a stamp the zone doesn't have" do
+        expect { described_class.validate!(with_stamps([{"stamp" => "camp/tent", "x" => 1, "y" => 2}])) }
+          .to raise_error(Validators::ValidationError, /isn't one of the zone's stamps/) { |e| expect(e.path).to eq("$.maps[0].stamps[0].stamp") }
+      end
+
+      it "rejects a variant past the stamp's frames" do
+        expect { described_class.validate!(with_stamps([{"stamp" => "camp/log", "x" => 1, "y" => 2, "variant" => 2}])) }
+          .to raise_error(Validators::ValidationError, /less than 2/)
+      end
+
+      it "rejects stamps placed on a zone with none" do
+        expect { described_class.validate!(with_stamps([{"stamp" => "camp/log", "x" => 1, "y" => 2}], stamps: nil)) }
+          .to raise_error(Validators::ValidationError, /isn't one of the zone's stamps/)
+      end
+    end
+
     it "raises when private is missing" do
       expect { described_class.validate!(zone_fixture.except("private")) }
         .to raise_error(Validators::ValidationError, /private is required/)

@@ -23,6 +23,7 @@ See [item.md](item.md) for the `Item` type embedded in `items`.
 | `provenanceRestrictions` | ProvenanceRestrictions | no | Which worlds' items (and up to what elevation) may be worn here. See [common.md](common.md#provenancerestrictions). Inside a world it is ANDed with the world's; default is no restriction. |
 | `openConnections` | object | no | Maps `"mapId/connectionId"` keys to zone-level name strings. Exposes connections for other zones to link against. Each key must name a connection on one of the zone's maps. |
 | `flags` | array of string | no | Compiled by the world editor's Expand, never written by hand. The `type/identifier` flags (see [flags.md](../flags.md)) the zone preloads for each character on entry. Always includes `zone/reached/<zone>`, plus, for each quest an NCU in the zone offers, its `quest/completed/` flag and `requiresFlags`. Flags not listed still work; they're fetched when needed. |
+| `stamps` | object \| AssetReference(`referenceTo: "stamps"`) | no | The decoration stamps the zone's maps can place, by set key. See **Stamps**. The world editor keeps them in `stamps.json` beside the zone file. |
 | `annotations` | Annotations | no | Notes for an LLM (and the author): intent, plans, backstory, personality. Never read at runtime, and never copied into game state. See [common.md](common.md#annotations). |
 
 > A zone must have at least one `entryPoint` or be reachable via an `openConnection` linked by another zone  -  otherwise there is no way for players to enter it.
@@ -54,6 +55,46 @@ Links two MapConnections within the zone so that traversing one transports a uni
 | `connectionB` | ConnectionIdentifier | yes | |
 | `oneWay` | boolean | yes | If `true`, travel is only permitted from `connectionA` to `connectionB`. |
 | `requiredKey` | string \| null | yes | Identifier of the key item required to traverse. `null` if no key is needed. |
+
+---
+
+## Stamps
+
+Decorations for the zone's maps to place (see [map.md](map.md#placedstamp)), grouped in sets.
+Each set is one image, a sheet holding many stamps, so a map loads a few images, not hundreds.
+Sets come from the shared library (`graphics/stamps/<set>.json` and its image) and are copied in;
+the sheet is copied to the world's `graphics/stamps/`. Backgrounds are transparent. Not animated.
+
+An object mapping set keys (lowercase letters, digits, `-` and `_`) to StampSet.
+
+### StampSet
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | no | Shown in the editor's palette. |
+| `imageUrl` | string | yes | The sheet image, relative to the file it's in. |
+| `stamps` | object | yes | Stamp keys (same form as set keys) to Stamp. |
+
+### Stamp
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | no | Shown in the editor's palette. |
+| `feetWidth` | number | yes | How wide the stamp is in the world, in feet, at scale 1: a tent is 12, a campfire 4. Its height follows the frame's shape. |
+| `frames` | array of `{x, y, width, height}` | no | Rectangles of the sheet, in pixels: the stamp's variants. Left out, the stamp is the whole sheet. |
+
+```json
+{
+  "camp": {
+    "name": "Camp",
+    "imageUrl": "../../graphics/stamps/camp.png",
+    "stamps": {
+      "tent": { "name": "Tent", "feetWidth": 12, "frames": [{ "x": 0, "y": 0, "width": 256, "height": 256 }] },
+      "log": { "name": "Log", "feetWidth": 7, "frames": [{ "x": 256, "y": 0, "width": 192, "height": 64 }, { "x": 256, "y": 64, "width": 192, "height": 64 }] }
+    }
+  }
+}
+```
 
 ---
 

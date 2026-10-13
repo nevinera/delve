@@ -24,6 +24,7 @@ See [common.md](common.md) for `Location`, `Position`, `floatRange`, and `Respaw
 | `ncus` | array of NCU | no | Non-combat units initially present on this map. See [ncu.md](ncu.md). |
 | `interactables` | array of Interactable | no | Things players use for quests: snares, totems, cages. See **Interactable**. |
 | `places` | array of Place | no | Named, tagged areas of the map, for building a zone in layers (see **Place** below). The game reads only their outlines, to record which a player has visited. |
+| `stamps` | array of PlacedStamp | no | Decorations baked into the ground, drawn in list order under everything else. No game effect. See **PlacedStamp**. |
 | `respawn` | RespawnConfig | no | Overrides the zone's `respawn` for every unit on this map, unless a unit overrides it again. See [common.md](common.md#respawnconfig). |
 | `leashRadius` | number | no | Feet. How far an engaged NPC on this map may get from where it was pulled before it gives up (see **Leashing** below). Default 120 (about WoW's 40 yards). A unit may override it. |
 | `hardLeash` | boolean | no | `true` makes NPCs on this map leash the moment they pass `leashRadius`, fight or no fight - for boss arenas and tight dungeon rooms. Default `false`. A unit may override it. |
@@ -246,6 +247,26 @@ it's drawn as `whenUnavailable` says; to anyone else it's hidden.
   "position": {"x": 120.0, "y": 340.0, "angle": 0.0},
   "useText": "Cutting"
 }
+```
+
+---
+
+## PlacedStamp
+
+A decoration from the zone's `stamps` (see [zone.md](zone.md#stamps)), baked into the map's
+ground (image or cells) when it loads. Later stamps draw over earlier ones; all of them draw
+under units, walls and everything else. They block nothing.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `stamp` | string | yes | | `set/stamp`, e.g. `camp/tent`: a stamp in one of the zone's sets. |
+| `x`, `y` | number | yes | | Where the stamp's center sits, in map feet. |
+| `rotation` | number | no | `0` | Degrees clockwise. |
+| `scale` | number | no | `1` | Multiplies the stamp's `feetWidth`. More than 0, at most 20. |
+| `variant` | integer | no | from the position | Which of the stamp's frames. Left out, one is picked from a hash of `x`, `y`, so scattered copies vary. |
+
+```json
+{ "stamp": "camp/log", "x": 42.5, "y": 18, "rotation": 30 }
 ```
 
 ---

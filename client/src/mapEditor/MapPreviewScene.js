@@ -17,6 +17,7 @@ import * as THREE from "three";
 import {buildWall, buildCircleBarrier, buildMapFill, createPlayerToken, createNpcToken, orbitFromDrag, clampZoom} from "../game/scene.js";
 import {computeMapFill} from "../game/mapFill.js";
 import {resolveBarrierCollisions} from "../game/collision.js";
+import {bakeStamps} from "../game/stamps";
 import {loadSvgToCanvas} from "../game/svgRaster.js";
 import {SceneLighting} from "../game/lighting.js";
 import {BASE_MOB_SPEED, initSimUnit, tickSimUnit} from "./simulateMovement.js";
@@ -106,7 +107,10 @@ export class MapPreviewScene {
   // is committed as the original SVG rather than a pre-baked PNG.
   // groundImage (a bitmap or canvas, e.g. a cell map's render) stands in
   // for imageUrl.
-  loadMap({feetDimensions, barriers, connections, fillPoints, units, imageUrl, isSvg, groundImage = null}, availableUnitTypes, startX, startY) {
+  // stamps ({placed, sets, sheets}, or null) are baked into the ground (see
+  // game/stamps.js); a raster background is then drawn onto a canvas at its
+  // pixelDimensions first.
+  loadMap({feetDimensions, barriers, connections, fillPoints, units, imageUrl, isSvg, groundImage = null, pixelDimensions = null, stamps = null}, availableUnitTypes, startX, startY) {
     this._feetDimensions = feetDimensions;
     this._barriers = barriers ?? [];
     this._playerX = startX;
@@ -114,6 +118,7 @@ export class MapPreviewScene {
 
     const {width, height} = feetDimensions;
     if (imageUrl || groundImage) {
+      const withStamps = (canvas) => (stamps ? bakeStamps(canvas, feetDimensions, stamps.placed, stamps.sets, stamps.sheets) : canvas);
       const addGround = (texture) => {
         // Ground textures are viewed at a shallow, walking-height angle,
         // which minifies them much more steeply along depth than width -
@@ -131,9 +136,13 @@ export class MapPreviewScene {
         canvas.width = groundImage.width;
         canvas.height = groundImage.height;
         canvas.getContext("2d").drawImage(groundImage, 0, 0);
-        addGround(new THREE.CanvasTexture(canvas));
+        addGround(new THREE.CanvasTexture(withStamps(canvas)));
       } else if (isSvg) {
-        loadSvgToCanvas(imageUrl, feetDimensions).then((canvas) => addGround(new THREE.CanvasTexture(canvas)));
+        loadSvgToCanvas(imageUrl, feetDimensions).then((canvas) => addGround(new THREE.CanvasTexture(withStamps(canvas))));
+      } else if (stamps) {
+        const pixelsPerFoot = (pixelDimensions?.width ?? width * 8) / width;
+        const maxDimension = this.renderer.capabilities.maxTextureSize;
+        loadSvgToCanvas(imageUrl, feetDimensions, {pixelsPerFoot, maxDimension}).then((canvas) => addGround(new THREE.CanvasTexture(withStamps(canvas))));
       } else {
         new THREE.TextureLoader().load(imageUrl, addGround);
       }

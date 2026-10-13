@@ -23,6 +23,7 @@ import {loadSvgToCanvas} from "../game/svgRaster";
 import {newGroupIdentifier} from "./groupIdentifiers";
 import {ANY_CATEGORY, buildEncounterFrom, scatterPositions} from "./encounter";
 import {unitsInPlace} from "../places/placer";
+import {useStampSheets} from "./stamps/useStampSheets";
 
 const ENCOUNTER_SETTINGS_KEY = "delve.mapEditor.encounter";
 
@@ -89,9 +90,11 @@ const TAB_LAYERS = {
 //   onNewQuest(ncuIdentifier)} (optional): each NCU's quests ([{identifier,
 //   name}]), listed in its row and badged on its token, opening the quest
 //   editor.
+// - stamps {sets, sheetUrl(set)} (optional): the zone's decoration stamps
+//   (docs/schema/zone.md#stamps), and each set's sheet as a displayable URL.
 export default function MapWorkbench({
   mapKey, mapData, onMapChange, imageUrl, onImageUpload, onImageRemove = null, onCellThumbnail = null, unitTypes, items,
-  ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null,
+  ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null, stamps = null,
 }) {
   const [tab, setTab] = useState("map");
   // The Places tab's open and hovered place (index into mapData.places).
@@ -119,6 +122,8 @@ export default function MapWorkbench({
   });
   const cellCanvas = tab === "cells" ? (cells.canvas ?? {placeholder: true}) : null;
   const ground = cellCanvas || !image ? cells.ground : null;
+  const stampSheets = useStampSheets(stamps);
+  const stampLayer = stamps ? {sets: stamps.sets, sheets: stampSheets} : null;
 
   // Walls from the cells, for a map whose ground they are.
   function makeAutoBarriers() {
@@ -646,6 +651,7 @@ export default function MapWorkbench({
         displayImageUrl={ground ? null : displayImageUrl}
         ground={ground}
         cellEditing={cellCanvas}
+        stampLayer={stampLayer}
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}

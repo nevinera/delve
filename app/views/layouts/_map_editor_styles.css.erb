@@ -111,6 +111,8 @@
       /* Same pixel-space box as the image, so its grid lines pan/zoom
          together with it for free via the shared parent's transform. */
       .map-canvas-grid { position: absolute; top: 0; left: 0; pointer-events: none; }
+      /* StampCanvas.jsx - the map's decoration stamps, over the ground. */
+      .map-canvas-stamps { position: absolute; top: 0; left: 0; pointer-events: none; }
       /* Same idea, but its shapes DO take pointer events (for select/drag) -
          the SVG root stays passthrough so empty space still reaches the
          wrapper underneath for panning/add-tool clicks. */

@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Packs a decoration stamp set's images into one sheet (see docs/schema/zone.md#stamps).
+
+Usage: bin/stamp-sheet SRC_DIR OUT_DIR
+
+SRC_DIR holds set.json and the images it names; the set's key is the directory's name.
+set.json: {"name", "pixelsPerFoot" (default 24), "stamps": {key: {"name", "feetWidth",
+"images": [file, ...]}}}, each image one frame (variant), SVG or PNG with a transparent
+background. Each frame is drawn feetWidth * pixelsPerFoot wide, keeping its shape.
+
+Writes OUT_DIR/<set>.png (the sheet) and OUT_DIR/<set>.json (the set, its frames
+measured in the sheet), ready to copy into a zone. Needs Pillow and rsvg-convert.
+
+  bin/stamp-sheet ../content/graphics/stamps/src/camp ../content/graphics/stamps
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+
+from PIL import Image
+
+PADDING = 2
+MAX_WIDTH = 2048
+
+
+def frame_image(path, width):
+    if path.lower().endswith(".svg"):
+        with tempfile.NamedTemporaryFile(suffix=".png") as out:
+            subprocess.run(["rsvg-convert", "--width", str(width), "--keep-aspect-ratio", "-o", out.name, path], check=True)
+            return Image.open(out.name).convert("RGBA").copy()
+    image = Image.open(path).convert("RGBA")
+    return image.resize((width, max(1, round(image.height * width / image.width))), Image.LANCZOS)
+
+
+def pack(images):
+    """Shelf-packs images (tallest first): [(x, y)] in their order, and the sheet's size."""
+    order = sorted(range(len(images)), key=lambda i: -images[i].height)
+    spots = [None] * len(images)
+    x = y = shelf = width = 0
+    for i in order:
+        w, h = images[i].size
+        if x and x + w > MAX_WIDTH:
+            x, y, shelf = 0, y + shelf + PADDING, 0
+        spots[i] = (x, y)
+        x += w + PADDING
+        shelf = max(shelf, h)
+        width = max(width, x - PADDING)
+    return spots, (width, y + shelf)
+
+
+def main():
+    if len(sys.argv) != 3 or sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        sys.exit(0 if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help") else 1)
+    src, out_dir = sys.argv[1], sys.argv[2]
+    key = os.path.basename(os.path.normpath(src))
+    with open(os.path.join(src, "set.json")) as f:
+        spec = json.load(f)
+    ppf = spec.get("pixelsPerFoot", 24)
+
+    frames, images = [], []
+    for stamp_key, stamp in spec["stamps"].items():
+        width = round(stamp["feetWidth"] * ppf)
+        for name in stamp["images"]:
+            frames.append(stamp_key)
+            images.append(frame_image(os.path.join(src, name), width))
+    spots, size = pack(images)
+
+    sheet = Image.new("RGBA", size, (0, 0, 0, 0))
+    for image, spot in zip(images, spots):
+        sheet.alpha_composite(image, spot)
+    os.makedirs(out_dir, exist_ok=True)
+    sheet.save(os.path.join(out_dir, f"{key}.png"), optimize=True)
+
+    stamps = {}
+    for stamp_key, stamp in spec["stamps"].items():
+        entry = {"name": stamp["name"]} if stamp.get("name") else {}
+        entry["feetWidth"] = stamp["feetWidth"]
+        entry["frames"] = [
+            {"x": spot[0], "y": spot[1], "width": image.width, "height": image.height}
+            for frame_key, image, spot in zip(frames, images, spots) if frame_key == stamp_key
+        ]
+        stamps[stamp_key] = entry
+    result = {"name": spec.get("name", key), "imageUrl": f"./{key}.png", "stamps": stamps}
+    with open(os.path.join(out_dir, f"{key}.json"), "w") as f:
+        json.dump(result, f, indent=2)
+        f.write("\n")
+    print(f"{key}: {len(images)} frames, {size[0]}x{size[1]} sheet")
+
+
+main()

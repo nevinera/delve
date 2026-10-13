@@ -13,6 +13,7 @@ import {inMemory, newAssetPath, tokenImageOptions} from "../state/assetOps";
 import {mapFile, relativePath, resolvePath} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
 import {createQuest, ncuQuests, newQuestIdentifier, questData} from "../state/questOps";
+import {stampSheetPath, zoneStamps} from "../state/stampOps";
 
 // The map level: the map editor's whole editing surface (MapWorkbench)
 // over one map's part of the live draft. Units can be any of the world's
@@ -30,6 +31,14 @@ export default function MapLevel({draft, zone, map, onChange, repo, stockAssets,
   const assetUrl = (repoPath) => assetUrlFor(draft, repo, repoPath);
   const {keys: unitTypeKeys, details: unitTypeDetails} = worldUnitTypes(draft, assetUrl);
   const {keys: itemKeys, details: itemDetails} = worldItems(draft);
+  const stampSets = zoneStamps(draft, zone).sets;
+  const stamps = {
+    sets: stampSets,
+    sheetUrl: (set) => {
+      const sheet = stampSheetPath(draft, zone, set);
+      return sheet ? assetUrl(sheet) : "";
+    },
+  };
   const named = (identifiers) => identifiers.map((identifier) => ({identifier, name: questData(draft, identifier)?.name || identifier}));
   const questsOf = (ncu) => {
     const {offers, turnIns} = ncuQuests(draft, zone, ncu);
@@ -81,6 +90,7 @@ export default function MapLevel({draft, zone, map, onChange, repo, stockAssets,
         ncuTokenUrls={ncuTokenUrls(draft, zone, map, assetUrl)}
         tokenImages={{options: tokenImageOptions(draft, path, assetUrl), upload: uploadTokenImage}}
         ncuQuests={ncuQuestProps}
+        stamps={stamps}
         renderUnitTypeAdder={({onAdded, close}) => (
           <ContentAdder
             noun="unit type" draft={draft} library={library} list={libraryUnitTypes} prepare={prepareUnitTypeImport} create={createUnitType}
