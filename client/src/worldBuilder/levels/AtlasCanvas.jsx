@@ -23,8 +23,8 @@ function fitView(atlas, width, height) {
 }
 
 // The world's atlas (docs/schema/world.md#atlas), north up and to scale:
-// each zone's outline, its maps as their thumbnails, and lines for the
-// links between maps (zoneLinks solid, worldLinks dashed). Drag a map to
+// each zone's outline, its maps as their thumbnails, and lines (behind
+// them) for the links between maps (zoneLinks solid, worldLinks dashed). Drag a map to
 // move it in its zone, a zone (between its maps) to move it whole, or an
 // outline's corner to reshape it; every move stops where it would break
 // the atlas's rules (see atlasEdit.js), and is reported (onChange, with
@@ -129,6 +129,9 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
                 fill={`${zoneColor(i)}22`} stroke={zoneColor(i)} vectorEffect="non-scaling-stroke"
                 onPointerDown={(e) => onPointerDown(e, {zone})} aria-label={`Zone ${zone}`} />
             ))}
+            {links.map((link, i) => (
+              <line key={i} className={`atlas-link atlas-link-${link.kind}`} x1={link.from.x} y1={link.from.y} x2={link.to.x} y2={link.to.y} vectorEffect="non-scaling-stroke" />
+            ))}
             {zones.flatMap(([zone, entry], i) => Object.entries(entry.maps).map(([map, at]) => {
               const size = sizes[zone]?.[map];
               if (!size) return null;
@@ -144,9 +147,6 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
                 </g>
               );
             }))}
-            {links.map((link, i) => (
-              <line key={i} className={`atlas-link atlas-link-${link.kind}`} x1={link.from.x} y1={link.from.y} x2={link.to.x} y2={link.to.y} vectorEffect="non-scaling-stroke" />
-            ))}
           </g>
           {zones.map(([zone, entry], i) => {
             const corner = toScreen(entry.outline.reduce((best, p) => (p.y - p.x > best.y - best.x ? p : best)));
