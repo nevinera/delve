@@ -1,4 +1,4 @@
-import {useMemo} from "react";
+import {useMemo, useState} from "react";
 import AtlasCanvas, {zoneColor} from "./AtlasCanvas";
 import {atlasData, atlasInput, atlasSizes, atlasThumbnails, resetAtlas, setAtlas} from "../state/atlasOps";
 import {atlasLinks} from "../../worldEditor/atlasLayout";
@@ -12,6 +12,7 @@ import {worldData} from "../state/worldOps";
 // yet, and anything the server would refuse.
 export default function AtlasLevel({draft, onChange, navigate, repo}) {
   const atlas = atlasData(draft);
+  const [editing, setEditing] = useState(true);
   const input = useMemo(() => atlasInput(draft), [draft]);
   const sizes = useMemo(() => atlasSizes(input), [input]);
   const thumbnails = useMemo(() => {
@@ -53,6 +54,7 @@ export default function AtlasLevel({draft, onChange, navigate, repo}) {
             linksFor={(shown) => atlasLinks(shown, input)}
             onChange={(next) => onChange((current) => setAtlas(current, next))}
             onOpenMap={(zone, map) => navigate({zone, map})}
+            editable={editing}
           />
         </div>
       </div>
@@ -64,6 +66,10 @@ export default function AtlasLevel({draft, onChange, navigate, repo}) {
           to bend it, and double-click the dot to straighten it. Double-click a map to open it.
         </p>
         <button type="button" className="add-entry" onClick={onReset}>{atlas ? "Reset atlas" : "Guess atlas"}</button>
+        <label className="atlas-editing">
+          <input type="checkbox" checked={editing} onChange={(e) => setEditing(e.target.checked)} />
+          {" "}Edit (off: as the in-game map shows it, with everything explored)
+        </label>
         <section className="content-list">
           <h4>Zones</h4>
           <ul className="atlas-zones">

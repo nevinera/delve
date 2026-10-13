@@ -218,6 +218,9 @@
       .atlas-bend:hover { fill: #fff; opacity: 1; }
       .atlas-label { position: absolute; pointer-events: none; background: rgba(20,16,12,0.97); border: 1px solid #556; border-radius: 6px; padding: 4px 8px; color: #cce; font-size: 12px; white-space: nowrap; }
       .atlas-zones { list-style: none; padding: 0; }
+      .atlas-canvas-locked .atlas-zone, .atlas-canvas-locked .atlas-map { cursor: inherit; }
+      .atlas-canvas-locked .atlas-map:hover .atlas-map-frame { stroke: #000a; stroke-width: 1; }
+      .atlas-editing { display: block; margin: 8px 0; }
       .atlas-problems { color: #f99; }
       .quest-graph { position: relative; width: 100%; height: 100%; background: #101316; cursor: grab; touch-action: none; user-select: none; }
       .quest-graph-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #889; margin: 0; }

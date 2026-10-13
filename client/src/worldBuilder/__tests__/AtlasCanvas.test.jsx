@@ -88,3 +88,31 @@ describe("AtlasCanvas", () => {
     expect(document.querySelector(".atlas-link").getAttribute("d")).toBe("M 20 100 L 50 160");
   });
 });
+
+describe("AtlasCanvas, not editable", () => {
+  function renderLocked() {
+    const onChange = vi.fn();
+    render(<AtlasCanvas atlas={atlas} sizes={sizes} zoneNames={{forest: "Forest"}} mapNames={{forest: {camp: "Camp", road: "Road"}}}
+      thumbnails={{}} linksFor={(a) => atlasLinks(a, input)} onChange={onChange} editable={false} />);
+    return onChange;
+  }
+
+  it("has no handles, still drawing the links", () => {
+    renderLocked();
+    expect(screen.queryByLabelText(`Bend ${key}`)).toBeNull();
+    expect(screen.queryByLabelText("Corner 1 of forest")).toBeNull();
+    expect(screen.queryByLabelText("Edge 1 of forest")).toBeNull();
+    expect(document.querySelectorAll(".atlas-link")).toHaveLength(1);
+  });
+
+  it("pans instead of moving maps or zones, and still names a tapped map", () => {
+    const onChange = renderLocked();
+    drag(screen.getByLabelText("Map camp"), 20, 0);
+    drag(screen.getByLabelText("Zone forest"), 20, 0);
+    expect(onChange).not.toHaveBeenCalled();
+    const camp = screen.getByLabelText("Map camp");
+    fireEvent.pointerDown(camp, {clientX: 5, clientY: 5, pointerId: 1});
+    fireEvent.pointerUp(camp, {clientX: 5, clientY: 5, pointerId: 1});
+    expect(document.querySelector(".atlas-label").textContent).toBe("Camp");
+  });
+});

@@ -45,8 +45,9 @@ function fitView(atlas, width, height) {
 // would break the atlas's rules (see atlasEdit.js), and is reported
 // (onChange, with the new atlas) when the drag ends. Drag outside the
 // zones to pan, wheel or pinch to zoom. Hovering (or tapping) a map shows
-// its name.
-export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap}) {
+// its name. With editable false, there are no handles and nothing moves:
+// the atlas as the in-game map will show it, everything explored.
+export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap, editable = true}) {
   const wrapper = useRef(null);
   const [view, setView] = useState(null);
   const [dragged, setDragged] = useState(null); // the atlas mid-drag
@@ -85,6 +86,9 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
   function onPointerDown(e, target = null) {
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    // Read-only, a press anywhere pans (a map can still be tapped for its
+    // name).
+    if (!editable && !target?.map) target = null;
     press.current = {target, base: atlas, start: local(e), grab: toWorld(local(e)), view, moved: false};
   }
 
@@ -95,7 +99,7 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
     if (Math.hypot(at.x - p.start.x, at.y - p.start.y) > CLICK_SLOP) p.moved = true;
     if (!p.moved) return;
     const {target} = p;
-    if (!target) {
+    if (!target || !editable) {
       setView({...p.view, panX: p.view.panX + at.x - p.start.x, panY: p.view.panY + at.y - p.start.y});
       return;
     }
@@ -147,7 +151,7 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
   const links = shown ? linksFor(shown) : [];
   const commit = (next) => next !== atlas && onChange(next);
   return (
-    <div className="atlas-canvas" ref={wrapper} {...pinchHandlers} onPointerDown={(e) => onPointerDown(e)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
+    <div className={`atlas-canvas${editable ? "" : " atlas-canvas-locked"}`} ref={wrapper} {...pinchHandlers} onPointerDown={(e) => onPointerDown(e)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
       {!zones.length && <p className="atlas-canvas-empty">Nothing laid out yet.</p>}
       {view && (
         <svg width="100%" height="100%" role="img" aria-label="Atlas">
@@ -180,7 +184,7 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
             const corner = toScreen(entry.outline.reduce((best, p) => (p.y - p.x > best.y - best.x ? p : best)));
             return <text key={zone} className="atlas-zone-name" x={corner.x + 6} y={corner.y + 16} fill={zoneColor(i)}>{zoneNames[zone] ?? zone}</text>;
           })}
-          {links.map((link) => {
+          {editable && links.map((link) => {
             const at = toScreen(link.through ?? midpoint(link.from, link.to));
             return (
               <circle key={link.key} className={`atlas-bend${link.through ? " atlas-bend-bent" : ""}`} cx={at.x} cy={at.y} r={BEND_RADIUS}
@@ -188,14 +192,14 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
                 aria-label={`Bend ${link.key}`} />
             );
           })}
-          {zones.flatMap(([zone, entry], i) => entry.outline.map((p, edge) => {
+          {editable && zones.flatMap(([zone, entry], i) => entry.outline.map((p, edge) => {
             const at = toScreen(midpoint(p, entry.outline[(edge + 1) % entry.outline.length]));
             return (
               <rect key={`${zone}/edge/${edge}`} className="atlas-edge" x={at.x - EDGE_HANDLE / 2} y={at.y - EDGE_HANDLE / 2} width={EDGE_HANDLE} height={EDGE_HANDLE}
                 stroke={zoneColor(i)} onPointerDown={(e) => onPointerDown(e, {zone, edge})} aria-label={`Edge ${edge + 1} of ${zone}`} />
             );
           }))}
-          {zones.flatMap(([zone, entry], i) => entry.outline.map((p, corner) => {
+          {editable && zones.flatMap(([zone, entry], i) => entry.outline.map((p, corner) => {
             const at = toScreen(p);
             return (
               <circle key={`${zone}/${corner}`} className="atlas-corner" cx={at.x} cy={at.y} r={CORNER_RADIUS} stroke={zoneColor(i)}

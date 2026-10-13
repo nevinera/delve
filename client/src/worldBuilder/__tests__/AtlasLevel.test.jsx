@@ -75,6 +75,15 @@ describe("AtlasLevel", () => {
     expect(forest.maps.hub).toEqual({x: -40, y: 60});
   });
 
+  it("turns editing off and on", () => {
+    renderLevel(resetAtlas(fixtureDraft()));
+    expect(screen.getByLabelText("Corner 1 of forest")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", {name: /Edit/}));
+    expect(screen.queryByLabelText("Corner 1 of forest")).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", {name: /Edit/}));
+    expect(screen.getByLabelText("Corner 1 of forest")).toBeInTheDocument();
+  });
+
   it("opens a map on double-click", () => {
     const {navigate} = renderLevel(resetAtlas(fixtureDraft()));
     fireEvent.doubleClick(screen.getByLabelText("Map hub"));
