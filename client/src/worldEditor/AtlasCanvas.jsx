@@ -34,7 +34,7 @@ const STYLES = `
 .atlas-bend { fill: #101316; stroke: #9cf; stroke-width: 1.5; cursor: move; opacity: 0.7; }
 .atlas-bend-bent { fill: #9cf; }
 .atlas-bend:hover { fill: #fff; opacity: 1; }
-.atlas-fog { fill: #7d838c; opacity: 0.92; pointer-events: none; }
+.atlas-fog { fill: #6b7078; pointer-events: none; }
 .atlas-stub { fill: #fc6; stroke: #000; stroke-width: 1; pointer-events: none; }
 .atlas-marker { fill: #fff; stroke: #000; stroke-width: 1.5; pointer-events: none; }
 .atlas-label { position: absolute; pointer-events: none; background: rgba(20,16,12,0.97); border: 1px solid #556; border-radius: 6px; padding: 4px 8px; color: #cce; font-size: 12px; white-space: nowrap; }
