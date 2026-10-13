@@ -24,6 +24,7 @@ import {newGroupIdentifier} from "./groupIdentifiers";
 import {ANY_CATEGORY, buildEncounterFrom, scatterPositions} from "./encounter";
 import {unitsInPlace} from "../places/placer";
 import {useStampSheets} from "./stamps/useStampSheets";
+import {useStampsTab} from "./stamps/useStampsTab";
 
 const ENCOUNTER_SETTINGS_KEY = "delve.mapEditor.encounter";
 
@@ -45,11 +46,13 @@ const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 // rest are drawn dimmed and ignore the pointer - see MapCanvas's
 // activeLayers). Quests don't exist yet; NCUs live there meanwhile. Cells
 // draws the map's cellMap, with every shape dimmed. Places are drawn only
-// on their own tab.
-const TABS = [["cells", "Cells"], ["map", "Map"], ["places", "Places"], ["units", "Units"], ["quests", "Quests"]];
+// on their own tab. Stamps places the zone's decoration stamps (see
+// stamps/useStampsTab.jsx).
+const TABS = [["cells", "Cells"], ["map", "Map"], ["stamps", "Stamps"], ["places", "Places"], ["units", "Units"], ["quests", "Quests"]];
 const TAB_LAYERS = {
   cells: {barriers: false, connections: false, places: false, units: false, ncus: false},
   map: {barriers: true, connections: true, places: false, units: false, ncus: false},
+  stamps: {barriers: false, connections: false, places: false, units: false, ncus: false},
   places: {barriers: false, connections: false, places: true, units: false, ncus: false},
   units: {barriers: false, connections: false, places: false, units: true, ncus: false},
   quests: {barriers: false, connections: false, places: false, units: false, ncus: true},
@@ -92,9 +95,12 @@ const TAB_LAYERS = {
 //   editor.
 // - stamps {sets, sheetUrl(set)} (optional): the zone's decoration stamps
 //   (docs/schema/zone.md#stamps), and each set's sheet as a displayable URL.
+// - renderStampSetAdder({close()}) (optional): a way to add a stamp set to
+//   the zone, in the Stamps tab.
 export default function MapWorkbench({
   mapKey, mapData, onMapChange, imageUrl, onImageUpload, onImageRemove = null, onCellThumbnail = null, unitTypes, items,
   ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null, stamps = null,
+  renderStampSetAdder = null,
 }) {
   const [tab, setTab] = useState("map");
   // The Places tab's open and hovered place (index into mapData.places).
@@ -124,6 +130,12 @@ export default function MapWorkbench({
   const ground = cellCanvas || !image ? cells.ground : null;
   const stampSheets = useStampSheets(stamps);
   const stampLayer = stamps ? {sets: stamps.sets, sheets: stampSheets} : null;
+  const stampsTab = useStampsTab({
+    active: tab === "stamps", stamps: mapData.stamps ?? [], stampLayer: stampLayer ?? {sets: {}, sheets: {}}, onMapChange,
+    pixelDimensions: ground ? ground.image?.pixelDimensions : image?.pixelDimensions,
+    feetDimensions: ground?.feetDimensions ?? mapData.feetDimensions,
+    renderSetAdder: renderStampSetAdder,
+  });
 
   // Walls from the cells, for a map whose ground they are.
   function makeAutoBarriers() {
@@ -652,6 +664,7 @@ export default function MapWorkbench({
         ground={ground}
         cellEditing={cellCanvas}
         stampLayer={stampLayer}
+        overlayEditing={stampsTab.editing}
         imageError={imageError}
         onImageFile={handleImageFile}
         backUrl={backUrl}
@@ -784,6 +797,8 @@ export default function MapWorkbench({
               dispatch={dispatch}
             />
           </>
+        ) : tab === "stamps" ? (
+          stampsTab.panel
         ) : tab === "places" ? (
           <PlacesPanel
             places={mapData.places ?? []} selectedIndex={selectedPlaceIndex} onSelect={setSelectedPlaceIndex} onHover={setHoveredPlaceIndex}

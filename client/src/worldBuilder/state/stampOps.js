@@ -7,6 +7,7 @@ import {updateZone, zoneData} from "./zoneOps";
 import {resolvePath, zoneFile, zoneStampsFile} from "./worldPaths";
 
 export const STAMP_LIBRARY_DIR = "graphics/stamps";
+const SET_KEY = /^[a-z0-9][a-z0-9_-]*$/;
 
 // The zone's stamp sets and the file they're written in (null when the
 // zone has none): inline in the zone file, or in the file it $refs.
@@ -40,6 +41,7 @@ export async function libraryStampSets(reader) {
 // any set of that key), its sheet copied into the world. Resolves to
 // {apply(draft) -> nextDraft, missing: [asset paths not found]}.
 export async function prepareStampSetImport(draft, reader, zone, sourcePath, key) {
+  if (!SET_KEY.test(key)) throw new Error("A stamp set's key is lowercase letters, digits, - and _");
   const raw = JSON.parse(await reader.fetchFile(sourcePath));
   const target = zoneStampsFile(draft.worldKey, zone);
   const {content, assets} = relocateAssets(raw, sourcePath, target, draft.worldKey);

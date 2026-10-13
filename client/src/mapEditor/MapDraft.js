@@ -141,6 +141,37 @@ export class MapDraft {
     return this.setField("units", next);
   }
 
+  // ---- Stamps (see stamps/) ----
+
+  addStamp(stamp) {
+    return this.addEntry("stamps", stamp);
+  }
+
+  // Merges fields into stamp `index`; a field set to undefined is dropped
+  // (rotation 0, scale 1 and a picked variant are the defaults).
+  updateStamp(index, fields) {
+    const stamps = (this.data.stamps ?? []).map((stamp, i) => {
+      if (i !== index) return stamp;
+      const next = {...stamp, ...fields};
+      for (const [key, value] of Object.entries(next)) if (value === undefined) delete next[key];
+      return next;
+    });
+    return this.setField("stamps", stamps);
+  }
+
+  removeStamp(index) {
+    return this.removeEntry("stamps", index);
+  }
+
+  // Moves stamp `index` to position `to` in the list (draw order: later is
+  // on top).
+  moveStamp(index, to) {
+    const stamps = [...(this.data.stamps ?? [])];
+    const [stamp] = stamps.splice(index, 1);
+    stamps.splice(Math.max(0, Math.min(to, stamps.length)), 0, stamp);
+    return this.setField("stamps", stamps);
+  }
+
   // ---- Cells (see cells/) ----
 
   // Without an image the cells are the ground, so the map is their size.

@@ -13,7 +13,8 @@ import {inMemory, newAssetPath, tokenImageOptions} from "../state/assetOps";
 import {mapFile, relativePath, resolvePath} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
 import {createQuest, ncuQuests, newQuestIdentifier, questData} from "../state/questOps";
-import {stampSheetPath, zoneStamps} from "../state/stampOps";
+import {libraryStampSets, prepareStampSetImport, stampSheetPath, zoneStamps} from "../state/stampOps";
+import ImportForm from "./ImportForm";
 
 // The map level: the map editor's whole editing surface (MapWorkbench)
 // over one map's part of the live draft. Units can be any of the world's
@@ -91,6 +92,13 @@ export default function MapLevel({draft, zone, map, onChange, repo, stockAssets,
         tokenImages={{options: tokenImageOptions(draft, path, assetUrl), upload: uploadTokenImage}}
         ncuQuests={ncuQuestProps}
         stamps={stamps}
+        renderStampSetAdder={library && (({close}) => (
+          <ImportForm
+            noun="stamp set" draft={draft} library={library} list={libraryStampSets}
+            prepare={(current, reader, sourcePath, key) => prepareStampSetImport(current, reader, zone, sourcePath, key)}
+            onChange={onChange} onImported={close} onCancel={close}
+          />
+        ))}
         renderUnitTypeAdder={({onAdded, close}) => (
           <ContentAdder
             noun="unit type" draft={draft} library={library} list={libraryUnitTypes} prepare={prepareUnitTypeImport} create={createUnitType}

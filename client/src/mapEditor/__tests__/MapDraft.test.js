@@ -218,3 +218,28 @@ describe("MapDraft cell maps", () => {
     expect(draft.data).toEqual({cellMap, feetDimensions: {width: 18.764, height: 17.5}});
   });
 });
+
+describe("MapDraft stamps", () => {
+  const tent = {stamp: "camp/tent", x: 1, y: 2};
+  const log = {stamp: "camp/log", x: 3, y: 4};
+  const fire = {stamp: "camp/campfire", x: 5, y: 6};
+
+  it("adds, updates and removes stamps", () => {
+    const draft = new MapDraft({stamps: []}).addStamp(tent).addStamp(log);
+    expect(draft.data.stamps).toEqual([tent, log]);
+    expect(draft.updateStamp(1, {rotation: 30, x: 9}).data.stamps[1]).toEqual({stamp: "camp/log", x: 9, y: 4, rotation: 30});
+    expect(draft.removeStamp(0).data.stamps).toEqual([log]);
+  });
+
+  it("drops a field updated to undefined", () => {
+    const draft = new MapDraft({stamps: [{...tent, scale: 2}]}).updateStamp(0, {scale: undefined});
+    expect(draft.data.stamps[0]).toEqual(tent);
+  });
+
+  it("moves a stamp in the draw order", () => {
+    const draft = new MapDraft({stamps: [tent, log, fire]});
+    expect(draft.moveStamp(0, 2).data.stamps).toEqual([log, fire, tent]);
+    expect(draft.moveStamp(2, 0).data.stamps).toEqual([fire, tent, log]);
+    expect(draft.moveStamp(1, 9).data.stamps).toEqual([tent, fire, log]);
+  });
+});
