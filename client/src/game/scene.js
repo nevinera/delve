@@ -1460,9 +1460,13 @@ export class SceneManager {
           this._selfMapY += (this._selfMapTargetY - this._selfMapY) * cf;
         }
 
-        // Apply client-side collision so predicted position stays out of walls.
+        // Apply client-side collision so predicted position stays out of
+        // walls - only for our own moves. A stopped token converges on the
+        // server's position, which has had its collisions resolved already;
+        // colliding on the way there would hold the token on the wrong side
+        // of a wall the server has pushed us back through (out of the fill).
         const barriers = this._barriersByMap.get(this._selfMapIdentifier) ?? [];
-        if (barriers.length > 0) {
+        if (moved && barriers.length > 0) {
           [this._selfMapX, this._selfMapY] = resolveBarrierCollisions(
             this._selfMapX, this._selfMapY, TOKEN_RADIUS, barriers
           );
