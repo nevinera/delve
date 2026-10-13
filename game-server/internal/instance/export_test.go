@@ -300,3 +300,6 @@ func (inst *Instance) CollectVisitsForTest(ctx context.Context, state *instances
 	}
 	return out
 }
+
+// UpdatePlayerSpeedForTest exposes updatePlayerSpeed.
+func UpdatePlayerSpeedForTest(state *instancestate.InstanceState) { updatePlayerSpeed(state) }

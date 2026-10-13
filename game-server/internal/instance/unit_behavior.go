@@ -118,7 +118,7 @@ func applyUnitBehavior(
 	if sf == 0 {
 		sf = 1.0
 	}
-	speed := BaseMobSpeed * sf
+	speed := command.MovementSpeed(unit, BaseMobSpeed*sf)
 	if unit.Stealthed {
 		speed *= StealthSpeedFactor
 	}

@@ -127,3 +127,19 @@ func TestActiveStatModifiers_MultipleStatusesEachContributeIndependently(t *test
 	assert.Equal(t, 100.0, add)
 	assert.Equal(t, 1.5, multiply)
 }
+
+func TestMovementSpeed_AppliesMovementSpeedBonuses(t *testing.T) {
+	unit := &instancestate.UnitState{ActiveStatusEffects: []instancestate.ActiveStatusEffect{
+		statusWithStatEffect("movementSpeed", "add", 5),
+		statusWithStatEffect("movementSpeed", "multiply", 1.7),
+	}}
+	assert.InDelta(t, 42.5, MovementSpeed(unit, 20), 1e-9)
+	assert.Equal(t, 20.0, MovementSpeed(&instancestate.UnitState{}, 20))
+}
+
+func TestMovementSpeed_NeverReachesZero(t *testing.T) {
+	unit := &instancestate.UnitState{ActiveStatusEffects: []instancestate.ActiveStatusEffect{
+		statusWithStatEffect("movementSpeed", "multiply", 0),
+	}}
+	assert.Equal(t, minMovementSpeed, MovementSpeed(unit, 20))
+}

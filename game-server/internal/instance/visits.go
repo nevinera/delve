@@ -219,4 +219,3 @@ func (inst *Instance) markVisited(slotID uuid.UUID, visit Visit) {
 	}
 	slot.Visited[visit.Key()] = true
 }
-

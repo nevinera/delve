@@ -104,6 +104,7 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			var combatEvents []CombatEvent
 			tickCasts(state, inst.ZoneConfig, now, &combatEvents, inst.Rand)
 			updatePlayerMaxHealth(state, inst.ZoneConfig)
+			updatePlayerSpeed(state)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig, inst.Fills)
 			zoneExits := inst.detectZoneExits(state, prevState, now)
