@@ -143,3 +143,15 @@ describe("AtlasCanvas, not editable", () => {
     expect(document.querySelector(".atlas-label").textContent).toBe("Camp");
   });
 });
+
+describe("AtlasCanvas, fog and stubs", () => {
+  it("grays out fogged rects but for their clear polygons, and draws stubs pointing their way", () => {
+    const fog = [{key: "forest/camp", x: 0, y: 0, width: 100, height: 100, clear: [[{x: 0, y: 0}, {x: 50, y: 0}, {x: 50, y: 50}]]}];
+    const stubs = [{key: "s", at: {x: 10, y: 10}, angle: 90}];
+    render(<AtlasCanvas atlas={atlas} sizes={sizes} zoneNames={{}} mapNames={{}} thumbnails={{}} linksFor={() => []} onChange={() => {}} editable={false} fog={fog} stubs={stubs} />);
+    const rect = document.querySelector(".atlas-fog");
+    expect(rect.getAttribute("mask")).toBe("url(#atlas-fog-mask-0)");
+    expect(document.querySelector("#atlas-fog-mask-0 polygon").getAttribute("points")).toBe("0,0 50,0 50,50");
+    expect(screen.getByLabelText("Unexplored way").getAttribute("transform")).toContain("rotate(90)");
+  });
+});

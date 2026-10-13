@@ -34,6 +34,8 @@ const STYLES = `
 .atlas-bend { fill: #101316; stroke: #9cf; stroke-width: 1.5; cursor: move; opacity: 0.7; }
 .atlas-bend-bent { fill: #9cf; }
 .atlas-bend:hover { fill: #fff; opacity: 1; }
+.atlas-fog { fill: #7d838c; opacity: 0.92; pointer-events: none; }
+.atlas-stub { fill: #fc6; stroke: #000; stroke-width: 1; pointer-events: none; }
 .atlas-marker { fill: #fff; stroke: #000; stroke-width: 1.5; pointer-events: none; }
 .atlas-label { position: absolute; pointer-events: none; background: rgba(20,16,12,0.97); border: 1px solid #556; border-radius: 6px; padding: 4px 8px; color: #cce; font-size: 12px; white-space: nowrap; }
 .atlas-canvas-locked .atlas-zone, .atlas-canvas-locked .atlas-map { cursor: inherit; }
@@ -88,8 +90,11 @@ function fitView(atlas, sizes, width, height, focus) {
 // the atlas as the in-game map will show it, everything explored. marker
 // ({x, y, angle}: world feet, degrees clockwise from north) draws an arrow
 // there, and focus ({zone, map}, map optional) is what the view starts
-// fitted to.
-export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap, editable = true, marker = null, focus = null}) {
+// fitted to. fog ([{key, x, y, width, height, clear}]) grays those rects
+// out but for the clear polygons in them, and stubs ([{key, at, angle}])
+// are links shown only as a dot pointing the way they go (both world feet,
+// for the in-game map's unexplored parts).
+export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap, editable = true, marker = null, focus = null, fog = [], stubs = []}) {
   const wrapper = useRef(null);
   const [view, setView] = useState(null);
   const [dragged, setDragged] = useState(null); // the atlas mid-drag
@@ -227,6 +232,17 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
                 </g>
               );
             }))}
+            <defs>
+              {fog.map((f, i) => (
+                <mask key={f.key} id={`atlas-fog-mask-${i}`} maskUnits="userSpaceOnUse" x={f.x} y={f.y} width={f.width} height={f.height}>
+                  <rect x={f.x} y={f.y} width={f.width} height={f.height} fill="white" />
+                  {f.clear.map((polygon, j) => <polygon key={j} points={polygon.map((p) => `${p.x},${p.y}`).join(" ")} fill="black" />)}
+                </mask>
+              ))}
+            </defs>
+            {fog.map((f, i) => (
+              <rect key={f.key} className="atlas-fog" x={f.x} y={f.y} width={f.width} height={f.height} mask={`url(#atlas-fog-mask-${i})`} />
+            ))}
             {/* Links over the maps, each masked out where it crosses a map
                 other than the two it joins: on top of its own, behind the rest. */}
             <defs>
@@ -246,6 +262,15 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
           {zones.map(([zone, entry], i) => {
             const corner = toScreen(entry.outline.reduce((best, p) => (p.y - p.x > best.y - best.x ? p : best)));
             return <text key={zone} className="atlas-zone-name" x={corner.x + 6} y={corner.y + 16} fill={zoneColor(i)}>{zoneNames[zone] ?? zone}</text>;
+          })}
+          {stubs.map((stub) => {
+            const at = toScreen(stub.at);
+            return (
+              <g key={stub.key} className="atlas-stub" transform={`translate(${at.x} ${at.y}) rotate(${stub.angle})`} aria-label="Unexplored way">
+                <circle r={4} />
+                <path d="M -4 -7 L 0 -13 L 4 -7 Z" />
+              </g>
+            );
           })}
           {marker && (() => {
             const at = toScreen(marker);

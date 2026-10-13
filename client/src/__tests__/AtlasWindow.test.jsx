@@ -49,6 +49,19 @@ describe("AtlasWindow", () => {
     expect(container.querySelector("svg g").getAttribute("transform")).toBe("translate(-196 596) scale(3.6 -3.6)");
   });
 
+  it("shows only what's been visited, fogged where it hasn't", () => {
+    const fogged = {...payload, maps: [{...payload.maps[0], places: [{identifier: "tents", polygon: [{x: 0, y: 0}, {x: 50, y: 0}, {x: 50, y: 50}]}]}]};
+    const {container} = render(<AtlasWindow open atlas={fogged} visited={new Set(["forest", "forest/camp"])} zone="forest" map="camp" />);
+    expect(screen.getByLabelText("Map camp")).toBeInTheDocument();
+    expect(container.querySelectorAll(".atlas-fog")).toHaveLength(1);
+    expect(container.querySelectorAll("mask[id^=atlas-fog-mask] polygon")).toHaveLength(0);
+  });
+
+  it("hides zones not visited", () => {
+    render(<AtlasWindow open atlas={payload} visited={new Set(["caves"])} zone="caves" />);
+    expect(screen.queryByLabelText("Map camp")).toBeNull();
+  });
+
   it("has no arrow off the atlas", () => {
     render(<AtlasWindow open atlas={payload} zone="forest" map="elsewhere" position={{x: 10, y: 20, angle: 0}} />);
     expect(screen.queryByLabelText("You are here")).toBeNull();

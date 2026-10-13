@@ -23,6 +23,13 @@ class CharacterVisit < ApplicationRecord
       .create_or_find_by!(visit.attributes.slice("world_character_id", "zone_identifier", "map_identifier", "place_identifier"))
   end
 
+  # {zone:, map:, place:} for each of world_character's visits, for the
+  # in-game map.
+  def self.in_world(world_character)
+    where(world_character:).order(:id)
+      .pluck(:zone_identifier, :map_identifier, :place_identifier).map { |zone, map, place| {zone:, map:, place:} }
+  end
+
   # {map:, place:} for each of world_character's visits in the zone, the
   # zone's own visit included (both blank).
   def self.in_zone(world_character, zone_identifier)

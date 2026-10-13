@@ -46,9 +46,17 @@ RSpec.describe WorldContent::Atlas do
     entrance = payload["maps"].find { |m| m["zone"] == "goblin-cave" && m["map"] == "cave_entrance" }
     expect(entrance).to eq(
       "zone" => "goblin-cave", "map" => "cave_entrance", "name" => "Cave Entrance", "x" => 0, "y" => 0, "width" => 200.0, "height" => 150.0,
-      "thumbnail_url" => "https://raw.example/c0ffee/zones/goblin-cave/cave_entrance/cave_entrance.thumb.webp"
+      "thumbnail_url" => "https://raw.example/c0ffee/zones/goblin-cave/cave_entrance/cave_entrance.thumb.webp",
+      "places" => []
     )
     expect(payload["maps"].size).to eq(3)
+  end
+
+  it "lists each map's places with outlines, for the fog" do
+    triangle = [{"x" => 0, "y" => 0}, {"x" => 50, "y" => 0}, {"x" => 0, "y" => 50}]
+    cave["maps"][0]["places"] = [{"identifier" => "mouth", "polygon" => triangle}, {"identifier" => "broken", "polygon" => triangle.take(2)}]
+    entrance = payload["maps"].find { |m| m["zone"] == "goblin-cave" && m["map"] == "cave_entrance" }
+    expect(entrance["places"]).to eq([{"identifier" => "mouth", "polygon" => triangle}])
   end
 
   it "draws zone links between their connections, bent as the atlas says" do

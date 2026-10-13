@@ -119,7 +119,7 @@ RSpec.describe "Play::WorldCharacters", type: :request do
       allow(JoinWorldZone).to receive(:call).and_return(join_result)
       version.update!(atlas: {"zones" => {}, "maps" => [], "links" => []})
       get "#{base}/#{world.id}/play"
-      expect(response.body).to include(%(data-atlas="{&quot;zones&quot;:{},&quot;maps&quot;:[],&quot;links&quot;:[]}"))
+      expect(response.body).to include(%(data-atlas="{&quot;zones&quot;:{},&quot;maps&quot;:[],&quot;links&quot;:[]}"), %(data-visits="[]"))
     end
 
     it "passes the world's quests file to the client" do

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import AtlasCanvas from "./worldEditor/AtlasCanvas";
+import { visibleAtlas } from "./game/atlasVisibility";
 
 const panelBase = {
   position: "fixed",
@@ -46,12 +47,16 @@ export function canvasProps(payload) {
   return {atlas, sizes, zoneNames, mapNames, thumbnails, links: payload?.links ?? []};
 }
 
-// The in-game map: the world's atlas, read-only, everything shown (no
-// unexplored masking yet), opened on the current map with an arrow where
-// the player is. position is the player's {x, y, angle} on map, in its own
+// The in-game map: the world's atlas, read-only, opened on the current map
+// with an arrow where the player is. Only what's been visited shows (see
+// game/atlasVisibility.js); visited is the visit keys, or null to show
+// everything. position is the player's {x, y, angle} on map, in its own
 // feet.
-export function AtlasWindow({open, atlas: payload, zone, map, position, onClose, portrait = false, landscape = false}) {
-  const props = useMemo(() => canvasProps(payload), [payload]);
+export function AtlasWindow({open, atlas: payload, visited = null, zone, map, position, onClose, portrait = false, landscape = false}) {
+  const props = useMemo(() => {
+    const all = {...canvasProps(payload), fog: [], stubs: []};
+    return visited ? visibleAtlas(all, payload, visited) : all;
+  }, [payload, visited]);
   if (!open) return null;
   const placed = props.atlas.zones[zone]?.maps[map];
   const marker = placed && position ? {x: placed.x + position.x, y: placed.y + position.y, angle: position.angle} : null;
@@ -74,6 +79,8 @@ export function AtlasWindow({open, atlas: payload, zone, map, position, onClose,
             onChange={() => {}}
             editable={false}
             marker={marker}
+            fog={props.fog}
+            stubs={props.stubs}
             focus={{zone, map}}
           />
         </div>

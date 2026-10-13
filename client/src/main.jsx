@@ -34,6 +34,7 @@ createRoot(el).render(
       questsUrl={el.dataset.questsUrl}
       questsSha={el.dataset.questsSha}
       atlas={el.dataset.atlas ? JSON.parse(el.dataset.atlas) : null}
+      visits={JSON.parse(el.dataset.visits || "[]")}
     />
   </StrictMode>
 );

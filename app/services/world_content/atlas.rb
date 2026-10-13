@@ -1,8 +1,8 @@
 module WorldContent
   # What the in-game map draws of a world's atlas (docs/schema/world.md#atlas),
   # worked out at import, when every zone's maps are at hand: each laid-out
-  # zone's name and outline, each placed map's name, place, size and
-  # thumbnail, and the lines for the links between placed maps (bends
+  # zone's name and outline, each placed map's name, place, size,
+  # thumbnail and places, and the lines for the links between placed maps (bends
   # applied). Mirrors client/src/worldEditor/atlasLayout.js's atlasLinks.
   # nil for a world with no atlas.
   module Atlas
@@ -33,9 +33,19 @@ module WorldContent
             "zone" => zone_key, "map" => map_id, "name" => map["name"] || map_id,
             "x" => at["x"], "y" => at["y"], "width" => dims["width"].to_f, "height" => dims["height"].to_f,
             "thumbnail_url" => map["thumbnailUrl"] && URI.join(zone[:url], map["thumbnailUrl"]).to_s,
+            "places" => places(map),
             "data" => map
           }
         end
+      end
+    end
+
+    # The map's places, for the in-game map's fog: [{"identifier",
+    # "polygon"}], in the map's own feet.
+    def places(map)
+      (map["places"] || []).filter_map do |place|
+        polygon = place["polygon"]
+        {"identifier" => place["identifier"], "polygon" => polygon} if polygon.is_a?(Array) && polygon.length >= 3
       end
     end
 

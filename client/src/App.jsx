@@ -15,6 +15,7 @@ import { activeQuestsById, applyQuestAction, offersFor, questLogZones, questMess
 import { inUseRange } from "./game/interactables";
 import { QuestLog } from "./QuestLog";
 import { AtlasWindow } from "./AtlasWindow";
+import { placesByMap, visitKeys, visitsAt } from "./game/atlasVisibility";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
@@ -3067,6 +3068,9 @@ export default function App({
   // The world's atlas, for the map (see WorldContent::Atlas.payload), or
   // null outside a world or before one is laid out.
   atlas = null,
+  // Everywhere in the world the character has been ([{zone, map, place}],
+  // see CharacterVisit.in_world), for what the map shows.
+  visits: initialVisits = [],
   // Set on a world's zones: the world's play page, which the client goes
   // back to when the player leaves through an exit or the world version
   // expires (see game/worldMessages.js).
@@ -3789,6 +3793,19 @@ export default function App({
   const selfEntry = Object.entries(units).find(([, u]) => u.zone_unit_identifier === selfIdentifier);
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
+
+  // Where the character has been, for the map: the visits Rails sent, plus
+  // the ones made since, worked out here as the game server does (see
+  // game/atlasVisibility.js's visitsAt).
+  const atlasPlaces = useMemo(() => placesByMap(atlas), [atlas]);
+  const [visited, setVisited] = useState(() => visitKeys(initialVisits));
+  const selfMap = selfUnit?.map_identifier;
+  const [selfX, selfY] = [selfUnit?.position.x, selfUnit?.position.y];
+  useEffect(() => {
+    const at = selfX == null ? null : { x: selfX, y: selfY };
+    const keys = visitsAt(zoneIdentifier, selfMap, at, atlasPlaces[zoneIdentifier]?.[selfMap]);
+    setVisited((current) => (keys.every((k) => current.has(k)) ? current : new Set([...current, ...keys])));
+  }, [zoneIdentifier, selfMap, selfX, selfY, atlasPlaces]);
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
   const targetUnit = targetId ? units[targetId] : null;
 
@@ -4351,6 +4368,7 @@ export default function App({
       <AtlasWindow
         open={atlasOpen}
         atlas={atlas}
+        visited={visited}
         zone={zoneIdentifier}
         map={selfUnit?.map_identifier}
         position={selfUnit?.position}
