@@ -27,8 +27,8 @@ export function startPositionFor(mapData) {
 // groundImage (a bitmap or canvas) is the ground instead of imageUrl, for a
 // map drawn in cells.
 // stampLayer ({sets, sheets}) bakes the map's decoration stamps into the
-// ground.
-export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl, groundImage = null, stampLayer = null, onExit}) {
+// ground, under groundCanopy (a cell map's tree crowns) when there is one.
+export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl, groundImage = null, groundCanopy = null, stampLayer = null, onExit}) {
   const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
 
@@ -46,7 +46,7 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
     // load the bytes), since that carries no file extension to sniff.
     const isSvg = Boolean(mapData.imageUrl?.toLowerCase().endsWith(".svg"));
     scene.loadMap(
-      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, fillPoints: mapData.fillPoints, units: mapData.units, imageUrl, isSvg, groundImage, pixelDimensions: mapData.pixelDimensions,
+      {feetDimensions: mapData.feetDimensions, barriers: mapData.barriers, connections: mapData.connections, fillPoints: mapData.fillPoints, units: mapData.units, imageUrl, isSvg, groundImage, groundCanopy, pixelDimensions: mapData.pixelDimensions,
         stamps: stampLayer && mapData.stamps?.length ? {placed: mapData.stamps, sets: stampLayer.sets, sheets: stampLayer.sheets} : null},
       availableUnitTypes, x, y
     );

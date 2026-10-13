@@ -125,6 +125,7 @@ export default function MapWorkbench({
     onCellMapChange: (cellMap) => onMapChange((d) => d.setCellMap(cellMap)),
     editing: tab === "cells", rendering: tab === "cells" || !image,
     onThumbnail: image ? null : onCellThumbnail,
+    layers: Boolean(stamps && mapData.stamps?.length),
   });
   const cellCanvas = tab === "cells" ? (cells.canvas ?? {placeholder: true}) : null;
   const ground = cellCanvas || !image ? cells.ground : null;

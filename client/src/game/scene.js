@@ -1185,8 +1185,10 @@ export class SceneManager {
     const maxTextureSize = this._renderer.capabilities.maxTextureSize;
     this._cellGrounds = new CellGroundQueue({
       pixelsPerFoot: (feet) => groundPixelsPerFoot(feet, maxTextureSize),
-      onGround: async (mapId, canvas) => {
+      onGround: async (mapId, canvas, canopy) => {
         await withStamps(mapId, canvas);
+        // Trees stand over the stamps.
+        if (canopy) canvas.getContext("2d").drawImage(canopy, 0, 0, canvas.width, canvas.height);
         const group = this._mapGroups.get(mapId);
         const { width, height } = this._dimsByMap.get(mapId);
         if (group) this._addGround(group, new THREE.CanvasTexture(canvas), width, height);
@@ -1231,7 +1233,7 @@ export class SceneManager {
           new THREE.TextureLoader().load(mapUrl, addGround);
         }
       } else if (m.cellMap) {
-        this._cellGrounds.add(m.identifier, m.cellMap, m.feetDimensions);
+        this._cellGrounds.add(m.identifier, m.cellMap, m.feetDimensions, { layers: Boolean(m.stamps?.length) });
       }
 
       // Everything outside the playable area rises as a plateau; walls

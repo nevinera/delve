@@ -355,6 +355,21 @@ describe("sprites and rendering", () => {
     expect(stats).toMatchObject({width: canvas.width, height: canvas.height});
     expect(stats.crowns).toBeGreaterThan(0);
   });
+
+  it("puts the tree crowns on their own canopy layer when asked", () => {
+    // Counts drawImage calls (sprite stamps) per canvas painted.
+    const counting = (width, height) => {
+      const canvas = {width, height, draws: 0};
+      canvas.getContext = () => new Proxy({}, {get: (_, name) => (name === "createLinearGradient" ? () => ({addColorStop: () => {}}) : name === "drawImage" ? () => canvas.draws++ : () => {})});
+      return canvas;
+    };
+    const whole = renderCellMap(clearing, {createCanvas: counting});
+    const split = renderCellMap(clearing, {createCanvas: counting, layers: true});
+    expect(whole.canopy).toBeNull();
+    expect(split.canopy.draws).toBe(split.stats.crowns);
+    expect(split.canvas.draws).toBe(whole.canvas.draws - split.stats.crowns);
+    expect(cacheKey(clearing, 10, true)).not.toEqual(cacheKey(clearing, 10));
+  });
 });
 
 describe("themes", () => {

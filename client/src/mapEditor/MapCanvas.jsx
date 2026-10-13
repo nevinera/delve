@@ -1156,7 +1156,7 @@ export default function MapCanvas({
       )}
       {imageError && <div className="map-canvas-error">{imageError}</div>}
       {previewing ? (
-        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} stampLayer={stampLayer} onExit={() => onTogglePreview?.()} />
+        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} groundCanopy={ground?.renderedCanopy ?? null} stampLayer={stampLayer} onExit={() => onTogglePreview?.()} />
       ) : image ? (
         <div
           ref={wrapperRef}
@@ -1192,6 +1192,7 @@ export default function MapCanvas({
                 pixelDimensions={image.pixelDimensions} feetDimensions={feetDimensions}
               />
             )}
+            {ground?.canopy}
             {!ground && hasBothAxes(feetDimensions) && (
               <svg
                 className="map-canvas-grid"

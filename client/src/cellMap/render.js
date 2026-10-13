@@ -24,8 +24,9 @@ const spriteSets = new Map();
 const SPRITE_SETS = 8;
 
 // Returns {canvas, timings, stats}: timings in ms for each step, stats
-// on the size of what was drawn.
-export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCanvas, style = resolveStyle(map)} = {}) {
+// on the size of what was drawn. With layers, the tree crowns go on their
+// own transparent canvas, canopy, to draw over whatever goes between.
+export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCanvas, style = resolveStyle(map), layers = false} = {}) {
   const timings = {};
   const time = (step, fn) => {
     const started = performance.now();
@@ -45,10 +46,11 @@ export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCa
     return set;
   });
   const canvas = createCanvas(Math.round(scene.width * scale), Math.round(scene.height * scale));
-  time("paint", () => paintScene(canvas.getContext("2d"), scene, scale, style, sprites));
+  const canopy = layers ? createCanvas(canvas.width, canvas.height) : null;
+  time("paint", () => paintScene(canvas.getContext("2d"), scene, scale, style, sprites, {canopyCtx: canopy?.getContext("2d")}));
   const stats = {width: canvas.width, height: canvas.height};
   for (const kind of ["crowns", "hatches", "patches", "tufts", "tallTufts", "hummocks", "reeds"]) stats[kind] = scene[kind].length;
-  return {canvas, timings, stats};
+  return {canvas, canopy, timings, stats};
 }
 
 function defaultCanvas(width, height) {
@@ -59,6 +61,6 @@ function defaultCanvas(width, height) {
   return canvas;
 }
 
-export function cacheKey(map, pixelsPerFoot) {
-  return `v${RENDER_VERSION}:${pixelsPerFoot}:${hashString(JSON.stringify([map.theme, map.colors ?? {}, map.grid, map.seed, map.cells, map.trails ?? [], map.bridges ?? []]))}`;
+export function cacheKey(map, pixelsPerFoot, layers = false) {
+  return `v${RENDER_VERSION}:${pixelsPerFoot}${layers ? ":layers" : ""}:${hashString(JSON.stringify([map.theme, map.colors ?? {}, map.grid, map.seed, map.cells, map.trails ?? [], map.bridges ?? []]))}`;
 }

@@ -108,9 +108,9 @@ export class MapPreviewScene {
   // groundImage (a bitmap or canvas, e.g. a cell map's render) stands in
   // for imageUrl.
   // stamps ({placed, sets, sheets}, or null) are baked into the ground (see
-  // game/stamps.js); a raster background is then drawn onto a canvas at its
+  // game/stamps.js), under groundCanopy (a cell map's tree crowns, apart); a raster background is then drawn onto a canvas at its
   // pixelDimensions first.
-  loadMap({feetDimensions, barriers, connections, fillPoints, units, imageUrl, isSvg, groundImage = null, pixelDimensions = null, stamps = null}, availableUnitTypes, startX, startY) {
+  loadMap({feetDimensions, barriers, connections, fillPoints, units, imageUrl, isSvg, groundImage = null, groundCanopy = null, pixelDimensions = null, stamps = null}, availableUnitTypes, startX, startY) {
     this._feetDimensions = feetDimensions;
     this._barriers = barriers ?? [];
     this._playerX = startX;
@@ -136,7 +136,9 @@ export class MapPreviewScene {
         canvas.width = groundImage.width;
         canvas.height = groundImage.height;
         canvas.getContext("2d").drawImage(groundImage, 0, 0);
-        addGround(new THREE.CanvasTexture(withStamps(canvas)));
+        withStamps(canvas);
+        if (groundCanopy) canvas.getContext("2d").drawImage(groundCanopy, 0, 0);
+        addGround(new THREE.CanvasTexture(canvas));
       } else if (isSvg) {
         loadSvgToCanvas(imageUrl, feetDimensions).then((canvas) => addGround(new THREE.CanvasTexture(withStamps(canvas))));
       } else if (stamps) {

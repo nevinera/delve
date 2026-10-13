@@ -4,7 +4,10 @@
 import {DEFAULT_PATH, PATHS, hummockShape} from "./style";
 import {blob} from "./sprites";
 
-export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
+// canopyCtx (optional) takes the tree crowns instead, on their own
+// transparent layer, so what's drawn between (decoration stamps) sits
+// under the trees.
+export function paintScene(ctx, scene, pixelsPerFoot, style, sprites, {canopyCtx = null} = {}) {
   const {palette} = style;
   ctx.save();
   ctx.setTransform(pixelsPerFoot, 0, 0, pixelsPerFoot, 0, 0);
@@ -48,7 +51,14 @@ export function paintScene(ctx, scene, pixelsPerFoot, style, sprites) {
   stamp(ctx, scene.tufts, sprites.tufts);
   stamp(ctx, scene.reeds, sprites.reeds);
   stamp(ctx, scene.tallTufts, sprites.tallTufts);
-  stamp(ctx, scene.crowns, sprites.crowns);
+  if (canopyCtx) {
+    canopyCtx.save();
+    canopyCtx.setTransform(pixelsPerFoot, 0, 0, pixelsPerFoot, 0, 0);
+    stamp(canopyCtx, scene.crowns, sprites.crowns);
+    canopyCtx.restore();
+  } else {
+    stamp(ctx, scene.crowns, sprites.crowns);
+  }
   ctx.restore();
 }
 
