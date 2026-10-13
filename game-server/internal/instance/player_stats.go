@@ -8,6 +8,17 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
+// updatePlayerSpeed sets every player unit's Speed from BasePlayerSpeed and
+// their movementSpeed bonuses (a sprint, a slow). Speed is what both the
+// server's move checks and the client's own movement go by.
+func updatePlayerSpeed(state *instancestate.InstanceState) {
+	for _, unit := range state.Units {
+		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
+			unit.Speed = command.MovementSpeed(unit, BasePlayerSpeed)
+		}
+	}
+}
+
 // updatePlayerMaxHealth recomputes every player unit's MaxHealth from their
 // currently equipped Stamina (command.PlayerMaxHealth - see docs/stats.md's
 // "Stamina" section). This needs to run every tick, not just on equip

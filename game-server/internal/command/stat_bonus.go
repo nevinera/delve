@@ -1,6 +1,10 @@
 package command
 
-import "github.com/delve-mmo/game-server/internal/instancestate"
+import (
+	"math"
+
+	"github.com/delve-mmo/game-server/internal/instancestate"
+)
 
 // StatModifiers is the combined bonus every currently-active "stat"
 // StatusEffect grants a unit, aggregated in one pass by ActiveStatModifiers
@@ -52,6 +56,18 @@ func (m StatModifiers) Get(statName string) (add, multiply float64) {
 		multiply = v
 	}
 	return m.add[statName], multiply
+}
+
+// minMovementSpeed is the slowest movementSpeed bonuses can bring a unit
+// to, in feet per second: a Speed of 0 means "unset" (the base speed) to
+// movement and its feasibility check, so a slow can't reach it.
+const minMovementSpeed = 1.0
+
+// MovementSpeed is base (feet per second) with unit's movementSpeed status
+// bonuses applied (docs/schema/status.md: add is flat feet per second).
+func MovementSpeed(unit *instancestate.UnitState, base float64) float64 {
+	add, multiply := ActiveStatModifiers(unit).Get("movementSpeed")
+	return math.Max(minMovementSpeed, (base+add)*multiply)
 }
 
 // applyTier2SchoolPct folds status-effect bonuses for a school-scoped Tier 2
