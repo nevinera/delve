@@ -114,6 +114,7 @@ Rails.application.routes.draw do
       resources :equipped_items, only: [:index]
       resources :zone_exits, only: [:create]
       resources :character_flags, only: [:create], path: "flags"
+      resources :character_visits, only: [:create], path: "visits"
       get "flags/*flag", to: "character_flags#show", as: :character_flag, format: false
       resources :character_quests, only: [:index, :create, :update, :destroy], path: "quests", param: :quest_identifier do
         member do

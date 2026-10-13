@@ -238,6 +238,34 @@ func (c *Client) GrantFlag(worldCharacterDatabaseID, flag string) error {
 	return nil
 }
 
+// RecordVisit records that a world character has been to zone, a map in
+// it, or a place on that map (blank map and place for the zone itself).
+// Recording a visit already recorded succeeds and changes nothing.
+func (c *Client) RecordVisit(worldCharacterDatabaseID, zone, mapID, place string) error {
+	data, err := json.Marshal(map[string]string{"zone": zone, "map": mapID, "place": place})
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	url := fmt.Sprintf("%s/internal_api/world_characters/%s/visits", c.baseURL, worldCharacterDatabaseID)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", c.token)
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("http: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusCreated {
+		return fmt.Errorf("rails returned %d", res.StatusCode)
+	}
+	return nil
+}
+
 // ErrQuestRefused is returned by AcceptQuest when Rails refuses the quest
 // (already completed, or too many active).
 var ErrQuestRefused = errors.New("quest refused")

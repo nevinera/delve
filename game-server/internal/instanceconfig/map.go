@@ -14,9 +14,17 @@ type Map struct {
 	Units          []Unit          `json:"units,omitempty"`
 	NCUs           []NCU           `json:"ncus,omitempty"`
 	Interactables  []Interactable  `json:"interactables,omitempty"`
+	Places         []Place         `json:"places,omitempty"` // only their outlines, to record players' visits - see instance/visits.go
 	Respawn        *RespawnConfig  `json:"respawn,omitempty"`     // overrides the zone's respawn for every unit on this map - see Zone.UnitRespawn
 	LeashRadius    *float64        `json:"leashRadius,omitempty"` // feet; see UnitLeash
 	HardLeash      *bool           `json:"hardLeash,omitempty"`   // see UnitLeash
+}
+
+// Place is a named area of a map (docs/schema/map.md#place). The game reads
+// only its outline, to record which places a player has visited.
+type Place struct {
+	Identifier string     `json:"identifier"` // Required: unique on the map
+	Polygon    []Location `json:"polygon"`    // Required: ≥3 points, closed back to the first
 }
 
 // Dimensions holds the width and height of a map in feet.

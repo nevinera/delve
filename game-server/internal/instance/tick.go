@@ -199,6 +199,9 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			if events := inst.collectQuestEvents(prevState, state); len(events) > 0 {
 				go inst.ApplyQuestEvents(ctx, events)
 			}
+			if visits := inst.collectVisits(state); len(visits) > 0 {
+				go inst.RecordVisits(ctx, visits)
+			}
 			inst.processTalks(ctx, state.PendingTalks)
 			inst.tickQuestTimers(ctx, now)
 			for _, exit := range zoneExits {

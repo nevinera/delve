@@ -37,6 +37,7 @@ class JoinWorldZone < JoinZone
     {
       owned_zone_items: @owned_zone_items,
       held_flags: @held_flags,
+      visits: CharacterVisit.in_zone(@world_character, @zone.identifier),
       active_quests:,
       equipped_items: EquippedItems::ForWorldCharacter.call(world_character: @world_character),
       mode: "world",

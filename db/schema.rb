@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_13_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -82,6 +82,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120000) do
     t.json "custom_hotkeys", default: {}, null: false
     t.datetime "updated_at", null: false
     t.index ["character_id"], name: "index_character_settings_on_character_id", unique: true
+  end
+
+  create_table "character_visits", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "map_identifier", limit: 64, default: "", null: false
+    t.string "place_identifier", limit: 64, default: "", null: false
+    t.integer "world_character_id", null: false
+    t.integer "world_version_id"
+    t.string "zone_identifier", limit: 64, null: false
+    t.index ["world_character_id", "zone_identifier", "map_identifier", "place_identifier"], name: "index_character_visits_uniquely", unique: true
+    t.index ["world_version_id"], name: "index_character_visits_on_world_version_id"
   end
 
   create_table "characters", force: :cascade do |t|
@@ -254,6 +265,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120000) do
   add_foreign_key "character_quests", "world_characters"
   add_foreign_key "character_quests", "world_versions", on_delete: :nullify
   add_foreign_key "character_settings", "characters"
+  add_foreign_key "character_visits", "world_characters"
+  add_foreign_key "character_visits", "world_versions", on_delete: :nullify
   add_foreign_key "characters", "character_classes"
   add_foreign_key "characters", "users"
   add_foreign_key "class_abilities", "character_classes"
