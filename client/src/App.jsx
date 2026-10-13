@@ -15,7 +15,7 @@ import { activeQuestsById, applyQuestAction, offersFor, questLogZones, questMess
 import { inUseRange } from "./game/interactables";
 import { QuestLog } from "./QuestLog";
 import { AtlasWindow } from "./AtlasWindow";
-import { placesByMap, visitKeys, visitsAt } from "./game/atlasVisibility";
+import { visitedMessageKey, visitKeys } from "./game/atlasVisibility";
 import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
@@ -3144,6 +3144,9 @@ export default function App({
   const pendingQuestActionsRef = useRef([]);
   const [questLogOpen, setQuestLogOpen] = useState(false);
   const [atlasOpen, setAtlasOpen] = useState(false);
+  // Where the character has been, for the map: the visits Rails sent, plus
+  // the ones the game server records since (its "visited" messages).
+  const [visited, setVisited] = useState(() => visitKeys(initialVisits));
   const [currentZoneNames, setCurrentZoneNames] = useState(null);
   const [questZoneNames, setQuestZoneNames] = useState({});
   const questZones = useMemo(
@@ -3681,6 +3684,8 @@ export default function App({
         addLog("Disconnected.");
       },
       onServerMessage: (msg) => {
+        const visit = visitedMessageKey(msg);
+        if (visit) setVisited((current) => (current.has(visit) ? current : new Set([...current, visit])));
         const questAction = questMessageAction(msg, questDefinitionsRef.current);
         if (questAction?.type === "offers") {
           questOffersRef.current = questAction.offers;
@@ -3794,18 +3799,6 @@ export default function App({
   const selfUnit = selfEntry?.[1];
   const selfUnitId = selfEntry?.[0];
 
-  // Where the character has been, for the map: the visits Rails sent, plus
-  // the ones made since, worked out here as the game server does (see
-  // game/atlasVisibility.js's visitsAt).
-  const atlasPlaces = useMemo(() => placesByMap(atlas), [atlas]);
-  const [visited, setVisited] = useState(() => visitKeys(initialVisits));
-  const selfMap = selfUnit?.map_identifier;
-  const [selfX, selfY] = [selfUnit?.position.x, selfUnit?.position.y];
-  useEffect(() => {
-    const at = selfX == null ? null : { x: selfX, y: selfY };
-    const keys = visitsAt(zoneIdentifier, selfMap, at, atlasPlaces[zoneIdentifier]?.[selfMap]);
-    setVisited((current) => (keys.every((k) => current.has(k)) ? current : new Set([...current, ...keys])));
-  }, [zoneIdentifier, selfMap, selfX, selfY, atlasPlaces]);
   const localElvl = selfUnit ? mapElvls[selfUnit.map_identifier] : undefined;
   const targetUnit = targetId ? units[targetId] : null;
 

@@ -162,3 +162,29 @@ func TestRecordVisits_SkipsSlotsWithoutAWorldCharacter(t *testing.T) {
 	inst.CollectVisitsForTest(context.Background(), visitState(slot.CharacterUnitID, "glade", 30, 30), true)
 	assert.Empty(t, rails.posted)
 }
+
+func TestRecordVisits_TellsTheClientOnceRecorded(t *testing.T) {
+	rails := &fakeVisitRails{}
+	inst := visitInstance(t, rails)
+	ctx := context.Background()
+	slot, err := inst.AddSlotWithOptions("Aldric", "42", puncherClass, nil, nil, instance.SlotOptions{
+		WorldCharacterDatabaseID: "wc-1",
+		Visits:                   []instance.Visit{{}, {Map: "glade"}},
+	})
+	require.NoError(t, err)
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+
+	inst.CollectVisitsForTest(ctx, visitState(slot.CharacterUnitID, "glade", 30, 30), true)
+
+	msg := readMsgOfType(t, writeCh, "visited")
+	assert.Equal(t, "darkwood", msg["zone"])
+	assert.Equal(t, "glade", msg["map"])
+	assert.Equal(t, "clearing", msg["place"])
+	select {
+	case extra := <-writeCh:
+		t.Fatalf("unexpected message for a visit already had: %s", extra)
+	default:
+	}
+}

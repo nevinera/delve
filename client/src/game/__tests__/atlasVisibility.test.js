@@ -1,6 +1,6 @@
 import {describe, it, expect} from "vitest";
 import {canvasProps} from "../../AtlasWindow";
-import {placesByMap, visibleAtlas, visitKeys, visitsAt} from "../atlasVisibility";
+import {visibleAtlas, visitedMessageKey, visitKeys} from "../atlasVisibility";
 
 const square = (x, y, size) => [{x, y}, {x: x + size, y}, {x: x + size, y: y + size}, {x, y: y + size}];
 const payload = {
@@ -21,17 +21,14 @@ const payload = {
 };
 const show = (keys) => visibleAtlas({...canvasProps(payload), fog: [], stubs: []}, payload, new Set(keys));
 
-describe("visitsAt", () => {
-  const places = placesByMap(payload).forest.camp;
-
-  it("is the zone, the map and every place around the player", () => {
-    expect(visitsAt("forest", "camp", {x: 10, y: 10}, places)).toEqual(["forest", "forest/camp", "forest/camp/tents"]);
-    expect(visitsAt("forest", "camp", {x: 90, y: 10}, places)).toEqual(["forest", "forest/camp"]);
+describe("visitedMessageKey", () => {
+  it("keys a visited message", () => {
+    expect(visitedMessageKey({type: "visited", zone: "forest", map: "camp", place: "tents"})).toBe("forest/camp/tents");
+    expect(visitedMessageKey({type: "visited", zone: "forest", map: "", place: ""})).toBe("forest");
   });
 
-  it("is just the zone before the player is on a map", () => {
-    expect(visitsAt("forest", undefined, null)).toEqual(["forest"]);
-    expect(visitsAt(null, "camp", null)).toEqual([]);
+  it("is null for other messages", () => {
+    expect(visitedMessageKey({type: "zone-exit"})).toBeNull();
   });
 });
 

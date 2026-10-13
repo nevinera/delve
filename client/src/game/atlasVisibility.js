@@ -18,21 +18,10 @@ export function visitKeys(visits) {
   return new Set((visits ?? []).map((v) => visitKey(v.zone, v.map, v.place)));
 }
 
-// The visits a player at position (map feet) on zone/map makes: the zone,
-// the map, and every place on it around them. places is [{identifier,
-// polygon}], the map's from the atlas payload.
-export function visitsAt(zone, map, position, places = []) {
-  if (!zone) return [];
-  if (!map) return [visitKey(zone)];
-  const here = position ? places.filter((p) => inside(position, p.polygon, {boundary: true})) : [];
-  return [visitKey(zone), visitKey(zone, map), ...here.map((p) => visitKey(zone, map, p.identifier))];
-}
-
-// The places of each map in the payload: {zone: {map: places}}.
-export function placesByMap(payload) {
-  const result = {};
-  for (const m of payload?.maps ?? []) (result[m.zone] ??= {})[m.map] = m.places ?? [];
-  return result;
+// The visit key a game server "visited" message is for, or null for any
+// other message.
+export function visitedMessageKey(msg) {
+  return msg?.type === "visited" && msg.zone ? visitKey(msg.zone, msg.map, msg.place) : null;
 }
 
 // The fog over a shown map: null when there's none, else the visited

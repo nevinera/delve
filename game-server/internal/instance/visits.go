@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -27,6 +28,15 @@ func (v Visit) Key() string {
 		return v.Map
 	}
 	return v.Map + "/" + v.Place
+}
+
+// visitedMsg tells a player's client about a visit just recorded, so its
+// map shows it straight away.
+type visitedMsg struct {
+	downBase
+	Zone  string `json:"zone"`
+	Map   string `json:"map"`
+	Place string `json:"place"`
 }
 
 // visitEvent is a player unit arriving somewhere it may not have visited.
@@ -161,8 +171,8 @@ func (inst *Instance) RecordZoneVisit(ctx context.Context, slotID uuid.UUID) {
 }
 
 // recordVisit records visit for the character in slotID, logging any
-// failure. A no-op for a slot with no world character, or that has the
-// visit already.
+// failure, and tells the client (visited) once it's recorded. A no-op for
+// a slot with no world character, or that has the visit already.
 func (inst *Instance) recordVisit(ctx context.Context, slotID uuid.UUID, visit Visit) {
 	inst.visitMu.Lock()
 	defer inst.visitMu.Unlock()
@@ -178,6 +188,10 @@ func (inst *Instance) recordVisit(ctx context.Context, slotID uuid.UUID, visit V
 		return
 	}
 	inst.markVisited(slotID, visit)
+	inst.sendJSONToSlot(slotID, visitedMsg{
+		downBase: downBase{Direction: "down", Type: "visited", Timestamp: time.Now().UnixMilli()},
+		Zone:     inst.ZoneIdentifier, Map: visit.Map, Place: visit.Place,
+	})
 }
 
 func (inst *Instance) cachedVisit(slotID uuid.UUID, visit Visit) (worldCharacterID string, visited bool, err error) {
