@@ -107,7 +107,8 @@ async function checkWorld(draft) {
   if (!result.valid) return [{file, location: {}, message: result.error.message}];
   const zones = Object.fromEntries(zoneKeys(draft).map((zone) => {
     const data = draft.read(`${zonesDir(draft.worldKey)}/${zone}/${zone}.json`) ?? {};
-    return [zone, {openConnections: data.openConnections ?? {}, entryPoints: data.entryPoints ?? {}}];
+    const maps = mapKeysInZone(draft, zone).map((map) => ({identifier: map, feetDimensions: mapData(draft, zone, map)?.feetDimensions ?? {}}));
+    return [zone, {openConnections: data.openConnections ?? {}, entryPoints: data.entryPoints ?? {}, maps}];
   }));
   const refs = await validateWorldReferences(world, zones);
   return refs.valid ? [] : [{file, location: {}, message: refs.error.message}];

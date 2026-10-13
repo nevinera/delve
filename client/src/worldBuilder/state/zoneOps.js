@@ -6,6 +6,7 @@
 // Per-file logic is reused from the old zone editor's ZoneDraft class,
 // applied to the zone file's data in place. Map details come straight
 // from the draft, so there's nothing to fetch.
+import {dropAtlasMap} from "./atlasOps";
 import {ZoneDraft as ZoneFile} from "../../zoneEditor/ZoneDraft";
 import {keyFromRef, refFromKey} from "../../zoneEditor/mapRef";
 import {aggregateItemUsage, aggregateUnitTypeUsage} from "../../zoneEditor/zoneRefUsage";
@@ -102,7 +103,8 @@ export function removeMap(draft, zone, index) {
   const ref = zoneData(draft, zone)?.maps?.[index]?.$ref;
   const key = ref ? keyFromRef(ref) : null;
   const identifier = key ? draft.read(mapFile(draft.worldKey, zone, key))?.identifier ?? key : null;
-  return updateZone(draft, zone, (z) => z.removeMap(index, identifier));
+  const next = updateZone(draft, zone, (z) => z.removeMap(index, identifier));
+  return identifier ? dropAtlasMap(next, zone, identifier) : next;
 }
 
 function isRef(value) {

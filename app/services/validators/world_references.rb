@@ -3,8 +3,11 @@ module Validators
   # side and world entry point must name a zone in the world, and a
   # connection point that zone actually exposes (an openConnections name for
   # kind "open", an entryPoints key for kind "entryPoint" and for world entry
-  # points). Mirrors client/src/worldEditor/worldLinkStatus.js. Run after
-  # WorldValidator and each zone's ZoneValidator have passed.
+  # points), mirroring client/src/worldEditor/worldLinkStatus.js. And its
+  # atlas must name only the world's zones and their maps, each map inside
+  # its zone's outline, with no maps or outlines overlapping (each zone's
+  # maps need identifier and feetDimensions). Run after WorldValidator and
+  # each zone's ZoneValidator have passed.
   class WorldReferences
     include Helpers
 
@@ -20,6 +23,7 @@ module Validators
     def validate!
       validate_world_links!
       validate_entry_points!
+      validate_atlas! if @world_data["atlas"]
     end
 
     private
@@ -49,6 +53,48 @@ module Validators
       return if exposed_connections(zone, kind).include?(connection)
 
       raise ValidationError.new("zone \"#{zone_key}\" has no #{pool_name(kind)} \"#{connection}\"", path: path)
+    end
+
+    def validate_atlas!
+      zones_path = child_path(child_path("$", "atlas"), "zones")
+      outlines = {}
+      rects = []
+      @world_data["atlas"]["zones"].each do |zone_key, entry|
+        zone_path = child_path(zones_path, zone_key)
+        zone = @zones_by_key[zone_key]
+        raise ValidationError.new("unknown zone \"#{zone_key}\"", path: zone_path) if zone.nil?
+        outline = entry["outline"].map { |p| [p["x"], p["y"]] }
+        outlines[zone_key] = outline
+        entry["maps"].each do |map_key, location|
+          map_path = child_path(child_path(zone_path, "maps"), map_key)
+          rect = map_rect(zone, zone_key, map_key, location, path: map_path)
+          raise ValidationError.new("map \"#{map_key}\" isn't inside its zone's outline", path: map_path) unless AtlasGeometry.rect_inside?(rect, outline)
+          rects << [zone_key, map_key, rect, map_path]
+        end
+      end
+      validate_no_overlapping_maps!(rects)
+      validate_no_overlapping_outlines!(outlines, zones_path)
+    end
+
+    def map_rect(zone, zone_key, map_key, location, path:)
+      map = (zone["maps"] || []).find { |m| m["identifier"] == map_key }
+      raise ValidationError.new("zone \"#{zone_key}\" has no map \"#{map_key}\"", path: path) if map.nil?
+      dims = map["feetDimensions"] || {}
+      AtlasGeometry.rect_corners(location["x"], location["y"], dims["width"].to_f, dims["height"].to_f)
+    end
+
+    def validate_no_overlapping_maps!(rects)
+      rects.combination(2) do |(zone_a, map_a, a, _), (zone_b, map_b, b, path)|
+        next unless AtlasGeometry.rects_overlap?(a, b)
+        raise ValidationError.new("map \"#{zone_b}/#{map_b}\" overlaps \"#{zone_a}/#{map_a}\"", path: path)
+      end
+    end
+
+    def validate_no_overlapping_outlines!(outlines, zones_path)
+      outlines.to_a.combination(2) do |(key_a, a), (key_b, b)|
+        next unless AtlasGeometry.quads_overlap?(a, b)
+        raise ValidationError.new("zone \"#{key_b}\"'s outline overlaps \"#{key_a}\"'s", path: child_path(child_path(zones_path, key_b), "outline"))
+      end
     end
 
     def exposed_connections(zone, kind)

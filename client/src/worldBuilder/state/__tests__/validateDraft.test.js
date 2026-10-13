@@ -28,8 +28,12 @@ describe("validateDraft", () => {
     expect(validators.validateWorldReferences).toHaveBeenCalledWith(
       expect.objectContaining({name: "W"}),
       {
-        forest: {openConnections: {"hub/north": "north-exit"}, entryPoints: {"hub/central": null}},
-        cave: {openConnections: {}, entryPoints: {}},
+        forest: {
+          openConnections: {"hub/north": "north-exit"},
+          entryPoints: {"hub/central": null},
+          maps: [{identifier: "hub", feetDimensions: {width: 100, height: 100}}, {identifier: "passage", feetDimensions: {}}],
+        },
+        cave: {openConnections: {}, entryPoints: {}, maps: []},
       }
     );
   });

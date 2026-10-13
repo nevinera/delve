@@ -8,6 +8,7 @@ import {blankMap} from "../../mapEditor/mapContentLoaders";
 import {keyFromRef, refFromKey} from "../../zoneEditor/mapRef";
 import {addMap, removeMap, syncZoneRefs, zoneData, zonePositions, setZonePositions} from "./zoneOps";
 import {zoneKeys} from "./worldOps";
+import {renameAtlasMap} from "./atlasOps";
 import {isValidIdentifier, itemFile, mapDir, mapFile, resolvePath, unitTypeFile, worldDir, zoneFile} from "./worldPaths";
 
 export const mapData = (draft, zone, map) => draft.read(mapFile(draft.worldKey, zone, map));
@@ -104,6 +105,7 @@ export function renameMap(draft, zone, from, to) {
     ...data,
     entryPoints: Object.fromEntries(Object.entries(data.entryPoints ?? {}).map(([k, v]) => [k.startsWith(worldPrefix) ? `${zone}/${to}/${k.slice(worldPrefix.length)}` : k, v])),
   }));
+  next = renameAtlasMap(next, zone, from, to);
 
   const positions = zonePositions(next, zone);
   return setZonePositions(next, zone, Object.fromEntries(Object.entries(positions).map(([key, pos]) => {
