@@ -57,32 +57,52 @@ export function resetAtlas(draft) {
   return setAtlas(draft, guessAtlas(atlasInput(draft)));
 }
 
-function updateAtlasZones(draft, fn) {
+function updateAtlas(draft, fn) {
   const path = worldFile(draft.worldKey);
-  const zones = draft.read(path)?.atlas?.zones;
-  if (!zones) return draft;
-  return draft.update(path, (data) => ({...data, atlas: {...data.atlas, zones: fn(data.atlas.zones)}}));
+  const atlas = draft.read(path)?.atlas;
+  if (!atlas?.zones) return draft;
+  const next = fn(atlas);
+  return next === atlas ? draft : draft.update(path, (data) => ({...data, atlas: next}));
 }
 
 const renameKey = (dict, from, to) => Object.fromEntries(Object.entries(dict).map(([key, value]) => [key === from ? to : key, value]));
 const dropKey = (dict, key) => Object.fromEntries(Object.entries(dict).filter(([k]) => k !== key));
 
+// The atlas with each bend key's ends ("zone/map/connection") passed
+// through end(parts), which returns new parts or null to drop the bend.
+function mapBendEnds(atlas, end) {
+  if (!atlas.bends) return atlas;
+  const bends = {};
+  for (const [key, offset] of Object.entries(atlas.bends)) {
+    const ends = key.split("|").map((e) => end(e.split("/")));
+    if (ends.every(Boolean)) bends[ends.map((parts) => parts.join("/")).sort().join("|")] = offset;
+  }
+  const {bends: _, ...rest} = atlas;
+  return Object.keys(bends).length ? {...rest, bends} : rest;
+}
+
 export function renameAtlasZone(draft, from, to) {
-  return updateAtlasZones(draft, (zones) => (from in zones ? renameKey(zones, from, to) : zones));
+  return updateAtlas(draft, (atlas) => (from in atlas.zones || atlas.bends
+    ? mapBendEnds({...atlas, zones: renameKey(atlas.zones, from, to)}, ([zone, ...rest]) => [zone === from ? to : zone, ...rest])
+    : atlas));
 }
 
 export function dropAtlasZone(draft, zone) {
-  return updateAtlasZones(draft, (zones) => (zone in zones ? dropKey(zones, zone) : zones));
+  return updateAtlas(draft, (atlas) => (zone in atlas.zones || atlas.bends
+    ? mapBendEnds({...atlas, zones: dropKey(atlas.zones, zone)}, (parts) => (parts[0] === zone ? null : parts))
+    : atlas));
 }
 
-function updateAtlasMaps(draft, zone, fn) {
-  return updateAtlasZones(draft, (zones) => (zones[zone]?.maps ? {...zones, [zone]: {...zones[zone], maps: fn(zones[zone].maps)}} : zones));
+function withMaps(atlas, zone, fn) {
+  return atlas.zones[zone]?.maps ? {...atlas, zones: {...atlas.zones, [zone]: {...atlas.zones[zone], maps: fn(atlas.zones[zone].maps)}}} : atlas;
 }
 
 export function renameAtlasMap(draft, zone, from, to) {
-  return updateAtlasMaps(draft, zone, (maps) => (from in maps ? renameKey(maps, from, to) : maps));
+  return updateAtlas(draft, (atlas) => mapBendEnds(withMaps(atlas, zone, (maps) => renameKey(maps, from, to)),
+    ([z, map, connection]) => [z, z === zone && map === from ? to : map, connection]));
 }
 
 export function dropAtlasMap(draft, zone, map) {
-  return updateAtlasMaps(draft, zone, (maps) => (map in maps ? dropKey(maps, map) : maps));
+  return updateAtlas(draft, (atlas) => mapBendEnds(withMaps(atlas, zone, (maps) => dropKey(maps, map)),
+    (parts) => (parts[0] === zone && parts[1] === map ? null : parts)));
 }

@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {constrainMove, moveCorner, moveMap, moveZone} from "../atlasEdit";
+import {bendLink, constrainMove, insertVertex, moveCorner, moveMap, moveZone, removeVertex} from "../atlasEdit";
 import {rectCorners} from "../atlasGeometry";
 
 const outline = (x, y, s) => rectCorners({x, y, width: s, height: s});
@@ -63,5 +63,39 @@ describe("moveCorner", () => {
   it("won't cross into another zone", () => {
     const corner = moveCorner(atlas, sizes, "a", 1, {x: 60, y: 0}).zones.a.outline[1];
     expect(corner.x).toBeLessThanOrEqual(40);
+  });
+});
+
+describe("insertVertex", () => {
+  it("splits an edge at its middle", () => {
+    const outline = insertVertex(atlas, "a", 1).zones.a.outline;
+    expect(outline).toHaveLength(5);
+    expect(outline[2]).toEqual({x: 40, y: 20});
+  });
+
+  it("then lets the new vertex move like any other", () => {
+    const split = insertVertex(atlas, "a", 3); // the west edge
+    expect(moveCorner(split, sizes, "a", 4, {x: -30, y: 20}).zones.a.outline[4]).toEqual({x: -30, y: 20});
+  });
+});
+
+describe("removeVertex", () => {
+  it("removes a vertex the outline can do without", () => {
+    const split = moveCorner(insertVertex(atlas, "a", 3), sizes, "a", 4, {x: -30, y: 20});
+    expect(removeVertex(split, sizes, "a", 4).zones.a.outline).toEqual(atlas.zones.a.outline);
+  });
+
+  it("keeps at least 3, and won't cut into a map", () => {
+    const triangle = {zones: {t: {outline: [{x: 0, y: 0}, {x: 10, y: 0}, {x: 0, y: 10}], maps: {}}}};
+    expect(removeVertex(triangle, {}, "t", 0)).toBe(triangle);
+    expect(removeVertex(atlas, sizes, "a", 0)).toBe(atlas); // the triangle left would cut m1
+  });
+});
+
+describe("bendLink", () => {
+  it("sets and clears a bend", () => {
+    const bent = bendLink(atlas, "a/m1/n|a/m2/s", {x: 3.4, y: -7.6});
+    expect(bent.bends).toEqual({"a/m1/n|a/m2/s": {x: 3, y: -8}});
+    expect(bendLink(bent, "a/m1/n|a/m2/s", null)).not.toHaveProperty("bends");
   });
 });

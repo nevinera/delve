@@ -1,15 +1,27 @@
 import {useEffect, useRef, useState} from "react";
 import usePinchZoom from "../../usePinchZoom";
-import {moveCorner, moveMap, moveZone} from "../../worldEditor/atlasEdit";
+import {bendLink, insertVertex, moveCorner, moveMap, moveZone, removeVertex} from "../../worldEditor/atlasEdit";
 
 const MIN_ZOOM = 0.005;
 const MAX_ZOOM = 4;
 const CLICK_SLOP = 4; // pixels a press can move and still count as a click
 const FIT_MARGIN = 0.9;
 const CORNER_RADIUS = 7; // pixels
+const EDGE_HANDLE = 8; // pixels across
+const BEND_RADIUS = 5; // pixels
 const ZONE_COLORS = ["#e76f51", "#2a9d8f", "#e9c46a", "#8ab17d", "#9b5de5", "#f4a261", "#4cc9f0", "#f15bb5"];
 
 export const zoneColor = (index) => ZONE_COLORS[index % ZONE_COLORS.length];
+
+const midpoint = (a, b) => ({x: (a.x + b.x) / 2, y: (a.y + b.y) / 2});
+
+// A link's line: straight, or a curve through `through` (its control point
+// set so the curve's middle lands there).
+function linkPath({from, to, through}) {
+  if (!through) return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+  const mid = midpoint(from, to);
+  return `M ${from.x} ${from.y} Q ${2 * through.x - mid.x} ${2 * through.y - mid.y} ${to.x} ${to.y}`;
+}
 
 function fitView(atlas, width, height) {
   const points = Object.values(atlas?.zones ?? {}).flatMap((z) => z.outline ?? []);
@@ -24,13 +36,17 @@ function fitView(atlas, width, height) {
 
 // The world's atlas (docs/schema/world.md#atlas), north up and to scale:
 // each zone's outline, its maps as their thumbnails, and lines (behind
-// them) for the links between maps (zoneLinks solid, worldLinks dashed). Drag a map to
-// move it in its zone, a zone (between its maps) to move it whole, or an
-// outline's corner to reshape it; every move stops where it would break
-// the atlas's rules (see atlasEdit.js), and is reported (onChange, with
-// the new atlas) when the drag ends. Drag outside the zones to pan, wheel
-// or pinch to zoom. Hovering (or tapping) a map shows its name.
-export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, links, onChange, onOpenMap}) {
+// them) for the links between maps (zoneLinks solid, worldLinks dashed),
+// as linksFor(atlas) gives them (see atlasLinks). Drag a map to move it in
+// its zone, a zone (between its maps) to move it whole, an outline's
+// vertex to reshape it, or the handle in the middle of an outline's edge to
+// split it there; double-click a vertex to remove it. Drag a link's handle
+// to bend it, double-click it to straighten it. Every move stops where it
+// would break the atlas's rules (see atlasEdit.js), and is reported
+// (onChange, with the new atlas) when the drag ends. Drag outside the
+// zones to pan, wheel or pinch to zoom. Hovering (or tapping) a map shows
+// its name.
+export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap}) {
   const wrapper = useRef(null);
   const [view, setView] = useState(null);
   const [dragged, setDragged] = useState(null); // the atlas mid-drag
@@ -64,11 +80,12 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
   const toWorld = (p) => ({x: (p.x - view.panX) / view.zoom, y: (view.panY - p.y) / view.zoom});
   const toScreen = (p) => ({x: view.panX + p.x * view.zoom, y: view.panY - p.y * view.zoom});
 
-  // target: null (background), {zone}, {zone, map} or {zone, corner}.
+  // target: null (background), {zone}, {zone, map}, {zone, corner},
+  // {zone, edge} or {link} (a line from linksFor).
   function onPointerDown(e, target = null) {
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    press.current = {target, start: local(e), grab: toWorld(local(e)), view, moved: false};
+    press.current = {target, base: atlas, start: local(e), grab: toWorld(local(e)), view, moved: false};
   }
 
   function onPointerMove(e) {
@@ -85,14 +102,23 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
     const world = toWorld(at);
     const by = {x: world.x - p.grab.x, y: world.y - p.grab.y};
     setLabel(null);
-    if (target.map) {
-      const from = atlas.zones[target.zone].maps[target.map];
-      setDragged(moveMap(atlas, sizes, target.zone, target.map, {x: from.x + by.x, y: from.y + by.y}));
-    } else if (target.corner != null) {
-      const from = atlas.zones[target.zone].outline[target.corner];
-      setDragged(moveCorner(atlas, sizes, target.zone, target.corner, {x: from.x + by.x, y: from.y + by.y}));
+    if (target.edge != null) {
+      // Splitting an edge: from here on, it's dragging the new vertex.
+      p.base = insertVertex(atlas, target.zone, target.edge);
+      p.target = {zone: target.zone, corner: target.edge + 1};
+    }
+    const {base, target: moving} = p;
+    if (moving.map) {
+      const from = base.zones[moving.zone].maps[moving.map];
+      setDragged(moveMap(base, sizes, moving.zone, moving.map, {x: from.x + by.x, y: from.y + by.y}));
+    } else if (moving.corner != null) {
+      const from = base.zones[moving.zone].outline[moving.corner];
+      setDragged(moveCorner(base, sizes, moving.zone, moving.corner, {x: from.x + by.x, y: from.y + by.y}));
+    } else if (moving.link) {
+      const from = base.bends?.[moving.link.key] ?? {x: 0, y: 0};
+      setDragged(bendLink(base, moving.link.key, {x: from.x + by.x, y: from.y + by.y}));
     } else {
-      setDragged(moveZone(atlas, target.zone, by));
+      setDragged(moveZone(base, moving.zone, by));
     }
   }
 
@@ -118,6 +144,8 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
   };
 
   const zones = Object.entries(shown?.zones ?? {});
+  const links = shown ? linksFor(shown) : [];
+  const commit = (next) => next !== atlas && onChange(next);
   return (
     <div className="atlas-canvas" ref={wrapper} {...pinchHandlers} onPointerDown={(e) => onPointerDown(e)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
       {!zones.length && <p className="atlas-canvas-empty">Nothing laid out yet.</p>}
@@ -129,8 +157,8 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
                 fill={`${zoneColor(i)}22`} stroke={zoneColor(i)} vectorEffect="non-scaling-stroke"
                 onPointerDown={(e) => onPointerDown(e, {zone})} aria-label={`Zone ${zone}`} />
             ))}
-            {links.map((link, i) => (
-              <line key={i} className={`atlas-link atlas-link-${link.kind}`} x1={link.from.x} y1={link.from.y} x2={link.to.x} y2={link.to.y} vectorEffect="non-scaling-stroke" />
+            {links.map((link) => (
+              <path key={link.key} className={`atlas-link atlas-link-${link.kind}`} d={linkPath(link)} vectorEffect="non-scaling-stroke" />
             ))}
             {zones.flatMap(([zone, entry], i) => Object.entries(entry.maps).map(([map, at]) => {
               const size = sizes[zone]?.[map];
@@ -152,11 +180,27 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
             const corner = toScreen(entry.outline.reduce((best, p) => (p.y - p.x > best.y - best.x ? p : best)));
             return <text key={zone} className="atlas-zone-name" x={corner.x + 6} y={corner.y + 16} fill={zoneColor(i)}>{zoneNames[zone] ?? zone}</text>;
           })}
+          {links.map((link) => {
+            const at = toScreen(link.through ?? midpoint(link.from, link.to));
+            return (
+              <circle key={link.key} className={`atlas-bend${link.through ? " atlas-bend-bent" : ""}`} cx={at.x} cy={at.y} r={BEND_RADIUS}
+                onPointerDown={(e) => onPointerDown(e, {link})} onDoubleClick={() => commit(bendLink(atlas, link.key, null))}
+                aria-label={`Bend ${link.key}`} />
+            );
+          })}
+          {zones.flatMap(([zone, entry], i) => entry.outline.map((p, edge) => {
+            const at = toScreen(midpoint(p, entry.outline[(edge + 1) % entry.outline.length]));
+            return (
+              <rect key={`${zone}/edge/${edge}`} className="atlas-edge" x={at.x - EDGE_HANDLE / 2} y={at.y - EDGE_HANDLE / 2} width={EDGE_HANDLE} height={EDGE_HANDLE}
+                stroke={zoneColor(i)} onPointerDown={(e) => onPointerDown(e, {zone, edge})} aria-label={`Edge ${edge + 1} of ${zone}`} />
+            );
+          }))}
           {zones.flatMap(([zone, entry], i) => entry.outline.map((p, corner) => {
             const at = toScreen(p);
             return (
               <circle key={`${zone}/${corner}`} className="atlas-corner" cx={at.x} cy={at.y} r={CORNER_RADIUS} stroke={zoneColor(i)}
-                onPointerDown={(e) => onPointerDown(e, {zone, corner})} aria-label={`Corner ${corner + 1} of ${zone}`} />
+                onPointerDown={(e) => onPointerDown(e, {zone, corner})} onDoubleClick={() => commit(removeVertex(atlas, sizes, zone, corner))}
+                aria-label={`Corner ${corner + 1} of ${zone}`} />
             );
           }))}
         </svg>

@@ -92,7 +92,7 @@ module Validators
 
     def validate_no_overlapping_outlines!(outlines, zones_path)
       outlines.to_a.combination(2) do |(key_a, a), (key_b, b)|
-        next unless AtlasGeometry.quads_overlap?(a, b)
+        next unless AtlasGeometry.polygons_overlap?(a, b)
         raise ValidationError.new("zone \"#{key_b}\"'s outline overlaps \"#{key_a}\"'s", path: child_path(child_path(zones_path, key_b), "outline"))
       end
     end

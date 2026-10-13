@@ -1,6 +1,6 @@
 // The geometry a world's atlas is checked with (docs/schema/world.md#atlas),
 // mirroring app/services/atlas_geometry.rb: zone outlines are simple
-// quadrilaterals, maps axis-aligned rectangles, all in world feet, as {x, y}
+// polygons, maps axis-aligned rectangles, all in world feet, as {x, y}
 // points. Touching (a shared edge or corner) never counts as overlapping.
 
 const EPSILON = 1e-6;
@@ -25,23 +25,58 @@ export function segmentsTouch(a, b, c, d) {
   return [[d1, c, d, a], [d2, c, d, b], [d3, a, b, c], [d4, a, b, d]].some(([o, p, q, r]) => Math.abs(o) <= EPSILON && onSegment(p, q, r));
 }
 
-// Whether four points make a simple quadrilateral: some area, and no edge
-// meeting the one opposite it.
-export function simpleQuad(quad) {
-  if (quad.length !== 4 || Math.abs(signedArea(quad)) <= EPSILON) return false;
-  return !segmentsTouch(quad[0], quad[1], quad[2], quad[3]) && !segmentsTouch(quad[1], quad[2], quad[3], quad[0]);
+// Whether r lies on segment pq.
+function pointOnSegment(p, q, r) {
+  return Math.abs(cross(p, q, r)) <= EPSILON * Math.max(1, Math.hypot(q.x - p.x, q.y - p.y)) && onSegment(p, q, r);
 }
 
-// A simple quad as two triangles, split along whichever diagonal is inside.
-function triangles([a, b, c, d]) {
-  return (cross(a, c, b) > 0) === (cross(a, c, d) > 0) ? [[b, c, d], [b, d, a]] : [[a, b, c], [a, c, d]];
+// Whether the points make a simple polygon: at least three, some area, no
+// edge of no length, no edge meeting another except where neighbors share
+// a corner, and no neighbors doubling back along each other.
+export function simplePolygon(polygon) {
+  const n = polygon.length;
+  if (n < 3 || Math.abs(signedArea(polygon)) <= EPSILON) return false;
+  const edges = polygon.map((p, i) => [p, polygon[(i + 1) % n]]);
+  if (edges.some(([a, b]) => Math.hypot(b.x - a.x, b.y - a.y) <= EPSILON)) return false;
+  return edges.every(([a, b], i) => edges.slice(i + 1).every(([c, d], k) => {
+    const j = i + 1 + k;
+    if (j === i + 1) return !pointOnSegment(a, b, d) && !pointOnSegment(c, d, a);
+    if (i === 0 && j === n - 1) return !pointOnSegment(a, b, c) && !pointOnSegment(c, d, b);
+    return !segmentsTouch(a, b, c, d);
+  }));
+}
+
+// Whether vertex i of a counterclockwise polygon can be cut off: it turns
+// left (or goes straight on, which cuts off nothing), and no other vertex
+// is in the triangle it makes with its neighbors.
+function isEar(points, i) {
+  const n = points.length;
+  const [prev, cur, next] = [points[(i + n - 1) % n], points[i], points[(i + 1) % n]];
+  const turn = cross(prev, cur, next);
+  if (Math.abs(turn) <= EPSILON) return true;
+  if (turn < 0) return false;
+  const own = new Set([(i + n - 1) % n, i, (i + 1) % n]);
+  return !points.some((p, j) => !own.has(j) && inside(p, [prev, cur, next], {boundary: true}));
+}
+
+// A simple polygon as triangles, by ear clipping.
+export function triangles(polygon) {
+  const points = signedArea(polygon) < 0 ? [...polygon].reverse() : [...polygon];
+  const result = [];
+  while (points.length > 3) {
+    const ear = points.findIndex((_, i) => isEar(points, i));
+    if (ear === -1) break; // only collinear runs left: nothing more with area
+    const n = points.length;
+    const [prev, cur, next] = [points[(ear + n - 1) % n], points[ear], points[(ear + 1) % n]];
+    if (cross(prev, cur, next) > EPSILON) result.push([prev, cur, next]);
+    points.splice(ear, 1);
+  }
+  if (points.length === 3 && Math.abs(cross(points[0], points[1], points[2])) > EPSILON) result.push(points);
+  return result;
 }
 
 function onBoundary(point, polygon) {
-  return polygon.some((a, i) => {
-    const b = polygon[(i + 1) % polygon.length];
-    return Math.abs(cross(a, b, point)) <= EPSILON * Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)) && onSegment(a, b, point);
-  });
+  return polygon.some((a, i) => pointOnSegment(a, polygon[(i + 1) % polygon.length], point));
 }
 
 // Whether point is inside polygon (even-odd), its boundary counting as
@@ -58,11 +93,11 @@ export function inside(point, polygon, {boundary}) {
 
 export const rectCorners = ({x, y, width, height}) => [{x, y}, {x: x + width, y}, {x: x + width, y: y + height}, {x, y: y + height}];
 
-// Whether the rect ({x, y, width, height}) lies inside quad: every corner
-// inside it or on its edge, and none of quad's corners poking in.
-export function rectInside(rect, quad) {
+// Whether the rect ({x, y, width, height}) lies inside polygon: every
+// corner inside it or on its edge, and none of polygon's vertices poking in.
+export function rectInside(rect, polygon) {
   const corners = rectCorners(rect);
-  return corners.every((c) => inside(c, quad, {boundary: true})) && !quad.some((v) => inside(v, corners, {boundary: false}));
+  return corners.every((c) => inside(c, polygon, {boundary: true})) && !polygon.some((v) => inside(v, corners, {boundary: false}));
 }
 
 export function rectsOverlap(a, b) {
@@ -79,9 +114,11 @@ function convexOverlap(a, b) {
   }));
 }
 
-// Whether two simple quads overlap by some area.
-export function quadsOverlap(a, b) {
-  return triangles(a).some((s) => triangles(b).some((t) => convexOverlap(s, t)));
+// Whether two simple polygons overlap by some area: whether any of their
+// triangles do, by separating axes.
+export function polygonsOverlap(a, b) {
+  const trianglesB = triangles(b);
+  return triangles(a).some((s) => trianglesB.some((t) => convexOverlap(s, t)));
 }
 
 // The rects of an atlas's placed maps: [{zone, map, x, y, width, height}].
@@ -100,7 +137,7 @@ export function atlasProblems(atlas, sizes) {
   const problems = [];
   const zones = Object.entries(atlas?.zones ?? {});
   for (const [zone, entry] of zones) {
-    if (!simpleQuad(entry.outline ?? [])) problems.push(`zone "${zone}"'s outline crosses itself or is flat`);
+    if (!simplePolygon(entry.outline ?? [])) problems.push(`zone "${zone}"'s outline crosses itself or is flat`);
   }
   const rects = atlasRects(atlas, sizes);
   for (const rect of rects) {
@@ -110,7 +147,7 @@ export function atlasProblems(atlas, sizes) {
     if (rectsOverlap(a, b)) problems.push(`map "${b.zone}/${b.map}" overlaps "${a.zone}/${a.map}"`);
   }));
   zones.forEach(([keyA, a], i) => zones.slice(i + 1).forEach(([keyB, b]) => {
-    if (simpleQuad(a.outline) && simpleQuad(b.outline) && quadsOverlap(a.outline, b.outline)) problems.push(`zone "${keyB}"'s outline overlaps "${keyA}"'s`);
+    if (simplePolygon(a.outline) && simplePolygon(b.outline) && polygonsOverlap(a.outline, b.outline)) problems.push(`zone "${keyB}"'s outline overlaps "${keyA}"'s`);
   }));
   return problems;
 }

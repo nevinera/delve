@@ -1,5 +1,5 @@
 import {describe, it, expect} from "vitest";
-import {guessAtlas} from "../atlasLayout";
+import {atlasLinks, guessAtlas, linkKey} from "../atlasLayout";
 
 const line = (identifier, x1, y1, x2, y2) => ({identifier, type: "line", start: {x: x1, y: y1}, end: {x: x2, y: y2}});
 const map = (identifier, width, height, connections = []) => ({identifier, feetDimensions: {width, height}, connections});
@@ -58,11 +58,11 @@ describe("guessAtlas", () => {
     expect(maps.lonely.x - maps.camp.x).toBe(160);
   });
 
-  it("outlines each zone with the smallest square a margin around its maps, centered", () => {
+  it("outlines each zone with the rectangle a margin around its maps", () => {
     const zones = {forest: {maps: [map("camp", 100, 40)], zoneLinks: []}};
     const {outline, maps} = guessAtlas({zones}).zones.forest;
-    expect(outline).toEqual([{x: 0, y: 0}, {x: 220, y: 0}, {x: 220, y: 220}, {x: 0, y: 220}]);
-    expect(maps.camp).toEqual({x: 60, y: 90});
+    expect(outline).toEqual([{x: 0, y: 0}, {x: 220, y: 0}, {x: 220, y: 160}, {x: 0, y: 160}]);
+    expect(maps.camp).toEqual({x: 60, y: 60});
   });
 
   it("sets linked zones beside each other, through their open connections and entry points", () => {
@@ -72,7 +72,7 @@ describe("guessAtlas", () => {
     };
     const worldLinks = [{zoneA: {zone: "forest", kind: "open", connection: "east-exit"}, zoneB: {zone: "cave", kind: "entryPoint", connection: "mouth/west"}, oneWay: false, requiredKey: null}];
     const atlas = guessAtlas({zones, worldLinks});
-    expect(atlas.zones.cave.outline[0].x).toBe(340); // forest's 220 square, then the gap
+    expect(atlas.zones.cave.outline[0].x).toBe(340); // forest's 220 ft box, then the gap
     expect(atlas.zones.cave.maps.mouth.y + 30).toBe(atlas.zones.forest.maps.camp.y + 50); // the connections face each other
     expectNoOverlaps(rects(atlas, zones));
   });
@@ -86,5 +86,25 @@ describe("guessAtlas", () => {
   it("gives a zone with no maps just its margins", () => {
     const atlas = guessAtlas({zones: {empty: {maps: []}}});
     expect(atlas.zones.empty).toEqual({outline: [{x: 0, y: 0}, {x: 120, y: 0}, {x: 120, y: 120}, {x: 0, y: 120}], maps: {}});
+  });
+});
+
+describe("atlasLinks", () => {
+  const zones = {forest: {
+    maps: [map("camp", 100, 100, [line("north", 40, 100, 60, 100)]), map("road", 100, 50, [line("south", 20, 0, 40, 0)])],
+    zoneLinks: [link("camp", "north", "road", "south")],
+  }};
+  const atlas = {zones: {forest: {outline: [], maps: {camp: {x: 0, y: 0}, road: {x: 20, y: 160}}}}};
+
+  it("draws each link between its connections, keyed by its ends in order", () => {
+    expect(atlasLinks(atlas, {zones})).toEqual([
+      {kind: "zone", key: "forest/camp/north|forest/road/south", from: {x: 50, y: 100}, to: {x: 50, y: 160}, through: null},
+    ]);
+    expect(linkKey({zone: "b", map: "m", connection: "c"}, {zone: "a", map: "m", connection: "c"})).toBe("a/m/c|b/m/c");
+  });
+
+  it("bends a link through its midpoint plus its bend", () => {
+    const bent = {...atlas, bends: {"forest/camp/north|forest/road/south": {x: 30, y: 0}}};
+    expect(atlasLinks(bent, {zones})[0].through).toEqual({x: 80, y: 130});
   });
 });

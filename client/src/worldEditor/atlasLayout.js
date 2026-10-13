@@ -6,8 +6,8 @@
 // connection is on, lined up along it so the two connections face each
 // other. A map that would overlap (or crowd) one already placed is pushed
 // further out the same way. A zone's maps that link to nothing it has go
-// east of the rest. Each zone's outline is then the smallest square around
-// its maps, ZONE_MARGIN feet clear of them, and zones are laid out the same
+// east of the rest. Each zone's outline is then the rectangle around its
+// maps, ZONE_MARGIN feet clear of them, and zones are laid out the same
 // way as maps, ZONE_GAP feet apart, walking the worldLinks, so linked maps
 // face each other across zone edges. Zones linked to nothing go east of the
 // rest. The gaps leave room to see the links.
@@ -133,49 +133,56 @@ function layOutZone(zone) {
   return Object.fromEntries(Object.entries(rects).map(([key, r]) => [key, {...r, x: r.x - minX, y: r.y - minY}]));
 }
 
-// The smallest square around rects (from (0, 0)), margin clear of them,
-// and rects centered in it.
-function squareAround(rects, margin) {
+// The rectangle around rects (from (0, 0)), margin clear of them, with
+// rects moved into it.
+function rectAround(rects, margin) {
   const all = Object.values(rects);
-  const width = Math.max(0, ...all.map((r) => r.x + r.width)), height = Math.max(0, ...all.map((r) => r.y + r.height));
-  const side = Math.max(width, height) + 2 * margin;
-  const dx = Math.round((side - width) / 2), dy = Math.round((side - height) / 2);
-  return {side, maps: Object.fromEntries(Object.entries(rects).map(([key, r]) => [key, {...r, x: r.x + dx, y: r.y + dy}]))};
+  const width = Math.max(0, ...all.map((r) => r.x + r.width)) + 2 * margin;
+  const height = Math.max(0, ...all.map((r) => r.y + r.height)) + 2 * margin;
+  return {width, height, maps: Object.fromEntries(Object.entries(rects).map(([key, r]) => [key, {...r, x: r.x + margin, y: r.y + margin}]))};
 }
 
 export function guessAtlas({zones = {}, worldLinks = []}) {
-  const squares = Object.fromEntries(Object.entries(zones).map(([key, zone]) => [key, squareAround(layOutZone(zone), ZONE_MARGIN)]));
+  const boxes = Object.fromEntries(Object.entries(zones).map(([key, zone]) => [key, rectAround(layOutZone(zone), ZONE_MARGIN)]));
 
   // Zones are laid out like maps: a link between maps becomes one between
-  // the zones' squares, at each map's connection as placed in its square.
+  // the zones' rectangles, at each map's connection as placed in its own.
   const zoneEdges = worldLinks.flatMap((link) => {
     const a = worldLinkEnd(zones, link.zoneA), b = worldLinkEnd(zones, link.zoneB);
     if (!a || !b || a.zone === b.zone) return [];
     const point = (end) => {
-      const rect = squares[end.zone].maps[end.map];
+      const rect = boxes[end.zone].maps[end.map];
       const p = connectionPoint(mapsByIdentifier(zones[end.zone])[end.map], end.connection);
       return rect && p ? {x: rect.x + p.x, y: rect.y + p.y} : null;
     };
     const aPoint = point(a), bPoint = point(b);
     return aPoint && bPoint ? [{a: a.zone, b: b.zone, aPoint, bPoint}] : [];
   });
-  const zoneRects = layOut(Object.entries(squares).map(([key, s]) => ({key, width: s.side, height: s.side})), zoneEdges, ZONE_GAP);
+  const zoneRects = layOut(Object.entries(boxes).map(([key, b]) => ({key, width: b.width, height: b.height})), zoneEdges, ZONE_GAP);
 
   const atlasZones = {};
-  for (const [key, {side, maps}] of Object.entries(squares)) {
+  for (const [key, {width, height, maps}] of Object.entries(boxes)) {
     const {x, y} = zoneRects[key];
     atlasZones[key] = {
-      outline: [{x, y}, {x: x + side, y}, {x: x + side, y: y + side}, {x, y: y + side}],
+      outline: [{x, y}, {x: x + width, y}, {x: x + width, y: y + height}, {x, y: y + height}],
       maps: Object.fromEntries(Object.entries(maps).map(([map, r]) => [map, {x: x + r.x, y: y + r.y}])),
     };
   }
   return {zones: atlasZones};
 }
 
-// The atlas's link lines, in world feet: [{kind, from, to}], kind "zone"
-// for a zoneLink, "world" for a worldLink, from and to the two connections
-// as placed. Links with an end not laid out are left out. zones and
-// worldLinks as guessAtlas takes them.
+// A link's key in the atlas's bends: its two ends, "zone/map/connection",
+// in sorted order, joined by "|".
+export function linkKey(a, b) {
+  return [`${a.zone}/${a.map}/${a.connection}`, `${b.zone}/${b.map}/${b.connection}`].sort().join("|");
+}
+
+// The atlas's link lines, in world feet: [{kind, key, from, to, through}],
+// kind "zone" for a zoneLink, "world" for a worldLink, from and to the two
+// connections as placed, through the point a bent link curves through
+// (its midpoint plus its bend, see docs/schema/world.md#atlas), or null
+// for a straight one. Links with an end not laid out are left out. zones
+// and worldLinks as guessAtlas takes them.
 export function atlasLinks(atlas, {zones = {}, worldLinks = []}) {
   const at = (zone, map, connection) => {
     const placed = atlas?.zones?.[zone]?.maps?.[map];
@@ -183,16 +190,22 @@ export function atlasLinks(atlas, {zones = {}, worldLinks = []}) {
     return point ? {x: placed.x + point.x, y: placed.y + point.y} : null;
   };
   const lines = [];
+  const add = (kind, a, b) => {
+    const [from, to] = [at(a.zone, a.map, a.connection), at(b.zone, b.map, b.connection)];
+    if (!from || !to) return;
+    const key = linkKey(a, b);
+    const bend = atlas?.bends?.[key];
+    const through = bend ? {x: (from.x + to.x) / 2 + bend.x, y: (from.y + to.y) / 2 + bend.y} : null;
+    lines.push({kind, key, from, to, through});
+  };
   for (const [zone, data] of Object.entries(zones)) {
     for (const link of data.zoneLinks ?? []) {
-      const [from, to] = [at(zone, link.connectionA?.map, link.connectionA?.connection), at(zone, link.connectionB?.map, link.connectionB?.connection)];
-      if (from && to) lines.push({kind: "zone", from, to});
+      if (link.connectionA && link.connectionB) add("zone", {zone, ...link.connectionA}, {zone, ...link.connectionB});
     }
   }
   for (const link of worldLinks) {
     const [a, b] = [worldLinkEnd(zones, link.zoneA), worldLinkEnd(zones, link.zoneB)];
-    const [from, to] = [a && at(a.zone, a.map, a.connection), b && at(b.zone, b.map, b.connection)];
-    if (from && to) lines.push({kind: "world", from, to});
+    if (a && b) add("world", a, b);
   }
   return lines;
 }

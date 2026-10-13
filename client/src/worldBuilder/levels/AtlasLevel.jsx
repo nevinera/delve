@@ -14,7 +14,6 @@ export default function AtlasLevel({draft, onChange, navigate, repo}) {
   const atlas = atlasData(draft);
   const input = useMemo(() => atlasInput(draft), [draft]);
   const sizes = useMemo(() => atlasSizes(input), [input]);
-  const links = useMemo(() => atlasLinks(atlas, input), [atlas, input]);
   const thumbnails = useMemo(() => {
     const paths = atlasThumbnails(draft);
     return Object.fromEntries(Object.entries(paths).map(([zone, maps]) => [zone, Object.fromEntries(Object.entries(maps).map(([map, path]) => [map, assetUrlFor(draft, repo, path)]))]));
@@ -51,7 +50,7 @@ export default function AtlasLevel({draft, onChange, navigate, repo}) {
             zoneNames={zoneNames}
             mapNames={mapNames}
             thumbnails={thumbnails}
-            links={links}
+            linksFor={(shown) => atlasLinks(shown, input)}
             onChange={(next) => onChange((current) => setAtlas(current, next))}
             onOpenMap={(zone, map) => navigate({zone, map})}
           />
@@ -61,7 +60,8 @@ export default function AtlasLevel({draft, onChange, navigate, repo}) {
         <h3>Atlas</h3>
         <p className="world-key">
           Where each zone&apos;s maps sit, north up and to scale, for the in-game map. Drag a map, a zone, or a zone&apos;s corners;
-          double-click a map to open it.
+          drag the middle of an outline&apos;s edge to add a corner there, and double-click a corner to remove it. Drag a link&apos;s dot
+          to bend it, and double-click the dot to straighten it. Double-click a map to open it.
         </p>
         <button type="button" className="add-entry" onClick={onReset}>{atlas ? "Reset atlas" : "Guess atlas"}</button>
         <section className="content-list">

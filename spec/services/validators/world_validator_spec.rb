@@ -75,9 +75,28 @@ RSpec.describe Validators::WorldValidator, type: :validator do
           .to raise_error(Validators::ValidationError, /zones is required/)
       end
 
-      it "needs exactly 4 outline points" do
-        expect { described_class.validate!(with_zone("outline" => square.first(3), "maps" => {})) }
-          .to raise_error(Validators::ValidationError, /outline must have exactly 4 points/)
+      it "takes outlines of 3 or more points" do
+        expect { described_class.validate!(with_zone("outline" => square.first(3), "maps" => {})) }.not_to raise_error
+        ell = [loc(0, 0), loc(100, 0), loc(100, 50), loc(50, 50), loc(50, 100), loc(0, 100)]
+        expect { described_class.validate!(with_zone("outline" => ell, "maps" => {})) }.not_to raise_error
+      end
+
+      it "needs 3 to 64 outline points" do
+        expect { described_class.validate!(with_zone("outline" => square.first(2), "maps" => {})) }
+          .to raise_error(Validators::ValidationError, /outline must have 3 to 64 points/)
+      end
+
+      it "takes bends keyed by a link's two ends" do
+        bends = {"darkwood/camp/north|darkwood/road/south" => loc(10, -20)}
+        data = world_fixture.merge("atlas" => {"zones" => {}, "bends" => bends})
+        expect { described_class.validate!(data) }.not_to raise_error
+      end
+
+      it "refuses a bend with a malformed key or offset" do
+        expect { described_class.validate!(world_fixture.merge("atlas" => {"zones" => {}, "bends" => {"camp|road" => loc(1, 1)}})) }
+          .to raise_error(Validators::ValidationError, /bend key must be two zone\/map\/connection ends/)
+        expect { described_class.validate!(world_fixture.merge("atlas" => {"zones" => {}, "bends" => {"a/b/c|d/e/f" => {"x" => 1}}})) }
+          .to raise_error(Validators::ValidationError, /y is required/)
       end
 
       it "refuses an outline that crosses itself" do

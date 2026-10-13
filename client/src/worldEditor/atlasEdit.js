@@ -1,9 +1,12 @@
 // The atlas layer's edits (see AtlasCanvas): moving a map, a whole zone, or
-// one corner of a zone's outline, each kept within the atlas's rules
+// one vertex of a zone's outline (adding and removing them too), and
+// bending links, each kept within the atlas's rules
 // (docs/schema/world.md#atlas). A move that would break one stops where it
 // would: it slides along whatever's in the way when it can, otherwise stops
 // short of it. sizes is {zone: {map: {width, height}}}.
-import {atlasRects, quadsOverlap, rectInside, rectsOverlap, simpleQuad} from "./atlasGeometry";
+import {atlasRects, polygonsOverlap, rectInside, rectsOverlap, simplePolygon} from "./atlasGeometry";
+
+export const MAX_OUTLINE_POINTS = 64;
 
 const BISECT_STEPS = 12;
 
@@ -41,7 +44,7 @@ function withZone(atlas, zone, entry) {
 }
 
 function outlineClear(atlas, zone, outline) {
-  return Object.entries(atlas.zones).every(([key, other]) => key === zone || !simpleQuad(other.outline) || !quadsOverlap(outline, other.outline));
+  return Object.entries(atlas.zones).every(([key, other]) => key === zone || !simplePolygon(other.outline) || !polygonsOverlap(outline, other.outline));
 }
 
 // The atlas with zone's map at `to` (its origin), or as near as it can get.
@@ -74,19 +77,50 @@ export function moveZone(atlas, zone, by) {
   return withZone(atlas, zone, {...entry, ...shifted(entry, at)});
 }
 
-// The atlas with corner `index` of the zone's outline at `to`, or as near
-// as it can get: the outline staying a simple quad around all its maps,
-// clear of every other zone's.
+// Whether outline would do for zone: a simple polygon around all its
+// maps, clear of every other zone's.
+function outlineFits(atlas, sizes, zone, outline) {
+  const rects = atlasRects({zones: {[zone]: atlas.zones[zone]}}, sizes);
+  return simplePolygon(outline) && rects.every((r) => rectInside(r, outline)) && outlineClear(atlas, zone, outline);
+}
+
+// The atlas with vertex `index` of the zone's outline at `to`, or as near
+// as it can get (see outlineFits).
 export function moveCorner(atlas, sizes, zone, index, to) {
   const entry = atlas.zones[zone];
   if (!entry) return atlas;
-  const rects = atlasRects({zones: {[zone]: entry}}, sizes);
   const outlineAt = (p) => entry.outline.map((q, i) => (i === index ? round(p) : q));
-  const valid = (p) => {
-    const outline = outlineAt(p);
-    return simpleQuad(outline) && rects.every((r) => rectInside(r, outline)) && outlineClear(atlas, zone, outline);
-  };
+  const valid = (p) => outlineFits(atlas, sizes, zone, outlineAt(p));
   const from = entry.outline[index];
   const at = valid(from) ? constrainMove(from, to, valid) : to;
   return withZone(atlas, zone, {...entry, outline: outlineAt(at)});
+}
+
+// The atlas with a new vertex in the middle of edge `edge` of the zone's
+// outline (from vertex edge to the next), at index edge + 1; unchanged at
+// MAX_OUTLINE_POINTS.
+export function insertVertex(atlas, zone, edge) {
+  const entry = atlas.zones[zone];
+  if (!entry || entry.outline.length >= MAX_OUTLINE_POINTS) return atlas;
+  const [a, b] = [entry.outline[edge], entry.outline[(edge + 1) % entry.outline.length]];
+  const outline = [...entry.outline.slice(0, edge + 1), {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2}, ...entry.outline.slice(edge + 1)];
+  return withZone(atlas, zone, {...entry, outline});
+}
+
+// The atlas without vertex `index` of the zone's outline, unless that would
+// leave fewer than 3 or break the outline (see outlineFits).
+export function removeVertex(atlas, sizes, zone, index) {
+  const entry = atlas.zones[zone];
+  if (!entry || entry.outline.length <= 3) return atlas;
+  const outline = entry.outline.filter((_, i) => i !== index);
+  return outlineFits(atlas, sizes, zone, outline) ? withZone(atlas, zone, {...entry, outline}) : atlas;
+}
+
+// The atlas with link `key` (see atlasLinks) bent through its midpoint
+// plus offset, or straight again when offset is null.
+export function bendLink(atlas, key, offset) {
+  const {[key]: _, ...rest} = atlas.bends ?? {};
+  const bends = offset ? {...rest, [key]: round(offset)} : rest;
+  const {bends: __, ...withoutBends} = atlas;
+  return Object.keys(bends).length ? {...withoutBends, bends} : withoutBends;
 }

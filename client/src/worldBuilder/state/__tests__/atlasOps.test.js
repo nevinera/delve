@@ -10,7 +10,10 @@ const outline = [loc(0, 0), loc(300, 0), loc(300, 300), loc(0, 300)];
 function withAtlas(draft = fixtureDraft()) {
   return draft.update(worldFile(draft.worldKey), (data) => ({
     ...data,
-    atlas: {zones: {forest: {outline, maps: {hub: loc(0, 0), passage: loc(100, 0)}}, cave: {outline, maps: {}}}},
+    atlas: {
+      zones: {forest: {outline, maps: {hub: loc(0, 0), passage: loc(100, 0)}}, cave: {outline, maps: {}}},
+      bends: {"cave/mouth/in|forest/hub/north": loc(5, 5), "forest/hub/east|forest/passage/west": loc(1, 1)},
+    },
   }));
 }
 
@@ -33,6 +36,15 @@ describe("atlas upkeep", () => {
 
   it("drops a deleted map", () => {
     expect(atlasZones(deleteMap(withAtlas(), "forest", "hub")).forest.maps).toEqual({passage: loc(100, 0)});
+  });
+
+  it("follows a renamed zone or map in the bends, and drops them with it", () => {
+    expect(Object.keys(worldData(renameZone(withAtlas(), "forest", "woods")).atlas.bends).sort())
+      .toEqual(["cave/mouth/in|woods/hub/north", "woods/hub/east|woods/passage/west"]);
+    expect(Object.keys(worldData(renameMap(withAtlas(), "forest", "hub", "plaza")).atlas.bends).sort())
+      .toEqual(["cave/mouth/in|forest/plaza/north", "forest/passage/west|forest/plaza/east"]);
+    expect(Object.keys(worldData(deleteZone(withAtlas(), "cave")).atlas.bends)).toEqual(["forest/hub/east|forest/passage/west"]);
+    expect(worldData(deleteMap(withAtlas(), "forest", "hub")).atlas).not.toHaveProperty("bends");
   });
 
   it("leaves a world with no atlas alone", () => {
