@@ -40,3 +40,13 @@ describe("atlas upkeep", () => {
     expect(worldData(deleteMap(fixtureDraft(), "forest", "hub")).atlas).toBeUndefined();
   });
 });
+
+describe("resetAtlas", () => {
+  it("lays out every zone's referenced maps", async () => {
+    const {resetAtlas} = await import("../atlasOps");
+    const zones = atlasZones(resetAtlas(fixtureDraft()));
+    expect(Object.keys(zones).sort()).toEqual(["cave", "forest"]);
+    expect(zones.forest.maps).toEqual({hub: {x: 0, y: 0}});
+    expect(zones.cave.maps).toEqual({});
+  });
+});

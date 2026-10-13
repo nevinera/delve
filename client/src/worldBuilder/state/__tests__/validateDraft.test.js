@@ -31,7 +31,7 @@ describe("validateDraft", () => {
         forest: {
           openConnections: {"hub/north": "north-exit"},
           entryPoints: {"hub/central": null},
-          maps: [{identifier: "hub", feetDimensions: {width: 100, height: 100}}, {identifier: "passage", feetDimensions: {}}],
+          maps: [{identifier: "hub", feetDimensions: {width: 100, height: 100}}],
         },
         cave: {openConnections: {}, entryPoints: {}, maps: []},
       }
