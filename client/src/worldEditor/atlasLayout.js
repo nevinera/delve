@@ -97,7 +97,7 @@ function layOut(nodes, edges) {
 
 // The zone's own map identifier and connection behind a world link side,
 // or null when it doesn't resolve.
-function worldLinkEnd(zones, side) {
+export function worldLinkEnd(zones, side) {
   const zone = zones[side?.zone];
   if (!zone) return null;
   let key = side.connection;
@@ -106,7 +106,7 @@ function worldLinkEnd(zones, side) {
   return slash === -1 ? null : {zone: side.zone, map: key.slice(0, slash), connection: key.slice(slash + 1)};
 }
 
-function mapsByIdentifier(zone) {
+export function mapsByIdentifier(zone) {
   return Object.fromEntries((zone.maps ?? []).filter((m) => m?.identifier).map((m) => [m.identifier, m]));
 }
 
@@ -162,4 +162,29 @@ export function guessAtlas({zones = {}, worldLinks = []}) {
     };
   }
   return {zones: atlasZones};
+}
+
+// The atlas's link lines, in world feet: [{kind, from, to}], kind "zone"
+// for a zoneLink, "world" for a worldLink, from and to the two connections
+// as placed. Links with an end not laid out are left out. zones and
+// worldLinks as guessAtlas takes them.
+export function atlasLinks(atlas, {zones = {}, worldLinks = []}) {
+  const at = (zone, map, connection) => {
+    const placed = atlas?.zones?.[zone]?.maps?.[map];
+    const point = placed && connectionPoint(mapsByIdentifier(zones[zone] ?? {})[map], connection);
+    return point ? {x: placed.x + point.x, y: placed.y + point.y} : null;
+  };
+  const lines = [];
+  for (const [zone, data] of Object.entries(zones)) {
+    for (const link of data.zoneLinks ?? []) {
+      const [from, to] = [at(zone, link.connectionA?.map, link.connectionA?.connection), at(zone, link.connectionB?.map, link.connectionB?.connection)];
+      if (from && to) lines.push({kind: "zone", from, to});
+    }
+  }
+  for (const link of worldLinks) {
+    const [a, b] = [worldLinkEnd(zones, link.zoneA), worldLinkEnd(zones, link.zoneB)];
+    const [from, to] = [a && at(a.zone, a.map, a.connection), b && at(b.zone, b.map, b.connection)];
+    if (from && to) lines.push({kind: "world", from, to});
+  }
+  return lines;
 }

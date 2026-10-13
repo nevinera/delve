@@ -11,7 +11,6 @@ import ZoneList from "./ZoneList";
 import UnitTypeList from "./UnitTypeList";
 import ItemList from "./ItemList";
 import {worldQuests} from "../state/questOps";
-import {resetAtlas} from "../state/atlasOps";
 
 // The world level: graph (top-left), world attributes (bottom-left),
 // zones, quests, unit types, items, links and entry points (right). The old world editor's panels
@@ -29,12 +28,6 @@ export default function WorldLevel({draft, onChange, navigate, repo, library, pl
     const thumbnail = await generateThumbnail(upload);
     const extension = thumbnail ? "webp" : (upload.name.split(".").pop() || "png");
     onChange(setWorldThumbnail(draft, thumbnail ?? upload, extension));
-  }
-
-  // Temporary, until the atlas layer has its own (see plans/map-layout.md).
-  function onResetAtlas() {
-    if (file.data.atlas && !window.confirm("Replace the atlas with a fresh guess? Nothing is committed until you save.")) return;
-    onChange(resetAtlas(draft));
   }
 
   return (
@@ -72,8 +65,8 @@ export default function WorldLevel({draft, onChange, navigate, repo, library, pl
         </section>
         <section className="content-list">
           <h3>Atlas</h3>
-          <button type="button" className="add-entry" onClick={onResetAtlas}>
-            {file.data.atlas ? "Reset atlas" : "Guess atlas"}
+          <button type="button" className="add-entry" onClick={() => navigate({atlas: true})}>
+            Open atlas
           </button>
         </section>
         <UnitTypeList draft={draft} onChange={onChange} onOpen={(unitType) => navigate({unitType})} repo={repo} library={library} />

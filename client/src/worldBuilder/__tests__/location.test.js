@@ -30,6 +30,11 @@ describe("location", () => {
     expect(formatLocation({quests: true, quest: "rat-hunt"})).toEqual("#/quests/rat-hunt");
   });
 
+  it("round-trips the atlas level", () => {
+    expect(parseLocation("#/atlas")).toEqual({atlas: true});
+    expect(formatLocation({atlas: true})).toEqual("#/atlas");
+  });
+
   it("ignores segments it doesn't understand", () => {
     expect(parseLocation("#/nonsense/x")).toEqual({});
     expect(parseLocation("#/zone")).toEqual({});

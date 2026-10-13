@@ -23,6 +23,7 @@ import MapLevel from "./levels/MapLevel";
 import UnitTypeLevel from "./levels/UnitTypeLevel";
 import ItemLevel from "./levels/ItemLevel";
 import QuestsLevel from "./levels/QuestsLevel";
+import AtlasLevel from "./levels/AtlasLevel";
 import QuestEditor from "./levels/QuestEditor";
 import {questData} from "./state/questOps";
 import {itemData} from "./state/itemOps";
@@ -40,6 +41,7 @@ function crumbsFor(location, draft) {
   if (location.unitType) crumbs.push({label: `Unit type: ${unitTypeData(draft, location.unitType)?.name || location.unitType}`, target: location});
   if (location.item) crumbs.push({label: `Item: ${itemData(draft, location.item)?.name || location.item}`, target: location});
   if (location.quests) crumbs.push({label: "Quests", target: {quests: true}});
+  if (location.atlas) crumbs.push({label: "Atlas", target: {atlas: true}});
   return crumbs;
 }
 
@@ -285,7 +287,8 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   };
   // A location whose zone or map no longer exists (deleted, renamed) falls
   // back to the nearest level that does.
-  const shown = location.quests ? (location.quest && !questData(draft, location.quest) ? {quests: true} : location)
+  const shown = location.atlas ? location
+    : location.quests ? (location.quest && !questData(draft, location.quest) ? {quests: true} : location)
     : location.unitType ? (unitTypeData(draft, location.unitType) ? location : {})
     : location.item ? (itemData(draft, location.item) ? location : {})
       : !location.zone || !zoneData(draft, location.zone) ? {}
@@ -303,6 +306,7 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   const editingQuest = shown.quests ? shown.quest : overlayQuest && questData(draft, overlayQuest) ? overlayQuest : null;
   let level;
   if (!world) level = <CreateWorldNotice worldKey={worldKey} branch={branch} onCreate={(name) => setDraft(createWorld(draft, name))} />;
+  else if (shown.atlas) level = <AtlasLevel draft={draft} onChange={setDraft} navigate={navigate} repo={repo} />;
   else if (shown.quests) level = <QuestsLevel draft={draft} onChange={setDraft} onOpenQuest={openQuest} />;
   else if (shown.item) level = <ItemLevel draft={draft} item={shown.item} onChange={setDraft} repo={repo} />;
   else if (shown.unitType) level = <UnitTypeLevel draft={draft} unitType={shown.unitType} onChange={setDraft} repo={repo} stockAssets={stockAssets} library={library} />;

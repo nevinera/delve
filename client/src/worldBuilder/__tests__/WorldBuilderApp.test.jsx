@@ -97,6 +97,14 @@ describe("WorldBuilderApp", () => {
     expect(screen.getByLabelText("Lighting")).toHaveValue("daylight");
   });
 
+  it("opens the atlas from the world level", async () => {
+    renderApp({branches: {main: fixtureJson()}});
+    fireEvent.click(await screen.findByRole("button", {name: "Open atlas"}));
+    expect(window.location.hash).toBe("#/atlas");
+    expect(screen.getByRole("navigation", {name: "Breadcrumb"})).toHaveTextContent("W›Atlas");
+    expect(screen.getByRole("button", {name: "Guess atlas"})).toBeInTheDocument();
+  });
+
   describe("quests", () => {
     const quest = {identifier: "rat-hunt", name: "Rat Hunt", chainIdentifier: "rats", chainName: "Rats",
       offeredBy: {zone: "forest", ncu: "grizzle"}, offerText: "Work?", description: "Rats.", objectives: []};

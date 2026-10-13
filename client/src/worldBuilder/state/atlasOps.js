@@ -4,7 +4,7 @@
 // atlas, or none for that zone).
 import {guessAtlas} from "../../worldEditor/atlasLayout";
 import {keyFromRef} from "../../zoneEditor/mapRef";
-import {mapFile, worldFile, zoneFile} from "./worldPaths";
+import {mapFile, resolvePath, worldFile, zoneFile} from "./worldPaths";
 
 const zoneData = (draft, zone) => draft.read(zoneFile(draft.worldKey, zone));
 
@@ -17,15 +17,44 @@ export function referencedMaps(draft, zone) {
     .filter(Boolean);
 }
 
-// Replaces the world's atlas with a fresh guess (see atlasLayout.js).
-export function resetAtlas(draft) {
-  const path = worldFile(draft.worldKey);
-  const world = draft.read(path) ?? {};
+export const atlasData = (draft) => draft.read(worldFile(draft.worldKey))?.atlas ?? null;
+
+// What the atlas is laid out from: {zones: {zone: {maps, zoneLinks,
+// openConnections}}, worldLinks}, each map its map file (as guessAtlas and
+// atlasLinks take it).
+export function atlasInput(draft) {
+  const world = draft.read(worldFile(draft.worldKey)) ?? {};
   const zones = Object.fromEntries(Object.keys(world.zones ?? {}).map((zone) => {
     const data = zoneData(draft, zone) ?? {};
     return [zone, {maps: referencedMaps(draft, zone), zoneLinks: data.zoneLinks ?? [], openConnections: data.openConnections ?? {}}];
   }));
-  return draft.update(path, (data) => ({...data, atlas: guessAtlas({zones, worldLinks: world.worldLinks ?? []})}));
+  return {zones, worldLinks: world.worldLinks ?? []};
+}
+
+// {zone: {map: {width, height}}} for every referenced map.
+export function atlasSizes(input) {
+  return Object.fromEntries(Object.entries(input.zones).map(([zone, {maps}]) => [zone, Object.fromEntries(maps.map((m) => [m.identifier, {width: m.feetDimensions?.width ?? 0, height: m.feetDimensions?.height ?? 0}]))]));
+}
+
+// {zone: {map: repoPath}} of each referenced map's thumbnail, where it has
+// one.
+export function atlasThumbnails(draft) {
+  return Object.fromEntries(Object.keys(draft.read(worldFile(draft.worldKey))?.zones ?? {}).map((zone) => [zone, Object.fromEntries(
+    (zoneData(draft, zone)?.maps ?? []).filter((entry) => entry?.$ref).flatMap((entry) => {
+      const path = mapFile(draft.worldKey, zone, keyFromRef(entry.$ref));
+      const map = draft.read(path);
+      return map?.thumbnailUrl ? [[map.identifier, resolvePath(path, map.thumbnailUrl)]] : [];
+    }),
+  )]));
+}
+
+export function setAtlas(draft, atlas) {
+  return draft.update(worldFile(draft.worldKey), (data) => ({...data, atlas}));
+}
+
+// Replaces the world's atlas with a fresh guess (see atlasLayout.js).
+export function resetAtlas(draft) {
+  return setAtlas(draft, guessAtlas(atlasInput(draft)));
 }
 
 function updateAtlasZones(draft, fn) {
