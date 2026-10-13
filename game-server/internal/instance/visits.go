@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -42,13 +43,12 @@ func visitedKeys(visits []Visit) map[string]bool {
 	return keys
 }
 
-// placeShape is a place's outline, with its bounds and area for quick
-// lookup (placeAt).
+// placeShape is a place's outline, with its bounds for quick lookup
+// (placesAt).
 type placeShape struct {
 	identifier             string
 	polygon                []instanceconfig.Location
 	minX, minY, maxX, maxY float64
-	area                   float64
 }
 
 func buildPlaceShapes(zone instanceconfig.Zone) map[string][]placeShape {
@@ -60,36 +60,29 @@ func buildPlaceShapes(zone instanceconfig.Zone) map[string][]placeShape {
 			}
 			s := placeShape{identifier: p.Identifier, polygon: p.Polygon,
 				minX: math.Inf(1), minY: math.Inf(1), maxX: math.Inf(-1), maxY: math.Inf(-1)}
-			for i, a := range p.Polygon {
-				b := p.Polygon[(i+1)%len(p.Polygon)]
+			for _, a := range p.Polygon {
 				s.minX, s.maxX = math.Min(s.minX, a.X), math.Max(s.maxX, a.X)
 				s.minY, s.maxY = math.Min(s.minY, a.Y), math.Max(s.maxY, a.Y)
-				s.area += a.X*b.Y - b.X*a.Y
 			}
-			s.area = math.Abs(s.area) / 2
 			shapes[m.Identifier] = append(shapes[m.Identifier], s)
 		}
 	}
 	return shapes
 }
 
-// placeAt is the place on mapID at (x, y), or "" if it's in none. Where
-// places nest, it's the smallest around the point (docs/schema/map.md#place).
-// Tick loop only.
-func (inst *Instance) placeAt(mapID string, x, y float64) string {
+// placesAt is every place on mapID around (x, y), in the map's order:
+// where places nest, a player is in all of them at once. Tick loop only.
+func (inst *Instance) placesAt(mapID string, x, y float64) []string {
 	if inst.placeShapes == nil {
 		inst.placeShapes = buildPlaceShapes(inst.ZoneConfig)
 	}
-	best, bestArea := "", math.Inf(1)
+	var places []string
 	for _, s := range inst.placeShapes[mapID] {
-		if x < s.minX || x > s.maxX || y < s.minY || y > s.maxY || s.area >= bestArea {
-			continue
-		}
-		if pointInPolygon(x, y, s.polygon) {
-			best, bestArea = s.identifier, s.area
+		if x >= s.minX && x <= s.maxX && y >= s.minY && y <= s.maxY && pointInPolygon(x, y, s.polygon) {
+			places = append(places, s.identifier)
 		}
 	}
-	return best
+	return places
 }
 
 // pointInPolygon reports whether (x, y) is inside polygon (even-odd rule).
@@ -104,30 +97,40 @@ func pointInPolygon(x, y float64, polygon []instanceconfig.Location) bool {
 	return inside
 }
 
+// visitWhere is where a player unit was last tick: its map and the places
+// around it there.
+type visitWhere struct {
+	Map    string
+	Places []string
+}
+
 // collectVisits finds this tick's visit events: each player unit arriving
-// on a map (spawning included), and in a place. It reports every arrival,
-// visited or not; RecordVisits skips the ones already recorded. Tick loop
-// only.
+// on a map (spawning included), and in each place around it. It reports
+// every arrival, visited or not; RecordVisits skips the ones already
+// recorded. Tick loop only.
 func (inst *Instance) collectVisits(state *instancestate.InstanceState) []visitEvent {
 	if inst.visitWhere == nil {
-		inst.visitWhere = make(map[uuid.UUID]Visit)
+		inst.visitWhere = make(map[uuid.UUID]visitWhere)
 	}
 	var events []visitEvent
 	for id, unit := range state.Units {
 		if !strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
 			continue
 		}
-		here := Visit{Map: unit.MapIdentifier, Place: inst.placeAt(unit.MapIdentifier, unit.Position.X, unit.Position.Y)}
+		here := visitWhere{Map: unit.MapIdentifier, Places: inst.placesAt(unit.MapIdentifier, unit.Position.X, unit.Position.Y)}
 		before, seen := inst.visitWhere[id]
-		if seen && before == here {
+		newMap := !seen || before.Map != here.Map
+		if !newMap && slices.Equal(before.Places, here.Places) {
 			continue
 		}
 		inst.visitWhere[id] = here
-		if !seen || before.Map != here.Map {
+		if newMap {
 			events = append(events, visitEvent{UnitID: id, Visit: Visit{Map: here.Map}})
 		}
-		if here.Place != "" {
-			events = append(events, visitEvent{UnitID: id, Visit: here})
+		for _, place := range here.Places {
+			if newMap || !slices.Contains(before.Places, place) {
+				events = append(events, visitEvent{UnitID: id, Visit: Visit{Map: here.Map, Place: place}})
+			}
 		}
 	}
 	for id := range inst.visitWhere {

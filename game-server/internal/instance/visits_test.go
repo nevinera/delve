@@ -86,11 +86,20 @@ func TestCollectVisits_ReportsTheMapAndPlaceOnArrival(t *testing.T) {
 	assert.Equal(t, unit, events[0].UnitID)
 }
 
-func TestCollectVisits_PicksTheSmallestNestedPlace(t *testing.T) {
+func TestCollectVisits_ReportsEveryNestedPlace(t *testing.T) {
 	inst := visitInstance(t, &fakeVisitRails{})
 	events := inst.CollectVisitsForTest(context.Background(), visitState(uuid.New(), "glade", 15, 15), false)
-	assert.Contains(t, visitsOf(events), instance.Visit{Map: "glade", Place: "pond"})
-	assert.NotContains(t, visitsOf(events), instance.Visit{Map: "glade", Place: "clearing"})
+	assert.Equal(t, []instance.Visit{{Map: "glade"}, {Map: "glade", Place: "clearing"}, {Map: "glade", Place: "pond"}}, visitsOf(events))
+}
+
+func TestCollectVisits_ReportsOnlyTheNestedPlaceEntered(t *testing.T) {
+	inst := visitInstance(t, &fakeVisitRails{})
+	ctx := context.Background()
+	unit := uuid.New()
+	inst.CollectVisitsForTest(ctx, visitState(unit, "glade", 30, 30), false)
+	assert.Equal(t, []instance.Visit{{Map: "glade", Place: "pond"}},
+		visitsOf(inst.CollectVisitsForTest(ctx, visitState(unit, "glade", 15, 15), false)))
+	assert.Empty(t, inst.CollectVisitsForTest(ctx, visitState(unit, "glade", 30, 30), false), "back out to the clearing")
 }
 
 func TestCollectVisits_ReportsOnlyChanges(t *testing.T) {
