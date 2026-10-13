@@ -6,7 +6,7 @@ describe("SceneLighting", () => {
   it("fades by distance along the ground from one center every material shares", () => {
     const scene = new THREE.Scene();
     const lighting = new SceneLighting(scene);
-    expect(THREE.ShaderChunk.fog_vertex).toContain("fogCenter");
+    expect(THREE.ShaderChunk.fog_fragment).toContain("fogCenter");
     const { lambert, basic, sprite } = THREE.ShaderLib;
     expect(lambert.uniforms.fogCenter.value).toBe(sprite.uniforms.fogCenter.value);
     expect(THREE.UniformsUtils.clone(basic.uniforms).fogCenter.value).toBe(lambert.uniforms.fogCenter.value);
