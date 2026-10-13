@@ -38,15 +38,31 @@ export function installPlayerFog() {
   for (const shader of Object.values(THREE.ShaderLib)) {
     if (shader.uniforms?.fogNear) shader.uniforms.fogCenter = { value: fogCenter };
   }
+  // The distance is taken per pixel, not per vertex: the ground is one
+  // quad whose corners can all be past FAR_FEET.
   THREE.ShaderChunk.fog_pars_vertex = /* glsl */ `
 #ifdef USE_FOG
-  varying float vFogDepth;
-  uniform vec2 fogCenter;
+  varying vec2 vFogGround;
 #endif
 `;
   THREE.ShaderChunk.fog_vertex = /* glsl */ `
 #ifdef USE_FOG
-  vFogDepth = distance((inverse(viewMatrix) * mvPosition).xz, fogCenter);
+  vFogGround = (inverse(viewMatrix) * mvPosition).xz;
+#endif
+`;
+  THREE.ShaderChunk.fog_pars_fragment = /* glsl */ `
+#ifdef USE_FOG
+  uniform vec3 fogColor;
+  uniform float fogNear;
+  uniform float fogFar;
+  uniform vec2 fogCenter;
+  varying vec2 vFogGround;
+#endif
+`;
+  THREE.ShaderChunk.fog_fragment = /* glsl */ `
+#ifdef USE_FOG
+  float fogFactor = smoothstep(fogNear, fogFar, distance(vFogGround, fogCenter));
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
 #endif
 `;
 }

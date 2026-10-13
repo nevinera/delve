@@ -3,6 +3,9 @@ import * as THREE from "three";
 import {
   createNpcToken,
   createNcuToken,
+  attachUnitName,
+  setUnitBars,
+  tickCastBar,
   createInteractable,
   createPlayerToken,
   classColor,
@@ -428,5 +431,66 @@ describe("buildMapFill", () => {
     expect(outline.geometry.getAttribute("position").count).toBe(4 * 4);
     const sides = group.children.find((c) => c.isMesh && c.geometry instanceof THREE.BufferGeometry && !(c.geometry instanceof THREE.ShapeGeometry));
     expect(sides.geometry.getAttribute("position").count).toBe(8 * 6);
+  });
+});
+
+describe("attachUnitName", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  // A canvas 2D context that draws nothing and measures text at 15px a letter.
+  const stubCanvas = () => vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    new Proxy({}, { get: (_, k) => (k === "measureText" ? (t) => ({ width: t.length * 15 }) : () => {}), set: () => true })
+  );
+
+  it("floats the name just over the token, widening for a long one", () => {
+    stubCanvas();
+    const short = createNpcToken(2, "hostile", null, null);
+    attachUnitName(short, "Wolf", 2, "hostile");
+    const long = createNpcToken(3, "hostile", null, null);
+    attachUnitName(long, "Brazza, Keeper of the Fire", 3, "hostile");
+
+    expect(short._nameLabel.position.y).toBe(2.5);
+    expect(short._nameLabel.scale.x).toBe(8);
+    expect(long._nameLabel.position.y).toBe(3.5);
+    expect(long._nameLabel.scale.x).toBeGreaterThan(8);
+  });
+
+  it("leaves a nameless unit unlabeled", () => {
+    stubCanvas();
+    const group = createNpcToken(2, "hostile", null, null);
+    attachUnitName(group, undefined, 2, "hostile");
+    expect(group._nameLabel).toBeUndefined();
+  });
+});
+
+describe("setUnitBars", () => {
+  const filled = (bar) => bar._fill.scale.x / 4;
+
+  it("shows health only once a unit has taken damage", () => {
+    const group = createNpcToken(2, "hostile", null, null);
+    setUnitBars(group, { health: 50, maxHealth: 50 });
+    expect(group._healthBar.visible).toBe(false);
+
+    setUnitBars(group, { health: 20, maxHealth: 50 });
+    expect(group._healthBar.visible).toBe(true);
+    expect(filled(group._healthBar)).toBeCloseTo(0.4);
+    // Still left-aligned: the fill's anchor moves out as it shrinks.
+    expect(group._healthBar._fill.center.x * group._healthBar._fill.scale.x).toBeCloseTo(2);
+
+    setUnitBars(group, { health: 0, maxHealth: 50, dead: true });
+    expect(group._healthBar.visible).toBe(false);
+  });
+
+  it("fills the cast bar over the cast, and hides it after", () => {
+    const group = createNpcToken(2, "hostile", null, null);
+    setUnitBars(group, { health: 50, maxHealth: 50, castStartedAt: 1000, castEndsAt: 3000 }, 1500);
+    expect(group._castBar.visible).toBe(true);
+    expect(filled(group._castBar)).toBeCloseTo(0.25);
+
+    tickCastBar(group, 2500);
+    expect(filled(group._castBar)).toBeCloseTo(0.75);
+
+    setUnitBars(group, { health: 50, maxHealth: 50 }, 3100);
+    expect(group._castBar.visible).toBe(false);
   });
 });
