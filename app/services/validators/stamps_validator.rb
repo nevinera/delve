@@ -10,6 +10,9 @@ module Validators
     MAX_FEET_WIDTH = 1000
     MAX_NAME = 80
     KEY_RE = /\A[a-z0-9][a-z0-9_-]*\z/
+    # An SPDX license id: CC0-1.0, CC-BY-4.0, CC-BY-SA-4.0, MIT...
+    LICENSE_RE = /\A[A-Za-z0-9][A-Za-z0-9.+-]{1,39}\z/
+    MAX_ATTRIBUTION = 400
 
     def validate!(sets, path: "$")
       reject_asset_reference!(sets, path: path)
@@ -31,7 +34,19 @@ module Validators
       require_object!(set, path: path)
       validate_name!(set, path: path) if given?(set, "name")
       require_non_empty_string!(set, "imageUrl", path: path)
+      validate_license!(set, path: path)
       validate_stamps!(require_hash!(set, "stamps", path: path), path: child_path(path, "stamps"))
+    end
+
+    # Every set says how its art is licensed, and credits it when the
+    # license asks; a share-alike one (-SA-) makes images baked from it
+    # share-alike too (see plans/decoration-stamps.md).
+    def validate_license!(set, path:)
+      license = require_string!(set, "license", path: path)
+      raise ValidationError.new("license must be an SPDX id, like CC-BY-4.0", path: child_path(path, "license")) unless LICENSE_RE.match?(license)
+      return unless license.include?("BY") || given?(set, "attribution")
+      attribution = require_non_empty_string!(set, "attribution", path: path)
+      raise ValidationError.new("attribution must be #{MAX_ATTRIBUTION} characters or fewer", path: child_path(path, "attribution")) if attribution.length > MAX_ATTRIBUTION
     end
 
     def validate_stamps!(stamps, path:)

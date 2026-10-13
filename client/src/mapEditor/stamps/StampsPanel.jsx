@@ -1,6 +1,6 @@
 import {useState} from "react";
 import StampThumb from "./StampThumb";
-import {stampFor} from "../../game/stamps";
+import {isShareAlike, shareAlikeSetsUsed, stampFor} from "../../game/stamps";
 import {MAX_SCALE, MIN_SCALE} from "./stampGeometry";
 
 // The Stamps tab's sidebar (see useStampsTab): a palette per stamp set in
@@ -20,7 +20,13 @@ export default function StampsPanel({sets, sheets, stamps, armed, onArm, varyRot
       {setKeys.length === 0 && <p className="stamps-empty">This zone has no stamp sets yet.</p>}
       {setKeys.map((setKey) => (
         <details key={setKey} className="stamp-palette" open>
-          <summary>{sets[setKey].name || setKey}</summary>
+          <summary>
+            {sets[setKey].name || setKey}
+            <span className={`stamp-license${isShareAlike(sets[setKey]) ? " share-alike" : ""}`} title={sets[setKey].attribution ?? ""}>
+              {sets[setKey].license ?? "no license"}
+            </span>
+          </summary>
+          {sets[setKey].attribution && <p className="stamp-attribution">{sets[setKey].attribution}</p>}
           <div className="stamp-palette-grid">
             {Object.entries(sets[setKey].stamps ?? {}).map(([key, stamp]) => {
               const id = `${setKey}/${key}`;
@@ -46,6 +52,7 @@ export default function StampsPanel({sets, sheets, stamps, armed, onArm, varyRot
         ? renderSetAdder({close: () => setAdding(false)})
         : <button type="button" className="add-entry" onClick={() => setAdding(true)}>Add a stamp set…</button>)}
       <p className="stamps-count">{stamps.length} {stamps.length === 1 ? "stamp" : "stamps"} on this map</p>
+      <ShareAlikeNote sets={sets} stamps={stamps} />
       {placed && <SelectedStamp sets={sets} placed={placed} index={selected} count={stamps.length} onUpdate={onUpdate} onRemove={onRemove} onMove={onMove} />}
     </div>
   );
@@ -90,5 +97,18 @@ function SelectedStamp({sets, placed, index, count, onUpdate, onRemove, onMove})
       </div>
       <button type="button" className="remove-entry" onClick={() => onRemove(index)}>Remove stamp</button>
     </div>
+  );
+}
+
+// Says when the map uses share-alike art, since images made from it are
+// share-alike too.
+function ShareAlikeNote({sets, stamps}) {
+  const used = shareAlikeSetsUsed(sets, stamps);
+  if (!used.length) return null;
+  return (
+    <p className="stamps-share-alike">
+      Uses share-alike art ({used.map((set) => sets[set].name || set).join(", ")}): any image of this map that's published
+      (a thumbnail, a screenshot) must be shared under the same license, with credit.
+    </p>
   );
 }

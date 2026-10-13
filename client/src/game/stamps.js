@@ -4,6 +4,16 @@
 // {feetWidth, frames?}}}}); a map places them by "set/key" with a
 // position in its feet, a rotation (degrees clockwise) and a scale.
 
+// A set whose license is share-alike (CC-BY-SA-4.0): images baked from it
+// that we publish (thumbnails, screenshots) must be share-alike too.
+export const isShareAlike = (set) => /(^|-)SA(-|$)/.test(set?.license ?? "");
+
+// The share-alike sets placed stamps use: [set key].
+export function shareAlikeSetsUsed(sets, placedStamps) {
+  const used = new Set((placedStamps ?? []).map((placed) => String(placed.stamp ?? "").split("/")[0]));
+  return [...used].filter((set) => isShareAlike(sets?.[set])).sort();
+}
+
 // The stamp a placed one is, or null if the zone has no such stamp.
 export function stampFor(sets, placed) {
   const [set, key] = String(placed.stamp ?? "").split("/");

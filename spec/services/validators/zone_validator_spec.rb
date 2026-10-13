@@ -73,7 +73,7 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
     end
 
     describe "stamps" do
-      let(:sets) { {"camp" => {"imageUrl" => "camp.png", "stamps" => {"log" => {"feetWidth" => 6, "frames" => [{"x" => 0, "y" => 0, "width" => 8, "height" => 4}] * 2}}}} }
+      let(:sets) { {"camp" => {"imageUrl" => "camp.png", "license" => "CC0-1.0", "stamps" => {"log" => {"feetWidth" => 6, "frames" => [{"x" => 0, "y" => 0, "width" => 8, "height" => 4}] * 2}}}} }
 
       def with_stamps(placed, stamps: sets)
         maps = zone_fixture["maps"].each_with_index.map { |map, i| i.zero? ? map.merge("stamps" => placed) : map }

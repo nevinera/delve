@@ -30,6 +30,14 @@ describe("StampsPanel", () => {
     expect(p.onRemove).toHaveBeenCalledWith(0);
   });
 
+  it("shows each set's license, and notes when the map uses share-alike art", () => {
+    const shared = {wilds: {name: "Wilds", license: "CC-BY-SA-4.0", attribution: "By Someone", imageUrl: "w.png", stamps: {rock: {feetWidth: 3}}}};
+    render(<StampsPanel {...props({sets: {...sets, ...shared}, stamps: [{stamp: "wilds/rock", x: 0, y: 0}]})} />);
+    expect(screen.getByText("CC-BY-SA-4.0")).toBeTruthy();
+    expect(screen.getByText("By Someone")).toBeTruthy();
+    expect(screen.getByText(/Uses share-alike art \(Wilds\)/)).toBeTruthy();
+  });
+
   it("says so when the zone has no sets, and offers to add one", () => {
     render(<StampsPanel {...props({sets: {}, stamps: [], renderSetAdder: () => <p>adder</p>})} />);
     expect(screen.getByText("This zone has no stamp sets yet.")).toBeTruthy();

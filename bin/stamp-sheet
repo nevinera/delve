@@ -4,9 +4,11 @@
 Usage: bin/stamp-sheet SRC_DIR OUT_DIR
 
 SRC_DIR holds set.json and the images it names; the set's key is the directory's name.
-set.json: {"name", "pixelsPerFoot" (default 24), "stamps": {key: {"name", "feetWidth",
-"images": [file, ...]}}}, each image one frame (variant), SVG or PNG with a transparent
-background. Each frame is drawn feetWidth * pixelsPerFoot wide, keeping its shape.
+set.json: {"name", "license" (an SPDX id: CC0-1.0, CC-BY-4.0, CC-BY-SA-4.0...),
+"attribution" (credit, for BY licenses), "pixelsPerFoot" (default 24), "stamps": {key:
+{"name", "feetWidth", "images": [file, ...]}}}, each image one frame (variant), SVG or PNG
+with a transparent background. Keep art under different licenses in different sets: a
+sheet mixing share-alike art with other art is itself share-alike. Each frame is drawn feetWidth * pixelsPerFoot wide, keeping its shape.
 
 Writes OUT_DIR/<set>.png (the sheet) and OUT_DIR/<set>.json (the set, its frames
 measured in the sheet), ready to copy into a zone. Needs Pillow and rsvg-convert.
@@ -83,7 +85,12 @@ def main():
             for frame_key, image, spot in zip(frames, images, spots) if frame_key == stamp_key
         ]
         stamps[stamp_key] = entry
-    result = {"name": spec.get("name", key), "imageUrl": f"./{key}.png", "stamps": stamps}
+    if not spec.get("license"):
+        sys.exit("bin/stamp-sheet: set.json needs a license (an SPDX id, like CC-BY-4.0)")
+    result = {"name": spec.get("name", key), "imageUrl": f"./{key}.png", "license": spec["license"]}
+    if spec.get("attribution"):
+        result["attribution"] = spec["attribution"]
+    result["stamps"] = stamps
     with open(os.path.join(out_dir, f"{key}.json"), "w") as f:
         json.dump(result, f, indent=2)
         f.write("\n")

@@ -65,6 +65,11 @@ Each set is one image, a sheet holding many stamps, so a map loads a few images,
 Sets come from the shared library (`graphics/stamps/<set>.json` and its image) and are copied in;
 the sheet is copied to the world's `graphics/stamps/`. Backgrounds are transparent. Not animated.
 
+Stamps are baked into the ground in the player's browser, so the game shares only the sheets
+(under their own licenses, credited) and never a combined image. An image we publish with
+stamps baked in (a thumbnail, a screenshot) is a derived work: if any set in it is share-alike,
+so is the image, with each set's credit. The map editor's Stamps tab says when a map uses one.
+
 An object mapping set keys (lowercase letters, digits, `-` and `_`) to StampSet.
 
 ### StampSet
@@ -73,6 +78,8 @@ An object mapping set keys (lowercase letters, digits, `-` and `_`) to StampSet.
 |---|---|---|---|
 | `name` | string | no | Shown in the editor's palette. |
 | `imageUrl` | string | yes | The sheet image, relative to the file it's in. |
+| `license` | string | yes | The art's license, as an SPDX id: `CC0-1.0`, `CC-BY-4.0`, `CC-BY-SA-4.0`, `MIT`. One per set, so art under different licenses goes in different sets (a sheet mixing share-alike art with other art is itself share-alike). |
+| `attribution` | string | for BY licenses | The credit the license asks for. At most 400 characters. |
 | `stamps` | object | yes | Stamp keys (same form as set keys) to Stamp. |
 
 ### Stamp
@@ -88,6 +95,8 @@ An object mapping set keys (lowercase letters, digits, `-` and `_`) to StampSet.
   "camp": {
     "name": "Camp",
     "imageUrl": "../../graphics/stamps/camp.png",
+    "license": "CC-BY-4.0",
+    "attribution": "Drawn for delve by Eric Mueller",
     "stamps": {
       "tent": { "name": "Tent", "feetWidth": 12, "frames": [{ "x": 0, "y": 0, "width": 256, "height": 256 }] },
       "log": { "name": "Log", "feetWidth": 7, "frames": [{ "x": 256, "y": 0, "width": 192, "height": 64 }, { "x": 256, "y": 64, "width": 192, "height": 64 }] }

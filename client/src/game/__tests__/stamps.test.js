@@ -1,5 +1,5 @@
 import {describe, expect, it, vi} from "vitest";
-import {bakeStamps, drawStamps, loadStampSheets, stampFeet, stampFor, stampFrame, variantIndex} from "../stamps";
+import {bakeStamps, drawStamps, isShareAlike, loadStampSheets, shareAlikeSetsUsed, stampFeet, stampFor, stampFrame, variantIndex} from "../stamps";
 
 const logs = [{x: 0, y: 0, width: 40, height: 20}, {x: 40, y: 0, width: 40, height: 20}, {x: 80, y: 0, width: 40, height: 20}];
 const sets = {
@@ -82,5 +82,18 @@ describe("loadStampSheets", () => {
     });
     const sheets = await loadStampSheets({...sets, broken: {imageUrl: "bad.png", stamps: {}}}, (u) => `https://x/${u}`, load);
     expect(sheets).toEqual({camp: {url: "https://x/camp.png"}});
+  });
+});
+
+describe("share-alike sets", () => {
+  it("knows a share-alike license", () => {
+    expect(isShareAlike({license: "CC-BY-SA-4.0"})).toBe(true);
+    expect(isShareAlike({license: "CC-BY-4.0"})).toBe(false);
+    expect(isShareAlike({license: "CC0-1.0"})).toBe(false);
+  });
+
+  it("lists the share-alike sets a map's stamps use", () => {
+    const licensed = {...sets, wilds: {license: "CC-BY-SA-4.0", stamps: {}}, other: {license: "CC-BY-SA-3.0", stamps: {}}};
+    expect(shareAlikeSetsUsed(licensed, [{stamp: "camp/log"}, {stamp: "wilds/rock"}])).toEqual(["wilds"]);
   });
 });

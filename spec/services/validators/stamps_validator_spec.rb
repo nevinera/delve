@@ -4,6 +4,7 @@ RSpec.describe Validators::StampsValidator, type: :validator do
   let(:camp) do
     {
       "name" => "Camp", "imageUrl" => "../../graphics/stamps/camp.png",
+      "license" => "CC-BY-SA-4.0", "attribution" => "Tents by Someone",
       "stamps" => {
         "tent" => {"name" => "Tent", "feetWidth" => 12, "frames" => [{"x" => 0, "y" => 0, "width" => 256, "height" => 256}]},
         "pond" => {"feetWidth" => 20}
@@ -41,6 +42,19 @@ RSpec.describe Validators::StampsValidator, type: :validator do
   it "raises on an empty frames list" do
     stamps = camp["stamps"].merge("tent" => {"feetWidth" => 12, "frames" => []})
     expect_invalid({"camp" => camp.merge("stamps" => stamps)}, /at least 1/, "$.stamps.camp.stamps.tent.frames")
+  end
+
+  it "raises on a set with no license" do
+    expect_invalid({"camp" => camp.except("license")}, /license is required/, "$.stamps.camp.license")
+  end
+
+  it "raises on a license that isn't an SPDX id" do
+    expect_invalid({"camp" => camp.merge("license" => "free to use!")}, /SPDX/, "$.stamps.camp.license")
+  end
+
+  it "needs an attribution for a BY license, but not for CC0" do
+    expect_invalid({"camp" => camp.except("attribution")}, /attribution is required/, "$.stamps.camp.attribution")
+    expect { described_class.validate!({"camp" => camp.except("attribution").merge("license" => "CC0-1.0")}) }.not_to raise_error
   end
 
   it "raises on an unresolved reference" do
