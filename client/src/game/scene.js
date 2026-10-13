@@ -389,6 +389,12 @@ export function edgeTowards(pos, other) {
 // snapshot of somewhere the client already predicted correctly one round
 // trip ago. Falls back to the raw echoed position when there's nothing to
 // match against.
+// The send an echo answers, if it was sent from mapIdentifier (or didn't
+// say), else null.
+export function sendOnMap(sent, mapIdentifier) {
+  return sent && sent.map && sent.map !== mapIdentifier ? null : sent;
+}
+
 export function reconciledTarget(matched, currentX, currentY, serverX, serverY) {
   if (!matched) return { x: serverX, y: serverY };
   return { x: currentX + (serverX - matched.x), y: currentY + (serverY - matched.y) };
@@ -866,6 +872,9 @@ export class SceneManager {
       if (!isTap(dx, dy)) clearLongPress();
       const k = this._cameraSensitivityRef?.current ?? 1;
       const orbit = orbitFromDrag(this._camFacing, this._camPitch, (e.clientX - lastX) * k, (e.clientY - lastY) * k);
+      // The token turns with the camera, so this turns the character too:
+      // say so, or frontal powers check against the old facing.
+      if (orbit.facing !== this._camFacing) this._onFacingChange?.(orbit.facing / DEG);
       this._camFacing = orbit.facing;
       this._camPitch = orbit.pitch;
       lastX = e.clientX;
@@ -1212,7 +1221,11 @@ export class SceneManager {
       const angle = -(unit.position.angle * DEG);
 
       if (isSelf) {
-        const matched = unit.last_move_seq != null ? (this._positionForMoveSeq?.(unit.last_move_seq) ?? null) : null;
+        // A send from another map (just before a map transition) is in that
+        // map's coordinates: matching against it would slide us across this
+        // one, so use the server's position as it is.
+        const sent = unit.last_move_seq != null ? (this._positionForMoveSeq?.(unit.last_move_seq) ?? null) : null;
+        const matched = sendOnMap(sent, unit.map_identifier);
         const target = reconciledTarget(matched, this._selfMapX, this._selfMapY, unit.position.x, unit.position.y);
         this._selfMapTargetX = target.x;
         this._selfMapTargetY = target.y;
@@ -1464,7 +1477,7 @@ export class SceneManager {
         // GameConnection records what was sent, keyed by the seq it stamps
         // on the message - see positionForMoveSeq/reconciledTarget above.
         if (this._onSelfPosition && time - this._lastPosSendTime >= 30) {
-          this._onSelfPosition({ x: this._selfMapX, y: this._selfMapY });
+          this._onSelfPosition({ x: this._selfMapX, y: this._selfMapY, map: this._selfMapIdentifier });
           this._lastPosSendTime = time;
         }
 

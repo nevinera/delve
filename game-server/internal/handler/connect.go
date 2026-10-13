@@ -140,18 +140,20 @@ func flushQueued(conn *websocket.Conn, writeCh chan []byte) {
 }
 
 type incomingMsg struct {
-	Type         string   `json:"type"`
-	Facing       float64  `json:"facing"`
-	Keys         []string `json:"keys"`
-	X            *float64 `json:"x"`
-	Y            *float64 `json:"y"`
-	TargetID     *string  `json:"target_id"`
-	Slot         *int     `json:"slot"`
-	TargetUnitID *string  `json:"target_unit_id"`
-	ItemIndex    *int     `json:"item_index"`
-	NCUID        *string  `json:"ncu_id"`
-	Quest        string   `json:"quest"`
-	Interactable string   `json:"interactable"`
+	Type   string   `json:"type"`
+	Facing float64  `json:"facing"`
+	Keys   []string `json:"keys"`
+	X      *float64 `json:"x"`
+	Y      *float64 `json:"y"`
+	// Map is the map a move was sent from (see command.MovePayload.Map).
+	Map          string  `json:"map"`
+	TargetID     *string `json:"target_id"`
+	Slot         *int    `json:"slot"`
+	TargetUnitID *string `json:"target_unit_id"`
+	ItemIndex    *int    `json:"item_index"`
+	NCUID        *string `json:"ncu_id"`
+	Quest        string  `json:"quest"`
+	Interactable string  `json:"interactable"`
 	// Seq is a per-connection, monotonically increasing hex id the client
 	// stamps on every outgoing message (see GameConnection._send). Recorded
 	// per message type that needs acking (heartbeat, move) via RecordSeq, and
@@ -179,7 +181,7 @@ func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.I
 		inst.SendCommand(command.Command{
 			UnitID:     unitID,
 			ReceivedAt: time.Now(),
-			Payload:    command.MovePayload{Facing: msg.Facing, Keys: keys, X: msg.X, Y: msg.Y},
+			Payload:    command.MovePayload{Facing: msg.Facing, Keys: keys, X: msg.X, Y: msg.Y, Map: msg.Map},
 		})
 	case "target":
 		var targetID *uuid.UUID

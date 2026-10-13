@@ -367,3 +367,22 @@ func TestMoveHandler_ExactDiagonalDistance(t *testing.T) {
 	unit := state.Units[unitID]
 	assert.InDelta(t, 5.0, math.Hypot(unit.Position.X, unit.Position.Y), 1e-9)
 }
+
+// A move sent from the map the unit has just left is in that map's
+// coordinates: it mustn't drag the unit across its new one.
+func TestMoveHandler_IgnoresAMoveFromAnotherMap(t *testing.T) {
+	h := command.MoveHandler{}
+	unitID := uuid.New()
+	state := stateWithUnit(unitID)
+	state.Units[unitID].MapIdentifier = "woods"
+	state.Units[unitID].Speed = 20.0
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 90, X: ptr(5.0), Y: ptr(0.0), Map: "camp"}, instanceconfig.Zone{}, state))
+	assert.Equal(t, instanceconfig.Position{X: 0, Y: 0, Angle: 0}, state.Units[unitID].Position)
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 90, Keys: []command.MoveKey{command.MoveKeyForward}, Map: "camp"}, instanceconfig.Zone{}, state))
+	assert.Equal(t, instancestate.MovementIntent{}, state.Units[unitID].MovementIntent)
+
+	require.NoError(t, h.Handle(unitID, command.MovePayload{Facing: 90, X: ptr(5.0), Y: ptr(0.0), Map: "woods"}, instanceconfig.Zone{}, state))
+	assert.Equal(t, 5.0, state.Units[unitID].Position.X)
+}

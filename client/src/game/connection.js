@@ -60,7 +60,7 @@ export class GameConnection {
     // chronological here, so _pruneOld can stop at the first still-fresh
     // entry rather than scanning the whole map.
     this._sentAt = new Map();
-    // seq -> {x, y} for move messages that included a position, so
+    // seq -> {x, y, map} for move messages that included a position, so
     // positionForSeq can match a server-echoed position (last_move_seq) back
     // to exactly the local prediction it answers - see scene.js's
     // reconciledTarget.
@@ -197,7 +197,7 @@ export class GameConnection {
     this._sentAt.set(seq, now);
     this._pruneOld(this._sentAt, now, (at) => at);
     if (data.type === "move" && data.x != null && data.y != null) {
-      this._sentPositions.set(seq, { x: data.x, y: data.y, at: now });
+      this._sentPositions.set(seq, { x: data.x, y: data.y, map: data.map, at: now });
       this._pruneOld(this._sentPositions, now, (entry) => entry.at);
     }
 

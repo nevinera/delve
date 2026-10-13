@@ -3448,15 +3448,24 @@ export default function App({
         const selfRadius = Object.values(unitsRef.current).find(u => u.zone_unit_identifier === selfIdentifierRef.current)?.radius ?? 0;
         const dx = target.position.x - self.x;
         const dy = target.position.y - self.y;
-        if (Math.sqrt(dx * dx + dy * dy) > range + selfRadius + (target.radius ?? 0)) return;
+        if (Math.sqrt(dx * dx + dy * dy) > range + selfRadius + (target.radius ?? 0)) {
+          showAbilityError("Out of range");
+          return;
+        }
         const barriers = mapBarriersByIdRef.current[selfUnit?.map_identifier] ?? [];
-        if (!hasLineOfSight(self.x, self.y, target.position.x, target.position.y, barriers)) return;
+        if (!hasLineOfSight(self.x, self.y, target.position.x, target.position.y, barriers)) {
+          showAbilityError("Can't see your target");
+          return;
+        }
         if (power.frontal !== false) {
           const toTarget = Math.atan2(dx, dy) * 180 / Math.PI;
           let diff = toTarget - facingRef.current;
           while (diff > 180) diff -= 360;
           while (diff < -180) diff += 360;
-          if (Math.abs(diff) > 75) return;
+          if (Math.abs(diff) > 75) {
+            showAbilityError("You must face your target");
+            return;
+          }
         }
       }
     }
@@ -3490,6 +3499,8 @@ export default function App({
       facing: facingRef.current,
       keys: [...movementKeysRef.current],
       ...(pos !== null ? { x: pos.x, y: pos.y } : {}),
+      // So the server can ignore a move sent from the map we just left.
+      ...(pos?.map ? { map: pos.map } : {}),
     });
   }, []);
 
