@@ -50,10 +50,19 @@ function linkPath({from, to, through}) {
   return `M ${from.x} ${from.y} Q ${2 * through.x - mid.x} ${2 * through.y - mid.y} ${to.x} ${to.y}`;
 }
 
-// The view that fits the focus zone's outline, or every zone's without one.
-function fitView(atlas, width, height, focus) {
-  const zones = atlas?.zones?.[focus] ? [atlas.zones[focus]] : Object.values(atlas?.zones ?? {});
-  const points = zones.flatMap((z) => z.outline ?? []);
+// The points a view fits: the focus map's corners, the focus zone's
+// outline, or every zone's.
+function focusPoints(atlas, sizes, focus) {
+  const zone = atlas?.zones?.[focus?.zone];
+  const at = zone?.maps?.[focus?.map];
+  const size = sizes?.[focus?.zone]?.[focus?.map];
+  if (at && size) return [at, {x: at.x + size.width, y: at.y + size.height}];
+  if (zone) return zone.outline ?? [];
+  return Object.values(atlas?.zones ?? {}).flatMap((z) => z.outline ?? []);
+}
+
+function fitView(atlas, sizes, width, height, focus) {
+  const points = focusPoints(atlas, sizes, focus);
   if (!points.length || width <= 0 || height <= 0) return {panX: width / 2, panY: height / 2, zoom: 0.2};
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
@@ -78,7 +87,8 @@ function fitView(atlas, width, height, focus) {
 // its name. With editable false, there are no handles and nothing moves:
 // the atlas as the in-game map will show it, everything explored. marker
 // ({x, y, angle}: world feet, degrees clockwise from north) draws an arrow
-// there, and focus (a zone) is what the view starts fitted to.
+// there, and focus ({zone, map}, map optional) is what the view starts
+// fitted to.
 export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnails, linksFor, onChange, onOpenMap, editable = true, marker = null, focus = null}) {
   const wrapper = useRef(null);
   const [view, setView] = useState(null);
@@ -92,7 +102,7 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
 
   useEffect(() => {
     const rect = wrapper.current?.getBoundingClientRect();
-    setView(fitView(atlas, rect?.width ?? 800, rect?.height ?? 600, focus));
+    setView(fitView(atlas, sizes, rect?.width ?? 800, rect?.height ?? 600, focus));
     // Fit once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

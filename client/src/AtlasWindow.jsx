@@ -47,7 +47,7 @@ export function canvasProps(payload) {
 }
 
 // The in-game map: the world's atlas, read-only, everything shown (no
-// unexplored masking yet), opened on the current zone with an arrow where
+// unexplored masking yet), opened on the current map with an arrow where
 // the player is. position is the player's {x, y, angle} on map, in its own
 // feet.
 export function AtlasWindow({open, atlas: payload, zone, map, position, onClose, portrait = false, landscape = false}) {
@@ -74,7 +74,7 @@ export function AtlasWindow({open, atlas: payload, zone, map, position, onClose,
             onChange={() => {}}
             editable={false}
             marker={marker}
-            focus={zone}
+            focus={{zone, map}}
           />
         </div>
       ) : (

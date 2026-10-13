@@ -41,6 +41,14 @@ describe("AtlasWindow", () => {
     expect(screen.getByLabelText("You are here").getAttribute("transform")).toContain("rotate(90)");
   });
 
+  it("opens fitted to the player's map", () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({left: 0, top: 0, width: 400, height: 400});
+    const {container} = render(<AtlasWindow open atlas={payload} zone="forest" map="camp" />);
+    rect.mockRestore();
+    // camp (60..160 both ways) fills 90% of the 400px square, centered.
+    expect(container.querySelector("svg g").getAttribute("transform")).toBe("translate(-196 596) scale(3.6 -3.6)");
+  });
+
   it("has no arrow off the atlas", () => {
     render(<AtlasWindow open atlas={payload} zone="forest" map="elsewhere" position={{x: 10, y: 20, angle: 0}} />);
     expect(screen.queryByLabelText("You are here")).toBeNull();
