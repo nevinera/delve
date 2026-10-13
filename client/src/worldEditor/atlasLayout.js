@@ -177,7 +177,8 @@ export function linkKey(a, b) {
   return [`${a.zone}/${a.map}/${a.connection}`, `${b.zone}/${b.map}/${b.connection}`].sort().join("|");
 }
 
-// The atlas's link lines, in world feet: [{kind, key, from, to, through}],
+// The atlas's link lines, in world feet: [{kind, key, from, to, through,
+// ends}], ends the two maps it joins ({zone, map}),
 // kind "zone" for a zoneLink, "world" for a worldLink, from and to the two
 // connections as placed, through the point a bent link curves through
 // (its midpoint plus its bend, see docs/schema/world.md#atlas), or null
@@ -196,7 +197,7 @@ export function atlasLinks(atlas, {zones = {}, worldLinks = []}) {
     const key = linkKey(a, b);
     const bend = atlas?.bends?.[key];
     const through = bend ? {x: (from.x + to.x) / 2 + bend.x, y: (from.y + to.y) / 2 + bend.y} : null;
-    lines.push({kind, key, from, to, through});
+    lines.push({kind, key, from, to, through, ends: [{zone: a.zone, map: a.map}, {zone: b.zone, map: b.map}]});
   };
   for (const [zone, data] of Object.entries(zones)) {
     for (const link of data.zoneLinks ?? []) {

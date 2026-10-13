@@ -98,7 +98,8 @@ describe("atlasLinks", () => {
 
   it("draws each link between its connections, keyed by its ends in order", () => {
     expect(atlasLinks(atlas, {zones})).toEqual([
-      {kind: "zone", key: "forest/camp/north|forest/road/south", from: {x: 50, y: 100}, to: {x: 50, y: 160}, through: null},
+      {kind: "zone", key: "forest/camp/north|forest/road/south", from: {x: 50, y: 100}, to: {x: 50, y: 160}, through: null,
+        ends: [{zone: "forest", map: "camp"}, {zone: "forest", map: "road"}]},
     ]);
     expect(linkKey({zone: "b", map: "m", connection: "c"}, {zone: "a", map: "m", connection: "c"})).toBe("a/m/c|b/m/c");
   });

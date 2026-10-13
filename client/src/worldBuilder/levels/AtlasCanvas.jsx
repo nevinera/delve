@@ -9,6 +9,7 @@ const FIT_MARGIN = 0.9;
 const CORNER_RADIUS = 7; // pixels
 const EDGE_HANDLE = 8; // pixels across
 const BEND_RADIUS = 5; // pixels
+const MASK_EXTENT = 1e7; // feet: a link mask's reach, past anything drawn
 const ZONE_COLORS = ["#e76f51", "#2a9d8f", "#e9c46a", "#8ab17d", "#9b5de5", "#f4a261", "#4cc9f0", "#f15bb5"];
 
 export const zoneColor = (index) => ZONE_COLORS[index % ZONE_COLORS.length];
@@ -35,8 +36,8 @@ function fitView(atlas, width, height) {
 }
 
 // The world's atlas (docs/schema/world.md#atlas), north up and to scale:
-// each zone's outline, its maps as their thumbnails, and lines (behind
-// them) for the links between maps (zoneLinks solid, worldLinks dashed),
+// each zone's outline, its maps as their thumbnails, and lines for the
+// links between maps (over the two maps each joins, behind any other) (zoneLinks solid, worldLinks dashed),
 // as linksFor(atlas) gives them (see atlasLinks). Drag a map to move it in
 // its zone, a zone (between its maps) to move it whole, an outline's
 // vertex to reshape it, or the handle in the middle of an outline's edge to
@@ -149,6 +150,7 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
 
   const zones = Object.entries(shown?.zones ?? {});
   const links = shown ? linksFor(shown) : [];
+  const mapRects = zones.flatMap(([zone, entry]) => Object.entries(entry.maps).flatMap(([map, at]) => (sizes[zone]?.[map] ? [{zone, map, ...at, ...sizes[zone][map]}] : [])));
   const commit = (next) => next !== atlas && onChange(next);
   return (
     <div className={`atlas-canvas${editable ? "" : " atlas-canvas-locked"}`} ref={wrapper} {...pinchHandlers} onPointerDown={(e) => onPointerDown(e)} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onWheel={onWheel}>
@@ -160,9 +162,6 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
               <polygon key={zone} className="atlas-zone" points={entry.outline.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill={`${zoneColor(i)}22`} stroke={zoneColor(i)} vectorEffect="non-scaling-stroke"
                 onPointerDown={(e) => onPointerDown(e, {zone})} aria-label={`Zone ${zone}`} />
-            ))}
-            {links.map((link) => (
-              <path key={link.key} className={`atlas-link atlas-link-${link.kind}`} d={linkPath(link)} vectorEffect="non-scaling-stroke" />
             ))}
             {zones.flatMap(([zone, entry], i) => Object.entries(entry.maps).map(([map, at]) => {
               const size = sizes[zone]?.[map];
@@ -179,6 +178,21 @@ export default function AtlasCanvas({atlas, sizes, zoneNames, mapNames, thumbnai
                 </g>
               );
             }))}
+            {/* Links over the maps, each masked out where it crosses a map
+                other than the two it joins: on top of its own, behind the rest. */}
+            <defs>
+              {links.map((link, i) => (
+                <mask key={link.key} id={`atlas-link-mask-${i}`} maskUnits="userSpaceOnUse" x={-MASK_EXTENT} y={-MASK_EXTENT} width={2 * MASK_EXTENT} height={2 * MASK_EXTENT}>
+                  <rect x={-MASK_EXTENT} y={-MASK_EXTENT} width={2 * MASK_EXTENT} height={2 * MASK_EXTENT} fill="white" />
+                  {mapRects.filter((r) => !link.ends.some((end) => end.zone === r.zone && end.map === r.map)).map((r) => (
+                    <rect key={`${r.zone}/${r.map}`} x={r.x} y={r.y} width={r.width} height={r.height} fill="black" />
+                  ))}
+                </mask>
+              ))}
+            </defs>
+            {links.map((link, i) => (
+              <path key={link.key} className={`atlas-link atlas-link-${link.kind}`} d={linkPath(link)} mask={`url(#atlas-link-mask-${i})`} vectorEffect="non-scaling-stroke" />
+            ))}
           </g>
           {zones.map(([zone, entry], i) => {
             const corner = toScreen(entry.outline.reduce((best, p) => (p.y - p.x > best.y - best.x ? p : best)));

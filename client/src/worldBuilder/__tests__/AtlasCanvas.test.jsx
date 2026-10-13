@@ -38,6 +38,17 @@ describe("AtlasCanvas", () => {
     expect(document.querySelector(".atlas-link").getAttribute("d")).toBe("M 50 100 L 50 160");
   });
 
+  it("draws a link over its own maps, masked out of any other", () => {
+    const withShed = {zones: {forest: {...atlas.zones.forest, maps: {...atlas.zones.forest.maps, shed: {x: 120, y: 0}}}}};
+    render(<AtlasCanvas atlas={withShed} sizes={{forest: {...sizes.forest, shed: {width: 40, height: 40}}}} zoneNames={{}} mapNames={{}}
+      thumbnails={{}} linksFor={(a) => atlasLinks(a, input)} onChange={vi.fn()} />);
+    const path = document.querySelector(".atlas-link");
+    const svg = path.closest("svg");
+    expect([...svg.children[0].children].indexOf(path)).toBeGreaterThan([...svg.children[0].children].indexOf(screen.getByLabelText("Map road")));
+    const mask = document.querySelector(path.getAttribute("mask").match(/#[^)]+/)[0]);
+    expect([...mask.querySelectorAll('rect[fill="black"]')].map((r) => r.getAttribute("x"))).toEqual(["120"]);
+  });
+
   it("bends a link by dragging its dot", () => {
     const onChange = renderCanvas();
     drag(screen.getByLabelText(`Bend ${key}`), 20, 0);
