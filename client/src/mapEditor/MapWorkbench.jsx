@@ -872,8 +872,7 @@ export default function MapWorkbench({
             />
             <InteractablesPanel
               interactables={mapData.interactables ?? []}
-              imageUrls={ncuTokenUrls}
-              images={tokenImages}
+              stampLayer={stampLayer}
               selectedIndex={selectedInteractableIndex}
               onSelect={setSelectedInteractableIndex}
               hoveredIndex={hoveredInteractableIndex}

@@ -1,5 +1,5 @@
 import {describe, expect, it, vi} from "vitest";
-import {bakeStamps, drawStamps, isShareAlike, loadStampSheets, shareAlikeSetsUsed, stampFeet, stampFor, stampFrame, variantIndex} from "../stamps";
+import {bakeStamps, drawStamps, isShareAlike, stampCanvas, loadStampSheets, shareAlikeSetsUsed, stampFeet, stampFor, stampFrame, variantIndex} from "../stamps";
 
 const logs = [{x: 0, y: 0, width: 40, height: 20}, {x: 40, y: 0, width: 40, height: 20}, {x: 80, y: 0, width: 40, height: 20}];
 const sets = {
@@ -95,5 +95,32 @@ describe("share-alike sets", () => {
   it("lists the share-alike sets a map's stamps use", () => {
     const licensed = {...sets, wilds: {license: "CC-BY-SA-4.0", stamps: {}}, other: {license: "CC-BY-SA-3.0", stamps: {}}};
     expect(shareAlikeSetsUsed(licensed, [{stamp: "camp/log"}, {stamp: "wilds/rock"}])).toEqual(["wilds"]);
+  });
+});
+
+describe("stampCanvas", () => {
+  const canvasRecorder = () => {
+    const made = [];
+    const createCanvas = (width, height) => {
+      const {ctx, calls} = recorder();
+      const canvas = {width, height, calls, getContext: () => ctx};
+      made.push(canvas);
+      return canvas;
+    };
+    return {made, createCanvas};
+  };
+
+  it("cuts a stamp's frame onto its own canvas at its size in feet", () => {
+    const {made, createCanvas} = canvasRecorder();
+    const cut = stampCanvas(sets, {camp: sheet}, {stamp: "camp/log", variant: 2, scale: 2}, {pixelsPerFoot: 10, createCanvas});
+    expect(cut).toMatchObject({width: 12, height: 6});
+    expect(made[0]).toMatchObject({width: 120, height: 60});
+    expect(made[0].calls).toEqual([["drawImage", sheet, 80, 0, 40, 20, 0, 0, 120, 60]]);
+  });
+
+  it("is null for a stamp it can't draw", () => {
+    expect(stampCanvas(sets, {}, {stamp: "camp/log"})).toBeNull();
+    expect(stampCanvas(sets, {camp: sheet}, {stamp: "camp/tent"})).toBeNull();
+    expect(stampCanvas(sets, {camp: sheet}, null)).toBeNull();
   });
 });

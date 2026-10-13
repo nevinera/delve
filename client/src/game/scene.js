@@ -3,7 +3,7 @@ import { fetchVerifiedJson } from "./verifiedFetch";
 import { resolveBarrierCollisions } from "./collision.js";
 import { resolveStockAssetUrl } from "../resolveStockAssetUrl";
 import { loadSvgToCanvas } from "./svgRaster.js";
-import { bakeStamps, loadStampSheets } from "./stamps.js";
+import { bakeStamps, loadStampSheets, stampCanvas } from "./stamps.js";
 import { isUntargetableStatus } from "./state.js";
 import { computeMapFill } from "./mapFill.js";
 import { SceneLighting } from "./lighting.js";
@@ -631,35 +631,28 @@ export function createNcuToken(radius, name, tokenImageUrl, zoneBaseUrl) {
   return group;
 }
 
-// A quest interactable (docs/schema/map.md#interactable): its image laid
-// on the ground like a stamp, no ring or label, so it blends in; its used
-// image, if it has one; a faint glow of the same image, shown on hover or
-// in range; and its name, shown on hover. Placed in map coordinates by
-// toWorld. Starts hidden (see GameScene.setInteractableStates).
-export function createInteractable(config, zoneBaseUrl, toWorld) {
+// A quest interactable (see interactables.js): its stamp laid flat on the
+// ground at its spot and turned, with a glow for when it's highlighted and
+// its name over it. Each part starts hidden; setInteractableStates shows
+// them. Its look arrives later, from the zone's stamp sheets: see
+// paintInteractable. One drawn as used gets a used mesh too.
+export function createInteractable(config, toWorld) {
   const group = new THREE.Group();
   const [wx, wz] = toWorld(config.position.x, config.position.y);
   group.position.set(wx, 0, wz);
   group.rotation.y = -((config.position.angle ?? 0) * DEG);
-  const { width, height } = config.size;
-  const image = (url, material, y) => {
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+  const plane = (material, y) => {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = y;
     mesh.visible = false;
-    if (url && zoneBaseUrl) {
-      new THREE.TextureLoader().load(new URL(url, zoneBaseUrl).href, (texture) => {
-        material.map = texture;
-        material.needsUpdate = true;
-      });
-    }
     group.add(mesh);
     return mesh;
   };
-  const flat = () => new THREE.MeshLambertMaterial({ transparent: true, alphaTest: 0.05, depthWrite: false });
-  const available = image(config.imageUrl, flat(), 0.03);
-  const used = config.usedImageUrl ? image(config.usedImageUrl, flat(), 0.03) : null;
-  const glow = image(config.imageUrl, new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }), 0.04);
+  const flat = (extra = {}) => new THREE.MeshLambertMaterial({ transparent: true, alphaTest: 0.05, depthWrite: false, ...extra });
+  const available = plane(flat(), 0.03);
+  const used = config.whenUnavailable === "used" ? plane(flat(), 0.03) : null;
+  const glow = plane(new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }), 0.04);
   glow.scale.set(1.12, 1.12, 1);
   const label = createNameLabel(config.name);
   if (label) {
@@ -668,6 +661,31 @@ export function createInteractable(config, zoneBaseUrl, toWorld) {
     group.add(label);
   }
   return { group, available, used, glow, label };
+}
+
+// How faded a used interactable with no used stamp of its own is.
+const USED_FADE = 0.55;
+
+// Gives an interactable (createInteractable's entry) its look from the
+// zone's stamps: its stamp, sized as it says, and once used its usedStamp,
+// or its own stamp grayed and faded when it has none.
+export function paintInteractable(entry, config, sets, sheets) {
+  const available = stampCanvas(sets, sheets, { stamp: config.stamp, variant: config.variant, scale: config.scale });
+  if (!available) return;
+  const show = (mesh, cut, opacity = 1) => {
+    mesh.material.map = new THREE.CanvasTexture(cut.canvas);
+    mesh.material.opacity = opacity;
+    mesh.material.needsUpdate = true;
+    mesh.scale.set(cut.width, cut.height, 1);
+  };
+  show(entry.available, available);
+  entry.glow.material.map = entry.available.material.map;
+  entry.glow.material.needsUpdate = true;
+  entry.glow.scale.set(available.width * 1.12, available.height * 1.12, 1);
+  if (!entry.used) return;
+  const usedStamp = config.usedStamp && stampCanvas(sets, sheets, { stamp: config.usedStamp, variant: config.usedVariant, scale: config.scale });
+  if (usedStamp) show(entry.used, usedStamp);
+  else show(entry.used, stampCanvas(sets, sheets, { stamp: config.stamp, variant: config.variant, scale: config.scale }, { gray: true }), USED_FADE);
 }
 
 // A pale blue diamond floating above an NCU that has a quest for the
@@ -1169,9 +1187,9 @@ export class SceneManager {
     }
 
     // Decoration stamps are baked into each map's ground once its sheets
-    // load (see stamps.js).
+    // load (see stamps.js); interactables are drawn from them too.
     const stampSets = json.stamps ?? {};
-    const needsSheets = json.maps.some((m) => m.stamps?.length);
+    const needsSheets = json.maps.some((m) => m.stamps?.length || m.interactables?.length);
     const sheets = needsSheets ? loadStampSheets(stampSets, (imageUrl) => new URL(imageUrl, baseUrl).href) : Promise.resolve({});
     const stampsByMap = new Map(json.maps.map((m) => [m.identifier, m.stamps ?? []]));
     const withStamps = async (mapId, canvas) => {
@@ -1253,7 +1271,8 @@ export class SceneManager {
       }
 
       for (const config of m.interactables ?? []) {
-        const entry = createInteractable(config, baseUrl, toWorld);
+        const entry = createInteractable(config, toWorld);
+        sheets.then((loaded) => paintInteractable(entry, config, stampSets, loaded));
         group.add(entry.group);
         this._interactables.set(config.identifier, { ...entry, config, map: m.identifier, state: "hidden" });
       }

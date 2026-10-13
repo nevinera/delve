@@ -288,7 +288,7 @@ RSpec.describe Validators::MapValidator, type: :validator do
 
     context "interactables" do
       let(:snare) do
-        {"identifier" => "snare-1", "name" => "Snare", "imageUrl" => "./s.webp", "size" => {"width" => 2, "height" => 2},
+        {"identifier" => "snare-1", "name" => "Snare", "stamp" => "quest-props/snare",
          "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
       end
 

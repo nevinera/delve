@@ -53,11 +53,11 @@ function newNcu(ncus, feet) {
 }
 
 // A freshly placed quest interactable (docs/schema/map.md#interactable) -
-// its image is left for the author to pick; validation flags it empty.
+// its stamp is left for the author to pick; validation flags it empty.
 function newInteractable(interactables, feet) {
   return {
-    identifier: nextUnitIdentifier(interactables, "interactable"), name: "New Interactable", imageUrl: "",
-    size: {width: 3, height: 3}, position: {x: feet.x, y: feet.y, angle: 0},
+    identifier: nextUnitIdentifier(interactables, "interactable"), name: "New Interactable", stamp: "",
+    position: {x: feet.x, y: feet.y, angle: 0},
   };
 }
 
@@ -1334,7 +1334,7 @@ export default function MapCanvas({
                 interactables={mapData.interactables}
                 pixelDimensions={image.pixelDimensions}
                 feetDimensions={feetDimensions}
-                imageUrls={ncuTokenUrls}
+                stampLayer={stampLayer}
                 interactive={!isPlacing && activeLayers.ncus}
                 selectedIndex={selectedInteractableIndex}
                 hoveredIndex={hoveredInteractableIndex}

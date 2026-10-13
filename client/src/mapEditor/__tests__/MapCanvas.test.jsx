@@ -931,20 +931,24 @@ describe("MapCanvas", () => {
       expect(dispatch).toHaveBeenCalledWith({
         type: "ADD_ENTRY", section: "interactables",
         entry: {
-          identifier: expect.stringMatching(/^interactable-[a-z]{6}$/), name: "New Interactable", imageUrl: "",
-          size: {width: 3, height: 3}, position: {x: 10, y: 120, angle: 0},
+          identifier: expect.stringMatching(/^interactable-[a-z]{6}$/), name: "New Interactable", stamp: "",
+          position: {x: 10, y: 120, angle: 0},
         },
       });
       expect(onSelectInteractable).toHaveBeenCalledWith(0);
       expect(onToolChange).toHaveBeenCalledWith("select");
     });
 
-    it("draws an interactable at its size and turn, and dragging it moves it", () => {
+    it("draws an interactable at its stamp's size and its turn, and dragging it moves it", () => {
       const dispatch = vi.fn();
-      const interactables = [{identifier: "snare-1", name: "Snare", imageUrl: "", size: {width: 4, height: 2}, position: {x: 5, y: 5, angle: 90}}];
+      const interactables = [{identifier: "snare-1", name: "Snare", stamp: "props/snare", position: {x: 5, y: 5, angle: 90}}];
+      const stampLayer = {
+        sets: {props: {imageUrl: "p.png", stamps: {snare: {feetWidth: 4, frames: [{x: 0, y: 0, width: 40, height: 20}]}}}},
+        sheets: {props: {src: "p.png", naturalWidth: 40, naturalHeight: 20}},
+      };
       render(
         <MapCanvas
-          image={IMAGE} imageError="" onImageFile={noop}
+          image={IMAGE} imageError="" onImageFile={noop} stampLayer={stampLayer}
           mapData={mapData({feetDimensions: FEET_DIMENSIONS, interactables})}
           dispatch={dispatch} onSelectBarrier={noop} onSelectInteractable={noop}
         />

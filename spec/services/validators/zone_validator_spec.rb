@@ -91,7 +91,15 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
 
       it "rejects a variant past the stamp's frames" do
         expect { described_class.validate!(with_stamps([{"stamp" => "camp/log", "x" => 1, "y" => 2, "variant" => 2}])) }
-          .to raise_error(Validators::ValidationError, /less than 2/)
+          .to raise_error(Validators::ValidationError, /must be less than 2/)
+      end
+
+      it "checks interactables' stamps too" do
+        maps = zone_fixture["maps"].each_with_index.map do |map, i|
+          i.zero? ? map.merge("interactables" => [{"identifier" => "pile", "name" => "Log pile", "stamp" => "camp/log", "usedStamp" => "camp/tent", "position" => {"x" => 1, "y" => 1, "angle" => 0}}]) : map
+        end
+        expect { described_class.validate!(zone_fixture.merge("stamps" => sets, "maps" => maps)) }
+          .to raise_error(Validators::ValidationError, /usedStamp "camp\/tent" on map .* isn't one of the zone's stamps/) { |e| expect(e.path).to eq("$.maps[0].interactables[0].usedStamp") }
       end
 
       it "rejects stamps placed on a zone with none" do
@@ -316,7 +324,7 @@ RSpec.describe Validators::ZoneValidator, type: :validator do
       end
 
       it "raises when two interactables share an identifier across maps" do
-        snare = {"identifier" => "snare-1", "name" => "Snare", "imageUrl" => "./s.webp", "size" => {"width" => 2, "height" => 2}, "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
+        snare = {"identifier" => "snare-1", "name" => "Snare", "stamp" => "quest-props/snare", "position" => {"x" => 1.0, "y" => 1.0, "angle" => 0.0}}
         maps = [
           minimal_map("map_a", ["goblin_1"]).merge("interactables" => [snare]),
           minimal_map("map_b", ["goblin_2"]).merge("interactables" => [snare])
