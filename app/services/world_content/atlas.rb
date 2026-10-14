@@ -27,17 +27,27 @@ module WorldContent
       atlas["zones"].each_with_object({}) do |(zone_key, entry), placed|
         zone = zones[zone_key] or next
         (entry["maps"] || {}).each do |map_id, at|
-          map = (zone[:data]["maps"] || []).find { |m| m["identifier"] == map_id } or next
-          dims = map["feetDimensions"] || {}
-          placed[[zone_key, map_id]] = {
-            "zone" => zone_key, "map" => map_id, "name" => map["name"] || map_id,
-            "x" => at["x"], "y" => at["y"], "width" => dims["width"].to_f, "height" => dims["height"].to_f,
-            "thumbnail_url" => map["thumbnailUrl"] && URI.join(zone[:url], map["thumbnailUrl"]).to_s,
-            "places" => places(map),
-            "data" => map
-          }
+          map = zone_map(zone[:data], map_id) or next
+          placed[[zone_key, map_id]] = placed_map(zone_key, zone, map, at)
         end
       end
+    end
+
+    def zone_map(zone_data, map_id) = (zone_data["maps"] || []).find { |m| m["identifier"] == map_id }
+
+    def placed_map(zone_key, zone, map, at)
+      {
+        "zone" => zone_key, "map" => map["identifier"], "name" => map["name"] || map["identifier"],
+        "x" => at["x"], "y" => at["y"], **size(map),
+        "thumbnail_url" => map["thumbnailUrl"] && URI.join(zone[:url], map["thumbnailUrl"]).to_s,
+        "places" => places(map),
+        "data" => map
+      }
+    end
+
+    def size(map)
+      dims = map["feetDimensions"] || {}
+      {"width" => dims["width"].to_f, "height" => dims["height"].to_f}
     end
 
     # The map's places, for the in-game map's fog: [{"identifier",
@@ -50,17 +60,25 @@ module WorldContent
     end
 
     def links(world_data, atlas, zones, maps)
-      ends = zones.flat_map do |zone_key, zone|
+      ends = zone_link_ends(zones) + world_link_ends(world_data, zones)
+      ends.filter_map { |kind, a, b| line(kind, a, b, atlas, maps) }
+    end
+
+    # [kind, end, end] for each link: zones' own, then the world's.
+    def zone_link_ends(zones)
+      zones.flat_map do |zone_key, zone|
         (zone[:data]["zoneLinks"] || []).filter_map do |link|
           a, b = link.values_at("connectionA", "connectionB")
           ["zone", end_of(zone_key, a), end_of(zone_key, b)] if a && b
         end
       end
-      ends += (world_data["worldLinks"] || []).filter_map do |link|
+    end
+
+    def world_link_ends(world_data, zones)
+      (world_data["worldLinks"] || []).filter_map do |link|
         a, b = link.values_at("zoneA", "zoneB").map { |side| world_link_end(zones, side) }
         ["world", a, b] if a && b
       end
-      ends.filter_map { |kind, a, b| line(kind, a, b, atlas, maps) }
     end
 
     def end_of(zone_key, side) = {zone: zone_key, map: side["map"], connection: side["connection"]}
@@ -74,24 +92,32 @@ module WorldContent
     def line(kind, a, b, atlas, maps)
       from, to = point(a, maps), point(b, maps)
       return unless from && to
-      key = ["#{a[:zone]}/#{a[:map]}/#{a[:connection]}", "#{b[:zone]}/#{b[:map]}/#{b[:connection]}"].sort.join("|")
+      key = link_key(a, b)
       bend = atlas.dig("bends", key)
-      through = bend && {"x" => (from["x"] + to["x"]) / 2.0 + bend["x"], "y" => (from["y"] + to["y"]) / 2.0 + bend["y"]}
-      {"kind" => kind, "key" => key, "from" => from, "to" => to, "through" => through,
-       "ends" => [{"zone" => a[:zone], "map" => a[:map]}, {"zone" => b[:zone], "map" => b[:map]}]}
+      {"kind" => kind, "key" => key, "from" => from, "to" => to, "through" => bend && offset(midpoint(from, to), bend),
+       "ends" => [a, b].map { |e| {"zone" => e[:zone], "map" => e[:map]} }}
     end
 
-    # Where the end's connection sits in world feet: a line's midpoint, or a
-    # point's position, from its map's origin.
+    # The link's two ends as "zone/map/connection", sorted and joined by "|":
+    # what its bend is keyed by.
+    def link_key(a, b) = [a, b].map { |e| e.values_at(:zone, :map, :connection).join("/") }.sort.join("|")
+
+    # Where the end's connection sits in world feet, from its map's origin.
     def point(link_end, maps)
       placed = maps[[link_end[:zone], link_end[:map]]] or return
-      conn = (placed["data"]["connections"] || []).find { |c| c["identifier"] == link_end[:connection] } or return
-      local = if conn["start"] && conn["end"]
-        {"x" => (conn["start"]["x"] + conn["end"]["x"]) / 2.0, "y" => (conn["start"]["y"] + conn["end"]["y"]) / 2.0}
-      else
-        conn["position"]
-      end
-      local && {"x" => placed["x"] + local["x"], "y" => placed["y"] + local["y"]}
+      local = connection_position(placed["data"], link_end[:connection]) or return
+      offset(local, placed)
     end
+
+    # Where the map's connection sits in its own feet: a line's midpoint, or
+    # a point's position.
+    def connection_position(map, identifier)
+      conn = (map["connections"] || []).find { |c| c["identifier"] == identifier } or return
+      (conn["start"] && conn["end"]) ? midpoint(conn["start"], conn["end"]) : conn["position"]
+    end
+
+    def midpoint(a, b) = {"x" => (a["x"] + b["x"]) / 2.0, "y" => (a["y"] + b["y"]) / 2.0}
+
+    def offset(point, by) = {"x" => point["x"] + by["x"], "y" => point["y"] + by["y"]}
   end
 end

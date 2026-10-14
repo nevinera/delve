@@ -29,12 +29,15 @@ module Validators
     def validate_outline!(zone, path:)
       outline = require_array!(zone, "outline", path: path)
       outline_path = child_path(path, "outline")
-      unless outline.length.between?(3, MAX_OUTLINE_POINTS)
-        raise ValidationError.new("outline must have 3 to #{MAX_OUTLINE_POINTS} points", path: outline_path)
-      end
+      validate_outline_length!(outline, path: outline_path)
       outline.each_with_index { |point, i| validate_location!(point, path: index_path(outline_path, i)) }
       return if AtlasGeometry.simple_polygon?(outline.map { |p| [p["x"], p["y"]] })
       raise ValidationError.new("outline must not cross itself or be flat", path: outline_path)
+    end
+
+    def validate_outline_length!(outline, path:)
+      return if outline.length.between?(3, MAX_OUTLINE_POINTS)
+      raise ValidationError.new("outline must have 3 to #{MAX_OUTLINE_POINTS} points", path: path)
     end
 
     # Keyed by the link's two ends ("zone/map/connection", in sorted order,

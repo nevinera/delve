@@ -12,11 +12,11 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
-// A zone whose hills map has a 4x2 ft snare at the origin (reach 2 ft),
-// taking useTime seconds (nil: the default).
+// A zone whose hills map has a snare at the origin, taking useTime seconds
+// (nil: the default).
 func snareZone(useTime *float64) instanceconfig.Zone {
 	return instanceconfig.Zone{Maps: []instanceconfig.Map{{Identifier: "hills", Interactables: []instanceconfig.Interactable{
-		{Identifier: "snare-1", Name: "Snare", Size: instanceconfig.Size{Width: 4, Height: 2}, UseTime: useTime},
+		{Identifier: "snare-1", Name: "Snare", UseTime: useTime},
 	}}}}
 }
 
@@ -27,8 +27,8 @@ func useState(playerX float64, playerMap string) (*instancestate.InstanceState, 
 	}}}, unitID
 }
 
-func TestUseInteractableHandler_StartsACastInRangeOfItsEdge(t *testing.T) {
-	state, unitID := useState(13, "hills") // 10 + 1 + 2 feet away
+func TestUseInteractableHandler_StartsACastInRangeOfItsMiddle(t *testing.T) {
+	state, unitID := useState(15, "hills") // 14 + 1 feet away
 	require.NoError(t, command.UseInteractableHandler{}.Handle(unitID, command.UseInteractablePayload{Interactable: "snare-1"}, snareZone(nil), state))
 	cast := state.Units[unitID].Casting
 	require.NotNil(t, cast)
@@ -49,7 +49,7 @@ func TestUseInteractableHandler_UsesAnInstantOneAtOnce(t *testing.T) {
 func TestUseInteractableHandler_IgnoresOutOfRangeOtherMapsUnknownAndBusy(t *testing.T) {
 	for name, setup := range map[string]func() (*instancestate.InstanceState, uuid.UUID, string){
 		"out of range": func() (*instancestate.InstanceState, uuid.UUID, string) {
-			s, id := useState(13.5, "hills")
+			s, id := useState(15.5, "hills")
 			return s, id, "snare-1"
 		},
 		"another map": func() (*instancestate.InstanceState, uuid.UUID, string) {

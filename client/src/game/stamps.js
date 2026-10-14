@@ -95,3 +95,39 @@ export function bakeStamps(canvas, feetDimensions, placedStamps, sets, sheets) {
   if (placedStamps?.length) drawStamps(canvas.getContext("2d"), placedStamps, sets, sheets, canvas.width / feetDimensions.width);
   return canvas;
 }
+
+// One stamp, cut from its sheet onto its own canvas, at pixelsPerFoot:
+// {canvas, width, height} (feet), or null when it can't be drawn. look is
+// {stamp, variant?, scale?}, as an interactable names its stamps; gray
+// drains its color (a used interactable with no used stamp of its own).
+export function stampCanvas(sets, sheets, look, {pixelsPerFoot = 32, gray = false, createCanvas = defaultCanvas} = {}) {
+  const found = look?.stamp && stampFor(sets, look);
+  const sheet = found && sheets[found.set];
+  if (!sheet) return null;
+  const placed = {x: 0, y: 0, variant: look.variant ?? 0, scale: look.scale};
+  const frame = stampFrame(found.stamp, placed, sheet);
+  const feet = stampFeet(found.stamp, placed, frame);
+  const canvas = createCanvas(Math.max(1, Math.round(feet.width * pixelsPerFoot)), Math.max(1, Math.round(feet.height * pixelsPerFoot)));
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(sheet, frame.x, frame.y, frame.width, frame.height, 0, 0, canvas.width, canvas.height);
+  if (gray) grayOut(ctx, canvas.width, canvas.height);
+  return {canvas, ...feet};
+}
+
+// Each pixel to its luminance, keeping its alpha.
+function grayOut(ctx, width, height) {
+  const image = ctx.getImageData(0, 0, width, height);
+  const px = image.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const y = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    px[i] = px[i + 1] = px[i + 2] = y;
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+function defaultCanvas(width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}

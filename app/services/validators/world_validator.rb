@@ -21,7 +21,11 @@ module Validators
       validate_elevation_range!(data, path: path) if given?(data, "elevationRange")
       validate_world_links!(data, path: path) if given?(data, "worldLinks")
       validate_provenance_restrictions!(data, path: path) if given?(data, "provenanceRestrictions")
-      AtlasValidator.validate!(data["atlas"], path: child_path(path, "atlas")) if given?(data, "atlas")
+      validate_atlas!(data, path: path) if given?(data, "atlas")
+    end
+
+    def validate_atlas!(data, path:)
+      AtlasValidator.validate!(data["atlas"], path: child_path(path, "atlas"))
     end
 
     def validate_provenance_restrictions!(data, path:)

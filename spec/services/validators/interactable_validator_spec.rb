@@ -9,10 +9,10 @@ RSpec.describe Validators::InteractableValidator, type: :validator do
     {
       "identifier" => "snare-1",
       "name" => "Goblin Snare",
-      "imageUrl" => "../../images/interactable/snare.webp",
-      "usedImageUrl" => "../../images/interactable/snare-cut.webp",
+      "stamp" => "quest-props/goblin-snare",
+      "usedStamp" => "quest-props/goblin-snare-used",
       "whenUnavailable" => "used",
-      "size" => {"width" => 4, "height" => 3},
+      "scale" => 1.5,
       "position" => {"x" => 120.0, "y" => 340.0, "angle" => 0.0},
       "useTime" => 1,
       "useText" => "Cutting"
@@ -25,29 +25,34 @@ RSpec.describe Validators::InteractableValidator, type: :validator do
 
   it "accepts a full interactable, and one with only what's required" do
     expect { described_class.validate!(interactable) }.not_to raise_error
-    expect { described_class.validate!(interactable.except("usedImageUrl", "whenUnavailable", "useTime", "useText")) }.not_to raise_error
+    expect { described_class.validate!(interactable.except("usedStamp", "whenUnavailable", "scale", "useTime", "useText")) }.not_to raise_error
   end
 
-  %w[identifier name imageUrl size position].each do |field|
+  %w[identifier name stamp position].each do |field|
     it "raises when #{field} is missing" do
       expect_invalid(/#{field} is required/, interactable.except(field))
     end
   end
 
-  it "raises on an empty name or image" do
+  it "raises on an empty name or a stamp that doesn't name its set" do
     expect_invalid(/name must not be empty/, interactable.merge("name" => " "))
-    expect_invalid(/imageUrl must not be empty/, interactable.merge("imageUrl" => ""))
+    expect_invalid(%r{stamp must be set/stamp}, interactable.merge("stamp" => "goblin-snare"))
+    expect_invalid(%r{usedStamp must be set/stamp}, interactable.merge("usedStamp" => "snare-cut"))
   end
 
-  it "needs a used image to show as used" do
-    expect_invalid(/usedImageUrl is required when whenUnavailable is "used"/, interactable.except("usedImageUrl"))
-    expect { described_class.validate!(interactable.except("usedImageUrl").merge("whenUnavailable" => "hidden")) }.not_to raise_error
+  it "shows as used without a used stamp (its own, grayed)" do
+    expect { described_class.validate!(interactable.except("usedStamp")) }.not_to raise_error
     expect_invalid(/must be one of/, interactable.merge("whenUnavailable" => "faded"))
   end
 
-  it "raises on a size out of range" do
-    expect_invalid(/width must be between 0.5 and 40.0/, interactable.merge("size" => {"width" => 0.1, "height" => 3}))
-    expect_invalid(/height must be between/, interactable.merge("size" => {"width" => 4, "height" => 41}))
+  it "raises on a bad scale or variant" do
+    expect_invalid(/scale must be more than 0/, interactable.merge("scale" => 0))
+    expect_invalid(/usedVariant must be at least 0/, interactable.merge("usedVariant" => -1))
+  end
+
+  it "says what replaced the image fields" do
+    expect_invalid(/imageUrl is gone: interactables are drawn from the zone's stamps \(stamp\)/, interactable.merge("imageUrl" => "a.png"))
+    expect_invalid(/size is gone/, interactable.merge("size" => {"width" => 4, "height" => 3}))
   end
 
   it "raises on a bad use time or text" do

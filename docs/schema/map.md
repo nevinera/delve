@@ -212,13 +212,13 @@ is in the smallest place around it.
 ## Interactable
 
 Something on the map a player uses for a quest's `use` objective (see [quest.md](quest.md#objective)):
-a snare to cut, a totem to break, a cage to open. It's an image drawn into the map, not a token (no
-ring, no label), so it can blend in; its name shows on hover and while using it, and it's softly
+a snare to cut, a totem to break, a cage to open. It's a stamp from the zone's `stamps` (see
+[zone.md](zone.md#stamps)) laid on the map, not a token (no ring, no label), so it can blend in; its name shows on hover and while using it, and it's softly
 highlighted on hover or in range.
 
 Each player uses it for themselves, and it does nothing outside a quest that lists it. To a player
 with an active `use` objective that lists it, and who hasn't used it yet, it's **available**: drawn
-from `imageUrl`, and used by right-clicking it within 10 feet of its edge. That takes `useTime`
+from `stamp`, and used by right-clicking it within 14 feet of its middle (plus the player's radius). That takes `useTime`
 seconds, with a cast bar, under the rules of a power's cast: moving (more than half a foot)
 cancels it, and a landed hit pushes it back. Once they've used it, while that quest is active,
 it's drawn as `whenUnavailable` says; to anyone else it's hidden.
@@ -227,10 +227,12 @@ it's drawn as `whenUnavailable` says; to anyone else it's hidden.
 |---|---|---|---|---|
 | `identifier` | string | yes | | Unique among the zone's interactables. |
 | `name` | string | yes | | Shown on hover and in the cast bar. |
-| `imageUrl` | string | yes | | A transparent-background image, relative to the file it's written in. |
-| `usedImageUrl` | string | no | | Drawn once the player has used it, when `whenUnavailable` is `used` (a cut snare). |
-| `whenUnavailable` | string | no | `hidden` | After using it: `hidden` (not drawn) or `used` (drawn from `usedImageUrl`, which it then needs). |
-| `size` | object | yes | | `{width, height}` in feet, each 0.5 to 40: the image's size, centered on `position`. |
+| `stamp` | string | yes | | `set/stamp`: one of the zone's stamps, drawn at its `feetWidth` (times `scale`), centered on `position`. |
+| `variant` | integer | no | `0` | Which of the stamp's frames. |
+| `scale` | number | no | `1` | Multiplies the stamp's size (and its used stamp's). More than 0, at most 20. |
+| `whenUnavailable` | string | no | `hidden` | After using it: `hidden` (not drawn) or `used` (drawn from `usedStamp`, or without one its own stamp, grayed and faded). |
+| `usedStamp` | string | no | | `set/stamp`: drawn once the player has used it, when `whenUnavailable` is `used` (a cut snare). |
+| `usedVariant` | integer | no | `0` | Which of the used stamp's frames. |
 | `position` | Position | yes | | Its middle, and its turn (`angle`). |
 | `useTime` | number | no | `1` | Seconds to use it, 0 to 30; 0 is instant. |
 | `useText` | string | no | | The cast bar's label ("Cutting"), at most 40 characters; without it, the name. |
@@ -240,10 +242,9 @@ it's drawn as `whenUnavailable` says; to anyone else it's hidden.
 {
   "identifier": "snare-1",
   "name": "Goblin Snare",
-  "imageUrl": "../../images/interactable/snare.webp",
-  "usedImageUrl": "../../images/interactable/snare-cut.webp",
+  "stamp": "quest-props/goblin-snare",
+  "usedStamp": "quest-props/goblin-snare-used",
   "whenUnavailable": "used",
-  "size": {"width": 4, "height": 3},
   "position": {"x": 120.0, "y": 340.0, "angle": 0.0},
   "useText": "Cutting"
 }

@@ -10,8 +10,13 @@ import (
 	"github.com/delve-mmo/game-server/internal/instancestate"
 )
 
+// UseRange is how far from an interactable's middle a player can use it,
+// in feet (past their own radius): talk range plus room for the biggest
+// one's half-width, since its size is the stamp's (the client's business).
+const UseRange = 14.0
+
 // UseInteractableHandler starts a player using an interactable on their
-// map, in talk range of its edge (see docs/schema/map.md#interactable):
+// map, within UseRange of its middle (see docs/schema/map.md#interactable):
 // a cast of its use time, which moving cancels and a hit pushes back, as a
 // power's does, ending in a Use (instance.tickCasts); instant when its use
 // time is 0. Whether a quest wants it is the quest's business: a use no
@@ -66,12 +71,12 @@ func FindInteractable(zone instanceconfig.Zone, mapIdentifier, identifier string
 	return instanceconfig.Interactable{}, false
 }
 
-// InUseRange reports whether a living unit is in talk range of an
-// interactable's edge (on the unit's map; see FindInteractable).
+// InUseRange reports whether a living unit is within UseRange of an
+// interactable's middle (on the unit's map; see FindInteractable).
 func InUseRange(unit *instancestate.UnitState, interactable instanceconfig.Interactable) bool {
 	if unit.Status == instancestate.UnitStatusDead || unit.Status == instancestate.UnitStatusRespawning {
 		return false
 	}
 	dist := math.Hypot(interactable.Position.X-unit.Position.X, interactable.Position.Y-unit.Position.Y)
-	return dist <= TalkRange+unit.Radius+interactable.Reach()
+	return dist <= UseRange+unit.Radius
 }

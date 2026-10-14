@@ -133,10 +133,19 @@ class ImportWorldVersionJob < ApplicationJob
         commit_sha: sha, raw_base_url: base_url, name: world_data["name"], state: :unreleased, imported_at: Time.current,
         provenance_restrictions: world_data["provenanceRestrictions"],
         quests_path: @quests&.dig(:path), quests_sha: @quests&.dig(:content_sha),
-        atlas: WorldContent::Atlas.payload(world_data, zones.transform_values { |z| {data: z[:data], url: "#{base_url}#{z[:path]}"} })
+        atlas: atlas_payload(world_data, zones, base_url)
       )
-      world.update!(name: world_data["name"]) if world.name.blank?
+      name_world!(world_data["name"])
     end
+  end
+
+  # A world takes its first imported version's name.
+  def name_world!(name)
+    world.update!(name:) if world.name.blank?
+  end
+
+  def atlas_payload(world_data, zones, base_url)
+    WorldContent::Atlas.payload(world_data, zones.transform_values { |z| {data: z[:data], url: "#{base_url}#{z[:path]}"} })
   end
 
   # {map identifier: name} for the zone's named maps.

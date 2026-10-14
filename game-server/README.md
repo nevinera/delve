@@ -77,7 +77,7 @@ events as quests change.
   (PATCH) and sent as `quest-progress` (`{quest, objective, count, used?}`, the objective by hash,
   `used` a `use` objective's interactables used).
 - The client sends `use_interactable` (`{interactable}`, its identifier) when the player
-  right-clicks one in talk range of its edge. Using it is a cast of its `useTime` (the cast bar's
+  right-clicks one within 14 ft of its middle (`UseRange`). Using it is a cast of its `useTime` (the cast bar's
   `casting_power` is its `useText` or name), which moving cancels and hits push back; instant at
   0. Its end is a `use` for the player's objectives; one none lists does nothing.
 - A quest with no `turnIn` completes once every objective is met. One with a `turnIn` completes

@@ -8,8 +8,9 @@ class InternalApi::CharacterVisitsController < InternalApi::BaseController
   # nothing.
   def create
     world_character = WorldCharacter.find(params[:world_character_id])
-    CharacterVisit.record!(world_character, zone: params[:zone], map: params[:map], place: params[:place])
-    render json: {zone: params[:zone], map: params[:map].to_s, place: params[:place].to_s}, status: :created
+    zone, map, place = params.values_at(:zone, :map, :place)
+    CharacterVisit.record!(world_character, zone:, map:, place:)
+    render json: {zone:, map: map.to_s, place: place.to_s}, status: :created
   end
 
   private

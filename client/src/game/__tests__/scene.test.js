@@ -7,6 +7,7 @@ import {
   setUnitBars,
   tickCastBar,
   createInteractable,
+  paintInteractable,
   createPlayerToken,
   classColor,
   isPlayerUnit,
@@ -56,22 +57,44 @@ describe("createNcuToken", () => {
 });
 
 describe("createInteractable", () => {
-  const snare = {name: "Goblin Snare", size: {width: 4, height: 2}, position: {x: 10, y: 20, angle: 90}};
+  const snare = {name: "Goblin Snare", stamp: "props/snare", position: {x: 10, y: 20, angle: 90}};
   const toWorld = (x, y) => [x - 50, 50 - y];
+  const sets = {props: {imageUrl: "p.png", stamps: {snare: {feetWidth: 4, frames: [{x: 0, y: 0, width: 40, height: 20}]}, cut: {feetWidth: 4, frames: [{x: 40, y: 0, width: 40, height: 20}]}}}};
+  const sheets = {props: {naturalWidth: 80, naturalHeight: 20}};
+  const stubCanvas = () => vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    new Proxy({}, { get: (_, k) => (k === "getImageData" ? () => ({ data: new Uint8ClampedArray(4) }) : k === "measureText" ? () => ({ width: 10 }) : () => {}), set: () => true })
+  );
+  afterEach(() => vi.restoreAllMocks());
 
-  it("lays its image flat on the ground at its spot, turned, hidden until shown", () => {
-    const {group, available, used, glow, label} = createInteractable(snare, null, toWorld);
+  it("lays it flat on the ground at its spot, turned, hidden until shown", () => {
+    const {group, available, used, glow, label} = createInteractable(snare, toWorld);
     expect(group.position.toArray()).toEqual([-40, 0, 30]);
     expect(group.rotation.y).toBeCloseTo(-Math.PI / 2);
-    expect(available.geometry.parameters).toMatchObject({width: 4, height: 2});
     expect(available.rotation.x).toBeCloseTo(-Math.PI / 2);
     expect([available.visible, glow.visible, label?.visible ?? false]).toEqual([false, false, false]);
     expect(used).toBeNull();
-    expect(glow.scale.x).toBeGreaterThan(1);
   });
 
-  it("has a used image only when it names one", () => {
-    expect(createInteractable({...snare, usedImageUrl: "./cut.webp"}, null, toWorld).used).toBeInstanceOf(THREE.Mesh);
+  it("is painted from its stamp, sized from it", () => {
+    stubCanvas();
+    const entry = createInteractable({...snare, scale: 1.5}, toWorld);
+    paintInteractable(entry, {...snare, scale: 1.5}, sets, sheets);
+    expect(entry.available.scale.toArray()).toEqual([6, 3, 1]);
+    expect(entry.available.material.map).toBeInstanceOf(THREE.CanvasTexture);
+    expect(entry.glow.scale.x).toBeCloseTo(6 * 1.12);
+  });
+
+  it("once used shows its used stamp, or its own grayed and faded", () => {
+    stubCanvas();
+    const withCut = {...snare, whenUnavailable: "used", usedStamp: "props/cut"};
+    const cut = createInteractable(withCut, toWorld);
+    paintInteractable(cut, withCut, sets, sheets);
+    expect(cut.used.material.opacity).toBe(1);
+    const plain = {...snare, whenUnavailable: "used"};
+    const faded = createInteractable(plain, toWorld);
+    paintInteractable(faded, plain, sets, sheets);
+    expect(faded.used.material.opacity).toBeLessThan(1);
+    expect(faded.used.scale.x).toBe(4);
   });
 });
 
