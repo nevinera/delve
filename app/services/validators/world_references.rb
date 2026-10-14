@@ -57,28 +57,44 @@ module Validators
 
     def validate_atlas!
       zones_path = child_path(child_path("$", "atlas"), "zones")
-      outlines = {}
       rects = []
-      @world_data["atlas"]["zones"].each do |zone_key, entry|
-        zone_path = child_path(zones_path, zone_key)
-        zone = @zones_by_key[zone_key]
-        raise ValidationError.new("unknown zone \"#{zone_key}\"", path: zone_path) if zone.nil?
-        outline = entry["outline"].map { |p| [p["x"], p["y"]] }
-        outlines[zone_key] = outline
-        entry["maps"].each do |map_key, location|
-          map_path = child_path(child_path(zone_path, "maps"), map_key)
-          rect = map_rect(zone, zone_key, map_key, location, path: map_path)
-          raise ValidationError.new("map \"#{map_key}\" isn't inside its zone's outline", path: map_path) unless AtlasGeometry.rect_inside?(rect, outline)
-          rects << [zone_key, map_key, rect, map_path]
-        end
+      outlines = @world_data["atlas"]["zones"].to_h do |zone_key, entry|
+        [zone_key, validate_atlas_zone!(zone_key, entry, rects, path: child_path(zones_path, zone_key))]
       end
       validate_no_overlapping_maps!(rects)
       validate_no_overlapping_outlines!(outlines, zones_path)
     end
 
-    def map_rect(zone, zone_key, map_key, location, path:)
+    # Checks each of the zone's placed maps lies inside its outline, adding
+    # [zone, map, corners, path] to rects for each; returns the outline.
+    def validate_atlas_zone!(zone_key, entry, rects, path:)
+      zone = @zones_by_key[zone_key]
+      raise ValidationError.new("unknown zone \"#{zone_key}\"", path: path) if zone.nil?
+      outline = outline_points(entry)
+      entry["maps"].each do |map_key, location|
+        map_path = child_path(child_path(path, "maps"), map_key)
+        rect = placed_rect!(zone_map!(zone, zone_key, map_key, path: map_path), location, outline, path: map_path)
+        rects << [zone_key, map_key, rect, map_path]
+      end
+      outline
+    end
+
+    def outline_points(entry) = entry["outline"].map { |p| [p["x"], p["y"]] }
+
+    # The placed map's corners, checked to lie inside its zone's outline.
+    def placed_rect!(map, location, outline, path:)
+      rect = map_rect(map, location)
+      return rect if AtlasGeometry.rect_inside?(rect, outline)
+      raise ValidationError.new("map \"#{map["identifier"]}\" isn't inside its zone's outline", path: path)
+    end
+
+    def zone_map!(zone, zone_key, map_key, path:)
       map = (zone["maps"] || []).find { |m| m["identifier"] == map_key }
       raise ValidationError.new("zone \"#{zone_key}\" has no map \"#{map_key}\"", path: path) if map.nil?
+      map
+    end
+
+    def map_rect(map, location)
       dims = map["feetDimensions"] || {}
       AtlasGeometry.rect_corners(location["x"], location["y"], dims["width"].to_f, dims["height"].to_f)
     end
