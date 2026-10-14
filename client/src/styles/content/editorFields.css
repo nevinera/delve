@@ -1,0 +1,9 @@
+/* The content editors' own fields-pane rules, on top of content/fieldsPane.css. */
+
+.content-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid var(--border-subtle); border-radius: 4px; }
+.content-editor-fields .checkbox-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.content-editor-fields .checkbox-list label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.content-editor-fields h3 { font-size: 13px; color: var(--text-heading); font-weight: 600; margin: 16px 0 8px; }
+
+.content-editor-fields .status-effect-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 8px; background: var(--sunken-bg); border: 1px solid var(--border-subtle); border-radius: 4px; }
+

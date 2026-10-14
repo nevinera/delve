@@ -1,0 +1,4 @@
+/* EditModal.jsx - an editor over the world builder. */
+
+.edit-modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.6); display: flex; padding: 3vh 3vw; }
+.edit-modal { flex: 1; height: auto; border: 1px solid var(--accent-border); border-radius: 6px; overflow: hidden; background: var(--page-bg); box-shadow: 0 10px 40px #000a; }

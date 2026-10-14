@@ -1,0 +1,7 @@
+/* The ability editor's own fields-pane rules, on top of content/fieldsPane.css. */
+
+.ability-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid var(--border-subtle); border-radius: 4px; transition: background-color 0.4s ease-out; }
+
+.ability-editor-fields .status-editor { padding: 8px 10px; background: var(--sunken-bg); border: 1px solid var(--border-subtle); border-radius: 4px; }
+.ability-editor-fields .status-effect-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 8px; background: var(--panel-bg); border: 1px solid var(--border-subtle); border-radius: 4px; }
+

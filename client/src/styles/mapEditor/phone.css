@@ -1,0 +1,7 @@
+/* Phone: the sidebar goes under the map. */
+
+@media (max-width: 700px) {
+  .map-editor { flex-direction: column; }
+  .map-editor-sidebar { flex: none; width: 100%; border-left: none; border-top: 1px solid var(--border); }
+  .map-editor-sidebar.collapsed { flex: 0 0 36px; }
+}

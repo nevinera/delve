@@ -1,0 +1,10 @@
+/* AnnotationsSection.jsx - an LLM's notes on a thing, shown only where there are some. */
+
+.annotations-section { margin: 10px 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.annotations-heading { color: var(--text-muted); font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; cursor: help; }
+.annotations-entry { margin-bottom: 8px; }
+.annotations-key-row { display: flex; align-items: center; justify-content: space-between; }
+.annotations-key-row label { color: var(--text-muted); font-size: 12px; font-weight: bold; }
+.annotations-remove { background: none; border: none; color: #888; cursor: pointer; font-size: 14px; padding: 0 4px; }
+.annotations-remove:hover { color: var(--text-error); }
+.annotations-entry textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; background: #1a1a1a; color: var(--text); border: 1px solid #444; border-radius: 3px; padding: 4px 6px; resize: vertical; }

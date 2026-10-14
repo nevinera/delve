@@ -1,0 +1,46 @@
+/* character token picker: stock tokens as a grid of round, selectable
+   images; the radio stays focusable but is drawn by the image's ring */
+.token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.token-option {
+  position: relative;
+  margin: 0;
+  cursor: pointer;
+}
+
+.token-option input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+}
+
+.token-option img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+}
+
+.token-option input:checked + img {
+  outline-color: var(--pico-primary);
+}
+
+.token-option input:focus-visible + img {
+  outline-color: var(--pico-primary-hover);
+  outline-style: dashed;
+}
+
+/* the character's own token, on its page */
+.character-token {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+}

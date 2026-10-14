@@ -58,7 +58,7 @@ export default function AtlasLevel({draft, onChange, navigate, repo}) {
           />
         </div>
       </div>
-      <div className="content-editor-fields">
+      <div className="content-editor-fields fields-pane">
         <h3>Atlas</h3>
         <p className="world-key">
           Where each zone&apos;s maps sit, north up and to scale, for the in-game map. Drag a map, a zone, or a zone&apos;s corners;

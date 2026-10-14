@@ -1,0 +1,35 @@
+/* The editors' colors, by role. Every page imports this first; use these instead of raw colors.
+   (The game client's styles are still inline, and don't use them yet.) */
+
+:root {
+  /* Surfaces */
+  --page-bg: #14181c; /* the page behind everything */
+  --panel-bg: #1c2126; /* headers, sidebars, panes */
+  --sunken-bg: #171b1f; /* lists and boxes set into a pane */
+  --input-bg: #111; /* inputs and selects */
+  /* Lines */
+  --border: #333; /* between panes and sections */
+  --border-subtle: #2a2f35; /* between entries in a list */
+  --input-border: #555; /* around inputs */
+  /* Text */
+  --text: #ddd; /* body text */
+  --text-input: #eee; /* what's typed in an input */
+  --text-heading: #cce; /* titles and names */
+  --text-muted: #9ab; /* labels and details */
+  --text-dim: #789; /* counts, hints, pending things */
+  --text-error: #e79; /* errors */
+  /* Accent: links, add buttons, the selected tab */
+  --accent: #9cf; /* accent text */
+  --accent-bg: #234; /* accent button */
+  --accent-hover-bg: #345; /* accent button, hovered */
+  --accent-border: #457; /* accent button's border */
+  /* Danger: remove buttons */
+  --danger: #e9a; /* danger text */
+  --danger-bg: #422; /* danger button */
+  --danger-hover-bg: #533; /* danger button, hovered */
+  --danger-border: #644; /* danger button's border */
+  /* Disabled buttons */
+  --disabled-bg: #333;
+  --disabled-border: #555;
+  --disabled-text: #888;
+}

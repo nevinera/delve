@@ -1,0 +1,28 @@
+/* The self and target frames: token, name, range and dead badge. */
+
+.game-frames { display: flex; flex-shrink: 0; height: 90px; }
+.game-self-frame { flex: 1; display: flex; align-items: stretch; gap: 8px; background: #0d2b0d; border: 1px solid #2a6a2a; padding: 8px; }
+.game-target-frame { flex: 1; display: flex; flex-direction: row-reverse; align-items: stretch; gap: 8px; background: #2b0d0d; border: 1px solid #6a2a2a; padding: 8px; }
+/* Both orientations now give this a real box to fill (landscapeFrameSlot for landscape, portraitFramePane for portrait) - flex/minHeight:0 stretch it to that box's full height so the token image (frameImageAdaptiveHud/frameImagePortraitHud) has real room to scale into, instead of sizing to its own fixed-pixel content. marginTop cancels the container's own top offset/padding so the health bar (first thing in the header) pokes up flush with the very top of the screen. */
+.game-frame-in-panel-hud { display: flex; flex-direction: column; background: none; border: none; padding: 0; margin-top: -8px; flex: 1; min-height: 0; }
+.game-frame-image { height: 100%; width: auto; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.game-frame-info { position: relative; flex: 1; min-width: 0; }
+/* Wraps HealthBar + ResourceBar as a flex column so ResourceBar always ends up immediately below HealthBar, the same length (both stretch to this wrapper's width) and half as thick, with no gap between them - pinned where healthBarTrack alone used to be pinned. */
+.game-health-resource-stack { position: absolute; bottom: 6px; left: 6px; right: 6px; display: flex; flex-direction: column; }
+/* Bar+name HUD (portrait and landscape both use this now): the header holds the health bar (and, for a target with one, its resource bar immediately below); the name moved down next to the token image instead of living in this header. flex column, not a fixed height, so it grows to fit an optional second (resource) bar without overlap. */
+.game-frame-hud-header { display: flex; flex-direction: column; flex-shrink: 0; }
+/* Image + name side by side, below the header ("moved down" to clear it). Row-reverse for target so the name still sits nearer the header it belongs to while the image is still in the original image/name reading order (matches the old row-reverse targetFrame convention for the same reason). flex/minHeight:0 let this fill whatever height frameInPanelHud has to give it (see frameInPanelHud). */
+.game-frame-image-name-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex: 1; min-height: 0; }
+.game-frame-image-name-row-right { display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; margin-top: 6px; flex: 1; min-height: 0; }
+/* Landscape: scales with the frame's box instead of a fixed pixel height - fills whatever vertical room frameImageNameRow actually has (see landscapeFrameSlot), capped by maxWidth so a wide/tall aspect ratio can't push the name out or bleed past the panel's width. */
+.game-frame-image-adaptive-hud { height: 100%; width: auto; max-width: 65%; object-fit: cover; border-radius: 4px; flex-shrink: 0; min-height: 0; }
+/* Portrait: tripled back up from an initial 40% (100%/2.5) after that read as too small once the frame band itself also got shrunk - maxWidth loosened to match (the row is nearly full screen width, so this isn't a meaningful cap at this scale, just a backstop against true overflow). */
+.game-frame-image-portrait-hud { height: 120%; width: auto; max-width: 100%; object-fit: cover; border-radius: 4px; flex-shrink: 0; min-height: 0; }
+.game-frame-name-inline { font-size: 13px; font-weight: bold; color: #eee; text-shadow: 0 1px 2px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Portrait: wraps instead of truncating - the name breaks at whitespace (normal word-wrap) and only breaks mid-word (overflowWrap) if a single word is too long to fit at all. Smaller base font than landscape's single-line frameNameInline since it has to share room with a 2.5x smaller token image, not the whole panel width. */
+.game-frame-name-portrait-hud { font-size: 11px; font-weight: bold; color: #eee; text-shadow: 0 1px 2px #000; white-space: normal; overflow-wrap: break-word; word-break: normal; line-height: 1.15; min-width: 0; }
+.game-target-range { font-size: 11px; color: #999; display: block; margin-top: 1px; }
+.game-dead-badge { position: absolute; top: 6px; right: 8px; font-size: 22px; font-weight: bold; color: #cc2222; letter-spacing: 2px; text-shadow: 0 0 6px #000, 0 1px 4px #000; pointer-events: none; }
+/* UnitBar: a label with current/max and a percentage. */
+.game-unit-bar { font-size: 11px; margin-top: 4px; color: #aaa; }
+.game-no-target { color: #666; }

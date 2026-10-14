@@ -2,6 +2,7 @@ import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import WorldBuilderApp from "./WorldBuilderApp";
 import {adoptBranchParam} from "../github/branchPreference";
+import "../styles/worldBuilder/index.css";
 
 adoptBranchParam();
 

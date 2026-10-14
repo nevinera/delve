@@ -1,0 +1,5 @@
+/* RespawnOverlay. */
+
+.game-respawn-overlay { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 6px; background: rgba(0,0,0,0.7); border: 1px solid #555; border-radius: 6px; padding: 8px 18px; pointer-events: auto; }
+.game-respawn-countdown { font-size: 20px; font-weight: bold; color: #cc2222; letter-spacing: 1px; }
+.game-respawn-button { font-size: 16px; font-weight: bold; padding: 6px 20px; background: #2a5a2a; color: #cfc; border: 1px solid #4a9a4a; border-radius: 4px; cursor: pointer; }

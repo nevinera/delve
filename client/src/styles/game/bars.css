@@ -1,0 +1,20 @@
+/* Health and resource bars, in the frames and the landscape panels. */
+
+.game-health-bar-track { position: relative; height: 9px; border: 1px solid #3a8a3a; border-radius: 2px; background: #5a1010; }
+.game-resource-bar-track { position: relative; height: 4px; border-radius: 2px; overflow: hidden; }
+.game-resource-bar-track-landscape { position: relative; height: 9px; border-radius: 2px; overflow: hidden; }
+/* Landscape phone: sits at the top of frameHudHeader (which itself sits a couple px from the top of the screen), twice the height/length of the desktop bar (no left/right margin, full frameHudHeader width). A flex child of frameHudHeader now rather than self-positioned, so an optional ResourceBar can stack immediately below it instead of overlapping. */
+.game-health-bar-track-landscape { position: relative; height: 18px; border: 1px solid #000; border-radius: 2px; background: #5a1010; }
+.game-health-bar-pct-landscape { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); font-size: 12px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.game-health-bar-pct-landscape-left { position: absolute; top: 50%; left: 4px; transform: translateY(-50%); font-size: 12px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.game-resource-bar-fill { height: 100%; }
+/* Pips for a resource that isn't fluid (combo points, holy charges): a neutral dark track (rather
+   than a darkened tint of the resource's own color) plus a visible gap between segments - the
+   darkened-same-hue-with-1px-gap version read as a continuous fractional bar, not distinct pips. */
+.game-resource-pips { background: #1a1a1a; display: flex; gap: 2px; }
+.game-resource-pip { flex: 1; height: 100%; border-radius: 1px; }
+/* HealthBar's "HP: current/max" and resource labels, just above one end of the bar. */
+.game-health-bar-label { position: absolute; bottom: 100%; margin-bottom: 2px; font-size: 11px; color: #ccc; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.game-health-bar-fill { height: 100%; background: #2a7a2a; border-radius: 1px; }
+/* The target's landscape bar empties toward the center: its fill anchors to the right. */
+.game-health-bar-fill-mirrored { position: absolute; top: 0; bottom: 0; right: 0; background: #2a7a2a; border-radius: 1px; }

@@ -1,0 +1,15 @@
+/* CharacterSheet: the equipped items table (its row states last, so they win). */
+
+.game-char-sheet-equip-table { border-collapse: collapse; width: 100%; }
+.game-char-sheet-equip-row { border-bottom: 1px solid #333; font-size: 12px; }
+.game-char-sheet-slot-cell { padding: 3px 8px 3px 0; color: #888; white-space: nowrap; text-align: left; vertical-align: top; }
+.game-char-sheet-elvl-cell { padding: 3px 8px 3px 0; color: #888; white-space: nowrap; text-align: left; vertical-align: top; }
+.game-char-sheet-name-cell { padding: 3px 0; width: 100%; vertical-align: top; }
+/* Reserves two lines of height (fontSize 11 * lineHeight 1.3 * 2 lines = 28.6px) on every row, filled or empty, so rows stay regularly spaced. */
+.game-char-sheet-name-box { font-size: 11px; line-height: 1.3; height: 28.6px; display: -webkit-box; -webkit-line-clamp: 2px; -webkit-box-orient: vertical; overflow: hidden; }
+.game-char-sheet-empty-slot { color: #555; }
+.game-char-sheet-disallowed { color: #c66; text-decoration: line-through; }
+.game-char-sheet-equip-row-clickable { cursor: pointer; }
+.game-char-sheet-equip-row-hover { background: rgba(212,168,75,0.06); }
+.game-char-sheet-equip-row-expanded { background: rgba(212,168,75,0.12); }
+.game-char-sheet-best-available { margin-bottom: 6px; }

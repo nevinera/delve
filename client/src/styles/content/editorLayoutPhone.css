@@ -1,0 +1,11 @@
+/* Phone: the content editor's panes stack, and the page scrolls. */
+
+@media (max-width: 700px) {
+  .content-editor { display: flex; flex-direction: column; height: auto; min-height: 100%; }
+  body { overflow: auto; }
+  .content-editor-header { flex-wrap: wrap; }
+  .content-editor-left { border-right: none; }
+  .content-editor-preview { flex: none; height: 38vh; }
+  .area-list { flex: none; max-height: 30vh; }
+  .content-editor-fields { border-top: 1px solid var(--border); }
+}

@@ -1,0 +1,14 @@
+/* StatusBar: buffs and debuffs, and their tooltips. */
+
+.game-status-bar-left { position: absolute; left: 8px; bottom: 8px; display: flex; flex-direction: row; align-items: flex-end; gap: 10px; pointer-events: none; }
+.game-status-bar-right { position: absolute; right: 8px; bottom: 8px; display: flex; flex-direction: row; align-items: flex-end; gap: 10px; pointer-events: none; }
+/* Landscape: too little room for buffs/debuffs side by side - stack the buff block above the debuff block instead (DOM order is buffs-then- debuffs, so plain top-to-bottom column order already puts buffs on top). alignItems hugs each block to the side's outer screen edge so a shorter block doesn't look adrift from a longer one above/below it. */
+.game-status-bar-left-landscape { position: absolute; left: 8px; top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+.game-status-bar-right-landscape { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; pointer-events: none; }
+/* width: max-content makes each block's box size deterministic from its own content instead of leaning on flex shrink-to-fit - without it, the right-anchored (target) column could end up a hair wider than its text at small font sizes, reading as the text overhanging the block's edge. */
+.game-status-column { display: flex; flex-direction: column; gap: 1px; width: max-content; }
+.game-status-row-landscape { font-size: 8px; line-height: 1.2; white-space: nowrap; text-shadow: 0 1px 3px #000; }
+.game-status-row { font-size: 11px; line-height: 1.3; white-space: nowrap; text-shadow: 0 1px 3px #000; }
+.game-status-tooltip-anchor { display: inline-block; pointer-events: auto; cursor: default; }
+/* HintTooltip's anchor: the standard arrow cursor over its text, not the text-select one. */
+.game-hint-tooltip-anchor { display: inline-block; cursor: default; }

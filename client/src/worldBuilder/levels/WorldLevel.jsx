@@ -55,7 +55,7 @@ export default function WorldLevel({draft, onChange, navigate, repo, library, pl
           />
         </div>
       </div>
-      <div className="content-editor-fields">
+      <div className="content-editor-fields fields-pane">
         <ZoneList draft={draft} onChange={onChange} onOpen={(zone) => navigate({zone})} play={play} />
         <section className="content-list">
           <h3>Quests</h3>

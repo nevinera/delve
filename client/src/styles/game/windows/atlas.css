@@ -1,0 +1,7 @@
+/* AtlasWindow: the in-game map. A frame on every layout, so its canvas
+   fills it; on desktop centered under the top of the screen. */
+
+.game-atlas-window { top: 40px; bottom: 40px; left: 50%; transform: translateX(-50%); width: min(1000px, calc(100vw - 80px)); }
+.game-atlas-header { padding: 8px 14px; margin-bottom: 0; }
+.game-atlas-canvas { flex: 1; min-height: 0; }
+.game-atlas-empty { padding: 0 14px 14px; }

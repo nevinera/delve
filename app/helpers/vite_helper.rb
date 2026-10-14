@@ -23,7 +23,21 @@ module ViteHelper
     safe_join((preloads + [script]).map(&:html_safe), "\n")
   end
 
+  # <link rel="stylesheet"> tags for the CSS the entry's build pulled in
+  # (client/src/styles/, imported by each entry's main.jsx), its own and
+  # its imported chunks'. None without a manifest.
+  def vite_stylesheet_tags(entry_key)
+    links = vite_css_files(entry_key).map { |file| %(<link rel="stylesheet" href="/client/#{file}">) }
+    safe_join(links.map(&:html_safe), "\n")
+  end
+
   private
+
+  def vite_css_files(key, seen = Set.new)
+    entry = vite_manifest[key]
+    return [] if entry.nil? || !seen.add?(key)
+    ((entry["imports"] || []).flat_map { |chunk| vite_css_files(chunk, seen) } + (entry["css"] || [])).uniq
+  end
 
   def vite_manifest
     @vite_manifest ||= File.exist?(VITE_MANIFEST_PATH) ? JSON.parse(File.read(VITE_MANIFEST_PATH)) : {}

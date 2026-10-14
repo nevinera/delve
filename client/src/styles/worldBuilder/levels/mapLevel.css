@@ -1,0 +1,18 @@
+/* Map level: the map editor's own canvas + sidebar, filling the area
+   below the header. */
+.map-level { grid-column: 1 / -1; min-height: 0; min-width: 0; display: flex; }
+.map-level > .map-editor { flex: 1; min-width: 0; height: auto; }
+.map-actions { margin-bottom: 8px; }
+.zone-map-row-actions { display: flex; gap: 4px; margin-left: auto; }
+/* The old editors' collapsible section headings, not the world
+   editor's own h3s. */
+.world-builder .map-sidebar-section-heading h3 { margin: 0; padding: 0; border: none; font-size: 13px; }
+
+/* The map level's unit type adder (UnitTypeAdder.jsx), in the Units
+   tab's palette popover, and the modal editor it opens. */
+:is(.map-unit-palette-popover, .map-loot-item-popover) .content-adder { display: flex; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-subtle); }
+:is(.map-unit-palette-popover, .map-loot-item-popover) .zone-form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-subtle); }
+:is(.map-unit-palette-popover, .map-loot-item-popover) .zone-form input,
+:is(.map-unit-palette-popover, .map-loot-item-popover) .zone-form select { flex: 1 1 100%; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-input); padding: 3px 6px; border-radius: 3px; }
+:is(.map-unit-palette-popover, .map-loot-item-popover) .zone-list-error { color: var(--text-error); font-size: 12px; }
+.map-loot-item-popover > :first-child { margin-top: 0; padding-top: 0; border-top: none; }

@@ -8,7 +8,7 @@ import nipplejs from "nipplejs";
 // vector ref for camera look, etc.) rather than this component assuming one.
 // `horizontal` locks the knob to left/right, and swaps the round base for
 // a left/right track so the stick reads as one-axis.
-export function Joystick({ onMove, onEnd, style, horizontal = false }) {
+export function Joystick({ onMove, onEnd, className, style, horizontal = false }) {
   const zoneRef = useRef(null);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export function Joystick({ onMove, onEnd, style, horizontal = false }) {
   }, [onMove, onEnd, horizontal]);
 
   return (
-    <div ref={zoneRef} style={style}>
+    <div ref={zoneRef} className={className} style={style}>
       {horizontal && (
         <div data-testid="joystick-horizontal-track" aria-hidden="true" style={styles.track}>
           <span>◀</span>

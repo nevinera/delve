@@ -20,8 +20,11 @@ import { buildStatusCatalog, mergeStatusCatalogs } from "./game/statusCatalog";
 import { resolveStockAssetUrl } from "./resolveStockAssetUrl";
 import { useViewportMode } from "./useViewportMode";
 import { AbilityTooltip } from "./AbilityTooltip";
+import "./styles/shared/hoverTooltip.css";
+import { ItemTooltip, itemColor, STAT_GROUPS, STAT_LABELS } from "./ItemTooltip";
 import { hastedGlobalCooldown } from "./abilityEffectText";
 import { ClassSheet } from "./ClassSheet";
+import { GameWindow } from "./GameWindow";
 import SettingsDialog from "./SettingsDialog";
 import { actionForEvent, customOverrides, actionForKeyUp, bindingLabel, buildBindingIndex, MOVEMENT_ACTIONS, resolveHotkeys, TURN_ACTIONS } from "./hotkeys";
 import { assignPowerToButton, layoutToMap, resolveButtonLayout, saveCharacterSettings } from "./abilityButtons";
@@ -439,1297 +442,6 @@ const CHARACTER_BASIC_ATTACK_POWER = {
   ],
 };
 
-const styles = {
-  root: {
-    display: "flex",
-    flexDirection: "column",
-    width: "100vw",
-    // dvh (dynamic viewport height) tracks the actually-visible viewport as
-    // mobile browser chrome (the URL bar) collapses/expands, unlike vh -
-    // which is pinned to the viewport's largest possible size and leaves a
-    // gap (or lets the URL bar cover real content) when the chrome is showing.
-    height: "100dvh",
-    background: "#111",
-    color: "#ddd",
-    fontFamily: "monospace",
-    fontSize: 13,
-    overflow: "hidden",
-  },
-  viewportDebug: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    zIndex: 2000,
-    background: "rgba(0,0,0,0.7)",
-    color: "#0f0",
-    fontFamily: "monospace",
-    fontSize: 11,
-    padding: "2px 6px",
-  },
-  frames: {
-    display: "flex",
-    flexShrink: 0,
-    height: 90,
-  },
-  selfFrame: {
-    flex: 1,
-    display: "flex",
-    alignItems: "stretch",
-    gap: 8,
-    background: "#0d2b0d",
-    border: "1px solid #2a6a2a",
-    padding: 8,
-  },
-  targetFrame: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "row-reverse",
-    alignItems: "stretch",
-    gap: 8,
-    background: "#2b0d0d",
-    border: "1px solid #6a2a2a",
-    padding: 8,
-  },
-  // Both orientations now give this a real box to fill (landscapeFrameSlot
-  // for landscape, portraitFramePane for portrait) - flex/minHeight:0
-  // stretch it to that box's full height so the token image
-  // (frameImageAdaptiveHud/frameImagePortraitHud) has real room to scale
-  // into, instead of sizing to its own fixed-pixel content. marginTop
-  // cancels the container's own top offset/padding so the health bar
-  // (first thing in the header) pokes up flush with the very top of the
-  // screen.
-  frameInPanelHud: {
-    display: "flex",
-    flexDirection: "column",
-    background: "none",
-    border: "none",
-    padding: 0,
-    marginTop: -8,
-    flex: 1,
-    minHeight: 0,
-  },
-  frameImage: {
-    height: "100%",
-    width: "auto",
-    objectFit: "cover",
-    borderRadius: 4,
-    flexShrink: 0,
-  },
-  frameInfo: {
-    position: "relative",
-    flex: 1,
-    minWidth: 0,
-  },
-  // Wraps HealthBar + ResourceBar as a flex column so ResourceBar always
-  // ends up immediately below HealthBar, the same length (both stretch to
-  // this wrapper's width) and half as thick, with no gap between them -
-  // pinned where healthBarTrack alone used to be pinned.
-  healthResourceStack: {
-    position: "absolute",
-    bottom: 6,
-    left: 6,
-    right: 6,
-    display: "flex",
-    flexDirection: "column",
-  },
-  healthBarTrack: {
-    position: "relative",
-    height: 9,
-    border: "1px solid #3a8a3a",
-    borderRadius: 2,
-    background: "#5a1010",
-  },
-  resourceBarTrack: {
-    position: "relative",
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  resourceBarTrackLandscape: {
-    position: "relative",
-    height: 9,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  // Landscape phone: sits at the top of frameHudHeader (which itself sits a
-  // couple px from the top of the screen), twice the height/length of the
-  // desktop bar (no left/right margin, full frameHudHeader width). A flex
-  // child of frameHudHeader now rather than self-positioned, so an optional
-  // ResourceBar can stack immediately below it instead of overlapping.
-  healthBarTrackLandscape: {
-    position: "relative",
-    height: 18,
-    // Black instead of the desktop bar's green border - green blends into
-    // grass/foliage scenery now that the frame has no background box.
-    border: "1px solid #000",
-    borderRadius: 2,
-    background: "#5a1010",
-  },
-  healthBarPctLandscape: {
-    position: "absolute",
-    top: "50%",
-    right: 4,
-    transform: "translateY(-50%)",
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#fff",
-    textShadow: "0 1px 2px #000",
-    pointerEvents: "none",
-  },
-  healthBarPctLandscapeLeft: {
-    position: "absolute",
-    top: "50%",
-    left: 4,
-    transform: "translateY(-50%)",
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#fff",
-    textShadow: "0 1px 2px #000",
-    pointerEvents: "none",
-  },
-  // Bar+name HUD (portrait and landscape both use this now): the header
-  // holds the health bar (and, for a target with one, its resource bar
-  // immediately below); the name moved down next to the token image
-  // instead of living in this header. flex column, not a fixed height, so
-  // it grows to fit an optional second (resource) bar without overlap.
-  frameHudHeader: {
-    display: "flex",
-    flexDirection: "column",
-    flexShrink: 0,
-  },
-  // Image + name side by side, below the header ("moved down" to clear
-  // it). Row-reverse for target so the name still sits nearer the header
-  // it belongs to while the image is still in the original image/name
-  // reading order (matches the old row-reverse targetFrame convention for
-  // the same reason). flex/minHeight:0 let this fill whatever height
-  // frameInPanelHud has to give it (see frameInPanelHud).
-  frameImageNameRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 6,
-    flex: 1,
-    minHeight: 0,
-  },
-  frameImageNameRowRight: {
-    display: "flex",
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 6,
-    flex: 1,
-    minHeight: 0,
-  },
-  // Landscape: scales with the frame's box instead of a fixed pixel height
-  // - fills whatever vertical room frameImageNameRow actually has (see
-  // landscapeFrameSlot), capped by maxWidth so a wide/tall aspect ratio
-  // can't push the name out or bleed past the panel's width.
-  frameImageAdaptiveHud: {
-    height: "100%",
-    width: "auto",
-    maxWidth: "65%",
-    objectFit: "cover",
-    borderRadius: 4,
-    flexShrink: 0,
-    minHeight: 0,
-  },
-  // Portrait: tripled back up from an initial 40% (100%/2.5) after that
-  // read as too small once the frame band itself also got shrunk - maxWidth
-  // loosened to match (the row is nearly full screen width, so this isn't
-  // a meaningful cap at this scale, just a backstop against true overflow).
-  frameImagePortraitHud: {
-    height: "120%",
-    width: "auto",
-    maxWidth: "100%",
-    objectFit: "cover",
-    borderRadius: 4,
-    flexShrink: 0,
-    minHeight: 0,
-  },
-  frameNameInline: {
-    fontSize: 13,
-    fontWeight: "bold",
-    color: "#eee",
-    textShadow: "0 1px 2px #000",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    minWidth: 0,
-  },
-  // Portrait: wraps instead of truncating - the name breaks at whitespace
-  // (normal word-wrap) and only breaks mid-word (overflowWrap) if a single
-  // word is too long to fit at all. Smaller base font than landscape's
-  // single-line frameNameInline since it has to share room with a 2.5x
-  // smaller token image, not the whole panel width.
-  frameNamePortraitHud: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#eee",
-    textShadow: "0 1px 2px #000",
-    whiteSpace: "normal",
-    overflowWrap: "break-word",
-    wordBreak: "normal",
-    lineHeight: 1.15,
-    minWidth: 0,
-  },
-  targetRange: {
-    fontSize: 11,
-    color: "#999",
-    display: "block",
-    marginTop: 1,
-  },
-  deadBadge: {
-    position: "absolute",
-    top: 6,
-    right: 8,
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#cc2222",
-    letterSpacing: 2,
-    textShadow: "0 0 6px #000, 0 1px 4px #000",
-    pointerEvents: "none",
-  },
-  actionBar: {
-    position: "relative",
-    flexShrink: 0,
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 4,
-    padding: "4px 8px",
-    background: "#111",
-    borderTop: "1px solid #333",
-  },
-  utilityRow: {
-    flexShrink: 0,
-    display: "flex",
-    gap: 4,
-    padding: "4px 8px",
-    background: "#111",
-    borderTop: "1px solid #333",
-  },
-  utilityButton: {
-    width: 52,
-    height: 26,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    color: "#999",
-    fontSize: 10,
-    letterSpacing: 0.5,
-    cursor: "pointer",
-  },
-  actionButton: {
-    position: "relative",
-    width: 52,
-    height: 52,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    cursor: "default",
-    flexShrink: 0,
-    overflow: "hidden",
-  },
-  actionIcon: {
-    position: "absolute",
-    inset: 4,
-    objectFit: "contain",
-  },
-  actionButtonFlash: {
-    borderColor: "#cc0",
-    boxShadow: "inset 0 0 10px rgba(255, 220, 50, 0.5)",
-    background: "#2a2a0a",
-  },
-  actionCooldownOverlay: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    pointerEvents: "none",
-  },
-  actionCooldownText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    textShadow: "0 0 4px #000, 0 1px 3px #000",
-    lineHeight: 1,
-  },
-  actionKeybind: {
-    position: "absolute",
-    bottom: 2,
-    right: 4,
-    fontSize: 10,
-    color: "#666",
-    lineHeight: 1,
-    pointerEvents: "none",
-  },
-  log: {
-    flexShrink: 0,
-    height: 110,
-    background: "#1a1a1a",
-    borderTop: "1px solid #333",
-    padding: "6px 8px",
-    overflowY: "auto",
-    lineHeight: 1.5,
-  },
-  touchControlButtonActive: {
-    borderColor: "#ff8c1a",
-    color: "#ff8c1a",
-    background: "#2a1c0a",
-  },
-  // Landscape phone: the screen is a 20/60/20 row (left panel, scene,
-  // right panel) instead of fixed-position overlays scattered over a
-  // full-screen canvas - each panel sizes/shrinks its own contents via
-  // normal flexbox rather than pixel math guessing what fits.
-  landscapeRow: {
-    flex: 1,
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "row",
-  },
-  // minWidth is a floor, not a fixed size: at 20% the panel is normally
-  // plenty wide, but on a narrow/short device it grows past 20% (shrinking
-  // the scene panel, which just letterboxes smaller) rather than squeezing
-  // the ability grid down to 2 shrunk columns when 3 full-size columns
-  // would otherwise fit.
-  landscapeControlPanel: {
-    flex: "0 0 20%",
-    minWidth: LANDSCAPE_PANEL_MIN_WIDTH,
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    padding: LANDSCAPE_PANEL_PADDING,
-    boxSizing: "border-box",
-  },
-  // Three stacked sub-panes within each control panel: unit frame (top),
-  // control buttons (middle, whatever's left), joystick (bottom) - fixed
-  // proportions so contents don't drift into each other or bleed into the
-  // scene panel regardless of device height.
-  landscapeFrameSlot: {
-    flex: "0 0 15%",
-    minWidth: 0,
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-  },
-  // overflow:hidden + minWidth/minHeight:0 clip the button grid to this
-  // sub-pane's actual box - without them a wide/tall grid (more columns, or
-  // not enough vertical room) just paints past the pane's edges instead of
-  // being contained by it, bleeding into the target frame above or the
-  // scene panel beside it.
-  landscapeControlsSlot: {
-    flex: "1 1 auto",
-    minWidth: 0,
-    minHeight: 0,
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-    gap: 8,
-  },
-  // "Outside-aligned": buttons hug the panel's outer edge (away from the
-  // scene in the middle) rather than centering toward it.
-  landscapeControlsSlotLeft: {
-    alignItems: "flex-start",
-  },
-  landscapeControlsSlotRight: {
-    alignItems: "flex-end",
-  },
-  landscapeJoystickSlot: {
-    flex: "0 0 25%",
-    minWidth: 0,
-    minHeight: 0,
-    marginTop: 8, // extra breathing room above the joystick, beyond the panel's own gap
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  landscapeJoystickZone: {
-    position: "relative",
-    width: 116,
-    height: 116,
-  },
-  // Fixed-size buttons packed into columns via native flex-wrap instead of a
-  // hand-picked row grouping - prefers as few columns as fit the available
-  // panel height without shrinking buttons, wrapping to another column only
-  // when one is actually needed. column-reverse fills bottom-to-top; the
-  // left panel's outer edge is the screen's left edge, so the default wrap
-  // direction (new columns toward the cross-end, i.e. rightward/inward)
-  // already reads outside-to-inside.
-  landscapeTouchControlsRow: {
-    display: "flex",
-    flexDirection: "column-reverse",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-    height: "100%",
-  },
-  // Same as landscapeTouchControlsRow, but the right panel's outer edge is
-  // the screen's right edge - wrap-reverse flips the cross-axis so the
-  // first column lands on the right (outside) and later columns wrap
-  // leftward (inside), instead of the default left-to-right.
-  landscapeActionGrid: {
-    display: "flex",
-    flexDirection: "column-reverse",
-    flexWrap: "wrap-reverse",
-    justifyContent: "center",
-    gap: 8,
-    height: "100%",
-  },
-  // Portrait phone: a top-to-bottom flex column of 5 bands (frames, scene,
-  // controls, joysticks, bottom buttons) - same idea as landscape's
-  // left-to-right row of panels, just rotated, and with real flexbox
-  // sizing instead of position:fixed pixel-offset math.
-  portraitColumn: {
-    flex: 1,
-    minHeight: 0,
-    position: "relative", // positioning root for chatPanelLandscape (reused here to cover the whole column, not just the scene band)
-    display: "flex",
-    flexDirection: "column",
-  },
-  portraitFrameBand: {
-    flex: "0 0 9%",
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "row",
-  },
-  portraitFramePane: {
-    flex: 1,
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    padding: 8,
-    boxSizing: "border-box",
-  },
-  // flex-shrink:1 (unlike the other bands, which are all 0) - the scene
-  // canvas is protected from shrinking (see its portrait-specific override
-  // below) so if the column ever runs short on height, this is the band
-  // that gives up space first instead of the scene.
-  portraitControlsBand: {
-    flex: "0 1 auto",
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    padding: "4px 8px",
-    boxSizing: "border-box",
-  },
-  // justifyContent:space-between with exactly two children pins them to
-  // the row's own left/right edges - same edges the action rows below use
-  // (same horizontal padding), so Tab/Atk end up flush above column 1 and
-  // column 5 of the grid without needing to match its column math exactly.
-  portraitTabAtkRow: {
-    display: "flex",
-    justifyContent: "space-between",
-  },
-  // space-between (fixed-size square buttons, extra room goes into the
-  // gaps) instead of flex:1 (which stretched buttons into wide rectangles
-  // to fill the row) - same edges as portraitTabAtkRow's own space-between
-  // treatment, so Tab/Atk still land above column 1 and column 5.
-  portraitActionRow: {
-    display: "flex",
-    justifyContent: "space-between",
-  },
-  // Extra padding (beyond the band's own gap) around each joystick zone so
-  // a full-deflection drag stays clear of the controls above and the
-  // bottom buttons below instead of visually crowding them.
-  // space-between (not space-around) pins the two sticks to the row's own
-  // edges - so aside from the row's own padding, each stick sits flush
-  // against the screen edge instead of drifting toward the center.
-  portraitJoystickBand: {
-    flex: "0 0 auto",
-    display: "flex",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: "10px 24px",
-    boxSizing: "border-box",
-  },
-  portraitBottomButtonsBand: {
-    flex: "0 0 auto",
-    display: "flex",
-    gap: 8,
-    padding: 6,
-    boxSizing: "border-box",
-  },
-  // Half-height, roughly one grid-column wide - sized to sit above a single
-  // column of the action grid below rather than spanning it.
-  touchControlButtonPortrait: {
-    flex: "0 0 18%",
-    height: 22,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    color: "#ccc",
-    fontSize: 11,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-    cursor: "pointer",
-  },
-  // flex:1 (equal width, filling the full-width row) instead of the
-  // landscape grid's fixed 43x43 - portrait has the whole screen width to
-  // spread 5 buttons across instead of a narrow side panel.
-  actionButtonPortrait: {
-    flex: "0 0 44px",
-    width: 44,
-    height: 44,
-  },
-  // Chat/Menu, portrait: normal-flow buttons filling the bottom band
-  // (unlike landscape's absolutely-positioned corner buttons - see
-  // chatButtonLandscape/menuButtonLandscape), splitting its width evenly.
-  bottomBandButtonPortrait: {
-    flex: 1,
-    height: 32,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    color: "#ccc",
-    fontSize: 13,
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-  // Landscape phone: Chat/Menu corner buttons, absolutely positioned within
-  // the scene panel (canvasWrapper, which is position:relative) instead of
-  // fixed-to-viewport - "live in the scene pane" per the panel redesign.
-  chatButtonLandscape: {
-    position: "absolute",
-    zIndex: 20,
-    left: 8,
-    bottom: 8,
-    width: 52,
-    height: 28,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    color: "#ccc",
-    fontSize: 11,
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-  menuButtonLandscape: {
-    position: "absolute",
-    zIndex: 20,
-    right: 8,
-    bottom: 8,
-    width: 52,
-    height: 28,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    color: "#ccc",
-    fontSize: 11,
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-  chatButtonActive: {
-    borderColor: "#4caf50",
-    color: "#4caf50",
-    background: "#0d2b0d",
-  },
-  // Covers the top 2/3 of the scene panel when chat is toggled on.
-  chatPanelLandscape: {
-    position: "absolute",
-    zIndex: 15,
-    top: 0,
-    left: 0,
-    right: 0,
-    height: "66.6667%",
-    background: "rgba(20,20,20,0.85)",
-    padding: "8px 12px",
-    overflowY: "auto",
-    fontSize: 13,
-    lineHeight: 1.5,
-    color: "#ddd",
-    boxSizing: "border-box",
-  },
-  menuDialogLandscape: {
-    position: "absolute",
-    zIndex: 20,
-    top: 16,
-    left: "50%",
-    transform: "translateX(-50%)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: 12,
-  },
-  menuDialogButton: {
-    width: 160,
-    height: 36,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    color: "#eee",
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  // Shared by both landscape and portrait control panels - size and look,
-  // not position (each orientation's own container handles that).
-  touchControlButtonLandscape: {
-    width: 43,
-    height: 43,
-    background: "#1c1c1c",
-    border: "1px solid #444",
-    borderRadius: 4,
-    color: "#ccc",
-    fontSize: 13,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
-    cursor: "pointer",
-  },
-  actionButtonLandscape: {
-    width: 43, // 48 * 0.9
-    height: 43,
-  },
-  canvasWrapper: {
-    flex: 1,
-    position: "relative",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "#111",
-  },
-  respawnOverlay: {
-    position: "absolute",
-    top: 12,
-    left: "50%",
-    transform: "translateX(-50%)",
-    zIndex: 10,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 6,
-    background: "rgba(0,0,0,0.7)",
-    border: "1px solid #555",
-    borderRadius: 6,
-    padding: "8px 18px",
-    pointerEvents: "auto",
-  },
-  respawnCountdown: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#cc2222",
-    letterSpacing: 1,
-  },
-  respawnButton: {
-    fontSize: 16,
-    fontWeight: "bold",
-    padding: "6px 20px",
-    background: "#2a5a2a",
-    color: "#cfc",
-    border: "1px solid #4a9a4a",
-    borderRadius: 4,
-    cursor: "pointer",
-  },
-  lootWindow: {
-    position: "absolute",
-    zIndex: 20,
-    background: "rgba(20,16,12,0.95)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "10px 16px 14px",
-    minWidth: 260,
-    pointerEvents: "auto",
-  },
-  lootHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-    cursor: "move",
-    userSelect: "none",
-  },
-  lootTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#d4a84b",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  lootClose: {
-    background: "none",
-    border: "none",
-    color: "#888",
-    fontSize: 16,
-    cursor: "pointer",
-    lineHeight: 1,
-    padding: "0 2px",
-  },
-  lootTable: {
-    borderCollapse: "collapse",
-  },
-  lootRow: {
-    borderBottom: "1px solid #333",
-  },
-  lootNameCell: {
-    padding: "4px 12px 4px 0",
-    textAlign: "left",
-  },
-  lootMetaCell: {
-    padding: "4px 12px 4px 0",
-    textAlign: "left",
-    color: "#888",
-    fontSize: 11,
-    whiteSpace: "nowrap",
-  },
-  lootTakeCell: {
-    padding: "4px 0",
-    textAlign: "right",
-  },
-  lootItemName: {
-    color: "#e8d5a0",
-    fontSize: 13,
-  },
-  lootTake: {
-    background: "none",
-    border: "1px solid #7a5a2a",
-    borderRadius: 3,
-    color: "#d4a84b",
-    fontSize: 11,
-    cursor: "pointer",
-    padding: "1px 6px",
-    whiteSpace: "nowrap",
-  },
-  lootOwned: {
-    color: "#888",
-    fontSize: 11,
-    marginLeft: 4,
-  },
-  lootItemNameOwned: {
-    textDecoration: "line-through",
-    color: "#888",
-  },
-  charSheetWrapper: {
-    position: "absolute",
-    zIndex: 25,
-    right: 20,
-    top: "50%",
-    transform: "translateY(-50%)",
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 8,
-  },
-  // Portrait phone: covers the region between the frames and the log. The
-  // border/background live on this fixed-size wrapper (the "frame"), with
-  // overflow:hidden clipping to it, while charSheetScrollArea (below)
-  // scrolls the actual content inside - so the border stays put as a
-  // window frame instead of scrolling away with the content and leaving
-  // its bottom edge hidden until you scroll all the way down.
-  charSheetWrapperPortrait: {
-    position: "fixed",
-    zIndex: 25,
-    left: 8,
-    right: 8,
-    top: 100, // clears the portrait HUD frames (header 18 + row with 60px image, from top:8)
-    bottom: 110 + 34, // styles.log.height + the utility row below it
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-  },
-  // Landscape phone: same fixed-frame-with-scrolling-content idea as
-  // charSheetWrapperPortrait, just inset from all four edges instead of
-  // pinned to the frames/log gap (canvas fills the whole screen here).
-  charSheetWrapperLandscape: {
-    position: "fixed",
-    zIndex: 25,
-    top: 16,
-    left: 16,
-    right: 16,
-    bottom: 16,
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-  },
-  // The scrollable content area inside charSheetWrapperPortrait/Landscape -
-  // flex:1 + minHeight:0 lets it shrink below its content's natural height
-  // so overflowY:auto actually triggers, instead of growing the flex
-  // column (and its fixed-size parent) to fit.
-  charSheetScrollArea: {
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    padding: "10px 16px 14px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  charSheet: {
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "10px 16px 14px",
-    width: 480,
-    pointerEvents: "auto",
-  },
-  charSheetCandidatePane: {
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "10px 16px 14px",
-    width: 440,
-    pointerEvents: "auto",
-  },
-  // Portrait phone: overlays the character sheet (same region it occupies)
-  // instead of sitting inline above it, since the candidate list can run
-  // long and pushing the sheet down would bury it off-screen.
-  charSheetCandidatePanePortrait: {
-    position: "fixed",
-    zIndex: 26,
-    left: 8,
-    right: 8,
-    top: 100, // clears the portrait HUD frames (header 18 + row with 60px image, from top:8)
-    bottom: 110 + 34, // styles.log.height + the utility row below it
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "10px 16px 14px",
-    boxSizing: "border-box",
-    overflowY: "auto",
-    pointerEvents: "auto",
-  },
-  // Landscape phone: same overlay-in-front-of-the-sheet idea, inset from
-  // the edges like charSheetWrapperLandscape instead of the frames/log gap.
-  charSheetCandidatePaneLandscape: {
-    position: "fixed",
-    zIndex: 26,
-    top: 16,
-    left: 16,
-    right: 16,
-    bottom: 16,
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "10px 16px 14px",
-    boxSizing: "border-box",
-    overflowY: "auto",
-    pointerEvents: "auto",
-  },
-  charSheetCandidateTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#d4a84b",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  charSheetCandidateListWrapper: {
-    maxHeight: 320,
-    overflowY: "auto",
-  },
-  charSheetCandidateTable: {
-    borderCollapse: "collapse",
-    width: "100%",
-  },
-  charSheetCandidateRow: {
-    borderBottom: "1px solid #333",
-    fontSize: 12,
-    cursor: "pointer",
-  },
-  charSheetCandidateElvlCell: {
-    padding: "3px 8px 3px 0",
-    color: "#888",
-    whiteSpace: "nowrap",
-    textAlign: "left",
-    verticalAlign: "top",
-  },
-  charSheetCandidateNameCell: {
-    padding: "3px 0",
-    width: "100%",
-    color: "#e8d5a0",
-    verticalAlign: "top",
-  },
-  charSheetCandidateEmpty: {
-    fontSize: 12,
-    color: "#555",
-  },
-  charSheetCandidateError: {
-    fontSize: 11,
-    color: "#cc6666",
-    marginBottom: 6,
-  },
-  charSheetEquipRowClickable: {
-    cursor: "pointer",
-  },
-  charSheetEquipRowHover: {
-    background: "rgba(212,168,75,0.06)",
-  },
-  charSheetEquipRowExpanded: {
-    background: "rgba(212,168,75,0.12)",
-  },
-  charSheetHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  charSheetTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#d4a84b",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  charSheetBody: {
-    display: "flex",
-    gap: 20,
-  },
-  charSheetBodyPortrait: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  charSheetColumn: {
-    flex: 1,
-    minWidth: 0,
-  },
-  // Stats laid out as two CSS columns (rather than one long list) so the
-  // portrait character sheet doesn't need as much vertical scroll.
-  charSheetStatsColumns: {
-    columnCount: 2,
-    columnGap: 20,
-  },
-  charSheetColumnTitle: {
-    fontSize: 11,
-    color: "#888",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  charSheetEquipTable: {
-    borderCollapse: "collapse",
-    width: "100%",
-  },
-  charSheetEquipRow: {
-    borderBottom: "1px solid #333",
-    fontSize: 12,
-  },
-  charSheetSlotCell: {
-    padding: "3px 8px 3px 0",
-    color: "#888",
-    whiteSpace: "nowrap",
-    textAlign: "left",
-    verticalAlign: "top",
-  },
-  charSheetElvlCell: {
-    padding: "3px 8px 3px 0",
-    color: "#888",
-    whiteSpace: "nowrap",
-    textAlign: "left",
-    verticalAlign: "top",
-  },
-  charSheetNameCell: {
-    padding: "3px 0",
-    width: "100%",
-    verticalAlign: "top",
-  },
-  // Reserves two lines of height (fontSize 11 * lineHeight 1.3 * 2 lines =
-  // 28.6px) on every row, filled or empty, so rows stay regularly spaced.
-  charSheetNameBox: {
-    fontSize: 11,
-    lineHeight: 1.3,
-    height: 28.6,
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-    overflow: "hidden",
-  },
-  charSheetEmptySlot: {
-    color: "#555",
-  },
-  charSheetDisallowed: {
-    color: "#c66",
-    textDecoration: "line-through",
-  },
-  charSheetStatGroup: {
-    marginBottom: 10,
-  },
-  charSheetStatGroupTitle: {
-    fontSize: 13,
-    color: "#888",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    paddingTop: 6,
-    marginBottom: 3,
-  },
-  charSheetStatsList: {
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-  },
-  charSheetStatRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: 12,
-    color: "#7fae7f",
-  },
-  itemTooltipAnchor: {
-    display: "inline-block",
-    cursor: "default",
-  },
-  itemTooltip: {
-    position: "fixed",
-    zIndex: 100,
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "8px 12px",
-    minWidth: 180,
-    maxWidth: 320,
-    pointerEvents: "none",
-  },
-  itemTooltipName: {
-    color: "#d4a84b",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  itemTooltipMeta: {
-    color: "#999",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  itemTooltipStats: {
-    marginTop: 6,
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-  },
-  itemTooltipStat: {
-    color: "#7fae7f",
-    fontSize: 12,
-  },
-  itemTooltipDescription: {
-    color: "#aaa",
-    fontSize: 12,
-    fontStyle: "italic",
-    marginTop: 6,
-  },
-  statTooltipLine: {
-    color: "#7fae7f",
-    fontSize: 12,
-  },
-  charSheetStatLabelHoverable: {
-    cursor: "help",
-    borderBottom: "1px dotted #667",
-  },
-  statusBarLeft: {
-    position: "absolute",
-    left: 8,
-    bottom: 8,
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    pointerEvents: "none",
-  },
-  statusBarRight: {
-    position: "absolute",
-    right: 8,
-    bottom: 8,
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    pointerEvents: "none",
-  },
-  // Landscape: too little room for buffs/debuffs side by side - stack the
-  // buff block above the debuff block instead (DOM order is buffs-then-
-  // debuffs, so plain top-to-bottom column order already puts buffs on
-  // top). alignItems hugs each block to the side's outer screen edge so a
-  // shorter block doesn't look adrift from a longer one above/below it.
-  statusBarLeftLandscape: {
-    position: "absolute",
-    left: 8,
-    top: 8,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 4,
-    pointerEvents: "none",
-  },
-  statusBarRightLandscape: {
-    position: "absolute",
-    right: 8,
-    top: 8,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 4,
-    pointerEvents: "none",
-  },
-  abilityErrorBanner: {
-    position: "absolute",
-    left: "50%",
-    top: 64,
-    transform: "translateX(-50%)",
-    padding: "6px 14px",
-    borderRadius: 4,
-    background: "rgba(20, 20, 20, 0.75)",
-    color: "#ff4040",
-    fontSize: 15,
-    fontWeight: 600,
-    textShadow: "0 1px 3px #000",
-    whiteSpace: "nowrap",
-    pointerEvents: "none",
-    transitionProperty: "opacity",
-    transitionTimingFunction: "ease-out",
-  },
-  castBarTop: {
-    position: "absolute",
-    left: "50%",
-    top: 8,
-    transform: "translateX(-50%)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 2,
-    pointerEvents: "none",
-  },
-  castBarBottom: {
-    position: "absolute",
-    left: "50%",
-    bottom: 90,
-    transform: "translateX(-50%)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 2,
-    pointerEvents: "none",
-  },
-  castBarTrack: {
-    width: 180,
-    height: 10,
-    borderRadius: 3,
-    background: "#1a1a1a",
-    border: "1px solid #444",
-    overflow: "hidden",
-  },
-  castBarFill: {
-    height: "100%",
-    background: "#e0c250",
-    transitionProperty: "width",
-    transitionTimingFunction: "linear",
-  },
-  castBarLabel: {
-    fontSize: 11,
-    color: "#eee",
-    textShadow: "0 1px 3px #000",
-  },
-  castBarInline: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-    marginTop: 2,
-  },
-  castBarInlineTrack: {
-    width: "100%",
-    height: 6,
-    borderRadius: 2,
-    background: "#1a1a1a",
-    border: "1px solid #444",
-    overflow: "hidden",
-  },
-  castBarInlineLabel: {
-    fontSize: 9,
-    color: "#ccc",
-  },
-  // width: max-content makes each block's box size deterministic from its
-  // own content instead of leaning on flex shrink-to-fit - without it, the
-  // right-anchored (target) column could end up a hair wider than its text
-  // at small font sizes, reading as the text overhanging the block's edge.
-  statusColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 1,
-    width: "max-content",
-  },
-  statusRowLandscape: {
-    fontSize: 8,
-    lineHeight: 1.2,
-    whiteSpace: "nowrap",
-    textShadow: "0 1px 3px #000",
-  },
-  statusRow: {
-    fontSize: 11,
-    lineHeight: 1.3,
-    whiteSpace: "nowrap",
-    textShadow: "0 1px 3px #000",
-  },
-  unitTooltip: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    zIndex: 15,
-    background: "rgba(20,16,12,0.95)",
-    border: "1px solid #555",
-    borderRadius: 6,
-    padding: "8px 12px",
-    minWidth: 160,
-    pointerEvents: "none",
-  },
-  unitTooltipName: {
-    color: "#e8d5a0",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  unitTooltipStatus: {
-    fontSize: 11,
-    color: "#999",
-    marginTop: 4,
-  },
-  unitTooltipTag: {
-    fontSize: 11,
-    color: "#d4a84b",
-    marginTop: 2,
-  },
-  statusTooltipAnchor: {
-    display: "inline-block",
-    // The status bars themselves are pointerEvents: "none" (so they never
-    // block clicks/targeting on the 3D scene underneath) - this re-enables
-    // hover just for each individual row.
-    pointerEvents: "auto",
-    cursor: "default",
-  },
-  statusTooltip: {
-    position: "fixed",
-    zIndex: 100,
-    background: "rgba(20,16,12,0.97)",
-    border: "1px solid #556",
-    borderRadius: 6,
-    padding: "8px 12px",
-    minWidth: 140,
-    maxWidth: 280,
-    pointerEvents: "none",
-  },
-  statusTooltipName: {
-    color: "#cce",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  statusTooltipDescription: {
-    color: "#aaa",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  statusTooltipAppliedBy: {
-    color: "#667",
-    fontSize: 11,
-    marginTop: 6,
-  },
-};
-
 // Green/yellow/red thresholds match what a player would recognize from WoW's
 // ping-color convention: <200ms fine, 200-350ms noticeable, 350ms+ rough.
 export function latencyColor(ms) {
@@ -1813,17 +525,17 @@ function StatusTooltip({ name, description, appliedByName, children }) {
 
   return (
     <span
-      style={styles.statusTooltipAnchor}
+      className="game-status-tooltip-anchor"
       onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setPos(null)}
     >
       {children}
       {pos && createPortal(
-        <div style={{ ...styles.statusTooltip, left: pos.x + 16, top: pos.y + 16 }}>
-          <div style={styles.statusTooltipName}>{name}</div>
-          {description && <div style={styles.statusTooltipDescription}>{description}</div>}
-          {appliedByName && <div style={styles.statusTooltipAppliedBy}>Applied by {appliedByName}</div>}
+        <div className="hover-tooltip" style={{ left: pos.x + 16, top: pos.y + 16 }}>
+          <div className="hover-tooltip-name">{name}</div>
+          {description && <div className="hover-tooltip-description">{description}</div>}
+          {appliedByName && <div className="hover-tooltip-note">Applied by {appliedByName}</div>}
         </div>,
         document.body
       )}
@@ -1840,15 +552,15 @@ function HintTooltip({ text, children }) {
 
   return (
     <span
-      style={{ display: "inline-block", cursor: "default" }}
+      className="game-hint-tooltip-anchor"
       onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setPos(null)}
     >
       {children}
       {pos && createPortal(
-        <div style={{ ...styles.statusTooltip, left: pos.x + 16, top: pos.y + 16 }}>
-          <div style={styles.statusTooltipName}>{text}</div>
+        <div className="hover-tooltip" style={{ left: pos.x + 16, top: pos.y + 16 }}>
+          <div className="hover-tooltip-name">{text}</div>
         </div>,
         document.body
       )}
@@ -1859,10 +571,10 @@ function HintTooltip({ text, children }) {
 function StatusColumn({ entries, color, landscape, align }) {
   const format = landscape ? formatRemainingCompact : formatRemaining;
   return (
-    <div style={styles.statusColumn}>
+    <div className="game-status-column">
       {entries.map(({ key, shortName, remainingMs, name, description, appliedByName }) => (
         <StatusTooltip key={key} name={name} description={description} appliedByName={appliedByName}>
-          <div style={{ ...(landscape ? styles.statusRowLandscape : styles.statusRow), color, ...(align ? { textAlign: align } : {}) }}>
+          <div className={landscape ? "game-status-row-landscape" : "game-status-row"} style={{ color, ...(align ? { textAlign: align } : {}) }}>
             {format(remainingMs)} {shortName}
           </div>
         </StatusTooltip>
@@ -1891,9 +603,9 @@ export function StatusBar({ statuses, now, side = "left", landscape }) {
   const debuffs = withRemaining.filter((s) => s.treatAs === "debuff");
   if (!buffs.length && !debuffs.length) return null;
 
-  const containerStyle = landscape
-    ? (side === "right" ? styles.statusBarRightLandscape : styles.statusBarLeftLandscape)
-    : (side === "right" ? styles.statusBarRight : styles.statusBarLeft);
+  const containerClass = landscape
+    ? (side === "right" ? "game-status-bar-right-landscape" : "game-status-bar-left-landscape")
+    : (side === "right" ? "game-status-bar-right" : "game-status-bar-left");
   // Belt-and-suspenders alongside statusColumn's width:max-content - even
   // if a row's box ends up a hair wider than its text, explicit textAlign
   // still hugs the text to the pane's outer edge instead of leaving it
@@ -1901,7 +613,7 @@ export function StatusBar({ statuses, now, side = "left", landscape }) {
   const align = landscape ? (side === "right" ? "right" : "left") : undefined;
 
   return (
-    <div style={containerStyle}>
+    <div className={containerClass}>
       <StatusColumn entries={buffs} color="#5ec95e" landscape={landscape} align={align} />
       <StatusColumn entries={debuffs} color="#ff5c5c" landscape={landscape} align={align} />
     </div>
@@ -1952,16 +664,16 @@ export function CastBar({ unit, position = "top", inline = false }) {
   if (!inline && !casting) return null; // floating variant: absolutely positioned, so absent-when-idle costs nothing
 
   const remainingMs = casting ? Math.max(0, endsAt - Date.now()) : 0;
-  const containerStyle = inline ? styles.castBarInline : (position === "top" ? styles.castBarTop : styles.castBarBottom);
-  const trackStyle = inline ? styles.castBarInlineTrack : styles.castBarTrack;
-  const labelStyle = inline ? styles.castBarInlineLabel : styles.castBarLabel;
+  const containerClass = inline ? "game-cast-bar-inline" : (position === "top" ? "game-cast-bar-top" : "game-cast-bar-bottom");
+  const trackClass = inline ? "game-cast-bar-inline-track" : "game-cast-bar-track";
+  const labelClass = inline ? "game-cast-bar-inline-label" : "game-cast-bar-label";
 
   return (
-    <div style={{ ...containerStyle, opacity: inline && !casting ? 0 : 1 }} data-testid="cast-bar">
-      <div style={trackStyle}>
-        <div style={{ ...styles.castBarFill, width: casting && filled ? "100%" : "0%", transitionDuration: `${remainingMs}ms` }} />
+    <div className={containerClass} style={{ opacity: inline && !casting ? 0 : 1 }} data-testid="cast-bar">
+      <div className={trackClass}>
+        <div className="game-cast-bar-fill" style={{ width: casting && filled ? "100%" : "0%", transitionDuration: `${remainingMs}ms` }} />
       </div>
-      <div style={labelStyle}>{casting ? power : " "}</div>
+      <div className={labelClass}>{casting ? power : " "}</div>
     </div>
   );
 }
@@ -1993,7 +705,8 @@ export function AbilityErrorBanner({ message, onDone }) {
 
   return (
     <div
-      style={{ ...styles.abilityErrorBanner, opacity: fading ? 0 : 1, transitionDuration: `${ABILITY_ERROR_FADE_MS}ms` }}
+      className="game-ability-error-banner"
+      style={{ opacity: fading ? 0 : 1, transitionDuration: `${ABILITY_ERROR_FADE_MS}ms` }}
       data-testid="ability-error-banner"
     >
       {message}
@@ -2014,11 +727,8 @@ function ResourceBar({ current, max, color, landscape }) {
   if (!(max > 0)) return null;
   const pct = Math.max(0, Math.min(1, (current ?? 0) / max));
   return (
-    <div data-testid="resource-bar" style={{
-      ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
-      background: darkenHexColor(color),
-    }}>
-      <div style={{ width: `${pct * 100}%`, height: "100%", background: color ? `#${color}` : "#888" }} />
+    <div data-testid="resource-bar" className={landscape ? "game-resource-bar-track-landscape" : "game-resource-bar-track"} style={{ background: darkenHexColor(color) }}>
+      <div className="game-resource-bar-fill" style={{ width: `${pct * 100}%`, background: color ? `#${color}` : "#888" }} />
     </div>
   );
 }
@@ -2049,23 +759,9 @@ function SecondaryResourceBar({ current, max, color, isFluid, landscape }) {
   const count = Math.round(max);
   const filled = Math.max(0, Math.min(count, Math.round(current ?? 0)));
   return (
-    <div data-testid="resource-bar" style={{
-      ...(landscape ? styles.resourceBarTrackLandscape : styles.resourceBarTrack),
-      // A neutral dark track (rather than a darkened tint of the resource's
-      // own color) plus a visible gap between segments - the previous
-      // darkened-same-hue-with-1px-gap version read as a continuous
-      // fractional bar, not distinct pips.
-      background: "#1a1a1a",
-      display: "flex",
-      gap: 2,
-    }}>
+    <div data-testid="resource-bar" className={`${landscape ? "game-resource-bar-track-landscape" : "game-resource-bar-track"} game-resource-pips`}>
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} style={{
-          flex: 1,
-          height: "100%",
-          borderRadius: 1,
-          background: i < filled ? (color ? `#${color}` : "#888") : "transparent",
-        }} />
+        <div key={i} className="game-resource-pip" style={{ background: i < filled ? (color ? `#${color}` : "#888") : "transparent" }} />
       ))}
     </div>
   );
@@ -2098,7 +794,7 @@ export function UnitResourceBars({ unit, primaryResource, secondaryResources = [
 function UnitBar({ label, current, max }) {
   const pct = max > 0 ? Math.round((current / max) * 100) : 0;
   return (
-    <div style={{ fontSize: 11, marginTop: 4, color: "#aaa" }}>
+    <div className="game-unit-bar">
       {label} {current?.toFixed(0)}/{max?.toFixed(0)} ({pct}%)
     </div>
   );
@@ -2123,51 +819,20 @@ function UnitBar({ label, current, max }) {
 function HealthBar({ current, max, numbersAlign, landscape, mirrored, resourceLabel }) {
   const pct = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
   return (
-    <div style={landscape ? styles.healthBarTrackLandscape : styles.healthBarTrack}>
+    <div className={landscape ? "game-health-bar-track-landscape" : "game-health-bar-track"}>
       {!landscape && numbersAlign && current != null && max != null && (
-        <div style={{
-          position: "absolute",
-          bottom: "100%",
-          marginBottom: 2,
-          [numbersAlign === "start" ? "left" : "right"]: 0,
-          fontSize: 11,
-          color: "#ccc",
-          whiteSpace: "nowrap",
-          textShadow: "0 1px 2px #000",
-        }}>
+        <div className="game-health-bar-label" style={{ [numbersAlign === "start" ? "left" : "right"]: 0 }}>
           HP: {Math.round(current)}/{Math.round(max)}
         </div>
       )}
       {!landscape && resourceLabel && (
-        <div style={{
-          position: "absolute",
-          bottom: "100%",
-          marginBottom: 2,
-          [numbersAlign === "start" ? "right" : "left"]: 0,
-          fontSize: 11,
-          color: "#ccc",
-          whiteSpace: "nowrap",
-          textShadow: "0 1px 2px #000",
-        }}>
+        <div className="game-health-bar-label" style={{ [numbersAlign === "start" ? "right" : "left"]: 0 }}>
           {resourceLabel}
         </div>
       )}
-      <div style={mirrored ? {
-        position: "absolute",
-        top: 0,
-        bottom: 0,
-        right: 0,
-        width: `${pct * 100}%`,
-        background: "#2a7a2a",
-        borderRadius: 1,
-      } : {
-        width: `${pct * 100}%`,
-        height: "100%",
-        background: "#2a7a2a",
-        borderRadius: 1,
-      }} />
+      <div className={mirrored ? "game-health-bar-fill-mirrored" : "game-health-bar-fill"} style={{ width: `${pct * 100}%` }} />
       {landscape && (
-        <span style={mirrored ? styles.healthBarPctLandscapeLeft : styles.healthBarPctLandscape}>
+        <span className={mirrored ? "game-health-bar-pct-landscape-left" : "game-health-bar-pct-landscape"}>
           {Math.round(pct * 100)}
         </span>
       )}
@@ -2250,131 +915,14 @@ export function UnitTooltip({ unit, selfUnitId }) {
       : "Tagged by another player";
 
   return (
-    <div style={styles.unitTooltip}>
-      <div style={styles.unitTooltipName}>{formatUnitName(unit)}</div>
+    <div className="game-unit-tooltip">
+      <div className="game-unit-tooltip-name">{formatUnitName(unit)}</div>
       <UnitBar label="HP" current={unit.health} max={unit.max_health} />
-      <div style={styles.unitTooltipStatus}>
+      <div className="game-unit-tooltip-status">
         {UNIT_STATUS_LABELS[unit.status] || unit.status}
       </div>
-      {tagLabel && <div style={styles.unitTooltipTag}>{tagLabel}</div>}
+      {tagLabel && <div className="game-unit-tooltip-tag">{tagLabel}</div>}
     </div>
-  );
-}
-
-const STAT_LABELS = {
-  strength: "Strength",
-  agility: "Agility",
-  intellect: "Intellect",
-  stamina: "Stamina",
-  crit_rating: "Crit Rating",
-  haste_rating: "Haste Rating",
-  mastery_rating: "Mastery Rating",
-  versatility_rating: "Versatility Rating",
-  defence_rating: "Defence Rating",
-  recovery_rating: "Recovery Rating",
-  basic_attack_dps: "Basic Attack DPS",
-};
-
-// Mirrors docs/stats.md's "Item coloration" table (delta up to -15/-5/+5/+15
-// -> gray/green/blue/purple, above +15 -> orange), but computed against the
-// player's current local elevation rather than a weighted mean.
-export function itemColor(item, localElvl) {
-  if (item?.elvl == null || localElvl == null) return null;
-  const delta = item.elvl - localElvl;
-  if (delta <= -15) return "#9d9d9d";
-  if (delta <= -5) return "#1eff00";
-  if (delta <= 5) return "#0070dd";
-  if (delta <= 15) return "#a335ee";
-  return "#ff8000";
-}
-
-// Mirrors ItemStats::ElevationMultiplier (app/services/item_stats/elevation_multiplier.rb)
-// / itemstats.ElevationMultiplier (game-server/internal/itemstats/elevation_multiplier.go).
-export function elevationMultiplier(ee) {
-  const base = 2 / (1 + Math.pow(3, -ee / 10));
-  let taper;
-  if (Math.abs(ee) <= 10) taper = 1;
-  else if (ee >= -20 && ee < -10) taper = (ee + 20) / 10;
-  else if (ee > 10 && ee <= 20) taper = 1 + (ee - 10) / 90;
-  else if (ee < -20) taper = 0;
-  else taper = 10 / 9;
-  return base * taper;
-}
-
-// Wraps its children in a hover target that shows a WoW-style item tooltip
-// near the cursor. `item` should have {name, slot, elvl, description, stats}.
-// `stats` is assumed to be raw (em=1.0, i.e. computed as if the item were
-// exactly on-level with itself) - it's rescaled here against `localElvl`
-// (the elevation of the map the player is currently on), not shown raw.
-// pinned: skips the hover/portal machinery entirely and renders the tooltip
-// body inline, always visible - for the item editor's preview pane, which
-// wants a persistent live view rather than something you have to hover to
-// see (see client/src/itemEditor/ItemPreviewPane.jsx).
-export function ItemTooltip({ item, children, style, localElvl, pinned }) {
-  const [pos, setPos] = useState(null); // {x, y} in viewport coords, or null when hidden
-
-  if (!item) return children;
-
-  const em = (localElvl != null && item.elvl != null) ? elevationMultiplier(item.elvl - localElvl) : 1;
-  const color = itemColor(item, localElvl);
-  const statOrder = STAT_GROUPS.flatMap(g => g.keys);
-  const stats = Object.entries(item.stats || {})
-    .map(([key, value]) => [key, value * em])
-    .filter(([, v]) => v)
-    .sort(([a], [b]) => statOrder.indexOf(a) - statOrder.indexOf(b));
-
-  const body = (
-    <div style={pinned ? { ...styles.itemTooltip, position: "static" } : { ...styles.itemTooltip, left: pos?.x + 16, top: pos?.y + 16 }}>
-      <div style={styles.itemTooltipName}>{item.name}</div>
-      {(item.slot || item.elvl != null) && (
-        <div style={styles.itemTooltipMeta}>
-          {item.elvl != null && <span style={color ? { color } : undefined}>e{item.elvl}</span>}
-          {item.elvl != null && item.slot ? " " : ""}
-          {item.slot}
-        </div>
-      )}
-      {stats.length > 0 && (
-        <div style={styles.itemTooltipStats}>
-          {stats.map(([key, value]) => (
-            <div key={key} style={styles.itemTooltipStat}>
-              +{value.toFixed(1)} {STAT_LABELS[key] || key}
-            </div>
-          ))}
-        </div>
-      )}
-      {item.description && (
-        <div style={styles.itemTooltipDescription}>{item.description}</div>
-      )}
-    </div>
-  );
-
-  if (pinned) {
-    return (
-      <span style={{ ...styles.itemTooltipAnchor, ...style }}>
-        {children}
-        {body}
-      </span>
-    );
-  }
-
-  return (
-    <span
-      style={{ ...styles.itemTooltipAnchor, ...style }}
-      onMouseEnter={e => setPos({ x: e.clientX, y: e.clientY })}
-      onMouseMove={e => setPos({ x: e.clientX, y: e.clientY })}
-      onMouseLeave={() => setPos(null)}
-    >
-      {children}
-      {pos && createPortal(
-        // Portaled to document.body: charSheetWrapper (an ancestor for the
-        // character sheet / candidate pane) has a CSS transform, which makes
-        // it the containing block for position:fixed descendants - without
-        // the portal, this tooltip's left/top would resolve against that
-        // transformed ancestor instead of the viewport.
-        body,
-        document.body
-      )}
-    </span>
   );
 }
 
@@ -2536,15 +1084,15 @@ function StatEffectTooltip({ lines, children }) {
 
   return (
     <span
-      style={styles.itemTooltipAnchor}
+      className="game-item-tooltip-anchor"
       onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => setPos(null)}
     >
       {children}
       {pos && createPortal(
-        <div style={{ ...styles.itemTooltip, left: pos.x + 16, top: pos.y + 16 }}>
-          {lines.map((line, i) => <div key={i} style={styles.statTooltipLine}>{line}</div>)}
+        <div className="game-item-tooltip" style={{ left: pos.x + 16, top: pos.y + 16 }}>
+          {lines.map((line, i) => <div key={i} className="game-stat-tooltip-line">{line}</div>)}
         </div>,
         document.body
       )}
@@ -2607,10 +1155,6 @@ function basicAttackDps(basicAttack, primaryStats) {
 
 const ZERO_SCHOOL_STATS = { haste_pct: 0, crit_chance_pct: 5, stat_contribution: 0 };
 
-const STAT_GROUPS = [
-  { title: "Primary", keys: ["strength", "agility", "intellect", "stamina", "basic_attack_dps"] },
-  { title: "Secondary", keys: ["crit_rating", "haste_rating", "mastery_rating", "versatility_rating", "defence_rating", "recovery_rating"] },
-];
 
 // Fallback label derived from an item's identifier, for the rare case a
 // payload is missing its display name.
@@ -2665,30 +1209,30 @@ function gearElevation(equippedItems) {
 // left of the character sheet. Clicking an item equips it into that slot.
 function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onSelect, onClose, localElvl, portrait = false, landscape = false }) {
   return (
-    <div style={portrait ? styles.charSheetCandidatePanePortrait : landscape ? styles.charSheetCandidatePaneLandscape : styles.charSheetCandidatePane}>
-      <div style={styles.charSheetHeader}>
-        <span style={styles.charSheetCandidateTitle}>{slotLabel}</span>
-        <button style={styles.lootClose} onClick={onClose}>✕</button>
+    <div className={portrait ? "game-char-sheet-candidate-pane-portrait" : landscape ? "game-char-sheet-candidate-pane-landscape" : "game-char-sheet-candidate-pane"}>
+      <div className="game-window-header">
+        <span className="game-char-sheet-candidate-title">{slotLabel}</span>
+        <button className="game-window-close" onClick={onClose}>✕</button>
       </div>
-      {error && <div style={styles.charSheetCandidateError}>{error}</div>}
+      {error && <div className="game-char-sheet-candidate-error">{error}</div>}
       {loading ? (
-        <div style={styles.charSheetCandidateEmpty}>Loading…</div>
+        <div className="game-char-sheet-candidate-empty">Loading…</div>
       ) : (
-        <div style={(portrait || landscape) ? undefined : styles.charSheetCandidateListWrapper}>
-          <table style={styles.charSheetCandidateTable}>
+        <div className={(portrait || landscape) ? undefined : "game-char-sheet-candidate-list-wrapper"}>
+          <table className="game-char-sheet-candidate-table">
             <tbody>
               {[...items].sort((a, b) => (b.elvl ?? -Infinity) - (a.elvl ?? -Infinity)).map(item => (
                 <tr
                   key={item.id}
-                  style={styles.charSheetCandidateRow}
+                  className="game-char-sheet-candidate-row"
                   onClick={equippingId ? undefined : () => onSelect(item)}
                 >
-                  <td style={{ ...styles.charSheetCandidateElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                  <td className="game-char-sheet-candidate-elvl-cell" style={itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : undefined}>
                     {item.elvl ?? ""}
                   </td>
-                  <td style={styles.charSheetCandidateNameCell}>
-                    <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
-                      <span style={styles.charSheetNameBox}>
+                  <td className="game-char-sheet-candidate-name-cell">
+                    <ItemTooltip item={item} clickable localElvl={localElvl}>
+                      <span className="game-char-sheet-name-box">
                         {item.name}{equippingId === item.id ? " (equipping…)" : ""}
                       </span>
                     </ItemTooltip>
@@ -2697,12 +1241,12 @@ function CandidateItemsPane({ slotLabel, loading, items, equippingId, error, onS
               ))}
               <tr
                 key={UNEQUIP_ID}
-                style={styles.charSheetCandidateRow}
+                className="game-char-sheet-candidate-row"
                 onClick={equippingId ? undefined : () => onSelect(null)}
               >
-                <td style={styles.charSheetCandidateElvlCell}></td>
-                <td style={styles.charSheetCandidateNameCell}>
-                  <span style={styles.charSheetNameBox}>
+                <td className="game-char-sheet-candidate-elvl-cell"></td>
+                <td className="game-char-sheet-candidate-name-cell">
+                  <span className="game-char-sheet-name-box">
                     Nothing{equippingId === UNEQUIP_ID ? " (equipping…)" : ""}
                   </span>
                 </td>
@@ -2774,48 +1318,48 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
     }
   };
 
-  const statGroupStyle = portrait ? { ...styles.charSheetStatGroup, breakInside: "avoid" } : styles.charSheetStatGroup;
+  const statGroupClass = portrait ? "game-char-sheet-stat-group game-char-sheet-stat-group-portrait" : "game-char-sheet-stat-group";
 
   const equipmentBlock = (
-    <div style={styles.charSheetColumn}>
-      <div style={styles.charSheetColumnTitle}>Equipment</div>
+    <div className="game-char-sheet-column">
+      <div className="game-char-sheet-column-title">Equipment</div>
       {canEquip && onBestAvailable && (
-        <button style={{ marginBottom: 6 }} onClick={onBestAvailable}>Best available</button>
+        <button className="game-char-sheet-best-available" onClick={onBestAvailable}>Best available</button>
       )}
-      <table style={styles.charSheetEquipTable}>
+      <table className="game-char-sheet-equip-table">
         <tbody>
           {EQUIPPED_SLOT_ORDER.map(slot => {
             const item = equippedItems?.[slot];
-            const rowStyle = {
-              ...styles.charSheetEquipRow,
-              ...(canEquip ? styles.charSheetEquipRowClickable : {}),
-              ...(canEquip && hoveredSlot === slot ? styles.charSheetEquipRowHover : {}),
-              ...(expandedSlot === slot ? styles.charSheetEquipRowExpanded : {}),
-            };
+            const rowClass = [
+              "game-char-sheet-equip-row",
+              canEquip && "game-char-sheet-equip-row-clickable",
+              canEquip && hoveredSlot === slot && "game-char-sheet-equip-row-hover",
+              expandedSlot === slot && "game-char-sheet-equip-row-expanded",
+            ].filter(Boolean).join(" ");
             return (
               <tr
                 key={slot}
-                style={rowStyle}
+                className={rowClass}
                 onClick={() => toggleSlot(slot)}
                 onMouseEnter={() => setHoveredSlot(slot)}
                 onMouseLeave={() => setHoveredSlot(current => (current === slot ? null : current))}
               >
-                <td style={styles.charSheetSlotCell}>{EQUIPPED_SLOT_ABBR[slot]}</td>
-                <td style={{ ...styles.charSheetElvlCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                <td className="game-char-sheet-slot-cell">{EQUIPPED_SLOT_ABBR[slot]}</td>
+                <td className="game-char-sheet-elvl-cell" style={itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : undefined}>
                   {item?.elvl ?? ""}
                 </td>
-                <td style={styles.charSheetNameCell}>
+                <td className="game-char-sheet-name-cell">
                   {item ? (
-                    <ItemTooltip item={item} style={{ cursor: "pointer" }} localElvl={localElvl}>
+                    <ItemTooltip item={item} clickable localElvl={localElvl}>
                       <span
-                        style={{ ...styles.charSheetNameBox, ...(itemAllowed(item, provenanceRestrictions) ? {} : styles.charSheetDisallowed) }}
+                        className={itemAllowed(item, provenanceRestrictions) ? "game-char-sheet-name-box" : "game-char-sheet-name-box game-char-sheet-disallowed"}
                         title={itemAllowed(item, provenanceRestrictions) ? undefined : "Not allowed here; it doesn't count"}
                       >
                         {item.name || formatItemName(item.identifier)}
                       </span>
                     </ItemTooltip>
                   ) : (
-                    <span style={{ ...styles.charSheetNameBox, ...styles.charSheetEmptySlot }}>Empty</span>
+                    <span className="game-char-sheet-name-box game-char-sheet-empty-slot">Empty</span>
                   )}
                 </td>
               </tr>
@@ -2827,32 +1371,32 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
   );
 
   const statsBlock = (
-    <div style={styles.charSheetColumn}>
-      <div style={styles.charSheetColumnTitle}>Stats</div>
-      <div style={portrait ? styles.charSheetStatsColumns : undefined}>
-        <div style={statGroupStyle}>
-          <ul style={styles.charSheetStatsList}>
-            <li style={styles.charSheetStatRow}>
+    <div className="game-char-sheet-column">
+      <div className="game-char-sheet-column-title">Stats</div>
+      <div className={portrait ? "game-char-sheet-stats-columns" : undefined}>
+        <div className={statGroupClass}>
+          <ul className="game-char-sheet-stats-list">
+            <li className="game-char-sheet-stat-row">
               <span>Local Elevation</span>
               <span>{localElvl ?? "—"}</span>
             </li>
-            <li style={styles.charSheetStatRow}>
+            <li className="game-char-sheet-stat-row">
               <span>Gear Elevation</span>
               <span>{gearElvl != null ? gearElvl.toFixed(1) : "—"}</span>
             </li>
           </ul>
         </div>
         {STAT_GROUPS.map(group => (
-          <div key={group.title} style={statGroupStyle}>
-            <div style={styles.charSheetStatGroupTitle}>{group.title}</div>
-            <ul style={styles.charSheetStatsList}>
+          <div key={group.title} className={statGroupClass}>
+            <div className="game-char-sheet-stat-group-title">{group.title}</div>
+            <ul className="game-char-sheet-stats-list">
               {group.keys.map(key => {
                 if (key === "basic_attack_dps") {
                   const {value, lines} = basicAttackDps(basicAttack, primaryStats);
                   return (
-                    <li key={key} style={styles.charSheetStatRow}>
+                    <li key={key} className="game-char-sheet-stat-row">
                       <StatEffectTooltip lines={lines}>
-                        <span style={styles.charSheetStatLabelHoverable}>{STAT_LABELS[key]}</span>
+                        <span className="game-char-sheet-stat-label-hoverable">{STAT_LABELS[key]}</span>
                       </StatEffectTooltip>
                       <span>{value.toFixed(1)}</span>
                     </li>
@@ -2863,9 +1407,9 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
                   ? secondaryStatEffectLines(key, value)
                   : primaryStatEffectLines(key, value, primaryStats, stats);
                 return (
-                  <li key={key} style={styles.charSheetStatRow}>
+                  <li key={key} className="game-char-sheet-stat-row">
                     <StatEffectTooltip lines={lines}>
-                      <span style={lines.length > 0 ? styles.charSheetStatLabelHoverable : undefined}>
+                      <span className={lines.length > 0 ? "game-char-sheet-stat-label-hoverable" : undefined}>
                         {STAT_LABELS[key] || key}
                       </span>
                     </StatEffectTooltip>
@@ -2881,8 +1425,10 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
   );
 
   return (
-    <div style={portrait ? styles.charSheetWrapperPortrait : landscape ? styles.charSheetWrapperLandscape : styles.charSheetWrapper}>
-      {expandedSlot && (
+    <GameWindow
+      title="Character" onClose={onClose} portrait={portrait} landscape={landscape}
+      wrapperClassName="game-char-sheet-wrapper" panelClassName="game-char-sheet" scrollClassName="game-char-sheet-scroll-area"
+      aside={expandedSlot && (
         <CandidateItemsPane
           slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}
           loading={candidateLoading}
@@ -2896,26 +1442,21 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
           landscape={landscape}
         />
       )}
-      <div style={(portrait || landscape) ? styles.charSheetScrollArea : styles.charSheet}>
-        <div style={styles.charSheetHeader}>
-          <span style={styles.charSheetTitle}>Character</span>
-          <button style={styles.lootClose} onClick={onClose}>✕</button>
-        </div>
-        <div style={portrait ? styles.charSheetBodyPortrait : styles.charSheetBody}>
-          {portrait ? (
-            <>
-              {statsBlock}
-              {equipmentBlock}
-            </>
-          ) : (
-            <>
-              {equipmentBlock}
-              {statsBlock}
-            </>
-          )}
-        </div>
+    >
+      <div className={portrait ? "game-char-sheet-body-portrait" : "game-char-sheet-body"}>
+        {portrait ? (
+          <>
+            {statsBlock}
+            {equipmentBlock}
+          </>
+        ) : (
+          <>
+            {equipmentBlock}
+            {statsBlock}
+          </>
+        )}
       </div>
-    </div>
+    </GameWindow>
   );
 }
 
@@ -2963,15 +1504,13 @@ export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClos
 
   if (!items?.length) return null;
 
-  const windowStyle = { ...styles.lootWindow, left: `${pos.fx * 100}%`, top: `${pos.fy * 100}%`, transform: "none" };
-
   return (
-    <div ref={elRef} style={windowStyle}>
-      <div style={styles.lootHeader} onMouseDown={handleHeaderMouseDown}>
-        <span style={styles.lootTitle}>Loot{unitName ? `: ${unitName}` : ""}</span>
-        <button style={styles.lootClose} onClick={onClose}>✕</button>
+    <div ref={elRef} className="game-loot-window" style={{ left: `${pos.fx * 100}%`, top: `${pos.fy * 100}%`, transform: "none" }}>
+      <div className="game-loot-header" onMouseDown={handleHeaderMouseDown}>
+        <span className="game-window-title">Loot{unitName ? `: ${unitName}` : ""}</span>
+        <button className="game-window-close" onClick={onClose}>✕</button>
       </div>
-      <table style={styles.lootTable}>
+      <table className="game-loot-table">
         <tbody>
           {items.map((item, i) => {
             const myState = item.claims?.find(c => c.character_unit_id === selfUnitId)?.state;
@@ -2979,21 +1518,21 @@ export function LootWindow({ unitId, unitName, items, selfUnitId, onTake, onClos
             const label = CLAIM_LABEL[myState];
             const canTake = myState === "available";
             return (
-              <tr key={i} style={styles.lootRow}>
-                <td style={styles.lootNameCell}>
+              <tr key={i} className="game-loot-row">
+                <td className="game-loot-name-cell">
                   <ItemTooltip item={item} localElvl={localElvl}>
-                    <span style={{ ...styles.lootItemName, ...(owned ? styles.lootItemNameOwned : {}) }}>
+                    <span className={owned ? "game-loot-item-name game-loot-item-name-owned" : "game-loot-item-name"}>
                       {item.name}
-                      {label && <span style={styles.lootOwned}> {label}</span>}
+                      {label && <span className="game-loot-owned"> {label}</span>}
                     </span>
                   </ItemTooltip>
                 </td>
-                <td style={{ ...styles.lootMetaCell, ...(itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : {}) }}>
+                <td className="game-loot-meta-cell" style={itemColor(item, localElvl) ? { color: itemColor(item, localElvl) } : undefined}>
                   e{item.elvl}
                 </td>
-                <td style={styles.lootMetaCell}>{item.slot}</td>
-                <td style={styles.lootTakeCell}>
-                  {canTake && <button style={styles.lootTake} onClick={() => onTake(unitId, i)}>Take</button>}
+                <td className="game-loot-meta-cell">{item.slot}</td>
+                <td className="game-loot-take-cell">
+                  {canTake && <button className="game-loot-take" onClick={() => onTake(unitId, i)}>Take</button>}
                 </td>
               </tr>
             );
@@ -3018,10 +1557,10 @@ function RespawnOverlay({ deathTime, onRespawn }) {
   if (!deathTime) return null;
 
   return (
-    <div style={styles.respawnOverlay}>
+    <div className="game-respawn-overlay">
       {remaining > 0
-        ? <span style={styles.respawnCountdown}>Respawn in {Math.ceil(remaining)}s</span>
-        : <button style={styles.respawnButton} onClick={onRespawn}>Respawn</button>
+        ? <span className="game-respawn-countdown">Respawn in {Math.ceil(remaining)}s</span>
+        : <button className="game-respawn-button" onClick={onRespawn}>Respawn</button>
       }
     </div>
   );
@@ -3032,13 +1571,10 @@ function RespawnOverlay({ deathTime, onRespawn }) {
 // the client and game server disagree about the content.
 export function ContentErrorOverlay({ message }) {
   return (
-    <div role="alert" style={{
-      position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-      background: "rgba(0, 0, 0, 0.8)", zIndex: 1000,
-    }}>
-      <div style={{ maxWidth: 420, padding: 24, background: "#221", border: "1px solid #a64", borderRadius: 6, color: "#fdb", textAlign: "center" }}>
-        <p style={{ margin: "0 0 12px", fontWeight: "bold" }}>{message}</p>
-        <p style={{ margin: 0 }}>Reload the page to load the version the server is running.</p>
+    <div role="alert" className="game-content-error">
+      <div className="game-content-error-box">
+        <p className="game-content-error-message">{message}</p>
+        <p>Reload the page to load the version the server is running.</p>
       </div>
     </div>
   );
@@ -4098,27 +2634,27 @@ export default function App({
     if (stacked) {
       return (
         <>
-          <div style={styles.frameHudHeader}>
+          <div className="game-frame-hud-header">
             {selfUnit && <HealthBar current={selfUnit.health} max={selfUnit.max_health} landscape />}
             {selfUnit && (
               <UnitResourceBars unit={selfUnit} primaryResource={primaryResource} secondaryResources={secondaryResources} landscape />
             )}
           </div>
-          <div style={styles.frameImageNameRow}>
-            {characterTokenUrl && <img src={characterTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
-            <div style={portrait ? styles.frameNamePortraitHud : styles.frameNameInline}>{characterName ?? "—"}</div>
+          <div className="game-frame-image-name-row">
+            {characterTokenUrl && <img src={characterTokenUrl} alt="" className={portrait ? "game-frame-image-portrait-hud" : "game-frame-image-adaptive-hud"} />}
+            <div className={portrait ? "game-frame-name-portrait-hud" : "game-frame-name-inline"}>{characterName ?? "—"}</div>
           </div>
-          {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          {selfUnit?.status === "dead" && <span className="game-dead-badge">DEAD</span>}
         </>
       );
     }
     return (
       <>
-        {characterTokenUrl && <img src={characterTokenUrl} alt="" style={styles.frameImage} />}
-        <div style={styles.frameInfo}>
+        {characterTokenUrl && <img src={characterTokenUrl} alt="" className="game-frame-image" />}
+        <div className="game-frame-info">
           <strong>{characterName ?? "—"}</strong>
           {selfUnit && (
-            <div style={styles.healthResourceStack}>
+            <div className="game-health-resource-stack">
               <HealthBar
                 current={selfUnit.health} max={selfUnit.max_health} numbersAlign="end"
                 resourceLabel={resourceMeterLabel(primaryResource, resourceCurrent(selfUnit, primaryResource?.name), resourceMax(selfUnit, primaryResource?.name))}
@@ -4126,49 +2662,46 @@ export default function App({
               <UnitResourceBars unit={selfUnit} primaryResource={primaryResource} secondaryResources={secondaryResources} />
             </div>
           )}
-          {selfUnit?.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
+          {selfUnit?.status === "dead" && <span className="game-dead-badge">DEAD</span>}
         </div>
       </>
     );
   }
 
   function renderTargetFrameContent(stacked, portrait) {
-    if (!targetUnit) return <span style={{ color: "#666" }}>No target</span>;
+    if (!targetUnit) return <span className="game-no-target">No target</span>;
     const targetPrimaryCurrent = resourceCurrent(targetUnit, targetResource?.name);
     const targetPrimaryMax = resourceMax(targetUnit, targetResource?.name);
     if (stacked) {
-      const nameStyle = {
-        ...(portrait ? styles.frameNamePortraitHud : styles.frameNameInline),
-        color: targetRelationshipColors(targetUnit).text,
-      };
+
       return (
         <>
-          <div style={styles.frameHudHeader}>
+          <div className="game-frame-hud-header">
             <HealthBar current={targetUnit.health} max={targetUnit.max_health} landscape mirrored />
             <UnitResourceBars
               unit={targetUnit} primaryResource={targetResource} secondaryResources={targetSecondaryResources} landscape
             />
             <CastBar unit={targetUnit} inline />
           </div>
-          <div style={styles.frameImageNameRowRight}>
-            {targetTokenUrl && <img src={targetTokenUrl} alt="" style={portrait ? styles.frameImagePortraitHud : styles.frameImageAdaptiveHud} />}
-            <div style={nameStyle}>
+          <div className="game-frame-image-name-row-right">
+            {targetTokenUrl && <img src={targetTokenUrl} alt="" className={portrait ? "game-frame-image-portrait-hud" : "game-frame-image-adaptive-hud"} />}
+            <div className={portrait ? "game-frame-name-portrait-hud" : "game-frame-name-inline"} style={{ color: targetRelationshipColors(targetUnit).text }}>
               {formatUnitName(targetUnit)}
             </div>
           </div>
-          {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
-          {targetUnit.status === "respawning" && <span style={styles.deadBadge}>RESPAWNING</span>}
-          {targetUnit.status === "leashing" && <span style={styles.deadBadge}>EVADING</span>}
+          {targetUnit.status === "dead" && <span className="game-dead-badge">DEAD</span>}
+          {targetUnit.status === "respawning" && <span className="game-dead-badge">RESPAWNING</span>}
+          {targetUnit.status === "leashing" && <span className="game-dead-badge">EVADING</span>}
         </>
       );
     }
     return (
       <>
-        {targetTokenUrl && <img src={targetTokenUrl} alt="" style={styles.frameImage} />}
-        <div style={styles.frameInfo}>
+        {targetTokenUrl && <img src={targetTokenUrl} alt="" className="game-frame-image" />}
+        <div className="game-frame-info">
           <strong>{formatUnitName(targetUnit)}</strong>
-          {targetRange != null && <span style={styles.targetRange}>{targetRange} ft</span>}
-          <div style={styles.healthResourceStack}>
+          {targetRange != null && <span className="game-target-range">{targetRange} ft</span>}
+          <div className="game-health-resource-stack">
             <HealthBar
               current={targetUnit.health} max={targetUnit.max_health} numbersAlign="start"
               resourceLabel={resourceMeterLabel(targetResource, targetPrimaryCurrent, targetPrimaryMax)}
@@ -4176,15 +2709,15 @@ export default function App({
             <UnitResourceBars unit={targetUnit} primaryResource={targetResource} secondaryResources={targetSecondaryResources} />
             <CastBar unit={targetUnit} inline />
           </div>
-          {targetUnit.status === "dead" && <span style={styles.deadBadge}>DEAD</span>}
-          {targetUnit.status === "respawning" && <span style={styles.deadBadge}>RESPAWNING</span>}
-          {targetUnit.status === "leashing" && <span style={styles.deadBadge}>EVADING</span>}
+          {targetUnit.status === "dead" && <span className="game-dead-badge">DEAD</span>}
+          {targetUnit.status === "respawning" && <span className="game-dead-badge">RESPAWNING</span>}
+          {targetUnit.status === "leashing" && <span className="game-dead-badge">EVADING</span>}
         </div>
       </>
     );
   }
 
-  function renderActionSlot(button, extraStyle) {
+  function renderActionSlot(button, extraClass, sizeStyle) {
     const slot = button + 1;
     const key = bindingLabel(hotkeys[`ability_${slot}`]);
     const i = buttonLayout[button]; // power index shown on this button
@@ -4222,29 +2755,30 @@ export default function App({
     const revealedDeg = (1 - fraction) * 360;
     const cdSecs = (onCooldown && totalMs > 2000) ? Math.ceil(remainingMs / 1000) : null;
 
-    // extraStyle also goes on the tooltip's own wrapper (not just the inner
+    // extraClass also goes on the tooltip's own wrapper (not just the inner
     // button div) - it's the wrapper that's actually the flex item in a
-    // flex row (e.g. portraitActionRow), so sizing like flex:1 has to be
-    // set there or it's a no-op.
+    // flex row (e.g. game-portrait-action-row), so sizing like flex:1 has to be
+    // set there or it's a no-op. sizeStyle (the landscape grid's fitted
+    // size) goes on both, the same way.
     return (
-      <AbilityTooltip key={slot} ability={power} style={extraStyle}>
+      <AbilityTooltip key={slot} ability={power} className={extraClass} style={sizeStyle}>
         <div
-          style={{...styles.actionButton, ...extraStyle, ...(flashSlot === i ? styles.actionButtonFlash : {}), cursor: power ? "pointer" : "default", opacity: (inRange && isFacing && affordable) ? 1 : 0.3}}
+          className={["game-action-button", extraClass, flashSlot === i && "game-action-button-flash"].filter(Boolean).join(" ")}
+          style={{ ...sizeStyle, cursor: power ? "pointer" : "default", opacity: (inRange && isFacing && affordable) ? 1 : 0.3 }}
           onClick={power ? () => usePower(i) : undefined}
         >
-          {iconUrl && <IconImage src={iconUrl} color={power.iconColor} alt={power.name} style={styles.actionIcon}/>}
+          {iconUrl && <IconImage src={iconUrl} color={power.iconColor} alt={power.name} className="game-action-icon"/>}
           {onCooldown && (
-            <div style={{
-              position: "absolute", inset: 0, borderRadius: 4, pointerEvents: "none",
+            <div className="game-action-cooldown-sweep" style={{
               background: `conic-gradient(from -90deg, transparent ${revealedDeg}deg, rgba(0,0,0,0.65) ${revealedDeg}deg)`,
             }}/>
           )}
           {cdSecs && (
-            <div style={styles.actionCooldownOverlay}>
-              <span style={styles.actionCooldownText}>{cdSecs}</span>
+            <div className="game-action-cooldown-overlay">
+              <span className="game-action-cooldown-text">{cdSecs}</span>
             </div>
           )}
-          <span style={styles.actionKeybind}>{key}</span>
+          <span className="game-action-keybind">{key}</span>
         </div>
       </AbilityTooltip>
     );
@@ -4390,53 +2924,53 @@ export default function App({
           two-thirds of the whole screen (rendered in portraitColumn) - two
           different positioned ancestors, so each needs its own instance. */}
       {viewportMode.isLandscapePhone && chatOpen && (
-        <div style={styles.chatPanelLandscape}>
+        <div className="game-chat-panel-landscape">
           {log.map((line, i) => (
             <div key={i}>{line}</div>
           ))}
         </div>
       )}
       {viewportMode.isPhoneLayout && menuOpen && (
-        <div style={styles.menuDialogLandscape}>
+        <div className="game-menu-dialog-landscape">
           <button
-            style={styles.menuDialogButton}
+            className="game-menu-dialog-button"
             onClick={() => { setCharSheetOpen((o) => !o); setMenuOpen(false); }}
           >
             Character
           </button>
           <button
-            style={styles.menuDialogButton}
+            className="game-menu-dialog-button"
             onClick={() => { setQuestLogOpen((o) => !o); setMenuOpen(false); }}
           >
             Quests
           </button>
           {atlas && (
             <button
-              style={styles.menuDialogButton}
+              className="game-menu-dialog-button"
               onClick={() => { setAtlasOpen((o) => !o); setMenuOpen(false); }}
             >
               Map
             </button>
           )}
           <button
-            style={styles.menuDialogButton}
+            className="game-menu-dialog-button"
             onClick={() => { setClassOpen((o) => !o); setMenuOpen(false); }}
           >
             Class
           </button>
           <button
-            style={styles.menuDialogButton}
+            className="game-menu-dialog-button"
             onClick={() => { setSettingsOpen(true); setMenuOpen(false); }}
           >
             Settings
           </button>
           {leaveWorldUrl && (
-            <button style={styles.menuDialogButton} onClick={handleLeaveWorld}>
+            <button className="game-menu-dialog-button" onClick={handleLeaveWorld}>
               Leave world
             </button>
           )}
           {!leaveWorldUrl && exitUrl && (
-            <button style={styles.menuDialogButton} onClick={() => redirectTo(exitUrl)}>
+            <button className="game-menu-dialog-button" onClick={() => redirectTo(exitUrl)}>
               Leave zone
             </button>
           )}
@@ -4447,57 +2981,45 @@ export default function App({
 
   return (
     <div
-      style={styles.root}
+      className="game-root"
       data-touch={viewportMode.isTouch || undefined}
       data-phone-layout={viewportMode.isPhoneLayout || undefined}
       data-orientation={viewportMode.isPhoneLayout ? (viewportMode.isPortraitPhone ? "portrait" : "landscape") : undefined}
     >
       {new URLSearchParams(window.location.search).has("debugViewport") && (
-        <div style={styles.viewportDebug}>
+        <div className="game-viewport-debug">
           touch={String(viewportMode.isTouch)} phone={String(viewportMode.isPhoneLayout)}{" "}
           {viewportMode.isPhoneLayout && (viewportMode.isPortraitPhone ? "portrait" : "landscape")}
         </div>
       )}
       {latencyVisible && (
-        <div style={{
-          position: "fixed",
-          top: viewportMode.isPortraitPhone ? (canvasRect?.bottom ?? 98) + 8 : 98,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 1000,
-        }}>
+        <div className="game-latency" style={{ top: viewportMode.isPortraitPhone ? (canvasRect?.bottom ?? 98) + 8 : 98 }}>
           <HintTooltip text="Hit 'L' to toggle">
-            <div style={{
-              background: "rgba(0,0,0,0.7)", color: latencyColor(latencyMs), fontFamily: "monospace",
-              fontSize: 20, fontWeight: "bold", padding: "4px 14px", borderRadius: 4,
-            }}>
+            <div className="game-latency-badge" style={{ color: latencyColor(latencyMs) }}>
               {latencyMs != null ? `RTT Latency: ${latencyMs} ms` : "RTT Latency: —"}
             </div>
           </HintTooltip>
         </div>
       )}
       {viewportMode.isLandscapePhone ? (
-        <div style={styles.landscapeRow}>
-          <div style={styles.landscapeControlPanel}>
-            <div style={styles.landscapeFrameSlot}>
-              <div style={styles.frameInPanelHud}>
+        <div className="game-landscape-row">
+          <div className="game-landscape-control-panel" style={{ minWidth: LANDSCAPE_PANEL_MIN_WIDTH, padding: LANDSCAPE_PANEL_PADDING }}>
+            <div className="game-landscape-frame-slot">
+              <div className="game-frame-in-panel-hud">
                 {renderSelfFrameContent(true)}
               </div>
             </div>
-            <div style={{ ...styles.landscapeControlsSlot, ...styles.landscapeControlsSlotLeft }}>
-              <div style={styles.landscapeTouchControlsRow}>
+            <div className="game-landscape-controls-slot game-landscape-controls-slot-left">
+              <div className="game-landscape-touch-controls-row">
                 <button
-                  style={styles.touchControlButtonLandscape}
+                  className="game-touch-control-button-landscape"
                   title="Tab-target (Tab)"
                   onClick={() => handleTabTarget(unitsRef.current, targetIdRef.current, selfIdentifier)}
                 >
                   Tab
                 </button>
                 <button
-                  style={{
-                    ...styles.touchControlButtonLandscape,
-                    ...(attacking ? styles.touchControlButtonActive : {}),
-                  }}
+                  className={attacking ? "game-touch-control-button-landscape game-touch-control-button-active" : "game-touch-control-button-landscape"}
                   title="Start/stop attacking (T)"
                   onClick={() => (attacking ? handleStopAttacking() : handleStartAttacking())}
                 >
@@ -4505,76 +3027,71 @@ export default function App({
                 </button>
               </div>
             </div>
-            <div style={styles.landscapeJoystickSlot}>
+            <div className="game-landscape-joystick-slot">
               <Joystick
                 onMove={handleMovementStickMove}
                 onEnd={handleMovementStickEnd}
-                style={styles.landscapeJoystickZone}
+                className="game-landscape-joystick-zone"
               />
             </div>
           </div>
-          <div style={styles.canvasWrapper}>
+          <div className="game-canvas-wrapper">
             {sceneContent}
             <button
-              style={{
-                ...styles.chatButtonLandscape,
-                ...(chatOpen ? styles.chatButtonActive : {}),
-              }}
+              className={chatOpen ? "game-chat-button-landscape game-chat-button-active" : "game-chat-button-landscape"}
               title="Toggle chat"
               onClick={() => setChatOpen((o) => !o)}
             >
               Chat
             </button>
             <button
-              style={styles.menuButtonLandscape}
+              className="game-menu-button-landscape"
               title="Menu"
               onClick={() => setMenuOpen((o) => !o)}
             >
               Menu
             </button>
           </div>
-          <div style={styles.landscapeControlPanel}>
-            <div style={styles.landscapeFrameSlot}>
-              <div style={styles.frameInPanelHud}>
+          <div className="game-landscape-control-panel" style={{ minWidth: LANDSCAPE_PANEL_MIN_WIDTH, padding: LANDSCAPE_PANEL_PADDING }}>
+            <div className="game-landscape-frame-slot">
+              <div className="game-frame-in-panel-hud">
                 {renderTargetFrameContent(true)}
               </div>
             </div>
-            <div ref={actionGridPaneRef} style={{ ...styles.landscapeControlsSlot, ...styles.landscapeControlsSlotRight }}>
+            <div ref={actionGridPaneRef} className="game-landscape-controls-slot game-landscape-controls-slot-right">
               <div
-                style={{
-                  ...styles.landscapeActionGrid,
-                  ...(actionGridLayout ? {
-                    width: actionGridLayout.columns * actionGridLayout.size + (actionGridLayout.columns - 1) * 8,
-                    height: actionGridLayout.rows * actionGridLayout.size + (actionGridLayout.rows - 1) * 8,
-                  } : {}),
-                }}
+                className="game-landscape-action-grid"
+                style={actionGridLayout ? {
+                  width: actionGridLayout.columns * actionGridLayout.size + (actionGridLayout.columns - 1) * 8,
+                  height: actionGridLayout.rows * actionGridLayout.size + (actionGridLayout.rows - 1) * 8,
+                } : undefined}
               >
-                {Array.from({ length: 10 }, (_, i) => renderActionSlot(i, {
-                  ...styles.actionButtonLandscape,
-                  ...(actionGridLayout ? { width: actionGridLayout.size, height: actionGridLayout.size } : {}),
-                }))}
+                {Array.from({ length: 10 }, (_, i) => renderActionSlot(
+                  i, "game-action-button-landscape",
+                  actionGridLayout ? { width: actionGridLayout.size, height: actionGridLayout.size } : undefined,
+                ))}
               </div>
             </div>
-            <div style={styles.landscapeJoystickSlot}>
+            <div className="game-landscape-joystick-slot">
               <Joystick
                 onMove={handleCameraStickMove}
                 onEnd={handleCameraStickEnd}
-                style={styles.landscapeJoystickZone}
+                className="game-landscape-joystick-zone"
                 horizontal
               />
             </div>
           </div>
         </div>
       ) : viewportMode.isPortraitPhone ? (
-        <div style={styles.portraitColumn}>
-          <div style={styles.portraitFrameBand}>
-            <div style={styles.portraitFramePane}>
-              <div style={styles.frameInPanelHud}>
+        <div className="game-portrait-column">
+          <div className="game-portrait-frame-band">
+            <div className="game-portrait-frame-pane">
+              <div className="game-frame-in-panel-hud">
                 {renderSelfFrameContent(true, true)}
               </div>
             </div>
-            <div style={styles.portraitFramePane}>
-              <div style={styles.frameInPanelHud}>
+            <div className="game-portrait-frame-pane">
+              <div className="game-frame-in-panel-hud">
                 {renderTargetFrameContent(true, true)}
               </div>
             </div>
@@ -4582,23 +3099,20 @@ export default function App({
           {/* flexShrink:0 override: if the column ever runs short on
               height, the scene should never be the one that gives up
               space - portraitControlsBand does that instead. */}
-          <div style={{ ...styles.canvasWrapper, flexShrink: 0 }}>
+          <div className="game-canvas-wrapper game-canvas-wrapper-fixed">
             {sceneContent}
           </div>
-          <div style={styles.portraitControlsBand}>
-            <div style={styles.portraitTabAtkRow}>
+          <div className="game-portrait-controls-band">
+            <div className="game-portrait-tab-atk-row">
               <button
-                style={styles.touchControlButtonPortrait}
+                className="game-touch-control-button-portrait"
                 title="Tab-target (Tab)"
                 onClick={() => handleTabTarget(unitsRef.current, targetIdRef.current, selfIdentifier)}
               >
                 Tab
               </button>
               <button
-                style={{
-                  ...styles.touchControlButtonPortrait,
-                  ...(attacking ? styles.touchControlButtonActive : {}),
-                }}
+                className={attacking ? "game-touch-control-button-portrait game-touch-control-button-active" : "game-touch-control-button-portrait"}
                 title="Start/stop attacking (T)"
                 onClick={() => (attacking ? handleStopAttacking() : handleStartAttacking())}
               >
@@ -4606,38 +3120,35 @@ export default function App({
               </button>
             </div>
             {ACTION_ROWS_PORTRAIT.map((row, ri) => (
-              <div key={ri} style={styles.portraitActionRow}>
-                {row.map((i) => renderActionSlot(i, styles.actionButtonPortrait))}
+              <div key={ri} className="game-portrait-action-row">
+                {row.map((i) => renderActionSlot(i, "game-action-button-portrait"))}
               </div>
             ))}
           </div>
-          <div style={styles.portraitJoystickBand}>
+          <div className="game-portrait-joystick-band">
             <Joystick
               onMove={handleMovementStickMove}
               onEnd={handleMovementStickEnd}
-              style={styles.landscapeJoystickZone}
+              className="game-landscape-joystick-zone"
             />
             {/* Right stick: console-style continuous camera look, symmetric with the left (movement) stick. */}
             <Joystick
               onMove={handleCameraStickMove}
               onEnd={handleCameraStickEnd}
-              style={styles.landscapeJoystickZone}
+              className="game-landscape-joystick-zone"
               horizontal
             />
           </div>
-          <div style={styles.portraitBottomButtonsBand}>
+          <div className="game-portrait-bottom-buttons-band">
             <button
-              style={{
-                ...styles.bottomBandButtonPortrait,
-                ...(chatOpen ? styles.chatButtonActive : {}),
-              }}
+              className={chatOpen ? "game-bottom-band-button-portrait game-chat-button-active" : "game-bottom-band-button-portrait"}
               title="Toggle chat"
               onClick={() => setChatOpen((o) => !o)}
             >
               Chat
             </button>
             <button
-              style={styles.bottomBandButtonPortrait}
+              className="game-bottom-band-button-portrait"
               title="Menu"
               onClick={() => setMenuOpen((o) => !o)}
             >
@@ -4645,7 +3156,7 @@ export default function App({
             </button>
           </div>
           {chatOpen && (
-            <div style={styles.chatPanelLandscape}>
+            <div className="game-chat-panel-landscape">
               {log.map((line, i) => (
                 <div key={i}>{line}</div>
               ))}
@@ -4654,25 +3165,24 @@ export default function App({
         </div>
       ) : (
         <>
-          <div style={styles.frames}>
-            <div style={styles.selfFrame}>{renderSelfFrameContent()}</div>
-            <div style={{
-              ...styles.targetFrame,
+          <div className="game-frames">
+            <div className="game-self-frame">{renderSelfFrameContent()}</div>
+            <div className="game-target-frame" style={{
               background: targetRelationshipColors(targetUnit).background,
               border: `1px solid ${targetRelationshipColors(targetUnit).borderColor}`,
             }}>{renderTargetFrameContent()}</div>
           </div>
-          <div style={styles.canvasWrapper}>
+          <div className="game-canvas-wrapper">
             {sceneContent}
           </div>
-          <div style={styles.actionBar}>
+          <div className="game-action-bar">
             {Array.from({ length: 10 }, (_, i) => renderActionSlot(i))}
           </div>
         </>
       )}
       {/* Log: desktop only now - portrait rolled it into the Chat button. */}
       {!viewportMode.isPhoneLayout && (
-        <div style={styles.log}>
+        <div className="game-log">
           {log.map((line, i) => (
             <div key={i}>{line}</div>
           ))}
@@ -4680,16 +3190,16 @@ export default function App({
       )}
       {/* Char/Latency/Reload: desktop only now - both phone orientations roll these into the Menu button/dialog instead. */}
       {!viewportMode.isPhoneLayout && (
-        <div style={styles.utilityRow}>
+        <div className="game-utility-row">
           <button
-            style={styles.utilityButton}
+            className="game-utility-button"
             title="Character sheet (P)"
             onClick={() => setCharSheetOpen(o => !o)}
           >
             Char
           </button>
           <button
-            style={styles.utilityButton}
+            className="game-utility-button"
             title="Quest log (J)"
             onClick={() => setQuestLogOpen(o => !o)}
           >
@@ -4697,7 +3207,7 @@ export default function App({
           </button>
           {atlas && (
             <button
-              style={styles.utilityButton}
+              className="game-utility-button"
               title="Map (M)"
               onClick={() => setAtlasOpen(o => !o)}
             >
@@ -4705,26 +3215,26 @@ export default function App({
             </button>
           )}
           <button
-            style={styles.utilityButton}
+            className="game-utility-button"
             title="Class"
             onClick={() => setClassOpen(o => !o)}
           >
             Class
           </button>
           <button
-            style={styles.utilityButton}
+            className="game-utility-button"
             title="Settings"
             onClick={() => setSettingsOpen(true)}
           >
             Settings
           </button>
           {leaveWorldUrl && (
-            <button style={styles.utilityButton} title="Leave world" onClick={handleLeaveWorld}>
+            <button className="game-utility-button" title="Leave world" onClick={handleLeaveWorld}>
               Leave world
             </button>
           )}
           {!leaveWorldUrl && exitUrl && (
-            <button style={styles.utilityButton} title="Leave zone" onClick={() => redirectTo(exitUrl)}>
+            <button className="game-utility-button" title="Leave zone" onClick={() => redirectTo(exitUrl)}>
               Leave zone
             </button>
           )}
@@ -4740,16 +3250,8 @@ export default function App({
       />
       {contentError && <ContentErrorOverlay message={contentError} />}
       {disconnected && (
-        <div style={{
-          position: "fixed", inset: 0, display: "flex",
-          alignItems: "center", justifyContent: "center",
-          pointerEvents: "none",
-        }}>
-          <div style={{
-            color: "#ff2222", fontSize: 48, fontWeight: "bold",
-            textShadow: "0 0 20px #ff0000, 0 2px 4px #000",
-            letterSpacing: 4,
-          }}>
+        <div className="game-disconnected">
+          <div className="game-disconnected-text">
             DISCONNECTED
           </div>
         </div>

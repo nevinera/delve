@@ -409,7 +409,7 @@ export default function ClassEditor({classKey, stockAssets, backUrl, publishUrl,
           onNewPassive={addPassive}
         />
       </div>
-      <div className="content-editor-fields" ref={fieldsRef}>
+      <div className="content-editor-fields fields-pane" ref={fieldsRef}>
         <Breadcrumbs crumbs={breadcrumbsFor(current, draft.data)} onSelect={setSelection} />
         {renderConfig()}
       </div>

@@ -1,0 +1,29 @@
+/* The fields pane the ability editor and the content editors share (.fields-pane, beside
+   .ability-editor-fields or .content-editor-fields): field tables, inputs, entries and the
+   status editor's fields. */
+
+.fields-pane table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.fields-pane th { text-align: left; padding: 4px 8px 4px 0; color: var(--text-muted); font-weight: normal; white-space: nowrap; vertical-align: top; }
+.fields-pane td { padding: 4px 0; word-break: break-word; }
+.fields-pane input[type=number] { width: 100px; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-input); padding: 3px 6px; border-radius: 3px; }
+.fields-pane input[type=text] { width: 100%; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-input); padding: 3px 6px; border-radius: 3px; }
+.fields-pane select { width: 100%; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-input); padding: 3px 6px; border-radius: 3px; }
+.fields-pane .range-field { display: inline-flex; align-items: center; gap: 6px; }
+.fields-pane .range-field input[type=number] { width: 70px; }
+.fields-pane .range-sep { color: #667; }
+.fields-pane .asset-upload { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.fields-pane input[type=file] { font-size: 11px; color: var(--text-muted); max-width: 100%; }
+.fields-pane .asset-upload button { background: #333; border: 1px solid var(--input-border); color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+.fields-pane .asset-upload button:hover { background: #444; }
+.fields-pane .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.fields-pane .entry-block-highlight { animation: entry-flash 1.5s ease-out; }
+@keyframes entry-flash {
+  0%, 15% { background-color: rgba(196, 154, 42, 0.35); }
+  100% { background-color: transparent; }
+}
+.fields-pane .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.fields-pane .entry-heading-row h3 { font-size: 13px; color: var(--text-heading); font-weight: 600; }
+.fields-pane .status-editor h4 { font-size: 12px; color: var(--text-muted); font-weight: 600; margin: 14px 0 6px; }
+.fields-pane .status-aura-effect-fields, .fields-pane .status-effects-list { display: flex; flex-direction: column; gap: 8px; }
+.fields-pane .status-effect-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--text-muted); }
+.fields-pane .status-effect-field select, .fields-pane .status-effect-field input[type=number] { width: auto; min-width: 90px; }

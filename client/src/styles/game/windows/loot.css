@@ -1,0 +1,13 @@
+/* LootWindow. */
+
+.game-loot-window { position: absolute; z-index: 20; background: var(--hud-window-bg-translucent); border: 1px solid var(--hud-window-border); border-radius: 6px; padding: 10px 16px 14px; min-width: 260px; pointer-events: auto; }
+.game-loot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: move; user-select: none; }
+.game-loot-table { border-collapse: collapse; }
+.game-loot-row { border-bottom: 1px solid #333; }
+.game-loot-name-cell { padding: 4px 12px 4px 0; text-align: left; }
+.game-loot-meta-cell { padding: 4px 12px 4px 0; text-align: left; color: #888; font-size: 11px; white-space: nowrap; }
+.game-loot-take-cell { padding: 4px 0; text-align: right; }
+.game-loot-item-name { color: #e8d5a0; font-size: 13px; }
+.game-loot-take { background: none; border: 1px solid var(--hud-window-border); border-radius: 3px; color: var(--hud-gold); font-size: 11px; cursor: pointer; padding: 1px 6px; white-space: nowrap; }
+.game-loot-owned { color: #888; font-size: 11px; margin-left: 4px; }
+.game-loot-item-name-owned { text-decoration: line-through; color: #888; }

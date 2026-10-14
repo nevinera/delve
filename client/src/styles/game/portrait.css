@@ -1,0 +1,17 @@
+/* The portrait phone layout: the frame band, controls and the bottom buttons. */
+
+/* Portrait phone: a top-to-bottom flex column of 5 bands (frames, scene, controls, joysticks, bottom buttons) - same idea as landscape's left-to-right row of panels, just rotated, and with real flexbox sizing instead of position:fixed pixel-offset math. */
+.game-portrait-column { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
+.game-portrait-frame-band { flex: 0 0 9%; min-height: 0; display: flex; flex-direction: row; }
+.game-portrait-frame-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 8px; box-sizing: border-box; }
+/* flex-shrink:1 (unlike the other bands, which are all 0) - the scene canvas is protected from shrinking (see its portrait-specific override below) so if the column ever runs short on height, this is the band that gives up space first instead of the scene. */
+.game-portrait-controls-band { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; padding: 4px 8px; box-sizing: border-box; }
+/* justifyContent:space-between with exactly two children pins them to the row's own left/right edges - same edges the action rows below use (same horizontal padding), so Tab/Atk end up flush above column 1 and column 5 of the grid without needing to match its column math exactly. */
+.game-portrait-tab-atk-row { display: flex; justify-content: space-between; }
+/* space-between (fixed-size square buttons, extra room goes into the gaps) instead of flex:1 (which stretched buttons into wide rectangles to fill the row) - same edges as portraitTabAtkRow's own space-between treatment, so Tab/Atk still land above column 1 and column 5. */
+.game-portrait-action-row { display: flex; justify-content: space-between; }
+/* Extra padding (beyond the band's own gap) around each joystick zone so a full-deflection drag stays clear of the controls above and the bottom buttons below instead of visually crowding them. space-between (not space-around) pins the two sticks to the row's own edges - so aside from the row's own padding, each stick sits flush against the screen edge instead of drifting toward the center. */
+.game-portrait-joystick-band { flex: 0 0 auto; display: flex; flex-direction: row; justify-content: space-between; padding: 10px 24px; box-sizing: border-box; }
+.game-portrait-bottom-buttons-band { flex: 0 0 auto; display: flex; gap: 8px; padding: 6px; box-sizing: border-box; }
+/* flex:1 (equal width, filling the full-width row) instead of the landscape grid's fixed 43x43 - portrait has the whole screen width to spread 5 buttons across instead of a narrow side panel. */
+.game-action-button-portrait { flex: 0 0 44px; width: 44px; height: 44px; }

@@ -2,6 +2,7 @@ import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import AbilityEditor from "./AbilityEditor";
 import {adoptBranchParam} from "../github/branchPreference";
+import "../styles/abilityEditor/index.css";
 
 adoptBranchParam();
 

@@ -1,0 +1,11 @@
+/* PublishClassControl.jsx - publish the class, with a commit prompt and a message. */
+
+.publish-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.publish-bar .publish-button { background: #542; border: 1px solid #a74; color: #fed; font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 3px; cursor: pointer; }
+.publish-bar .publish-button:hover:not(:disabled) { background: #653; }
+.publish-bar .publish-button:disabled { background: var(--disabled-bg); border-color: var(--disabled-border); color: var(--disabled-text); cursor: default; }
+.publish-bar .commit-prompt { display: flex; gap: 6px; }
+.publish-bar .commit-prompt input { width: 70px; }
+.publish-bar .save-message { font-size: 12px; }
+.publish-bar .save-success { color: #7c7; }
+.publish-bar .save-error { color: var(--text-error); }

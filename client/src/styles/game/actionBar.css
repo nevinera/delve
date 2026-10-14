@@ -1,0 +1,11 @@
+/* The action bar's buttons, their cooldowns and keybinds. */
+
+.game-action-bar { position: relative; flex-shrink: 0; display: flex; justify-content: center; align-items: center; gap: 4px; padding: 4px 8px; background: #111; border-top: 1px solid #333; }
+.game-action-button { position: relative; width: 52px; height: 52px; background: #1c1c1c; border: 1px solid #444; border-radius: 4px; cursor: default; flex-shrink: 0; overflow: hidden; }
+.game-action-icon { position: absolute; inset: 4px; object-fit: contain; }
+.game-action-cooldown-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.game-action-cooldown-text { color: #fff; font-size: 16px; font-weight: bold; text-shadow: 0 0 4px #000, 0 1px 3px #000; line-height: 1; }
+.game-action-keybind { position: absolute; bottom: 2px; right: 4px; font-size: 10px; color: #666; line-height: 1; pointer-events: none; }
+.game-action-button-flash { border-color: #cc0; box-shadow: inset 0 0 10px rgba(255, 220, 50, 0.5); background: #2a2a0a; }
+/* The cooldown's sweep: darkened where the cooldown is still left (its gradient is set inline). */
+.game-action-cooldown-sweep { position: absolute; inset: 0; border-radius: 4px; pointer-events: none; }

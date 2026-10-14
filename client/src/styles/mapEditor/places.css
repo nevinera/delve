@@ -1,0 +1,8 @@
+/* PlaceShapes.jsx and PlacesPanel.jsx. */
+
+.map-place-label { fill: #fff; font: bold 13px sans-serif; paint-order: stroke; stroke: rgba(0,0,0,0.75); stroke-width: 3px; }
+.map-place-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; flex: none; }
+.map-place-details { padding: 2px 4px 6px 20px; font-size: 12px; }
+.map-place-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.map-place-tag { background: #2a3440; color: #bcd; border-radius: 8px; padding: 1px 7px; }
+.map-place-description { margin: 0 0 6px; white-space: pre-wrap; }

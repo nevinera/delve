@@ -1,0 +1,6 @@
+/* BranchPicker.jsx - the branch picker the content editors share. */
+
+.branch-picker { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.branch-picker select, .branch-picker input { background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-input); padding: 3px 6px; border-radius: 3px; font-size: 12px; }
+.branch-picker button { background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent); font-size: 12px; padding: 3px 8px; border-radius: 3px; cursor: pointer; }
+.branch-picker .branch-error { color: var(--text-error); }

@@ -1,0 +1,4 @@
+/* The map sidebar's Validate/Save sits apart from the fields around it. Unscoped, so in the
+   world builder it applies to every save bar (the header's overrides it). */
+
+.save-bar { margin: 14px 0; }

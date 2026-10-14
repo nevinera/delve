@@ -1,0 +1,28 @@
+/* The SVG overlays drawn over the map. */
+
+/* Same idea, but its shapes DO take pointer events (for select/drag) -
+   the SVG root stays passthrough so empty space still reaches the
+   wrapper underneath for panning/add-tool clicks. */
+.map-canvas-shapes polyline, .map-canvas-shapes circle, .map-canvas-shapes line, .map-canvas-shapes image { pointer-events: auto; }
+/* NcuQuestBadges.jsx - a quest badge on NCUs with quests (world editor only). */
+.map-ncu-quest-badge circle { fill: #7fe0ff; stroke: #123; stroke-width: 1; cursor: pointer; }
+.map-ncu-quest-badge text { fill: #123; font-weight: bold; pointer-events: none; }
+.map-ncu-quest-badge text.map-ncu-quest-option { fill: #bfefff; stroke: #000; stroke-width: 0.6px; paint-order: stroke; pointer-events: auto; cursor: pointer; font-weight: normal; }
+.map-ncu-quests { margin-top: 8px; }
+.map-ncu-quests h4 { margin: 0 0 4px; }
+.map-ncu-quests-list { margin: 0 0 4px; font-size: 12px; }
+.map-canvas-shapes circle, .map-canvas-shapes line, .map-canvas-shapes image { cursor: grab; }
+/* The 3ft hover ring around a wall point (from hovering its row in
+   BarriersPanel) is a pure visual marker, not an interactive handle -
+   needs to win over the plain "circle" rule above. */
+.map-canvas-shapes circle.map-canvas-point-hover-ring { pointer-events: none; cursor: default; }
+/* Group-highlight overlay (GroupShapes) - purely decorative, must
+   never intercept a click meant for the real token underneath
+   (grouping mode relies on that to toggle membership). */
+/* Movement path/zone overlay (MovementShapes) - same positioning as
+   the group highlight above, but its own class since both can be
+   present at once and are visually distinct (dim vs. loud). */
+
+/* Shapes the current tab doesn't edit (MapCanvas's activeLayers). */
+.map-canvas-layer { display: contents; }
+.map-canvas-layer-inactive > svg { opacity: 0.35; pointer-events: none; }

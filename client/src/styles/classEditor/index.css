@@ -1,0 +1,6 @@
+/* The class editor's page, in cascade order. */
+
+@import "../content/index.css";
+@import "./publishBar.css";
+@import "./dpsEstimate.css";
+@import "../editorPhone.css";

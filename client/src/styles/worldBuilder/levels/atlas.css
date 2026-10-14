@@ -1,0 +1,5 @@
+/* AtlasLevel.jsx. */
+
+.atlas-zones { list-style: none; padding: 0; }
+.atlas-editing { display: block; margin: 8px 0; }
+.atlas-problems { color: #f99; }

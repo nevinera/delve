@@ -2,6 +2,7 @@ import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import ClassEditor from "./ClassEditor";
 import {adoptBranchParam} from "../github/branchPreference";
+import "../styles/classEditor/index.css";
 
 adoptBranchParam();
 

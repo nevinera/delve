@@ -32,7 +32,7 @@ export default function ItemLevel({draft, item, onChange, repo}) {
           <ItemPreviewPane key={item} itemData={data} />
         </div>
       </div>
-      <div className="content-editor-fields item-level-fields">
+      <div className="content-editor-fields fields-pane item-level-fields">
         <ItemFieldsPanel
           draft={new ItemDraft(data)}
           onChange={(next) => onChange((current) => updateItem(current, item, next.data))}

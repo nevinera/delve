@@ -1,0 +1,7 @@
+/* Add and remove buttons (.add-entry, .remove-entry), wherever an editor lists entries. */
+
+button.add-entry { background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent); font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+button.add-entry:hover, button.add-entry.selected { background: var(--accent-hover-bg); }
+button.add-entry:disabled { opacity: 0.4; cursor: default; }
+button.remove-entry { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+button.remove-entry:hover { background: var(--danger-hover-bg); }
