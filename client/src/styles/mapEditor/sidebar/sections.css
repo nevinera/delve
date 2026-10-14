@@ -1,0 +1,15 @@
+/* A collapsible section heading (Barriers today; Connections/Units
+   will want this too) - starts collapsed, since a list of every
+   point in every wall would otherwise dominate the sidebar. */
+.map-sidebar-section-heading { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 0; }
+.map-sidebar-section-heading h3 { font-size: 13px; color: #cce; font-weight: 600; }
+.map-sidebar-section-toggle { font-size: 11px; color: #9ab; width: 1em; text-align: center; }
+
+/* The sidebar's tabs (MapWorkbench's TABS). */
+.map-editor-tabs { display: flex; border-bottom: 1px solid #333; margin: 0 -14px 12px; padding: 0 14px; position: sticky; top: 0; z-index: 2; background: #1c2126; }
+.map-editor-tabs button {
+  flex: 1; background: none; border: none; border-bottom: 2px solid transparent; color: #9ab;
+  padding: 8px; font-size: 13px; cursor: pointer;
+}
+.map-editor-tabs button:hover { color: #cce; }
+.map-editor-tabs button.active { color: #cce; border-bottom-color: #9cf; font-weight: 600; }

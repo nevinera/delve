@@ -1,0 +1,58 @@
+/* Units tab (UnitsTab.jsx): the palette of unit types above the list
+   of groups, or one open group's members. */
+.map-editor-sidebar-content .map-units-tab { display: flex; flex-direction: column; gap: 12px; }
+.map-editor-sidebar-content .map-unit-palette { position: relative; }
+.map-editor-sidebar-content .map-unit-palette-entries { display: flex; flex-wrap: wrap; gap: 6px; }
+.map-editor-sidebar-content .map-unit-palette-entry {
+  display: flex; align-items: center; gap: 6px; background: #22282e; border: 1px solid #3a4148; color: #cce;
+  padding: 3px 10px 3px 3px; border-radius: 16px; font-size: 12px; cursor: pointer;
+}
+.map-editor-sidebar-content .map-unit-palette-entry:hover:not(:disabled) { background: #2a323a; }
+.map-editor-sidebar-content .map-unit-palette-entry.armed { background: #1d3550; border-color: #9cf; box-shadow: inset 0 1px 4px rgba(0,0,0,0.7); }
+.map-editor-sidebar-content .map-unit-palette-entry:disabled { opacity: 0.4; cursor: default; }
+.map-editor-sidebar-content .map-unit-palette-entry.selected:not(.armed) { border-color: #e8c35a; }
+.map-editor-sidebar-content .map-unit-palette-group { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.map-editor-sidebar-content .map-unit-palette-category {
+  flex-basis: 100%; text-align: left; background: none; border: none; padding: 2px 0 0; color: #889;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer;
+}
+.map-editor-sidebar-content .map-unit-palette-category:hover:not(:disabled) { color: #e8c35a; }
+.map-editor-sidebar-content .map-encounter-controls { margin-top: 8px; }
+.map-editor-sidebar-content .map-encounter-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.map-editor-sidebar-content .map-encounter-row select { width: auto; }
+.map-editor-sidebar-content .map-encounter-row button.armed { background: #1d3550; border-color: #9cf; }
+.map-editor-sidebar-content .map-encounter-error { color: #e79; }
+.map-editor-sidebar-content .map-unit-token-thumb.map-unit-palette-token { width: 26px; height: 26px; }
+.map-editor-sidebar-content .map-unit-palette-add {
+  width: 32px; height: 32px; border-radius: 16px; background: transparent; border: 1px dashed #557; color: #9cf; font-size: 16px; cursor: pointer;
+}
+.map-editor-sidebar-content .map-unit-palette-add:hover { background: #22303c; }
+.map-editor-sidebar-content .map-unit-palette-popover,
+.map-editor-sidebar-content .map-loot-item-popover {
+  position: absolute; z-index: 5; top: 100%; left: 0; right: 0; margin-top: 4px; padding: 6px;
+  background: #1c2126; border: 1px solid #457; border-radius: 6px; box-shadow: 0 6px 24px #00000080;
+  max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+}
+.map-editor-sidebar-content .map-unit-palette-option {
+  display: flex; align-items: center; gap: 8px; background: none; border: none; color: #cce;
+  padding: 4px 6px; text-align: left; font-size: 13px; cursor: pointer; border-radius: 4px;
+}
+.map-editor-sidebar-content .map-unit-palette-option:hover { background: #22303c; }
+.map-editor-sidebar-content .map-unit-group-list { list-style: none; display: flex; flex-direction: column; gap: 2px; border-top: 1px solid #2a2f35; padding-top: 8px; }
+.map-editor-sidebar-content .map-unit-group-row {
+  width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: 1px solid transparent;
+  border-radius: 4px; padding: 5px 6px; color: #cce; cursor: pointer; text-align: left;
+}
+.map-editor-sidebar-content .map-unit-group-row:hover, .map-editor-sidebar-content .map-unit-group-row.map-entry-hovered { background: #202832; border-color: #345; }
+.map-editor-sidebar-content .map-unit-group-tokens { display: flex; flex-shrink: 0; }
+.map-editor-sidebar-content .map-unit-group-tokens > * + * { margin-left: -8px; }
+.map-editor-sidebar-content .map-unit-group-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.map-editor-sidebar-content .map-unit-close-group { background: none; border: none; color: #9cf; cursor: pointer; padding: 0; font-size: 13px; margin-bottom: 8px; }
+.map-editor-sidebar-content .map-unit-close-group:hover { text-decoration: underline; }
+.map-editor-sidebar-content .map-unit-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.map-editor-sidebar-content .map-unit-group-name {
+  flex: 1; min-width: 0; background: transparent; border: 1px solid transparent; color: #fca; font-size: 14px; font-weight: 600;
+  padding: 2px 4px; border-radius: 3px;
+}
+.map-editor-sidebar-content .map-unit-group-name:hover, .map-editor-sidebar-content .map-unit-group-name:focus { border-color: #555; background: #111; }
+.map-editor-sidebar-content .map-unit-group-count { font-size: 12px; color: #987; flex-shrink: 0; }

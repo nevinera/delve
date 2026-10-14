@@ -1,0 +1,35 @@
+/* The sidebar's field tables and entry rows. */
+
+.map-editor-sidebar-content table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.map-editor-sidebar-content th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
+.map-editor-sidebar-content td { padding: 4px 0; word-break: break-word; }
+.map-editor-sidebar-content input[type=number] { width: 100px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.map-editor-sidebar-content input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.map-fields-dimension-pair { display: flex; align-items: center; gap: 6px; }
+.map-fields-dimension-pair input[type=number] { width: 70px; }
+
+.map-editor-sidebar-content .entry-block { margin: 8px 0; padding: 6px 0; border-top: 1px solid #2a2f35; border-radius: 4px; }
+.map-editor-sidebar-content .entry-block.map-entry-selected { background: #202832; }
+/* A not-yet-placed entry for an armed single-shot add-tool (Add
+   Circle/Add Point Connection/Add Line Connection) - nothing's
+   actually in mapData yet, just a cue that something's pending at
+   the list position the real entry will land at once placed. */
+.map-editor-sidebar-content .entry-block.map-entry-pending { border-top-style: dashed; }
+.map-editor-sidebar-content .entry-block.map-entry-pending h3 { color: #789; font-style: italic; }
+.map-editor-sidebar-content .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; margin-bottom: 6px; }
+.map-editor-sidebar-content .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
+.map-editor-sidebar-content .entry-heading-row h3 .map-entry-summary { font-weight: normal; color: #789; }
+.map-editor-sidebar-content button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+.map-editor-sidebar-content button.remove-entry:hover { background: #533; }
+
+/* Generic heading-row summary wrapper (toggle chevron + title), so the
+   remove button stays a separate flex item pinned to the far right
+   via the heading row's own space-between - reused by BarriersPanel's
+   per-entry collapse. */
+.map-editor-sidebar-content .map-row-summary { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+
+.map-editor-sidebar-content .add-buttons-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.map-editor-sidebar-content button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+.map-editor-sidebar-content button.add-entry:hover { background: #345; }
+.map-editor-sidebar-content button.add-entry:disabled { opacity: 0.4; cursor: default; }
+.map-editor-sidebar-content .add-buttons-row select { background: #111; border: 1px solid #555; color: #eee; font-size: 12px; padding: 4px 6px; border-radius: 3px; }

@@ -1,0 +1,19 @@
+/* AbilityIcon.jsx - the ability's icon over its preview. */
+
+.ability-icon-button {
+  display: block;
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 56px;
+  background: #111;
+  border: 2px solid #668;
+  border-radius: 6px;
+  object-fit: cover;
+  cursor: pointer;
+}
+.ability-icon-button:hover { border-color: #9ac; }
+.ability-icon-button.disabled { cursor: default; opacity: 0.5; border-color: #444; }
+.ability-icon-button.ability-icon-fallback { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #9ab; background: #182028; border-style: dashed; }

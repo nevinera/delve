@@ -1,0 +1,55 @@
+/* MapCanvas.jsx - the pannable, zoomable map and its layers. */
+
+.map-canvas-wrapper {
+  flex: 1; min-height: 0; overflow: hidden; position: relative;
+  background: #0a0c0e;
+  background-image: linear-gradient(45deg, #101316 25%, transparent 25%), linear-gradient(-45deg, #101316 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #101316 75%), linear-gradient(-45deg, transparent 75%, #101316 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  touch-action: none;
+  cursor: grab;
+}
+.map-canvas-wrapper:active { cursor: grabbing; }
+/* Placement mode (see BarriersPanel's "+" buttons): clicking sets the
+   next point rather than panning, so swap the grab cursor for a
+   crosshair - :active is included so a click-hold doesn't briefly
+   flash back to "grabbing". */
+.map-canvas-wrapper.map-canvas-wrapper-placing,
+.map-canvas-wrapper.map-canvas-wrapper-placing:active { cursor: crosshair; }
+/* The crosshair above only wins over empty map background - an
+   existing shape underneath the cursor (a barrier's line/points, a
+   connection, a unit token) sets its own cursor: grab below, which
+   otherwise overrides it right when precision matters most (clicking
+   a new point near/against existing geometry, e.g. to snap to it).
+   Higher specificity than that plain rule, so it wins while placing. */
+.map-canvas-wrapper-placing .map-canvas-shapes circle,
+.map-canvas-wrapper-placing .map-canvas-shapes line,
+.map-canvas-wrapper-placing .map-canvas-shapes image { cursor: crosshair; }
+/* will-change hints the browser to promote this to its own GPU
+   compositing layer up front, so panning/zooming a large map image is
+   a cheap composite instead of a full repaint of the bitmap on every
+   drag frame - without it, some browsers only promote reactively
+   (after the first animated frame or two), which is exactly when a
+   big image visibly stutters before catching up. */
+.map-canvas-content { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+/* Not on touch devices, though: a promoted layer is kept at the
+   image's full size (a 4000px map is hundreds of MB at a phone's
+   pixel density), which mobile Safari can't hold, so it drops tiles
+   and the map shows holes that move as it pans. Unpromoted, it's
+   drawn at the current zoom instead. */
+@media (pointer: coarse) {
+  .map-canvas-content { will-change: auto; }
+}
+.map-canvas-content img { display: block; user-select: none; }
+/* Same pixel-space box as the image, so its grid lines pan/zoom
+   together with it for free via the shared parent's transform. */
+.map-canvas-grid { position: absolute; top: 0; left: 0; pointer-events: none; }
+/* StampCanvas.jsx - the map's decoration stamps, over the ground. */
+.map-canvas-stamps { position: absolute; top: 0; left: 0; pointer-events: none; }
+/* useCellsTab.jsx - a cell map's tree crowns, over the stamps. */
+.map-canvas-canopy { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+.map-canvas-status-bar {
+  flex: 0 0 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+  background: #1c2126; border-top: 1px solid #333; color: #9ab; font-size: 12px; font-variant-numeric: tabular-nums;
+}

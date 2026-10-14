@@ -1,0 +1,36 @@
+/* The ability editor's fields pane, its entries and the status editor. */
+
+.ability-editor-fields table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.ability-editor-fields th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
+.ability-editor-fields td { padding: 4px 0; word-break: break-word; }
+.ability-editor-fields input[type=number] { width: 100px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.ability-editor-fields input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.ability-editor-fields select { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.ability-editor-fields .range-field { display: inline-flex; align-items: center; gap: 6px; }
+.ability-editor-fields .range-field input[type=number] { width: 70px; }
+.ability-editor-fields .range-sep { color: #667; }
+.ability-editor-fields .asset-upload { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.ability-editor-fields input[type=file] { font-size: 11px; color: #9ab; max-width: 100%; }
+.ability-editor-fields .asset-upload button { background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+.ability-editor-fields .asset-upload button:hover { background: #444; }
+
+.ability-editor-fields .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
+.ability-editor-fields button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+.ability-editor-fields button.add-entry:hover { background: #345; }
+.ability-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid #2a2f35; border-radius: 4px; transition: background-color 0.4s ease-out; }
+.ability-editor-fields .entry-block-highlight { animation: entry-flash 1.5s ease-out; }
+@keyframes entry-flash {
+  0%, 15% { background-color: rgba(196, 154, 42, 0.35); }
+  100% { background-color: transparent; }
+}
+.ability-editor-fields .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ability-editor-fields .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
+.ability-editor-fields button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+.ability-editor-fields button.remove-entry:hover { background: #533; }
+
+.ability-editor-fields .status-editor { padding: 8px 10px; background: #171b1f; border: 1px solid #2a2f35; border-radius: 4px; }
+.ability-editor-fields .status-editor h4 { font-size: 12px; color: #9ab; font-weight: 600; margin: 14px 0 6px; }
+.ability-editor-fields .status-aura-effect-fields, .ability-editor-fields .status-effects-list { display: flex; flex-direction: column; gap: 8px; }
+.ability-editor-fields .status-effect-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 8px; background: #1c2126; border: 1px solid #2a2f35; border-radius: 4px; }
+.ability-editor-fields .status-effect-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #9ab; }
+.ability-editor-fields .status-effect-field select, .ability-editor-fields .status-effect-field input[type=number] { width: auto; min-width: 90px; }

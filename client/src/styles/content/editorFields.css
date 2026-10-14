@@ -1,0 +1,39 @@
+/* The config pane's fields. The power and status panes reuse the ability editor's fields and status editor (see abilityEditor/fields.css). */
+
+.content-editor-fields table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.content-editor-fields th { text-align: left; padding: 4px 8px 4px 0; color: #9ab; font-weight: normal; white-space: nowrap; vertical-align: top; }
+.content-editor-fields td { padding: 4px 0; word-break: break-word; }
+.content-editor-fields input[type=number] { width: 100px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.content-editor-fields input[type=text] { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.content-editor-fields select { width: 100%; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+
+.content-editor-fields .add-buttons-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #333; }
+.content-editor-fields button.add-entry { background: #234; border: 1px solid #457; color: #9cf; font-size: 12px; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+.content-editor-fields button.add-entry:hover { background: #345; }
+.content-editor-fields .entry-block { margin: 16px 0; padding-top: 12px; border-top: 1px solid #2a2f35; border-radius: 4px; }
+.content-editor-fields .entry-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.content-editor-fields .entry-heading-row h3 { font-size: 13px; color: #cce; font-weight: 600; }
+.content-editor-fields button.remove-entry { background: #422; border: 1px solid #644; color: #e9a; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+.content-editor-fields button.remove-entry:hover { background: #533; }
+.content-editor-fields .checkbox-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.content-editor-fields .checkbox-list label { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.content-editor-fields h3 { font-size: 13px; color: #cce; font-weight: 600; margin: 16px 0 8px; }
+.content-editor-fields input[type=file] { font-size: 11px; color: #9ab; max-width: 100%; }
+
+.content-editor-fields .range-field { display: inline-flex; align-items: center; gap: 6px; }
+.content-editor-fields .range-field input[type=number] { width: 70px; }
+.content-editor-fields .range-sep { color: #667; }
+.content-editor-fields .asset-upload { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.content-editor-fields .asset-upload button { background: #333; border: 1px solid #555; color: #ccc; font-size: 11px; padding: 3px 8px; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+.content-editor-fields .asset-upload button:hover { background: #444; }
+
+.content-editor-fields .entry-block-highlight { animation: entry-flash 1.5s ease-out; }
+@keyframes entry-flash {
+  0%, 15% { background-color: rgba(196, 154, 42, 0.35); }
+  100% { background-color: transparent; }
+}
+.content-editor-fields .status-editor h4 { font-size: 12px; color: #9ab; font-weight: 600; margin: 14px 0 6px; }
+.content-editor-fields .status-aura-effect-fields, .content-editor-fields .status-effects-list { display: flex; flex-direction: column; gap: 8px; }
+.content-editor-fields .status-effect-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 8px; background: #171b1f; border: 1px solid #2a2f35; border-radius: 4px; }
+.content-editor-fields .status-effect-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #9ab; }
+.content-editor-fields .status-effect-field select, .content-editor-fields .status-effect-field input[type=number] { width: auto; min-width: 90px; }

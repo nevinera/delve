@@ -1,0 +1,17 @@
+/* The powers editor's breadcrumbs, config actions, status summaries and import panel. */
+
+.config-breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; font-size: 13px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #333; }
+.config-breadcrumbs .crumb-sep { color: #667; margin: 0 8px; }
+.config-breadcrumbs .crumb-current { color: #cce; font-weight: 600; }
+.config-breadcrumbs button.crumb-link { background: none; border: none; color: #9cf; font-size: 13px; cursor: pointer; padding: 0; }
+.config-breadcrumbs button.crumb-link:hover { text-decoration: underline; }
+.config-actions { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.config-empty { font-size: 12px; color: #9ab; margin: 8px 0; }
+
+.status-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; background: #171b1f; border: 1px solid #2a2f35; border-radius: 4px; }
+.status-summary-name { font-size: 13px; color: #cce; }
+.status-summary-detail { font-size: 11px; color: #9ab; }
+
+.import-power > select { margin-bottom: 10px; }
+.import-power .import-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+.import-power .import-error { font-size: 12px; color: #e79; }

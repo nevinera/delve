@@ -1,0 +1,22 @@
+/* A wall's points as a wrapping row of pills + "+" buttons, instead
+   of one text-input row per point - positions are only ever set by
+   clicking the map (placement mode) or dragging a handle on canvas,
+   never typed. */
+.map-point-pills, .map-fill-point-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.map-point-pill {
+  display: inline-flex; align-items: center; gap: 4px; background: #223; border: 1px solid #457;
+  color: #cde; font-size: 12px; padding: 3px 4px 3px 8px; border-radius: 12px; font-variant-numeric: tabular-nums;
+}
+.map-point-pill-pending { border-style: dashed; color: #789; }
+.map-point-pill-editable { cursor: pointer; }
+.map-point-pill-editable:hover { border-color: #9cf; color: #eef; }
+.map-point-pill-remove {
+  background: none; border: none; color: #e9a; font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; border-radius: 50%;
+}
+.map-point-pill-remove:hover { background: #422; }
+.map-point-plus {
+  background: none; border: 1px dashed #567; color: #789; font-size: 12px; line-height: 1;
+  width: 20px; height: 20px; border-radius: 50%; cursor: pointer; flex-shrink: 0;
+}
+.map-point-plus:hover:not(:disabled) { color: #9cf; border-color: #9cf; }
+.map-point-plus:disabled { opacity: 0.3; cursor: default; }

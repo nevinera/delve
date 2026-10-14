@@ -1,0 +1,3 @@
+/* Editors that fill the window and scroll inside their panes (a phone layout may let the page scroll). */
+
+body { overflow: hidden; }
