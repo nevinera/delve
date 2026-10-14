@@ -22,17 +22,13 @@ describe("CastBar", () => {
   it('anchors to the top by default', () => {
     const now = Date.now();
     render(<CastBar unit={{ casting_power: "Fireball", cast_started_at: now, cast_ends_at: now + 2000 }} />);
-    const container = screen.getByText("Fireball").closest("[style*='position: absolute']");
-    expect(container).toHaveStyle({ top: "8px" });
-    expect(container.style.bottom).toBe("");
+    expect(screen.getByTestId("cast-bar")).toHaveClass("game-cast-bar-top");
   });
 
   it("anchors to the bottom when position is 'bottom'", () => {
     const now = Date.now();
     render(<CastBar unit={{ casting_power: "Fireball", cast_started_at: now, cast_ends_at: now + 2000 }} position="bottom" />);
-    const container = screen.getByText("Fireball").closest("[style*='position: absolute']");
-    expect(container).toHaveStyle({ bottom: "90px" });
-    expect(container.style.top).toBe("");
+    expect(screen.getByTestId("cast-bar")).toHaveClass("game-cast-bar-bottom");
   });
 
   it("renders a fill bar with a testid for layout tests to target", () => {

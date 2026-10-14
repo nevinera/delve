@@ -1,0 +1,18 @@
+/* CharacterSheet: its window, header and columns. */
+
+.game-char-sheet-wrapper { position: absolute; z-index: 25; right: 20px; top: 50%; transform: translateY(-50%); display: flex; align-items: flex-start; gap: 8px; }
+/* Portrait phone: covers the region between the frames and the log. The border/background live on this fixed-size wrapper (the "frame"), with overflow:hidden clipping to it, while charSheetScrollArea (below) scrolls the actual content inside - so the border stays put as a window frame instead of scrolling away with the content and leaving its bottom edge hidden until you scroll all the way down. */
+.game-char-sheet-wrapper-portrait { position: fixed; z-index: 25; left: 8px; right: 8px; top: 100px; bottom: 144px; background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; }
+/* Landscape phone: same fixed-frame-with-scrolling-content idea as charSheetWrapperPortrait, just inset from all four edges instead of pinned to the frames/log gap (canvas fills the whole screen here). */
+.game-char-sheet-wrapper-landscape { position: fixed; z-index: 25; top: 16px; left: 16px; right: 16px; bottom: 16px; background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; }
+/* The scrollable content area inside charSheetWrapperPortrait/Landscape - flex:1 + minHeight:0 lets it shrink below its content's natural height so overflowY:auto actually triggers, instead of growing the flex column (and its fixed-size parent) to fit. */
+.game-char-sheet-scroll-area { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+.game-char-sheet { background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; padding: 10px 16px 14px; width: 480px; pointer-events: auto; }
+.game-char-sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.game-char-sheet-title { font-size: 15px; font-weight: bold; color: #d4a84b; letter-spacing: 1px; text-transform: uppercase; }
+.game-char-sheet-body { display: flex; gap: 20px; }
+.game-char-sheet-body-portrait { display: flex; flex-direction: column; gap: 16px; }
+.game-char-sheet-column { flex: 1; min-width: 0; }
+/* Stats laid out as two CSS columns (rather than one long list) so the portrait character sheet doesn't need as much vertical scroll. */
+.game-char-sheet-stats-columns { column-count: 2; column-gap: 20px; }
+.game-char-sheet-column-title { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }

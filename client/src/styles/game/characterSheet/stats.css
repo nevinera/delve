@@ -1,0 +1,10 @@
+/* CharacterSheet: the stat groups, and a stat's breakdown tooltip. */
+
+.game-char-sheet-stat-group { margin-bottom: 10px; }
+.game-char-sheet-stat-group-title { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; padding-top: 6px; margin-bottom: 3px; }
+.game-char-sheet-stats-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.game-char-sheet-stat-row { display: flex; justify-content: space-between; font-size: 12px; color: #7fae7f; }
+.game-stat-tooltip-line { color: #7fae7f; font-size: 12px; }
+.game-char-sheet-stat-label-hoverable { cursor: help; border-bottom: 1px dotted #667; }
+/* Portrait stacks the groups in columns: keep each group whole. */
+.game-char-sheet-stat-group-portrait { break-inside: avoid; }

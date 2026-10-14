@@ -1,0 +1,25 @@
+/* The landscape phone layout: side panels, joysticks, the action grid and the menu. */
+
+/* Landscape phone: the screen is a 20/60/20 row (left panel, scene, right panel) instead of fixed-position overlays scattered over a full-screen canvas - each panel sizes/shrinks its own contents via normal flexbox rather than pixel math guessing what fits. */
+.game-landscape-row { flex: 1; min-height: 0; display: flex; flex-direction: row; }
+/* minWidth is a floor, not a fixed size: at 20% the panel is normally plenty wide, but on a narrow/short device it grows past 20% (shrinking the scene panel, which just letterboxes smaller) rather than squeezing the ability grid down to 2 shrunk columns when 3 full-size columns would otherwise fit. */
+.game-landscape-control-panel { flex: 0 0 20%; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; }
+/* Three stacked sub-panes within each control panel: unit frame (top), control buttons (middle, whatever's left), joystick (bottom) - fixed proportions so contents don't drift into each other or bleed into the scene panel regardless of device height. */
+.game-landscape-frame-slot { flex: 0 0 15%; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* overflow:hidden + minWidth/minHeight:0 clip the button grid to this sub-pane's actual box - without them a wide/tall grid (more columns, or not enough vertical room) just paints past the pane's edges instead of being contained by it, bleeding into the target frame above or the scene panel beside it. */
+.game-landscape-controls-slot { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+/* "Outside-aligned": buttons hug the panel's outer edge (away from the scene in the middle) rather than centering toward it. */
+.game-landscape-controls-slot-left { align-items: flex-start; }
+.game-landscape-controls-slot-right { align-items: flex-end; }
+.game-landscape-joystick-slot { flex: 0 0 25%; min-width: 0; min-height: 0; margin-top: 8px; display: flex; align-items: center; justify-content: center; }
+.game-landscape-joystick-zone { position: relative; width: 116px; height: 116px; }
+/* Fixed-size buttons packed into columns via native flex-wrap instead of a hand-picked row grouping - prefers as few columns as fit the available panel height without shrinking buttons, wrapping to another column only when one is actually needed. column-reverse fills bottom-to-top; the left panel's outer edge is the screen's left edge, so the default wrap direction (new columns toward the cross-end, i.e. rightward/inward) already reads outside-to-inside. */
+.game-landscape-touch-controls-row { display: flex; flex-direction: column-reverse; flex-wrap: wrap; justify-content: center; gap: 8px; height: 100%; }
+/* Same as landscapeTouchControlsRow, but the right panel's outer edge is the screen's right edge - wrap-reverse flips the cross-axis so the first column lands on the right (outside) and later columns wrap leftward (inside), instead of the default left-to-right. */
+.game-landscape-action-grid { display: flex; flex-direction: column-reverse; flex-wrap: wrap-reverse; justify-content: center; gap: 8px; height: 100%; }
+.game-menu-button-landscape { position: absolute; z-index: 20; right: 8px; bottom: 8px; width: 52px; height: 28px; background: #1c1c1c; border: 1px solid #444; border-radius: 4px; color: #ccc; font-size: 11px; font-weight: bold; cursor: pointer; }
+/* Covers the top 2/3 of the scene panel when chat is toggled on. */
+.game-chat-panel-landscape { position: absolute; z-index: 15; top: 0; left: 0; right: 0; height: 66.6667%; background: rgba(20,20,20,0.85); padding: 8px 12px; overflow-y: auto; font-size: 13px; line-height: 1.5; color: #ddd; box-sizing: border-box; }
+.game-menu-dialog-landscape { position: absolute; z-index: 20; top: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; padding: 12px; }
+.game-menu-dialog-button { width: 160px; height: 36px; background: #1c1c1c; border: 1px solid #444; border-radius: 4px; color: #eee; font-size: 13px; cursor: pointer; }
+.game-action-button-landscape { width: 43px; height: 43px; }

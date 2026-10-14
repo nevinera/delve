@@ -85,7 +85,7 @@ describe("LootWindow", () => {
     render(<LootWindow unitId="u1" items={items} selfUnitId={SELF} onTake={() => {}} onClose={() => {}} />);
     expect(screen.queryByText("(owned)")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Take" })).not.toBeInTheDocument();
-    expect(screen.getByText("Sword of Testing")).toHaveStyle({ textDecoration: "line-through" });
+    expect(screen.getByText("Sword of Testing")).toHaveClass("game-loot-item-name-owned");
   });
 
   it("shows no label and no Take button when self has no claim entry", () => {

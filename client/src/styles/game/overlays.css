@@ -1,0 +1,8 @@
+/* Full-screen overlays: ContentErrorOverlay, and the DISCONNECTED notice. */
+
+/* ContentErrorOverlay blocks the game when the zone or class file doesn't match what Rails validated. */
+.game-content-error { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.8); z-index: 1000; }
+.game-content-error-box { max-width: 420px; padding: 24px; background: #221; border: 1px solid #a64; border-radius: 6px; color: #fdb; text-align: center; }
+.game-content-error-message { margin: 0 0 12px; font-weight: bold; }
+.game-disconnected { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.game-disconnected-text { color: #ff2222; font-size: 48px; font-weight: bold; text-shadow: 0 0 20px #ff0000, 0 2px 4px #000; letter-spacing: 4px; }

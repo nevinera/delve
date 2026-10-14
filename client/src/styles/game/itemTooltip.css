@@ -1,0 +1,11 @@
+/* ItemTooltip. */
+
+.game-item-tooltip-anchor { display: inline-block; cursor: default; }
+.game-item-tooltip { position: fixed; z-index: 100; background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; padding: 8px 12px; min-width: 180px; max-width: 320px; pointer-events: none; }
+.game-item-tooltip-name { color: #d4a84b; font-size: 14px; font-weight: bold; }
+.game-item-tooltip-meta { color: #999; font-size: 11px; margin-top: 2px; }
+.game-item-tooltip-stats { margin-top: 6px; display: flex; flex-direction: column; gap: 1px; }
+.game-item-tooltip-stat { color: #7fae7f; font-size: 12px; }
+.game-item-tooltip-description { color: #aaa; font-size: 12px; font-style: italic; margin-top: 6px; }
+/* An item the player can click (to equip it). */
+.game-item-tooltip-anchor-clickable { cursor: pointer; }

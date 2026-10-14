@@ -24,7 +24,7 @@ const hintStyle = {color: "#667", fontSize: 11, marginTop: 6};
 // mouse-tracked portal approach (App.jsx), but debounced: a mouse skating
 // across a bar of action buttons shouldn't spawn a tooltip per button, only
 // one it actually pauses on.
-export function AbilityTooltip({ability, hint, children, style}) {
+export function AbilityTooltip({ability, hint, children, className, style}) {
   const [pos, setPos] = useState(null);
   const timerRef = useRef(null);
 
@@ -57,6 +57,7 @@ export function AbilityTooltip({ability, hint, children, style}) {
   // slot next to an empty one could end up drastically differently sized).
   return (
     <span
+      className={className}
       style={{display: "inline-block", ...style}}
       onMouseEnter={ability ? handleEnter : undefined}
       onMouseMove={ability ? handleMove : undefined}

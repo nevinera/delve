@@ -76,7 +76,7 @@ describe("StatusBar", () => {
         now={NOW}
       />
     );
-    const columns = document.querySelectorAll("[style*='column']");
+    const columns = document.querySelectorAll(".game-status-column");
     expect(columns[0].textContent).toContain("Buffed");
     expect(columns[1].textContent).toContain("Debuffed");
   });
@@ -103,12 +103,12 @@ describe("StatusBar", () => {
 
   it("anchors to the left edge by default", () => {
     render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} />);
-    expect(screen.getByText(/Buffed/).closest("[style*='position: absolute']")).toHaveStyle({ left: "8px" });
+    expect(screen.getByText(/Buffed/).closest("[class*='game-status-bar']")).toHaveClass("game-status-bar-left");
   });
 
   it("anchors to the right edge when side is 'right'", () => {
     render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} side="right" />);
-    expect(screen.getByText(/Buffed/).closest("[style*='position: absolute']")).toHaveStyle({ right: "8px" });
+    expect(screen.getByText(/Buffed/).closest("[class*='game-status-bar']")).toHaveClass("game-status-bar-right");
   });
 
   describe("landscape mode", () => {
@@ -128,15 +128,12 @@ describe("StatusBar", () => {
           landscape
         />
       );
-      const container = screen.getByText(/Buffed/).closest("[style*='position: absolute']");
-      expect(container).toHaveStyle({ flexDirection: "column" });
+      expect(screen.getByText(/Buffed/).closest("[class*='game-status-bar']")).toHaveClass("game-status-bar-left-landscape");
     });
 
     it("anchors to the top corner instead of the bottom", () => {
       render(<StatusBar statuses={[{ key: "a", shortName: "Buffed", treatAs: "buff", expiresAt: NOW + 10_000 }]} now={NOW} landscape />);
-      const container = screen.getByText(/Buffed/).closest("[style*='position: absolute']");
-      expect(container).toHaveStyle({ top: "8px" });
-      expect(container.style.bottom).toBe("");
+      expect(screen.getByText(/Buffed/).closest("[class*='game-status-bar']")).toHaveClass("game-status-bar-left-landscape");
     });
 
     it("text-aligns rows to the left side's outer (left) edge", () => {

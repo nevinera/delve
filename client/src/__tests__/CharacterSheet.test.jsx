@@ -563,8 +563,8 @@ describe("CharacterSheet", () => {
       };
       render(<CharacterSheet open equippedItems={equippedItems} provenanceRestrictions={restrictions} onClose={() => {}} />);
 
-      expect(screen.getByText("Foreign Chest")).toHaveStyle({ textDecoration: "line-through" });
-      expect(screen.getByText("Local Helm")).not.toHaveStyle({ textDecoration: "line-through" });
+      expect(screen.getByText("Foreign Chest")).toHaveClass("game-char-sheet-disallowed");
+      expect(screen.getByText("Local Helm")).not.toHaveClass("game-char-sheet-disallowed");
     });
 
     it("offers a best available button that calls back", () => {
