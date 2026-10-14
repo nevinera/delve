@@ -16,5 +16,4 @@
 .game-window-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .game-window-title { font-size: 15px; font-weight: bold; color: var(--hud-gold); letter-spacing: 1px; text-transform: uppercase; }
 .game-window-close { background: none; border: none; color: #888; font-size: 16px; cursor: pointer; line-height: 1; padding: 0 2px; }
-.game-window-close-small { background: none; border: none; color: #aaa; cursor: pointer; font-size: 14px; }
 .game-window-empty { color: #889; font-style: italic; }

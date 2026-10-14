@@ -43,7 +43,7 @@ export function AtlasWindow({open, atlas: payload, visited = null, zone, map, po
     <div className={`game-window-frame ${portrait ? "game-window-frame-portrait" : landscape ? "game-window-frame-landscape" : "game-atlas-window"}`}>
       <div className="game-window-header game-atlas-header">
         <span className="game-window-title">Map</span>
-        <button className="game-window-close-small" aria-label="Close map" onClick={onClose}>✕</button>
+        <button className="game-window-close" aria-label="Close map" onClick={onClose}>✕</button>
       </div>
       {laidOut ? (
         <div className="game-atlas-canvas">

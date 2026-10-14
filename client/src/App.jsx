@@ -1428,7 +1428,6 @@ export function CharacterSheet({ open, equippedItems, combatStats, characterItem
     <GameWindow
       title="Character" onClose={onClose} portrait={portrait} landscape={landscape}
       wrapperClassName="game-char-sheet-wrapper" panelClassName="game-char-sheet" scrollClassName="game-char-sheet-scroll-area"
-      closeClassName="game-window-close"
       aside={expandedSlot && (
         <CandidateItemsPane
           slotLabel={EQUIPPED_SLOT_LABELS[expandedSlot]}

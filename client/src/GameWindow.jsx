@@ -6,7 +6,7 @@
 // area.
 export function GameWindow({
   title, closeLabel, onClose, portrait = false, landscape = false,
-  wrapperClassName, panelClassName, scrollClassName, closeClassName = "game-window-close-small",
+  wrapperClassName, panelClassName, scrollClassName,
   aside, children,
 }) {
   const phone = portrait || landscape;
@@ -17,7 +17,7 @@ export function GameWindow({
       <div className={phone ? classes("game-window-scroll", scrollClassName) : classes("game-window", panelClassName)}>
         <div className="game-window-header">
           <span className="game-window-title">{title}</span>
-          <button className={closeClassName} aria-label={closeLabel} onClick={onClose}>✕</button>
+          <button className="game-window-close" aria-label={closeLabel} onClick={onClose}>✕</button>
         </div>
         {children}
       </div>
