@@ -2,28 +2,6 @@ import { useMemo } from "react";
 import AtlasCanvas from "./worldEditor/AtlasCanvas";
 import { visibleAtlas } from "./game/atlasVisibility";
 
-const panelBase = {
-  position: "fixed",
-  zIndex: 25,
-  background: "rgba(20,16,12,0.97)",
-  border: "1px solid #7a5a2a",
-  borderRadius: 6,
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden",
-};
-
-const styles = {
-  wrapper: {...panelBase, top: 40, bottom: 40, left: "50%", transform: "translateX(-50%)", width: "min(1000px, calc(100vw - 80px))"},
-  wrapperPortrait: {...panelBase, left: 8, right: 8, top: 100, bottom: 110 + 34},
-  wrapperLandscape: {...panelBase, top: 16, left: 16, right: 16, bottom: 16},
-  header: {display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px"},
-  title: {fontSize: 15, fontWeight: "bold", color: "#d4a84b", letterSpacing: 1, textTransform: "uppercase"},
-  close: {background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 14},
-  canvas: {flex: 1, minHeight: 0},
-  empty: {color: "#889", fontStyle: "italic", padding: "0 14px 14px"},
-};
-
 // What AtlasCanvas takes, from the world's published atlas
 // (WorldContent::Atlas.payload): {atlas, sizes, zoneNames, mapNames,
 // thumbnails, links}.
@@ -62,13 +40,13 @@ export function AtlasWindow({open, atlas: payload, visited = null, zone, map, po
   const marker = placed && position ? {x: placed.x + position.x, y: placed.y + position.y, angle: position.angle} : null;
   const laidOut = Object.keys(props.atlas.zones).length > 0;
   return (
-    <div style={portrait ? styles.wrapperPortrait : landscape ? styles.wrapperLandscape : styles.wrapper}>
-      <div style={styles.header}>
-        <span style={styles.title}>Map</span>
-        <button style={styles.close} aria-label="Close map" onClick={onClose}>✕</button>
+    <div className={`game-window-frame ${portrait ? "game-window-frame-portrait" : landscape ? "game-window-frame-landscape" : "game-atlas-window"}`}>
+      <div className="game-window-header game-atlas-header">
+        <span className="game-window-title">Map</span>
+        <button className="game-window-close-small" aria-label="Close map" onClick={onClose}>✕</button>
       </div>
       {laidOut ? (
-        <div style={styles.canvas}>
+        <div className="game-atlas-canvas">
           <AtlasCanvas
             atlas={props.atlas}
             sizes={props.sizes}
@@ -85,7 +63,7 @@ export function AtlasWindow({open, atlas: payload, visited = null, zone, map, po
           />
         </div>
       ) : (
-        <div style={styles.empty}>This world has no map yet.</div>
+        <div className="game-window-empty game-atlas-empty">This world has no map yet.</div>
       )}
     </div>
   );

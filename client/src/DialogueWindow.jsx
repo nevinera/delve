@@ -33,36 +33,36 @@ export function DialogueWindow({ name, dialogue, offers = [], turnIns = [], onAc
   };
 
   return (
-    <div style={styles.window} role="dialog" aria-label={name}>
-      <div style={styles.header}>
-        <span style={styles.title}>{name}</span>
-        <button style={styles.close} onClick={onClose} aria-label="Close">✕</button>
+    <div className="game-dialogue" role="dialog" aria-label={name}>
+      <div className="game-window-header game-dialogue-header">
+        <span className="game-window-title">{name}</span>
+        <button className="game-window-close" onClick={onClose} aria-label="Close">✕</button>
       </div>
       {reply !== undefined ? (
         <>
-          <p style={styles.line}>{reply}</p>
-          <div style={styles.footer}>
-            <button style={styles.next} onClick={() => setQuestId(null)}>Back</button>
+          <p className="game-dialogue-line">{reply}</p>
+          <div className="game-dialogue-options">
+            <button className="game-dialogue-option" onClick={() => setQuestId(null)}>Back</button>
           </div>
         </>
       ) : turnIn ? (
         <QuestTurnIn quest={turnIn} onComplete={() => { onTurnInQuest?.(turnIn.identifier); onClose(); }} onBack={() => setQuestId(null)} />
       ) : (
         <>
-          {node && <p style={styles.line}>{node.text}</p>}
-          <div style={styles.footer}>
+          {node && <p className="game-dialogue-line">{node.text}</p>}
+          <div className="game-dialogue-options">
             {atTop && openOffers.map((offer) => (
-              <button key={offer.identifier} style={offer.marker ? styles.quest : styles.next} onClick={() => startQuest(offer)}>
+              <button key={offer.identifier} className={offer.marker ? "game-dialogue-option game-dialogue-option-quest" : "game-dialogue-option"} onClick={() => startQuest(offer)}>
                 {offer.marker && "◆ "}{offer.offerText}
               </button>
             ))}
             {atTop && turnIns.map((t) => (
-              <button key={t.identifier} style={styles.quest} onClick={() => setQuestId(t.identifier)}>
+              <button key={t.identifier} className="game-dialogue-option game-dialogue-option-quest" onClick={() => setQuestId(t.identifier)}>
                 {t.ready ? "✔" : "…"} {t.name}
               </button>
             ))}
             {node && <NodeButtons node={node} onNext={setCurrentNodeId} onClose={onClose} />}
-            {!node && <button style={styles.next} onClick={onClose}>Goodbye</button>}
+            {!node && <button className="game-dialogue-option" onClick={onClose}>Goodbye</button>}
           </div>
         </>
       )}
@@ -73,13 +73,13 @@ export function DialogueWindow({ name, dialogue, offers = [], turnIns = [], onAc
 function NodeButtons({ node, onNext, onClose }) {
   if (node.choices?.length) {
     return node.choices.map((choice, i) => (
-      <button key={i} style={styles.next} onClick={choice.next ? () => onNext(choice.next) : onClose}>
+      <button key={i} className="game-dialogue-option" onClick={choice.next ? () => onNext(choice.next) : onClose}>
         {choice.text}
       </button>
     ));
   }
   return (
-    <button style={styles.next} onClick={node.next ? () => onNext(node.next) : onClose}>
+    <button className="game-dialogue-option" onClick={node.next ? () => onNext(node.next) : onClose}>
       {node.next ? "Next" : "Goodbye"}
     </button>
   );
@@ -88,88 +88,12 @@ function NodeButtons({ node, onNext, onClose }) {
 function QuestTurnIn({ quest, onComplete, onBack }) {
   return (
     <>
-      <p style={styles.questName}>{quest.name}</p>
-      {quest.text && <p style={styles.line}>{quest.text}</p>}
-      <div style={styles.footer}>
-        {quest.ready && <button style={styles.quest} onClick={onComplete}>Complete</button>}
-        <button style={styles.next} onClick={onBack}>{quest.ready ? "Not now" : "Back"}</button>
+      <p className="game-dialogue-quest-name">{quest.name}</p>
+      {quest.text && <p className="game-dialogue-line">{quest.text}</p>}
+      <div className="game-dialogue-options">
+        {quest.ready && <button className="game-dialogue-option game-dialogue-option-quest" onClick={onComplete}>Complete</button>}
+        <button className="game-dialogue-option" onClick={onBack}>{quest.ready ? "Not now" : "Back"}</button>
       </div>
     </>
   );
 }
-
-const styles = {
-  window: {
-    position: "absolute",
-    zIndex: 20,
-    left: "50%",
-    bottom: "22%",
-    transform: "translateX(-50%)",
-    width: "min(420px, calc(100% - 32px))",
-    boxSizing: "border-box",
-    background: "rgba(20,16,12,0.95)",
-    border: "1px solid #7a5a2a",
-    borderRadius: 6,
-    padding: "10px 16px 12px",
-    pointerEvents: "auto",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#d4a84b",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  close: {
-    background: "none",
-    border: "none",
-    color: "#888",
-    fontSize: 16,
-    cursor: "pointer",
-    lineHeight: 1,
-    padding: "0 2px",
-  },
-  line: {
-    color: "#e8e0d0",
-    fontSize: 15,
-    lineHeight: 1.4,
-    margin: "4px 0 10px",
-    whiteSpace: "pre-wrap",
-  },
-  footer: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 6,
-  },
-  questName: {
-    color: "#7fe0ff",
-    fontSize: 14,
-    fontWeight: "bold",
-    margin: "4px 0 0",
-  },
-  quest: {
-    background: "#14303a",
-    color: "#bfefff",
-    border: "1px solid #3f8fa8",
-    borderRadius: 4,
-    padding: "4px 14px",
-    cursor: "pointer",
-    fontSize: 14,
-  },
-  next: {
-    background: "#3a2a14",
-    color: "#e8d0a0",
-    border: "1px solid #7a5a2a",
-    borderRadius: 4,
-    padding: "4px 14px",
-    cursor: "pointer",
-    fontSize: 14,
-  },
-};

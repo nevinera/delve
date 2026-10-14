@@ -4,24 +4,17 @@
 export default function GearRestrictionPrompt({ items, busy, error, onSwitch, onDismiss }) {
   if (!items || items.length === 0) return null;
   return (
-    <div
-      role="dialog"
-      aria-label="Disallowed gear"
-      style={{
-        position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-        background: "rgba(0, 0, 0, 0.6)", zIndex: 1000,
-      }}
-    >
-      <div style={{ background: "#1c1c22", border: "1px solid #666", borderRadius: 6, color: "#ddd", padding: 16, maxWidth: 360, margin: 16 }}>
-        <p style={{ marginTop: 0 }}>
+    <div role="dialog" aria-label="Disallowed gear" className="game-gear-prompt-backdrop">
+      <div className="game-gear-prompt">
+        <p>
           You're wearing gear this zone doesn't allow. It won't count here:
         </p>
-        <ul style={{ paddingLeft: 20 }}>
+        <ul>
           {items.map(item => <li key={item.id}>{item.name}</li>)}
         </ul>
-        {error && <p style={{ color: "#e88" }}>{error}</p>}
+        {error && <p className="game-gear-prompt-error">{error}</p>}
         <p>Switch to the best available gear?</p>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div className="game-gear-prompt-actions">
           <button disabled={busy} onClick={onDismiss}>Not now</button>
           <button disabled={busy} onClick={onSwitch}>{busy ? "Switching…" : "Switch"}</button>
         </div>

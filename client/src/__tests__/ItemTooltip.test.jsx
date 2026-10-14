@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ItemTooltip } from "../App";
+import { ItemTooltip } from "../ItemTooltip";
 
 const ITEM = {
   name: "Sword of Testing",

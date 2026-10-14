@@ -1,11 +1,11 @@
 /* CharacterSheet: the pane of items a slot could take. */
 
-.game-char-sheet-candidate-pane { background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; padding: 10px 16px 14px; width: 440px; pointer-events: auto; }
+.game-char-sheet-candidate-pane { background: var(--hud-window-bg); border: 1px solid var(--hud-window-border); border-radius: 6px; padding: 10px 16px 14px; width: 440px; pointer-events: auto; }
 /* Portrait phone: overlays the character sheet (same region it occupies) instead of sitting inline above it, since the candidate list can run long and pushing the sheet down would bury it off-screen. */
-.game-char-sheet-candidate-pane-portrait { position: fixed; z-index: 26; left: 8px; right: 8px; top: 100px; bottom: 144px; background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; padding: 10px 16px 14px; box-sizing: border-box; overflow-y: auto; pointer-events: auto; }
+.game-char-sheet-candidate-pane-portrait { position: fixed; z-index: 26; left: 8px; right: 8px; top: 100px; bottom: 144px; background: var(--hud-window-bg); border: 1px solid var(--hud-window-border); border-radius: 6px; padding: 10px 16px 14px; box-sizing: border-box; overflow-y: auto; pointer-events: auto; }
 /* Landscape phone: same overlay-in-front-of-the-sheet idea, inset from the edges like charSheetWrapperLandscape instead of the frames/log gap. */
-.game-char-sheet-candidate-pane-landscape { position: fixed; z-index: 26; top: 16px; left: 16px; right: 16px; bottom: 16px; background: rgba(20,16,12,0.97); border: 1px solid #7a5a2a; border-radius: 6px; padding: 10px 16px 14px; box-sizing: border-box; overflow-y: auto; pointer-events: auto; }
-.game-char-sheet-candidate-title { font-size: 12px; font-weight: bold; color: #d4a84b; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
+.game-char-sheet-candidate-pane-landscape { position: fixed; z-index: 26; top: 16px; left: 16px; right: 16px; bottom: 16px; background: var(--hud-window-bg); border: 1px solid var(--hud-window-border); border-radius: 6px; padding: 10px 16px 14px; box-sizing: border-box; overflow-y: auto; pointer-events: auto; }
+.game-char-sheet-candidate-title { font-size: 12px; font-weight: bold; color: var(--hud-gold); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
 .game-char-sheet-candidate-list-wrapper { max-height: 320px; overflow-y: auto; }
 .game-char-sheet-candidate-table { border-collapse: collapse; width: 100%; }
 .game-char-sheet-candidate-row { border-bottom: 1px solid #333; font-size: 12px; cursor: pointer; }

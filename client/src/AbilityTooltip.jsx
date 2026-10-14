@@ -1,23 +1,8 @@
 import {useRef, useState} from "react";
 import {createPortal} from "react-dom";
+import "./styles/shared/hoverTooltip.css";
 
 const SHOW_DELAY_MS = 500;
-
-const tooltipStyle = {
-  position: "fixed",
-  zIndex: 100,
-  background: "rgba(20,16,12,0.97)",
-  border: "1px solid #556",
-  borderRadius: 6,
-  padding: "8px 12px",
-  minWidth: 140,
-  maxWidth: 280,
-  pointerEvents: "none",
-};
-
-const nameStyle = {color: "#cce", fontSize: 14, fontWeight: "bold"};
-const descriptionStyle = {color: "#aaa", fontSize: 12, marginTop: 4};
-const hintStyle = {color: "#667", fontSize: 11, marginTop: 6};
 
 // Wraps an ability/power button and shows its name (and description, if
 // any) near the cursor after a short hover delay - mirrors ItemTooltip's
@@ -65,10 +50,10 @@ export function AbilityTooltip({ability, hint, children, className, style}) {
     >
       {children}
       {ability && pos && createPortal(
-        <div style={{...tooltipStyle, left: pos.x + 16, top: pos.y + 16}}>
-          <div style={nameStyle}>{ability.name}</div>
-          {ability.description && <div style={descriptionStyle}>{ability.description}</div>}
-          {hint && <div style={hintStyle}>{hint}</div>}
+        <div className="hover-tooltip" style={{left: pos.x + 16, top: pos.y + 16}}>
+          <div className="hover-tooltip-name">{ability.name}</div>
+          {ability.description && <div className="hover-tooltip-description">{ability.description}</div>}
+          {hint && <div className="hover-tooltip-note">{hint}</div>}
         </div>,
         document.body
       )}

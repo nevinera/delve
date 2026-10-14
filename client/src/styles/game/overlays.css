@@ -6,3 +6,6 @@
 .game-content-error-message { margin: 0 0 12px; font-weight: bold; }
 .game-disconnected { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .game-disconnected-text { color: #ff2222; font-size: 48px; font-weight: bold; text-shadow: 0 0 20px #ff0000, 0 2px 4px #000; letter-spacing: 4px; }
+
+/* ExpiryBanner: the countdown to a world version expiring. */
+.game-expiry-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(40, 20, 0, 0.85); border: 1px solid #c84; border-radius: 4px; color: #fc8; padding: 4px 12px; font-size: 14px; pointer-events: none; }

@@ -1,0 +1,8 @@
+/* GearRestrictionPrompt: offered on entering a zone that disallows worn gear. */
+
+.game-gear-prompt-backdrop { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); z-index: 1000; }
+.game-gear-prompt { background: #1c1c22; border: 1px solid #666; border-radius: 6px; color: #ddd; padding: 16px; max-width: 360px; margin: 16px; }
+.game-gear-prompt p:first-child { margin-top: 0; }
+.game-gear-prompt ul { padding-left: 20px; }
+.game-gear-prompt-error { color: #e88; }
+.game-gear-prompt-actions { display: flex; gap: 8px; justify-content: flex-end; }

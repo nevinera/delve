@@ -1,0 +1,7 @@
+/* The small hover tooltip: AbilityTooltip's, and the status bar's
+   StatusTooltip and HintTooltip. Positioned at the cursor inline. */
+
+.hover-tooltip { position: fixed; z-index: 100; background: rgba(20,16,12,0.97); border: 1px solid #556; border-radius: 6px; padding: 8px 12px; min-width: 140px; max-width: 280px; pointer-events: none; }
+.hover-tooltip-name { color: #cce; font-size: 14px; font-weight: bold; }
+.hover-tooltip-description { color: #aaa; font-size: 12px; margin-top: 4px; }
+.hover-tooltip-note { color: #667; font-size: 11px; margin-top: 6px; }

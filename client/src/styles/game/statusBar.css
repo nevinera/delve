@@ -10,9 +10,5 @@
 .game-status-row-landscape { font-size: 8px; line-height: 1.2; white-space: nowrap; text-shadow: 0 1px 3px #000; }
 .game-status-row { font-size: 11px; line-height: 1.3; white-space: nowrap; text-shadow: 0 1px 3px #000; }
 .game-status-tooltip-anchor { display: inline-block; pointer-events: auto; cursor: default; }
-.game-status-tooltip { position: fixed; z-index: 100; background: rgba(20,16,12,0.97); border: 1px solid #556; border-radius: 6px; padding: 8px 12px; min-width: 140px; max-width: 280px; pointer-events: none; }
-.game-status-tooltip-name { color: #cce; font-size: 14px; font-weight: bold; }
-.game-status-tooltip-description { color: #aaa; font-size: 12px; margin-top: 4px; }
-.game-status-tooltip-applied-by { color: #667; font-size: 11px; margin-top: 6px; }
 /* HintTooltip's anchor: the standard arrow cursor over its text, not the text-select one. */
 .game-hint-tooltip-anchor { display: inline-block; cursor: default; }

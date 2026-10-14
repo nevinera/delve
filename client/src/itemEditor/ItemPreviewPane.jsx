@@ -1,5 +1,5 @@
 import {useState} from "react";
-import {ItemTooltip} from "../App";
+import {ItemTooltip} from "../ItemTooltip";
 import {rawItemStats} from "./itemStats";
 
 // Live preview of how this draft renders in-game via the shared ItemTooltip

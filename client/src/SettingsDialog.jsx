@@ -2,33 +2,14 @@ import { useEffect, useState } from "react";
 import { ABILITY_BUTTON_COUNT } from "./abilityButtons";
 import { ACTIONS, DEFAULT_HOTKEYS, bindingFromEvent, bindingLabel, duplicateBindings } from "./hotkeys";
 
-const styles = {
-  backdrop: {
-    position: "fixed", inset: 0, zIndex: 2000, display: "flex",
-    alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)",
-  },
-  dialog: {
-    background: "#1a1a1a", border: "1px solid #555", borderRadius: 6, color: "#eee",
-    padding: 16, width: 320, maxWidth: "94vw", maxHeight: "90vh", overflowY: "auto",
-    fontSize: 13,
-  },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  row: { display: "flex", justifyContent: "space-between", alignItems: "center", margin: "4px 0", gap: 8 },
-  select: { flex: 1, maxWidth: 200, background: "#111", color: "#eee", border: "1px solid #444", borderRadius: 4, padding: 4 },
-  button: { background: "#1c1c1c", border: "1px solid #444", borderRadius: 4, color: "#eee", padding: "4px 10px", cursor: "pointer" },
-  menu: { display: "flex", flexDirection: "column", gap: 6 },
-  menuButton: { background: "#1c1c1c", border: "1px solid #444", borderRadius: 4, color: "#eee", padding: "8px 10px", cursor: "pointer" },
-  error: { color: "#ff6666", marginTop: 8 },
-};
-
 function RemapAbilitiesPane({ powers, layout, onAssign, onReset, error }) {
   return (
     <>
       {Array.from({ length: ABILITY_BUTTON_COUNT }, (_, button) => (
-        <label key={button} style={styles.row}>
+        <label key={button} className="game-settings-row">
           <span>{button === 9 ? "Button 0" : `Button ${button + 1}`}</span>
           <select
-            style={styles.select}
+            className="game-settings-select"
             value={layout[button]}
             onChange={(e) => onAssign(button, Number(e.target.value))}
           >
@@ -38,10 +19,10 @@ function RemapAbilitiesPane({ powers, layout, onAssign, onReset, error }) {
           </select>
         </label>
       ))}
-      <div style={{ marginTop: 8 }}>
-        <button type="button" style={styles.button} onClick={onReset}>Reset to default</button>
+      <div className="game-settings-actions">
+        <button type="button" className="game-settings-button" onClick={onReset}>Reset to default</button>
       </div>
-      {error && <div style={styles.error}>{error}</div>}
+      {error && <div className="game-settings-error">{error}</div>}
     </>
   );
 }
@@ -97,14 +78,14 @@ function HotkeysPane({ hotkeys, onSave, onSaved }) {
       {ACTIONS.map(({ id, label }) => {
         const others = conflictsWith(id);
         return (
-          <div key={id} style={styles.row}>
+          <div key={id} className="game-settings-row">
             <span>{label}</span>
             <span>
-              {others.length > 0 && <span style={{ ...styles.error, marginRight: 6 }}>also {others.join(", ")}</span>}
+              {others.length > 0 && <span className="game-settings-conflict">also {others.join(", ")}</span>}
               <button
                 type="button"
                 aria-label={`Bind ${label}`}
-                style={{ ...styles.button, minWidth: 90, ...(capturing === id ? { borderColor: "#ffcc00" } : {}) }}
+                className={capturing === id ? "game-settings-button game-settings-binding game-settings-binding-capturing" : "game-settings-button game-settings-binding"}
                 onClick={() => setCapturing(capturing === id ? null : id)}
               >
                 {capturing === id ? "Press a key..." : bindingLabel(draft[id])}
@@ -113,14 +94,14 @@ function HotkeysPane({ hotkeys, onSave, onSaved }) {
           </div>
         );
       })}
-      <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-        <button type="button" style={styles.button} disabled={!changed || blocked || saving} onClick={save}>Save</button>
-        <button type="button" style={styles.button} onClick={() => { setCapturing(null); setDraft({ ...DEFAULT_HOTKEYS }); }}>
+      <div className="game-settings-actions">
+        <button type="button" className="game-settings-button" disabled={!changed || blocked || saving} onClick={save}>Save</button>
+        <button type="button" className="game-settings-button" onClick={() => { setCapturing(null); setDraft({ ...DEFAULT_HOTKEYS }); }}>
           Reset to default
         </button>
       </div>
-      {blocked && <div style={styles.error}>Each action needs its own key.</div>}
-      {saveError && <div style={styles.error}>{saveError}</div>}
+      {blocked && <div className="game-settings-error">Each action needs its own key.</div>}
+      {saveError && <div className="game-settings-error">{saveError}</div>}
     </>
   );
 }
@@ -137,12 +118,11 @@ export const sliderToSensitivity = (position) => Math.round(2 ** position * 100)
 function CameraPane({ value, onChange, error }) {
   return (
     <>
-      <label style={styles.row}>
+      <label className="game-settings-row">
         <span>Camera</span>
         <input
           type="range"
           aria-label="Camera sensitivity"
-          style={{ flex: 1 }}
           min={-1}
           max={1}
           step={0.05}
@@ -151,11 +131,11 @@ function CameraPane({ value, onChange, error }) {
         />
         <span>{value.toFixed(2)}x</span>
       </label>
-      <div style={{ color: "#aaa", marginTop: 6 }}>Applies to mouse/touch drag and the camera stick.</div>
-      <div style={{ marginTop: 8 }}>
-        <button type="button" style={styles.button} onClick={() => onChange(1)}>Reset to default</button>
+      <div className="game-settings-note">Applies to mouse/touch drag and the camera stick.</div>
+      <div className="game-settings-actions">
+        <button type="button" className="game-settings-button" onClick={() => onChange(1)}>Reset to default</button>
       </div>
-      {error && <div style={styles.error}>{error}</div>}
+      {error && <div className="game-settings-error">{error}</div>}
     </>
   );
 }
@@ -171,13 +151,13 @@ export default function SettingsDialog({
 
   const title = { abilities: "Remap abilities", camera: "Camera sensitivity", hotkeys: "Hotkeys" }[pane] ?? "Settings";
   return (
-    <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.dialog} role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
+    <div className="game-settings-backdrop" onClick={onClose}>
+      <div className="game-settings" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
+        <div className="game-settings-header">
           <strong>{title}</strong>
           <span>
-            {pane && <button type="button" style={{ ...styles.button, marginRight: 6 }} onClick={() => setPane(null)}>Back</button>}
-            <button type="button" style={styles.button} onClick={onClose}>Close</button>
+            {pane && <button type="button" className="game-settings-button" onClick={() => setPane(null)}>Back</button>}
+            <button type="button" className="game-settings-button" onClick={onClose}>Close</button>
           </span>
         </div>
         {pane === "abilities" ? (
@@ -187,22 +167,22 @@ export default function SettingsDialog({
         ) : pane === "camera" ? (
           <CameraPane value={cameraSensitivity} onChange={onCameraSensitivityChange} error={error} />
         ) : (
-          <div style={styles.menu}>
-            <button type="button" style={styles.menuButton} onClick={() => setPane("abilities")}>
+          <div className="game-settings-menu">
+            <button type="button" className="game-settings-button" onClick={() => setPane("abilities")}>
               Remap abilities
             </button>
             {showHotkeys && (
-              <button type="button" style={styles.menuButton} onClick={() => setPane("hotkeys")}>
+              <button type="button" className="game-settings-button" onClick={() => setPane("hotkeys")}>
                 Hotkeys
               </button>
             )}
-            <button type="button" style={styles.menuButton} onClick={() => setPane("camera")}>
+            <button type="button" className="game-settings-button" onClick={() => setPane("camera")}>
               Camera sensitivity
             </button>
-            <button type="button" style={styles.menuButton} onClick={onToggleLatency}>
+            <button type="button" className="game-settings-button" onClick={onToggleLatency}>
               Toggle latency display (L)
             </button>
-            <button type="button" style={styles.menuButton} onClick={onReload}>
+            <button type="button" className="game-settings-button" onClick={onReload}>
               Reload
             </button>
           </div>

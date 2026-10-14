@@ -1,0 +1,19 @@
+/* SettingsDialog: the settings menu and its panes. */
+
+.game-settings-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); }
+.game-settings { background: #1a1a1a; border: 1px solid #555; border-radius: 6px; color: #eee; padding: 16px; width: 320px; max-width: 94vw; max-height: 90vh; overflow-y: auto; font-size: 13px; }
+.game-settings-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.game-settings-menu { display: flex; flex-direction: column; gap: 6px; }
+.game-settings-row { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; gap: 8px; }
+.game-settings-row input[type=range] { flex: 1; }
+.game-settings-select { flex: 1; max-width: 200px; background: #111; color: #eee; border: 1px solid #444; border-radius: 4px; padding: 4px; }
+.game-settings-note { color: #aaa; margin-top: 6px; }
+.game-settings-actions { margin-top: 8px; display: flex; gap: 6px; }
+.game-settings-error { color: #ff6666; margin-top: 8px; }
+.game-settings-conflict { color: #ff6666; margin-right: 6px; }
+
+.game-settings-button { background: #1c1c1c; border: 1px solid #444; border-radius: 4px; color: #eee; padding: 4px 10px; cursor: pointer; }
+.game-settings-menu .game-settings-button { padding: 8px 10px; }
+.game-settings-header .game-settings-button + .game-settings-button { margin-left: 6px; }
+.game-settings-binding { min-width: 90px; }
+.game-settings-binding-capturing { border-color: #ffcc00; }

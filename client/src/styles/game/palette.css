@@ -1,0 +1,9 @@
+/* The game HUD's window colors: the dark brown panel, its bronze border
+   and the gold of its titles. */
+
+:root {
+  --hud-window-bg: rgba(20,16,12,0.97);
+  --hud-window-bg-translucent: rgba(20,16,12,0.95);
+  --hud-window-border: #7a5a2a;
+  --hud-gold: #d4a84b;
+}

@@ -2,6 +2,7 @@
 
 @import "../reset.css";
 @import "../theme.css";
+@import "./palette.css";
 @import "./page.css";
 @import "./layout.css";
 @import "./frames.css";
@@ -12,12 +13,18 @@
 @import "./touchControls.css";
 @import "./respawn.css";
 @import "./overlays.css";
-@import "./loot.css";
-@import "./characterSheet/layout.css";
-@import "./characterSheet/candidates.css";
-@import "./characterSheet/equipment.css";
-@import "./characterSheet/stats.css";
-@import "./itemTooltip.css";
+@import "./windows/window.css";
+@import "./windows/loot.css";
+@import "./windows/characterSheet/layout.css";
+@import "./windows/characterSheet/candidates.css";
+@import "./windows/characterSheet/equipment.css";
+@import "./windows/characterSheet/stats.css";
+@import "./windows/questLog.css";
+@import "./windows/classSheet.css";
+@import "./windows/atlas.css";
+@import "./windows/dialogue.css";
+@import "./windows/settings.css";
+@import "./windows/gearPrompt.css";
 @import "./statusBar.css";
 @import "./castBar.css";
 @import "./abilityError.css";
