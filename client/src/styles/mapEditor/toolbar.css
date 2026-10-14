@@ -9,24 +9,24 @@
    tighter gap below. */
 .map-canvas-toolbar-row {
   flex: 0 0 44px; display: flex; align-items: center; gap: 20px; padding: 6px 14px;
-  background: #1c2126; border-bottom: 1px solid #333;
+  background: var(--panel-bg); border-bottom: 1px solid var(--border);
 }
 /* A set of related buttons meant to read as one control (zoom
    in/fit/out today; later slices' tool-mode buttons will likely want
    this too) - reuse this instead of relying on the row's own gap. */
 .map-toolbar-button-group { display: flex; gap: 4px; }
 .map-canvas-back-link {
-  color: #9ab; font-size: 13px; text-decoration: none; padding: 5px 10px;
+  color: var(--text-muted); font-size: 13px; text-decoration: none; padding: 5px 10px;
   border: 1px solid #445; border-radius: 3px;
 }
-.map-canvas-back-link:hover { background: #234; }
+.map-canvas-back-link:hover { background: var(--accent-bg); }
 .map-canvas-toolbar-row button {
-  background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600;
+  background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent); font-size: 13px; font-weight: 600;
   padding: 5px 12px; border-radius: 3px; cursor: pointer;
 }
-.map-canvas-toolbar-row button:hover { background: #345; }
+.map-canvas-toolbar-row button:hover { background: var(--accent-hover-bg); }
 .map-canvas-toolbar-row button:disabled { opacity: 0.4; cursor: default; }
-.map-canvas-replace { background: none; border: none; padding: 0; font-size: 12px; color: #9ab; cursor: pointer; }
+.map-canvas-replace { background: none; border: none; padding: 0; font-size: 12px; color: var(--text-muted); cursor: pointer; }
 .map-canvas-replace:hover { color: #bcd; }
 .map-canvas-replace-input { display: none; }
 .map-canvas-placing-status { margin-left: auto; font-size: 13px; font-weight: 600; color: #fd0; }

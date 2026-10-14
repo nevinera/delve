@@ -158,7 +158,7 @@ export default function AbilityEditor({abilityKey, stockAssets}) {
       <div className="ability-editor-preview">
         <AbilityPreviewPane ability={draft.data} assetMap={assetMap} assetOverrides={assetOverrides} stockAssets={stockAssets} />
       </div>
-      <div className="ability-editor-fields">
+      <div className="ability-editor-fields fields-pane">
         <div className="ability-editor-branch">
           <BranchPicker branches={branches} branch={branch} disabled={dirty || activity.status === "saving"} onSelect={select} onCreate={create} />
         </div>

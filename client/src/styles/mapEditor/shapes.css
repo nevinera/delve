@@ -3,7 +3,6 @@
 /* Same idea, but its shapes DO take pointer events (for select/drag) -
    the SVG root stays passthrough so empty space still reaches the
    wrapper underneath for panning/add-tool clicks. */
-.map-canvas-shapes { position: absolute; top: 0; left: 0; pointer-events: none; }
 .map-canvas-shapes polyline, .map-canvas-shapes circle, .map-canvas-shapes line, .map-canvas-shapes image { pointer-events: auto; }
 /* NcuQuestBadges.jsx - a quest badge on NCUs with quests (world editor only). */
 .map-ncu-quest-badge circle { fill: #7fe0ff; stroke: #123; stroke-width: 1; cursor: pointer; }
@@ -20,11 +19,9 @@
 /* Group-highlight overlay (GroupShapes) - purely decorative, must
    never intercept a click meant for the real token underneath
    (grouping mode relies on that to toggle membership). */
-.map-group-highlight { position: absolute; top: 0; left: 0; pointer-events: none; }
 /* Movement path/zone overlay (MovementShapes) - same positioning as
    the group highlight above, but its own class since both can be
    present at once and are visually distinct (dim vs. loud). */
-.map-movement-highlight { position: absolute; top: 0; left: 0; pointer-events: none; }
 
 /* Shapes the current tab doesn't edit (MapCanvas's activeLayers). */
 .map-canvas-layer { display: contents; }

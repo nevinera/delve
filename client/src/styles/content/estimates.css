@@ -9,6 +9,6 @@
 /* After the hint styles above, so a fit color wins over their grey. */
 .target-on { color: #8d8; }
 .target-near { color: #ec6; }
-.target-off { color: #e79; }
+.target-off { color: var(--text-error); }
 .target-tanky { color: #8cf; }
 .class-survivability-selectors { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; font-size: 12px; }

@@ -2,12 +2,12 @@
 .zone-graph-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 14px; }
 .zone-graph-toolbar { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; flex: 0 0 auto; }
 .zone-graph-toolbar button {
-  background: #234; border: 1px solid #457; color: #9cf; font-size: 13px; font-weight: 600;
+  background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent); font-size: 13px; font-weight: 600;
   padding: 4px 10px; border-radius: 3px; cursor: pointer;
 }
-.zone-graph-toolbar button:hover { background: #345; }
+.zone-graph-toolbar button:hover { background: var(--accent-hover-bg); }
 .zone-graph-wrapper {
-  flex: 1; min-height: 0; border: 1px solid #333; border-radius: 4px; background: #0a0c0e;
+  flex: 1; min-height: 0; border: 1px solid var(--border); border-radius: 4px; background: #0a0c0e;
   background-image: linear-gradient(45deg, #101316 25%, transparent 25%), linear-gradient(-45deg, #101316 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #101316 75%), linear-gradient(-45deg, transparent 75%, #101316 75%);
   background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
   touch-action: none; cursor: grab; overflow: hidden;

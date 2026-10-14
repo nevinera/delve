@@ -10,8 +10,8 @@
 .quest-graph-flag circle { fill: #3a2e1a; stroke: #c96; stroke-width: 1.5; }
 .quest-graph-flag text { fill: #fc9; font-size: 13px; pointer-events: none; }
 .quest-new { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.quest-new input { flex: 1; min-width: 160px; background: #111; border: 1px solid #555; color: #eee; padding: 3px 6px; border-radius: 3px; }
+.quest-new input { flex: 1; min-width: 160px; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-input); padding: 3px 6px; border-radius: 3px; }
 .quest-chain h4 { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; }
 .quest-chain ul { margin: 0; padding-left: 18px; }
-.quest-chain code { color: #789; font-size: 11px; }
-.quest-editor .quest-item-popover { max-width: 420px; margin-top: 6px; padding: 8px 10px; background: #1b2026; border: 1px solid #457; border-radius: 4px; }
+.quest-chain code { color: var(--text-dim); font-size: 11px; }
+.quest-editor .quest-item-popover { max-width: 420px; margin-top: 6px; padding: 8px 10px; background: #1b2026; border: 1px solid var(--accent-border); border-radius: 4px; }

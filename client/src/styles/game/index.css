@@ -1,4 +1,5 @@
 /* The game client's page. */
 
 @import "../reset.css";
+@import "../theme.css";
 @import "./page.css";

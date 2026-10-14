@@ -2,25 +2,23 @@
 
 @media (max-width: 700px) {
   /* Field tables: each label above its input, so inputs get the full width. */
-  .ability-editor-fields table:not(.class-dps-estimate-table):not(.class-survivability-table),
-  .content-editor-fields table:not(.class-dps-estimate-table):not(.class-survivability-table) { display: block; }
-  .ability-editor-fields table:not(.class-dps-estimate-table):not(.class-survivability-table) :is(tbody, tr, th, td),
-  .content-editor-fields table:not(.class-dps-estimate-table):not(.class-survivability-table) :is(tbody, tr, th, td) { display: block; }
-  .ability-editor-fields th, .content-editor-fields th { padding: 8px 0 2px; white-space: normal; }
-  .ability-editor-fields td, .content-editor-fields td { padding: 0 0 4px; }
+  .fields-pane table:not(.class-dps-estimate-table):not(.class-survivability-table) { display: block; }
+  .fields-pane table:not(.class-dps-estimate-table):not(.class-survivability-table) :is(tbody, tr, th, td) { display: block; }
+  .fields-pane th { padding: 8px 0 2px; white-space: normal; }
+  .fields-pane td { padding: 0 0 4px; }
 
   /* 16px text keeps iOS from zooming in when an input is focused. */
-  :is(.ability-editor-fields, .content-editor-fields, .preview-controls, .branch-picker) :is(input, select, textarea) { font-size: 16px; }
-  :is(.ability-editor-fields, .content-editor-fields) :is(input[type=text], input[type=number], select) { min-height: 36px; }
-  :is(.ability-editor-fields, .content-editor-fields) input[type=number] { width: 120px; }
+  :is(.fields-pane, .preview-controls, .branch-picker) :is(input, select, textarea) { font-size: 16px; }
+  .fields-pane :is(input[type=text], input[type=number], select) { min-height: 36px; }
+  .fields-pane input[type=number] { width: 120px; }
 
   /* Bigger tap targets. */
-  :is(.ability-editor-fields, .content-editor-fields) :is(button.add-entry, button.remove-entry) { min-height: 36px; padding: 6px 12px; font-size: 14px; }
+  .fields-pane :is(button.add-entry, button.remove-entry) { min-height: 36px; padding: 6px 12px; font-size: 14px; }
   .save-bar :is(.validate-button, .save-button), .publish-bar .publish-button { min-height: 40px; }
   .area-list .area-item-order button { width: 36px; height: 36px; font-size: 14px; }
   .color-field { flex-wrap: wrap; }
   .color-field input[type="color"] { width: 44px; height: 36px; }
   .color-field button { min-height: 36px; padding: 6px 12px; }
-  :is(.ability-editor-fields, .content-editor-fields) .asset-upload { flex-wrap: wrap; }
-  :is(.ability-editor-fields, .content-editor-fields) .asset-upload button { min-height: 36px; padding: 6px 12px; }
+  .fields-pane .asset-upload { flex-wrap: wrap; }
+  .fields-pane .asset-upload button { min-height: 36px; padding: 6px 12px; }
 }

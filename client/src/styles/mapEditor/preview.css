@@ -8,7 +8,7 @@
   pointer-events: none;
 }
 .map-preview-exit {
-  position: absolute; top: 10px; right: 10px; background: #234; border: 1px solid #457; color: #9cf;
+  position: absolute; top: 10px; right: 10px; background: var(--accent-bg); border: 1px solid var(--accent-border); color: var(--accent);
   font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 3px; cursor: pointer;
 }
-.map-preview-exit:hover { background: #345; }
+.map-preview-exit:hover { background: var(--accent-hover-bg); }

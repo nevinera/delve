@@ -9,13 +9,13 @@
   background: #1a1e22; border: 1px solid #445; border-radius: 6px;
   padding: 20px 24px; min-width: 220px;
 }
-.map-hotkey-help h3 { font-size: 14px; color: #cce; font-weight: 600; margin-bottom: 12px; }
+.map-hotkey-help h3 { font-size: 14px; color: var(--text-heading); font-weight: 600; margin-bottom: 12px; }
 .map-hotkey-help table { border-collapse: collapse; }
 .map-hotkey-help td { padding: 4px 0; font-size: 13px; color: #ccd; }
 .map-hotkey-help td:first-child { padding-right: 14px; }
 .map-hotkey-help kbd {
   display: inline-block; min-width: 1.4em; text-align: center; background: #2a2f36;
   border: 1px solid #556; border-radius: 3px; padding: 2px 6px; font-family: inherit;
-  font-size: 12px; color: #9cf;
+  font-size: 12px; color: var(--accent);
 }
-.map-hotkey-help-hint { margin-top: 14px; font-size: 11px; color: #789; }
+.map-hotkey-help-hint { margin-top: 14px; font-size: 11px; color: var(--text-dim); }

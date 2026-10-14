@@ -105,7 +105,7 @@ export default function ZoneLevel({draft, zone, onChange, navigate, repo, play})
           <AnnotationsSection annotations={data.annotations} onChange={(v) => setField("annotations", v)} />
         </div>
       </div>
-      <div className="content-editor-fields">
+      <div className="content-editor-fields fields-pane">
         {(missing.unitTypes.length > 0 || missing.items.length > 0) && (
           <div className="zone-missing-refs" role="alert">
             This world has no file for:

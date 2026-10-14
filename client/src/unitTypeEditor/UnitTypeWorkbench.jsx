@@ -181,7 +181,7 @@ export default function UnitTypeWorkbench({unitTypeKey, data, onChange, tokenIma
           onNewPower={() => addPower(blankAbility("new-power"))}
         />
       </div>
-      <div className="content-editor-fields">
+      <div className="content-editor-fields fields-pane">
         <Breadcrumbs crumbs={breadcrumbsFor({...selection, area}, draft.data)} onSelect={setSelection} />
         {renderConfig()}
       </div>

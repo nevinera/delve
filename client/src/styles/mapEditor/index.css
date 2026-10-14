@@ -1,5 +1,6 @@
 /* The map editor (MapWorkbench), in cascade order. */
 
+@import "../theme.css";
 @import "./layout.css";
 @import "./toolbar.css";
 @import "./preview.css";
@@ -7,7 +8,9 @@
 @import "./stamps.css";
 @import "./shapes.css";
 @import "./sidebar/layout.css";
+@import "../validators/saveBar.css";
 @import "./saveBar.css";
+@import "../controls/buttons.css";
 @import "./sidebar/fields.css";
 @import "./sidebar/units.css";
 @import "./sidebar/unitsTab.css";

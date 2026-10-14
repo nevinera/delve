@@ -31,6 +31,9 @@
    drag frame - without it, some browsers only promote reactively
    (after the first animated frame or two), which is exactly when a
    big image visibly stutters before catching up. */
+/* The layers over the map image share its pixel box, so they pan and zoom with it via the
+   shared parent's transform, and none take the pointer (shapes' children opt back in). */
+.map-canvas-grid, .map-canvas-stamps, .map-canvas-canopy, .map-canvas-shapes, .map-group-highlight, .map-movement-highlight, .map-canvas-cell-overlay, .map-canvas-stamp-overlay { position: absolute; top: 0; left: 0; pointer-events: none; }
 .map-canvas-content { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
 /* Not on touch devices, though: a promoted layer is kept at the
    image's full size (a 4000px map is hundreds of MB at a phone's
@@ -43,13 +46,10 @@
 .map-canvas-content img { display: block; user-select: none; }
 /* Same pixel-space box as the image, so its grid lines pan/zoom
    together with it for free via the shared parent's transform. */
-.map-canvas-grid { position: absolute; top: 0; left: 0; pointer-events: none; }
 /* StampCanvas.jsx - the map's decoration stamps, over the ground. */
-.map-canvas-stamps { position: absolute; top: 0; left: 0; pointer-events: none; }
 /* useCellsTab.jsx - a cell map's tree crowns, over the stamps. */
-.map-canvas-canopy { position: absolute; top: 0; left: 0; pointer-events: none; }
 
 .map-canvas-status-bar {
   flex: 0 0 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
-  background: #1c2126; border-top: 1px solid #333; color: #9ab; font-size: 12px; font-variant-numeric: tabular-nums;
+  background: var(--panel-bg); border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums;
 }

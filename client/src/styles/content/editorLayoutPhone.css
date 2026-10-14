@@ -7,5 +7,5 @@
   .content-editor-left { border-right: none; }
   .content-editor-preview { flex: none; height: 38vh; }
   .area-list { flex: none; max-height: 30vh; }
-  .content-editor-fields { border-top: 1px solid #333; }
+  .content-editor-fields { border-top: 1px solid var(--border); }
 }

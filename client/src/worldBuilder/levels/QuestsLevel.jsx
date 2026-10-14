@@ -53,7 +53,7 @@ export default function QuestsLevel({draft, onChange, onOpenQuest}) {
           />
         </div>
       </div>
-      <div className="content-editor-fields">
+      <div className="content-editor-fields fields-pane">
         <h3>Quests</h3>
         <p className="world-key">File: <code>{questsFile(draft)}</code></p>
         <NewQuestForm draft={draft} onChange={onChange} onOpenQuest={onOpenQuest} />
