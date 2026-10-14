@@ -1,0 +1,8 @@
+/* A character's class and its abilities (play/characters/_class_details). */
+
+.ability-list { list-style: none; padding: 0; }
+.ability-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.ability-icon { width: 40px; height: 40px; flex-shrink: 0; }
+.ability-icon-framed { background: #1a1f2b; border-radius: 4px; }
+/* A tinted stock icon: the mask (inline, per ability) fills the frame. */
+.ability-icon-masked { display: grid; }

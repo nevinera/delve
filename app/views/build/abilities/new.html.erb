@@ -6,7 +6,7 @@
     <label for="key">Key</label>
     <%= text_field_tag :key, @key, placeholder: "classes/druid/wildshape" %>
   </div>
-  <p style="font-size: 0.85em; color: #666;">Use "/" to place it in a subdirectory, e.g. "classes/druid/wildshape" or "units/goblin-archer".</p>
+  <p class="field-hint">Use "/" to place it in a subdirectory, e.g. "classes/druid/wildshape" or "units/goblin-archer".</p>
 
   <%= submit_tag "Create" %>
 <% end %>

@@ -1,0 +1,4 @@
+/* Form helpers. */
+
+/* a short note under a field, e.g. what an identifier may contain */
+.field-hint { font-size: 0.85em; color: #666; }
