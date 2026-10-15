@@ -207,7 +207,7 @@ Client-only; ignored by the game server. Drawn as a flat translucent layer on th
   "onTick": [
     { "type": "harm", "amount": [2.0, 3.0], "school": "magic" }
   ],
-  "graphic": { "color": "#ff5a1f", "textureURL": ":flames:", "opacity": 0.5 },
+  "graphic": { "color": "#ff5a1f", "opacity": 0.5 },
   "tags": ["fire"]
 }
 ```
