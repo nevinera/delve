@@ -7,7 +7,7 @@ import {client} from "../client/cli/load.mjs";
 
 const {generateCellMap, TAGS} = await client("cellMap/generate.js");
 const {THEMES} = await client("cellMap/format.js");
-const {mapSize} = await client("cellMap/hexGrid.js");
+const {mapSizeOf} = await client("cellMap/grid.js");
 
 const USAGE = `Usage: bin/cellmap-generate [flags]
 
@@ -84,7 +84,7 @@ try {
 if (values.barriers && !values.map) fail("--barriers needs --map");
 let data = cellMap;
 if (values.map) {
-  data = {identifier: values.map, name: values.map, feetDimensions: mapSize(cellMap.grid), cellMap, barriers: [], connections: []};
+  data = {identifier: values.map, name: values.map, feetDimensions: mapSizeOf(cellMap.grid), cellMap, barriers: [], connections: []};
   if (values.barriers) {
     const {autoBarriers} = await client("mapEditor/cells/autoBarriers.js");
     const {barriers, connections, places, fillPoints, error} = autoBarriers(cellMap);

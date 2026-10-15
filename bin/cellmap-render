@@ -10,7 +10,7 @@ import {client} from "../client/cli/load.mjs";
 const {renderCellMap} = await client("cellMap/render.js");
 const {validateCellMap, THEMES} = await client("cellMap/format.js");
 const {drawCells, drawExits, drawTrails, drawBridges} = await client("cellMap/overlay.js");
-const {mapSize} = await client("cellMap/hexGrid.js");
+const {mapSizeOf} = await client("cellMap/grid.js");
 
 const USAGE = `Usage: bin/cellmap-render FILE [flags]
 
@@ -96,7 +96,7 @@ async function drawBarriers(ctx, data, cellMap, scale) {
     ({barriers, fillPoints} = result);
     connections = [...connections.filter((c) => !named.has(c.identifier)), ...result.connections];
   }
-  const feetDimensions = mapSize(cellMap.grid);
+  const feetDimensions = mapSizeOf(cellMap.grid);
   const y = (v) => feetDimensions.height - v;
   const fill = computeMapFill({feetDimensions, barriers, connections, fillPoints});
   ctx.fillStyle = "rgba(200, 30, 60, 0.3)";
@@ -140,7 +140,7 @@ async function drawPlaces(ctx, data, cellMap, scale) {
     const {autoBarriers} = await client("mapEditor/cells/autoBarriers.js");
     places = autoBarriers(cellMap).places ?? [];
   }
-  const {height} = mapSize(cellMap.grid);
+  const {height} = mapSizeOf(cellMap.grid);
   ctx.lineWidth = 2 / scale;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
   ctx.textAlign = "center";
@@ -167,7 +167,7 @@ async function drawPlaces(ctx, data, cellMap, scale) {
 // A map file's units and NCUs, in map feet (y up): a dot each, a faint
 // circle for a wanderer's range, a line for a patrol.
 function drawUnits(ctx, data, cellMap, scale) {
-  const {height} = mapSize(cellMap.grid);
+  const {height} = mapSizeOf(cellMap.grid);
   const COLORS = {hostile: "#e03030", neutral: "#e8c020", friendly: "#30c040"};
   ctx.lineWidth = 1.5 / scale;
   for (const {position, hostility, movement} of data.units ?? []) {

@@ -3,7 +3,7 @@
 // of the grid, at most one per side; Auto Barriers (mapEditor/cells/
 // autoBarriers.js) makes each a line connection named for its side.
 
-import {CELL_SIZE, cellCenter, hexRadius, mapSize} from "./hexGrid";
+import {CELL_SIZE, geometryOf} from "./grid";
 
 export const SIDES = ["north", "east", "south", "west"];
 
@@ -26,10 +26,11 @@ export function exitCells({side, from, to}, grid) {
 // The stretch of the map's edge an exit's cells span, as [a, b] in
 // cellmap feet (y down), a nearer the side's start.
 export function exitEdge({side, from, to}, grid) {
-  const {width, height} = mapSize(grid);
-  const [first, last] = [sideCell(side, from, grid), sideCell(side, to, grid)].map((cell) => cellCenter(...cell, CELL_SIZE));
+  const g = geometryOf(grid);
+  const {width, height} = g.mapSize(grid);
+  const [first, last] = [sideCell(side, from, grid), sideCell(side, to, grid)].map((cell) => g.cellCenter(...cell, CELL_SIZE));
   if (side === "north" || side === "south") {
-    const r = hexRadius(CELL_SIZE);
+    const r = g.halfWidth(CELL_SIZE);
     const y = side === "north" ? 0 : height;
     return [{x: Math.max(0, first.x - r), y}, {x: Math.min(width, last.x + r), y}];
   }

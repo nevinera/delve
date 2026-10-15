@@ -19,6 +19,7 @@
 //   dry       no marsh
 //   wet       marsh is the main ground, not meadow
 //   rough     tall grass is the main ground
+//   vault     (dungeons only) a big room in the middle with one way in
 //   paths     trails joining the exits, as a tree (or, with one exit, from
 //             it into the map)
 //
@@ -36,8 +37,9 @@ import {THEMES, VERSION, fillOf} from "./format";
 import {noise} from "./regions";
 import {PATHS} from "./style";
 import {traceLabels} from "./places";
+import {generateDungeon} from "./generateDungeon";
 
-export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
+export const TAGS = ["vault", "chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
 
 // Which tags can't go together (the first of a group given wins).
 const EXCLUSIVE = [["chamber", "hub", "burrow"], ["cavities", "coral", "chaotic"], ["wet", "rough"], ["wet", "dry"]];
@@ -93,6 +95,7 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, exits, t
   const wanted = exits === undefined ? null : exitPlan(exits);
   const has = tagSet(tags);
   const rng = random(seed);
+  if (THEMES[theme].grids[0] === "square") return generateDungeon({cols, rows, seed, wanted, connections, tags: [...has], theme}, rng);
   const grid = new Grid(cols, rows);
 
   const areas = growAreas(grid, has, rng);

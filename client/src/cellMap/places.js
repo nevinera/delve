@@ -2,8 +2,7 @@
 // each a polygon in cell coordinates, which Auto Barriers (mapEditor/cells/
 // autoBarriers.js) turns into the map's places. The generator makes them
 // by labelling every cell with a place and tracing the labels' outlines.
-import {CELL_SIZE, hexRadius, neighbor, pointAt} from "./hexGrid";
-import {latticeCorner} from "./regions";
+import {CELL_SIZE, geometryOf} from "./grid";
 
 // How far, in feet, an outline may stray from the cells' edges.
 const TOLERANCE = 1;
@@ -42,7 +41,9 @@ export function mergePlaces(places, outlined) {
 // gets its biggest outline: what's inside it that's another label's is
 // that label's (the smallest place around a point is the one it's in).
 // Where two labels meet, both outlines share the same simplified line.
-export function traceLabels({cols, rows}, labelAt) {
+export function traceLabels(grid, labelAt) {
+  const {cols, rows} = grid;
+  const g = geometryOf(grid);
   const label = (c, r) => (c >= 0 && r >= 0 && c < cols && r < rows ? labelAt(c, r) : null);
   // Boundary edges, by the corner each starts at, for each label: [from,
   // to, the label across].
@@ -51,11 +52,11 @@ export function traceLabels({cols, rows}, labelAt) {
     for (let r = 0; r < rows; r++) {
       const own = label(c, r);
       if (own === null) continue;
-      for (let i = 0; i < 6; i++) {
-        const other = label(...neighbor(c, r, i));
+      for (let i = 0; i < g.edges; i++) {
+        const other = label(...g.neighbor(c, r, i));
         if (other === own) continue;
         if (!next.has(own)) next.set(own, new Map());
-        next.get(own).set(latticeCorner(c, r, i).join(","), {to: latticeCorner(c, r, (i + 1) % 6), other});
+        next.get(own).set(g.corner(c, r, i).join(","), {to: g.corner(c, r, (i + 1) % g.edges), other});
       }
     }
   }
@@ -65,11 +66,11 @@ export function traceLabels({cols, rows}, labelAt) {
   for (const [own, edges] of next) {
     let best = null;
     for (const loop of loopsOf(edges)) {
-      const polygon = assemble(loop, own, simplified);
+      const polygon = assemble(loop, own, simplified, g);
       const area = Math.abs(signedArea(polygon));
       if (!best || area > best.area) best = {polygon, area};
     }
-    if (best) outlines.set(own, best.polygon.map(({x, y}) => pointAt(x, y, CELL_SIZE).map((n) => Number(n.toFixed(2)))));
+    if (best) outlines.set(own, best.polygon.map(({x, y}) => g.pointAt(x, y, CELL_SIZE).map((n) => Number(n.toFixed(2)))));
   }
   return outlines;
 }
@@ -95,10 +96,10 @@ function loopsOf(edges) {
 
 // A loop as a polygon in feet: split where the label across changes, each
 // stretch simplified once for both labels either side of it.
-function assemble(loop, own, simplified) {
+function assemble(loop, own, simplified, g) {
   const n = loop.length;
   const cuts = loop.map((edge, i) => edge.other !== loop[(i + n - 1) % n].other).map((cut, i) => (cut ? i : -1)).filter((i) => i >= 0);
-  if (!cuts.length) return closedStretch(loop.map((e) => e.corner), own, loop[0].other, simplified);
+  if (!cuts.length) return closedStretch(loop.map((e) => e.corner), own, loop[0].other, simplified, g);
   const points = [];
   cuts.forEach((at, k) => {
     const end = cuts[(k + 1) % cuts.length];
@@ -108,7 +109,7 @@ function assemble(loop, own, simplified) {
       if (i === (end + n - 1) % n) break;
     }
     corners.push(loop[end].corner);
-    const stretch = openStretch(corners, own, loop[at].other, simplified);
+    const stretch = openStretch(corners, own, loop[at].other, simplified, g);
     points.push(...stretch.slice(0, -1));
   });
   return points;
@@ -116,31 +117,30 @@ function assemble(loop, own, simplified) {
 
 // A stretch between two junctions, simplified the same from either side:
 // the label lower in order (none, null, last) walks it forwards.
-function openStretch(corners, own, other, simplified) {
+function openStretch(corners, own, other, simplified, g) {
   const mine = other === null || own < other;
   const forward = mine ? corners : [...corners].reverse();
   const key = forward.join(";");
-  if (!simplified.has(key)) simplified.set(key, simplify(forward.map(toFeet), TOLERANCE));
+  if (!simplified.has(key)) simplified.set(key, simplify(forward.map((k) => toFeet(k, g)), TOLERANCE));
   const points = simplified.get(key);
   return mine ? points : [...points].reverse();
 }
 
 // A whole loop around one other label (or the map's edge), started at its
 // lowest corner, so both sides simplify it alike.
-function closedStretch(corners, own, other, simplified) {
+function closedStretch(corners, own, other, simplified, g) {
   const mine = other === null || own < other;
   const forward = mine ? corners : [...corners].reverse();
   const start = forward.reduce((best, key, i) => (key < forward[best] ? i : best), 0);
   const rotated = [...forward.slice(start), ...forward.slice(0, start)];
   const key = `loop:${rotated.join(";")}`;
-  if (!simplified.has(key)) simplified.set(key, simplify([...rotated, rotated[0]].map(toFeet), TOLERANCE).slice(0, -1));
+  if (!simplified.has(key)) simplified.set(key, simplify([...rotated, rotated[0]].map((k) => toFeet(k, g)), TOLERANCE).slice(0, -1));
   const points = simplified.get(key);
   return mine ? points : [...points].reverse();
 }
 
-function toFeet(key) {
-  const [lx, ly] = key.split(",").map(Number);
-  return {x: (lx * hexRadius(CELL_SIZE)) / 2, y: (ly * CELL_SIZE) / 2};
+function toFeet(key, g) {
+  return g.latticeFeet(key.split(",").map(Number), CELL_SIZE);
 }
 
 // Douglas-Peucker, keeping the ends.

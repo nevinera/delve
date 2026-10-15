@@ -1,4 +1,4 @@
-import {mapSize} from "../cellMap/hexGrid";
+import {mapSizeOf} from "../cellMap/grid";
 
 // Owns a map draft's data and every mutation the editor can make to it -
 // barriers/connections/units, plus the image-derived fields
@@ -200,6 +200,6 @@ export class MapDraft {
 
 // A cell map's size in feet, to the thousandth (the validator allows 0.01).
 function cellMapFeet(cellMap) {
-  const {width, height} = mapSize(cellMap.grid);
+  const {width, height} = mapSizeOf(cellMap.grid);
   return {width: Math.round(width * 1000) / 1000, height: Math.round(height * 1000) / 1000};
 }

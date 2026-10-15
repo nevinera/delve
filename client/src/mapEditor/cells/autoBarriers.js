@@ -21,9 +21,14 @@
 // each side (see cellMap/bridges.js), so it's open from bank to bank; a
 // rail across an end too, if that end's over water.
 //
+// On a square grid (a dungeon) the walls are the cells' edges exactly:
+// straight, axis-aligned, only joined where they run on, and not bent; and
+// there are no circles.
+//
 // Works in map feet (y up); the scene is in cellmap feet (y down).
-import {latticeCorner, PAD, unwarp, warp} from "../../cellMap/regions";
-import {CELL_SIZE, cellAt, cellCenter, cellPoint, hexDistance, hexRadius, mapSize, neighbor} from "../../cellMap/hexGrid";
+import {PAD, unwarp, warp} from "../../cellMap/regions";
+import {CELL_SIZE, geometryOf, gridOf} from "../../cellMap/grid";
+import {hexRadius} from "../../cellMap/hexGrid";
 import {terrainAt} from "../../cellMap/format";
 import {bridgeCells, bridgeDeck} from "../../cellMap/bridges";
 import {exitCells, exitEdge} from "../../cellMap/exits";
@@ -42,6 +47,7 @@ const BLOCKERS = {trees: true, water: false};
 // walls are long straight lines rather than following each cell;
 // doubled until the walls fit MAX_BARRIER_SEGMENTS.
 const START_TOLERANCE = 1.5;
+const SQUARE_START_TOLERANCE = 0.05;
 const MAX_TOLERANCE = 6;
 
 // Averaging passes over the outline: each halves a row's zigzag.
@@ -54,30 +60,34 @@ const SMOOTHING_PASSES = 3;
 // many segments the walls use, whether open ground reaches the map's edge
 // outside the exits, and why nothing could be made (or null).
 export function autoBarriers(cellMap, existingFillPoints = []) {
-  const {width, height} = mapSize(cellMap.grid);
+  const g = geometryOf(cellMap.grid);
+  const square = g.type === "square";
+  const bend = (p) => (square ? p : warp(p, cellMap.seed));
+  const unbend = (p) => (square ? p : unwarp(p, cellMap.seed));
+  const {width, height} = g.mapSize(cellMap.grid);
   const toMap = ({x, y}) => [x, height - y];
   const blocking = (c, r) => {
     const terrain = terrainAt(cellMap, c, r);
     return terrain in BLOCKERS ? terrain : null;
   };
   const bridges = cellMap.bridges ?? [];
-  const onBridge = new Set(bridges.flatMap((bridge) => bridgeCells(bridge).map((cell) => cell.join(","))));
-  const groves = roundPatches(cellMap, blocking).filter(({cells}) => !cells.some((cell) => onBridge.has(cell)));
+  const onBridge = new Set(bridges.flatMap((bridge) => bridgeCells(bridge, g.type).map((cell) => cell.join(","))));
+  const groves = (square ? [] : roundPatches(cellMap, blocking)).filter(({cells}) => !cells.some((cell) => onBridge.has(cell)));
   const inGrove = new Set(groves.flatMap(({cells}) => cells));
   const kindAt = (c, r) => (inGrove.has(`${c},${r}`) ? null : blocking(c, r));
   // Water under a bridge's middle splits the water into patches either
   // side of it, each needing its own fill point.
   const patchKindAt = (c, r) => (kindAt(c, r) === "water" && onBridge.has(`${c},${r}`) ? null : kindAt(c, r));
-  const circles = groves.map(({kind, center, radius}) => ({kind, radius, ...warp(center, cellMap.seed)})).map(({kind, x, y, radius}) => barrier({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}, kind));
+  const circles = groves.map(({kind, center, radius}) => ({kind, radius, ...bend(center)})).map(({kind, x, y, radius}) => barrier({type: "circle", location: roundPoint([x, height - y]), radius: round(radius)}, kind));
 
-  const outlined = outlines(cellMap, kindAt).map((line) => ({...line, points: linePoints(line).map((p) => toMap(warp(p, cellMap.seed)))}));
+  const outlined = outlines(cellMap, kindAt, g).map((line) => ({...line, points: linePoints(line, g).map((p) => toMap(bend(p)))}));
   const decks = bridges.map((bridge) => {
-    const {a, b, halfWidth} = bridgeDeck(bridge);
+    const {a, b, halfWidth} = bridgeDeck(bridge, g.type);
     return {a: toMap(a), b: toMap(b), halfWidth};
   });
   const runs = [...bridged(outlined, decks), ...decks.flatMap((deck) => rails(deck, outlined))].flatMap((line) =>
     (line.closed ? clipLoop(line.points, width, height) : clipRun(line.points, width, height)).map((run) => ({...run, kind: line.kind})));
-  let tolerance = START_TOLERANCE;
+  let tolerance = square ? SQUARE_START_TOLERANCE : START_TOLERANCE;
   let walls = simplifyAll(runs, tolerance);
   const circleSegments = circles.length * CIRCLE_SEGMENTS;
   while (segmentCount(walls) + circleSegments > MAX_BARRIER_SEGMENTS && tolerance < MAX_TOLERANCE) {
@@ -89,7 +99,7 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
     return {barriers: [], connections: [], places: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `The trees' and water's edges need ${segments} wall segments, more than the ${MAX_BARRIER_SEGMENTS} a map can have. Simplify them and try again.`};
   }
 
-  const fillPoints = [...existingFillPoints, ...newFillPoints(cellMap, patchKindAt, existingFillPoints, height)];
+  const fillPoints = [...existingFillPoints, ...newFillPoints(cellMap, patchKindAt, existingFillPoints, height, g, bend, unbend)];
   if (fillPoints.length > MAX_FILL_POINTS) {
     return {barriers: [], connections: [], places: [], fillPoints: existingFillPoints, segments, openEdge: false, error: `There are ${fillPoints.length - existingFillPoints.length} separate patches of trees and water inside the map, more than the ${MAX_FILL_POINTS} fill points a map can have.`};
   }
@@ -102,7 +112,7 @@ export function autoBarriers(cellMap, existingFillPoints = []) {
   const connections = (cellMap.exits ?? []).map((exit) => exitConnection(exit, cellMap.grid, barriers, toMap));
   const inExit = new Set((cellMap.exits ?? []).flatMap((exit) => exitCells(exit, cellMap.grid).map((cell) => cell.join(","))));
   const openEdge = borderCells(cellMap).some(([c, r]) => !kindAt(c, r) && !inExit.has(`${c},${r}`));
-  const places = (cellMap.places ?? []).map(({identifier, polygon}) => ({identifier, polygon: polygon.map(([c, r]) => roundPoint(toMap(warp(cellPoint(c, r, CELL_SIZE), cellMap.seed))))}));
+  const places = (cellMap.places ?? []).map(({identifier, polygon}) => ({identifier, polygon: polygon.map(([c, r]) => roundPoint(toMap(bend(g.cellPoint(c, r, CELL_SIZE)))))}));
   return {barriers, connections, places, fillPoints, segments, openEdge, error: null};
 }
 
@@ -135,6 +145,7 @@ const barrier = (fields, kind) => (BLOCKERS[kind] ? fields : {...fields, blocksS
 // ([col, row]), edge (whether it touches the map's edge)}.
 function patches(cellMap, kindAt) {
   const {cols, rows} = cellMap.grid;
+  const g = geometryOf(cellMap.grid);
   const seen = new Set();
   const found = [];
   for (let row = 0; row < rows; row++) {
@@ -144,8 +155,8 @@ function patches(cellMap, kindAt) {
       const cells = [[col, row]];
       seen.add(`${col},${row}`);
       for (let i = 0; i < cells.length; i++) {
-        for (let edge = 0; edge < 6; edge++) {
-          const [c, r] = neighbor(...cells[i], edge);
+        for (let edge = 0; edge < g.edges; edge++) {
+          const [c, r] = g.neighbor(...cells[i], edge);
           if (c < 0 || r < 0 || c >= cols || r >= rows || seen.has(`${c},${r}`) || kindAt(c, r) !== kind) continue;
           seen.add(`${c},${r}`);
           cells.push([c, r]);
@@ -160,6 +171,7 @@ function patches(cellMap, kindAt) {
 // Round patches away from the map's edge, with open ground all around:
 // {kind, center (cellmap feet), radius, cells ("col,row")}.
 function roundPatches(cellMap, kindAt) {
+  const {neighbor} = gridOf("hex");
   return patches(cellMap, kindAt).flatMap(({kind, cells, edge}) => {
     if (edge) return [];
     const keys = new Set(cells.map(([c, r]) => `${c},${r}`));
@@ -174,6 +186,7 @@ function roundPatches(cellMap, kindAt) {
 
 // Three cells around a corner: a circle on the corner, as big as they are.
 function asTriad(patch) {
+  const {distance: hexDistance, cellCenter} = gridOf("hex");
   if (patch.length !== 3 || hexDistance(patch[0], patch[1]) + hexDistance(patch[1], patch[2]) + hexDistance(patch[0], patch[2]) !== 3) return null;
   const centers = patch.map(([c, r]) => cellCenter(c, r, CELL_SIZE));
   const center = {x: centers.reduce((sum, {x}) => sum + x, 0) / 3, y: centers.reduce((sum, {y}) => sum + y, 0) / 3};
@@ -185,6 +198,7 @@ function asTriad(patch) {
 // bounding columns and rows. Its circle runs through its edges' middles,
 // like the walls do.
 function asHexBall(patch) {
+  const {distance: hexDistance, cellCenter} = gridOf("hex");
   const steps = Math.round((Math.sqrt(12 * patch.length - 3) - 3) / 6);
   if (3 * steps * (steps + 1) + 1 !== patch.length || (steps + 0.5) * CELL_SIZE > MAX_CIRCLE_RADIUS) return null;
   const colsOf = patch.map(([c]) => c);
@@ -200,7 +214,7 @@ function asHexBall(patch) {
 // A line runs between corners where three kinds meet, or is a loop. The
 // grid runs PAD cells past the map (copying its edge cells), so lines
 // reaching the edge carry on past it and get clipped.
-function outlines(cellMap, kindAt) {
+function outlines(cellMap, kindAt, g) {
   const {cols, rows} = cellMap.grid;
   const kind = (c, r) => (c >= -PAD && c < cols + PAD && r >= -PAD && r < rows + PAD ? kindAt(c, r) : null);
   const edges = [];
@@ -208,11 +222,11 @@ function outlines(cellMap, kindAt) {
     for (let r = -PAD; r < rows + PAD; r++) {
       const here = kind(c, r);
       if (!here) continue;
-      for (let i = 0; i < 6; i++) {
-        const there = kind(...neighbor(c, r, i));
+      for (let i = 0; i < g.edges; i++) {
+        const there = kind(...g.neighbor(c, r, i));
         // Where two blocking kinds meet, the wall is the one blocking sight.
         if (there === here || (there && !BLOCKERS[here])) continue;
-        edges.push({a: latticeCorner(c, r, i), b: latticeCorner(c, r, (i + 1) % 6), kind: here});
+        edges.push({a: g.corner(c, r, i), b: g.corner(c, r, (i + 1) % g.edges), kind: here});
       }
     }
   }
@@ -252,9 +266,9 @@ function outlines(cellMap, kindAt) {
 
 // A line of lattice corners as the midpoints of its edges, in feet,
 // smoothed. A line between junctions keeps its ends on them.
-function linePoints({corners, closed}) {
-  const r = hexRadius(CELL_SIZE);
-  const feet = corners.map(([lx, ly]) => ({x: (lx * r) / 2, y: (ly * CELL_SIZE) / 2}));
+function linePoints({corners, closed}, g) {
+  const feet = corners.map((corner) => g.latticeFeet(corner, CELL_SIZE));
+  if (g.type === "square") return closed ? [...feet, feet[0]] : feet;
   const mid = (p, q) => ({x: (p.x + q.x) / 2, y: (p.y + q.y) / 2});
   const n = feet.length;
   let points = closed ? feet.map((p, i) => mid(p, feet[(i + 1) % n])) : [feet[0], ...feet.slice(1).map((q, i) => mid(feet[i], q)), feet[n - 1]];
@@ -485,16 +499,16 @@ const segmentCount = (walls) => walls.reduce((sum, {points}) => sum + points.len
 // A fill point for each patch inside the map that none of existing is in,
 // at its deepest cell's center (in map feet).
 // Fill points are where the cells are drawn, bent as the walls are.
-function newFillPoints(cellMap, kindAt, existing, height) {
+function newFillPoints(cellMap, kindAt, existing, height, g, bend, unbend) {
   const marked = new Set(existing.map(({x, y}) => {
-    const p = unwarp({x, y: height - y}, cellMap.seed);
-    return cellAt(p.x, p.y, CELL_SIZE).join(",");
+    const p = unbend({x, y: height - y});
+    return g.cellAt(p.x, p.y, CELL_SIZE).join(",");
   }));
   return patches(cellMap, kindAt).flatMap(({cells, edge}) => {
     const keys = new Set(cells.map(([c, r]) => `${c},${r}`));
     if (edge || [...keys].some((k) => marked.has(k))) return [];
-    const [col, row] = deepest(cells, keys);
-    const {x, y} = warp(cellCenter(col, row, CELL_SIZE), cellMap.seed);
+    const [col, row] = deepest(cells, keys, g);
+    const {x, y} = bend(g.cellCenter(col, row, CELL_SIZE));
     return [{x: round(x), y: round(height - y)}];
   });
 }
@@ -502,16 +516,17 @@ function newFillPoints(cellMap, kindAt, existing, height) {
 // The patch's most inward cell, where the walls' smoothing can't have cut
 // it off: the farthest in steps from the patch's edge, then the one with
 // the most of the patch around it, then the nearest its middle.
-function deepest(cells, keys) {
-  const around = ([c, r]) => [0, 1, 2, 3, 4, 5].filter((e) => keys.has(neighbor(c, r, e).join(","))).length;
+function deepest(cells, keys, g) {
+  const sides = Array.from({length: g.edges}, (_, e) => e);
+  const around = ([c, r]) => sides.filter((e) => keys.has(g.neighbor(c, r, e).join(","))).length;
   const depth = new Map();
-  let frontier = cells.filter((cell) => around(cell) < 6);
+  let frontier = cells.filter((cell) => around(cell) < g.edges);
   for (let d = 1; frontier.length; d++) {
     for (const cell of frontier) depth.set(cell.join(","), d);
-    frontier = frontier.flatMap(([c, r]) => [0, 1, 2, 3, 4, 5].map((e) => neighbor(c, r, e))).filter((cell) => keys.has(cell.join(",")) && !depth.has(cell.join(",")));
+    frontier = frontier.flatMap(([c, r]) => sides.map((e) => g.neighbor(c, r, e))).filter((cell) => keys.has(cell.join(",")) && !depth.has(cell.join(",")));
     frontier = [...new Map(frontier.map((cell) => [cell.join(","), cell])).values()];
   }
-  const centers = cells.map(([c, r]) => cellCenter(c, r, CELL_SIZE));
+  const centers = cells.map(([c, r]) => g.cellCenter(c, r, CELL_SIZE));
   const middle = {x: centers.reduce((sum, {x}) => sum + x, 0) / cells.length, y: centers.reduce((sum, {y}) => sum + y, 0) / cells.length};
   const score = (cell, i) => [depth.get(cell.join(",")) ?? 1, around(cell), -Math.hypot(centers[i].x - middle.x, centers[i].y - middle.y)];
   let best = 0;

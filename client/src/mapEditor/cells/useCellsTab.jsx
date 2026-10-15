@@ -12,7 +12,7 @@
 // them (rendering), and makes the map's thumbnail after an edit
 // (onThumbnail(blob)).
 import {useEffect, useRef, useState} from "react";
-import {CELL_SIZE, cellAt, cellCenter, cellPoint, hexDistance, hexRays, mapSize, pointAt} from "../../cellMap/hexGrid";
+import {CELL_SIZE, geometryOf, gridOf} from "../../cellMap/grid";
 import {bridgeCells, MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
 import {renderScale} from "../../cellMap/render";
 import {drawBridges, drawCells, drawExits, drawTrails, hexPath, SELECTED_COLOR} from "../../cellMap/overlay";
@@ -41,10 +41,11 @@ const INITIAL_UI = {tool: "paint", terrain: ".", brush: 1, overlay: "grid", hove
 // Where a bridge from a cell would end, toward another: the cell, in a
 // straight line from it and at most MAX_BRIDGE_LENGTH away, nearest that
 // one.
-export function bridgeEnd(from, toward) {
+export function bridgeEnd(from, toward, gridType = "hex") {
+  const {cellCenter, rays} = gridOf(gridType);
   const target = cellCenter(...toward, CELL_SIZE);
   let best = null;
-  for (const cell of hexRays(from, MAX_BRIDGE_LENGTH)) {
+  for (const cell of rays(from, MAX_BRIDGE_LENGTH)) {
     const {x, y} = cellCenter(...cell, CELL_SIZE);
     const d = Math.hypot(x - target.x, y - target.y);
     if (!best || d < best.d) best = {cell, d};
@@ -64,7 +65,8 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
   // Each drag is its own undo step (see useCellHistory's groups).
   const nextDrag = useRef(0);
 
-  const size = draft ? mapSize(draft.grid) : null;
+  const g = geometryOf(draft?.grid);
+  const size = draft ? g.mapSize(draft.grid) : null;
   const scale = size ? renderScale(size, EDITOR_PIXELS_PER_FOOT) : 1;
   const pixelDimensions = size ? {width: Math.round(size.width * scale), height: Math.round(size.height * scale)} : null;
 
@@ -104,7 +106,7 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
   function locate(px) {
     const x = px.x / scale;
     const y = px.y / scale;
-    return {point: pointAt(x, y, CELL_SIZE), cell: cellAt(x, y, CELL_SIZE), x, y};
+    return {point: g.pointAt(x, y, CELL_SIZE), cell: g.cellAt(x, y, CELL_SIZE), x, y};
   }
 
   // The trail point nearest (x, y) within reach feet, as {trail, point,
@@ -113,7 +115,7 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
     let best = null;
     draft.trails.forEach((trail, t) => trail.points.forEach(([col, row], i) => {
       if (!include(t, i)) return;
-      const p = cellPoint(col, row, CELL_SIZE);
+      const p = g.cellPoint(col, row, CELL_SIZE);
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= reach && (!best || d < best.d)) best = {trail: t, point: i, at: [col, row], d};
     }));
@@ -129,22 +131,22 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
     if (shiftKey) return at.point;
     const joined = nearestTrailPoint(at, SNAP_RADIUS_FEET, (t, i) => !exclude(t, i));
     if (joined) return joined.at;
-    const {width, height} = mapSize(draft.grid);
+    const {width, height} = g.mapSize(draft.grid);
     const onEdge = (v, size) => (v <= SNAP_RADIUS_FEET ? 0 : v >= size - SNAP_RADIUS_FEET ? size : v);
     const [x, y] = [onEdge(at.x, width), onEdge(at.y, height)];
-    return x === at.x && y === at.y ? at.point : pointAt(x, y, CELL_SIZE);
+    return x === at.x && y === at.y ? at.point : g.pointAt(x, y, CELL_SIZE);
   }
 
   // Paints every cell along the line from the last cell to this one, so a
   // fast drag doesn't skip any.
   function paintAlong(from, to, group) {
-    const steps = Math.max(1, hexDistance(from, to));
+    const steps = Math.max(1, g.distance(from, to));
     change((d) => {
       let next = d;
       for (let i = 0; i <= steps; i++) {
-        const a = cellPoint(from[0], from[1], CELL_SIZE);
-        const b = cellPoint(to[0], to[1], CELL_SIZE);
-        const [c, r] = cellAt(a.x + ((b.x - a.x) * i) / steps, a.y + ((b.y - a.y) * i) / steps, CELL_SIZE);
+        const a = g.cellPoint(from[0], from[1], CELL_SIZE);
+        const b = g.cellPoint(to[0], to[1], CELL_SIZE);
+        const [c, r] = g.cellAt(a.x + ((b.x - a.x) * i) / steps, a.y + ((b.y - a.y) * i) / steps, CELL_SIZE);
         next = next.paint(c, r, ui.terrain, ui.brush);
       }
       return next;
@@ -188,7 +190,7 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
   // ends it, in a straight line.
   function bridgeDown(cell, inside) {
     if (ui.pendingBridge) {
-      const end = bridgeEnd(ui.pendingBridge, cell);
+      const end = bridgeEnd(ui.pendingBridge, cell, draft.grid.type);
       const from = ui.pendingBridge;
       if (draft.inside(...end)) {
         change((d) => d.addBridge(from, end));
@@ -196,7 +198,7 @@ export function useCellsTab({mapKey, cellMap, onCellMapChange, editing, renderin
       }
       return;
     }
-    const on = draft.bridges.findIndex((bridge) => bridgeCells(bridge).some(([c, r]) => c === cell[0] && r === cell[1]));
+    const on = draft.bridges.findIndex((bridge) => bridgeCells(bridge, draft.grid.type).some(([c, r]) => c === cell[0] && r === cell[1]));
     if (on !== -1) update({selectedBridge: on});
     else if (inside) update({pendingBridge: cell, selectedBridge: null});
   }
@@ -334,11 +336,11 @@ function CellOverlay({draft, renderedCells, ui, scale, width, height}) {
     drawExits(ctx, map, overlayScale);
     if (tool === "trail" || overlay === "cells") drawTrails(ctx, map, overlayScale, {selected: tool === "trail" ? selected : null});
     if (tool === "bridge" || overlay === "cells") {
-      const preview = pendingBridge && hover ? {from: pendingBridge, to: bridgeEnd(pendingBridge, hover)} : null;
+      const preview = pendingBridge && hover ? {from: pendingBridge, to: bridgeEnd(pendingBridge, hover, map.grid.type)} : null;
       drawBridges(ctx, map, overlayScale, {selected: tool === "bridge" ? selectedBridge : null, pending: pendingBridge, preview});
     }
     if (pendingPoint) {
-      const p = cellPoint(...pendingPoint, CELL_SIZE);
+      const p = geometryOf(map.grid).cellPoint(...pendingPoint, CELL_SIZE);
       ctx.fillStyle = SELECTED_COLOR;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 9 / overlayScale, 0, Math.PI * 2);
@@ -357,12 +359,13 @@ function BrushOverlay({draft, ui, scale, width, height}) {
     if (!ctx || !hover || (tool !== "paint" && tool !== "fill")) return;
     const reach = tool === "paint" ? brush - 1 : 0;
     const [hc, hr] = hover;
+    const g = geometryOf(draft.grid);
     ctx.strokeStyle = SELECTED_COLOR;
     ctx.lineWidth = 2 / overlayScale;
     ctx.beginPath();
     for (let c = hc - reach; c <= hc + reach; c++) {
       for (let r = hr - reach - 1; r <= hr + reach + 1; r++) {
-        if (draft.inside(c, r) && hexDistance([hc, hr], [c, r]) <= reach) hexPath(ctx, c, r, CELL_SIZE);
+        if (draft.inside(c, r) && g.distance([hc, hr], [c, r]) <= reach) hexPath(ctx, c, r, CELL_SIZE, g.type);
       }
     }
     ctx.stroke();

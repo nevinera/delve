@@ -3,7 +3,7 @@
 // in useCellsTab.
 import {useState} from "react";
 import {THEMES, terrainLabel, terrainsOf} from "../../cellMap/format";
-import {CELL_SIZE, gridFor, hexDistance} from "../../cellMap/hexGrid";
+import {CELL_SIZE, geometryOf, gridOf} from "../../cellMap/grid";
 import {MAX_BRIDGE_LENGTH} from "../../cellMap/bridges";
 import {DEFAULT_PATH, PATHS} from "../../cellMap/style";
 import {CELL_COLORS} from "../../cellMap/overlay";
@@ -91,7 +91,7 @@ function Choices({label, options, value, onChange}) {
 
 function NewCellMap({feetDimensions, onCreate}) {
   const fits = feetDimensions?.width && feetDimensions?.height;
-  const [size, setSize] = useState(() => (fits ? gridFor(feetDimensions) : {cols: 48, rows: 36}));
+  const [size, setSize] = useState(() => (fits ? gridOf(THEMES[Object.keys(THEMES)[0]].grids[0]).gridFor(feetDimensions) : {cols: 48, rows: 36}));
   const [theme, setTheme] = useState(Object.keys(THEMES)[0]);
   return (
     <div className="cells-panel">
@@ -107,7 +107,7 @@ function NewCellMap({feetDimensions, onCreate}) {
         <NumberField label="Rows" value={size.rows} min={1} max={200} onChange={(rows) => setSize({...size, rows})} />
       </div>
       {fits && (
-        <button type="button" onClick={() => setSize(gridFor(feetDimensions))}>Fit to the map ({feetDimensions.width} × {feetDimensions.height} ft)</button>
+        <button type="button" onClick={() => setSize(gridOf(THEMES[theme].grids[0]).gridFor(feetDimensions))}>Fit to the map ({feetDimensions.width} × {feetDimensions.height} ft)</button>
       )}
       <button type="button" onClick={() => onCreate(CellMapDraft.blank({theme, ...size}))}>New cell map</button>
       <GenerateSection grid={size} sized={false} onGenerate={(options) => onCreate(new CellMapDraft(generateCellMap({...options, theme})))} />
@@ -122,7 +122,7 @@ const GENERATE_GROUPS = {
   Shape: {"": "plain", cavities: "round", coral: "coral", chaotic: "chaotic"},
   Ground: {"": "meadow", wet: "wet", rough: "rough"},
 };
-const GENERATE_TAGS = {tight: "tight", tree: "no loops", connected: "connected", dry: "no marsh", paths: "paths"};
+const GENERATE_TAGS = {vault: "vault (dungeon)", tight: "tight", tree: "no loops", connected: "connected", dry: "no marsh", paths: "paths"};
 
 // Folded until opened. With sized, the size is its own; otherwise it's
 // grid (the new map form's own fields).
@@ -264,7 +264,7 @@ function BridgesSection({cells}) {
       <ul className="cells-panel-trails">
         {draft.bridges.map((bridge, b) => (
           <li key={b} className={ui.selectedBridge === b ? "active" : ""}>
-            <button type="button" onClick={() => update({selectedBridge: b, pendingBridge: null})}>Bridge {b + 1} ({hexDistance(bridge.from, bridge.to)} cells)</button>
+            <button type="button" onClick={() => update({selectedBridge: b, pendingBridge: null})}>Bridge {b + 1} ({geometryOf(draft.grid).distance(bridge.from, bridge.to)} cells)</button>
             <button type="button" aria-label={`Delete bridge ${b + 1}`} onClick={() => {
               change((d) => d.removeBridge(b));
               update({selectedBridge: null});

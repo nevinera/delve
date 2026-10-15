@@ -179,3 +179,66 @@ describe("generateCellMap", () => {
     expect(() => generateCellMap({...rest, exits: [{side: "east", at: 1.5}]})).toThrow(/at must be 0 to 1/);
   });
 });
+
+describe("generateCellMap for a dungeon", () => {
+  const options = {cols: 40, rows: 30, seed: 5, exits: ["west", "east"], theme: "dungeon"};
+
+  it("makes the same valid square map for the same options", () => {
+    const map = generateCellMap(options);
+    expect(map.grid).toEqual({type: "square", cols: 40, rows: 30});
+    expect(validateCellMap(map)).toEqual([]);
+    expect(generateCellMap(options)).toEqual(map);
+    expect(map.places.length).toBeGreaterThan(1);
+  });
+
+  it("joins all its open ground, reaching the edge only at its exits", () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const map = generateCellMap({...options, seed});
+      const open = (c, r) => map.cells[r]?.[c] !== undefined && map.cells[r][c] !== "T";
+      const seen = new Set();
+      const start = (() => { for (let r = 0; r < 30; r++) for (let c = 0; c < 40; c++) if (open(c, r)) return [c, r]; })();
+      const stack = [start];
+      while (stack.length) {
+        const [c, r] = stack.pop();
+        if (seen.has(`${c},${r}`) || !open(c, r)) continue;
+        seen.add(`${c},${r}`);
+        for (const [dc, dr] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) stack.push([c + dc, r + dr]);
+      }
+      let total = 0;
+      for (let r = 0; r < 30; r++) for (let c = 0; c < 40; c++) if (open(c, r)) total++;
+      expect(seen.size).toBe(total);
+      expect(map.exits.map((e) => e.side)).toEqual(["east", "west"]);
+    }
+  });
+
+  it("is walled by Auto Barriers", () => {
+    const result = autoBarriers(generateCellMap(options));
+    expect(result.error).toBeNull();
+    expect(result.barriers.length).toBeGreaterThan(0);
+  });
+
+  it("leaves out puddles when dry", () => {
+    const map = generateCellMap({...options, tags: ["dry"]});
+    expect(map.cells.join("")).not.toMatch(/[~w]/);
+  });
+
+  it("makes a big room in the middle with one way in, for vault", () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const map = generateCellMap({cols: 100, rows: 100, seed, exits: ["west", "east"], theme: "dungeon", tags: ["vault"]});
+      expect(validateCellMap(map)).toEqual([]);
+      const open = (c, r) => map.cells[r][c] !== "T";
+      for (let r = 35; r < 65; r++) for (let c = 35; c < 65; c++) expect(open(c, r)).toBe(true);
+      const outside = [];
+      for (let i = 35; i < 65; i++) outside.push(["w", open(34, i)], ["e", open(65, i)], ["n", open(i, 34)], ["s", open(i, 65)]);
+      const doors = outside.filter(([, isOpen]) => isOpen);
+      expect(doors.length).toBeGreaterThan(0);
+      expect(doors.length).toBeLessThanOrEqual(2);
+      expect(new Set(doors.map(([side]) => side)).size).toBe(1);
+    }
+  });
+
+  it("mixes in rooms that aren't rectangles", () => {
+    const rooms = generateCellMap({cols: 100, rows: 100, seed: 2, theme: "dungeon"}).places;
+    expect(rooms.some(({polygon}) => polygon.length > 6)).toBe(true);
+  });
+});
