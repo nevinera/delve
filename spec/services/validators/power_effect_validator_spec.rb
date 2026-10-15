@@ -22,6 +22,82 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
   end
 
   describe ".validate!" do
+    describe "groundArea" do
+      let(:ground_area) do
+        {
+          "type" => "groundArea",
+          "shape" => {"type" => "circle", "at" => "target", "radius" => 8.0},
+          "affects" => "bAll",
+          "range" => 30.0,
+          "duration" => 12.0,
+          "onTick" => [{"type" => "harm", "amount" => [2.0, 3.0], "school" => "magic"}],
+          "graphic" => {"color" => "#ff5a1f", "opacity" => 0.5}
+        }
+      end
+
+      def with_shape(**shape)
+        ground_area.merge("shape" => shape.transform_keys(&:to_s))
+      end
+
+      it "accepts a circle on the target with a range" do
+        expect { described_class.validate!(ground_area) }.not_to raise_error
+      end
+
+      it "accepts a burst-style circle on self without a range" do
+        effect = with_shape(type: "circle", at: "self", radius: 6).except("range")
+        expect { described_class.validate!(effect) }.not_to raise_error
+      end
+
+      it "accepts rings, lines and cones" do
+        ring = with_shape(type: "ring", at: "self", innerRadius: 4, outerRadius: 9).except("range")
+        line = with_shape(type: "line", length: 30, width: 4, direction: "facing").except("range")
+        cone = with_shape(type: "cone", offset: 3, length: 25, width: 20)
+        [ring, line, cone].each { |effect| expect { described_class.validate!(effect) }.not_to raise_error }
+      end
+
+      it "requires a range when the shape is anchored on the target" do
+        expect { described_class.validate!(ground_area.except("range")) }
+          .to raise_error(Validators::ValidationError, /range is required/)
+        expect { described_class.validate!(with_shape(type: "cone", length: 25, width: 20, direction: "target").except("range")) }
+          .to raise_error(Validators::ValidationError, /range is required/)
+      end
+
+      it "rejects an unknown shape or affects" do
+        expect { described_class.validate!(with_shape(type: "blob")) }.to raise_error(Validators::ValidationError, /must be one of/)
+        expect { described_class.validate!(ground_area.merge("affects" => "bTarget")) }.to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "rejects a ring whose outer radius doesn't exceed its inner radius" do
+        effect = with_shape(type: "ring", at: "self", innerRadius: 5, outerRadius: 5).except("range")
+        expect { described_class.validate!(effect) }.to raise_error(Validators::ValidationError, /outerRadius must be greater than innerRadius/)
+      end
+
+      it "rejects a non-positive duration, tickInterval or size" do
+        expect { described_class.validate!(ground_area.merge("duration" => 0)) }.to raise_error(Validators::ValidationError, /duration must be greater than 0/)
+        expect { described_class.validate!(ground_area.merge("tickInterval" => 0)) }.to raise_error(Validators::ValidationError, /tickInterval must be greater than 0/)
+        expect { described_class.validate!(with_shape(type: "circle", at: "target", radius: 0)) }.to raise_error(Validators::ValidationError, /radius must be greater than 0/)
+      end
+
+      it "requires at least one onTick effect and rejects nested areas" do
+        expect { described_class.validate!(ground_area.merge("onTick" => [])) }.to raise_error(Validators::ValidationError, /at least 1/)
+        nested = ground_area.merge("onTick" => [ground_area])
+        expect { described_class.validate!(nested) }.to raise_error(Validators::ValidationError, /must be one of/)
+      end
+
+      it "validates the nested effects" do
+        expect { described_class.validate!(ground_area.merge("onTick" => [{"type" => "harm"}])) }
+          .to raise_error(Validators::ValidationError, /amount is required/)
+        resource = {"type" => "resource", "resourceName" => "energy", "delta" => 1}
+        expect { described_class.validate!(ground_area.merge("onTick" => [resource])) }.not_to raise_error
+      end
+
+      it "validates the graphic" do
+        expect { described_class.validate!(ground_area.merge("graphic" => {"color" => "red"})) }.to raise_error(Validators::ValidationError, /6-digit hex/)
+        expect { described_class.validate!(ground_area.merge("graphic" => {"opacity" => 1.5})) }.to raise_error(Validators::ValidationError, /opacity must be between/)
+        expect { described_class.validate!(ground_area.merge("graphic" => {"textureURL" => ":nonesuch:"})) }.to raise_error(Validators::ValidationError, /not a recognized stock asset/)
+      end
+    end
+
     describe "radius" do
       it "accepts a positive radius on a bTarget or gTarget effect" do
         expect { described_class.validate!(harm_effect.merge("affects" => "bTarget", "radius" => 6)) }.not_to raise_error

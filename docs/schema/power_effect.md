@@ -177,11 +177,11 @@ The area is fixed where it was created: it does not follow the caster or the tar
 | `line` | the caster | `length`, `width` (feet, > 0), `direction` |
 | `cone` | the caster | `offset` (feet, >= 0), `length`, `width` (feet, > 0), `direction` |
 
-`direction` is `"target"` (point from the caster toward the target) or `"facing"` (the way the caster is facing). It defaults to `"target"` when the ability has a target and `"facing"` otherwise.
+`direction` is `"target"` (point from the caster toward the target) or `"facing"` (the way the caster is facing). It defaults to `"target"` when the effect has a `range` (it needs a target anyway) and `"facing"` otherwise.
 
 A `cone` starts `offset` feet in front of the caster as a point, and widens as a parabola to `width` feet across at `length` feet from the caster. A `line` is a rectangle of the given `length` and `width`, starting at the caster.
 
-A shape with `at: "target"`, or `direction: "target"`, needs a target when used, and the ability needs `maxRange`/`range` to say how far away that target can be.
+A shape with `at: "target"`, or `direction: "target"`, needs a target when used, and the effect must give a `range`. A shape anchored only on the caster (`at: "self"`, or `direction: "facing"`) needs no target and no `range`.
 
 ### GroundAreaGraphic
 
