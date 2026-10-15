@@ -122,7 +122,7 @@ const GENERATE_GROUPS = {
   Shape: {"": "plain", cavities: "round", coral: "coral", chaotic: "chaotic"},
   Ground: {"": "meadow", wet: "wet", rough: "rough"},
 };
-const GENERATE_TAGS = {tight: "tight", tree: "no loops", connected: "connected", dry: "no marsh", paths: "paths"};
+const GENERATE_TAGS = {vault: "vault (dungeon)", tight: "tight", tree: "no loops", connected: "connected", dry: "no marsh", paths: "paths"};
 
 // Folded until opened. With sized, the size is its own; otherwise it's
 // grid (the new map form's own fields).

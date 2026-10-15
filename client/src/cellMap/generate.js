@@ -19,6 +19,7 @@
 //   dry       no marsh
 //   wet       marsh is the main ground, not meadow
 //   rough     tall grass is the main ground
+//   vault     (dungeons only) a big room in the middle with one way in
 //   paths     trails joining the exits, as a tree (or, with one exit, from
 //             it into the map)
 //
@@ -38,7 +39,7 @@ import {PATHS} from "./style";
 import {traceLabels} from "./places";
 import {generateDungeon} from "./generateDungeon";
 
-export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
+export const TAGS = ["vault", "chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
 
 // Which tags can't go together (the first of a group given wins).
 const EXCLUSIVE = [["chamber", "hub", "burrow"], ["cavities", "coral", "chaotic"], ["wet", "rough"], ["wet", "dry"]];

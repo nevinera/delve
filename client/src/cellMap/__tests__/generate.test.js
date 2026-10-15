@@ -221,4 +221,24 @@ describe("generateCellMap for a dungeon", () => {
     const map = generateCellMap({...options, tags: ["dry"]});
     expect(map.cells.join("")).not.toMatch(/[~w]/);
   });
+
+  it("makes a big room in the middle with one way in, for vault", () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const map = generateCellMap({cols: 100, rows: 100, seed, exits: ["west", "east"], theme: "dungeon", tags: ["vault"]});
+      expect(validateCellMap(map)).toEqual([]);
+      const open = (c, r) => map.cells[r][c] !== "T";
+      for (let r = 35; r < 65; r++) for (let c = 35; c < 65; c++) expect(open(c, r)).toBe(true);
+      const outside = [];
+      for (let i = 35; i < 65; i++) outside.push(["w", open(34, i)], ["e", open(65, i)], ["n", open(i, 34)], ["s", open(i, 65)]);
+      const doors = outside.filter(([, isOpen]) => isOpen);
+      expect(doors.length).toBeGreaterThan(0);
+      expect(doors.length).toBeLessThanOrEqual(2);
+      expect(new Set(doors.map(([side]) => side)).size).toBe(1);
+    }
+  });
+
+  it("mixes in rooms that aren't rectangles", () => {
+    const rooms = generateCellMap({cols: 100, rows: 100, seed: 2, theme: "dungeon"}).places;
+    expect(rooms.some(({polygon}) => polygon.length > 6)).toBe(true);
+  });
 });

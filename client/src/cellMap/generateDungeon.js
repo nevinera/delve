@@ -4,9 +4,12 @@
 // the edge. Called by generateCellMap (see generate.js) for themes on a
 // square grid, with its random number generator and checked exit plan.
 //
-// Tags it heeds: tree (no loops), tight (rooms packed close), dry (no
-// puddles or water), wet (many), rough (rubble about). The rest are for
-// the hex generator, and are ignored here.
+// Rooms are rectangles, some with a corner cut out (L-shaped) or two (T).
+//
+// Tags it heeds: vault (a big room in the middle with one way in), tree
+// (no loops), tight (rooms packed close), dry (no puddles or water), wet
+// (many), rough (rubble about). The rest are for the hex generator, and
+// are ignored here.
 import {SIDES, sideCell, sideLength} from "./exits";
 import {VERSION, fillOf} from "./format";
 import {traceLabels} from "./places";
@@ -17,6 +20,10 @@ const TIGHT_GAP = 2;
 const ROOM_MIN = 6;
 const ROOM_MAX = 18;
 // Rooms' share of the map inside the margin, and the fewest and most tried.
+const SHAPED = 0.45;
+const VAULT_SHARE = 0.3;
+const VAULT_MIN = 12;
+const VAULT_MAX = 36;
 const COVER = 0.32;
 const TIGHT_COVER = 0.42;
 const TRIES = 400;
@@ -38,6 +45,7 @@ export function generateDungeon({cols, rows, seed, wanted, connections, tags, th
     open[key(c, r)] = 1;
     roomOf[key(c, r)] = i;
   }));
+  const vault = rooms.findIndex((room) => room.vault);
 
   const brush = ([c, r]) => [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]].filter((cell) => inBrush(cols, rows, [c, r], cell));
   const isRoom = (c, r) => c >= 0 && r >= 0 && c < cols && r < rows && roomOf[key(c, r)] >= 0;
@@ -46,13 +54,16 @@ export function generateDungeon({cols, rows, seed, wanted, connections, tags, th
     if (isRoom(c, r)) return false;
     return (horizontal ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]]).some(([dc, dr]) => isRoom(c + dc, r + dr));
   }).length, 0);
+  // Cells of a corridor in the vault, which only its one way in may enter.
+  const inVault = (path) => (vault < 0 || path.some(({cell}) => roomOf[key(...cell)] === vault) && [path[0], path[path.length - 1]].some(({cell}) => roomOf[key(...cell)] === vault) ? 0 : path.filter(({cell}) => roomOf[key(...cell)] === vault).length * 1000);
   const carve = (from, to) => {
     const first = rng() < 0.5;
     const tries = [elbow(from, to, first), elbow(from, to, !first)];
-    const path = flush(tries[0]) <= flush(tries[1]) ? tries[0] : tries[1];
+    const score = (path) => flush(path) + inVault(path);
+    const path = score(tries[0]) <= score(tries[1]) ? tries[0] : tries[1];
     for (const {cell} of path) for (const [c, r] of brush(cell)) open[key(c, r)] = 1;
   };
-  for (const [a, b] of links(rooms, has, rng)) carve(centerOf(rooms[a]), centerOf(rooms[b]));
+  for (const [a, b] of links(rooms, has, rng)) carve(rooms[a].center, rooms[b].center);
   const exits = cutExits(cols, rows, rooms, wanted ?? rng.shuffle(SIDES).slice(0, connections).map((side) => ({side})), carve, open, key, rng);
 
   const fill = fillOf(theme);
@@ -69,14 +80,53 @@ function inBrush(cols, rows, [c, r], [nc, nr]) {
   return fits(nc, c, cols) && fits(nr, r, rows);
 }
 
-const eachCell = ({col, row, w, h}, fn) => {
-  for (let r = row; r < row + h; r++) for (let c = col; c < col + w; c++) fn(c, r);
+const inRoom = (room, c, r) => c >= room.col && r >= room.row && c < room.col + room.w && r < room.row + room.h && !room.cuts.some(([c0, r0, c1, r1]) => c >= c0 && c < c1 && r >= r0 && r < r1);
+
+const eachCell = (room, fn) => {
+  for (let r = room.row; r < room.row + room.h; r++) for (let c = room.col; c < room.col + room.w; c++) if (inRoom(room, c, r)) fn(c, r);
 };
 
-const centerOf = ({col, row, w, h}) => [col + Math.floor(w / 2), row + Math.floor(h / 2)];
+// The room's cell nearest its box's middle (corridors start there).
+function centerOf(room) {
+  const [mc, mr] = [room.col + Math.floor(room.w / 2), room.row + Math.floor(room.h / 2)];
+  let best = null;
+  eachCell(room, (c, r) => {
+    const d = Math.abs(c - mc) + Math.abs(r - mr);
+    if (!best || d < best.d) best = {d, cell: [c, r]};
+  });
+  return best.cell;
+}
 
-// Rooms as {col, row, w, h}, none nearer another than the gap or the edge
-// than the margin, until they cover enough of the map.
+// Rectangles cut from a w x h box (offsets from its corner) to make it an
+// L or a T, or none: arms are never under 2 cells wide.
+function shapeCuts(col, row, w, h, rng) {
+  if (w < 8 || h < 8 || rng() >= SHAPED) return [];
+  if (rng() < 0.5) {
+    const cw = rng.int(3, w - 3);
+    const ch = rng.int(3, h - 3);
+    const left = rng() < 0.5;
+    const top = rng() < 0.5;
+    const c0 = left ? col : col + w - cw;
+    const r0 = top ? row : row + h - ch;
+    return [[c0, r0, c0 + cw, r0 + ch]];
+  }
+  if (rng() < 0.5) {
+    const stem = rng.int(3, w - 4);
+    const a = Math.floor((w - stem) / 2);
+    const ch = rng.int(3, h - 3);
+    const r0 = rng() < 0.5 ? row : row + h - ch;
+    return [[col, r0, col + a, r0 + ch], [col + a + stem, r0, col + w, r0 + ch]];
+  }
+  const stem = rng.int(3, h - 4);
+  const a = Math.floor((h - stem) / 2);
+  const cw = rng.int(3, w - 3);
+  const c0 = rng() < 0.5 ? col : col + w - cw;
+  return [[c0, row, c0 + cw, row + a], [c0, row + a + stem, c0 + cw, row + h]];
+}
+
+// Rooms as {col, row, w, h, cuts, center}, none nearer another (by their
+// boxes) than the gap or the edge than the margin, until they cover enough
+// of the map. With the vault tag, the first is a big one in the middle.
 function placeRooms(cols, rows, has, rng) {
   const gap = has.has("tight") ? TIGHT_GAP : GAP;
   const room = (cols - 2 * MARGIN) * (rows - 2 * MARGIN);
@@ -84,6 +134,20 @@ function placeRooms(cols, rows, has, rng) {
   const maxSide = (limit) => Math.max(ROOM_MIN, Math.min(ROOM_MAX, limit - 2 * MARGIN));
   const rooms = [];
   let area = 0;
+  const add = (col, row, w, h, extra = {}) => {
+    const made = {col, row, w, h, cuts: shapeCuts(col, row, w, h, rng), ...extra};
+    made.center = centerOf(made);
+    rooms.push(made);
+    area += w * h;
+  };
+  if (has.has("vault")) {
+    const side = (limit) => Math.min(limit - 2 * MARGIN, Math.max(VAULT_MIN, Math.min(VAULT_MAX, Math.round(limit * VAULT_SHARE))));
+    const [w, h] = [side(cols), side(rows)];
+    const made = {col: Math.floor((cols - w) / 2), row: Math.floor((rows - h) / 2), w, h, cuts: [], vault: true};
+    made.center = centerOf(made);
+    rooms.push(made);
+    area += w * h;
+  }
   for (let t = 0; t < TRIES && area < wantArea; t++) {
     const w = rng.int(ROOM_MIN, maxSide(cols));
     const h = rng.int(ROOM_MIN, maxSide(rows));
@@ -91,9 +155,7 @@ function placeRooms(cols, rows, has, rng) {
     const col = rng.int(MARGIN, cols - MARGIN - w);
     const row = rng.int(MARGIN, rows - MARGIN - h);
     const clear = rooms.every((o) => col >= o.col + o.w + gap || o.col >= col + w + gap || row >= o.row + o.h + gap || o.row >= row + h + gap);
-    if (!clear) continue;
-    rooms.push({col, row, w, h});
-    area += w * h;
+    if (clear) add(col, row, w, h);
   }
   return rooms;
 }
@@ -103,12 +165,14 @@ function placeRooms(cols, rows, has, rng) {
 // pairs left.
 function links(rooms, has, rng) {
   if (rooms.length < 2) return [];
-  const centers = rooms.map(centerOf);
+  const centers = rooms.map((room) => room.center);
   const dist = (a, b) => Math.abs(centers[a][0] - centers[b][0]) + Math.abs(centers[a][1] - centers[b][1]);
   const pairs = [];
-  for (let a = 0; a < rooms.length; a++) for (let b = a + 1; b < rooms.length; b++) pairs.push([a, b]);
+  const ids = rooms.map((_, i) => i).filter((i) => !rooms[i].vault);
+  for (const a of ids) for (const b of ids) if (a < b) pairs.push([a, b]);
   pairs.sort((p, q) => dist(...p) - dist(...q));
   const parent = rooms.map((_, i) => i);
+  const vault = rooms.findIndex((room) => room.vault);
   const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])));
   const tree = [];
   const rest = [];
@@ -120,8 +184,9 @@ function links(rooms, has, rng) {
       tree.push(pair);
     }
   }
-  const loops = has.has("tree") ? 0 : Math.round(rooms.length * LOOPS);
-  return [...tree, ...rest.slice(0, loops * 2).filter(() => rng() < 0.5).slice(0, loops)];
+  const loops = has.has("tree") ? 0 : Math.round(ids.length * LOOPS);
+  const door = vault < 0 || !ids.length ? [] : [[vault, ids.reduce((best, i) => (dist(vault, i) < dist(vault, best) ? i : best))]];
+  return [...tree, ...rest.slice(0, loops * 2).filter(() => rng() < 0.5).slice(0, loops), ...door];
 }
 
 // The cells of a corridor with one bend, from one cell to another, going
@@ -149,7 +214,7 @@ function cutExits(cols, rows, rooms, plan, carve, open, key, rng) {
     const length = sideLength(side, grid);
     const spot = Math.max(1, Math.min(length - 2, at === undefined ? Math.round(length * (0.3 + 0.4 * rng())) : Math.round(at * (length - 1))));
     const edge = sideCell(side, spot, grid);
-    const near = rooms.map(centerOf).sort((p, q) => Math.abs(p[0] - edge[0]) + Math.abs(p[1] - edge[1]) - Math.abs(q[0] - edge[0]) - Math.abs(q[1] - edge[1]))[0];
+    const near = (rooms.some((room) => !room.vault) ? rooms.filter((room) => !room.vault) : rooms).map((room) => room.center).sort((p, q) => Math.abs(p[0] - edge[0]) + Math.abs(p[1] - edge[1]) - Math.abs(q[0] - edge[0]) - Math.abs(q[1] - edge[1]))[0];
     carve(edge, near);
     const isOpen = (i) => i >= 0 && i < length && open[key(...sideCell(side, i, grid))];
     let [from, to] = [spot, spot];
@@ -171,10 +236,11 @@ function groundCells(cols, rows, rooms, open, has, rng) {
   if (has.has("dry")) return ground;
   const share = has.has("wet") ? PUDDLE_ROOMS.wet : PUDDLE_ROOMS.plain;
   for (const room of rooms) {
-    if (room.w < 4 || room.h < 4 || rng() >= share) continue;
-    const [pc, pr] = centerOf(room);
+    if (rng() >= share) continue;
+    const [pc, pr] = room.center;
+    if (![[0, 0], [-1, 0], [0, -1], [-1, -1]].every(([dc, dr]) => inRoom(room, pc + dc, pr + dr))) continue;
     const deep = room.w >= 6 && room.h >= 6 && rng() < 0.5;
-    eachCell({col: pc - 1, row: pr - 1, w: 2, h: 2}, (c, r) => { ground[c + r * cols] = deep ? "w" : "~"; });
+    eachCell({col: pc - 1, row: pr - 1, w: 2, h: 2, cuts: []}, (c, r) => { ground[c + r * cols] = deep ? "w" : "~"; });
     if (deep) for (const [dc, dr] of NEIGHBORS) if (rng() < 0.5) ground[pc + dc + (pr + dr) * cols] = "~";
   }
   return ground;
