@@ -149,3 +149,65 @@ Applies a Status to one or more targets for a fixed duration. See [status.md](st
   "tags": ["buff"]
 }
 ```
+
+---
+
+## groundArea
+
+Creates a persistent area on the ground. Every `tickInterval` seconds, its `onTick` effects are applied to each living unit standing inside the shape. Fire zones, healing circles, and the like.
+
+The area is fixed where it was created: it does not follow the caster or the target afterwards. The first tick lands one `tickInterval` after the cast. Units are tested by position only (no line-of-sight check). The area ends after `duration` seconds. If the same caster creates a `groundArea` from the same ability at the same spot, the old one is refreshed instead of stacking.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `shape` | Shape | yes | | The area's footprint. See below. |
+| `affects` | string | yes | | `"bAll"` (hostile units), `"gAll"` (friendly units), or `"all"` (both). Which side counts as hostile or friendly is relative to the caster, same as [Affects Values](#affects-values). |
+| `range` | rangeFloat | when the shape is anchored on the target | | How far the caster can be from the target. Omit when the shape is anchored on `self`. |
+| `duration` | float | yes | | Seconds the area lasts. |
+| `tickInterval` | float | no | `1.0` | Seconds between applications of `onTick`. |
+| `onTick` | array of PowerEffect | yes | | `harm`, `heal`, `resource` and `status` effects, applied to each qualifying unit inside the shape per tick. Nested effects omit `affects` and `range` (the area decides who is hit and from where). At least one entry, and no nested `groundArea`. |
+| `graphic` | GroundAreaGraphic | no | translucent red (`bAll`), green (`gAll`) or yellow (`all`) fill | How the area is drawn. See below. |
+
+### Shape
+
+| `type` | Anchored at | Fields |
+|---|---|---|
+| `circle` | `at`: `"self"` or `"target"` | `radius` (feet, > 0) |
+| `ring` | `at`: `"self"` or `"target"` | `innerRadius` (feet, >= 0), `outerRadius` (feet, > `innerRadius`) |
+| `line` | the caster | `length`, `width` (feet, > 0), `direction` |
+| `cone` | the caster | `offset` (feet, >= 0), `length`, `width` (feet, > 0), `direction` |
+
+`direction` is `"target"` (point from the caster toward the target) or `"facing"` (the way the caster is facing). It defaults to `"target"` when the ability has a target and `"facing"` otherwise.
+
+A `cone` starts `offset` feet in front of the caster as a point, and widens as a parabola to `width` feet across at `length` feet from the caster. A `line` is a rectangle of the given `length` and `width`, starting at the caster.
+
+A shape with `at: "target"`, or `direction: "target"`, needs a target when used, and the ability needs `maxRange`/`range` to say how far away that target can be.
+
+### GroundAreaGraphic
+
+Client-only; ignored by the game server. Drawn as a flat translucent layer on the ground, slightly above it (a quarter of a token's height), underneath tokens.
+
+| Field | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `color` | Color | no | | Solid fill color. If `textureURL` is also set, the texture is tinted by it (see [common.md](common.md#color)). |
+| `textureURL` | string | no | | Image tiled across the shape, or a stock asset reference (see [common.md](common.md#stock-asset-reference)). |
+| `textureScale` | float | no | `5.0` | Feet per tile. Only meaningful with `textureURL`. |
+| `opacity` | float | no | `0.5` | From `0.0` (invisible) to `1.0` (fully opaque). |
+
+### Example
+
+```json
+{
+  "type": "groundArea",
+  "shape": { "type": "circle", "at": "target", "radius": 8.0 },
+  "affects": "bAll",
+  "range": 30.0,
+  "duration": 12.0,
+  "tickInterval": 1.0,
+  "onTick": [
+    { "type": "harm", "amount": [2.0, 3.0], "school": "magic" }
+  ],
+  "graphic": { "color": "#ff5a1f", "textureURL": ":flames:", "opacity": 0.5 },
+  "tags": ["fire"]
+}
+```
