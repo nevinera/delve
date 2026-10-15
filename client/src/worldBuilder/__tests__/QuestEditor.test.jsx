@@ -15,7 +15,8 @@ const quest = (identifier, fields = {}) => ({
 function questDraft() {
   return fixtureDraft()
     .update("worlds/w/zones/forest/hub/hub.json", (map) => ({...map, ncus: [{identifier: "grizzle", name: "Grizzle"}, {identifier: "warden", name: "Warden"}],
-      interactables: [{identifier: "snare-1", name: "Goblin Snare"}, {identifier: "snare-2", name: "Goblin Snare"}]}))
+      interactables: [{identifier: "snare-1", name: "Goblin Snare"}, {identifier: "snare-2", name: "Goblin Snare"}],
+      places: [{identifier: "camp", name: "Arren's Camp", polygon: []}]}))
     .write("worlds/w/quests.json", [
       quest("rat-hunt", {objectives: [{type: "kill", text: "Kill goblins", zone: "forest", unitType: "goblin", count: 3}]}),
       quest("rat-king", {name: "The Rat King", requiresFlags: ["quest/completed/rat-hunt"]}),
@@ -56,6 +57,18 @@ describe("QuestEditor", () => {
     expect(questData(result.draft, "rat-hunt").objectives).toEqual([
       {type: "kill", text: "Kill goblins", zone: "forest", count: 3, unit: "goblin-a"},
     ]);
+  });
+
+  it("scopes a kill to a place on its map, and drops the place with the map", () => {
+    const {result} = renderEditor("rat-hunt");
+    expect(screen.queryByDisplayValue("Anywhere on the map")).toBeNull();
+    fireEvent.change(screen.getByDisplayValue("Any map"), {target: {value: "hub"}});
+    fireEvent.change(screen.getByDisplayValue("Anywhere on the map"), {target: {value: "camp"}});
+    expect(questData(result.draft, "rat-hunt").objectives[0]).toMatchObject({map: "hub", place: "camp"});
+    expect(screen.getByDisplayValue("Arren's Camp (camp)")).toBeTruthy();
+    fireEvent.change(screen.getByDisplayValue("Hub"), {target: {value: ""}});
+    expect(questData(result.draft, "rat-hunt").objectives[0]).not.toHaveProperty("place");
+    expect(questData(result.draft, "rat-hunt").objectives[0]).not.toHaveProperty("map");
   });
 
   it("switches an objective to use, ticking the zone's interactables", () => {

@@ -1,7 +1,7 @@
 module Validators
   # Cross-checks a world's quests against its zones: every NCU, unit, unit
   # type, map and item a quest names must exist in the named zone (and an
-  # objective's NCU or unit on its map, when it names one). Run after
+  # objective's NCU, unit or place on its map, when it names one). Run after
   # QuestsValidator and each zone's ZoneValidator have passed.
   class QuestReferences
     include Helpers
@@ -30,12 +30,17 @@ module Validators
     def validate_objectives!(quest, path:)
       (quest["objectives"] || []).each_with_index do |objective, i|
         objective_path = index_path(child_path(path, "objectives"), i)
-        case objective["type"]
-        when "talk" then validate_ncu!(objective, path: objective_path)
-        when "reach" then objective["map"] ? map(objective, path: objective_path) : zone!(objective, path: objective_path)
-        when "kill" then validate_kill!(objective, path: objective_path)
-        when "use" then validate_interactables!(objective, path: objective_path)
-        end
+        validate_objective!(objective, path: objective_path)
+        validate_place!(objective, path: objective_path) if given?(objective, "place")
+      end
+    end
+
+    def validate_objective!(objective, path:)
+      case objective["type"]
+      when "talk" then validate_ncu!(objective, path: path)
+      when "reach" then objective["map"] ? map(objective, path: path) : zone!(objective, path: path)
+      when "kill" then validate_kill!(objective, path: path)
+      when "use" then validate_interactables!(objective, path: path)
       end
     end
 
@@ -62,6 +67,11 @@ module Validators
         next if on_maps.any? { |map| interactable_on?(map, id) }
         raise missing_interactable(objective, id, path: index_path(child_path(path, "interactables"), i))
       end
+    end
+
+    def validate_place!(objective, path:)
+      return if (map(objective, path: path)["places"] || []).any? { |place| place["identifier"] == objective["place"] }
+      raise ValidationError.new("map \"#{objective["map"]}\" has no place \"#{objective["place"]}\"", path: child_path(path, "place"))
     end
 
     def missing_interactable(objective, id, path:)

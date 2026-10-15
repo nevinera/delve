@@ -60,5 +60,16 @@
       "map": "dépths"
     },
     "hash": "75468bd9288a87340a03f9fa9a3532caad3951c5"
+  },
+  {
+    "objective": {
+      "type": "kill",
+      "zone": "goblin-cave",
+      "unitType": "rat",
+      "count": 3,
+      "map": "depths",
+      "place": "nest"
+    },
+    "hash": "cfd94bb333c63442d022a5f925e55fb29c9821e3"
   }
 ]

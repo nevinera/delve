@@ -267,8 +267,21 @@ func StealthViewForTest(payload []byte, state *instancestate.InstanceState, obse
 // QuestEventForTest is a quest event (see quest_progress.go).
 type QuestEventForTest = questEvent
 
-func (inst *Instance) CollectQuestEventsForTest(prev, curr *instancestate.InstanceState) []QuestEventForTest {
-	return inst.collectQuestEvents(prev, curr)
+// CollectQuestEventsForTest runs collectQuestEvents, with visits as this
+// tick's collectVisits found.
+func (inst *Instance) CollectQuestEventsForTest(prev, curr *instancestate.InstanceState, visits ...VisitEventForTest) []QuestEventForTest {
+	events := make([]visitEvent, len(visits))
+	for i, v := range visits {
+		events[i] = visitEvent(v)
+	}
+	return inst.collectQuestEvents(prev, curr, events)
+}
+
+// ProcessTalksForTest runs processTalks on talks, after collectVisits on
+// state (for where each player is).
+func (inst *Instance) ProcessTalksForTest(ctx context.Context, state *instancestate.InstanceState, talks []instancestate.Talk) {
+	inst.collectVisits(state)
+	inst.processTalks(ctx, talks)
 }
 
 func (inst *Instance) TickQuestTimersForTest(ctx context.Context, now time.Time) {

@@ -20,7 +20,13 @@ var progressQuests = []instanceconfig.Quest{
 	{Identifier: "deliver", OfferedBy: instanceconfig.NcuRef{Zone: "goblin-cave", NCU: "grizzle"},
 		TurnIn: &instanceconfig.NcuRef{Zone: "darkwood", NCU: "warden"}},
 	{Identifier: "timed", OfferedBy: instanceconfig.NcuRef{Zone: "goblin-cave", NCU: "grizzle"}, Timer: "20s"},
+	{Identifier: "camp", OfferedBy: instanceconfig.NcuRef{Zone: "goblin-cave", NCU: "grizzle"},
+		TurnIn: &instanceconfig.NcuRef{Zone: "darkwood", NCU: "warden"}},
 }
+
+// yardCamp is the yard map, with a camp place in its corner (0-20 ft).
+var yardCamp = instanceconfig.Map{Identifier: "yard", Places: []instanceconfig.Place{{Identifier: "camp",
+	Polygon: []instanceconfig.Location{{X: 0, Y: 0}, {X: 20, Y: 0}, {X: 20, Y: 20}, {X: 0, Y: 20}}}}}
 
 func activeObjective(hash string, objective instanceconfig.QuestObjective, count, required int) instanceconfig.ActiveObjective {
 	return instanceconfig.ActiveObjective{Hash: hash, Objective: objective, Count: count, Required: required}
@@ -28,7 +34,8 @@ func activeObjective(hash string, objective instanceconfig.QuestObjective, count
 
 // progressInstance is a darkwood instance whose one slot has rat-hunt (kill
 // two rats), deliver (talk to the warden, reach the cellar; turned in to
-// the warden) and timed (reach the tower within 20s) active.
+// the warden), timed (reach the tower within 20s) and camp (reach the
+// yard's camp and kill a rat in it; turned in to the warden) active.
 func progressInstance(t *testing.T) (*instance.Instance, *fakeQuestRails, *instance.InstanceSlot, chan []byte) {
 	t.Helper()
 	active := []instanceconfig.ActiveQuest{
@@ -41,6 +48,10 @@ func progressInstance(t *testing.T) (*instance.Instance, *fakeQuestRails, *insta
 		}},
 		{QuestIdentifier: "timed", WorldVersionID: "wv-2", Objectives: []instanceconfig.ActiveObjective{
 			activeObjective("reach-tower", instanceconfig.QuestObjective{Type: "reach", Zone: "darkwood", Map: "tower"}, 0, 1),
+		}},
+		{QuestIdentifier: "camp", WorldVersionID: "wv-2", Objectives: []instanceconfig.ActiveObjective{
+			activeObjective("reach-camp", instanceconfig.QuestObjective{Type: "reach", Zone: "darkwood", Map: "yard", Place: "camp"}, 0, 1),
+			activeObjective("kill-camp-rat", instanceconfig.QuestObjective{Type: "kill", Zone: "darkwood", UnitType: "rat", Map: "yard", Place: "camp"}, 0, 1),
 		}},
 	}
 	rails := &fakeQuestRails{active: map[string]instanceconfig.ActiveQuest{}}
@@ -90,6 +101,58 @@ func TestCollectQuestEvents_FindsTalksTaggedKillsAndArrivals(t *testing.T) {
 
 	curr.PendingTalks = nil
 	assert.Empty(t, inst.CollectQuestEventsForTest(curr, curr), "nothing changed")
+}
+
+func TestCollectQuestEvents_FindsPlaces(t *testing.T) {
+	inst, _, slot, _ := progressInstance(t)
+	inst.ZoneConfig.Maps = []instanceconfig.Map{yardCamp}
+	player, inCamp, outside := slot.CharacterUnitID, uuid.New(), uuid.New()
+	unit := func(identifier, unitType, mapID string, x float64, status instancestate.UnitStatus) *instancestate.UnitState {
+		return &instancestate.UnitState{ZoneUnitIdentifier: identifier, UnitTypeIdentifier: unitType, MapIdentifier: mapID,
+			Position: instanceconfig.Position{X: x, Y: 10}, Status: status, TaggedBy: &player}
+	}
+	prev := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{
+		player:  unit("player:42", "", "cellar", 10, instancestate.UnitStatusIdle),
+		inCamp:  unit("rat-1", "rat", "yard", 10, instancestate.UnitStatusEngaged),
+		outside: unit("rat-2", "rat", "yard", 50, instancestate.UnitStatusEngaged),
+	}}
+	curr := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{
+		player:  unit("player:42", "", "yard", 10, instancestate.UnitStatusIdle),
+		inCamp:  unit("rat-1", "rat", "yard", 10, instancestate.UnitStatusDead),
+		outside: unit("rat-2", "rat", "yard", 50, instancestate.UnitStatusDead),
+	}}
+
+	events := inst.CollectQuestEventsForTest(prev, curr,
+		instance.VisitEventForTest{UnitID: player, Visit: instance.Visit{Map: "yard"}},
+		instance.VisitEventForTest{UnitID: player, Visit: instance.Visit{Map: "yard", Place: "camp"}})
+	assert.ElementsMatch(t, []instance.QuestEventForTest{
+		{UnitID: player, Type: "reach", Map: "yard", Places: []string{"camp"}},
+		{UnitID: player, Type: "reach", Map: "yard", Places: []string{"camp"}},
+		{UnitID: player, Type: "kill", Unit: "rat-1", UnitType: "rat", Map: "yard", Places: []string{"camp"}},
+		{UnitID: player, Type: "kill", Unit: "rat-2", UnitType: "rat", Map: "yard"},
+	}, events, "the map arrival, entering the camp, and a kill in it and one outside")
+}
+
+func TestApplyQuestEvents_CountsOnlyEventsInThePlace(t *testing.T) {
+	inst, _, slot, writeCh := progressInstance(t)
+	player := slot.CharacterUnitID
+	inst.ApplyQuestEvents(context.Background(), []instance.QuestEventForTest{
+		{UnitID: player, Type: "reach", Map: "yard"},
+		{UnitID: player, Type: "reach", Map: "cellar", Places: []string{"camp"}},
+		{UnitID: player, Type: "kill", Unit: "rat-2", UnitType: "rat", Map: "yard", Places: []string{"pond"}},
+	})
+	got, _ := inst.GetSlot(slot.ID)
+	assert.Equal(t, 0, got.Quests["camp"].Objectives[0].Count, "not in the camp, or a camp on another map")
+	assert.Equal(t, 0, got.Quests["camp"].Objectives[1].Count, "killed outside the camp")
+	assert.Equal(t, 1, got.Quests["rat-hunt"].Objectives[0].Count, "a kill anywhere still counts without a place")
+	nextMessage(t, writeCh)
+
+	inst.ApplyQuestEvents(context.Background(), []instance.QuestEventForTest{
+		{UnitID: player, Type: "reach", Map: "yard", Places: []string{"camp"}},
+		{UnitID: player, Type: "kill", Unit: "rat-1", UnitType: "rat", Map: "yard", Places: []string{"pond", "camp"}},
+	})
+	got, _ = inst.GetSlot(slot.ID)
+	assert.True(t, got.Quests["camp"].Ready())
 }
 
 func TestApplyQuestEvents_RecordsProgress(t *testing.T) {
@@ -228,9 +291,30 @@ func arriveInstance(t *testing.T) (*instance.Instance, *instance.InstanceSlot, c
 	return inst, slot, writeCh
 }
 
+func TestAcceptQuest_MeetsAPlaceReachObjectiveForWhereThePlayerIs(t *testing.T) {
+	camp := instanceconfig.ActiveQuest{QuestIdentifier: "camp", WorldVersionID: "wv-2", Objectives: []instanceconfig.ActiveObjective{
+		activeObjective("reach-camp", instanceconfig.QuestObjective{Type: "reach", Zone: "darkwood", Map: "yard", Place: "camp"}, 0, 1),
+	}}
+	inst := questInstance(t, &fakeQuestRails{active: map[string]instanceconfig.ActiveQuest{"camp": camp}})
+	inst.ZoneConfig.Maps = []instanceconfig.Map{yardCamp}
+	inst.Quests = []instanceconfig.Quest{{Identifier: "camp", OfferedBy: instanceconfig.NcuRef{Zone: "darkwood", NCU: "grizzle"},
+		TurnIn: &instanceconfig.NcuRef{Zone: "darkwood", NCU: "warden"}}}
+	slot, writeCh := addQuestSlot(t, inst)
+	player := slot.CharacterUnitID
+	state := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{
+		player: {ZoneUnitIdentifier: "player:42", MapIdentifier: "yard", Position: instanceconfig.Position{X: 5, Y: 5}},
+	}}
+	inst.ProcessTalksForTest(context.Background(), state, []instancestate.Talk{
+		{UnitID: player, NCUIdentifier: "grizzle", Map: "yard", AcceptQuest: "camp"},
+	})
+
+	assert.Equal(t, "quest-received", nextMessage(t, writeCh)["type"])
+	assert.Equal(t, "reach-camp", nextMessage(t, writeCh)["objective"])
+}
+
 func TestAcceptQuest_MeetsAReachObjectiveForWhereThePlayerIs(t *testing.T) {
 	inst, slot, writeCh := arriveInstance(t)
-	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "arrive", "yard")
+	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "arrive", "yard", nil)
 
 	assert.Equal(t, "quest-received", nextMessage(t, writeCh)["type"])
 	progress := nextMessage(t, writeCh)

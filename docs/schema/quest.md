@@ -50,7 +50,7 @@ Failing (for example, timer expiry) or abandoning a quest sets no flags; the pla
 
 ## Objective
 
-Every objective has a `type`, `text`, and a `zone`, and may name a `map` in that zone; its other fields depend on the type.
+Every objective has a `type`, `text`, and a `zone`, and may name a `map` in that zone (and a `place` on it, for `kill` and `reach`); its other fields depend on the type.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
@@ -58,6 +58,7 @@ Every objective has a `type`, `text`, and a `zone`, and may name a `map` in that
 | `text` | string | yes | What the quest log shows for the objective, like `"Kill 5 rats in the cellar"`. Never generated. |
 | `zone` | string | yes | Zone identifier, within the quest's world. The quest log lists the objective under this zone. |
 | `map` | string | no | Map identifier within that zone. What it means depends on the type. |
+| `place` | string | no | `kill` and `reach` only, and needs `map`: a [place](map.md#place) identifier on that map. |
 
 No two objectives in one quest may have the same content (every field but `text`). Progress is tracked per objective by its content, which is what lets it carry over to a new world version (see [Quests](../quests.md#world-versions)); rewording `text` keeps progress.
 
@@ -69,7 +70,7 @@ A `talk` objective and `turnIn` are independent, and may name the same NCU (talk
 |---|---|---|---|
 | `ncu` | string | yes | NCU identifier within the zone. With `map`, the NCU must be on that map. |
 
-**`kill`:** kill some number of a unit or unit type. With `map`, only kills on that map count.
+**`kill`:** kill some number of a unit or unit type. With `map`, only kills on that map count; with `place` too, only units that die inside that place (where places nest, a unit in the inner one is in the outer one too).
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -79,7 +80,7 @@ A `talk` objective and `turnIn` are independent, and may name the same NCU (talk
 
 Every player who can loot the unit gets credit for the kill.
 
-**`reach`:** enter the zone, or with `map`, that map. Arriving or spawning there both count.
+**`reach`:** enter the zone, or with `map`, that map, or with `place` too, that place on it. Arriving or spawning there both count, as does accepting the quest while there.
 
 **`use`:** use each of a list of [interactables](map.md#interactable), once each, in any order.
 Progress records which ones the player has used; the objective needs all of them.

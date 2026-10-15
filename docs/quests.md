@@ -13,8 +13,8 @@ live in one quests file.
 
 - **talk**: talk to a specific NCU. Starting any conversation with it counts.
 - **kill**: kill a number of units of a unit type, or one specific unit (a named mob), optionally
-  only on one map.
-- **reach**: enter a zone, or a specific map in it.
+  only on one map, or in one [place](schema/map.md#place) on it.
+- **reach**: enter a zone, a specific map in it, or a place on that map.
 - **use**: use each of a list of [interactables](schema/map.md#interactable) (snares, totems,
   cages) on the zone's maps. Each player uses them for themselves.
 
@@ -90,7 +90,9 @@ Abandoning a quest from the log goes through the game server.
 
 The game server tracks objectives in the zone the player is in: `talk` when they start a
 conversation with the NCU, `kill` when a matching unit they can loot dies, and
-`reach` when they arrive in the zone or on the map. Each step is saved to Rails as it happens.
+`reach` when they arrive in the zone, on the map, or in the place (accepting the quest while
+already there counts). A kill in a place counts when the unit dies inside it, wherever the player
+is. Each step is saved to Rails as it happens.
 
 A quest with no `turnIn` completes as soon as every objective is met. One with a `turnIn` is
 listed in that NCU's conversation: its `progressText` until it's finished, then its

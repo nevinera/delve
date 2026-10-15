@@ -8,7 +8,8 @@ RSpec.describe Validators::QuestReferences do
         "items" => {"rusty-dagger" => {}},
         "maps" => [
           {"identifier" => "entrance", "ncus" => [{"identifier" => "grizzle"}], "units" => [{"identifier" => "rat-king"}]},
-          {"identifier" => "depths", "interactables" => [{"identifier" => "snare-1"}, {"identifier" => "snare-2"}]}
+          {"identifier" => "depths", "interactables" => [{"identifier" => "snare-1"}, {"identifier" => "snare-2"}],
+           "places" => [{"identifier" => "nest"}]}
         ]
       }
     }
@@ -24,6 +25,8 @@ RSpec.describe Validators::QuestReferences do
         {"type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle", "map" => "entrance"},
         {"type" => "reach", "zone" => "goblin-cave", "map" => "depths"},
         {"type" => "reach", "zone" => "goblin-cave"},
+        {"type" => "reach", "zone" => "goblin-cave", "map" => "depths", "place" => "nest"},
+        {"type" => "kill", "zone" => "goblin-cave", "unitType" => "rat", "map" => "depths", "place" => "nest"},
         {"type" => "use", "zone" => "goblin-cave", "interactables" => ["snare-1", "snare-2"]},
         {"type" => "use", "zone" => "goblin-cave", "map" => "depths", "interactables" => ["snare-1"]}
       ],
@@ -83,6 +86,11 @@ RSpec.describe Validators::QuestReferences do
   it "rejects a use objective's unknown interactable, or one off its map" do
     expect_invalid(/no interactable "snare-9".*interactables\[1\]/, with_objective("type" => "use", "zone" => "goblin-cave", "interactables" => ["snare-1", "snare-9"]))
     expect_invalid(/no interactable "snare-1" on map "entrance"/, with_objective("type" => "use", "zone" => "goblin-cave", "map" => "entrance", "interactables" => ["snare-1"]))
+  end
+
+  it "rejects a place that isn't on the objective's map" do
+    expect_invalid(/map "entrance" has no place "nest".*place/, with_objective("type" => "reach", "zone" => "goblin-cave", "map" => "entrance", "place" => "nest"))
+    expect_invalid(/map "depths" has no place "den"/, with_objective("type" => "kill", "zone" => "goblin-cave", "unitType" => "rat", "map" => "depths", "place" => "den"))
   end
 
   it "rejects an unknown reward item" do

@@ -26,15 +26,19 @@ var errNotReady = errors.New("that quest isn't finished yet")
 var errNotTurnedInHere = errors.New("that quest isn't turned in here")
 
 // questEvent is something a player did that can meet an objective: talked
-// to an NCU, killed a unit (one they tagged), reached a map, or used an
-// interactable.
+// to an NCU, killed a unit (one they tagged), reached a map or a place on
+// it, or used an interactable.
 type questEvent struct {
-	UnitID       uuid.UUID // the player's unit
-	Type         string    // "talk", "kill", "reach" or "use", as objective types
-	NCU          string
-	Unit         string
-	UnitType     string
-	Map          string
+	UnitID   uuid.UUID // the player's unit
+	Type     string    // "talk", "kill", "reach" or "use", as objective types
+	NCU      string
+	Unit     string
+	UnitType string
+	Map      string
+	// Places are where it happened on Map: for a kill, every place around
+	// the unit killed; for a reach, the places just entered (every place
+	// around the player, on arriving on the map).
+	Places       []string
 	Interactable string
 }
 
@@ -63,11 +67,17 @@ func (inst *Instance) matches(objective instanceconfig.QuestObjective, event que
 	case "talk":
 		return objective.NCU == event.NCU
 	case "reach":
+		if objective.Place != "" {
+			return objective.Map == event.Map && slices.Contains(event.Places, objective.Place)
+		}
 		return objective.Map == "" || objective.Map == event.Map
 	case "use":
 		return (objective.Map == "" || objective.Map == event.Map) && slices.Contains(objective.Interactables, event.Interactable)
 	case "kill":
 		if objective.Map != "" && objective.Map != event.Map {
+			return false
+		}
+		if objective.Place != "" && !slices.Contains(event.Places, objective.Place) {
 			return false
 		}
 		if objective.Unit != "" {
@@ -80,8 +90,9 @@ func (inst *Instance) matches(objective instanceconfig.QuestObjective, event que
 
 // collectQuestEvents finds this tick's quest events: conversations started,
 // kills (credited to everyone who can loot them), players arriving on a
-// map (including spawning), and interactables used. Tick loop only.
-func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState) []questEvent {
+// map (including spawning) or in a place (from visits, this tick's
+// collectVisits), and interactables used. Tick loop only.
+func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState, visits []visitEvent) []questEvent {
 	if len(inst.Quests) == 0 {
 		return nil
 	}
@@ -91,6 +102,11 @@ func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState
 			events = append(events, questEvent{UnitID: talk.UnitID, Type: "talk", NCU: talk.NCUIdentifier})
 		}
 	}
+	for _, visit := range visits {
+		if visit.Visit.Place != "" {
+			events = append(events, questEvent{UnitID: visit.UnitID, Type: "reach", Map: visit.Visit.Map, Places: []string{visit.Visit.Place}})
+		}
+	}
 	for _, use := range curr.PendingUses {
 		events = append(events, questEvent{UnitID: use.UnitID, Type: "use", Interactable: use.Interactable, Map: use.Map})
 	}
@@ -98,7 +114,8 @@ func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState
 		before := prev.Units[id]
 		if strings.HasPrefix(unit.ZoneUnitIdentifier, "player:") {
 			if before == nil || before.MapIdentifier != unit.MapIdentifier {
-				events = append(events, questEvent{UnitID: id, Type: "reach", Map: unit.MapIdentifier})
+				events = append(events, questEvent{UnitID: id, Type: "reach", Map: unit.MapIdentifier,
+					Places: inst.placesAt(unit.MapIdentifier, unit.Position.X, unit.Position.Y)})
 			}
 			continue
 		}
@@ -106,10 +123,11 @@ func (inst *Instance) collectQuestEvents(prev, curr *instancestate.InstanceState
 		if !justDied {
 			continue
 		}
+		places := inst.placesAt(unit.MapIdentifier, unit.Position.X, unit.Position.Y)
 		for _, player := range killCredited(unit) {
 			events = append(events, questEvent{
 				UnitID: player, Type: "kill",
-				Unit: unit.ZoneUnitIdentifier, UnitType: unit.UnitTypeIdentifier, Map: unit.MapIdentifier,
+				Unit: unit.ZoneUnitIdentifier, UnitType: unit.UnitTypeIdentifier, Map: unit.MapIdentifier, Places: places,
 			})
 		}
 	}

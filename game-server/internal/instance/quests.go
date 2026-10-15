@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -184,9 +185,10 @@ func (inst *Instance) upgradeQuest(slotID uuid.UUID, worldCharacterID, questIden
 // AcceptQuest accepts questIdentifier, offered by the zone's NCU
 // ncuIdentifier, for the character in slotID, through Rails; then sends
 // quest-received and their new offers (or quest-accept-failed). A reach
-// objective for where they are (mapIdentifier, in this zone) is met
-// straight away. Calls Rails, so run it in its own goroutine.
-func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIdentifier, questIdentifier, mapIdentifier string) {
+// objective for where they are (mapIdentifier, in this zone, and places
+// on it) is met straight away. Calls Rails, so run it in its own
+// goroutine.
+func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIdentifier, questIdentifier, mapIdentifier string, places []string) {
 	inst.questMu.Lock()
 	defer inst.questMu.Unlock()
 	quest, err := inst.acceptQuest(slotID, ncuIdentifier, questIdentifier)
@@ -198,7 +200,7 @@ func (inst *Instance) AcceptQuest(ctx context.Context, slotID uuid.UUID, ncuIden
 	}
 	inst.sendJSONToSlot(slotID, questMsg{downBase: inst.downBase("quest-received"), Quest: quest})
 	if slot, ok := inst.GetSlot(slotID); ok {
-		here := questEvent{UnitID: slot.CharacterUnitID, Type: "reach", Map: mapIdentifier}
+		here := questEvent{UnitID: slot.CharacterUnitID, Type: "reach", Map: mapIdentifier, Places: places}
 		if err := inst.advanceQuest(ctx, slotID, slot.WorldCharacterDatabaseID, quest, here); err != nil {
 			slog.WarnContext(ctx, "failed to record quest progress", "error", err, "quest", questIdentifier)
 		}
@@ -306,6 +308,7 @@ func (inst *Instance) removeActiveQuest(slotID uuid.UUID, questIdentifier string
 
 // processTalks acts on each conversation started this tick (refreshing the
 // player's offers) and each quest accepted or turned in, off the tick loop.
+// Tick loop only, after collectVisits (for the places a player's in).
 func (inst *Instance) processTalks(ctx context.Context, talks []instancestate.Talk) {
 	for _, talk := range talks {
 		slot := inst.slotByUnitID(talk.UnitID)
@@ -314,7 +317,11 @@ func (inst *Instance) processTalks(ctx context.Context, talks []instancestate.Ta
 		}
 		switch {
 		case talk.AcceptQuest != "":
-			go inst.AcceptQuest(ctx, slot.ID, talk.NCUIdentifier, talk.AcceptQuest, talk.Map)
+			var places []string
+			if where, ok := inst.visitWhere[talk.UnitID]; ok && where.Map == talk.Map {
+				places = slices.Clone(where.Places)
+			}
+			go inst.AcceptQuest(ctx, slot.ID, talk.NCUIdentifier, talk.AcceptQuest, talk.Map, places)
 		case talk.TurnInQuest != "":
 			go inst.TurnInQuest(ctx, slot.ID, talk.NCUIdentifier, talk.TurnInQuest)
 		default:

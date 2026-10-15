@@ -182,6 +182,7 @@ export function questChoices(draft) {
         ncus: (mapFileData.ncus ?? []).map((ncu) => ({identifier: ncu.identifier, name: ncu.name || ncu.identifier})),
         units: (mapFileData.units ?? []).map((unit) => ({identifier: unit.identifier, unitType: unit.unitType})),
         interactables: (mapFileData.interactables ?? []).map((i) => ({identifier: i.identifier, name: i.name || i.identifier})),
+        places: (mapFileData.places ?? []).map((p) => ({identifier: p.identifier, name: p.name || p.identifier})),
       })),
       unitTypes: Object.keys(data.unitTypes ?? {}).sort().map((key) => ({key, name: unitTypeData(draft, key)?.name || key})),
     };

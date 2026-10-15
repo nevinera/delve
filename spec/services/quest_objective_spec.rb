@@ -20,6 +20,7 @@ RSpec.describe QuestObjective do
     base = {"type" => "kill", "zone" => "z", "unitType" => "rat", "count" => 5}
     expect(described_class.hash_of(base.merge("count" => 6))).not_to eq(described_class.hash_of(base))
     expect(described_class.hash_of(base.merge("map" => "m"))).not_to eq(described_class.hash_of(base))
+    expect(described_class.hash_of(base.merge("map" => "m", "place" => "p"))).not_to eq(described_class.hash_of(base.merge("map" => "m")))
     use = {"type" => "use", "zone" => "z", "interactables" => ["a", "b"]}
     expect(described_class.hash_of(use.merge("interactables" => ["a", "b", "c"]))).not_to eq(described_class.hash_of(use))
   end
