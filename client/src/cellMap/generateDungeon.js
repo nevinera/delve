@@ -15,6 +15,8 @@ import {VERSION, fillOf} from "./format";
 import {traceLabels} from "./places";
 
 const MARGIN = 2;
+const NECK = 2;
+const INWARD = {north: [0, 1], south: [0, -1], west: [1, 0], east: [-1, 0]};
 const GAP = 4;
 const TIGHT_GAP = 2;
 const ROOM_MIN = 6;
@@ -215,7 +217,11 @@ function cutExits(cols, rows, rooms, plan, carve, open, key, rng) {
     const spot = Math.max(1, Math.min(length - 2, at === undefined ? Math.round(length * (0.3 + 0.4 * rng())) : Math.round(at * (length - 1))));
     const edge = sideCell(side, spot, grid);
     const near = (rooms.some((room) => !room.vault) ? rooms.filter((room) => !room.vault) : rooms).map((room) => room.center).sort((p, q) => Math.abs(p[0] - edge[0]) + Math.abs(p[1] - edge[1]) - Math.abs(q[0] - edge[0]) - Math.abs(q[1] - edge[1]))[0];
-    carve(edge, near);
+    const [dc, dr] = INWARD[side];
+    for (let depth = 0; depth <= NECK; depth++) {
+      for (const along of [spot, spot + 1]) open[key(...sideCell(side, along, grid).map((v, i) => v + depth * [dc, dr][i]))] = 1;
+    }
+    carve(edge.map((v, i) => v + NECK * [dc, dr][i]), near);
     const isOpen = (i) => i >= 0 && i < length && open[key(...sideCell(side, i, grid))];
     let [from, to] = [spot, spot];
     while (isOpen(from - 1)) from--;

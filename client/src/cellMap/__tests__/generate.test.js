@@ -43,6 +43,14 @@ describe("generateCellMap", () => {
 
   // 45 maps: over a second alone, and past vitest's 5s default under a full
   // parallel run.
+  it("cuts each exit as a 10 foot gap, never a hallway running along the edge", () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const map = generateCellMap({cols: 100, rows: 100, seed, exits: ["north", "east", "south", "west"], theme: "dungeon"});
+      expect(map.exits).toHaveLength(4);
+      for (const {from, to} of map.exits) expect(to - from + 1).toBe(2);
+    }
+  });
+
   it("joins all its open ground, which only reaches the edge at its exits, each on its own side", {timeout: 30000}, () => {
     for (const tags of [[], ...TAGS.map((t) => [t]), ["burrow", "coral", "tight", "tree"]]) {
       for (const seed of [1, 2, 3]) {
