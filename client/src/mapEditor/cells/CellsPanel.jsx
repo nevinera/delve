@@ -67,13 +67,13 @@ export default function CellsPanel({cells, feetDimensions, hasImage, onRemoveIma
         <button type="button" onClick={() => change((d) => d.setSeed(Math.floor(Math.random() * 1_000_000)))}>Re-roll</button>
       </div>
       <ColorsSection draft={draft} change={change} />
-      {draft.grid.type === "hex" && <GenerateSection
+      <GenerateSection
         grid={draft.grid}
         onGenerate={(options) => {
           if (!window.confirm("Replace this map's cells, trails, bridges and exits with a generated map? Undo brings them back.")) return;
           change((d) => d.generated(generateCellMap({...options, theme: d.data.theme})));
         }}
-      />}
+      />
     </div>
   );
 }
@@ -110,7 +110,7 @@ function NewCellMap({feetDimensions, onCreate}) {
         <button type="button" onClick={() => setSize(gridOf(THEMES[theme].grids[0]).gridFor(feetDimensions))}>Fit to the map ({feetDimensions.width} × {feetDimensions.height} ft)</button>
       )}
       <button type="button" onClick={() => onCreate(CellMapDraft.blank({theme, ...size}))}>New cell map</button>
-      {THEMES[theme].grids[0] === "hex" && <GenerateSection grid={size} sized={false} onGenerate={(options) => onCreate(new CellMapDraft(generateCellMap({...options, theme})))} />}
+      <GenerateSection grid={size} sized={false} onGenerate={(options) => onCreate(new CellMapDraft(generateCellMap({...options, theme})))} />
     </div>
   );
 }

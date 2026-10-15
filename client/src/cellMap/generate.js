@@ -36,6 +36,7 @@ import {THEMES, VERSION, fillOf} from "./format";
 import {noise} from "./regions";
 import {PATHS} from "./style";
 import {traceLabels} from "./places";
+import {generateDungeon} from "./generateDungeon";
 
 export const TAGS = ["chamber", "hub", "burrow", "cavities", "coral", "chaotic", "tight", "tree", "connected", "dry", "wet", "rough", "paths"];
 
@@ -93,6 +94,7 @@ export function generateCellMap({cols, rows, seed = 1, connections = 0, exits, t
   const wanted = exits === undefined ? null : exitPlan(exits);
   const has = tagSet(tags);
   const rng = random(seed);
+  if (THEMES[theme].grids[0] === "square") return generateDungeon({cols, rows, seed, wanted, connections, tags: [...has], theme}, rng);
   const grid = new Grid(cols, rows);
 
   const areas = growAreas(grid, has, rng);
