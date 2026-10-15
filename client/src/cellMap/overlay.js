@@ -1,6 +1,6 @@
 // Editor overlays drawn over a cellmap's render, in feet (the caller sets
 // the scale): hex outlines, cells tinted by terrain, and trails as authored.
-// Shared by the cell editor page and the map editor's Cells tab.
+// Used by the map editor's Cells tab.
 import {CELL_SIZE, geometryOf, gridOf} from "./grid";
 import {terrainsOf} from "./format";
 import {exitEdge} from "./exits";

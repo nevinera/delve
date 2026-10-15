@@ -25,7 +25,6 @@ export default defineConfig(({command}) => ({
         abilityEditor: resolve(__dirname, "client/src/abilityEditor/main.jsx"),
         classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
         worldBuilder: resolve(__dirname, "client/src/worldBuilder/main.jsx"),
-        cellEditor: resolve(__dirname, "client/src/cellEditor/main.jsx"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",
