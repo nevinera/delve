@@ -1,5 +1,5 @@
 // Generates a square-grid dungeon cell map: rooms scattered over the rock,
-// joined by one-cell corridors (a spanning tree of them, plus a few loops
+// joined by two-cell (10 foot) corridors (a spanning tree of them, plus a few loops
 // unless the map is a "tree"), with exits cut from the nearest room out to
 // the edge. Called by generateCellMap (see generate.js) for themes on a
 // square grid, with its random number generator and checked exit plan.
@@ -11,11 +11,11 @@ import {SIDES, sideCell, sideLength} from "./exits";
 import {VERSION, fillOf} from "./format";
 import {traceLabels} from "./places";
 
-const MARGIN = 1;
-const GAP = 2;
-const TIGHT_GAP = 1;
-const ROOM_MIN = 3;
-const ROOM_MAX = 9;
+const MARGIN = 2;
+const GAP = 4;
+const TIGHT_GAP = 2;
+const ROOM_MIN = 6;
+const ROOM_MAX = 18;
 // Rooms' share of the map inside the margin, and the fewest and most tried.
 const COVER = 0.32;
 const TIGHT_COVER = 0.42;
@@ -39,8 +39,18 @@ export function generateDungeon({cols, rows, seed, wanted, connections, tags, th
     roomOf[key(c, r)] = i;
   }));
 
+  const brush = ([c, r]) => [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]].filter((cell) => inBrush(cols, rows, [c, r], cell));
+  const isRoom = (c, r) => c >= 0 && r >= 0 && c < cols && r < rows && roomOf[key(c, r)] >= 0;
+  // How many cells of a corridor run flush along a room's wall, outside it.
+  const flush = (path) => path.reduce((n, {cell, horizontal}) => n + brush(cell).filter(([c, r]) => {
+    if (isRoom(c, r)) return false;
+    return (horizontal ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]]).some(([dc, dr]) => isRoom(c + dc, r + dr));
+  }).length, 0);
   const carve = (from, to) => {
-    for (const [c, r] of elbow(from, to, rng)) open[key(c, r)] = 1;
+    const first = rng() < 0.5;
+    const tries = [elbow(from, to, first), elbow(from, to, !first)];
+    const path = flush(tries[0]) <= flush(tries[1]) ? tries[0] : tries[1];
+    for (const {cell} of path) for (const [c, r] of brush(cell)) open[key(c, r)] = 1;
   };
   for (const [a, b] of links(rooms, has, rng)) carve(centerOf(rooms[a]), centerOf(rooms[b]));
   const exits = cutExits(cols, rows, rooms, wanted ?? rng.shuffle(SIDES).slice(0, connections).map((side) => ({side})), carve, open, key, rng);
@@ -50,6 +60,13 @@ export function generateDungeon({cols, rows, seed, wanted, connections, tags, th
   const cells = Array.from({length: rows}, (_, r) => Array.from({length: cols}, (_, c) => (open[key(c, r)] ? ground[key(c, r)] : fill)).join(""));
   const places = placesOf(cols, rows, open, roomOf, rooms.length);
   return {version: VERSION, theme, grid: {type: "square", cols, rows}, seed, cells, ...(exits.length ? {exits} : {}), ...(places.length ? {places} : {})};
+}
+
+// Corridors are two cells (10 feet) wide: a 2x2 brush along their line,
+// which keeps off the map's edge except where the line itself is on it.
+function inBrush(cols, rows, [c, r], [nc, nr]) {
+  const fits = (n, base, size) => n < size && (n === base || (n > 0 && n < size - 1) || base === 0 || base === size - 1);
+  return fits(nc, c, cols) && fits(nr, r, rows);
 }
 
 const eachCell = ({col, row, w, h}, fn) => {
@@ -108,13 +125,14 @@ function links(rooms, has, rng) {
 }
 
 // The cells of a corridor with one bend, from one cell to another, going
-// along the row or the column first.
-function elbow([c1, r1], [c2, r2], rng) {
+// along the row first or the column first, each with whether its stretch
+// runs along a row.
+function elbow([c1, r1], [c2, r2], rowFirst) {
   const out = [];
-  const [bc, br] = rng() < 0.5 ? [c2, r1] : [c1, r2];
+  const [bc, br] = rowFirst ? [c2, r1] : [c1, r2];
   const run = ([ca, ra], [cb, rb]) => {
     const steps = Math.max(Math.abs(cb - ca), Math.abs(rb - ra));
-    for (let k = 0; k <= steps; k++) out.push([ca + Math.sign(cb - ca) * k, ra + Math.sign(rb - ra) * k]);
+    for (let k = 0; k <= steps; k++) out.push({cell: [ca + Math.sign(cb - ca) * k, ra + Math.sign(rb - ra) * k], horizontal: ra === rb && ca !== cb});
   };
   run([c1, r1], [bc, br]);
   run([bc, br], [c2, r2]);
