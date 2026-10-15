@@ -1690,6 +1690,7 @@ export default function App({
     [activeQuests, questDefinitions, zoneIdentifier, questZoneNames]
   );
   const [ncus, setNcus] = useState({});
+  const [groundAreas, setGroundAreas] = useState([]);
   const ncusRef = useRef({});
   const [charSheetOpen, setCharSheetOpen] = useState(false);
   const [classOpen, setClassOpen] = useState(false);
@@ -2241,12 +2242,13 @@ export default function App({
           redirectTo(worldReturnUrl);
         }
       },
-      onStateChange: ({ units: u, ncus: n = {}, combatEvents = [], lootEvents = [], lootFailures = [], ...rest }) => {
+      onStateChange: ({ units: u, ncus: n = {}, groundAreas: ga = [], combatEvents = [], lootEvents = [], lootFailures = [], ...rest }) => {
         if ("expiresAt" in rest) setExpiresAt(rest.expiresAt);
         unitsRef.current = u;
         setUnits(u);
         ncusRef.current = n;
         setNcus(n);
+        setGroundAreas(ga);
         const selfForHeartbeat = Object.values(u).find(un => un.zone_unit_identifier === selfIdentifierRef.current);
         const heartbeatSeq = selfForHeartbeat?.last_heartbeat_seq;
         if (heartbeatSeq != null && heartbeatSeq !== lastHeartbeatSeqRef.current) {
@@ -2792,6 +2794,7 @@ export default function App({
         zoneSourceSha={zoneSourceSha}
         units={units}
         ncus={ncus}
+        groundAreas={groundAreas}
         questNcus={questNcuSet}
         selfIdentifier={selfIdentifier}
         characterTokenUrl={characterTokenUrl}

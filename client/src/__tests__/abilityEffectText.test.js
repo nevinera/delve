@@ -4,6 +4,27 @@ import {combatStats} from "./combatStatsFixture";
 
 const noStats = {combatStats: combatStats()};
 
+describe("describeEffects groundArea", () => {
+  const area = (extra) => ({castTime: null, globalCooldown: 1.5, effects: [{type: "groundArea", affects: "bAll", duration: 6, tickInterval: 2, shape: {type: "circle", at: "self", radius: 8}, onTick: [{type: "harm", amount: 5}], ...extra}]});
+
+  it("describes the shape, duration and tick effects", () => {
+    expect(describeEffects(area(), noStats)).toEqual([[
+      "Creates a 8 radius circle for 6s, every 2s:",
+      "  Deals 5 physical damage to enemies in it",
+    ]]);
+  });
+
+  it("shows the range of an aimed area", () => {
+    const out = describeEffects(area({range: 30, shape: {type: "line", at: "self", length: 20, width: 4, direction: "target"}}), noStats);
+    expect(out[0][0]).toBe("Creates a 20 long, 4 wide line for 6s (range 30), every 2s:");
+  });
+
+  it("names allies for gAll", () => {
+    const out = describeEffects(area({affects: "gAll", onTick: [{type: "heal", amount: 3}]}), noStats);
+    expect(out[0][1]).toBe("  Heals allies in it for 3");
+  });
+});
+
 describe("describeEffects", () => {
   it("describes a splash around the target", () => {
     const ability = {castTime: null, globalCooldown: 1, effects: [{type: "harm", affects: "bTarget", amount: [2, 4], range: 30, radius: 6}]};

@@ -6,6 +6,7 @@ const Canvas = forwardRef(function Canvas({
   zoneSourceSha,
   units,
   ncus,
+  groundAreas,
   questNcus,
   activeQuests,
   zoneIdentifier,
@@ -61,6 +62,10 @@ const Canvas = forwardRef(function Canvas({
     managerRef.current?.updateUnits(units, selfIdentifier, characterTokenUrl);
     managerRef.current?.syncStatusAuras(units, statusCatalog ?? {}, stockAssets);
   }, [units, statusCatalog, stockAssets]);
+
+  useEffect(() => {
+    managerRef.current?.syncGroundAreas(groundAreas ?? [], stockAssets);
+  }, [groundAreas, units, stockAssets]);
 
   useEffect(() => {
     managerRef.current?.updateNcus(ncus ?? {});

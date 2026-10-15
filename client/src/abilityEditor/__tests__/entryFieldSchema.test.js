@@ -139,3 +139,20 @@ describe("placeholderEntry", () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe("groundArea effects", () => {
+  it("offers the groundArea type", () => {
+    expect(selectOptions("type")).toContain("groundArea");
+  });
+
+  it("edits shape, onTick and graphic as JSON", () => {
+    expect(widgetFor("shape")).toEqual("json");
+    expect(widgetFor("onTick")).toEqual("json");
+    expect(widgetFor("graphic")).toEqual("json");
+  });
+
+  it("forces the groundArea fields into the list", () => {
+    const fields = entryFieldsFor("effects", {type: "groundArea", affects: "bAll"});
+    expect(fields).toEqual(["type", "affects", "shape", "range", "duration", "tickInterval", "onTick", "graphic"]);
+  });
+});

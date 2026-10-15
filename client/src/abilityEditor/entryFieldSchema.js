@@ -11,8 +11,8 @@ const SELECT_OPTIONS = {
   condition: ["always", "onHit", "onMiss"],
   location: ["self", "affected"],
   impactTiming: ["", "after", "before", "centered"],
-  type: ["harm", "heal", "resource", "status"],
-  affects: ["bTarget", "gTarget", "bAll", "gAll", "self"],
+  type: ["harm", "heal", "resource", "status", "groundArea"],
+  affects: ["bTarget", "gTarget", "bAll", "gAll", "self", "all"],
   // "physical" (default) or "magic" - see Validators::PowerEffectValidator::
   // DAMAGE_SCHOOLS. Used both by a top-level harm/heal effect's own
   // `school` field and (locally, in StatusEditor) a recurring
@@ -27,13 +27,17 @@ const RANGE_FIELDS = new Set(["amount", "range"]);
 
 const NUMBER_FIELDS = new Set([
   "duration", "scale", "spriteColumns", "spriteRows", "spriteFrameCount",
-  "spriteFrameRate", "volumeScale", "delta", "radius",
+  "spriteFrameRate", "volumeScale", "delta", "radius", "tickInterval",
 ]);
+
+// Nested objects of a groundArea effect, edited as raw JSON.
+const JSON_FIELDS = new Set(["shape", "onTick", "graphic"]);
 
 export function widgetFor(field) {
   if (field === "status") return "status";
   if (SELECT_OPTIONS[field]) return "select";
   if (RANGE_FIELDS.has(field)) return "range";
+  if (JSON_FIELDS.has(field)) return "json";
   if (field === "tags") return "tags";
   if (field === "color") return "color";
   if (NUMBER_FIELDS.has(field)) return "number";
@@ -67,6 +71,8 @@ const ENTRY_FIELDS = {
 // list.
 const RESOURCE_EFFECT_FIELDS = ["type", "affects", "resourceName", "delta", "range"];
 
+const GROUND_AREA_FIELDS = ["type", "affects", "shape", "range", "duration", "tickInterval", "onTick", "graphic"];
+
 // An effect aimed at a target can splash around it (radius), so offer the
 // field even before it's set.
 export function entryFieldsFor(section, entry) {
@@ -80,6 +86,13 @@ function baseEntryFields(section, entry) {
     const fields = Object.keys(entry);
     if (!fields.includes("status")) fields.push("status");
     if (!fields.includes("duration")) fields.push("duration");
+    return fields;
+  }
+  if (section === "effects" && entry.type === "groundArea") {
+    const fields = Object.keys(entry);
+    for (const field of GROUND_AREA_FIELDS) {
+      if (!fields.includes(field)) fields.push(field);
+    }
     return fields;
   }
   if (section === "effects" && entry.type === "resource") {

@@ -72,6 +72,7 @@ module Validators
         if type == "cone" && given?(shape, "offset")
           offset = require_numeric!(shape, "offset", path: path)
           raise ValidationError.new("offset must be 0 or more", path: child_path(path, "offset")) if offset.negative?
+          raise ValidationError.new("offset must be less than length", path: child_path(path, "offset")) unless offset < shape["length"]
         end
       end
     end

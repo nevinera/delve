@@ -1,6 +1,7 @@
 import { computeChecksum } from "./checksum";
 import { visibleUnits } from "./stealthView";
 import { applyFullState, applyDelta, applyFullNCUs, applyNCUDelta } from "./state";
+import { applyFullGroundAreas, applyGroundAreaDelta } from "./groundAreas";
 
 const HEARTBEAT_MS = 300;
 // How long to remember what we've sent, keyed by seq, for matching a server
@@ -46,6 +47,7 @@ export class GameConnection {
     this._heartbeatTimer = null;
     this._units = {};
     this._ncus = {};
+    this._groundAreas = [];
     // Latest scheduled delivery time (epoch ms) for each direction, so
     // _scheduleOrdered can enforce in-order delivery - see its comment.
     this._nextSendAt = 0;
@@ -116,22 +118,24 @@ export class GameConnection {
     if (msg.type === "instance-state") {
       this._units = applyFullState(msg);
       this._ncus = applyFullNCUs(msg);
+      this._groundAreas = applyFullGroundAreas(msg);
       const local = await computeChecksum(this._units);
       if (local !== msg.checksum) {
         console.warn("checksum mismatch after full state", { server: msg.checksum, local });
       }
       // expiresAt is only ever on full state (epoch ms, or null when the
       // world version isn't expiring); deltas leave it out entirely.
-      this._onStateChange?.({ units: visibleUnits(this._units, msg.stealth_view), ncus: this._ncus, expiresAt: msg.expires_at ?? null });
+      this._onStateChange?.({ units: visibleUnits(this._units, msg.stealth_view), ncus: this._ncus, groundAreas: this._groundAreas, expiresAt: msg.expires_at ?? null });
     } else if (msg.type === "delta") {
       this._units = applyDelta(this._units, msg);
       this._ncus = applyNCUDelta(this._ncus, msg);
+      this._groundAreas = applyGroundAreaDelta(this._groundAreas, msg);
       const local = await computeChecksum(this._units);
       if (local !== msg.checksum) {
         console.warn("checksum mismatch after delta", { server: msg.checksum, local });
         this._send({ direction: "up", type: "full-state-request" });
       }
-      this._onStateChange?.({ units: visibleUnits(this._units, msg.stealth_view), ncus: this._ncus, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
+      this._onStateChange?.({ units: visibleUnits(this._units, msg.stealth_view), ncus: this._ncus, groundAreas: this._groundAreas, combatEvents: msg.combat_events ?? [], lootEvents: msg.loot_events ?? [], lootFailures: msg.loot_failures ?? [] });
     } else {
       this._onServerMessage?.(msg);
     }

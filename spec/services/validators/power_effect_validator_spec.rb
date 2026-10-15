@@ -48,6 +48,11 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
         expect { described_class.validate!(effect) }.not_to raise_error
       end
 
+      it "rejects a cone whose offset reaches its length" do
+        effect = with_shape(type: "cone", offset: 25, length: 25, width: 20)
+        expect { described_class.validate!(effect) }.to raise_error(Validators::ValidationError, /offset must be less than length/)
+      end
+
       it "accepts rings, lines and cones" do
         ring = with_shape(type: "ring", at: "self", innerRadius: 4, outerRadius: 9).except("range")
         line = with_shape(type: "line", length: 30, width: 4, direction: "facing").except("range")

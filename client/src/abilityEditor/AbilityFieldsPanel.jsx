@@ -190,8 +190,35 @@ function TagsField({value, onChange}) {
   return <input type="text" value={text} onChange={handleChange} />;
 }
 
+// Edits a nested object as JSON text; only a parseable draft is emitted, so
+// a half-typed edit never reaches the draft.
+function JsonField({value, onChange}) {
+  const [text, setText] = useState(value == null ? "" : JSON.stringify(value));
+  const [invalid, setInvalid] = useState(false);
+
+  function handleChange(e) {
+    const raw = e.target.value;
+    setText(raw);
+    if (raw.trim() === "") {
+      setInvalid(false);
+      onChange(null);
+      return;
+    }
+    try {
+      onChange(JSON.parse(raw));
+      setInvalid(false);
+    } catch {
+      setInvalid(true);
+    }
+  }
+
+  return <textarea className={invalid ? "invalid" : undefined} rows={3} value={text} onChange={handleChange} aria-invalid={invalid} />;
+}
+
 function EntryField({field, value, onChange, stockAssets}) {
   switch (widgetFor(field)) {
+    case "json":
+      return <JsonField value={value} onChange={onChange} />;
     case "select":
       return <SelectField field={field} value={value} onChange={onChange} />;
     case "range":

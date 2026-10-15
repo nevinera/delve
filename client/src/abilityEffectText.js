@@ -104,9 +104,34 @@ function effectLine(effect, ability, ctx) {
       const head = `Applies ${status.name}${kind} to ${who} for ${num(effect.duration)}s`;
       return [head, ...statusEffectLines(status, {...ctx}).map((l) => `  ${l}`)];
     }
+    case "groundArea":
+      return groundAreaLines(effect, ability, ctx);
     default:
       return [];
   }
+}
+
+const AREA_RECIPIENTS = {bAll: "enemies in it", gAll: "allies in it", all: "everyone in it"};
+
+function shapeText(shape = {}) {
+  const at = shape.at === "target" ? " on the target" : "";
+  switch (shape.type) {
+    case "circle": return `a ${num(shape.radius)} radius circle${at}`;
+    case "ring": return `a ring ${num(shape.innerRadius)} to ${num(shape.outerRadius)} out${at}`;
+    case "line": return `a ${num(shape.length)} long, ${num(shape.width)} wide line`;
+    case "cone": return `a ${num(shape.length)} long cone, ${num(shape.width)} wide`;
+    default: return "an area";
+  }
+}
+
+function groundAreaLines(effect, ability, ctx) {
+  const every = effect.tickInterval ?? 1;
+  const head = `Creates ${shapeText(effect.shape)} for ${num(effect.duration)}s${rangeText(effect.range)}, every ${num(every)}s:`;
+  const who = AREA_RECIPIENTS[effect.affects] ?? "everyone in it";
+  const ticks = (effect.onTick || []).flatMap((tick) =>
+    effectLine({...tick, affects: who, range: undefined, radius: undefined}, {...ability, castTime: every}, ctx).map((l) => `  ${l}`)
+  );
+  return [head, ...ticks];
 }
 
 // One entry per effect, each a list of lines (first is the effect itself,

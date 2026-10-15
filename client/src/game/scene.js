@@ -9,6 +9,7 @@ import { computeMapFill } from "./mapFill.js";
 import { SceneLighting } from "./lighting.js";
 import { CellGroundQueue, groundPixelsPerFoot } from "./cellGrounds.js";
 import { inUseRange, interactableStates } from "./interactables.js";
+import { areaColor, areaOpacity, areaOutline, DEFAULT_AREA_TEXTURE_SCALE } from "./groundAreas.js";
 
 const DEG = Math.PI / 180;
 const BASE_PLAYER_SPEED = 20.0; // feet per second — must match server
@@ -27,6 +28,8 @@ const CAMERA_STICK_PITCH_RATE = 60 * DEG; // radians/sec at full deflection
 const LONG_PRESS_MS = 500; // touch substitute for right-click
 const DRAG_THRESHOLD_SQ = 9; // px^2; below this a pointer down/up pair counts as a tap/click
 const PINCH_ZOOM_SENSITIVITY = 0.003; // per px of finger-distance change
+// Ground areas lie a quarter of the way up a token (y ~0.31), under the tokens.
+const GROUND_AREA_HEIGHT = 0.08;
 const EFFECT_HEIGHT = 0.4; // graphic effects float just above the tokens' top surface (y ~0.31)
 const DEFAULT_SPRITE_FRAME_RATE = 8; // fps, used when spriteFrameRate is omitted
 
@@ -801,6 +804,7 @@ export class SceneManager {
     this._animId = null;
 
     this._activeEffects = []; // { sprite, mat, startedAt, durationMs, fadeStartMs }
+    this._groundAreaMeshes = new Map(); // area id → { mesh, key, texture }
     this._statusAuras = new Map(); // `${unitId}:${statusName}:${applierId}` → { plane, mat, texture, ... } (or a pending placeholder while its texture loads)
 
     // Targeting visuals
@@ -1885,6 +1889,89 @@ export class SceneManager {
     this._onCanvasResize?.(this._canvas.getBoundingClientRect());
   }
 
+  // Draws the live groundArea effects on the player's current map as flat,
+  // tinted and/or tiled-texture meshes just above the ground. An area whose
+  // shape or map changed (a recast moves it) is rebuilt.
+  syncGroundAreas(areas, stockAssets) {
+    const wanted = new Set();
+    for (const area of areas) {
+      if (area.map_identifier !== this._selfMapIdentifier) continue;
+      const toWorld = this._mapToWorldByMap.get(area.map_identifier);
+      if (!toWorld) continue;
+      wanted.add(area.id);
+      const key = JSON.stringify([area.shape, area.graphic, area.affects, area.map_identifier]);
+      const existing = this._groundAreaMeshes.get(area.id);
+      if (existing?.key === key) continue;
+      if (existing) this._removeGroundArea(area.id);
+      this._spawnGroundArea(area, key, toWorld, stockAssets);
+    }
+    for (const id of [...this._groundAreaMeshes.keys()]) {
+      if (!wanted.has(id)) this._removeGroundArea(id);
+    }
+  }
+
+  _removeGroundArea(id) {
+    const entry = this._groundAreaMeshes.get(id);
+    this._groundAreaMeshes.delete(id);
+    if (!entry?.mesh) return;
+    entry.mesh.removeFromParent();
+    entry.mesh.geometry.dispose();
+    entry.mesh.material.dispose();
+    entry.mesh.material.map?.dispose();
+  }
+
+  _spawnGroundArea(area, key, toWorld, stockAssets) {
+    const { outer, hole } = areaOutline(area.shape);
+    if (outer.length < 3) return;
+    const graphic = area.graphic ?? {};
+    const textureScale = graphic.textureScale > 0 ? graphic.textureScale : DEFAULT_AREA_TEXTURE_SCALE;
+
+    const toVec = ([x, y]) => {
+      const [wx, wz] = toWorld(x, y);
+      return new THREE.Vector2(wx, wz);
+    };
+    const contour = outer.map(toVec);
+    const holes = hole ? [hole.map(toVec)] : [];
+    const vertices = [...contour, ...holes.flat()];
+    const positions = [];
+    const uvs = [];
+    for (const v of vertices) {
+      positions.push(v.x, 0, v.y);
+      uvs.push(v.x / textureScale, v.y / textureScale);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(THREE.ShapeUtils.triangulateShape(contour, holes).flat());
+
+    const tint = areaColor(area);
+    const material = new THREE.MeshBasicMaterial({
+      transparent: true, opacity: areaOpacity(area), depthWrite: false, side: THREE.DoubleSide,
+    });
+    if (tint) material.color.set(`#${tint.replace(/^#/, "")}`);
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.y = GROUND_AREA_HEIGHT;
+    mesh.renderOrder = -1;
+    mesh.frustumCulled = false;
+    this._scene.add(mesh);
+    const entry = { mesh, key };
+    this._groundAreaMeshes.set(area.id, entry);
+
+    if (graphic.textureURL) {
+      const url = resolveStockAssetUrl(graphic.textureURL, "graphics", stockAssets) ?? new URL(graphic.textureURL, this._zoneBaseUrl ?? window.location.href).href;
+      new THREE.TextureLoader().load(url, (texture) => {
+        if (this._groundAreaMeshes.get(area.id) !== entry) {
+          texture.dispose();
+          return;
+        }
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        material.map = texture;
+        material.needsUpdate = true;
+      });
+    }
+  }
+
   dispose() {
     if (this._animId) cancelAnimationFrame(this._animId);
     this._cellGrounds?.stop();
@@ -1896,6 +1983,7 @@ export class SceneManager {
       }
     }
     this._statusAuras.clear();
+    for (const id of [...this._groundAreaMeshes.keys()]) this._removeGroundArea(id);
     this._renderer.dispose();
   }
 
