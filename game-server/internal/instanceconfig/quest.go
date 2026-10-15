@@ -28,7 +28,7 @@ type NcuRef struct {
 }
 
 // QuestObjective is one of a quest's objectives; which fields apply
-// depends on Type (talk, kill, reach).
+// depends on Type (talk, kill, reach, use).
 type QuestObjective struct {
 	Type     string `json:"type"`
 	Text     string `json:"text"` // for the quest log; not part of its hash
@@ -38,6 +38,9 @@ type QuestObjective struct {
 	UnitType string `json:"unitType,omitempty"`
 	Count    int    `json:"count,omitempty"`
 	Map      string `json:"map,omitempty"`
+	// Place is a place on Map, for reach and kill objectives: entering it,
+	// or kills inside it.
+	Place string `json:"place,omitempty"`
 	// Interactables are a use objective's: each, once (not a count).
 	Interactables []string `json:"interactables,omitempty"`
 }

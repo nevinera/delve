@@ -137,6 +137,15 @@ RSpec.describe Validators::QuestValidator, type: :validator do
       expect_invalid(/exactly one of unit or unitType/, with_objective(both))
     end
 
+    it "allows a place only on reach and kill objectives, with a map" do
+      reach = {"type" => "reach", "zone" => "goblin-cave", "place" => "nest"}
+      expect_invalid(/place needs a map/, with_objective(reach))
+      expect_invalid(/place is only for reach and kill/, with_objective("type" => "talk", "zone" => "goblin-cave", "ncu" => "grizzle", "map" => "depths", "place" => "nest"))
+      expect { described_class.validate!(with_objective(reach.merge("map" => "depths"))) }.not_to raise_error
+      kill = {"type" => "kill", "zone" => "goblin-cave", "unitType" => "rat", "map" => "depths", "place" => "nest"}
+      expect { described_class.validate!(with_objective(kill)) }.not_to raise_error
+    end
+
     it "requires a use objective's interactables, each once, and no count" do
       use = {"type" => "use", "zone" => "goblin-cave"}
       expect_invalid(/interactables is required/, with_objective(use))

@@ -197,11 +197,12 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			for _, pending := range state.PendingLootClaims {
 				go inst.fireLootAward(ctx, pending)
 			}
-			if events := inst.collectQuestEvents(prevState, state); len(events) > 0 {
-				go inst.ApplyQuestEvents(ctx, events)
-			}
-			if visits := inst.collectVisits(state); len(visits) > 0 {
+			visits := inst.collectVisits(state)
+			if len(visits) > 0 {
 				go inst.RecordVisits(ctx, visits)
+			}
+			if events := inst.collectQuestEvents(prevState, state, visits); len(events) > 0 {
+				go inst.ApplyQuestEvents(ctx, events)
 			}
 			inst.processTalks(ctx, state.PendingTalks)
 			inst.tickQuestTimers(ctx, now)

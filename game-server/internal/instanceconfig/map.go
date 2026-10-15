@@ -21,7 +21,8 @@ type Map struct {
 }
 
 // Place is a named area of a map (docs/schema/map.md#place). The game reads
-// only its outline, to record which places a player has visited.
+// only its outline, to record which places a player has visited and for
+// quest objectives in a place.
 type Place struct {
 	Identifier string     `json:"identifier"` // Required: unique on the map
 	Polygon    []Location `json:"polygon"`    // Required: ≥3 points, closed back to the first

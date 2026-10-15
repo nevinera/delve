@@ -8,6 +8,7 @@ module Validators
     MAX_TIMER_SECONDS = 60 * 60
     OBJECTIVE_TYPES = %w[talk kill reach use].freeze
     MAX_INTERACTABLES = 32
+    PLACE_TYPES = %w[reach kill].freeze
 
     # The timer in seconds, or nil for a malformed one.
     def self.timer_seconds(timer)
@@ -98,12 +99,25 @@ module Validators
       require_object!(data, path: path)
       require_one_of!(data["type"], OBJECTIVE_TYPES, path: child_path(path, "type"))
       %w[zone text].each { |key| require_non_empty_string!(data, key, path: path) }
-      require_non_empty_string!(data, "map", path: path) if given?(data, "map")
+      validate_where!(data, path: path)
       case data["type"]
       when "talk" then require_non_empty_string!(data, "ncu", path: path)
       when "kill" then validate_kill!(data, path: path)
       when "use" then validate_use!(data, path: path)
       end
+    end
+
+    def validate_where!(data, path:)
+      require_non_empty_string!(data, "map", path: path) if given?(data, "map")
+      validate_place!(data, path: path) if given?(data, "place")
+    end
+
+    # A place on the objective's map, so it needs one.
+    def validate_place!(data, path:)
+      place_path = child_path(path, "place")
+      raise ValidationError.new("place is only for reach and kill objectives", path: place_path) unless PLACE_TYPES.include?(data["type"])
+      require_non_empty_string!(data, "place", path: path)
+      raise ValidationError.new("place needs a map", path: place_path) unless given?(data, "map")
     end
 
     # The interactables to use, each once: a list, not a count.

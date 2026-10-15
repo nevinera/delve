@@ -206,7 +206,7 @@ func TestAcceptQuest_AcceptsThroughRailsAndRefreshesOffers(t *testing.T) {
 	inst := questInstance(t, rails)
 	slot, writeCh := addQuestSlot(t, inst)
 
-	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt", "")
+	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt", "", nil)
 	received := nextMessage(t, writeCh)
 	assert.Equal(t, "quest-received", received["type"])
 	assert.Equal(t, "rat-hunt", received["quest"].(map[string]any)["quest_identifier"])
@@ -231,7 +231,7 @@ func TestAcceptQuest_RefusesQuestsTheNCUDoesntOffer(t *testing.T) {
 			inst := questInstance(t, rails)
 			slot, writeCh := addQuestSlot(t, inst)
 
-			inst.AcceptQuest(context.Background(), slot.ID, tc.ncu, tc.quest, "")
+			inst.AcceptQuest(context.Background(), slot.ID, tc.ncu, tc.quest, "", nil)
 			msg := nextMessage(t, writeCh)
 			assert.Equal(t, "quest-accept-failed", msg["type"])
 			assert.Equal(t, tc.quest, msg["quest"])
@@ -244,7 +244,7 @@ func TestAcceptQuest_ReportsARailsRefusal(t *testing.T) {
 	inst := questInstance(t, &fakeQuestRails{refuse: "rat-hunt is already completed"})
 	slot, writeCh := addQuestSlot(t, inst)
 
-	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt", "")
+	inst.AcceptQuest(context.Background(), slot.ID, "grizzle", "rat-hunt", "", nil)
 	msg := nextMessage(t, writeCh)
 	assert.Equal(t, "quest-accept-failed", msg["type"])
 	assert.Contains(t, msg["error"], "already completed")

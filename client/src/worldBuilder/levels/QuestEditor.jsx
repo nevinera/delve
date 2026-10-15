@@ -41,6 +41,11 @@ const ncuOptions = (zone, map = null) => (zone?.maps ?? [])
   .filter((m) => !map || m.key === map)
   .flatMap((m) => m.ncus.map((ncu) => ({value: ncu.identifier, label: map ? ncu.name : `${ncu.name} (${m.name})`})));
 
+// Places on one map; reach and kill objectives can name one.
+const PLACE_TYPES = ["reach", "kill"];
+const placeOptions = (zone, map) => ((zone?.maps ?? []).find((m) => m.key === map)?.places ?? [])
+  .map((p) => ({value: p.identifier, label: p.name === p.identifier ? p.identifier : `${p.name} (${p.identifier})`}));
+
 const interactableOptions = (zone, map = null) => (zone?.maps ?? [])
   .filter((m) => !map || m.key === map)
   .flatMap((m) => (m.interactables ?? []).map((i) => ({value: i.identifier, label: map ? `${i.identifier} (${i.name})` : `${i.identifier} (${i.name}, ${m.name})`})));
@@ -125,7 +130,11 @@ function ObjectiveFields({objective, choices, onChange, onRemove}) {
         <Choice value={objective.zone} options={zoneOptions(choices)} blank="Zone…"
           onChange={(z) => onChange(compact({type: objective.type, text: objective.text, zone: z ?? "", count: objective.count, ...TYPE_FIELDS[objective.type]}))} />
         <Choice value={objective.map} options={(zone?.maps ?? []).map((m) => ({value: m.key, label: m.name}))}
-          blank={objective.type === "reach" ? "Anywhere in the zone" : "Any map"} onChange={(map) => set({map})} />
+          blank={objective.type === "reach" ? "Anywhere in the zone" : "Any map"} onChange={(map) => set({map, place: undefined})} />
+        {PLACE_TYPES.includes(objective.type) && objective.map && (
+          <Choice value={objective.place} options={placeOptions(zone, objective.map)} blank="Anywhere on the map"
+            onChange={(place) => set({place: place ?? undefined})} />
+        )}
       </span>
       {objective.type === "talk" && (
         <span className="quest-pair">
