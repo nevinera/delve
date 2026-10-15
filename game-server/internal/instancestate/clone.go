@@ -19,7 +19,7 @@ func (s *InstanceState) Clone() *InstanceState {
 		c := *n
 		ncus[id] = &c
 	}
-	return &InstanceState{Units: units, NCUs: ncus}
+	return &InstanceState{Units: units, NCUs: ncus, GroundAreas: slices.Clone(s.GroundAreas)}
 }
 
 func (u *UnitState) clone() *UnitState {

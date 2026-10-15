@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/areashape"
 	"github.com/delve-mmo/game-server/internal/command"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 	"github.com/delve-mmo/game-server/internal/instancestate"
@@ -139,6 +140,9 @@ type fullStateMsg struct {
 	downBase
 	Units map[string]unitJSON `json:"units"`
 	NCUs  map[string]ncuJSON  `json:"ncus"`
+	// GroundAreas are the live groundArea effects; later ones arrive as
+	// ground_area_adds / ground_area_removes on deltas.
+	GroundAreas []groundAreaJSON `json:"ground_areas,omitempty"`
 	// ExpiresAt is when the instance's world version expires (epoch ms),
 	// so a player joining mid-countdown sees it; omitted when it doesn't.
 	ExpiresAt *int64 `json:"expires_at,omitempty"`
@@ -191,6 +195,57 @@ type effectAddJSON struct {
 	ApplierID  string `json:"applier_id"`
 	Stacks     int    `json:"stacks"`
 	ExpiresAt  int64  `json:"expires_at"`
+}
+
+// groundAreaJSON is one live groundArea as the client draws it. An add with
+// an ID the client already has replaces it (a refresh by a recast).
+type groundAreaJSON struct {
+	ID            string                            `json:"id"`
+	MapIdentifier string                            `json:"map_identifier"`
+	Shape         areashape.Shape                   `json:"shape"`
+	Affects       string                            `json:"affects"`
+	ExpiresAt     int64                             `json:"expires_at"`
+	Graphic       *instanceconfig.GroundAreaGraphic `json:"graphic,omitempty"`
+}
+
+func groundAreaToJSON(a instancestate.GroundArea) groundAreaJSON {
+	return groundAreaJSON{
+		ID: a.ID.String(), MapIdentifier: a.MapIdentifier, Shape: a.Shape,
+		Affects: a.Affects, ExpiresAt: a.ExpiresAt.UnixMilli(), Graphic: a.Graphic,
+	}
+}
+
+func groundAreasToJSON(areas []instancestate.GroundArea) []groundAreaJSON {
+	if len(areas) == 0 {
+		return nil
+	}
+	out := make([]groundAreaJSON, len(areas))
+	for i, a := range areas {
+		out[i] = groundAreaToJSON(a)
+	}
+	return out
+}
+
+// groundAreaDiff is what changed between two ticks' areas: those new or whose
+// footprint or expiry changed (a recast refresh), and the IDs of those gone.
+func groundAreaDiff(prev, curr []instancestate.GroundArea) (adds []groundAreaJSON, removes []string) {
+	prevByID := make(map[uuid.UUID]instancestate.GroundArea, len(prev))
+	for _, a := range prev {
+		prevByID[a.ID] = a
+	}
+	currIDs := make(map[uuid.UUID]bool, len(curr))
+	for _, a := range curr {
+		currIDs[a.ID] = true
+		if p, had := prevByID[a.ID]; !had || p.ExpiresAt != a.ExpiresAt || p.Shape != a.Shape {
+			adds = append(adds, groundAreaToJSON(a))
+		}
+	}
+	for _, a := range prev {
+		if !currIDs[a.ID] {
+			removes = append(removes, a.ID.String())
+		}
+	}
+	return adds, removes
 }
 
 type effectRemoveJSON struct {
@@ -265,6 +320,9 @@ type deltaMsg struct {
 	LootEvents    []lootEventJSON           `json:"loot_events,omitempty"`
 	LootFailures  []lootFailureJSON         `json:"loot_failures,omitempty"`
 	NCUUpdates    map[string]any            `json:"ncu_updates,omitempty"`
+	// GroundAreaAdds upserts areas by ID; GroundAreaRemoves drops them.
+	GroundAreaAdds    []groundAreaJSON `json:"ground_area_adds,omitempty"`
+	GroundAreaRemoves []string         `json:"ground_area_removes,omitempty"`
 }
 
 func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checksum string, heartbeatSeqs, moveSeqs map[uuid.UUID]string, expiresAt time.Time) ([]byte, error) {
@@ -347,9 +405,10 @@ func buildFullStateMsg(state *instancestate.InstanceState, now time.Time, checks
 			Timestamp: now.UnixMilli(),
 			Checksum:  checksum,
 		},
-		Units:     units,
-		NCUs:      ncusJSON(state.NCUs),
-		ExpiresAt: expiresAtJSON(expiresAt),
+		Units:       units,
+		NCUs:        ncusJSON(state.NCUs),
+		GroundAreas: groundAreasToJSON(state.GroundAreas),
+		ExpiresAt:   expiresAtJSON(expiresAt),
 	})
 }
 
@@ -584,6 +643,7 @@ func buildDeltaMsg(prev, curr *instancestate.InstanceState, events []CombatEvent
 		}
 	}
 	msg.NCUUpdates = ncuUpdates(prev.NCUs, curr.NCUs)
+	msg.GroundAreaAdds, msg.GroundAreaRemoves = groundAreaDiff(prev.GroundAreas, curr.GroundAreas)
 
 	for _, ev := range events {
 		msg.CombatEvents = append(msg.CombatEvents, combatEventJSON(ev))

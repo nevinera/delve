@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/delve-mmo/game-server/internal/areashape"
 	"github.com/delve-mmo/game-server/internal/instanceconfig"
 )
 
@@ -85,6 +86,27 @@ type InstanceState struct {
 	PendingTalks            []Talk                         // drained each tick; conversations started, quests accepted and turned in
 	PendingUses             []Use                          // drained each tick; interactables used
 	PendingImpacts          []PendingImpact                // projectile effects in flight; resolved once each lands
+	GroundAreas             []GroundArea                   // live groundArea effects; ticked and expired by the instance
+}
+
+// GroundArea is one live groundArea effect: a footprint on a map whose OnTick
+// effects land on the units standing in it every TickInterval until
+// ExpiresAt. Its footprint is fixed where it was cast.
+type GroundArea struct {
+	ID            uuid.UUID
+	CasterID      uuid.UUID
+	FromPlayer    bool   // resolved through the player path (command) or the NPC one (instance)
+	PowerName     string // with EffectIndex, identifies which effect made it, so a recast refreshes it
+	EffectIndex   int
+	MapIdentifier string
+	Shape         areashape.Shape
+	Affects       string // "bAll", "gAll" or "all"
+	OnTick        []instanceconfig.PowerEffect
+	TimeBudget    float64 // seconds: PowerEffectAmount's stat-bonus normalization for each tick
+	TickInterval  time.Duration
+	NextTickAt    time.Time
+	ExpiresAt     time.Time
+	Graphic       *instanceconfig.GroundAreaGraphic // relayed to the client, which draws it
 }
 
 // PendingImpact is one effect riding a projectile (a power with a Speed),

@@ -305,8 +305,14 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 	dist := math.Sqrt(dx*dx + dy*dy)
 
 	timeBudget := command.PowerEffectTimeBudget(power)
-	for _, eff := range power.Effects {
+	for i, eff := range power.Effects {
 		if !npcEffectUsable(eff) {
+			continue
+		}
+		if eff.IsGroundArea() {
+			if !eff.AreaNeedsTarget() || npcEffectInRange(eff, dist, unit, target) {
+				command.CreateGroundArea(attackerID, unit, target, false, power, i, eff, now, state)
+			}
 			continue
 		}
 		if isAllyAffects(eff.Affects) {
@@ -416,7 +422,9 @@ func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, 
 				continue
 			}
 			reachable := false
-			if isAllyAffects(eff.Affects) {
+			if eff.IsGroundArea() {
+				reachable = !eff.AreaNeedsTarget() || npcEffectInRange(eff, dist, unit, target)
+			} else if isAllyAffects(eff.Affects) {
 				reachable = len(eligibleAllies(unit, allies, eff)) > 0
 			} else {
 				reachable = npcEffectInRange(eff, dist, unit, target)
@@ -543,6 +551,8 @@ func npcEffectUsable(eff instanceconfig.PowerEffect) bool {
 		return eff.ResourceName != ""
 	case "heal":
 		return eff.Amount != nil
+	case "groundArea":
+		return eff.Shape != nil && len(eff.OnTick) > 0
 	default:
 		return false
 	}

@@ -316,3 +316,8 @@ func (inst *Instance) CollectVisitsForTest(ctx context.Context, state *instances
 
 // UpdatePlayerSpeedForTest exposes updatePlayerSpeed.
 func UpdatePlayerSpeedForTest(state *instancestate.InstanceState) { updatePlayerSpeed(state) }
+
+func TickGroundAreasForTest(state *instancestate.InstanceState, zone instanceconfig.Zone, now time.Time) {
+	updateCombatStats(state, zone)
+	tickGroundAreas(state, zone, now, testRng())
+}

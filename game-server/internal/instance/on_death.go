@@ -70,8 +70,12 @@ func applyDeathPower(unitID uuid.UUID, unit *instancestate.UnitState, targetID u
 			packmates = append(packmates, a)
 		}
 	}
-	for _, eff := range power.Effects {
+	for i, eff := range power.Effects {
 		if !npcEffectUsable(eff) || eff.Affects == "self" {
+			continue
+		}
+		if eff.IsGroundArea() {
+			command.CreateGroundArea(unitID, unit, target, false, power, i, eff, now, state)
 			continue
 		}
 		if isAllyAffects(eff.Affects) {

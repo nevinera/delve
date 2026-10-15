@@ -80,9 +80,10 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, next *instancestate.InstanceState) (*instancestate.UnitState, bool) {
 	needsTarget := false
 	for _, eff := range power.Effects {
-		if !isUntargetedAffects(eff.Affects) {
+		if eff.IsGroundArea() {
+			needsTarget = needsTarget || eff.AreaNeedsTarget()
+		} else if !isUntargetedAffects(eff.Affects) {
 			needsTarget = true
-			break
 		}
 	}
 	if !needsTarget {
@@ -131,8 +132,20 @@ func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power
 // effects the same way an instant power applies them.
 func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState, rng *rand.Rand) bool {
 	timeBudget := PowerEffectTimeBudget(power)
-	for _, effect := range power.Effects {
+	for i, effect := range power.Effects {
 		if !playerEffectUsable(effect) {
+			continue
+		}
+		if effect.IsGroundArea() {
+			if effect.AreaNeedsTarget() {
+				if target == nil {
+					continue
+				}
+				if !inRangeAndLOS(unit, target, zone, effect.Range) {
+					return false
+				}
+			}
+			CreateGroundArea(unitID, unit, target, true, power, i, effect, now, next)
 			continue
 		}
 		switch effect.Affects {
@@ -207,6 +220,8 @@ func playerEffectUsable(effect instanceconfig.PowerEffect) bool {
 		return effect.Status != nil
 	case "resource":
 		return true
+	case "groundArea":
+		return effect.Shape != nil && len(effect.OnTick) > 0
 	default:
 		return false
 	}
@@ -301,6 +316,13 @@ func applyPlayerEffect(unitID uuid.UUID, unit *instancestate.UnitState, recipien
 		}
 		AdjustResource(recipient, effect.ResourceName, effect.Delta)
 	}
+}
+
+// ApplyPlayerEffect lands one effect from a player on a single recipient the
+// caller has already chosen (a groundArea's tick), with no range or line of
+// sight check of its own.
+func ApplyPlayerEffect(unitID uuid.UUID, unit *instancestate.UnitState, recipientID uuid.UUID, recipient *instancestate.UnitState, effect instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, next *instancestate.InstanceState, rng *rand.Rand) {
+	applyPlayerEffect(unitID, unit, recipientID, recipient, effect, timeBudget, zone, now, next, rng)
 }
 
 func applyPlayerHarm(unitID uuid.UUID, unit *instancestate.UnitState, victimID uuid.UUID, victim *instancestate.UnitState, effect instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, next *instancestate.InstanceState, rng *rand.Rand) {

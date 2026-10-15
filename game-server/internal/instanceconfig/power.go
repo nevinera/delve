@@ -40,12 +40,14 @@ func (p Power) IsFrontal() bool {
 }
 
 // PowerEffect describes one mechanical outcome applied when a power fires.
-// Type discriminator: "harm", "heal", "resource", or "status".
+// Type discriminator: "harm", "heal", "resource", "status", or "groundArea".
 //
 // harm fields:     Affects, Range, Amount, School, Tags
 // heal fields:     Affects, Range (unless self), Amount, Tags
 // resource fields: Affects, ResourceName, Delta, Range (unless self), Tags
 // status fields:   Affects, Duration, Status, Range (unless self), Tags
+// groundArea fields: Shape, Affects ("bAll", "gAll" or "all"), Range (when the
+// shape is anchored on the target), Duration, TickInterval, OnTick, Graphic, Tags
 type PowerEffect struct {
 	Type string   `json:"type"` // Required
 	Tags []string `json:"tags,omitempty"`
@@ -77,6 +79,64 @@ type PowerEffect struct {
 	// status
 	Duration float64 `json:"duration,omitempty"` // Required for status: seconds
 	Status   *Status `json:"status,omitempty"`   // Required for status
+
+	// groundArea
+	Shape        *AreaShape         `json:"shape,omitempty"`        // Required for groundArea
+	TickInterval float64            `json:"tickInterval,omitempty"` // Seconds between ticks; DefaultAreaTickInterval when omitted
+	OnTick       []PowerEffect      `json:"onTick,omitempty"`       // Required for groundArea: harm/heal/resource/status, without affects or range
+	Graphic      *GroundAreaGraphic `json:"graphic,omitempty"`      // Client-only; ignored by the server except to relay it
+}
+
+// DefaultAreaTickInterval is a groundArea's tickInterval when it sets none.
+const DefaultAreaTickInterval = 1.0
+
+// AreaShape is a groundArea's footprint, before it is placed on a map. Type
+// is "circle", "ring", "line" or "cone"; see docs/schema/power_effect.md.
+type AreaShape struct {
+	Type        string  `json:"type"`
+	At          string  `json:"at,omitempty"`          // circle, ring: "self" or "target"
+	Radius      float64 `json:"radius,omitempty"`      // circle
+	InnerRadius float64 `json:"innerRadius,omitempty"` // ring
+	OuterRadius float64 `json:"outerRadius,omitempty"` // ring
+	Length      float64 `json:"length,omitempty"`      // line, cone
+	Width       float64 `json:"width,omitempty"`       // line, cone
+	Offset      float64 `json:"offset,omitempty"`      // cone
+	Direction   string  `json:"direction,omitempty"`   // line, cone: "target" or "facing"
+}
+
+// GroundAreaGraphic is how the client draws a groundArea. The server only
+// relays it.
+type GroundAreaGraphic struct {
+	Color        string   `json:"color,omitempty"`
+	TextureURL   string   `json:"textureURL,omitempty"`
+	TextureScale float64  `json:"textureScale,omitempty"`
+	Opacity      *float64 `json:"opacity,omitempty"`
+}
+
+// IsGroundArea reports whether the effect creates a ground area.
+func (e PowerEffect) IsGroundArea() bool { return e.Type == "groundArea" }
+
+// AreaTickSeconds is the effect's tick interval, with the default applied.
+func (e PowerEffect) AreaTickSeconds() float64 {
+	if e.TickInterval > 0 {
+		return e.TickInterval
+	}
+	return DefaultAreaTickInterval
+}
+
+// AreaAimsAtTarget reports whether a line or cone points toward the target:
+// by default it does when the effect has a range (and so needs one anyway).
+func (e PowerEffect) AreaAimsAtTarget() bool {
+	if e.Shape == nil || (e.Shape.Type != "line" && e.Shape.Type != "cone") {
+		return false
+	}
+	return e.Shape.Direction == "target" || (e.Shape.Direction == "" && e.Range != nil)
+}
+
+// AreaNeedsTarget reports whether a groundArea's footprint is anchored on, or
+// aimed at, the caster's target.
+func (e PowerEffect) AreaNeedsTarget() bool {
+	return e.Shape != nil && (e.Shape.At == "target" || e.AreaAimsAtTarget())
 }
 
 // Status is a named effect applied to a unit for a fixed duration.
