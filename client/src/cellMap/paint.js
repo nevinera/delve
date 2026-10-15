@@ -150,7 +150,7 @@ function paintWater(ctx, scene, style) {
 const PLANK = 0.9; // feet
 const BEAM = 0.55; // feet
 
-function paintBridges(ctx, bridges, style, cellSize) {
+export function paintBridges(ctx, bridges, style, cellSize) {
   const {palette} = style;
   for (const {a, b, halfWidth} of bridges) {
     const length = Math.hypot(b.x - a.x, b.y - a.y);

@@ -102,7 +102,7 @@ export function buildScene(map, style = resolveStyle(map)) {
   const shallow = (c, r) => [0, 1, 2, 3, 4, 5].some((edge) => terrainAt(map, ...neighbor(c, r, edge)) !== "water");
   scene.deepWater = regionLoops(map, "water", shallow).map((loop) => insetLoop(softLoop(loop, cellSize, seed), DEEP_INSET * cellSize));
   if (style.water.edge === "ice") scene.ice = scene.water.map((loop) => jaggedInset(loop, ICE_DEPTH * cellSize, ICE_JAGGED, seed));
-  scene.bridges = (map.bridges ?? []).map(bridgeDeck);
+  scene.bridges = (map.bridges ?? []).map((b) => bridgeDeck(b, map.grid.type));
   scene.trails = sceneTrails(map, scene);
   // Trails run on open ground only, and clear no trees. Rock is rough, and
   // comes right to its cells' edge.

@@ -1,7 +1,7 @@
 // Owns a cellMap being drawn in the map editor's Cells tab, and every edit
 // the tab can make to it (see docs/schema/map.md#cellmap). Immutable, like
 // MapDraft: every edit returns a new CellMapDraft.
-import {hexDistance, neighbor} from "../../cellMap/hexGrid";
+import {geometryOf} from "../../cellMap/grid";
 import {THEMES, fillOf} from "../../cellMap/format";
 import {PATHS} from "../../cellMap/style";
 
@@ -44,10 +44,11 @@ export class CellMapDraft {
   // Sets every cell within brush - 1 steps of (col, row) to ch.
   paint(col, row, ch, brush = 1) {
     const reach = brush - 1;
+    const g = geometryOf(this.grid);
     const changes = [];
     for (let c = col - reach; c <= col + reach; c++) {
       for (let r = row - reach - 1; r <= row + reach + 1; r++) {
-        if (this.inside(c, r) && hexDistance([col, row], [c, r]) <= reach) changes.push([c, r]);
+        if (this.inside(c, r) && g.distance([col, row], [c, r]) <= reach) changes.push([c, r]);
       }
     }
     return this.setCells(changes, ch);
@@ -56,12 +57,13 @@ export class CellMapDraft {
   // Sets the cell at (col, row), and every cell like it joined to it, to ch.
   fill(col, row, ch) {
     const from = this.cellAt(col, row);
+    const g = geometryOf(this.grid);
     if (from === undefined || from === ch) return this;
     const seen = new Set([`${col},${row}`]);
     const queue = [[col, row]];
     for (let i = 0; i < queue.length; i++) {
-      for (let edge = 0; edge < 6; edge++) {
-        const [c, r] = neighbor(...queue[i], edge);
+      for (let edge = 0; edge < g.edges; edge++) {
+        const [c, r] = g.neighbor(...queue[i], edge);
         const key = `${c},${r}`;
         if (seen.has(key) || this.cellAt(c, r) !== from) continue;
         seen.add(key);
@@ -128,11 +130,18 @@ export class CellMapDraft {
   }
 
   // Themes share their letters, so the cells stay; color overrides were for
-  // the old look, so they go.
+  // the old look, so they go. A theme on another kind of grid (a dungeon's
+  // squares) takes the grid with it, and bridges that no longer run straight
+  // along the cells go.
   setTheme(theme) {
     if (theme === this.data.theme) return this;
     const {colors: _old, ...rest} = this.data;
-    return new CellMapDraft({...rest, theme});
+    const grids = THEMES[theme].grids;
+    if (grids.includes(this.grid.type)) return new CellMapDraft({...rest, theme});
+    const grid = {...this.grid, type: grids[0]};
+    const g = geometryOf(grid);
+    const bridges = this.bridges.filter(({from, to}) => g.line(from, to));
+    return new CellMapDraft({...rest, theme, grid, ...(rest.bridges ? {bridges} : {})});
   }
 
   // null goes back to the theme's color.

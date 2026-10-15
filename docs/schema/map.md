@@ -75,9 +75,9 @@ walls around water don't.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `version` | integer | yes | `1`. |
-| `theme` | string | yes | The look, and the grid types that go with it: `"glade"` (a summer wood), `"autumn"` (turning leaves), `"winter"` (snow, pines, iced water) or `"cave"` (rock, inked and hatched like a hand-drawn cave map). Themes live in client/src/cellMap/themes.json, their looks in client/src/cellMap/style.js. Every theme has the same cell alphabet, so a map can change theme. |
+| `theme` | string | yes | The look, and the grid types that go with it: `"glade"` (a summer wood), `"autumn"` (turning leaves), `"winter"` (snow, pines, iced water) `"cave"` (rock, inked and hatched like a hand-drawn cave map) or `"dungeon"` (stone floors and walls on a square grid). Themes live in client/src/cellMap/themes.json, their looks in client/src/cellMap/style.js. Every theme has the same cell alphabet, so a map can change theme. |
 | `colors` | object | no | Overrides some of the theme's colors, as `"#rrggbb"`: `{ "meadow": "#b8c98a" }`. Keys must be the theme's colors (its `colors` in themes.json; glade: `meadow`, `tallGrass`, `marsh`, `water`, `forest`, `crown`, `tuft`, `tallTuft`, `pool`, `reed`, `trail`, `road`, `bridge`, `ink`). |
-| `grid` | object | yes | `{ "type": "hex", "cols": int, "rows": int }`. `type` must be one the theme supports (glade: `"hex"`). `cols` and `rows` are 1 to 200. |
+| `grid` | object | yes | `{ "type": "hex", "cols": int, "rows": int }`. `type` is `"hex"` or `"square"` and must be one the theme supports (dungeon: `"square"`, the rest: `"hex"`). Square cells are 5 feet on a side, and bridges run along rows or columns only. `cols` and `rows` are 1 to 200. |
 | `seed` | integer | yes | Varies the decorations (tree crowns, grass tufts and so on) without changing the terrain. |
 | `cells` | array of string | yes | One string per row, one character per cell, `rows` strings of `cols` characters: `.` meadow, `%` tall grass, `~` marsh, `w` water, `T` trees. A cave calls them floor, gravel, puddles, water and rock. A new map starts all `T`. |
 | `trails` | array of Trail | no | Paths across the cells, drawn over the ground and under the decorations. Nothing grows on them, and they cut through trees. |

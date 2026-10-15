@@ -1,7 +1,7 @@
 // Editor overlays drawn over a cellmap's render, in feet (the caller sets
 // the scale): hex outlines, cells tinted by terrain, and trails as authored.
 // Shared by the cell editor page and the map editor's Cells tab.
-import {CELL_SIZE, cellCenter, cellCorners, cellPoint} from "./hexGrid";
+import {CELL_SIZE, geometryOf, gridOf} from "./grid";
 import {terrainsOf} from "./format";
 import {exitEdge} from "./exits";
 
@@ -16,8 +16,8 @@ export const CELL_COLORS = {
   trees: "rgba(30, 110, 200, 0.55)",
 };
 
-export function hexPath(ctx, col, row, cellSize = CELL_SIZE) {
-  const corners = cellCorners(col, row, cellSize);
+export function hexPath(ctx, col, row, cellSize = CELL_SIZE, gridType = "hex") {
+  const corners = gridOf(gridType).cellCorners(col, row, cellSize);
   ctx.moveTo(corners[0].x, corners[0].y);
   for (const {x, y} of corners.slice(1)) ctx.lineTo(x, y);
   ctx.closePath();
@@ -28,6 +28,7 @@ export function hexPath(ctx, col, row, cellSize = CELL_SIZE) {
 export function drawCells(ctx, map, scale, {filled = false, outline = true, only = null, opacity = 1} = {}) {
   const {grid} = map;
   const terrains = terrainsOf(map);
+  const type = grid.type;
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
@@ -46,14 +47,14 @@ export function drawCells(ctx, map, scale, {filled = false, outline = true, only
     for (const [terrain, cells] of paths) {
       ctx.fillStyle = CELL_COLORS[terrain];
       ctx.beginPath();
-      for (const [col, row] of cells) hexPath(ctx, col, row);
+      for (const [col, row] of cells) hexPath(ctx, col, row, CELL_SIZE, type);
       ctx.fill();
     }
   }
   if (outline) {
     ctx.beginPath();
     for (let row = 0; row < grid.rows; row++) {
-      for (let col = 0; col < grid.cols; col++) if (!only || only(col, row)) hexPath(ctx, col, row);
+      for (let col = 0; col < grid.cols; col++) if (!only || only(col, row)) hexPath(ctx, col, row, CELL_SIZE, type);
     }
     ctx.stroke();
   }
@@ -66,7 +67,7 @@ export function drawTrails(ctx, map, scale, {selected = null} = {}) {
   (map.trails ?? []).forEach((trail, t) => {
     const isSelected = selected?.trail === t;
     const color = isSelected ? SELECTED_COLOR : TRAIL_COLOR;
-    const points = trail.points.map(([col, row]) => cellPoint(col, row, CELL_SIZE));
+    const points = trail.points.map(([col, row]) => geometryOf(map.grid).cellPoint(col, row, CELL_SIZE));
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 3 / scale;
@@ -87,6 +88,7 @@ export const BRIDGE_COLOR = "rgba(160, 90, 30, 0.9)";
 // Bridges as lines from end to end. selected is a bridge's index; pending,
 // the cell a bridge being placed starts at; preview, the bridge it'd be.
 export function drawBridges(ctx, map, scale, {selected = null, pending = null, preview = null} = {}) {
+  const {cellCenter} = geometryOf(map.grid);
   const line = ({from, to}, color, dashed = false) => {
     const a = cellCenter(...from, CELL_SIZE);
     const b = cellCenter(...to, CELL_SIZE);

@@ -21,9 +21,11 @@ module Validators
     end
 
     # The rendered size in feet: flat-top hexes, odd columns half a cell
-    # lower (see client/src/cellMap/hexGrid.js's mapSize).
+    # lower (see client/src/cellMap/hexGrid.js's mapSize), or square cells
+    # side by side (squareGrid.js).
     def self.feet_size(grid, cell_size = CELL_SIZE)
       cols, rows = grid.values_at("cols", "rows")
+      return {"width" => cell_size * cols, "height" => cell_size * rows} if grid["type"] == "square"
       r = cell_size / Math.sqrt(3)
       {"width" => 1.5 * r * cols + 0.5 * r, "height" => cell_size * rows + ((cols > 1) ? cell_size / 2.0 : 0)}
     end
@@ -141,7 +143,7 @@ module Validators
     def validate_bridge!(bridge, grid, path:)
       require_object!(bridge, path: path)
       ends = %w[from to].map { |key| validate_cell!(require_key!(bridge, key, path: path), grid, path: child_path(path, key)) }
-      steps = straight_steps(*ends)
+      steps = straight_steps(*ends, grid["type"])
       raise ValidationError.new("must run straight along the cells", path: path) if steps.nil?
       return if steps.between?(1, MAX_BRIDGE_LENGTH)
       raise ValidationError.new("must reach 1 to #{MAX_BRIDGE_LENGTH} cells from its start", path: path)
@@ -171,12 +173,14 @@ module Validators
       cell
     end
 
-    # Steps between two cells on a straight line through neighbors, or nil
-    # when they aren't on one (cube coordinates, as in
+    # Steps between two cells on a straight line through neighbors (along a
+    # row or column on square grids), or nil when they aren't on one (cube coordinates, as in
     # client/src/cellMap/hexGrid.js).
-    def straight_steps(from, to)
-      deltas = cube(*to).zip(cube(*from)).map { |b, a| b - a }
-      deltas.include?(0) ? deltas.map(&:abs).max : nil
+    def straight_steps(from, to, type = "hex")
+      square = type == "square"
+      deltas = (square ? to.zip(from) : cube(*to).zip(cube(*from))).map { |b, a| (b - a).abs }
+      return unless deltas.include?(0)
+      square ? deltas.sum : deltas.max
     end
 
     def cube(col, row)

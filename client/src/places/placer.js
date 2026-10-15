@@ -6,7 +6,7 @@
 import {STEP, placeGrid} from "./ground";
 import {parsePopulation} from "./population";
 import {hasLineOfSight} from "../game/collision";
-import {CELL_SIZE, cellPoint} from "../cellMap/hexGrid";
+import {CELL_SIZE, geometryOf} from "../cellMap/grid";
 
 // How far (feet) a unit or connection may be from a place's open ground and
 // still count as in it (as zone-outline counts them).
@@ -207,7 +207,7 @@ function groundOf(map) {
   const trail = new Uint8Array(cols * rows);
   for (const {points} of map.cellMap?.trails ?? []) {
     for (let i = 0; i + 1 < points.length; i++) {
-      const [a, b] = [points[i], points[i + 1]].map((p) => cellPoint(...p, CELL_SIZE)).map((p) => ({x: p.x, y: height - p.y}));
+      const [a, b] = [points[i], points[i + 1]].map((p) => geometryOf(map.cellMap.grid).cellPoint(...p, CELL_SIZE)).map((p) => ({x: p.x, y: height - p.y}));
       mark(a, b, (x, y) => {
         const reach = Math.ceil(TRAIL_MARGIN / STEP);
         const [c0, r0] = [Math.floor(x / STEP), Math.floor(y / STEP)];

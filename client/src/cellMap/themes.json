@@ -86,5 +86,24 @@
       "bridge": "#a98053",
       "ink": "#1a1714"
     }
+  },
+  "dungeon": {
+    "grids": ["square"],
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "floor", "tallGrass": "rubble", "marsh": "puddles", "water": "water", "trees": "wall", "forest": "rock"},
+    "paths": ["worn"],
+    "colors": {
+      "meadow": "#cfc8bb",
+      "tallGrass": "#c2baab",
+      "marsh": "#b8b4aa",
+      "water": "#4f6f80",
+      "forest": "#45403b",
+      "grout": "#8f887b",
+      "stone": "#9b9387",
+      "worn": "#d9d2c4",
+      "bridge": "#a98053",
+      "ink": "#15120f"
+    }
   }
 }

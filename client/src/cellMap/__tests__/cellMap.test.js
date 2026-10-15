@@ -30,7 +30,7 @@ describe("validateCellMap", () => {
   });
 
   it("checks the theme and its colors", () => {
-    expect(validateCellMap({...tiny([".."]), theme: "caves"})).toEqual(["theme must be one of: glade, autumn, winter, cave"]);
+    expect(validateCellMap({...tiny([".."]), theme: "caves"})).toEqual(["theme must be one of: glade, autumn, winter, cave, dungeon"]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "#aabbcc"}})).toEqual([]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "green", sky: "#000000"}})).toEqual([
       'colors.meadow must be a "#rrggbb" color',
@@ -373,7 +373,7 @@ describe("sprites and rendering", () => {
 });
 
 describe("themes", () => {
-  const map = (theme) => ({...tiny(["TTTTTTTT", "T..%%~~T", "T.www..T", "T.wTw..T", "T..ww..T", "TTTTTTTT"]), theme, trails: [{width: 1, points: [[1, 1], [6, 4]]}], bridges: [{from: [1, 2], to: [5, 4]}]});
+  const map = (theme) => ({...tiny(["TTTTTTTT", "T..%%~~T", "T.www..T", "T.wTw..T", "T..ww..T", "TTTTTTTT"]), theme, grid: {type: THEMES[theme].grids[0], cols: 8, rows: 6}, trails: [{width: 1, points: [[1, 1], [6, 4]]}], bridges: [THEMES[theme].grids[0] === "square" ? {from: [1, 2], to: [5, 2]} : {from: [1, 2], to: [5, 4]}]});
 
   it("share their cells, so a map can change theme", () => {
     const [first, ...rest] = Object.values(THEMES);

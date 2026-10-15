@@ -4,6 +4,7 @@ import {buildScene} from "./scene";
 import {paintScene} from "./paint";
 import {buildSprites} from "./sprites";
 import {resolveStyle} from "./style";
+import {buildDungeonScene, paintDungeon} from "./dungeon";
 import {hashString} from "./random";
 
 // Bump when the renderer's output changes, so old cached images are ignored.
@@ -35,6 +36,8 @@ export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCa
     return result;
   };
 
+  if (style.renderer === "dungeon") return renderDungeon(map, {pixelsPerFoot, createCanvas, style, layers, time, timings});
+
   const scene = time("scene", () => buildScene(map, style));
   const scale = renderScale(scene, pixelsPerFoot);
   const spriteKey = `${style.key}:${scene.cellSize}:${scale}`;
@@ -51,6 +54,15 @@ export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCa
   const stats = {width: canvas.width, height: canvas.height};
   for (const kind of ["crowns", "hatches", "patches", "tufts", "tallTufts", "hummocks", "reeds"]) stats[kind] = scene[kind].length;
   return {canvas, canopy, timings, stats};
+}
+
+function renderDungeon(map, {pixelsPerFoot, createCanvas, style, layers, time, timings}) {
+  const scene = time("scene", () => buildDungeonScene(map));
+  const scale = renderScale(scene, pixelsPerFoot);
+  const canvas = createCanvas(Math.round(scene.width * scale), Math.round(scene.height * scale));
+  const canopy = layers ? createCanvas(canvas.width, canvas.height) : null;
+  time("paint", () => paintDungeon(canvas.getContext("2d"), scene, scale, style));
+  return {canvas, canopy, timings, stats: {width: canvas.width, height: canvas.height}};
 }
 
 function defaultCanvas(width, height) {

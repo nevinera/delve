@@ -194,7 +194,27 @@ export const CAVE = style("cave", {
   marsh: {hummocks: 1.4, reeds: 0},
 });
 
-export const STYLES = {glade: GLADE, autumn: AUTUMN, winter: WINTER, cave: CAVE};
+// A dungeon is square rooms and corridors, drawn by dungeon.js instead of the
+// woodland renderer: so it needs only a palette.
+export const DUNGEON = style("dungeon", {
+  renderer: "dungeon",
+  palette: {
+    meadow: "#cfc8bb",
+    tallGrass: "#c2baab",
+    marsh: "#b8b4aa",
+    water: "#4f6f80",
+    waterRim: "rgba(220, 230, 234, 0.55)",
+    forest: "#45403b",
+    grout: "#8f887b",
+    stone: "#9b9387",
+    worn: "#d9d2c4",
+    shadow: "rgba(21, 18, 15, 0.38)",
+    ink: "#15120f",
+    ...WOOD,
+  },
+});
+
+export const STYLES = {glade: GLADE, autumn: AUTUMN, winter: WINTER, cave: CAVE, dungeon: DUNGEON};
 
 // Shades derived from a theme color, for when a map overrides it: the
 // defaults above are hand-tuned, so they're only replaced then.

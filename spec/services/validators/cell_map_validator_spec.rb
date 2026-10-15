@@ -95,8 +95,9 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
   end
 
   it "accepts every theme, with the same cells" do
-    described_class.themes.each_key do |theme|
-      expect { described_class.validate!(cell_map.merge("theme" => theme, "cells" => ["Tw.", "%~."])) }.not_to raise_error
+    described_class.themes.each do |theme, definition|
+      grid = cell_map["grid"].merge("type" => definition["grids"].first)
+      expect { described_class.validate!(cell_map.merge("theme" => theme, "grid" => grid, "cells" => ["Tw.", "%~."])) }.not_to raise_error
     end
   end
 
@@ -149,6 +150,26 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
       size = described_class.feet_size({"cols" => 2, "rows" => 1}, Math.sqrt(3))
       expect(size["width"]).to be_within(1e-9).of(3.5)
       expect(size["height"]).to be_within(1e-9).of(1.5 * Math.sqrt(3))
+    end
+  end
+
+  describe "the dungeon theme on a square grid" do
+    let(:dungeon) { cell_map.merge("theme" => "dungeon", "grid" => {"type" => "square", "cols" => 12, "rows" => 4}, "cells" => Array.new(4) { "." * 12 }, "trails" => []) }
+
+    it "accepts it, with bridges along rows and columns" do
+      expect { described_class.validate!(dungeon.merge("bridges" => [{"from" => [2, 1], "to" => [2, 3]}, {"from" => [1, 0], "to" => [6, 0]}])) }.not_to raise_error
+    end
+
+    it "raises on a diagonal bridge" do
+      expect_invalid(dungeon.merge("bridges" => [{"from" => [2, 1], "to" => [3, 2]}]), /must run straight/, "$.bridges[0]")
+    end
+
+    it "raises on a hex grid" do
+      expect_invalid(dungeon.merge("grid" => dungeon["grid"].merge("type" => "hex")), /must be one of: "square"/, "$.grid.type")
+    end
+
+    it "measures cells as 5 foot squares" do
+      expect(described_class.feet_size({"type" => "square", "cols" => 12, "rows" => 4})).to eq("width" => 60, "height" => 20)
     end
   end
 end

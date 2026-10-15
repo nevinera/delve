@@ -9,7 +9,7 @@
 // prints it.
 import {STEP, placeGrid} from "./ground";
 import {hasLineOfSight} from "../game/collision";
-import {CELL_SIZE, cellCenter, cellPoint} from "../cellMap/hexGrid";
+import {CELL_SIZE, geometryOf} from "../cellMap/grid";
 import {terrainAt, terrainLabel} from "../cellMap/format";
 
 // How far, in feet, a connection or unit may be from open ground in a place
@@ -161,7 +161,7 @@ function cellFeatures(cellMap, height, labelAt, count) {
   const tallies = Array.from({length: count}, () => ({}));
   const totals = new Array(count).fill(0);
   cellMap.cells.forEach((line, row) => [...line].forEach((_, col) => {
-    const {x, y} = cellCenter(col, row, CELL_SIZE);
+    const {x, y} = geometryOf(cellMap.grid).cellCenter(col, row, CELL_SIZE);
     const own = labelAt(x, height - y);
     if (own < 0) return;
     const terrain = terrainLabel(cellMap.theme, terrainAt(cellMap, col, row));
@@ -175,8 +175,8 @@ function cellFeatures(cellMap, height, labelAt, count) {
   const trails = new Array(count).fill(false);
   for (const {points} of cellMap.trails ?? []) {
     for (let i = 0; i + 1 < points.length; i++) {
-      const a = cellPoint(...points[i], CELL_SIZE);
-      const b = cellPoint(...points[i + 1], CELL_SIZE);
+      const a = geometryOf(cellMap.grid).cellPoint(...points[i], CELL_SIZE);
+      const b = geometryOf(cellMap.grid).cellPoint(...points[i + 1], CELL_SIZE);
       const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / STEP);
       for (let k = 0; k <= steps; k++) {
         const own = labelAt(a.x + ((b.x - a.x) * k) / steps, height - (a.y + ((b.y - a.y) * k) / steps));

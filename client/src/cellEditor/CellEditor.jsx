@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from "react";
 import {renderScale} from "../cellMap/render";
 import {cachedCellMapImage} from "../cellMap/cache";
 import {stressTestMap} from "../cellMap/examples/stressTest";
-import {mapSize} from "../cellMap/hexGrid";
+import {mapSizeOf} from "../cellMap/grid";
 import {CELL_COLORS, TRAIL_COLOR, drawCells, drawTrails} from "../cellMap/overlay";
 import {terrainsOf, validateCellMap} from "../cellMap/format";
 import clearing from "../cellMap/examples/clearing.json";
@@ -64,7 +64,7 @@ export default function CellEditor({backUrl}) {
   useEffect(() => {
     if (errors.length) return;
     const canvas = gridCanvas.current;
-    const size = mapSize(map.grid);
+    const size = mapSizeOf(map.grid);
     const scale = renderScale(size, PIXELS_PER_FOOT);
     canvas.width = Math.round(size.width * scale);
     canvas.height = Math.round(size.height * scale);

@@ -1,6 +1,7 @@
 // Outlines of the areas a terrain covers, as closed loops, then smoothed so
 // the hexes they're made of don't show.
-import {hexRadius, neighbor} from "./hexGrid";
+import {gridOf, geometryOf} from "./grid";
+import {hexRadius} from "./hexGrid";
 import {hash01, pointHash01} from "./random";
 import {terrainAt} from "./format";
 
@@ -8,13 +9,10 @@ import {terrainAt} from "./format";
 // their outlines - and the smoothing's pull on them - stay off the map.
 export const PAD = 2;
 
-// Corners in a lattice of (r/2, s/2) steps, r the corner radius and s the
-// cell size, so neighboring cells agree on them exactly.
-const CORNER_STEPS = [[2, 0], [1, 1], [-1, 1], [-2, 0], [-1, -1], [1, -1]];
-
-export function latticeCorner(col, row, i) {
-  const [dx, dy] = CORNER_STEPS[i];
-  return [2 + 3 * col + dx, 1 + 2 * row + (col & 1) + dy];
+// Corners in a lattice shared by neighboring cells, so they agree on them
+// exactly (see grid.js).
+export function latticeCorner(col, row, i, type = "hex") {
+  return gridOf(type).corner(col, row, i);
 }
 
 // Each loop is a list of lattice points, clockwise on screen around the
@@ -23,6 +21,7 @@ export function latticeCorner(col, row, i) {
 // each cell's terrain, if not the map's.
 export function regionLoops(map, terrain, skip = () => false, at = (c, r) => terrainAt(map, c, r)) {
   const {cols, rows} = map.grid;
+  const g = geometryOf(map.grid);
   const inDomain = (c, r) => c >= -PAD && c < cols + PAD && r >= -PAD && r < rows + PAD;
   const isTerrain = (c, r) => inDomain(c, r) && at(c, r) === terrain && !skip(c, r);
 
@@ -30,10 +29,10 @@ export function regionLoops(map, terrain, skip = () => false, at = (c, r) => ter
   for (let c = -PAD; c < cols + PAD; c++) {
     for (let r = -PAD; r < rows + PAD; r++) {
       if (!isTerrain(c, r)) continue;
-      for (let i = 0; i < 6; i++) {
-        if (isTerrain(...neighbor(c, r, i))) continue;
-        const a = latticeCorner(c, r, i);
-        next.set(a.join(","), latticeCorner(c, r, (i + 1) % 6));
+      for (let i = 0; i < g.edges; i++) {
+        if (isTerrain(...g.neighbor(c, r, i))) continue;
+        const a = g.corner(c, r, i);
+        next.set(a.join(","), g.corner(c, r, (i + 1) % g.edges));
       }
     }
   }

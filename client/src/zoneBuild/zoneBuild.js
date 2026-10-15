@@ -9,7 +9,7 @@
 import {generateCellMap} from "../cellMap/generate";
 import {SIDES} from "../cellMap/exits";
 import {THEMES, terrainAt} from "../cellMap/format";
-import {CELL_SIZE, cellCenter, mapSize} from "../cellMap/hexGrid";
+import {CELL_SIZE, geometryOf, mapSizeOf} from "../cellMap/grid";
 import {autoBarriers} from "../mapEditor/cells/autoBarriers";
 
 const ID_RE = /^[a-z][a-z0-9-]*$/;
@@ -99,7 +99,7 @@ export function buildMap(id, spec, zoneSpec) {
   const cellMap = generateCellMap({cols, rows, seed: spec.seed ?? seedFor(id), exits, tags: spec.tags ?? [], theme: spec.theme});
   const {barriers, connections, places, fillPoints, error} = autoBarriers(cellMap);
   if (error) throw new Error(`${id}: ${error}`);
-  const feetDimensions = mapSize(cellMap.grid);
+  const feetDimensions = mapSizeOf(cellMap.grid);
   if (spec.entry) connections.push(arrival(cellMap, feetDimensions));
   return {
     identifier: id, name: spec.name ?? titleOf(id),
@@ -136,7 +136,7 @@ function arrival(cellMap, {height}) {
     }
   }
   if (!best) throw new Error("no open ground for an arrival point");
-  const {x, y} = cellCenter(best.c, best.r, CELL_SIZE);
+  const {x, y} = geometryOf(cellMap.grid).cellCenter(best.c, best.r, CELL_SIZE);
   return {identifier: ARRIVAL, type: "point", position: {x: round(x), y: round(height - y), angle: 0}, fuzzRadius: 5, fuzzAngle: 360};
 }
 
