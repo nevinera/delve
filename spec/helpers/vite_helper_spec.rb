@@ -6,7 +6,7 @@ RSpec.describe ViteHelper, type: :helper do
       "src/worldBuilder/main.jsx" => {"file" => "worldBuilder-abc.js", "isEntry" => true, "imports" => ["_shared-1.js"], "css" => ["worldBuilder-abc.css"]},
       "_shared-1.js" => {"file" => "shared-1.js", "imports" => ["_shared-2.js"], "css" => ["shared-1.css"]},
       "_shared-2.js" => {"file" => "shared-2.js", "imports" => ["_shared-1.js"]},
-      "src/cellEditor/main.jsx" => {"file" => "cellEditor-def.js", "isEntry" => true}
+      "src/classEditor/main.jsx" => {"file" => "classEditor-def.js", "isEntry" => true}
     }
   end
 
@@ -20,7 +20,7 @@ RSpec.describe ViteHelper, type: :helper do
     end
 
     it "is empty for an entry with no CSS, or one the manifest doesn't have" do
-      expect(helper.vite_stylesheet_tags("src/cellEditor/main.jsx")).to eq("")
+      expect(helper.vite_stylesheet_tags("src/classEditor/main.jsx")).to eq("")
       expect(helper.vite_stylesheet_tags("src/missing.jsx")).to eq("")
     end
   end
