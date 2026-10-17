@@ -76,6 +76,13 @@ type BasicAttackPayload struct{}
 
 func (BasicAttackPayload) CommandType() string { return "basic_attack" }
 
+// ConfirmZoneExitPayload answers a "zone-exit-confirm" prompt: the player does
+// want to leave the zone. Handled by the instance itself (see
+// instance/zone_exit.go), not by a command handler.
+type ConfirmZoneExitPayload struct{}
+
+func (ConfirmZoneExitPayload) CommandType() string { return "confirm_zone_exit" }
+
 // RespawnPayload requests that the dead player unit be respawned at their spawn point.
 type RespawnPayload struct{}
 

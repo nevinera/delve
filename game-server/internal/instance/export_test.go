@@ -201,12 +201,13 @@ type PendingZoneExitForTest struct {
 	UnitID           uuid.UUID
 	WorldCharacterID string
 	Connection       string
+	NeedsConfirm     bool
 }
 
 func (inst *Instance) DetectZoneExitsForTest(state, prevState *instancestate.InstanceState, now time.Time) []PendingZoneExitForTest {
 	var out []PendingZoneExitForTest
 	for _, p := range inst.detectZoneExits(state, prevState, now) {
-		out = append(out, PendingZoneExitForTest{p.slotID, p.unitID, p.worldCharacterID, p.connection})
+		out = append(out, PendingZoneExitForTest{p.slotID, p.unitID, p.worldCharacterID, p.connection, p.needsConfirm})
 	}
 	return out
 }
@@ -219,7 +220,7 @@ func (inst *Instance) ArmZoneExitsForTest(unitID uuid.UUID, now time.Time) {
 // drains it, as the tick loop would.
 func (inst *Instance) FinishZoneExitForTest(exit PendingZoneExitForTest, err error, now time.Time) {
 	inst.zoneExitResultCh <- zoneExitResult{
-		pendingZoneExit: pendingZoneExit{exit.SlotID, exit.UnitID, exit.WorldCharacterID, exit.Connection},
+		pendingZoneExit: pendingZoneExit{slotID: exit.SlotID, unitID: exit.UnitID, worldCharacterID: exit.WorldCharacterID, connection: exit.Connection},
 		err:             err,
 	}
 	inst.drainZoneExitResults(now)
@@ -316,3 +317,20 @@ func (inst *Instance) CollectVisitsForTest(ctx context.Context, state *instances
 
 // UpdatePlayerSpeedForTest exposes updatePlayerSpeed.
 func UpdatePlayerSpeedForTest(state *instancestate.InstanceState) { updatePlayerSpeed(state) }
+
+// AskZoneExitConfirmForTest sends the confirm prompt for an exit, as the tick
+// loop does for one flagged NeedsConfirm.
+func (inst *Instance) AskZoneExitConfirmForTest(exit PendingZoneExitForTest, now time.Time) {
+	inst.askZoneExitConfirm(pendingZoneExit{slotID: exit.SlotID, unitID: exit.UnitID, worldCharacterID: exit.WorldCharacterID, connection: exit.Connection}, now)
+}
+
+// ConfirmZoneExitsForTest feeds a player's "yes, leave" answer through the
+// tick's command intercept and returns the exits it releases.
+func (inst *Instance) ConfirmZoneExitsForTest(unitID uuid.UUID) []PendingZoneExitForTest {
+	_, released := inst.takeZoneExitConfirms([]command.Command{{UnitID: unitID, Payload: command.ConfirmZoneExitPayload{}}})
+	var out []PendingZoneExitForTest
+	for _, p := range released {
+		out = append(out, PendingZoneExitForTest{p.slotID, p.unitID, p.worldCharacterID, p.connection, p.needsConfirm})
+	}
+	return out
+}

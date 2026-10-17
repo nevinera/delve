@@ -76,14 +76,49 @@ func TestDetectZoneExits_NotForOtherConnections(t *testing.T) {
 	assert.Empty(t, exits)
 }
 
-func TestDetectZoneExits_NotDuringTheLockout(t *testing.T) {
+func TestDetectZoneExits_NeedsConfirmWithinTheWindowAfterEntering(t *testing.T) {
 	inst, slot := exitInstance(t)
 	now := time.Now()
 	inst.ArmZoneExitsForTest(slot.CharacterUnitID, now)
 	on, off := playerAt(slot.CharacterUnitID, doorPos), playerAt(slot.CharacterUnitID, awayPos)
 
-	assert.Empty(t, inst.DetectZoneExitsForTest(on, off, now.Add(instance.ZoneExitLockout-time.Millisecond)))
-	assert.Len(t, inst.DetectZoneExitsForTest(on, off, now.Add(instance.ZoneExitLockout)), 1)
+	exits := inst.DetectZoneExitsForTest(on, off, now.Add(instance.ZoneExitConfirmWindow-time.Millisecond))
+	require.Len(t, exits, 1)
+	assert.True(t, exits[0].NeedsConfirm)
+
+	exits = inst.DetectZoneExitsForTest(on, off, now.Add(instance.ZoneExitConfirmWindow))
+	require.Len(t, exits, 1)
+	assert.False(t, exits[0].NeedsConfirm)
+}
+
+func TestDetectZoneExits_NotForAUnitThatJustAppearedOnTheExit(t *testing.T) {
+	inst, slot := exitInstance(t)
+	empty := &instancestate.InstanceState{Units: map[uuid.UUID]*instancestate.UnitState{}}
+	assert.Empty(t, inst.DetectZoneExitsForTest(playerAt(slot.CharacterUnitID, doorPos), empty, time.Now()))
+}
+
+func TestZoneExitConfirm_YesReleasesTheExit(t *testing.T) {
+	inst, slot := exitInstance(t)
+	writeCh, _, done, ok := inst.ConnectSlot(slot.ID)
+	require.True(t, ok)
+	t.Cleanup(func() { close(done) })
+	now := time.Now()
+	inst.ArmZoneExitsForTest(slot.CharacterUnitID, now)
+	exit := inst.DetectZoneExitsForTest(playerAt(slot.CharacterUnitID, doorPos), playerAt(slot.CharacterUnitID, awayPos), now)[0]
+
+	inst.AskZoneExitConfirmForTest(exit, now)
+
+	msg := readMsgOfType(t, writeCh, "zone-exit-confirm")
+	assert.Equal(t, "m/door", msg["connection"])
+	released := inst.ConfirmZoneExitsForTest(slot.CharacterUnitID)
+	require.Len(t, released, 1)
+	assert.Equal(t, "m/door", released[0].Connection)
+	assert.Empty(t, inst.ConfirmZoneExitsForTest(slot.CharacterUnitID), "an answer is used once")
+}
+
+func TestZoneExitConfirm_YesWithNoQuestionDoesNothing(t *testing.T) {
+	inst, slot := exitInstance(t)
+	assert.Empty(t, inst.ConfirmZoneExitsForTest(slot.CharacterUnitID))
 }
 
 func TestDetectZoneExits_OnlyOnceWhileInFlight(t *testing.T) {

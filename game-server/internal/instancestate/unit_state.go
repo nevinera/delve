@@ -290,6 +290,12 @@ type UnitState struct {
 	// each tick; see Instance.markDisconnected.
 	Disconnected bool
 
+	// DisarmedConnection is the "mapId/connectionId" of the connection this
+	// unit last arrived through. It stays inert until the unit has left that
+	// connection's trigger area once, so arriving never bounces the unit
+	// straight back (see instance/map_transition.go).
+	DisarmedConnection string
+
 	Speed  float64 // movement speed in feet per second
 	Radius float64 // collision radius in feet; 0 means no collision (NPCs for now)
 
