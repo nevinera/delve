@@ -16,6 +16,12 @@ RSpec.describe Validators::StatusValidator, type: :validator do
       expect { described_class.validate!(minimal_status) }.not_to raise_error
     end
 
+    it "accepts a boolean endsOnCasterDeath and rejects other values" do
+      expect { described_class.validate!(minimal_status.merge("endsOnCasterDeath" => true)) }.not_to raise_error
+      expect { described_class.validate!(minimal_status.merge("endsOnCasterDeath" => "yes")) }
+        .to raise_error(Validators::ValidationError, /endsOnCasterDeath must be a boolean/)
+    end
+
     it "accepts maxStacks when stacking is stack" do
       data = minimal_status.merge("stacking" => "stack", "maxStacks" => 5)
       expect { described_class.validate!(data) }.not_to raise_error

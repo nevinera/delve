@@ -96,3 +96,41 @@ func applyDeathPower(unitID uuid.UUID, unit *instancestate.UnitState, targetID u
 		}
 	}
 }
+
+// endCasterDeathEffects drops the statuses and ground areas that end when
+// their caster dies, for every unit that died since the previous tick. It
+// runs before fireDeathEffects so an effect the dying unit's own onDeath power
+// creates is not caught by it.
+func endCasterDeathEffects(state, prevState *instancestate.InstanceState) {
+	var died map[uuid.UUID]bool
+	for id, unit := range state.Units {
+		if unit.Status != instancestate.UnitStatusDead {
+			continue
+		}
+		if prev, ok := prevState.Units[id]; ok && prev.Status != instancestate.UnitStatusDead {
+			if died == nil {
+				died = map[uuid.UUID]bool{}
+			}
+			died[id] = true
+		}
+	}
+	if died == nil {
+		return
+	}
+	for _, unit := range state.Units {
+		kept := unit.ActiveStatusEffects[:0]
+		for _, e := range unit.ActiveStatusEffects {
+			if !e.Status.EndsOnCasterDeath || !died[e.ApplierID] {
+				kept = append(kept, e)
+			}
+		}
+		unit.ActiveStatusEffects = kept
+	}
+	areas := state.GroundAreas[:0]
+	for _, a := range state.GroundAreas {
+		if !a.EndsOnCasterDeath || !died[a.CasterID] {
+			areas = append(areas, a)
+		}
+	}
+	state.GroundAreas = areas
+}

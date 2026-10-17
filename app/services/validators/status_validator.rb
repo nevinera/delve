@@ -12,6 +12,7 @@ module Validators
       validate_treat_as!(data, path: path)
       validate_stacking!(data, path: path)
       validate_max_stacks!(data, path: path) if given?(data, "maxStacks")
+      require_boolean!(data, "endsOnCasterDeath", path: path) if given?(data, "endsOnCasterDeath")
       validate_aura_effect!(data, path: path) if given?(data, "auraEffect")
       validate_effects!(data, path: path)
     end

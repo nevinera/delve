@@ -86,6 +86,11 @@ describe("entryFieldsFor", () => {
     expect(entryFieldsFor("effects", {type: "heal", affects: "self", amount: 5})).not.toContain("radius");
   });
 
+  it("edits endsOnCasterDeath as a boolean on a groundArea", () => {
+    expect(widgetFor("endsOnCasterDeath")).toBe("boolean");
+    expect(entryFieldsFor("effects", {type: "groundArea", affects: "bAll"})).toContain("endsOnCasterDeath");
+  });
+
   it("forces status and duration into a fresh status-type effect's field list", () => {
     const entry = {type: "status", affects: "self"};
     const fields = entryFieldsFor("effects", entry);
@@ -153,6 +158,6 @@ describe("groundArea effects", () => {
 
   it("forces the groundArea fields into the list", () => {
     const fields = entryFieldsFor("effects", {type: "groundArea", affects: "bAll"});
-    expect(fields).toEqual(["type", "affects", "shape", "range", "duration", "tickInterval", "onTick", "graphic"]);
+    expect(fields).toEqual(["type", "affects", "shape", "range", "duration", "tickInterval", "onTick", "graphic", "endsOnCasterDeath"]);
   });
 });

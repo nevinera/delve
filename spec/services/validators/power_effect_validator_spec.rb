@@ -43,6 +43,12 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
         expect { described_class.validate!(ground_area) }.not_to raise_error
       end
 
+      it "accepts a boolean endsOnCasterDeath and rejects other values" do
+        expect { described_class.validate!(ground_area.merge("endsOnCasterDeath" => true)) }.not_to raise_error
+        expect { described_class.validate!(ground_area.merge("endsOnCasterDeath" => 1)) }
+          .to raise_error(Validators::ValidationError, /endsOnCasterDeath must be a boolean/)
+      end
+
       it "accepts a burst-style circle on self without a range" do
         effect = with_shape(type: "circle", at: "self", radius: 6).except("range")
         expect { described_class.validate!(effect) }.not_to raise_error

@@ -81,7 +81,7 @@ func CreateGroundArea(casterID uuid.UUID, caster, target *instancestate.UnitStat
 		Shape: shape, Affects: effect.Affects, OnTick: effect.OnTick,
 		TimeBudget: interval.Seconds(), TickInterval: interval,
 		NextTickAt: now.Add(interval), ExpiresAt: expires,
-		Graphic: effect.Graphic,
+		Graphic: effect.Graphic, EndsOnCasterDeath: effect.EndsOnCasterDeath,
 	})
 	return true
 }

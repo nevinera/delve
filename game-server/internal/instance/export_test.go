@@ -339,3 +339,7 @@ func (inst *Instance) ConfirmZoneExitsForTest(unitID uuid.UUID) []PendingZoneExi
 	}
 	return out
 }
+
+func EndCasterDeathEffectsForTest(state, prevState *instancestate.InstanceState) {
+	endCasterDeathEffects(state, prevState)
+}
