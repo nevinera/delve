@@ -97,12 +97,14 @@ const TAB_LAYERS = {
 //   editor.
 // - stamps {sets, sheetUrl(set)} (optional): the zone's decoration stamps
 //   (docs/schema/zone.md#stamps), and each set's sheet as a displayable URL.
+// - onBuildStampSet({setKey, name, license, attribution, stamps, sheet})
+//   (optional): makes or extends a stamp set from picked images.
 // - renderStampSetAdder({close()}) (optional): a way to add a stamp set to
 //   the zone, in the Stamps tab.
 export default function MapWorkbench({
   mapKey, mapData, onMapChange, imageUrl, onImageUpload, onImageRemove = null, onCellThumbnail = null, unitTypes, items,
   ncuTokenUrls, tokenImages, renderUnitTypeAdder, renderItemAdder, sidebarHeader, backUrl, ncuQuests = null, stamps = null,
-  renderStampSetAdder = null,
+  renderStampSetAdder = null, onBuildStampSet = null,
 }) {
   const [tab, setTab] = useState("map");
   // The Places tab's open and hovered place (index into mapData.places).
@@ -138,6 +140,7 @@ export default function MapWorkbench({
     pixelDimensions: ground ? ground.image?.pixelDimensions : image?.pixelDimensions,
     feetDimensions: ground?.feetDimensions ?? mapData.feetDimensions,
     renderSetAdder: renderStampSetAdder,
+    onBuildSet: onBuildStampSet,
   });
 
   // Walls from the cells, for a map whose ground they are.

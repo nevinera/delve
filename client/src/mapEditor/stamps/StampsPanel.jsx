@@ -1,12 +1,14 @@
 import {useState} from "react";
 import StampThumb from "./StampThumb";
+import StampSetBuilder from "./StampSetBuilder";
 import {isShareAlike, shareAlikeSetsUsed, stampFor} from "../../game/stamps";
 import {MAX_SCALE, MIN_SCALE} from "./stampGeometry";
 
 // The Stamps tab's sidebar (see useStampsTab): a palette per stamp set in
 // the zone, the selected stamp's fields, and adding a set (renderSetAdder).
-export default function StampsPanel({sets, sheets, stamps, armed, onArm, varyRotation, onVaryRotation, selected, onUpdate, onRemove, onMove, renderSetAdder}) {
+export default function StampsPanel({sets, sheets, stamps, armed, onArm, varyRotation, onVaryRotation, selected, onUpdate, onRemove, onMove, renderSetAdder, onBuildSet}) {
   const [adding, setAdding] = useState(false);
+  const [building, setBuilding] = useState(false);
   const setKeys = Object.keys(sets);
   const placed = selected !== null ? stamps[selected] : null;
 
@@ -51,6 +53,9 @@ export default function StampsPanel({sets, sheets, stamps, armed, onArm, varyRot
       {renderSetAdder && (adding
         ? renderSetAdder({close: () => setAdding(false)})
         : <button type="button" className="add-entry" onClick={() => setAdding(true)}>Add a stamp set…</button>)}
+      {onBuildSet && (building
+        ? <StampSetBuilder sets={sets} sheets={sheets} onCancel={() => setBuilding(false)} onBuild={(result) => { onBuildSet(result); setBuilding(false); }} />
+        : <button type="button" className="add-entry" onClick={() => setBuilding(true)}>Make or extend a set from images…</button>)}
       <p className="stamps-count">{stamps.length} {stamps.length === 1 ? "stamp" : "stamps"} on this map</p>
       <ShareAlikeNote sets={sets} stamps={stamps} />
       {placed && <SelectedStamp sets={sets} placed={placed} index={selected} count={stamps.length} onUpdate={onUpdate} onRemove={onRemove} onMove={onMove} />}

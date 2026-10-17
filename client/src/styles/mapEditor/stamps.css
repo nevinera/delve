@@ -23,3 +23,10 @@
 .stamp-license.share-alike { background: #5a3d1a; color: #ffd9a0; }
 .stamp-attribution { margin: 2px 0 0; color: #889; font-size: 11px; }
 .stamps-share-alike { color: #ffd9a0; font-size: 12px; }
+
+.stamp-set-builder { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.stamp-set-builder label { display: flex; flex-direction: column; gap: 2px; }
+.stamp-set-mode { display: flex; flex-direction: column; }
+.stamp-set-mode label { flex-direction: row; gap: 4px; }
+.stamp-set-item { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.stamp-set-item input { width: 7em; }

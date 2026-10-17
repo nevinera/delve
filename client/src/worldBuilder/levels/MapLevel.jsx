@@ -14,7 +14,7 @@ import {mapFile, relativePath, resolvePath} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
 import {createQuest, ncuQuests, newQuestIdentifier, questData} from "../state/questOps";
 import {ncuDialogueLayout, setNcuDialogueLayout} from "../state/zoneOps";
-import {libraryStampSets, prepareStampSetImport, stampSheetPath, zoneStamps} from "../state/stampOps";
+import {buildStampSet, libraryStampSets, prepareStampSetImport, stampSheetPath, zoneStamps} from "../state/stampOps";
 import ImportForm from "./ImportForm";
 
 // The map level: the map editor's whole editing surface (MapWorkbench)
@@ -97,6 +97,7 @@ export default function MapLevel({draft, zone, map, onChange, repo, stockAssets,
         tokenImages={{options: tokenImageOptions(draft, path, assetUrl), upload: uploadTokenImage}}
         ncuQuests={ncuQuestProps}
         stamps={stamps}
+        onBuildStampSet={({setKey, ...built}) => onChange((current) => buildStampSet(current, zone, setKey, built))}
         renderStampSetAdder={library && (({close}) => (
           <ImportForm
             noun="stamp set" draft={draft} library={library} list={libraryStampSets}

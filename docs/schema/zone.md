@@ -64,6 +64,8 @@ Decorations for the zone's maps to place (see [map.md](map.md#placedstamp)), gro
 Each set is one image, a sheet holding many stamps, so a map loads a few images, not hundreds.
 Sets come from the shared library (`graphics/stamps/<set>.json` and its image) and are copied in;
 the sheet is copied to the world's `graphics/stamps/`. Backgrounds are transparent. Not animated.
+The world builder can also make a set from picked image files (packing them onto a new sheet) or add
+stamps to one (the sheet grows downward, so existing `frames` stay valid).
 
 Stamps are baked into the ground in the player's browser, so the game shares only the sheets
 (under their own licenses, credited) and never a combined image. An image we publish with

@@ -18,7 +18,7 @@ const ROTATE_STEP = 15;
 // onMapChange(fn) edits the map (a MapDraft); pixelDimensions and
 // feetDimensions convert the canvas's pixels to feet. renderSetAdder({close})
 // (optional) renders a way to add a set to the zone.
-export function useStampsTab({active, stamps, stampLayer, onMapChange, pixelDimensions, feetDimensions, renderSetAdder = null}) {
+export function useStampsTab({active, stamps, stampLayer, onMapChange, pixelDimensions, feetDimensions, renderSetAdder = null, onBuildSet = null}) {
   const [armed, setArmed] = useState(null);
   const [selected, setSelected] = useState(null);
   const [hovered, setHovered] = useState(null);
@@ -172,6 +172,7 @@ export function useStampsTab({active, stamps, stampLayer, onMapChange, pixelDime
       varyRotation={varyRotation} onVaryRotation={setVaryRotation}
       selected={selected} onUpdate={update} onRemove={remove} onMove={move}
       renderSetAdder={renderSetAdder}
+      onBuildSet={onBuildSet}
     />
   );
   return {editing, panel};
