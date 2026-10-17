@@ -52,7 +52,7 @@ A node with neither `next` nor `choices` ends the conversation.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `text` | string | yes | The choice's button label. Non-empty. |
-| `next` | string | yes | Node id to advance to. |
+| `next` | string | no | Node id to advance to. A choice with no `next` ends the conversation. |
 
 ## Example
 
