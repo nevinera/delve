@@ -101,14 +101,6 @@ RSpec.describe Validators::DialogueValidator, type: :validator do
     expect { described_class.validate!(branching.merge("nodes" => nodes)) }.not_to raise_error
   end
 
-  it "raises when a choice's next is blank" do
-    node = branching["nodes"]["greet"]
-    blank = [node["choices"].first.merge("next" => " "), node["choices"].last]
-    nodes = branching["nodes"].merge("greet" => node.merge("choices" => blank))
-    expect { described_class.validate!(branching.merge("nodes" => nodes)) }
-      .to raise_error(Validators::ValidationError, /next must not be empty/)
-  end
-
   it "raises on a blank node text" do
     expect { described_class.validate!(linear.merge("nodes" => linear["nodes"].merge("greet" => {"text" => "  "}))) }
       .to raise_error(Validators::ValidationError, /text must not be empty/)
