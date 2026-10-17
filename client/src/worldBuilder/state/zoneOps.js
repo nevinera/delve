@@ -13,7 +13,7 @@ import {aggregateItemUsage, aggregateUnitTypeUsage} from "../../zoneEditor/zoneR
 import {rebaseRelativeUrls, dirname} from "../../content/rebaseRelativeUrls";
 import {syncZoneEntry, worldData} from "./worldOps";
 import {stableStringify} from "./WorldDraft";
-import {itemFile, mapFile, relativePath, resolvePath, unitTypeFile, worldFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
+import {itemFile, mapFile, relativePath, resolvePath, unitTypeFile, worldFile, zoneDialogueLayoutFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
 
 export const zoneData = (draft, zone) => draft.read(zoneFile(draft.worldKey, zone));
 
@@ -34,6 +34,20 @@ export function zonePositions(draft, zone) {
 export function setZonePositions(draft, zone, positions) {
   if (stableStringify(positions) === stableStringify(zonePositions(draft, zone))) return draft;
   return draft.write(zoneLayoutFile(draft.worldKey, zone), {positions});
+}
+
+// One NCU's dialogue graph layout ({positions, bends}), kept with the rest
+// of the zone's in <zone>.dialogue.layout.json as {ncus: {<ncu>: layout}}.
+export function ncuDialogueLayout(draft, zone, ncu) {
+  return draft.read(zoneDialogueLayoutFile(draft.worldKey, zone))?.ncus?.[ncu] ?? {positions: {}, bends: {}};
+}
+
+// A no-op when nothing moved (see worldOps#setWorldPositions).
+export function setNcuDialogueLayout(draft, zone, ncu, layout) {
+  if (stableStringify(layout) === stableStringify(ncuDialogueLayout(draft, zone, ncu))) return draft;
+  const path = zoneDialogueLayoutFile(draft.worldKey, zone);
+  const ncus = draft.read(path)?.ncus ?? {};
+  return draft.write(path, {ncus: {...ncus, [ncu]: layout}});
 }
 
 // Every map directory in the zone (<zone>/<map>/<map>.json), whether or

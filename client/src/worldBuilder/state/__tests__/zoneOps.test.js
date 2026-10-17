@@ -1,7 +1,7 @@
 import {describe, it, expect} from "vitest";
 import {fixtureDraft} from "./fixtureWorld";
 import {worldData} from "../worldOps";
-import {addMap, mapDetails, mapKeysInZone, removeMap, resolveZone, setZoneField, setZonePositions, zoneData, zonePositions} from "../zoneOps";
+import {addMap, mapDetails, mapKeysInZone, removeMap, resolveZone, setZoneField, ncuDialogueLayout, setNcuDialogueLayout, setZonePositions, zoneData, zonePositions} from "../zoneOps";
 
 const FOREST = "worlds/w/zones/forest/forest.json";
 
@@ -12,6 +12,16 @@ describe("zoneOps", () => {
     expect(zoneData(draft, "forest").name).toEqual("Old Forest");
     expect(worldData(draft).zones.forest.name).toEqual("Old Forest");
     expect(draft.dirtyPaths()).toEqual(["worlds/w/w.json", FOREST]);
+  });
+
+  it("saves each NCU's dialogue layout beside the zone, and is a no-op when unchanged", () => {
+    const layout = {positions: {a: {x: 1, y: 2}}, bends: {}};
+    const draft = setNcuDialogueLayout(fixtureDraft(), "forest", "grizzle", layout);
+
+    expect(ncuDialogueLayout(draft, "forest", "grizzle")).toEqual(layout);
+    expect(ncuDialogueLayout(draft, "forest", "other")).toEqual({positions: {}, bends: {}});
+    expect(draft.dirtyPaths()).toEqual(["worlds/w/zones/forest/forest.dialogue.layout.json"]);
+    expect(setNcuDialogueLayout(fixtureDraft(), "forest", "grizzle", {positions: {}, bends: {}}).dirtyPaths()).toEqual([]);
   });
 
   it("lists every map directory in the zone, referenced or not", () => {

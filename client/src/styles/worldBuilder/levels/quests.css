@@ -15,3 +15,15 @@
 .quest-chain ul { margin: 0; padding-left: 18px; }
 .quest-chain code { color: var(--text-dim); font-size: 11px; }
 .quest-editor .quest-item-popover { max-width: 420px; margin-top: 6px; padding: 8px 10px; background: #1b2026; border: 1px solid var(--accent-border); border-radius: 4px; }
+
+.dialogue-graph { position: relative; width: 100%; height: 320px; background: #101316; cursor: grab; touch-action: none; user-select: none; border: 1px solid #345; }
+.dialogue-graph-node { cursor: move; }
+.dialogue-graph-node text { font-size: 12px; pointer-events: none; fill: #111; }
+.dialogue-graph-start rect { fill: #334; stroke: #99a; }
+.dialogue-graph-start text { fill: #dde; }
+.dialogue-graph-npc rect { fill: #e8d36a; stroke: #a90; }
+.dialogue-graph-choice rect { fill: #7ed09a; stroke: #3a7; }
+.dialogue-graph-quest rect { fill: #f0a050; stroke: #b60; }
+.dialogue-graph-quest { cursor: pointer; }
+.dialogue-graph-bend { fill: #556; stroke: #99a; cursor: crosshair; }
+.dialogue-graph-edge { pointer-events: none; }

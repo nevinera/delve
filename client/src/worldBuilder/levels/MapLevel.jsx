@@ -13,6 +13,7 @@ import {inMemory, newAssetPath, tokenImageOptions} from "../state/assetOps";
 import {mapFile, relativePath, resolvePath} from "../state/worldPaths";
 import {assetUrlFor} from "../state/assetUrls";
 import {createQuest, ncuQuests, newQuestIdentifier, questData} from "../state/questOps";
+import {ncuDialogueLayout, setNcuDialogueLayout} from "../state/zoneOps";
 import {libraryStampSets, prepareStampSetImport, stampSheetPath, zoneStamps} from "../state/stampOps";
 import ImportForm from "./ImportForm";
 
@@ -48,6 +49,10 @@ export default function MapLevel({draft, zone, map, onChange, repo, stockAssets,
   const ncuQuestProps = onOpenQuest && {
     byNcu: Object.fromEntries((data.ncus ?? []).filter((ncu) => ncu.identifier).map((ncu) => [ncu.identifier, questsOf(ncu.identifier)])),
     onOpenQuest,
+    dialogueLayout: {
+      get: (ncu) => ncuDialogueLayout(draft, zone, ncu),
+      set: (ncu, layout) => onChange((current) => setNcuDialogueLayout(current, zone, ncu, layout)),
+    },
     onNewQuest: (ncu) => {
       const identifier = newQuestIdentifier(draft, ncu);
       onChange(createQuest(draft, identifier, {zone, ncu}));

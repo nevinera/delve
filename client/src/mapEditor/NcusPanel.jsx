@@ -155,7 +155,15 @@ function NcuRow({
             wanderLocationPlacement={wanderLocationPlacement} onStartWanderLocationPlacement={onStartWanderLocationPlacement}
             onUpdateMovement={onUpdateMovement}
           />
-          <DialogueFields dialogue={ncu.dialogue} onChange={(v) => update(index, {dialogue: v})} />
+          <DialogueFields
+            dialogue={ncu.dialogue} onChange={(v) => update(index, {dialogue: v})}
+            graphView={ncuQuests?.dialogueLayout && ncu.identifier ? {
+              offers: ncuQuests.byNcu[ncu.identifier]?.offers ?? [],
+              layout: ncuQuests.dialogueLayout.get(ncu.identifier),
+              onLayoutChange: (layout) => ncuQuests.dialogueLayout.set(ncu.identifier, layout),
+              onOpenQuest: ncuQuests.onOpenQuest,
+            } : null}
+          />
           {ncuQuests && ncu.identifier && (
             <NcuQuests
               quests={ncuQuests.byNcu[ncu.identifier] ?? {offers: [], turnIns: []}}

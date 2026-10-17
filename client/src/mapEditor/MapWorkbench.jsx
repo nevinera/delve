@@ -90,6 +90,8 @@ const TAB_LAYERS = {
 //   images an NCU can use, and storing a new one (see ImagePicker).
 // - sidebarHeader: rendered at the top of the sidebar (e.g. a save bar).
 // - ncuQuests {byNcu: {ncuIdentifier: {offers, turnIns}}, onOpenQuest(id),
+//   dialogueLayout {get(ncu), set(ncu, {positions, bends})} (optional: enables
+//   the dialogue graph view),
 //   onNewQuest(ncuIdentifier)} (optional): each NCU's quests ([{identifier,
 //   name}]), listed in its row and badged on its token, opening the quest
 //   editor.

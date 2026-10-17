@@ -9,7 +9,7 @@
 import {dropAtlasZone, renameAtlasZone} from "./atlasOps";
 import {WorldDraft as WorldFile} from "../../worldEditor/WorldDraft";
 import {stableStringify} from "./WorldDraft";
-import {isValidIdentifier, relativePath, worldDir, worldFile, worldLayoutFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
+import {isValidIdentifier, relativePath, worldDir, worldFile, worldLayoutFile, zoneDialogueLayoutFile, zoneDir, zoneFile, zoneLayoutFile} from "./worldPaths";
 
 export function blankWorld(name) {
   return {name, description: null, thumbnailUrl: null, elevationRange: null, zones: {}, worldLinks: [], entryPoints: {}};
@@ -86,7 +86,7 @@ export function renameZone(draft, from, to) {
   const world = draft.worldKey;
   let next = draft.moveDir(zoneDir(world, from), zoneDir(world, to));
   const moved = (name) => `${zoneDir(world, to)}/${name}`;
-  for (const [oldPath, newPath] of [[moved(`${from}.json`), zoneFile(world, to)], [moved(`${from}.layout.json`), zoneLayoutFile(world, to)]]) {
+  for (const [oldPath, newPath] of [[moved(`${from}.json`), zoneFile(world, to)], [moved(`${from}.layout.json`), zoneLayoutFile(world, to)], [moved(`${from}.dialogue.layout.json`), zoneDialogueLayoutFile(world, to)]]) {
     if (next.exists(oldPath)) next = next.write(newPath, next.read(oldPath)).remove(oldPath);
   }
   if (next.exists(moved(`${from}.full.json`))) next = next.remove(moved(`${from}.full.json`));
