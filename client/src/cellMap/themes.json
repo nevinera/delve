@@ -106,4 +106,43 @@
       "ink": "#15120f"
     }
   }
+  ,
+  "ruins": {
+    "grids": ["square"],
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "flagstones", "tallGrass": "rubble", "marsh": "mud", "water": "water", "trees": "wall", "forest": "grass"},
+    "paths": ["worn"],
+    "colors": {
+      "meadow": "#c9c3b0",
+      "tallGrass": "#b9b49f",
+      "marsh": "#8d8f6b",
+      "water": "#527464",
+      "forest": "#5d7a46",
+      "grout": "#8a8671",
+      "stone": "#a39e8b",
+      "worn": "#d3cdb8",
+      "bridge": "#a98053",
+      "ink": "#1d2417"
+    }
+  },
+  "mansion": {
+    "grids": ["square"],
+    "fill": "T",
+    "terrains": {".": "meadow", "%": "tallGrass", "~": "marsh", "w": "water", "T": "trees"},
+    "labels": {"meadow": "floor", "tallGrass": "carpet", "marsh": "rug", "water": "water", "trees": "wall", "forest": "outside"},
+    "paths": ["worn"],
+    "colors": {
+      "meadow": "#b88a5a",
+      "tallGrass": "#8c3a3a",
+      "marsh": "#4f6a85",
+      "water": "#5b8199",
+      "forest": "#3a3128",
+      "grout": "#8f6a43",
+      "stone": "#9b9387",
+      "worn": "#d8c39a",
+      "bridge": "#a98053",
+      "ink": "#1c140e"
+    }
+  }
 }

@@ -19,13 +19,19 @@ const HATCHES_PER_EDGE = 3;
 
 const grid = gridOf("square");
 
-export function buildDungeonScene(map) {
+// Looks the dungeon renderer's themes vary on (style.dungeon): "flagstone"
+// or "planks" floors, rock hatching, rubble stones, puddles on the "marsh"
+// cells, and the chance a floor cell has a patch of moss.
+const DEFAULT_LOOK = {floor: "flagstone", hatch: true, rubble: true, puddles: true, moss: 0};
+
+export function buildDungeonScene(map, look = {}) {
+  const options = {...DEFAULT_LOOK, ...look};
   const {seed} = map;
   const cs = CELL_SIZE;
   const {cols, rows} = map.grid;
   const size = grid.mapSize(map.grid, cs);
   const at = (c, r) => terrainAt(map, c, r);
-  const scene = {...size, cellSize: cs, cells: {meadow: [], tallGrass: [], marsh: [], water: []}, stones: [], puddles: [], ripples: [], hatches: [], walls: [], water: [], trails: [], bridges: []};
+  const scene = {...size, cellSize: cs, cells: {meadow: [], tallGrass: [], marsh: [], water: []}, stones: [], puddles: [], ripples: [], hatches: [], planks: [], moss: [], walls: [], water: [], trails: [], bridges: []};
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -33,15 +39,19 @@ export function buildDungeonScene(map) {
       const h = (salt) => hash01(seed, col, row, salt);
       const {x, y} = grid.cellCenter(col, row, cs);
       if (terrain === "trees") {
-        scene.hatches.push(...hatchesFor(map, col, row, h, cs));
+        if (options.hatch) scene.hatches.push(...hatchesFor(map, col, row, h, cs));
         continue;
       }
       scene.cells[terrain].push({x: x - cs / 2, y: y - cs / 2});
-      if (terrain === "tallGrass") {
+      if (options.floor === "planks" && terrain !== "water") scene.planks.push(...plankSeams(x - cs / 2, y - cs / 2, cs, h));
+      if (options.moss && terrain !== "water" && h(120) < options.moss) {
+        scene.moss.push({x: x + (h(121) - 0.5) * 0.6 * cs, y: y + (h(122) - 0.5) * 0.6 * cs, rx: cs * (0.15 + 0.2 * h(123)), ry: cs * (0.12 + 0.15 * h(124)), turn: h(125) * Math.PI});
+      }
+      if (terrain === "tallGrass" && options.rubble) {
         for (let i = 0; i < STONES_PER_CELL; i++) {
           scene.stones.push({x: x + (h(10 + i * 5) - 0.5) * 0.85 * cs, y: y + (h(11 + i * 5) - 0.5) * 0.85 * cs, radius: cs * (0.07 + 0.09 * h(12 + i * 5)), turn: h(13 + i * 5) * Math.PI, sides: 5 + Math.floor(h(14 + i * 5) * 3)});
         }
-      } else if (terrain === "marsh") {
+      } else if (terrain === "marsh" && options.puddles) {
         const count = 1 + Math.floor(h(40) * 2);
         for (let i = 0; i < count; i++) {
           scene.puddles.push({x: x + (h(41 + i * 4) - 0.5) * 0.6 * cs, y: y + (h(42 + i * 4) - 0.5) * 0.6 * cs, rx: cs * (0.18 + 0.17 * h(43 + i * 4)), ry: cs * (0.12 + 0.12 * h(44 + i * 4))});
@@ -59,6 +69,20 @@ export function buildDungeonScene(map) {
   scene.trails = (map.trails ?? []).map(({width, points}) => ({width: width * cs, points: points.map(([c, r]) => grid.cellPoint(c, r, cs))}));
   scene.bridges = (map.bridges ?? []).map((b) => bridgeDeck(b, "square"));
   return scene;
+}
+
+// The seams of a cell's floorboards: a board a foot wide per row, with a
+// butt joint at a different place along each.
+function plankSeams(left, top, cs, h) {
+  const out = [];
+  const boards = Math.round(cs);
+  for (let i = 0; i < boards; i++) {
+    const y = top + (i * cs) / boards;
+    if (i > 0) out.push({x1: left, y1: y, x2: left + cs, y2: y});
+    const x = left + cs * (0.15 + 0.7 * h(130 + i));
+    out.push({x1: x, y1: y, x2: x, y2: y + cs / boards});
+  }
+  return out;
 }
 
 // Short diagonal strokes in a rock cell, along each edge it shares with open
@@ -131,10 +155,29 @@ export function paintDungeon(ctx, scene, pixelsPerFoot, style) {
   ctx.strokeStyle = palette.grout;
   ctx.lineWidth = GROUT_INK;
   ctx.beginPath();
-  for (const terrain of ["meadow", "tallGrass", "marsh"]) {
-    for (const {x, y} of scene.cells[terrain]) ctx.rect(x, y, cs, cs);
+  if (scene.planks.length) {
+    for (const {x1, y1, x2, y2} of scene.planks) {
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    }
+  } else {
+    for (const terrain of ["meadow", "tallGrass", "marsh"]) {
+      for (const {x, y} of scene.cells[terrain]) ctx.rect(x, y, cs, cs);
+    }
   }
   ctx.stroke();
+
+  if (scene.moss.length) {
+    ctx.fillStyle = palette.moss;
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    for (const {x, y, rx, ry, turn} of scene.moss) {
+      ctx.moveTo(x + rx, y);
+      ctx.ellipse(x, y, rx, ry, turn, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
 
   paintWater(ctx, scene, palette);
   paintStones(ctx, scene, palette);

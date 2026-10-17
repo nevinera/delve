@@ -30,7 +30,7 @@ describe("validateCellMap", () => {
   });
 
   it("checks the theme and its colors", () => {
-    expect(validateCellMap({...tiny([".."]), theme: "caves"})).toEqual(["theme must be one of: glade, autumn, winter, cave, dungeon"]);
+    expect(validateCellMap({...tiny([".."]), theme: "caves"})).toEqual(["theme must be one of: glade, autumn, winter, cave, dungeon, ruins, mansion"]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "#aabbcc"}})).toEqual([]);
     expect(validateCellMap({...tiny([".."]), colors: {meadow: "green", sky: "#000000"}})).toEqual([
       'colors.meadow must be a "#rrggbb" color',

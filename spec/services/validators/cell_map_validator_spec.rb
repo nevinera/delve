@@ -160,6 +160,12 @@ RSpec.describe Validators::CellMapValidator, type: :validator do
       expect { described_class.validate!(dungeon.merge("bridges" => [{"from" => [2, 1], "to" => [2, 3]}, {"from" => [1, 0], "to" => [6, 0]}])) }.not_to raise_error
     end
 
+    %w[ruins mansion].each do |theme|
+      it "accepts the #{theme} theme on a square grid" do
+        expect { described_class.validate!(dungeon.merge("theme" => theme)) }.not_to raise_error
+      end
+    end
+
     it "raises on a diagonal bridge" do
       expect_invalid(dungeon.merge("bridges" => [{"from" => [2, 1], "to" => [3, 2]}]), /must run straight/, "$.bridges[0]")
     end
