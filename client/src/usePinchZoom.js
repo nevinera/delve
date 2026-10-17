@@ -18,6 +18,23 @@ export default function usePinchZoom(wrapperRef, view, {onPinch, onPinchStart, c
     if (frame.current != null) cancelAnimationFrame(frame.current);
   }, []);
 
+  // A touch whose up/cancel never reached the wrapper (released outside it,
+  // or the wrapper remounted mid-touch) would otherwise linger in `touches`
+  // forever, so every later two-finger gesture counts as three and never
+  // pinches. Window-level listeners catch those releases.
+  useEffect(() => {
+    function release(e) {
+      if (!touches.current.delete(e.pointerId)) return;
+      if (touches.current.size === 0) pinch.current = null;
+    }
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+    };
+  }, []);
+
   function touchPoint(e) {
     const rect = wrapperRef.current.getBoundingClientRect();
     return {x: e.clientX - rect.left, y: e.clientY - rect.top};
