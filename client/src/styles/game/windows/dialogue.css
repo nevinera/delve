@@ -1,10 +1,10 @@
 /* DialogueWindow: talking to an NCU, and its quest offers and turn-ins. */
 
-.game-dialogue { position: absolute; z-index: 20; left: 50%; bottom: 22%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); box-sizing: border-box; background: var(--hud-window-bg-translucent); border: 1px solid var(--hud-window-border); border-radius: 6px; padding: 10px 16px 12px; pointer-events: auto; }
-.game-dialogue-header { margin-bottom: 6px; }
-.game-dialogue-line { color: #e8e0d0; font-size: 15px; line-height: 1.4; margin: 4px 0 10px; white-space: pre-wrap; }
+.game-dialogue { position: absolute; z-index: 20; left: 50%; bottom: 22%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); box-sizing: border-box; background: var(--hud-window-bg-translucent); border: 1px solid var(--hud-window-border); border-radius: 6px; padding: 10px 16px 12px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(78% - 12px); }
+.game-dialogue-header { margin-bottom: 6px; flex: none; }
+.game-dialogue-line { color: #e8e0d0; font-size: 15px; line-height: 1.4; margin: 4px 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; overflow-y: auto; flex: 0 1 auto; min-height: 3em; }
 .game-dialogue-quest-name { color: #7fe0ff; font-size: 14px; font-weight: bold; margin: 4px 0 0; }
-.game-dialogue-options { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.game-dialogue-options { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
 
-.game-dialogue-option { background: #3a2a14; color: #e8d0a0; border: 1px solid var(--hud-window-border); border-radius: 4px; padding: 4px 14px; cursor: pointer; font-size: 14px; }
+.game-dialogue-option { background: #3a2a14; color: #e8d0a0; border: 1px solid var(--hud-window-border); border-radius: 4px; padding: 4px 14px; cursor: pointer; font-size: 14px; max-width: 100%; flex: none; white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .game-dialogue-option-quest { background: #14303a; color: #bfefff; border-color: #3f8fa8; }
