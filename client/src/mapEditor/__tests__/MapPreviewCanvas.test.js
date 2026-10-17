@@ -32,6 +32,22 @@ describe("startPositionFor", () => {
     expect(startPositionFor(mapData, {x: 91, y: 60})).toEqual({x: 10, y: 10});
   });
 
+  it("uses the nearest entrance when the view center is walled off from every entrance", () => {
+    const ring = [{x: 60, y: 30}, {x: 140, y: 30}, {x: 140, y: 100}, {x: 60, y: 100}, {x: 60, y: 30}];
+    const mapData = {feetDimensions, barriers: [{type: "wall", locations: ring}],
+      connections: [{type: "point", position: {x: 10, y: 10, angle: 0}}]};
+    expect(startPositionFor(mapData, {x: 100, y: 65})).toEqual({x: 10, y: 10});
+    expect(startPositionFor(mapData, {x: 30, y: 60})).toEqual({x: 30, y: 60});
+  });
+
+  it("starts inside walls when an entrance is inside them", () => {
+    const ring = [{x: 60, y: 30}, {x: 140, y: 30}, {x: 140, y: 100}, {x: 60, y: 100}, {x: 60, y: 30}];
+    const mapData = {feetDimensions, barriers: [{type: "wall", locations: ring}],
+      connections: [{type: "point", position: {x: 100, y: 50, angle: 0}}]};
+    expect(startPositionFor(mapData, {x: 30, y: 60})).toEqual({x: 100, y: 50});
+    expect(startPositionFor(mapData, {x: 90, y: 70})).toEqual({x: 90, y: 70});
+  });
+
   it("clamps the view center to the map when there are no entrances", () => {
     expect(startPositionFor({feetDimensions}, {x: -5, y: 500})).toEqual({x: 0, y: 120});
   });

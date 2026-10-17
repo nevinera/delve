@@ -1,5 +1,6 @@
 import {useEffect, useRef} from "react";
 import {MapPreviewScene} from "./MapPreviewScene";
+import {reachableArea} from "./reachableArea";
 
 const WALL_CLEARANCE_FEET = 2;
 
@@ -38,7 +39,8 @@ function connectionPoints(mapData) {
 
 // Where the walk preview starts: the center of the part of the map the editor
 // was showing (`viewCenter`, in feet), if a walker can stand there. Otherwise
-// (or with no view at all - it then defaults to the map's center) the entrance
+// (or with no view at all - it then defaults to the map's center), or it
+// can't be reached from an entrance (walled off), the entrance
 // nearest that point: a map has no spawn point of its own - real play starts
 // at Zone.entryPoints (docs/schema/zone.md), which this editor can't resolve
 // without zone context - so a connection (a point's position, or a line's
@@ -46,8 +48,11 @@ function connectionPoints(mapData) {
 export function startPositionFor(mapData, viewCenter = null) {
   const {width, height} = mapData.feetDimensions;
   const from = viewCenter ?? {x: width / 2, y: height / 2};
-  if (isOpenSpot(mapData, from)) return {x: from.x, y: from.y};
-  const nearest = connectionPoints(mapData).sort(
+  const entrances = connectionPoints(mapData);
+  // With entrances, the spot must also be reachable from one (not walled off, e.g. outside the outer walls).
+  const reachable = entrances.length ? reachableArea(mapData, entrances, WALL_CLEARANCE_FEET) : null;
+  if (isOpenSpot(mapData, from) && (!reachable || reachable.contains(from))) return {x: from.x, y: from.y};
+  const nearest = entrances.sort(
     (a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y)
   )[0];
   return nearest ?? {x: Math.min(width, Math.max(0, from.x)), y: Math.min(height, Math.max(0, from.y))};
