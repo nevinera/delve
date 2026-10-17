@@ -107,6 +107,8 @@ type GroundArea struct {
 	NextTickAt    time.Time
 	ExpiresAt     time.Time
 	Graphic       *instanceconfig.GroundAreaGraphic // relayed to the client, which draws it
+
+	EndsOnCasterDeath bool // dropped when the caster dies
 }
 
 // PendingImpact is one effect riding a projectile (a power with a Speed),

@@ -33,8 +33,11 @@ const NUMBER_FIELDS = new Set([
 // Nested objects of a groundArea effect, edited as raw JSON.
 const JSON_FIELDS = new Set(["shape", "onTick", "graphic"]);
 
+const BOOLEAN_FIELDS = new Set(["endsOnCasterDeath"]);
+
 export function widgetFor(field) {
   if (field === "status") return "status";
+  if (BOOLEAN_FIELDS.has(field)) return "boolean";
   if (SELECT_OPTIONS[field]) return "select";
   if (RANGE_FIELDS.has(field)) return "range";
   if (JSON_FIELDS.has(field)) return "json";
@@ -71,7 +74,7 @@ const ENTRY_FIELDS = {
 // list.
 const RESOURCE_EFFECT_FIELDS = ["type", "affects", "resourceName", "delta", "range"];
 
-const GROUND_AREA_FIELDS = ["type", "affects", "shape", "range", "duration", "tickInterval", "onTick", "graphic"];
+const GROUND_AREA_FIELDS = ["type", "affects", "shape", "range", "duration", "tickInterval", "onTick", "graphic", "endsOnCasterDeath"];
 
 // An effect aimed at a target can splash around it (radius), and a bAll/gAll
 // one can land in a shape, so offer those fields even before they're set.

@@ -86,6 +86,10 @@ type PowerEffect struct {
 	TickInterval float64            `json:"tickInterval,omitempty"` // Seconds between ticks; DefaultAreaTickInterval when omitted
 	OnTick       []PowerEffect      `json:"onTick,omitempty"`       // Required for groundArea: harm/heal/resource/status, without affects or range
 	Graphic      *GroundAreaGraphic `json:"graphic,omitempty"`      // Client-only; ignored by the server except to relay it
+	// EndsOnCasterDeath removes the area when its caster dies. An area made by
+	// the caster's own onDeath power is unaffected (it is placed after the
+	// death is handled).
+	EndsOnCasterDeath bool `json:"endsOnCasterDeath,omitempty"`
 }
 
 // DefaultAreaTickInterval is a groundArea's tickInterval when it sets none.
@@ -146,13 +150,16 @@ func (e PowerEffect) AreaNeedsTarget() bool {
 
 // Status is a named effect applied to a unit for a fixed duration.
 type Status struct {
-	Name        string         `json:"name"`                  // Required
-	Description string         `json:"description,omitempty"` // Short description shown in UI.
-	ShortName   string         `json:"shortName"`             // Required: <=6 chars, compact UI badge (no status icons yet)
-	TreatAs     string         `json:"treatAs"`               // Required: "buff", "debuff", or "inherent"
-	Stacking    string         `json:"stacking"`              // Required: "extend", "replace", or "stack"
-	MaxStacks   int            `json:"maxStacks,omitempty"`   // Only meaningful when stacking is "stack"
-	Effects     []StatusEffect `json:"effects"`               // Required (may be empty)
+	Name        string `json:"name"`                  // Required
+	Description string `json:"description,omitempty"` // Short description shown in UI.
+	ShortName   string `json:"shortName"`             // Required: <=6 chars, compact UI badge (no status icons yet)
+	TreatAs     string `json:"treatAs"`               // Required: "buff", "debuff", or "inherent"
+	Stacking    string `json:"stacking"`              // Required: "extend", "replace", or "stack"
+	MaxStacks   int    `json:"maxStacks,omitempty"`   // Only meaningful when stacking is "stack"
+	// EndsOnCasterDeath removes the status from whoever holds it when the unit
+	// that applied it dies.
+	EndsOnCasterDeath bool           `json:"endsOnCasterDeath,omitempty"`
+	Effects           []StatusEffect `json:"effects"` // Required (may be empty)
 }
 
 // StatusEffect describes one mechanical outcome of a status being active.

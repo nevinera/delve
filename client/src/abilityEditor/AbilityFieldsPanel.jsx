@@ -234,6 +234,8 @@ function EntryField({field, value, onChange, stockAssets}) {
           onChange={(e) => onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
         />
       );
+    case "boolean":
+      return <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked ? true : null)} />;
     case "readonly":
       return formatValue(value);
     default:

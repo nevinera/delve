@@ -344,3 +344,7 @@ func ApplyNPCShapedEffectForTest(casterID uuid.UUID, caster, target *instancesta
 	updateCombatStats(state, zone)
 	applyNPCShapedEffect(casterID, caster, target, eff, 1, zone, now, state, testRng())
 }
+
+func EndCasterDeathEffectsForTest(state, prevState *instancestate.InstanceState) {
+	endCasterDeathEffects(state, prevState)
+}

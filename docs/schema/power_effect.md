@@ -174,6 +174,7 @@ The area is fixed where it was created: it does not follow the caster or the tar
 | `duration` | float | yes | | Seconds the area lasts. |
 | `tickInterval` | float | no | `1.0` | Seconds between applications of `onTick`. |
 | `onTick` | array of PowerEffect | yes | | `harm`, `heal`, `resource` and `status` effects, applied to each qualifying unit inside the shape per tick. Nested effects omit `affects` and `range` (the area decides who is hit and from where). At least one entry, and no nested `groundArea`. |
+| `endsOnCasterDeath` | boolean | no | `false` | When `true`, the area vanishes when its caster dies. An area made by the caster's own `onDeath` power is not affected. |
 | `graphic` | GroundAreaGraphic | no | translucent red (`bAll`), green (`gAll`) or yellow (`all`) fill | How the area is drawn. See below. |
 
 ### Shape

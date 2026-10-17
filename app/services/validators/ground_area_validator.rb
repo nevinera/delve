@@ -11,11 +11,16 @@ module Validators
       AreaShapeValidator.validate!(shape, path: child_path(path, "shape"))
       validate_range!(data, shape, path: path)
       validate_tick_effects!(data, path: path)
-      return unless given?(data, "graphic")
-      AreaGraphicValidator.validate!(require_hash!(data, "graphic", path: path), path: child_path(path, "graphic"))
+      validate_optional!(data, path: path)
     end
 
     private
+
+    def validate_optional!(data, path:)
+      require_boolean!(data, "endsOnCasterDeath", path: path) if given?(data, "endsOnCasterDeath")
+      return unless given?(data, "graphic")
+      AreaGraphicValidator.validate!(require_hash!(data, "graphic", path: path), path: child_path(path, "graphic"))
+    end
 
     def validate_affects!(data, path:)
       affects = require_string!(data, "affects", path: path)

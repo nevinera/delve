@@ -184,6 +184,7 @@ export default function StatusEditor({status, onChange, onAdd, stockAssets}) {
           <tr><th>Treat as</th><td><Select value={value.treatAs} options={TREAT_AS_OPTIONS} onChange={(treatAs) => onChange(status.setField("treatAs", treatAs))} blankLabel="treat as" /></td></tr>
           <tr><th>Stacking</th><td><Select value={value.stacking} options={STACKING_OPTIONS} onChange={(stacking) => onChange(status.setField("stacking", stacking))} blankLabel="stacking" /></td></tr>
           <tr><th>Max stacks</th><td><NumberField value={value.maxStacks} onChange={(maxStacks) => onChange(status.setField("maxStacks", maxStacks))} /></td></tr>
+          <tr><th>Ends on caster death</th><td><input type="checkbox" checked={value.endsOnCasterDeath === true} onChange={(e) => onChange(status.setField("endsOnCasterDeath", e.target.checked ? true : null))} /></td></tr>
         </tbody>
       </table>
 
