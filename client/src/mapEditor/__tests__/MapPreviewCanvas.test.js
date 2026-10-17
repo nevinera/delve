@@ -7,6 +7,23 @@ import {startPositionFor} from "../MapPreviewCanvas";
 describe("startPositionFor", () => {
   const feetDimensions = {width: 160, height: 120};
 
+  it("starts at the visible-area center when given one", () => {
+    const mapData = {feetDimensions, connections: [{type: "point", position: {x: 1, y: 2, angle: 0}}]};
+    expect(startPositionFor(mapData, {x: 100, y: 70})).toEqual({x: 100, y: 70});
+  });
+
+  it("clamps a visible-area center to the map", () => {
+    expect(startPositionFor({feetDimensions}, {x: -5, y: 500})).toEqual({x: 0, y: 120});
+  });
+
+  it("picks the connection nearest the map's center when there is no view", () => {
+    const mapData = {feetDimensions, connections: [
+      {type: "point", position: {x: 0, y: 0, angle: 0}},
+      {type: "line", start: {x: 70, y: 100}, end: {x: 90, y: 100}},
+    ]};
+    expect(startPositionFor(mapData)).toEqual({x: 80, y: 100});
+  });
+
   it("uses a point connection's position when the map has one", () => {
     const mapData = {feetDimensions, connections: [{type: "point", position: {x: 12, y: 34, angle: 0}}]};
     expect(startPositionFor(mapData)).toEqual({x: 12, y: 34});

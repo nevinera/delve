@@ -165,6 +165,7 @@ export default function MapCanvas({
   const replaceInputRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({x: 0, y: 0});
+  const [previewViewCenter, setPreviewViewCenter] = useState(null);
   const [cursorPixel, setCursorPixel] = useState(null); // {x, y} in content (image) pixel space, or null off-canvas
   // "select" (the default - drag/select existing shapes) or a single-shot
   // add-tool entered externally via the `tool`/`onToolChange` props (see
@@ -416,6 +417,20 @@ export default function MapCanvas({
 
   // Screen (client) coordinates -> image-pixel coordinates, inverting the
   // current pan/zoom transform.
+  // The feet point at the middle of the visible part of the map, for the
+  // walk preview to start from - null when it can't be worked out.
+  function visibleCenterFeet() {
+    const wrapper = wrapperRef.current;
+    if (!wrapper || !image || !canDrawBarriers) return null;
+    const rect = wrapper.getBoundingClientRect();
+    return feetFromClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  function togglePreviewFromView() {
+    if (!previewing) setPreviewViewCenter(visibleCenterFeet());
+    onTogglePreview?.();
+  }
+
   function contentPixelFromClient(clientX, clientY) {
     const rect = wrapperRef.current.getBoundingClientRect();
     return {x: (clientX - rect.left - offset.x) / zoom, y: (clientY - rect.top - offset.y) / zoom};
@@ -1135,7 +1150,7 @@ export default function MapCanvas({
             <button
               type="button" className={previewing ? "map-simulate-active" : ""}
               disabled={simulating}
-              onClick={() => onTogglePreview?.()}
+              onClick={togglePreviewFromView}
             >
               {previewing ? "Exit Walk Preview" : "Walk Preview"}
             </button>
@@ -1156,7 +1171,7 @@ export default function MapCanvas({
       )}
       {imageError && <div className="map-canvas-error">{imageError}</div>}
       {previewing ? (
-        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} groundCanopy={ground?.renderedCanopy ?? null} stampLayer={stampLayer} onExit={() => onTogglePreview?.()} />
+        <MapPreviewCanvas mapData={mapData} availableUnitTypes={availableUnitTypes} imageUrl={ground ? null : image.url} groundImage={ground?.rendered ?? null} groundCanopy={ground?.renderedCanopy ?? null} stampLayer={stampLayer} viewCenter={previewViewCenter} onExit={() => onTogglePreview?.()} />
       ) : image ? (
         <div
           ref={wrapperRef}
