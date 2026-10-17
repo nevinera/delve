@@ -1,32 +1,56 @@
 import {useEffect, useRef} from "react";
 import {MapPreviewScene} from "./MapPreviewScene";
 
-// Where the walk preview starts: the center of the part of the map the editor
-// was showing (`viewCenter`, in feet). A map has no spawn point of its own -
-// real play starts at Zone.entryPoints (docs/schema/zone.md), which this
-// editor can't resolve without zone context - so with no visible-area center
-// to go on, fall back to the connection nearest the map's center (a point's
-// position, or a line's midpoint), then to the map's center itself.
-export function startPositionFor(mapData, viewCenter = null) {
+const WALL_CLEARANCE_FEET = 2;
+
+function distToSegment(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+// True when a walker can stand at `p`: on the map, not inside a circle
+// barrier, and not right up against a wall.
+function isOpenSpot(mapData, p) {
   const {width, height} = mapData.feetDimensions;
-  if (viewCenter) {
-    return {x: Math.min(width, Math.max(0, viewCenter.x)), y: Math.min(height, Math.max(0, viewCenter.y))};
-  }
-  const center = {x: width / 2, y: height / 2};
-  let best = null;
-  let bestDist = Infinity;
-  for (const c of mapData.connections ?? []) {
-    let at = null;
-    if (c?.type === "point" && c.position) at = {x: c.position.x, y: c.position.y};
-    else if (c?.type === "line" && c.start && c.end) at = {x: (c.start.x + c.end.x) / 2, y: (c.start.y + c.end.y) / 2};
-    if (!at) continue;
-    const dist = Math.hypot(at.x - center.x, at.y - center.y);
-    if (dist < bestDist) {
-      best = at;
-      bestDist = dist;
+  if (p.x < 0 || p.y < 0 || p.x > width || p.y > height) return false;
+  for (const b of mapData.barriers ?? []) {
+    if (b.type === "circle" && b.location && Math.hypot(p.x - b.location.x, p.y - b.location.y) <= b.radius) return false;
+    if (b.type === "wall" && b.locations) {
+      for (let i = 0; i + 1 < b.locations.length; i++) {
+        if (distToSegment(p, b.locations[i], b.locations[i + 1]) < WALL_CLEARANCE_FEET) return false;
+      }
     }
   }
-  return best ?? center;
+  return true;
+}
+
+function connectionPoints(mapData) {
+  const points = [];
+  for (const c of mapData.connections ?? []) {
+    if (c?.type === "point" && c.position) points.push({x: c.position.x, y: c.position.y});
+    else if (c?.type === "line" && c.start && c.end) points.push({x: (c.start.x + c.end.x) / 2, y: (c.start.y + c.end.y) / 2});
+  }
+  return points;
+}
+
+// Where the walk preview starts: the center of the part of the map the editor
+// was showing (`viewCenter`, in feet), if a walker can stand there. Otherwise
+// (or with no view at all - it then defaults to the map's center) the entrance
+// nearest that point: a map has no spawn point of its own - real play starts
+// at Zone.entryPoints (docs/schema/zone.md), which this editor can't resolve
+// without zone context - so a connection (a point's position, or a line's
+// midpoint) stands in. With no connections, the point itself, clamped to the map.
+export function startPositionFor(mapData, viewCenter = null) {
+  const {width, height} = mapData.feetDimensions;
+  const from = viewCenter ?? {x: width / 2, y: height / 2};
+  if (isOpenSpot(mapData, from)) return {x: from.x, y: from.y};
+  const nearest = connectionPoints(mapData).sort(
+    (a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y)
+  )[0];
+  return nearest ?? {x: Math.min(width, Math.max(0, from.x)), y: Math.min(height, Math.max(0, from.y))};
 }
 
 // Mounts MapPreviewScene onto a canvas - the React side of the "walk it" 3D
