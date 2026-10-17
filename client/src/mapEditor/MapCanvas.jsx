@@ -395,8 +395,9 @@ export default function MapCanvas({
       }
 
       // "=" alongside "+" - zooming in shouldn't require holding Shift.
-      if (e.key === "+" || e.key === "=") zoomAroundCenter(ZOOM_STEP);
-      else if (e.key === "-" || e.key === "_") zoomAroundCenter(1 / ZOOM_STEP);
+      // E / Q zoom in / out too, matching the walk preview's strafe keys.
+      if (e.key === "+" || e.key === "=" || e.code === "KeyE") zoomAroundCenter(ZOOM_STEP);
+      else if (e.key === "-" || e.key === "_" || e.code === "KeyQ") zoomAroundCenter(1 / ZOOM_STEP);
     }
     function onKeyUp(e) {
       panKeysRef.current.delete(e.code);

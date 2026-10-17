@@ -122,6 +122,35 @@ describe("MapCanvas", () => {
     expect(after.x + pixelUnderMidpoint * after.scale).toBeCloseTo(120, 5);
   });
 
+  it("still pinch-zooms after a touch was released outside the map", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const wrapper = document.querySelector(".map-canvas-wrapper");
+    const touch = (pointerId, clientX, clientY) => ({pointerId, pointerType: "touch", clientX, clientY});
+
+    fireEvent.pointerDown(wrapper, touch(7, 10, 10));
+    fireEvent.pointerUp(window, touch(7, 10, 10)); // lifted off the wrapper
+    const before = transformParts();
+
+    fireEvent.pointerDown(wrapper, touch(1, 90, 50));
+    fireEvent.pointerDown(wrapper, touch(2, 110, 50));
+    fireEvent.pointerMove(wrapper, touch(2, 150, 50));
+    fireEvent.pointerUp(wrapper, touch(1, 90, 50));
+    fireEvent.pointerUp(wrapper, touch(2, 150, 50));
+
+    expect(transformParts().scale).toBeCloseTo(before.scale * 3, 5);
+  });
+
+  it("E zooms in and Q zooms out", () => {
+    render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} />);
+    const base = transformParts();
+
+    fireEvent.keyDown(document.body, {key: "e", code: "KeyE"});
+    expect(transformParts().scale).toBeCloseTo(base.scale * 1.25, 5);
+
+    fireEvent.keyDown(document.body, {key: "q", code: "KeyQ"});
+    expect(transformParts().scale).toBeCloseTo(base.scale, 5);
+  });
+
   it("coalesces several pointermoves within one frame into a single flush at the latest position", () => {
     let scheduleCount = 0;
     let scheduledCallback = null;
