@@ -75,7 +75,7 @@ function PointConnectionFields({connectionIndex, connection, onChange, placement
           <td><NumberField value={connection.position.angle} onChange={(v) => onChange({position: {...connection.position, angle: v}})} /></td>
         </tr>
         <tr>
-          <th>Fuzz Radius</th>
+          <th>Radius</th>
           <td><NumberField value={connection.fuzzRadius} onChange={(v) => onChange({fuzzRadius: v})} /></td>
         </tr>
         <tr>

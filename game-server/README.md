@@ -47,11 +47,13 @@ Every slot request says how the player reached the zone (`mode`), along with the
 "Instance" fields are taken from the request that starts the instance.
 
 **Exits.** A world-mode player exits by stepping onto an exit: not by spawning on one or standing
-on one, and not within 6 seconds of spawning. The server posts
+on one. Within 10 seconds of spawning, stepping onto an exit sends the client `zone-exit-confirm`
+(`{connection}`) instead, and the exit happens only if the client answers with an up message of type
+`confirm_zone_exit`. Otherwise the server posts
 `{zone_identifier, connection}` to Rails at `/internal_api/world_characters/{id}/zone_exits`.
 - On success, the client gets `zone-exit` (`{connection}`), its slot is removed, and the socket
   closes.
-- On failure, the client gets `zone-exit-failed` (`{error}`), and the 6 seconds start again.
+- On failure, the client gets `zone-exit-failed` (`{error}`), and the exit is locked out for 6 seconds.
 
 **Quests.** The client keeps its own quest log (read from Rails on load); the server sends it
 events as quests change.

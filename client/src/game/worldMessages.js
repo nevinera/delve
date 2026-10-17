@@ -9,6 +9,8 @@ export function worldMessageAction(msg) {
       return { type: "leave" };
     case "version-expired":
       return { type: "leave", log: "This world version has expired. Moving you to the latest version…" };
+    case "zone-exit-confirm":
+      return { type: "confirm-exit" };
     case "zone-exit-failed":
       return { type: "log", log: `Couldn't leave the zone: ${msg.error}` };
     case "version-expiring": {
