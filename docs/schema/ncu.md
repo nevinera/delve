@@ -86,3 +86,15 @@ A node with neither `next` nor `choices` ends the conversation.
   }
 }
 ```
+
+## Dialogue graph layout
+
+The world builder can show an NCU's dialogue as a graph (NCU lines yellow, player choices green,
+quest offers orange). Where boxes sit and how arrows bend is editor-only state, saved per zone in
+`<zone>.dialogue.layout.json` (ignored by the game and validators, like `.layout.json`):
+
+```json
+{"ncus": {"grizzle": {"positions": {"start": {"x": 0, "y": 0}}, "bends": {"start->node-ab12": {"x": 90, "y": 40}}}}}
+```
+
+Position keys are dialogue node ids, `<node>#<choice index>` for choices, and `quest:<identifier>`.

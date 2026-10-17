@@ -1,5 +1,7 @@
 import {useState} from "react";
 import {randomIdentifierSuffix} from "./randomIdentifier";
+import DialogueGraphCanvas from "./DialogueGraphCanvas";
+import {dialogueGraph} from "./dialogueGraph";
 
 // Edits an NCU's `dialogue` (docs/schema/ncu.md#dialogue): a branching tree
 // of nodes, keyed by an opaque id the author never sees or edits directly -
@@ -131,7 +133,11 @@ function NodeCard({id, node, nodeIds, nodes, entry, onChangeText, onChangeNext, 
   );
 }
 
-export default function DialogueFields({dialogue, onChange}) {
+// `graphView` (optional) {offers, layout, onLayoutChange, onOpenQuest}
+// adds a toggle to see the dialogue (and the quests the NCU offers) as a
+// graph; see DialogueGraphCanvas.
+export default function DialogueFields({dialogue, onChange, graphView = null}) {
+  const [showGraph, setShowGraph] = useState(false);
   const nodes = dialogue?.nodes ?? {};
   const entry = dialogue?.entry ?? [];
   const nodeIds = Object.keys(nodes);
@@ -165,6 +171,18 @@ export default function DialogueFields({dialogue, onChange}) {
   return (
     <div className="map-ncu-dialogue">
       <h4>Dialogue</h4>
+      {graphView && (
+        <div className="add-buttons-row">
+          <button type="button" onClick={() => setShowGraph((v) => !v)}>{showGraph ? "List view" : "Graph view"}</button>
+        </div>
+      )}
+      {graphView && showGraph && (
+        <DialogueGraphCanvas
+          graph={dialogueGraph(dialogue, graphView.offers)} layout={graphView.layout}
+          onLayoutChange={graphView.onLayoutChange} onOpenQuest={graphView.onOpenQuest}
+        />
+      )}
+      {!(graphView && showGraph) && <>
       {nodeIds.length === 0 && <p className="map-editor-sidebar-placeholder">No dialogue yet.</p>}
       {nodeIds.map((id) => (
         <NodeCard
@@ -185,6 +203,7 @@ export default function DialogueFields({dialogue, onChange}) {
       <div className="add-buttons-row">
         <button type="button" className="add-entry" onClick={addNode}>+ Add Node</button>
       </div>
+      </>}
     </div>
   );
 }

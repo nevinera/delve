@@ -15,6 +15,7 @@ export const zonesDir = (world) => `${worldDir(world)}/zones`;
 export const zoneDir = (world, zone) => `${zonesDir(world)}/${zone}`;
 export const zoneFile = (world, zone) => `${zoneDir(world, zone)}/${zone}.json`;
 export const zoneLayoutFile = (world, zone) => `${zoneDir(world, zone)}/${zone}.layout.json`;
+export const zoneDialogueLayoutFile = (world, zone) => `${zoneDir(world, zone)}/${zone}.dialogue.layout.json`;
 export const zoneFullFile = (world, zone) => `${zoneDir(world, zone)}/${zone}.full.json`;
 export const zoneStampsFile = (world, zone) => `${zoneDir(world, zone)}/stamps.json`;
 
