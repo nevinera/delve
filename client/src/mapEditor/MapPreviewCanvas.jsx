@@ -1,21 +1,56 @@
 import {useEffect, useRef} from "react";
 import {MapPreviewScene} from "./MapPreviewScene";
 
-// A map has no dedicated "spawn point" field of its own - where a player
-// actually starts is Zone.entryPoints (docs/schema/zone.md), mapping a
-// connection on this map to whether it requires a key. This editor has no
-// zone context (a Map's connections don't know their own zone), so it can't
-// resolve that precisely - the closest reasonable stand-in is the map's own
-// first connection (a point's position, or a line's midpoint), falling back
-// to the map's center if it has none yet.
-export function startPositionFor(mapData) {
+const WALL_CLEARANCE_FEET = 2;
+
+function distToSegment(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+// True when a walker can stand at `p`: on the map, not inside a circle
+// barrier, and not right up against a wall.
+function isOpenSpot(mapData, p) {
   const {width, height} = mapData.feetDimensions;
-  const first = mapData.connections?.[0];
-  if (first?.type === "point" && first.position) return {x: first.position.x, y: first.position.y};
-  if (first?.type === "line" && first.start && first.end) {
-    return {x: (first.start.x + first.end.x) / 2, y: (first.start.y + first.end.y) / 2};
+  if (p.x < 0 || p.y < 0 || p.x > width || p.y > height) return false;
+  for (const b of mapData.barriers ?? []) {
+    if (b.type === "circle" && b.location && Math.hypot(p.x - b.location.x, p.y - b.location.y) <= b.radius) return false;
+    if (b.type === "wall" && b.locations) {
+      for (let i = 0; i + 1 < b.locations.length; i++) {
+        if (distToSegment(p, b.locations[i], b.locations[i + 1]) < WALL_CLEARANCE_FEET) return false;
+      }
+    }
   }
-  return {x: width / 2, y: height / 2};
+  return true;
+}
+
+function connectionPoints(mapData) {
+  const points = [];
+  for (const c of mapData.connections ?? []) {
+    if (c?.type === "point" && c.position) points.push({x: c.position.x, y: c.position.y});
+    else if (c?.type === "line" && c.start && c.end) points.push({x: (c.start.x + c.end.x) / 2, y: (c.start.y + c.end.y) / 2});
+  }
+  return points;
+}
+
+// Where the walk preview starts: the center of the part of the map the editor
+// was showing (`viewCenter`, in feet), if a walker can stand there. Otherwise
+// (or with no view at all - it then defaults to the map's center) the entrance
+// nearest that point: a map has no spawn point of its own - real play starts
+// at Zone.entryPoints (docs/schema/zone.md), which this editor can't resolve
+// without zone context - so a connection (a point's position, or a line's
+// midpoint) stands in. With no connections, the point itself, clamped to the map.
+export function startPositionFor(mapData, viewCenter = null) {
+  const {width, height} = mapData.feetDimensions;
+  const from = viewCenter ?? {x: width / 2, y: height / 2};
+  if (isOpenSpot(mapData, from)) return {x: from.x, y: from.y};
+  const nearest = connectionPoints(mapData).sort(
+    (a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y)
+  )[0];
+  return nearest ?? {x: Math.min(width, Math.max(0, from.x)), y: Math.min(height, Math.max(0, from.y))};
 }
 
 // Mounts MapPreviewScene onto a canvas - the React side of the "walk it" 3D
@@ -28,7 +63,7 @@ export function startPositionFor(mapData) {
 // map drawn in cells.
 // stampLayer ({sets, sheets}) bakes the map's decoration stamps into the
 // ground, under groundCanopy (a cell map's tree crowns) when there is one.
-export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl, groundImage = null, groundCanopy = null, stampLayer = null, onExit}) {
+export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl, groundImage = null, groundCanopy = null, stampLayer = null, viewCenter = null, onExit}) {
   const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
 
@@ -40,7 +75,7 @@ export default function MapPreviewCanvas({mapData, availableUnitTypes, imageUrl,
     // everywhere else that field is read. No in-preview toggle any more -
     // it's an authored map setting now, not a session-only choice.
     scene.setLightingMode(mapData.lighting === "torchlight" ? "torchlight" : "daylight");
-    const {x, y} = startPositionFor(mapData);
+    const {x, y} = startPositionFor(mapData, viewCenter);
     // isSvg comes from mapData.imageUrl - the repo-relative filename - not
     // the imageUrl prop above (an opaque blob:/data: URL used to actually
     // load the bytes), since that carries no file extension to sniff.
