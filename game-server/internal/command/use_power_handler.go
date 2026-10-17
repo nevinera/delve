@@ -80,7 +80,7 @@ func (h UsePowerHandler) Handle(unitID uuid.UUID, payload CommandPayload, zone i
 func ResolveCastTarget(unit *instancestate.UnitState, targetID *uuid.UUID, power instanceconfig.Power, zone instanceconfig.Zone, next *instancestate.InstanceState) (*instancestate.UnitState, bool) {
 	needsTarget := false
 	for _, eff := range power.Effects {
-		if eff.IsGroundArea() {
+		if eff.Shape != nil {
 			needsTarget = needsTarget || eff.AreaNeedsTarget()
 		} else if !isUntargetedAffects(eff.Affects) {
 			needsTarget = true
@@ -146,6 +146,12 @@ func ApplyPowerEffects(unitID uuid.UUID, unit, target *instancestate.UnitState, 
 				}
 			}
 			CreateGroundArea(unitID, unit, target, true, power, i, effect, now, next)
+			continue
+		}
+		if effect.IsShaped() {
+			if !applyPlayerShapedEffect(unitID, unit, target, effect, timeBudget, zone, now, next, rng) {
+				return false
+			}
 			continue
 		}
 		switch effect.Affects {
@@ -238,10 +244,7 @@ type areaVictim struct {
 func playerAreaVictims(unit *instancestate.UnitState, effect instanceconfig.PowerEffect, zone instanceconfig.Zone, next *instancestate.InstanceState) []areaVictim {
 	var victims []areaVictim
 	for id, u := range next.Units {
-		if u == unit || u.MapIdentifier != unit.MapIdentifier || !u.Status.IsTargetable() || IsEvading(u) {
-			continue
-		}
-		if u.Hostility != "hostile" && u.Hostility != "neutral" {
+		if !isPlayerHostileCandidate(unit, u) {
 			continue
 		}
 		if inRangeAndLOS(unit, u, zone, effect.Range) {
@@ -249,6 +252,15 @@ func playerAreaVictims(unit *instancestate.UnitState, effect instanceconfig.Powe
 		}
 	}
 	return victims
+}
+
+// isPlayerHostileCandidate reports whether u is a living, non-evading hostile
+// or neutral NPC on unit's map: the units a player's area effects can hit.
+func isPlayerHostileCandidate(unit, u *instancestate.UnitState) bool {
+	if u == unit || u.MapIdentifier != unit.MapIdentifier || !u.Status.IsTargetable() || IsEvading(u) {
+		return false
+	}
+	return u.Hostility == "hostile" || u.Hostility == "neutral"
 }
 
 // playerSplashVictims is everyone else a player's bTarget radius hits: the

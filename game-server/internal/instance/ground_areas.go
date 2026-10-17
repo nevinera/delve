@@ -43,10 +43,25 @@ func tickGroundAreas(state *instancestate.InstanceState, zone instanceconfig.Zon
 // it on the side(s) its Affects selects. A harm never lands on the friendly
 // side (the caster for a player, its pack for an NPC).
 func landAreaTick(a instancestate.GroundArea, caster *instancestate.UnitState, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) {
+	landEffectsInArea(a, a.OnTick, caster, zone, now, state, rng)
+}
+
+// applyNPCShapedEffect lands an NPC's instant effect on everyone in its shape
+// at cast, the same sides and rules as one tick of a ground area.
+func applyNPCShapedEffect(casterID uuid.UUID, caster, target *instancestate.UnitState, eff instanceconfig.PowerEffect, timeBudget float64, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) {
+	shape, ok := command.PlaceAreaShape(caster, target, eff)
+	if !ok {
+		return
+	}
+	a := instancestate.GroundArea{CasterID: casterID, MapIdentifier: caster.MapIdentifier, Shape: shape, Affects: eff.Affects, TimeBudget: timeBudget}
+	landEffectsInArea(a, []instanceconfig.PowerEffect{eff}, caster, zone, now, state, rng)
+}
+
+func landEffectsInArea(a instancestate.GroundArea, effects []instanceconfig.PowerEffect, caster *instancestate.UnitState, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState, rng *rand.Rand) {
 	hostile, friendly := areaRecipients(a, caster, zone, state)
 	if a.Affects == "bAll" || a.Affects == "all" {
 		for _, r := range hostile {
-			for _, eff := range a.OnTick {
+			for _, eff := range effects {
 				if !r.unit.Status.IsTargetable() {
 					break
 				}
@@ -61,7 +76,7 @@ func landAreaTick(a instancestate.GroundArea, caster *instancestate.UnitState, z
 	}
 	if a.Affects == "gAll" || a.Affects == "all" {
 		for _, r := range friendly {
-			for _, eff := range a.OnTick {
+			for _, eff := range effects {
 				if !r.unit.Status.IsTargetable() {
 					break
 				}

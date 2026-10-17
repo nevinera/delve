@@ -40,6 +40,14 @@ Any `harm`, `heal`, `resource` or `status` effect with `affects` of `bTarget` or
 { "type": "harm", "affects": "bTarget", "range": 30.0, "radius": 8.0, "amount": [6.0, 9.0], "school": "magic" }
 ```
 
+### shape (instant area)
+
+Any `harm`, `heal`, `resource` or `status` effect with `affects` of `bAll` or `gAll` may set `shape` (the same object a `groundArea` takes, see [Shape](#shape)). It lands once, at cast, on every unit of that side standing inside the shape: a cone breath, a beam, a ring blast. `range` is needed only when the shape is anchored on or aimed at the target (`at: "target"` or `direction: "target"`); otherwise the effect needs no target. Like a ground area it ignores line of sight, and a `gAll` effect reaches the caster only if they stand inside the shape (until there are parties). It lands at cast even on a power with a `speed`.
+
+```json
+{ "type": "harm", "affects": "bAll", "shape": { "type": "cone", "length": 25.0, "width": 14.0, "direction": "facing" }, "amount": [8.0, 12.0], "school": "magic" }
+```
+
 The client marks every area automatically when the power fires: a faint ring around the caster at a `bAll`/`gAll` effect's `range`, and around the target at a `radius` (when the projectile lands, for a power with a `speed`). Red for hostile effects, green for friendly ones. It plays alongside the power's own graphics, in the game and in the editors' previews.
 
 ---

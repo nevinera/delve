@@ -103,6 +103,32 @@ RSpec.describe Validators::PowerEffectValidator, type: :validator do
       end
     end
 
+    describe "shape on an instant effect" do
+      let(:cone) { {"type" => "cone", "length" => 20, "width" => 10} }
+
+      it "accepts a bAll or gAll effect with a self-anchored shape and no range" do
+        expect { described_class.validate!(harm_effect.except("range").merge("affects" => "bAll", "shape" => cone)) }.not_to raise_error
+        expect { described_class.validate!(heal_effect.except("range").merge("affects" => "gAll", "shape" => {"type" => "circle", "at" => "self", "radius" => 5})) }.not_to raise_error
+      end
+
+      it "requires a range when the shape aims at the target" do
+        aimed = cone.merge("direction" => "target")
+        expect { described_class.validate!(harm_effect.except("range").merge("affects" => "bAll", "shape" => aimed)) }
+          .to raise_error(Validators::ValidationError, /range/)
+        expect { described_class.validate!(harm_effect.merge("affects" => "bAll", "shape" => aimed)) }.not_to raise_error
+      end
+
+      it "rejects a shape on a single-target effect" do
+        expect { described_class.validate!(harm_effect.merge("affects" => "bTarget", "shape" => cone)) }
+          .to raise_error(Validators::ValidationError, /affects/)
+      end
+
+      it "validates the shape itself" do
+        expect { described_class.validate!(harm_effect.merge("affects" => "bAll", "shape" => cone.merge("width" => 0))) }
+          .to raise_error(Validators::ValidationError, /width must be greater than 0/)
+      end
+    end
+
     describe "radius" do
       it "accepts a positive radius on a bTarget or gTarget effect" do
         expect { described_class.validate!(harm_effect.merge("affects" => "bTarget", "radius" => 6)) }.not_to raise_error

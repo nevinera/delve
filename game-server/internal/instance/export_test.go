@@ -339,3 +339,8 @@ func (inst *Instance) ConfirmZoneExitsForTest(unitID uuid.UUID) []PendingZoneExi
 	}
 	return out
 }
+
+func ApplyNPCShapedEffectForTest(casterID uuid.UUID, caster, target *instancestate.UnitState, eff instanceconfig.PowerEffect, zone instanceconfig.Zone, now time.Time, state *instancestate.InstanceState) {
+	updateCombatStats(state, zone)
+	applyNPCShapedEffect(casterID, caster, target, eff, 1, zone, now, state, testRng())
+}

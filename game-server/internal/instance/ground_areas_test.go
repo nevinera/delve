@@ -110,3 +110,26 @@ func TestGroundArea_RemovedWhenCasterGone(t *testing.T) {
 
 	require.Empty(t, state.GroundAreas)
 }
+
+func TestShapedEffect_NPCHarmsPlayersInShapeOnly(t *testing.T) {
+	state, zone, caster, near, now := areaFixture("bAll")
+	state.GroundAreas = nil
+	_, far := addPlayer(state, "map1", 30, 0)
+	far.Position = pos(30, 0)
+	casterID := uuid.Nil
+	for id, u := range state.Units {
+		if u == caster {
+			casterID = id
+		}
+	}
+	eff := areaTickEffect()
+	eff.Affects = "bAll"
+	eff.Shape = &instanceconfig.AreaShape{Type: "circle", At: "self", Radius: 10}
+
+	for i := 0; i < 20 && near.Health == 100; i++ {
+		instance.ApplyNPCShapedEffectForTest(casterID, caster, nil, eff, zone, now, state)
+	}
+
+	assert.Less(t, near.Health, 100.0)
+	assert.Equal(t, 100.0, far.Health)
+}

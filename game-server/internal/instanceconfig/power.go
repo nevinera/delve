@@ -46,6 +46,7 @@ func (p Power) IsFrontal() bool {
 // heal fields:     Affects, Range (unless self), Amount, Tags
 // resource fields: Affects, ResourceName, Delta, Range (unless self), Tags
 // status fields:   Affects, Duration, Status, Range (unless self), Tags
+// shaped harm/heal/resource/status: Shape, Affects ("bAll" or "gAll"), Range (when the shape is anchored on or aimed at the target)
 // groundArea fields: Shape, Affects ("bAll", "gAll" or "all"), Range (when the
 // shape is anchored on the target), Duration, TickInterval, OnTick, Graphic, Tags
 type PowerEffect struct {
@@ -80,8 +81,8 @@ type PowerEffect struct {
 	Duration float64 `json:"duration,omitempty"` // Required for status: seconds
 	Status   *Status `json:"status,omitempty"`   // Required for status
 
-	// groundArea
-	Shape        *AreaShape         `json:"shape,omitempty"`        // Required for groundArea
+	// groundArea; also a harm/heal/resource/status effect that lands in a shape at cast
+	Shape        *AreaShape         `json:"shape,omitempty"`        // Required for groundArea, optional on instant effects
 	TickInterval float64            `json:"tickInterval,omitempty"` // Seconds between ticks; DefaultAreaTickInterval when omitted
 	OnTick       []PowerEffect      `json:"onTick,omitempty"`       // Required for groundArea: harm/heal/resource/status, without affects or range
 	Graphic      *GroundAreaGraphic `json:"graphic,omitempty"`      // Client-only; ignored by the server except to relay it
@@ -115,6 +116,10 @@ type GroundAreaGraphic struct {
 
 // IsGroundArea reports whether the effect creates a ground area.
 func (e PowerEffect) IsGroundArea() bool { return e.Type == "groundArea" }
+
+// IsShaped reports whether the effect is an instant harm/heal/resource/status
+// that lands on everyone inside a shape (at cast) instead of on a target.
+func (e PowerEffect) IsShaped() bool { return e.Type != "groundArea" && e.Shape != nil }
 
 // AreaTickSeconds is the effect's tick interval, with the default applied.
 func (e PowerEffect) AreaTickSeconds() float64 {

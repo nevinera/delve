@@ -2,7 +2,6 @@ module Validators
   # A groundArea power effect: see docs/schema/power_effect.md.
   class GroundAreaValidator < Base
     AFFECTS_OPTIONS = %w[bAll gAll all].freeze
-    TARGET_DIRECTION = "target".freeze
 
     def validate!(data, path: "$")
       validate_affects!(data, path: path)
@@ -29,12 +28,8 @@ module Validators
     end
 
     def validate_range!(data, shape, path:)
-      return unless shape_needs_target?(shape)
+      return unless AreaShapeValidator.needs_target?(shape)
       validate_float_or_range!(require_key!(data, "range", path: path), path: child_path(path, "range"))
-    end
-
-    def shape_needs_target?(shape)
-      shape["at"] == "target" || (%w[line cone].include?(shape["type"]) && shape["direction"] == TARGET_DIRECTION)
     end
 
     def validate_tick_effects!(data, path:)

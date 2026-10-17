@@ -81,8 +81,14 @@ function splashText(effect) {
   return ` and every ${kind} within ${num(effect.radius)} of it`;
 }
 
+function inShapeText(effect) {
+  return `${effect.affects === "gAll" ? "allies" : "enemies"} in ${shapeText(effect.shape)}`;
+}
+
+const isShaped = (effect) => effect.shape && effect.type !== "groundArea";
+
 function effectLine(effect, ability, ctx) {
-  const who = (TARGETS[effect.affects] || effect.affects) + splashText(effect);
+  const who = isShaped(effect) ? inShapeText(effect) : (TARGETS[effect.affects] || effect.affects) + splashText(effect);
   const budget = timeBudget(ability);
   switch (effect.type) {
     case "harm": {

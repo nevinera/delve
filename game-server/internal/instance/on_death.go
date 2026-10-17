@@ -78,6 +78,10 @@ func applyDeathPower(unitID uuid.UUID, unit *instancestate.UnitState, targetID u
 			command.CreateGroundArea(unitID, unit, target, false, power, i, eff, now, state)
 			continue
 		}
+		if eff.IsShaped() {
+			applyNPCShapedEffect(unitID, unit, target, eff, timeBudget, zone, now, state, rng)
+			continue
+		}
 		if isAllyAffects(eff.Affects) {
 			applyNPCAllyEffect(unitID, unit, packmates, eff, timeBudget, zone, now, rng)
 			continue

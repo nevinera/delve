@@ -6,6 +6,8 @@ module Validators
     DAMAGE_SCHOOLS = %w[physical magic].freeze
     # A radius splashes around the target, so it needs one.
     RADIUS_AFFECTS_OPTIONS = %w[bTarget gTarget].freeze
+    # An instant effect with a shape lands on everyone in it, on one side.
+    SHAPED_AFFECTS_OPTIONS = %w[bAll gAll].freeze
 
     def validate!(data, path: "$")
       require_object!(data, path: path)
@@ -20,18 +22,37 @@ module Validators
       when "status" then validate_status!(data, path: path)
       when "groundArea" then GroundAreaValidator.validate!(data, path: path)
       end
-      validate_radius!(data, path: path) if given?(data, "radius")
+      validate_optional_area!(data, type, path: path)
     end
 
     private
+
+    def validate_optional_area!(data, type, path:)
+      validate_radius!(data, path: path) if given?(data, "radius")
+      validate_shape!(data, path: path) if given?(data, "shape") && type != "groundArea"
+    end
+
+    def validate_shape!(data, path:)
+      require_one_of!(data["affects"], SHAPED_AFFECTS_OPTIONS, path: child_path(path, "affects"))
+      AreaShapeValidator.validate!(require_hash!(data, "shape", path: path), path: child_path(path, "shape"))
+    end
+
+    # A shaped effect needs a range only when its shape is anchored on, or
+    # aimed at, the target.
+    def range_required?(data)
+      return data["affects"] != "self" unless data["shape"].is_a?(Hash)
+      AreaShapeValidator.needs_target?(data["shape"])
+    end
 
     def validate_harm!(data, path:)
       affects = require_string!(data, "affects", path: path)
       require_one_of!(affects, HARM_AFFECTS_OPTIONS, path: child_path(path, "affects"))
       amount = require_key!(data, "amount", path: path)
       validate_float_or_range!(amount, path: child_path(path, "amount"))
-      range_val = require_key!(data, "range", path: path)
-      validate_float_or_range!(range_val, path: child_path(path, "range"))
+      if range_required?(data)
+        range_val = require_key!(data, "range", path: path)
+        validate_float_or_range!(range_val, path: child_path(path, "range"))
+      end
       validate_school!(data, path: path) if given?(data, "school")
     end
 
@@ -52,7 +73,7 @@ module Validators
       require_one_of!(affects, AFFECTS_OPTIONS, path: child_path(path, "affects"))
       amount = require_key!(data, "amount", path: path)
       validate_float_or_range!(amount, path: child_path(path, "amount"))
-      if affects != "self"
+      if range_required?(data)
         range_val = require_key!(data, "range", path: path)
         validate_float_or_range!(range_val, path: child_path(path, "range"))
       end
@@ -63,7 +84,7 @@ module Validators
       require_one_of!(affects, AFFECTS_OPTIONS, path: child_path(path, "affects"))
       require_string!(data, "resourceName", path: path)
       require_numeric!(data, "delta", path: path)
-      if affects != "self"
+      if range_required?(data)
         range_val = require_key!(data, "range", path: path)
         validate_float_or_range!(range_val, path: child_path(path, "range"))
       end
@@ -75,7 +96,7 @@ module Validators
       require_numeric!(data, "duration", path: path)
       status_data = require_hash!(data, "status", path: path)
       StatusValidator.validate!(status_data, path: child_path(path, "status"))
-      if affects != "self"
+      if range_required?(data)
         range_val = require_key!(data, "range", path: path)
         validate_float_or_range!(range_val, path: child_path(path, "range"))
       end

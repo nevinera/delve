@@ -76,7 +76,7 @@ describe("entryFieldsFor", () => {
   });
 
   it("falls back to the entry's own keys for a section with no recognized list (effects)", () => {
-    const entry = {type: "harm", affects: "bAll", amount: 10.0};
+    const entry = {type: "harm", affects: "self", amount: 10.0};
     expect(entryFieldsFor("effects", entry)).toEqual(["type", "affects", "amount"]);
   });
 
@@ -84,6 +84,12 @@ describe("entryFieldsFor", () => {
     expect(entryFieldsFor("effects", {type: "harm", affects: "bTarget", amount: 10.0})).toEqual(["type", "affects", "amount", "radius"]);
     expect(entryFieldsFor("effects", {type: "heal", affects: "gTarget", amount: 5, radius: 4})).toEqual(["type", "affects", "amount", "radius"]);
     expect(entryFieldsFor("effects", {type: "heal", affects: "self", amount: 5})).not.toContain("radius");
+  });
+
+  it("offers shape on a bAll or gAll effect, but not on a groundArea", () => {
+    expect(entryFieldsFor("effects", {type: "harm", affects: "bAll", amount: 10.0})).toEqual(["type", "affects", "amount", "shape"]);
+    expect(entryFieldsFor("effects", {type: "heal", affects: "gAll", amount: 5, shape: {}})).toEqual(["type", "affects", "amount", "shape"]);
+    expect(entryFieldsFor("effects", {type: "groundArea", affects: "bAll"})).not.toContain("radius");
   });
 
   it("forces status and duration into a fresh status-type effect's field list", () => {

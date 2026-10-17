@@ -315,6 +315,12 @@ func applyNPCPowerEffects(attackerID, targetID uuid.UUID, unit, target *instance
 			}
 			continue
 		}
+		if eff.IsShaped() {
+			if !eff.AreaNeedsTarget() || npcEffectInRange(eff, dist, unit, target) {
+				applyNPCShapedEffect(attackerID, unit, target, eff, timeBudget, zone, now, state, rng)
+			}
+			continue
+		}
 		if isAllyAffects(eff.Affects) {
 			if power.Speed > 0 && eff.Affects == "gTarget" {
 				queueNPCAllyImpact(attackerID, unit, allies, eff, timeBudget, power, now, state)
@@ -422,7 +428,7 @@ func usablePowers(unit *instancestate.UnitState, powers []instanceconfig.Power, 
 				continue
 			}
 			reachable := false
-			if eff.IsGroundArea() {
+			if eff.Shape != nil {
 				reachable = !eff.AreaNeedsTarget() || npcEffectInRange(eff, dist, unit, target)
 			} else if isAllyAffects(eff.Affects) {
 				reachable = len(eligibleAllies(unit, allies, eff)) > 0

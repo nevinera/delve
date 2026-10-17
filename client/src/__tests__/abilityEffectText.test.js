@@ -31,6 +31,12 @@ describe("describeEffects", () => {
     expect(describeEffects(ability, noStats)).toEqual([["Deals 2-4 physical damage to the target and every enemy within 6 of it (range 30)"]]);
   });
 
+  it("describes an instant effect that lands in a shape", () => {
+    const shape = {type: "cone", length: 25, width: 14};
+    const ability = {castTime: null, globalCooldown: 1, effects: [{type: "harm", affects: "bAll", amount: [2, 4], shape}]};
+    expect(describeEffects(ability, noStats)).toEqual([["Deals 2-4 physical damage to enemies in a 25 long cone, 14 wide"]]);
+  });
+
   it("shows an authored harm range with no stats", () => {
     const ability = {castTime: null, globalCooldown: 1, effects: [{type: "harm", affects: "bTarget", amount: [2, 4], range: 5}]};
     expect(describeEffects(ability, noStats)).toEqual([["Deals 2-4 physical damage to the target (range 5)"]]);

@@ -1,9 +1,14 @@
 module Validators
-  # The shape of a groundArea effect.
+  # The shape of a groundArea effect, or of an instant effect that lands in one.
   class AreaShapeValidator < Base
     TYPES = %w[circle ring line cone].freeze
     ANCHORS = %w[self target].freeze
     DIRECTIONS = %w[target facing].freeze
+
+    # Whether the shape is anchored on, or aimed at, the caster's target.
+    def self.needs_target?(shape)
+      shape["at"] == "target" || (%w[line cone].include?(shape["type"]) && shape["direction"] == "target")
+    end
 
     def validate!(shape, path: "$")
       type = require_string!(shape, "type", path: path)

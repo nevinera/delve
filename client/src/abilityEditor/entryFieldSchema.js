@@ -73,12 +73,16 @@ const RESOURCE_EFFECT_FIELDS = ["type", "affects", "resourceName", "delta", "ran
 
 const GROUND_AREA_FIELDS = ["type", "affects", "shape", "range", "duration", "tickInterval", "onTick", "graphic"];
 
-// An effect aimed at a target can splash around it (radius), so offer the
-// field even before it's set.
+// An effect aimed at a target can splash around it (radius), and a bAll/gAll
+// one can land in a shape, so offer those fields even before they're set.
 export function entryFieldsFor(section, entry) {
   const fields = baseEntryFields(section, entry);
   const targeted = section === "effects" && (entry.affects === "bTarget" || entry.affects === "gTarget");
-  return targeted && !fields.includes("radius") ? [...fields, "radius"] : fields;
+  const area = section === "effects" && entry.type !== "groundArea" && (entry.affects === "bAll" || entry.affects === "gAll");
+  const extra = [];
+  if (targeted && !fields.includes("radius")) extra.push("radius");
+  if (area && !fields.includes("shape")) extra.push("shape");
+  return extra.length ? [...fields, ...extra] : fields;
 }
 
 function baseEntryFields(section, entry) {
