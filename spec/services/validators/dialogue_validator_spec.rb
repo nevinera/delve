@@ -94,12 +94,11 @@ RSpec.describe Validators::DialogueValidator, type: :validator do
       .to raise_error(Validators::ValidationError, /text is required/)
   end
 
-  it "raises when a choice is missing next" do
+  it "allows a choice with no next, which ends the conversation" do
     node = branching["nodes"]["greet"]
-    bad_choices = [node["choices"].first.except("next"), node["choices"].last]
-    nodes = branching["nodes"].merge("greet" => node.merge("choices" => bad_choices))
-    expect { described_class.validate!(branching.merge("nodes" => nodes)) }
-      .to raise_error(Validators::ValidationError, /next is required/)
+    open_ended = [node["choices"].first.except("next"), node["choices"].last]
+    nodes = branching["nodes"].merge("greet" => node.merge("choices" => open_ended))
+    expect { described_class.validate!(branching.merge("nodes" => nodes)) }.not_to raise_error
   end
 
   it "raises on a blank node text" do

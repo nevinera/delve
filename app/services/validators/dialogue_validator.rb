@@ -65,6 +65,7 @@ module Validators
       require_object!(choice, path: path)
       text = require_string!(choice, "text", path: path)
       raise ValidationError.new("text must not be empty", path: child_path(path, "text")) if text.strip.empty?
+      return unless given?(choice, "next")
       next_id = require_string!(choice, "next", path: path)
       raise ValidationError.new("next must not be empty", path: child_path(path, "next")) if next_id.strip.empty?
     end
@@ -75,6 +76,7 @@ module Validators
       elsif given?(node, "choices")
         choices_path = child_path(path, "choices")
         node["choices"].each_with_index do |choice, i|
+          next unless given?(choice, "next")
           check_node_reference!(choice["next"], nodes, path: child_path(index_path(choices_path, i), "next"))
         end
       end
