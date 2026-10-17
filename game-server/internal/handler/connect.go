@@ -222,6 +222,12 @@ func handleClientMessage(data []byte, slotID, unitID uuid.UUID, inst *instance.I
 				Payload:    command.UsePowerPayload{Power: powers[*msg.Slot]},
 			})
 		}
+	case "confirm_zone_exit":
+		inst.SendCommand(command.Command{
+			UnitID:     unitID,
+			ReceivedAt: time.Now(),
+			Payload:    command.ConfirmZoneExitPayload{},
+		})
 	case "respawn":
 		inst.SendCommand(command.Command{
 			UnitID:     unitID,

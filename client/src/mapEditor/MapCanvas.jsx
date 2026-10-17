@@ -69,6 +69,8 @@ const FALLBACK_MAX_ZOOM = 4;
 // screen dimension should still show at least this many feet of the map -
 // see maxZoom, which is why MAX_ZOOM isn't a fixed constant any more.
 const MIN_VISIBLE_FEET_AT_MAX_ZOOM = 40;
+const DEFAULT_CONNECTION_RADIUS = 2; // feet, for a plain click with no drag
+const MAX_CONNECTION_RADIUS = 20; // the schema's fuzzRadius ceiling
 const ZOOM_STEP = 1.25; // per click of the +/- buttons
 const GRID_SPACING_FEET = 5;
 const DEFAULT_UNIT_RADIUS_FEET = 2; // matches UnitShapes' own fallback, for the drag-to-face preview's arrow cap
@@ -468,6 +470,23 @@ export default function MapCanvas({
     onToolChange?.("select");
   }
 
+  // A point connection is a circle: dragging out its radius works like a
+  // barrier circle's, except a plain click (no drag) takes the default.
+  function commitPointConnection() {
+    if (drawingCircle) {
+      const radius = drawingCircle.radius > 0 ? Math.min(drawingCircle.radius, MAX_CONNECTION_RADIUS) : DEFAULT_CONNECTION_RADIUS;
+      dispatch({
+        type: "ADD_ENTRY", section: "connections",
+        entry: {
+          identifier: nextConnectionIdentifier(mapData.connections), type: "point",
+          position: {x: drawingCircle.location.x, y: drawingCircle.location.y, angle: 0}, fuzzRadius: radius, fuzzAngle: 90,
+        },
+      });
+    }
+    setDrawingCircle(null);
+    onToolChange?.("select");
+  }
+
   // A line connection is single-shot too - a plain click (start === end)
   // commits nothing, same as circle's zero-radius guard.
   function commitLineConnection() {
@@ -508,7 +527,7 @@ export default function MapCanvas({
   // once a drag has started, releasing the pointer is what commits/cancels
   // it (see commitCircle/commitLineConnection/commitUnit).
   useEffect(() => {
-    const armed = (tool === "add-circle" && !drawingCircle) || tool === "add-point-connection"
+    const armed = ((tool === "add-circle" || tool === "add-point-connection") && !drawingCircle)
       || (tool === "add-line-connection" && !drawingLine) || (tool === "add-unit" && !drawingUnit) || tool === "add-ncu" || tool === "add-interactable"
       || tool === "add-encounter" || tool === "add-fill-point";
     if (!armed) return;
@@ -680,6 +699,13 @@ export default function MapCanvas({
     e.currentTarget.setPointerCapture?.(e.pointerId);
   }
 
+  function startDragConnectionRadius(connectionIndex, e) {
+    e.stopPropagation();
+    if (simulating) return;
+    connectionDragRef.current = {type: "point-resize", connectionIndex};
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+
   function startDragConnectionEndpoint(connectionIndex, endpoint, e) {
     e.stopPropagation();
     if (simulating) return;
@@ -834,13 +860,12 @@ export default function MapCanvas({
 
     if (tool === "add-point-connection") {
       const feet = snapFeet(feetFromClient(e.clientX, e.clientY), null, e.shiftKey);
-      if (feet) {
-        dispatch({
-          type: "ADD_ENTRY", section: "connections",
-          entry: {identifier: nextConnectionIdentifier(mapData.connections), type: "point", position: {x: feet.x, y: feet.y, angle: 0}, fuzzRadius: 2, fuzzAngle: 90},
-        });
+      if (!feet) {
+        onToolChange?.("select");
+        return;
       }
-      onToolChange?.("select");
+      setDrawingCircle({location: feet, radius: 0});
+      e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
 
@@ -925,6 +950,9 @@ export default function MapCanvas({
       if (type === "point-move") {
         const snapped = snapFeet(feet, {kind: "connection-point", connectionIndex}, e.shiftKey);
         dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: "position", value: {...connection.position, x: snapped.x, y: snapped.y}});
+      } else if (type === "point-resize") {
+        const radius = Math.hypot(feet.x - connection.position.x, feet.y - connection.position.y);
+        dispatch({type: "UPDATE_ENTRY_FIELD", section: "connections", index: connectionIndex, field: "fuzzRadius", value: Math.min(radius, MAX_CONNECTION_RADIUS)});
       } else if (type === "line-endpoint") {
         const {endpoint} = connectionDragRef.current;
         const snapped = snapFeet(feet, {kind: "connection-endpoint", connectionIndex, endpoint}, e.shiftKey);
@@ -960,7 +988,7 @@ export default function MapCanvas({
       return;
     }
 
-    if (tool === "add-circle" && drawingCircle) {
+    if ((tool === "add-circle" || tool === "add-point-connection") && drawingCircle) {
       // The center (set on pointerdown) is already snapped - the radius
       // drag itself traces a circle's edge, not a point to snap.
       const feet = feetFromClient(e.clientX, e.clientY);
@@ -1018,6 +1046,7 @@ export default function MapCanvas({
     ncuDragRef.current = null;
     interactableDragRef.current = null;
     if (tool === "add-circle" && drawingCircle) commitCircle();
+    if (tool === "add-point-connection" && drawingCircle) commitPointConnection();
     if (tool === "add-line-connection" && drawingLine) commitLineConnection();
     if (tool === "add-unit" && drawingUnit) commitUnit();
   }
@@ -1099,7 +1128,7 @@ export default function MapCanvas({
     ? "Placing Points"
     : {
       "add-circle": "Placing Circle - drag on the map",
-      "add-point-connection": "Placing Point Connection - click the map",
+      "add-point-connection": "Placing Point Connection - drag out its radius",
       "add-fill-point": "Placing Fill Point - click inside the area to fill",
       "add-line-connection": "Placing Line Connection - drag on the map",
       "add-unit": "Placing Unit - click the map",
@@ -1296,7 +1325,8 @@ export default function MapCanvas({
                   cx={feetToPixel(drawingCircle.location.x, drawingCircle.location.y, image.pixelDimensions, feetDimensions).x}
                   cy={feetToPixel(drawingCircle.location.x, drawingCircle.location.y, image.pixelDimensions, feetDimensions).y}
                   r={feetSpacingToPixelsX(drawingCircle.radius, image.pixelDimensions, feetDimensions)}
-                  fill="rgba(255,222,122,0.15)" stroke="#ffde7a" strokeWidth={3} strokeDasharray="6,4"
+                  fill={tool === "add-point-connection" ? "rgba(74,192,224,0.15)" : "rgba(255,222,122,0.15)"}
+                  stroke={tool === "add-point-connection" ? "#4ac0e0" : "#ffde7a"} strokeWidth={3} strokeDasharray="6,4"
                 />
               </svg>
             )}
@@ -1321,6 +1351,7 @@ export default function MapCanvas({
                 onSelect={onSelectConnection}
                 onStartDragPoint={startDragConnectionPoint}
                 onStartDragEndpoint={startDragConnectionEndpoint}
+                onStartDragRadius={startDragConnectionRadius}
               />
             )}
             {canDrawBarriers && drawingLine && (

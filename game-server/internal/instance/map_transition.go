@@ -27,11 +27,16 @@ func applyMapTransitions(state *instancestate.InstanceState, prevState *instance
 			continue
 		}
 		conns := connsByMap[unit.MapIdentifier]
+		disarmedStillTouched := false
 		for _, conn := range conns {
+			key := unit.MapIdentifier + "/" + conn.Identifier
 			if !touchingConnection(unit, conn) {
 				continue
 			}
-			key := unit.MapIdentifier + "/" + conn.Identifier
+			if key == unit.DisarmedConnection {
+				disarmedStillTouched = true
+				continue
+			}
 			dest, ok := linkIndex[key]
 			if !ok {
 				continue
@@ -55,7 +60,13 @@ func applyMapTransitions(state *instancestate.InstanceState, prevState *instance
 				prevX, prevY = unit.Position.X, unit.Position.Y
 			}
 			traverseConnection(unit, conn, *destMap, *destConn, prevX, prevY, fills[destMap.Identifier])
+			unit.DisarmedConnection = dest.Map + "/" + dest.Connection
+			disarmedStillTouched = true
 			break // one transition per tick per unit
+		}
+		// Re-arm once the unit is clear of the connection it arrived through.
+		if !disarmedStillTouched {
+			unit.DisarmedConnection = ""
 		}
 	}
 }
@@ -104,21 +115,29 @@ const spawnEndMargin = 3.0
 // When destFill shows which side of destConn is open ground, the unit is
 // nudged onto that side instead, facing straight into it.
 func spawnPosition(fromConn, destConn instanceconfig.MapConnection, prevX, prevY float64, facingDeg float64, destFill *mapfill.Fill) instanceconfig.Position {
-	if fromConn.Start == nil || fromConn.End == nil || destConn.Start == nil || destConn.End == nil {
+	if destConn.Start == nil || destConn.End == nil {
+		// A circle connection: arrive at its center, facing as it says.
 		if destConn.Position != nil {
 			return *destConn.Position
 		}
 		return instanceconfig.Position{}
 	}
 
-	// Project previous position onto fromConn to get t ∈ [0,1].
-	fDX := fromConn.End.X - fromConn.Start.X
-	fDY := fromConn.End.Y - fromConn.Start.Y
-	fLenSq := fDX*fDX + fDY*fDY
-	var t float64
-	if fLenSq > 0 {
-		t = ((prevX-fromConn.Start.X)*fDX + (prevY-fromConn.Start.Y)*fDY) / fLenSq
-		t = math.Max(0, math.Min(1, t))
+	// Project previous position onto fromConn to get t ∈ [0,1]; a circle
+	// source has no line to project onto, so the unit comes through the
+	// middle of the destination.
+	fromIsLine := fromConn.Start != nil && fromConn.End != nil
+	var fDX, fDY, fLenSq float64
+	t := 0.5
+	if fromIsLine {
+		fDX = fromConn.End.X - fromConn.Start.X
+		fDY = fromConn.End.Y - fromConn.Start.Y
+		fLenSq = fDX*fDX + fDY*fDY
+		t = 0
+		if fLenSq > 0 {
+			t = ((prevX-fromConn.Start.X)*fDX + (prevY-fromConn.Start.Y)*fDY) / fLenSq
+			t = math.Max(0, math.Min(1, t))
+		}
 	}
 
 	// Interpolate the same t onto destConn, kept spawnEndMargin feet in from

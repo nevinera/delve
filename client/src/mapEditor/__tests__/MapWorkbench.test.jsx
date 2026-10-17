@@ -198,7 +198,7 @@ describe("MapWorkbench", () => {
     expect(screen.getByRole("button", {name: "+ Add Circle"})).not.toBeDisabled();
   });
 
-  it("flows the sidebar's '+ Add Point Connection' button into a single canvas click, creating a point connection", async () => {
+  it("flows the sidebar's '+ Add Point Connection' button into a canvas click, creating a point connection", async () => {
     await renderReady({map: {...BLANK_MAP, pixelDimensions: {width: 800, height: 600}, feetDimensions: {width: 160, height: 120}}, imageUrl: "data:image/webp;base64,AAAA"});
     const wrapper = document.querySelector(".map-canvas-wrapper");
     Object.defineProperty(wrapper, "clientWidth", {value: 800, configurable: true});
@@ -208,7 +208,8 @@ describe("MapWorkbench", () => {
     fireEvent.click(document.querySelectorAll(".map-sidebar-section-heading")[1]); // Connections
     fireEvent.click(screen.getByRole("button", {name: "+ Add Point Connection"}));
 
-    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+    fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+    fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
 
     expect(screen.getByText(/Connection 1: point/)).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "+ Add Point Connection"})).not.toBeDisabled();

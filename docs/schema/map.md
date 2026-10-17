@@ -285,12 +285,12 @@ Connections are entry/exit points used to move between maps or enter the zone.
 
 ### point
 
-A positional trigger. Units departing via this connection must intersect `position`. Units arriving via this connection are placed randomly within `fuzzRadius` feet and `fuzzAngle` degrees of `position`.
+A circular trigger. A unit touching the circle (within `fuzzRadius` feet of `position`) departs via this connection, the same way crossing a line connection does. A unit arriving via it is placed at `position`, facing `position.angle`. `fuzzAngle` is currently unused.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `position` | Position | yes | Location and facing direction of the connection point. |
-| `fuzzRadius` | float | yes | Arrival scatter radius in feet. Range: 0.0-20.0. |
+| `fuzzRadius` | float | yes | Radius of the trigger circle in feet. Range: 0.0-20.0. |
 | `fuzzAngle` | float | yes | Arrival scatter angle in degrees. Range: 0.0-360.0. |
 
 ```json
@@ -302,6 +302,8 @@ A positional trigger. Units departing via this connection must intersect `positi
   "fuzzAngle": 90.0
 }
 ```
+
+A connection a unit has just arrived through stays inert until the unit has left its trigger area once, so arriving never sends it straight back. This holds for every pairing of point and line connections.
 
 ### line
 

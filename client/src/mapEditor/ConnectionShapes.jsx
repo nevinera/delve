@@ -1,9 +1,10 @@
-import {feetToPixel} from "./mapCoords";
+import {feetToPixel, feetSpacingToPixelsX} from "./mapCoords";
 
 // Read-only rendering of committed connections plus their selection handles
 // - a distinct color from barriers (see BarrierShapes.jsx), since a
 // connection is a trigger/entry-point, not an obstacle. A point connection
-// is a single draggable marker (position only - no separate handle); a
+// is a circle of its radius (fuzzRadius) with a center marker to drag it by
+// and, selected, a handle on its edge to resize it; a
 // line connection is a segment with a drag handle at each end (mirrors a
 // wall's per-point handles, not a circle's move+resize pair, since both
 // ends are independently meaningful).
@@ -14,7 +15,7 @@ const POINT_RADIUS = 5;
 const STROKE_WIDTH = 3;
 const HOVERED_STROKE_WIDTH = STROKE_WIDTH * 2;
 
-export default function ConnectionShapes({connections, pixelDimensions, feetDimensions, interactive, selectedIndex, hoveredIndex, onSelect, onStartDragPoint, onStartDragEndpoint}) {
+export default function ConnectionShapes({connections, pixelDimensions, feetDimensions, interactive, selectedIndex, hoveredIndex, onSelect, onStartDragPoint, onStartDragEndpoint, onStartDragRadius}) {
   function toPixel(loc) {
     return feetToPixel(loc.x, loc.y, pixelDimensions, feetDimensions);
   }
@@ -36,12 +37,26 @@ export default function ConnectionShapes({connections, pixelDimensions, feetDime
 
         if (conn.type === "point") {
           const p = toPixel(conn.position);
+          const radius = feetSpacingToPixelsX(conn.fuzzRadius ?? 0, pixelDimensions, feetDimensions);
           return (
-            <circle
-              key={i} cx={p.x} cy={p.y} r={hoveredIndex === i ? POINT_RADIUS * 1.5 : POINT_RADIUS}
-              fill={color} stroke="#000" strokeWidth={1}
-              onPointerDown={selectable ? (e) => onStartDragPoint(i, e) : undefined}
-            />
+            <g key={i}>
+              <circle
+                cx={p.x} cy={p.y} r={radius}
+                fill={color} fillOpacity={0.15} stroke={color} strokeWidth={hoveredIndex === i ? HOVERED_STROKE_WIDTH : STROKE_WIDTH}
+                onPointerDown={selectable ? (e) => onStartDragPoint(i, e) : undefined}
+              />
+              <circle
+                cx={p.x} cy={p.y} r={hoveredIndex === i ? POINT_RADIUS * 1.5 : POINT_RADIUS}
+                fill={color} stroke="#000" strokeWidth={1}
+                onPointerDown={selectable ? (e) => onStartDragPoint(i, e) : undefined}
+              />
+              {selected && (
+                <circle
+                  cx={p.x + radius} cy={p.y} r={HANDLE_RADIUS} fill={SELECTED_COLOR} stroke="#000" strokeWidth={1}
+                  onPointerDown={(e) => onStartDragRadius(i, e)}
+                />
+              )}
+            </g>
           );
         }
 

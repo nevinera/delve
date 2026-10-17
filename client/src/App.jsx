@@ -38,6 +38,7 @@ import { redirectTo } from "./redirectTo";
 import { leaveWorld } from "./game/leaveWorld";
 import IconImage from "./IconImage";
 import GearRestrictionPrompt from "./GearRestrictionPrompt";
+import ZoneExitPrompt from "./ZoneExitPrompt";
 import { itemAllowed, disallowedItems } from "./game/provenance";
 
 
@@ -2237,6 +2238,7 @@ export default function App({
         if (!action) return;
         if (action.log) addLog(action.log);
         if (action.type === "expiring") setExpiresAt(action.expiresAt);
+        if (action.type === "confirm-exit") setConfirmingExit(true);
         if (action.type === "leave" && worldReturnUrl) {
           leavingRef.current = true;
           redirectTo(worldReturnUrl);
@@ -2445,6 +2447,12 @@ export default function App({
     if (status !== "dead" && prevSelfStatusRef.current === "dead") setDeathTime(null);
     prevSelfStatusRef.current = status;
   }, [selfUnit?.status]);
+
+  const [confirmingExit, setConfirmingExit] = useState(false);
+  const handleConfirmExit = useCallback(() => {
+    setConfirmingExit(false);
+    connRef.current?.send({ type: "confirm_zone_exit" });
+  }, []);
 
   const handleRespawn = useCallback(() => {
     connRef.current?.send({ type: "respawn" });
@@ -3244,6 +3252,7 @@ export default function App({
         </div>
       )}
       <ExpiryBanner expiresAt={expiresAt} />
+      <ZoneExitPrompt open={confirmingExit} onStay={() => setConfirmingExit(false)} onLeave={handleConfirmExit} />
       <GearRestrictionPrompt
         items={disallowedEquipped}
         busy={gearSwitching}

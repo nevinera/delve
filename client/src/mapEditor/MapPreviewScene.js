@@ -166,7 +166,8 @@ export class MapPreviewScene {
     // Line connections (map-to-map thresholds) render the same way the real
     // client draws them - a translucent magenta "wall" (game/scene.js's own
     // per-map setup) so a doorway/edge reads as a boundary, not just empty
-    // space. Point connections aren't drawn there either - matches exactly.
+    // space. Point connections draw as the same translucent magenta, as a
+    // cylinder of their radius.
     //
     // Unlike the real client, they also collide here - this preview never
     // actually transitions to another map when crossing one, so leaving them
@@ -176,12 +177,18 @@ export class MapPreviewScene {
     const lineConnectionWalls = (connections ?? [])
       .filter((conn) => conn.type === "line" && conn.start && conn.end)
       .map((conn) => ({type: "wall", locations: [conn.start, conn.end]}));
-    this._collisionBarriers = [...this._barriers, ...lineConnectionWalls];
+    const circleConnections = (connections ?? [])
+      .filter((conn) => conn.type === "point" && conn.position && conn.fuzzRadius > 0)
+      .map((conn) => ({type: "circle", location: conn.position, radius: conn.fuzzRadius}));
+    this._collisionBarriers = [...this._barriers, ...lineConnectionWalls, ...circleConnections];
 
     for (const conn of connections ?? []) {
-      if (conn.type !== "line" || !conn.start || !conn.end) continue;
-      const pts = [conn.start, conn.end].map(({x, y}) => this._toWorld(x, y));
-      this.scene.add(buildWall(pts, {color: 0xff00ff, opacity: 0.4}));
+      if (conn.type === "line" && conn.start && conn.end) {
+        const pts = [conn.start, conn.end].map(({x, y}) => this._toWorld(x, y));
+        this.scene.add(buildWall(pts, {color: 0xff00ff, opacity: 0.4}));
+      } else if (conn.type === "point" && conn.position) {
+        this.scene.add(buildCircleBarrier(this._toWorld(conn.position.x, conn.position.y), conn.fuzzRadius ?? 0, {color: 0xff00ff, opacity: 0.4}));
+      }
     }
 
     for (const unit of units ?? []) {

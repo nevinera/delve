@@ -10,6 +10,10 @@ describe("worldMessageAction", () => {
     expect(worldMessageAction({type: "version-expired"})).toMatchObject({type: "leave", log: expect.stringContaining("expired")});
   });
 
+  it("asks to confirm an exit", () => {
+    expect(worldMessageAction({type: "zone-exit-confirm", connection: "m/door"})).toEqual({type: "confirm-exit"});
+  });
+
   it("logs a failed exit", () => {
     expect(worldMessageAction({type: "zone-exit-failed", error: "nope"})).toEqual({type: "log", log: "Couldn't leave the zone: nope"});
   });

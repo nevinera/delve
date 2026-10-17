@@ -730,7 +730,7 @@ describe("MapCanvas", () => {
       fireEvent.click(screen.getByRole("button", {name: "Fit"}));
     }
 
-    it("places a point connection on a single click, then reverts the tool to select", () => {
+    it("places a point connection with the default radius on a plain click, then reverts the tool to select", () => {
       const dispatch = vi.fn();
       const onToolChange = vi.fn();
       render(
@@ -742,13 +742,55 @@ describe("MapCanvas", () => {
       fitToImageSize();
       const wrapper = document.querySelector(".map-canvas-wrapper");
 
-      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0}); // (50, 0)px -> (10, 120)ft at 5px/ft
+      fireEvent.pointerDown(wrapper, {clientX: 50, clientY: 0, pointerId: 1}); // (50, 0)px -> (10, 120)ft at 5px/ft
+      fireEvent.pointerUp(wrapper, {clientX: 50, clientY: 0, pointerId: 1});
 
       expect(dispatch).toHaveBeenCalledWith({
         type: "ADD_ENTRY", section: "connections",
         entry: {identifier: "connection-1", type: "point", position: {x: 10, y: 120, angle: 0}, fuzzRadius: 2, fuzzAngle: 90},
       });
       expect(onToolChange).toHaveBeenCalledWith("select");
+    });
+
+    it("sets a point connection's radius by dragging, capped at the schema maximum", () => {
+      const dispatch = vi.fn();
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS})} dispatch={dispatch} onSelectBarrier={noop}
+          tool="add-point-connection" onToolChange={noop}
+        />
+      );
+      fitToImageSize();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 25, clientY: 0, pointerId: 1}); // 5ft
+      fireEvent.pointerUp(wrapper, {clientX: 25, clientY: 0, pointerId: 1});
+      expect(dispatch.mock.calls[0][0].entry).toMatchObject({type: "point", fuzzRadius: 5});
+
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 500, clientY: 0, pointerId: 1}); // 100ft
+      fireEvent.pointerUp(wrapper, {clientX: 500, clientY: 0, pointerId: 1});
+      expect(dispatch.mock.calls[1][0].entry).toMatchObject({fuzzRadius: 20});
+    });
+
+    it("resizes a selected point connection by dragging the handle on its edge", () => {
+      const dispatch = vi.fn();
+      const connections = [{identifier: "door", type: "point", position: {x: 10, y: 10, angle: 0}, fuzzRadius: 2, fuzzAngle: 90}];
+      render(
+        <MapCanvas
+          image={IMAGE} imageError="" onImageFile={noop} mapData={mapData({feetDimensions: FEET_DIMENSIONS, connections})} dispatch={dispatch} onSelectBarrier={noop}
+          selectedConnectionIndex={0} onSelectConnection={noop}
+        />
+      );
+      fitToImageSize();
+      const handle = [...document.querySelectorAll(".map-canvas-shapes circle")].filter((c) => c.getAttribute("r") === "5" && c.getAttribute("fill") === "#8fe3fa").pop();
+      const wrapper = document.querySelector(".map-canvas-wrapper");
+
+      fireEvent.pointerDown(handle, {pointerId: 1});
+      fireEvent.pointerMove(wrapper, {clientX: 50 + 30, clientY: 5 * (120 - 10), pointerId: 1}); // 6ft right of the center
+
+      expect(dispatch).toHaveBeenCalledWith({type: "UPDATE_ENTRY_FIELD", section: "connections", index: 0, field: "fuzzRadius", value: expect.closeTo(6, 5)});
     });
 
     it("places a fill point on one click, then reverts the tool", () => {
@@ -793,7 +835,8 @@ describe("MapCanvas", () => {
       fitToImageSize();
       const wrapper = document.querySelector(".map-canvas-wrapper");
 
-      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0});
+      fireEvent.pointerDown(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
+      fireEvent.pointerUp(wrapper, {clientX: 0, clientY: 0, pointerId: 1});
 
       expect(dispatch.mock.calls[0][0].entry.identifier).toBe("connection-2");
     });
@@ -2327,7 +2370,7 @@ describe("MapCanvas", () => {
     it("shows a status and crosshair cursor for every single-shot add-tool too, not just wall/field placement", () => {
       for (const [tool, expectedText] of [
         ["add-circle", "Placing Circle - drag on the map"],
-        ["add-point-connection", "Placing Point Connection - click the map"],
+        ["add-point-connection", "Placing Point Connection - drag out its radius"],
         ["add-line-connection", "Placing Line Connection - drag on the map"],
       ]) {
         render(<MapCanvas image={IMAGE} imageError="" onImageFile={noop} mapData={mapData()} dispatch={noop} onSelectBarrier={noop} tool={tool} onToolChange={noop} />);

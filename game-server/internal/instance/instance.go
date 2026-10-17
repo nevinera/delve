@@ -172,6 +172,8 @@ type Instance struct {
 	lastExpiryNotice int
 
 	exitArmedAt      map[uuid.UUID]time.Time
+	exitConfirmUntil map[uuid.UUID]time.Time
+	exitAwaiting     map[uuid.UUID]pendingZoneExit
 	exitsInFlight    map[uuid.UUID]bool
 	zoneExitResultCh chan zoneExitResult
 
@@ -209,6 +211,8 @@ func NewInstance(
 		commandProcessor:    command.NewCommandProcessor(),
 		autoUpgradeResultCh: make(chan autoUpgradeResult, 256),
 		exitArmedAt:         make(map[uuid.UUID]time.Time),
+		exitConfirmUntil:    make(map[uuid.UUID]time.Time),
+		exitAwaiting:        make(map[uuid.UUID]pendingZoneExit),
 		exitsInFlight:       make(map[uuid.UUID]bool),
 		zoneExitResultCh:    make(chan zoneExitResult, DefaultMaxSlots),
 	}

@@ -1,6 +1,7 @@
 package instance_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/google/uuid"
@@ -277,4 +278,111 @@ func TestMapTransition_IdleNPCLosesAggroOnTransition(t *testing.T) {
 	require.Equal(t, "map_b", s.Units[npcID].MapIdentifier)
 	assert.Nil(t, s.Units[npcID].Target)
 	assert.Equal(t, instancestate.UnitStatusIdle, s.Units[npcID].Status)
+}
+
+// ---------------------------------------------------------------------------
+// circle connections, and re-arming after arrival
+// ---------------------------------------------------------------------------
+
+func circleAt(x, y, radius float64) instanceconfig.MapConnection {
+	return instanceconfig.MapConnection{Identifier: "c", Type: "point", Position: &instanceconfig.Position{X: x, Y: y, Angle: 90}, FuzzRadius: radius}
+}
+
+func linkedZone(a, b instanceconfig.MapConnection) instanceconfig.Zone {
+	a.Identifier, b.Identifier = "a", "b"
+	return instanceconfig.Zone{
+		Maps: []instanceconfig.Map{
+			{Identifier: "map_a", FeetDimensions: instanceconfig.Dimensions{Width: 100, Height: 100}, Connections: []instanceconfig.MapConnection{a}},
+			{Identifier: "map_b", FeetDimensions: instanceconfig.Dimensions{Width: 100, Height: 100}, Connections: []instanceconfig.MapConnection{b}},
+		},
+		ZoneLinks: []instanceconfig.ZoneLink{{
+			ConnectionA: instanceconfig.ConnectionIdentifier{Map: "map_a", Connection: "a"},
+			ConnectionB: instanceconfig.ConnectionIdentifier{Map: "map_b", Connection: "b"},
+		}},
+	}
+}
+
+func lineConn(x1, y1, x2, y2 float64) instanceconfig.MapConnection {
+	return instanceconfig.MapConnection{Type: "line", Start: locPtr(x1, y1), End: locPtr(x2, y2)}
+}
+
+func TestMapTransition_CircleTriggersAtItsRadius(t *testing.T) {
+	zone := linkedZone(circleAt(50, 50, 5), circleAt(20, 20, 3))
+	s := emptyInstanceState()
+	id, p := playerOnMap(s, "map_a", 54, 50)
+	prev := prevStateWithUnit(id, "map_a", 60, 50)
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	assert.Equal(t, "map_b", p.MapIdentifier)
+	assert.InDelta(t, 20.0, p.Position.X, 0.01)
+	assert.InDelta(t, 20.0, p.Position.Y, 0.01)
+}
+
+func TestMapTransition_CircleOutsideRadiusDoesNothing(t *testing.T) {
+	zone := linkedZone(circleAt(50, 50, 5), circleAt(20, 20, 3))
+	s := emptyInstanceState()
+	id, p := playerOnMap(s, "map_a", 56, 50)
+	prev := prevStateWithUnit(id, "map_a", 60, 50)
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	assert.Equal(t, "map_a", p.MapIdentifier)
+}
+
+func TestMapTransition_ArrivingOnACircleDoesNotBounceBack(t *testing.T) {
+	zone := linkedZone(circleAt(50, 50, 5), circleAt(20, 20, 3))
+	s := emptyInstanceState()
+	id, p := playerOnMap(s, "map_a", 52, 50)
+	prev := prevStateWithUnit(id, "map_a", 60, 50)
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+	require.Equal(t, "map_b", p.MapIdentifier)
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	assert.Equal(t, "map_b", p.MapIdentifier)
+}
+
+func TestMapTransition_CrossesBackAfterLeavingTheArrivalArea(t *testing.T) {
+	zone := linkedZone(circleAt(50, 50, 5), circleAt(20, 20, 3))
+	s := emptyInstanceState()
+	id, p := playerOnMap(s, "map_a", 52, 50)
+	prev := prevStateWithUnit(id, "map_a", 60, 50)
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+	require.Equal(t, "map_b", p.MapIdentifier)
+
+	p.Position.X, p.Position.Y = 30, 20 // out of the circle: re-arms
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+	p.Position.X, p.Position.Y = 22, 20 // back in
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	assert.Equal(t, "map_a", p.MapIdentifier)
+}
+
+func TestMapTransition_CircleToLineArrivesMidLineOnTheFarSide(t *testing.T) {
+	zone := linkedZone(circleAt(50, 50, 5), lineConn(40, 0, 60, 0))
+	s := emptyInstanceState()
+	id, p := playerOnMap(s, "map_a", 52, 50)
+	prev := prevStateWithUnit(id, "map_a", 60, 50)
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	assert.Equal(t, "map_b", p.MapIdentifier)
+	assert.InDelta(t, 50.0, p.Position.X, 0.01)
+	assert.InDelta(t, 2.0, math.Abs(p.Position.Y), 0.01)
+}
+
+func TestMapTransition_LineToCircleArrivesAtTheCenterAndStaysThere(t *testing.T) {
+	zone := linkedZone(lineConn(40, 50, 60, 50), circleAt(20, 20, 3))
+	s := emptyInstanceState()
+	id, p := playerOnMap(s, "map_a", 50, 51)
+	prev := prevStateWithUnit(id, "map_a", 50, 55)
+
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+	instance.ApplyMapTransitionsForTest(s, prev, zone)
+
+	assert.Equal(t, "map_b", p.MapIdentifier)
+	assert.InDelta(t, 20.0, p.Position.X, 0.01)
+	assert.InDelta(t, 20.0, p.Position.Y, 0.01)
 }

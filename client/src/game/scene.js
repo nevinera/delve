@@ -1285,6 +1285,8 @@ export class SceneManager {
         if (conn.type === "line") {
           const pts = [conn.start, conn.end].map(({ x, y }) => toWorld(x, y));
           group.add(buildWall(pts, { color: 0xff00ff, opacity: 0.4 }));
+        } else if (conn.type === "point" && conn.position) {
+          group.add(buildCircleBarrier(toWorld(conn.position.x, conn.position.y), conn.fuzzRadius ?? 0, { color: 0xff00ff, opacity: 0.4 }));
         }
       }
     }

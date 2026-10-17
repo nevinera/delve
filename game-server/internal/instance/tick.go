@@ -100,14 +100,22 @@ func (inst *Instance) run(ctx context.Context, state *instancestate.InstanceStat
 			inst.drainPlayerDespawns(state)
 			refreshStatusEffectConditions(state)
 			updateCombatStats(state, inst.ZoneConfig)
-			inst.commandProcessor.Process(inst.drainCommands(), inst.ZoneConfig, state)
+			cmds, confirmedExits := inst.takeZoneExitConfirms(inst.drainCommands())
+			inst.commandProcessor.Process(cmds, inst.ZoneConfig, state)
 			var combatEvents []CombatEvent
 			tickCasts(state, inst.ZoneConfig, now, &combatEvents, inst.Rand)
 			updatePlayerMaxHealth(state, inst.ZoneConfig)
 			updatePlayerSpeed(state)
 			applyMovement(state)
 			applyMapTransitions(state, prevState, inst.ZoneConfig, inst.Fills)
-			zoneExits := inst.detectZoneExits(state, prevState, now)
+			zoneExits := confirmedExits
+			for _, exit := range inst.detectZoneExits(state, prevState, now) {
+				if exit.needsConfirm {
+					inst.askZoneExitConfirm(exit, now)
+				} else {
+					zoneExits = append(zoneExits, exit)
+				}
+			}
 			combatEvents = append(combatEvents, applyUnitBehaviors(state, inst.ZoneConfig, TickInterval.Seconds(), inst.PathGraph, inst.Rand)...)
 			tickNCUMovement(state, TickInterval.Seconds(), inst.Rand)
 			combatEvents = append(combatEvents, state.PendingCombatEvents...)
