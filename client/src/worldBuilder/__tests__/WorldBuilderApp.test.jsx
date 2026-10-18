@@ -18,6 +18,7 @@ function fakeClient(branchFiles) {
   const json = (branch) => branchFiles[branch];
   return {
     repo: vi.fn().mockResolvedValue("o/content"),
+    libraryRepo: vi.fn().mockResolvedValue("o/content"),
     listBranches: vi.fn(async () => Object.keys(branchFiles)),
     defaultBranch: vi.fn().mockResolvedValue("main"),
     createBranch: vi.fn(async (name) => {

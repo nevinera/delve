@@ -40,7 +40,7 @@ export default function ContentAdder({noun, draft, library, list, prepare, creat
   }
   return (
     <div className="content-adder">
-      {library && <button type="button" className="add-entry" onClick={() => setMode("import")}>Import from library…</button>}
+      {library && <button type="button" className="add-entry" onClick={() => setMode("import")}>Import from {library.external ? library.repo : "library"}…</button>}
       <button type="button" className="add-entry" onClick={() => setMode("create")}>Create new…</button>
     </div>
   );

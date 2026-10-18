@@ -3,8 +3,8 @@
 // copied in, and every asset it uses (tokens, icons, graphics, sounds) is
 // copied to the same place under worlds/<w>/ - tokens/unit/goblin.webp ->
 // worlds/<w>/tokens/unit/goblin.webp - so repeated imports share copies.
-// Copies are ExistingBlobs: nothing is downloaded or re-uploaded.
-import {ExistingBlob} from "../../github/commitFiles";
+// Copies from the world's own repo are ExistingBlobs (nothing downloaded
+// or re-uploaded); from another library repo, downloaded Blobs.
 import {expandPowers} from "../../powersEditor/powerSources";
 import {normalizeUnitType} from "../../unitTypeEditor/UnitTypeWorkbench";
 import {createUnitType} from "./unitTypeOps";
@@ -43,23 +43,24 @@ export function relocateAssets(content, sourceFile, targetFile, world) {
   return {content: walk(content), assets: [...assets].sort()};
 }
 
-// [{to: world path, sha}] for each library asset the world doesn't have
-// yet, and the paths of any that don't exist in the library.
+// [{to: world path, content}] for each library asset the world doesn't
+// have yet (content from LibraryReader#copy), and the paths of any that
+// don't exist in the library.
 export async function assetCopies(draft, reader, assets) {
   const copies = [];
   const missing = [];
   for (const path of assets) {
     const to = `${worldDir(draft.worldKey)}/${path}`;
     if (draft.exists(to)) continue;
-    const sha = await reader.blobSha(path);
-    if (sha) copies.push({to, sha, from: path});
+    const content = await reader.copy(path);
+    if (content) copies.push({to, content});
     else missing.push(path);
   }
   return {copies, missing};
 }
 
 export function applyCopies(draft, copies) {
-  return copies.reduce((next, {to, sha, from}) => (next.exists(to) ? next : next.write(to, new ExistingBlob(sha, from))), draft);
+  return copies.reduce((next, {to, content}) => (next.exists(to) ? next : next.write(to, content)), draft);
 }
 
 // The shared library's files under dir: [{path, label}], label being the

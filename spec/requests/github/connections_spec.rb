@@ -269,6 +269,39 @@ RSpec.describe "Github::Connections", type: :request do
           expect(response.body).to include("installations/new?state=")
           expect(response.body).to include("github.com/settings/installations")
           expect(response.body).to include(github_disconnect_path)
+          expect(response.body).to include(github_library_path)
+        end
+      end
+    end
+
+    describe "PATCH /github/library" do
+      context "with no existing connection" do
+        it "redirects to connect" do
+          patch "/github/library", params: {library_repo: "nevinera/delve-content"}
+          expect(response).to redirect_to(github_connect_path)
+        end
+      end
+
+      context "with an existing connection" do
+        let!(:installation) { create(:github_installation, user: user, repo_full_name: "kid/her-world") }
+
+        it "sets the shared content repo" do
+          patch "/github/library", params: {library_repo: " nevinera/delve-content "}
+          expect(response).to redirect_to(github_manage_path)
+          expect(installation.reload.library_repo).to eq("nevinera/delve-content")
+        end
+
+        it "clears it when blank" do
+          installation.update!(library_repo: "nevinera/delve-content")
+          patch "/github/library", params: {library_repo: ""}
+          expect(installation.reload.library_repo).to be_nil
+          expect(installation.library_repo_name).to eq("kid/her-world")
+        end
+
+        it "refuses a URL" do
+          patch "/github/library", params: {library_repo: "https://github.com/nevinera/delve-content"}
+          expect(flash[:alert]).to include("must be username/reponame")
+          expect(installation.reload.library_repo).to be_nil
         end
       end
     end
@@ -334,6 +367,13 @@ RSpec.describe "Github::Connections", type: :request do
           body = JSON.parse(response.body)
           expect(body["token"]).to eq("gho_fresh")
           expect(body["repo_full_name"]).to eq(installation.repo_full_name)
+          expect(body["library_repo"]).to eq(installation.repo_full_name)
+        end
+
+        it "returns the shared content repo when one is set" do
+          installation.update!(library_repo: "nevinera/delve-content")
+          get "/github/token"
+          expect(JSON.parse(response.body)["library_repo"]).to eq("nevinera/delve-content")
         end
       end
 

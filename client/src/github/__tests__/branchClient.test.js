@@ -118,4 +118,20 @@ describe("BranchClient", () => {
   it("builds asset URLs pinned to a commit", async () => {
     expect(await new BranchClient().rawUrl("c1", "worlds/small/a.png")).toEqual("https://raw.githubusercontent.com/nevinera/delve-content/c1/worlds/small/a.png");
   });
+
+  it("defaults the library repo to the connected one", async () => {
+    expect(await new BranchClient().libraryRepo()).toEqual("nevinera/delve-content");
+  });
+
+  it("reads another repo through forRepo, with the same token", async () => {
+    tokenModule.fetchToken.mockResolvedValue({token: "tok", repo_full_name: "kid/world", library_repo: "nevinera/delve-content"});
+    const client = new BranchClient();
+    const calls = stubApi({"GET ": {default_branch: "main"}});
+
+    const other = client.forRepo(await client.libraryRepo());
+
+    expect(await other.defaultBranch()).toEqual("main");
+    expect(calls[0].url).toEqual(API);
+    expect(calls[0].options.headers.Authorization).toEqual("Bearer tok");
+  });
 });

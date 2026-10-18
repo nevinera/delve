@@ -43,6 +43,13 @@ class Github::ConnectionsController < ApplicationController
     @install_url = "#{ENV.string("DELVE_GITHUB_PUBLIC_LINK", default: nil)}/installations/new?state=#{session[:github_oauth_state]}"
   end
 
+  def update_library
+    installation = current_user.github_installation
+    return redirect_to github_connect_path unless installation
+
+    redirect_to github_manage_path, library_update_flash(installation)
+  end
+
   def disconnect
     installation = current_user.github_installation
     if installation
@@ -125,6 +132,14 @@ class Github::ConnectionsController < ApplicationController
     )
   end
 
+  def library_update_flash(installation)
+    if installation.update(library_repo: params[:library_repo])
+      {notice: "Shared content now comes from #{installation.library_repo_name}."}
+    else
+      {alert: "Shared content repo #{installation.errors[:library_repo].to_sentence}."}
+    end
+  end
+
   def render_not_connected
     render json: {error: "not_connected", connect_url: github_connect_path}, status: :unauthorized
   end
@@ -137,7 +152,8 @@ class Github::ConnectionsController < ApplicationController
     {
       token: installation.access_token,
       expires_at: installation.access_token_expires_at.iso8601,
-      repo_full_name: installation.repo_full_name
+      repo_full_name: installation.repo_full_name,
+      library_repo: installation.library_repo_name
     }
   end
 end

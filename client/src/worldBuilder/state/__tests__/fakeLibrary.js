@@ -11,5 +11,6 @@ export function fakeClient(repo) {
       const value = repo[blobSha.slice(4)];
       return typeof value === "string" ? value : JSON.stringify(value);
     },
+    readBlobBytes: async (blobSha) => new TextEncoder().encode(String(repo[blobSha.slice(4)])),
   };
 }

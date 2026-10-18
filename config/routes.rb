@@ -21,6 +21,7 @@ Rails.application.routes.draw do
     get "callback", to: "connections#callback"
     get "token", to: "connections#token"
     get "manage", to: "connections#manage"
+    patch "library", to: "connections#update_library"
     delete "disconnect", to: "connections#disconnect"
   end
 

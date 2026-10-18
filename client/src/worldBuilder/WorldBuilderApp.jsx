@@ -28,7 +28,7 @@ import QuestEditor from "./levels/QuestEditor";
 import {questData} from "./state/questOps";
 import {itemData} from "./state/itemOps";
 import {unitTypeData} from "./state/unitTypeOps";
-import {LibraryReader} from "./state/libraryReader";
+import {openLibrary} from "./state/libraryReader";
 import {redirectTo} from "../redirectTo";
 
 const PERSIST_DELAY_MS = 400;
@@ -76,9 +76,25 @@ export default function WorldBuilderApp({worldKey, backUrl, publishUrl, nextTag,
   // Whether git's .full.json files match the saved content (resolving every
   // zone, so only recomputed when the draft changes).
   const expanded = useMemo(() => Boolean(draft) && !draft.hasChanges && isExpanded(draft), [draft]);
-  // The shared library (outside worlds/), at the same commit, to import from.
+  // The shared library to import from: outside worlds/ at the same
+  // commit, or another repo's (see openLibrary).
   const commitSha = draft?.snapshot.commitSha;
-  const library = useMemo(() => (commitSha ? new LibraryReader(client, commitSha) : null), [client, commitSha]);
+  const [library, setLibrary] = useState(null);
+  useEffect(() => {
+    if (!commitSha) return undefined;
+    let cancelled = false;
+    openLibrary(client, commitSha).then(
+      (reader) => !cancelled && setLibrary(reader),
+      (error) => {
+        if (cancelled) return;
+        setLibrary(null);
+        setStatus({text: `Couldn't read shared content: ${error.message}`, error: true});
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [client, commitSha]);
 
   const fail = useCallback((error) => {
     if (error instanceof GithubAuthError) redirectTo(error.redirectUrl);

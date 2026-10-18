@@ -16,8 +16,11 @@ function decodeBase64(base64) {
 }
 
 export class BranchClient {
-  constructor() {
+  // repo: read another repo instead of the connected one (e.g. the shared
+  // content repo - see libraryRepo), with the same token.
+  constructor({repo = null} = {}) {
     this._auth = null;
+    this._repo = repo;
   }
 
   async _getAuth() {
@@ -26,7 +29,8 @@ export class BranchClient {
   }
 
   async _get(path) {
-    const {token, repo_full_name: repo} = await this._getAuth();
+    const {token} = await this._getAuth();
+    const repo = await this.repo();
     const res = await fetch(`${GITHUB_API}/repos/${repo}${path}`, {
       cache: "no-store",
       headers: {Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
@@ -40,7 +44,21 @@ export class BranchClient {
   }
 
   async repo() {
-    return (await this._getAuth()).repo_full_name;
+    return this._repo ?? (await this._getAuth()).repo_full_name;
+  }
+
+  // Where shared content is imported from: the connected repo unless the
+  // user picked another (Github::ConnectionsController#update_library).
+  async libraryRepo() {
+    const auth = await this._getAuth();
+    return auth.library_repo ?? auth.repo_full_name;
+  }
+
+  // A client reading `repo` instead, sharing this one's token.
+  forRepo(repo) {
+    const other = new BranchClient({repo});
+    other._auth = this._auth;
+    return other;
   }
 
   async defaultBranch() {

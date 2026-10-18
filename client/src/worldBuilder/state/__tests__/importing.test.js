@@ -1,7 +1,7 @@
 import {describe, it, expect} from "vitest";
 import {fixtureDraft} from "./fixtureWorld";
 import {ExistingBlob} from "../../../github/commitFiles";
-import {LibraryReader} from "../libraryReader";
+import {LibraryReader, openLibrary} from "../libraryReader";
 import {fakeClient} from "./fakeLibrary";
 import {applyCopies, libraryItems, libraryUnitTypes, prepareItemImport, preparePowerImport, prepareUnitTypeImport, relocateAssets} from "../importing";
 import {itemData} from "../itemOps";
@@ -83,5 +83,33 @@ describe("importing", () => {
 
     expect(itemData(draft, "golden-band")).toEqual({identifier: "golden-band", name: "Gold Ring", slot: "ring", icon_url: "../graphics/items/gold-ring.webp"});
     expect(draft.exists("worlds/w/graphics/items/gold-ring.webp")).toBe(true);
+  });
+
+  it("downloads the assets of a unit type imported from another repo", async () => {
+    const external = new LibraryReader(fakeClient(LIBRARY), "c9", {repo: "dad/shared", external: true});
+    const prepared = await prepareUnitTypeImport(fixtureDraft(), external, "unit_types/demo/troll.json", "troll");
+    const token = prepared.apply(fixtureDraft()).read("worlds/w/tokens/unit/troll.webp");
+
+    expect(token).toBeInstanceOf(Blob);
+    expect(token.type).toEqual("image/webp");
+    expect(await token.text()).toEqual("img");
+  });
+});
+
+describe("openLibrary", () => {
+  const client = (libraryRepo, other = {}) => ({
+    repo: async () => "kid/world",
+    libraryRepo: async () => libraryRepo,
+    forRepo: (repo) => ({repo: async () => repo, defaultBranch: async () => "trunk", headSha: async (branch) => `${branch}-head`, ...other}),
+  });
+
+  it("reads the connected repo at the draft's commit by default", async () => {
+    const library = await openLibrary(client("kid/world"), "c1");
+    expect(library).toMatchObject({commitSha: "c1", repo: "kid/world", external: false});
+  });
+
+  it("reads another library repo at its default branch's head", async () => {
+    const library = await openLibrary(client("dad/shared"), "c1");
+    expect(library).toMatchObject({commitSha: "trunk-head", repo: "dad/shared", external: true});
   });
 });

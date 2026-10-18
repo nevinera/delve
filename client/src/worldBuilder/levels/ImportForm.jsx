@@ -1,5 +1,8 @@
 import {useEffect, useState} from "react";
 
+// "the library", or the other repo it's read from (see openLibrary).
+export const libraryName = (library) => (library.external ? library.repo : "the library");
+
 const suggestedKey = (label) => label.split("/").pop().replace(/[^A-Za-z0-9_-]/g, "-");
 
 // Copies one of the shared library's files of a kind (unit types, items)
@@ -47,7 +50,7 @@ export default function ImportForm({noun, draft, library, list, prepare, onChang
   return (
     <form className="zone-form import-form" onSubmit={submit}>
       <select aria-label={`Library ${noun}`} value={path} onChange={(e) => pick(e.target.value)} disabled={!options}>
-        <option value="">{options ? "— import from the library —" : "Loading…"}</option>
+        <option value="">{options ? `— import from ${libraryName(library)} —` : "Loading…"}</option>
         {options?.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
       </select>
       <input aria-label={`Imported ${noun} identifier`} placeholder="identifier" value={key} onChange={(e) => setKey(e.target.value)} />

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_13_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_18_120000) do
   create_table "character_classes", force: :cascade do |t|
     t.string "content_sha"
     t.datetime "created_at", null: false
@@ -142,6 +142,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_130000) do
     t.datetime "access_token_expires_at", null: false
     t.datetime "created_at", null: false
     t.bigint "installation_id", null: false
+    t.string "library_repo"
     t.text "refresh_token", null: false
     t.datetime "refresh_token_expires_at", null: false
     t.string "repo_full_name", null: false

@@ -2,6 +2,20 @@
 
 <p>Currently connected to <strong><%= @installation.repo_full_name %></strong>.</p>
 
+<h2>Shared content</h2>
+<p>
+  The world builder imports unit types, items, and stamp sets from
+  <strong><%= @installation.library_repo_name %></strong>. To import from someone else's
+  content repo instead, give its GitHub username and repository name. It must be public.
+  Content from another repo is read-only here: importing copies it into your world.
+  Leave it blank to use your own repo.
+</p>
+<%= form_with url: github_library_path, method: :patch do |form| %>
+  <%= form.label :library_repo, "Shared content repo (username/reponame)" %>
+  <%= form.text_field :library_repo, value: @installation.library_repo, placeholder: @installation.repo_full_name %>
+  <%= form.submit "Save" %>
+<% end %>
+
 <h2>Change the selected repository</h2>
 <p>
   Updating an existing github installation in place is not supported (GitHub won't tell

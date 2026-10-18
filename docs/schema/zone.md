@@ -62,8 +62,9 @@ Links two MapConnections within the zone so that traversing one transports a uni
 
 Decorations for the zone's maps to place (see [map.md](map.md#placedstamp)), grouped in sets.
 Each set is one image, a sheet holding many stamps, so a map loads a few images, not hundreds.
-Sets come from the shared library (`graphics/stamps/<set>.json` and its image) and are copied in;
-the sheet is copied to the world's `graphics/stamps/`. Backgrounds are transparent. Not animated.
+Sets come from the shared library (`graphics/stamps/<set>.json` and its image) and are copied in.
+The library is the world's own repo unless the GitHub connection page names another public one.
+Either way, the sheet is copied to the world's `graphics/stamps/`. Backgrounds are transparent. Not animated.
 The world builder can also make a set from picked image files (packing them onto a new sheet) or add
 stamps to one (the sheet grows downward, so existing `frames` stay valid).
 
