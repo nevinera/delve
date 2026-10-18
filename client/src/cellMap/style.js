@@ -214,7 +214,50 @@ export const DUNGEON = style("dungeon", {
   },
 });
 
-export const STYLES = {glade: GLADE, autumn: AUTUMN, winter: WINTER, cave: CAVE, dungeon: DUNGEON};
+// Ruins are the dungeon's flagstones and rubble, mossy, with grass in place
+// of rock: only the palette and a little moss differ.
+export const RUINS = style("ruins", {
+  renderer: "dungeon",
+  dungeon: {moss: 0.3},
+  palette: {
+    meadow: "#c9c3b0",
+    tallGrass: "#b9b49f",
+    marsh: "#8d8f6b",
+    water: "#527464",
+    waterRim: "rgba(220, 235, 225, 0.5)",
+    forest: "#5d7a46",
+    grout: "#8a8671",
+    stone: "#a39e8b",
+    moss: "#5f8a3c",
+    worn: "#d3cdb8",
+    shadow: "rgba(24, 32, 18, 0.36)",
+    ink: "#1d2417",
+    ...WOOD,
+  },
+});
+
+// A mansion has plank floors (no flagstones), carpets and rugs, and plain
+// walls with no rock hatching around them.
+export const MANSION = style("mansion", {
+  renderer: "dungeon",
+  dungeon: {floor: "planks", hatch: false, rubble: false, puddles: false},
+  palette: {
+    meadow: "#b88a5a",
+    tallGrass: "#8c3a3a",
+    marsh: "#4f6a85",
+    water: "#5b8199",
+    waterRim: "rgba(225, 235, 240, 0.55)",
+    forest: "#3a3128",
+    grout: "#8f6a43",
+    stone: "#9b9387",
+    worn: "#d8c39a",
+    shadow: "rgba(20, 12, 6, 0.4)",
+    ink: "#1c140e",
+    ...WOOD,
+  },
+});
+
+export const STYLES = {glade: GLADE, autumn: AUTUMN, winter: WINTER, cave: CAVE, dungeon: DUNGEON, ruins: RUINS, mansion: MANSION};
 
 // Shades derived from a theme color, for when a map overrides it: the
 // defaults above are hand-tuned, so they're only replaced then.

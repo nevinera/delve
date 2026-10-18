@@ -8,7 +8,7 @@ import {buildDungeonScene, paintDungeon} from "./dungeon";
 import {hashString} from "./random";
 
 // Bump when the renderer's output changes, so old cached images are ignored.
-export const RENDER_VERSION = 10;
+export const RENDER_VERSION = 11;
 
 // iOS Safari won't draw a canvas past about 16.7M pixels.
 const MAX_PIXELS = 16_000_000;
@@ -57,7 +57,7 @@ export function renderCellMap(map, {pixelsPerFoot = 10, createCanvas = defaultCa
 }
 
 function renderDungeon(map, {pixelsPerFoot, createCanvas, style, layers, time, timings}) {
-  const scene = time("scene", () => buildDungeonScene(map));
+  const scene = time("scene", () => buildDungeonScene(map, style.dungeon));
   const scale = renderScale(scene, pixelsPerFoot);
   const canvas = createCanvas(Math.round(scene.width * scale), Math.round(scene.height * scale));
   const canopy = layers ? createCanvas(canvas.width, canvas.height) : null;
