@@ -25,6 +25,7 @@ export default defineConfig(({command}) => ({
         abilityEditor: resolve(__dirname, "client/src/abilityEditor/main.jsx"),
         classEditor: resolve(__dirname, "client/src/classEditor/main.jsx"),
         worldBuilder: resolve(__dirname, "client/src/worldBuilder/main.jsx"),
+        spike3d: resolve(__dirname, "client/src/spike3d/main.js"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",

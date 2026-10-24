@@ -10,6 +10,7 @@ Rails.application.routes.draw do
   get "up" => "rails/health#show", :as => :rails_health_check
 
   get "home", to: "home#index"
+  get "spike3d", to: "spike3d#show"
 
   namespace :admin do
     resources :users, only: [:index]
