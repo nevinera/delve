@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  rails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+      - run: bin/brakeman --no-pager
+      - run: bin/bundler-audit
+      - run: bundle exec standardrb
+      - run: bin/rails db:prepare
+        env:
+          RAILS_ENV: test
+      - run: bundle exec rspec
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run
+      - run: npm run build
+
+  game-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: game-server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: game-server/go.mod
+      - run: go test ./...
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          working-directory: game-server

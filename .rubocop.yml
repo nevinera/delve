@@ -1,0 +1,26 @@
+---
+AllCops:
+  SuggestExtensions: false
+  DisabledByDefault: true
+  TargetRubyVersion: 3.3
+
+Metrics/AbcSize:
+  Max: 15
+  Exclude:
+    - "db/migrate/**/*"
+Metrics/CyclomaticComplexity:
+  Max: 8
+Metrics/PerceivedComplexity:
+  Max: 7
+
+Metrics/ClassLength:
+  CountComments: false
+  Max: 150
+Metrics/MethodLength:
+  CountComments: false
+  Max: 15
+  Exclude:
+    - "db/migrate/**/*"
+Metrics/ParameterLists:
+  Max: 5
+  CountKeywordArgs: true

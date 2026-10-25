@@ -1,1 +1,42 @@
-plans/*
+# See https://help.github.com/articles/ignoring-files for more about ignoring files.
+
+# Ignore bundler config.
+/.bundle
+
+# Ignore all environment files.
+/.env*
+
+# Ignore all logfiles and tempfiles.
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+
+# directory for transient planning and tracking
+/plans/*
+
+# Ignore pidfiles, but keep the directory.
+/tmp/pids/*
+!/tmp/pids/
+!/tmp/pids/.keep
+
+# Ignore storage (uploaded files in development and any SQLite databases).
+/storage/*
+!/storage/.keep
+/tmp/storage/*
+!/tmp/storage/
+!/tmp/storage/.keep
+
+/public/assets
+/public/client
+node_modules/
+
+# Ignore key files for decrypting credentials and more.
+/config/*.key
+
+# Game server build artifacts
+/game-server/game-server
+/game-server/coverage.out
+/game-server/coverage.html
+
+/coverage/
