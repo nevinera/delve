@@ -14,6 +14,7 @@ import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
 import { groundMaterial } from "./groundMaterial.js";
+import { HORIZON, SUN_DIR, Sky } from "./sky.js";
 
 const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
@@ -33,7 +34,7 @@ THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
   `float fogFactor = pow( clamp( ( vFogDepth - fogNear ) / ( fogFar - fogNear ), 0.0, 1.0 ), ${FOG_CURVE.toFixed(1)} );`,
 );
 const SEA = 0x1d4a6a;
-const SKY = 0x9db8cc;
+const SKY = HORIZON;
 const BOUNDARY_LIFT_FT = 6;
 const BOUNDARY_STEP_FT = 32;
 const ACTIVE = 0xf0c850;
@@ -63,14 +64,16 @@ export class RenderView {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(SKY);
     this.scene.fog = new THREE.Fog(SKY, ...ORBIT_FOG);
+    this.sky = new Sky();
+    this.scene.add(this.sky.mesh);
     this.camera = new THREE.PerspectiveCamera(50, 1, 5, 120000);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.maxPolarAngle = Math.PI * 0.49;
     this.controls.addEventListener("change", () => this.render());
 
     this.scene.add(new THREE.HemisphereLight(0xdde8ff, 0x445533, 1.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-    sun.position.set(-1, 1.6, -0.8);
+    const sun = new THREE.DirectionalLight(0xfff6e8, 1.6);
+    sun.position.copy(SUN_DIR);
     this.scene.add(sun);
 
     this.content = new THREE.Group();
@@ -122,6 +125,7 @@ export class RenderView {
   }
 
   render() {
+    this.sky.update(this.camera, performance.now() / 1000);
     this.showSight();
     this.showClutter();
     this.renderer.render(this.scene, this.camera);
