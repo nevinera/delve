@@ -21,7 +21,8 @@ const GREY = [[0.08, 0.12], [0.03, 0.1], [0.38, 0.55]];
 const BROWN = [[0.06, 0.1], [0.3, 0.5], [0.2, 0.32]];
 const PALE = [[0.1, 0.14], [0.15, 0.3], [0.75, 0.88]];
 
-// size: [min, max] in feet, the kind's overall height (or width, for flat kinds). lie: lies along
+// size: [min, max] in feet, the kind's overall height (or width, for flat kinds; frond length,
+// for ferns, which stand about 0.6 of that). lie: lies along
 // the ground's slope instead of standing upright. A part's chance is the share of instances that
 // have it.
 export const CLUTTER = {
@@ -38,7 +39,8 @@ export const CLUTTER = {
   pebble: { size: [0.2, 0.5], parts: [{ shape: "pebble", colors: [GREY, BROWN] }] },
   stone: { size: [0.33, 1], parts: [{ shape: "stone", colors: [GREY] }] },
   bush: { size: [1.5, 2.8], parts: [{ shape: "bush", colors: [DARK_GREEN] }] },
-  fern: { size: [1.2, 2.4], parts: [{ shape: "fern", colors: [[[0.26, 0.32], [0.4, 0.6], [0.22, 0.32]]] }] },
+  fern: { size: [1.5, 3.5], parts: [{ shape: "fern", colors: [[[0.26, 0.32], [0.4, 0.6], [0.22, 0.32]]] }] },
+  swampFern: { size: [3, 6.5], parts: [{ shape: "fern", colors: [[[0.22, 0.3], [0.3, 0.5], [0.28, 0.38]]] }] },
   mushrooms: {
     size: [0.3, 0.7],
     parts: [
@@ -56,7 +58,6 @@ export const CLUTTER = {
       { shape: "thistleDots", colors: [[[0.78, 0.83], [0.5, 0.7], [0.45, 0.6]]] },
     ],
   },
-  moss: { size: [0.8, 1.8], parts: [{ shape: "mound", colors: [[[0.2, 0.25], [0.45, 0.6], [0.3, 0.42]]] }] },
   reeds: {
     size: [3, 5.5],
     parts: [
@@ -100,7 +101,7 @@ const RULES = [
   { kind: "dryGrass", at: "ground", biomes: ["rocky"], per: 0.6 },
   { kind: "thistle", at: "ground", biomes: ["rocky"], per: 0.05 },
 
-  { kind: "moss", at: "ground", biomes: ["swamp"], per: 0.4 },
+  { kind: "swampFern", at: "ground", biomes: ["swamp"], per: 0.5, patches: 0.5 },
   { kind: "paleMushrooms", at: "ground", biomes: ["swamp"], per: 0.08 },
   { kind: "shadeGrass", at: "ground", biomes: ["swamp"], per: 0.8 },
 

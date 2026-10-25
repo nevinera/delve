@@ -33,6 +33,9 @@ function fading(material) {
 }
 
 const material = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+// Fronds are mostly see-through: a leaflet texture, cut out by alpha test rather than blended, so
+// nothing needs sorting.
+const leafy = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: frondTexture(), alphaTest: 0.5 }));
 const flat = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
 
 // Thin blades fanned out round a point: count of them, each `width` wide at the foot, reaching
@@ -61,6 +64,90 @@ function blades(count, { width = 0.08, height = [0.7, 1], lean = 0.3, segments =
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   g.computeVertexNormals();
   return g;
+}
+
+// A fern: `count` fronds round a point, each a strip that rises at a slant and droops toward its
+// tip, textured with leaflets (frondTexture). Unit size: fronds about 1 long, standing about 0.6
+// tall.
+function fronds(count, seed) {
+  const rand = random(seed);
+  const SEGMENTS = 6;
+  const parts = [];
+  for (let f = 0; f < count; f++) {
+    const angle = (f / count) * Math.PI * 2 + rand() * 0.6;
+    const [dx, dz] = [Math.cos(angle), Math.sin(angle)];
+    const length = 0.8 + 0.2 * rand();
+    const rise = 1.3 - 0.25 * rand(); // the frond's angle up from flat at its foot
+    const droop = 0.9 + 0.4 * rand(); // how far it bends down by the tip
+    const halfWidth = 0.17 * length;
+    const positions = [];
+    const uvs = [];
+    let [x, y, z] = [dx * 0.03, 0, dz * 0.03];
+    for (let s = 0; s <= SEGMENTS; s++) {
+      const t = s / SEGMENTS;
+      positions.push(x - dz * halfWidth, y, z + dx * halfWidth, x + dz * halfWidth, y, z - dx * halfWidth);
+      uvs.push(0, t, 1, t);
+      const pitch = rise - droop * t;
+      const step = length / SEGMENTS;
+      x += dx * Math.cos(pitch) * step;
+      z += dz * Math.cos(pitch) * step;
+      y += Math.sin(pitch) * step;
+    }
+    const indices = [];
+    for (let s = 0; s < SEGMENTS; s++) {
+      const v = s * 2;
+      indices.push(v, v + 1, v + 2, v + 1, v + 3, v + 2);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    g.setIndex(indices);
+    g.computeVertexNormals();
+    parts.push(g);
+  }
+  return mergeGeometries(parts);
+}
+
+// A fern frond's leaflets, white on clear so instance colors tint them: a stem up the middle and
+// pairs of narrow leaflets angled toward the tip, longest a third of the way up. u runs across
+// the frond, v from foot (0) to tip (1).
+function frondTexture() {
+  const W = 128;
+  const H = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const rand = random(11);
+  ctx.strokeStyle = "#d8d8d8";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(W / 2, H);
+  ctx.lineTo(W / 2, 4);
+  ctx.stroke();
+  const PAIRS = 22;
+  for (let p = 0; p < PAIRS; p++) {
+    const t = (p + 0.5) / PAIRS; // 0 at the foot
+    const y = H * (1 - t);
+    const reach = (W / 2 - 4) * Math.min(1, 1.6 * Math.sin(Math.PI * Math.min(1, t * 1.25 + 0.05)));
+    for (const side of [-1, 1]) {
+      const shade = 200 + Math.floor(rand() * 55);
+      ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
+      ctx.beginPath();
+      // A narrow leaflet from the stem out and up toward the tip.
+      const tipX = W / 2 + side * reach;
+      const tipY = y - reach * 0.45;
+      const width = 5 + 4 * (1 - t);
+      ctx.moveTo(W / 2, y + width);
+      ctx.quadraticCurveTo(W / 2 + side * reach * 0.5, y - reach * 0.1 + width, tipX, tipY);
+      ctx.quadraticCurveTo(W / 2 + side * reach * 0.5, y - reach * 0.3 - width, W / 2, y - width);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 // Copies of a geometry at points [[x, y, z, scale], ...], merged into one.
@@ -92,14 +179,13 @@ const SHAPES = {
   pebble: () => new THREE.IcosahedronGeometry(0.5, 0).scale(1, 0.45, 0.8).translate(0, 0.12, 0),
   stone: () => new THREE.DodecahedronGeometry(0.55, 0).scale(1, 0.9, 0.8).translate(0, 0.35, 0),
   bush: () => new THREE.IcosahedronGeometry(0.5, 1).scale(1, 0.8, 1).translate(0, 0.38, 0),
-  fern: () => blades(7, { width: 0.18, height: [0.6, 0.8], lean: 1.1, segments: 3, spread: 0.02, seed: 3 }),
+  fern: () => fronds(7, 3),
   stalks: () => mergeGeometries(stalkTops.map(([x, y, z, s]) => new THREE.CylinderGeometry(0.035, 0.05, y, 5).translate(x, y / 2, z).scale(s, 1, s))),
   caps: () => at(new THREE.SphereGeometry(0.16, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), stalkTops.map(([x, y, z, s]) => [x * s, y, z * s, s])),
   patch: () => patch(9, 0.04, 4),
   twig: () => new THREE.CylinderGeometry(0.025, 0.035, 1, 4).rotateZ(Math.PI / 2).translate(0, 0.04, 0),
   thistle: () => mergeGeometries(thistleTips.map(([x, y, z]) => cylinderBetween([0, 0, 0], [x, y, z], 0.04))),
   thistleDots: () => at(new THREE.IcosahedronGeometry(0.07, 0), thistleTips),
-  mound: () => new THREE.IcosahedronGeometry(0.5, 1).scale(1, 0.35, 1).translate(0, 0.04, 0),
   reeds: () => blades(8, { width: 0.05, height: [0.6, 1], lean: 0.12, segments: 3, spread: 0.15, seed: 5 }),
   cattails: () => at(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 6), reedTops),
   lily: () => new THREE.CircleGeometry(0.5, 12, 0.3, Math.PI * 2 - 0.6).rotateX(-Math.PI / 2).translate(0, 0.05, 0),
@@ -153,7 +239,7 @@ export function clutterMeshes(instances, origin) {
       const placed = list.filter((item) => item.colors[p]);
       if (!placed.length) return;
       const solid = part.shape === "stone" || part.shape === "pebble";
-      const mesh = new THREE.InstancedMesh(shape(part.shape), solid ? flat : material, placed.length);
+      const mesh = new THREE.InstancedMesh(shape(part.shape), solid ? flat : part.shape === "fern" ? leafy : material, placed.length);
       placed.forEach((item, n) => {
         q.setFromUnitVectors(UP, normal.set(...item.normal)).multiply(turn.setFromAxisAngle(UP, item.yaw));
         m.compose(new THREE.Vector3(item.x - origin[0], item.y, item.z - origin[1]), q, new THREE.Vector3(item.scale, item.scale, item.scale));
