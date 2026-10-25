@@ -22,6 +22,7 @@ export const SURFACE_LAYERS = [
   { name: "terrain", type: "u8" },
   { name: "biome", type: "u8" },
   { name: "forest", type: "u8" },
+  { name: "clutter", type: "u8", optional: true }, // ground clutter density, 100 = normal
 ];
 
 // tile: { coords: [tx, tz], layer, cells, cellFt, palettes, objects, generator, layers: { name: array } }

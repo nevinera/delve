@@ -19,7 +19,7 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 17;
+export const GENERATOR_VERSION = 18;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -160,6 +160,7 @@ export function generateTile(ctx, tx, tz) {
     terrain: new Uint8Array(count),
     biome: new Uint8Array(count),
     forest: new Uint8Array(count),
+    clutter: new Uint8Array(count),
   };
   for (let j = 0; j < CELLS; j++) {
     for (let i = 0; i < CELLS; i++) {
@@ -173,6 +174,7 @@ export function generateTile(ctx, tx, tz) {
       layers.terrain[k] = terrainFor(ctx, s, Math.hypot(gx, gz), tx * CELLS + i, tz * CELLS + j);
       layers.forest[k] = s.land ? Math.round(s.climate.profile.trees * 255) : 0;
       layers.biome[k] = s.climate.biome;
+      layers.clutter[k] = Math.min(255, Math.round(s.climate.profile.clutter * 100));
       layers.waterKind[k] = WATER_KINDS.indexOf(s.sea ? "sea" : "fresh");
     }
   }

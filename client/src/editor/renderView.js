@@ -8,6 +8,8 @@ import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
+import { clutterMeshes } from "./clutterMeshes.js";
+import { clutterForTile } from "../world/clutter.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
 import { groundMaterial } from "./groundMaterial.js";
@@ -24,6 +26,7 @@ const PIN_SIZE = 0.035; // head sizes, as a fraction of the view's height
 const POINT_SIZE = 0.022;
 const DRAG_PX = 4; // a press that moves less than this is a click
 const KEY = { pan: 0.8, zoom: 1.6, turn: 1.5 }; // per second: distances panned, e^zoom, radians
+const CLUTTER_VIEW_FT = 1500; // ground clutter shows when the camera's this close to what it looks at
 
 // The editor's 3D view: the active zone's tiles plus a ring around them as lit terrain with river
 // water, every other existing tile as its thumbnail on the sea, and every zone's boundary draped
@@ -56,7 +59,10 @@ export class RenderView {
     this.content = new THREE.Group();
     this.marks = new THREE.Group();
     this.trees = new THREE.Group();
-    this.scene.add(this.content, this.marks, this.trees);
+    this.clutter = new THREE.Group();
+    this.scene.add(this.content, this.marks, this.trees, this.clutter);
+    this.clutterTiles = new Map(); // "tx,tz" -> that tile's clutter, worked out when first needed
+    this.clutterAround = null; // the tile clutter is drawn around
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
     this.surfaces = []; // what a pointer can land on
     this.heads = []; // pin heads a pointer can pick
@@ -98,7 +104,37 @@ export class RenderView {
   }
 
   render() {
+    this.showClutter();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // Ground clutter on the 3×3 tiles around where you're looking (or walking), when the camera's
+  // close enough to see it. It's redrawn when that moves to another tile.
+  showClutter() {
+    if (!this.origin) return;
+    const focus = this.walking ? this.walker.pos : this.controls.target;
+    this.clutter.visible = this.walking || this.camera.position.distanceTo(focus) < CLUTTER_VIEW_FT;
+    if (!this.clutter.visible) return;
+    const [tx, tz] = [Math.floor((focus.x + this.origin[0]) / TILE_FT), Math.floor((focus.z + this.origin[1]) / TILE_FT)];
+    const key = `${tx},${tz}`;
+    if (key === this.clutterAround) return;
+    this.clutterAround = key;
+    for (const child of [...this.clutter.children]) {
+      child.dispose();
+      this.clutter.remove(child);
+    }
+    const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
+    const instances = [];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const near = `${tx + dx},${tz + dz}`;
+        const tile = this.decoded.get(near);
+        if (!tile) continue;
+        if (!this.clutterTiles.has(near)) this.clutterTiles.set(near, clutterForTile(tile, tileAt));
+        instances.push(...this.clutterTiles.get(near));
+      }
+    }
+    if (instances.length) this.clutter.add(...clutterMeshes(instances, this.origin));
   }
 
   // Walk mode (walker.js): a character dropped where the camera looks. onStop runs when it ends,
@@ -146,6 +182,8 @@ export class RenderView {
 
     const decoded = new Map();
     this.decoded = decoded;
+    this.clutterTiles.clear();
+    this.clutterAround = null;
     for (const { tx, tz, path } of surfaceTiles(world, continent)) {
       if (near.has(`${tx},${tz}`)) decoded.set(`${tx},${tz}`, decodeTile(gunzipSync(world.files.get(path))));
     }
@@ -216,6 +254,8 @@ export class RenderView {
     const key = `${tx},${tz}`;
     if (!this.decoded.has(key)) return;
     this.decoded.set(key, tile);
+    this.clutterTiles.delete(key);
+    this.clutterAround = null;
     this.showTrees();
     this.render();
   }

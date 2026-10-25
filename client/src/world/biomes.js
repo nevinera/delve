@@ -21,7 +21,7 @@ export const DEFAULT_BIOME = "plains";
 // amp: hill noise height (ft); rough: ridged rocky noise height (ft); steep: rise over run that
 // turns to rock; trees: chance of a tree per 32ft grid square; sizes: odds of 1x1, 2x2 and 3x3;
 // kinds: odds per tree kind; pools: swamp pools, 0-1; ravines: ravine cracks, 0-1; lakes:
-// scattered ponds and small lakes, 0-1.
+// scattered ponds and small lakes, 0-1; clutter: how much ground clutter, 1 by default.
 const PROFILES = {
   plains: { amp: 4, rough: 0, steep: 0.7, trees: 0.03, sizes: [0.5, 0.4, 0.1], kinds: { oak: 1 } },
   forest: { amp: 9, rough: 0, steep: 0.7, trees: 0.17, sizes: [0.1, 0.3, 0.6], kinds: { oak: 0.85, pine: 0.15 } },
@@ -46,6 +46,12 @@ const TAGS = {
   },
   ravines: (p) => {
     p.ravines = 1;
+  },
+  "low-clutter": (p) => {
+    p.clutter *= 0.5;
+  },
+  "high-clutter": (p) => {
+    p.clutter *= 2;
   },
   // Swamps have their pools instead.
   lakes: (p) => {
@@ -103,6 +109,7 @@ export function profileFor(biome, tags = []) {
     pools: base.pools ?? 0,
     ravines: 0,
     lakes: 0,
+    clutter: 1,
   };
   for (const tag of tags) TAGS[tag]?.(p);
   return p;
