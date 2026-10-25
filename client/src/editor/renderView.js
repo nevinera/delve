@@ -21,6 +21,17 @@ const RING_TILES = 3; // tiles drawn in full around the active zone's editable t
 // `largeFt` for large ones), and tree crowns drawn solid past `canopyFt`.
 export const SIGHT = { fogStartFt: 350, fogEndFt: 1400, tiles: 3, smallFt: 500, largeFt: 1000, canopyFt: 450 };
 const ORBIT_FOG = [6000, 30000];
+
+// Fog thickens with straight-line distance from the camera, so turning doesn't move it, and along
+// a steep curve, so the middle distance stays clear and it closes in late: 6% at 700ft, 30% at
+// 1,000ft, 59% at 1,200ft (with SIGHT's numbers). three.js's own fog is a smoothstep on depth,
+// which reads as foggy weather.
+const FOG_CURVE = 2.5;
+THREE.ShaderChunk.fog_vertex = THREE.ShaderChunk.fog_vertex.replace("vFogDepth = - mvPosition.z;", "vFogDepth = length( mvPosition.xyz );");
+THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
+  "float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );",
+  `float fogFactor = pow( clamp( ( vFogDepth - fogNear ) / ( fogFar - fogNear ), 0.0, 1.0 ), ${FOG_CURVE.toFixed(1)} );`,
+);
 const SEA = 0x1d4a6a;
 const SKY = 0x9db8cc;
 const BOUNDARY_LIFT_FT = 6;
