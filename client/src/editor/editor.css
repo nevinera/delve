@@ -132,6 +132,14 @@
   cursor: default;
 }
 
+.editor-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: #aaa;
+}
+
 .editor-empty {
   color: #777;
 }

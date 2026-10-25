@@ -1,3 +1,4 @@
+import { changedTiles } from "./changes.js";
 import { FEATURE_HINTS, FEATURE_TOOLS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
 import { TileGenerator } from "./generation.js";
@@ -13,13 +14,14 @@ import {
   subtractZones,
   tilesTouched,
 } from "./region.js";
-import { createZone, listZones, olderZones, removeZone, saveZone } from "./zones.js";
+import { createZone, listZones, olderZones, removeZone, saveZone, zonePath } from "./zones.js";
 
 const HIT_PX = 8;
 const COLORS = {
   active: "#f0c850",
   activeFill: "rgba(240, 200, 80, 0.06)",
   editable: "rgba(240, 200, 80, 0.35)",
+  changed: "rgba(255, 130, 40, 0.45)",
   locked: "rgba(255, 255, 255, 0.55)",
   lockedFill: "rgba(255, 255, 255, 0.07)",
 };
@@ -56,6 +58,7 @@ export class Editor {
     this.thumbnails = new Thumbnails(() => this.map.render());
     this.generator = new TileGenerator();
     this.generating = false;
+    this.pending = new Set(); // "x,z" keys of tiles whose sketch changed since upload or generation
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
@@ -74,6 +77,7 @@ export class Editor {
     this.features.stroke = null;
     this.features.select(null);
     this.dirty = false;
+    this.pending.clear();
     this.fillContinents();
     this.showContinent();
   }
@@ -118,7 +122,12 @@ export class Editor {
     this.map.render();
   }
 
+  // Stores the zone, and marks the tiles the edit changes, within the zone's editable tiles, as
+  // needing regeneration.
   save(zone) {
+    const before = this.world.readJson(zonePath(this.continent, zone.key));
+    const editable = new Set(tilesTouched(zone.region).map(([tx, tz]) => `${tx},${tz}`));
+    for (const tile of changedTiles(before, zone)) if (editable.has(tile)) this.pending.add(tile);
     saveZone(this.world, this.continent, zone);
     this.dirty = true;
     this.renderPanel();
@@ -181,8 +190,9 @@ export class Editor {
   // --- panel ---
 
   bindPanel() {
-    const { continent, newZone, zoneName, drawRegion, deleteZone, tools, generate } = this.el;
+    const { continent, newZone, zoneName, drawRegion, deleteZone, tools, generate, highlight } = this.el;
     generate.addEventListener("click", () => this.generateZone());
+    highlight.addEventListener("change", () => this.map.render());
     for (const name of TOOLS) {
       const b = document.createElement("button");
       b.type = "button";
@@ -269,6 +279,7 @@ export class Editor {
         : "no region yet";
       drawRegion.textContent = zone.region.length ? "redraw region" : "draw region";
       this.el.generate.disabled = !tiles || this.generating;
+      this.el.pendingInfo.textContent = `${this.pending.size} changed`;
       if (!this.generating) this.el.generate.textContent = `generate ${tiles} tiles`;
       for (const b of this.el.tools.children) {
         b.classList.toggle("active", b.dataset.tool === this.toolName);
@@ -293,6 +304,7 @@ export class Editor {
     try {
       await this.generator.run(listZones(this.world, this.continent), this.continent, tiles, ({ tx, tz, gz, rgba, cells }) => {
         this.world.files.set(tilePath(this.continent, tx, tz), gz);
+        this.pending.delete(`${tx},${tz}`);
         this.thumbnails.set(tx, tz, rgba, cells);
         button.textContent = `generating ${++done}/${tiles.length}`;
         frame ??= requestAnimationFrame(() => {
@@ -474,6 +486,13 @@ export class Editor {
     for (const [tx, tz] of tilesTouched(zone.region)) {
       const [sx, sy] = map.toScreen([tx, tz]);
       ctx.strokeRect(sx + 2 * dpr, sy + 2 * dpr, map.view.scale - 4 * dpr, map.view.scale - 4 * dpr);
+    }
+    if (this.el.highlight.checked) {
+      ctx.fillStyle = COLORS.changed;
+      for (const tile of this.pending) {
+        const [sx, sy] = map.toScreen(tile.split(",").map(Number));
+        ctx.fillRect(sx, sy, map.view.scale, map.view.scale);
+      }
     }
     if (!this.drawing) {
       this.drawRegion(ctx, map, zone, true);

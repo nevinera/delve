@@ -21,7 +21,7 @@ const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
 export const BIOMES = ["temperate"];
 
 const BASE = {
-  defaultHeight: 20, // land height when the continent has no height pins
+  defaultHeight: 20, // land height away from every height pin
   shoreHeight: 3, // ft above sea level at the water's edge
   shoreRampFt: 400, // land rises from the shore to its pinned height over this distance
   seaDrop: 0.08, // ft of drop per ft out to sea
@@ -29,9 +29,14 @@ const BASE = {
   noiseAmp: 8,
   noiseWavelength: 900,
 };
-// Past this distance from the zoned area's edge, nothing about the edge matters any more.
-const EDGE_REACH_FT = Math.max(BASE.shoreRampFt, (BASE.shoreHeight - BASE.seaFloor) / BASE.seaDrop) + 64;
+// How far each feature reaches, so the editor knows which tiles a change touches.
+// Past EDGE_REACH_FT from the zoned area's edge, nothing about the edge matters any more.
+export const EDGE_REACH_FT = Math.max(BASE.shoreRampFt, (BASE.shoreHeight - BASE.seaFloor) / BASE.seaDrop) + 64;
+export const PIN_REACH_FT = 2048;
 const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30 };
+export function riverReachFt(width) {
+  return width / 2 + Math.max(RIVER.minBankFt, width);
+}
 const STEEP = 0.7; // rise over run that turns into rock
 const PROFILE_STEP = 16;
 
@@ -148,16 +153,20 @@ function groundHeight(ctx, x, z, edges) {
   return lerp(BASE.shoreHeight, pinnedHeight(ctx, x, z), t) + noise * t;
 }
 
-// Inverse-distance weighting over every height pin on the continent, so neighbouring zones blend.
+// Modified Shepard weighting over the height pins within PIN_REACH_FT, so a pin only shapes the
+// ground near it and neighbouring zones' pins blend. A weak pull toward the default height takes
+// over where no pin reaches.
 function pinnedHeight(ctx, x, z) {
-  if (!ctx.pins.length) return BASE.defaultHeight;
-  let num = 0;
-  let den = 0;
+  const w0 = 1 / (PIN_REACH_FT * PIN_REACH_FT * 64);
+  let num = BASE.defaultHeight * w0;
+  let den = w0;
   for (const p of ctx.pins) {
-    const d2 = (p.x - x) ** 2 + (p.z - z) ** 2;
-    if (d2 < 1) return p.height;
-    num += p.height / d2;
-    den += 1 / d2;
+    const d = Math.hypot(p.x - x, p.z - z);
+    if (d >= PIN_REACH_FT) continue;
+    if (d < 1) return p.height;
+    const w = ((PIN_REACH_FT - d) / (PIN_REACH_FT * d)) ** 2;
+    num += w * p.height;
+    den += w;
   }
   return num / den;
 }
