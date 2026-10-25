@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 // Tree models for the 3D view, as instanced meshes: one per part (trunk, crown, branch) per kind.
 // Each kind's parts are placed from its height `h`, crown radius `c` and the clearance `b` under
@@ -13,16 +14,37 @@ const SIZES = {
 const LIFT = 1.6; // canopies sit this much higher than the kinds' `clear` says
 
 const trunk = new THREE.CylinderGeometry(0.7, 1, 1, 7).translate(0, 0.5, 0);
-const blob = new THREE.IcosahedronGeometry(1, 1);
-const cone = new THREE.ConeGeometry(1, 1, 8).translate(0, 0.5, 0);
+const blob = new THREE.SphereGeometry(1, 14, 9);
+const cone = new THREE.ConeGeometry(1, 1, 10, 3).translate(0, 0.5, 0);
 // An upside-down bowl, its rim drooping a little below its widest point: 1 tall, rim at 0.
 const DROOP = 0.6; // share of a half turn the bowl runs down from its top
-const bowl = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI * DROOP).translate(0, -Math.cos(Math.PI * DROOP), 0);
+const bowl = new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, Math.PI * DROOP).translate(0, -Math.cos(Math.PI * DROOP), 0);
 bowl.scale(1, 1 / (1 - Math.cos(Math.PI * DROOP)), 1);
+
+// A crown is a few nested shells of a shape, each textured with leaf clusters and cut out
+// between them (alpha test, so nothing needs sorting), so you see into it and through its edges.
+// A dark core keeps the middle from looking hollow. `repeat` sets how many leaf tiles go round
+// and up the outer shell; `lift` raises each smaller shell to keep it centered.
+function crown(shape, { repeat: [ru, rv], lift = 0 }) {
+  const shells = [1, 0.78, 0.56].map((s, n) => {
+    const g = shape.clone().scale(s, s, s).rotateY(n * 1.7).translate(0, lift * (1 - s), 0);
+    const uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ru * (0.6 + 0.4 * s), uv.getY(i) * rv * (0.6 + 0.4 * s));
+    return g;
+  });
+  return mergeGeometries(shells);
+}
+const core = (shape, lift = 0) => shape.clone().scale(0.42, 0.42, 0.42).translate(0, lift * 0.58, 0);
+
 const bark = new THREE.MeshLambertMaterial({ color: 0x5a4430 });
 const deadBark = new THREE.MeshLambertMaterial({ color: 0x6e6458 });
-const leaves = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
-const drape = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide }); // seen from under it too
+// Leaves are seen from both sides, since you look into and up through crowns.
+let leaves;
+function leafMaterial() {
+  leaves ??= new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: leafTexture(), alphaTest: 0.5 });
+  return leaves;
+}
+const shade = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tilt = (angle, spin) =>
@@ -37,7 +59,8 @@ const KINDS = {
     clear: 0.36,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t, b + h * 0.26, t]] },
-      { geometry: blob, material: leaves, color: 0x3d6b2e, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
+      { geometry: () => crown(blob, { repeat: [7, 4] }), material: leafMaterial, color: 0x4a7a36, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
+      { geometry: () => core(blob), material: () => shade, color: 0x1f3a18, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
     ],
   },
   pine: {
@@ -45,7 +68,8 @@ const KINDS = {
     clear: 0.18,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 0.8, b + h * 0.32, t * 0.8]] },
-      { geometry: cone, material: leaves, color: 0x2d5238, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
+      { geometry: () => crown(cone, { repeat: [6, 7], lift: 0.25 }), material: leafMaterial, color: 0x356146, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
+      { geometry: () => core(cone, 0.25), material: () => shade, color: 0x16301f, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
     ],
   },
   willow: {
@@ -53,7 +77,7 @@ const KINDS = {
     clear: 0.3,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 1.2, b + h * 0.4, t * 1.2]] },
-      { geometry: bowl, material: drape, color: 0x6f8f45, at: (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]] },
+      { geometry: () => crown(bowl, { repeat: [9, 3], lift: 0.3 }), material: leafMaterial, color: 0x7a9a4c, at: (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]] },
     ],
   },
   dead: {
@@ -82,7 +106,7 @@ export function treeMeshes(trees) {
   for (const [kind, list] of byKind) {
     const { height, clear = 0, parts } = KINDS[kind];
     for (const part of parts) {
-      const mesh = new THREE.InstancedMesh(part.geometry, part.material, list.length);
+      const mesh = new THREE.InstancedMesh(built(part.geometry), typeof part.material === "function" ? part.material() : part.material, list.length);
       list.forEach(({ x, z, ground, size }, n) => {
         const r = random(x, z);
         const s = SIZES[size];
@@ -99,6 +123,48 @@ export function treeMeshes(trees) {
     }
   }
   return meshes;
+}
+
+// Crown geometries are built on first use and kept.
+const builtGeometries = new Map();
+function built(geometry) {
+  if (typeof geometry !== "function") return geometry;
+  if (!builtGeometries.has(geometry)) builtGeometries.set(geometry, geometry());
+  return builtGeometries.get(geometry);
+}
+
+// Clusters of leaves, white on clear so instance colors tint them, covering a bit over half the
+// tile. It wraps, so clusters carry across tile edges.
+function leafTexture() {
+  const SIZE = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  const ctx = canvas.getContext("2d");
+  let seed = 7;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  for (let cluster = 0; cluster < 26; cluster++) {
+    const [cx, cy] = [rand() * SIZE, rand() * SIZE];
+    for (let leaf = 0; leaf < 14; leaf++) {
+      const a = rand() * Math.PI * 2;
+      const d = rand() * 22;
+      const v = 150 + Math.floor(rand() * 105);
+      const turn = rand() * Math.PI;
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      for (const [ox, oy] of [[0, 0], [SIZE, 0], [-SIZE, 0], [0, SIZE], [0, -SIZE]]) {
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * d + ox, cy + Math.sin(a) * d + oy, 9, 4, turn, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 // A steady pseudo-random number in [0, 1) for a spot, so trees keep their looks between redraws.
