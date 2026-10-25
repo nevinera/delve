@@ -6,18 +6,20 @@
 // pin on the continent, and it slopes down to the sea at the edge of the zoned area, so a region's
 // outline is its coast. Rivers carve down through it.
 //
-// This pass makes height, water, terrain types, forest density and biome regions (biomes.js).
-// Biomes don't shape the ground yet. Objects and scatter wait for kits.
+// Biome pins split the land into biomes (biomes.js), and each biome's profile shapes its ground,
+// surface and trees, blended at borders. Trees are planted as tree terrain cells (trees.js).
+// Objects and scatter wait for kits.
 
 import polygonClipping from "polygon-clipping";
-import { BIOMES, biomeAt, biomesNear, prepareBiomes } from "./biomes.js";
+import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT } from "./constants.js";
-import { fbm, hashString } from "./noise.js";
+import { fbm, hash2, hashString } from "./noise.js";
+import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 3;
+export const GENERATOR_VERSION = 4;
 
-export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud"];
+export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
 
 const BASE = {
@@ -26,9 +28,13 @@ const BASE = {
   shoreRampFt: 400, // land rises from the shore to its pinned height over this distance
   seaDrop: 0.08, // ft of drop per ft out to sea
   seaFloor: -60,
-  noiseAmp: 8,
   noiseWavelength: 900,
+  roughWavelength: 350,
 };
+const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
+const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
+const TREE_GRID = 4; // cells per side of a tree planting square
+const TREE_GROUND = new Set(["grass", "dirt", "moss", "mud"]);
 // How far each feature reaches, so the editor knows which tiles a change touches.
 // Past EDGE_REACH_FT from the zoned area's edge, nothing about the edge matters any more.
 export const EDGE_REACH_FT = Math.max(BASE.shoreRampFt, (BASE.shoreHeight - BASE.seaFloor) / BASE.seaDrop) + 64;
@@ -68,21 +74,6 @@ export function prepareWorld(zones, seedKey) {
     rivers: [],
   };
 
-  // Rivers always descend: the surface follows the lowest ground seen so far from the source.
-  ctx.rivers = zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river" && s.points.length >= 2)).map((s) => {
-    const line = makePolyline(s.points.map(toFt));
-    const width = s.width ?? 30;
-    const ground = sampleAlong(line, (x, z) => groundHeight(ctx, x, z, ctx.areaEdges));
-    let low = Infinity;
-    return {
-      line,
-      half: width / 2,
-      bank: Math.max(RIVER.minBankFt, width),
-      depth: clamp(width / 6, RIVER.minDepth, RIVER.maxDepth),
-      surface: ground.map((h) => (low = Math.min(low, h)) - RIVER.surfaceDrop),
-    };
-  });
-
   const pinsOf = (kind) => zoned.flatMap((z) => z.pins.filter((p) => p.kind === kind));
   ctx.biomes = prepareBiomes({
     pins: pinsOf("biome").map((p) => {
@@ -92,6 +83,21 @@ export function prepareWorld(zones, seedKey) {
     rivers: zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river")).map((s) => s.points.map(toFt)),
     edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
     seed: ctx.seed,
+  });
+
+  // Rivers always descend: the surface follows the lowest ground seen so far from the source.
+  ctx.rivers = zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river" && s.points.length >= 2)).map((s) => {
+    const line = makePolyline(s.points.map(toFt));
+    const width = s.width ?? 30;
+    const ground = sampleAlong(line, (x, z) => land(ctx, x, z, ctx.areaEdges, ctx.biomes).h);
+    let low = Infinity;
+    return {
+      line,
+      half: width / 2,
+      bank: Math.max(RIVER.minBankFt, width),
+      depth: clamp(width / 6, RIVER.minDepth, RIVER.maxDepth),
+      surface: ground.map((h) => (low = Math.min(low, h)) - RIVER.surfaceDrop),
+    };
   });
 
   return ctx;
@@ -114,7 +120,7 @@ export function generateTile(ctx, tx, tz) {
   const samples = new Array(N * N);
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
-      samples[j * N + i] = sample(ctx, x0 + (i - 0.5) * CELL_FT, z0 + (j - 0.5) * CELL_FT, edges);
+      samples[j * N + i] = sample(ctx, x0 + (i - 0.5) * CELL_FT, z0 + (j - 0.5) * CELL_FT, edges, biomes);
     }
   }
 
@@ -135,35 +141,75 @@ export function generateTile(ctx, tx, tz) {
       const k = j * CELLS + i;
       layers.height[k] = s.h;
       layers.water[k] = s.water;
-      layers.terrain[k] = terrainFor(s, Math.hypot(gx, gz));
-      const x = x0 + (i + 0.5) * CELL_FT;
-      const z = z0 + (j + 0.5) * CELL_FT;
-      layers.forest[k] = Math.round(forestFor(ctx, s, layers.terrain[k], x, z) * 255);
-      layers.biome[k] = biomeAt(biomes, x, z).biome;
+      layers.terrain[k] = terrainFor(ctx, s, Math.hypot(gx, gz), tx * CELLS + i, tz * CELLS + j);
+      layers.forest[k] = s.land ? Math.round(s.climate.profile.trees * 255) : 0;
+      layers.biome[k] = s.climate.biome;
     }
   }
 
-  return {
+  const tile = {
     coords: [tx, tz],
     layer: "surface",
     cells: CELLS,
     cellFt: CELL_FT,
-    palettes: { terrain: TERRAIN, biome: BIOMES },
+    palettes: { terrain: [...TERRAIN], biome: BIOMES },
     objects: [],
     generator: { version: GENERATOR_VERSION, seed: ctx.seed },
     layers,
   };
+  plantTrees(ctx, tile, (i, j) => samples[(j + 1) * N + (i + 1)]);
+  return tile;
+}
+
+// Trees on a grid of TREE_GRID-cell squares: each square may get one tree, by its biome's odds,
+// at a random spot in the square. Squares are counted across the continent so every tile agrees.
+function plantTrees(ctx, tile, sampleAt) {
+  const [tx, tz] = tile.coords;
+  const per = CELLS / TREE_GRID;
+  for (let sj = 0; sj < per; sj++) {
+    for (let si = 0; si < per; si++) {
+      const roll = (k) => hash2(tx * per + si, tz * per + sj, ctx.seed ^ Math.imul(k, 0x45d9f3b));
+      const ci = si * TREE_GRID + Math.floor(roll(1) * TREE_GRID);
+      const cj = sj * TREE_GRID + Math.floor(roll(2) * TREE_GRID);
+      const s = sampleAt(ci, cj);
+      const { profile } = s.climate;
+      if (!s.land || roll(3) >= profile.trees) continue;
+      if (!TREE_GROUND.has(TERRAIN[tile.layers.terrain[cj * CELLS + ci]])) continue;
+      const size = 1 + pick(profile.sizes, roll(4));
+      const kind = TREE_KINDS[pick(profile.kinds, roll(5))];
+      const half = Math.floor((size - 1) / 2);
+      plantTree(tile, ci - half, cj - half, size, kind);
+    }
+  }
+}
+
+// An index into odds (which needn't sum to 1), chosen by r in [0, 1).
+function pick(odds, r) {
+  const total = odds.reduce((a, b) => a + b, 0);
+  let left = r * total;
+  for (let i = 0; i < odds.length; i++) {
+    left -= odds[i];
+    if (left < 0) return i;
+  }
+  return odds.length - 1;
 }
 
 // --- height ---
 
-// Ground before rivers: open sea outside the zoned area, sloping up from the shore inside it.
-function groundHeight(ctx, x, z, edges) {
+// Ground before rivers, pools and ravines: open sea outside the zoned area, sloping up from the
+// shore inside it, with hills and rocky ridges by biome. Returns { h, t, land, climate }, where t
+// is how far inland it is, from 0 at the shore to 1 past the shore ramp.
+function land(ctx, x, z, edges, biomes) {
+  const climate = climateAt(biomes, x, z);
   const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, edges));
-  if (!pointInRegion(x, z, ctx.area)) return Math.max(BASE.seaFloor, BASE.shoreHeight - edgeDist * BASE.seaDrop);
+  if (!pointInRegion(x, z, ctx.area)) {
+    return { h: Math.max(BASE.seaFloor, BASE.shoreHeight - edgeDist * BASE.seaDrop), t: 0, land: false, climate };
+  }
   const t = smoothstep(0, BASE.shoreRampFt, edgeDist);
-  const noise = fbm(x, z, ctx.seed, { wavelength: BASE.noiseWavelength, octaves: 3 }) * BASE.noiseAmp;
-  return lerp(BASE.shoreHeight, pinnedHeight(ctx, x, z), t) + noise * t;
+  const { amp, rough } = climate.profile;
+  let relief = fbm(x, z, ctx.seed, { wavelength: BASE.noiseWavelength, octaves: 3 }) * amp;
+  if (rough > 0) relief += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
+  return { h: lerp(BASE.shoreHeight, pinnedHeight(ctx, x, z), t) + relief * t, t, land: true, climate };
 }
 
 // Height pins blend by inverse-distance weighting among the pins within PIN_REACH_FT, and the
@@ -184,8 +230,12 @@ function pinnedHeight(ctx, x, z) {
   return den ? lerp(BASE.defaultHeight, num / den, reach) : BASE.defaultHeight;
 }
 
-function sample(ctx, x, z, edges) {
-  const out = { h: groundHeight(ctx, x, z, edges), water: NaN, river: false, bank: false };
+function sample(ctx, x, z, edges, biomes) {
+  const ground = land(ctx, x, z, edges, biomes);
+  const out = { h: ground.h, water: NaN, river: false, bank: false, pool: false, land: ground.land, climate: ground.climate };
+  const { pools, ravines } = ground.climate.profile;
+  if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
+  if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
   for (const r of ctx.rivers) {
     if (!nearBounds(r.line, x, z, r.half + r.bank)) continue;
     const n = nearest(r.line, x, z);
@@ -204,6 +254,28 @@ function sample(ctx, x, z, edges) {
   }
   if (out.h < 0 && Number.isNaN(out.water)) out.water = 0;
   return out;
+}
+
+// Swamp pools: standing water a little below the ground around it, where noise dips. `amount`
+// (0-1) grows them from none to full size.
+function pool(ctx, out, x, z, amount) {
+  const level = lerp(-1, POOL.level, amount);
+  const n = fbm(x, z, ctx.seed ^ 0x51ab3c, { wavelength: POOL.wavelength, octaves: 2 });
+  if (n >= level) return;
+  out.water = out.h - 0.5;
+  out.h = out.water - Math.min(POOL.maxDepth, (level - n) * 30);
+  out.pool = true;
+}
+
+// Ravines: narrow winding cracks, deep enough not to climb out of, along the zero line of a
+// warped noise field. They stop a little above sea level so they don't flood.
+function ravine(ctx, out, x, z, amount) {
+  const wx = x + fbm(x, z, ctx.seed ^ 0x1f83d9ab, { wavelength: 600 }) * RAVINE.wander;
+  const wz = z + fbm(x, z, ctx.seed ^ 0x5be0cd19, { wavelength: 600 }) * RAVINE.wander;
+  const r = Math.abs(fbm(wx, wz, ctx.seed ^ 0x7a11c0de, { wavelength: RAVINE.wavelength, octaves: 2 }));
+  const cut = smoothstep(RAVINE.width, RAVINE.width * 0.35, r) * amount;
+  if (cut <= 0) return;
+  out.h = Math.max(out.h - RAVINE.depth * cut, Math.min(out.h, RAVINE.floor));
 }
 
 // --- geometry ---
@@ -251,19 +323,20 @@ function profileAt(profile, along) {
   return i >= profile.length - 1 ? profile[profile.length - 1] : lerp(profile[i], profile[i + 1], f - i);
 }
 
-// --- terrain and forest ---
+// --- terrain ---
 
-function terrainFor(s, slope) {
-  if (s.river) return T.mud;
+// A cell's terrain type. Near a border the biome is picked per cell by its share, so surfaces
+// speckle into each other. (ci, cj) is the cell's continent cell position, for steady noise.
+function terrainFor(ctx, s, slope, ci, cj) {
+  if (s.river || s.pool) return T.mud;
   if (s.h < 0) return T.sand;
-  if (slope > STEEP) return T.rock;
+  if (slope > s.climate.profile.steep) return T.rock;
   if (s.bank) return T.shore;
   if (s.h < 2.5 + BASE.shoreHeight) return T.sand;
-  return T.grass;
-}
-
-function forestFor(ctx, s, terrain, x, z) {
-  if (terrain !== T.grass) return 0;
-  const density = clamp((fbm(x, z, ctx.seed ^ 0x5f3759df, { wavelength: 700, octaves: 3 }) * 0.5 + 0.5) * 1.6 - 0.45, 0, 1);
-  return density * smoothstep(BASE.shoreHeight + 2.5, BASE.shoreHeight + 10, s.h);
+  const { biome, second, weight } = s.climate;
+  const here = BIOMES[hash2(ci, cj, ctx.seed ^ 0x2545f491) < weight ? biome : second];
+  const n = fbm(ci * CELL_FT, cj * CELL_FT, ctx.seed ^ 0x6a09e667, { wavelength: 60, octaves: 3 });
+  if (here === "swamp") return n > 0.25 ? T.moss : n > 0.05 ? T.mud : T.grass;
+  if (here === "rocky") return n > 0.15 ? T.rock : n > -0.25 ? T.dirt : T.grass;
+  return n > (here === "forest" ? 0.6 : 0.5) ? T.dirt : T.grass;
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { CELLS } from "./constants.js";
 import { generateTile, prepareWorld } from "./generator.js";
+import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
 
 const square = (x0, z0, x1, z1) => [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]];
@@ -65,6 +66,31 @@ describe("generator", () => {
   it("is all ocean with no zones", () => {
     const tile = generateTile(prepareWorld([], "test"), 0, 0);
     expect(Math.max(...tile.layers.height)).toBe(-60);
+  });
+});
+
+describe("biomes in the generator", () => {
+  // One flat 8×8-tile zone given over to a single biome pin.
+  const world = (biome, tags = []) =>
+    prepareWorld([{ region: [square(0, 0, 8, 8)], pins: [{ id: "b", kind: "biome", at: [4, 4], biome, tags }], strokes: [] }], "test");
+  const tiles = (ctx) => [3, 4].flatMap((tx) => [3, 4].map((tz) => generateTile(ctx, tx, tz)));
+  const count = (ctx, fn) => tiles(ctx).reduce((sum, tile) => sum + fn(tile), 0);
+
+  it("plants many more trees in forest than plains", () => {
+    const trees = (biome) => count(world(biome), (t) => findTrees(t).length);
+    expect(trees("forest")).toBeGreaterThan(trees("plains") * 4);
+  });
+
+  it("fills swamps with pools", () => {
+    const wet = (biome) => count(world(biome), (t) => t.layers.water.filter((w) => w > 0).length);
+    expect(wet("plains")).toBe(0);
+    expect(wet("swamp")).toBeGreaterThan(500);
+  });
+
+  it("cuts ravines only where tagged", () => {
+    const lowest = (tags) => Math.min(...tiles(world("plains", tags)).flatMap((t) => Array.from(t.layers.height)));
+    expect(lowest([])).toBeGreaterThan(10);
+    expect(lowest(["ravines"])).toBeLessThan(5);
   });
 });
 

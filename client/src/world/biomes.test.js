@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BIOMES, biomeAt, biomesNear, prepareBiomes } from "./biomes.js";
+import { BIOMES, biomeAt, biomesNear, climateAt, prepareBiomes, profileFor } from "./biomes.js";
 
 const at = (b, x, z) => BIOMES[biomeAt(b, x, z).biome];
 const forest = { x: 0, z: 0, biome: "forest" };
@@ -34,6 +34,22 @@ describe("biomes", () => {
     const b = plain({ rivers: [[[2600, -5000], [2600, 5000]]], edges: [[2000, -5000, 2000, 5000]] }, {});
     const near = biomesNear(b, [2048, -512, 2560, 0]);
     for (let x = 2048; x < 2560; x += 64) expect(at(near, x, -100)).toBe(at(b, x, -100));
+  });
+
+  it("lets tags adjust a biome's profile", () => {
+    expect(profileFor("forest", ["flat"]).amp).toBeLessThan(profileFor("forest").amp);
+    expect(profileFor("forest", ["dense"]).trees).toBeGreaterThan(profileFor("forest").trees);
+    expect(profileFor("rocky", ["ravines"]).ravines).toBe(1);
+  });
+
+  it("blends profiles across a border, evenly right on it", () => {
+    const b = plain();
+    const inside = climateAt(b, 500, 0);
+    expect(inside.weight).toBe(1);
+    expect(inside.profile.pools).toBe(0);
+    const border = climateAt(b, 2001, 0);
+    expect(border.weight).toBeCloseTo(0.5, 1);
+    expect(border.profile.pools).toBeCloseTo(0.5, 1);
   });
 
   it("wanders with the warp, but never within a tile of a pin", () => {
