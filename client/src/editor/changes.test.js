@@ -15,20 +15,11 @@ describe("changedTiles", () => {
     expect(changedTiles(zone(), after).size).toBe(0);
   });
 
-  it("covers a height pin's reach and the ring around it, and no further", () => {
+  it("covers the whole zone when a height pin changes", () => {
     const after = zone({ pins: [{ id: "p1", kind: "height", at: [10.5, 10.5], height: 80 }] });
     const tiles = changedTiles(zone(), after);
-    expect(has(tiles, 10, 10)).toBe(true);
-    expect(has(tiles, 15, 10)).toBe(true);
-    expect(has(tiles, 18, 10)).toBe(false);
-  });
-
-  it("covers both where a pin was and where it went", () => {
-    const pin = { id: "p1", kind: "height", at: [2.5, 2.5], height: 80 };
-    const tiles = changedTiles(zone({ pins: [pin] }), zone({ pins: [{ ...pin, at: [17.5, 17.5] }] }));
-    expect(has(tiles, 2, 2)).toBe(true);
-    expect(has(tiles, 17, 17)).toBe(true);
-    expect(has(tiles, 10, 10)).toBe(false);
+    expect(has(tiles, 0, 0)).toBe(true);
+    expect(has(tiles, 19, 19)).toBe(true);
   });
 
   it("covers a river's whole length", () => {

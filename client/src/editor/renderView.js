@@ -390,6 +390,13 @@ function groundSampler(decoded, origin) {
   };
 }
 
+// The highest ground within a cell of a point, so lines along a coast ride the cliff top.
+function top(ground, x, z) {
+  let best = 0;
+  for (const [dx, dz] of [[0, 0], [8, 0], [-8, 0], [0, 8], [0, -8]]) best = Math.max(best, ground(x + dx, z + dz) || 0);
+  return best;
+}
+
 // A zone outline laid over the ground, a little above it, or an open line with `closed` off.
 function boundary(points, ground, origin, color, closed = true) {
   const out = [];
@@ -401,11 +408,11 @@ function boundary(points, ground, origin, color, closed = true) {
     for (let s = 0; s < steps; s++) {
       const x = ax + ((bx - ax) * s) / steps;
       const z = az + ((bz - az) * s) / steps;
-      out.push(x, (ground(x, z) || 0) + BOUNDARY_LIFT_FT, z);
+      out.push(x, top(ground, x, z) + BOUNDARY_LIFT_FT, z);
     }
   }
   const [lx, lz] = [ring.at(-1)[0] * TILE_FT - origin[0], ring.at(-1)[1] * TILE_FT - origin[1]];
-  out.push(lx, (ground(lx, lz) || 0) + BOUNDARY_LIFT_FT, lz);
+  out.push(lx, top(ground, lx, lz) + BOUNDARY_LIFT_FT, lz);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
   return new THREE.Line(g, new THREE.LineBasicMaterial({ color }));

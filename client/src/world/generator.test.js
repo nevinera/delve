@@ -37,10 +37,11 @@ describe("generator", () => {
     }
   });
 
-  it("leaves open ocean far from any zone", () => {
+  it("leaves open ocean far from any zone, with an uneven floor", () => {
     const tile = generateTile(ctx, 30, 30);
-    expect(cell(tile, 32, 32, "height")).toBe(-60);
+    expect(cell(tile, 32, 32, "height")).toBeLessThan(-40);
     expect(cell(tile, 32, 32, "water")).toBe(0);
+    expect(new Set(tile.layers.height).size).toBeGreaterThan(10);
   });
 
   it("slopes the land into the sea at the zoned area's edge", () => {
@@ -48,6 +49,11 @@ describe("generator", () => {
     const outside = generateTile(ctx, 16, -2);
     expect(cell(inside, 63, 32, "height")).toBeGreaterThan(0);
     expect(cell(outside, 40, 32, "height")).toBeLessThan(0);
+  });
+
+  it("meets the sea in a cliff where the land is high", () => {
+    const high = generateTile(ctx, 15, -2);
+    expect(cell(high, 63, 32, "height") - cell(generateTile(ctx, 16, -2), 0, 32, "height")).toBeGreaterThan(40);
   });
 
   it("raises the land toward the height pin", () => {
@@ -65,7 +71,7 @@ describe("generator", () => {
 
   it("is all ocean with no zones", () => {
     const tile = generateTile(prepareWorld([], "test"), 0, 0);
-    expect(Math.max(...tile.layers.height)).toBe(-60);
+    expect(Math.max(...tile.layers.height)).toBeLessThan(-40);
   });
 });
 

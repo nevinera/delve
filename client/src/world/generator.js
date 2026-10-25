@@ -2,9 +2,10 @@
 // cell is a pure function of its continent position and the sketches, so tiles generate
 // independently and agree across seams, whichever zone asked for them.
 //
-// The world is open ocean. Land is wherever a zone's region is: its height comes from every height
-// pin on the continent, and it slopes down to the sea at the edge of the zoned area, so a region's
-// outline is its coast. Rivers carve down through it.
+// The world is open ocean. Land is wherever a zone's region is, so a region's outline is its coast.
+// The land's broad shape is a smooth surface through every height pin on the continent
+// (heightField.js), with rolling hills on top, and crags that grow where the land is steep. It
+// meets the sea in cliffs, or in a rough, uneven shore where it's low. Rivers carve down through it.
 //
 // Biome pins split the land into biomes (biomes.js), and each biome's profile shapes its ground,
 // surface and trees, blended at borders. Trees are planted as tree terrain cells (trees.js).
@@ -13,32 +14,37 @@
 import polygonClipping from "polygon-clipping";
 import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT } from "./constants.js";
+import { prepareHeights } from "./heightField.js";
 import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 4;
+export const GENERATOR_VERSION = 5;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
 
 const BASE = {
   defaultHeight: 20, // land height away from every height pin
-  shoreHeight: 3, // ft above sea level at the water's edge
-  shoreRampFt: 400, // land rises from the shore to its pinned height over this distance
-  seaDrop: 0.08, // ft of drop per ft out to sea
-  seaFloor: -60,
-  noiseWavelength: 900,
-  roughWavelength: 350,
+  shoreHeight: 3, // land below this plus 2.5ft is sand
+  hillWavelength: 1200, // rolling hills
+  roughWavelength: 350, // a rocky biome's ridges
 };
+// Crags: sharp ridged noise, as tall as the biome's roughness plus `perSlope` times the broad
+// shape's steepness (rise over run).
+const CRAG = { wavelength: 160, perSlope: 60, probeFt: 24 };
+// Land at or above `cliff` ft meets the sea in a cliff; lower land in a rough shore of uneven
+// width (`minFt` to `maxFt`) and bumpy height. Between `low` and `cliff` it shifts from one to the
+// other.
+const COAST = { low: 6, cliff: 10, minFt: 16, maxFt: 90, bumps: 2.5 };
+const SEA = { shallow: -2, drop: 0.08, floor: -60, swell: 8, bumps: 3 };
 const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
 const TREE_GROUND = new Set(["grass", "dirt", "moss", "mud"]);
 // How far each feature reaches, so the editor knows which tiles a change touches.
 // Past EDGE_REACH_FT from the zoned area's edge, nothing about the edge matters any more.
-export const EDGE_REACH_FT = Math.max(BASE.shoreRampFt, (BASE.shoreHeight - BASE.seaFloor) / BASE.seaDrop) + 64;
-export const PIN_REACH_FT = 2048;
+export const EDGE_REACH_FT = Math.max(COAST.maxFt, (SEA.shallow - SEA.floor) / SEA.drop) + 64;
 const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30 };
 export function riverReachFt(width) {
   return width / 2 + Math.max(RIVER.minBankFt, width);
@@ -67,12 +73,16 @@ export function prepareWorld(zones, seedKey) {
     seed: hashString(seedKey),
     area,
     areaEdges: edgesOf(area),
-    pins: zoned.flatMap((z) => z.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height))).map((p) => {
+    rivers: [],
+  };
+  const heightPins = zoned.flatMap((z) => z.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height)));
+  ctx.heightAt = prepareHeights(
+    heightPins.map((p) => {
       const [x, z] = toFt(p.at);
       return { x, z, height: p.height };
     }),
-    rivers: [],
-  };
+    BASE.defaultHeight,
+  );
 
   const pinsOf = (kind) => zoned.flatMap((z) => z.pins.filter((p) => p.kind === kind));
   ctx.biomes = prepareBiomes({
@@ -196,38 +206,43 @@ function pick(odds, r) {
 
 // --- height ---
 
-// Ground before rivers, pools and ravines: open sea outside the zoned area, sloping up from the
-// shore inside it, with hills and rocky ridges by biome. Returns { h, t, land, climate }, where t
-// is how far inland it is, from 0 at the shore to 1 past the shore ramp.
+// Ground before rivers, pools and ravines: the sea floor outside the zoned area, and inside it the
+// broad shape with hills and crags, meeting the sea at the coast. Returns { h, t, land, climate },
+// where t grows from 0 at the coast to 1 a little inland, for features that keep off the shore.
 function land(ctx, x, z, edges, biomes) {
   const climate = climateAt(biomes, x, z);
   const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, edges));
-  if (!pointInRegion(x, z, ctx.area)) {
-    return { h: Math.max(BASE.seaFloor, BASE.shoreHeight - edgeDist * BASE.seaDrop), t: 0, land: false, climate };
-  }
-  const t = smoothstep(0, BASE.shoreRampFt, edgeDist);
+  if (!pointInRegion(x, z, ctx.area)) return { h: seaFloor(ctx, x, z, edgeDist), t: 0, land: false, climate };
+
   const { amp, rough } = climate.profile;
-  let relief = fbm(x, z, ctx.seed, { wavelength: BASE.noiseWavelength, octaves: 3 }) * amp;
-  if (rough > 0) relief += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
-  return { h: lerp(BASE.shoreHeight, pinnedHeight(ctx, x, z), t) + relief * t, t, land: true, climate };
+  const d = CRAG.probeFt;
+  const steep = Math.hypot(ctx.heightAt(x + d, z) - ctx.heightAt(x - d, z), ctx.heightAt(x, z + d) - ctx.heightAt(x, z - d)) / (2 * d);
+  let h = ctx.heightAt(x, z) + fbm(x, z, ctx.seed, { wavelength: BASE.hillWavelength, octaves: 3 }) * amp;
+  if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
+  const crag = rough * 0.5 + steep * CRAG.perSlope;
+  if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;
+
+  return { h: coast(ctx, h, x, z, edgeDist), t: smoothstep(0, COAST.maxFt, edgeDist), land: true, climate };
 }
 
-// Height pins blend by inverse-distance weighting among the pins within PIN_REACH_FT, and the
-// result fades smoothly back to the default height toward the edge of the nearest pin's reach,
-// so each pin raises (or lowers) a gentle rise rather than a plateau.
-function pinnedHeight(ctx, x, z) {
-  let num = 0;
-  let den = 0;
-  let reach = 0;
-  for (const p of ctx.pins) {
-    const d = Math.hypot(p.x - x, p.z - z);
-    if (d >= PIN_REACH_FT) continue;
-    if (d < 1) return p.height;
-    num += p.height / (d * d);
-    den += 1 / (d * d);
-    reach = Math.max(reach, smoothstep(PIN_REACH_FT, 0, d));
-  }
-  return den ? lerp(BASE.defaultHeight, num / den, reach) : BASE.defaultHeight;
+// Cliffs where the land is high; where it's low, a shore of uneven width that drops in bumps to
+// just below sea level.
+function coast(ctx, h, x, z, edgeDist) {
+  const low = 1 - smoothstep(COAST.low, COAST.cliff, h);
+  if (low <= 0) return h;
+  const width = lerp(COAST.minFt, COAST.maxFt, fbm(x, z, ctx.seed ^ 0x27d4eb2f, { wavelength: 500 }) * 0.5 + 0.5) * low;
+  if (edgeDist >= width) return h;
+  const shore = SEA.shallow + (edgeDist / width) * (h - SEA.shallow) + fbm(x, z, ctx.seed ^ 0x165667b1, { wavelength: 40 }) * COAST.bumps;
+  return Math.min(h, shore);
+}
+
+// The sea floor: shallow by the coast and deeper further out, with slow swells and finer bumps.
+// Always under water.
+function seaFloor(ctx, x, z, edgeDist) {
+  const depth = Math.max(SEA.floor, SEA.shallow - edgeDist * SEA.drop);
+  const swell = fbm(x, z, ctx.seed ^ 0x61c88647, { wavelength: 1500 }) * SEA.swell;
+  const bumps = fbm(x, z, ctx.seed ^ 0x2545f491, { wavelength: 250 }) * SEA.bumps;
+  return Math.min(-1, depth + swell + bumps);
 }
 
 function sample(ctx, x, z, edges, biomes) {

@@ -1,16 +1,17 @@
 import polygonClipping from "polygon-clipping";
 import { TILE_FT } from "../world/constants.js";
-import { EDGE_REACH_FT, PIN_REACH_FT, riverReachFt } from "../world/generator.js";
+import { EDGE_REACH_FT, riverReachFt } from "../world/generator.js";
 import { tilesTouched } from "./region.js";
 
 // Which tiles a sketch edit changes, so the editor can highlight them and regenerate just those.
 // Each kind of change reaches as far as the generator lets it: a moved region edge reshapes the
-// shore around it, a height pin shapes the ground within its reach, and a river carves along its
-// whole length. Info pins don't touch the ground. Every hit tile brings its neighbours along.
+// shore around it, and a river carves along its whole length. Info pins don't touch the ground.
+// Every hit tile brings its neighbours along.
 //
-// Biome borders can move anywhere a biome pin's region reaches, and rivers and zone edges bend
-// them, so when a zone has biome pins, any biome pin, river or region change marks every tile the
-// zone touches.
+// Height pins shape one smooth surface across the continent, so a height pin change marks every
+// tile the zone touches. Biome borders can move anywhere a biome pin's region reaches, and rivers
+// and zone edges bend them, so when a zone has biome pins, any biome pin, river or region change
+// does too.
 
 const key = (tx, tz) => `${tx},${tz}`;
 
@@ -24,8 +25,9 @@ export function changedTiles(before, after) {
 
   const hasBiomes = [...a.pins, ...b.pins].some((p) => p.kind === "biome");
   const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
-  const biomePins = (z) => z.pins.filter((p) => p.kind === "biome");
-  if (hasBiomes && (changed(biomePins(a), biomePins(b)) || changed(a.strokes, b.strokes) || changed(a.region, b.region))) {
+  const pinsOf = (z, kind) => z.pins.filter((p) => p.kind === kind);
+  const biomesMoved = hasBiomes && (changed(pinsOf(a, "biome"), pinsOf(b, "biome")) || changed(a.strokes, b.strokes) || changed(a.region, b.region));
+  if (biomesMoved || changed(pinsOf(a, "height"), pinsOf(b, "height"))) {
     for (const zone of [a, b]) for (const [tx, tz] of tilesTouched(zone.region)) addAround(tiles, tx, tz, 1);
   }
 
@@ -37,13 +39,6 @@ export function changedTiles(before, after) {
         : openRings(polygonClipping.xor(a.region, b.region));
     const reach = Math.ceil(EDGE_REACH_FT / TILE_FT);
     for (const [tx, tz] of tilesTouched(moved)) addAround(tiles, tx, tz, reach);
-  }
-
-  for (const [old, now] of pairs(a.pins, b.pins)) {
-    if (JSON.stringify(old) === JSON.stringify(now)) continue;
-    for (const pin of [old, now]) {
-      if (pin?.kind === "height") addNearPoint(tiles, pin.at, PIN_REACH_FT / TILE_FT);
-    }
   }
 
   for (const [old, now] of pairs(a.strokes, b.strokes)) {
