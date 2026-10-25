@@ -1,6 +1,6 @@
 import { MapView } from "./mapView.js";
 import { cornerCount, labelPoint, nearestEdge, resubtract, rings, snapToCell, subtractZones, tilesTouched } from "./region.js";
-import { createZone, listZones, saveZone } from "./zones.js";
+import { createZone, listZones, removeZone, saveZone } from "./zones.js";
 
 const HIT_PX = 8;
 const COLORS = {
@@ -90,19 +90,26 @@ export class Editor {
   }
 
   // The zone's region with every other zone cut out of it, or null (with a message) when nothing
-  // would be left.
+  // would be left or it would come apart. Zones must be contiguous.
   clip(region, zone) {
     const others = this.otherZones(zone).map((z) => z.region);
-    const result = resubtract(region, others);
-    if (result.length) return result;
-    this.say("Other zones cover all of that; nothing would be left.");
+    return this.checkContiguous(resubtract(region, others));
+  }
+
+  checkContiguous(region) {
+    if (region.length === 1) return region;
+    this.say(
+      region.length
+        ? `Other zones would split this region into ${region.length} pieces; a zone must be one piece.`
+        : "Other zones cover all of that region; nothing would be left.",
+    );
     return null;
   }
 
   // --- panel ---
 
   bindPanel() {
-    const { continent, newZone, zoneName, drawRegion } = this.el;
+    const { continent, newZone, zoneName, drawRegion, deleteZone } = this.el;
     continent.innerHTML = "";
     for (const c of this.world.info.continents) continent.add(new Option(c.name, c.key));
     continent.addEventListener("change", () => {
@@ -127,6 +134,17 @@ export class Editor {
       if (!zone) return;
       zone.name = zoneName.value;
       this.save(zone);
+    });
+
+    deleteZone.addEventListener("click", () => {
+      const zone = this.activeZone;
+      if (!zone || !window.confirm(`Delete ${zone.name || zone.key}? Its generated tiles stay.`)) return;
+      removeZone(this.world, this.continent, zone.key);
+      this.dirty = true;
+      this.active = null;
+      this.drawing = null;
+      this.say();
+      this.reload();
     });
 
     drawRegion.addEventListener("click", () => {
@@ -164,9 +182,8 @@ export class Editor {
     if (zone) {
       if (document.activeElement !== zoneName) zoneName.value = zone.name;
       const tiles = tilesTouched(zone.region).length;
-      const pieces = zone.region.length > 1 ? ` · ${zone.region.length} pieces` : "";
       regionInfo.textContent = zone.region.length
-        ? `${cornerCount(zone.region)} corners${pieces} · ${tiles} editable tiles`
+        ? `${cornerCount(zone.region)} corners · ${tiles} editable tiles`
         : "no region yet";
       drawRegion.textContent = zone.region.length ? "redraw region" : "draw region";
     }
@@ -256,12 +273,9 @@ export class Editor {
   finishDrawing(zone) {
     if (this.drawing.length < 3) return;
     const others = this.otherZones(zone).map((z) => z.region);
-    const region = subtractZones(this.drawing, others);
-    if (!region.length) {
-      this.say("Other zones cover all of that region; move corners outside them before closing it.");
-      return;
-    }
-    this.say(region.length > 1 ? `Other zones split this region into ${region.length} pieces.` : "");
+    const region = this.checkContiguous(subtractZones(this.drawing, others));
+    if (!region) return;
+    this.say();
     zone.region = region;
     this.drawing = null;
     this.save(zone);

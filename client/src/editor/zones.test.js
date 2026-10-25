@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { World } from "./world.js";
-import { createZone, listZones, saveZone, zonePath } from "./zones.js";
+import { createZone, listZones, removeZone, saveZone, zonePath } from "./zones.js";
 
 describe("zones", () => {
   it("creates a zone file keyed by its name", () => {
@@ -29,5 +29,13 @@ describe("zones", () => {
     saveZone(world, "main", { ...zone, name: "The Cradle" });
     expect(listZones(world, "main").map((z) => [z.key, z.name])).toEqual([["cradle", "The Cradle"]]);
     expect(world.readJson(zonePath("main", "cradle")).key).toBeUndefined();
+  });
+
+  it("removes a zone's file and nothing else", () => {
+    const world = World.empty();
+    createZone(world, "main", "Cradle");
+    world.files.set("places/continents/main/tiles/surface/0/0.dlt.gz", new Uint8Array([1]));
+    removeZone(world, "main", "cradle");
+    expect([...world.files.keys()].sort()).toEqual(["places/continents/main/tiles/surface/0/0.dlt.gz", "world.json"]);
   });
 });

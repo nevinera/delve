@@ -30,6 +30,11 @@ export function saveZone(world, continent, { key, ...zone }) {
   world.writeJson(zonePath(continent, key), zone);
 }
 
+// Removes only the zone file. Tiles generated inside the zone stay as they are.
+export function removeZone(world, continent, key) {
+  world.files.delete(zonePath(continent, key));
+}
+
 export function slug(text) {
   return text
     .toLowerCase()

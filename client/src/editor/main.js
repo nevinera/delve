@@ -18,6 +18,7 @@ const editor = new Editor(world, {
   zoneName: $("zoneName"),
   regionInfo: $("regionInfo"),
   drawRegion: $("drawRegion"),
+  deleteZone: $("deleteZone"),
   hint: $("hint"),
   message: $("message"),
 });

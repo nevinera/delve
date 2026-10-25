@@ -101,6 +101,11 @@
   text-align: left;
 }
 
+.editor-row {
+  display: flex;
+  gap: 6px;
+}
+
 .editor-empty {
   color: #777;
 }
