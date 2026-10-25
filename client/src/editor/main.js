@@ -10,6 +10,8 @@ const $ = (id) => document.getElementById(id);
 
 const editor = new Editor(World.empty(), {
   map: $("map"),
+  scene: $("scene"),
+  toggle3d: $("toggle3d"),
   cursor: $("cursor"),
   continent: $("continent"),
   zoneList: $("zoneList"),
@@ -39,6 +41,8 @@ $("download").addEventListener("click", () => {
   URL.revokeObjectURL(link.href);
   editor.markSaved();
 });
+
+$("toggle3d").addEventListener("click", () => editor.toggle3d());
 
 $("upload").addEventListener("click", () => {
   if (editor.dirty && !window.confirm("Replace this world? Changes you haven't downloaded will be lost.")) return;

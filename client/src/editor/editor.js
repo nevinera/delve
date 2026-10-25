@@ -59,6 +59,8 @@ export class Editor {
     this.generator = new TileGenerator();
     this.generating = false;
     this.pending = new Set(); // "x,z" keys of tiles whose sketch changed since upload or generation
+    this.view3d = null; // the RenderView, loaded the first time 3D is shown
+    this.showing3d = false;
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
@@ -89,6 +91,7 @@ export class Editor {
     const older = olderZones(this.world, this.continent);
     this.say(older.length ? `Skipped zones in an older format: ${older.join(", ")}.` : "", { info: true });
     this.fitContinent();
+    this.refresh3d({ keepCamera: false });
   }
 
   fillContinents() {
@@ -132,6 +135,27 @@ export class Editor {
     this.dirty = true;
     this.renderPanel();
     this.map.render();
+    this.refresh3d();
+  }
+
+  // Switches between the 2D map and the 3D view. three.js loads on first use.
+  async toggle3d() {
+    this.showing3d = !this.showing3d;
+    if (this.showing3d && !this.view3d) {
+      const { RenderView } = await import("./renderView.js");
+      this.view3d = new RenderView(this.el.scene);
+    }
+    this.el.map.hidden = this.showing3d;
+    this.el.scene.hidden = !this.showing3d;
+    this.el.toggle3d.textContent = this.showing3d ? "2D map" : "3D view";
+    if (this.showing3d) this.refresh3d({ keepCamera: false });
+    else this.map.resize();
+  }
+
+  refresh3d({ keepCamera = true } = {}) {
+    if (!this.showing3d || !this.view3d) return;
+    const state = { world: this.world, continent: this.continent, zones: this.zones, active: this.activeZone, thumbnails: this.thumbnails };
+    this.view3d.show(state, { keepCamera });
   }
 
   markSaved() {
@@ -264,6 +288,7 @@ export class Editor {
         this.say();
         this.renderPanel();
         this.map.render();
+        this.refresh3d({ keepCamera: false });
       });
       item.append(button);
       zoneList.append(item);
@@ -328,6 +353,7 @@ export class Editor {
       this.generating = false;
       this.renderPanel();
       this.map.render();
+      this.refresh3d();
     }
   }
 

@@ -2,12 +2,14 @@
   <strong id="worldName"></strong>
   <span id="cursor" class="editor-cursor"></span>
   <span class="spacer"></span>
+  <button id="toggle3d" type="button">3D view</button>
   <button id="upload" type="button">upload world</button>
   <input id="uploadFile" type="file" accept=".zip,application/zip" hidden>
   <button id="download" type="button">download world</button>
 </header>
 <main class="editor-main">
   <canvas id="map" class="editor-map"></canvas>
+  <canvas id="scene" class="editor-map" hidden></canvas>
   <aside class="editor-panel">
     <section>
       <h2>Continent</h2>

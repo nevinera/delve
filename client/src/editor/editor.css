@@ -57,6 +57,10 @@
   min-height: 0;
 }
 
+.editor-map[hidden] {
+  display: none;
+}
+
 .editor-map {
   flex: 1;
   display: block;

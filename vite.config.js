@@ -15,6 +15,8 @@ export default defineConfig(({command}) => ({
     // Content-hashed filenames, with manifest.json mapping each entry to its
     // current file for app/helpers/vite_helper.rb.
     manifest: true,
+    // three.js alone is about 550KB, and the editor loads it in its own chunk.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       input: {
         main: resolve(__dirname, "client/src/main.js"),

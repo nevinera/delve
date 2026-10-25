@@ -153,22 +153,22 @@ function groundHeight(ctx, x, z, edges) {
   return lerp(BASE.shoreHeight, pinnedHeight(ctx, x, z), t) + noise * t;
 }
 
-// Modified Shepard weighting over the height pins within PIN_REACH_FT, so a pin only shapes the
-// ground near it and neighbouring zones' pins blend. A weak pull toward the default height takes
-// over where no pin reaches.
+// Height pins blend by inverse-distance weighting among the pins within PIN_REACH_FT, and the
+// result fades smoothly back to the default height toward the edge of the nearest pin's reach,
+// so each pin raises (or lowers) a gentle rise rather than a plateau.
 function pinnedHeight(ctx, x, z) {
-  const w0 = 1 / (PIN_REACH_FT * PIN_REACH_FT * 64);
-  let num = BASE.defaultHeight * w0;
-  let den = w0;
+  let num = 0;
+  let den = 0;
+  let reach = 0;
   for (const p of ctx.pins) {
     const d = Math.hypot(p.x - x, p.z - z);
     if (d >= PIN_REACH_FT) continue;
     if (d < 1) return p.height;
-    const w = ((PIN_REACH_FT - d) / (PIN_REACH_FT * d)) ** 2;
-    num += w * p.height;
-    den += w;
+    num += p.height / (d * d);
+    den += 1 / (d * d);
+    reach = Math.max(reach, smoothstep(PIN_REACH_FT, 0, d));
   }
-  return num / den;
+  return den ? lerp(BASE.defaultHeight, num / den, reach) : BASE.defaultHeight;
 }
 
 function sample(ctx, x, z, edges) {
