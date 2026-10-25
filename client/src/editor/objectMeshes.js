@@ -7,7 +7,32 @@ import { meshHeightAt } from "../world/clutter.js";
 // one per part shape and variant. Shapes are for scale 1, standing on y = 0 and matching their
 // type's footprint and height; long ones (logs) lie along x.
 
-const material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide });
+// Objects past a distance from the focus (scene x, z) aren't drawn: they shrink away over the
+// last FADE_FT, so they don't pop. Large types (`large: true`) reach farther than small ones.
+const FADE_FT = 40;
+const sight = { focus: { value: new THREE.Vector2() }, small: { value: 1e9 }, large: { value: 1e9 } };
+
+export function setObjectSight(x, z, smallFt, largeFt) {
+  sight.focus.value.set(x, z);
+  sight.small.value = Math.min(smallFt, 1e9);
+  sight.large.value = Math.min(largeFt, 1e9);
+}
+
+function limited(range) {
+  const material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.objectFocus = sight.focus;
+    shader.uniforms.objectRange = range;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 objectFocus;\nuniform float objectRange;").replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>
+        vec2 objectAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+        transformed *= 1.0 - smoothstep(objectRange - ${FADE_FT.toFixed(1)}, objectRange, distance(objectAt, objectFocus));`,
+    );
+  };
+  return material;
+}
+const materials = { small: limited(sight.small), large: limited(sight.large) };
 const UP = new THREE.Vector3(0, 1, 0);
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
 
@@ -126,7 +151,7 @@ export function objectMeshes(objects, tileAt, origin) {
     spec.parts.forEach((part, p) => {
       const shape = SHAPE_FOR[object.type]?.[part.shape] ?? part.shape;
       const v = Math.floor(object.yaw * 1000) % variants(shape).length;
-      const key = `${shape}/${v}`;
+      const key = `${shape}/${v}/${spec.large ? "large" : "small"}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push({ object, p });
     });
@@ -137,8 +162,8 @@ export function objectMeshes(objects, tileAt, origin) {
   const tilt = new THREE.Quaternion();
   const color = new THREE.Color();
   for (const [key, list] of groups) {
-    const [shape, v] = key.split("/");
-    const mesh = new THREE.InstancedMesh(variants(shape)[Number(v)], material, list.length);
+    const [shape, v, size] = key.split("/");
+    const mesh = new THREE.InstancedMesh(variants(shape)[Number(v)], materials[size], list.length);
     list.forEach(({ object, p }, n) => {
       const { y, pitch } = seat(object, tileAt);
       q.setFromAxisAngle(UP, object.yaw).multiply(tilt.setFromAxisAngle(AXIS_Z, pitch));

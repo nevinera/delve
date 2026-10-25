@@ -10,12 +10,17 @@ import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
 import { clutterMeshes, setClutterFocus } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
-import { objectMeshes } from "./objectMeshes.js";
+import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
 import { groundMaterial } from "./groundMaterial.js";
 
-const RING_TILES = 2; // tiles drawn in full around the active zone's editable tiles
+const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
+// What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
+// `fogEndFt`, the 7×7 tiles around you (`tiles` either side), and objects out to `smallFt`, or
+// `largeFt` for large ones.
+export const SIGHT = { fogStartFt: 350, fogEndFt: 1400, tiles: 3, smallFt: 500, largeFt: 1000 };
+const ORBIT_FOG = [6000, 30000];
 const SEA = 0x1d4a6a;
 const SKY = 0x9db8cc;
 const BOUNDARY_LIFT_FT = 6;
@@ -46,7 +51,7 @@ export class RenderView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(SKY);
-    this.scene.fog = new THREE.Fog(SKY, 6000, 30000);
+    this.scene.fog = new THREE.Fog(SKY, ...ORBIT_FOG);
     this.camera = new THREE.PerspectiveCamera(50, 1, 5, 120000);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.maxPolarAngle = Math.PI * 0.49;
@@ -106,8 +111,38 @@ export class RenderView {
   }
 
   render() {
+    this.showSight();
     this.showClutter();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // Walking limits what you see to SIGHT; orbiting shows everything.
+  showSight() {
+    const walking = this.walking;
+    if (walking !== this.sightWalking) {
+      this.sightWalking = walking;
+      [this.scene.fog.near, this.scene.fog.far] = walking ? [SIGHT.fogStartFt, SIGHT.fogEndFt] : ORBIT_FOG;
+      this.camera.far = walking ? SIGHT.fogEndFt + 100 : 120000;
+      this.camera.updateProjectionMatrix();
+      this.sightTile = null;
+    }
+    if (!this.origin) return;
+    if (!walking) {
+      setObjectSight(0, 0, Infinity, Infinity);
+      if (this.sightTile !== null) for (const child of this.content.children) child.visible = true;
+      this.sightTile = null;
+      return;
+    }
+    const { pos } = this.walker;
+    setObjectSight(pos.x, pos.z, SIGHT.smallFt, SIGHT.largeFt);
+    const [tx, tz] = [Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT)];
+    const key = `${tx},${tz}`;
+    if (key === this.sightTile) return;
+    this.sightTile = key;
+    for (const child of this.content.children) {
+      const at = child.userData.tile;
+      child.visible = !at || (Math.abs(at[0] - tx) <= SIGHT.tiles && Math.abs(at[1] - tz) <= SIGHT.tiles);
+    }
   }
 
   // Ground clutter on the 3×3 tiles around where you're looking (or walking), when the camera's
@@ -185,6 +220,7 @@ export class RenderView {
 
     const decoded = new Map();
     this.decoded = decoded;
+    this.sightTile = null;
     this.clutterTiles.clear();
     this.clutterAround = null;
     this.unreadable = []; // tiles near the zone that couldn't be read, such as ones from an old format
@@ -216,11 +252,15 @@ export class RenderView {
         southEast: decoded.get(`${tx + 1},${tz + 1}`),
       };
       const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), terrainMaterial);
+      terrain.userData.tile = [tx, tz];
       this.content.add(terrain);
       this.surfaces.push(terrain);
       for (const kind of WATER_KINDS) {
         const water = waterMesh(tile, neighbours, this.origin, kind);
-        if (water) this.content.add(new THREE.Mesh(geometry(water), waterMaterials[kind]));
+        if (!water) continue;
+        const mesh = new THREE.Mesh(geometry(water), waterMaterials[kind]);
+        mesh.userData.tile = [tx, tz];
+        this.content.add(mesh);
       }
     }
 
@@ -238,6 +278,7 @@ export class RenderView {
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(TILE_FT, TILE_FT), new THREE.MeshBasicMaterial({ map: texture }));
       plane.rotation.x = -Math.PI / 2;
       plane.position.set((tx + 0.5) * TILE_FT - this.origin[0], 0.5, (tz + 0.5) * TILE_FT - this.origin[1]);
+      plane.userData.tile = [tx, tz];
       this.content.add(plane);
       this.surfaces.push(plane);
     }
