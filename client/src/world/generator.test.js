@@ -5,14 +5,12 @@ import { fbm } from "./noise.js";
 
 const square = (x0, z0, x1, z1) => [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]];
 
-// A 6×4-tile zone at (10, -4) with a 100ft height pin, a coastline cutting off its western
-// tile column with the sea to the west, and a river flowing west into that sea.
+// A 6×4-tile zone at (10, -4) with a 100ft height pin and a river flowing west into the sea.
 const zones = [
   {
     region: [square(10, -4, 16, 0)],
     pins: [{ id: "p1", kind: "height", at: [14, -2], height: 100 }],
     strokes: [
-      { id: "s1", kind: "coast", points: [[11, 0], [11, -4]], width: 40 },
       { id: "s2", kind: "river", points: [[15.5, -3.5], [13, -3], [10.5, -3]], width: 40 },
     ],
   },
@@ -54,12 +52,6 @@ describe("generator", () => {
   it("raises the land toward the height pin", () => {
     const tile = generateTile(ctx, 14, -2);
     expect(cell(tile, 0, 0, "height")).toBeGreaterThan(80);
-  });
-
-  it("puts the sea on the coastline's water side", () => {
-    const tile = generateTile(ctx, 10, -2);
-    expect(cell(tile, 10, 32, "height")).toBeLessThan(0);
-    expect(cell(tile, 10, 32, "water")).toBe(0);
   });
 
   it("keeps river water flowing downhill", () => {

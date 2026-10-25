@@ -4,7 +4,7 @@ import { TILE_FT } from "../world/constants.js";
 // A zone's sketch features: pins ({ id, kind, at, ... }) and strokes ({ id, kind, points, width,
 // ... }), in continent tile units with sizes in feet. Height pins set the ground height at a spot;
 // info pins carry a name, notes and tags for people and LLMs and don't affect generation. Rivers
-// flow the way they're drawn; coastlines have the water on their left.
+// flow the way they're drawn. There are no coastlines: the sea is wherever no zone is.
 
 export const PINS = {
   height: { color: "#70d070", label: "height pin" },
@@ -12,7 +12,6 @@ export const PINS = {
 };
 export const STROKES = {
   river: { color: "#4a90d9", width: 30, label: "river" },
-  coast: { color: "#d9c27a", width: 40, label: "coastline" },
 };
 export const FEATURE_TOOLS = ["select", ...Object.keys(PINS), ...Object.keys(STROKES)];
 export const FEATURE_HINTS = {
@@ -240,8 +239,6 @@ export class Features {
     const dpr = this.map.dpr;
     const pts = stroke.points.map((p) => this.map.toScreen(p));
     if (pts.length === 0) return;
-    if (stroke.kind === "coast" && pts.length > 1) drawWaterSide(ctx, pts, Math.max(10 * dpr, this.map.view.scale * 0.25));
-
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = kind.color;
@@ -309,14 +306,6 @@ export class Features {
 
     const row = document.createElement("div");
     row.className = "editor-row";
-    if (feature.kind === "coast") {
-      row.append(
-        button("flip water side", () => {
-          feature.points.reverse();
-          this.editor.save(zone);
-        }),
-      );
-    }
     row.append(button(`delete ${kind.label}`, () => this.remove(zone)));
     box.append(row);
   }
@@ -367,25 +356,6 @@ function polyline(ctx, pts) {
   ctx.beginPath();
   pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
   ctx.stroke();
-}
-
-// Water is on the left of the drawing direction. With z pointing down the screen, the left of
-// direction (dx, dy) is (dy, -dx).
-function drawWaterSide(ctx, pts, band) {
-  ctx.fillStyle = "rgba(60, 110, 180, 0.4)";
-  for (let i = 1; i < pts.length; i++) {
-    const [ax, ay] = pts[i - 1];
-    const [bx, by] = pts[i];
-    const len = Math.hypot(bx - ax, by - ay) || 1;
-    const nx = ((by - ay) / len) * band;
-    const ny = (-(bx - ax) / len) * band;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.lineTo(bx + nx, by + ny);
-    ctx.lineTo(ax + nx, ay + ny);
-    ctx.fill();
-  }
 }
 
 function arrow(ctx, [ax, ay], [bx, by], color, dpr) {

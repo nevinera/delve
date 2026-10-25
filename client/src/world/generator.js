@@ -3,8 +3,8 @@
 // independently and agree across seams, whichever zone asked for them.
 //
 // The world is open ocean. Land is wherever a zone's region is: its height comes from every height
-// pin on the continent, it slopes down to the sea at the edge of the zoned area, and a zone's
-// coastlines put the sea on their water side within that zone. Rivers carve down through it.
+// pin on the continent, and it slopes down to the sea at the edge of the zoned area, so a region's
+// outline is its coast. Rivers carve down through it.
 //
 // This pass makes height, water, terrain types and forest density with one default biome.
 // Objects, scatter and biomes wait for kits.
@@ -46,25 +46,16 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // units). seedKey (the continent's key) seeds the noise.
 export function prepareWorld(zones, seedKey) {
   const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
-  const regionToFt = (region) => region.map((polygon) => polygon.map((ring) => ring.map(toFt)));
   const zoned = zones.filter((z) => z.region?.length);
 
   // The zoned area: every region together. Its outline is where land meets open ocean.
   const union = zoned.length ? polygonClipping.union(...zoned.map((z) => z.region)) : [];
-  const area = regionToFt(union.map((polygon) => polygon.map((ring) => ring.slice(0, -1))));
+  const area = union.map((polygon) => polygon.map((ring) => ring.slice(0, -1).map(toFt)));
 
   const ctx = {
     seed: hashString(seedKey),
     area,
     areaEdges: edgesOf(area),
-    zones: zoned.map((z) => {
-      const region = regionToFt(z.region);
-      return {
-        region,
-        bounds: boundsOf(region.flat(2)),
-        coasts: z.strokes.filter((s) => s.kind === "coast" && s.points.length >= 2).map((s) => makePolyline(s.points.map(toFt))),
-      };
-    }),
     pins: zoned.flatMap((z) => z.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height))).map((p) => {
       const [x, z] = toFt(p.at);
       return { x, z, height: p.height };
@@ -76,7 +67,7 @@ export function prepareWorld(zones, seedKey) {
   ctx.rivers = zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river" && s.points.length >= 2)).map((s) => {
     const line = makePolyline(s.points.map(toFt));
     const width = s.width ?? 30;
-    const ground = sampleAlong(line, (x, z) => groundHeight(ctx, x, z, ctx.areaEdges, ctx.zones));
+    const ground = sampleAlong(line, (x, z) => groundHeight(ctx, x, z, ctx.areaEdges));
     let low = Infinity;
     return {
       line,
@@ -92,7 +83,7 @@ export function prepareWorld(zones, seedKey) {
 
 // One tile's layers. tx and tz are continent tile coordinates.
 export function generateTile(ctx, tx, tz) {
-  // Only the area edges and zones that can reach this tile.
+  // Only the area edges that can reach this tile.
   const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
   const near = ([ax, az, bx, bz]) =>
     Math.max(ax, bx) > x0 - EDGE_REACH_FT &&
@@ -100,14 +91,13 @@ export function generateTile(ctx, tx, tz) {
     Math.max(az, bz) > z0 - EDGE_REACH_FT &&
     Math.min(az, bz) < z0 + TILE_FT + EDGE_REACH_FT;
   const edges = ctx.areaEdges.filter(near);
-  const zones = ctx.zones.filter((z) => near(z.bounds));
 
   // One extra cell on each side, so slopes at the tile edge see their neighbours.
   const N = CELLS + 2;
   const samples = new Array(N * N);
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
-      samples[j * N + i] = sample(ctx, x0 + (i - 0.5) * CELL_FT, z0 + (j - 0.5) * CELL_FT, edges, zones);
+      samples[j * N + i] = sample(ctx, x0 + (i - 0.5) * CELL_FT, z0 + (j - 0.5) * CELL_FT, edges);
     }
   }
 
@@ -150,27 +140,10 @@ export function generateTile(ctx, tx, tz) {
 // --- height ---
 
 // Ground before rivers: open sea outside the zoned area, sloping up from the shore inside it.
-function groundHeight(ctx, x, z, edges, zones) {
-  const inArea = pointInRegion(x, z, ctx.area);
+function groundHeight(ctx, x, z, edges) {
   const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, edges));
-  if (!inArea) return Math.max(BASE.seaFloor, BASE.shoreHeight - edgeDist * BASE.seaDrop);
-
-  // Within a zone, its coastlines put the sea on their water side.
-  let inland = edgeDist;
-  const zone = zones.find((zn) => pointInRegion(x, z, zn.region));
-  if (zone?.coasts.length) {
-    let best = { dist: Infinity, side: -1 };
-    for (const coast of zone.coasts) {
-      const n = nearest(coast, x, z);
-      if (n.dist < best.dist) best = n;
-    }
-    // Water is on the coast's left (side +1).
-    const signed = best.dist * -best.side;
-    if (signed < 0) return Math.max(BASE.seaFloor, BASE.shoreHeight + signed * BASE.seaDrop);
-    inland = Math.min(inland, signed);
-  }
-
-  const t = smoothstep(0, BASE.shoreRampFt, inland);
+  if (!pointInRegion(x, z, ctx.area)) return Math.max(BASE.seaFloor, BASE.shoreHeight - edgeDist * BASE.seaDrop);
+  const t = smoothstep(0, BASE.shoreRampFt, edgeDist);
   const noise = fbm(x, z, ctx.seed, { wavelength: BASE.noiseWavelength, octaves: 3 }) * BASE.noiseAmp;
   return lerp(BASE.shoreHeight, pinnedHeight(ctx, x, z), t) + noise * t;
 }
@@ -189,8 +162,8 @@ function pinnedHeight(ctx, x, z) {
   return num / den;
 }
 
-function sample(ctx, x, z, edges, zones) {
-  const out = { h: groundHeight(ctx, x, z, edges, zones), water: NaN, river: false, bank: false };
+function sample(ctx, x, z, edges) {
+  const out = { h: groundHeight(ctx, x, z, edges), water: NaN, river: false, bank: false };
   for (const r of ctx.rivers) {
     if (!nearBounds(r.line, x, z, r.half + r.bank)) continue;
     const n = nearest(r.line, x, z);
@@ -241,12 +214,6 @@ function distanceToEdges(x, z, edges) {
     best = Math.min(best, Math.hypot(x - (ax + t * dx), z - (az + t * dz)));
   }
   return best;
-}
-
-function boundsOf(points) {
-  const xs = points.map((p) => p[0]);
-  const zs = points.map((p) => p[1]);
-  return [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
 }
 
 // --- profiles along strokes ---
