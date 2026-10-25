@@ -44,16 +44,28 @@ describe("generator", () => {
     expect(new Set(tile.layers.height).size).toBeGreaterThan(10);
   });
 
-  it("slopes the land into the sea at the zoned area's edge", () => {
-    const inside = generateTile(ctx, 15, -2);
-    const outside = generateTile(ctx, 16, -2);
-    expect(cell(inside, 63, 32, "height")).toBeGreaterThan(0);
-    expect(cell(outside, 40, 32, "height")).toBeLessThan(0);
+  // Heights along one row, west to east, across the zone's east edge at x = 16 tiles.
+  const row = (j) => [14, 15, 16].flatMap((tx) => Array.from({ length: CELLS }, (_, i) => cell(generateTile(ctx, tx, -2), i, j, "height")));
+
+  it("puts the coast a little inside the zoned area's edge", () => {
+    for (const j of [8, 32, 56]) {
+      const heights = row(j);
+      expect(heights[2 * CELLS - 100]).toBeGreaterThan(0); // 800ft inside
+      expect(heights[2 * CELLS]).toBeLessThan(0); // on the edge
+      expect(heights[2 * CELLS + 40]).toBeLessThan(0);
+    }
+  });
+
+  it("wanders the coast rather than following the edge", () => {
+    const coast = (j) => row(j).findIndex((h) => h < 0);
+    const spots = [0, 16, 32, 48, 63].map(coast);
+    expect(Math.max(...spots) - Math.min(...spots)).toBeGreaterThan(3);
   });
 
   it("meets the sea in a cliff where the land is high", () => {
-    const high = generateTile(ctx, 15, -2);
-    expect(cell(high, 63, 32, "height") - cell(generateTile(ctx, 16, -2), 0, 32, "height")).toBeGreaterThan(40);
+    const heights = row(32);
+    const drops = heights.slice(1).map((h, i) => heights[i] - h);
+    expect(Math.max(...drops)).toBeGreaterThan(40);
   });
 
   it("raises the land toward the height pin", () => {
@@ -79,16 +91,18 @@ describe("beaches", () => {
   // A low, flat zone, 8×8 tiles, all one biome.
   const low = (biome) =>
     prepareWorld([{ region: [square(0, 0, 8, 8)], pins: [{ id: "h", kind: "height", at: [4, 4], height: 3 }, { id: "b", kind: "biome", at: [4, 4], biome, tags: ["flat"] }], strokes: [] }], "test");
-  const sand = (tile) => tile.layers.terrain.filter((t) => tile.palettes.terrain[t] === "sand").length;
+  // Sand on land; the sea floor is sand everywhere.
+  const sand = (tile) => tile.layers.terrain.filter((t, k) => tile.palettes.terrain[t] === "sand" && tile.layers.height[k] > 0).length;
 
   it("puts sand on low land by the coast, but not inland", () => {
     const ctx = low("plains");
-    expect(sand(generateTile(ctx, 0, 4))).toBeGreaterThan(50);
+    expect(sand(generateTile(ctx, 0, 4)) + sand(generateTile(ctx, 1, 4))).toBeGreaterThan(50);
     expect(sand(generateTile(ctx, 4, 4))).toBe(0);
   });
 
   it("gives swamps no beaches", () => {
-    expect(sand(generateTile(low("swamp"), 0, 4))).toBe(0);
+    const ctx = low("swamp");
+    expect(sand(generateTile(ctx, 0, 4)) + sand(generateTile(ctx, 1, 4))).toBe(0);
   });
 });
 

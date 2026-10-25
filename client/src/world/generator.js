@@ -19,7 +19,7 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 10;
+export const GENERATOR_VERSION = 11;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -36,7 +36,8 @@ const CRAG = { wavelength: 160, perSlope: 60, probeFt: 24 };
 // Everywhere on land: gentle swells some hundreds of feet across, and small lumps and dips on
 // top, a foot or two either way. (fbm rarely strays past ±0.5, so heights are about the full
 // swing.)
-const JITTER = { swellFt: 16, swellWavelength: 650, ft: 3, wavelength: 90 };
+// Swells shrink on land lower than `swellFullAt`, so they don't sink low plains under the sea.
+const JITTER = { swellFt: 16, swellWavelength: 650, swellFullAt: 40, ft: 3, wavelength: 90 };
 // Land at or above `cliff` ft meets the sea in a cliff; lower land in a rough shore of uneven
 // width (`minFt` to `maxFt`) and bumpy height. Between `low` and `cliff` it shifts from one to the
 // other.
@@ -48,9 +49,14 @@ const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
 const TREE_GROUND = new Set(["grass", "dirt", "moss", "mud"]);
-// How far each feature reaches, so the editor knows which tiles a change touches.
-// Past EDGE_REACH_FT from the zoned area's edge, nothing about the edge matters any more.
-export const EDGE_REACH_FT = Math.max(COAST.maxFt, (SEA.shallow - SEA.floor) / SEA.drop) + 64;
+// The coast wanders inside the zoned area's edge, by up to `maxFt`, in bays and headlands at
+// three sizes. It never crosses the edge, so land stays on the zones' own tiles.
+const SHORE = { maxFt: 700, layers: [{ wavelength: 1800, weight: 1 }, { wavelength: 400, weight: 0.5 }, { wavelength: 90, weight: 0.15 }] };
+// How far each feature reaches, so the editor knows which tiles a change touches. Past
+// COAST_REACH_FT from the coast, nothing about the coast matters any more, and past EDGE_REACH_FT
+// from the zoned area's edge, nothing about the edge does.
+const COAST_REACH_FT = Math.max(COAST.maxFt, (SEA.shallow - SEA.floor) / SEA.drop) + 64;
+export const EDGE_REACH_FT = COAST_REACH_FT + SHORE.maxFt;
 const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30 };
 export function riverReachFt(width) {
   return width / 2 + Math.max(RIVER.minBankFt, width);
@@ -215,11 +221,14 @@ function pick(odds, r) {
 // Ground before rivers, pools and ravines: the sea floor outside the zoned area, and inside it the
 // broad shape with hills and crags, meeting the sea at the coast. Returns { h, t, land, climate,
 // coastDist }, where t grows from 0 at the coast to 1 a little inland, for features that keep off
-// the shore, and coastDist is how far it is to the coast (capped at EDGE_REACH_FT).
+// the shore, and coastDist is how far it is to the coast (capped at COAST_REACH_FT).
 function land(ctx, x, z, edges, biomes) {
   const climate = climateAt(biomes, x, z);
+  // Feet inland from the coast, negative out to sea.
   const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, edges));
-  if (!pointInRegion(x, z, ctx.area)) return { h: seaFloor(ctx, x, z, edgeDist), t: 0, land: false, climate, coastDist: edgeDist };
+  const inland = (pointInRegion(x, z, ctx.area) ? edgeDist : -edgeDist) - shoreInset(ctx, x, z);
+  const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
+  if (inland <= 0) return { h: seaFloor(ctx, x, z, coastDist), t: 0, land: false, climate, coastDist };
 
   const { amp, rough } = climate.profile;
   const d = CRAG.probeFt;
@@ -228,27 +237,35 @@ function land(ctx, x, z, edges, biomes) {
   if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
   const crag = rough * 0.5 + steep * CRAG.perSlope;
   if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;
-  h += fbm(x, z, ctx.seed ^ 0x3c6ef373, { wavelength: JITTER.swellWavelength, octaves: 2 }) * JITTER.swellFt;
+  const swell = JITTER.swellFt * smoothstep(0, JITTER.swellFullAt, ctx.heightAt(x, z));
+  h += fbm(x, z, ctx.seed ^ 0x3c6ef373, { wavelength: JITTER.swellWavelength, octaves: 2 }) * swell;
   h += fbm(x, z, ctx.seed ^ 0x6a09e667, { wavelength: JITTER.wavelength, octaves: 2 }) * JITTER.ft;
 
-  return { h: coast(ctx, h, x, z, edgeDist), t: smoothstep(0, COAST.maxFt, edgeDist), land: true, climate, coastDist: edgeDist };
+  return { h: coast(ctx, h, x, z, coastDist), t: smoothstep(0, COAST.maxFt, coastDist), land: true, climate, coastDist };
+}
+
+// How far inside the zoned area's edge the coast lies here, between 0 and SHORE.maxFt.
+function shoreInset(ctx, x, z) {
+  let n = 0;
+  SHORE.layers.forEach(({ wavelength, weight }, i) => (n += fbm(x, z, ctx.seed ^ (0x7f4a7c15 + i), { wavelength, octaves: 2 }) * weight));
+  return SHORE.maxFt * (0.5 + 0.5 * Math.tanh(1.2 * n));
 }
 
 // Cliffs where the land is high; where it's low, a shore of uneven width that drops in bumps to
 // just below sea level.
-function coast(ctx, h, x, z, edgeDist) {
+function coast(ctx, h, x, z, coastDist) {
   const low = 1 - smoothstep(COAST.low, COAST.cliff, h);
   if (low <= 0) return h;
   const width = lerp(COAST.minFt, COAST.maxFt, fbm(x, z, ctx.seed ^ 0x27d4eb2f, { wavelength: 500 }) * 0.5 + 0.5) * low;
-  if (edgeDist >= width) return h;
-  const shore = SEA.shallow + (edgeDist / width) * (h - SEA.shallow) + fbm(x, z, ctx.seed ^ 0x165667b1, { wavelength: 40 }) * COAST.bumps;
+  if (coastDist >= width) return h;
+  const shore = SEA.shallow + (coastDist / width) * (h - SEA.shallow) + fbm(x, z, ctx.seed ^ 0x165667b1, { wavelength: 40 }) * COAST.bumps;
   return Math.min(h, shore);
 }
 
 // The sea floor: shallow by the coast and deeper further out, with slow swells and finer bumps.
 // Always under water.
-function seaFloor(ctx, x, z, edgeDist) {
-  const depth = Math.max(SEA.floor, SEA.shallow - edgeDist * SEA.drop);
+function seaFloor(ctx, x, z, coastDist) {
+  const depth = Math.max(SEA.floor, SEA.shallow - coastDist * SEA.drop);
   const swell = fbm(x, z, ctx.seed ^ 0x61c88647, { wavelength: 1500 }) * SEA.swell;
   const bumps = fbm(x, z, ctx.seed ^ 0x2545f491, { wavelength: 250 }) * SEA.bumps;
   return Math.min(-1, depth + swell + bumps);
