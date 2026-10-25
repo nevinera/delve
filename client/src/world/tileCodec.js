@@ -3,14 +3,11 @@
 
 const MAGIC = "DLT1";
 export const FORMAT_VERSION = 2;
-// Version 1 stored height and water as i16. Still read for now, so old worlds can be resaved.
-const READS = [1, FORMAT_VERSION];
 
-// i32 and i16 layers store round(value * scale). The type's lowest value marks "no value" (no
+// i32 layers store round(value * scale). The type's lowest value marks "no value" (no
 // water, no upper surface) and decodes to NaN.
 const LAYER_TYPES = {
   i32: { bytes: 4, array: Float64Array, none: -(2 ** 31), max: 2 ** 31 - 1, get: "getInt32", set: "setInt32" },
-  i16: { bytes: 2, array: Float32Array, none: -32768, max: 32767, get: "getInt16", set: "setInt16" },
   u8: { bytes: 1, array: Uint8Array },
 };
 
@@ -77,7 +74,7 @@ export function decodeTile(bytes) {
   if (magic !== MAGIC) throw new Error(`not a tile file (magic ${JSON.stringify(magic)})`);
   const jsonLength = view.getUint32(4, true);
   const manifest = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + jsonLength)));
-  if (!READS.includes(manifest.version)) throw new Error(`unsupported tile version ${manifest.version}`);
+  if (manifest.version !== FORMAT_VERSION) throw new Error(`unsupported tile version ${manifest.version}`);
   const headerBytes = align4(8 + jsonLength);
   const count = manifest.cells * manifest.cells;
 
