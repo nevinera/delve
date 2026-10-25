@@ -15,6 +15,8 @@ const editor = new Editor(World.empty(), {
   showPins: $("showPins"),
   sceneTip: $("sceneTip"),
   walk: $("walk"),
+  solidCanopies: $("solidCanopies"),
+  solidCanopiesLabel: $("solidCanopiesLabel"),
   cursor: $("cursor"),
   continent: $("continent"),
   zoneList: $("zoneList"),

@@ -19,8 +19,9 @@ import { HORIZON, SUN_DIR, Sky } from "./sky.js";
 const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
 // `fogEndFt`, the 7×7 tiles around you (`tiles` either side), objects out to `smallFt` (or
-// `largeFt` for large ones), and tree crowns drawn solid past `canopyFt`.
-export const SIGHT = { fogStartFt: 350, fogEndFt: 1400, tiles: 3, smallFt: 500, largeFt: 1000, canopyFt: 450 };
+// `largeFt` for large ones), and tree crowns drawn in simpler stages past each of `canopyFt`,
+// dissolving from one to the next across `canopyBandFt`.
+export const SIGHT = { fogStartFt: 350, fogEndFt: 1400, tiles: 3, smallFt: 500, largeFt: 1000, canopyFt: [250, 350, 450], canopyBandFt: 40 };
 const ORBIT_FOG = [6000, 30000];
 
 // Fog thickens with straight-line distance from the camera, so turning doesn't move it, and along
@@ -144,14 +145,14 @@ export class RenderView {
     if (!this.origin) return;
     if (!walking) {
       setObjectSight(0, 0, Infinity, Infinity);
-      setTreeSight(0, 0, Infinity);
+      setTreeSight(0, 0, [], { solid: this.solidCanopies });
       if (this.sightTile !== null) for (const child of this.content.children) child.visible = true;
       this.sightTile = null;
       return;
     }
     const { pos } = this.walker;
     setObjectSight(pos.x, pos.z, SIGHT.smallFt, SIGHT.largeFt);
-    setTreeSight(pos.x, pos.z, SIGHT.canopyFt);
+    setTreeSight(pos.x, pos.z, SIGHT.canopyFt, { band: SIGHT.canopyBandFt, solid: this.solidCanopies });
     const [tx, tz] = [Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT)];
     const key = `${tx},${tz}`;
     if (key === this.sightTile) return;

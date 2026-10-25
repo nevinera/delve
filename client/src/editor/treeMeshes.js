@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 // Tree models for the 3D view, as instanced meshes: one per part (trunk, crown, branch) per kind.
 // Each kind's parts are placed from its height `h`, crown radius `c` and the clearance `b` under
@@ -21,55 +20,117 @@ const DROOP = 0.6; // share of a half turn the bowl runs down from its top
 const bowl = new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, Math.PI * DROOP).translate(0, -Math.cos(Math.PI * DROOP), 0);
 bowl.scale(1, 1 / (1 - Math.cos(Math.PI * DROOP)), 1);
 
-// A crown is a few nested shells of a shape, each textured with leaf clusters and cut out
-// between them (alpha test, so nothing needs sorting), so you see into it and through its edges.
-// A dark core keeps the middle from looking hollow. `repeat` sets how many leaf tiles go round
-// and up the outer shell; `lift` raises each smaller shell to keep it centered.
-function crown(shape, { repeat: [ru, rv], lift = 0 }) {
-  const shells = [1, 0.78, 0.56].map((s, n) => {
-    const g = shape.clone().scale(s, s, s).rotateY(n * 1.7).translate(0, lift * (1 - s), 0);
-    const uv = g.attributes.uv;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ru * (0.6 + 0.4 * s), uv.getY(i) * rv * (0.6 + 0.4 * s));
-    return g;
-  });
-  return mergeGeometries(shells);
+// A crown is four nested shells of a shape, textured with leaf clusters. Up close the outer three
+// are cut out between the leaves (alpha test, so nothing needs sorting) and the innermost is
+// opaque with dark gaps, so you see into the crown. Farther away a crown draws in stages: at each
+// step its innermost shell drops and the next one out turns opaque, until only an opaque outer
+// shell is left. Opaque shells have no cutout in their shader, so the last stage costs what a
+// solid crown would. `repeat` sets how many leaf tiles go round and up the outer shell; `lift`
+// raises each smaller shell to keep it centered.
+const SHELLS = [1, 0.8, 0.6, 0.42];
+const HOLE = 0.22; // how bright an opaque shell's gaps are, against its leaves
+
+function shell(shape, n, { repeat: [ru, rv], lift = 0 }) {
+  const s = SHELLS[n];
+  const g = shape.clone().scale(s, s, s).rotateY(n * 1.7).translate(0, lift * (1 - s), 0);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ru * (0.6 + 0.4 * s), uv.getY(i) * rv * (0.6 + 0.4 * s));
+  return g;
 }
-const core = (shape, lift = 0) => shape.clone().scale(0.42, 0.42, 0.42).translate(0, lift * 0.58, 0);
 
 const bark = new THREE.MeshLambertMaterial({ color: 0x5a4430 });
 const deadBark = new THREE.MeshLambertMaterial({ color: 0x6e6458 });
-// Crowns near the focus (scene x, z) are cutout shells; past `range` feet they're drawn solid,
-// which is far cheaper. Each crown has both meshes, and each draws only its own side of the range.
-const sight = { focus: { value: new THREE.Vector2() }, range: { value: 1e9 } };
 
-export function setTreeSight(x, z, rangeFt) {
+// Each crown's stage comes from its distance to the focus (scene x, z): one step past each of
+// `stages` (feet), taken gradually across a band `band` feet wide, so it's a number like 1.4
+// partway through. `solid` puts every crown in the last stage, for slower machines.
+const sight = {
+  focus: { value: new THREE.Vector2() },
+  stages: { value: new THREE.Vector3(1e9, 1e9, 1e9) },
+  band: { value: 40 },
+  least: { value: 0 },
+};
+
+export function setTreeSight(x, z, stages, { band = 40, solid = false } = {}) {
   sight.focus.value.set(x, z);
-  sight.range.value = Math.min(rangeFt, 1e9);
+  sight.stages.value.set(...[0, 1, 2].map((i) => Math.min(stages[i] ?? Infinity, 1e9)));
+  sight.band.value = band;
+  sight.least.value = solid ? SHELLS.length - 1 : 0;
 }
 
-function bySight(material, far) {
+// A shell's material: `cutout` or opaque, drawn for crowns at stages lo to hi. Across the band
+// either side, the shell dissolves in or out with a 4×4 dither: each pixel has a fixed threshold,
+// and a shell fading out keeps the pixels below its share while one fading in takes the ones
+// above, so a shell's cutout and opaque versions trade pixels without overlapping. Cutouts also
+// use alpha to coverage, which smooths leaf edges where the view is antialiased.
+const leafMaterials = new Map();
+function leafMaterial(cutout, lo, hi) {
+  const key = `${cutout ? "cutout" : "opaque"}${lo}-${hi}`;
+  if (leafMaterials.has(key)) return leafMaterials.get(key);
+  leafTextureOnce ??= leafTexture();
+  const material = new THREE.MeshLambertMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    map: leafTextureOnce,
+    alphaTest: cutout ? 0.5 : 0,
+    alphaToCoverage: cutout,
+  });
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.treeFocus = sight.focus;
-    shader.uniforms.treeRange = sight.range;
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 treeFocus;\nuniform float treeRange;").replace(
-      "#include <begin_vertex>",
-      `#include <begin_vertex>
-        float treeOut = step(treeRange, distance((modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz, treeFocus));
-        transformed *= ${far ? "treeOut" : "1.0 - treeOut"};`,
-    );
+    Object.assign(shader.uniforms, { treeFocus: sight.focus, treeStages: sight.stages, treeBand: sight.band, treeLeast: sight.least });
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec2 treeFocus;\nuniform vec3 treeStages;\nuniform float treeBand;\nuniform float treeLeast;\nvarying float vTreeShow;\nvarying float vTreeIn;",
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        float treeAway = distance((modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz, treeFocus);
+        vec3 treeSteps = clamp((vec3(treeAway) - treeStages) / treeBand + 0.5, 0.0, 1.0);
+        float treeStage = max(treeLeast, treeSteps.x + treeSteps.y + treeSteps.z);
+        // How much of this shell shows: rising from stage lo - 1 to lo, falling from hi to hi + 1.
+        vTreeIn = step(treeStage, ${lo.toFixed(1)});
+        vTreeShow = clamp(min(${lo === 0 ? "1.0" : `treeStage - ${(lo - 1).toFixed(1)}`}, ${(hi + 1).toFixed(1)} - treeStage), 0.0, 1.0);
+        transformed *= step(0.001, vTreeShow);`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vTreeShow;\nvarying float vTreeIn;")
+      .replace(
+        "#include <alphatest_fragment>",
+        `#include <alphatest_fragment>
+        if (vTreeShow < 0.999) {
+          const float BAYER[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+          ivec2 cell = ivec2(mod(gl_FragCoord.xy, 4.0));
+          float threshold = (BAYER[cell.y * 4 + cell.x] + 0.5) / 16.0;
+          if (vTreeIn > 0.5 ? threshold < 1.0 - vTreeShow : threshold >= vTreeShow) discard;
+        }`,
+      );
+    if (!cutout) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        diffuseColor.rgb = mix(vColor.rgb * ${HOLE.toFixed(2)}, diffuseColor.rgb, step(0.5, diffuseColor.a));
+        diffuseColor.a = 1.0;`,
+      );
+    }
   };
-  material.customProgramCacheKey = () => (far ? "treeFar" : "treeNear");
+  material.customProgramCacheKey = () => `tree-${key}`;
+  leafMaterials.set(key, material);
   return material;
 }
+let leafTextureOnce;
 
-// Leaves are seen from both sides, since you look into and up through crowns.
-let leaves;
-function leafMaterial() {
-  leaves ??= bySight(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: leafTexture(), alphaTest: 0.5 }), false);
-  return leaves;
+// A crown's parts: each shell (0 outer) cut out while the stage is at most 2 - n, and opaque at
+// stage 3 - n. The innermost shell is never cut out.
+function crownParts(shape, opts, color, at) {
+  const last = SHELLS.length - 1;
+  return SHELLS.flatMap((_, n) => {
+    const geometry = () => shell(shape, n, opts);
+    const parts = [{ geometry, material: () => leafMaterial(false, last - n, last - n), color, at }];
+    if (n < last) parts.push({ geometry, material: () => leafMaterial(true, 0, last - 1 - n), color, at });
+    return parts;
+  });
 }
-const solidLeaves = bySight(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide }), true);
-const shade = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tilt = (angle, spin) =>
@@ -84,8 +145,7 @@ const KINDS = {
     clear: 0.36,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t, b + h * 0.26, t]] },
-      { geometry: () => crown(blob, { repeat: [7, 4] }), far: blob, material: leafMaterial, color: 0x4a7a36, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
-      { geometry: () => core(blob), material: () => shade, color: 0x1f3a18, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
+      ...crownParts(blob, { repeat: [7, 4] }, 0x4a7a36, (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]]),
     ],
   },
   pine: {
@@ -93,8 +153,7 @@ const KINDS = {
     clear: 0.18,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 0.8, b + h * 0.32, t * 0.8]] },
-      { geometry: () => crown(cone, { repeat: [6, 7], lift: 0.25 }), far: cone, material: leafMaterial, color: 0x356146, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
-      { geometry: () => core(cone, 0.25), material: () => shade, color: 0x16301f, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
+      ...crownParts(cone, { repeat: [6, 7], lift: 0.25 }, 0x356146, (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]]),
     ],
   },
   willow: {
@@ -102,7 +161,7 @@ const KINDS = {
     clear: 0.3,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 1.2, b + h * 0.4, t * 1.2]] },
-      { geometry: () => crown(bowl, { repeat: [9, 3], lift: 0.3 }), far: bowl, material: leafMaterial, color: 0x7a9a4c, at: (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]] },
+      ...crownParts(bowl, { repeat: [9, 3], lift: 0.3 }, 0x7a9a4c, (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]]),
     ],
   },
   dead: {
@@ -130,10 +189,8 @@ export function treeMeshes(trees) {
   const color = new THREE.Color();
   for (const [kind, list] of byKind) {
     const { height, clear = 0, parts } = KINDS[kind];
-    // Crowns with a solid stand-in get it as one more part, with the same place and color.
-    const all = parts.flatMap((part) => (part.far ? [part, { ...part, geometry: part.far, material: solidLeaves }] : [part]));
-    for (const part of all) {
-      const mesh = new THREE.InstancedMesh(built(part.geometry), typeof part.material === "function" ? part.material() : part.material, list.length);
+    for (const part of parts) {
+      const mesh = new THREE.InstancedMesh(built(part), typeof part.material === "function" ? part.material() : part.material, list.length);
       list.forEach(({ x, z, ground, size }, n) => {
         const r = random(x, z);
         const s = SIZES[size];
@@ -152,16 +209,15 @@ export function treeMeshes(trees) {
   return meshes;
 }
 
-// Crown geometries are built on first use and kept.
+// Crown geometries are built on first use and kept, shared by a shell's cutout and opaque parts.
 const builtGeometries = new Map();
-function built(geometry) {
+function built({ geometry }) {
   if (typeof geometry !== "function") return geometry;
   if (!builtGeometries.has(geometry)) builtGeometries.set(geometry, geometry());
   return builtGeometries.get(geometry);
 }
 
-// Clusters of leaves, white on clear so instance colors tint them, covering a bit over half the
-// tile. It wraps, so clusters carry across tile edges.
+// Clusters of leaves, white on clear so instance colors tint them, covering most of the tile. It wraps, so clusters carry across tile edges.
 function leafTexture() {
   const SIZE = 256;
   const canvas = document.createElement("canvas");
@@ -173,17 +229,17 @@ function leafTexture() {
     seed = (seed * 9301 + 49297) % 233280;
     return seed / 233280;
   };
-  for (let cluster = 0; cluster < 26; cluster++) {
+  for (let cluster = 0; cluster < 44; cluster++) {
     const [cx, cy] = [rand() * SIZE, rand() * SIZE];
-    for (let leaf = 0; leaf < 14; leaf++) {
+    for (let leaf = 0; leaf < 18; leaf++) {
       const a = rand() * Math.PI * 2;
-      const d = rand() * 22;
+      const d = rand() * 24;
       const v = 150 + Math.floor(rand() * 105);
       const turn = rand() * Math.PI;
       ctx.fillStyle = `rgb(${v},${v},${v})`;
       for (const [ox, oy] of [[0, 0], [SIZE, 0], [-SIZE, 0], [0, SIZE], [0, -SIZE]]) {
         ctx.beginPath();
-        ctx.ellipse(cx + Math.cos(a) * d + ox, cy + Math.sin(a) * d + oy, 9, 4, turn, 0, Math.PI * 2);
+        ctx.ellipse(cx + Math.cos(a) * d + ox, cy + Math.sin(a) * d + oy, 11, 5, turn, 0, Math.PI * 2);
         ctx.fill();
       }
     }

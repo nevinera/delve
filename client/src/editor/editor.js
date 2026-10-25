@@ -436,6 +436,11 @@ export class Editor {
       else this.view3d.startWalk(() => this.renderPanel());
       this.renderPanel();
     });
+    this.el.solidCanopies.addEventListener("change", (e) => {
+      e.currentTarget.blur();
+      this.view3d.solidCanopies = e.currentTarget.checked;
+      this.view3d.render();
+    });
     for (const kind of TREE_KINDS) this.el.treeKind.add(new Option(kind, kind));
 
     continent.addEventListener("change", () => {
@@ -547,6 +552,7 @@ export class Editor {
     }
     hint.textContent = this.view3d?.walking ? HINT_WALK : this.showing3d ? HINT_3D : HINTS[this.mode()];
     this.el.walk.hidden = !this.showing3d;
+    this.el.solidCanopiesLabel.hidden = !this.showing3d;
     this.el.walk.textContent = this.view3d?.walking ? "stop walking" : "walk";
     this.el.walk.classList.toggle("active", Boolean(this.view3d?.walking));
   }
