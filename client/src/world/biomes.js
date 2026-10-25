@@ -49,7 +49,13 @@ const TAGS = {
 export const BIOME_TAGS = Object.keys(TAGS);
 const BLEND_FT = 300; // borders blend over about twice this
 
-const WARP = { amp: 1000, wavelength: 2600 };
+// Each cell's position is pushed around by layers of noise before finding its pin: a big slow
+// wander, so borders curve, and a small quick wobble, so they're ragged. (fbm rarely strays past
+// ±0.5, so the amplitudes are about twice the usual push.)
+const WARP = [
+  { amp: 2500, wavelength: 3000, octaves: 3 },
+  { amp: 300, wavelength: 350, octaves: 2 },
+];
 const PENALTY = { river: 1500, edge: 700, cap: 3000 };
 
 // pins: [{ x, z, biome, tags }]; rivers: [[[x, z], ...], ...] point lists; edges: zone edges as
@@ -58,7 +64,7 @@ export function prepareBiomes({ pins, rivers, edges, seed }, { warp = true } = {
   const known = pins.filter((p) => BIOMES.includes(p.biome));
   return {
     seed,
-    warp: warp ? WARP.amp : 0,
+    warp,
     pins: known.map((p) => {
       const gap = Math.min(...known.filter((q) => q !== p).map((q) => Math.hypot(q.x - p.x, q.z - p.z)));
       const tags = p.tags ?? [];
@@ -128,8 +134,14 @@ export function biomeAt(b, x, z) {
     if (Math.hypot(p.x - x, p.z - z) < p.margin) return { biome: p.biome, gap: Infinity, pin: p };
   }
 
-  const wx = b.warp ? x + fbm(x, z, b.seed ^ 0x2b1e5a, { wavelength: WARP.wavelength }) * b.warp : x;
-  const wz = b.warp ? z + fbm(x, z, b.seed ^ 0x6c3d91, { wavelength: WARP.wavelength }) * b.warp : z;
+  let wx = x;
+  let wz = z;
+  if (b.warp) {
+    for (const [n, { amp, wavelength, octaves }] of WARP.entries()) {
+      wx += fbm(x, z, b.seed ^ (0x2b1e5a + n), { wavelength, octaves }) * amp;
+      wz += fbm(x, z, b.seed ^ (0x6c3d91 + n), { wavelength, octaves }) * amp;
+    }
+  }
   const raw = pins.map((p) => Math.hypot(p.x - wx, p.z - wz));
   const least = Math.min(...raw);
 

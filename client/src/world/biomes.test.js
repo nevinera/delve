@@ -54,9 +54,17 @@ describe("biomes", () => {
 
   it("wanders with the warp, but never within a tile of a pin", () => {
     const b = plain({}, {});
-    const sides = new Set();
-    for (let z = -3000; z <= 3000; z += 250) sides.add(at(b, 2000, z));
-    expect(sides.size).toBe(2);
-    for (let a = 0; a < 6.28; a += 0.3) expect(at(b, Math.cos(a) * 500, Math.sin(a) * 500)).toBe("forest");
+    // Where the border crosses each east-west line between the pins.
+    const crossings = [];
+    for (let z = -3000; z <= 3000; z += 250) {
+      let x = 0;
+      while (x < 4000 && at(b, x, z) === "forest") x += 25;
+      crossings.push(x);
+    }
+    expect(Math.max(...crossings) - Math.min(...crossings)).toBeGreaterThan(500);
+    for (let a = 0; a < 6.28; a += 0.3) {
+      expect(at(b, Math.cos(a) * 500, Math.sin(a) * 500)).toBe("forest");
+      expect(at(b, 4000 + Math.cos(a) * 500, Math.sin(a) * 500)).toBe("swamp");
+    }
   });
 });
