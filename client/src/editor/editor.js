@@ -1,5 +1,6 @@
 import { FEATURE_HINTS, FEATURE_TOOLS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
+import { Thumbnails, surfaceTiles } from "./thumbnails.js";
 import {
   cornerCount,
   labelPoint,
@@ -11,7 +12,7 @@ import {
   subtractZones,
   tilesTouched,
 } from "./region.js";
-import { createZone, listZones, removeZone, saveZone } from "./zones.js";
+import { createZone, listZones, olderZones, removeZone, saveZone } from "./zones.js";
 
 const HIT_PX = 8;
 const COLORS = {
@@ -46,16 +47,60 @@ export class Editor {
 
     this.map = new MapView(elements.map, {
       onPointer: ([x, z]) => (elements.cursor.textContent = `tile ${Math.floor(x)}, ${Math.floor(z)}`),
+      drawBase: (ctx, map) => this.drawThumbnails(ctx, map),
       draw: (ctx, map) => this.draw(ctx, map),
       tool: () => this.tool(),
     });
 
+    this.thumbnails = new Thumbnails(() => this.map.render());
     this.bindPanel();
+    this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
     window.addEventListener("beforeunload", (e) => {
       if (this.dirty) e.preventDefault();
     });
+    this.showContinent();
+  }
+
+  // Swaps in a different world, such as an uploaded one.
+  setWorld(world) {
+    this.world = world;
+    this.continent = world.info.continents[0]?.key;
+    this.active = null;
+    this.drawing = null;
+    this.features.stroke = null;
+    this.features.select(null);
+    this.dirty = false;
+    this.fillContinents();
+    this.showContinent();
+  }
+
+  // Loads the current continent's thumbnails and zones, and frames them.
+  showContinent() {
+    this.thumbnails.load(this.world, this.continent);
     this.reload();
+    const older = olderZones(this.world, this.continent);
+    this.say(older.length ? `Skipped zones in an older format: ${older.join(", ")}.` : "");
+    this.fitContinent();
+  }
+
+  fillContinents() {
+    const select = this.el.continent;
+    select.innerHTML = "";
+    for (const c of this.world.info.continents) select.add(new Option(c.name, c.key));
+    select.value = this.continent;
+  }
+
+  // Frames the continent's tiles and zones.
+  fitContinent() {
+    const points = [
+      ...surfaceTiles(this.world, this.continent).flatMap(({ tx, tz }) => [[tx, tz], [tx + 1, tz + 1]]),
+      ...this.zones.flatMap((z) => rings(z.region).flatMap((r) => r.points)),
+    ];
+    if (!points.length) return;
+    const xs = points.map((p) => p[0]);
+    const zs = points.map((p) => p[1]);
+    this.map.fit([Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)]);
   }
 
   get activeZone() {
@@ -141,13 +186,11 @@ export class Editor {
       tools.append(b);
     }
 
-    continent.innerHTML = "";
-    for (const c of this.world.info.continents) continent.add(new Option(c.name, c.key));
     continent.addEventListener("change", () => {
       this.continent = continent.value;
       this.active = null;
       this.drawing = null;
-      this.reload();
+      this.showContinent();
     });
 
     newZone.addEventListener("click", () => {
@@ -358,6 +401,22 @@ export class Editor {
   }
 
   // --- drawing ---
+
+  drawThumbnails(ctx, map) {
+    if (!this.thumbnails.size) return;
+    const [x0, z0] = map.toTile(0, 0);
+    const [x1, z1] = map.toTile(map.canvas.width, map.canvas.height);
+    ctx.imageSmoothingEnabled = map.view.scale < 64;
+    for (let tx = Math.floor(x0); tx <= x1; tx++) {
+      for (let tz = Math.floor(z0); tz <= z1; tz++) {
+        const image = this.thumbnails.get(tx, tz);
+        if (!image) continue;
+        const [sx, sy] = map.toScreen([tx, tz]);
+        // A hair of overlap hides seams between neighbouring thumbnails.
+        ctx.drawImage(image, sx, sy, map.view.scale + 0.5, map.view.scale + 0.5);
+      }
+    }
+  }
 
   draw(ctx, map) {
     const dpr = map.dpr;

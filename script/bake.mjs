@@ -11,8 +11,9 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { CELLS } from "../client/src/world/constants.js";
-import { TERRAIN, generateTile, prepareZone } from "../client/src/world/generator.js";
+import { generateTile, prepareZone } from "../client/src/world/generator.js";
 import { encodeTile } from "../client/src/world/tileCodec.js";
+import { tileRgba } from "../client/src/world/tileImage.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -94,38 +95,17 @@ function drawOverview(tiles) {
   const height = (Math.max(...coords.map((c) => c[1])) - minZ + 1) * CELLS;
   const rgb = Buffer.alloc(width * height * 3, 24);
 
-  const colors = {
-    grass: [96, 140, 70],
-    dirt: [140, 112, 80],
-    sand: [210, 196, 150],
-    rock: [130, 126, 120],
-    path: [176, 150, 110],
-    shore: [150, 150, 110],
-    mud: [100, 88, 70],
-  };
-  const forest = [40, 80, 40];
-
   for (const tile of tiles.values()) {
-    const { height: h, water, terrain, forest: trees } = tile.layers;
-    const at = (i, j) => h[Math.max(0, Math.min(CELLS - 1, j)) * CELLS + Math.max(0, Math.min(CELLS - 1, i))];
+    const rgba = tileRgba(tile);
     for (let j = 0; j < CELLS; j++) {
       for (let i = 0; i < CELLS; i++) {
-        const k = j * CELLS + i;
-        // Light from the north-west, exaggerated so gentle coastal slopes still show.
-        const dx = (at(i + 1, j) - at(i - 1, j)) / 16;
-        const dz = (at(i, j + 1) - at(i, j - 1)) / 16;
-        const shade = Math.max(0.55, Math.min(1.35, 1 - (dx + dz) * 2.5));
-        let c = colors[TERRAIN[terrain[k]]];
-        const f = trees[k] / 255;
-        c = c.map((v, n) => v + (forest[n] - v) * f * 0.8);
-        if (!Number.isNaN(water[k])) {
-          const depth = Math.min(1, (water[k] - h[k]) / 20);
-          c = [60 - depth * 30, 110 - depth * 40, 170 - depth * 30];
-        }
         const px = (tile.coords[0] - minX) * CELLS + i;
         const pz = (tile.coords[1] - minZ) * CELLS + j;
         const o = (pz * width + px) * 3;
-        for (let n = 0; n < 3; n++) rgb[o + n] = Math.max(0, Math.min(255, Math.round(c[n] * shade)));
+        const k = (j * CELLS + i) * 4;
+        rgb[o] = rgba[k];
+        rgb[o + 1] = rgba[k + 1];
+        rgb[o + 2] = rgba[k + 2];
       }
     }
   }

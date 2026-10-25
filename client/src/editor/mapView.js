@@ -3,7 +3,8 @@
 //
 // The current tool gets left-button presses first: tool.down(tile, event) returns true to take
 // the drag, and then receives move(tile, event) and up(tile, event). Unclaimed left drags, right
-// and middle drags, and space-drags pan. draw(ctx, mapView) paints on top of the grid.
+// and middle drags, and space-drags pan. drawBase(ctx, mapView) paints under the grid and
+// draw(ctx, mapView) on top of it.
 
 const OCEAN = "#1d3a52";
 const GRID = "rgba(255, 255, 255, 0.08)";
@@ -13,17 +14,27 @@ const MIN_SCALE = 2;
 const MAX_SCALE = 1600;
 
 export class MapView {
-  constructor(canvas, { onPointer, draw, tool } = {}) {
+  constructor(canvas, { onPointer, drawBase, draw, tool } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.view = { x: 0, z: 0, scale: 24 }; // tile at the canvas center, pixels per tile
     this.onPointer = onPointer;
+    this.drawBase = drawBase;
     this.draw = draw;
     this.tool = tool;
     this.drag = null;
     this.spaceHeld = false;
     this.listen();
     new ResizeObserver(() => this.resize()).observe(canvas);
+  }
+
+  // Centers the view on a box of tiles and zooms to fit it.
+  fit([x0, z0, x1, z1]) {
+    this.view.x = (x0 + x1) / 2;
+    this.view.z = (z0 + z1) / 2;
+    const scale = Math.min(this.canvas.width / (x1 - x0 + 2), this.canvas.height / (z1 - z0 + 2));
+    this.view.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+    this.render();
   }
 
   toScreen([x, z]) {
@@ -45,6 +56,7 @@ export class MapView {
     const { ctx, canvas } = this;
     ctx.fillStyle = OCEAN;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    this.drawBase?.(ctx, this);
     this.drawGrid();
     this.draw?.(ctx, this);
   }

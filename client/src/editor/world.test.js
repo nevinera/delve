@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { strToU8, unzipSync } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { World } from "./world.js";
 
 describe("World", () => {
@@ -22,5 +22,21 @@ describe("World", () => {
     const loaded = World.fromZip(world.toZip());
     expect(loaded.info.name).toBe("New world");
     expect(new TextDecoder().decode(loaded.files.get("notes/readme.txt"))).toBe("hello");
+  });
+});
+
+describe("World.fromZip", () => {
+  it("strips a single top-level folder", () => {
+    const zip = zipSync({ "core-main/world.json": strToU8('{"name":"Core","continents":[]}'), "core-main/a.txt": strToU8("a") });
+    expect([...World.fromZip(zip).files.keys()].sort()).toEqual(["a.txt", "world.json"]);
+  });
+
+  it("makes a world.json from the continents it finds", () => {
+    const zip = zipSync({ "places/continents/cartaxia/index.json": strToU8("{}") });
+    expect(World.fromZip(zip).info.continents).toEqual([{ key: "cartaxia", name: "Cartaxia" }]);
+  });
+
+  it("rejects a zip that isn't a world", () => {
+    expect(() => World.fromZip(zipSync({ "notes.txt": strToU8("hi") }))).toThrow(/no world.json/);
   });
 });

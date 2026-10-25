@@ -8,13 +8,29 @@ export function zonePath(continent, key) {
   return `places/continents/${continent}/zones/${key}.json`;
 }
 
+// The continent's zones in the current format, by key. Older zone files are left alone; see
+// olderZones.
 export function listZones(world, continent) {
+  return zoneFiles(world, continent)
+    .filter((zone) => zone.version === ZONE_VERSION)
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// Keys of zone files from before regions (format 1), which the editor can't show or edit.
+export function olderZones(world, continent) {
+  return zoneFiles(world, continent)
+    .filter((zone) => zone.version !== ZONE_VERSION)
+    .map((zone) => zone.key)
+    .sort();
+}
+
+function zoneFiles(world, continent) {
   const zones = [];
   for (const path of world.files.keys()) {
     const match = path.match(ZONE_PATH);
     if (match && match[1] === continent) zones.push({ key: match[2], ...world.readJson(path) });
   }
-  return zones.sort((a, b) => a.key.localeCompare(b.key));
+  return zones;
 }
 
 export function createZone(world, continent, name) {
