@@ -1,4 +1,5 @@
 import "./editor.css";
+import { updateIndexes } from "./continentIndex.js";
 import { Editor } from "./editor.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
@@ -26,6 +27,7 @@ const editor = new Editor(World.empty(), {
 });
 
 $("download").addEventListener("click", () => {
+  updateIndexes(editor.world);
   const blob = new Blob([editor.world.toZip()], { type: "application/zip" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
