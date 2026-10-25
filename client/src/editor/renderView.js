@@ -7,7 +7,7 @@ import { findTrees } from "../world/trees.js";
 import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
-import { treeMeshes } from "./treeMeshes.js";
+import { setTreeSight, treeMeshes } from "./treeMeshes.js";
 import { clutterMeshes, setClutterFocus } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
@@ -17,9 +17,9 @@ import { groundMaterial } from "./groundMaterial.js";
 
 const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
-// `fogEndFt`, the 7×7 tiles around you (`tiles` either side), and objects out to `smallFt`, or
-// `largeFt` for large ones.
-export const SIGHT = { fogStartFt: 350, fogEndFt: 1400, tiles: 3, smallFt: 500, largeFt: 1000 };
+// `fogEndFt`, the 7×7 tiles around you (`tiles` either side), objects out to `smallFt` (or
+// `largeFt` for large ones), and tree crowns drawn solid past `canopyFt`.
+export const SIGHT = { fogStartFt: 350, fogEndFt: 1400, tiles: 3, smallFt: 500, largeFt: 1000, canopyFt: 450 };
 const ORBIT_FOG = [6000, 30000];
 const SEA = 0x1d4a6a;
 const SKY = 0x9db8cc;
@@ -129,12 +129,14 @@ export class RenderView {
     if (!this.origin) return;
     if (!walking) {
       setObjectSight(0, 0, Infinity, Infinity);
+      setTreeSight(0, 0, Infinity);
       if (this.sightTile !== null) for (const child of this.content.children) child.visible = true;
       this.sightTile = null;
       return;
     }
     const { pos } = this.walker;
     setObjectSight(pos.x, pos.z, SIGHT.smallFt, SIGHT.largeFt);
+    setTreeSight(pos.x, pos.z, SIGHT.canopyFt);
     const [tx, tz] = [Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT)];
     const key = `${tx},${tz}`;
     if (key === this.sightTile) return;

@@ -38,12 +38,37 @@ const core = (shape, lift = 0) => shape.clone().scale(0.42, 0.42, 0.42).translat
 
 const bark = new THREE.MeshLambertMaterial({ color: 0x5a4430 });
 const deadBark = new THREE.MeshLambertMaterial({ color: 0x6e6458 });
+// Crowns near the focus (scene x, z) are cutout shells; past `range` feet they're drawn solid,
+// which is far cheaper. Each crown has both meshes, and each draws only its own side of the range.
+const sight = { focus: { value: new THREE.Vector2() }, range: { value: 1e9 } };
+
+export function setTreeSight(x, z, rangeFt) {
+  sight.focus.value.set(x, z);
+  sight.range.value = Math.min(rangeFt, 1e9);
+}
+
+function bySight(material, far) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.treeFocus = sight.focus;
+    shader.uniforms.treeRange = sight.range;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 treeFocus;\nuniform float treeRange;").replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>
+        float treeOut = step(treeRange, distance((modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz, treeFocus));
+        transformed *= ${far ? "treeOut" : "1.0 - treeOut"};`,
+    );
+  };
+  material.customProgramCacheKey = () => (far ? "treeFar" : "treeNear");
+  return material;
+}
+
 // Leaves are seen from both sides, since you look into and up through crowns.
 let leaves;
 function leafMaterial() {
-  leaves ??= new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: leafTexture(), alphaTest: 0.5 });
+  leaves ??= bySight(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: leafTexture(), alphaTest: 0.5 }), false);
   return leaves;
 }
+const solidLeaves = bySight(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide }), true);
 const shade = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -59,7 +84,7 @@ const KINDS = {
     clear: 0.36,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t, b + h * 0.26, t]] },
-      { geometry: () => crown(blob, { repeat: [7, 4] }), material: leafMaterial, color: 0x4a7a36, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
+      { geometry: () => crown(blob, { repeat: [7, 4] }), far: blob, material: leafMaterial, color: 0x4a7a36, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
       { geometry: () => core(blob), material: () => shade, color: 0x1f3a18, at: (h, c, t, r, b) => [b + h * 0.32, null, [c, h * 0.32, c]] },
     ],
   },
@@ -68,7 +93,7 @@ const KINDS = {
     clear: 0.18,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 0.8, b + h * 0.32, t * 0.8]] },
-      { geometry: () => crown(cone, { repeat: [6, 7], lift: 0.25 }), material: leafMaterial, color: 0x356146, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
+      { geometry: () => crown(cone, { repeat: [6, 7], lift: 0.25 }), far: cone, material: leafMaterial, color: 0x356146, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
       { geometry: () => core(cone, 0.25), material: () => shade, color: 0x16301f, at: (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]] },
     ],
   },
@@ -77,7 +102,7 @@ const KINDS = {
     clear: 0.3,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 1.2, b + h * 0.4, t * 1.2]] },
-      { geometry: () => crown(bowl, { repeat: [9, 3], lift: 0.3 }), material: leafMaterial, color: 0x7a9a4c, at: (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]] },
+      { geometry: () => crown(bowl, { repeat: [9, 3], lift: 0.3 }), far: bowl, material: leafMaterial, color: 0x7a9a4c, at: (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]] },
     ],
   },
   dead: {
@@ -105,7 +130,9 @@ export function treeMeshes(trees) {
   const color = new THREE.Color();
   for (const [kind, list] of byKind) {
     const { height, clear = 0, parts } = KINDS[kind];
-    for (const part of parts) {
+    // Crowns with a solid stand-in get it as one more part, with the same place and color.
+    const all = parts.flatMap((part) => (part.far ? [part, { ...part, geometry: part.far, material: solidLeaves }] : [part]));
+    for (const part of all) {
       const mesh = new THREE.InstancedMesh(built(part.geometry), typeof part.material === "function" ? part.material() : part.material, list.length);
       list.forEach(({ x, z, ground, size }, n) => {
         const r = random(x, z);
