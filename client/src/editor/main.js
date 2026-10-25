@@ -13,6 +13,7 @@ const editor = new Editor(World.empty(), {
   scene: $("scene"),
   showPins: $("showPins"),
   sceneTip: $("sceneTip"),
+  walk: $("walk"),
   cursor: $("cursor"),
   continent: $("continent"),
   zoneList: $("zoneList"),

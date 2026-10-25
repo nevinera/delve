@@ -8,6 +8,7 @@ import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
+import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
 
 const RING_TILES = 2; // tiles drawn in full around the active zone's editable tiles
@@ -99,8 +100,32 @@ export class RenderView {
     this.renderer.render(this.scene, this.camera);
   }
 
+  // Walk mode (walker.js): a character dropped where the camera looks. onStop runs when it ends,
+  // however it ends.
+  startWalk(onStop) {
+    this.walker ??= new Walker(this, {
+      onStop: () => {
+        this.controls.enabled = true;
+        this.walkStopped?.();
+      },
+    });
+    this.walkStopped = onStop;
+    this.controls.enabled = false;
+    this.hover(null);
+    this.walker.start([this.controls.target.x, this.controls.target.z]);
+  }
+
+  stopWalk() {
+    this.walker?.stop();
+  }
+
+  get walking() {
+    return Boolean(this.walker?.active);
+  }
+
   // Rebuilds everything from the world. `keepCamera` leaves the view where it is.
   show(state, { keepCamera = false } = {}) {
+    if (!keepCamera) this.stopWalk();
     const { world, continent, active, thumbnails } = state;
     this.clear();
     const editable = active ? tilesTouched(active.region) : [];
@@ -308,7 +333,7 @@ export class RenderView {
   }
 
   onDown(e) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || this.walking) return;
     const hit = this.pick(e);
     this.press = { x: e.clientX, y: e.clientY, hit };
     const took = hit ? this.handlers.grab?.(hit) : this.handlers.press?.(this.tileAt(e), e);
@@ -321,6 +346,7 @@ export class RenderView {
   }
 
   onMove(e) {
+    if (this.walking) return;
     if (this.dragging) {
       const tile = this.tileAt(e);
       if (tile) this.handlers.drag?.(tile, e);
@@ -330,6 +356,7 @@ export class RenderView {
   }
 
   onUp(e) {
+    if (this.walking) return;
     const press = this.press;
     this.press = null;
     if (this.dragging) {

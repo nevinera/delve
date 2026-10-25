@@ -38,6 +38,7 @@ const HINTS = {
   ...FEATURE_HINTS,
   tree: "click or drag to plant trees on the zone's generated tiles · hold alt to remove them · regenerating a tile clears its trees",
 };
+const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_3D = "drag to orbit · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E to turn · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
 const TREE_TOOLS = TREE_SIZES.map((size) => `tree_${size}`);
 const treeToolSize = (name) => Number(/^tree_(\d)$/.exec(name)?.[1] ?? 0);
@@ -89,7 +90,11 @@ export class Editor {
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
-    keyNav((dt, move) => (this.showing3d ? this.view3d?.nudge(dt, move) : this.map.nudge(dt, move)));
+    keyNav((dt, move) => {
+      if (this.view3d?.walking) return;
+      if (this.showing3d) this.view3d?.nudge(dt, move);
+      else this.map.nudge(dt, move);
+    });
     window.addEventListener("beforeunload", (e) => {
       if (this.dirty) e.preventDefault();
     });
@@ -201,6 +206,7 @@ export class Editor {
   // Shows the map as cells, terrain or 3D. three.js loads the first time 3D is shown.
   async setView(view) {
     this.view = view;
+    if (view !== "3d") this.view3d?.stopWalk();
     this.showing3d = view === "3d";
     if (this.showing3d && !this.view3d) {
       const { RenderView } = await import("./renderView.js");
@@ -414,6 +420,12 @@ export class Editor {
     }
     for (const b of this.el.stepTabs.children) b.addEventListener("click", () => this.setStep(b.dataset.step));
     for (const b of this.el.viewTabs.children) b.addEventListener("click", () => this.setView(b.dataset.view));
+    this.el.walk.addEventListener("click", (e) => {
+      e.currentTarget.blur(); // so space jumps instead of pressing the button again
+      if (this.view3d.walking) this.view3d.stopWalk();
+      else this.view3d.startWalk(() => this.renderPanel());
+      this.renderPanel();
+    });
     for (const kind of TREE_KINDS) this.el.treeKind.add(new Option(kind, kind));
 
     continent.addEventListener("change", () => {
@@ -523,7 +535,10 @@ export class Editor {
       b.classList.toggle("active", b.dataset.tool === this.toolName);
       b.disabled = !this.scopeZones().length;
     }
-    hint.textContent = this.showing3d ? HINT_3D : HINTS[this.mode()];
+    hint.textContent = this.view3d?.walking ? HINT_WALK : this.showing3d ? HINT_3D : HINTS[this.mode()];
+    this.el.walk.hidden = !this.showing3d;
+    this.el.walk.textContent = this.view3d?.walking ? "stop walking" : "walk";
+    this.el.walk.classList.toggle("active", Boolean(this.view3d?.walking));
   }
 
   // The changed tiles you can regenerate now.
