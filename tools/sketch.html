@@ -81,6 +81,7 @@
       <h2>Tool</h2>
       <div class="row" id="tools"></div>
       <div class="row" style="margin-top: 6px">
+        <button id="fillBtn">fill enclosed</button>
         <label><input type="checkbox" id="showLevels"> level gradient</label>
       </div>
     </section>
@@ -124,7 +125,7 @@ const PIN_KINDS = {
 const TOOLS = ["select", "outline", ...Object.keys(STROKE_KINDS), ...Object.keys(PIN_KINDS)]
 const HINTS = {
   select: "click to select · drag points and pins · alt-click a stroke point to remove it · delete removes the selection",
-  outline: "click or drag to add tiles · shift to remove",
+  outline: "click or drag to add tiles · shift to remove · draw a border, then fill enclosed",
   stroke: "click to add points · enter or double-click to finish · esc to cancel",
   pin: "click to place · click a pin to select or drag it",
 }
@@ -415,6 +416,35 @@ function setTile(x, z, on) {
   if (!on && i >= 0) zone.tiles.splice(i, 1)
 }
 
+// Adds every tile the outline encloses: a flood from just outside the bounding box marks what's
+// outside, and everything else becomes part of the zone.
+function fillEnclosed() {
+  if (zone.tiles.length === 0) return 0
+  const key = (x, z) => `${x},${z}`
+  const inZone = new Set(zone.tiles.map(([x, z]) => key(x, z)))
+  const xs = zone.tiles.map((t) => t[0])
+  const zs = zone.tiles.map((t) => t[1])
+  const [x0, x1, z0, z1] = [Math.min(...xs) - 1, Math.max(...xs) + 1, Math.min(...zs) - 1, Math.max(...zs) + 1]
+  const outside = new Set()
+  const stack = [[x0, z0]]
+  while (stack.length) {
+    const [x, z] = stack.pop()
+    if (x < x0 || x > x1 || z < z0 || z > z1 || outside.has(key(x, z)) || inZone.has(key(x, z))) continue
+    outside.add(key(x, z))
+    stack.push([x + 1, z], [x - 1, z], [x, z + 1], [x, z - 1])
+  }
+  let added = 0
+  for (let x = x0; x <= x1; x++) {
+    for (let z = z0; z <= z1; z++) {
+      if (inZone.has(key(x, z)) || outside.has(key(x, z))) continue
+      zone.tiles.push([x, z])
+      added++
+    }
+  }
+  zone.tiles.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  return added
+}
+
 // --- input ---
 
 canvas.addEventListener("contextmenu", (e) => e.preventDefault())
@@ -660,6 +690,11 @@ $("originZ").oninput = (e) => {
   save()
 }
 $("showLevels").onchange = render
+$("fillBtn").onclick = () => {
+  const added = fillEnclosed()
+  commit()
+  status(added ? `filled ${added} enclosed tiles` : "nothing enclosed to fill")
+}
 
 $("copyBtn").onclick = async () => {
   try {

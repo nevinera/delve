@@ -5,7 +5,8 @@
   "scripts": {
     "build": "vite build",
     "build:watch": "vite build --watch",
-    "test": "vitest"
+    "test": "vitest",
+    "bake": "node script/bake.mjs"
   },
   "dependencies": {
     "three": "^0.186.0"
