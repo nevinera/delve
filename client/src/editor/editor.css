@@ -24,7 +24,8 @@
 
 .editor button,
 .editor input,
-.editor select {
+.editor select,
+.editor textarea {
   background: #111;
   border: 1px solid #555;
   border-radius: 3px;
@@ -104,6 +105,31 @@
 .editor-row {
   display: flex;
   gap: 6px;
+}
+
+.editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.editor-subhead {
+  margin-top: 12px !important;
+}
+
+.editor-props {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-props textarea {
+  resize: vertical;
+}
+
+.editor button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .editor-empty {

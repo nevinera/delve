@@ -1,5 +1,16 @@
+import { FEATURE_HINTS, FEATURE_TOOLS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
-import { cornerCount, labelPoint, nearestEdge, resubtract, rings, snapToCell, subtractZones, tilesTouched } from "./region.js";
+import {
+  cornerCount,
+  labelPoint,
+  nearestEdge,
+  pointInRegion,
+  resubtract,
+  rings,
+  snapToCell,
+  subtractZones,
+  tilesTouched,
+} from "./region.js";
 import { createZone, listZones, removeZone, saveZone } from "./zones.js";
 
 const HIT_PX = 8;
@@ -12,9 +23,12 @@ const COLORS = {
 };
 const HINTS = {
   none: "pick a zone to edit, or make a new one · drag to pan · wheel to zoom",
+  empty: "draw the zone's region first",
   draw: "click to add corners · click the first corner or press enter to close · backspace removes the last · esc cancels · right-drag to pan",
-  edit: "drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · drag elsewhere to pan",
+  region: "drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · drag elsewhere to pan",
+  ...FEATURE_HINTS,
 };
+const TOOLS = ["region", ...FEATURE_TOOLS];
 
 // Ties the map, the side panel and the in-memory world together. One zone at a time is active and
 // editable; every other zone on the continent shows but is locked.
@@ -26,6 +40,8 @@ export class Editor {
     this.zones = [];
     this.active = null;
     this.drawing = null; // corners of a region being drawn
+    this.toolName = "select";
+    this.features = new Features(this);
     this.dirty = false;
 
     this.map = new MapView(elements.map, {
@@ -50,6 +66,7 @@ export class Editor {
     this.zones = listZones(this.world, this.continent);
     if (!this.activeZone) this.active = null;
     this.renderPanel();
+    this.renderProps();
     this.map.render();
   }
 
@@ -89,6 +106,11 @@ export class Editor {
     return snapToCell(tile);
   }
 
+  // On the region or its edge.
+  inRegion(point, zone) {
+    return pointInRegion(point, zone.region) || nearestEdge(zone.region, point).dist < 1e-9;
+  }
+
   // The zone's region with every other zone cut out of it, or null (with a message) when nothing
   // would be left or it would come apart. Zones must be contiguous.
   clip(region, zone) {
@@ -109,7 +131,16 @@ export class Editor {
   // --- panel ---
 
   bindPanel() {
-    const { continent, newZone, zoneName, drawRegion, deleteZone } = this.el;
+    const { continent, newZone, zoneName, drawRegion, deleteZone, tools } = this.el;
+    for (const name of TOOLS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.tool = name;
+      b.textContent = PINS[name]?.label ?? STROKES[name]?.label ?? name;
+      b.addEventListener("click", () => this.setTool(name));
+      tools.append(b);
+    }
+
     continent.innerHTML = "";
     for (const c of this.world.info.continents) continent.add(new Option(c.name, c.key));
     continent.addEventListener("change", () => {
@@ -168,6 +199,8 @@ export class Editor {
       button.addEventListener("click", () => {
         this.active = zone.key === this.active ? null : zone.key;
         this.drawing = null;
+        this.features.stroke = null;
+        this.features.select(null);
         this.say();
         this.renderPanel();
         this.map.render();
@@ -186,13 +219,34 @@ export class Editor {
         ? `${cornerCount(zone.region)} corners · ${tiles} editable tiles`
         : "no region yet";
       drawRegion.textContent = zone.region.length ? "redraw region" : "draw region";
+      for (const b of this.el.tools.children) {
+        b.classList.toggle("active", b.dataset.tool === this.toolName);
+        b.disabled = !zone.region.length;
+      }
     }
     hint.textContent = HINTS[this.mode()];
   }
 
+  renderProps() {
+    this.features.renderProps(this.el.props, this.activeZone);
+  }
+
   mode() {
-    if (!this.activeZone) return "none";
-    return this.drawing ? "draw" : "edit";
+    const zone = this.activeZone;
+    if (!zone) return "none";
+    if (this.drawing) return "draw";
+    if (!zone.region.length) return "empty";
+    if (PINS[this.toolName]) return "pin";
+    if (STROKES[this.toolName]) return "stroke";
+    return this.toolName;
+  }
+
+  setTool(name) {
+    this.toolName = name;
+    this.features.stroke = null;
+    this.say();
+    this.renderPanel();
+    this.map.render();
   }
 
   // --- tools ---
@@ -201,8 +255,9 @@ export class Editor {
     const zone = this.activeZone;
     if (!zone) return null;
     if (this.drawing) return this.drawTool(zone);
-    if (zone.region.length) return this.editTool(zone);
-    return null;
+    if (!zone.region.length) return null;
+    if (this.toolName === "region") return this.editTool(zone);
+    return this.features.tool(zone, this.toolName);
   }
 
   drawTool(zone) {
@@ -282,11 +337,16 @@ export class Editor {
   }
 
   onKey(e) {
-    if (e.target.matches("input, textarea, select") || !this.drawing) return;
     const zone = this.activeZone;
-    if (e.key === "Enter") this.finishDrawing(zone);
-    if (e.key === "Escape") this.drawing = null;
-    if (e.key === "Backspace") this.drawing.pop();
+    if (e.target.matches("input, textarea, select") || !zone) return;
+    if (this.drawing) {
+      if (e.key === "Enter") this.finishDrawing(zone);
+      if (e.key === "Escape") this.drawing = null;
+      if (e.key === "Backspace") this.drawing.pop();
+    } else if (!this.features.onKey(e, zone)) {
+      return;
+    }
+    e.preventDefault();
     this.renderPanel();
     this.map.render();
   }
@@ -302,7 +362,9 @@ export class Editor {
   draw(ctx, map) {
     const dpr = map.dpr;
     for (const zone of this.zones) {
-      if (zone.key !== this.active) this.drawRegion(ctx, map, zone, false);
+      if (zone.key === this.active) continue;
+      this.drawRegion(ctx, map, zone, false);
+      this.features.draw(ctx, zone, false);
     }
     const zone = this.activeZone;
     if (!zone) return;
@@ -315,6 +377,8 @@ export class Editor {
     }
     if (!this.drawing) {
       this.drawRegion(ctx, map, zone, true);
+      this.features.draw(ctx, zone, true);
+      this.features.drawInProgress(ctx);
       return;
     }
 
@@ -342,7 +406,7 @@ export class Editor {
     ctx.setLineDash(active ? [] : [6 * dpr, 4 * dpr]);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (active) all.flat().forEach((p) => handle(ctx, p, 4 * dpr, COLORS.active));
+    if (active && this.toolName === "region") all.flat().forEach((p) => handle(ctx, p, 4 * dpr, COLORS.active));
 
     const [cx, cy] = map.toScreen(labelPoint(zone.region));
     ctx.fillStyle = active ? COLORS.active : COLORS.locked;
