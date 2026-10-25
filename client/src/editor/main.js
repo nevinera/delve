@@ -59,6 +59,13 @@ $("download").addEventListener("click", () => {
   keep();
 });
 
+$("newWorld").addEventListener("click", () => {
+  if (editor.dirty && !window.confirm("Start a new world? Changes you haven't downloaded will be lost.")) return;
+  editor.setWorld(World.empty());
+  $("worldName").textContent = editor.world.info.name;
+  keep();
+});
+
 $("upload").addEventListener("click", () => {
   if (editor.dirty && !window.confirm("Replace this world? Changes you haven't downloaded will be lost.")) return;
   $("uploadFile").click();

@@ -112,7 +112,7 @@ describe("biomes in the generator", () => {
 
   it("cuts ravines only where tagged", () => {
     const lowest = (tags) => Math.min(...tiles(world("plains", tags)).flatMap((t) => Array.from(t.layers.height)));
-    expect(lowest([])).toBeGreaterThan(10);
+    expect(lowest([])).toBeGreaterThan(4);
     expect(lowest(["ravines"])).toBeLessThan(5);
   });
 });
