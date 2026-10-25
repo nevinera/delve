@@ -1,40 +1,96 @@
-// Region polygons: [[x, z], ...] in continent tile units, implicitly closed. Vertices snap to
-// cell corners, so a region's edge is exact to the cell.
+// A zone's region is a multipolygon in continent tile units: a list of polygons, each a list of
+// rings (the outline first, then any holes), each ring a list of [x, z] corners, implicitly
+// closed. Holes appear where the region surrounds another zone, and a region can come out in
+// pieces when another zone cuts across it.
+//
+// Corners snap to cell corners, so an edge drawn along the grid is exact to the cell.
 
+import polygonClipping from "polygon-clipping";
 import { CELLS } from "../world/constants.js";
+
+const EPSILON = 1e-9;
 
 export function snapToCell([x, z]) {
   return [Math.round(x * CELLS) / CELLS, Math.round(z * CELLS) / CELLS];
 }
 
-export function pointInPolygon([x, z], polygon) {
+// Every ring with its address in the region: { poly, ring, points }.
+export function rings(region) {
+  return region.flatMap((polygon, poly) => polygon.map((points, ring) => ({ poly, ring, points })));
+}
+
+export function cornerCount(region) {
+  return rings(region).reduce((sum, r) => sum + r.points.length, 0);
+}
+
+// The region drawn as `outline`, minus every other zone's region. Empty when nothing is left.
+export function subtractZones(outline, others) {
+  return resubtract([[outline]], others);
+}
+
+// Re-applies the subtraction to a region, for when a corner moved or went away. Overlapping
+// pieces merge first.
+export function resubtract(region, others) {
+  if (!region.length) return [];
+  const merged = region.length > 1 ? polygonClipping.union(...region.map((p) => [p])) : region;
+  const clips = others.filter((r) => r.length);
+  const result = clips.length ? polygonClipping.difference(merged, ...clips) : merged;
+  return result
+    .map((polygon) => polygon.map(openRing).filter((ring) => ring.length >= 3))
+    .filter((polygon) => polygon.length && Math.abs(signedArea(polygon[0])) > EPSILON);
+}
+
+// polygon-clipping repeats each ring's first corner at the end.
+function openRing(ring) {
+  const [first, last] = [ring[0], ring[ring.length - 1]];
+  return first[0] === last[0] && first[1] === last[1] ? ring.slice(0, -1) : ring;
+}
+
+export function pointInRing([x, z], ring) {
   let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, zi] = polygon[i];
-    const [xj, zj] = polygon[j];
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i];
+    const [xj, zj] = ring[j];
     if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
   }
   return inside;
 }
 
-// Every tile the region touches: the tiles that can be regenerated or edited for the zone.
-export function tilesTouched(polygon) {
-  if (polygon.length < 3) return [];
-  const xs = polygon.map((p) => p[0]);
-  const zs = polygon.map((p) => p[1]);
+export function pointInRegion(point, region) {
+  return region.some(([outline, ...holes]) => pointInRing(point, outline) && !holes.some((h) => pointInRing(point, h)));
+}
+
+// Every tile the region covers some area of: the tiles that can be regenerated or edited for the
+// zone. Touching a tile only along an edge or at a corner doesn't count.
+export function tilesTouched(region) {
+  const all = rings(region).flatMap((r) => r.points);
+  if (!all.length) return [];
+  const xs = all.map((p) => p[0]);
+  const zs = all.map((p) => p[1]);
   const tiles = [];
   for (let tx = Math.floor(Math.min(...xs)); tx < Math.ceil(Math.max(...xs)); tx++) {
     for (let tz = Math.floor(Math.min(...zs)); tz < Math.ceil(Math.max(...zs)); tz++) {
-      if (polygonTouchesSquare(polygon, tx, tz)) tiles.push([tx, tz]);
+      if (areaInSquare(region, tx, tz) > EPSILON) tiles.push([tx, tz]);
     }
   }
   return tiles;
 }
 
-// True when the polygon overlaps the unit square at (tx, tz) by some area. Touching only along an
-// edge or at a corner doesn't count. Clips the polygon to the square and measures what's left.
-function polygonTouchesSquare(polygon, tx, tz) {
-  let pts = polygon;
+// The region's area inside the unit square at (tx, tz): each outline's clipped area minus its
+// holes' clipped areas.
+function areaInSquare(region, tx, tz) {
+  let sum = 0;
+  for (const [outline, ...holes] of region) {
+    sum += Math.abs(signedArea(clipToSquare(outline, tx, tz)));
+    for (const hole of holes) sum -= Math.abs(signedArea(clipToSquare(hole, tx, tz)));
+  }
+  return sum;
+}
+
+// Sutherland-Hodgman against the square's four sides. The square is convex, so the clipped area
+// is right even for concave rings.
+function clipToSquare(ring, tx, tz) {
+  let pts = ring;
   const planes = [(p) => p[0] - tx, (p) => tx + 1 - p[0], (p) => p[1] - tz, (p) => tz + 1 - p[1]];
   for (const inside of planes) {
     const out = [];
@@ -50,60 +106,9 @@ function polygonTouchesSquare(polygon, tx, tz) {
       }
     }
     pts = out;
-    if (pts.length < 3) return false;
+    if (pts.length < 3) return [];
   }
-  return Math.abs(signedArea(pts)) > 1e-9;
-}
-
-// The index of the edge (from vertex i to i + 1) nearest a point, its distance, and the nearest
-// point on it.
-export function nearestEdge(polygon, [x, z]) {
-  let best = { index: -1, dist: Infinity, point: null };
-  for (let i = 0; i < polygon.length; i++) {
-    const [ax, az] = polygon[i];
-    const [bx, bz] = polygon[(i + 1) % polygon.length];
-    const dx = bx - ax;
-    const dz = bz - az;
-    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
-    const point = [ax + t * dx, az + t * dz];
-    const dist = Math.hypot(x - point[0], z - point[1]);
-    if (dist < best.dist) best = { index: i, dist, point };
-  }
-  return best;
-}
-
-const EPSILON = 1e-6;
-
-// True when two regions share some area. Regions may share edges and corners, including a corner
-// that sits partway along the other region's edge.
-export function overlaps(a, b) {
-  if (a.length < 3 || b.length < 3) return false;
-  for (let i = 0; i < a.length; i++) {
-    for (let j = 0; j < b.length; j++) {
-      if (segmentsCross(a[i], a[(i + 1) % a.length], b[j], b[(j + 1) % b.length])) return true;
-    }
-  }
-  // With no crossings the boundaries only touch, so the regions overlap exactly when the ground
-  // just inside one region's edge is inside the other.
-  return insideNearEdges(a, b) || insideNearEdges(b, a);
-}
-
-function insideNearEdges(a, b) {
-  // In (x, z) taken as plain math axes, a positive shoelace area means the interior is to the
-  // left of each edge, which is (-dz, dx).
-  const sign = Math.sign(signedArea(a));
-  for (let i = 0; i < a.length; i++) {
-    const [ax, az] = a[i];
-    const [bx, bz] = a[(i + 1) % a.length];
-    const len = Math.hypot(bx - ax, bz - az) || 1;
-    const nx = (-(bz - az) / len) * sign * 1e-4;
-    const nz = ((bx - ax) / len) * sign * 1e-4;
-    for (const t of [0.25, 0.5, 0.75]) {
-      const p = [ax + (bx - ax) * t + nx, az + (bz - az) * t + nz];
-      if (pointInPolygon(p, b) && nearestEdge(b, p).dist > EPSILON) return true;
-    }
-  }
-  return false;
+  return pts;
 }
 
 function signedArea(pts) {
@@ -116,11 +121,41 @@ function signedArea(pts) {
   return sum / 2;
 }
 
-// Proper crossings only: segments that touch at an end or run along each other don't count.
-function segmentsCross(a, b, c, d) {
-  const side = (p, q, r) => {
-    const v = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
-    return Math.abs(v) < EPSILON ? 0 : Math.sign(v);
-  };
-  return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+// The edge nearest a point, across every ring: its ring's address, the index of its first corner,
+// the distance, and the nearest point on it.
+export function nearestEdge(region, [x, z]) {
+  let best = { poly: -1, ring: -1, index: -1, dist: Infinity, point: null };
+  for (const { poly, ring, points } of rings(region)) {
+    for (let i = 0; i < points.length; i++) {
+      const [ax, az] = points[i];
+      const [bx, bz] = points[(i + 1) % points.length];
+      const dx = bx - ax;
+      const dz = bz - az;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+      const point = [ax + t * dx, az + t * dz];
+      const dist = Math.hypot(x - point[0], z - point[1]);
+      if (dist < best.dist) best = { poly, ring, index: i, dist, point };
+    }
+  }
+  return best;
+}
+
+// A spot well inside the region for its label: the point on a coarse grid over the region's
+// bounds that's farthest from any edge.
+export function labelPoint(region) {
+  const all = rings(region).flatMap((r) => r.points);
+  const xs = all.map((p) => p[0]);
+  const zs = all.map((p) => p[1]);
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+  const steps = 24;
+  let best = { point: all[0], dist: -1 };
+  for (let i = 0; i <= steps; i++) {
+    for (let j = 0; j <= steps; j++) {
+      const point = [x0 + ((x1 - x0) * i) / steps, z0 + ((z1 - z0) * j) / steps];
+      if (!pointInRegion(point, region)) continue;
+      const dist = nearestEdge(region, point).dist;
+      if (dist > best.dist) best = { point, dist };
+    }
+  }
+  return best.point;
 }
