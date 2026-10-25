@@ -54,7 +54,7 @@ const STEPS = {
 
 // Ties the map, the side panel and the in-memory world together. With a zone selected, only that
 // zone is editable and every other zone shows but is locked; with none selected, the whole
-// continent is, and each click edits the zone it lands in. Step tabs pick what you're
+// continent is, and each click edits the zone it lands in (3D needs a zone selected). Step tabs pick what you're
 // editing and view tabs how the map shows: cells (the grid and pins), terrain (tile thumbnails)
 // or 3D.
 export class Editor {
@@ -488,7 +488,18 @@ export class Editor {
 
     const zone = this.activeZone;
     for (const b of this.el.stepTabs.children) b.classList.toggle("active", b.dataset.step === this.step);
-    for (const b of this.el.viewTabs.children) b.classList.toggle("active", b.dataset.view === this.view);
+    // 3D draws one zone and its surroundings, so it needs a zone selected.
+    if (this.showing3d && !zone) {
+      this.setView("terrain");
+      return;
+    }
+    for (const b of this.el.viewTabs.children) {
+      b.classList.toggle("active", b.dataset.view === this.view);
+      if (b.dataset.view === "3d") {
+        b.disabled = !zone;
+        b.title = zone ? "" : "select a zone to see it in 3D";
+      }
+    }
     // Only the zones step needs a zone selected; the others edit the whole continent without one.
     const zonesStep = this.step === "zones";
     for (const section of this.el.steps) section.hidden = section.dataset.step !== this.step || (zonesStep && !zone);
