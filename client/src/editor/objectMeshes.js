@@ -68,21 +68,24 @@ const SHAPES = {
   thicket: [11, 12].map((seed) => () => mergeGeometries([0, 1, 2, 3, 4].map((b) => { const a = b * 1.3 + seed; const r = b ? 0.45 : 0; return stone(0.75, 0.75 + 0.2 * Math.sin(a * 3), 0.7, seed * 7 + b, { rough: 0.15 }).translate(Math.cos(a) * r, 0, Math.sin(a) * r); }))),
   fencePosts: () => mergeGeometries([-1.2, 0, 1.2].map((x, n) => new THREE.BoxGeometry(0.12, n === 1 ? 0.7 : 1, 0.12).translate(x, n === 1 ? 0.35 : 0.5, 0))),
   fenceRail: () => mergeGeometries([new THREE.BoxGeometry(2.6, 0.08, 0.05).translate(0, 0.8, 0), new THREE.BoxGeometry(1.4, 0.08, 0.05).rotateZ(-0.35).translate(-0.6, 0.35, 0)]),
-  log: () => log(0.05),
-  trunk: () => log(0.08),
+  log: () => log(0.1),
+  driftLog: () => log(0.07),
+  trunk: () => log(0.045),
+  // The root plate at the trunk's foot (+x end), standing on edge.
   roots: () => {
     const rand = random(13);
     const parts = [];
-    for (let r = 0; r < 9; r++) {
-      const a = (r / 9) * Math.PI * 2 + rand() * 0.4;
-      const reach = 0.12 + 0.08 * rand();
-      parts.push(cylinderBetween([0.5, 0.1, 0], [0.5 + 0.03 * rand(), 0.1 + Math.sin(a) * reach, Math.cos(a) * reach], 0.022, 0.006, 4));
+    const y = 0.04;
+    for (let r = 0; r < 11; r++) {
+      const a = (r / 11) * Math.PI * 2 + rand() * 0.4;
+      const reach = 0.07 + 0.05 * rand();
+      parts.push(cylinderBetween([0.5, y, 0], [0.5 + 0.02 * rand(), Math.max(0, y + Math.sin(a) * reach), Math.cos(a) * reach], 0.012, 0.003, 4));
     }
-    parts.push(new THREE.CylinderGeometry(0.12, 0.12, 0.04, 8).rotateZ(Math.PI / 2).translate(0.5, 0.1, 0));
+    parts.push(new THREE.CylinderGeometry(0.07, 0.07, 0.025, 8).rotateZ(Math.PI / 2).translate(0.5, y, 0));
     return mergeGeometries(parts);
   },
-  stump: [14, 15].map((seed) => () => lumpy(new THREE.CylinderGeometry(0.3, 0.38, 1, 8, 2), 0.06, seed).translate(0, 0.5, 0)),
-  hollowStump: () => lumpy(new THREE.CylinderGeometry(0.4, 0.5, 1, 9, 2, true), 0.08, 16).translate(0, 0.5, 0),
+  stump: [14, 15].map((seed) => () => lumpy(new THREE.CylinderGeometry(0.65, 0.8, 1, 9, 2), 0.06, seed).translate(0, 0.5, 0)),
+  hollowStump: () => lumpy(new THREE.CylinderGeometry(0.65, 0.8, 1, 10, 2, true), 0.08, 16).translate(0, 0.5, 0),
   mossCap: () => new THREE.SphereGeometry(0.4, 8, 3, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.45, 0.9).translate(0, 0.55, 0),
   spire: [17, 18].map((seed) => () => lumpy(new THREE.CylinderGeometry(0.04, 0.15, 1, 6, 4), 0.15, seed).translate(0, 0.5, 0)),
   rubble: [19, 20].map((seed) => () => heap(9, 0.4, 0.3, seed)),
@@ -99,8 +102,8 @@ const SHAPES = {
   hummock: () => lumpy(new THREE.SphereGeometry(1.1, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2), 0.08, 23).scale(1, 0.9, 1),
 };
 
-// Uprooted trees lie on a thicker trunk than plain logs.
-const SHAPE_FOR = { uprooted: { log: "trunk" } };
+// Driftwood is thinner than other logs.
+const SHAPE_FOR = { driftLog: { log: "driftLog" } };
 
 const geometries = new Map();
 function variants(name) {
