@@ -75,6 +75,23 @@ describe("generator", () => {
   });
 });
 
+describe("beaches", () => {
+  // A low, flat zone, 8×8 tiles, all one biome.
+  const low = (biome) =>
+    prepareWorld([{ region: [square(0, 0, 8, 8)], pins: [{ id: "h", kind: "height", at: [4, 4], height: 3 }, { id: "b", kind: "biome", at: [4, 4], biome, tags: ["flat"] }], strokes: [] }], "test");
+  const sand = (tile) => tile.layers.terrain.filter((t) => tile.palettes.terrain[t] === "sand").length;
+
+  it("puts sand on low land by the coast, but not inland", () => {
+    const ctx = low("plains");
+    expect(sand(generateTile(ctx, 0, 4))).toBeGreaterThan(50);
+    expect(sand(generateTile(ctx, 4, 4))).toBe(0);
+  });
+
+  it("gives swamps no beaches", () => {
+    expect(sand(generateTile(low("swamp"), 0, 4))).toBe(0);
+  });
+});
+
 describe("biomes in the generator", () => {
   // One flat 8×8-tile zone given over to a single biome pin.
   const world = (biome, tags = []) =>

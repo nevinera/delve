@@ -19,14 +19,14 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 5;
+export const GENERATOR_VERSION = 6;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
 
 const BASE = {
   defaultHeight: 20, // land height away from every height pin
-  shoreHeight: 3, // land below this plus 2.5ft is sand
+  shoreHeight: 3, // land below this plus 2.5ft, near the coast, is beach
   hillWavelength: 1200, // rolling hills
   roughWavelength: 350, // a rocky biome's ridges
 };
@@ -38,6 +38,8 @@ const CRAG = { wavelength: 160, perSlope: 60, probeFt: 24 };
 // other.
 const COAST = { low: 6, cliff: 10, minFt: 16, maxFt: 90, bumps: 2.5 };
 const SEA = { shallow: -2, drop: 0.08, floor: -60, swell: 8, bumps: 3 };
+// Low land within `reachFt` of the coast is beach, in biomes that get beaches.
+const BEACH = { reachFt: 200, biomes: new Set(["plains", "forest", "rocky"]) };
 const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
@@ -207,12 +209,13 @@ function pick(odds, r) {
 // --- height ---
 
 // Ground before rivers, pools and ravines: the sea floor outside the zoned area, and inside it the
-// broad shape with hills and crags, meeting the sea at the coast. Returns { h, t, land, climate },
-// where t grows from 0 at the coast to 1 a little inland, for features that keep off the shore.
+// broad shape with hills and crags, meeting the sea at the coast. Returns { h, t, land, climate,
+// coastDist }, where t grows from 0 at the coast to 1 a little inland, for features that keep off
+// the shore, and coastDist is how far it is to the coast (capped at EDGE_REACH_FT).
 function land(ctx, x, z, edges, biomes) {
   const climate = climateAt(biomes, x, z);
   const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, edges));
-  if (!pointInRegion(x, z, ctx.area)) return { h: seaFloor(ctx, x, z, edgeDist), t: 0, land: false, climate };
+  if (!pointInRegion(x, z, ctx.area)) return { h: seaFloor(ctx, x, z, edgeDist), t: 0, land: false, climate, coastDist: edgeDist };
 
   const { amp, rough } = climate.profile;
   const d = CRAG.probeFt;
@@ -222,7 +225,7 @@ function land(ctx, x, z, edges, biomes) {
   const crag = rough * 0.5 + steep * CRAG.perSlope;
   if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;
 
-  return { h: coast(ctx, h, x, z, edgeDist), t: smoothstep(0, COAST.maxFt, edgeDist), land: true, climate };
+  return { h: coast(ctx, h, x, z, edgeDist), t: smoothstep(0, COAST.maxFt, edgeDist), land: true, climate, coastDist: edgeDist };
 }
 
 // Cliffs where the land is high; where it's low, a shore of uneven width that drops in bumps to
@@ -247,7 +250,7 @@ function seaFloor(ctx, x, z, edgeDist) {
 
 function sample(ctx, x, z, edges, biomes) {
   const ground = land(ctx, x, z, edges, biomes);
-  const out = { h: ground.h, water: NaN, river: false, bank: false, pool: false, land: ground.land, climate: ground.climate };
+  const out = { h: ground.h, water: NaN, river: false, bank: false, pool: false, land: ground.land, climate: ground.climate, coastDist: ground.coastDist };
   const { pools, ravines } = ground.climate.profile;
   if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
@@ -344,12 +347,13 @@ function profileAt(profile, along) {
 // speckle into each other. (ci, cj) is the cell's continent cell position, for steady noise.
 function terrainFor(ctx, s, slope, ci, cj) {
   if (s.river || s.pool) return T.mud;
-  if (s.h < 0) return T.sand;
+  if (!s.land) return T.sand;
   if (slope > s.climate.profile.steep) return T.rock;
   if (s.bank) return T.shore;
-  if (s.h < 2.5 + BASE.shoreHeight) return T.sand;
   const { biome, second, weight } = s.climate;
   const here = BIOMES[hash2(ci, cj, ctx.seed ^ 0x2545f491) < weight ? biome : second];
+  if (s.h < 2.5 + BASE.shoreHeight && s.coastDist < BEACH.reachFt && BEACH.biomes.has(here)) return T.sand;
+  if (s.h < 0) return T.mud;
   const n = fbm(ci * CELL_FT, cj * CELL_FT, ctx.seed ^ 0x6a09e667, { wavelength: 60, octaves: 3 });
   if (here === "swamp") return n > 0.25 ? T.moss : n > 0.05 ? T.mud : T.grass;
   if (here === "rocky") return n > 0.15 ? T.rock : n > -0.25 ? T.dirt : T.grass;
