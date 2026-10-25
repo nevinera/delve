@@ -21,6 +21,7 @@ const PIN_STAB_FT = 20; // and their sticks reach this far into it
 const PIN_SIZE = 0.035; // head sizes, as a fraction of the view's height
 const POINT_SIZE = 0.022;
 const DRAG_PX = 4; // a press that moves less than this is a click
+const KEY = { pan: 0.8, zoom: 1.6, turn: 1.5 }; // per second: distances panned, e^zoom, radians
 
 // The editor's 3D view: the active zone's tiles plus a ring around them as lit terrain with river
 // water, every other existing tile as its thumbnail on the sea, and every zone's boundary draped
@@ -76,6 +77,21 @@ export class RenderView {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.render();
+  }
+
+  // Keyboard navigation (keyNav.js): pans across the ground relative to where the camera faces, at
+  // a speed that scales with the camera's distance; zooms toward the target; turns around it.
+  nudge(dt, { x, z, zoom, turn }) {
+    const offset = this.camera.position.clone().sub(this.controls.target);
+    const forward = offset.clone().setY(0).normalize().negate();
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const step = forward.multiplyScalar(-z).add(right.multiplyScalar(x)).multiplyScalar(offset.length() * KEY.pan * dt);
+    this.controls.target.add(step);
+    offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), turn * KEY.turn * dt);
+    offset.multiplyScalar(Math.exp(-zoom * KEY.zoom * dt));
+    this.camera.position.copy(this.controls.target).add(offset);
+    this.controls.update();
     this.render();
   }
 

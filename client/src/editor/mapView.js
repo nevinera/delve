@@ -12,6 +12,8 @@ const GRID_MAJOR = "rgba(255, 255, 255, 0.22)";
 const MAJOR_EVERY = 8;
 const MIN_SCALE = 2;
 const MAX_SCALE = 1600;
+const KEY_PAN_PX = 500; // per second
+const KEY_ZOOM = 1.6; // scale grows by e^this per second
 
 export class MapView {
   constructor(canvas, { onPointer, drawBase, draw, tool } = {}) {
@@ -49,6 +51,15 @@ export class MapView {
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = Math.round(this.canvas.clientWidth * dpr);
     this.canvas.height = Math.round(this.canvas.clientHeight * dpr);
+    this.render();
+  }
+
+  // Keyboard navigation (keyNav.js): pans at a steady screen speed and zooms about the middle.
+  nudge(dt, { x, z, zoom }) {
+    const pan = (KEY_PAN_PX * this.dpr * dt) / this.view.scale;
+    this.view.x += x * pan;
+    this.view.z += z * pan;
+    this.view.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, this.view.scale * Math.exp(zoom * KEY_ZOOM * dt)));
     this.render();
   }
 

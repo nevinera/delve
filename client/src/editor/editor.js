@@ -1,6 +1,7 @@
 import { changedTiles } from "./changes.js";
 import { FEATURE_HINTS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
+import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
 import { Thumbnails, surfaceTiles, tilePath } from "./thumbnails.js";
 import {
@@ -30,14 +31,14 @@ const COLORS = {
   lockedFill: "rgba(255, 255, 255, 0.07)",
 };
 const HINTS = {
-  none: "pick a zone to edit, or make a new one · drag to pan · wheel to zoom",
+  none: "pick a zone to edit, or make a new one · drag or W A S D to pan · wheel or C/V to zoom",
   empty: "draw the zone's region first",
   draw: "click to add corners · click the first corner or press enter to close · backspace removes the last · esc cancels · right-drag to pan",
   region: "drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · drag elsewhere to pan",
   ...FEATURE_HINTS,
   tree: "click or drag to plant trees on the zone's generated tiles · hold alt to remove them · regenerating a tile clears its trees",
 };
-const HINT_3D = "drag to orbit · right-drag to pan · wheel to zoom · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
+const HINT_3D = "drag to orbit · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E to turn · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
 const TREE_TOOLS = TREE_SIZES.map((size) => `tree_${size}`);
 const treeToolSize = (name) => Number(/^tree_(\d)$/.exec(name)?.[1] ?? 0);
 const ALL_KINDS = [...Object.keys(PINS), ...Object.keys(STROKES)];
@@ -87,6 +88,7 @@ export class Editor {
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
+    keyNav((dt, move) => (this.showing3d ? this.view3d?.nudge(dt, move) : this.map.nudge(dt, move)));
     window.addEventListener("beforeunload", (e) => {
       if (this.dirty) e.preventDefault();
     });
