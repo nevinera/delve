@@ -112,6 +112,11 @@
   color: #aaa;
 }
 
+.editor-message {
+  color: #e88;
+  min-height: 1em;
+}
+
 .editor-hint {
   margin-top: auto;
   color: #888;

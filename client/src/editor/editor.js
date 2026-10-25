@@ -1,5 +1,5 @@
 import { MapView } from "./mapView.js";
-import { nearestEdge, snapToCell, tilesTouched } from "./region.js";
+import { nearestEdge, overlaps, pointInPolygon, snapToCell, tilesTouched } from "./region.js";
 import { createZone, listZones, saveZone } from "./zones.js";
 
 const HIT_PX = 8;
@@ -62,6 +62,40 @@ export class Editor {
 
   markSaved() {
     this.dirty = false;
+  }
+
+  say(text) {
+    this.el.message.textContent = text ?? "";
+  }
+
+  otherZones(zone) {
+    return this.zones.filter((z) => z.key !== zone.key && z.region.length >= 3);
+  }
+
+  // Where a corner lands: on another zone's corner or edge when it's near one, so neighbours
+  // share boundaries exactly, and otherwise on the nearest cell corner.
+  snap(tile, zone) {
+    const others = this.otherZones(zone);
+    for (const other of others) {
+      const corner = other.region.find((p) => this.nearScreen(p, tile));
+      if (corner) return [...corner];
+    }
+    for (const other of others) {
+      const edge = nearestEdge(other.region, tile);
+      if (edge.dist * this.map.view.scale < HIT_PX * this.map.dpr) return edge.point;
+    }
+    return snapToCell(tile);
+  }
+
+  // The zone a region would overlap, if any.
+  overlapping(region, zone) {
+    return this.otherZones(zone).find((other) => overlaps(region, other.region)) ?? null;
+  }
+
+  insideOther(point, zone) {
+    return this.otherZones(zone).find(
+      (other) => pointInPolygon(point, other.region) && nearestEdge(other.region, point).dist > 1e-6,
+    );
   }
 
   // --- panel ---
@@ -157,8 +191,15 @@ export class Editor {
         const pts = this.drawing;
         if (pts.length >= 3 && this.nearScreen(pts[0], tile)) {
           this.finishDrawing(zone);
+          return true;
+        }
+        const point = this.snap(tile, zone);
+        const inside = this.insideOther(point, zone);
+        if (inside) {
+          this.say(`That's inside ${inside.name}.`);
         } else {
-          pts.push(snapToCell(tile));
+          pts.push(point);
+          this.say();
         }
         return true;
       },
@@ -171,7 +212,11 @@ export class Editor {
       down: (tile, e) => {
         let index = region.findIndex((p) => this.nearScreen(p, tile));
         if (index >= 0 && e.altKey) {
-          if (region.length > 3) {
+          const without = region.filter((_, i) => i !== index);
+          const other = region.length > 3 && this.overlapping(without, zone);
+          if (other) {
+            this.say(`Removing that corner would overlap ${other.name}.`);
+          } else if (region.length > 3) {
             region.splice(index, 1);
             this.save(zone);
           }
@@ -181,14 +226,21 @@ export class Editor {
           const edge = nearestEdge(region, tile);
           if (edge.dist * this.map.view.scale > HIT_PX * this.map.dpr) return false;
           index = edge.index + 1;
-          region.splice(index, 0, snapToCell(tile));
+          region.splice(index, 0, edge.point);
         }
         if (index < 0) return false;
         this.dragIndex = index;
         return true;
       },
       move: (tile) => {
-        region[this.dragIndex] = snapToCell(tile);
+        const moved = region.with(this.dragIndex, this.snap(tile, zone));
+        const other = this.overlapping(moved, zone);
+        if (other) {
+          this.say(`Can't overlap ${other.name}.`);
+          return;
+        }
+        region[this.dragIndex] = moved[this.dragIndex];
+        this.say();
       },
       up: () => this.save(zone),
     };
@@ -196,6 +248,12 @@ export class Editor {
 
   finishDrawing(zone) {
     if (this.drawing.length < 3) return;
+    const other = this.overlapping(this.drawing, zone);
+    if (other) {
+      this.say(`This region overlaps ${other.name}; move or remove corners before closing it.`);
+      return;
+    }
+    this.say();
     zone.region = this.drawing;
     this.drawing = null;
     this.save(zone);
@@ -239,7 +297,7 @@ export class Editor {
     }
 
     const pts = this.drawing.map((p) => map.toScreen(p));
-    if (map.pointer) pts.push(map.toScreen(snapToCell(map.pointer)));
+    if (map.pointer) pts.push(map.toScreen(this.snap(map.pointer, zone)));
     ctx.strokeStyle = COLORS.active;
     ctx.lineWidth = 2 * dpr;
     polyline(ctx, pts, false);

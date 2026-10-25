@@ -19,6 +19,7 @@ const editor = new Editor(world, {
   regionInfo: $("regionInfo"),
   drawRegion: $("drawRegion"),
   hint: $("hint"),
+  message: $("message"),
 });
 
 $("download").addEventListener("click", () => {
