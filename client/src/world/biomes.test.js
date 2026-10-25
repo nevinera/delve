@@ -49,6 +49,8 @@ describe("biomes", () => {
     expect(profileFor("forest", ["flat"]).amp).toBeLessThan(profileFor("forest").amp);
     expect(profileFor("forest", ["dense"]).trees).toBeGreaterThan(profileFor("forest").trees);
     expect(profileFor("rocky", ["ravines"]).ravines).toBe(1);
+    expect(profileFor("forest", ["lakes"]).lakes).toBe(1);
+    expect(profileFor("swamp", ["lakes"]).lakes).toBe(0);
   });
 
   it("blends profiles across a border, evenly right on it", () => {

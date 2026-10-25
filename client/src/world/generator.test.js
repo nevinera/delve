@@ -124,18 +124,17 @@ describe("biomes in the generator", () => {
     expect(wet("swamp")).toBeGreaterThan(500);
   });
 
-  it("floods a lake at one level, deeper away from its shore", () => {
-    const ctx = prepareWorld(
-      [{ region: [square(0, 0, 8, 8)], pins: [{ id: "f", kind: "biome", at: [2, 4], biome: "forest" }, { id: "l", kind: "biome", at: [6, 4], biome: "lake" }], strokes: [] }],
-      "test",
-    );
-    const middle = generateTile(ctx, 6, 4);
-    const levels = new Set(Array.from(middle.layers.water).filter((w) => !Number.isNaN(w)));
-    expect(levels.size).toBe(1);
-    const [level] = levels;
-    expect(cell(middle, 0, 0, "height")).toBeLessThan(level - 10);
-    expect(findTrees(middle)).toHaveLength(0);
-    expect(Number.isNaN(cell(generateTile(ctx, 2, 4), 0, 0, "water"))).toBe(true);
+  it("scatters flat-topped ponds and lakes where tagged", () => {
+    const all = (ctx) => [2, 3, 4, 5].flatMap((tx) => [2, 3, 4, 5].map((tz) => generateTile(ctx, tx, tz)));
+    const water = (tiles) => tiles.flatMap((t) => Array.from(t.layers.water).filter((w) => !Number.isNaN(w)));
+    expect(water(all(world("plains")))).toHaveLength(0);
+    const tiles = all(world("plains", ["lakes"]));
+    const wet = water(tiles);
+    expect(wet.length).toBeGreaterThan(100);
+    expect(new Set(wet).size).toBeLessThan(wet.length / 20); // a level per lake, not per cell
+    for (const tile of tiles) {
+      for (const { i, j } of findTrees(tile)) expect(Number.isNaN(cell(tile, i, j, "water"))).toBe(true);
+    }
   });
 
   it("cuts ravines only where tagged", () => {

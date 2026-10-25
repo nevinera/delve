@@ -19,7 +19,7 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 13;
+export const GENERATOR_VERSION = 14;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -46,10 +46,11 @@ const SEA = { shallow: -2, drop: 0.08, floor: -60, swell: 8, bumps: 3 };
 // Low land within `reachFt` of the coast is beach, in biomes that get beaches.
 const BEACH = { reachFt: 200, biomes: new Set(["plains", "forest", "rocky"]) };
 const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
-// A lake's water sits `belowFt` under the broad ground at its pin. Its bed drops `shelfFt` at the
-// shore and `depthFt` more well out, and its shore rises to `rimFt` above the water so it holds.
-// It stops `damFt` short of the sea, so its water doesn't spill over the coast.
-const LAKE = { belowFt: 3, minLevel: 1, shelfFt: 1, depthFt: 14, rimFt: 1, damFt: 80 };
+// Ponds and small lakes: at most one per `gridFt` square, by `chance` times the biome's lakes,
+// `minFt` to `maxFt` across (mostly small), with wobbly shores. Each has one water level, a little
+// under the lowest ground around it, a bed that deepens from the shore, and a rim that holds it. A
+// lake only goes where the ground's fairly level and well away from the sea.
+const LAKES = { gridFt: 900, chance: 0.7, minFt: 40, maxFt: 300, wobble: 0.35, belowFt: 1, shelfFt: 1, depthFt: [2, 12], rimFt: 1, rimWidthFt: 30, maxDropFt: 15, damFt: 80 };
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
 const TREE_GROUND = new Set(["grass", "dirt", "moss", "mud"]);
@@ -90,6 +91,7 @@ export function prepareWorld(zones, seedKey) {
     area,
     areaEdges: edgesOf(area),
     rivers: [],
+    lakeSites: new Map(), // "gi,gj" -> lake or null, filled as tiles need them
   };
   const heightPins = zoned.flatMap((z) => z.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height)));
   ctx.heightAt = prepareHeights(
@@ -104,8 +106,7 @@ export function prepareWorld(zones, seedKey) {
   ctx.biomes = prepareBiomes({
     pins: pinsOf("biome").map((p) => {
       const [x, z] = toFt(p.at);
-      const level = p.biome === "lake" ? Math.max(LAKE.minLevel, ctx.heightAt(x, z) - LAKE.belowFt) : undefined;
-      return { x, z, biome: p.biome, tags: p.tags, level };
+      return { x, z, biome: p.biome, tags: p.tags };
     }),
     rivers: zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river")).map((s) => s.points.map(toFt)),
     edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
@@ -280,12 +281,9 @@ function sample(ctx, x, z, edges, biomes) {
   const ground = land(ctx, x, z, edges, biomes);
   const out = { h: ground.h, water: NaN, river: false, bank: false, pool: false, lake: false, land: ground.land, climate: ground.climate, coastDist: ground.coastDist };
   const { pools, ravines } = ground.climate.profile;
-  if (ground.climate.lake && ground.land) {
-    const amount = ground.climate.profile.lake;
-    lake(out, ground.climate.lake.level, ground.coastDist < LAKE.damFt ? Math.min(amount, 0.45) : amount);
-  }
   if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
+  if (ground.land) lakes(ctx, out, x, z);
   for (const r of ctx.rivers) {
     if (!nearBounds(r.line, x, z, r.half + r.bank)) continue;
     const n = nearest(r.line, x, z);
@@ -317,18 +315,49 @@ function pool(ctx, out, x, z, amount) {
   out.pool = true;
 }
 
-// Lakes: water at the lake's level over its biome, deepening away from the shore, with the land
-// just outside raised to hold it. `amount` is the blended lake profile: above 0.5 in the lake, below
-// it on the shore.
-function lake(out, level, amount) {
-  if (amount >= 0.5) {
-    out.water = level;
-    out.h = Math.min(out.h, level - LAKE.shelfFt - LAKE.depthFt * smoothstep(0.5, 1, amount));
-    out.lake = true;
-  } else {
-    out.h = Math.max(out.h, lerp(out.h, level + LAKE.rimFt, amount * 2));
-    if (amount > 0.3) out.bank = true;
+// Ponds and small lakes, from the lake sites in the grid squares around the point.
+function lakes(ctx, out, x, z) {
+  const gi = Math.floor(x / LAKES.gridFt);
+  const gj = Math.floor(z / LAKES.gridFt);
+  for (let dj = -1; dj <= 1; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      const site = lakeSite(ctx, gi + di, gj + dj);
+      if (!site) continue;
+      const d = Math.hypot(x - site.x, z - site.z);
+      if (d > site.r * (1 + LAKES.wobble) + LAKES.rimWidthFt) continue;
+      const shore = site.r * (1 + LAKES.wobble * fbm(x, z, ctx.seed ^ 0x5851f42d, { wavelength: Math.max(40, site.r * 0.7), octaves: 2 }));
+      if (d < shore) {
+        out.water = site.level;
+        out.h = Math.min(out.h, site.level - LAKES.shelfFt - site.depth * smoothstep(0, shore * 0.6, shore - d));
+        out.lake = true;
+      } else if (d < shore + LAKES.rimWidthFt) {
+        out.h = Math.max(out.h, lerp(site.level + LAKES.rimFt, out.h, (d - shore) / LAKES.rimWidthFt));
+        out.bank = true;
+      }
+    }
   }
+}
+
+// The lake in grid square (gi, gj), as { x, z, r, level, depth }, or null. Worked out once per
+// square, from every zone, so tiles agree.
+function lakeSite(ctx, gi, gj) {
+  const key = `${gi},${gj}`;
+  if (ctx.lakeSites.has(key)) return ctx.lakeSites.get(key);
+  ctx.lakeSites.set(key, null);
+  const roll = (k) => hash2(gi, gj, ctx.seed ^ Math.imul(k + 11, 0x27d4eb2d));
+  const x = (gi + 0.3 + 0.4 * roll(1)) * LAKES.gridFt;
+  const z = (gj + 0.3 + 0.4 * roll(2)) * LAKES.gridFt;
+  const { lakes: amount } = climateAt(ctx.biomes, x, z).profile;
+  if (!(amount > 0) || roll(3) >= LAKES.chance * amount) return null;
+  const size = roll(4) ** 2;
+  const r = lerp(LAKES.minFt, LAKES.maxFt, size) / 2;
+  const around = [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].map(([dx, dz]) => land(ctx, x + dx, z + dz, ctx.areaEdges, ctx.biomes));
+  const heights = around.map((g) => g.h);
+  if (!around.every((g) => g.land && g.coastDist > r * (1 + LAKES.wobble) + LAKES.damFt)) return null;
+  if (Math.max(...heights) - Math.min(...heights) > LAKES.maxDropFt) return null;
+  const site = { x, z, r, level: Math.min(...heights) - LAKES.belowFt, depth: lerp(...LAKES.depthFt, size) };
+  ctx.lakeSites.set(key, site);
+  return site;
 }
 
 // Ravines: narrow winding cracks, deep enough not to climb out of, along the zero line of a

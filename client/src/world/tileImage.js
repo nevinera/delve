@@ -29,7 +29,6 @@ export const BIOME_COLORS = {
   forest: [40, 140, 60],
   rocky: [150, 150, 150],
   swamp: [70, 120, 110],
-  lake: [60, 110, 190],
 };
 
 // The biome layer as RGBA, for tinting the map: one color per biome, and clear for biomes it
