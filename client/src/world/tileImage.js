@@ -9,6 +9,9 @@ const COLORS = {
   path: [176, 150, 110],
   shore: [150, 150, 110],
   mud: [100, 88, 70],
+  tree_1: [44, 74, 36],
+  tree_2: [44, 74, 36],
+  tree_3: [44, 74, 36],
 };
 const UNKNOWN = [255, 0, 255];
 const FOREST = [40, 80, 40];

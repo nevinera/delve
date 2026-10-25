@@ -15,6 +15,9 @@ import {
   tilesTouched,
 } from "./region.js";
 import { createZone, listZones, olderZones, removeZone, saveZone, zonePath } from "./zones.js";
+import { TreeBrush } from "./treeBrush.js";
+import { tileRgba } from "../world/tileImage.js";
+import { TREE_SIZES, treeSize, treeTerrain } from "../world/trees.js";
 
 const HIT_PX = 8;
 const COLORS = {
@@ -31,9 +34,11 @@ const HINTS = {
   draw: "click to add corners · click the first corner or press enter to close · backspace removes the last · esc cancels · right-drag to pan",
   region: "drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · drag elsewhere to pan",
   ...FEATURE_HINTS,
+  tree: "click or drag to plant trees on the zone's generated tiles · hold alt to remove them · regenerating a tile clears its trees",
 };
-const HINT_3D = "drag to orbit · right-drag to pan · wheel to zoom · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one";
-const TOOLS = ["region", ...FEATURE_TOOLS];
+const HINT_3D = "drag to orbit · right-drag to pan · wheel to zoom · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
+const TREE_TOOLS = TREE_SIZES.map(treeTerrain);
+const TOOLS = ["region", ...FEATURE_TOOLS, ...TREE_TOOLS];
 
 // Ties the map, the side panel and the in-memory world together. One zone at a time is active and
 // editable; every other zone on the continent shows but is locked.
@@ -47,6 +52,7 @@ export class Editor {
     this.drawing = null; // corners of a region being drawn
     this.toolName = "select";
     this.features = new Features(this);
+    this.trees = new TreeBrush(this);
     this.dirty = false;
 
     this.map = new MapView(elements.map, {
@@ -185,13 +191,27 @@ export class Editor {
       hover: (hit, e) => this.showTip(hit, e),
       grab: (hit) => {
         const zone = this.activeZone;
+        this.painting = false;
         return zone?.key === hit.zone && this.features.grab(zone, hit);
       },
-      drag: (tile) => {
-        this.features.dragTo(tile, this.activeZone);
-        this.refreshMarks();
+      press: (tile, e) => {
+        const zone = this.activeZone;
+        const size = treeSize(this.toolName);
+        if (!zone?.region.length || !size || !tile) return false;
+        this.painting = true;
+        this.say();
+        this.trees.apply(zone, tile, size, e.altKey);
+        return true;
       },
-      drop: () => this.features.endDrag(this.activeZone),
+      drag: (tile, e) => {
+        if (this.painting) {
+          this.trees.apply(this.activeZone, tile, treeSize(this.toolName), e.altKey);
+        } else {
+          this.features.dragTo(tile, this.activeZone);
+          this.refreshMarks();
+        }
+      },
+      drop: () => (this.painting ? this.treesDone() : this.features.endDrag(this.activeZone)),
       click: (hit, tile) => {
         const zone = this.activeZone;
         if (!zone?.region.length || hit) return;
@@ -199,6 +219,20 @@ export class Editor {
         else this.features.select(null);
       },
     };
+  }
+
+  // A tree brush stroke changed a tile: show it right away.
+  treesChanged(tx, tz, tile) {
+    this.thumbnails.set(tx, tz, tileRgba(tile), tile.cells);
+    if (this.showing3d) this.view3d.setTile(tx, tz, tile);
+    else this.map.render();
+  }
+
+  treesDone() {
+    this.painting = false;
+    if (!this.trees.finish()) return;
+    this.dirty = true;
+    this.refresh3d();
   }
 
   // The details box beside a hovered pin head, or hidden for null.
@@ -282,7 +316,8 @@ export class Editor {
       const b = document.createElement("button");
       b.type = "button";
       b.dataset.tool = name;
-      b.textContent = PINS[name]?.label ?? STROKES[name]?.label ?? name;
+      const size = treeSize(name);
+      b.textContent = PINS[name]?.label ?? STROKES[name]?.label ?? (size ? `tree ${size}x${size}` : name);
       b.addEventListener("click", () => this.setTool(name));
       tools.append(b);
     }
@@ -429,6 +464,7 @@ export class Editor {
     if (!zone.region.length) return "empty";
     if (PINS[this.toolName]) return "pin";
     if (STROKES[this.toolName]) return "stroke";
+    if (treeSize(this.toolName)) return "tree";
     return this.toolName;
   }
 
@@ -448,6 +484,7 @@ export class Editor {
     if (this.drawing) return this.drawTool(zone);
     if (!zone.region.length) return null;
     if (this.toolName === "region") return this.editTool(zone);
+    if (treeSize(this.toolName)) return this.trees.tool(zone, treeSize(this.toolName));
     return this.features.tool(zone, this.toolName);
   }
 
