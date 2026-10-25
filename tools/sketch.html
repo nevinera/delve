@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zone Sketch</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: monospace;
+      font-size: 13px;
+      background: #1a1a1a;
+      color: #ddd;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #map { flex: 1; position: relative; }
+    #map canvas { display: block; width: 100%; height: 100%; }
+    #hint {
+      position: absolute; left: 10px; bottom: 10px;
+      background: rgba(0, 0, 0, 0.6); padding: 6px 8px; border-radius: 3px; color: #aaa;
+      pointer-events: none;
+    }
+
+    #panel {
+      width: 340px;
+      background: #2a2a2a;
+      border-left: 1px solid #444;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 12px;
+      overflow-y: auto;
+    }
+
+    h2 { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    label { color: #aaa; }
+
+    button, input, textarea {
+      background: #111;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 4px 6px;
+      font-family: monospace;
+      font-size: 12px;
+      border-radius: 3px;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: #888; }
+    button.active { background: #3a5a7a; border-color: #6a9aca; }
+    input[type="number"] { width: 70px; }
+    input[type="text"], textarea { width: 100%; }
+    textarea { resize: vertical; }
+    #json { height: 220px; font-size: 11px; }
+    #props .field { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+    #status { color: #8a8; min-height: 1em; }
+  </style>
+</head>
+<body>
+  <div id="map">
+    <canvas id="canvas"></canvas>
+    <div id="hint"></div>
+  </div>
+
+  <div id="panel">
+    <section>
+      <h2>Zone</h2>
+      <div class="row">
+        <label>name</label><input type="text" id="zoneName" style="flex: 1; width: auto">
+      </div>
+      <div class="row" style="margin-top: 6px">
+        <label>origin x</label><input type="number" id="originX">
+        <label>z</label><input type="number" id="originZ">
+      </div>
+    </section>
+
+    <section>
+      <h2>Tool</h2>
+      <div class="row" id="tools"></div>
+      <div class="row" style="margin-top: 6px">
+        <label><input type="checkbox" id="showLevels"> level gradient</label>
+      </div>
+    </section>
+
+    <section id="props">
+      <h2>Selected</h2>
+      <div id="propFields"><span style="color: #777">nothing selected</span></div>
+    </section>
+
+    <section>
+      <h2>zone.json</h2>
+      <div class="row" style="margin-bottom: 6px">
+        <button id="copyBtn">copy</button>
+        <button id="loadBtn">load from text</button>
+        <button id="newBtn">new zone</button>
+      </div>
+      <textarea id="json" spellcheck="false"></textarea>
+      <div id="status"></div>
+    </section>
+  </div>
+
+<script>
+// Sketches a zone and produces its zone.json. Coordinates are in tile units relative to the
+// zone's origin tile; sizes (width, height) are in feet.
+
+const VERSION = 1
+const TILE_FT = 512
+const STORAGE_KEY = "delve3d.sketch"
+
+const STROKE_KINDS = {
+  river: { color: "#4a90d9", width: 30 },
+  range: { color: "#a08060", width: 1500, height: 400 },
+  coast: { color: "#d9c27a", width: 40 },
+  road: { color: "#c8a070", width: 12 },
+}
+const PIN_KINDS = {
+  hub: { color: "#f0d050" },
+  poi: { color: "#e07050" },
+  level: { color: "#70d070" },
+}
+const TOOLS = ["select", "outline", ...Object.keys(STROKE_KINDS), ...Object.keys(PIN_KINDS)]
+const HINTS = {
+  select: "click to select · drag points and pins · alt-click a stroke point to remove it · delete removes the selection",
+  outline: "click or drag to add tiles · shift to remove",
+  stroke: "click to add points · enter or double-click to finish · esc to cancel",
+  pin: "click to place · click a pin to select or drag it",
+}
+
+const canvas = document.getElementById("canvas")
+const ctx = canvas.getContext("2d")
+const $ = (id) => document.getElementById(id)
+
+let zone = loadSaved() || emptyZone()
+let tool = "select"
+let selected = null // { type: "stroke" | "pin", id }
+let drawing = null // stroke in progress
+let view = { x: 0, z: 0, scale: 80 } // tile coords at canvas center, pixels per tile
+let drag = null
+let mouse = null
+
+function emptyZone() {
+  return { version: VERSION, name: "", origin: [0, 0], tiles: [], strokes: [], pins: [] }
+}
+
+// --- persistence ---
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? normalize(JSON.parse(raw)) : null
+  } catch {
+    return null
+  }
+}
+
+// Pretty-printed, but with number pairs like [3, -2] kept on one line.
+function format(data) {
+  return JSON.stringify(data, null, 2).replace(/\[\s+(-?[\d.]+),\s+(-?[\d.]+)\s+\]/g, "[$1, $2]")
+}
+
+function save() {
+  const text = format(zone)
+  $("json").value = text
+  try {
+    localStorage.setItem(STORAGE_KEY, text)
+  } catch {
+    // Autosave is a convenience; the textarea still holds the zone.
+  }
+}
+
+function normalize(data) {
+  if (typeof data !== "object" || data === null) throw new Error("zone.json must be an object")
+  return {
+    version: data.version ?? VERSION,
+    name: data.name ?? "",
+    origin: data.origin ?? [0, 0],
+    tiles: data.tiles ?? [],
+    strokes: data.strokes ?? [],
+    pins: data.pins ?? [],
+  }
+}
+
+function nextId(prefix) {
+  const used = [...zone.strokes, ...zone.pins].map((f) => f.id)
+  let n = 1
+  while (used.includes(`${prefix}${n}`)) n++
+  return `${prefix}${n}`
+}
+
+// --- coordinates ---
+
+function toScreen([x, z]) {
+  return [(x - view.x) * view.scale + canvas.width / 2, (z - view.z) * view.scale + canvas.height / 2]
+}
+
+function toTile(sx, sy) {
+  return [(sx - canvas.width / 2) / view.scale + view.x, (sy - canvas.height / 2) / view.scale + view.z]
+}
+
+const round = (v) => Math.round(v * 100) / 100
+const ftToPx = (ft) => (ft / TILE_FT) * view.scale
+
+function eventPos(e) {
+  const r = canvas.getBoundingClientRect()
+  const dpr = window.devicePixelRatio || 1
+  return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]
+}
+
+// --- drawing ---
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1
+  canvas.width = canvas.clientWidth * dpr
+  canvas.height = canvas.clientHeight * dpr
+  render()
+}
+
+function render() {
+  ctx.fillStyle = "#151515"
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  drawTiles()
+  if ($("showLevels").checked) drawLevelGradient()
+  drawGrid()
+  zone.strokes.forEach((s) => drawStroke(s, isSelected("stroke", s.id)))
+  if (drawing) drawStroke({ ...drawing, points: mouse ? [...drawing.points, toTile(...mouse)] : drawing.points }, true)
+  zone.pins.forEach((p) => drawPin(p, isSelected("pin", p.id)))
+}
+
+function drawTiles() {
+  ctx.fillStyle = "#2c3a2c"
+  zone.tiles.forEach(([x, z]) => {
+    const [sx, sy] = toScreen([x, z])
+    ctx.fillRect(sx, sy, view.scale + 0.5, view.scale + 0.5)
+  })
+}
+
+function drawGrid() {
+  const [x0, z0] = toTile(0, 0)
+  const [x1, z1] = toTile(canvas.width, canvas.height)
+  ctx.strokeStyle = "#333"
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  for (let x = Math.floor(x0); x <= x1; x++) {
+    const [sx] = toScreen([x, 0])
+    ctx.moveTo(sx, 0)
+    ctx.lineTo(sx, canvas.height)
+  }
+  for (let z = Math.floor(z0); z <= z1; z++) {
+    const [, sy] = toScreen([0, z])
+    ctx.moveTo(0, sy)
+    ctx.lineTo(canvas.width, sy)
+  }
+  ctx.stroke()
+}
+
+// Inverse-distance weighting over the level pins, drawn coarsely over the zone's tiles.
+function levelAt(x, z, levelPins) {
+  let num = 0
+  let den = 0
+  for (const p of levelPins) {
+    const d2 = (p.at[0] - x) ** 2 + (p.at[1] - z) ** 2
+    if (d2 < 1e-6) return p.level
+    const w = 1 / d2
+    num += w * p.level
+    den += w
+  }
+  return num / den
+}
+
+function drawLevelGradient() {
+  const levelPins = zone.pins.filter((p) => p.kind === "level" && typeof p.level === "number")
+  if (levelPins.length === 0) return
+  const levels = levelPins.map((p) => p.level)
+  const lo = Math.min(...levels)
+  const span = Math.max(...levels) - lo || 1
+  const step = 0.25
+  zone.tiles.forEach(([tx, tz]) => {
+    for (let x = tx; x < tx + 1; x += step) {
+      for (let z = tz; z < tz + 1; z += step) {
+        const t = (levelAt(x + step / 2, z + step / 2, levelPins) - lo) / span
+        ctx.fillStyle = `hsla(${120 - t * 120}, 70%, 45%, 0.35)`
+        const [sx, sy] = toScreen([x, z])
+        ctx.fillRect(sx, sy, step * view.scale + 0.5, step * view.scale + 0.5)
+      }
+    }
+  })
+}
+
+function drawStroke(stroke, highlight) {
+  const kind = STROKE_KINDS[stroke.kind]
+  const pts = stroke.points.map(toScreen)
+  if (pts.length === 0) return
+
+  if (stroke.kind === "coast" && pts.length > 1) drawWaterSide(pts)
+
+  ctx.lineCap = "round"
+  ctx.lineJoin = "round"
+  ctx.strokeStyle = kind.color
+  ctx.globalAlpha = stroke.kind === "range" ? 0.45 : 1
+  ctx.lineWidth = Math.max(2, ftToPx(stroke.width ?? kind.width))
+  polyline(pts)
+  ctx.globalAlpha = 1
+
+  if (highlight) {
+    ctx.strokeStyle = "#fff"
+    ctx.lineWidth = 1
+    polyline(pts)
+    pts.forEach(([x, y]) => {
+      ctx.fillStyle = "#fff"
+      ctx.fillRect(x - 3, y - 3, 6, 6)
+    })
+  }
+  if (stroke.kind === "river" && pts.length > 1) drawArrow(pts[pts.length - 2], pts[pts.length - 1], kind.color)
+}
+
+function polyline(pts) {
+  ctx.beginPath()
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
+  ctx.stroke()
+}
+
+// Water is on the left of the drawing direction. With z pointing down the screen, the left of
+// direction (dx, dy) is (dy, -dx).
+function drawWaterSide(pts) {
+  const band = Math.max(12, view.scale * 0.3)
+  ctx.fillStyle = "rgba(60, 110, 180, 0.35)"
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1]
+    const [bx, by] = pts[i]
+    const len = Math.hypot(bx - ax, by - ay) || 1
+    const nx = ((by - ay) / len) * band
+    const ny = (-(bx - ax) / len) * band
+    ctx.beginPath()
+    ctx.moveTo(ax, ay)
+    ctx.lineTo(bx, by)
+    ctx.lineTo(bx + nx, by + ny)
+    ctx.lineTo(ax + nx, ay + ny)
+    ctx.fill()
+  }
+}
+
+function drawArrow([ax, ay], [bx, by], color) {
+  const angle = Math.atan2(by - ay, bx - ax)
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.moveTo(bx, by)
+  ctx.lineTo(bx - 12 * Math.cos(angle - 0.4), by - 12 * Math.sin(angle - 0.4))
+  ctx.lineTo(bx - 12 * Math.cos(angle + 0.4), by - 12 * Math.sin(angle + 0.4))
+  ctx.fill()
+}
+
+function drawPin(pin, highlight) {
+  const [x, y] = toScreen(pin.at)
+  ctx.fillStyle = PIN_KINDS[pin.kind].color
+  ctx.strokeStyle = highlight ? "#fff" : "#000"
+  ctx.lineWidth = highlight ? 2 : 1
+  ctx.beginPath()
+  if (pin.kind === "hub") ctx.rect(x - 7, y - 7, 14, 14)
+  else if (pin.kind === "level") ctx.moveTo(x, y - 8), ctx.lineTo(x + 8, y), ctx.lineTo(x, y + 8), ctx.lineTo(x - 8, y), ctx.closePath()
+  else ctx.arc(x, y, 6, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+
+  const label = pin.kind === "level" ? String(pin.level ?? "?") : pin.name || (pin.tags || []).join(", ")
+  if (label) {
+    ctx.fillStyle = "#eee"
+    ctx.font = `${12 * (window.devicePixelRatio || 1)}px monospace`
+    ctx.fillText(label, x + 10, y + 4)
+  }
+}
+
+// --- hit testing ---
+
+function isSelected(type, id) {
+  return selected && selected.type === type && selected.id === id
+}
+
+function findPin(sx, sy) {
+  return [...zone.pins].reverse().find((p) => {
+    const [x, y] = toScreen(p.at)
+    return Math.hypot(x - sx, y - sy) < 10
+  })
+}
+
+function findVertex(stroke, sx, sy) {
+  return stroke.points.findIndex((pt) => {
+    const [x, y] = toScreen(pt)
+    return Math.hypot(x - sx, y - sy) < 8
+  })
+}
+
+function distToSegment(px, py, [ax, ay], [bx, by]) {
+  const dx = bx - ax
+  const dy = by - ay
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+function findStroke(sx, sy) {
+  return [...zone.strokes].reverse().find((s) => {
+    const pts = s.points.map(toScreen)
+    const reach = Math.max(6, ftToPx(s.width ?? STROKE_KINDS[s.kind].width) / 2)
+    return pts.some((p, i) => i > 0 && distToSegment(sx, sy, pts[i - 1], p) < reach)
+  })
+}
+
+// --- tiles ---
+
+function setTile(x, z, on) {
+  const i = zone.tiles.findIndex(([tx, tz]) => tx === x && tz === z)
+  if (on && i < 0) zone.tiles.push([x, z])
+  if (!on && i >= 0) zone.tiles.splice(i, 1)
+}
+
+// --- input ---
+
+canvas.addEventListener("contextmenu", (e) => e.preventDefault())
+
+canvas.addEventListener("mousedown", (e) => {
+  const [sx, sy] = eventPos(e)
+  const at = toTile(sx, sy)
+
+  if (e.button === 1 || e.button === 2 || spaceHeld) {
+    drag = { type: "pan", sx, sy, x: view.x, z: view.z }
+    return
+  }
+
+  if (tool === "outline") {
+    const on = !e.shiftKey
+    setTile(Math.floor(at[0]), Math.floor(at[1]), on)
+    drag = { type: "paint", on }
+    commit()
+    return
+  }
+
+  if (STROKE_KINDS[tool]) {
+    if (!drawing) drawing = { kind: tool, points: [] }
+    drawing.points.push(at.map(round))
+    render()
+    return
+  }
+
+  if (PIN_KINDS[tool]) {
+    // Clicking an existing pin picks it up instead of stacking a new one on top.
+    const existing = findPin(sx, sy)
+    if (existing) {
+      select("pin", existing.id)
+      drag = { type: "pin", pin: existing }
+      return
+    }
+    const pin = { id: nextId("p"), kind: tool, at: at.map(round) }
+    if (tool === "level") pin.level = 1
+    if (tool === "poi") pin.tags = []
+    zone.pins.push(pin)
+    select("pin", pin.id)
+    commit()
+    return
+  }
+
+  // select tool
+  const stroke = selected?.type === "stroke" && zone.strokes.find((s) => s.id === selected.id)
+  if (stroke) {
+    const i = findVertex(stroke, sx, sy)
+    if (i >= 0 && e.altKey) {
+      stroke.points.splice(i, 1)
+      if (stroke.points.length < 2) deleteSelected()
+      commit()
+      return
+    }
+    if (i >= 0) {
+      drag = { type: "vertex", stroke, i }
+      return
+    }
+  }
+  const pin = findPin(sx, sy)
+  if (pin) {
+    select("pin", pin.id)
+    drag = { type: "pin", pin }
+    return
+  }
+  const hit = findStroke(sx, sy)
+  select(hit ? "stroke" : null, hit?.id)
+})
+
+window.addEventListener("mousemove", (e) => {
+  if (e.target !== canvas && !drag) return
+  mouse = eventPos(e)
+  const at = toTile(...mouse)
+  if (drag?.type === "pan") {
+    view.x = drag.x - (mouse[0] - drag.sx) / view.scale
+    view.z = drag.z - (mouse[1] - drag.sy) / view.scale
+  } else if (drag?.type === "paint") {
+    setTile(Math.floor(at[0]), Math.floor(at[1]), drag.on)
+  } else if (drag?.type === "vertex") {
+    drag.stroke.points[drag.i] = at.map(round)
+  } else if (drag?.type === "pin") {
+    drag.pin.at = at.map(round)
+  }
+  render()
+})
+
+window.addEventListener("mouseup", () => {
+  if (drag && drag.type !== "pan") commit()
+  drag = null
+})
+
+canvas.addEventListener("dblclick", () => finishStroke())
+
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault()
+  const [sx, sy] = eventPos(e)
+  const before = toTile(sx, sy)
+  view.scale = Math.max(8, Math.min(800, view.scale * Math.exp(-e.deltaY * 0.0015)))
+  const after = toTile(sx, sy)
+  view.x += before[0] - after[0]
+  view.z += before[1] - after[1]
+  render()
+}, { passive: false })
+
+let spaceHeld = false
+window.addEventListener("keydown", (e) => {
+  if (e.target.matches("input, textarea")) return
+  if (e.key === " ") spaceHeld = true
+  if (e.key === "Enter") finishStroke()
+  if (e.key === "Escape") {
+    drawing = null
+    render()
+  }
+  if ((e.key === "Delete" || e.key === "Backspace") && selected) deleteSelected()
+})
+window.addEventListener("keyup", (e) => {
+  if (e.key === " ") spaceHeld = false
+})
+
+function finishStroke() {
+  if (!drawing) return
+  // A double-click adds the same point twice; drop the duplicate.
+  const pts = drawing.points.filter((p, i, all) => i === 0 || p[0] !== all[i - 1][0] || p[1] !== all[i - 1][1])
+  if (pts.length >= 2) {
+    const kind = STROKE_KINDS[drawing.kind]
+    const stroke = { id: nextId("s"), kind: drawing.kind, points: pts, width: kind.width }
+    if (kind.height) stroke.height = kind.height
+    zone.strokes.push(stroke)
+    select("stroke", stroke.id)
+  }
+  drawing = null
+  commit()
+}
+
+function deleteSelected() {
+  const list = selected.type === "pin" ? zone.pins : zone.strokes
+  const i = list.findIndex((f) => f.id === selected.id)
+  if (i >= 0) list.splice(i, 1)
+  select(null)
+  commit()
+}
+
+function commit() {
+  save()
+  render()
+}
+
+// --- selection panel ---
+
+function select(type, id) {
+  selected = type ? { type, id } : null
+  renderProps()
+  render()
+}
+
+function selectedFeature() {
+  if (!selected) return null
+  const list = selected.type === "pin" ? zone.pins : zone.strokes
+  return list.find((f) => f.id === selected.id)
+}
+
+function renderProps() {
+  const box = $("propFields")
+  box.innerHTML = ""
+  const f = selectedFeature()
+  if (!f) {
+    box.innerHTML = '<span style="color: #777">nothing selected</span>'
+    return
+  }
+
+  const heading = document.createElement("div")
+  heading.style.marginBottom = "6px"
+  heading.textContent = `${f.kind} · ${f.id}`
+  box.appendChild(heading)
+
+  const fields = ["name"]
+  if (selected.type === "stroke") fields.push("width")
+  if (f.kind === "range") fields.push("height")
+  if (selected.type === "pin") fields.push("level")
+  fields.push("tags", "notes")
+  if (f.kind === "coast") fields.push("reverse")
+
+  fields.forEach((key) => box.appendChild(propField(f, key)))
+
+  const del = document.createElement("button")
+  del.textContent = `delete ${f.kind}`
+  del.onclick = deleteSelected
+  box.appendChild(del)
+}
+
+function propField(f, key) {
+  const wrap = document.createElement("div")
+  wrap.className = "field"
+
+  if (key === "reverse") {
+    const btn = document.createElement("button")
+    btn.textContent = "flip water side"
+    btn.onclick = () => {
+      f.points.reverse()
+      commit()
+    }
+    wrap.appendChild(btn)
+    return wrap
+  }
+
+  const label = document.createElement("label")
+  label.textContent = { width: "width (ft)", height: "height (ft)", tags: "tags (comma-separated)" }[key] || key
+  const input = document.createElement(key === "notes" ? "textarea" : "input")
+  const numeric = ["width", "height", "level"].includes(key)
+  input.type = numeric ? "number" : "text"
+  if (key === "notes") input.rows = 4
+  input.value = key === "tags" ? (f.tags || []).join(", ") : f[key] ?? ""
+  input.oninput = () => {
+    const v = input.value
+    if (key === "tags") f.tags = v.split(",").map((t) => t.trim()).filter(Boolean)
+    else if (numeric) v === "" ? delete f[key] : (f[key] = Number(v))
+    else v === "" ? delete f[key] : (f[key] = v)
+    commit()
+  }
+  wrap.append(label, input)
+  return wrap
+}
+
+// --- zone panel ---
+
+function renderZoneFields() {
+  $("zoneName").value = zone.name
+  $("originX").value = zone.origin[0]
+  $("originZ").value = zone.origin[1]
+}
+
+$("zoneName").oninput = (e) => {
+  zone.name = e.target.value
+  save()
+}
+$("originX").oninput = (e) => {
+  zone.origin[0] = Number(e.target.value) || 0
+  save()
+}
+$("originZ").oninput = (e) => {
+  zone.origin[1] = Number(e.target.value) || 0
+  save()
+}
+$("showLevels").onchange = render
+
+$("copyBtn").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($("json").value)
+    status("copied")
+  } catch {
+    $("json").select()
+    status("select-all is ready; copy with your keyboard")
+  }
+}
+
+$("loadBtn").onclick = () => {
+  try {
+    zone = normalize(JSON.parse($("json").value))
+    select(null)
+    renderZoneFields()
+    commit()
+    status("loaded")
+  } catch (err) {
+    status(`couldn't load: ${err.message}`, true)
+  }
+}
+
+$("newBtn").onclick = () => {
+  if (!confirm("Start a new zone? The current one is only kept if you copied it.")) return
+  zone = emptyZone()
+  select(null)
+  renderZoneFields()
+  commit()
+}
+
+function status(text, error = false) {
+  $("status").textContent = text
+  $("status").style.color = error ? "#d88" : "#8a8"
+}
+
+// --- tool buttons ---
+
+function setTool(name) {
+  tool = name
+  drawing = null
+  document.querySelectorAll("#tools button").forEach((b) => b.classList.toggle("active", b.dataset.tool === name))
+  const hint = STROKE_KINDS[name] ? HINTS.stroke : PIN_KINDS[name] ? HINTS.pin : HINTS[name]
+  $("hint").textContent = `${hint} · right-drag or space-drag to pan · wheel to zoom`
+  render()
+}
+
+TOOLS.forEach((name) => {
+  const b = document.createElement("button")
+  b.textContent = name
+  b.dataset.tool = name
+  b.onclick = () => setTool(name)
+  $("tools").appendChild(b)
+})
+
+window.addEventListener("resize", resize)
+renderZoneFields()
+setTool("select")
+save()
+resize()
+</script>
+</body>
+</html>
