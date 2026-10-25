@@ -1,6 +1,7 @@
 import "./editor.css";
 import { updateIndexes } from "./continentIndex.js";
 import { Editor } from "./editor.js";
+import { loadLocal, saveLocal } from "./localSave.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
 
@@ -55,6 +56,7 @@ $("download").addEventListener("click", () => {
   link.click();
   URL.revokeObjectURL(link.href);
   editor.markSaved();
+  keep();
 });
 
 $("upload").addEventListener("click", () => {
@@ -69,9 +71,53 @@ $("uploadFile").addEventListener("change", async (e) => {
   try {
     editor.setWorld(World.fromZip(new Uint8Array(await file.arrayBuffer())));
     $("worldName").textContent = editor.world.info.name;
+    keep();
   } catch (err) {
     window.alert(`Couldn't load ${file.name}: ${err.message}`);
   }
 });
 
 $("worldName").textContent = editor.world.info.name;
+
+// The world is kept in the browser a moment after each change, and comes back on reload.
+const KEEP_DELAY_MS = 1000;
+let keepTimer = null;
+let keeping = false; // a change hasn't been kept yet
+
+async function keep() {
+  clearTimeout(keepTimer);
+  keepTimer = null;
+  try {
+    await saveLocal({ zip: editor.world.toZip(), pending: [...editor.pending], dirty: editor.dirty });
+    keeping = keepTimer !== null;
+  } catch (err) {
+    editor.say(`Couldn't keep the world in this browser: ${err.message}`);
+  }
+}
+
+editor.onEdit = () => {
+  keeping = true;
+  clearTimeout(keepTimer);
+  keepTimer = setTimeout(keep, KEEP_DELAY_MS);
+};
+
+window.addEventListener("beforeunload", (e) => {
+  if (keeping) e.preventDefault();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && keepTimer) keep();
+});
+
+try {
+  const saved = await loadLocal();
+  if (saved) {
+    editor.setWorld(World.fromZip(saved.zip));
+    for (const key of saved.pending ?? []) editor.pending.add(key);
+    editor.unsaved = Boolean(saved.dirty);
+    editor.renderPanel();
+    $("worldName").textContent = editor.world.info.name;
+    editor.say(`Picked up where you left off (kept ${new Date(saved.savedAt).toLocaleString()}).`, { info: true });
+  }
+} catch (err) {
+  editor.say(`Couldn't load the world kept in this browser: ${err.message}`);
+}

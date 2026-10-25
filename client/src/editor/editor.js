@@ -72,7 +72,7 @@ export class Editor {
     this.features = new Features(this);
     this.palette = new ShapePalette(this, elements);
     this.trees = new TreeBrush(this);
-    this.dirty = false;
+    this.unsaved = false; // changed since the last download
 
     this.map = new MapView(elements.map, {
       onPointer: ([x, z]) => (elements.cursor.textContent = `tile ${Math.floor(x)}, ${Math.floor(z)}`),
@@ -95,10 +95,18 @@ export class Editor {
       if (this.showing3d) this.view3d?.nudge(dt, move);
       else this.map.nudge(dt, move);
     });
-    window.addEventListener("beforeunload", (e) => {
-      if (this.dirty) e.preventDefault();
-    });
     this.showContinent();
+  }
+
+  // Whether the world changed since the last download. Setting it runs onEdit, so the world can be
+  // kept somewhere as it changes.
+  get dirty() {
+    return this.unsaved;
+  }
+
+  set dirty(value) {
+    this.unsaved = value;
+    if (value) this.onEdit?.();
   }
 
   // Swaps in a different world, such as an uploaded one.
