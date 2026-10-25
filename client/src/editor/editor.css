@@ -52,6 +52,7 @@
 }
 
 .editor-main {
+  position: relative;
   flex: 1;
   display: flex;
   min-height: 0;
@@ -142,6 +143,25 @@
   gap: 6px;
   margin-top: 8px;
   color: #aaa;
+}
+
+.editor-bar .editor-check {
+  margin-top: 0;
+}
+
+.editor-tip {
+  position: absolute;
+  max-width: 280px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #555;
+  border-radius: 3px;
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.editor-tip[hidden] {
+  display: none;
 }
 
 .editor-empty {

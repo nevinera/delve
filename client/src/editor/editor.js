@@ -32,6 +32,7 @@ const HINTS = {
   region: "drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · drag elsewhere to pan",
   ...FEATURE_HINTS,
 };
+const HINT_3D = "drag to orbit · right-drag to pan · wheel to zoom · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one";
 const TOOLS = ["region", ...FEATURE_TOOLS];
 
 // Ties the map, the side panel and the in-memory world together. One zone at a time is active and
@@ -135,7 +136,7 @@ export class Editor {
     this.dirty = true;
     this.renderPanel();
     this.map.render();
-    this.refresh3d();
+    this.refreshMarks();
   }
 
   // Switches between the 2D map and the 3D view. three.js loads on first use.
@@ -143,19 +144,74 @@ export class Editor {
     this.showing3d = !this.showing3d;
     if (this.showing3d && !this.view3d) {
       const { RenderView } = await import("./renderView.js");
-      this.view3d = new RenderView(this.el.scene);
+      this.view3d = new RenderView(this.el.scene, this.sceneHandlers());
     }
     this.el.map.hidden = this.showing3d;
     this.el.scene.hidden = !this.showing3d;
     this.el.toggle3d.textContent = this.showing3d ? "2D map" : "3D view";
+    this.showTip(null);
+    this.renderPanel();
     if (this.showing3d) this.refresh3d({ keepCamera: false });
     else this.map.resize();
   }
 
+  sceneState() {
+    return {
+      world: this.world,
+      continent: this.continent,
+      zones: this.zones,
+      active: this.activeZone,
+      thumbnails: this.thumbnails,
+      selected: this.features.selected,
+      pins: this.el.showPins.checked,
+    };
+  }
+
+  // Rebuilds the 3D view's terrain, for new tiles or a different zone.
   refresh3d({ keepCamera = true } = {}) {
     if (!this.showing3d || !this.view3d) return;
-    const state = { world: this.world, continent: this.continent, zones: this.zones, active: this.activeZone, thumbnails: this.thumbnails };
-    this.view3d.show(state, { keepCamera });
+    this.view3d.show(this.sceneState(), { keepCamera });
+  }
+
+  // Redraws just the 3D view's outlines and pins, after an edit.
+  refreshMarks() {
+    if (this.showing3d && this.view3d?.ground) this.view3d.showMarks(this.sceneState());
+  }
+
+  // What the pointer does in the 3D view: hover a head for details, drag the active zone's pins and
+  // stroke points, click a head to select it, and click the ground to place a pin or deselect.
+  sceneHandlers() {
+    return {
+      hover: (hit, e) => this.showTip(hit, e),
+      grab: (hit) => {
+        const zone = this.activeZone;
+        return zone?.key === hit.zone && this.features.grab(zone, hit);
+      },
+      drag: (tile) => {
+        this.features.dragTo(tile, this.activeZone);
+        this.refreshMarks();
+      },
+      drop: () => this.features.endDrag(this.activeZone),
+      click: (hit, tile) => {
+        const zone = this.activeZone;
+        if (!zone?.region.length || hit) return;
+        if (PINS[this.toolName] && tile) this.features.addPin(zone, this.toolName, tile);
+        else this.features.select(null);
+      },
+    };
+  }
+
+  // The details box beside a hovered pin head, or hidden for null.
+  showTip(hit, e) {
+    const tip = this.el.sceneTip;
+    const zone = hit && this.zones.find((z) => z.key === hit.zone);
+    const lines = zone && this.features.describe(zone, hit);
+    tip.hidden = !lines;
+    if (!lines) return;
+    tip.textContent = lines.join("\n");
+    const box = tip.parentElement.getBoundingClientRect();
+    tip.style.left = `${e.clientX - box.left + 14}px`;
+    tip.style.top = `${e.clientY - box.top + 14}px`;
   }
 
   markSaved() {
@@ -218,6 +274,10 @@ export class Editor {
     generate.addEventListener("click", () => this.generate(generate, tilesTouched(this.activeZone.region)));
     this.el.regenerate.addEventListener("click", () => this.generate(this.el.regenerate, this.changedHere()));
     highlight.addEventListener("change", () => this.map.render());
+    this.el.showPins.addEventListener("change", () => {
+      this.map.render();
+      this.refreshMarks();
+    });
     for (const name of TOOLS) {
       const b = document.createElement("button");
       b.type = "button";
@@ -315,7 +375,7 @@ export class Editor {
         b.disabled = !zone.region.length;
       }
     }
-    hint.textContent = HINTS[this.mode()];
+    hint.textContent = this.showing3d ? HINT_3D : HINTS[this.mode()];
   }
 
   // The changed tiles the active zone can regenerate.
@@ -359,6 +419,7 @@ export class Editor {
 
   renderProps() {
     this.features.renderProps(this.el.props, this.activeZone);
+    this.refreshMarks();
   }
 
   mode() {
@@ -507,10 +568,11 @@ export class Editor {
 
   draw(ctx, map) {
     const dpr = map.dpr;
+    const pins = this.el.showPins.checked;
     for (const zone of this.zones) {
       if (zone.key === this.active) continue;
       this.drawRegion(ctx, map, zone, false);
-      this.features.draw(ctx, zone, false);
+      if (pins) this.features.draw(ctx, zone, false);
     }
     const zone = this.activeZone;
     if (!zone) return;
@@ -530,7 +592,7 @@ export class Editor {
     }
     if (!this.drawing) {
       this.drawRegion(ctx, map, zone, true);
-      this.features.draw(ctx, zone, true);
+      if (pins) this.features.draw(ctx, zone, true);
       this.features.drawInProgress(ctx);
       return;
     }

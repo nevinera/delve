@@ -2,6 +2,7 @@
   <strong id="worldName"></strong>
   <span id="cursor" class="editor-cursor"></span>
   <span class="spacer"></span>
+  <label class="editor-check"><input id="showPins" type="checkbox" checked><span>show pins</span></label>
   <button id="toggle3d" type="button">3D view</button>
   <button id="upload" type="button">upload world</button>
   <input id="uploadFile" type="file" accept=".zip,application/zip" hidden>
@@ -10,6 +11,7 @@
 <main class="editor-main">
   <canvas id="map" class="editor-map"></canvas>
   <canvas id="scene" class="editor-map" hidden></canvas>
+  <div id="sceneTip" class="editor-tip" hidden></div>
   <aside class="editor-panel">
     <section>
       <h2>Continent</h2>

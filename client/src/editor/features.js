@@ -82,18 +82,22 @@ export class Features {
       down: (tile) => {
         const existing = this.pinAt(zone, tile);
         if (existing) return this.grabPin(existing);
-        const at = this.place(tile, zone);
-        if (!at) return true;
-        const pin = { id: nextId(zone, "p"), kind, at };
-        if (kind === "height") pin.height = DEFAULT_HEIGHT_FT;
-        zone.pins.push(pin);
-        this.select("pin", pin.id);
-        this.editor.save(zone);
+        this.addPin(zone, kind, tile);
         return true;
       },
       move: (tile) => this.dragTo(tile, zone),
       up: () => this.endDrag(zone),
     };
+  }
+
+  addPin(zone, kind, tile) {
+    const at = this.place(tile, zone);
+    if (!at) return;
+    const pin = { id: nextId(zone, "p"), kind, at };
+    if (kind === "height") pin.height = DEFAULT_HEIGHT_FT;
+    zone.pins.push(pin);
+    this.select("pin", pin.id);
+    this.editor.save(zone);
   }
 
   strokeTool(zone, kind) {
@@ -153,6 +157,35 @@ export class Features {
     this.select("pin", pin.id);
     this.dragging = { target: pin, key: "at" };
     return true;
+  }
+
+  // Starts dragging something picked in the 3D view: a pin, or one point of a stroke.
+  grab(zone, { type, id, index }) {
+    if (type === "pin") {
+      const pin = zone.pins.find((p) => p.id === id);
+      return pin ? this.grabPin(pin) : false;
+    }
+    const stroke = zone.strokes.find((s) => s.id === id);
+    if (!stroke) return false;
+    this.select("stroke", id);
+    this.dragging = { target: stroke.points, key: index };
+    return true;
+  }
+
+  // Lines of text about something picked in the 3D view, or null when it's gone.
+  describe(zone, { type, id, index, ground }) {
+    const feature = (type === "pin" ? zone.pins : zone.strokes).find((f) => f.id === id);
+    if (!feature) return null;
+    const kind = PINS[feature.kind] ?? STROKES[feature.kind];
+    const lines = [`${kind.label} · ${feature.id} · ${zone.name || zone.key}`];
+    if (feature.name) lines.push(feature.name);
+    const groundText = Number.isNaN(ground) ? "" : `ground ${Math.round(ground)}ft`;
+    const heights = [feature.kind === "height" && `height ${feature.height ?? "?"}ft`, groundText].filter(Boolean);
+    if (heights.length) lines.push(heights.join(" · "));
+    if (type === "stroke") lines.push(`point ${index + 1} of ${feature.points.length} · width ${feature.width}ft`);
+    if (feature.tags?.length) lines.push(`tags: ${feature.tags.join(", ")}`);
+    if (feature.notes) lines.push(feature.notes);
+    return lines;
   }
 
   // Returns true when the press took a point of the selected stroke, false when it was used up

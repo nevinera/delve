@@ -12,6 +12,8 @@ const editor = new Editor(World.empty(), {
   map: $("map"),
   scene: $("scene"),
   toggle3d: $("toggle3d"),
+  showPins: $("showPins"),
+  sceneTip: $("sceneTip"),
   cursor: $("cursor"),
   continent: $("continent"),
   zoneList: $("zoneList"),

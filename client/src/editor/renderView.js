@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { gunzipSync } from "fflate";
 import { TILE_FT } from "../world/constants.js";
 import { decodeTile } from "../world/tileCodec.js";
+import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { surfaceTiles } from "./thumbnails.js";
@@ -12,13 +13,20 @@ const SEA = 0x1d4a6a;
 const SKY = 0x9db8cc;
 const BOUNDARY_LIFT_FT = 6;
 const BOUNDARY_STEP_FT = 32;
+const ACTIVE = 0xf0c850;
+const PIN_LIFT_FT = 150; // pin heads float this far above the ground
+const PIN_STAB_FT = 20; // and their sticks reach this far into it
+const PIN_SIZE = 0.035; // head sizes, as a fraction of the view's height
+const POINT_SIZE = 0.022;
+const DRAG_PX = 4; // a press that moves less than this is a click
 
 // The editor's 3D view: the active zone's tiles plus a ring around them as lit terrain with river
 // water, every other existing tile as its thumbnail on the sea, and every zone's boundary draped
-// over the ground. Positions are feet relative to the active zone's middle, so float32 stays
+// over the ground. Pins stand on sticks stabbed into the ground, with strokes strung between their
+// points' heads; `handlers` hears about hovering, dragging and clicking those heads. Positions are feet relative to the active zone's middle, so float32 stays
 // precise.
 export class RenderView {
-  constructor(canvas) {
+  constructor(canvas, handlers = {}) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -40,7 +48,20 @@ export class RenderView {
     this.scene.add(sea);
 
     this.content = new THREE.Group();
-    this.scene.add(this.content);
+    this.marks = new THREE.Group();
+    this.scene.add(this.content, this.marks);
+    this.surfaces = [sea]; // what a pointer can land on
+    this.heads = []; // pin heads a pointer can pick
+    this.textures = { circle: markTexture("circle"), diamond: markTexture("diamond") };
+    this.raycaster = new THREE.Raycaster();
+    this.handlers = handlers;
+    this.press = null;
+    this.dragging = false;
+    // Capture runs this before OrbitControls' own listener, so a grabbed head can turn orbiting off.
+    canvas.addEventListener("pointerdown", (e) => this.onDown(e), { capture: true });
+    canvas.addEventListener("pointermove", (e) => this.onMove(e));
+    canvas.addEventListener("pointerup", (e) => this.onUp(e));
+    canvas.addEventListener("pointerleave", () => this.hover(null));
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
 
@@ -58,7 +79,8 @@ export class RenderView {
   }
 
   // Rebuilds everything from the world. `keepCamera` leaves the view where it is.
-  show({ world, continent, zones, active, thumbnails }, { keepCamera = false } = {}) {
+  show(state, { keepCamera = false } = {}) {
+    const { world, continent, active, thumbnails } = state;
     this.clear();
     const editable = active ? tilesTouched(active.region) : [];
     const near = new Set();
@@ -76,6 +98,7 @@ export class RenderView {
     const middle = active?.region.length ? labelPoint(active.region) : [0, 0];
     this.origin = [middle[0] * TILE_FT, middle[1] * TILE_FT];
     const ground = groundSampler(decoded, this.origin);
+    this.ground = ground;
 
     const groundMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
     const waterMaterial = new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 });
@@ -86,7 +109,9 @@ export class RenderView {
         south: decoded.get(`${tx},${tz + 1}`),
         southEast: decoded.get(`${tx + 1},${tz + 1}`),
       };
-      this.content.add(new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin)), groundMaterial));
+      const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin)), groundMaterial);
+      this.content.add(terrain);
+      this.surfaces.push(terrain);
       const water = waterMesh(tile, neighbours, this.origin);
       if (water) this.content.add(new THREE.Mesh(geometry(water), waterMaterial));
     }
@@ -101,11 +126,7 @@ export class RenderView {
       plane.rotation.x = -Math.PI / 2;
       plane.position.set((tx + 0.5) * TILE_FT - this.origin[0], 0.5, (tz + 0.5) * TILE_FT - this.origin[1]);
       this.content.add(plane);
-    }
-
-    for (const zone of zones) {
-      const color = zone.key === active?.key ? 0xf0c850 : 0xffffff;
-      for (const { points } of rings(zone.region)) this.content.add(boundary(points, ground, this.origin, color));
+      this.surfaces.push(plane);
     }
 
     if (!keepCamera) {
@@ -114,22 +135,182 @@ export class RenderView {
       const zs = editable.map(([, tz]) => tz);
       const extent = editable.length ? Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) + 1 : 8;
       const distance = extent * TILE_FT * 0.75;
-      const y = ground(0, 0);
+      const y = Math.max(0, ground(0, 0) || 0);
       this.controls.target.set(0, y, 0);
       this.camera.position.set(0, y + distance * 0.8, distance);
       this.controls.update();
     }
+    this.showMarks(state);
     this.resize();
   }
 
+  // Zone outlines and, when `pins` is on, every zone's pins and strokes, with the active zone's
+  // brighter. Cheap, so it's redone on every edit and drag.
+  showMarks({ zones, active, selected, pins }) {
+    empty(this.marks);
+    this.heads = [];
+    for (const zone of zones) {
+      const mine = zone.key === active?.key;
+      for (const { points } of rings(zone.region)) this.marks.add(boundary(points, this.ground, this.origin, mine ? ACTIVE : 0xffffff));
+      if (pins) this.addFeatures(zone, mine, mine ? selected : null);
+    }
+    this.render();
+  }
+
+  addFeatures(zone, mine, selected) {
+    const opacity = mine ? 1 : 0.45;
+    const sticks = [];
+    // A stick under a point; returns where its head goes and the ground there.
+    const stick = ([tx, tz]) => {
+      const x = tx * TILE_FT - this.origin[0];
+      const z = tz * TILE_FT - this.origin[1];
+      const ground = this.ground(x, z);
+      const y = Number.isNaN(ground) ? 0 : ground;
+      sticks.push(x, y - PIN_STAB_FT, z, x, y + PIN_LIFT_FT, z);
+      return { top: new THREE.Vector3(x, y + PIN_LIFT_FT, z), ground };
+    };
+
+    for (const stroke of zone.strokes) {
+      const color = STROKES[stroke.kind]?.color ?? "#fff";
+      const picked = selected?.type === "stroke" && selected.id === stroke.id;
+      const points = stroke.points.map(stick);
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(points.map((p) => p.top)),
+        new THREE.LineBasicMaterial({ color: picked ? "#fff" : color, transparent: true, opacity }),
+      );
+      this.marks.add(line);
+      points.forEach(({ top, ground }, index) => {
+        const hit = { zone: zone.key, type: "stroke", id: stroke.id, index, ground };
+        this.addHead(top, "circle", color, POINT_SIZE, { opacity, picked, hit });
+      });
+    }
+    for (const pin of zone.pins) {
+      const { top, ground } = stick(pin.at);
+      const picked = selected?.type === "pin" && selected.id === pin.id;
+      const hit = { zone: zone.key, type: "pin", id: pin.id, ground };
+      const shape = pin.kind === "height" ? "diamond" : "circle";
+      this.addHead(top, shape, PINS[pin.kind]?.color ?? "#fff", PIN_SIZE, { opacity, picked, hit });
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(sticks, 3));
+    this.marks.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xeeeeee, transparent: true, opacity: opacity * 0.8 })));
+  }
+
+  // A head drawn at the same size however far away it is, and over the terrain so hills don't hide
+  // it. A picked head gets a white halo.
+  addHead(position, shape, color, size, { opacity, picked, hit }) {
+    const sprite = (map, tint, scale, order) => {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: tint, sizeAttenuation: false, transparent: true, opacity, depthTest: false }));
+      s.position.copy(position);
+      s.scale.setScalar(scale);
+      s.renderOrder = order;
+      this.marks.add(s);
+      return s;
+    };
+    if (picked) sprite(this.textures[shape], "#fff", size * 1.5, 1);
+    const head = sprite(this.textures[shape], color, size, 2);
+    head.userData.hit = hit;
+    this.heads.push(head);
+  }
+
   clear() {
-    for (const child of [...this.content.children]) {
-      child.geometry.dispose();
-      child.material.map?.dispose();
-      child.material.dispose();
-      this.content.remove(child);
+    empty(this.content);
+    this.surfaces.length = 1; // keep the sea
+  }
+
+  // --- pointer ---
+
+  ray(e) {
+    const r = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    return this.raycaster;
+  }
+
+  pick(e) {
+    return this.ray(e).intersectObjects(this.heads)[0]?.object.userData.hit ?? null;
+  }
+
+  // The continent tile position under the pointer, or null off the edge of the world.
+  tileAt(e) {
+    const point = this.ray(e).intersectObjects(this.surfaces)[0]?.point;
+    return point ? [(point.x + this.origin[0]) / TILE_FT, (point.z + this.origin[1]) / TILE_FT] : null;
+  }
+
+  hover(hit, e) {
+    this.canvas.style.cursor = hit ? "pointer" : "";
+    this.handlers.hover?.(hit, e);
+  }
+
+  onDown(e) {
+    if (e.button !== 0) return;
+    const hit = this.pick(e);
+    this.press = { x: e.clientX, y: e.clientY, hit };
+    if (hit && this.handlers.grab?.(hit)) {
+      this.dragging = true;
+      this.controls.enabled = false;
+      this.canvas.setPointerCapture(e.pointerId);
+      this.hover(null);
     }
   }
+
+  onMove(e) {
+    if (this.dragging) {
+      const tile = this.tileAt(e);
+      if (tile) this.handlers.drag?.(tile);
+    } else if (!e.buttons) {
+      this.hover(this.pick(e), e);
+    }
+  }
+
+  onUp(e) {
+    const press = this.press;
+    this.press = null;
+    if (this.dragging) {
+      this.dragging = false;
+      this.controls.enabled = true;
+      this.handlers.drop?.();
+    } else if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_PX) {
+      this.handlers.click?.(press.hit, this.tileAt(e));
+    }
+  }
+}
+
+// Disposes a group's children. Sprites share one geometry and the heads share their textures, so
+// those stay; thumbnail textures go.
+function empty(group) {
+  for (const child of [...group.children]) {
+    if (!child.isSprite) child.geometry.dispose();
+    if (child.material.map && !child.isSprite) child.material.map.dispose();
+    child.material.dispose();
+    group.remove(child);
+  }
+}
+
+// A white shape with a dark rim, tinted per pin by the sprite's color.
+function markTexture(shape) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.beginPath();
+  if (shape === "diamond") {
+    ctx.moveTo(32, 4);
+    ctx.lineTo(60, 32);
+    ctx.lineTo(32, 60);
+    ctx.lineTo(4, 32);
+    ctx.closePath();
+  } else {
+    ctx.arc(32, 32, 26, 0, Math.PI * 2);
+  }
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = "#111";
+  ctx.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 function geometry({ positions, colors, indices }) {
@@ -141,8 +322,8 @@ function geometry({ positions, colors, indices }) {
   return g;
 }
 
-// Ground height at a point relative to the origin, from the decoded tiles (nearest cell), or sea
-// level where no tile is loaded.
+// Ground height at a point relative to the origin, from the decoded tiles (nearest cell), or NaN
+// where no tile is loaded.
 function groundSampler(decoded, origin) {
   return (x, z) => {
     const wx = x + origin[0];
@@ -150,7 +331,7 @@ function groundSampler(decoded, origin) {
     const tx = Math.floor(wx / TILE_FT);
     const tz = Math.floor(wz / TILE_FT);
     const tile = decoded.get(`${tx},${tz}`);
-    if (!tile) return 0;
+    if (!tile) return NaN;
     const i = Math.min(tile.cells - 1, Math.floor((wx - tx * TILE_FT) / tile.cellFt));
     const j = Math.min(tile.cells - 1, Math.floor((wz - tz * TILE_FT) / tile.cellFt));
     const k = j * tile.cells + i;
@@ -170,7 +351,7 @@ function boundary(points, ground, origin, color) {
     for (let s = 0; s < steps; s++) {
       const x = ax + ((bx - ax) * s) / steps;
       const z = az + ((bz - az) * s) / steps;
-      out.push(x, ground(x, z) + BOUNDARY_LIFT_FT, z);
+      out.push(x, (ground(x, z) || 0) + BOUNDARY_LIFT_FT, z);
     }
   }
   out.push(out[0], out[1], out[2]);
