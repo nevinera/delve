@@ -8,7 +8,7 @@ import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
-import { clutterMeshes } from "./clutterMeshes.js";
+import { clutterMeshes, setClutterFocus } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
@@ -115,6 +115,7 @@ export class RenderView {
     const focus = this.walking ? this.walker.pos : this.controls.target;
     this.clutter.visible = this.walking || this.camera.position.distanceTo(focus) < CLUTTER_VIEW_FT;
     if (!this.clutter.visible) return;
+    setClutterFocus(focus.x, focus.z);
     const [tx, tz] = [Math.floor((focus.x + this.origin[0]) / TILE_FT), Math.floor((focus.z + this.origin[1]) / TILE_FT)];
     const key = `${tx},${tz}`;
     if (key === this.clutterAround) return;

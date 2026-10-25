@@ -7,8 +7,33 @@ import { CLUTTER } from "../world/clutter.js";
 // each instance scales, turns and colors its shape.
 
 const UP = new THREE.Vector3(0, 1, 0);
-const material = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-const flat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+// Clutter shrinks away with distance from the focus (scene x, z), from `startFt` to nothing at
+// `endFt`, so it thins out instead of stopping at the edge of the tiles it's drawn on. endFt stays
+// inside a tile, the least distance from the focus to that edge.
+const FADE = { startFt: 250, endFt: 480 };
+const focus = { value: new THREE.Vector2() };
+
+export function setClutterFocus(x, z) {
+  focus.value.set(x, z);
+}
+
+function fading(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.clutterFocus = focus;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;")
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        vec2 clutterAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+        transformed *= 1.0 - smoothstep(${FADE.startFt.toFixed(1)}, ${FADE.endFt.toFixed(1)}, distance(clutterAt, clutterFocus));`,
+      );
+  };
+  return material;
+}
+
+const material = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+const flat = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
 
 // Thin blades fanned out round a point: count of them, each `width` wide at the foot, reaching
 // `height` (0-1 each, varied) and leaning out by `lean`. Segments bend each blade over.
