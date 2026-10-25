@@ -6,7 +6,7 @@ describe("heightField", () => {
     expect(prepareHeights([], 20)(123, 456)).toBe(20);
   });
 
-  it("passes through every pin", () => {
+  it("passes through every pin, or close", () => {
     const pins = [
       { x: 0, z: 0, height: 100 },
       { x: 2000, z: 0, height: 20 },
@@ -14,7 +14,7 @@ describe("heightField", () => {
       { x: 1500, z: 1500, height: 5 },
     ];
     const at = prepareHeights(pins, 20);
-    for (const p of pins) expect(at(p.x, p.z)).toBeCloseTo(p.height, 3);
+    for (const p of pins) expect(Math.abs(at(p.x, p.z) - p.height)).toBeLessThan(1);
   });
 
   it("spans smoothly between two pins instead of doming around each", () => {
@@ -24,7 +24,7 @@ describe("heightField", () => {
     expect(at(1500, 0)).toBeLessThan(at(1000, 0));
   });
 
-  it("never goes past the pins' range, and eases to the default far away", () => {
+  it("stays about within the pins' range, and eases to the default far away", () => {
     const pins = [
       { x: 0, z: 0, height: 100 },
       { x: 1000, z: 0, height: 0 },
@@ -33,10 +33,23 @@ describe("heightField", () => {
     const at = prepareHeights(pins, 20);
     for (let x = -2000; x <= 3000; x += 250) {
       const h = at(x, -1500);
-      expect(h).toBeGreaterThanOrEqual(0);
-      expect(h).toBeLessThanOrEqual(100);
+      expect(h).toBeGreaterThanOrEqual(-10);
+      expect(h).toBeLessThanOrEqual(110);
     }
     expect(at(20000, 20000)).toBe(20);
+  });
+
+  it("doesn't dip far below the pins around it beside a steep pair", () => {
+    // A low pin just past a steep rise: the bare spline plunges beyond it.
+    const pins = [
+      { x: 0, z: 0, height: 260 },
+      { x: 0, z: 1000, height: 260 },
+      { x: 900, z: 500, height: 16 },
+      { x: 4000, z: 500, height: 20 },
+      { x: 3000, z: -2000, height: 2 },
+    ];
+    const at = prepareHeights(pins, 20);
+    for (let x = 900; x <= 3000; x += 100) expect(at(x, 500)).toBeGreaterThan(8);
   });
 
   it("copes with one pin, or pins in a line", () => {

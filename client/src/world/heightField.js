@@ -1,12 +1,18 @@
 // The broad shape of the land: a thin-plate spline through every height pin, the smoothest surface
-// that passes through them all, like a sheet of metal bent through each pin. It's clamped to the
-// pins' range so it can't overshoot, and far from every pin it eases to a default height.
+// that passes through them all, like a sheet of metal bent through each pin. A spline overshoots
+// past a steep pair of pins, so it's kept between a low and a high bound made from the pins in
+// each neighbourhood: it can't dip much below the lowest pin around, or rise above the highest.
+// Far from every pin it eases to a default height.
 //
 // Points are feet in continent space. Solving happens once per continent; each point is then a sum
 // over the pins.
 
 const UNIT = 1000; // the spline works in thousands of feet, to keep the solve well conditioned
 const FAR = { start: 3000, end: 8000 }; // ft from the nearest pin over which it eases to the default
+// The bounds: a soft min and max of the pins' heights, weighted 1 / (r² + reach²)², so a pin counts
+// over about `reachFt` around it. `softFt` is how soft the min and max are, `slackFt` how far past
+// them the spline may go, and `edgeFt` how gently it bends onto a bound.
+const BOUND = { reachFt: 1000, softFt: 15, slackFt: 10, edgeFt: 8 };
 
 const phi = (r) => (r > 0 ? r * r * Math.log(r) : 0);
 
@@ -19,18 +25,33 @@ export function prepareHeights(pins, defaultHeight) {
   // With fewer than three pins, or all in a line, the tilt terms can't be pinned down, so the
   // spline goes without them.
   const fit = solve(pts, true) ?? solve(pts, false);
+  // Each pin's share of the soft min and max, measured from the lowest and highest pins so the
+  // exponents stay small.
+  const below = pins.map((p) => Math.exp(-(p.height - low) / BOUND.softFt));
+  const above = pins.map((p) => Math.exp((p.height - high) / BOUND.softFt));
+  const reach2 = (BOUND.reachFt / UNIT) ** 2;
 
   return (x, z) => {
     const u = x / UNIT;
     const v = z / UNIT;
     let h = fit.affine[0] + fit.affine[1] * u + fit.affine[2] * v;
     let nearest = Infinity;
+    let total = 0;
+    let lowSum = 0;
+    let highSum = 0;
     for (let i = 0; i < pts.length; i++) {
-      const r = Math.hypot(u - pts[i][0], v - pts[i][1]);
+      const r2 = (u - pts[i][0]) ** 2 + (v - pts[i][1]) ** 2;
+      const r = Math.sqrt(r2);
       h += fit.weights[i] * phi(r);
       nearest = Math.min(nearest, r);
+      const w = 1 / (r2 + reach2) ** 2;
+      total += w;
+      lowSum += w * below[i];
+      highSum += w * above[i];
     }
-    h = Math.max(low, Math.min(high, h));
+    const floor = low - BOUND.softFt * Math.log(lowSum / total) - BOUND.slackFt;
+    const ceiling = high + BOUND.softFt * Math.log(highSum / total) + BOUND.slackFt;
+    h = softMin(softMax(h, floor, BOUND.edgeFt), ceiling, BOUND.edgeFt);
     const t = smoothstep(FAR.start / UNIT, FAR.end / UNIT, nearest);
     return h + (defaultHeight - h) * t;
   };
@@ -78,6 +99,16 @@ function gauss(a) {
     x[r] = sum / a[r][r];
   }
   return x;
+}
+
+// min and max with the corner rounded over about k.
+function softMin(a, b, k) {
+  const t = Math.max(0, Math.min(1, 0.5 + (b - a) / (2 * k)));
+  return b + (a - b) * t - k * t * (1 - t);
+}
+
+function softMax(a, b, k) {
+  return -softMin(-a, -b, k);
 }
 
 function smoothstep(a, b, x) {
