@@ -7,7 +7,7 @@ import { findTrees } from "../world/trees.js";
 import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
-import { setTreeSight, treeMeshes } from "./treeMeshes.js";
+import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
 import { clutterMeshes, setClutterFocus } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
@@ -143,23 +143,41 @@ export class RenderView {
       this.sightTile = null;
     }
     if (!this.origin) return;
+    // Tree crowns simplify with distance from the walker, or from what the camera looks at.
+    const focus = walking ? this.walker.pos : this.controls.target;
+    setTreeSight(focus.x, focus.z, SIGHT.canopyFt, { band: SIGHT.canopyBandFt, solid: this.solidCanopies });
+    const [tx, tz] = [Math.floor((focus.x + this.origin[0]) / TILE_FT), Math.floor((focus.z + this.origin[1]) / TILE_FT)];
+    const near = (at) => !walking || !at || (Math.abs(at[0] - tx) <= SIGHT.tiles && Math.abs(at[1] - tz) <= SIGHT.tiles);
+    this.showTreeStages(focus, near);
     if (!walking) {
       setObjectSight(0, 0, Infinity, Infinity);
-      setTreeSight(0, 0, [], { solid: this.solidCanopies });
       if (this.sightTile !== null) for (const child of this.content.children) child.visible = true;
       this.sightTile = null;
       return;
     }
-    const { pos } = this.walker;
-    setObjectSight(pos.x, pos.z, SIGHT.smallFt, SIGHT.largeFt);
-    setTreeSight(pos.x, pos.z, SIGHT.canopyFt, { band: SIGHT.canopyBandFt, solid: this.solidCanopies });
-    const [tx, tz] = [Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT)];
+    setObjectSight(focus.x, focus.z, SIGHT.smallFt, SIGHT.largeFt);
     const key = `${tx},${tz}`;
     if (key === this.sightTile) return;
     this.sightTile = key;
-    for (const child of this.content.children) {
-      const at = child.userData.tile;
-      child.visible = !at || (Math.abs(at[0] - tx) <= SIGHT.tiles && Math.abs(at[1] - tz) <= SIGHT.tiles);
+    for (const child of this.content.children) child.visible = near(child.userData.tile);
+  }
+
+  // Each tile's tree meshes draw only when some tree on that tile can need them: trunks within
+  // sight, and each crown layer while the tile's nearest or farthest tree is in its stages.
+  showTreeStages(focus, near) {
+    for (const mesh of this.trees.children) {
+      const at = mesh.userData.tile;
+      mesh.visible = near(at);
+      const stages = mesh.userData.stages;
+      if (!mesh.visible || !stages) continue;
+      const [x0, z0] = [at[0] * TILE_FT - this.origin[0], at[1] * TILE_FT - this.origin[1]];
+      const dx = Math.max(x0 - focus.x, 0, focus.x - x0 - TILE_FT);
+      const dz = Math.max(z0 - focus.z, 0, focus.z - z0 - TILE_FT);
+      const farX = Math.max(Math.abs(focus.x - x0), Math.abs(focus.x - x0 - TILE_FT));
+      const farZ = Math.max(Math.abs(focus.z - z0), Math.abs(focus.z - z0 - TILE_FT));
+      const least = treeStage(Math.hypot(dx, dz));
+      const most = treeStage(Math.hypot(farX, farZ));
+      mesh.visible = most > stages[0] - 1 && least < stages[1] + 1;
     }
   }
 
@@ -348,9 +366,10 @@ export class RenderView {
       child.dispose();
       this.trees.remove(child);
     }
-    const trees = [];
+    // A set of meshes per tile, so whole tiles can be left out.
     for (const tile of this.decoded.values()) {
       const [tx, tz] = tile.coords;
+      const trees = [];
       for (const { i, j, size, kind } of findTrees(tile)) {
         let ground = Infinity;
         for (let dj = 0; dj < size; dj++) {
@@ -360,8 +379,11 @@ export class RenderView {
         const z = (tz * tile.cells + j + size / 2) * tile.cellFt - this.origin[1];
         trees.push({ x, z, ground, size, kind });
       }
+      for (const mesh of treeMeshes(trees)) {
+        mesh.userData.tile = [tx, tz];
+        this.trees.add(mesh);
+      }
     }
-    if (trees.length) this.trees.add(...treeMeshes(trees));
   }
 
   // Zone outlines and, when `pins` is on, every zone's pins and strokes, with the active zone's

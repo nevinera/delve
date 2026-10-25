@@ -51,6 +51,13 @@ const sight = {
   least: { value: 0 },
 };
 
+// The stage a crown at `away` feet from the focus is in, as the shaders work it out.
+export function treeStage(away) {
+  const { stages, band, least } = sight;
+  const steps = stages.value.toArray().reduce((sum, at) => sum + Math.min(1, Math.max(0, (away - at) / band.value + 0.5)), 0);
+  return Math.max(least.value, steps);
+}
+
 export function setTreeSight(x, z, stages, { band = 40, solid = false } = {}) {
   sight.focus.value.set(x, z);
   sight.stages.value.set(...[0, 1, 2].map((i) => Math.min(stages[i] ?? Infinity, 1e9)));
@@ -126,8 +133,8 @@ function crownParts(shape, opts, color, at) {
   const last = SHELLS.length - 1;
   return SHELLS.flatMap((_, n) => {
     const geometry = () => shell(shape, n, opts);
-    const parts = [{ geometry, material: () => leafMaterial(false, last - n, last - n), color, at }];
-    if (n < last) parts.push({ geometry, material: () => leafMaterial(true, 0, last - 1 - n), color, at });
+    const parts = [{ geometry, material: () => leafMaterial(false, last - n, last - n), stages: [last - n, last - n], color, at }];
+    if (n < last) parts.push({ geometry, material: () => leafMaterial(true, 0, last - 1 - n), stages: [0, last - 1 - n], color, at });
     return parts;
   });
 }
@@ -203,6 +210,8 @@ export function treeMeshes(trees) {
         mesh.setMatrixAt(n, m);
         if (part.color) mesh.setColorAt(n, color.set(part.color).offsetHSL(0.03 * (r - 0.5), 0, 0.08 * (random(x + 1, z) - 0.5)));
       });
+      mesh.userData.stages = part.stages;
+      mesh.computeBoundingSphere();
       meshes.push(mesh);
     }
   }
