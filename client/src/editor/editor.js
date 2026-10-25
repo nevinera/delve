@@ -17,7 +17,7 @@ import {
 import { createZone, listZones, olderZones, removeZone, saveZone, zonePath } from "./zones.js";
 import { TreeBrush } from "./treeBrush.js";
 import { tileRgba } from "../world/tileImage.js";
-import { TREE_SIZES, treeSize, treeTerrain } from "../world/trees.js";
+import { TREE_KINDS, TREE_SIZES } from "../world/trees.js";
 
 const HIT_PX = 8;
 const COLORS = {
@@ -37,7 +37,8 @@ const HINTS = {
   tree: "click or drag to plant trees on the zone's generated tiles · hold alt to remove them · regenerating a tile clears its trees",
 };
 const HINT_3D = "drag to orbit · right-drag to pan · wheel to zoom · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
-const TREE_TOOLS = TREE_SIZES.map(treeTerrain);
+const TREE_TOOLS = TREE_SIZES.map((size) => `tree_${size}`);
+const treeToolSize = (name) => Number(/^tree_(\d)$/.exec(name)?.[1] ?? 0);
 const TOOLS = ["region", ...FEATURE_TOOLS, ...TREE_TOOLS];
 
 // Ties the map, the side panel and the in-memory world together. One zone at a time is active and
@@ -196,16 +197,15 @@ export class Editor {
       },
       press: (tile, e) => {
         const zone = this.activeZone;
-        const size = treeSize(this.toolName);
-        if (!zone?.region.length || !size || !tile) return false;
+        if (!zone?.region.length || !this.brushTree() || !tile) return false;
         this.painting = true;
         this.say();
-        this.trees.apply(zone, tile, size, e.altKey);
+        this.trees.apply(zone, tile, this.brushTree(), e.altKey);
         return true;
       },
       drag: (tile, e) => {
         if (this.painting) {
-          this.trees.apply(this.activeZone, tile, treeSize(this.toolName), e.altKey);
+          this.trees.apply(this.activeZone, tile, this.brushTree(), e.altKey);
         } else {
           this.features.dragTo(tile, this.activeZone);
           this.refreshMarks();
@@ -219,6 +219,12 @@ export class Editor {
         else this.features.select(null);
       },
     };
+  }
+
+  // The tree the brush plants, { size, kind }, or null when no tree tool is on.
+  brushTree() {
+    const size = treeToolSize(this.toolName);
+    return size ? { size, kind: this.el.treeKind.value } : null;
   }
 
   // A tree brush stroke changed a tile: show it right away.
@@ -316,11 +322,12 @@ export class Editor {
       const b = document.createElement("button");
       b.type = "button";
       b.dataset.tool = name;
-      const size = treeSize(name);
+      const size = treeToolSize(name);
       b.textContent = PINS[name]?.label ?? STROKES[name]?.label ?? (size ? `tree ${size}x${size}` : name);
       b.addEventListener("click", () => this.setTool(name));
       tools.append(b);
     }
+    for (const kind of TREE_KINDS) this.el.treeKind.add(new Option(kind, kind));
 
     continent.addEventListener("change", () => {
       this.continent = continent.value;
@@ -464,7 +471,7 @@ export class Editor {
     if (!zone.region.length) return "empty";
     if (PINS[this.toolName]) return "pin";
     if (STROKES[this.toolName]) return "stroke";
-    if (treeSize(this.toolName)) return "tree";
+    if (treeToolSize(this.toolName)) return "tree";
     return this.toolName;
   }
 
@@ -484,7 +491,7 @@ export class Editor {
     if (this.drawing) return this.drawTool(zone);
     if (!zone.region.length) return null;
     if (this.toolName === "region") return this.editTool(zone);
-    if (treeSize(this.toolName)) return this.trees.tool(zone, treeSize(this.toolName));
+    if (treeToolSize(this.toolName)) return this.trees.tool(zone, () => this.brushTree());
     return this.features.tool(zone, this.toolName);
   }
 

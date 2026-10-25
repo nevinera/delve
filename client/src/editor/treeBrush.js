@@ -19,7 +19,7 @@ export class TreeBrush {
   }
 
   // One step of a stroke at a continent position (tile units).
-  apply(zone, [x, z], size, erase) {
+  apply(zone, [x, z], { size, kind }, erase) {
     const tx = Math.floor(x);
     const tz = Math.floor(z);
     const tile = this.tile(zone, tx, tz);
@@ -36,7 +36,7 @@ export class TreeBrush {
       const half = Math.floor((size - 1) / 2);
       const i = Math.max(0, Math.min(n - size, ci - half));
       const j = Math.max(0, Math.min(n - size, cj - half));
-      changed = plantTree(tile, i, j, size);
+      changed = plantTree(tile, i, j, size, kind);
       if (changed) this.last = [x, z];
     }
     if (!changed) return;
@@ -77,15 +77,16 @@ export class TreeBrush {
     return any;
   }
 
-  // The 2D map's tool for one tree size.
-  tool(zone, size) {
+  // The 2D map's tool for one tree size. `tree()` gives the { size, kind } to plant, read fresh so a
+  // kind picked mid-stroke applies.
+  tool(zone, tree) {
     return {
       down: (tile, e) => {
         this.editor.say();
-        this.apply(zone, tile, size, e.altKey);
+        this.apply(zone, tile, tree(), e.altKey);
         return true;
       },
-      move: (tile, e) => this.apply(zone, tile, size, e.altKey),
+      move: (tile, e) => this.apply(zone, tile, tree(), e.altKey),
       up: () => this.editor.treesDone(),
     };
   }

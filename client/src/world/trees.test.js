@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findTrees, fellTree, plantTree } from "./trees.js";
+import { findTrees, fellTree, parseTree, plantTree } from "./trees.js";
 
 const N = 8;
 const blank = () => ({
@@ -11,16 +11,23 @@ const blank = () => ({
 describe("trees", () => {
   it("finds trees of each size, even side by side", () => {
     const tile = blank();
-    expect(plantTree(tile, 0, 0, 2)).toBe(true);
-    expect(plantTree(tile, 2, 0, 2)).toBe(true);
-    expect(plantTree(tile, 1, 2, 3)).toBe(true);
+    expect(plantTree(tile, 0, 0, 2, "pine")).toBe(true);
+    expect(plantTree(tile, 2, 0, 2, "pine")).toBe(true);
+    expect(plantTree(tile, 1, 2, 3, "willow")).toBe(true);
     expect(plantTree(tile, 7, 7, 1)).toBe(true);
     expect(findTrees(tile)).toEqual([
-      { i: 0, j: 0, size: 2 },
-      { i: 2, j: 0, size: 2 },
-      { i: 1, j: 2, size: 3 },
-      { i: 7, j: 7, size: 1 },
+      { i: 0, j: 0, size: 2, kind: "pine" },
+      { i: 2, j: 0, size: 2, kind: "pine" },
+      { i: 1, j: 2, size: 3, kind: "willow" },
+      { i: 7, j: 7, size: 1, kind: "oak" },
     ]);
+    expect(tile.palettes.terrain).toContain("tree_willow_3");
+  });
+
+  it("reads kind and size from names, with the older tree_N names as oaks", () => {
+    expect(parseTree("tree_dead_2")).toEqual({ kind: "dead", size: 2 });
+    expect(parseTree("tree_3")).toEqual({ kind: "oak", size: 3 });
+    expect(parseTree("grass")).toBeNull();
   });
 
   it("won't overlap a tree, leave the tile, or stand in water", () => {

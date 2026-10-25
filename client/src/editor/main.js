@@ -24,6 +24,7 @@ const editor = new Editor(World.empty(), {
   drawRegion: $("drawRegion"),
   deleteZone: $("deleteZone"),
   tools: $("tools"),
+  treeKind: $("treeKind"),
   generate: $("generate"),
   regenerate: $("regenerate"),
   highlight: $("highlight"),

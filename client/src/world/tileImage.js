@@ -9,17 +9,16 @@ const COLORS = {
   path: [176, 150, 110],
   shore: [150, 150, 110],
   mud: [100, 88, 70],
-  tree_1: [44, 74, 36],
-  tree_2: [44, 74, 36],
-  tree_3: [44, 74, 36],
 };
+const TREE = [44, 74, 36];
 const UNKNOWN = [255, 0, 255];
 const FOREST = [40, 80, 40];
 
 // A cell's ground color, 0-255 RGB: its terrain type darkened toward green by forest. No water or
 // shading; the 3D view lights the ground and draws water itself.
 export function groundRgb(tile, k) {
-  const c = COLORS[tile.palettes.terrain[tile.layers.terrain[k]]] ?? UNKNOWN;
+  const name = tile.palettes.terrain[tile.layers.terrain[k]];
+  const c = COLORS[name] ?? (name?.startsWith("tree_") ? TREE : UNKNOWN);
   const f = tile.layers.forest[k] / 255;
   return c.map((v, m) => v + (FOREST[m] - v) * f * 0.8);
 }

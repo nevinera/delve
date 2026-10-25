@@ -7,6 +7,7 @@ import { findTrees } from "../world/trees.js";
 import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
+import { treeMeshes } from "./treeMeshes.js";
 import { surfaceTiles } from "./thumbnails.js";
 
 const RING_TILES = 2; // tiles drawn in full around the active zone's editable tiles
@@ -20,14 +21,6 @@ const PIN_STAB_FT = 20; // and their sticks reach this far into it
 const PIN_SIZE = 0.035; // head sizes, as a fraction of the view's height
 const POINT_SIZE = 0.022;
 const DRAG_PX = 4; // a press that moves less than this is a click
-// Trees by footprint size: very tall, with broad crowns. Feet.
-const TREES = {
-  1: { height: 60, trunk: 2.5, crown: 18 },
-  2: { height: 90, trunk: 4, crown: 28 },
-  3: { height: 120, trunk: 6, crown: 38 },
-};
-const TRUNK = 0x5a4430;
-const CROWN = 0x3d6b2e;
 
 // The editor's 3D view: the active zone's tiles plus a ring around them as lit terrain with river
 // water, every other existing tile as its thumbnail on the sea, and every zone's boundary draped
@@ -62,12 +55,6 @@ export class RenderView {
     this.trees = new THREE.Group();
     this.scene.add(this.content, this.marks, this.trees);
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
-    this.treeParts = {
-      trunk: new THREE.CylinderGeometry(0.7, 1, 1, 7).translate(0, 0.5, 0),
-      crown: new THREE.IcosahedronGeometry(1, 1),
-      trunkMaterial: new THREE.MeshLambertMaterial({ color: TRUNK }),
-      crownMaterial: new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }),
-    };
     this.surfaces = [sea]; // what a pointer can land on
     this.heads = []; // pin heads a pointer can pick
     this.textures = { circle: markTexture("circle"), diamond: markTexture("diamond") };
@@ -174,7 +161,7 @@ export class RenderView {
     this.render();
   }
 
-  // Every tree on the tiles drawn in full, as two instanced meshes: trunks and crowns.
+  // Every tree on the tiles drawn in full.
   showTrees() {
     for (const child of [...this.trees.children]) {
       child.dispose();
@@ -183,37 +170,17 @@ export class RenderView {
     const trees = [];
     for (const tile of this.decoded.values()) {
       const [tx, tz] = tile.coords;
-      for (const { i, j, size } of findTrees(tile)) {
+      for (const { i, j, size, kind } of findTrees(tile)) {
         let ground = Infinity;
         for (let dj = 0; dj < size; dj++) {
           for (let di = 0; di < size; di++) ground = Math.min(ground, tile.layers.height[(j + dj) * tile.cells + i + di]);
         }
         const x = (tx * tile.cells + i + size / 2) * tile.cellFt - this.origin[0];
         const z = (tz * tile.cells + j + size / 2) * tile.cellFt - this.origin[1];
-        trees.push({ x, z, ground, size });
+        trees.push({ x, z, ground, size, kind });
       }
     }
-    if (!trees.length) return;
-
-    const { trunk, crown, trunkMaterial, crownMaterial } = this.treeParts;
-    const trunks = new THREE.InstancedMesh(trunk, trunkMaterial, trees.length);
-    const crowns = new THREE.InstancedMesh(crown, crownMaterial, trees.length);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const color = new THREE.Color();
-    trees.forEach(({ x, z, ground, size }, n) => {
-      const r = random(x, z);
-      const shape = TREES[size];
-      const h = shape.height * (0.85 + 0.3 * r);
-      m.compose(new THREE.Vector3(x, ground, z), q, new THREE.Vector3(shape.trunk, h * 0.62, shape.trunk));
-      trunks.setMatrixAt(n, m);
-      const spin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), r * 6.28);
-      const c = shape.crown * (0.9 + 0.2 * random(z, x));
-      m.compose(new THREE.Vector3(x, ground + h * 0.68, z), spin, new THREE.Vector3(c, h * 0.32, c));
-      crowns.setMatrixAt(n, m);
-      crowns.setColorAt(n, color.set(CROWN).offsetHSL(0.03 * (r - 0.5), 0, 0.08 * (random(x + 1, z) - 0.5)));
-    });
-    this.trees.add(trunks, crowns);
+    if (trees.length) this.trees.add(...treeMeshes(trees));
   }
 
   // Zone outlines and, when `pins` is on, every zone's pins and strokes, with the active zone's
@@ -348,12 +315,6 @@ export class RenderView {
       this.handlers.click?.(press.hit, this.tileAt(e));
     }
   }
-}
-
-// A steady pseudo-random number in [0, 1) for a spot, so trees keep their looks between redraws.
-function random(x, z) {
-  const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
-  return s - Math.floor(s);
 }
 
 // Disposes a group's children. Sprites share one geometry and the heads share their textures, so

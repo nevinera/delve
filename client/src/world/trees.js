@@ -1,27 +1,34 @@
-// Trees are terrain types in a tile: every cell of a size-N tree's N x N footprint is "tree_N".
-// A tree never crosses a tile edge. Trees are found again by claiming footprints in row order:
-// the first unclaimed tree cell met is always some tree's north-west corner.
+// Trees are terrain types in a tile: every cell of a size-N tree's N x N footprint is
+// "tree_<kind>_<N>", such as "tree_oak_3". A tree never crosses a tile edge. Trees are found again
+// by claiming footprints in row order: the first unclaimed tree cell met is always some tree's
+// north-west corner.
 
 export const TREE_SIZES = [1, 2, 3];
-export const treeTerrain = (size) => `tree_${size}`;
-const TREE = /^tree_([123])$/;
+export const TREE_KINDS = ["oak", "pine", "willow", "dead"];
+export const treeTerrain = (kind, size) => `tree_${kind}_${size}`;
+const TREE = /^tree_(?:([a-z]+)_)?([123])$/;
 
-// Size of the tree a terrain palette entry stands for, or 0.
-export function treeSize(name) {
-  return Number(TREE.exec(name ?? "")?.[1] ?? 0);
+// The tree a terrain palette entry stands for, as { kind, size }, or null. The older "tree_N"
+// names are oaks.
+export function parseTree(name) {
+  const match = TREE.exec(name ?? "");
+  return match ? { kind: match[1] ?? "oak", size: Number(match[2]) } : null;
 }
 
-// Every tree in the tile, as { i, j, size } with (i, j) its north-west cell.
+const treeSize = (name) => parseTree(name)?.size ?? 0;
+
+// Every tree in the tile, as { i, j, size, kind } with (i, j) its north-west cell.
 export function findTrees(tile) {
   const n = tile.cells;
-  const sizes = tile.palettes.terrain.map(treeSize);
+  const parsed = tile.palettes.terrain.map(parseTree);
   const claimed = new Uint8Array(n * n);
   const trees = [];
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
-      const size = sizes[tile.layers.terrain[j * n + i]];
-      if (!size || claimed[j * n + i]) continue;
-      trees.push({ i, j, size });
+      const tree = parsed[tile.layers.terrain[j * n + i]];
+      if (!tree || claimed[j * n + i]) continue;
+      const { size, kind } = tree;
+      trees.push({ i, j, size, kind });
       for (let dj = 0; dj < size && j + dj < n; dj++) {
         for (let di = 0; di < size && i + di < n; di++) claimed[(j + dj) * n + i + di] = 1;
       }
@@ -32,7 +39,7 @@ export function findTrees(tile) {
 
 // Puts a tree with its north-west cell at (i, j). Returns false, changing nothing, when it would
 // leave the tile, stand in water, or overlap another tree.
-export function plantTree(tile, i, j, size) {
+export function plantTree(tile, i, j, size, kind = "oak") {
   const n = tile.cells;
   if (i < 0 || j < 0 || i + size > n || j + size > n) return false;
   const sizes = tile.palettes.terrain.map(treeSize);
@@ -42,7 +49,7 @@ export function plantTree(tile, i, j, size) {
       if (sizes[tile.layers.terrain[k]] || !Number.isNaN(tile.layers.water[k])) return false;
     }
   }
-  const type = paletteIndex(tile, treeTerrain(size));
+  const type = paletteIndex(tile, treeTerrain(kind, size));
   for (let dj = 0; dj < size; dj++) {
     for (let di = 0; di < size; di++) tile.layers.terrain[(j + dj) * n + i + di] = type;
   }
