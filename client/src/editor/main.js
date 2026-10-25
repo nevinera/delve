@@ -21,6 +21,7 @@ const editor = new Editor(World.empty(), {
   deleteZone: $("deleteZone"),
   tools: $("tools"),
   generate: $("generate"),
+  regenerate: $("regenerate"),
   highlight: $("highlight"),
   pendingInfo: $("pendingInfo"),
   props: $("props"),

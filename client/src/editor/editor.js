@@ -191,7 +191,8 @@ export class Editor {
 
   bindPanel() {
     const { continent, newZone, zoneName, drawRegion, deleteZone, tools, generate, highlight } = this.el;
-    generate.addEventListener("click", () => this.generateZone());
+    generate.addEventListener("click", () => this.generate(generate, tilesTouched(this.activeZone.region)));
+    this.el.regenerate.addEventListener("click", () => this.generate(this.el.regenerate, this.changedHere()));
     highlight.addEventListener("change", () => this.map.render());
     for (const name of TOOLS) {
       const b = document.createElement("button");
@@ -279,6 +280,9 @@ export class Editor {
         : "no region yet";
       drawRegion.textContent = zone.region.length ? "redraw region" : "draw region";
       this.el.generate.disabled = !tiles || this.generating;
+      const changed = this.changedHere().length;
+      this.el.regenerate.disabled = !changed || this.generating;
+      if (!this.generating) this.el.regenerate.textContent = `regenerate ${changed} changed`;
       this.el.pendingInfo.textContent = `${this.pending.size} changed`;
       if (!this.generating) this.el.generate.textContent = `generate ${tiles} tiles`;
       for (const b of this.el.tools.children) {
@@ -289,12 +293,16 @@ export class Editor {
     hint.textContent = HINTS[this.mode()];
   }
 
-  // Regenerates every tile the active zone's region touches, from every zone on the continent.
-  async generateZone() {
+  // The changed tiles the active zone can regenerate.
+  changedHere() {
     const zone = this.activeZone;
-    if (!zone || this.generating) return;
-    const tiles = tilesTouched(zone.region);
-    const button = this.el.generate;
+    if (!zone) return [];
+    return tilesTouched(zone.region).filter(([tx, tz]) => this.pending.has(`${tx},${tz}`));
+  }
+
+  // Regenerates the given tiles from every zone on the continent, counting progress on `button`.
+  async generate(button, tiles) {
+    if (!this.activeZone || this.generating || !tiles.length) return;
     const started = performance.now();
     let done = 0;
     let frame = null;
