@@ -3,7 +3,7 @@ import { parseTree } from "../world/trees.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls follow WoW: W/S run forward and back,
-// A/D turn, Q/E strafe, space jumps; left-drag swings the camera around the character, right-drag
+// A/D turn, Q/E strafe, space jumps, shift sprints; left-drag swings the camera around the character, right-drag
 // turns the character with it, and the wheel zooms. Escape stops.
 //
 // The character keeps to the tiles drawn in full, can't climb slopes steeper than MAX_CLIMB or walk
@@ -11,6 +11,7 @@ import { parseTree } from "../world/trees.js";
 
 const RUN_FT = 21; // per second, about WoW's run speed
 const BACK = 0.6; // backing up is slower
+const SPRINT = 2;
 const TURN = 2.6; // radians per second
 const JUMP_FT = 16; // upward speed at takeoff, per second
 const GRAVITY = 48;
@@ -20,7 +21,7 @@ const SWIM_DEPTH = 4.5; // how deep the feet go in water too deep to stand in
 const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -0.3, maxPitch: 1.3 };
 const DRAG = 0.006; // radians per pixel
 
-const KEYS = new Set(["w", "a", "s", "d", "q", "e", " "]);
+const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
 
 export class Walker {
   // view: the RenderView, for its scene, camera, canvas and decoded tiles.
@@ -30,6 +31,7 @@ export class Walker {
     this.active = false;
     this.held = new Set();
     this.model = person();
+    this.ray = new THREE.Raycaster();
     this.listeners = {
       keydown: (e) => this.onKey(e, true),
       keyup: (e) => this.onKey(e, false),
@@ -101,7 +103,7 @@ export class Walker {
     let mz = fz * forward - fx * strafe;
     const length = Math.hypot(mx, mz);
     if (length > 0) {
-      const speed = RUN_FT * (forward < 0 ? BACK : 1) * dt;
+      const speed = RUN_FT * (forward < 0 ? BACK : 1) * (this.held.has("shift") ? SPRINT : 1) * dt;
       mx = (mx / length) * speed;
       mz = (mz / length) * speed;
       // Try the whole step, then each axis alone, so you slide along what blocks you.
@@ -188,7 +190,8 @@ export class Walker {
     };
   }
 
-  // Puts the model and the camera where they belong.
+  // Puts the model and the camera where they belong. Trees between the head and the camera pull the
+  // camera in, so it ducks under a canopy rather than looking down through it.
   place() {
     this.model.position.copy(this.pos);
     this.model.rotation.y = this.yaw;
@@ -196,8 +199,11 @@ export class Walker {
     const yaw = this.yaw + this.cam.yaw;
     const { pitch, distance } = this.cam;
     const head = this.pos.clone().add(new THREE.Vector3(0, EYE_FT, 0));
-    const offset = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(distance);
-    camera.position.copy(head).add(offset);
+    const away = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+    this.ray.set(head, away);
+    this.ray.far = distance;
+    const hit = this.ray.intersectObjects(this.view.trees.children, false)[0];
+    camera.position.copy(head).addScaledVector(away, hit ? Math.max(1, hit.distance - 1) : distance);
     const floor = this.groundAt(camera.position.x, camera.position.z);
     if (floor !== null) camera.position.y = Math.max(camera.position.y, floor + 1.5);
     camera.lookAt(head);

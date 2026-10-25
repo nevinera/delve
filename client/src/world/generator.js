@@ -19,7 +19,7 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 7;
+export const GENERATOR_VERSION = 8;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -33,6 +33,8 @@ const BASE = {
 // Crags: sharp ridged noise, as tall as the biome's roughness plus `perSlope` times the broad
 // shape's steepness (rise over run).
 const CRAG = { wavelength: 160, perSlope: 60, probeFt: 24 };
+// Small lumps and dips everywhere on land, a few feet either way.
+const JITTER = { ft: 6, wavelength: 70, fineFt: 2, fineWavelength: 20 };
 // Land at or above `cliff` ft meets the sea in a cliff; lower land in a rough shore of uneven
 // width (`minFt` to `maxFt`) and bumpy height. Between `low` and `cliff` it shifts from one to the
 // other.
@@ -224,6 +226,8 @@ function land(ctx, x, z, edges, biomes) {
   if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
   const crag = rough * 0.5 + steep * CRAG.perSlope;
   if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;
+  h += fbm(x, z, ctx.seed ^ 0x6a09e667, { wavelength: JITTER.wavelength, octaves: 2 }) * JITTER.ft;
+  h += fbm(x, z, ctx.seed ^ 0x3c6ef373, { wavelength: JITTER.fineWavelength }) * JITTER.fineFt;
 
   return { h: coast(ctx, h, x, z, edgeDist), t: smoothstep(0, COAST.maxFt, edgeDist), land: true, climate, coastDist: edgeDist };
 }

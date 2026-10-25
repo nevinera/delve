@@ -22,7 +22,7 @@ export const DEFAULT_BIOME = "plains";
 // kinds: odds per tree kind; pools: swamp pools, 0-1; ravines: ravine cracks, 0-1.
 const PROFILES = {
   plains: { amp: 4, rough: 0, steep: 0.7, trees: 0.03, sizes: [0.5, 0.4, 0.1], kinds: { oak: 1 } },
-  forest: { amp: 9, rough: 0, steep: 0.7, trees: 0.3, sizes: [0.1, 0.3, 0.6], kinds: { oak: 0.85, pine: 0.15 } },
+  forest: { amp: 9, rough: 0, steep: 0.7, trees: 0.17, sizes: [0.1, 0.3, 0.6], kinds: { oak: 0.85, pine: 0.15 } },
   rocky: { amp: 12, rough: 26, steep: 0.45, trees: 0.06, sizes: [0.6, 0.35, 0.05], kinds: { pine: 0.7, dead: 0.3 } },
   swamp: { amp: 2, rough: 0, steep: 0.7, trees: 0.25, sizes: [0.4, 0.5, 0.1], kinds: { willow: 0.65, dead: 0.35 }, pools: 1 },
 };

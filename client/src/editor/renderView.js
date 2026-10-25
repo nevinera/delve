@@ -10,6 +10,7 @@ import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
+import { groundMaterial } from "./groundMaterial.js";
 
 const RING_TILES = 2; // tiles drawn in full around the active zone's editable tiles
 const SEA = 0x1d4a6a;
@@ -106,6 +107,7 @@ export class RenderView {
     this.walker ??= new Walker(this, {
       onStop: () => {
         this.controls.enabled = true;
+        this.showPins();
         this.walkStopped?.();
       },
     });
@@ -113,6 +115,7 @@ export class RenderView {
     this.controls.enabled = false;
     this.hover(null);
     this.walker.start([this.controls.target.x, this.controls.target.z]);
+    this.showPins();
   }
 
   stopWalk() {
@@ -121,6 +124,11 @@ export class RenderView {
 
   get walking() {
     return Boolean(this.walker?.active);
+  }
+
+  // Pins and strokes hide while walking; zone outlines stay.
+  showPins() {
+    for (const child of this.marks.children) child.visible = !this.walking || Boolean(child.userData.outline);
   }
 
   // Rebuilds everything from the world. `keepCamera` leaves the view where it is.
@@ -147,7 +155,7 @@ export class RenderView {
     const ground = groundSampler(decoded, this.origin);
     this.ground = ground;
 
-    const groundMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const terrainMaterial = groundMaterial(this.renderer);
     const waterMaterial = new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 });
     for (const [key, tile] of decoded) {
       const [tx, tz] = key.split(",").map(Number);
@@ -156,7 +164,7 @@ export class RenderView {
         south: decoded.get(`${tx},${tz + 1}`),
         southEast: decoded.get(`${tx + 1},${tz + 1}`),
       };
-      const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin)), groundMaterial);
+      const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), terrainMaterial);
       this.content.add(terrain);
       this.surfaces.push(terrain);
       const water = waterMesh(tile, neighbours, this.origin);
@@ -232,9 +240,14 @@ export class RenderView {
     for (const zone of zones) {
       const mine = !active || zone.key === active.key;
       const color = zone.key === active?.key ? ACTIVE : 0xffffff;
-      for (const { points } of rings(zone.region)) this.marks.add(boundary(points, this.ground, this.origin, color));
+      for (const { points } of rings(zone.region)) {
+        const outline = boundary(points, this.ground, this.origin, color);
+        outline.userData.outline = true;
+        this.marks.add(outline);
+      }
       if (pins) this.addFeatures(zone, mine, selected?.zone === zone.key ? selected : null, kinds, lines);
     }
+    this.showPins();
     this.render();
   }
 
