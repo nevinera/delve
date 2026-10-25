@@ -11,19 +11,21 @@ const $ = (id) => document.getElementById(id);
 const editor = new Editor(World.empty(), {
   map: $("map"),
   scene: $("scene"),
-  toggle3d: $("toggle3d"),
   showPins: $("showPins"),
   sceneTip: $("sceneTip"),
   cursor: $("cursor"),
   continent: $("continent"),
   zoneList: $("zoneList"),
   newZone: $("newZone"),
-  zonePanel: $("zonePanel"),
+  noZone: $("noZone"),
+  stepTabs: $("stepTabs"),
+  viewTabs: $("viewTabs"),
+  steps: [...document.querySelectorAll(".editor-step")],
   zoneName: $("zoneName"),
   regionInfo: $("regionInfo"),
   drawRegion: $("drawRegion"),
   deleteZone: $("deleteZone"),
-  tools: $("tools"),
+  tools: [...document.querySelectorAll("[data-tools]")],
   treeKind: $("treeKind"),
   generate: $("generate"),
   regenerate: $("regenerate"),
@@ -45,8 +47,6 @@ $("download").addEventListener("click", () => {
   URL.revokeObjectURL(link.href);
   editor.markSaved();
 });
-
-$("toggle3d").addEventListener("click", () => editor.toggle3d());
 
 $("upload").addEventListener("click", () => {
   if (editor.dirty && !window.confirm("Replace this world? Changes you haven't downloaded will be lost.")) return;

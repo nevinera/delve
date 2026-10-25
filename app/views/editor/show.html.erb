@@ -2,17 +2,28 @@
   <strong id="worldName"></strong>
   <span id="cursor" class="editor-cursor"></span>
   <span class="spacer"></span>
-  <label class="editor-check"><input id="showBiomes" type="checkbox"><span>show biomes</span></label>
-  <label class="editor-check"><input id="showPins" type="checkbox" checked><span>show pins</span></label>
-  <button id="toggle3d" type="button">3D view</button>
   <button id="upload" type="button">upload world</button>
   <input id="uploadFile" type="file" accept=".zip,application/zip" hidden>
   <button id="download" type="button">download world</button>
 </header>
 <main class="editor-main">
-  <canvas id="map" class="editor-map"></canvas>
-  <canvas id="scene" class="editor-map" hidden></canvas>
-  <div id="sceneTip" class="editor-tip" hidden></div>
+  <div class="editor-view">
+    <nav class="editor-tabs editor-view-bar">
+      <span id="viewTabs" class="editor-tabs">
+        <button type="button" data-view="cells">cells</button>
+        <button type="button" data-view="terrain">terrain</button>
+        <button type="button" data-view="3d">3D</button>
+      </span>
+      <span class="spacer"></span>
+      <label class="editor-check"><input id="showBiomes" type="checkbox"><span>show biomes</span></label>
+      <label class="editor-check"><input id="showPins" type="checkbox" checked><span>show pins</span></label>
+    </nav>
+    <div class="editor-stage">
+      <canvas id="map" class="editor-map"></canvas>
+      <canvas id="scene" class="editor-map" hidden></canvas>
+      <div id="sceneTip" class="editor-tip" hidden></div>
+    </div>
+  </div>
   <aside class="editor-panel">
     <section>
       <h2>Continent</h2>
@@ -23,14 +34,23 @@
       <ul id="zoneList" class="editor-zones"></ul>
       <button id="newZone" type="button">new zone</button>
     </section>
-    <section id="zonePanel" hidden>
-      <h2>Zone</h2>
+    <nav id="stepTabs" class="editor-tabs editor-steps">
+      <button type="button" data-step="zones">zones</button>
+      <button type="button" data-step="shape">shape</button>
+      <button type="button" data-step="features">features</button>
+      <button type="button" data-step="population">population</button>
+    </nav>
+    <p id="noZone" class="editor-empty">pick a zone to edit, or make a new one</p>
+    <section class="editor-step" data-step="zones" hidden>
       <label class="editor-field">name <input id="zoneName" type="text"></label>
       <p id="regionInfo"></p>
       <div class="editor-row">
         <button id="drawRegion" type="button">draw region</button>
         <button id="deleteZone" type="button">delete zone</button>
       </div>
+    </section>
+    <section class="editor-step" data-step="shape" hidden>
+      <div class="editor-tools" data-tools="shape"></div>
       <div class="editor-row editor-subhead">
         <button id="generate" type="button">generate</button>
         <button id="regenerate" type="button">regenerate changed</button>
@@ -39,8 +59,12 @@
         <input id="highlight" type="checkbox">
         <span>highlight changes (<span id="pendingInfo"></span>)</span>
       </label>
-      <h2 class="editor-subhead">Tools</h2>
-      <div id="tools" class="editor-tools"></div>
+    </section>
+    <section class="editor-step" data-step="features" hidden>
+      <div class="editor-tools" data-tools="features"></div>
+    </section>
+    <section class="editor-step" data-step="population" hidden>
+      <div class="editor-tools" data-tools="population"></div>
       <label class="editor-field editor-subhead">tree kind <select id="treeKind"></select></label>
     </section>
     <section id="props" class="editor-props" hidden></section>

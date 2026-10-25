@@ -16,7 +16,6 @@ export const PINS = {
 export const STROKES = {
   river: { color: "#4a90d9", width: 30, label: "river" },
 };
-export const FEATURE_TOOLS = ["select", ...Object.keys(PINS), ...Object.keys(STROKES)];
 export const FEATURE_HINTS = {
   select: "click a pin or line to select it · drag pins and line points · shift-click a selected line to add a point · alt-click a point to remove it · delete removes the selection",
   pin: "click inside the zone to place · click a pin to select or drag it",
@@ -38,6 +37,7 @@ export class Features {
   constructor(editor) {
     this.editor = editor;
     this.selected = null; // { type: "pin" | "stroke", id }
+    this.kinds = []; // what the current tool can pick
     this.stroke = null; // a stroke being drawn: { kind, points }
   }
 
@@ -67,10 +67,17 @@ export class Features {
 
   // --- tools ---
 
-  tool(zone, name) {
+  // `kinds` limits what the select tool picks, and what a pin tool's click can grab.
+  tool(zone, name, kinds) {
+    this.kinds = kinds ?? [...Object.keys(PINS), ...Object.keys(STROKES)];
     if (PINS[name]) return this.pinTool(zone, name);
     if (STROKES[name]) return this.strokeTool(zone, name);
     return this.selectTool(zone);
+  }
+
+  // The kind of the feature a 3D view pick points at.
+  kindOf(zone, { type, id }) {
+    return (type === "pin" ? zone.pins : zone.strokes).find((f) => f.id === id)?.kind;
   }
 
   // A spot inside the zone, snapped to the cell grid, or null (with a message) outside it.
@@ -228,12 +235,13 @@ export class Features {
   }
 
   pinAt(zone, tile) {
-    return [...zone.pins].reverse().find((p) => this.editor.nearScreen(p.at, tile)) ?? null;
+    return [...zone.pins].reverse().find((p) => this.kinds.includes(p.kind) && this.editor.nearScreen(p.at, tile)) ?? null;
   }
 
   strokeAt(zone, tile) {
     return (
       [...zone.strokes].reverse().find((s) => {
+        if (!this.kinds.includes(s.kind)) return false;
         const reachFt = Math.max(s.width / 2, 0);
         const reach = Math.max(8 * this.map.dpr, (reachFt / TILE_FT) * this.map.view.scale);
         return nearestOnStroke(s.points, tile).dist * this.map.view.scale < reach;

@@ -1,5 +1,5 @@
 import { changedTiles } from "./changes.js";
-import { FEATURE_HINTS, FEATURE_TOOLS, Features, PINS, STROKES } from "./features.js";
+import { FEATURE_HINTS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
 import { TileGenerator } from "./generation.js";
 import { Thumbnails, surfaceTiles, tilePath } from "./thumbnails.js";
@@ -39,10 +39,19 @@ const HINTS = {
 const HINT_3D = "drag to orbit · right-drag to pan · wheel to zoom · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
 const TREE_TOOLS = TREE_SIZES.map((size) => `tree_${size}`);
 const treeToolSize = (name) => Number(/^tree_(\d)$/.exec(name)?.[1] ?? 0);
-const TOOLS = ["region", ...FEATURE_TOOLS, ...TREE_TOOLS];
+// The editor's steps, in the order you'd usually work: each has its own tools, and its select tool
+// picks only its own kinds of features.
+const STEPS = {
+  zones: { tools: [], kinds: [] },
+  shape: { tools: ["select", "height", "biome"], kinds: ["height", "biome"] },
+  features: { tools: ["select", "river", "info"], kinds: ["river", "info"] },
+  population: { tools: TREE_TOOLS, kinds: [] },
+};
 
 // Ties the map, the side panel and the in-memory world together. One zone at a time is active and
-// editable; every other zone on the continent shows but is locked.
+// editable; every other zone on the continent shows but is locked. Step tabs pick what you're
+// editing and view tabs how the map shows: cells (the grid and pins), terrain (tile thumbnails)
+// or 3D.
 export class Editor {
   constructor(world, elements) {
     this.world = world;
@@ -51,7 +60,9 @@ export class Editor {
     this.zones = [];
     this.active = null;
     this.drawing = null; // corners of a region being drawn
-    this.toolName = "select";
+    this.step = "zones";
+    this.toolName = "region";
+    this.view = "terrain";
     this.features = new Features(this);
     this.trees = new TreeBrush(this);
     this.dirty = false;
@@ -146,20 +157,36 @@ export class Editor {
     this.refreshMarks();
   }
 
-  // Switches between the 2D map and the 3D view. three.js loads on first use.
-  async toggle3d() {
-    this.showing3d = !this.showing3d;
+  // Shows the map as cells, terrain or 3D. three.js loads the first time 3D is shown.
+  async setView(view) {
+    this.view = view;
+    this.showing3d = view === "3d";
     if (this.showing3d && !this.view3d) {
       const { RenderView } = await import("./renderView.js");
       this.view3d = new RenderView(this.el.scene, this.sceneHandlers());
     }
     this.el.map.hidden = this.showing3d;
     this.el.scene.hidden = !this.showing3d;
-    this.el.toggle3d.textContent = this.showing3d ? "2D map" : "3D view";
     this.showTip(null);
     this.renderPanel();
     if (this.showing3d) this.refresh3d({ keepCamera: false });
     else this.map.resize();
+  }
+
+  // Switches to an editing step, with its first tool.
+  setStep(step) {
+    this.step = step;
+    this.toolName = STEPS[step].tools[0] ?? "region";
+    this.features.stroke = null;
+    this.features.select(null);
+    this.say();
+    this.renderPanel();
+    this.map.render();
+  }
+
+  // The feature kinds the current step edits.
+  get kinds() {
+    return STEPS[this.step].kinds;
   }
 
   sceneState() {
@@ -193,7 +220,7 @@ export class Editor {
       grab: (hit) => {
         const zone = this.activeZone;
         this.painting = false;
-        return zone?.key === hit.zone && this.features.grab(zone, hit);
+        return zone?.key === hit.zone && this.kinds.includes(this.features.kindOf(zone, hit)) && this.features.grab(zone, hit);
       },
       press: (tile, e) => {
         const zone = this.activeZone;
@@ -310,7 +337,7 @@ export class Editor {
   // --- panel ---
 
   bindPanel() {
-    const { continent, newZone, zoneName, drawRegion, deleteZone, tools, generate, highlight } = this.el;
+    const { continent, newZone, zoneName, drawRegion, deleteZone, generate, highlight } = this.el;
     generate.addEventListener("click", () => this.generate(generate, tilesTouched(this.activeZone.region)));
     this.el.regenerate.addEventListener("click", () => this.generate(this.el.regenerate, this.changedHere()));
     highlight.addEventListener("change", () => this.map.render());
@@ -319,15 +346,19 @@ export class Editor {
       this.map.render();
       this.refreshMarks();
     });
-    for (const name of TOOLS) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.dataset.tool = name;
-      const size = treeToolSize(name);
-      b.textContent = PINS[name]?.label ?? STROKES[name]?.label ?? (size ? `tree ${size}x${size}` : name);
-      b.addEventListener("click", () => this.setTool(name));
-      tools.append(b);
+    for (const tools of this.el.tools) {
+      for (const name of STEPS[tools.dataset.tools].tools) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.dataset.tool = name;
+        const size = treeToolSize(name);
+        b.textContent = PINS[name]?.label ?? STROKES[name]?.label ?? (size ? `tree ${size}x${size}` : name);
+        b.addEventListener("click", () => this.setTool(name));
+        tools.append(b);
+      }
     }
+    for (const b of this.el.stepTabs.children) b.addEventListener("click", () => this.setStep(b.dataset.step));
+    for (const b of this.el.viewTabs.children) b.addEventListener("click", () => this.setView(b.dataset.view));
     for (const kind of TREE_KINDS) this.el.treeKind.add(new Option(kind, kind));
 
     continent.addEventListener("change", () => {
@@ -343,6 +374,7 @@ export class Editor {
       const zone = createZone(this.world, this.continent, name);
       this.dirty = true;
       this.active = zone.key;
+      this.setStep("zones");
       this.drawing = [];
       this.reload();
     });
@@ -371,11 +403,12 @@ export class Editor {
       if (zone.region.length && !window.confirm("Replace this zone's region?")) return;
       this.drawing = [];
       this.renderPanel();
+      this.map.render();
     });
   }
 
   renderPanel() {
-    const { zoneList, zonePanel, zoneName, regionInfo, drawRegion, hint } = this.el;
+    const { zoneList, zoneName, regionInfo, drawRegion, hint } = this.el;
     zoneList.innerHTML = "";
     for (const zone of this.zones) {
       const item = document.createElement("li");
@@ -399,7 +432,10 @@ export class Editor {
     if (!this.zones.length) zoneList.innerHTML = '<li class="editor-empty">no zones yet</li>';
 
     const zone = this.activeZone;
-    zonePanel.hidden = !zone;
+    for (const b of this.el.stepTabs.children) b.classList.toggle("active", b.dataset.step === this.step);
+    for (const b of this.el.viewTabs.children) b.classList.toggle("active", b.dataset.view === this.view);
+    for (const section of this.el.steps) section.hidden = !zone || section.dataset.step !== this.step;
+    this.el.noZone.hidden = Boolean(zone);
     if (zone) {
       if (document.activeElement !== zoneName) zoneName.value = zone.name;
       const tiles = tilesTouched(zone.region).length;
@@ -413,7 +449,7 @@ export class Editor {
       if (!this.generating) this.el.regenerate.textContent = `regenerate ${changed} changed`;
       this.el.pendingInfo.textContent = `${this.pending.size} changed`;
       if (!this.generating) this.el.generate.textContent = `generate ${tiles} tiles`;
-      for (const b of this.el.tools.children) {
+      for (const b of this.el.tools.flatMap((t) => [...t.children])) {
         b.classList.toggle("active", b.dataset.tool === this.toolName);
         b.disabled = !zone.region.length;
       }
@@ -470,6 +506,7 @@ export class Editor {
     if (!zone) return "none";
     if (this.drawing) return "draw";
     if (!zone.region.length) return "empty";
+    if (this.step === "zones") return "region";
     if (PINS[this.toolName]) return "pin";
     if (STROKES[this.toolName]) return "stroke";
     if (treeToolSize(this.toolName)) return "tree";
@@ -491,9 +528,9 @@ export class Editor {
     if (!zone) return null;
     if (this.drawing) return this.drawTool(zone);
     if (!zone.region.length) return null;
-    if (this.toolName === "region") return this.editTool(zone);
+    if (this.step === "zones") return this.editTool(zone);
     if (treeToolSize(this.toolName)) return this.trees.tool(zone, () => this.brushTree());
-    return this.features.tool(zone, this.toolName);
+    return this.features.tool(zone, this.toolName, this.kinds);
   }
 
   drawTool(zone) {
@@ -595,9 +632,11 @@ export class Editor {
 
   // --- drawing ---
 
-  // Every tile's thumbnail, with its biomes tinted over it when "show biomes" is on.
+  // In the terrain view, every tile's thumbnail; in either 2D view, biomes tinted over the tiles
+  // when "show biomes" is on.
   drawThumbnails(ctx, map) {
     if (!this.thumbnails.size) return;
+    const terrain = this.view === "terrain";
     const [x0, z0] = map.toTile(0, 0);
     const [x1, z1] = map.toTile(map.canvas.width, map.canvas.height);
     const biomes = this.el.showBiomes.checked;
@@ -608,7 +647,7 @@ export class Editor {
         if (!image) continue;
         const [sx, sy] = map.toScreen([tx, tz]);
         // A hair of overlap hides seams between neighbouring thumbnails.
-        ctx.drawImage(image, sx, sy, map.view.scale + 0.5, map.view.scale + 0.5);
+        if (terrain) ctx.drawImage(image, sx, sy, map.view.scale + 0.5, map.view.scale + 0.5);
         const tint = biomes && this.thumbnails.biome(tx, tz);
         if (!tint) continue;
         ctx.globalAlpha = 0.45;
@@ -673,7 +712,7 @@ export class Editor {
     ctx.setLineDash(active ? [] : [6 * dpr, 4 * dpr]);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (active && this.toolName === "region") all.flat().forEach((p) => handle(ctx, p, 4 * dpr, COLORS.active));
+    if (active && this.step === "zones") all.flat().forEach((p) => handle(ctx, p, 4 * dpr, COLORS.active));
 
     const [cx, cy] = map.toScreen(labelPoint(zone.region));
     ctx.fillStyle = active ? COLORS.active : COLORS.locked;
