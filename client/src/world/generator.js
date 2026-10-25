@@ -17,9 +17,10 @@ import { CELLS, CELL_FT, TILE_FT, WATER_KINDS } from "./constants.js";
 import { prepareHeights } from "./heightField.js";
 import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
+import { scatterObjects } from "./objects.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 18;
+export const GENERATOR_VERSION = 19;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -190,6 +191,7 @@ export function generateTile(ctx, tx, tz) {
     layers,
   };
   plantTrees(ctx, tile, (i, j) => samples[(j + 1) * N + (i + 1)]);
+  tile.objects = scatterObjects(tile);
   return tile;
 }
 

@@ -10,6 +10,7 @@ import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
 import { clutterMeshes, setClutterFocus } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
+import { objectMeshes } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
 import { groundMaterial } from "./groundMaterial.js";
@@ -60,7 +61,8 @@ export class RenderView {
     this.marks = new THREE.Group();
     this.trees = new THREE.Group();
     this.clutter = new THREE.Group();
-    this.scene.add(this.content, this.marks, this.trees, this.clutter);
+    this.objects = new THREE.Group();
+    this.scene.add(this.content, this.marks, this.trees, this.clutter, this.objects);
     this.clutterTiles = new Map(); // "tx,tz" -> that tile's clutter, worked out when first needed
     this.clutterAround = null; // the tile clutter is drawn around
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
@@ -245,6 +247,7 @@ export class RenderView {
       this.controls.update();
     }
     this.showTrees();
+    this.showObjects();
     this.showMarks(state);
     this.resize();
   }
@@ -258,7 +261,19 @@ export class RenderView {
     this.clutterTiles.delete(key);
     this.clutterAround = null;
     this.showTrees();
+    this.showObjects();
     this.render();
+  }
+
+  // Every object on the tiles drawn in full.
+  showObjects() {
+    for (const child of [...this.objects.children]) {
+      child.dispose();
+      this.objects.remove(child);
+    }
+    const objects = [...this.decoded.values()].flatMap((tile) => tile.objects ?? []);
+    const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
+    if (objects.length) this.objects.add(...objectMeshes(objects, tileAt, this.origin));
   }
 
   // Every tree on the tiles drawn in full.

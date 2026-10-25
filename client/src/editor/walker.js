@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { parseTree } from "../world/trees.js";
+import { blocks } from "../world/objects.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls follow WoW: W/S run forward and back,
@@ -17,6 +18,7 @@ const JUMP_FT = 16; // upward speed at takeoff, per second
 const GRAVITY = 48;
 const MAX_CLIMB = 1.2; // rise over run
 const EYE_FT = 5.5;
+const BODY_FT = 1; // the character's radius, for bumping into objects
 const SWIM_DEPTH = 4.5; // how deep the feet go in water too deep to stand in
 const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -0.3, maxPitch: 1.3 };
 const DRAG = 0.006; // radians per pixel
@@ -127,12 +129,12 @@ export class Walker {
     }
   }
 
-  // Whether the character may move to (x, z): on a tile drawn in full, not into a tree trunk, and
-  // not up a slope too steep to climb.
+  // Whether the character may move to (x, z): on a tile drawn in full, not into a tree trunk or
+  // an object, and not up a slope too steep to climb.
   canStep(x, z) {
     const here = this.standHeight(this.pos.x, this.pos.z);
     const there = this.standHeight(x, z);
-    if (there === null || this.cell(x, z)?.tree) return false;
+    if (there === null || this.cell(x, z)?.tree || this.objectAt(x, z)) return false;
     const run = Math.hypot(x - this.pos.x, z - this.pos.z);
     return here === null || run === 0 || (there - here) / run <= MAX_CLIMB || this.pos.y > there + 2;
   }
@@ -164,6 +166,28 @@ export class Walker {
     const top = corners[0] + (corners[1] - corners[0]) * fu;
     const bottom = corners[2] + (corners[3] - corners[2]) * fu;
     return top + (bottom - top) * fv;
+  }
+
+  // An object in the way of a character at scene (x, z), on that tile or the ones beside it. One
+  // the character is already inside (one placed on them, say) doesn't hold them in, and a jump
+  // clears low ones.
+  objectAt(x, z) {
+    const { origin } = this.view;
+    const any = this.view.decoded.values().next().value;
+    if (!any) return null;
+    const [cx, cz] = [x + origin[0], z + origin[1]];
+    const [hx, hz] = [this.pos.x + origin[0], this.pos.z + origin[1]];
+    const size = any.cells * any.cellFt;
+    const [tx, tz] = [Math.floor(cx / size), Math.floor(cz / size)];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (const object of this.view.decoded.get(`${tx + dx},${tz + dz}`)?.objects ?? []) {
+          if (this.pos.y > (this.groundAt(x, z) ?? 0) + object.height * 0.9) continue;
+          if (blocks(object, cx, cz, BODY_FT) && !blocks(object, hx, hz, BODY_FT)) return object;
+        }
+      }
+    }
+    return null;
   }
 
   cell(x, z) {
@@ -202,7 +226,7 @@ export class Walker {
     const away = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
     this.ray.set(head, away);
     this.ray.far = distance;
-    const hit = this.ray.intersectObjects(this.view.trees.children, false)[0];
+    const hit = this.ray.intersectObjects([...this.view.trees.children, ...this.view.objects.children], false)[0];
     camera.position.copy(head).addScaledVector(away, hit ? Math.max(1, hit.distance - 1) : distance);
     const floor = this.groundAt(camera.position.x, camera.position.z);
     if (floor !== null) camera.position.y = Math.max(camera.position.y, floor + 1.5);
