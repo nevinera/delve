@@ -187,8 +187,15 @@ export class RenderView {
     this.decoded = decoded;
     this.clutterTiles.clear();
     this.clutterAround = null;
+    this.unreadable = []; // tiles near the zone that couldn't be read, such as ones from an old format
     for (const { tx, tz, path } of surfaceTiles(world, continent)) {
-      if (near.has(`${tx},${tz}`)) decoded.set(`${tx},${tz}`, decodeTile(gunzipSync(world.files.get(path))));
+      if (!near.has(`${tx},${tz}`)) continue;
+      try {
+        decoded.set(`${tx},${tz}`, decodeTile(gunzipSync(world.files.get(path))));
+      } catch (err) {
+        console.warn(`couldn't read ${path}: ${err.message}`);
+        this.unreadable.push(path);
+      }
     }
 
     const middle = active?.region.length ? labelPoint(active.region) : [0, 0];

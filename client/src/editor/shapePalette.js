@@ -3,6 +3,25 @@ import { BIOME_COLORS } from "../world/tileImage.js";
 
 const DEFAULTS = { height: 20, biome: "forest", tags: [] };
 
+// The height slider is logarithmic either side of 0, so it steps by a foot near sea level and by
+// hundreds near the top: position s gives sign(s) * KNEE * (e^(|s| * RATE) - 1) feet, 4 miles at
+// the top end and -50ft at the bottom.
+export const HEIGHT_SLIDER = { min: -180, max: 1000 };
+const TOP_FT = 21120;
+const KNEE = 20;
+const RATE = Math.log(TOP_FT / KNEE + 1) / HEIGHT_SLIDER.max;
+
+export function sliderHeight(s) {
+  if (s >= HEIGHT_SLIDER.max) return TOP_FT;
+  const ft = Math.sign(s) * KNEE * Math.expm1(Math.abs(s) * RATE);
+  const step = Math.abs(ft) < 100 ? 1 : Math.abs(ft) < 1000 ? 5 : Math.abs(ft) < 10000 ? 50 : 100;
+  return Math.round(ft / step) * step || 0;
+}
+
+export function heightSlider(ft) {
+  return Math.round((Math.sign(ft) * Math.log1p(Math.abs(ft) / KNEE)) / RATE);
+}
+
 // The shape step's palette: a biome with tags, and a height slider. A new pin takes its settings
 // from here. With a pin selected, the palette shows that pin, and changing it changes the pin.
 export class ShapePalette {
@@ -23,7 +42,7 @@ export class ShapePalette {
         }),
       );
     }
-    el.heightSlider.addEventListener("input", () => this.set({ height: Number(el.heightSlider.value) }));
+    el.heightSlider.addEventListener("input", () => this.set({ height: sliderHeight(Number(el.heightSlider.value)) }));
   }
 
   // Settings for a new pin of this kind.
@@ -65,8 +84,8 @@ export class ShapePalette {
     this.el.heightPalette.hidden = !showing || kind !== "height";
     this.el.biomePalette.hidden = !showing || kind !== "biome";
 
-    this.el.heightSlider.value = this.values.height;
-    this.el.heightValue.textContent = `${this.values.height} ft`;
+    this.el.heightSlider.value = heightSlider(this.values.height);
+    this.el.heightValue.textContent = `${this.values.height.toLocaleString()} ft`;
     for (const input of this.el.biomeChoices.querySelectorAll("input")) input.checked = input.value === this.values.biome;
     for (const input of this.el.biomeTags.querySelectorAll("input")) input.checked = this.values.tags.includes(input.value);
   }

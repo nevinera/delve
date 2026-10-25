@@ -56,3 +56,22 @@ describe("tileCodec", () => {
     expect(() => decodeTile(new Uint8Array(16))).toThrow(/not a tile/);
   });
 });
+
+describe("tall land", () => {
+  it("keeps heights above 16-bit quarter feet", () => {
+    const t = {
+      coords: [0, 0], layer: "surface", cells: 2, cellFt: 8,
+      palettes: { terrain: ["rock"], biome: ["rocky"] },
+      generator: {},
+      layers: {
+        height: Float32Array.from([21120, 20000.25, -40, 0]),
+        water: Float32Array.from([NaN, NaN, -2, 0]),
+        terrain: new Uint8Array(4), biome: new Uint8Array(4), forest: new Uint8Array(4),
+      },
+    };
+    const back = decodeTile(encodeTile(t));
+    expect([...back.layers.height]).toEqual([21120, 20000.25, -40, 0]);
+    expect(back.layers.water[0]).toBeNaN();
+    expect(back.layers.water[2]).toBe(-2);
+  });
+});

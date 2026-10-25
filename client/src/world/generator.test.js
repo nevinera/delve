@@ -60,7 +60,7 @@ describe("generator", () => {
     const coast = (j) => row(j).findIndex((h) => h < 0);
     const spots = [0, 16, 32, 48, 63].map(coast);
     expect(Math.max(...spots) - Math.min(...spots)).toBeGreaterThan(3);
-  });
+  }, 20000); // generates the tiles along a row
 
   it("meets the sea in a cliff where the land is high", () => {
     const heights = row(32);

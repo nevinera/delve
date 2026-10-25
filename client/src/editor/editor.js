@@ -272,6 +272,8 @@ export class Editor {
   refresh3d({ keepCamera = true } = {}) {
     if (!this.showing3d || !this.view3d) return;
     this.view3d.show(this.sceneState(), { keepCamera });
+    const bad = this.view3d.unreadable.length;
+    if (bad) this.say(`${bad} tile${bad === 1 ? "" : "s"} couldn't be read and ${bad === 1 ? "isn't" : "aren't"} drawn. Regenerate to replace them.`);
   }
 
   // Redraws just the 3D view's outlines and pins, after an edit.

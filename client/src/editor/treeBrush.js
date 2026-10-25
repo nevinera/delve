@@ -56,7 +56,13 @@ export class TreeBrush {
       this.editor.say("Generate this tile before planting trees on it.");
       return null;
     }
-    const tile = decodeTile(gunzipSync(bytes));
+    let tile;
+    try {
+      tile = decodeTile(gunzipSync(bytes));
+    } catch (err) {
+      this.editor.say(`This tile couldn't be read (${err.message}). Regenerate it.`);
+      return null;
+    }
     this.tiles.set(key, tile);
     return tile;
   }

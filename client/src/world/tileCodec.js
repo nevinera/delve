@@ -2,22 +2,23 @@
 // the dense layers (plans/design.md, "Tile data"). All numbers are little-endian.
 
 const MAGIC = "DLT1";
-export const FORMAT_VERSION = 1;
+export const FORMAT_VERSION = 2;
+// Version 1 stored height and water as i16. Still read for now, so old worlds can be resaved.
+const READS = [1, FORMAT_VERSION];
 
-// i16 layers store round(value * scale). NONE marks "no value" (no water, no upper surface) and
-// decodes to NaN.
-const NONE = -32768;
-
+// i32 and i16 layers store round(value * scale). The type's lowest value marks "no value" (no
+// water, no upper surface) and decodes to NaN.
 const LAYER_TYPES = {
-  i16: { bytes: 2, array: Float32Array },
+  i32: { bytes: 4, array: Float64Array, none: -(2 ** 31), max: 2 ** 31 - 1, get: "getInt32", set: "setInt32" },
+  i16: { bytes: 2, array: Float32Array, none: -32768, max: 32767, get: "getInt16", set: "setInt16" },
   u8: { bytes: 1, array: Uint8Array },
 };
 
 // Layers in file order, with how each is stored. An optional layer is left out of the file when
 // the tile doesn't have it.
 export const SURFACE_LAYERS = [
-  { name: "height", type: "i16", scale: 4 },
-  { name: "water", type: "i16", scale: 4 },
+  { name: "height", type: "i32", scale: 4 },
+  { name: "water", type: "i32", scale: 4 },
   { name: "waterKind", type: "u8", optional: true }, // index into palettes.water, where there's water
   { name: "terrain", type: "u8" },
   { name: "biome", type: "u8" },
@@ -61,7 +62,10 @@ export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
     const at = headerBytes + entry.offset;
     for (let k = 0; k < count; k++) {
       if (entry.type === "u8") out[at + k] = values[k];
-      else view.setInt16(at + k * 2, encodeI16(values[k], entry.scale), true);
+      else {
+        const type = LAYER_TYPES[entry.type];
+        view[type.set](at + k * type.bytes, encodeInt(values[k], entry.scale, type), true);
+      }
     }
   }
   return out;
@@ -73,29 +77,31 @@ export function decodeTile(bytes) {
   if (magic !== MAGIC) throw new Error(`not a tile file (magic ${JSON.stringify(magic)})`);
   const jsonLength = view.getUint32(4, true);
   const manifest = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + jsonLength)));
-  if (manifest.version !== FORMAT_VERSION) throw new Error(`unsupported tile version ${manifest.version}`);
+  if (!READS.includes(manifest.version)) throw new Error(`unsupported tile version ${manifest.version}`);
   const headerBytes = align4(8 + jsonLength);
   const count = manifest.cells * manifest.cells;
 
   const layers = {};
   for (const entry of manifest.layers) {
-    const values = new LAYER_TYPES[entry.type].array(count);
+    const type = LAYER_TYPES[entry.type];
+    if (!type) throw new Error(`unknown layer type ${entry.type}`);
+    const values = new type.array(count);
     const at = headerBytes + entry.offset;
     for (let k = 0; k < count; k++) {
-      values[k] = entry.type === "u8" ? bytes[at + k] : decodeI16(view.getInt16(at + k * 2, true), entry.scale);
+      values[k] = entry.type === "u8" ? bytes[at + k] : decodeInt(view[type.get](at + k * type.bytes, true), entry.scale, type);
     }
     layers[entry.name] = values;
   }
   return { ...manifest, layers };
 }
 
-function encodeI16(value, scale) {
-  if (Number.isNaN(value)) return NONE;
-  return Math.max(NONE + 1, Math.min(32767, Math.round(value * scale)));
+function encodeInt(value, scale, { none, max }) {
+  if (Number.isNaN(value)) return none;
+  return Math.max(none + 1, Math.min(max, Math.round(value * scale)));
 }
 
-function decodeI16(raw, scale) {
-  return raw === NONE ? NaN : raw / scale;
+function decodeInt(raw, scale, { none }) {
+  return raw === none ? NaN : raw / scale;
 }
 
 function align4(n) {
