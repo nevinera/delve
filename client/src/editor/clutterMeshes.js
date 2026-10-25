@@ -20,14 +20,12 @@ export function setClutterFocus(x, z) {
 function fading(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.clutterFocus = focus;
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;")
-      .replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;").replace(
+      "#include <begin_vertex>",
+      `#include <begin_vertex>
         vec2 clutterAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
         transformed *= 1.0 - smoothstep(${FADE.startFt.toFixed(1)}, ${FADE.endFt.toFixed(1)}, distance(clutterAt, clutterFocus));`,
-      );
+    );
   };
   return material;
 }
@@ -35,7 +33,14 @@ function fading(material) {
 const material = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
 // Fronds are mostly see-through: a leaflet texture, cut out by alpha test rather than blended, so
 // nothing needs sorting.
-const leafy = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide, map: frondTexture(), alphaTest: 0.5 }));
+const leafy = fading(
+  new THREE.MeshLambertMaterial({
+    color: 0xffffff,
+    side: THREE.DoubleSide,
+    map: frondTexture(),
+    alphaTest: 0.5,
+  }),
+);
 const flat = fading(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
 
 // Thin blades fanned out round a point: count of them, each `width` wide at the foot, reaching
@@ -76,7 +81,7 @@ function fronds(count, seed) {
   for (let f = 0; f < count; f++) {
     const angle = (f / count) * Math.PI * 2 + rand() * 0.6;
     const [dx, dz] = [Math.cos(angle), Math.sin(angle)];
-    const length = 0.8 + 0.2 * rand();
+    const length = 0.65 + 0.35 * rand();
     const rise = 1.3 - 0.25 * rand(); // the frond's angle up from flat at its foot
     const droop = 0.9 + 0.4 * rand(); // how far it bends down by the tip
     const halfWidth = 0.17 * length;
@@ -168,9 +173,16 @@ function patch(sides, lift, seed) {
   return new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).translate(0, lift, 0);
 }
 
-const stalkTops = [[0, 0.55, 0, 1], [0.15, 0.4, 0.08, 0.8], [-0.1, 0.32, -0.12, 0.7]];
+const stalkTops = [
+  [0, 0.55, 0, 1],
+  [0.15, 0.4, 0.08, 0.8],
+  [-0.1, 0.32, -0.12, 0.7],
+];
 const thistleTips = [0.2, 1.9, 3.6, 5.2].map((a, i) => [Math.cos(a) * 0.25, 0.75 + 0.08 * i, Math.sin(a) * 0.25]);
-const reedTops = [[0.05, 0.92, 0.02], [-0.08, 0.85, 0.06]];
+const reedTops = [
+  [0.05, 0.92, 0.02],
+  [-0.08, 0.85, 0.06],
+];
 
 const SHAPES = {
   tuft: () => blades(9, { width: 0.12, spread: 0.12, seed: 1 }),
@@ -179,20 +191,41 @@ const SHAPES = {
   pebble: () => new THREE.IcosahedronGeometry(0.5, 0).scale(1, 0.45, 0.8).translate(0, 0.12, 0),
   stone: () => new THREE.DodecahedronGeometry(0.55, 0).scale(1, 0.9, 0.8).translate(0, 0.35, 0),
   bush: () => new THREE.IcosahedronGeometry(0.5, 1).scale(1, 0.8, 1).translate(0, 0.38, 0),
-  fern: () => fronds(7, 3),
-  stalks: () => mergeGeometries(stalkTops.map(([x, y, z, s]) => new THREE.CylinderGeometry(0.035, 0.05, y, 5).translate(x, y / 2, z).scale(s, 1, s))),
-  caps: () => at(new THREE.SphereGeometry(0.16, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), stalkTops.map(([x, y, z, s]) => [x * s, y, z * s, s])),
+  fern: [3, 4, 5, 6].map((seed) => () => fronds(6 + (seed % 3), seed)),
+  stalks: () =>
+    mergeGeometries(stalkTops.map(([x, y, z, s]) => new THREE.CylinderGeometry(0.035, 0.05, y, 5).translate(x, y / 2, z).scale(s, 1, s))),
+  caps: () =>
+    at(
+      new THREE.SphereGeometry(0.16, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2),
+      stalkTops.map(([x, y, z, s]) => [x * s, y, z * s, s]),
+    ),
   patch: () => patch(9, 0.04, 4),
   twig: () => new THREE.CylinderGeometry(0.025, 0.035, 1, 4).rotateZ(Math.PI / 2).translate(0, 0.04, 0),
   thistle: () => mergeGeometries(thistleTips.map(([x, y, z]) => cylinderBetween([0, 0, 0], [x, y, z], 0.04))),
   thistleDots: () => at(new THREE.IcosahedronGeometry(0.07, 0), thistleTips),
-  reeds: () => blades(8, { width: 0.05, height: [0.6, 1], lean: 0.12, segments: 3, spread: 0.15, seed: 5 }),
+  reeds: () =>
+    blades(8, {
+      width: 0.05,
+      height: [0.6, 1],
+      lean: 0.12,
+      segments: 3,
+      spread: 0.15,
+      seed: 5,
+    }),
   cattails: () => at(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 6), reedTops),
   lily: () => new THREE.CircleGeometry(0.5, 12, 0.3, Math.PI * 2 - 0.6).rotateX(-Math.PI / 2).translate(0, 0.05, 0),
   lilyFlower: () => new THREE.ConeGeometry(0.1, 0.1, 6).translate(0.1, 0.1, 0.05),
   shell: () => new THREE.ConeGeometry(0.5, 0.3, 7).scale(1, 1, 0.7).translate(0, 0.1, 0),
   log: () => new THREE.CylinderGeometry(0.1, 0.13, 1, 6).rotateZ(Math.PI / 2).translate(0, 0.1, 0),
-  weed: () => blades(5, { width: 0.1, height: [0.6, 1], lean: 0.25, segments: 4, spread: 0.2, seed: 6 }),
+  weed: () =>
+    blades(5, {
+      width: 0.1,
+      height: [0.6, 1],
+      lean: 0.25,
+      segments: 4,
+      spread: 0.2,
+      seed: 6,
+    }),
 };
 
 // A flower head on the tip of stem b (the stems shape's blades: 2 segments of 6 vertices each,
@@ -212,11 +245,18 @@ function cylinderBetween(a, b, radius) {
   return g.translate(...a);
 }
 
+// A shape's geometries: one, or several variants for shapes listed as an array of builders.
 const geometries = new Map();
-function shape(name) {
+function variants(name) {
   if (!geometries.has(name)) {
-    const g = SHAPES[name]();
-    geometries.set(name, g.index ? g.toNonIndexed() : g);
+    const builders = [SHAPES[name]].flat();
+    geometries.set(
+      name,
+      builders.map((build) => {
+        const g = build();
+        return g.index ? g.toNonIndexed() : g;
+      }),
+    );
   }
   return geometries.get(name);
 }
@@ -236,18 +276,26 @@ export function clutterMeshes(instances, origin) {
   const color = new THREE.Color();
   for (const [kind, list] of byKind) {
     CLUTTER[kind].parts.forEach((part, p) => {
-      const placed = list.filter((item) => item.colors[p]);
-      if (!placed.length) return;
-      const solid = part.shape === "stone" || part.shape === "pebble";
-      const mesh = new THREE.InstancedMesh(shape(part.shape), solid ? flat : part.shape === "fern" ? leafy : material, placed.length);
-      placed.forEach((item, n) => {
-        q.setFromUnitVectors(UP, normal.set(...item.normal)).multiply(turn.setFromAxisAngle(UP, item.yaw));
-        m.compose(new THREE.Vector3(item.x - origin[0], item.y, item.z - origin[1]), q, new THREE.Vector3(item.scale, item.scale, item.scale));
-        mesh.setMatrixAt(n, m);
-        mesh.setColorAt(n, color.setRGB(...item.colors[p], THREE.SRGBColorSpace));
+      const shapes = variants(part.shape);
+      shapes.forEach((geometry, v) => {
+        // Each instance takes a variant from its turn, which is already random.
+        const placed = list.filter((item) => item.colors[p] && Math.floor(item.yaw * 1000) % shapes.length === v);
+        if (!placed.length) return;
+        const solid = part.shape === "stone" || part.shape === "pebble";
+        const mesh = new THREE.InstancedMesh(geometry, solid ? flat : part.shape === "fern" ? leafy : material, placed.length);
+        placed.forEach((item, n) => {
+          q.setFromUnitVectors(UP, normal.set(...item.normal)).multiply(turn.setFromAxisAngle(UP, item.yaw));
+          m.compose(
+            new THREE.Vector3(item.x - origin[0], item.y, item.z - origin[1]),
+            q,
+            new THREE.Vector3(item.scale, item.scale, item.scale),
+          );
+          mesh.setMatrixAt(n, m);
+          mesh.setColorAt(n, color.setRGB(...item.colors[p], THREE.SRGBColorSpace));
+        });
+        mesh.computeBoundingSphere();
+        meshes.push(mesh);
       });
-      mesh.computeBoundingSphere();
-      meshes.push(mesh);
     });
   }
   return meshes;
