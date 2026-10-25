@@ -19,7 +19,7 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 12;
+export const GENERATOR_VERSION = 13;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -46,6 +46,10 @@ const SEA = { shallow: -2, drop: 0.08, floor: -60, swell: 8, bumps: 3 };
 // Low land within `reachFt` of the coast is beach, in biomes that get beaches.
 const BEACH = { reachFt: 200, biomes: new Set(["plains", "forest", "rocky"]) };
 const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
+// A lake's water sits `belowFt` under the broad ground at its pin. Its bed drops `shelfFt` at the
+// shore and `depthFt` more well out, and its shore rises to `rimFt` above the water so it holds.
+// It stops `damFt` short of the sea, so its water doesn't spill over the coast.
+const LAKE = { belowFt: 3, minLevel: 1, shelfFt: 1, depthFt: 14, rimFt: 1, damFt: 80 };
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
 const TREE_GROUND = new Set(["grass", "dirt", "moss", "mud"]);
@@ -100,7 +104,8 @@ export function prepareWorld(zones, seedKey) {
   ctx.biomes = prepareBiomes({
     pins: pinsOf("biome").map((p) => {
       const [x, z] = toFt(p.at);
-      return { x, z, biome: p.biome, tags: p.tags };
+      const level = p.biome === "lake" ? Math.max(LAKE.minLevel, ctx.heightAt(x, z) - LAKE.belowFt) : undefined;
+      return { x, z, biome: p.biome, tags: p.tags, level };
     }),
     rivers: zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river")).map((s) => s.points.map(toFt)),
     edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
@@ -195,7 +200,7 @@ function plantTrees(ctx, tile, sampleAt) {
       const cj = sj * TREE_GRID + Math.floor(roll(2) * TREE_GRID);
       const s = sampleAt(ci, cj);
       const { profile } = s.climate;
-      if (!s.land || roll(3) >= profile.trees) continue;
+      if (!s.land || !Number.isNaN(s.water) || roll(3) >= profile.trees) continue;
       if (!TREE_GROUND.has(TERRAIN[tile.layers.terrain[cj * CELLS + ci]])) continue;
       const size = 1 + pick(profile.sizes, roll(4));
       const kind = TREE_KINDS[pick(profile.kinds, roll(5))];
@@ -273,8 +278,12 @@ function seaFloor(ctx, x, z, coastDist) {
 
 function sample(ctx, x, z, edges, biomes) {
   const ground = land(ctx, x, z, edges, biomes);
-  const out = { h: ground.h, water: NaN, river: false, bank: false, pool: false, land: ground.land, climate: ground.climate, coastDist: ground.coastDist };
+  const out = { h: ground.h, water: NaN, river: false, bank: false, pool: false, lake: false, land: ground.land, climate: ground.climate, coastDist: ground.coastDist };
   const { pools, ravines } = ground.climate.profile;
+  if (ground.climate.lake && ground.land) {
+    const amount = ground.climate.profile.lake;
+    lake(out, ground.climate.lake.level, ground.coastDist < LAKE.damFt ? Math.min(amount, 0.45) : amount);
+  }
   if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
   for (const r of ctx.rivers) {
@@ -306,6 +315,20 @@ function pool(ctx, out, x, z, amount) {
   out.water = out.h - 0.5;
   out.h = out.water - Math.min(POOL.maxDepth, (level - n) * 30);
   out.pool = true;
+}
+
+// Lakes: water at the lake's level over its biome, deepening away from the shore, with the land
+// just outside raised to hold it. `amount` is the blended lake profile: above 0.5 in the lake, below
+// it on the shore.
+function lake(out, level, amount) {
+  if (amount >= 0.5) {
+    out.water = level;
+    out.h = Math.min(out.h, level - LAKE.shelfFt - LAKE.depthFt * smoothstep(0.5, 1, amount));
+    out.lake = true;
+  } else {
+    out.h = Math.max(out.h, lerp(out.h, level + LAKE.rimFt, amount * 2));
+    if (amount > 0.3) out.bank = true;
+  }
 }
 
 // Ravines: narrow winding cracks, deep enough not to climb out of, along the zero line of a
@@ -369,7 +392,7 @@ function profileAt(profile, along) {
 // A cell's terrain type. Near a border the biome is picked per cell by its share, so surfaces
 // speckle into each other. (ci, cj) is the cell's continent cell position, for steady noise.
 function terrainFor(ctx, s, slope, ci, cj) {
-  if (s.river || s.pool) return T.mud;
+  if (s.river || s.pool || s.lake) return T.mud;
   if (!s.land) return T.sand;
   if (slope > s.climate.profile.steep) return T.rock;
   if (s.bank) return T.shore;

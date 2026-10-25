@@ -124,6 +124,20 @@ describe("biomes in the generator", () => {
     expect(wet("swamp")).toBeGreaterThan(500);
   });
 
+  it("floods a lake at one level, deeper away from its shore", () => {
+    const ctx = prepareWorld(
+      [{ region: [square(0, 0, 8, 8)], pins: [{ id: "f", kind: "biome", at: [2, 4], biome: "forest" }, { id: "l", kind: "biome", at: [6, 4], biome: "lake" }], strokes: [] }],
+      "test",
+    );
+    const middle = generateTile(ctx, 6, 4);
+    const levels = new Set(Array.from(middle.layers.water).filter((w) => !Number.isNaN(w)));
+    expect(levels.size).toBe(1);
+    const [level] = levels;
+    expect(cell(middle, 0, 0, "height")).toBeLessThan(level - 10);
+    expect(findTrees(middle)).toHaveLength(0);
+    expect(Number.isNaN(cell(generateTile(ctx, 2, 4), 0, 0, "water"))).toBe(true);
+  });
+
   it("cuts ravines only where tagged", () => {
     const lowest = (tags) => Math.min(...tiles(world("plains", tags)).flatMap((t) => Array.from(t.layers.height)));
     expect(lowest([])).toBeGreaterThan(4);

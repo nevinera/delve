@@ -15,17 +15,19 @@ import { TILE_FT } from "./constants.js";
 import { fbm } from "./noise.js";
 import { TREE_KINDS } from "./trees.js";
 
-export const BIOMES = ["plains", "forest", "rocky", "swamp"];
+export const BIOMES = ["plains", "forest", "rocky", "swamp", "lake"];
 export const DEFAULT_BIOME = "plains";
 
 // amp: hill noise height (ft); rough: ridged rocky noise height (ft); steep: rise over run that
 // turns to rock; trees: chance of a tree per 32ft grid square; sizes: odds of 1x1, 2x2 and 3x3;
-// kinds: odds per tree kind; pools: swamp pools, 0-1; ravines: ravine cracks, 0-1.
+// kinds: odds per tree kind; pools: swamp pools, 0-1; ravines: ravine cracks, 0-1; lake: 1 for
+// lakes, so it blends from 0.5 at a lake's shore to 1 well out in it, and 0 well away from it.
 const PROFILES = {
   plains: { amp: 4, rough: 0, steep: 0.7, trees: 0.03, sizes: [0.5, 0.4, 0.1], kinds: { oak: 1 } },
   forest: { amp: 9, rough: 0, steep: 0.7, trees: 0.17, sizes: [0.1, 0.3, 0.6], kinds: { oak: 0.85, pine: 0.15 } },
   rocky: { amp: 12, rough: 26, steep: 0.45, trees: 0.06, sizes: [0.6, 0.35, 0.05], kinds: { pine: 0.7, dead: 0.3 } },
   swamp: { amp: 2, rough: 0, steep: 0.7, trees: 0.25, sizes: [0.4, 0.5, 0.1], kinds: { willow: 0.65, dead: 0.35 }, pools: 1 },
+  lake: { amp: 2, rough: 0, steep: 0.7, trees: 0, sizes: [1, 0, 0], kinds: { willow: 1 }, lake: 1 },
 };
 // What each pin tag does to its profile.
 const TAGS = {
@@ -61,7 +63,7 @@ const PENALTY = { river: 1500, edge: 700, cap: 3000 };
 // Within `calm` margins of a pin there's no warp; it comes back in full over the next `fade`.
 const MARGIN = { calm: 0.5, fade: 1.5 };
 
-// pins: [{ x, z, biome, tags }]; rivers: [[[x, z], ...], ...] point lists; edges: zone edges as
+// pins: [{ x, z, biome, tags, level }], level being a lake's water level; rivers: [[[x, z], ...], ...] point lists; edges: zone edges as
 // [ax, az, bx, bz] (shared edges are counted once); seed: number. `warp: false` turns the warp off.
 export function prepareBiomes({ pins, rivers, edges, seed }, { warp = true } = {}) {
   const known = pins.filter((p) => BIOMES.includes(p.biome));
@@ -71,7 +73,8 @@ export function prepareBiomes({ pins, rivers, edges, seed }, { warp = true } = {
     pins: known.map((p) => {
       const gap = Math.min(...known.filter((q) => q !== p).map((q) => Math.hypot(q.x - p.x, q.z - p.z)));
       const tags = p.tags ?? [];
-      return { x: p.x, z: p.z, biome: BIOMES.indexOf(p.biome), tags, profile: profileFor(p.biome, tags), margin: Math.min(TILE_FT, gap / 2) };
+      const margin = Math.min(TILE_FT, gap / 2);
+      return { x: p.x, z: p.z, biome: BIOMES.indexOf(p.biome), tags, profile: profileFor(p.biome, tags), margin, level: p.level };
     }),
     rivers: rivers.flatMap((points) => points.slice(1).map((b, i) => [...points[i], ...b])),
     edges: dedupe(edges),
@@ -97,6 +100,7 @@ export function profileFor(biome, tags = []) {
     kinds: TREE_KINDS.map((kind) => base.kinds[kind] ?? 0),
     pools: base.pools ?? 0,
     ravines: 0,
+    lake: base.lake ?? 0,
   };
   for (const tag of tags) TAGS[tag]?.(p);
   return p;
@@ -104,15 +108,17 @@ export function profileFor(biome, tags = []) {
 
 const DEFAULT_PROFILE = profileFor(DEFAULT_BIOME);
 
-// The climate at a point: { biome, second, weight, profile }. biome wins the point and second is
-// the runner-up (or the same); weight is biome's share, from 1 well inside down to 0.5 on the
-// border; profile is the two pins' profiles blended by weight.
+// The climate at a point: { biome, second, weight, profile, lake }. biome wins the point and
+// second is the runner-up (or the same); weight is biome's share, from 1 well inside down to 0.5
+// on the border; profile is the two pins' profiles blended by weight; lake is the pin of the lake
+// it's in or beside, if any.
 export function climateAt(b, x, z) {
   const { biome, pin, second, secondPin, gap } = biomeAt(b, x, z);
-  if (!pin) return { biome, second: biome, weight: 1, profile: DEFAULT_PROFILE };
+  if (!pin) return { biome, second: biome, weight: 1, profile: DEFAULT_PROFILE, lake: null };
   const weight = 0.5 + 0.5 * smoothstep(gap / BLEND_FT);
-  if (weight >= 1) return { biome, second: biome, weight, profile: pin.profile };
-  return { biome, second, weight, profile: blend(secondPin.profile, pin.profile, weight) };
+  const lake = pin.profile.lake ? pin : secondPin?.profile.lake ? secondPin : null;
+  if (weight >= 1) return { biome, second: biome, weight, profile: pin.profile, lake: pin.profile.lake ? pin : null };
+  return { biome, second, weight, profile: blend(secondPin.profile, pin.profile, weight), lake };
 }
 
 function blend(a, b, t) {
