@@ -18,6 +18,7 @@ export default defineConfig(({command}) => ({
     rollupOptions: {
       input: {
         main: resolve(__dirname, "client/src/main.js"),
+        editor: resolve(__dirname, "client/src/editor/main.js"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",
