@@ -62,6 +62,15 @@ describe("waterMesh", () => {
     expect(waterMesh(wide, {}, [0, 0]).indices.length).toBe(4 * 4 * 6);
   });
 
+  it("goes by the water kind layer where a tile has one", () => {
+    const pool = tile(0, 0, -5);
+    pool.layers.water = new Float32Array(16).fill(0); // fresh water that rounded to level 0
+    pool.layers.waterKind = new Uint8Array(16).fill(1);
+    pool.palettes.water = ["sea", "fresh"];
+    expect(waterMesh(pool, {}, [0, 0], "sea")).toBeNull();
+    expect(waterMesh(pool, {}, [0, 0], "fresh").indices.length).toBe(4 * 4 * 6);
+  });
+
   it("keeps the sea and fresh water apart", () => {
     const sea = tile(0, 0, -5);
     sea.layers.water = new Float32Array(16).fill(0);

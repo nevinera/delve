@@ -13,13 +13,13 @@
 
 import polygonClipping from "polygon-clipping";
 import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
-import { CELLS, CELL_FT, TILE_FT } from "./constants.js";
+import { CELLS, CELL_FT, TILE_FT, WATER_KINDS } from "./constants.js";
 import { prepareHeights } from "./heightField.js";
 import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 15;
+export const GENERATOR_VERSION = 17;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -156,6 +156,7 @@ export function generateTile(ctx, tx, tz) {
   const layers = {
     height: new Float32Array(count),
     water: new Float32Array(count),
+    waterKind: new Uint8Array(count),
     terrain: new Uint8Array(count),
     biome: new Uint8Array(count),
     forest: new Uint8Array(count),
@@ -172,6 +173,7 @@ export function generateTile(ctx, tx, tz) {
       layers.terrain[k] = terrainFor(ctx, s, Math.hypot(gx, gz), tx * CELLS + i, tz * CELLS + j);
       layers.forest[k] = s.land ? Math.round(s.climate.profile.trees * 255) : 0;
       layers.biome[k] = s.climate.biome;
+      layers.waterKind[k] = WATER_KINDS.indexOf(s.sea ? "sea" : "fresh");
     }
   }
 
@@ -180,7 +182,7 @@ export function generateTile(ctx, tx, tz) {
     layer: "surface",
     cells: CELLS,
     cellFt: CELL_FT,
-    palettes: { terrain: [...TERRAIN], biome: BIOMES },
+    palettes: { terrain: [...TERRAIN], biome: BIOMES, water: [...WATER_KINDS] },
     objects: [],
     generator: { version: GENERATOR_VERSION, seed: ctx.seed },
     layers,
@@ -279,7 +281,7 @@ function seaFloor(ctx, x, z, coastDist) {
 
 function sample(ctx, x, z, edges, biomes) {
   const ground = land(ctx, x, z, edges, biomes);
-  const out = { h: ground.h, water: NaN, river: false, bank: false, pool: false, lake: false, land: ground.land, climate: ground.climate, coastDist: ground.coastDist };
+  const out = { h: ground.h, water: NaN, sea: false, river: false, bank: false, pool: false, lake: false, land: ground.land, climate: ground.climate, coastDist: ground.coastDist };
   const { pools, ravines } = ground.climate.profile;
   if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
@@ -301,7 +303,10 @@ function sample(ctx, x, z, edges, biomes) {
     }
   }
   // The sea covers the sea floor and the shore strip. Land below sea level further in stays dry.
-  if (out.h < 0 && Number.isNaN(out.water) && (!out.land || out.coastDist < COAST.maxFt)) out.water = 0;
+  if (out.h < 0 && Number.isNaN(out.water) && (!out.land || out.coastDist < COAST.maxFt)) {
+    out.water = 0;
+    out.sea = true;
+  }
   return out;
 }
 

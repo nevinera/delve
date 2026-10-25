@@ -24,14 +24,19 @@ export function terrainMesh(tile, neighbours, origin, step = 2) {
   return { positions, colors, indices: gridIndices(side, () => true) };
 }
 
-// Kinds of water, each drawn as its own mesh so each can look different: the sea at level 0, and
-// fresh water (rivers, lakes, pools) at any other level.
-export const WATER_KINDS = ["sea", "fresh"];
-const kindOf = (level) => (Number.isNaN(level) ? null : level === 0 ? "sea" : "fresh");
+// A cell's kind of water (WATER_KINDS), or null where it's dry. Tiles from before the waterKind
+// layer count water at level 0 as sea.
+function kindOf(tile, k) {
+  const level = tile.layers.water[k];
+  if (Number.isNaN(level)) return null;
+  if (tile.layers.waterKind && tile.palettes.water) return tile.palettes.water[tile.layers.waterKind[k]];
+  return level === 0 ? "sea" : "fresh";
+}
 
-// One kind of water: a sheet at the water surface over the cells holding that kind. The sheet runs
-// on half a cell into the dry ground beside it, at the water's level there, so the ground itself
-// cuts the shoreline. Null when the tile has none.
+// One kind of water (WATER_KINDS), each drawn as its own mesh so each can look different: a sheet
+// at the water surface over the cells holding that kind. The sheet runs on half a cell into the
+// dry ground beside it, at the water's level there, so the ground itself cuts the shoreline. Null
+// when the tile has none.
 export function waterMesh(tile, neighbours, origin, kind = "fresh") {
   const grid = sampler(tile, neighbours);
   const side = tile.cells + 1;
@@ -39,8 +44,7 @@ export function waterMesh(tile, neighbours, origin, kind = "fresh") {
   for (let b = 0; b < side; b++) {
     for (let a = 0; a < side; a++) {
       const { t, k } = grid(a, b);
-      const w = t.layers.water[k];
-      if (kindOf(w) === kind) level[b * side + a] = w;
+      if (kindOf(t, k) === kind) level[b * side + a] = t.layers.water[k];
     }
   }
   const positions = new Float32Array(side * side * 3);

@@ -3,3 +3,6 @@
 export const CELLS = 64;
 export const CELL_FT = 8;
 export const TILE_FT = CELLS * CELL_FT;
+
+// Kinds of water, the tile's water palette: the sea, and fresh water (rivers, lakes, pools).
+export const WATER_KINDS = ["sea", "fresh"];

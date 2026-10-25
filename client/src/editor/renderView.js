@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { gunzipSync } from "fflate";
-import { TILE_FT } from "../world/constants.js";
+import { TILE_FT, WATER_KINDS } from "../world/constants.js";
 import { decodeTile } from "../world/tileCodec.js";
 import { findTrees } from "../world/trees.js";
 import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
-import { WATER_KINDS, terrainMesh, waterMesh } from "./terrainMesh.js";
+import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";

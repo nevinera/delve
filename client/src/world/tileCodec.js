@@ -13,10 +13,12 @@ const LAYER_TYPES = {
   u8: { bytes: 1, array: Uint8Array },
 };
 
-// Layers in file order, with how each is stored.
+// Layers in file order, with how each is stored. An optional layer is left out of the file when
+// the tile doesn't have it.
 export const SURFACE_LAYERS = [
   { name: "height", type: "i16", scale: 4 },
   { name: "water", type: "i16", scale: 4 },
+  { name: "waterKind", type: "u8", optional: true }, // index into palettes.water, where there's water
   { name: "terrain", type: "u8" },
   { name: "biome", type: "u8" },
   { name: "forest", type: "u8" },
@@ -26,7 +28,7 @@ export const SURFACE_LAYERS = [
 export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
   const count = tile.cells * tile.cells;
   let offset = 0;
-  const table = layerSpecs.map((spec) => {
+  const table = layerSpecs.filter((spec) => !spec.optional || tile.layers[spec.name]).map(({ optional, ...spec }) => {
     const entry = { ...spec, offset };
     offset += count * LAYER_TYPES[spec.type].bytes;
     return entry;
