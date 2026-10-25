@@ -45,6 +45,13 @@ describe("changedTiles", () => {
     expect(has(tiles, 5, 10)).toBe(false);
   });
 
+  it("covers the whole zone when a biome pin changes", () => {
+    const pin = { id: "p1", kind: "biome", at: [5.5, 5.5], biome: "forest" };
+    const tiles = changedTiles(zone({ pins: [pin] }), zone({ pins: [{ ...pin, biome: "swamp" }] }));
+    expect(has(tiles, 0, 0)).toBe(true);
+    expect(has(tiles, 19, 19)).toBe(true);
+  });
+
   it("covers every tile of a brand-new region", () => {
     const triangle = [[[[0, 0], [10, 0], [0, 10]]]];
     const tiles = changedTiles(null, { region: triangle, pins: [], strokes: [] });

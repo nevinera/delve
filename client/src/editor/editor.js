@@ -314,6 +314,7 @@ export class Editor {
     generate.addEventListener("click", () => this.generate(generate, tilesTouched(this.activeZone.region)));
     this.el.regenerate.addEventListener("click", () => this.generate(this.el.regenerate, this.changedHere()));
     highlight.addEventListener("change", () => this.map.render());
+    this.el.showBiomes.addEventListener("change", () => this.map.render());
     this.el.showPins.addEventListener("change", () => {
       this.map.render();
       this.refreshMarks();
@@ -437,10 +438,10 @@ export class Editor {
     this.renderPanel();
     this.say();
     try {
-      await this.generator.run(listZones(this.world, this.continent), this.continent, tiles, ({ tx, tz, gz, rgba, cells }) => {
+      await this.generator.run(listZones(this.world, this.continent), this.continent, tiles, ({ tx, tz, gz, rgba, biomes, cells }) => {
         this.world.files.set(tilePath(this.continent, tx, tz), gz);
         this.pending.delete(`${tx},${tz}`);
-        this.thumbnails.set(tx, tz, rgba, cells);
+        this.thumbnails.set(tx, tz, rgba, cells, biomes);
         button.textContent = `generating ${++done}/${tiles.length}`;
         frame ??= requestAnimationFrame(() => {
           frame = null;
@@ -594,10 +595,12 @@ export class Editor {
 
   // --- drawing ---
 
+  // Every tile's thumbnail, with its biomes tinted over it when "show biomes" is on.
   drawThumbnails(ctx, map) {
     if (!this.thumbnails.size) return;
     const [x0, z0] = map.toTile(0, 0);
     const [x1, z1] = map.toTile(map.canvas.width, map.canvas.height);
+    const biomes = this.el.showBiomes.checked;
     ctx.imageSmoothingEnabled = map.view.scale < 64;
     for (let tx = Math.floor(x0); tx <= x1; tx++) {
       for (let tz = Math.floor(z0); tz <= z1; tz++) {
@@ -606,6 +609,11 @@ export class Editor {
         const [sx, sy] = map.toScreen([tx, tz]);
         // A hair of overlap hides seams between neighbouring thumbnails.
         ctx.drawImage(image, sx, sy, map.view.scale + 0.5, map.view.scale + 0.5);
+        const tint = biomes && this.thumbnails.biome(tx, tz);
+        if (!tint) continue;
+        ctx.globalAlpha = 0.45;
+        ctx.drawImage(tint, sx, sy, map.view.scale + 0.5, map.view.scale + 0.5);
+        ctx.globalAlpha = 1;
       }
     }
   }

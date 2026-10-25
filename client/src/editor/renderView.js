@@ -57,7 +57,7 @@ export class RenderView {
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
     this.surfaces = [sea]; // what a pointer can land on
     this.heads = []; // pin heads a pointer can pick
-    this.textures = { circle: markTexture("circle"), diamond: markTexture("diamond") };
+    this.textures = { circle: markTexture("circle"), diamond: markTexture("diamond"), square: markTexture("square") };
     this.raycaster = new THREE.Raycaster();
     this.handlers = handlers;
     this.press = null;
@@ -227,7 +227,7 @@ export class RenderView {
       const { top, ground } = stick(pin.at);
       const picked = selected?.type === "pin" && selected.id === pin.id;
       const hit = { zone: zone.key, type: "pin", id: pin.id, ground };
-      const shape = pin.kind === "height" ? "diamond" : "circle";
+      const shape = { height: "diamond", biome: "square" }[pin.kind] ?? "circle";
       this.addHead(top, shape, PINS[pin.kind]?.color ?? "#fff", PIN_SIZE, { opacity, picked, hit });
     }
 
@@ -340,6 +340,8 @@ function markTexture(shape) {
     ctx.lineTo(32, 60);
     ctx.lineTo(4, 32);
     ctx.closePath();
+  } else if (shape === "square") {
+    ctx.rect(10, 10, 44, 44);
   } else {
     ctx.arc(32, 32, 26, 0, Math.PI * 2);
   }

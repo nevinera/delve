@@ -6,19 +6,19 @@
 // pin on the continent, and it slopes down to the sea at the edge of the zoned area, so a region's
 // outline is its coast. Rivers carve down through it.
 //
-// This pass makes height, water, terrain types and forest density with one default biome.
-// Objects, scatter and biomes wait for kits.
+// This pass makes height, water, terrain types, forest density and biome regions (biomes.js).
+// Biomes don't shape the ground yet. Objects and scatter wait for kits.
 
 import polygonClipping from "polygon-clipping";
+import { BIOMES, biomeAt, biomesNear, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT } from "./constants.js";
 import { fbm, hashString } from "./noise.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 2;
+export const GENERATOR_VERSION = 3;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
-export const BIOMES = ["temperate"];
 
 const BASE = {
   defaultHeight: 20, // land height away from every height pin
@@ -83,6 +83,17 @@ export function prepareWorld(zones, seedKey) {
     };
   });
 
+  const pinsOf = (kind) => zoned.flatMap((z) => z.pins.filter((p) => p.kind === kind));
+  ctx.biomes = prepareBiomes({
+    pins: pinsOf("biome").map((p) => {
+      const [x, z] = toFt(p.at);
+      return { x, z, biome: p.biome, tags: p.tags };
+    }),
+    rivers: zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river")).map((s) => s.points.map(toFt)),
+    edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
+    seed: ctx.seed,
+  });
+
   return ctx;
 }
 
@@ -96,6 +107,7 @@ export function generateTile(ctx, tx, tz) {
     Math.max(az, bz) > z0 - EDGE_REACH_FT &&
     Math.min(az, bz) < z0 + TILE_FT + EDGE_REACH_FT;
   const edges = ctx.areaEdges.filter(near);
+  const biomes = biomesNear(ctx.biomes, [x0, z0, x0 + TILE_FT, z0 + TILE_FT]);
 
   // One extra cell on each side, so slopes at the tile edge see their neighbours.
   const N = CELLS + 2;
@@ -127,6 +139,7 @@ export function generateTile(ctx, tx, tz) {
       const x = x0 + (i + 0.5) * CELL_FT;
       const z = z0 + (j + 0.5) * CELL_FT;
       layers.forest[k] = Math.round(forestFor(ctx, s, layers.terrain[k], x, z) * 255);
+      layers.biome[k] = biomeAt(biomes, x, z).biome;
     }
   }
 

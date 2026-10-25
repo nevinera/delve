@@ -7,6 +7,10 @@ import { tilesTouched } from "./region.js";
 // Each kind of change reaches as far as the generator lets it: a moved region edge reshapes the
 // shore around it, a height pin shapes the ground within its reach, and a river carves along its
 // whole length. Info pins don't touch the ground. Every hit tile brings its neighbours along.
+//
+// Biome borders can move anywhere a biome pin's region reaches, and rivers and zone edges bend
+// them, so when a zone has biome pins, any biome pin, river or region change marks every tile the
+// zone touches.
 
 const key = (tx, tz) => `${tx},${tz}`;
 
@@ -17,6 +21,13 @@ export function changedTiles(before, after) {
   const empty = { region: [], pins: [], strokes: [] };
   const a = before ?? empty;
   const b = after ?? empty;
+
+  const hasBiomes = [...a.pins, ...b.pins].some((p) => p.kind === "biome");
+  const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
+  const biomePins = (z) => z.pins.filter((p) => p.kind === "biome");
+  if (hasBiomes && (changed(biomePins(a), biomePins(b)) || changed(a.strokes, b.strokes) || changed(a.region, b.region))) {
+    for (const zone of [a, b]) for (const [tx, tz] of tilesTouched(zone.region)) addAround(tiles, tx, tz, 1);
+  }
 
   if (JSON.stringify(a.region) !== JSON.stringify(b.region)) {
     const moved = !a.region.length

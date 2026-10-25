@@ -23,6 +23,27 @@ export function groundRgb(tile, k) {
   return c.map((v, m) => v + (FOREST[m] - v) * f * 0.8);
 }
 
+const BIOME_COLORS = {
+  plains: [226, 200, 90],
+  forest: [40, 140, 60],
+  rocky: [150, 150, 150],
+  swamp: [70, 120, 110],
+};
+
+// The biome layer as RGBA, for tinting the map: one color per biome, and clear for biomes it
+// doesn't know.
+export function biomeRgba(tile) {
+  const n = tile.cells;
+  const out = new Uint8ClampedArray(n * n * 4);
+  const colors = (tile.palettes.biome ?? []).map((name) => BIOME_COLORS[name]);
+  for (let k = 0; k < n * n; k++) {
+    const c = colors[tile.layers.biome[k]];
+    if (!c) continue;
+    out.set([...c, 255], k * 4);
+  }
+  return out;
+}
+
 // RGBA, row by row from the tile's north-west corner.
 export function tileRgba(tile) {
   const n = tile.cells;

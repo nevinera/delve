@@ -28,6 +28,7 @@ const editor = new Editor(World.empty(), {
   generate: $("generate"),
   regenerate: $("regenerate"),
   highlight: $("highlight"),
+  showBiomes: $("showBiomes"),
   pendingInfo: $("pendingInfo"),
   props: $("props"),
   hint: $("hint"),

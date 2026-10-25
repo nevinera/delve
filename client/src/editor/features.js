@@ -1,13 +1,16 @@
 import { snapToCell } from "./region.js";
 import { TILE_FT } from "../world/constants.js";
+import { BIOMES } from "../world/biomes.js";
 
 // A zone's sketch features: pins ({ id, kind, at, ... }) and strokes ({ id, kind, points, width,
 // ... }), in continent tile units with sizes in feet. Height pins set the ground height at a spot;
-// info pins carry a name, notes and tags for people and LLMs and don't affect generation. Rivers
+// biome pins claim the land around them for a biome, adjusted by their tags; info pins carry a
+// name, notes and tags for people and LLMs and don't affect generation. Rivers
 // flow the way they're drawn. There are no coastlines: the sea is wherever no zone is.
 
 export const PINS = {
   height: { color: "#70d070", label: "height pin" },
+  biome: { color: "#e0a040", label: "biome pin" },
   info: { color: "#b08ae0", label: "info pin" },
 };
 export const STROKES = {
@@ -21,6 +24,7 @@ export const FEATURE_HINTS = {
 };
 
 const DEFAULT_HEIGHT_FT = 20;
+const DEFAULT_BIOME_PIN = "forest";
 
 export function nextId(zone, prefix) {
   const used = new Set([...zone.pins, ...zone.strokes].map((f) => f.id));
@@ -95,6 +99,7 @@ export class Features {
     if (!at) return;
     const pin = { id: nextId(zone, "p"), kind, at };
     if (kind === "height") pin.height = DEFAULT_HEIGHT_FT;
+    if (kind === "biome") pin.biome = DEFAULT_BIOME_PIN;
     zone.pins.push(pin);
     this.select("pin", pin.id);
     this.editor.save(zone);
@@ -179,6 +184,7 @@ export class Features {
     const kind = PINS[feature.kind] ?? STROKES[feature.kind];
     const lines = [`${kind.label} · ${feature.id} · ${zone.name || zone.key}`];
     if (feature.name) lines.push(feature.name);
+    if (feature.kind === "biome") lines.push(`biome: ${feature.biome}`);
     const groundText = Number.isNaN(ground) ? "" : `ground ${Math.round(ground)}ft`;
     const heights = [feature.kind === "height" && `height ${feature.height ?? "?"}ft`, groundText].filter(Boolean);
     if (heights.length) lines.push(heights.join(" · "));
@@ -296,7 +302,9 @@ export class Features {
     ctx.strokeStyle = highlight ? "#fff" : "#000";
     ctx.lineWidth = (highlight ? 2 : 1) * dpr;
     ctx.beginPath();
-    if (pin.kind === "height") {
+    if (pin.kind === "biome") {
+      ctx.rect(x - r * 0.75, y - r * 0.75, r * 1.5, r * 1.5);
+    } else if (pin.kind === "height") {
       ctx.moveTo(x, y - r);
       ctx.lineTo(x + r, y);
       ctx.lineTo(x, y + r);
@@ -308,7 +316,12 @@ export class Features {
     ctx.fill();
     ctx.stroke();
 
-    const label = pin.kind === "height" ? `${pin.height ?? "?"}ft` : pin.name || (pin.tags ?? []).join(", ");
+    const label =
+      pin.kind === "height"
+        ? `${pin.height ?? "?"}ft`
+        : pin.kind === "biome"
+          ? [pin.biome, ...(pin.tags ?? [])].join(" · ")
+          : pin.name || (pin.tags ?? []).join(", ");
     if (label) {
       ctx.fillStyle = "#eee";
       ctx.font = `${12 * dpr}px ui-monospace, monospace`;
@@ -333,6 +346,7 @@ export class Features {
 
     const fields = ["name"];
     if (feature.kind === "height") fields.push("height");
+    if (feature.kind === "biome") fields.push("biome");
     if (STROKES[feature.kind]) fields.push("width");
     fields.push("tags", "notes");
     for (const key of fields) box.append(this.field(zone, feature, key));
@@ -348,8 +362,9 @@ export class Features {
     label.className = "editor-field";
     label.textContent = { height: "height (ft)", width: "width (ft)", tags: "tags (comma-separated)" }[key] ?? key;
     const numeric = key === "height" || key === "width";
-    const input = document.createElement(key === "notes" ? "textarea" : "input");
+    const input = document.createElement(key === "notes" ? "textarea" : key === "biome" ? "select" : "input");
     if (key === "notes") input.rows = 4;
+    else if (key === "biome") for (const biome of BIOMES) input.add(new Option(biome, biome));
     else input.type = numeric ? "number" : "text";
     input.value = key === "tags" ? (feature.tags ?? []).join(", ") : (feature[key] ?? "");
     input.addEventListener("input", () => {

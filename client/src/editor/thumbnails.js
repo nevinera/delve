@@ -1,6 +1,6 @@
 import { gunzipSync } from "fflate";
 import { decodeTile } from "../world/tileCodec.js";
-import { tileRgba } from "../world/tileImage.js";
+import { biomeRgba, tileRgba } from "../world/tileImage.js";
 
 const TILE_PATH = /^places\/continents\/([\w-]+)\/tiles\/surface\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
 const BATCH_MS = 12;
@@ -25,11 +25,13 @@ export class Thumbnails {
   constructor(onProgress) {
     this.onProgress = onProgress;
     this.images = new Map(); // "tx,tz" -> canvas
+    this.biomes = new Map(); // "tx,tz" -> canvas of the biome layer
     this.loading = null;
   }
 
   load(world, continent) {
     this.images.clear();
+    this.biomes.clear();
     const queue = surfaceTiles(world, continent);
     const run = { cancelled: false };
     if (this.loading) this.loading.cancelled = true;
@@ -41,7 +43,9 @@ export class Thumbnails {
       while (queue.length && performance.now() - start < BATCH_MS) {
         const { tx, tz, path } = queue.pop();
         try {
-          this.images.set(`${tx},${tz}`, toCanvas(decodeTile(gunzipSync(world.files.get(path)))));
+          const tile = decodeTile(gunzipSync(world.files.get(path)));
+          this.images.set(`${tx},${tz}`, rgbaCanvas(tileRgba(tile), tile.cells));
+          this.biomes.set(`${tx},${tz}`, rgbaCanvas(biomeRgba(tile), tile.cells));
         } catch (err) {
           console.warn(`couldn't read ${path}: ${err.message}`);
         }
@@ -52,22 +56,24 @@ export class Thumbnails {
     step();
   }
 
-  // A freshly generated tile's picture, from tileRgba.
-  set(tx, tz, rgba, cells) {
+  // A freshly generated or edited tile's pictures, from tileRgba and biomeRgba. Without biome
+  // pixels, the biome picture stays as it was.
+  set(tx, tz, rgba, cells, biomes) {
     this.images.set(`${tx},${tz}`, rgbaCanvas(rgba, cells));
+    if (biomes) this.biomes.set(`${tx},${tz}`, rgbaCanvas(biomes, cells));
   }
 
   get(tx, tz) {
     return this.images.get(`${tx},${tz}`);
   }
 
+  biome(tx, tz) {
+    return this.biomes.get(`${tx},${tz}`);
+  }
+
   get size() {
     return this.images.size;
   }
-}
-
-function toCanvas(tile) {
-  return rgbaCanvas(tileRgba(tile), tile.cells);
 }
 
 function rgbaCanvas(rgba, cells) {
