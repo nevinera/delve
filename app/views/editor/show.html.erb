@@ -6,4 +6,22 @@
 </header>
 <main class="editor-main">
   <canvas id="map" class="editor-map"></canvas>
+  <aside class="editor-panel">
+    <section>
+      <h2>Continent</h2>
+      <select id="continent"></select>
+    </section>
+    <section>
+      <h2>Zones</h2>
+      <ul id="zoneList" class="editor-zones"></ul>
+      <button id="newZone" type="button">new zone</button>
+    </section>
+    <section id="zonePanel" hidden>
+      <h2>Zone</h2>
+      <label class="editor-field">name <input id="zoneName" type="text"></label>
+      <p id="regionInfo"></p>
+      <button id="drawRegion" type="button">draw region</button>
+    </section>
+    <p id="hint" class="editor-hint"></p>
+  </aside>
 </main>

@@ -1,5 +1,9 @@
 // The editor's 2D map: open ocean with a tile grid, panned by dragging and zoomed with the wheel.
 // Positions are continent tile units (x east, z south).
+//
+// The current tool gets left-button presses first: tool.down(tile, event) returns true to take
+// the drag, and then receives move(tile, event) and up(tile, event). Unclaimed left drags, right
+// and middle drags, and space-drags pan. draw(ctx, mapView) paints on top of the grid.
 
 const OCEAN = "#1d3a52";
 const GRID = "rgba(255, 255, 255, 0.08)";
@@ -9,12 +13,15 @@ const MIN_SCALE = 2;
 const MAX_SCALE = 1600;
 
 export class MapView {
-  constructor(canvas, { onPointer } = {}) {
+  constructor(canvas, { onPointer, draw, tool } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.view = { x: 0, z: 0, scale: 24 }; // tile at the canvas center, pixels per tile
     this.onPointer = onPointer;
+    this.draw = draw;
+    this.tool = tool;
     this.drag = null;
+    this.spaceHeld = false;
     this.listen();
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
@@ -39,6 +46,12 @@ export class MapView {
     ctx.fillStyle = OCEAN;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     this.drawGrid();
+    this.draw?.(ctx, this);
+  }
+
+  // Device pixels, for hit radii and line widths that should look the same at any zoom.
+  get dpr() {
+    return window.devicePixelRatio || 1;
   }
 
   drawGrid() {
@@ -80,22 +93,44 @@ export class MapView {
     const { canvas } = this;
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
+    window.addEventListener("keydown", (e) => {
+      if (e.key === " " && !e.target.matches("input, textarea, select")) this.spaceHeld = true;
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.key === " ") this.spaceHeld = false;
+    });
+
     canvas.addEventListener("pointerdown", (e) => {
       const [sx, sy] = this.eventPos(e);
       canvas.setPointerCapture(e.pointerId);
-      this.drag = { sx, sy, x: this.view.x, z: this.view.z };
+      const tool = this.tool?.();
+      if (e.button === 0 && !this.spaceHeld && tool?.down?.(this.toTile(sx, sy), e)) {
+        this.drag = { tool };
+      } else {
+        this.drag = { sx, sy, x: this.view.x, z: this.view.z };
+      }
+      this.render();
     });
 
     canvas.addEventListener("pointermove", (e) => {
       const pos = this.eventPos(e);
-      this.onPointer?.(this.toTile(...pos));
-      if (!this.drag) return;
-      this.view.x = this.drag.x - (pos[0] - this.drag.sx) / this.view.scale;
-      this.view.z = this.drag.z - (pos[1] - this.drag.sy) / this.view.scale;
+      const tile = this.toTile(...pos);
+      this.pointer = tile;
+      this.onPointer?.(tile);
+      if (this.drag?.tool) {
+        this.drag.tool.move?.(tile, e);
+      } else if (this.drag) {
+        this.view.x = this.drag.x - (pos[0] - this.drag.sx) / this.view.scale;
+        this.view.z = this.drag.z - (pos[1] - this.drag.sy) / this.view.scale;
+      }
       this.render();
     });
 
-    canvas.addEventListener("pointerup", () => (this.drag = null));
+    canvas.addEventListener("pointerup", (e) => {
+      if (this.drag?.tool) this.drag.tool.up?.(this.toTile(...this.eventPos(e)), e);
+      this.drag = null;
+      this.render();
+    });
 
     canvas.addEventListener(
       "wheel",

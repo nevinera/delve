@@ -1,17 +1,24 @@
 import "./editor.css";
-import { MapView } from "./mapView.js";
+import { Editor } from "./editor.js";
 import { World } from "./world.js";
+import { slug } from "./zones.js";
 
 // Editor entry (plans/roadmap.md, "World editor").
 
 const $ = (id) => document.getElementById(id);
 
 const world = World.empty();
-
-new MapView($("map"), {
-  onPointer: ([x, z]) => {
-    $("cursor").textContent = `tile ${Math.floor(x)}, ${Math.floor(z)}`;
-  },
+const editor = new Editor(world, {
+  map: $("map"),
+  cursor: $("cursor"),
+  continent: $("continent"),
+  zoneList: $("zoneList"),
+  newZone: $("newZone"),
+  zonePanel: $("zonePanel"),
+  zoneName: $("zoneName"),
+  regionInfo: $("regionInfo"),
+  drawRegion: $("drawRegion"),
+  hint: $("hint"),
 });
 
 $("download").addEventListener("click", () => {
@@ -21,10 +28,7 @@ $("download").addEventListener("click", () => {
   link.download = `${slug(world.info.name) || "world"}.zip`;
   link.click();
   URL.revokeObjectURL(link.href);
+  editor.markSaved();
 });
 
 $("worldName").textContent = world.info.name;
-
-function slug(text) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
