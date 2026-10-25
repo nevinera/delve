@@ -1,13 +1,12 @@
 import { gunzipSync, gzipSync } from "fflate";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { fellTree, plantTree } from "../world/trees.js";
-import { tilesTouched } from "./region.js";
 import { tilePath } from "./thumbnails.js";
 
 const GAP_CELLS = 2; // cells left between trees planted along one drag
 
-// The tree brush paints trees straight into the active zone's generated tiles, or removes them with
-// alt held. Painted tiles stay decoded until the stroke ends, then go back into the world.
+// The tree brush paints trees straight into the editable zones' generated tiles, or removes them
+// with alt held. Painted tiles stay decoded until the stroke ends, then go back into the world.
 // Regenerating a tile replaces its trees.
 export class TreeBrush {
   constructor(editor) {
@@ -19,10 +18,10 @@ export class TreeBrush {
   }
 
   // One step of a stroke at a continent position (tile units).
-  apply(zone, [x, z], { size, kind }, erase) {
+  apply([x, z], { size, kind }, erase) {
     const tx = Math.floor(x);
     const tz = Math.floor(z);
-    const tile = this.tile(zone, tx, tz);
+    const tile = this.tile(tx, tz);
     if (!tile) return;
     const n = tile.cells;
     const ci = Math.floor((x - tx) * n);
@@ -44,12 +43,12 @@ export class TreeBrush {
     this.editor.treesChanged(tx, tz, tile);
   }
 
-  tile(zone, tx, tz) {
+  tile(tx, tz) {
     const key = `${tx},${tz}`;
     if (this.tiles.has(key)) return this.tiles.get(key);
-    this.editable ??= new Set(tilesTouched(zone.region).map(([x, z]) => `${x},${z}`));
+    this.editable ??= new Set(this.editor.editableTiles().map(([x, z]) => `${x},${z}`));
     if (!this.editable.has(key)) {
-      this.editor.say("Trees go on the zone's editable tiles.");
+      this.editor.say(this.editor.activeZone ? "Trees go on the zone's editable tiles." : "Trees go on zones' tiles.");
       return null;
     }
     const bytes = this.editor.world.files.get(tilePath(this.editor.continent, tx, tz));
@@ -79,14 +78,14 @@ export class TreeBrush {
 
   // The 2D map's tool for one tree size. `tree()` gives the { size, kind } to plant, read fresh so a
   // kind picked mid-stroke applies.
-  tool(zone, tree) {
+  tool(tree) {
     return {
       down: (tile, e) => {
         this.editor.say();
-        this.apply(zone, tile, tree(), e.altKey);
+        this.apply(tile, tree(), e.altKey);
         return true;
       },
-      move: (tile, e) => this.apply(zone, tile, tree(), e.altKey),
+      move: (tile, e) => this.apply(tile, tree(), e.altKey),
       up: () => this.editor.treesDone(),
     };
   }

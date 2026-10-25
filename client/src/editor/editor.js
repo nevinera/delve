@@ -52,8 +52,9 @@ const STEPS = {
   population: { tools: TREE_TOOLS, kinds: [] },
 };
 
-// Ties the map, the side panel and the in-memory world together. One zone at a time is active and
-// editable; every other zone on the continent shows but is locked. Step tabs pick what you're
+// Ties the map, the side panel and the in-memory world together. With a zone selected, only that
+// zone is editable and every other zone shows but is locked; with none selected, the whole
+// continent is, and each click edits the zone it lands in. Step tabs pick what you're
 // editing and view tabs how the map shows: cells (the grid and pins), terrain (tile thumbnails)
 // or 3D.
 export class Editor {
@@ -140,6 +141,40 @@ export class Editor {
 
   get activeZone() {
     return this.zones.find((z) => z.key === this.active) ?? null;
+  }
+
+  zoneByKey(key) {
+    return this.zones.find((z) => z.key === key) ?? null;
+  }
+
+  // The zone an edit is about: the selected zone, or with none selected, the zone of the stroke
+  // being drawn or of the selected feature.
+  get focusZone() {
+    return this.activeZone ?? this.zoneByKey(this.features.stroke?.zone ?? this.features.selected?.zone);
+  }
+
+  // The zones you can edit now: the selected one, or every zone with a region.
+  scopeZones() {
+    return this.activeZone ? [this.activeZone] : this.zones.filter((z) => z.region.length);
+  }
+
+  // Tiles you can generate or edit now, as [tx, tz] pairs.
+  editableTiles() {
+    const keys = new Set();
+    const tiles = [];
+    for (const zone of this.scopeZones()) {
+      for (const [tx, tz] of tilesTouched(zone.region)) {
+        if (keys.has(`${tx},${tz}`)) continue;
+        keys.add(`${tx},${tz}`);
+        tiles.push([tx, tz]);
+      }
+    }
+    return tiles;
+  }
+
+  // The zone whose region holds a point, if any.
+  zoneAt(point) {
+    return this.zones.find((z) => z.region.length && this.inRegion(point, z)) ?? null;
   }
 
   reload() {
@@ -230,37 +265,37 @@ export class Editor {
     if (this.showing3d && this.view3d?.ground) this.view3d.showMarks(this.sceneState());
   }
 
-  // What the pointer does in the 3D view: hover a head for details, drag the active zone's pins and
-  // stroke points, click a head to select it, and click the ground to place a pin or deselect.
+  // What the pointer does in the 3D view: hover a head for details, drag the editable zones' pins
+  // and stroke points, click a head to select it, and click the ground to place a pin or deselect.
   sceneHandlers() {
     return {
       hover: (hit, e) => this.showTip(hit, e),
       grab: (hit) => {
-        const zone = this.activeZone;
+        const zone = this.scopeZones().find((z) => z.key === hit.zone);
         this.painting = false;
-        return zone?.key === hit.zone && this.kinds.includes(this.features.kindOf(zone, hit)) && this.features.grab(zone, hit);
+        this.sceneZone = zone;
+        return Boolean(zone) && this.kinds.includes(this.features.kindOf(zone, hit)) && this.features.grab(zone, hit);
       },
       press: (tile, e) => {
-        const zone = this.activeZone;
-        if (!zone?.region.length || !this.brushTree() || !tile) return false;
+        if (!this.scopeZones().length || !this.brushTree() || !tile) return false;
         this.painting = true;
         this.say();
-        this.trees.apply(zone, tile, this.brushTree(), e.altKey);
+        this.trees.apply(tile, this.brushTree(), e.altKey);
         return true;
       },
       drag: (tile, e) => {
         if (this.painting) {
-          this.trees.apply(this.activeZone, tile, this.brushTree(), e.altKey);
+          this.trees.apply(tile, this.brushTree(), e.altKey);
         } else {
-          this.features.dragTo(tile, this.activeZone);
+          this.features.dragTo(tile, this.sceneZone);
           this.refreshMarks();
         }
       },
-      drop: () => (this.painting ? this.treesDone() : this.features.endDrag(this.activeZone)),
+      drop: () => (this.painting ? this.treesDone() : this.features.endDrag(this.sceneZone)),
       click: (hit, tile) => {
-        const zone = this.activeZone;
-        if (!zone?.region.length || hit) return;
-        if (PINS[this.toolName] && tile) this.features.addPin(zone, this.toolName, tile, this.palette.pinProps(this.toolName));
+        if (hit) return;
+        const zone = tile && (this.activeZone ?? this.zoneAt(tile));
+        if (zone?.region.length && PINS[this.toolName]) this.features.addPin(zone, this.toolName, tile, this.palette.pinProps(this.toolName));
         else this.features.select(null);
       },
     };
@@ -356,7 +391,7 @@ export class Editor {
 
   bindPanel() {
     const { continent, newZone, zoneName, drawRegion, deleteZone, generate, highlight } = this.el;
-    generate.addEventListener("click", () => this.generate(generate, tilesTouched(this.activeZone.region)));
+    generate.addEventListener("click", () => this.generate(generate, this.editableTiles()));
     this.el.regenerate.addEventListener("click", () => this.generate(this.el.regenerate, this.changedHere()));
     highlight.addEventListener("change", () => this.map.render());
     this.el.showBiomes.addEventListener("change", () => this.map.render());
@@ -454,39 +489,40 @@ export class Editor {
     const zone = this.activeZone;
     for (const b of this.el.stepTabs.children) b.classList.toggle("active", b.dataset.step === this.step);
     for (const b of this.el.viewTabs.children) b.classList.toggle("active", b.dataset.view === this.view);
-    for (const section of this.el.steps) section.hidden = !zone || section.dataset.step !== this.step;
+    // Only the zones step needs a zone selected; the others edit the whole continent without one.
+    const zonesStep = this.step === "zones";
+    for (const section of this.el.steps) section.hidden = section.dataset.step !== this.step || (zonesStep && !zone);
     this.el.noZone.hidden = Boolean(zone);
+    this.el.noZone.textContent = zonesStep ? "pick a zone to edit, or make a new one" : "no zone selected: editing every zone";
     if (zone) {
       if (document.activeElement !== zoneName) zoneName.value = zone.name;
-      const tiles = tilesTouched(zone.region).length;
       regionInfo.textContent = zone.region.length
-        ? `${cornerCount(zone.region)} corners · ${tiles} editable tiles`
+        ? `${cornerCount(zone.region)} corners · ${tilesTouched(zone.region).length} editable tiles`
         : "no region yet";
       drawRegion.textContent = zone.region.length ? "redraw region" : "draw region";
-      this.el.generate.disabled = !tiles || this.generating;
-      const changed = this.changedHere().length;
-      this.el.regenerate.disabled = !changed || this.generating;
-      if (!this.generating) this.el.regenerate.textContent = `regenerate ${changed} changed`;
-      this.el.pendingInfo.textContent = `${this.pending.size} changed`;
-      if (!this.generating) this.el.generate.textContent = `generate ${tiles} tiles`;
-      for (const b of this.el.tools.flatMap((t) => [...t.children])) {
-        b.classList.toggle("active", b.dataset.tool === this.toolName);
-        b.disabled = !zone.region.length;
-      }
+    }
+    const tiles = this.editableTiles().length;
+    this.el.generate.disabled = !tiles || this.generating;
+    const changed = this.changedHere().length;
+    this.el.regenerate.disabled = !changed || this.generating;
+    if (!this.generating) this.el.regenerate.textContent = `regenerate ${changed} changed`;
+    this.el.pendingInfo.textContent = `${this.pending.size} changed`;
+    if (!this.generating) this.el.generate.textContent = `generate ${tiles} tiles`;
+    for (const b of this.el.tools.flatMap((t) => [...t.children])) {
+      b.classList.toggle("active", b.dataset.tool === this.toolName);
+      b.disabled = !this.scopeZones().length;
     }
     hint.textContent = this.showing3d ? HINT_3D : HINTS[this.mode()];
   }
 
-  // The changed tiles the active zone can regenerate.
+  // The changed tiles you can regenerate now.
   changedHere() {
-    const zone = this.activeZone;
-    if (!zone) return [];
-    return tilesTouched(zone.region).filter(([tx, tz]) => this.pending.has(`${tx},${tz}`));
+    return this.editableTiles().filter(([tx, tz]) => this.pending.has(`${tx},${tz}`));
   }
 
   // Regenerates the given tiles from every zone on the continent, counting progress on `button`.
   async generate(button, tiles) {
-    if (!this.activeZone || this.generating || !tiles.length) return;
+    if (this.generating || !tiles.length) return;
     const started = performance.now();
     let done = 0;
     let frame = null;
@@ -517,17 +553,19 @@ export class Editor {
   }
 
   renderProps() {
-    this.features.renderProps(this.el.props, this.activeZone);
+    this.features.renderProps(this.el.props, this.focusZone);
     this.palette.render();
     this.refreshMarks();
   }
 
   mode() {
     const zone = this.activeZone;
-    if (!zone) return "none";
-    if (this.drawing) return "draw";
-    if (!zone.region.length) return "empty";
-    if (this.step === "zones") return "region";
+    if (this.step === "zones") {
+      if (!zone) return "none";
+      if (this.drawing) return "draw";
+      return zone.region.length ? "region" : "empty";
+    }
+    if (!this.scopeZones().length) return "empty";
     if (PINS[this.toolName]) return "pin";
     if (STROKES[this.toolName]) return "stroke";
     if (treeToolSize(this.toolName)) return "tree";
@@ -547,12 +585,36 @@ export class Editor {
 
   tool() {
     const zone = this.activeZone;
-    if (!zone) return null;
-    if (this.drawing) return this.drawTool(zone);
-    if (!zone.region.length) return null;
-    if (this.step === "zones") return this.editTool(zone);
-    if (treeToolSize(this.toolName)) return this.trees.tool(zone, () => this.brushTree());
-    return this.features.tool(zone, this.toolName, this.kinds);
+    if (this.step === "zones") {
+      if (!zone) return null;
+      if (this.drawing) return this.drawTool(zone);
+      return zone.region.length ? this.editTool(zone) : null;
+    }
+    if (!this.scopeZones().length) return null;
+    if (treeToolSize(this.toolName)) return this.trees.tool(() => this.brushTree());
+    return zone ? this.features.tool(zone, this.toolName, this.kinds) : this.worldTool();
+  }
+
+  // With no zone selected, each press goes to the zone it's about: the one a stroke is being drawn
+  // in, else the one whose feature is under the pointer, else the one the pointer is inside.
+  worldTool() {
+    let inner = null;
+    return {
+      down: (tile, e) => {
+        this.features.kinds = this.kinds;
+        const zone =
+          this.zoneByKey(this.features.stroke?.zone) ??
+          [...this.zones].reverse().find((z) => this.features.hitAt(z, tile)) ??
+          this.zoneAt(tile);
+        inner = zone && this.features.tool(zone, this.toolName, this.kinds);
+        if (inner) return inner.down(tile, e);
+        this.features.select(null);
+        if (this.toolName !== "select") this.say("Click inside a zone.");
+        return false;
+      },
+      move: (tile, e) => inner?.move?.(tile, e),
+      up: (tile, e) => inner?.up?.(tile, e),
+    };
   }
 
   drawTool(zone) {
@@ -632,9 +694,9 @@ export class Editor {
   }
 
   onKey(e) {
-    const zone = this.activeZone;
+    const zone = this.focusZone;
     if (e.target.matches("input, textarea, select") || !zone) return;
-    if (this.drawing) {
+    if (this.drawing && this.activeZone) {
       if (e.key === "Enter") this.finishDrawing(zone);
       if (e.key === "Escape") this.drawing = null;
       if (e.key === "Backspace") this.drawing.pop();
@@ -682,19 +744,11 @@ export class Editor {
   draw(ctx, map) {
     const dpr = map.dpr;
     const pins = this.el.showPins.checked;
+    const world = !this.activeZone; // every zone editable
     for (const zone of this.zones) {
       if (zone.key === this.active) continue;
       this.drawRegion(ctx, map, zone, false);
-      if (pins) this.features.draw(ctx, zone, false, this.markKinds());
-    }
-    const zone = this.activeZone;
-    if (!zone) return;
-
-    ctx.strokeStyle = COLORS.editable;
-    ctx.lineWidth = dpr;
-    for (const [tx, tz] of tilesTouched(zone.region)) {
-      const [sx, sy] = map.toScreen([tx, tz]);
-      ctx.strokeRect(sx + 2 * dpr, sy + 2 * dpr, map.view.scale - 4 * dpr, map.view.scale - 4 * dpr);
+      if (pins) this.features.draw(ctx, zone, world, this.markKinds());
     }
     if (this.el.highlight.checked) {
       ctx.fillStyle = COLORS.changed;
@@ -702,6 +756,18 @@ export class Editor {
         const [sx, sy] = map.toScreen(tile.split(",").map(Number));
         ctx.fillRect(sx, sy, map.view.scale, map.view.scale);
       }
+    }
+    const zone = this.activeZone;
+    if (!zone) {
+      this.features.drawInProgress(ctx);
+      return;
+    }
+
+    ctx.strokeStyle = COLORS.editable;
+    ctx.lineWidth = dpr;
+    for (const [tx, tz] of tilesTouched(zone.region)) {
+      const [sx, sy] = map.toScreen([tx, tz]);
+      ctx.strokeRect(sx + 2 * dpr, sy + 2 * dpr, map.view.scale - 4 * dpr, map.view.scale - 4 * dpr);
     }
     if (!this.drawing) {
       this.drawRegion(ctx, map, zone, true);

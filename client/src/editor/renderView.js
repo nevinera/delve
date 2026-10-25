@@ -101,9 +101,10 @@ export class RenderView {
 
   // Rebuilds everything from the world. `keepCamera` leaves the view where it is.
   show(state, { keepCamera = false } = {}) {
-    const { world, continent, active, thumbnails } = state;
+    const { world, continent, zones, active, thumbnails } = state;
     this.clear();
-    const editable = active ? tilesTouched(active.region) : [];
+    // With no zone selected, every zone's tiles are drawn in full.
+    const editable = (active ? [active] : zones).flatMap((z) => tilesTouched(z.region));
     const near = new Set();
     for (const [tx, tz] of editable) {
       for (let dx = -RING_TILES; dx <= RING_TILES; dx++) {
@@ -117,7 +118,7 @@ export class RenderView {
       if (near.has(`${tx},${tz}`)) decoded.set(`${tx},${tz}`, decodeTile(gunzipSync(world.files.get(path))));
     }
 
-    const middle = active?.region.length ? labelPoint(active.region) : [0, 0];
+    const middle = active?.region.length ? labelPoint(active.region) : centerOf(editable);
     this.origin = [middle[0] * TILE_FT, middle[1] * TILE_FT];
     const ground = groundSampler(decoded, this.origin);
     this.ground = ground;
@@ -205,9 +206,10 @@ export class RenderView {
     empty(this.marks);
     this.heads = [];
     for (const zone of zones) {
-      const mine = zone.key === active?.key;
-      for (const { points } of rings(zone.region)) this.marks.add(boundary(points, this.ground, this.origin, mine ? ACTIVE : 0xffffff));
-      if (pins) this.addFeatures(zone, mine, mine ? selected : null, kinds, lines);
+      const mine = !active || zone.key === active.key;
+      const color = zone.key === active?.key ? ACTIVE : 0xffffff;
+      for (const { points } of rings(zone.region)) this.marks.add(boundary(points, this.ground, this.origin, color));
+      if (pins) this.addFeatures(zone, mine, selected?.zone === zone.key ? selected : null, kinds, lines);
     }
     this.render();
   }
@@ -404,6 +406,14 @@ function groundSampler(decoded, origin) {
     const water = tile.layers.water[k];
     return Math.max(tile.layers.height[k], Number.isNaN(water) ? -Infinity : water, 0);
   };
+}
+
+// The middle of a set of [tx, tz] tiles, in tile units.
+function centerOf(tiles) {
+  if (!tiles.length) return [0, 0];
+  const xs = tiles.map(([tx]) => tx);
+  const zs = tiles.map(([, tz]) => tz);
+  return [(Math.min(...xs) + Math.max(...xs) + 1) / 2, (Math.min(...zs) + Math.max(...zs) + 1) / 2];
 }
 
 // The highest ground within a cell of a point, so lines along a coast ride the cliff top.

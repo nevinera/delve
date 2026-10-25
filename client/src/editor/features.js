@@ -35,24 +35,34 @@ export function nextId(zone, prefix) {
 export class Features {
   constructor(editor) {
     this.editor = editor;
-    this.selected = null; // { type: "pin" | "stroke", id }
+    this.selected = null; // { zone (its key), type: "pin" | "stroke", id }
     this.kinds = []; // what the current tool can pick
-    this.stroke = null; // a stroke being drawn: { kind, points }
+    this.stroke = null; // a stroke being drawn: { zone (its key), kind, points }
   }
 
   get map() {
     return this.editor.map;
   }
 
+  // The selected feature, when it's in this zone.
   find(zone) {
-    if (!this.selected) return null;
+    if (this.selected?.zone !== zone.key) return null;
     const list = this.selected.type === "pin" ? zone.pins : zone.strokes;
     return list.find((f) => f.id === this.selected.id) ?? null;
   }
 
-  select(type, id) {
-    this.selected = type ? { type, id } : null;
+  select(zone, type, id) {
+    this.selected = zone && type ? { zone: zone.key, type, id } : null;
     this.editor.renderProps();
+  }
+
+  isSelected(zone, feature) {
+    return this.selected?.zone === zone.key && this.selected.id === feature.id;
+  }
+
+  // Whether a pin or stroke of the current tool's kinds is under the pointer.
+  hitAt(zone, tile) {
+    return Boolean(this.pinAt(zone, tile) ?? this.strokeAt(zone, tile));
   }
 
   remove(zone) {
@@ -91,7 +101,7 @@ export class Features {
     return {
       down: (tile) => {
         const existing = this.pinAt(zone, tile);
-        if (existing) return this.grabPin(existing);
+        if (existing) return this.grabPin(zone, existing);
         this.addPin(zone, kind, tile, this.editor.palette.pinProps(kind));
         return true;
       },
@@ -109,7 +119,7 @@ export class Features {
     const pin = { id: nextId(zone, "p"), kind, at, ...props };
     if (kind === "height") pin.height ??= DEFAULT_HEIGHT_FT;
     zone.pins.push(pin);
-    this.select(SHAPE_PINS.includes(kind) ? null : "pin", pin.id);
+    this.select(zone, SHAPE_PINS.includes(kind) ? null : "pin", pin.id);
     this.editor.save(zone);
   }
 
@@ -123,7 +133,7 @@ export class Features {
         }
         const point = this.place(tile, zone);
         if (!point) return true;
-        if (!this.stroke) this.stroke = { kind, points: [] };
+        if (!this.stroke) this.stroke = { zone: zone.key, kind, points: [] };
         this.stroke.points.push(point);
         this.editor.say();
         return true;
@@ -137,7 +147,7 @@ export class Features {
     if (!points || points.length < 2) return;
     const stroke = { id: nextId(zone, "s"), kind, points, width: STROKES[kind].width };
     zone.strokes.push(stroke);
-    this.select("stroke", stroke.id);
+    this.select(zone, "stroke", stroke.id);
     this.editor.save(zone);
   }
 
@@ -150,9 +160,9 @@ export class Features {
           if (grabbed !== null) return grabbed;
         }
         const pin = this.pinAt(zone, tile);
-        if (pin) return this.grabPin(pin);
+        if (pin) return this.grabPin(zone, pin);
         const hit = this.strokeAt(zone, tile);
-        this.select(hit ? "stroke" : null, hit?.id);
+        this.select(zone, hit ? "stroke" : null, hit?.id);
         return Boolean(hit);
       },
       move: (tile) => this.dragTo(tile, zone),
@@ -166,8 +176,8 @@ export class Features {
     this.editor.save(zone);
   }
 
-  grabPin(pin) {
-    this.select("pin", pin.id);
+  grabPin(zone, pin) {
+    this.select(zone, "pin", pin.id);
     this.dragging = { target: pin, key: "at" };
     return true;
   }
@@ -176,11 +186,11 @@ export class Features {
   grab(zone, { type, id, index }) {
     if (type === "pin") {
       const pin = zone.pins.find((p) => p.id === id);
-      return pin ? this.grabPin(pin) : false;
+      return pin ? this.grabPin(zone, pin) : false;
     }
     const stroke = zone.strokes.find((s) => s.id === id);
     if (!stroke) return false;
-    this.select("stroke", id);
+    this.select(zone, "stroke", id);
     this.dragging = { target: stroke.points, key: index };
     return true;
   }
@@ -275,11 +285,11 @@ export class Features {
   draw(ctx, zone, active, { kinds, lines = [] }) {
     ctx.globalAlpha = active ? 1 : 0.45;
     for (const stroke of zone.strokes) {
-      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, active && this.selected?.id === stroke.id);
+      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, this.isSelected(zone, stroke));
       else if (lines.includes(stroke.kind)) this.drawLine(ctx, stroke);
     }
     for (const pin of zone.pins) {
-      if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, active && this.selected?.id === pin.id);
+      if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(zone, pin));
     }
     ctx.globalAlpha = 1;
   }
