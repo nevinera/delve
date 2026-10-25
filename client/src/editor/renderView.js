@@ -6,7 +6,7 @@ import { decodeTile } from "../world/tileCodec.js";
 import { findTrees } from "../world/trees.js";
 import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
-import { terrainMesh, waterMesh } from "./terrainMesh.js";
+import { WATER_KINDS, terrainMesh, waterMesh } from "./terrainMesh.js";
 import { treeMeshes } from "./treeMeshes.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles } from "./thumbnails.js";
@@ -53,16 +53,12 @@ export class RenderView {
     sun.position.set(-1, 1.6, -0.8);
     this.scene.add(sun);
 
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(400000, 400000), new THREE.MeshLambertMaterial({ color: SEA }));
-    sea.rotation.x = -Math.PI / 2;
-    this.scene.add(sea);
-
     this.content = new THREE.Group();
     this.marks = new THREE.Group();
     this.trees = new THREE.Group();
     this.scene.add(this.content, this.marks, this.trees);
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
-    this.surfaces = [sea]; // what a pointer can land on
+    this.surfaces = []; // what a pointer can land on
     this.heads = []; // pin heads a pointer can pick
     this.textures = { circle: markTexture("circle"), diamond: markTexture("diamond"), square: markTexture("square") };
     this.raycaster = new THREE.Raycaster();
@@ -160,7 +156,10 @@ export class RenderView {
     this.ground = ground;
 
     const terrainMaterial = groundMaterial(this.renderer);
-    const waterMaterial = new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 });
+    const waterMaterials = {
+      sea: new THREE.MeshLambertMaterial({ color: SEA }),
+      fresh: new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 }),
+    };
     for (const [key, tile] of decoded) {
       const [tx, tz] = key.split(",").map(Number);
       const neighbours = {
@@ -171,9 +170,16 @@ export class RenderView {
       const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), terrainMaterial);
       this.content.add(terrain);
       this.surfaces.push(terrain);
-      const water = waterMesh(tile, neighbours, this.origin);
-      if (water) this.content.add(new THREE.Mesh(geometry(water), waterMaterial));
+      for (const kind of WATER_KINDS) {
+        const water = waterMesh(tile, neighbours, this.origin, kind);
+        if (water) this.content.add(new THREE.Mesh(geometry(water), waterMaterials[kind]));
+      }
     }
+
+    // Open sea wherever no tile is drawn in full; those tiles draw their own.
+    const ocean = new THREE.Mesh(oceanGeometry([...decoded.keys()], this.origin), waterMaterials.sea);
+    this.content.add(ocean);
+    this.surfaces.push(ocean);
 
     // Everything farther out is its thumbnail, lying on the sea.
     for (const { tx, tz } of surfaceTiles(world, continent)) {
@@ -322,7 +328,7 @@ export class RenderView {
 
   clear() {
     empty(this.content);
-    this.surfaces.length = 1; // keep the sea
+    this.surfaces.length = 0;
   }
 
   // --- pointer ---
@@ -440,6 +446,39 @@ function geometry({ positions, colors, indices }) {
   return g;
 }
 
+// A flat sea at level 0 out to the horizon, leaving out the tiles drawn in full (keys "tx,tz"):
+// strips around their bounding box, plus a square for each tile inside it that isn't drawn.
+function oceanGeometry(keys, origin) {
+  const FAR = 200000;
+  const rects = [];
+  if (!keys.length) {
+    rects.push([-FAR, -FAR, FAR, FAR]);
+  } else {
+    const tiles = keys.map((key) => key.split(",").map(Number));
+    const xs = tiles.map(([tx]) => tx);
+    const zs = tiles.map(([, tz]) => tz);
+    const [tx0, tx1, tz0, tz1] = [Math.min(...xs), Math.max(...xs) + 1, Math.min(...zs), Math.max(...zs) + 1];
+    const [x0, x1, z0, z1] = [tx0 * TILE_FT - origin[0], tx1 * TILE_FT - origin[0], tz0 * TILE_FT - origin[1], tz1 * TILE_FT - origin[1]];
+    rects.push([-FAR, -FAR, x0, FAR], [x1, -FAR, FAR, FAR], [x0, -FAR, x1, z0], [x0, z1, x1, FAR]);
+    const drawn = new Set(keys);
+    for (let tx = tx0; tx < tx1; tx++) {
+      for (let tz = tz0; tz < tz1; tz++) {
+        if (drawn.has(`${tx},${tz}`)) continue;
+        const [x, z] = [tx * TILE_FT - origin[0], tz * TILE_FT - origin[1]];
+        rects.push([x, z, x + TILE_FT, z + TILE_FT]);
+      }
+    }
+  }
+  const positions = [];
+  const indices = [];
+  for (const [ax, az, bx, bz] of rects) {
+    const n = positions.length / 3;
+    positions.push(ax, 0, az, bx, 0, az, ax, 0, bz, bx, 0, bz);
+    indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
+  }
+  return geometry({ positions: new Float32Array(positions), indices: new Uint32Array(indices) });
+}
+
 // Ground height at a point relative to the origin, from the decoded tiles (nearest cell), or NaN
 // where no tile is loaded.
 function groundSampler(decoded, origin) {
@@ -454,7 +493,7 @@ function groundSampler(decoded, origin) {
     const j = Math.min(tile.cells - 1, Math.floor((wz - tz * TILE_FT) / tile.cellFt));
     const k = j * tile.cells + i;
     const water = tile.layers.water[k];
-    return Math.max(tile.layers.height[k], Number.isNaN(water) ? -Infinity : water, 0);
+    return Math.max(tile.layers.height[k], Number.isNaN(water) ? -Infinity : water);
   };
 }
 

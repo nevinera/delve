@@ -24,24 +24,54 @@ export function terrainMesh(tile, neighbours, origin, step = 2) {
   return { positions, colors, indices: gridIndices(side, () => true) };
 }
 
-// River water: a sheet at the water surface over cells that hold river water. The sea is drawn
-// separately as one flat plane at height 0, so cells at sea level are left out.
-export function waterMesh(tile, neighbours, origin) {
+// Kinds of water, each drawn as its own mesh so each can look different: the sea at level 0, and
+// fresh water (rivers, lakes, pools) at any other level.
+export const WATER_KINDS = ["sea", "fresh"];
+const kindOf = (level) => (Number.isNaN(level) ? null : level === 0 ? "sea" : "fresh");
+
+// One kind of water: a sheet at the water surface over the cells holding that kind. The sheet runs
+// on half a cell into the dry ground beside it, at the water's level there, so the ground itself
+// cuts the shoreline. Null when the tile has none.
+export function waterMesh(tile, neighbours, origin, kind = "fresh") {
   const grid = sampler(tile, neighbours);
   const side = tile.cells + 1;
+  const level = new Float32Array(side * side).fill(NaN);
+  for (let b = 0; b < side; b++) {
+    for (let a = 0; a < side; a++) {
+      const { t, k } = grid(a, b);
+      const w = t.layers.water[k];
+      if (kindOf(w) === kind) level[b * side + a] = w;
+    }
+  }
   const positions = new Float32Array(side * side * 3);
-  const wet = new Uint8Array(side * side);
+  const usable = new Uint8Array(side * side);
   for (let b = 0; b < side; b++) {
     for (let a = 0; a < side; a++) {
       const v = b * side + a;
-      const { t, k } = grid(a, b);
-      const level = t.layers.water[k];
+      let y = level[v];
+      if (Number.isNaN(y)) {
+        // A dry vertex takes the mean level of the wet ones around it.
+        let sum = 0;
+        let count = 0;
+        for (let db = -1; db <= 1; db++) {
+          for (let da = -1; da <= 1; da++) {
+            const [na, nb] = [a + da, b + db];
+            if (na < 0 || nb < 0 || na >= side || nb >= side) continue;
+            const w = level[nb * side + na];
+            if (Number.isNaN(w)) continue;
+            sum += w;
+            count++;
+          }
+        }
+        y = count ? sum / count : NaN;
+      }
+      usable[v] = Number.isNaN(y) ? 0 : 1;
       const [x, z] = position(tile, a, b, origin);
-      positions.set([x, Number.isNaN(level) ? 0 : level, z], v * 3);
-      wet[v] = level > 0 ? 1 : 0;
+      positions.set([x, usable[v] ? y : 0, z], v * 3);
     }
   }
-  const indices = gridIndices(side, (v0, v1, v2) => wet[v0] && wet[v1] && wet[v2]);
+  const wet = (v) => !Number.isNaN(level[v]);
+  const indices = gridIndices(side, (v0, v1, v2) => usable[v0] && usable[v1] && usable[v2] && (wet(v0) || wet(v1) || wet(v2)));
   return indices.length ? { positions, indices } : null;
 }
 

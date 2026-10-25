@@ -49,16 +49,23 @@ describe("terrainMesh", () => {
 });
 
 describe("waterMesh", () => {
-  it("is empty without river water", () => {
+  it("is empty without water", () => {
     expect(waterMesh(tile(0, 0, 5), {}, [0, 0])).toBeNull();
   });
 
-  it("covers only where neighbouring cells are all wet", () => {
+  it("covers a narrow river and runs on into its banks at the river's level", () => {
     const water = waterMesh(tile(0, 0, 5, true), {}, [0, 0]);
-    // A single wet column has no wet neighbours across, so no triangles; a wider river would.
-    expect(water).toBeNull();
+    expect(water.indices.length).toBeGreaterThan(0);
+    for (const i of water.indices) expect(water.positions[i * 3 + 1]).toBe(7);
     const wide = tile(0, 0, 5, true);
     wide.layers.water = new Float32Array(16).fill(7);
     expect(waterMesh(wide, {}, [0, 0]).indices.length).toBe(4 * 4 * 6);
+  });
+
+  it("keeps the sea and fresh water apart", () => {
+    const sea = tile(0, 0, -5);
+    sea.layers.water = new Float32Array(16).fill(0);
+    expect(waterMesh(sea, {}, [0, 0], "fresh")).toBeNull();
+    expect(waterMesh(sea, {}, [0, 0], "sea").indices.length).toBe(4 * 4 * 6);
   });
 });

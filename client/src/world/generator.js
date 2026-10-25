@@ -19,7 +19,7 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 14;
+export const GENERATOR_VERSION = 15;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -300,7 +300,8 @@ function sample(ctx, x, z, edges, biomes) {
       if (n.dist < r.half + r.bank * 0.6) out.bank = true;
     }
   }
-  if (out.h < 0 && Number.isNaN(out.water)) out.water = 0;
+  // The sea covers the sea floor and the shore strip. Land below sea level further in stays dry.
+  if (out.h < 0 && Number.isNaN(out.water) && (!out.land || out.coastDist < COAST.maxFt)) out.water = 0;
   return out;
 }
 
