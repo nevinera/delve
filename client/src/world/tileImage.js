@@ -24,7 +24,7 @@ export function groundRgb(tile, k) {
   return c.map((v, m) => v + (FOREST[m] - v) * f * 0.8);
 }
 
-const BIOME_COLORS = {
+export const BIOME_COLORS = {
   plains: [226, 200, 90],
   forest: [40, 140, 60],
   rocky: [150, 150, 150],

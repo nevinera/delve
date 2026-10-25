@@ -185,18 +185,20 @@ export class RenderView {
 
   // Zone outlines and, when `pins` is on, every zone's pins and strokes, with the active zone's
   // brighter. Cheap, so it's redone on every edit and drag.
-  showMarks({ zones, active, selected, pins }) {
+  showMarks({ zones, active, selected, pins, kinds, lines = [] }) {
     empty(this.marks);
     this.heads = [];
     for (const zone of zones) {
       const mine = zone.key === active?.key;
       for (const { points } of rings(zone.region)) this.marks.add(boundary(points, this.ground, this.origin, mine ? ACTIVE : 0xffffff));
-      if (pins) this.addFeatures(zone, mine, mine ? selected : null);
+      if (pins) this.addFeatures(zone, mine, mine ? selected : null, kinds, lines);
     }
     this.render();
   }
 
-  addFeatures(zone, mine, selected) {
+  // Features of `kinds` on sticks, and strokes of `lines` kinds draped over the ground as plain
+  // lines.
+  addFeatures(zone, mine, selected, kinds, lines) {
     const opacity = mine ? 1 : 0.45;
     const sticks = [];
     // A stick under a point; returns where its head goes and the ground there.
@@ -211,6 +213,11 @@ export class RenderView {
 
     for (const stroke of zone.strokes) {
       const color = STROKES[stroke.kind]?.color ?? "#fff";
+      if (lines.includes(stroke.kind)) {
+        this.marks.add(boundary(stroke.points, this.ground, this.origin, color, false));
+        continue;
+      }
+      if (!kinds.includes(stroke.kind)) continue;
       const picked = selected?.type === "stroke" && selected.id === stroke.id;
       const points = stroke.points.map(stick);
       const line = new THREE.Line(
@@ -224,6 +231,7 @@ export class RenderView {
       });
     }
     for (const pin of zone.pins) {
+      if (!kinds.includes(pin.kind)) continue;
       const { top, ground } = stick(pin.at);
       const picked = selected?.type === "pin" && selected.id === pin.id;
       const hit = { zone: zone.key, type: "pin", id: pin.id, ground };
@@ -382,10 +390,10 @@ function groundSampler(decoded, origin) {
   };
 }
 
-// A zone outline laid over the ground, a little above it.
-function boundary(points, ground, origin, color) {
+// A zone outline laid over the ground, a little above it, or an open line with `closed` off.
+function boundary(points, ground, origin, color, closed = true) {
   const out = [];
-  const ring = [...points, points[0]];
+  const ring = closed ? [...points, points[0]] : points;
   for (let i = 1; i < ring.length; i++) {
     const [ax, az] = [ring[i - 1][0] * TILE_FT - origin[0], ring[i - 1][1] * TILE_FT - origin[1]];
     const [bx, bz] = [ring[i][0] * TILE_FT - origin[0], ring[i][1] * TILE_FT - origin[1]];
@@ -396,7 +404,8 @@ function boundary(points, ground, origin, color) {
       out.push(x, (ground(x, z) || 0) + BOUNDARY_LIFT_FT, z);
     }
   }
-  out.push(out[0], out[1], out[2]);
+  const [lx, lz] = [ring.at(-1)[0] * TILE_FT - origin[0], ring.at(-1)[1] * TILE_FT - origin[1]];
+  out.push(lx, (ground(lx, lz) || 0) + BOUNDARY_LIFT_FT, lz);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
   return new THREE.Line(g, new THREE.LineBasicMaterial({ color }));

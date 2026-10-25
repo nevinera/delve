@@ -46,6 +46,7 @@ const TAGS = {
     p.ravines = 1;
   },
 };
+export const BIOME_TAGS = Object.keys(TAGS);
 const BLEND_FT = 300; // borders blend over about twice this
 
 const WARP = { amp: 1000, wavelength: 2600 };

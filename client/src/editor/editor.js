@@ -15,6 +15,7 @@ import {
   tilesTouched,
 } from "./region.js";
 import { createZone, listZones, olderZones, removeZone, saveZone, zonePath } from "./zones.js";
+import { ShapePalette } from "./shapePalette.js";
 import { TreeBrush } from "./treeBrush.js";
 import { tileRgba } from "../world/tileImage.js";
 import { TREE_KINDS, TREE_SIZES } from "../world/trees.js";
@@ -39,6 +40,8 @@ const HINTS = {
 const HINT_3D = "drag to orbit · right-drag to pan · wheel to zoom · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
 const TREE_TOOLS = TREE_SIZES.map((size) => `tree_${size}`);
 const treeToolSize = (name) => Number(/^tree_(\d)$/.exec(name)?.[1] ?? 0);
+const ALL_KINDS = [...Object.keys(PINS), ...Object.keys(STROKES)];
+
 // The editor's steps, in the order you'd usually work: each has its own tools, and its select tool
 // picks only its own kinds of features.
 const STEPS = {
@@ -64,6 +67,7 @@ export class Editor {
     this.toolName = "region";
     this.view = "terrain";
     this.features = new Features(this);
+    this.palette = new ShapePalette(this, elements);
     this.trees = new TreeBrush(this);
     this.dirty = false;
 
@@ -198,6 +202,18 @@ export class Editor {
       thumbnails: this.thumbnails,
       selected: this.features.selected,
       pins: this.el.showPins.checked,
+      ...this.markKinds(),
+    };
+  }
+
+  // Which of each zone's features the map shows: on the shape step, the pins the shape filter
+  // picks, plus rivers as plain lines when asked; on other steps, everything.
+  markKinds() {
+    if (this.step !== "shape") return { kinds: ALL_KINDS, lines: [] };
+    const show = this.el.shapeShow.find((r) => r.checked)?.value ?? "both";
+    return {
+      kinds: { both: ["height", "biome"], biomes: ["biome"], heights: ["height"] }[show],
+      lines: this.el.showRivers.checked ? ["river"] : [],
     };
   }
 
@@ -242,7 +258,7 @@ export class Editor {
       click: (hit, tile) => {
         const zone = this.activeZone;
         if (!zone?.region.length || hit) return;
-        if (PINS[this.toolName] && tile) this.features.addPin(zone, this.toolName, tile);
+        if (PINS[this.toolName] && tile) this.features.addPin(zone, this.toolName, tile, this.palette.pinProps(this.toolName));
         else this.features.select(null);
       },
     };
@@ -342,10 +358,12 @@ export class Editor {
     this.el.regenerate.addEventListener("click", () => this.generate(this.el.regenerate, this.changedHere()));
     highlight.addEventListener("change", () => this.map.render());
     this.el.showBiomes.addEventListener("change", () => this.map.render());
-    this.el.showPins.addEventListener("change", () => {
-      this.map.render();
-      this.refreshMarks();
-    });
+    for (const input of [this.el.showPins, this.el.showRivers, ...this.el.shapeShow]) {
+      input.addEventListener("change", () => {
+        this.map.render();
+        this.refreshMarks();
+      });
+    }
     for (const tools of this.el.tools) {
       for (const name of STEPS[tools.dataset.tools].tools) {
         const b = document.createElement("button");
@@ -498,6 +516,7 @@ export class Editor {
 
   renderProps() {
     this.features.renderProps(this.el.props, this.activeZone);
+    this.palette.render();
     this.refreshMarks();
   }
 
@@ -516,6 +535,7 @@ export class Editor {
   setTool(name) {
     this.toolName = name;
     this.features.stroke = null;
+    this.palette.render();
     this.say();
     this.renderPanel();
     this.map.render();
@@ -663,7 +683,7 @@ export class Editor {
     for (const zone of this.zones) {
       if (zone.key === this.active) continue;
       this.drawRegion(ctx, map, zone, false);
-      if (pins) this.features.draw(ctx, zone, false);
+      if (pins) this.features.draw(ctx, zone, false, this.markKinds());
     }
     const zone = this.activeZone;
     if (!zone) return;
@@ -683,7 +703,7 @@ export class Editor {
     }
     if (!this.drawing) {
       this.drawRegion(ctx, map, zone, true);
-      if (pins) this.features.draw(ctx, zone, true);
+      if (pins) this.features.draw(ctx, zone, true, this.markKinds());
       this.features.drawInProgress(ctx);
       return;
     }

@@ -51,6 +51,24 @@
     </section>
     <section class="editor-step" data-step="shape" hidden>
       <div class="editor-tools" data-tools="shape"></div>
+      <div id="heightPalette" class="editor-palette" hidden>
+        <input id="heightSlider" class="editor-vslider" type="range" min="-50" max="500" step="1" value="20">
+        <div>
+          <strong id="heightValue"></strong>
+          <p class="editor-empty">500 ft at the top, -50 at the bottom</p>
+        </div>
+      </div>
+      <div id="biomePalette" class="editor-palette" hidden>
+        <div id="biomeChoices" class="editor-choices"></div>
+        <div id="biomeTags" class="editor-choices"></div>
+      </div>
+      <div class="editor-row editor-subhead editor-show">
+        show
+        <label class="editor-check"><input type="radio" name="shapeShow" value="both" checked><span>both</span></label>
+        <label class="editor-check"><input type="radio" name="shapeShow" value="biomes"><span>biomes</span></label>
+        <label class="editor-check"><input type="radio" name="shapeShow" value="heights"><span>heights</span></label>
+      </div>
+      <label class="editor-check"><input id="showRivers" type="checkbox"><span>show rivers</span></label>
       <div class="editor-row editor-subhead">
         <button id="generate" type="button">generate</button>
         <button id="regenerate" type="button">regenerate changed</button>

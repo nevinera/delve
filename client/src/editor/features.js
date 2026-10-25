@@ -1,6 +1,5 @@
 import { snapToCell } from "./region.js";
 import { TILE_FT } from "../world/constants.js";
-import { BIOMES } from "../world/biomes.js";
 
 // A zone's sketch features: pins ({ id, kind, at, ... }) and strokes ({ id, kind, points, width,
 // ... }), in continent tile units with sizes in feet. Height pins set the ground height at a spot;
@@ -23,7 +22,7 @@ export const FEATURE_HINTS = {
 };
 
 const DEFAULT_HEIGHT_FT = 20;
-const DEFAULT_BIOME_PIN = "forest";
+const SHAPE_PINS = ["height", "biome"];
 
 export function nextId(zone, prefix) {
   const used = new Set([...zone.pins, ...zone.strokes].map((f) => f.id));
@@ -93,7 +92,7 @@ export class Features {
       down: (tile) => {
         const existing = this.pinAt(zone, tile);
         if (existing) return this.grabPin(existing);
-        this.addPin(zone, kind, tile);
+        this.addPin(zone, kind, tile, this.editor.palette.pinProps(kind));
         return true;
       },
       move: (tile) => this.dragTo(tile, zone),
@@ -101,14 +100,16 @@ export class Features {
     };
   }
 
-  addPin(zone, kind, tile) {
+  // Places a pin with the given settings. Height and biome pins are dropped many at a time, so
+  // placing one doesn't select it (and clears any selection, so the palette applies to new pins);
+  // other pins are selected so their details can be filled in.
+  addPin(zone, kind, tile, props = {}) {
     const at = this.place(tile, zone);
     if (!at) return;
-    const pin = { id: nextId(zone, "p"), kind, at };
-    if (kind === "height") pin.height = DEFAULT_HEIGHT_FT;
-    if (kind === "biome") pin.biome = DEFAULT_BIOME_PIN;
+    const pin = { id: nextId(zone, "p"), kind, at, ...props };
+    if (kind === "height") pin.height ??= DEFAULT_HEIGHT_FT;
     zone.pins.push(pin);
-    this.select("pin", pin.id);
+    this.select(SHAPE_PINS.includes(kind) ? null : "pin", pin.id);
     this.editor.save(zone);
   }
 
@@ -260,18 +261,33 @@ export class Features {
       this.remove(zone);
       return true;
     }
+    if (e.key === "Escape" && this.selected) {
+      this.select(null);
+      return true;
+    }
     return false;
   }
 
   // --- drawing ---
 
-  draw(ctx, zone, active) {
+  // Draws the zone's features of the given kinds, and its strokes of `lines` kinds as plain
+  // reference lines.
+  draw(ctx, zone, active, { kinds, lines = [] }) {
     ctx.globalAlpha = active ? 1 : 0.45;
     for (const stroke of zone.strokes) {
-      this.drawStroke(ctx, stroke, active && this.selected?.id === stroke.id);
+      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, active && this.selected?.id === stroke.id);
+      else if (lines.includes(stroke.kind)) this.drawLine(ctx, stroke);
     }
-    for (const pin of zone.pins) this.drawPin(ctx, pin, active && this.selected?.id === pin.id);
+    for (const pin of zone.pins) {
+      if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, active && this.selected?.id === pin.id);
+    }
     ctx.globalAlpha = 1;
+  }
+
+  drawLine(ctx, stroke) {
+    ctx.strokeStyle = STROKES[stroke.kind].color;
+    ctx.lineWidth = 2 * this.map.dpr;
+    polyline(ctx, stroke.points.map((p) => this.map.toScreen(p)));
   }
 
   drawInProgress(ctx) {
@@ -352,11 +368,11 @@ export class Features {
     heading.textContent = `${kind.label} · ${feature.id}`;
     box.append(heading);
 
+    // Height and biome settings live in the shape palette.
     const fields = ["name"];
-    if (feature.kind === "height") fields.push("height");
-    if (feature.kind === "biome") fields.push("biome");
     if (STROKES[feature.kind]) fields.push("width");
-    fields.push("tags", "notes");
+    if (!SHAPE_PINS.includes(feature.kind)) fields.push("tags");
+    fields.push("notes");
     for (const key of fields) box.append(this.field(zone, feature, key));
 
     const row = document.createElement("div");
@@ -368,11 +384,10 @@ export class Features {
   field(zone, feature, key) {
     const label = document.createElement("label");
     label.className = "editor-field";
-    label.textContent = { height: "height (ft)", width: "width (ft)", tags: "tags (comma-separated)" }[key] ?? key;
-    const numeric = key === "height" || key === "width";
-    const input = document.createElement(key === "notes" ? "textarea" : key === "biome" ? "select" : "input");
+    label.textContent = { width: "width (ft)", tags: "tags (comma-separated)" }[key] ?? key;
+    const numeric = key === "width";
+    const input = document.createElement(key === "notes" ? "textarea" : "input");
     if (key === "notes") input.rows = 4;
-    else if (key === "biome") for (const biome of BIOMES) input.add(new Option(biome, biome));
     else input.type = numeric ? "number" : "text";
     input.value = key === "tags" ? (feature.tags ?? []).join(", ") : (feature[key] ?? "");
     input.addEventListener("input", () => {

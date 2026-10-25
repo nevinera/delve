@@ -219,6 +219,46 @@
   display: none;
 }
 
+.editor-palette {
+  display: flex;
+  gap: 12px;
+}
+
+.editor-palette[hidden] {
+  display: none;
+}
+
+.editor-vslider {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  height: 220px;
+  padding: 0 !important;
+}
+
+.editor-choices {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-choices .editor-check {
+  margin-top: 4px;
+}
+
+.editor-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.editor-show {
+  align-items: center;
+  color: #aaa;
+}
+
+.editor-show .editor-check {
+  margin-top: 0;
+}
+
 .editor-empty {
   color: #777;
 }
