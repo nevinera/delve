@@ -34,7 +34,11 @@ const KEY = { pan: 0.8, zoom: 1.6, turn: 1.5 }; // per second: distances panned,
 export class RenderView {
   constructor(canvas, handlers = {}) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    // The view spans half a foot to many miles, too much for a plain depth buffer: near surfaces
+    // like the sea and the low ground fight and flicker. A reversed depth buffer fixes that where
+    // the browser has it, and a logarithmic one elsewhere.
+    const reversed = hasClipControl();
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, reversedDepthBuffer: reversed, logarithmicDepthBuffer: !reversed });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(SKY);
@@ -380,6 +384,13 @@ export class RenderView {
       this.handlers.click?.(press.hit, this.tileAt(e));
     }
   }
+}
+
+function hasClipControl() {
+  const gl = document.createElement("canvas").getContext("webgl2");
+  const ok = Boolean(gl?.getExtension("EXT_clip_control"));
+  gl?.getExtension("WEBGL_lose_context")?.loseContext();
+  return ok;
 }
 
 // Disposes a group's children. Sprites share one geometry and the heads share their textures, so
