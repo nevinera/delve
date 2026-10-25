@@ -25,9 +25,18 @@ describe("biomes", () => {
     expect(at(b, 2700, 0)).toBe("swamp");
   });
 
-  it("keeps a pin's cells within its margin, even across a river", () => {
-    const b = plain({ rivers: [[[4200, -5000], [4200, 5000]]] });
-    expect(at(b, 4300, 0)).toBe("swamp");
+  it("splits a pin's surroundings at a river right beside it", () => {
+    const b = plain({ pins: [forest, swamp, { x: 5500, z: 0, biome: "rocky" }], rivers: [[[4200, -5000], [4200, 5000]]] });
+    expect(at(b, 4100, 0)).toBe("swamp");
+    expect(at(b, 4300, 0)).toBe("rocky");
+  });
+
+  it("changes the climate smoothly around a pin", () => {
+    const b = plain({ edges: [[3900, -5000, 3900, 5000]] }, {});
+    for (let x = 3000; x < 5000; x += 8) {
+      const step = Math.abs(climateAt(b, x + 8, 37).profile.amp - climateAt(b, x, 37).profile.amp);
+      expect(step).toBeLessThan(1);
+    }
   });
 
   it("gives the same answers with segments narrowed to a tile", () => {
@@ -52,7 +61,7 @@ describe("biomes", () => {
     expect(border.profile.pools).toBeCloseTo(0.5, 1);
   });
 
-  it("wanders with the warp, but never within a tile of a pin", () => {
+  it("wanders with the warp, but never right beside a pin", () => {
     const b = plain({}, {});
     // Where the border crosses each east-west line between the pins.
     const crossings = [];
@@ -63,8 +72,8 @@ describe("biomes", () => {
     }
     expect(Math.max(...crossings) - Math.min(...crossings)).toBeGreaterThan(500);
     for (let a = 0; a < 6.28; a += 0.3) {
-      expect(at(b, Math.cos(a) * 500, Math.sin(a) * 500)).toBe("forest");
-      expect(at(b, 4000 + Math.cos(a) * 500, Math.sin(a) * 500)).toBe("swamp");
+      expect(at(b, Math.cos(a) * 250, Math.sin(a) * 250)).toBe("forest");
+      expect(at(b, 4000 + Math.cos(a) * 250, Math.sin(a) * 250)).toBe("swamp");
     }
   });
 });

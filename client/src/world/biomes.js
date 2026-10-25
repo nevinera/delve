@@ -1,9 +1,10 @@
 // Biome regions from biome pins (plans/design.md, "Biome pins"). Each cell takes the biome of the
 // pin that scores lowest, where a pin's score is its distance from the cell's noise-warped
 // position, plus a penalty for each river or zone edge the straight line from the cell to the pin
-// crosses. So borders wander, and snap onto rivers and zone edges near where they'd fall. A cell
-// within a pin's margin always belongs to that pin: a tile, or half the gap to the nearest other
-// biome pin when that's less.
+// crosses. So borders wander, and snap onto rivers and zone edges near where they'd fall. The warp
+// fades out near each pin, within its margin (a tile, or half the gap to the nearest other biome
+// pin when that's less), so a pin's surroundings stay its biome unless a river or zone edge cuts
+// them off.
 //
 // Each biome has a profile of numbers for the generator: ground shape, trees, pools, ravines. A
 // pin's tags adjust its profile, and near a border the profile blends toward the next biome's.
@@ -57,6 +58,8 @@ const WARP = [
   { amp: 300, wavelength: 350, octaves: 2 },
 ];
 const PENALTY = { river: 1500, edge: 700, cap: 3000 };
+// Within `calm` margins of a pin there's no warp; it comes back in full over the next `fade`.
+const MARGIN = { calm: 0.5, fade: 1.5 };
 
 // pins: [{ x, z, biome, tags }]; rivers: [[[x, z], ...], ...] point lists; edges: zone edges as
 // [ax, az, bx, bz] (shared edges are counted once); seed: number. `warp: false` turns the warp off.
@@ -130,16 +133,16 @@ function smoothstep(t) {
 export function biomeAt(b, x, z) {
   const { pins } = b;
   if (!pins.length) return { biome: BIOMES.indexOf(DEFAULT_BIOME), gap: Infinity, pin: null };
-  for (const p of pins) {
-    if (Math.hypot(p.x - x, p.z - z) < p.margin) return { biome: p.biome, gap: Infinity, pin: p };
-  }
-
+  // The warp fades out toward each pin, so the ground around a pin stays its biome. Rivers and
+  // zone edges still split it, though.
+  let fade = 1;
+  for (const p of pins) fade = Math.min(fade, smoothstep((Math.hypot(p.x - x, p.z - z) - p.margin * MARGIN.calm) / (p.margin * MARGIN.fade)));
   let wx = x;
   let wz = z;
   if (b.warp) {
     for (const [n, { amp, wavelength, octaves }] of WARP.entries()) {
-      wx += fbm(x, z, b.seed ^ (0x2b1e5a + n), { wavelength, octaves }) * amp;
-      wz += fbm(x, z, b.seed ^ (0x6c3d91 + n), { wavelength, octaves }) * amp;
+      wx += fbm(x, z, b.seed ^ (0x2b1e5a + n), { wavelength, octaves }) * amp * fade;
+      wz += fbm(x, z, b.seed ^ (0x6c3d91 + n), { wavelength, octaves }) * amp * fade;
     }
   }
   const raw = pins.map((p) => Math.hypot(p.x - wx, p.z - wz));

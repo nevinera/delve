@@ -19,7 +19,7 @@ import { fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 9;
+export const GENERATOR_VERSION = 10;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
