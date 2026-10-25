@@ -19,6 +19,7 @@ const editor = new Editor(World.empty(), {
   drawRegion: $("drawRegion"),
   deleteZone: $("deleteZone"),
   tools: $("tools"),
+  generate: $("generate"),
   props: $("props"),
   hint: $("hint"),
   message: $("message"),

@@ -148,6 +148,10 @@
   min-height: 1em;
 }
 
+.editor-message.info {
+  color: #8c8;
+}
+
 .editor-hint {
   margin-top: auto;
   color: #888;

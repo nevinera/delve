@@ -5,6 +5,10 @@ import { tileRgba } from "../world/tileImage.js";
 const TILE_PATH = /^places\/continents\/([\w-]+)\/tiles\/surface\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
 const BATCH_MS = 12;
 
+export function tilePath(continent, tx, tz) {
+  return `places/continents/${continent}/tiles/surface/${tx}/${tz}.dlt.gz`;
+}
+
 // The surface tiles a continent has in the world, as { tx, tz, path }.
 export function surfaceTiles(world, continent) {
   const tiles = [];
@@ -48,6 +52,11 @@ export class Thumbnails {
     step();
   }
 
+  // A freshly generated tile's picture, from tileRgba.
+  set(tx, tz, rgba, cells) {
+    this.images.set(`${tx},${tz}`, rgbaCanvas(rgba, cells));
+  }
+
   get(tx, tz) {
     return this.images.get(`${tx},${tz}`);
   }
@@ -58,9 +67,14 @@ export class Thumbnails {
 }
 
 function toCanvas(tile) {
+  return rgbaCanvas(tileRgba(tile), tile.cells);
+}
+
+function rgbaCanvas(rgba, cells) {
   const canvas = document.createElement("canvas");
-  canvas.width = tile.cells;
-  canvas.height = tile.cells;
-  canvas.getContext("2d").putImageData(new ImageData(tileRgba(tile), tile.cells, tile.cells), 0, 0);
+  canvas.width = cells;
+  canvas.height = cells;
+  canvas.getContext("2d").putImageData(new ImageData(rgba, cells, cells), 0, 0);
   return canvas;
 }
+

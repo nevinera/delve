@@ -1,6 +1,7 @@
 import { FEATURE_HINTS, FEATURE_TOOLS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
-import { Thumbnails, surfaceTiles } from "./thumbnails.js";
+import { TileGenerator } from "./generation.js";
+import { Thumbnails, surfaceTiles, tilePath } from "./thumbnails.js";
 import {
   cornerCount,
   labelPoint,
@@ -17,7 +18,7 @@ import { createZone, listZones, olderZones, removeZone, saveZone } from "./zones
 const HIT_PX = 8;
 const COLORS = {
   active: "#f0c850",
-  activeFill: "rgba(240, 200, 80, 0.16)",
+  activeFill: "rgba(240, 200, 80, 0.06)",
   editable: "rgba(240, 200, 80, 0.35)",
   locked: "rgba(255, 255, 255, 0.55)",
   lockedFill: "rgba(255, 255, 255, 0.07)",
@@ -53,6 +54,8 @@ export class Editor {
     });
 
     this.thumbnails = new Thumbnails(() => this.map.render());
+    this.generator = new TileGenerator();
+    this.generating = false;
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
@@ -80,7 +83,7 @@ export class Editor {
     this.thumbnails.load(this.world, this.continent);
     this.reload();
     const older = olderZones(this.world, this.continent);
-    this.say(older.length ? `Skipped zones in an older format: ${older.join(", ")}.` : "");
+    this.say(older.length ? `Skipped zones in an older format: ${older.join(", ")}.` : "", { info: true });
     this.fitContinent();
   }
 
@@ -126,8 +129,10 @@ export class Editor {
     this.dirty = false;
   }
 
-  say(text) {
+  // Shows a message under the panel: a problem by default, or { info: true } for news.
+  say(text, { info = false } = {}) {
     this.el.message.textContent = text ?? "";
+    this.el.message.classList.toggle("info", info);
   }
 
   otherZones(zone) {
@@ -176,7 +181,8 @@ export class Editor {
   // --- panel ---
 
   bindPanel() {
-    const { continent, newZone, zoneName, drawRegion, deleteZone, tools } = this.el;
+    const { continent, newZone, zoneName, drawRegion, deleteZone, tools, generate } = this.el;
+    generate.addEventListener("click", () => this.generateZone());
     for (const name of TOOLS) {
       const b = document.createElement("button");
       b.type = "button";
@@ -262,12 +268,47 @@ export class Editor {
         ? `${cornerCount(zone.region)} corners · ${tiles} editable tiles`
         : "no region yet";
       drawRegion.textContent = zone.region.length ? "redraw region" : "draw region";
+      this.el.generate.disabled = !tiles || this.generating;
+      if (!this.generating) this.el.generate.textContent = `generate ${tiles} tiles`;
       for (const b of this.el.tools.children) {
         b.classList.toggle("active", b.dataset.tool === this.toolName);
         b.disabled = !zone.region.length;
       }
     }
     hint.textContent = HINTS[this.mode()];
+  }
+
+  // Regenerates every tile the active zone's region touches, from every zone on the continent.
+  async generateZone() {
+    const zone = this.activeZone;
+    if (!zone || this.generating) return;
+    const tiles = tilesTouched(zone.region);
+    const button = this.el.generate;
+    const started = performance.now();
+    let done = 0;
+    let frame = null;
+    this.generating = true;
+    this.renderPanel();
+    this.say();
+    try {
+      await this.generator.run(listZones(this.world, this.continent), this.continent, tiles, ({ tx, tz, gz, rgba, cells }) => {
+        this.world.files.set(tilePath(this.continent, tx, tz), gz);
+        this.thumbnails.set(tx, tz, rgba, cells);
+        button.textContent = `generating ${++done}/${tiles.length}`;
+        frame ??= requestAnimationFrame(() => {
+          frame = null;
+          this.map.render();
+        });
+      });
+      this.dirty = true;
+      this.say(`Generated ${tiles.length} tiles in ${((performance.now() - started) / 1000).toFixed(1)}s.`, { info: true });
+    } catch (err) {
+      this.say(`Generation failed: ${err.message}`);
+    } finally {
+      this.generating = false;
+      this.renderPanel();
+      this.map.render();
+    }
   }
 
   renderProps() {

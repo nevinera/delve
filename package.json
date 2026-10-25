@@ -5,8 +5,7 @@
   "scripts": {
     "build": "vite build",
     "build:watch": "vite build --watch",
-    "test": "vitest",
-    "bake": "node script/bake.mjs"
+    "test": "vitest"
   },
   "dependencies": {
     "fflate": "^0.8.3",
