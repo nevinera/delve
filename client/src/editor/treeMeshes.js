@@ -15,9 +15,14 @@ const LIFT = 1.6; // canopies sit this much higher than the kinds' `clear` says
 const trunk = new THREE.CylinderGeometry(0.7, 1, 1, 7).translate(0, 0.5, 0);
 const blob = new THREE.IcosahedronGeometry(1, 1);
 const cone = new THREE.ConeGeometry(1, 1, 8).translate(0, 0.5, 0);
+// An upside-down bowl, its rim drooping a little below its widest point: 1 tall, rim at 0.
+const DROOP = 0.6; // share of a half turn the bowl runs down from its top
+const bowl = new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, Math.PI * DROOP).translate(0, -Math.cos(Math.PI * DROOP), 0);
+bowl.scale(1, 1 / (1 - Math.cos(Math.PI * DROOP)), 1);
 const bark = new THREE.MeshLambertMaterial({ color: 0x5a4430 });
 const deadBark = new THREE.MeshLambertMaterial({ color: 0x6e6458 });
 const leaves = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+const drape = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide }); // seen from under it too
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tilt = (angle, spin) =>
@@ -44,11 +49,11 @@ const KINDS = {
     ],
   },
   willow: {
-    height: 0.7,
-    clear: 0.08,
+    height: 0.9,
+    clear: 0.3,
     parts: [
-      { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 1.2, b + h * 0.47, t * 1.2]] },
-      { geometry: blob, material: leaves, color: 0x6f8f45, at: (h, c, t, r, b) => [b + h * 0.42, null, [c * 1.25, h * 0.42, c * 1.25]] },
+      { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 1.2, b + h * 0.4, t * 1.2]] },
+      { geometry: bowl, material: drape, color: 0x6f8f45, at: (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]] },
     ],
   },
   dead: {
