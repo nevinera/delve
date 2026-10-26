@@ -1,7 +1,7 @@
 import { gzipSync } from "fflate";
 import { generateTile, prepareWorld } from "../world/generator.js";
 import { encodeTile } from "../world/tileCodec.js";
-import { biomeRgba, tileRgba } from "../world/tileImage.js";
+import { tileRgba } from "../world/tileImage.js";
 
 // Generates tiles off the main thread. "prepare" sets up the continent once per run;
 // each "tile" message answers with the gzipped tile file, its thumbnail pixels and its waterfalls.
@@ -18,6 +18,5 @@ self.onmessage = ({ data }) => {
   // mtime 0 keeps the same tile byte-identical from run to run.
   const gz = gzipSync(encodeTile(tile), { level: 9, mtime: 0 });
   const rgba = tileRgba(tile);
-  const biomes = biomeRgba(tile);
-  self.postMessage({ tx, tz, gz, rgba, biomes, cells: tile.cells, falls: tile.falls }, [gz.buffer, rgba.buffer, biomes.buffer]);
+  self.postMessage({ tx, tz, gz, rgba, cells: tile.cells, falls: tile.falls }, [gz.buffer, rgba.buffer]);
 };

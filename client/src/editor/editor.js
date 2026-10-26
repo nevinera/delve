@@ -3,6 +3,7 @@ import { FEATURE_HINTS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
 import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
+import { CHUNK, THUMB_PX } from "./thumbPixels.js";
 import { Thumbnails, TileDetails, surfaceTiles, tilePath } from "./thumbnails.js";
 import {
   cornerCount,
@@ -60,6 +61,8 @@ const STEPS = {
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
 const DETAIL_MAX_TILES = 128;
+// Past this many screen pixels per pixel of the small thumbnails, tiles draw their full ones.
+const FULL_THUMB_ZOOM = 1.5;
 const PREVIEW_DELAY_MS = 80; // after panning or zooming stops, before the preview is redone
 const PREVIEW_MARGIN = 0.15; // of the view's size, worked out beyond each edge
 const PREVIEW_PX = 3; // screen pixels per preview sample
@@ -89,7 +92,11 @@ export class Editor {
       onView: () => this.viewChanged(),
     });
 
-    this.thumbnails = new Thumbnails(() => this.map.render());
+    this.thumbnails = new Thumbnails({
+      onProgress: () => this.map.render(),
+      onSaved: () => this.onEdit?.(),
+      near: () => [this.map.view.x, this.map.view.z],
+    });
     this.details = new TileDetails(
       (tx, tz) => this.world.files.get(tilePath(this.continent, tx, tz)),
       () => this.map.render(),
@@ -618,10 +625,10 @@ export class Editor {
     this.renderPanel();
     this.say();
     try {
-      await this.generator.run(this.storedState(), this.continent, tiles, ({ tx, tz, gz, rgba, biomes, cells, falls }) => {
+      await this.generator.run(this.storedState(), this.continent, tiles, ({ tx, tz, gz, rgba, cells, falls }) => {
         this.world.files.set(tilePath(this.continent, tx, tz), gz);
         this.pending.delete(`${tx},${tz}`);
-        this.thumbnails.set(tx, tz, rgba, cells, biomes, falls);
+        this.thumbnails.set(tx, tz, { rgba, cells, gz, falls });
         this.details.drop(tx, tz);
         button.textContent = `generating ${++done}/${tiles.length}`;
         frame ??= requestAnimationFrame(() => {
@@ -874,21 +881,34 @@ export class Editor {
     ctx.globalAlpha = 1;
   }
 
-  // The generated tiles in sight: close up when there are few enough, else as thumbnails. A tile
-  // still being drawn close up shows its thumbnail meanwhile.
+  // The generated tiles in sight: the small thumbnails a chunk at a time, then, zoomed in past
+  // them, each tile's full thumbnail, or close up when few enough are in sight. A tile still being
+  // drawn shows the next smaller picture meanwhile.
   drawTiles(ctx, map) {
     const [x0, z0, x1, z1] = map.bounds();
     const [tx0, tz0, tx1, tz1] = [Math.floor(x0), Math.floor(z0), Math.floor(x1), Math.floor(z1)];
     const close = (tx1 - tx0 + 1) * (tz1 - tz0 + 1) < DETAIL_MAX_TILES;
+    const full = close || map.view.scale > THUMB_PX * FULL_THUMB_ZOOM;
     this.details.forgetQueued();
+    this.thumbnails.forgetQueued();
     ctx.imageSmoothingEnabled = !close && map.view.scale < 64;
+    // A hair of overlap hides seams between neighbours.
+    const chunkSize = CHUNK * map.view.scale + 0.5;
+    for (let cx = Math.floor(tx0 / CHUNK); cx <= Math.floor(tx1 / CHUNK); cx++) {
+      for (let cz = Math.floor(tz0 / CHUNK); cz <= Math.floor(tz1 / CHUNK); cz++) {
+        const chunk = this.thumbnails.chunk(cx, cz, false);
+        if (!chunk) continue;
+        const [sx, sy] = map.toScreen([cx * CHUNK, cz * CHUNK]);
+        ctx.drawImage(chunk, sx, sy, chunkSize, chunkSize);
+      }
+    }
+    if (!full) return;
     for (let tx = tx0; tx <= tx1; tx++) {
       for (let tz = tz0; tz <= tz1; tz++) {
-        const thumbnail = this.thumbnails.get(tx, tz);
-        if (!thumbnail) continue;
-        const image = (close && this.details.get(tx, tz)) || thumbnail;
+        if (!this.thumbnails.has(tx, tz)) continue;
+        const image = (close && this.details.get(tx, tz)) || this.thumbnails.get(tx, tz);
+        if (!image) continue;
         const [sx, sy] = map.toScreen([tx, tz]);
-        // A hair of overlap hides seams between neighbouring tiles.
         ctx.drawImage(image, sx, sy, map.view.scale + 0.5, map.view.scale + 0.5);
       }
     }

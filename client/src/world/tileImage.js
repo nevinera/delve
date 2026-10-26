@@ -36,44 +36,46 @@ export const BIOME_COLORS = {
   swamp: [70, 120, 110],
 };
 
-// The biome layer as RGBA, for tinting the map: one color per biome, and clear for biomes it
-// doesn't know.
-export function biomeRgba(tile) {
-  const n = tile.cells;
-  const out = new Uint8ClampedArray(n * n * 4);
-  const colors = (tile.palettes.biome ?? []).map((name) => BIOME_COLORS[name]);
-  for (let k = 0; k < n * n; k++) {
-    const c = colors[tile.layers.biome[k]];
-    if (!c) continue;
-    out.set([...c, 255], k * 4);
-  }
-  return out;
-}
-
 // RGBA, row by row from the tile's north-west corner.
 export function tileRgba(tile) {
   const n = tile.cells;
+  const cells = shadedCells(tile);
   const out = new Uint8ClampedArray(n * n * 4);
-  for (let k = 0; k < n * n; k++) out.set([...shadedRgb(tile, k), 255], k * 4);
+  for (let k = 0; k < n * n; k++) {
+    out[k * 4] = cells[k * 3];
+    out[k * 4 + 1] = cells[k * 3 + 1];
+    out[k * 4 + 2] = cells[k * 3 + 2];
+    out[k * 4 + 3] = 255;
+  }
   return out;
 }
 
-// A cell's color in the pictures: its ground, or its water by depth, hill-shaded with light from
-// the north-west, exaggerated so gentle coastal slopes still show.
-function shadedRgb(tile, k) {
+// Each cell's color in the pictures, as RGB floats: its ground, or its water by depth, hill-shaded
+// with light from the north-west, exaggerated so gentle coastal slopes still show.
+function shadedCells(tile) {
   const n = tile.cells;
-  const { height: h, water } = tile.layers;
-  const [i, j] = [k % n, Math.floor(k / n)];
+  const { height: h, water, terrain, forest } = tile.layers;
+  const colors = tile.palettes.terrain.map((name) => COLORS[name] ?? (name?.startsWith("tree_") ? TREE : UNKNOWN));
+  const out = new Float32Array(n * n * 3);
   const at = (a, b) => h[Math.max(0, Math.min(n - 1, b)) * n + Math.max(0, Math.min(n - 1, a))];
-  const dx = (at(i + 1, j) - at(i - 1, j)) / (2 * tile.cellFt);
-  const dz = (at(i, j + 1) - at(i, j - 1)) / (2 * tile.cellFt);
-  const shade = Math.max(0.55, Math.min(1.35, 1 - (dx + dz) * 2.5));
-  let c = groundRgb(tile, k);
-  if (!Number.isNaN(water[k])) {
-    const depth = Math.min(1, (water[k] - h[k]) / 20);
-    c = [60 - depth * 30, 110 - depth * 40, 170 - depth * 30];
+  for (let j = 0, k = 0; j < n; j++) {
+    for (let i = 0; i < n; i++, k++) {
+      const dx = (at(i + 1, j) - at(i - 1, j)) / (2 * tile.cellFt);
+      const dz = (at(i, j + 1) - at(i, j - 1)) / (2 * tile.cellFt);
+      const shade = Math.max(0.55, Math.min(1.35, 1 - (dx + dz) * 2.5));
+      if (Number.isNaN(water[k])) {
+        const c = colors[terrain[k]] ?? UNKNOWN;
+        const f = (forest[k] / 255) * 0.8;
+        for (let m = 0; m < 3; m++) out[k * 3 + m] = (c[m] + (FOREST[m] - c[m]) * f) * shade;
+      } else {
+        const depth = Math.min(1, (water[k] - h[k]) / 20);
+        out[k * 3] = (60 - depth * 30) * shade;
+        out[k * 3 + 1] = (110 - depth * 40) * shade;
+        out[k * 3 + 2] = (170 - depth * 30) * shade;
+      }
+    }
   }
-  return c.map((v) => v * shade);
+  return out;
 }
 
 const CROWNS = { oak: [62, 104, 42], pine: [32, 74, 46], willow: [100, 128, 58], dead: [112, 98, 78] };
@@ -84,8 +86,7 @@ const CROWNS = { oak: [62, 104, 42], pine: [32, 74, 46], willow: [100, 128, 58],
 export function tileDetailRgba(tile, px = 4) {
   const n = tile.cells;
   const side = n * px;
-  const cells = new Float32Array(n * n * 3);
-  for (let k = 0; k < n * n; k++) cells.set(shadedRgb(tile, k), k * 3);
+  const cells = shadedCells(tile);
   const out = new Uint8ClampedArray(side * side * 4);
   const clampCell = (v) => Math.max(0, Math.min(n - 1, v));
   for (let y = 0; y < side; y++) {
