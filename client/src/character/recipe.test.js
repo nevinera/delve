@@ -15,7 +15,7 @@ describe("resolveRecipe", () => {
   });
 
   it("drops parts it doesn't know", () => {
-    const look = resolveRecipe({ hair: "mohawk", jewelry: ["earrings", "crown"] });
+    const look = resolveRecipe({ hair: "dreadlocks", jewelry: ["earrings", "crown"] });
     expect(look.hair).toBe(DEFAULT_LOOK.hair);
     expect(look.jewelry).toEqual(["earrings"]);
   });

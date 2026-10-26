@@ -9,15 +9,15 @@
 // - height: in feet, to the top of the head.
 // - build: 0 slight to 1 heavy, the thickness of the trunk and limbs.
 // - limbs: 0 thin to 1 thick, the limbs on top of build.
-// - femininity: 0 to 1, narrower shoulders and waist, wider hips, a finer jaw.
-// - hips, bust: 0 to 1.
+// - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
+// - bust: 0 to 1.
 // - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY.
 // - colors: { skin, hair, eyes, primary, secondary, metal }, each "#rrggbb" or a list to pick
 //   from. primary is the shirt or tunic, secondary the trousers; boots and belt are darker shades
 //   of those.
 
-export const HAIR = ["bald", "short", "long", "ponytail"];
-export const BEARD = ["none", "goatee", "full"];
+export const HAIR = ["bald", "short", "long", "ponytail", "braids", "mohawk", "afro"];
+export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
 export const JEWELRY = ["earrings", "necklace"];
 
 export const DEFAULT_LOOK = {
@@ -25,8 +25,10 @@ export const DEFAULT_LOOK = {
   height: 6,
   build: 0.5,
   limbs: 0.5,
-  femininity: 0,
+  shoulders: 0.5,
+  waist: 0.5,
   hips: 0.5,
+  jaw: 0.5,
   bust: 0,
   hair: "short",
   beard: "none",

@@ -19,11 +19,11 @@ describe("skeleton", () => {
     expect(bones.hand_r[1]).toBeCloseTo(bones.hand_l[1]);
   });
 
-  it("widens the hips and narrows the shoulders with femininity", () => {
+  it("sets the arms and legs apart by the shoulders and hips", () => {
     const at = (look) => Object.fromEntries(skeleton(resolveRecipe(look)).map((b) => [b.name, b.at]));
-    const [man, woman] = [at({ femininity: 0 }), at({ femininity: 1 })];
-    expect(woman.thigh_l[0]).toBeGreaterThan(man.thigh_l[0]);
-    expect(woman.upperarm_l[0]).toBeLessThan(man.upperarm_l[0]);
+    const [narrow, broad] = [at({ shoulders: 0, hips: 0 }), at({ shoulders: 1, hips: 1 })];
+    expect(broad.thigh_l[0]).toBeGreaterThan(narrow.thigh_l[0]);
+    expect(broad.upperarm_l[0]).toBeGreaterThan(narrow.upperarm_l[0]);
   });
 });
 
@@ -34,7 +34,7 @@ describe("bodyMesh", () => {
   });
 
   it("weights every corner to real bones, summing to 1", () => {
-    const { bones, skinIndex, skinWeight } = bodyMesh(resolveRecipe({ hair: "ponytail", jewelry: ["earrings", "necklace"] }));
+    const { bones, skinIndex, skinWeight } = bodyMesh(resolveRecipe({ hair: "braids", beard: "handlebar", jewelry: ["earrings", "necklace"] }));
     for (let v = 0; v < skinIndex.length / 4; v++) {
       let total = 0;
       for (let n = 0; n < 4; n++) {
