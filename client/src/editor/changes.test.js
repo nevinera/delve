@@ -59,3 +59,19 @@ describe("changedTiles", () => {
     expect(has(tiles, 9, 0)).toBe(true);
   });
 });
+
+describe("pool changes", () => {
+  const pool = { id: "w1", source: "p1", region: [[[[2.2, 2.2], [2.8, 2.2], [2.8, 2.8], [2.2, 2.8]]]], level: 40 };
+  const base = { zones: [], pins: [], strokes: [], pools: [] };
+
+  it("marks the tiles round a new pool", () => {
+    const tiles = changedTiles(base, { ...base, pools: [pool] });
+    expect(tiles.has("2,2")).toBe(true);
+    expect(tiles.has("3,3")).toBe(true);
+    expect(tiles.has("5,5")).toBe(false);
+  });
+
+  it("ignores pools that didn't change", () => {
+    expect(changedTiles({ ...base, pools: [pool] }, { ...base, pools: [structuredClone(pool)] }).size).toBe(0);
+  });
+});

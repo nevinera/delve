@@ -68,6 +68,10 @@ const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
 // under the lowest ground around it, a bed that deepens from the shore, and a rim that holds it. A
 // lake only goes where the ground's fairly level and well away from the sea.
 const LAKES = { gridFt: 900, chance: 0.7, minFt: 40, maxFt: 300, wobble: 0.35, belowFt: 1, shelfFt: 1, depthFt: [2, 12], rimFt: 1, rimWidthFt: 30, maxDropFt: 15, damFt: 80 };
+// Pools the editor's water flow filled (editor/waterflow.js): flat water at their level, over a
+// bed that deepens from the shore by up to `depthFt` (more for wider pools, up to `wideFt`
+// across), with a rim `rimWidthFt` wide that holds the water in.
+const PONDS = { shelfFt: 1, depthFt: [2, 12], wideFt: 2000, rimFt: 1, rimWidthFt: 30, slopeFt: 60 };
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
 const TREE_GROUND = new Set(["grass", "dirt", "moss", "mud"]);
@@ -94,8 +98,8 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
-// The continent as { zones, pins, strokes }: every zone as stored ({ region }), and the sketch's
-// pins and strokes (editor/zones.js), in continent tile units. seedKey (the continent's key) seeds
+// The continent as { zones, pins, strokes, pools }: every zone as stored ({ region }), and the
+// sketch's pins, strokes and pools (editor/zones.js), in continent tile units. seedKey (the continent's key) seeds
 // the noise.
 export function prepareWorld(continent, seedKey) {
   const ctx = prepareShape(continent, seedKey);
@@ -132,7 +136,28 @@ export function prepareWorld(continent, seedKey) {
     };
   });
 
+  ctx.ponds = (continent.pools ?? []).map(({ region, level }) => {
+    const ft = region.map((polygon) => polygon.map((ring) => ring.map(toFt)));
+    const xs = ft.flat(2).map(([x]) => x);
+    const zs = ft.flat(2).map(([, z]) => z);
+    const reach = PONDS.rimWidthFt;
+    const across = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+    return {
+      region: ft,
+      edges: edgesOf(ft),
+      box: [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach],
+      level,
+      depth: lerp(...PONDS.depthFt, Math.min(1, across / PONDS.wideFt)),
+    };
+  });
+
   return ctx;
+}
+
+// Whether there's water at a point before any confirmed rivers and pools: the sea, swamp pools,
+// ponds and lakes. ctx: prepareWorld's, for a continent without rivers or pools.
+export function waterAt(ctx, x, z) {
+  return !Number.isNaN(sample(ctx, x, z, ctx.areaEdges, ctx.biomes).water);
 }
 
 // The land's shape from the zones' regions and height pins alone, with no biomes: the zoned area,
@@ -379,6 +404,7 @@ function sample(ctx, x, z, edges, biomes) {
   if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
   if (ground.land) lakes(ctx, out, x, z);
+  for (const p of ctx.ponds) pond(out, x, z, p);
   for (const r of ctx.rivers) {
     if (!nearBounds(r.line, x, z, r.half + r.bank)) continue;
     const n = nearest(r.line, x, z);
@@ -412,6 +438,21 @@ function pool(ctx, out, x, z, amount) {
   out.water = out.h - 0.5;
   out.h = out.water - Math.min(POOL.maxDepth, (level - n) * 30);
   out.pool = true;
+}
+
+// A pool from the water flow: flat water inside its outline, and a rim just outside.
+function pond(out, x, z, p) {
+  const [x0, z0, x1, z1] = p.box;
+  if (x < x0 || x > x1 || z < z0 || z > z1) return;
+  const shore = distanceToEdges(x, z, p.edges);
+  if (pointInRegion(x, z, p.region)) {
+    out.water = Number.isNaN(out.water) ? p.level : Math.max(out.water, p.level);
+    out.h = Math.min(out.h, p.level - PONDS.shelfFt - p.depth * smoothstep(0, PONDS.slopeFt, shore));
+    out.lake = true;
+  } else if (shore < PONDS.rimWidthFt) {
+    out.h = Math.max(out.h, lerp(p.level + PONDS.rimFt, out.h, shore / PONDS.rimWidthFt));
+    out.bank = true;
+  }
 }
 
 // Ponds and small lakes, from the lake sites in the grid squares around the point.

@@ -83,6 +83,17 @@ describe("generator", () => {
     }
   });
 
+  it("floods a kept pool flat at its level, below the ground around it", () => {
+    // A square pool over the middle of tile (12, -2), whose cells run 0-63 across it.
+    const pool = { id: "w1", source: "p9", region: [[[[12.25, -1.75], [12.75, -1.75], [12.75, -1.25], [12.25, -1.25]]]], level: 95 };
+    const tile = generateTile(prepareContinent({ zones, pins: zones[0].pins, strokes: [], pools: [pool] }, "test"), 12, -2);
+    // The ground there is about 92ft; the rim just outside holds the water in.
+    expect(cell(tile, 32, 32, "water")).toBe(95);
+    expect(cell(tile, 32, 32, "height")).toBeLessThan(94);
+    expect(cell(tile, 15, 32, "height")).toBeGreaterThan(95);
+    expect(Number.isNaN(cell(tile, 4, 32, "water"))).toBe(true);
+  });
+
   it("is all ocean with no zones", () => {
     const tile = generateTile(prepareWorld([], "test"), 0, 0);
     expect(Math.max(...tile.layers.height)).toBeLessThan(-40);

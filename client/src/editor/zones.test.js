@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { World } from "./world.js";
-import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveZone, sketchPath, zonePath } from "./zones.js";
+import { createZone, dropDrawnRivers, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveZone, sketchPath, zonePath } from "./zones.js";
 
 describe("zones", () => {
   it("creates a zone file keyed by its name", () => {
@@ -42,13 +42,13 @@ describe("zones", () => {
   });
 
   it("starts with an empty sketch", () => {
-    expect(loadSketch(World.empty(), "main")).toEqual({ version: 1, pins: [], strokes: [] });
+    expect(loadSketch(World.empty(), "main")).toEqual({ version: 2, pins: [], strokes: [], pools: [] });
   });
 
   it("moves zones' own pins and strokes into the sketch, renumbering clashes", () => {
     const world = World.empty();
     const region = [[[[0, 0], [4, 0], [4, 4]]]];
-    world.writeJson(zonePath("main", "a"), { version: 2, name: "A", region, pins: [{ id: "p1", kind: "height", at: [1, 1], height: 5 }], strokes: [{ id: "s1", kind: "river", points: [], width: 30 }] });
+    world.writeJson(zonePath("main", "a"), { version: 2, name: "A", region, pins: [{ id: "p1", kind: "height", at: [1, 1], height: 5 }], strokes: [{ id: "s1", kind: "road", points: [], width: 16 }, { id: "s2", kind: "river", points: [], width: 30 }] });
     world.writeJson(zonePath("main", "b"), { version: 2, name: "B", region, pins: [{ id: "p1", kind: "biome", at: [2, 2], biome: "forest" }], strokes: [] });
     expect(moveIntoSketch(world, "main")).toEqual(["a", "b"]);
     const sketch = world.readJson(sketchPath("main"));
@@ -57,5 +57,13 @@ describe("zones", () => {
     expect(world.readJson(zonePath("main", "b"))).toEqual({ version: 3, name: "B", region });
     expect(listZones(world, "main").map((z) => z.key)).toEqual(["a", "b"]);
     expect(moveIntoSketch(world, "main")).toEqual([]);
+  });
+
+  it("drops hand-drawn rivers from sketches from before water sources", () => {
+    const old = { version: 1, pins: [], strokes: [{ id: "s1", kind: "river", points: [] }, { id: "s2", kind: "road", points: [] }], pools: [] };
+    expect(dropDrawnRivers(old)).toBe(1);
+    expect(old.strokes.map((s) => s.id)).toEqual(["s2"]);
+    expect(old.version).toBe(2);
+    expect(dropDrawnRivers(old)).toBe(0);
   });
 });

@@ -14,8 +14,8 @@ import { tilesTouched } from "./region.js";
 
 const key = (tx, tz) => `${tx},${tz}`;
 
-// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, strokes }
-// with zones as stored ({ region }) and the sketch's pins and strokes.
+// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, strokes,
+// pools } with zones as stored ({ region }) and the sketch's pins, strokes and pools.
 export function changedTiles(before, after) {
   const tiles = new Set();
   const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
@@ -42,6 +42,12 @@ export function changedTiles(before, after) {
     for (const stroke of [old, now]) {
       if (stroke) addNearLine(tiles, stroke.points, riverReachFt(stroke.width ?? 30) / TILE_FT);
     }
+  }
+
+  // A pool's rim reaches a little past its shore, well within the neighbours added below.
+  for (const [old, now] of pairs(before.pools ?? [], after.pools ?? [])) {
+    if (!changed(old, now)) continue;
+    for (const pool of [old, now]) if (pool) for (const [tx, tz] of tilesTouched(pool.region)) tiles.add(key(tx, tz));
   }
 
   for (const k of [...tiles]) {
