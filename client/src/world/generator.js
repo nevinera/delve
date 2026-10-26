@@ -88,8 +88,9 @@ export const EDGE_REACH_FT = COAST_REACH_FT + SHORE.maxFt;
 // banks, up to maxBanks. The surface follows the lowest ground across the channel, out to
 // `besideFt` past each edge, so on a slope it sits no higher than the downhill bank; where the bank
 // is still lower somewhere, it's raised to `leveeFt` above the water, easing back into the land
-// across the bank, so the water's always held in.
-const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30, maxBanks: 2, besideFt: 8, leveeFt: 1 };
+// across the bank, so the water's always held in. The bank rises from the waterline at the bed's
+// slope at its edge, at least `minEdgeSlope`.
+const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30, maxBanks: 2, besideFt: 8, leveeFt: 1, minEdgeSlope: 0.3 };
 // Biome borders follow rivers loosely, so they get each course simplified to within this: a
 // smoothed course has a point every few feet, and every one costs each biome lookup.
 const BIOME_RIVER_TOLERANCE_FT = 24;
@@ -482,18 +483,23 @@ function sample(ctx, x, z, edges, biomes) {
     const bank = r.bank * Math.min(RIVER.maxBanks, banks);
     if (n.dist >= r.half + bank) continue;
     const surface = profileAt(r.surface, n.along);
+    const depth = Math.min(RIVER.maxDepth, r.depth * bed);
     if (n.dist < r.half) {
       const t = n.dist / r.half;
-      out.h = Math.min(out.h, surface - Math.min(RIVER.maxDepth, r.depth * bed) * (1 - t * t));
+      out.h = Math.min(out.h, surface - depth * (1 - t * t));
       if (!(out.water >= surface)) {
         out.water = surface;
         out.flow = flowAt(r, n.along);
       }
       out.river = true;
     } else {
-      const t = smoothstep(0, 1, (n.dist - r.half) / bank);
-      levee = Math.max(levee, lerp(surface + RIVER.leveeFt, out.h, t));
-      out.h = Math.min(out.h, lerp(surface + 1, out.h, t));
+      // The bank keeps rising at the bed's slope through the waterline, up to the levee, so the
+      // shore falls right on the river's edge rather than on whichever cells are inside it.
+      const e = n.dist - r.half;
+      const lip = surface + Math.min(RIVER.leveeFt, e * Math.max(RIVER.minEdgeSlope, (2 * depth) / r.half));
+      const t = smoothstep(0, 1, e / bank);
+      levee = Math.max(levee, lerp(lip, out.h, t));
+      out.h = Math.min(out.h, lerp(lip, out.h, t));
       if (n.dist < r.half + bank * 0.6) out.bank = true;
     }
   }
