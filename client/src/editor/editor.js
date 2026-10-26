@@ -44,15 +44,18 @@ const HINT_ROADS = "roads are drawn and kept, but don't shape the ground yet";
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · shift sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
 
-// The editor's steps, in the order you'd usually work, each with its own map and tools. The zones
-// step edits one zone's region at a time; the rest edit the continent's sketch, the pins and
-// strokes drawn anywhere on its land. `map` is what the step draws under its marks: a live preview worked out
+// The editor's steps, in the order you'd usually work, each with its own map and tools. Each step
+// is a layer that depends only on the ones before it: zones, then heights, then the water that runs
+// over them, then the biomes that grow along it, then the features on top. The zones step edits
+// one zone's region at a time; the rest edit the continent's sketch, the pins and strokes drawn
+// anywhere on its land. `map` is what the step draws under its marks: a live preview worked out
 // from the zones (shapePreview.js), or the generated tiles.
 const STEPS = {
   zones: { tools: [], kinds: [] },
   heights: { tools: ["select", "height"], kinds: ["height"], map: "heights" },
+  water: { tools: ["select", "source"], kinds: ["source"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
-  features: { tools: ["select", "source", "road", "hub", "info"], kinds: ["source", "road", "hub", "info"] },
+  features: { tools: ["select", "road", "hub", "info"], kinds: ["road", "hub", "info"] },
   tiles: { tools: [], kinds: [], map: "tiles" },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -269,7 +272,7 @@ export class Editor {
   // in which case they're kept when the drag ends.
   updateWater() {
     const { zones, pins } = this.continentState();
-    const land = { zones, pins: pins.filter((p) => p.kind === "height" || p.kind === "biome") };
+    const land = { zones, pins: pins.filter((p) => p.kind === "height") };
     const sources = pins.filter((p) => p.kind === "source").map(({ id, at, width }) => ({ id, at, width }));
     const key = String(hashString(JSON.stringify([land, sources, this.continent])));
     if (key === this.waterKey) return;
@@ -298,7 +301,7 @@ export class Editor {
     const { pin, el } = this.waterStatus ?? {};
     if (!el) return;
     const ends = {
-      water: "Its water reaches the sea or other water.",
+      water: "Its water reaches the sea.",
       pool: "Its water fills a pool as far as its flow allows, and stops there.",
       flat: "Its water spreads out over flat ground.",
       lost: "Its water wanders too far, and has been cut short.",
@@ -411,10 +414,10 @@ export class Editor {
     return Boolean(this.el.steps.find((s) => s.dataset.step === this.step)?.querySelector(`[data-option=${name}]`)?.checked);
   }
 
-  // Which of the sketch's features the map shows: the step's own, and the water on the features
-  // step, or on the biomes step when asked.
+  // Which of the sketch's features the map shows: the step's own, and the water on the water and
+  // features steps, or on the biomes step when asked.
   markKinds() {
-    return { kinds: this.kinds, water: this.step === "features" || (this.step === "biomes" && this.option("rivers")) };
+    return { kinds: this.kinds, water: this.step === "water" || this.step === "features" || (this.step === "biomes" && this.option("rivers")) };
   }
 
   // --- the heights and biomes maps ---
@@ -442,6 +445,7 @@ export class Editor {
     const [mx, mz] = [(x1 - x0) * PREVIEW_MARGIN, (z1 - z0) * PREVIEW_MARGIN];
     const bounds = [x0 - mx, z0 - mz, x1 + mx, z1 + mz].map((v) => v * TILE_FT);
     const { width, height } = this.map.canvas;
+    if (!width || !height) return; // hidden, while walking
     const side = Math.round((Math.max(width, height) * (1 + 2 * PREVIEW_MARGIN)) / PREVIEW_PX);
     this.previews.request(this.continentState(), this.continent, { biomes: kind === "biomes", bounds, side });
   }

@@ -20,7 +20,7 @@ import { TREE_KINDS, plantTree } from "./trees.js";
 import { scatterObjects } from "./objects.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 20;
+export const GENERATOR_VERSION = 21;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -83,11 +83,15 @@ const SHORE = { maxFt: 700, layers: [{ wavelength: 1800, weight: 1 }, { waveleng
 // from the zoned area's edge, nothing about the edge does.
 const COAST_REACH_FT = Math.max(COAST.maxFt, (SEA.shallow - SEA.floor) / SEA.drop) + 64;
 export const EDGE_REACH_FT = COAST_REACH_FT + SHORE.maxFt;
-const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30 };
+// A river's channel: `depth` is cut below its surface, up to maxDepth, scaled by the ground's bed
+// (biomes.js profiles). Banks slope up over its width (at least minBankFt), scaled by the ground's
+// banks, up to maxBanks.
+const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30, maxBanks: 2 };
 export function riverReachFt(width) {
-  return width / 2 + Math.max(RIVER.minBankFt, width);
+  return width / 2 + Math.max(RIVER.minBankFt, width) * RIVER.maxBanks;
 }
 const STEEP = 0.7; // rise over run that turns into rock
+const FLOW_PROBE_FT = 16; // how far up and down a river its flow is judged over
 const PROFILE_STEP = 16;
 
 const smoothstep = (a, b, x) => {
@@ -132,6 +136,7 @@ export function prepareWorld(continent, seedKey) {
       line,
       half: width / 2,
       bank: Math.max(RIVER.minBankFt, width),
+      reach: width / 2 + Math.max(RIVER.minBankFt, width) * RIVER.maxBanks,
       depth: clamp(width / 6, RIVER.minDepth, RIVER.maxDepth),
       surface: ground.map((h) => (low = Math.min(low, h)) - RIVER.surfaceDrop),
     };
@@ -155,10 +160,13 @@ export function prepareWorld(continent, seedKey) {
   return ctx;
 }
 
-// Whether there's water at a point before any confirmed rivers and pools: the sea, swamp pools,
-// ponds and lakes. ctx: prepareWorld's, for a continent without rivers or pools.
-export function waterAt(ctx, x, z) {
-  return !Number.isNaN(sample(ctx, x, z, ctx.areaEdges, ctx.biomes).water);
+// Whether the sea covers a point, from prepareShape's ctx: past the coast, or in the shore strip
+// where the ground's below sea level.
+export function seaAt(ctx, x, z) {
+  const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, ctx.areaEdges));
+  const inland = (pointInRegion(x, z, ctx.area) ? edgeDist : -edgeDist) - shoreInset(ctx, x, z);
+  const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
+  return inland <= 0 || (coastDist < COAST.maxFt && coast(ctx, ctx.heightAt(x, z), x, z, coastDist) < 0);
 }
 
 // The land's shape from the zones' regions and height pins alone, with no biomes: the zoned area,
@@ -200,6 +208,31 @@ export function biomeRelief(ctx, x, z, { amp, rough }) {
   return h;
 }
 
+// Running water's flow, in two byte layers. flowDir is the way it runs, as an angle in 255ths of a
+// turn from east toward south, or FLOW_NONE where it's still or dry. flowSlope is how steeply its
+// surface falls, as 255 * sqrt(slope), so gentle slopes keep their detail and 1 (45°) or more is
+// 255.
+export const FLOW_NONE = 255;
+
+export function encodeFlowDir(dx, dz) {
+  const turn = Math.atan2(dz, dx) / (2 * Math.PI);
+  return Math.round((turn - Math.floor(turn)) * 255) % 255;
+}
+
+export function decodeFlowDir(byte) {
+  if (byte === FLOW_NONE) return null;
+  const angle = (byte / 255) * 2 * Math.PI;
+  return [Math.cos(angle), Math.sin(angle)];
+}
+
+export function encodeFlowSlope(slope) {
+  return Math.round(Math.min(1, Math.sqrt(Math.max(0, slope))) * 255);
+}
+
+export function decodeFlowSlope(byte) {
+  return (byte / 255) ** 2;
+}
+
 // One tile's layers. tx and tz are continent tile coordinates.
 export function generateTile(ctx, tx, tz) {
   // Only the area edges that can reach this tile.
@@ -230,6 +263,8 @@ export function generateTile(ctx, tx, tz) {
     biome: new Uint8Array(count),
     forest: new Uint8Array(count),
     clutter: new Uint8Array(count),
+    flowDir: new Uint8Array(count).fill(FLOW_NONE),
+    flowSlope: new Uint8Array(count),
   };
   for (let j = 0; j < CELLS; j++) {
     for (let i = 0; i < CELLS; i++) {
@@ -245,6 +280,10 @@ export function generateTile(ctx, tx, tz) {
       layers.biome[k] = s.climate.biome;
       layers.clutter[k] = Math.min(255, Math.round(s.climate.profile.clutter * 100));
       layers.waterKind[k] = WATER_KINDS.indexOf(s.sea ? "sea" : "fresh");
+      if (s.flow) {
+        layers.flowDir[k] = encodeFlowDir(s.flow.dx, s.flow.dz);
+        layers.flowSlope[k] = encodeFlowSlope(s.flow.slope);
+      }
     }
   }
 
@@ -406,20 +445,25 @@ function sample(ctx, x, z, edges, biomes) {
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
   if (ground.land) lakes(ctx, out, x, z);
   for (const p of ctx.ponds) pond(out, x, z, p);
+  const { banks, bed } = ground.climate.profile;
   for (const r of ctx.rivers) {
-    if (!nearBounds(r.line, x, z, r.half + r.bank)) continue;
+    if (!nearBounds(r.line, x, z, r.reach)) continue;
     const n = nearest(r.line, x, z);
-    if (n.dist >= r.half + r.bank) continue;
+    const bank = r.bank * Math.min(RIVER.maxBanks, banks);
+    if (n.dist >= r.half + bank) continue;
     const surface = profileAt(r.surface, n.along);
     if (n.dist < r.half) {
       const t = n.dist / r.half;
-      out.h = Math.min(out.h, surface - r.depth * (1 - t * t));
-      out.water = Number.isNaN(out.water) ? surface : Math.max(out.water, surface);
+      out.h = Math.min(out.h, surface - Math.min(RIVER.maxDepth, r.depth * bed) * (1 - t * t));
+      if (!(out.water >= surface)) {
+        out.water = surface;
+        out.flow = flowAt(r, n.along);
+      }
       out.river = true;
     } else {
-      const t = smoothstep(0, 1, (n.dist - r.half) / r.bank);
+      const t = smoothstep(0, 1, (n.dist - r.half) / bank);
       out.h = Math.min(out.h, lerp(surface + 1, out.h, t));
-      if (n.dist < r.half + r.bank * 0.6) out.bank = true;
+      if (n.dist < r.half + bank * 0.6) out.bank = true;
     }
   }
   // The sea covers the sea floor and the shore strip. Land below sea level further in stays dry.
@@ -428,6 +472,17 @@ function sample(ctx, x, z, edges, biomes) {
     out.sea = true;
   }
   return out;
+}
+
+// Which way a river runs at `along` ft down its line, and how steeply its surface falls there, as
+// { dx, dz, slope } with (dx, dz) a unit vector and slope in ft per ft.
+function flowAt(r, along) {
+  const d = FLOW_PROBE_FT;
+  const [ax, az] = pointAt(r.line, Math.max(0, along - d));
+  const [bx, bz] = pointAt(r.line, Math.min(r.line.length, along + d));
+  const len = Math.hypot(bx - ax, bz - az) || 1;
+  const slope = Math.max(0, profileAt(r.surface, along - d) - profileAt(r.surface, along + d)) / (2 * d);
+  return { dx: (bx - ax) / len, dz: (bz - az) / len, slope };
 }
 
 // Swamp pools: standing water a little below the ground around it, where noise dips. `amount`

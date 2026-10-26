@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { groundCells, terrainMesh, waterMesh } from "./terrainMesh.js";
+import { FLOW_NONE, encodeFlowDir, encodeFlowSlope } from "../world/generator.js";
 
 // A 4×4-cell tile with every cell at `height`, river water down column 1 when wet.
 function tile(tx, tz, height, wet = false) {
@@ -69,6 +70,21 @@ describe("waterMesh", () => {
     pool.palettes.water = ["sea", "fresh"];
     expect(waterMesh(pool, {}, [0, 0], "sea")).toBeNull();
     expect(waterMesh(pool, {}, [0, 0], "fresh").indices.length).toBe(4 * 4 * 6);
+  });
+
+  it("gives fresh water its flow, spreading it to the shore", () => {
+    const river = tile(0, 0, 5, true);
+    // Column 1 runs south, falling 1 in 25.
+    river.layers.flowDir = Uint8Array.from({ length: 16 }, (_, k) => (k % 4 === 1 ? encodeFlowDir(0, 1) : FLOW_NONE));
+    river.layers.flowSlope = Uint8Array.from({ length: 16 }, (_, k) => (k % 4 === 1 ? encodeFlowSlope(0.04) : 0));
+    const { flows } = waterMesh(river, {}, [0, 0]);
+    const at = (a, b) => Array.from(flows.slice((b * 5 + a) * 3, (b * 5 + a) * 3 + 3));
+    const [vx, vz, steep] = at(1, 1);
+    expect(Math.abs(vx)).toBeLessThan(0.1);
+    expect(vz).toBeGreaterThan(5);
+    expect(steep).toBeCloseTo(0.2, 1);
+    expect(at(2, 1)[1]).toBeCloseTo(vz, 1); // the bank beside it
+    expect(at(4, 1)).toEqual([0, 0, 0]); // too far from any flow
   });
 
   it("keeps the sea and fresh water apart", () => {

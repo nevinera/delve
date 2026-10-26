@@ -21,6 +21,8 @@ export const SURFACE_LAYERS = [
   { name: "biome", type: "u8" },
   { name: "forest", type: "u8" },
   { name: "clutter", type: "u8", optional: true }, // ground clutter density, 100 = normal
+  { name: "flowDir", type: "u8", optional: true }, // which way running water goes (generator.js)
+  { name: "flowSlope", type: "u8", optional: true }, // how steeply it falls (generator.js)
 ];
 
 // tile: { coords: [tx, tz], layer, cells, cellFt, palettes, objects, generator, layers: { name: array } }

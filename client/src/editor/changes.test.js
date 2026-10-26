@@ -33,6 +33,16 @@ describe("changedTiles", () => {
     expect(has(tiles, 10, 13)).toBe(false);
   });
 
+  it("covers only the land near a changed river, even with biome pins", () => {
+    const pins = [{ id: "b1", kind: "biome", at: [5, 5], biome: "forest" }, { id: "b2", kind: "biome", at: [15, 15], biome: "rocky" }];
+    const river = { points: [[1.5, 10.5], [18.5, 10.5]], width: 30 };
+    const tiles = changedTiles(continent({ pins }), continent({ pins, rivers: [river] }));
+    expect(has(tiles, 10, 10)).toBe(true);
+    expect(has(tiles, 10, 13)).toBe(true);
+    expect(has(tiles, 10, 2)).toBe(false);
+    expect(has(tiles, 10, 18)).toBe(false);
+  });
+
   it("covers the shore around a moved coast, not the whole region", () => {
     const tiles = changedTiles(continent(), continent({ region: square(0, 0, 21, 20) }));
     expect(has(tiles, 20, 10)).toBe(true);

@@ -92,6 +92,13 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
   return material;
 }
 
+// The grainy noise texture the ground uses, shared with anything else that wants some: speckle in
+// red, soft blotches in green.
+export function noiseTexture(renderer) {
+  detail ??= detailTexture(renderer);
+  return detail;
+}
+
 // Frees a tile's material and its cells.
 export function disposeGround(material) {
   material.userData.cells?.dispose();

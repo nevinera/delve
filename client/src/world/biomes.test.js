@@ -25,6 +25,13 @@ describe("biomes", () => {
     expect(at(b, 2700, 0)).toBe("swamp");
   });
 
+  it("lets go of borders far from a river", () => {
+    // Pins far apart, with a river well off to one side of their halfway line.
+    const far = plain({ pins: [forest, { x: 10000, z: 0, biome: "swamp" }], rivers: [[[1500, -9000], [1500, 9000]]] });
+    expect(at(far, 4900, 0)).toBe("forest");
+    expect(at(far, 5100, 0)).toBe("swamp");
+  });
+
   it("splits a pin's surroundings at a river right beside it", () => {
     const b = plain({ pins: [forest, swamp, { x: 5500, z: 0, biome: "rocky" }], rivers: [[[4200, -5000], [4200, 5000]]] });
     expect(at(b, 4100, 0)).toBe("swamp");

@@ -6,6 +6,7 @@ import { decodeTile } from "../world/tileCodec.js";
 import { findTrees } from "../world/trees.js";
 import { rings } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
+import { setWaterTime, waterMaterial } from "./waterMaterial.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
 import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
@@ -138,6 +139,7 @@ export class RenderView {
         this.streamAround(Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT));
       }
       this.sky.update(this.camera, performance.now() / 1000);
+      setWaterTime(performance.now() / 1000);
       this.showSight();
       this.showClutter();
       this.hideParts();
@@ -325,7 +327,7 @@ export class RenderView {
     this.terrainMaterial ??= groundMaterial(this.renderer);
     this.waterMaterials ??= {
       sea: new THREE.MeshLambertMaterial({ color: SEA }),
-      fresh: new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 }),
+      fresh: waterMaterial(this.renderer, { color: 0x3a78b8, opacity: 0.85 }),
     };
   }
 
@@ -539,10 +541,11 @@ function empty(group) {
   }
 }
 
-function geometry({ positions, colors, indices, skirt }) {
+function geometry({ positions, colors, flows, indices, skirt }) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   if (colors) g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  if (flows) g.setAttribute("flow", new THREE.BufferAttribute(flows, 3));
   g.setIndex(new THREE.BufferAttribute(indices, 1));
   g.computeVertexNormals();
   // A skirt is lit like the ground at its top, so it doesn't show as a dark line.

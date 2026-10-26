@@ -1,6 +1,7 @@
 import polygonClipping from "polygon-clipping";
 import { TILE_FT } from "../world/constants.js";
 import { EDGE_REACH_FT, riverReachFt } from "../world/generator.js";
+import { RIVER_PULL_FT } from "../world/biomes.js";
 import { tilesTouched } from "./region.js";
 
 // Which tiles an edit changes, so the editor can highlight them and regenerate just those. Each
@@ -9,8 +10,10 @@ import { tilesTouched } from "./region.js";
 // yet. Every hit tile brings its neighbours along.
 //
 // Height pins shape one smooth surface across the continent, so a height pin change marks every
-// zoned tile. Biome borders can move anywhere a biome pin's region reaches, and rivers and zone
-// edges bend them, so when there are biome pins, any biome pin, river or region change does too.
+// zoned tile. Biome borders can move anywhere a biome pin's region reaches, and zone edges bend
+// them, so when there are biome pins, any biome pin or region change does too. Rivers bend biome
+// borders only within RIVER_PULL_FT of themselves, so a changed river marks the tiles that near
+// it.
 
 const key = (tx, tz) => `${tx},${tz}`;
 
@@ -25,7 +28,7 @@ export function changedTiles(before, after) {
 
   const hasBiomes = [...before.pins, ...after.pins].some((p) => p.kind === "biome");
   const regionsMoved = changed(regions(before), regions(after));
-  const biomesMoved = hasBiomes && (changed(pinsOf(before, "biome"), pinsOf(after, "biome")) || changed(rivers(before), rivers(after)) || regionsMoved);
+  const biomesMoved = hasBiomes && (changed(pinsOf(before, "biome"), pinsOf(after, "biome")) || regionsMoved);
   if (biomesMoved || changed(pinsOf(before, "height"), pinsOf(after, "height"))) {
     for (const region of [...regions(before), ...regions(after)]) for (const [tx, tz] of tilesTouched(region)) addAround(tiles, tx, tz, 1);
   }
@@ -37,7 +40,9 @@ export function changedTiles(before, after) {
     for (const [tx, tz] of tilesTouched(moved)) addAround(tiles, tx, tz, reach);
   }
 
-  for (const river of unmatched(rivers(before), rivers(after))) addNearLine(tiles, river.points, riverReachFt(river.width) / TILE_FT);
+  for (const river of unmatched(rivers(before), rivers(after))) {
+    addNearLine(tiles, river.points, Math.max(riverReachFt(river.width), hasBiomes ? RIVER_PULL_FT : 0) / TILE_FT);
+  }
 
   // A pool's rim reaches a little past its shore, well within the neighbours added below.
   const pools = (c) => c.watercourses?.pools ?? [];

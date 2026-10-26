@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CELLS, TILE_FT } from "./constants.js";
-import { generateTile, prepareWorld as prepareContinent } from "./generator.js";
+import { decodeFlowDir, decodeFlowSlope, encodeFlowDir, encodeFlowSlope, generateTile, prepareWorld as prepareContinent } from "./generator.js";
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
 
@@ -79,6 +79,28 @@ describe("generator", () => {
         expect(river.surface[i]).toBeLessThanOrEqual(river.surface[i - 1]);
       }
     }
+  });
+
+  it("marks which way river water runs, and nowhere else", () => {
+    const tile = generateTile(ctx, 12, -3);
+    let wet = 0;
+    for (let k = 0; k < CELLS * CELLS; k++) {
+      const dir = decodeFlowDir(tile.layers.flowDir[k]);
+      if (!dir) continue;
+      wet++;
+      expect(Number.isNaN(tile.layers.water[k])).toBe(false);
+      expect(dir[0]).toBeLessThan(-0.8); // the river runs west
+    }
+    expect(wet).toBeGreaterThan(50);
+  });
+
+  it("round-trips flow directions and slopes through their bytes", () => {
+    for (const angle of [0, 1, 2.5, -2, Math.PI]) {
+      const [dx, dz] = decodeFlowDir(encodeFlowDir(Math.cos(angle), Math.sin(angle)));
+      expect(Math.hypot(dx - Math.cos(angle), dz - Math.sin(angle))).toBeLessThan(0.03);
+    }
+    expect(decodeFlowSlope(encodeFlowSlope(0.04))).toBeCloseTo(0.04, 2);
+    expect(decodeFlowSlope(encodeFlowSlope(3))).toBe(1);
   });
 
   it("floods a kept pool flat at its level, below the ground around it", () => {

@@ -1,7 +1,8 @@
 // Biome regions from biome pins (plans/design.md, "Biome pins"). Each cell takes the biome of the
 // pin that scores lowest, where a pin's score is its distance from the cell's noise-warped
 // position, plus a penalty for each river or zone edge the straight line from the cell to the pin
-// crosses. So borders wander, and snap onto rivers and zone edges near where they'd fall. The warp
+// crosses. So borders wander, and snap onto rivers and zone edges near where they'd fall. A river's
+// penalty fades out over RIVER_PULL_FT from it, so moving a river only moves borders near it. The warp
 // fades out near each pin, within its margin (a tile, or half the gap to the nearest other biome
 // pin when that's less), so a pin's surroundings stay its biome unless a river or zone edge cuts
 // them off.
@@ -22,12 +23,13 @@ export const DEFAULT_BIOME = "plains";
 // turns to rock; trees: chance of a tree per 32ft grid square; sizes: odds of 1x1, 2x2 and 3x3;
 // kinds: odds per tree kind; pools: swamp pools, 0-1; ravines: ravine cracks, 0-1; lakes:
 // scattered ponds and small lakes, 0-1; clutter: how much ground clutter, 1 by default; cliffs:
-// patches of ledges and cliffs, 0-1; peaks: high pins rise to a point, 0-1.
+// patches of ledges and cliffs, 0-1; peaks: high pins rise to a point, 0-1; banks: how far a
+// river's banks slope away, 1 by default; bed: how deep its channel is cut, 1 by default.
 const PROFILES = {
   plains: { amp: 4, rough: 0, steep: 0.7, trees: 0.03, sizes: [0.5, 0.4, 0.1], kinds: { oak: 1 } },
   forest: { amp: 9, rough: 0, steep: 0.7, trees: 0.17, sizes: [0.1, 0.3, 0.6], kinds: { oak: 0.85, pine: 0.15 } },
-  rocky: { amp: 12, rough: 45, steep: 0.45, cliffs: 1, peaks: 1, trees: 0.06, sizes: [0.6, 0.35, 0.05], kinds: { pine: 0.7, dead: 0.3 } },
-  swamp: { amp: 2, rough: 0, steep: 0.7, trees: 0.25, sizes: [0.4, 0.5, 0.1], kinds: { willow: 0.65, dead: 0.35 }, pools: 1 },
+  rocky: { amp: 12, rough: 45, steep: 0.45, cliffs: 1, peaks: 1, trees: 0.06, sizes: [0.6, 0.35, 0.05], kinds: { pine: 0.7, dead: 0.3 }, banks: 0.35, bed: 1.6 },
+  swamp: { amp: 2, rough: 0, steep: 0.7, trees: 0.25, sizes: [0.4, 0.5, 0.1], kinds: { willow: 0.65, dead: 0.35 }, pools: 1, banks: 1.8, bed: 0.5 },
 };
 // What each pin tag does to its profile.
 const TAGS = {
@@ -71,6 +73,7 @@ const WARP = [
   { amp: 300, wavelength: 350, octaves: 2 },
 ];
 const PENALTY = { river: 1500, edge: 700, cap: 3000 };
+export const RIVER_PULL_FT = 1500;
 // Within `calm` margins of a pin there's no warp; it comes back in full over the next `fade`.
 const MARGIN = { calm: 0.5, fade: 1.5 };
 
@@ -114,6 +117,8 @@ export function profileFor(biome, tags = []) {
     ravines: 0,
     lakes: 0,
     clutter: 1,
+    banks: base.banks ?? 1,
+    bed: base.bed ?? 1,
   };
   for (const tag of tags) TAGS[tag]?.(p);
   return p;
@@ -184,9 +189,17 @@ export function biomeAt(b, x, z) {
 
 function penalty(segments, p, x, z) {
   let total = 0;
-  for (const s of segments.rivers) if (crosses(x, z, p.x, p.z, s)) total += PENALTY.river;
+  for (const s of segments.rivers) {
+    if (crosses(x, z, p.x, p.z, s)) total += PENALTY.river * (1 - smoothstep((distToSegment(x, z, s) * 2) / RIVER_PULL_FT - 1));
+  }
   for (const s of segments.edges) if (crosses(x, z, p.x, p.z, s)) total += PENALTY.edge;
   return Math.min(total, PENALTY.cap);
+}
+
+function distToSegment(x, z, [ax, az, bx, bz]) {
+  const [dx, dz] = [bx - ax, bz - az];
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+  return Math.hypot(x - (ax + t * dx), z - (az + t * dz));
 }
 
 // Whether segment (ax, az)-(bx, bz) properly crosses s.

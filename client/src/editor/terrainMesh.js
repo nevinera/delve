@@ -1,4 +1,9 @@
 import { groundRgb } from "../world/tileImage.js";
+import { decodeFlowDir, decodeFlowSlope } from "../world/generator.js";
+
+// How fast running water moves, in ft/s: `still` where it has no flow, and from `base` up by
+// `perRootSlope` times the square root of its surface's slope.
+const FLOW_SPEED = { base: 1.5, perRootSlope: 30 };
 
 // Mesh data for one decoded tile, without three.js, so it can be tested. Vertices sit on cell
 // centers every `step` cells. The last row and column come from the east and south neighbours
@@ -84,7 +89,8 @@ function kindOf(tile, k) {
 // One kind of water (WATER_KINDS), each drawn as its own mesh so each can look different: a sheet
 // at the water surface over the cells holding that kind. The sheet runs on half a cell into the
 // dry ground beside it, at the water's level there, so the ground itself cuts the shoreline. Null
-// when the tile has none.
+// when the tile has none. Fresh water's vertices also get `flows`: its velocity (x, z, in ft/s) and
+// how steeply it falls (0-1, from the tile's flowSlope), for rushing water (waterMaterial.js).
 export function waterMesh(tile, neighbours, origin, kind = "fresh") {
   const grid = sampler(tile, neighbours);
   const side = tile.cells + 1;
@@ -124,7 +130,45 @@ export function waterMesh(tile, neighbours, origin, kind = "fresh") {
   }
   const wet = (v) => !Number.isNaN(level[v]);
   const indices = gridIndices(side, (v0, v1, v2) => usable[v0] && usable[v1] && usable[v2] && (wet(v0) || wet(v1) || wet(v2)));
-  return indices.length ? { positions, indices } : null;
+  if (!indices.length) return null;
+  return kind === "fresh" ? { positions, indices, flows: waterFlows(grid, side, level) } : { positions, indices };
+}
+
+// Each vertex's flow, as [vx, vz, steepness]. A vertex without a flow of its own (still water, or
+// dry ground at the shore) takes the mean of the ones around it.
+function waterFlows(grid, side, level) {
+  const flows = new Float32Array(side * side * 3);
+  const has = new Uint8Array(side * side);
+  for (let b = 0; b < side; b++) {
+    for (let a = 0; a < side; a++) {
+      const { t, k } = grid(a, b);
+      const v = b * side + a;
+      const dir = !Number.isNaN(level[v]) && t.layers.flowDir ? decodeFlowDir(t.layers.flowDir[k]) : null;
+      if (!dir) continue;
+      const slope = decodeFlowSlope(t.layers.flowSlope[k]);
+      const speed = FLOW_SPEED.base + FLOW_SPEED.perRootSlope * Math.sqrt(slope);
+      flows.set([dir[0] * speed, dir[1] * speed, Math.sqrt(slope)], v * 3);
+      has[v] = 1;
+    }
+  }
+  for (let b = 0; b < side; b++) {
+    for (let a = 0; a < side; a++) {
+      const v = b * side + a;
+      if (has[v]) continue;
+      const sum = [0, 0, 0];
+      let count = 0;
+      for (let db = -1; db <= 1; db++) {
+        for (let da = -1; da <= 1; da++) {
+          const [na, nb] = [a + da, b + db];
+          if (na < 0 || nb < 0 || na >= side || nb >= side || !has[nb * side + na]) continue;
+          for (let c = 0; c < 3; c++) sum[c] += flows[(nb * side + na) * 3 + c];
+          count++;
+        }
+      }
+      if (count) flows.set(sum.map((s) => s / count), v * 3);
+    }
+  }
+  return flows;
 }
 
 function position(tile, i, j, origin) {
