@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { blocks } from "../world/objects.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "./treeMeshes.js";
 
@@ -24,7 +25,7 @@ const WALK_FT = 7.5;
 const BACK_FT = 13.5; // backing up at a run
 const SWIM_FT = 14.2;
 const SPRINT = 2;
-const TURN = 2.6; // radians per second
+const TURN = TURN_RATE; // radians per second, as the turning clips step round at
 const JUMP_FT = 16; // upward speed at takeoff, per second
 const GRAVITY = 48;
 const MAX_CLIMB = 1.2; // rise over run
@@ -58,7 +59,7 @@ const TWIST = [
   ["neck_01", 0.1],
   ["head", 0.1],
 ];
-const TURN_LEAD = 0.35; // how far the chest and head lead a turn on the spot
+const TURN_LEAD = 0.12; // how far the chest and head lead a turn on the spot
 const FADE_S = 0.2;
 const AIRBORNE_S = 0.15; // off the ground this long, without jumping, is falling
 const ROLL_FT = 30; // landing faster than this, or moving after a long fall, rolls
@@ -241,6 +242,7 @@ export class Walker {
     const ease = Math.min(1, dt * 10);
     this.facing += (facing - this.facing) * ease;
     this.twist += (twist - this.twist) * ease;
+    this.untwistChest();
     this.mixer.update(dt);
     if (!this.clips) return;
 
@@ -256,16 +258,30 @@ export class Walker {
       const clip = (GAITS[gait] ?? GAITS.run)[way];
       const ground = (this.clips.get(clip)?.userData.speed ?? speed) * this.model.userData.scale;
       this.play(clip, Math.min(STRETCH[1], Math.max(STRETCH[0], speed / ground)));
-    } else this.play(still && this.turning ? "Turn_Loop" : "Idle_Loop");
+    } else if (still && this.turning) this.play(this.turning > 0 ? "Turn_Left_Loop" : "Turn_Right_Loop");
+    else this.play("Idle_Loop");
     this.twistChest();
   }
 
   // Twists the chest and head on top of whatever the clip has them doing.
   twistChest() {
     if (Math.abs(this.twist) < 0.01) return;
-    this.bones ??= new Map(this.model.skeleton.bones.map((b) => [b.name, b]));
+    this.bonesByName();
     const turn = new THREE.Quaternion();
     for (const [name, share] of TWIST) this.bones.get(name)?.quaternion.multiply(turn.setFromAxisAngle(UP, this.twist * share));
+  }
+
+  // Puts the twisted bones back as they rest, before the clip poses them. A clip leaves alone the
+  // bones it has no track for, and they'd otherwise keep every frame's twist.
+  untwistChest() {
+    this.bonesByName();
+    for (const [name] of TWIST) this.bones.get(name)?.quaternion.copy(this.restTurns.get(name));
+  }
+
+  bonesByName() {
+    if (this.bones) return;
+    this.bones = new Map(this.model.skeleton.bones.map((b) => [b.name, b]));
+    this.restTurns = new Map(TWIST.filter(([name]) => this.bones.has(name)).map(([name]) => [name, this.bones.get(name).quaternion.clone()]));
   }
 
   // Fades to a clip, or sets the playing one's speed. One-shot clips hold their last frame.

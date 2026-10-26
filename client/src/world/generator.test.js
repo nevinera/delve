@@ -105,15 +105,17 @@ describe("generator", () => {
   });
 
   it("finds waterfalls where a river's surface drops sharply, one per drop", () => {
-    // A river falling 1ft per 16ft step, then 20ft over two steps, then gently again.
-    const surface = [50, 49, 48, 38, 28, 27, 26];
+    // A river falling 1ft per 16ft step, then 20ft in one, then gently again.
+    const surface = [50, 49, 48, 28, 27, 26, 25];
     const river = { line: makePolyline([[0, 0], [96, 0]]), surface, width: 20 };
     const falls = fallsOf(river);
     expect(falls).toHaveLength(1);
     expect(falls[0].top).toEqual([32, 48, 0]);
-    expect(falls[0].bottom).toEqual([64, 28, 0]);
+    expect(falls[0].bottom).toEqual([48, 28, 0]);
     expect(falls[0].depth).toBeGreaterThan(3);
     expect(fallsOf({ ...river, surface: [50, 49, 48, 47, 46, 45, 44] })).toEqual([]);
+    // A drop as steep as rapids, 7ft per 16ft step, is no waterfall.
+    expect(fallsOf({ ...river, surface: [50, 43, 36, 29, 22, 15, 8] })).toEqual([]);
   });
 
   it("floods a kept pool flat at its level, below the ground around it", () => {

@@ -93,10 +93,11 @@ export function riverReachFt(width) {
 const STEEP = 0.7; // rise over run that turns into rock
 const FLOW_PROBE_FT = 16; // how far up and down a river its flow is judged over
 // Waterfalls: where a river's surface drops at least `minDropFt` from one PROFILE_STEP to the
-// next, carrying on while each step still drops `keepDropFt`. A plunge pool `widths` river widths
+// next, carrying on while each step still drops `keepDropFt`, and falls at least `minSteep` times
+// as far as it runs (steeper than that is a fall; gentler, rapids). A plunge pool `widths` river widths
 // across (at least minPoolFt) is cut below each, deeper for taller falls, and the water churns
 // there as if it fell `churnSlope`.
-const FALLS = { minDropFt: 6, keepDropFt: 3, widths: 1.2, minPoolFt: 16, depthFt: [3, 14], depthPerDrop: 0.25, churnSlope: 0.3 };
+const FALLS = { minDropFt: 6, keepDropFt: 3, minSteep: 1, widths: 1.2, minPoolFt: 16, depthFt: [3, 14], depthPerDrop: 0.25, churnSlope: 0.3 };
 const PROFILE_STEP = 16;
 
 const smoothstep = (a, b, x) => {
@@ -500,6 +501,8 @@ export function fallsOf(r) {
     const at = (k) => pointAt(r.line, Math.min(r.line.length, k * PROFILE_STEP));
     const [[tx, tz], [bx, bz]] = [at(i), at(j)];
     const drop = s[i] - s[j];
+    i = j - 1;
+    if (drop < FALLS.minSteep * Math.hypot(bx - tx, bz - tz)) continue;
     falls.push({
       top: [tx, s[i], tz],
       bottom: [bx, s[j], bz],
@@ -507,7 +510,6 @@ export function fallsOf(r) {
       pool: Math.max(FALLS.minPoolFt, r.width * FALLS.widths) / 2,
       depth: clamp(drop * FALLS.depthPerDrop, ...FALLS.depthFt),
     });
-    i = j - 1;
   }
   return falls;
 }

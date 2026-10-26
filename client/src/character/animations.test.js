@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { characterClips } from "./animations.js";
 import { characterMesh } from "./characterMesh.js";
+import { TURN_RATE } from "./posed.js";
 import { resolveRecipe } from "./recipe.js";
 
 const read = (file) => JSON.parse(fs.readFileSync(new URL(file, import.meta.url)));
@@ -80,6 +81,24 @@ describe("characterClips", () => {
     const flying = posed("Run_Fwd_Loop", 0.36 * cycle);
     expect(flying("foot_l").y).toBeGreaterThan(0.4);
     expect(flying("foot_r").y).toBeGreaterThan(0.4);
+  });
+
+  it("turns on the spot with the planted foot held as the body turns over it", () => {
+    const cycle = 0.7;
+    // Through the left foot's time planted, it turns back against a left turn as fast as the
+    // body turns, so it stays put on the ground.
+    const angle = (t) => {
+      const foot = posed("Turn_Left_Loop", t)("foot_l");
+      return Math.atan2(foot.x, foot.z);
+    };
+    expect((angle(0.3 * cycle) - angle(0.2 * cycle)) / (0.1 * cycle)).toBeCloseTo(-TURN_RATE, 0);
+    // While it swings round ahead, it's off the ground.
+    expect(posed("Turn_Left_Loop", 0.75 * cycle)("foot_l").y).toBeGreaterThan(0.4);
+    const right = (t) => {
+      const foot = posed("Turn_Right_Loop", t)("foot_l");
+      return Math.atan2(foot.x, foot.z);
+    };
+    expect((right(0.3 * cycle) - right(0.2 * cycle)) / (0.1 * cycle)).toBeCloseTo(TURN_RATE, 0);
   });
 
   it("strafes with the feet clear of each other", () => {

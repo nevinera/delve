@@ -5,7 +5,8 @@ import { waterTime } from "./waterMaterial.js";
 // Waterfalls (the generator's tile.falls): a curtain of water arcing from the lip to where it lands,
 // streaming down; churning foam on the water where it lands; and mist rising off it.
 
-const CURTAIN = { segments: 14, spread: 1.15, narrow: 0.9, liftFt: 1, speedFtS: 26, streakFt: [5, 34] };
+// The curtain bulges out from the lip `bulge` of the way to where it lands.
+const CURTAIN = { bulge: 0.2, segments: 14, spread: 1.15, narrow: 0.9, liftFt: 1, speedFtS: 26, streakFt: [5, 34] };
 const FOAM = { reach: 1.4, liftFt: 0.4, segments: 24, rings: 6 };
 const MIST = { puffs: 14, sizeFt: 30, riseFt: [12, 45], cycleS: 7 };
 
@@ -20,7 +21,11 @@ export function waterfallMeshes(falls, origin, renderer) {
     const [top, bottom] = [at(fall.top), at(fall.bottom)];
     const mist = new THREE.Points(mistGeometry(fall, bottom), materials.mist);
     mist.frustumCulled = false;
-    return [new THREE.Mesh(curtainGeometry(fall, top, bottom), materials.curtain), new THREE.Mesh(foamGeometry(fall, bottom), materials.foam), mist];
+    const meshes = [new THREE.Mesh(curtainGeometry(fall, top, bottom), materials.curtain), new THREE.Mesh(foamGeometry(fall, bottom), materials.foam), mist];
+    // Drawn after the water, which is see-through too, so the water's surface hides only what's
+    // really under it.
+    for (const mesh of meshes) mesh.renderOrder = 1;
+    return meshes;
   });
 }
 
@@ -31,7 +36,7 @@ function curtainGeometry(fall, top, bottom) {
   if (ahead.lengthSq() < 1e-6) ahead.set(1, 0, 0);
   const side = new THREE.Vector3(-ahead.z, 0, ahead.x).normalize();
   // Out over the drop at the lip's height, then down: a quadratic curve.
-  const control = new THREE.Vector3().lerpVectors(top, bottom, 0.6).setY(top.y);
+  const control = new THREE.Vector3().lerpVectors(top, bottom, CURTAIN.bulge).setY(top.y);
   const curve = new THREE.QuadraticBezierCurve3(top.clone().setY(top.y + CURTAIN.liftFt), control, bottom);
   const points = curve.getSpacedPoints(CURTAIN.segments);
   const positions = [];

@@ -16,6 +16,8 @@ import { HELD } from "./weapons.js";
 //   hand's item `back` feet further down. { wrist } puts the wrist there, the hand straight on
 //   the forearm. `elbow` is the way the elbow points.
 // - feet: where the ankles go, the legs bending to reach them and the feet kept flat.
+// - feetYaw: how far each foot (and its knee) is turned about the vertical, toward the left, in
+//   radians; straight ahead without.
 // Places are in feet for a 6ft body, from the ground beneath the character's middle, facing +z.
 
 // Sitting on the ground: knees up, forearms resting on them.
@@ -108,9 +110,14 @@ const LOOSED = { ...ARCHER, bones: SIDE_ON, reach: { hand_l: BOW_OUT, hand_r: { 
 // hold the ground. With a foot planted less than half the time there's a moment in the air between
 // steps, as long as the stride's speed and planting allow, and the body rises through it by as
 // much as a jump that long would. The arms swing against the legs, the hips and shoulders turn
-// with them, and the body leans into the going. Sizes are feet for a 6ft body.
-function gait({ speed, cycle, planted, lift, heading = 0, bob, low = 0, lean, swing, elbow, width = 0.25 }) {
+// with them (by `twist`), and the body leans into the going. Sizes are feet for a 6ft body.
+//
+// A gait can turn the body too, at `turn` radians per second toward the left. Then each planted
+// foot turns back against the body as the body turns over it, holding its spot on the ground,
+// and each lifted foot swings round ahead to catch up.
+function gait({ speed, cycle, planted, lift, heading = 0, bob, low = 0, lean, swing, elbow, width = 0.25, twist = 1, turn: turnRate = 0 }) {
   const reach = speed * planted * cycle;
+  const sweep = turnRate * planted * cycle;
   const way = [Math.sin(heading), Math.cos(heading)];
   const airborne = Math.max(0, (0.5 - planted) * cycle);
   const rise = (32 * airborne * airborne) / 8;
@@ -118,20 +125,26 @@ function gait({ speed, cycle, planted, lift, heading = 0, bob, low = 0, lean, sw
   const at = (t) => {
     const p = (t / cycle) % 1;
     const feet = {};
+    const feetYaw = {};
     for (const [foot, side, offset] of [
       ["foot_l", 1, 0],
       ["foot_r", -1, 0.5],
     ]) {
       const q = (p + offset) % 1;
-      let along;
+      // How far through its stride the foot is, from -0.5 to 0.5: back while planted, then
+      // forward while it swings.
+      let stride;
       let up = 0;
-      if (q < planted) along = reach * (0.5 - q / planted);
+      if (q < planted) stride = 0.5 - q / planted;
       else {
         const u = (q - planted) / (1 - planted);
-        along = reach * (u * u * (3 - 2 * u) - 0.5);
+        stride = u * u * (3 - 2 * u) - 0.5;
         up = lift * Math.sin(Math.PI * u);
       }
-      feet[foot] = [side * width + way[0] * along, 0.32 + up, way[1] * along];
+      const [x, z] = [side * width + way[0] * reach * stride, way[1] * reach * stride];
+      const yaw = sweep * stride;
+      feet[foot] = [x * Math.cos(yaw) + z * Math.sin(yaw), 0.32 + up, z * Math.cos(yaw) - x * Math.sin(yaw)];
+      if (sweep) feetYaw[foot] = yaw;
     }
     // Through each step: down onto the planted foot, then up through the air or over the stance.
     const h = (p % 0.5) / 0.5;
@@ -144,10 +157,11 @@ function gait({ speed, cycle, planted, lift, heading = 0, bob, low = 0, lean, sw
     return {
       pelvis: [0, low + dy, 0],
       feet,
+      feetYaw,
       bones: {
-        pelvis: [0, -0.15 * turn, 0],
+        pelvis: [0, -0.15 * twist * turn, 0],
         spine_01: [lean * forward, 0, -lean * Math.sin(heading) * 0.5],
-        spine_02: [0, 0.25 * turn, 0],
+        spine_02: [0, 0.25 * twist * turn, 0],
         upperarm_l: [swing * turn, 0, 0.12],
         upperarm_r: [-swing * turn, 0, -0.12],
         lowerarm_l: [elbow, 0, 0],
@@ -161,6 +175,10 @@ const RUN = { speed: 21, cycle: 0.66, planted: 0.22, lift: 0.75, bob: 0.12, low:
 const WALK = { speed: 7.5, cycle: 1.1, planted: 0.6, lift: 0.25, bob: 0.06, low: -0.03, lean: 0.03, swing: 0.3, elbow: -0.35, width: 0.25 };
 // Strafing runs half turned toward the side, the feet a little further apart so they pass.
 const STRAFE = Math.PI / 4;
+// Stepping round on the spot, at the walker's turning speed (radians per second), without the
+// hips and shoulders swinging.
+export const TURN_RATE = 2.6;
+const TURN = { speed: 0, cycle: 0.7, planted: 0.5, lift: 0.28, bob: 0.03, lean: 0, swing: 0.08, elbow: -0.3, width: 0.3, twist: 0 };
 
 export const POSED = {
   Run_Fwd_Loop: gait(RUN),
@@ -170,8 +188,9 @@ export const POSED = {
   Walk_Left_Loop: gait({ ...WALK, heading: STRAFE, width: 0.3 }),
   Walk_Right_Loop: gait({ ...WALK, heading: -STRAFE, width: 0.3 }),
   Walk_Back_Loop: gait({ ...WALK, heading: Math.PI, lean: -0.03 }),
-  // Stepping on the spot, for turning where it stands.
-  Turn_Loop: gait({ speed: 0, cycle: 0.7, planted: 0.5, lift: 0.28, bob: 0.03, lean: 0, swing: 0.08, elbow: -0.3 }),
+  // Stepping round on the spot, for turning where it stands.
+  Turn_Left_Loop: gait({ ...TURN, turn: TURN_RATE }),
+  Turn_Right_Loop: gait({ ...TURN, turn: -TURN_RATE }),
   Sit_Ground_Enter: [
     [0, STANDING],
     [0.45, CROUCHED],
@@ -240,7 +259,11 @@ function blend(from, to, u) {
   }
   const feet = {};
   for (const foot of Object.keys(to.feet ?? {})) feet[foot] = lerp(from.feet?.[foot] ?? to.feet[foot], to.feet[foot]);
-  return { pelvis: lerp(from.pelvis ?? [0, 0, 0], to.pelvis ?? [0, 0, 0]), bones, reach, feet };
+  const feetYaw = {};
+  for (const foot of new Set([...Object.keys(from.feetYaw ?? {}), ...Object.keys(to.feetYaw ?? {})])) {
+    feetYaw[foot] = lerp([from.feetYaw?.[foot] ?? 0], [to.feetYaw?.[foot] ?? 0])[0];
+  }
+  return { pelvis: lerp(from.pelvis ?? [0, 0, 0], to.pelvis ?? [0, 0, 0]), bones, reach, feet, feetYaw };
 }
 
 // A keyframed clip's pose at a time, eased from the keyframe before it to the one after.
@@ -327,7 +350,8 @@ function poseRig(rig, pose, s) {
   for (const foot of ["foot_l", "foot_r"]) {
     if (!pose.feet[foot]) continue;
     const side = foot.slice(-1);
-    reachFor(LEG(side), v3(pose.feet[foot]).multiplyScalar(s), [side === "l" ? 0.15 : -0.15, 0, 1], new THREE.Quaternion());
+    const yaw = new THREE.Quaternion().setFromAxisAngle(UP, pose.feetYaw?.[foot] ?? 0);
+    reachFor(LEG(side), v3(pose.feet[foot]).multiplyScalar(s), v3([side === "l" ? 0.15 : -0.15, 0, 1]).applyQuaternion(yaw).toArray(), yaw);
   }
 }
 
