@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { blocks } from "../world/objects.js";
+import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { savedLook } from "../character/recipe.js";
 import { trunkRadius } from "./treeMeshes.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
@@ -35,7 +37,7 @@ export class Walker {
     this.onStop = onStop;
     this.active = false;
     this.held = new Set();
-    this.model = person();
+    this.model = null; // the character, built from the character builder's look on each walk
     this.ray = new THREE.Raycaster();
     this.listeners = {
       keydown: (e) => this.onKey(e, true),
@@ -62,6 +64,8 @@ export class Walker {
     this.saved = { near: camera.near };
     camera.near = CAMERA.near;
     camera.updateProjectionMatrix();
+    if (this.model) disposeCharacter(this.model);
+    this.model = characterMesh(savedLook());
     this.view.scene.add(this.model);
     for (const [name, fn] of Object.entries(this.listeners)) window.addEventListener(name, fn);
     for (const [name, fn] of Object.entries(this.pointer)) this.view.canvas.addEventListener(name, fn, { capture: true });
@@ -313,18 +317,3 @@ export class Walker {
 }
 
 // A plain stand-in person, 6 ft tall, with a lighter front so you can tell which way it faces.
-function person() {
-  const group = new THREE.Group();
-  const cloth = new THREE.MeshLambertMaterial({ color: 0x7a3b2e });
-  const skin = new THREE.MeshLambertMaterial({ color: 0xe0b48c });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.9, 2.6, 4, 10), cloth);
-  body.position.y = 2.2;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.75, 12, 10), skin);
-  head.position.y = 5.1;
-  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.6), skin);
-  nose.position.set(0, 5.0, 0.75);
-  const pack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.6), new THREE.MeshLambertMaterial({ color: 0x4a3a28 }));
-  pack.position.set(0, 3.2, -0.9);
-  group.add(body, head, nose, pack);
-  return group;
-}
