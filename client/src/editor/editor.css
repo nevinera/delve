@@ -99,23 +99,33 @@
   display: none;
 }
 
-/* The steps, as an accordion: only the open step shows its body. */
-.editor-steps {
+/* The steps: a button for each at the top, then a divider, then only the open step's body. */
+.editor-step-tabs {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
 .editor .editor-step-head {
-  width: 100%;
-  text-align: left;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 
-.editor .editor-step.open > .editor-step-head {
+.editor .editor-step-head.open {
   background: #5a4a1a;
   border-color: #f0c850;
+}
+
+.editor-divider {
+  width: 100%;
+  border: none;
+  border-top: 1px solid #555;
+  margin: 4px 0;
+}
+
+.editor-steps {
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-step-body {
@@ -125,7 +135,7 @@
   padding: 6px 0 10px;
 }
 
-.editor-step:not(.open) > .editor-step-body,
+.editor-step:not(.open),
 .editor-step-body[hidden],
 .editor-empty[hidden] {
   display: none;

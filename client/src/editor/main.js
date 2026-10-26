@@ -41,6 +41,7 @@ const editor = new Editor(World.empty(), {
   newZone: $("newZone"),
   zoneEdit: $("zoneEdit"),
   steps: [...document.querySelectorAll(".editor-step")],
+  stepTabs: [...document.querySelectorAll(".editor-step-tabs button")],
   zoneName: $("zoneName"),
   regionInfo: $("regionInfo"),
   drawRegion: $("drawRegion"),

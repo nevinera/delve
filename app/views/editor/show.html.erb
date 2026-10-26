@@ -48,9 +48,17 @@
       <h2>Continent</h2>
       <select id="continent"></select>
     </section>
+    <nav class="editor-step-tabs">
+      <button type="button" class="editor-step-head" data-step="zones">zones</button>
+      <button type="button" class="editor-step-head" data-step="heights">heights</button>
+      <button type="button" class="editor-step-head" data-step="water">water</button>
+      <button type="button" class="editor-step-head" data-step="biomes">biomes</button>
+      <button type="button" class="editor-step-head" data-step="features">features</button>
+      <button type="button" class="editor-step-head" data-step="tiles">tiles</button>
+    </nav>
+    <hr class="editor-divider">
     <div class="editor-steps">
       <section class="editor-step" data-step="zones">
-        <button type="button" class="editor-step-head">zones</button>
         <div class="editor-step-body">
           <ul id="zoneList" class="editor-zones"></ul>
           <button id="newZone" type="button">new zone</button>
@@ -66,7 +74,6 @@
         </div>
       </section>
       <section class="editor-step" data-step="heights">
-        <button type="button" class="editor-step-head">heights</button>
         <div class="editor-step-body">
           <div class="editor-tools" data-tools="heights"></div>
           <div id="heightPalette" class="editor-palette">
@@ -81,7 +88,6 @@
         </div>
       </section>
       <section class="editor-step" data-step="water">
-        <button type="button" class="editor-step-head">water</button>
         <div class="editor-step-body">
           <div class="editor-tools" data-tools="water"></div>
           <p class="editor-empty">Water runs down from each source, filling hollows until it spills or reaches the sea.</p>
@@ -90,7 +96,6 @@
         </div>
       </section>
       <section class="editor-step" data-step="biomes">
-        <button type="button" class="editor-step-head">biomes</button>
         <div class="editor-step-body">
           <div class="editor-tools" data-tools="biomes"></div>
           <div id="biomePalette" class="editor-palette">
@@ -103,7 +108,6 @@
         </div>
       </section>
       <section class="editor-step" data-step="features">
-        <button type="button" class="editor-step-head">features</button>
         <div class="editor-step-body">
           <div class="editor-tools" data-tools="features"></div>
           <label class="editor-check"><input type="checkbox" data-option="heightmap"><span>display height map</span></label>
@@ -112,7 +116,6 @@
         </div>
       </section>
       <section class="editor-step" data-step="tiles">
-        <button type="button" class="editor-step-head">tiles</button>
         <div class="editor-step-body">
           <p id="tilesInfo"></p>
           <button id="generate" type="button">generate</button>

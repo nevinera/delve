@@ -585,8 +585,8 @@ export class Editor {
       const tiles = [...this.zoneTiles()].map((k) => k.split(",").map(Number));
       if (window.confirm(`Regenerate all ${tiles.length} tiles? It replaces every generated tile, edits included.`)) this.generate(regenerateAll, tiles);
     });
+    for (const tab of this.el.stepTabs) tab.addEventListener("click", () => this.setStep(tab.dataset.step));
     for (const section of this.el.steps) {
-      section.querySelector(".editor-step-head").addEventListener("click", () => this.setStep(section.dataset.step));
       for (const input of section.querySelectorAll("[data-option]")) {
         input.addEventListener("change", () => {
           this.map.render();
@@ -684,7 +684,7 @@ export class Editor {
     }
     if (!this.zones.length) zoneList.innerHTML = '<li class="editor-empty">no zones yet</li>';
 
-    for (const section of this.el.steps) section.classList.toggle("open", section.dataset.step === this.step);
+    for (const el of [...this.el.steps, ...this.el.stepTabs]) el.classList.toggle("open", el.dataset.step === this.step);
     const zone = this.activeZone;
     this.el.zoneEdit.hidden = !zone;
     if (zone) {
