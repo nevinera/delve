@@ -70,6 +70,9 @@ describe("waterMesh", () => {
     const water = waterMesh(river, {}, [0, 0]);
     expect(heightAt(water, 5, 1, 1)).toBe(7);
     expect(heightAt(water, 5, 2, 1)).toBe(4.5);
+    // How deep it is, for fading the shore: 2ft in the river, under the ground at the bank.
+    expect(water.depths[1 * 5 + 1]).toBe(2);
+    expect(water.depths[1 * 5 + 2]).toBe(-0.5);
   });
 
   it("goes by the water kind layer where a tile has one", () => {

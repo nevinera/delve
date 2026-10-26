@@ -546,11 +546,12 @@ function empty(group) {
   }
 }
 
-function geometry({ positions, colors, flows, indices, skirt }) {
+function geometry({ positions, colors, flows, depths, indices, skirt }) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   if (colors) g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   if (flows) g.setAttribute("flow", new THREE.BufferAttribute(flows, 3));
+  if (depths) g.setAttribute("depth", new THREE.BufferAttribute(depths, 1));
   g.setIndex(new THREE.BufferAttribute(indices, 1));
   g.computeVertexNormals();
   // A skirt is lit like the ground at its top, so it doesn't show as a dark line.

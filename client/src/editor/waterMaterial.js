@@ -14,6 +14,9 @@ const CYCLE_S = 1.6; // how long each phase slides before it restarts
 const DRIFT = [0.35, 0.2]; // ft/s the ripples wander on still water, so lakes shimmer
 // Steepness (0-1, the root of the surface's slope) where foam starts and where it covers the water.
 const FOAM = [0.15, 0.45];
+// Water fades in over this depth at its shore (its `depth` attribute), so the waterline is soft
+// rather than showing each kink where the water meets the ground.
+const SHORE_FADE_FT = 1;
 
 // The clock every moving water material shares (waterfalls.js too), in seconds.
 export const waterTime = { value: 0 };
@@ -31,8 +34,8 @@ export function waterMaterial(renderer, { color, opacity }) {
     shader.uniforms.waterNoise = { value: noiseTexture(renderer) };
     shader.uniforms.waterTime = time;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute vec3 flow;\nvarying vec3 vFlow;\nvarying vec2 vWaterXZ;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFlow = flow;\nvWaterXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
+      .replace("#include <common>", "#include <common>\nattribute vec3 flow;\nattribute float depth;\nvarying vec3 vFlow;\nvarying vec2 vWaterXZ;\nvarying float vDepth;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFlow = flow;\nvDepth = depth;\nvWaterXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
     const f = (n) => n.toFixed(4);
     shader.fragmentShader = shader.fragmentShader
       .replace(
@@ -42,6 +45,7 @@ export function waterMaterial(renderer, { color, opacity }) {
         uniform float waterTime;
         varying vec3 vFlow;
         varying vec2 vWaterXZ;
+        varying float vDepth;
         // The ripple layers at xz, slid back along the flow by \`slide\` seconds' worth.
         vec2 ripples(vec2 xz, float slide, float seed) {
           vec2 at = xz - vFlow.xy * slide + vec2(${f(DRIFT[0])}, ${f(DRIFT[1])}) * waterTime + seed;
@@ -62,7 +66,8 @@ export function waterMaterial(renderer, { color, opacity }) {
         // Whitecaps on the highest ripples at first, and streaks over about half of a cascade.
         float foam = foamy * smoothstep(0.6 - 0.12 * foamy, 0.66 - 0.12 * foamy, 0.6 * r.x + 0.4 * r.y);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.96, 1.0), foam);
-        diffuseColor.a = mix(diffuseColor.a, 1.0, foam);`,
+        diffuseColor.a = mix(diffuseColor.a, 1.0, foam);
+        diffuseColor.a *= smoothstep(0.0, ${f(SHORE_FADE_FT)}, vDepth);`,
       );
   };
   return material;

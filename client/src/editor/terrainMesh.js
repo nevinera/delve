@@ -136,7 +136,17 @@ export function waterMesh(tile, neighbours, origin, kind = "fresh") {
   const wet = (v) => !Number.isNaN(level[v]);
   const indices = gridIndices(side, (v0, v1, v2) => usable[v0] && usable[v1] && usable[v2] && (wet(v0) || wet(v1) || wet(v2)));
   if (!indices.length) return null;
-  return kind === "fresh" ? { positions, indices, flows: waterFlows(grid, side, level) } : { positions, indices };
+  if (kind !== "fresh") return { positions, indices };
+  // How deep the water is over the ground at each vertex (below zero where it's under the bank),
+  // so its shore can fade out.
+  const depths = new Float32Array(side * side);
+  for (let b = 0; b < side; b++) {
+    for (let a = 0; a < side; a++) {
+      const { t, k } = grid(a, b);
+      depths[b * side + a] = positions[(b * side + a) * 3 + 1] - t.layers.height[k];
+    }
+  }
+  return { positions, indices, flows: waterFlows(grid, side, level), depths };
 }
 
 // Each vertex's flow, as [vx, vz, steepness]. A vertex without a flow of its own (still water, or
