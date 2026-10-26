@@ -19,6 +19,7 @@
 import polygonClipping from "polygon-clipping";
 import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT, WATER_KINDS, gradeCap } from "./constants.js";
+import { prepareCliffs } from "./cliffs.js";
 import { prepareHeights } from "./heightField.js";
 import { facets, fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
@@ -155,8 +156,8 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
-// The continent as { zones, pins, paths, watercourses }: every zone as stored ({ region }), and
-// the sketch's pins, road paths and watercourses ({ rivers, pools }, editor/waterflow.js), in
+// The continent as { zones, pins, cliffs, paths, watercourses }: every zone as stored ({ region }),
+// and the sketch's pins, cliffs, road paths and watercourses ({ rivers, pools }, editor/waterflow.js), in
 // continent tile units. seedKey (the continent's key) seeds the noise.
 export function prepareWorld(continent, seedKey) {
   const ctx = prepareShape(continent, seedKey);
@@ -177,7 +178,11 @@ export function prepareWorld(continent, seedKey) {
     seed: ctx.seed,
   });
 
-  ctx.heightAt = withPeaks(ctx.heightAt, summits(heightPins.map((p) => toFt(p.at).concat(p.height)), ctx.biomes));
+  const peaks = summits(heightPins.map((p) => toFt(p.at).concat(p.height)), ctx.biomes);
+  // Peaks are cut from the ground without its cliffs, which then step it down as before.
+  const step = ctx.heightAt.step;
+  ctx.smoothAt = withPeaks(ctx.smoothAt, peaks);
+  ctx.heightAt = step ? (x, z) => ctx.smoothAt(x, z) + step(x, z) : ctx.smoothAt;
 
   // Rivers always descend: the surface follows the lowest ground seen so far from the source.
   ctx.rivers = rivers.map((s) => {
@@ -233,11 +238,13 @@ export function seaAt(ctx, x, z) {
   return inland <= 0 || (coastDist < COAST.maxFt && coast(ctx, ctx.heightAt(x, z), x, z, coastDist) < 0);
 }
 
-// The land's shape from the zones' regions and height pins alone, with no biomes: the zoned area,
-// and the broad shape through the pins (heightAt). prepareWorld builds on it, and the editor's
-// heights map draws it with shapeHeight. continent: as for prepareWorld.
-export function prepareShape({ zones, pins }, seedKey) {
+// The land's shape from the zones' regions, height pins and cliffs alone, with no biomes: the
+// zoned area, and the broad shape through the pins and cliffs (heightAt; smoothAt leaves the
+// cliffs out). prepareWorld builds on it, and the editor's heights map draws it with shapeHeight.
+// continent: as for prepareWorld.
+export function prepareShape({ zones, pins, cliffs = [] }, seedKey) {
   const zoned = zones.filter((z) => z.region?.length);
+  const seed = hashString(seedKey);
 
   // The zoned area: every region together. Its outline is where land meets open ocean.
   const union = zoned.length ? polygonClipping.union(...zoned.map((z) => z.region)) : [];
@@ -249,8 +256,12 @@ export function prepareShape({ zones, pins }, seedKey) {
       return { x, z, height: p.height };
     }),
     BASE.defaultHeight,
+    prepareCliffs(
+      cliffs.map((c) => ({ points: c.points.map(toFt) })),
+      seed,
+    ),
   );
-  return { seed: hashString(seedKey), area, areaEdges: edgesOf(area), rivers: [], heightAt, zoned, heightPins };
+  return { seed, area, areaEdges: edgesOf(area), rivers: [], heightAt, smoothAt: heightAt.smooth, zoned, heightPins };
 }
 
 // The ground from prepareShape: the broad shape, raised by `relief` ft, meeting the sea at the
@@ -438,7 +449,7 @@ function land(ctx, x, z, edges, biomes) {
 
   const { rough } = climate.profile;
   const d = CRAG.probeFt;
-  const steep = Math.hypot(ctx.heightAt(x + d, z) - ctx.heightAt(x - d, z), ctx.heightAt(x, z + d) - ctx.heightAt(x, z - d)) / (2 * d);
+  const steep = Math.hypot(ctx.smoothAt(x + d, z) - ctx.smoothAt(x - d, z), ctx.smoothAt(x, z + d) - ctx.smoothAt(x, z - d)) / (2 * d);
   let h = ctx.heightAt(x, z) + biomeRelief(ctx, x, z, climate.profile);
   const crag = rough * 0.5 + steep * CRAG.perSlope;
   if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;

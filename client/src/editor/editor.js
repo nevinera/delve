@@ -55,7 +55,7 @@ const HINT_PICK_WALK = "click where to start walking · esc cancels";
 // from the zones (shapePreview.js), or the generated tiles.
 const STEPS = {
   zones: { tools: [], kinds: [] },
-  heights: { tools: ["select", "height"], kinds: ["height"], map: "heights" },
+  heights: { tools: ["select", "height", "cliff"], kinds: ["height", "cliff"], map: "heights" },
   water: { tools: ["select", "source"], kinds: ["source"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
   features: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
@@ -245,14 +245,14 @@ export class Editor {
 
   // The continent as the generator takes it (generator.js prepareWorld).
   continentState() {
-    const { pins, paths, watercourses } = this.sketch;
-    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins, paths, watercourses };
+    const { pins, cliffs, paths, watercourses } = this.sketch;
+    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins, cliffs, paths, watercourses };
   }
 
   // The continent as last stored, from the world's files.
   storedState() {
-    const { pins, paths, watercourses } = loadSketch(this.world, this.continent);
-    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, paths, watercourses };
+    const { pins, cliffs, paths, watercourses } = loadSketch(this.world, this.continent);
+    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, cliffs, paths, watercourses };
   }
 
   reload() {
@@ -294,8 +294,8 @@ export class Editor {
   // last worked out. They're kept in the sketch when they arrive, unless something's being dragged,
   // in which case they're kept when the drag ends.
   updateWater() {
-    const { zones, pins } = this.continentState();
-    const land = { zones, pins: pins.filter((p) => p.kind === "height") };
+    const { zones, pins, cliffs } = this.continentState();
+    const land = { zones, pins: pins.filter((p) => p.kind === "height"), cliffs };
     const sources = pins.filter((p) => p.kind === "source").map(({ id, at, width }) => ({ id, at, width }));
     const key = String(hashString(JSON.stringify([land, sources, this.continent])));
     if (key === this.waterKey) return;
@@ -335,10 +335,11 @@ export class Editor {
   // --- roads ---
 
   // Asks for routes for the paths whose route is missing or was worked out for other pins, widths
-  // or land. The land they're routed over is the zones, height and biome pins and watercourses.
+  // or land. The land they're routed over is the zones, height and biome pins, cliffs and
+  // watercourses.
   updateRoads() {
-    const { zones, pins, watercourses } = this.continentState();
-    const land = { zones, pins: pins.filter((p) => p.kind === "height" || p.kind === "biome"), watercourses: { rivers: watercourses.rivers, pools: watercourses.pools } };
+    const { zones, pins, cliffs, watercourses } = this.continentState();
+    const land = { zones, pins: pins.filter((p) => p.kind === "height" || p.kind === "biome"), cliffs, watercourses: { rivers: watercourses.rivers, pools: watercourses.pools } };
     this.roadLand = String(hashString(JSON.stringify([land, this.continent])));
     const jobs = this.sketch.paths.flatMap((path) => {
       const key = this.routeKey(path);
@@ -515,6 +516,7 @@ export class Editor {
     this.step = step;
     this.toolName = STEPS[step].tools[0] ?? "select";
     this.drawing = null;
+    this.features.cliffDrawing = null;
     this.features.select(null);
     this.say();
     this.renderPanel();
@@ -802,6 +804,7 @@ export class Editor {
 
   setTool(name) {
     this.toolName = name;
+    this.features.cliffDrawing = null;
     this.palette.render();
     this.say();
     this.renderPanel();

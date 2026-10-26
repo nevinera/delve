@@ -9,16 +9,16 @@ import { tilesTouched } from "./region.js";
 // it, and a river carves along its whole length, as does a road. Info pins and hubs don't touch
 // the ground yet. Every hit tile brings its neighbours along.
 //
-// Height pins shape one smooth surface across the continent, so a height pin change marks every
-// zoned tile. Biome borders can move anywhere a biome pin's region reaches, and zone edges bend
+// Height pins and cliffs shape one surface across the continent, so a height pin or cliff change
+// marks every zoned tile. Biome borders can move anywhere a biome pin's region reaches, and zone edges bend
 // them, so when there are biome pins, any biome pin or region change does too. Rivers bend biome
 // borders only within RIVER_PULL_FT of themselves, so a changed river marks the tiles that near
 // it.
 
 const key = (tx, tz) => `${tx},${tz}`;
 
-// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, paths,
-// watercourses } with zones as stored ({ region }) and the sketch's pins and watercourses.
+// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, cliffs,
+// paths, watercourses } with zones as stored ({ region }) and the sketch's pins and watercourses.
 export function changedTiles(before, after) {
   const tiles = new Set();
   const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
@@ -29,7 +29,8 @@ export function changedTiles(before, after) {
   const hasBiomes = [...before.pins, ...after.pins].some((p) => p.kind === "biome");
   const regionsMoved = changed(regions(before), regions(after));
   const biomesMoved = hasBiomes && (changed(pinsOf(before, "biome"), pinsOf(after, "biome")) || regionsMoved);
-  if (biomesMoved || changed(pinsOf(before, "height"), pinsOf(after, "height"))) {
+  const cliffs = (c) => (c.cliffs ?? []).map((cliff) => cliff.points);
+  if (biomesMoved || changed(pinsOf(before, "height"), pinsOf(after, "height")) || changed(cliffs(before), cliffs(after))) {
     for (const region of [...regions(before), ...regions(after)]) for (const [tx, tz] of tilesTouched(region)) addAround(tiles, tx, tz, 1);
   }
 

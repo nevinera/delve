@@ -4,8 +4,14 @@
 // each neighbourhood: it can't dip much below the lowest pin around, or rise above the highest.
 // Far from every pin it eases to a default height.
 //
+// Cliffs (cliffs.js) step the ground down along lines, by drops worked out here: the ones that
+// let the surface through the pins bend least, so the cliffs take up the height between pins
+// either side of them. A drop is never less than CLIFF.minDropFt.
+//
 // Points are feet in continent space. Solving happens once per continent; each point is then a sum
 // over the pins.
+
+import { CLIFF } from "./cliffs.js";
 
 const UNIT = 1000; // the spline works in thousands of feet, to keep the solve well conditioned
 const FAR = { start: 3000, end: 8000 }; // ft from the nearest pin over which it eases to the default
@@ -14,24 +20,50 @@ const FAR = { start: 3000, end: 8000 }; // ft from the nearest pin over which it
 // them the spline may go, and `edgeFt` how gently it bends onto a bound.
 const BOUND = { reachFt: 1000, softFt: 15, slackFt: 10, edgeFt: 8 };
 
+// How strongly drops are held near the least drop, and to their neighbours', where the pins
+// don't settle them, as shares of how strongly the pins do.
+const DROP_HOLD = { least: 1e-3, even: 0.1 };
+const SLOPE_PROBE_FT = 1; // how far either way the cliffs' field's slope is measured over
+
 const phi = (r) => (r > 0 ? r * r * Math.log(r) : 0);
 
-// pins: [{ x, z, height }]. Returns heightAt(x, z).
-export function prepareHeights(pins, defaultHeight) {
-  if (!pins.length) return () => defaultHeight;
-  const pts = pins.map((p) => [p.x / UNIT, p.z / UNIT, p.height]);
-  const low = Math.min(...pins.map((p) => p.height));
-  const high = Math.max(...pins.map((p) => p.height));
+// pins: [{ x, z, height }]; cliffs: from prepareCliffs, or null. Returns heightAt(x, z), with
+// heightAt.smooth(x, z), the ground without the cliffs, and when there are cliffs,
+// heightAt.step(x, z), what they add to it, and heightAt.drops, each cliff knot's drop ({ values,
+// least }, `least` saying which were held at the least drop).
+export function prepareHeights(pins, defaultHeight, cliffs = null) {
+  const m = cliffs?.knots.length ?? 0;
+  if (!pins.length) {
+    const flat = () => defaultHeight;
+    if (!m) return Object.assign(flat, { smooth: flat });
+    const values = new Float64Array(m).fill(CLIFF.minDropFt);
+    const step = cliffs.settle(values);
+    return Object.assign((x, z) => defaultHeight + step(x, z), { smooth: flat, step, drops: { values, least: new Uint8Array(m).fill(1) } });
+  }
   // With fewer than three pins, or all in a line, the tilt terms can't be pinned down, so the
   // spline goes without them.
-  const fit = solve(pts, true) ?? solve(pts, false);
+  const tilt = solve(pins.map((p) => [p.x / UNIT, p.z / UNIT, p.height]), true) !== null;
+  let heights = pins.map((p) => p.height);
+  let drops = null;
+  let step = null;
+  if (m) {
+    const terms = pins.map((p) => cliffs.basis(p.x, p.z));
+    drops = fitDrops(pins.map((p) => [p.x / UNIT, p.z / UNIT, p.height]), terms, tilt, cliffs);
+    step = cliffs.settle(drops.values);
+    // What's left for the smooth surface at each pin.
+    heights = pins.map((p, i) => p.height - terms[i].reduce((sum, t, k) => sum + t * drops.values[k], 0));
+  }
+  const pts = pins.map((p, i) => [p.x / UNIT, p.z / UNIT, heights[i]]);
+  const low = Math.min(...heights);
+  const high = Math.max(...heights);
+  const fit = solve(pts, tilt) ?? solve(pts, false);
   // Each pin's share of the soft min and max, measured from the lowest and highest pins so the
   // exponents stay small.
-  const below = pins.map((p) => Math.exp(-(p.height - low) / BOUND.softFt));
-  const above = pins.map((p) => Math.exp((p.height - high) / BOUND.softFt));
+  const below = heights.map((h) => Math.exp(-(h - low) / BOUND.softFt));
+  const above = heights.map((h) => Math.exp((h - high) / BOUND.softFt));
   const reach2 = (BOUND.reachFt / UNIT) ** 2;
 
-  return (x, z) => {
+  const smooth = (x, z) => {
     const u = x / UNIT;
     const v = z / UNIT;
     let h = fit.affine[0] + fit.affine[1] * u + fit.affine[2] * v;
@@ -55,15 +87,109 @@ export function prepareHeights(pins, defaultHeight) {
     const t = smoothstep(FAR.start / UNIT, FAR.end / UNIT, nearest);
     return h + (defaultHeight - h) * t;
   };
+  if (!step) return Object.assign(smooth, { smooth });
+  return Object.assign((x, z) => smooth(x, z) + step(x, z), { smooth, step, drops });
+}
+
+// The cliffs' drops that leave the ground through the pins (pts, [u, v, height]) least steep
+// across each cliff, near it, none less than CLIFF.minDropFt. terms[i][k] is how far knot k's
+// drop moves the ground at pin i, per foot. The ground is the cliffs' field plus the spline
+// through the heights less the field's share, which is the spline through the heights less each
+// drop times the spline through its terms. So its slope across a cliff at a spot is linear in
+// the drops, and the drops minimise its square summed over spots either side of every knot, held a little toward the
+// least drop and each other, which settles knots no pin's near. Any that come out below the
+// least are held there, and the rest worked out again.
+function fitDrops(pts, terms, tilt, { knots, across, basis }) {
+  const n = pts.length;
+  const m = knots.length;
+  const a = system(pts, tilt, m + 1);
+  for (let i = 0; i < n; i++) {
+    for (let k = 0; k < m; k++) a[i][a.length + k] = terms[i][k];
+    a[i][a.length + m] = pts[i][2];
+  }
+  const x = gauss(a, m + 1);
+  if (!x) return { values: new Float64Array(m).fill(CLIFF.minDropFt), least: new Uint8Array(m).fill(1) };
+  const g = Array.from({ length: m }, () => new Float64Array(m));
+  const r = new Float64Array(m);
+  const slope = new Float64Array(m + 1);
+  for (const [sx, sz, nx, nz] of across) {
+    const [u, v] = [sx / UNIT, sz / UNIT];
+    slope.fill(0);
+    for (let i = 0; i < n; i++) {
+      const [du, dv] = [u - pts[i][0], v - pts[i][1]];
+      const r2 = du * du + dv * dv;
+      if (r2 === 0) continue;
+      const k = (Math.log(r2) + 1) * (du * nx + dv * nz); // phi's slope along (nx, nz)
+      for (let j = 0; j <= m; j++) slope[j] += x[i][j] * k;
+    }
+    if (tilt) for (let j = 0; j <= m; j++) slope[j] += x[n + 1][j] * nx + x[n + 2][j] * nz;
+    // The ground's the surface plus the cliffs' own field, whose slope goes the other way.
+    const [ahead, behind] = [basis(sx + nx * SLOPE_PROBE_FT, sz + nz * SLOPE_PROBE_FT), basis(sx - nx * SLOPE_PROBE_FT, sz - nz * SLOPE_PROBE_FT)];
+    for (let j = 0; j < m; j++) slope[j] -= ((ahead[j] - behind[j]) / (2 * SLOPE_PROBE_FT)) * UNIT;
+    for (let k = 0; k < m; k++) {
+      for (let j = 0; j < m; j++) g[k][j] += slope[k] * slope[j];
+      r[k] += slope[k] * slope[m];
+    }
+  }
+  let trace = 0;
+  for (let k = 0; k < m; k++) trace += g[k][k];
+  const hold = Math.max(trace / m, 1e-9);
+  for (let k = 0; k < m; k++) {
+    g[k][k] += hold * DROP_HOLD.least;
+    r[k] += hold * DROP_HOLD.least * CLIFF.minDropFt;
+    const next = k + 1 < m && knots[k + 1].cliff === knots[k].cliff ? k + 1 : -1;
+    if (next < 0) continue;
+    g[k][k] += hold * DROP_HOLD.even;
+    g[next][next] += hold * DROP_HOLD.even;
+    g[k][next] -= hold * DROP_HOLD.even;
+    g[next][k] -= hold * DROP_HOLD.even;
+  }
+
+  const values = new Float64Array(m).fill(CLIFF.minDropFt);
+  const least = new Uint8Array(m);
+  for (let round = 0; round < m; round++) {
+    const free = [...values.keys()].filter((k) => !least[k]);
+    if (!free.length) break;
+    const b = free.map((k) => {
+      const row = new Float64Array(free.length + 1);
+      free.forEach((j, c) => (row[c] = g[k][j]));
+      let rhs = r[k];
+      for (let j = 0; j < m; j++) if (least[j]) rhs -= g[k][j] * CLIFF.minDropFt;
+      row[free.length] = rhs;
+      return row;
+    });
+    const solved = gauss(b);
+    if (!solved) break;
+    let held = false;
+    free.forEach((k, c) => {
+      values[k] = solved[c][0];
+      if (values[k] < CLIFF.minDropFt) {
+        values[k] = CLIFF.minDropFt;
+        least[k] = 1;
+        held = true;
+      }
+    });
+    if (!held) break;
+  }
+  return { values, least };
 }
 
 // Weights and affine terms for the spline through pts ([u, v, height]), or null when the system
 // is singular. With `tilt` off, the affine part is a constant only.
 function solve(pts, tilt) {
   const n = pts.length;
-  const m = tilt ? 3 : 1;
-  const size = n + m;
-  const a = Array.from({ length: size }, () => new Float64Array(size + 1));
+  const a = system(pts, tilt, 1);
+  for (let i = 0; i < n; i++) a[i][a.length] = pts[i][2];
+  const x = gauss(a)?.map((row) => row[0]);
+  if (!x) return null;
+  return { weights: x.slice(0, n), affine: tilt ? x.slice(n) : [x[n], 0, 0] };
+}
+
+// The spline's system for points pts, with room for `columns` right-hand sides, left zero.
+function system(pts, tilt, columns) {
+  const n = pts.length;
+  const size = n + (tilt ? 3 : 1);
+  const a = Array.from({ length: size }, () => new Float64Array(size + columns));
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) a[i][j] = phi(Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]));
     const affine = tilt ? [1, pts[i][0], pts[i][1]] : [1];
@@ -71,16 +197,15 @@ function solve(pts, tilt) {
       a[i][n + k] = value;
       a[n + k][i] = value;
     });
-    a[i][size] = pts[i][2];
   }
-  const x = gauss(a);
-  if (!x) return null;
-  return { weights: x.slice(0, n), affine: tilt ? x.slice(n) : [x[n], 0, 0] };
+  return a;
 }
 
-// Solves an augmented matrix in place by Gaussian elimination with partial pivoting.
-function gauss(a) {
+// Solves an augmented matrix with `columns` right-hand sides in place, by Gaussian elimination
+// with partial pivoting. Returns a row of solutions per unknown, or null when it's singular.
+function gauss(a, columns = 1) {
   const n = a.length;
+  const width = n + columns;
   for (let c = 0; c < n; c++) {
     let pivot = c;
     for (let r = c + 1; r < n; r++) if (Math.abs(a[r][c]) > Math.abs(a[pivot][c])) pivot = r;
@@ -89,14 +214,16 @@ function gauss(a) {
     for (let r = c + 1; r < n; r++) {
       const f = a[r][c] / a[c][c];
       if (f === 0) continue;
-      for (let k = c; k <= n; k++) a[r][k] -= f * a[c][k];
+      for (let k = c; k < width; k++) a[r][k] -= f * a[c][k];
     }
   }
-  const x = new Array(n).fill(0);
+  const x = Array.from({ length: n }, () => new Float64Array(columns));
   for (let r = n - 1; r >= 0; r--) {
-    let sum = a[r][n];
-    for (let k = r + 1; k < n; k++) sum -= a[r][k] * x[k];
-    x[r] = sum / a[r][r];
+    for (let j = 0; j < columns; j++) {
+      let sum = a[r][n + j];
+      for (let k = r + 1; k < n; k++) sum -= a[r][k] * x[k][j];
+      x[r][j] = sum / a[r][r];
+    }
   }
   return x;
 }
