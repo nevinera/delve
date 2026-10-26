@@ -109,6 +109,40 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
   return look;
 }
 
+// A random look, for a passer-by: any body, hair and face, ordinary colors, about half the armor
+// slots filled, and any weapon.
+const SKIN = ["#f3d6bd", "#e0b48c", "#c99166", "#a56d48", "#7c4a30", "#4f2f1f"];
+const HAIR_COLORS = ["#1b1310", "#3a2618", "#5e3c22", "#8a5a30", "#c8a060", "#e3cf98", "#a8401c", "#808080", "#e6e2da"];
+const EYES = ["#3a5a7a", "#5a7a9a", "#4a6a3a", "#6b4a2a", "#3a2a1a", "#6a7a7a"];
+const CLOTH = ["#7a3b2e", "#4a4038", "#2e4a6b", "#3e5a32", "#6b5a3a", "#5a3a6b", "#8a7a5a", "#2a2a2a", "#a08060", "#6b2a2a", "#c8c0a8", "#2a5a5a"];
+const PAINT = ["#2a4a9a", "#9a2a2a", "#e8e0d0", "#1a1a1a", "#3a7a3a"];
+
+export function randomLook(random = Math.random) {
+  const chance = (p) => random() < p;
+  const some = (items, p) => items.filter(() => chance(p));
+  return resolveRecipe(
+    {
+      height: [5.2, 6.6],
+      build: [0, 1],
+      limbs: [0.2, 0.8],
+      shoulders: [0, 1],
+      waist: [0, 1],
+      hips: [0, 1],
+      jaw: [0, 1],
+      bust: chance(0.5) ? [0.3, 1] : 0,
+      hair: HAIR,
+      beard: chance(0.5) ? "none" : BEARD,
+      jewelry: some(JEWELRY, 0.25),
+      face: some(FACE, 0.12),
+      weapon: WEAPONS.filter((w) => w !== "none"),
+      offhand: OFFHANDS,
+      armor: Object.fromEntries(ARMOR_SLOTS.filter(() => chance(0.5)).map((slot) => [slot, { type: ARMOR_TYPES, colors: [CLOTH, CLOTH] }])),
+      colors: { skin: SKIN, hair: HAIR_COLORS, eyes: EYES, primary: CLOTH, secondary: CLOTH, paint: PAINT },
+    },
+    random,
+  );
+}
+
 // The look saved by the character builder page, which walk mode uses too, or the default.
 // Saved looks and recipes load through resolveRecipe, so a recipe saved before a setting existed
 // takes its default, and one naming a choice since removed falls back to the default too.

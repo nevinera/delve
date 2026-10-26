@@ -1,19 +1,27 @@
 import * as THREE from "three";
 import { blocks } from "../world/objects.js";
+import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
-import { savedLook } from "../character/recipe.js";
+import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "./treeMeshes.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls follow WoW: W/S run forward and back,
-// A/D turn, Q/E strafe, space jumps, shift sprints; left-drag swings the camera around the character, right-drag
-// turns the character with it, and the wheel zooms. Escape stops.
+// A/D turn, Q/E strafe, space jumps, / toggles walking, X sits; shift sprints, which WoW doesn't.
+// Left-drag swings the camera around the character, right-drag turns the character with it, and
+// the wheel zooms. Escape stops.
+//
+// Each walk is a new random character, weapons put away, animated to match how it moves. With no
+// clips to back up or strafe, it walks backward and turns its body the way it's going.
 //
 // The character keeps to the tiles drawn in full, can't climb slopes steeper than MAX_CLIMB or walk
 // through tree trunks, and wades or swims where the water's deep. Positions are scene feet.
 
-const RUN_FT = 21; // per second, about WoW's run speed
-const BACK = 0.6; // backing up is slower
+// Speeds in feet per second, WoW's.
+const RUN_FT = 21;
+const WALK_FT = 7.5;
+const BACK_FT = 13.5; // backing up at a run
+const SWIM_FT = 14.2;
 const SPRINT = 2;
 const TURN = 2.6; // radians per second
 const JUMP_FT = 16; // upward speed at takeoff, per second
@@ -29,6 +37,17 @@ const DRAG = 0.006; // radians per pixel
 // of the screen) flat out. A little under the 60fps interval, so 60Hz displays don't drop frames.
 const MIN_FRAME_MS = 1000 / 60 - 2;
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
+const TOGGLES = new Set(["/", "x"]);
+
+// The clips for moving at each gait, and how far one stretches to match the character's speed
+// before its feet are left to slide.
+const GAITS = { walk: "Walk_Loop", run: "Jog_Fwd_Loop", sprint: "Sprint_Loop" };
+const STRETCH = [0.6, 1.8];
+const FADE_S = 0.2;
+const AIRBORNE_S = 0.15; // off the ground this long, without jumping, is falling
+const ROLL_FT = 30; // landing faster than this, or moving after a long fall, rolls
+const LONG_FALL_S = 1.1;
+const ONCE = { Jump_Start: { from: 0.1, speed: 1.5 }, Jump_Land: { speed: 1.6, length: 0.55 }, Roll: { speed: 1.5 }, Sit_Ground_Enter: {}, Sit_Ground_Exit: {} };
 
 export class Walker {
   // view: the RenderView, for its scene, camera, canvas and decoded tiles.
@@ -65,8 +84,24 @@ export class Walker {
     camera.near = CAMERA.near;
     camera.updateProjectionMatrix();
     if (this.model) disposeCharacter(this.model);
-    this.model = characterMesh(savedLook());
+    this.model = characterMesh({ ...randomLook(), sheathed: true });
     this.view.scene.add(this.model);
+    this.mixer = new THREE.AnimationMixer(this.model);
+    this.clips = null;
+    this.playing = null;
+    this.t = 0;
+    this.facing = 0;
+    this.gait = this.gait ?? "run";
+    this.sitting = null;
+    this.landing = null;
+    this.airTime = 0;
+    this.jumpedAt = -Infinity;
+    const model = this.model;
+    loadAnimations().then((baked) => {
+      if (this.model !== model) return;
+      this.speeds = Object.fromEntries(Object.entries(baked.clips).map(([name, clip]) => [name, clip.speed]));
+      this.clips = characterClips(model, baked);
+    });
     for (const [name, fn] of Object.entries(this.listeners)) window.addEventListener(name, fn);
     for (const [name, fn] of Object.entries(this.pointer)) this.view.canvas.addEventListener(name, fn, { capture: true });
     this.active = true;
@@ -99,13 +134,17 @@ export class Walker {
     }
     const dt = this.last === null ? 0 : Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
-    if (dt > 0) this.step(dt);
+    if (dt > 0) {
+      this.step(dt);
+      this.animate(dt);
+    }
     this.place();
     this.view.render();
     requestAnimationFrame((t) => this.frame(t));
   }
 
   step(dt) {
+    this.t += dt;
     const key = (k) => (this.held.has(k) ? 1 : 0);
     this.yaw += (key("a") - key("d")) * TURN * dt;
     const forward = key("w") - key("s");
@@ -115,10 +154,15 @@ export class Walker {
     let mx = fx * forward + fz * strafe;
     let mz = fz * forward - fx * strafe;
     const length = Math.hypot(mx, mz);
+    const swimming = this.swimming();
+    const sprinting = this.held.has("shift") && !swimming;
+    const gait = swimming ? "swim" : sprinting ? "sprint" : this.gait;
+    const speed = length ? (swimming ? SWIM_FT : gait === "walk" ? WALK_FT : forward < 0 ? BACK_FT : RUN_FT) * (sprinting ? SPRINT : 1) : 0;
+    this.motion = { forward, strafe, speed, gait, swimming };
     if (length > 0) {
-      const speed = RUN_FT * (forward < 0 ? BACK : 1) * (this.held.has("shift") ? SPRINT : 1) * dt;
-      mx = (mx / length) * speed;
-      mz = (mz / length) * speed;
+      this.sitting = null;
+      mx = (mx / length) * speed * dt;
+      mz = (mz / length) * speed * dt;
       // Try the whole step, then each axis alone, so you slide along what blocks you.
       for (const [dx, dz] of [[mx, mz], [mx, 0], [0, mz]]) {
         if (this.canStep(this.pos.x + dx, this.pos.z + dz)) {
@@ -131,13 +175,80 @@ export class Walker {
 
     const ground = this.standHeight(this.pos.x, this.pos.z) ?? this.pos.y;
     const onGround = this.pos.y <= ground + 0.01;
-    if (onGround && this.held.has(" ")) this.vy = JUMP_FT;
+    if (onGround && this.held.has(" ")) {
+      this.vy = JUMP_FT;
+      this.jumpedAt = this.t;
+      this.sitting = null;
+    }
     this.vy -= GRAVITY * dt;
     this.pos.y += this.vy * dt;
     if (this.pos.y <= ground) {
       this.pos.y = ground;
       this.vy = 0;
+      if (this.airTime > 0.3) this.land();
+      this.airTime = 0;
+    } else {
+      this.airTime += dt;
     }
+  }
+
+  // Coming down: a roll when moving fast or after a long fall on the move, a crouch when standing
+  // still, and straight on otherwise.
+  land() {
+    const { speed } = this.motion;
+    if (speed > ROLL_FT || (speed > 0 && this.airTime > LONG_FALL_S)) this.landing = { clip: "Roll", until: this.t + 1 };
+    else if (speed === 0) this.landing = { clip: "Jump_Land", until: this.t + ONCE.Jump_Land.length };
+  }
+
+  // Whether the character is swimming: held up at a depth in water too deep to stand in.
+  swimming() {
+    const ground = this.groundAt(this.pos.x, this.pos.z);
+    const stand = this.standHeight(this.pos.x, this.pos.z);
+    return ground !== null && stand > ground + 0.01 && this.pos.y <= stand + 0.01;
+  }
+
+  // Plays the clip for what the character is doing, and turns its body the way it's going.
+  animate(dt) {
+    const { forward, strafe, speed, gait, swimming } = this.motion;
+    const moving = speed > 0;
+    let target = 0;
+    if (moving) target = forward < 0 ? Math.atan2(strafe, forward) - Math.sign(strafe || 1) * Math.PI : Math.atan2(strafe, forward);
+    const turn = Math.atan2(Math.sin(target - this.facing), Math.cos(target - this.facing));
+    this.facing += turn * Math.min(1, dt * 10);
+    this.mixer.update(dt);
+    if (!this.clips) return;
+
+    if (this.landing && (this.t > this.landing.until || (moving && this.landing.clip !== "Roll"))) this.landing = null;
+    const sat = this.sitting && this.t - this.sitting.at;
+    if (this.sitting?.standing && sat > 1.1) this.sitting = null;
+    if (swimming) this.play(moving ? "Swim_Fwd_Loop" : "Swim_Idle_Loop");
+    else if (this.t - this.jumpedAt < 0.35) this.play("Jump_Start");
+    else if (this.airTime > AIRBORNE_S || this.t - this.jumpedAt < 0.5) this.play("Jump_Loop");
+    else if (this.landing) this.play(this.landing.clip);
+    else if (this.sitting) this.play(this.sitting.standing ? "Sit_Ground_Exit" : sat < 1 ? "Sit_Ground_Enter" : "Sit_Ground_Idle_Loop");
+    else if (moving) {
+      const clip = GAITS[forward < 0 && !strafe ? "walk" : gait] ?? GAITS.run;
+      const s = this.model.userData.scale;
+      const stretch = Math.min(STRETCH[1], Math.max(STRETCH[0], speed / ((this.speeds[clip] ?? speed) * s)));
+      this.play(clip, forward < 0 ? -stretch : stretch);
+    } else this.play("Idle_Loop");
+  }
+
+  // Fades to a clip, or sets the playing one's speed. One-shot clips hold their last frame.
+  play(name, speed = ONCE[name]?.speed ?? 1) {
+    const clip = this.clips.get(name);
+    if (!clip) return;
+    const action = this.mixer.clipAction(clip);
+    action.timeScale = speed;
+    if (this.playing === name) return;
+    const previous = this.playing && this.mixer.existingAction(this.clips.get(this.playing));
+    this.playing = name;
+    action.reset();
+    action.setLoop(ONCE[name] ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+    action.clampWhenFinished = true;
+    action.time = ONCE[name]?.from ?? (speed < 0 ? clip.duration : 0);
+    action.play();
+    if (previous) action.crossFadeFrom(previous, FADE_S, false);
   }
 
   // Whether the character may move to (x, z): on a tile drawn in full, not into a tree trunk or
@@ -250,7 +361,7 @@ export class Walker {
   // camera in, so it ducks under a canopy rather than looking down through it.
   place() {
     this.model.position.copy(this.pos);
-    this.model.rotation.y = this.yaw;
+    this.model.rotation.y = this.yaw + this.facing;
     const { camera } = this.view;
     const yaw = this.yaw + this.cam.yaw;
     const { pitch, distance } = this.cam;
@@ -274,11 +385,25 @@ export class Walker {
       this.stop();
       return;
     }
+    if (TOGGLES.has(key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (down && !e.repeat) this.toggle(key);
+      return;
+    }
     if (!KEYS.has(key) || e.ctrlKey || e.metaKey || e.altKey) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     if (down) this.held.add(key);
     else this.held.delete(key);
+  }
+
+  // / switches between walking and running; X sits down, or stands back up.
+  toggle(key) {
+    if (key === "/") this.gait = this.gait === "walk" ? "run" : "walk";
+    if (key !== "x" || this.motion?.speed || this.airTime > 0 || this.motion?.swimming) return;
+    if (!this.sitting) this.sitting = { at: this.t };
+    else if (!this.sitting.standing) this.sitting = { at: this.t, standing: true };
   }
 
   onDown(e) {
@@ -315,5 +440,3 @@ export class Walker {
     this.cam.distance = Math.max(CAMERA.min, Math.min(CAMERA.max, this.cam.distance * Math.exp(e.deltaY * 0.001)));
   }
 }
-
-// A plain stand-in person, 6 ft tall, with a lighter front so you can tell which way it faces.

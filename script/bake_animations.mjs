@@ -12,6 +12,9 @@
 // arms down with every bone unrotated. Each frame, each bone turns from its rest pose the way the
 // mannequin's bone turns from its own, in the world: our bone is first turned to lie the way
 // the mannequin's lies at rest, then the mannequin's turn is applied on top.
+//
+// Clips that move along the ground record their speed: how fast the planted foot slides back, in
+// feet per second for a 6ft body, so a character moving at some speed can play them to match.
 import fs from "fs";
 import * as THREE from "three";
 import { ENDS, skeleton } from "../client/src/character/body.js";
@@ -23,6 +26,19 @@ const STASH_OUT = new URL("../client/src/character/animations-stash.json", impor
 // Root motion, gun, vehicle, phone, parkour and chair clips are left out.
 const SKIP = /_RM$|^Pistol_|^Driving|Phone|Rail|^NinjaJump|^Slide|^Sitting/;
 const STASH = /^Zombie|^A_TPose$/;
+const MOVES = /^(Walk|Jog|Sprint|Crouch_Fwd)/;
+
+// How fast the lower foot moves back, frame to frame, in the middle of the range so the moments
+// the feet change over don't count.
+function groundSpeed(feet) {
+  const speeds = [];
+  for (let f = 0; f + 1 < feet.length; f++) {
+    const planted = feet[f][0].y < feet[f][1].y ? 0 : 1;
+    speeds.push((feet[f][planted].z - feet[f + 1][planted].z) * FPS);
+  }
+  speeds.sort((a, b) => a - b);
+  return Math.round(speeds[Math.floor(speeds.length / 2)] * 100) / 100;
+}
 
 // The first pack names bones like Blender's Rigify, the second like Unreal.
 const RIGIFY = {
@@ -144,6 +160,7 @@ function bakePack(path, clips) {
     const duration = Math.max(...channels.map((c) => c.times[c.times.length - 1]));
     const frames = Math.max(1, Math.round(duration * FPS) + 1);
     const data = [];
+    const feet = [];
     let previous = null;
     for (let f = 0; f < frames; f++) {
       const time = Math.min(duration, f / FPS);
@@ -180,10 +197,11 @@ function bakePack(path, clips) {
       // Keep each bone's quaternion on the same side as the frame before, for smooth blending.
       if (previous) frame.forEach((q, i) => q.dot(previous[i]) < 0 && q.set(-q.x, -q.y, -q.z, -q.w));
       previous = frame;
+      feet.push(["foot_l", "foot_r"].map((foot) => world[byName[foot]].p.clone().multiplyScalar(lift)));
       const lifted = world[byName.pelvis].p.clone().sub(at("pelvis")).multiplyScalar(lift);
       data.push(...frame.flatMap((q) => q.toArray()), ...lifted.toArray());
     }
-    clips[anim.name] = { frames, data: Buffer.from(Int16Array.from(data.map((v, i) => Math.round((i % (BONES.length * 4 + 3) < BONES.length * 4 ? v * 32767 : v * 1000)))).buffer).toString("base64") };
+    clips[anim.name] = { frames, ...(MOVES.test(anim.name) && { speed: groundSpeed(feet) }), data: Buffer.from(Int16Array.from(data.map((v, i) => Math.round((i % (BONES.length * 4 + 3) < BONES.length * 4 ? v * 32767 : v * 1000)))).buffer).toString("base64") };
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_LOOK, resolveRecipe } from "./recipe.js";
+import { DEFAULT_LOOK, randomLook, resolveRecipe } from "./recipe.js";
 
 describe("resolveRecipe", () => {
   it("fills in the defaults", () => {
@@ -35,5 +35,12 @@ describe("resolveRecipe", () => {
     expect(look.colors.eyes).toBe("#00ff00");
     expect(look.colors).not.toHaveProperty("fur");
     expect(look.armor.chest.colors[0]).toMatch(/^#/);
+  });
+
+  it("makes random looks that load as they are", () => {
+    for (let i = 0; i < 20; i++) {
+      const look = randomLook();
+      expect(resolveRecipe(look)).toEqual(look);
+    }
   });
 });
