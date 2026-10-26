@@ -84,10 +84,11 @@ export class Features {
     return this.selectTool(sketch);
   }
 
-  // A spot on land, snapped to the cell grid, or null (with a message) out at sea.
-  place(tile) {
+  // A spot for a feature of `kind`, snapped to the cell grid: on land, or anywhere for a river,
+  // which may run out to sea. Null (with a message) for a spot it can't go.
+  place(tile, kind) {
     const point = snapToCell(tile);
-    if (this.editor.onLand(point)) return point;
+    if (kind === "river" || this.editor.onLand(point)) return point;
     this.editor.say("Features go on land, inside some zone.");
     return null;
   }
@@ -109,7 +110,7 @@ export class Features {
   // placing one doesn't select it (and clears any selection, so the palette applies to new pins);
   // other pins are selected so their details can be filled in.
   addPin(sketch, kind, tile, props = {}) {
-    const at = this.place(tile);
+    const at = this.place(tile, kind);
     if (!at) return;
     const pin = { id: nextId(sketch, "p"), kind, at, ...props };
     if (kind === "height") pin.height ??= DEFAULT_HEIGHT_FT;
@@ -127,7 +128,7 @@ export class Features {
           this.finishStroke(sketch);
           return true;
         }
-        const point = this.place(tile);
+        const point = this.place(tile, kind);
         if (!point) return true;
         if (!this.stroke) this.stroke = { kind, points: [] };
         this.stroke.points.push(point);
@@ -174,7 +175,7 @@ export class Features {
 
   grabPin(sketch, pin) {
     this.select(sketch, "pin", pin.id);
-    this.dragging = { target: pin, key: "at" };
+    this.dragging = { target: pin, key: "at", kind: pin.kind };
     return true;
   }
 
@@ -189,16 +190,16 @@ export class Features {
       return true;
     }
     if (index >= 0) {
-      this.dragging = { target: stroke.points, key: index };
+      this.dragging = { target: stroke.points, key: index, kind: stroke.kind };
       return true;
     }
     if (e.shiftKey) {
       const near = nearestOnStroke(stroke.points, tile);
       if (near.dist * this.map.view.scale > 8 * this.map.dpr) return null;
-      const point = this.place(tile);
+      const point = this.place(tile, stroke.kind);
       if (!point) return true;
       stroke.points.splice(near.index + 1, 0, point);
-      this.dragging = { target: stroke.points, key: near.index + 1 };
+      this.dragging = { target: stroke.points, key: near.index + 1, kind: stroke.kind };
       return true;
     }
     return null;
@@ -207,7 +208,7 @@ export class Features {
   dragTo(tile, sketch) {
     if (!this.dragging) return;
     const point = snapToCell(tile);
-    if (!this.editor.onLand(point)) return;
+    if (this.dragging.kind !== "river" && !this.editor.onLand(point)) return;
     this.dragging.target[this.dragging.key] = point;
   }
 
@@ -247,10 +248,10 @@ export class Features {
   // --- drawing ---
 
   // Draws the sketch's features of the given kinds, and its strokes of `lines` kinds as plain
-  // reference lines.
-  draw(ctx, sketch, { kinds, lines = [] }) {
+  // reference lines. `flow` (rivers.js riverFlow) points each river segment's arrow downstream.
+  draw(ctx, sketch, { kinds, lines = [], flow = null }) {
     for (const stroke of sketch.strokes) {
-      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, this.isSelected(sketch, stroke));
+      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, this.isSelected(sketch, stroke), flow?.get(stroke.id));
       else if (lines.includes(stroke.kind)) this.drawLine(ctx, stroke);
     }
     for (const pin of sketch.pins) {
@@ -271,7 +272,8 @@ export class Features {
     this.drawStroke(ctx, { kind: this.stroke.kind, points, width: STROKES[this.stroke.kind].width }, true);
   }
 
-  drawStroke(ctx, stroke, highlight) {
+  // `forward`: for a river, one boolean per segment, true where it flows the way it was drawn.
+  drawStroke(ctx, stroke, highlight, forward) {
     const kind = STROKES[stroke.kind];
     const dpr = this.map.dpr;
     const pts = stroke.points.map((p) => this.map.toScreen(p));
@@ -281,7 +283,12 @@ export class Features {
     ctx.strokeStyle = kind.color;
     ctx.lineWidth = Math.max(2 * dpr, (stroke.width / TILE_FT) * this.map.view.scale);
     polyline(ctx, pts);
-    if (stroke.kind === "river" && pts.length > 1) arrow(ctx, pts[pts.length - 2], pts[pts.length - 1], kind.color, dpr);
+    if (stroke.kind === "river") {
+      for (let i = 1; i < pts.length; i++) {
+        const [a, b] = forward?.[i - 1] === false ? [pts[i], pts[i - 1]] : [pts[i - 1], pts[i]];
+        arrow(ctx, a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], "#fff", dpr);
+      }
+    }
 
     if (highlight) {
       ctx.strokeStyle = "#fff";
@@ -414,15 +421,21 @@ function polyline(ctx, pts) {
   ctx.stroke();
 }
 
+// An arrowhead at (bx, by), pointing away from (ax, ay), with a dark rim so it shows on any map.
 function arrow(ctx, [ax, ay], [bx, by], color, dpr) {
   const angle = Math.atan2(by - ay, bx - ax);
-  const size = 12 * dpr;
+  const size = 10 * dpr;
+  const [tx, ty] = [bx + (size / 2) * Math.cos(angle), by + (size / 2) * Math.sin(angle)];
   ctx.fillStyle = color;
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = dpr;
   ctx.beginPath();
-  ctx.moveTo(bx, by);
-  ctx.lineTo(bx - size * Math.cos(angle - 0.4), by - size * Math.sin(angle - 0.4));
-  ctx.lineTo(bx - size * Math.cos(angle + 0.4), by - size * Math.sin(angle + 0.4));
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx - size * Math.cos(angle - 0.45), ty - size * Math.sin(angle - 0.45));
+  ctx.lineTo(tx - size * Math.cos(angle + 0.45), ty - size * Math.sin(angle + 0.45));
+  ctx.closePath();
   ctx.fill();
+  ctx.stroke();
 }
 
 function button(text, onClick) {

@@ -18,6 +18,8 @@ import {
 import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
+import { riverFlow } from "./rivers.js";
+import { prepareShape, shapeHeight } from "../world/generator.js";
 import { TILE_FT } from "../world/constants.js";
 
 const HIT_PX = 8;
@@ -224,6 +226,7 @@ export class Editor {
     this.zones = listZones(this.world, this.continent);
     this.sketch = loadSketch(this.world, this.continent);
     this.zoneTileKeys = null;
+    this.flow = null;
     if (!this.activeZone) this.active = null;
     this.renderPanel();
     this.renderProps();
@@ -245,6 +248,7 @@ export class Editor {
     const before = this.storedState();
     write();
     this.zoneTileKeys = null;
+    this.flow = null;
     const zoned = this.zoneTiles();
     for (const tile of changedTiles(before, this.storedState())) if (zoned.has(tile)) this.pending.add(tile);
     this.dirty = true;
@@ -366,9 +370,15 @@ export class Editor {
 
   // --- the heights and biomes maps ---
 
+  // The map drawn under the current step's marks: "heights", "biomes", or null.
+  previewKind() {
+    if (this.step === "features") return this.option("heightmap") ? "heights" : null;
+    return ["heights", "biomes"].includes(STEPS[this.step].map) ? STEPS[this.step].map : null;
+  }
+
   viewChanged() {
     this.renderScale();
-    if (!STEPS[this.step].map || this.step === "tiles") return;
+    if (!this.previewKind()) return;
     clearTimeout(this.previewTimer);
     this.previewTimer = setTimeout(() => this.updatePreview(), PREVIEW_DELAY_MS);
   }
@@ -376,8 +386,9 @@ export class Editor {
   // Asks for a fresh heights or biomes map of what's in sight, from the zones as they are now,
   // mid-drag included.
   updatePreview() {
-    const kind = STEPS[this.step].map;
-    if (kind !== "heights" && kind !== "biomes") return;
+    this.flow = null; // the zones or sketch may have changed under a drag
+    const kind = this.previewKind();
+    if (!kind) return;
     const [x0, z0, x1, z1] = this.map.bounds();
     const [mx, mz] = [(x1 - x0) * PREVIEW_MARGIN, (z1 - z0) * PREVIEW_MARGIN];
     const bounds = [x0 - mx, z0 - mz, x1 + mx, z1 + mz].map((v) => v * TILE_FT);
@@ -412,7 +423,12 @@ export class Editor {
     });
     for (const section of this.el.steps) {
       section.querySelector(".editor-step-head").addEventListener("click", () => this.setStep(section.dataset.step));
-      for (const input of section.querySelectorAll("[data-option]")) input.addEventListener("change", () => this.map.render());
+      for (const input of section.querySelectorAll("[data-option]")) {
+        input.addEventListener("change", () => {
+          this.map.render();
+          this.updatePreview();
+        });
+      }
     }
     for (const tools of this.el.tools) {
       for (const name of STEPS[tools.dataset.tools].tools) {
@@ -787,7 +803,7 @@ export class Editor {
     const tiles = this.step === "tiles" || this.option("tiles");
     if (tiles) this.drawTiles(ctx, map);
     const preview = this.preview;
-    if (!preview || preview.step !== STEPS[this.step].map) return;
+    if (!preview || preview.step !== this.previewKind()) return;
     const { grid, canvas } = preview;
     const half = grid.stepFt / 2;
     const [sx, sy] = map.toScreen([(grid.x0 - half) / TILE_FT, (grid.z0 - half) / TILE_FT]);
@@ -825,7 +841,9 @@ export class Editor {
     if (zonesStep || this.option("boundaries")) {
       for (const zone of this.zones) if (zone !== editing) this.drawRegion(ctx, map, zone, false);
     }
-    this.features.draw(ctx, this.sketch, this.markKinds());
+    const flow = this.step === "features" ? this.riverFlow() : null;
+    this.features.draw(ctx, this.sketch, { ...this.markKinds(), flow: flow?.flow });
+    if (flow) this.drawStuck(ctx, map, flow.stuck);
     if (!editing) {
       this.features.drawInProgress(ctx);
       return;
@@ -840,6 +858,29 @@ export class Editor {
     ctx.lineWidth = 2 * map.dpr;
     polyline(ctx, pts, false);
     this.drawing.forEach((p, i) => handle(ctx, map.toScreen(p), (i === 0 ? 6 : 4) * map.dpr, COLORS.active));
+  }
+
+  // Which way each river flows over the land's rough shape (rivers.js), worked out again after
+  // each edit.
+  riverFlow() {
+    if (!this.flow) {
+      const ctx = prepareShape(this.continentState(), this.continent);
+      const rivers = this.sketch.strokes.filter((s) => s.kind === "river");
+      this.flow = riverFlow(rivers, (x, z) => shapeHeight(ctx, x * TILE_FT, z * TILE_FT));
+    }
+    return this.flow;
+  }
+
+  // A red ring round each river point with no way out.
+  drawStuck(ctx, map, points) {
+    ctx.strokeStyle = "#ff3030";
+    ctx.lineWidth = 2.5 * map.dpr;
+    for (const p of points) {
+      const [x, y] = map.toScreen(p);
+      ctx.beginPath();
+      ctx.arc(x, y, 11 * map.dpr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   drawOutOfDate(ctx, map) {
