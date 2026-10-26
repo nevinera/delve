@@ -7,24 +7,31 @@ import { CLUTTER } from "../world/clutter.js";
 // each instance scales, turns and colors its shape.
 
 const UP = new THREE.Vector3(0, 1, 0);
-// Clutter shrinks away with distance from the focus (scene x, z), from `startFt` to nothing at
-// `endFt`, so it thins out instead of stopping at the edge of the tiles it's drawn on. endFt stays
-// inside a tile, the least distance from the focus to that edge.
-export const FADE = { startFt: 250, endFt: 480 };
+// Clutter shrinks away with distance from the focus (scene x, z), to nothing at the radius the
+// graphics settings pick, so it thins out instead of stopping at an edge. It starts shrinking at
+// FADE_FROM of the radius. The radius stays inside a tile, the least distance from the focus to the
+// edge of the tiles clutter is made for.
+const FADE_FROM = 0.55;
 const focus = { value: new THREE.Vector2() };
+const fade = { value: new THREE.Vector2(130, 240) };
 
 export function setClutterFocus(x, z) {
   focus.value.set(x, z);
 }
 
+export function setClutterRadius(radiusFt) {
+  fade.value.set(radiusFt * FADE_FROM, radiusFt);
+}
+
 function fading(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.clutterFocus = focus;
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;").replace(
+    shader.uniforms.clutterFade = fade;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;\nuniform vec2 clutterFade;").replace(
       "#include <begin_vertex>",
       `#include <begin_vertex>
         vec2 clutterAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
-        transformed *= 1.0 - smoothstep(${FADE.startFt.toFixed(1)}, ${FADE.endFt.toFixed(1)}, distance(clutterAt, clutterFocus));`,
+        transformed *= 1.0 - smoothstep(clutterFade.x, clutterFade.y, distance(clutterAt, clutterFocus));`,
     );
   };
   return material;
@@ -303,8 +310,9 @@ export function clutterMeshes(instances, origin) {
 }
 
 // Draws only the instances within `radiusFt` of scene point (x, z): the rest have shrunk to
-// nothing, but the GPU would still work through their shapes.
-export function gatherClutter(meshes, x, z, radiusFt) {
+// nothing, but the GPU would still work through their shapes. Density (0-1) is the share of them
+// drawn; the same ones are left out each time.
+export function gatherClutter(meshes, x, z, radiusFt, density = 1) {
   const r2 = radiusFt * radiusFt;
   for (const mesh of meshes) {
     const { matrices, colors, count } = mesh.userData.all;
@@ -312,7 +320,7 @@ export function gatherClutter(meshes, x, z, radiusFt) {
     let n = 0;
     for (let i = 0; i < count; i++) {
       const [dx, dz] = [matrices[i * 16 + 12] - x, matrices[i * 16 + 14] - z];
-      if (dx * dx + dz * dz > r2) continue;
+      if (dx * dx + dz * dz > r2 || (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296 >= density) continue;
       if (n !== i) {
         toM.set(matrices.subarray(i * 16, i * 16 + 16), n * 16);
         toC.set(colors.subarray(i * 3, i * 3 + 3), n * 3);

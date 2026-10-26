@@ -8,7 +8,7 @@ import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
-import { FADE as CLUTTER_FADE, clutterMeshes, gatherClutter, setClutterFocus } from "./clutterMeshes.js";
+import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
@@ -52,6 +52,9 @@ const KEY = { pan: 0.8, zoom: 1.6, turn: 1.5 }; // per second: distances panned,
 // the display's own pixel density, up to 2.
 export const SCENE_PARTS = ["clutter", "near trees", "far ring", "objects", "ground and water", "sky"];
 export const RESOLUTIONS = ["full", 1.5, 1];
+// Ground clutter's radius ranges up to the least distance from the focus to the edge of the tiles
+// it's made for.
+export const CLUTTER_RADIUS_FT = { min: 100, max: 480 };
 const pixelRatio = (resolution) => Math.min(window.devicePixelRatio || 1, resolution === "full" ? 2 : resolution);
 const CLUTTER_VIEW_FT = 1500; // ground clutter shows when the camera's this close to what it looks at
 const CLUTTER_REGATHER_FT = 40; // clutter drawn round the focus is picked again when it moves this far
@@ -70,7 +73,8 @@ export class RenderView {
     // the browser has it, and a logarithmic one elsewhere.
     const reversed = hasClipControl();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, reversedDepthBuffer: reversed, logarithmicDepthBuffer: !reversed });
-    this.graphics = { hidden: new Set(), resolution: "full", solidCanopies: false };
+    this.graphics = { hidden: new Set(), resolution: "full", solidCanopies: false, clutterRadiusFt: 240, clutterDensity: 1 };
+    setClutterRadius(this.graphics.clutterRadiusFt);
     this.renderer.setPixelRatio(pixelRatio(this.graphics.resolution));
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(SKY);
@@ -114,9 +118,12 @@ export class RenderView {
   }
 
   // Changes any of the graphics settings: hidden (a set of SCENE_PARTS), resolution (one of
-  // RESOLUTIONS) and solidCanopies (draws every crown as its cheapest stage).
+  // RESOLUTIONS), solidCanopies (draws every crown as its cheapest stage), clutterRadiusFt and
+  // clutterDensity (the share of clutter drawn, 0-1).
   setGraphics(changes) {
     Object.assign(this.graphics, changes);
+    setClutterRadius(this.graphics.clutterRadiusFt);
+    this.clutterGathered = null;
     this.renderer.setPixelRatio(pixelRatio(this.graphics.resolution));
     this.resize();
     this.handlers.onGraphics?.(this.graphics);
@@ -330,7 +337,8 @@ export class RenderView {
 
   gatherClutter(focus) {
     this.clutterGathered = [focus.x, focus.z];
-    gatherClutter(this.clutter.children, focus.x, focus.z, CLUTTER_FADE.endFt + CLUTTER_REGATHER_FT);
+    const { clutterRadiusFt, clutterDensity } = this.graphics;
+    gatherClutter(this.clutter.children, focus.x, focus.z, clutterRadiusFt + CLUTTER_REGATHER_FT, clutterDensity);
   }
 
   // Walk mode (walker.js): a character dropped at scene [x, z], or where the camera looks. onStop

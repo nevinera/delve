@@ -252,9 +252,9 @@ export class Editor {
     if (view !== "3d") this.view3d?.stopWalk();
     this.showing3d = view === "3d";
     if (this.showing3d && !this.view3d) {
-      const { RenderView, SCENE_PARTS, RESOLUTIONS } = await import("./renderView.js");
+      const { RenderView, SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT } = await import("./renderView.js");
       this.view3d = new RenderView(this.el.scene, this.sceneHandlers());
-      this.buildGraphics(SCENE_PARTS, RESOLUTIONS);
+      this.buildGraphics(SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT);
     }
     this.el.map.hidden = this.showing3d;
     this.el.scene.hidden = !this.showing3d;
@@ -320,10 +320,10 @@ export class Editor {
   // What the pointer does in the 3D view: hover a head for details, drag the editable zones' pins
   // and stroke points, click a head to select it, and click the ground to place a pin or deselect.
   // The graphics popover: a radio button for each resolution, a checkbox for each part of the scene,
-  // and solid canopies. They change the 3D view's settings, and follow changes made elsewhere,
+  // solid canopies, and sliders for ground clutter's radius and density. They change the 3D view's settings, and follow changes made elsewhere,
   // like the stats overlay's keys.
-  buildGraphics(parts, resolutions) {
-    const { graphicsResolution, graphicsParts, solidCanopies } = this.el;
+  buildGraphics(parts, resolutions, clutterRadiusFt) {
+    const { graphicsResolution, graphicsParts, solidCanopies, clutterRadius, clutterDensity } = this.el;
     const check = (type, name, label) => {
       const el = document.createElement("label");
       el.className = "editor-check";
@@ -344,10 +344,17 @@ export class Editor {
       }),
     );
     solidCanopies.addEventListener("change", () => this.view3d.setGraphics({ solidCanopies: solidCanopies.checked }));
+    Object.assign(clutterRadius, clutterRadiusFt);
+    clutterRadius.addEventListener("input", () => this.view3d.setGraphics({ clutterRadiusFt: Number(clutterRadius.value) }));
+    clutterDensity.addEventListener("input", () => this.view3d.setGraphics({ clutterDensity: Number(clutterDensity.value) / 100 }));
     this.showGraphics = ({ resolution, hidden }) => {
       inputs(graphicsResolution).forEach((input, i) => (input.checked = resolutions[i] === resolution));
       inputs(graphicsParts).forEach((input, i) => (input.checked = !hidden.has(parts[i])));
       solidCanopies.checked = this.view3d.graphics.solidCanopies;
+      clutterRadius.value = this.view3d.graphics.clutterRadiusFt;
+      clutterDensity.value = Math.round(this.view3d.graphics.clutterDensity * 100);
+      this.el.clutterRadiusValue.textContent = `${clutterRadius.value} ft`;
+      this.el.clutterDensityValue.textContent = `${clutterDensity.value}%`;
     };
     this.showGraphics(this.view3d.graphics);
     // So keys go back to walking and the stats overlay.
