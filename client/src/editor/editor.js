@@ -252,8 +252,9 @@ export class Editor {
     if (view !== "3d") this.view3d?.stopWalk();
     this.showing3d = view === "3d";
     if (this.showing3d && !this.view3d) {
-      const { RenderView } = await import("./renderView.js");
+      const { RenderView, SCENE_PARTS, RESOLUTIONS } = await import("./renderView.js");
       this.view3d = new RenderView(this.el.scene, this.sceneHandlers());
+      this.buildGraphics(SCENE_PARTS, RESOLUTIONS);
     }
     this.el.map.hidden = this.showing3d;
     this.el.scene.hidden = !this.showing3d;
@@ -318,8 +319,50 @@ export class Editor {
 
   // What the pointer does in the 3D view: hover a head for details, drag the editable zones' pins
   // and stroke points, click a head to select it, and click the ground to place a pin or deselect.
+  // The graphics popover: a radio button for each resolution, a checkbox for each part of the scene,
+  // and solid canopies. They change the 3D view's settings, and follow changes made elsewhere,
+  // like the stats overlay's keys.
+  buildGraphics(parts, resolutions) {
+    const { graphicsResolution, graphicsParts, solidCanopies } = this.el;
+    const check = (type, name, label) => {
+      const el = document.createElement("label");
+      el.className = "editor-check";
+      el.innerHTML = `<input type="${type}" name="${name}"><span></span>`;
+      el.querySelector("span").textContent = label;
+      return el;
+    };
+    for (const r of resolutions) graphicsResolution.append(check("radio", "graphicsResolution", r === "full" ? "full" : `${r}x`));
+    for (const p of parts) graphicsParts.append(check("checkbox", "graphicsPart", p));
+    const inputs = (el) => [...el.querySelectorAll("input")];
+    inputs(graphicsResolution).forEach((input, i) => input.addEventListener("change", () => this.view3d.setGraphics({ resolution: resolutions[i] })));
+    inputs(graphicsParts).forEach((input, i) =>
+      input.addEventListener("change", () => {
+        const { hidden } = this.view3d.graphics;
+        if (input.checked) hidden.delete(parts[i]);
+        else hidden.add(parts[i]);
+        this.view3d.setGraphics({ hidden });
+      }),
+    );
+    solidCanopies.addEventListener("change", () => this.view3d.setGraphics({ solidCanopies: solidCanopies.checked }));
+    this.showGraphics = ({ resolution, hidden }) => {
+      inputs(graphicsResolution).forEach((input, i) => (input.checked = resolutions[i] === resolution));
+      inputs(graphicsParts).forEach((input, i) => (input.checked = !hidden.has(parts[i])));
+      solidCanopies.checked = this.view3d.graphics.solidCanopies;
+    };
+    this.showGraphics(this.view3d.graphics);
+    // So keys go back to walking and the stats overlay.
+    this.el.graphics.addEventListener("change", (e) => e.target.blur());
+    // Under its button, lined up with its left edge.
+    this.el.graphics.addEventListener("toggle", (e) => {
+      if (e.newState !== "open") return;
+      const at = this.el.graphicsButton.getBoundingClientRect();
+      Object.assign(this.el.graphics.style, { top: `${at.bottom + 4}px`, left: `${at.left}px` });
+    });
+  }
+
   sceneHandlers() {
     return {
+      onGraphics: (graphics) => this.showGraphics?.(graphics),
       hover: (hit, e) => this.showTip(hit, e),
       grab: (hit) => {
         if (this.walkPicking) return false;
@@ -478,11 +521,6 @@ export class Editor {
       else this.walkPicking = !this.walkPicking;
       this.renderPanel();
     });
-    this.el.solidCanopies.addEventListener("change", (e) => {
-      e.currentTarget.blur();
-      this.view3d.solidCanopies = e.currentTarget.checked;
-      this.view3d.render();
-    });
     for (const kind of TREE_KINDS) this.el.treeKind.add(new Option(kind, kind));
 
     continent.addEventListener("change", () => {
@@ -595,7 +633,7 @@ export class Editor {
     }
     hint.textContent = this.view3d?.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.showing3d ? HINT_3D : HINTS[this.mode()];
     this.el.walk.hidden = false;
-    this.el.solidCanopiesLabel.hidden = !this.showing3d;
+    this.el.graphicsButton.hidden = !this.showing3d;
     this.el.walk.textContent = this.view3d?.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";
     this.el.walk.classList.toggle("active", Boolean(this.view3d?.walking || this.walkPicking));
   }

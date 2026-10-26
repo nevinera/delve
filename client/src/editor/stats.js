@@ -5,9 +5,11 @@ import { TILE_FT } from "../world/constants.js";
 // it), and counts what's drawn. It updates a few times a second.
 //
 // fps counts renders: walking renders every frame, but orbiting only renders when something moves.
-// Keys 1-6 hide and show a group of meshes (6 is the sky), to see what each costs; 7 switches
-// between the display's pixel density and 1x, to see what resolution costs; 0 copies the numbers
-// as JSON.
+// Keys 1-6 hide and show a part of the scene (renderView.js's SCENE_PARTS), to see what each costs;
+// 7 steps through the resolutions, to see what pixels cost; 0 copies the numbers as JSON. Both
+// change the view's graphics settings.
+
+import { RESOLUTIONS, SCENE_PARTS } from "./renderView.js";
 
 const REFRESH_MS = 250;
 const WINDOW_MS = 1000; // frame times are averaged, and the worst found, over this long
@@ -29,15 +31,6 @@ export class Stats {
     this.timer = gl.getExtension("EXT_disjoint_timer_query_webgl2");
     this.queries = [];
     this.shownAt = 0;
-    this.groups = [
-      ["clutter", view.clutter],
-      ["near trees", view.trees],
-      ["far ring", view.far],
-      ["objects", view.objects],
-      ["ground and water", view.content],
-      ["sky", view.sky.mesh],
-    ];
-    this.hidden = new Set();
     window.addEventListener("keydown", (e) => {
       const n = Number(e.key);
       if (e.target.matches?.("input, textarea, select")) return;
@@ -45,34 +38,23 @@ export class Stats {
         this.copy();
         return;
       }
-      if (n === this.groups.length + 1) {
-        this.lowRes = !this.lowRes;
-        view.renderer.setPixelRatio(this.lowRes ? 1 : Math.min(window.devicePixelRatio || 1, 2));
-        view.resize();
+      const { hidden, resolution } = view.graphics;
+      if (n === SCENE_PARTS.length + 1) {
+        view.setGraphics({ resolution: RESOLUTIONS[(RESOLUTIONS.indexOf(resolution) + 1) % RESOLUTIONS.length] });
         return;
       }
-      if (!(n >= 1 && n <= this.groups.length)) return;
-      const name = this.groups[n - 1][0];
-      if (this.hidden.has(name)) this.hidden.delete(name);
-      else this.hidden.add(name);
-      if (!view.walking) view.render();
+      if (!(n >= 1 && n <= SCENE_PARTS.length)) return;
+      const name = SCENE_PARTS[n - 1];
+      if (hidden.has(name)) hidden.delete(name);
+      else hidden.add(name);
+      view.setGraphics({ hidden });
     });
-  }
-
-  // Applies the hidden groups after the view has set what's visible for this frame. Groups the
-  // view doesn't switch itself come back on when unhidden.
-  hide() {
-    for (const [name, group] of this.groups) {
-      if (this.hidden.has(name)) group.visible = false;
-      else if (group !== this.view.clutter && group !== this.view.far) group.visible = true; // the view switches these two itself
-    }
   }
 
   // Wraps one render: ours() is our per-frame work, draw() three.js's.
   measure(ours, draw) {
     const start = performance.now();
     ours();
-    this.hide();
     const mid = performance.now();
     const query = this.beginGpu();
     draw();
@@ -150,7 +132,7 @@ export class Stats {
         near: view.content.children.filter((c) => c.visible && c.userData.tile && c.material === view.terrainMaterial).length,
         far: view.farTiles?.size ?? 0,
       },
-      groups: Object.fromEntries(this.groups.map(([name, group]) => [name, { ...count(group), hidden: this.hidden.has(name) }])),
+      groups: Object.fromEntries(Object.entries(view.parts()).map(([name, group]) => [name, { ...count(group), hidden: view.graphics.hidden.has(name) }])),
       walking: view.walking,
       at: { tile: [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)], ft: [Math.round(x), Math.round(z)] },
       browser: navigator.userAgent,
@@ -170,8 +152,8 @@ export class Stats {
       `draw calls ${s.drawCalls}   triangles ${(s.triangles / 1000).toFixed(0)}k   canvas ${s.canvas.width}×${s.canvas.height} (${s.canvas.pixelRatio}x)`,
       `memory: ${s.memory.geometries} geometries, ${s.memory.textures} textures, ${s.memory.shaders ?? "?"} shaders`,
       `tiles: ${s.tiles.near} near, ${s.tiles.far} far`,
-      ...this.groups.map(([name], i) => `${i + 1} ${name}: ${group(name)}`),
-      `${this.groups.length + 1} pixel density: ${this.lowRes ? "1x" : "full"}   0 copies these numbers as JSON${this.copied ? " (copied)" : ""}`,
+      ...SCENE_PARTS.map((name, i) => `${i + 1} ${name}: ${group(name)}`),
+      `${SCENE_PARTS.length + 1} resolution: ${this.view.graphics.resolution}${this.view.graphics.resolution === "full" ? "" : "x"}   0 copies these numbers as JSON${this.copied ? " (copied)" : ""}`,
       `at tile ${s.at.tile.join(", ")}   (${s.at.ft.join(", ")}) ft`,
     ].join("\n");
   }

@@ -48,6 +48,11 @@ const PIN_SIZE = 0.035; // head sizes, as a fraction of the view's height
 const POINT_SIZE = 0.022;
 const DRAG_PX = 4; // a press that moves less than this is a click
 const KEY = { pan: 0.8, zoom: 1.6, turn: 1.5 }; // per second: distances panned, e^zoom, radians
+// What the graphics settings can leave out of the scene, and the resolutions they offer: "full" is
+// the display's own pixel density, up to 2.
+export const SCENE_PARTS = ["clutter", "near trees", "far ring", "objects", "ground and water", "sky"];
+export const RESOLUTIONS = ["full", 1.5, 1];
+const pixelRatio = (resolution) => Math.min(window.devicePixelRatio || 1, resolution === "full" ? 2 : resolution);
 const CLUTTER_VIEW_FT = 1500; // ground clutter shows when the camera's this close to what it looks at
 const CLUTTER_REGATHER_FT = 40; // clutter drawn round the focus is picked again when it moves this far
 
@@ -65,7 +70,8 @@ export class RenderView {
     // the browser has it, and a logarithmic one elsewhere.
     const reversed = hasClipControl();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, reversedDepthBuffer: reversed, logarithmicDepthBuffer: !reversed });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.graphics = { hidden: new Set(), resolution: "full", solidCanopies: false };
+    this.renderer.setPixelRatio(pixelRatio(this.graphics.resolution));
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(SKY);
     this.scene.fog = new THREE.Fog(SKY, ...ORBIT_FOG);
@@ -107,6 +113,29 @@ export class RenderView {
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
 
+  // Changes any of the graphics settings: hidden (a set of SCENE_PARTS), resolution (one of
+  // RESOLUTIONS) and solidCanopies (draws every crown as its cheapest stage).
+  setGraphics(changes) {
+    Object.assign(this.graphics, changes);
+    this.renderer.setPixelRatio(pixelRatio(this.graphics.resolution));
+    this.resize();
+    this.handlers.onGraphics?.(this.graphics);
+  }
+
+  // The scene's groups by their names in SCENE_PARTS.
+  parts() {
+    return { clutter: this.clutter, "near trees": this.trees, "far ring": this.far, objects: this.objects, "ground and water": this.content, sky: this.sky.mesh };
+  }
+
+  // Hides the parts the settings leave out, after the frame's work has set what's visible. Clutter
+  // and the far ring switch themselves on and off; the rest come back when no longer hidden.
+  hideParts() {
+    for (const [name, group] of Object.entries(this.parts())) {
+      if (this.graphics.hidden.has(name)) group.visible = false;
+      else if (group !== this.clutter && group !== this.far) group.visible = true;
+    }
+  }
+
   resize() {
     const { clientWidth: w, clientHeight: h } = this.canvas;
     if (!w || !h) return;
@@ -141,6 +170,7 @@ export class RenderView {
       this.sky.update(this.camera, performance.now() / 1000);
       this.showSight();
       this.showClutter();
+      this.hideParts();
     };
     const draw = () => this.renderer.render(this.scene, this.camera);
     if (this.stats) this.stats.measure(ours, draw);
@@ -163,7 +193,7 @@ export class RenderView {
     if (!this.origin) return;
     // Tree crowns simplify with distance from the walker, or from what the camera looks at.
     const focus = walking ? this.walker.pos : this.controls.target;
-    setTreeSight(focus.x, focus.z, SIGHT.canopyFt, { band: SIGHT.canopyBandFt, solid: this.solidCanopies });
+    setTreeSight(focus.x, focus.z, SIGHT.canopyFt, { band: SIGHT.canopyBandFt, solid: this.graphics.solidCanopies });
     const [tx, tz] = [Math.floor((focus.x + this.origin[0]) / TILE_FT), Math.floor((focus.z + this.origin[1]) / TILE_FT)];
     const near = (at) => !walking || !at || (Math.abs(at[0] - tx) <= SIGHT.tiles && Math.abs(at[1] - tz) <= SIGHT.tiles);
     this.showTreeStages(focus, near);

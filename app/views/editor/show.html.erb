@@ -17,7 +17,14 @@
         <button type="button" data-view="3d">3D</button>
       </span>
       <button id="walk" type="button" hidden>walk</button>
-      <label class="editor-check" id="solidCanopiesLabel" hidden title="Draws every tree crown as its cheapest, far-away stage"><input id="solidCanopies" type="checkbox"><span>solid canopies</span></label>
+      <button id="graphicsButton" type="button" popovertarget="graphics" hidden>graphics</button>
+      <div id="graphics" class="editor-popover" popover>
+        <h3>Resolution</h3>
+        <div id="graphicsResolution"></div>
+        <h3>Draw</h3>
+        <div id="graphicsParts"></div>
+        <label class="editor-check" title="Draws every tree crown as its cheapest, far-away stage"><input id="solidCanopies" type="checkbox"><span>solid canopies</span></label>
+      </div>
       <span class="spacer"></span>
       <label class="editor-check"><input id="showBiomes" type="checkbox"><span>show biomes</span></label>
       <label class="editor-check"><input id="showPins" type="checkbox" checked><span>show pins</span></label>
