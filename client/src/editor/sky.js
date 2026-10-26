@@ -1,8 +1,13 @@
 import * as THREE from "three";
 
 // The sky, the way vanilla WoW drew it: a dome colored in bands from the horizon up, two layers of
-// drifting clouds, and the sun with a glow round it. The fog fades the land into the horizon band,
-// so they're the same color. The dome follows the camera and draws behind everything.
+// drifting clouds, and the sun with a glow round it. The dome follows the camera and draws behind
+// everything.
+//
+// Fog fades things into the sky color behind them (SKY_COLOR_GLSL, without the clouds), so a far
+// peak against the blue high up fades into that blue, not into the paler horizon. Fog is applied
+// after three.js converts colors for the screen, so the sky's colors are worked out in sRGB, and
+// the dome skips the conversion so the two match exactly.
 
 // From the horizon up: the color at each height, as the sine of the angle above the horizon.
 export const SKY_BANDS = [
@@ -16,7 +21,26 @@ export const HORIZON = SKY_BANDS[0][1];
 // The sun stays at about 2 in the afternoon, high in the south-southwest, until days turn.
 export const SUN_DIR = new THREE.Vector3(-0.45, 1.15, 0.85).normalize();
 const SUN = { color: 0xfff6e0, discDeg: 1.6, glow: 0xfff0c8 };
-const CLOUDS = { cover: 0.52, wind: [0.012, 0.004] }; // share of the sky they cover; drift per second
+// Share of the sky clouds cover, their drift per second, and the heights (sine of the angle above
+// the horizon) they thin out between, so they stay above most far peaks.
+const CLOUDS = { cover: 0.52, wind: [0.012, 0.004], fade: [0.1, 0.3] };
+
+const srgb = (hex) => `vec3(${[16, 8, 0].map((shift) => (((hex >> shift) & 255) / 255).toFixed(4)).join(", ")})`;
+const f = (v) => v.toFixed(4);
+
+// skyColor(dir): the sky's color looking along unit vector `dir`, in sRGB, without clouds or the
+// sun's disc.
+export const SKY_COLOR_GLSL = `
+  vec3 skyColor(vec3 dir) {
+    float up = max(dir.y, 0.0);
+    vec3 color = ${srgb(SKY_BANDS[0][1])};
+    ${SKY_BANDS.slice(1)
+      .map(([stop, hex], i) => `color = mix(color, ${srgb(hex)}, smoothstep(${f(SKY_BANDS[i][0])}, ${f(stop)}, up));`)
+      .join("\n    ")}
+    float toSun = max(dot(dir, vec3(${f(SUN_DIR.x)}, ${f(SUN_DIR.y)}, ${f(SUN_DIR.z)})), 0.0);
+    return mix(color, ${srgb(SUN.glow)}, 0.35 * pow(toSun, 24.0) + 0.25 * pow(toSun, 300.0));
+  }
+`;
 
 const vertexShader = `
   varying vec3 vDir;
@@ -27,15 +51,13 @@ const vertexShader = `
 `;
 
 const fragmentShader = `
-  uniform vec3 bands[${SKY_BANDS.length}];
-  uniform float stops[${SKY_BANDS.length}];
   uniform vec3 sunDir;
-  uniform vec3 sunColor;
-  uniform vec3 glowColor;
   uniform float sunCos;
   uniform float cover;
   uniform vec2 drift;
   varying vec3 vDir;
+
+  ${SKY_COLOR_GLSL}
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -60,15 +82,8 @@ const fragmentShader = `
   void main() {
     vec3 dir = normalize(vDir);
     float up = max(dir.y, 0.0);
-
-    vec3 color = bands[0];
-    for (int i = 1; i < ${SKY_BANDS.length}; i++) {
-      color = mix(color, bands[i], smoothstep(stops[i - 1], stops[i], up));
-    }
-
-    // Glow round the sun, warming the sky near it.
+    vec3 color = skyColor(dir);
     float toSun = dot(dir, sunDir);
-    color = mix(color, glowColor, 0.35 * pow(max(toSun, 0.0), 24.0) + 0.25 * pow(max(toSun, 0.0), 300.0));
 
     // Clouds: two layers on a flat ceiling seen through the dome, drifting at different speeds,
     // thinning toward the horizon so they melt into the haze there.
@@ -76,32 +91,37 @@ const fragmentShader = `
     float big = fbm(ceiling * 0.9 + drift);
     float small = fbm(ceiling * 2.6 + drift * 1.7 + vec2(40.0, 13.0));
     float shape = big * 0.7 + small * 0.3;
-    float cloud = smoothstep(1.0 - cover, 1.0 - cover + 0.25, shape) * smoothstep(0.02, 0.2, up);
+    float cloud = smoothstep(1.0 - cover, 1.0 - cover + 0.25, shape) * smoothstep(${f(CLOUDS.fade[0])}, ${f(CLOUDS.fade[1])}, up);
     // Lit from the sun's side, shaded underneath.
-    vec3 cloudColor = mix(vec3(0.82, 0.85, 0.9), vec3(1.0), 0.5 + 0.5 * toSun) * (0.9 + 0.1 * small);
+    vec3 cloudColor = mix(vec3(0.91, 0.93, 0.95), vec3(1.0), 0.5 + 0.5 * toSun) * (0.95 + 0.05 * small);
 
     // The sun's disc shows through thin cloud only.
     float disc = smoothstep(sunCos - 0.00004, sunCos + 0.00004, toSun);
-    color = mix(color, sunColor, disc * (1.0 - cloud * 0.8));
+    color = mix(color, ${srgb(SUN.color)}, disc * (1.0 - cloud * 0.8));
     color = mix(color, cloudColor, cloud * 0.9);
 
+    // Already sRGB, like the fog: no conversion.
     gl_FragColor = vec4(color, 1.0);
-    #include <colorspace_fragment>
   }
 `;
 
+// Fog takes the sky's color in the direction of each point, worked out from its position relative
+// to the camera, turned from view space back to world space.
+THREE.ShaderChunk.fog_pars_vertex = THREE.ShaderChunk.fog_pars_vertex.replace("varying float vFogDepth;", "varying float vFogDepth;\nvarying vec3 vFogDir;");
+THREE.ShaderChunk.fog_vertex = THREE.ShaderChunk.fog_vertex.replace("#ifdef USE_FOG", "#ifdef USE_FOG\n\tvFogDir = transpose( mat3( viewMatrix ) ) * mvPosition.xyz;");
+THREE.ShaderChunk.fog_pars_fragment = THREE.ShaderChunk.fog_pars_fragment.replace("varying float vFogDepth;", `varying float vFogDepth;\nvarying vec3 vFogDir;\n${SKY_COLOR_GLSL}`);
+THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
+  "gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );",
+  "gl_FragColor.rgb = mix( gl_FragColor.rgb, skyColor( normalize( vFogDir ) ), fogFactor );",
+);
+
 export class Sky {
   constructor() {
-    const linear = (hex) => new THREE.Color(hex);
     this.material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
       uniforms: {
-        bands: { value: SKY_BANDS.map(([, hex]) => linear(hex)) },
-        stops: { value: SKY_BANDS.map(([stop]) => stop) },
         sunDir: { value: SUN_DIR },
-        sunColor: { value: linear(SUN.color) },
-        glowColor: { value: linear(SUN.glow) },
         sunCos: { value: Math.cos(THREE.MathUtils.degToRad(SUN.discDeg)) },
         cover: { value: CLOUDS.cover },
         drift: { value: new THREE.Vector2() },
