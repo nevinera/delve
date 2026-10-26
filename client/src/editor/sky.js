@@ -17,11 +17,13 @@ const BAND_STOPS = [0, 0.06, 0.25, 0.6, 1];
 const PALETTES = {
   day: [0xc4d8e6, 0xaecbe6, 0x7eaee6, 0x5290dc, 0x3f7bd2],
   twilight: [0xf2a36b, 0xd9988a, 0x8f86b5, 0x4f5f9e, 0x2f3f7a],
-  night: [0x1d2840, 0x18223a, 0x131c31, 0x0f1729, 0x0c1322],
+  night: [0x34466a, 0x2c3d60, 0x223252, 0x1a2844, 0x152138],
 };
 export const HORIZON = PALETTES.day[0];
 const SUN = { color: 0xfff6e0, discDeg: 1.6, glow: 0xfff0c8, lowGlow: 0xff8a4a };
 const MOON = { color: 0xeeeee2, discDeg: 2.2 };
+// What colors turn toward by night, scaled by their brightness.
+const MOONLIT = 0xc8e0ff;
 // Share of the sky clouds cover, their drift per second, and the heights (sine of the angle above
 // the horizon) they thin out between, so they stay above most far peaks.
 const CLOUDS = { cover: 0.52, wind: [0.012, 0.004], fade: [0.1, 0.3] };
@@ -61,9 +63,12 @@ export function skyLook({ sunDir, moonDir, moonAge }) {
     stars: 1 - smoothstep(-0.2, -0.02, sunY),
     clouds: mix(mix([0.13, 0.15, 0.21], [1, 1, 1], daylight), [1, 0.72, 0.6], twilight * 0.6),
     sun: { color: mix(rgb(0xff9a5c), rgb(0xfff6e8), warm), intensity: 1.6 * sunUp },
-    moon: { color: rgb(0xa8b8e0), intensity: 0.4 * fullness * moonUp * (1 - daylight) },
-    sky: { color: mix(mix(rgb(0x56638a), rgb(0xdde8ff), daylight), rgb(0xe8b8a0), twilight * 0.4), intensity: 0.35 + 0.75 * daylight },
-    ground: mix(rgb(0x1c2224), rgb(0x445533), daylight),
+    // Even a thin moon lights the night a little, and starlight stands in for it when it's down.
+    moon: { color: rgb(0xc4d4f4), intensity: 1.1 * (0.3 + 0.7 * fullness) * moonUp * (1 - daylight) },
+    sky: { color: mix(mix(rgb(0x7a8cc0), rgb(0xdde8ff), daylight), rgb(0xe8b8a0), twilight * 0.4), intensity: 0.7 + 0.4 * daylight },
+    ground: mix(rgb(0x2a3448), rgb(0x445533), daylight),
+    // How far toward moonlit blue-grey the scene's colors go: eyes lose color in the dark.
+    grade: 0.65 * (1 - daylight),
   };
 }
 
@@ -77,6 +82,7 @@ const SKY_UNIFORMS = {
   skyGlow: { value: vec() },
   skyGlowAmount: { value: vec() },
   skyLight: { value: { x: 1, y: 1, z: 1 } }, // how lit unlit things should look, like waterfall mist
+  skyGrade: { value: vec() }, // x: how far colors go toward moonlit blue-grey
 };
 for (const lib of Object.values(THREE.ShaderLib)) if (lib.uniforms.fogColor) Object.assign(lib.uniforms, SKY_UNIFORMS);
 Object.assign(THREE.UniformsLib.fog, SKY_UNIFORMS);
@@ -177,13 +183,15 @@ const fragmentShader = `
 `;
 
 // Fog takes the sky's color in the direction of each point, worked out from its position relative
-// to the camera, turned from view space back to world space.
+// to the camera, turned from view space back to world space. Before it, by night, colors are drawn
+// toward their brightness in moonlit blue-grey.
 THREE.ShaderChunk.fog_pars_vertex = THREE.ShaderChunk.fog_pars_vertex.replace("varying float vFogDepth;", "varying float vFogDepth;\nvarying vec3 vFogDir;");
 THREE.ShaderChunk.fog_vertex = THREE.ShaderChunk.fog_vertex.replace("#ifdef USE_FOG", "#ifdef USE_FOG\n\tvFogDir = transpose( mat3( viewMatrix ) ) * mvPosition.xyz;");
 THREE.ShaderChunk.fog_pars_fragment = THREE.ShaderChunk.fog_pars_fragment.replace("varying float vFogDepth;", `varying float vFogDepth;\nvarying vec3 vFogDir;\n${SKY_COLOR_GLSL}`);
 THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
   "gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );",
-  "gl_FragColor.rgb = mix( gl_FragColor.rgb, skyColor( normalize( vFogDir ) ), fogFactor );",
+  `gl_FragColor.rgb = mix( gl_FragColor.rgb, dot( gl_FragColor.rgb, vec3( 0.3, 0.59, 0.11 ) ) * ${srgb(MOONLIT)}, skyGrade.x );
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, skyColor( normalize( vFogDir ) ), fogFactor );`,
 );
 
 export class Sky {
@@ -222,6 +230,7 @@ export class Sky {
     setVec(SKY_UNIFORMS.skySunDir.value, at.sunDir);
     setVec(SKY_UNIFORMS.skyGlow.value, look.glow);
     setVec(SKY_UNIFORMS.skyGlowAmount.value, look.glowAmount);
+    SKY_UNIFORMS.skyGrade.value.x = look.grade;
     setVec(SKY_UNIFORMS.skyLight.value, look.sky.color.map((c) => Math.min(1, c * look.sky.intensity)));
     u.sunUp.value = look.sunUp;
     u.moonDir.value.fromArray(at.moonDir);
