@@ -1,54 +1,62 @@
 import { simplify } from "../world/polyline.js";
 
 // Routes for the sketch's road paths, after Galin et al., "Procedural Generation of Roads"
-// (Eurographics 2010): a shortest path across a lattice STEP_FT apart, where each step costs its
-// length, more the steeper it climbs, and nothing past the path's grade cap. Steps reach up to two
-// lattice points away, so routes can head in 16 directions instead of 8, and switchbacks form on
-// their own where a hill's too steep to climb straight. Turning costs too, so routes run straight
-// where they can and switchbacks have long legs. (The search tracks the way it came into each
-// lattice point, but not as part of the point, so it's a little short of the best route.) Paths
-// wider than CART_WIDTH_FT carry carts, so they're held to a gentler grade.
+// (Eurographics 2010): a shortest path where each foot costs more the steeper it climbs, and
+// nothing passes the path's grade cap. Paths wider than CART_WIDTH_FT carry carts, so they're held
+// to a gentler grade. Turning costs too, so routes run straight where they can and switchbacks
+// have long legs.
+//
+// The search is Lazy Theta* (Nash, Koenig and Tovey, 2010) on a lattice STEP_FT apart: each
+// lattice point links straight back to an earlier point on its route where it can, so routes head
+// any way, not just along the lattice. That matters on steep ground, where only a narrow range of
+// headings climbs gently enough. A link is judged by its ends' heights when it's made, and in full
+// when its far end is settled, falling back to a lattice step from a settled neighbour if it
+// fails. (The search tracks the way it came into each point, but not as part of the point, so it's
+// a little short of the best route.)
 //
 // Routes may cross rivers, square to the flow (within CROSSING.squareDeg), for a bridge to carry
 // them; each foot over water costs CROSSING.costPerFt, so they cross where it's narrow. They never
-// cross lakes or the sea. The ground's sampled every STEP_FT / 2 along each step, and rivers every
-// RIVER_SAMPLE_FT, so narrow ones aren't stepped over. The lattice route is then pulled straight
-// wherever a straight line costs no more, and its corners are rounded off.
+// cross lakes or the sea. The ground's sampled on a grid SAMPLE_FT apart, and rivers every
+// RIVER_SAMPLE_FT, so narrow ones aren't stepped over. The route's corners are rounded off after,
+// and it reports how steep the ground beside it is, since a road across a steep slope needs a
+// ledge dug for it.
 //
 // Points are continent feet here; the sketch keeps routes in tile units.
 
+// Bumped when routes would come out differently, so they're worked out again.
+export const ROUTE_VERSION = 2;
 const STEP_FT = 32;
+const SAMPLE_FT = STEP_FT;
 const RIVER_SAMPLE_FT = 8;
 export const CART_WIDTH_FT = 8;
 export const GRADES = { cart: 0.1, foot: 0.25 }; // rise over run
-// Each foot of a step costs 1 + perGrade × (grade / cap)², so a step at the cap costs 1 + perGrade.
+// Each foot costs 1 + perGrade × (grade / cap)², so a foot at the cap costs 1 + perGrade.
 const GRADE_COST = { perGrade: 3 };
+// Where the ground's too steep, the road can be dug in or built up by as much as `maxFt` over
+// each sample, each foot costing as much as going `costPerFt` further: enough for a hairpin's
+// landing, or to cut through a bump.
+const CARVE = { maxFt: 2, costPerFt: 200 };
 // A turn costs as much as going `hairpinFt` further for a full about-turn, less for gentler ones.
 const TURN = { hairpinFt: 160 };
 const CROSSING = { squareDeg: 20, costPerFt: 6, marginFt: 4 };
-// How hard the search tries before giving up: lattice points settled, and how much the estimate of
-// the distance left counts (over 1 finds routes faster, a little longer than the best).
-const SEARCH = { maxVisits: 60000, greed: 1.1 };
-// Pulling straight: tried over up to `spanSteps` lattice steps, sampling the ground every `sampleFt`.
-const PULL = { spanSteps: 16, sampleFt: STEP_FT / 2 };
+// How hard the search tries before giving up: lattice points settled; how much the estimate of the
+// distance left counts (over 1 finds routes faster, a little longer than the best); and how many
+// lattice steps a straight link may span.
+const SEARCH = { maxVisits: 60000, greed: 1.1, linkSteps: 256 };
 // Rounding corners: each is cut back up to a quarter of its sides, and at most `cutFt`, so a
 // hairpin's corner doesn't run straight up the hill.
 const SMOOTH = { toleranceFt: 1, rounds: 2, cutFt: 12 };
+// The ground's steepness beside the route is measured `probeFt` either side of points no more
+// than `spacingFt` apart.
+const SIDES = { probeFt: 16, spacingFt: 32 };
 
 // Every step reaching up to two lattice points away that isn't a repeat of a shorter one.
 const MOVES = [];
 for (let di = -2; di <= 2; di++) {
   for (let dj = -2; dj <= 2; dj++) {
-    if ((di || dj) && gcd(Math.abs(di), Math.abs(dj)) === 1) MOVES.push({ di, dj, len: Math.hypot(di, dj) * STEP_FT });
+    if ((di || dj) && gcd(Math.abs(di), Math.abs(dj)) === 1) MOVES.push({ di, dj });
   }
 }
-// What turning from one move onto another costs.
-const TURNS = MOVES.map((a) =>
-  MOVES.map((b) => {
-    const cos = ((a.di * b.di + a.dj * b.dj) * STEP_FT ** 2) / (a.len * b.len);
-    return (TURN.hairpinFt * (1 - cos)) / 2;
-  }),
-);
 
 export function gradeCap(widthFt) {
   return widthFt > CART_WIDTH_FT ? GRADES.cart : GRADES.foot;
@@ -56,23 +64,51 @@ export function gradeCap(widthFt) {
 
 // The route from `from` to `to` ([x, z] ft). ground(x, z) is { h, water } (generator.js
 // routeGround); riverAt(x, z) is the unit direction a river flows there, or null. Returns {
-// points, lengthFt, grade } with points in ft and grade the steepest step, or null when there's no
-// route within the cap.
+// points, slopes, lengthFt, grade } with points in ft, slopes how steep the ground is at each (rise
+// over run, any way), and grade the steepest the route climbs; or null when there's no route
+// within the cap.
 export function findRoute({ from, to, cap, ground, riverAt }) {
-  // Ground at half-lattice points, so each step's middle is sampled too.
-  const samples = new Map();
-  const sample = (hx, hz) => {
-    const k = (hx + 65536) * 131072 + (hz + 65536);
-    let s = samples.get(k);
-    if (!s) {
-      s = groundAt((hx * STEP_FT) / 2, (hz * STEP_FT) / 2);
-      samples.set(k, s);
-    }
-    return s;
+  // The ground on a grid SAMPLE_FT apart, kept in chunks CHUNK samples across: heights, and 1 for
+  // dry ground or 2 for water (0 not sampled yet).
+  const CHUNK = 64;
+  const chunks = new Map();
+  let last = { key: NaN };
+  const chunkOf = (cx, cz) => {
+    const key = (cx + 16384) * 32768 + (cz + 16384);
+    if (last.key === key) return last;
+    let chunk = chunks.get(key);
+    if (!chunk) chunks.set(key, (chunk = { key, h: new Float32Array(CHUNK * CHUNK), state: new Uint8Array(CHUNK * CHUNK) }));
+    return (last = chunk);
   };
+  // Sets `got` to the sample at grid point (gx, gz), as { h, blocked }.
+  const got = { h: 0, blocked: false };
+  const sample = (gx, gz) => {
+    const [cx, cz] = [Math.floor(gx / CHUNK), Math.floor(gz / CHUNK)];
+    const chunk = chunkOf(cx, cz);
+    const k = (gz - cz * CHUNK) * CHUNK + (gx - cx * CHUNK);
+    if (!chunk.state[k]) {
+      const g = ground(gx * SAMPLE_FT, gz * SAMPLE_FT);
+      chunk.h[k] = g.h;
+      chunk.state[k] = g.water ? 2 : 1;
+    }
+    got.h = chunk.h[k];
+    got.blocked = chunk.state[k] === 2;
+    return got;
+  };
+  // Between grid points, from the four around: blocked when water's at any of those that count.
   const groundAt = (x, z) => {
-    const g = ground(x, z);
-    return { x, z, h: g.h, blocked: Boolean(g.water) };
+    const [u, v] = [x / SAMPLE_FT, z / SAMPLE_FT];
+    const [gx, gz] = [Math.floor(u), Math.floor(v)];
+    const [fx, fz] = [u - gx, v - gz];
+    let { h: a, blocked } = sample(gx, gz);
+    blocked &&= fx < 1 && fz < 1;
+    const b = sample(gx + 1, gz).h;
+    blocked ||= got.blocked && fx > 0 && fz < 1;
+    const c = sample(gx, gz + 1).h;
+    blocked ||= got.blocked && fx < 1 && fz > 0;
+    const d = sample(gx + 1, gz + 1).h;
+    blocked ||= got.blocked && fx > 0 && fz > 0;
+    return { x, z, h: (a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz, blocked };
   };
   const square = Math.sin((CROSSING.squareDeg * Math.PI) / 180);
   // The cost and grade of going `len` ft in unit direction `dir` between two samples: Infinity
@@ -88,30 +124,23 @@ export function findRoute({ from, to, cap, ground, riverAt }) {
       wet = true;
     }
     if (wet) return { cost: len * CROSSING.costPerFt, grade: 0 };
-    const grade = Math.abs(q.h - p.h) / len;
-    if (grade > cap) return { cost: Infinity };
-    return { cost: len * (1 + GRADE_COST.perGrade * (grade / cap) ** 2), grade };
+    const rise = Math.abs(q.h - p.h);
+    const carved = rise - cap * len;
+    if (carved > CARVE.maxFt) return { cost: Infinity };
+    const grade = Math.min(rise / len, cap);
+    return { cost: len * (1 + GRADE_COST.perGrade * (grade / cap) ** 2) + Math.max(0, carved) * CARVE.costPerFt, grade };
   };
-  // A step's cost and grade, from the half-lattice point (hx, hz), through its middle.
-  const step = (hx, hz, { di, dj, len }) => {
-    const dir = [(di * STEP_FT) / len, (dj * STEP_FT) / len];
-    const a = leg(sample(hx, hz), sample(hx + di, hz + dj), len / 2, dir);
-    if (a.cost === Infinity) return a;
-    const b = leg(sample(hx + di, hz + dj), sample(hx + 2 * di, hz + 2 * dj), len / 2, dir);
-    return { cost: a.cost + b.cost, grade: Math.max(a.grade, b.grade) };
-  };
-  // The cost and grade of a straight line between two points in ft, sampled `n` times along the
-  // way (as often as PULL says by default).
-  const line = (a, b, n = 0) => {
+  // The cost and grade of a straight line between two points in ft, sampled along the way.
+  const line = (a, b) => {
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    n ||= Math.max(1, Math.ceil(len / PULL.sampleFt));
+    if (!len) return { cost: 0, grade: 0 };
+    const n = Math.ceil(len / SAMPLE_FT);
     const dir = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
-    const at = (k) => groundAt(a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n);
     let cost = 0;
     let grade = 0;
-    let p = at(0);
+    let p = groundAt(...a);
     for (let k = 1; k <= n; k++) {
-      const q = at(k);
+      const q = groundAt(a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n);
       const l = leg(p, q, len / n, dir);
       if (l.cost === Infinity) return l;
       cost += l.cost;
@@ -121,72 +150,132 @@ export function findRoute({ from, to, cap, ground, riverAt }) {
     return { cost, grade };
   };
 
+  // Lattice points by small whole numbers, which maps and sets handle fastest.
+  const key = (i, j) => (i + 16384) * 32768 + (j + 16384);
+  const at = (k) => [(Math.floor(k / 32768) - 16384) * STEP_FT, ((k % 32768) - 16384) * STEP_FT];
+  // What turning from heading `d` (a unit vector, or none at the start) onto the line a → b costs.
+  const turn = (d, a, b) => {
+    if (!d) return 0;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    return (TURN.hairpinFt * (1 - (d[0] * (b[0] - a[0]) + d[1] * (b[1] - a[1])) / len)) / 2;
+  };
+  const heading = (a, b) => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    return [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+  };
+
   const [si, sj] = from.map((v) => Math.round(v / STEP_FT));
   const [ei, ej] = to.map((v) => Math.round(v / STEP_FT));
-  const key = (i, j) => (i + 32768) * 65536 + (j + 32768);
+  const start = key(si, sj);
   const goal = key(ei, ej);
-  const best = new Map([[key(si, sj), 0]]);
-  const came = new Map();
-  const heading = new Map(); // the move into each lattice point
+  // Per lattice point: the cost of the route there, the point it links straight back to, the
+  // heading it arrives on, and whether its link has been judged in full.
+  const best = new Map([[start, 0]]);
+  const parent = new Map();
+  const dirs = new Map();
+  const checked = new Set([start]);
   const done = new Set();
   const open = new Heap();
-  const estimate = (i, j) => Math.hypot(ei - i, ej - j) * STEP_FT * SEARCH.greed;
-  open.push(estimate(si, sj), [si, sj]);
+  const estimate = (k) => {
+    const [x, z] = at(k);
+    return Math.hypot(ei * STEP_FT - x, ej * STEP_FT - z) * SEARCH.greed;
+  };
+  const link = (k, p, g) => {
+    best.set(k, g);
+    parent.set(k, p);
+    dirs.set(k, heading(at(p), at(k)));
+  };
+  // The cheapest link from a settled neighbour, or straight on from its parent, or false.
+  const fallBack = (k) => {
+    const [x, z] = at(k);
+    let found = null;
+    for (const { di, dj } of MOVES) {
+      const n = key(x / STEP_FT - di, z / STEP_FT - dj);
+      if (!done.has(n)) continue;
+      for (const from of [n, parent.get(n)]) {
+        if (from === undefined || Math.hypot(at(from)[0] - x, at(from)[1] - z) > SEARCH.linkSteps * STEP_FT) continue;
+        const g = best.get(from) + turn(dirs.get(from), at(from), at(k)) + line(at(from), at(k)).cost;
+        if (g < (found?.g ?? Infinity)) found = { n: from, g };
+      }
+    }
+    if (found) link(k, found.n, found.g);
+    return Boolean(found);
+  };
+
+  open.push(estimate(start), start);
   while (open.size && done.size < SEARCH.maxVisits) {
-    const [i, j] = open.pop()[1];
-    const k = key(i, j);
-    if (done.has(k)) continue;
+    const k = open.pop()[1];
+    if (done.has(k) || !best.has(k)) continue;
+    if (!checked.has(k)) {
+      const p = parent.get(k);
+      const l = line(at(p), at(k));
+      if (l.cost < Infinity) link(k, p, best.get(p) + turn(dirs.get(p), at(p), at(k)) + l.cost);
+      else if (!fallBack(k)) {
+        // Unreachable as yet; another point may reach it later.
+        best.delete(k);
+        continue;
+      }
+      checked.add(k);
+    }
     done.add(k);
-    if (k === goal) return finish(trace(came, [si, sj], [ei, ej], key), best, key, line, from, to);
-    const turns = heading.has(k) ? TURNS[heading.get(k)] : null;
-    for (let m = 0; m < MOVES.length; m++) {
-      const move = MOVES[m];
-      const { cost } = step(2 * i, 2 * j, move);
-      if (cost === Infinity) continue;
-      const [ni, nj] = [i + move.di, j + move.dj];
-      const nk = key(ni, nj);
-      const g = best.get(k) + cost + (turns ? turns[m] : 0);
-      if (done.has(nk) || g >= (best.get(nk) ?? Infinity)) continue;
-      best.set(nk, g);
-      came.set(nk, [i, j]);
-      heading.set(nk, m);
-      open.push(g + estimate(ni, nj), [ni, nj]);
+    if (k === goal) return finish(trace(parent, start, goal).map(at), from, to, line, ground);
+    const here = at(k);
+    const p = parent.get(k);
+    for (const { di, dj } of MOVES) {
+      const n = key(here[0] / STEP_FT + di, here[1] / STEP_FT + dj);
+      if (done.has(n)) continue;
+      const there = at(n);
+      let found = null;
+      // Straight on from this point's parent, judged by the heights at its ends for now.
+      if (p !== undefined && Math.hypot(there[0] - at(p)[0], there[1] - at(p)[1]) <= SEARCH.linkSteps * STEP_FT) {
+        const [a, b] = [groundAt(...at(p)), groundAt(...there)];
+        const len = Math.hypot(there[0] - a.x, there[1] - a.z);
+        const grade = Math.abs(b.h - a.h) / len;
+        if (!b.blocked && grade <= cap) found = { p, g: best.get(p) + turn(dirs.get(p), at(p), there) + len * (1 + GRADE_COST.perGrade * (grade / cap) ** 2), checked: false };
+      }
+      // A lattice step from this point, judged in full.
+      const l = line(here, there);
+      const g = best.get(k) + turn(dirs.get(k), here, there) + l.cost;
+      if (g < (found?.g ?? Infinity)) found = { p: k, g, checked: true };
+      if (!found || found.g >= (best.get(n) ?? Infinity)) continue;
+      link(n, found.p, found.g);
+      if (found.checked) checked.add(n);
+      else checked.delete(n);
+      open.push(found.g + estimate(n), n);
     }
   }
   return null;
 }
 
-// The lattice points from start to end.
-function trace(came, start, end, key) {
-  const cells = [end];
-  for (let c = end; c[0] !== start[0] || c[1] !== start[1]; ) cells.push((c = came.get(key(...c))));
-  return cells.reverse();
+// The lattice points from start to end, by their parents.
+function trace(parent, start, end) {
+  const keys = [end];
+  for (let k = end; k !== start; ) keys.push((k = parent.get(k)));
+  return keys.reverse();
 }
 
-// The route through lattice points `cells`, pulled straight: from each point kept, on to the
-// furthest point a straight line reaches for no more than the lattice route costs (`best` holds
-// what it cost to reach each point). It starts and ends at `from` and `to`, off the lattice.
-function finish(cells, best, key, line, from, to) {
-  const pts = cells.map(([i, j]) => [i * STEP_FT, j * STEP_FT]);
-  const cost = cells.map((c) => best.get(key(...c)));
-  const kept = [0];
+// The route through lattice points `pts`, starting and ending at `from` and `to`, off the lattice,
+// with its corners rounded, and how steep the ground beside it is.
+function finish(pts, from, to, line, ground) {
   let grade = 0;
-  for (let a = 0; a < pts.length - 1; ) {
-    let to = a + 1;
-    let found = line(pts[a], pts[to], 2); // as the search went, through the step's middle
-    for (let b = a + 2; b < pts.length && b - a <= PULL.spanSteps; b++) {
-      const tried = line(pts[a], pts[b]);
-      if (tried.cost > (cost[b] - cost[a]) * 1.001) continue;
-      [to, found] = [b, tried];
-    }
-    grade = Math.max(grade, found.grade);
-    kept.push(to);
-    a = to;
-  }
-  const points = smooth(simplify([from, ...kept.slice(1, -1).map((k) => pts[k]), to], SMOOTH.toleranceFt));
+  for (let k = 1; k < pts.length; k++) grade = Math.max(grade, line(pts[k - 1], pts[k]).grade);
+  const points = densify(smooth(simplify([from, ...pts.slice(1, -1), to], SMOOTH.toleranceFt)));
+  const d = SIDES.probeFt;
+  const slopes = points.map(([x, z]) => Math.hypot(ground(x + d, z).h - ground(x - d, z).h, ground(x, z + d).h - ground(x, z - d).h) / (2 * d));
   let lengthFt = 0;
   for (let k = 1; k < points.length; k++) lengthFt += Math.hypot(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1]);
-  return { points, lengthFt, grade };
+  return { points, slopes, lengthFt, grade };
+}
+
+// Points added along long segments, so none is longer than SIDES.spacingFt.
+function densify(points) {
+  const out = [points[0]];
+  for (let k = 1; k < points.length; k++) {
+    const [a, b] = [points[k - 1], points[k]];
+    const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / SIDES.spacingFt);
+    for (let m = 1; m <= n; m++) out.push([a[0] + ((b[0] - a[0]) * m) / n, a[1] + ((b[1] - a[1]) * m) / n]);
+  }
+  return out;
 }
 
 // Chaikin's corner cutting: each corner is cut back along both its sides.
@@ -266,9 +355,14 @@ export function findCrossing(paths, gap) {
   return null;
 }
 
-// A route cut in two at `point` on its segment `index`.
-export function splitRoute(points, index, point) {
-  return [[...points.slice(0, index + 1), point], [point, ...points.slice(index + 1)]];
+// A route ({ points, slopes }) cut in two at `point` on its segment `index`.
+export function splitRoute({ points, slopes }, index, point) {
+  const halves = [
+    { points: [...points.slice(0, index + 1), point], slopes: slopes && [...slopes.slice(0, index + 1), slopes[index]] },
+    { points: [point, ...points.slice(index + 1)], slopes: slopes && [slopes[index], ...slopes.slice(index + 1)] },
+  ];
+  for (const half of halves) if (!slopes) delete half.slopes;
+  return halves;
 }
 
 function intersect(p, p2, q, q2) {

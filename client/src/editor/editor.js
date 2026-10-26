@@ -20,7 +20,7 @@ import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZo
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
 import { WaterSimulator } from "./waterflow.js";
-import { RoadRouter, findCrossing, gradeCap } from "./roads.js";
+import { ROUTE_VERSION, RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
 import { TILE_FT } from "../world/constants.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
@@ -349,7 +349,7 @@ export class Editor {
     const at = (id) => this.sketch.pins.find((p) => p.id === id)?.at;
     const [from, to] = [at(path.from), at(path.to)];
     if (!from || !to) return null;
-    return String(hashString(JSON.stringify([this.roadLand, from, to, gradeCap(path.width)])));
+    return String(hashString(JSON.stringify([ROUTE_VERSION, this.roadLand, from, to, gradeCap(path.width)])));
   }
 
   // Keeps a route that's still wanted, and once the routes in hand are kept, puts road pins where

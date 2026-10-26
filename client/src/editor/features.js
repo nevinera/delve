@@ -24,6 +24,12 @@ const PATH = { color: "#c8a26a", none: "#ff4a4a", pending: "rgba(255, 255, 255, 
 // The kinds of road, each with its own tool. A path's kind is the first of its tags that names one
 // (plain road without). New paths get the kind's width and tag. On the map, each kind is drawn
 // at least `minPx` wide: highways as a double line, roads solid, trails dashed and footpaths dotted.
+// Ground beside a route at least this steep (rise over run, any way) is highlighted: a road there
+// needs a ledge dug for it.
+const STEEP_SIDES = [
+  { slope: 1, label: "45°", color: "rgba(255, 60, 40, 0.75)" },
+  { slope: 0.5, label: "27°", color: "rgba(255, 160, 40, 0.6)" },
+];
 export const ROADS = {
   highway: { width: 24, minPx: 6, style: "double" },
   road: { width: 12, minPx: 3, style: "solid" },
@@ -202,9 +208,9 @@ export class Features {
     sketch.paths.push(next);
     delete path.route;
     if (!current) return;
-    const halves = splitRoute(route.points, index, pin.at);
-    for (const [p, points] of [[path, halves[0]], [next, halves[1]]]) {
-      p.route = { key: this.editor.routeKey(p), points, lengthFt: Math.round(lengthOf(points) * TILE_FT), grade: route.grade };
+    const halves = splitRoute(route, index, pin.at);
+    for (const [p, half] of [[path, halves[0]], [next, halves[1]]]) {
+      p.route = { key: this.editor.routeKey(p), ...half, lengthFt: Math.round(lengthOf(half.points) * TILE_FT), grade: route.grade };
     }
   }
 
@@ -356,6 +362,7 @@ export class Features {
     const points = this.pathPoints(sketch, path);
     if (state === "routed" || (state === "pending" && path.route?.points)) {
       ctx.globalAlpha = state === "routed" ? 1 : 0.5;
+      this.drawSteep(ctx, path);
       this.drawRoad(ctx, points, path);
       ctx.globalAlpha = 1;
     } else {
@@ -367,6 +374,27 @@ export class Features {
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = dpr;
       polyline(ctx, points.map((p) => this.map.toScreen(p)));
+    }
+  }
+
+  // Where a route crosses steep ground, a glow under it, brighter the steeper.
+  drawSteep(ctx, path) {
+    const { points, slopes } = path.route;
+    if (!slopes) return;
+    const dpr = this.map.dpr;
+    const width = Math.max(ROADS[roadKind(path)].minPx * dpr, (path.width / TILE_FT) * this.map.view.scale) + 8 * dpr;
+    for (const k of [1, 0]) {
+      const { slope, color } = STEEP_SIDES[k];
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      for (let n = 1; n < points.length; n++) {
+        if ((slopes[n - 1] + slopes[n]) / 2 < slope) continue;
+        ctx.moveTo(...this.map.toScreen(points[n - 1]));
+        ctx.lineTo(...this.map.toScreen(points[n]));
+      }
+      ctx.stroke();
     }
   }
 
@@ -490,7 +518,7 @@ export class Features {
     const cap = `${Math.round(gradeCap(path.width) * 100)}%`;
     const carts = path.width > CART_WIDTH_FT ? "it's wide enough for carts, so it's held to" : "its grade cap is";
     el.textContent = {
-      routed: `Runs ${path.route?.lengthFt?.toLocaleString()} ft, climbing ${Math.round((path.route?.grade ?? 0) * 100)}% at most (${carts} ${cap}).`,
+      routed: `Runs ${path.route?.lengthFt?.toLocaleString()} ft, climbing ${Math.round((path.route?.grade ?? 0) * 100)}% at most (${carts} ${cap}).${steepText(path.route)}`,
       none: `No route within a ${cap} grade without crossing a lake or the sea, or a river at an angle, so it's shown as a red dashed line.`,
       pending: "Working out its route…",
     }[this.pathState(path)];
@@ -545,6 +573,22 @@ export class Features {
     label.append(input);
     return label;
   }
+}
+
+// How much of a route crosses steep ground, as a sentence, or nothing.
+function steepText({ points, slopes } = {}) {
+  if (!slopes) return "";
+  const feet = STEEP_SIDES.map(({ slope }) => {
+    let ft = 0;
+    for (let n = 1; n < points.length; n++) {
+      if ((slopes[n - 1] + slopes[n]) / 2 >= slope) ft += Math.hypot(points[n][0] - points[n - 1][0], points[n][1] - points[n - 1][1]) * TILE_FT;
+    }
+    return Math.round(ft);
+  });
+  const [worst, steep] = feet;
+  if (!steep) return "";
+  const [w, s] = STEEP_SIDES;
+  return ` ${steep.toLocaleString()} ft crosses ground steeper than ${s.label}${worst ? `, ${worst.toLocaleString()} ft of it steeper than ${w.label}` : ""}, where it'll need a ledge dug.`;
 }
 
 // A path's kind of road (ROADS): the first of its tags that names one, or plain road.

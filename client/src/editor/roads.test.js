@@ -29,7 +29,18 @@ describe("findRoute", () => {
     const route = findRoute({ from: [0, -300], to: [0, 300], cap: 0.25, ground: land(height), riverAt: noRivers });
     expect(route.grade).toBeLessThanOrEqual(0.25);
     expect(route.lengthFt).toBeGreaterThan(200 / 0.25);
-    expect(steepest(route, height, 64)).toBeLessThan(0.3);
+    expect(steepest(route, height, 64)).toBeLessThan(0.33); // a little over, where it digs in
+  });
+
+  it("climbs steep slopes whichever way they face, reporting how steep they are", () => {
+    for (const [slope, cap] of [[0.3, 0.1], [0.8, 0.25], [1.2, 0.25]]) {
+      const height = (x, z) => Math.max(-200, Math.min(200, z)) * slope;
+      const route = findRoute({ from: [0, -300], to: [0, 300], cap, ground: land(height), riverAt: noRivers });
+      expect(route, `${slope} at ${cap}`).not.toBeNull();
+      expect(route.grade).toBeLessThanOrEqual(cap);
+      expect(Math.max(...route.slopes)).toBeCloseTo(slope, 1);
+      expect(route.slopes[0]).toBe(0);
+    }
   });
 
   it("holds cart roads to a gentler grade", () => {
@@ -77,6 +88,9 @@ describe("findCrossing", () => {
   });
 
   it("splits a route at a point", () => {
-    expect(splitRoute([[0, 0], [10, 10], [20, 10]], 0, [5, 5])).toEqual([[[0, 0], [5, 5]], [[5, 5], [10, 10], [20, 10]]]);
+    expect(splitRoute({ points: [[0, 0], [10, 10], [20, 10]], slopes: [0.1, 0.2, 0.3] }, 0, [5, 5])).toEqual([
+      { points: [[0, 0], [5, 5]], slopes: [0.1, 0.1] },
+      { points: [[5, 5], [10, 10], [20, 10]], slopes: [0.1, 0.2, 0.3] },
+    ]);
   });
 });

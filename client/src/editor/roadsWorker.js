@@ -19,7 +19,9 @@ self.onmessage = ({ data }) => {
     let route = land.routes.get(key);
     if (!route) {
       const found = findRoute({ from: toFt(from), to: toFt(to), cap: gradeCap(width), ground: (x, z) => routeGround(land.ctx, x, z), riverAt: land.riverAt });
-      route = found ? { points: found.points.map(toTiles), lengthFt: Math.round(found.lengthFt), grade: Math.round(found.grade * 1000) / 1000 } : { points: null };
+      route = found
+        ? { points: found.points.map(toTiles), slopes: found.slopes.map((s) => Math.round(s * 100) / 100), lengthFt: Math.round(found.lengthFt), grade: Math.round(found.grade * 1000) / 1000 }
+        : { points: null };
       if (land.routes.size >= ROUTES_KEPT) land.routes.delete(land.routes.keys().next().value);
       land.routes.set(key, route);
     }
