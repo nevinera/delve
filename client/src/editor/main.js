@@ -73,6 +73,23 @@ $("upload").addEventListener("click", () => {
   $("uploadFile").click();
 });
 
+// The server's shared default world, for working without a file at hand (it isn't part of the
+// repo; it's copied onto each server). no-cache, so a replaced one comes through.
+const DEFAULT_WORLD = "/worlds/default.zip";
+
+$("loadDefault").addEventListener("click", async () => {
+  if (editor.dirty && !window.confirm("Replace this world with the default one? Changes you haven't downloaded will be lost.")) return;
+  try {
+    const response = await fetch(DEFAULT_WORLD, { cache: "no-cache" });
+    if (!response.ok) throw new Error(response.status === 404 ? "this server has no default world" : `the server said ${response.status}`);
+    editor.setWorld(World.fromZip(new Uint8Array(await response.arrayBuffer())));
+    $("worldName").textContent = editor.world.info.name;
+    keep();
+  } catch (err) {
+    window.alert(`Couldn't load the default world: ${err.message}`);
+  }
+});
+
 $("uploadFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
