@@ -21,11 +21,12 @@ export const DEFAULT_BIOME = "plains";
 // amp: hill noise height (ft); rough: ridged rocky noise height (ft); steep: rise over run that
 // turns to rock; trees: chance of a tree per 32ft grid square; sizes: odds of 1x1, 2x2 and 3x3;
 // kinds: odds per tree kind; pools: swamp pools, 0-1; ravines: ravine cracks, 0-1; lakes:
-// scattered ponds and small lakes, 0-1; clutter: how much ground clutter, 1 by default.
+// scattered ponds and small lakes, 0-1; clutter: how much ground clutter, 1 by default; cliffs:
+// patches of ledges and cliffs, 0-1; peaks: high pins rise to a point, 0-1.
 const PROFILES = {
   plains: { amp: 4, rough: 0, steep: 0.7, trees: 0.03, sizes: [0.5, 0.4, 0.1], kinds: { oak: 1 } },
   forest: { amp: 9, rough: 0, steep: 0.7, trees: 0.17, sizes: [0.1, 0.3, 0.6], kinds: { oak: 0.85, pine: 0.15 } },
-  rocky: { amp: 12, rough: 26, steep: 0.45, trees: 0.06, sizes: [0.6, 0.35, 0.05], kinds: { pine: 0.7, dead: 0.3 } },
+  rocky: { amp: 12, rough: 45, steep: 0.45, cliffs: 1, peaks: 1, trees: 0.06, sizes: [0.6, 0.35, 0.05], kinds: { pine: 0.7, dead: 0.3 } },
   swamp: { amp: 2, rough: 0, steep: 0.7, trees: 0.25, sizes: [0.4, 0.5, 0.1], kinds: { willow: 0.65, dead: 0.35 }, pools: 1 },
 };
 // What each pin tag does to its profile.
@@ -33,6 +34,7 @@ const TAGS = {
   flat: (p) => {
     p.amp *= 0.3;
     p.rough *= 0.3;
+    p.cliffs *= 0.3;
   },
   hilly: (p) => {
     p.amp *= 2.2;
@@ -107,6 +109,8 @@ export function profileFor(biome, tags = []) {
     sizes: [...base.sizes],
     kinds: TREE_KINDS.map((kind) => base.kinds[kind] ?? 0),
     pools: base.pools ?? 0,
+    cliffs: base.cliffs ?? 0,
+    peaks: base.peaks ?? 0,
     ravines: 0,
     lakes: 0,
     clutter: 1,

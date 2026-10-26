@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CELLS } from "./constants.js";
+import { CELLS, TILE_FT } from "./constants.js";
 import { generateTile, prepareWorld } from "./generator.js";
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
@@ -150,5 +150,28 @@ describe("fbm", () => {
       const v = fbm(i * 37.3, i * -11.9, 7, { wavelength: 100 });
       expect(Math.abs(v)).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe("rocky peaks", () => {
+  const world = (biome) => {
+    const sq = [[[0, 0], [12, 0], [12, 12], [0, 12]]];
+    const pins = [
+      { id: "b", kind: "biome", at: [6, 6], biome },
+      { id: "top", kind: "height", at: [6, 6], height: 900 },
+      { id: "low1", kind: "height", at: [1, 6], height: 20 },
+      { id: "low2", kind: "height", at: [11, 6], height: 20 },
+    ];
+    return prepareWorld([{ region: [sq], pins, strokes: [] }], "peaks");
+  };
+
+  it("cuts a summit's dome down to a peak in rocky land", () => {
+    const x = 6 * TILE_FT;
+    const z = 6 * TILE_FT;
+    const dome = world("plains").heightAt;
+    const peak = world("rocky").heightAt;
+    expect(peak(x, z)).toBeCloseTo(dome(x, z), 0);
+    expect(dome(x, z) - dome(x + 400, z)).toBeLessThan(60);
+    expect(peak(x, z) - peak(x + 400, z)).toBeGreaterThan(150);
   });
 });

@@ -15,12 +15,12 @@ import polygonClipping from "polygon-clipping";
 import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT, WATER_KINDS } from "./constants.js";
 import { prepareHeights } from "./heightField.js";
-import { fbm, hash2, hashString } from "./noise.js";
+import { facets, fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { scatterObjects } from "./objects.js";
 import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
 
-export const GENERATOR_VERSION = 19;
+export const GENERATOR_VERSION = 20;
 
 export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"];
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
@@ -31,6 +31,22 @@ const BASE = {
   hillWavelength: 1200, // rolling hills
   roughWavelength: 350, // a rocky biome's ridges
 };
+// Rocky peaks: a height pin in peaky land (the biomes' `peaks`) that's higher than every other pin
+// within `aloneFt` is a summit. The broad shape is a smooth dome there, capped flat by its bounds,
+// so around a summit it's cut down to a peak: a cone reaching from the summit to the ground
+// `reach` of the way to the nearest pin (at most `maxFt`), its flanks steepest near the top
+// (`flank` < 1). It eases back to the broad shape over the outer `blend` share.
+const PEAK = { aloneFt: 2500, reach: 0.9, maxFt: 6000, flank: 0.7, blend: 0.3 };
+// Cliffs: in patches (`patchWavelength`, covering about `cover` of the land where the biomes'
+// `cliffs` is 1), ground climbs in ledges `minFt` to `maxFt` high, each rise squeezed into a
+// cliff over `riser` of the ledge's height. Cliff lines wander by up to a ledge either way.
+const CLIFFS = { patchWavelength: 1600, cover: 0.6, minFt: 20, maxFt: 60, stepWavelength: 900, wander: 260, riser: 0.15 };
+// Rocky ground breaks into flat facets (noise.js `facets`) at these sizes, each as tall as
+// `share` of the biome's roughness.
+const FACETS = [
+  { wavelength: 80, share: 1.1 },
+  { wavelength: 30, share: 0.35 },
+];
 // Crags: sharp ridged noise, as tall as the biome's roughness plus `perSlope` times the broad
 // shape's steepness (rise over run).
 const CRAG = { wavelength: 160, perSlope: 60, probeFt: 24 };
@@ -113,6 +129,8 @@ export function prepareWorld(zones, seedKey) {
     edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
     seed: ctx.seed,
   });
+
+  ctx.heightAt = withPeaks(ctx.heightAt, summits(heightPins.map((p) => toFt(p.at).concat(p.height)), ctx.biomes));
 
   // Rivers always descend: the surface follows the lowest ground seen so far from the source.
   ctx.rivers = zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river" && s.points.length >= 2)).map((s) => {
@@ -249,6 +267,10 @@ function land(ctx, x, z, edges, biomes) {
   if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
   const crag = rough * 0.5 + steep * CRAG.perSlope;
   if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;
+  FACETS.forEach(({ wavelength, share }, n) => {
+    if (rough > 0) h += facets(x, z, ctx.seed ^ (0x5bd1e995 + n), wavelength) * rough * share;
+  });
+  if (climate.profile.cliffs > 0) h = ledges(ctx, h, x, z, climate.profile.cliffs);
   const swell = JITTER.swellFt * smoothstep(0, JITTER.swellFullAt, ctx.heightAt(x, z));
   h += fbm(x, z, ctx.seed ^ 0x3c6ef373, { wavelength: JITTER.swellWavelength, octaves: 2 }) * swell;
   h += fbm(x, z, ctx.seed ^ 0x6a09e667, { wavelength: JITTER.wavelength, octaves: 2 }) * JITTER.ft;
@@ -257,6 +279,50 @@ function land(ctx, x, z, edges, biomes) {
 }
 
 // How far inside the zoned area's edge the coast lies here, between 0 and SHORE.maxFt.
+// Height pins that are summits: [{ x, z, height, radius }], from pins as [x, z, height].
+function summits(pins, biomes) {
+  return pins.flatMap(([x, z, height], i) => {
+    if (climateAt(biomes, x, z).profile.peaks < 0.5) return [];
+    let nearest = Infinity;
+    for (const [ox, oz, other] of pins.filter((_, j) => j !== i)) {
+      const d = Math.hypot(ox - x, oz - z);
+      if (other >= height && d < PEAK.aloneFt) return [];
+      nearest = Math.min(nearest, d);
+    }
+    return [{ x, z, height, radius: Math.min(PEAK.maxFt, nearest * PEAK.reach) }];
+  });
+}
+
+// The broad shape, with each summit's dome cut down to a peak: from the summit down to where the
+// dome is at `radius` along the same line, the height follows a curve that's steepest at the top.
+function withPeaks(heightAt, peaks) {
+  if (!peaks.length) return heightAt;
+  return (x, z) => {
+    const h = heightAt(x, z);
+    for (const p of peaks) {
+      const r = Math.hypot(x - p.x, z - p.z);
+      if (r >= p.radius) continue;
+      const foot = r > 0 ? heightAt(p.x + ((x - p.x) / r) * p.radius, p.z + ((z - p.z) / r) * p.radius) : heightAt(p.x + p.radius, p.z);
+      const peak = p.height + (foot - p.height) * (r / p.radius) ** PEAK.flank;
+      const cut = Math.min(h, peak);
+      return cut + (h - cut) * smoothstep(p.radius * (1 - PEAK.blend), p.radius, r);
+    }
+    return h;
+  };
+}
+
+// Ground stepped into ledges and cliffs, in patches, by `amount` (0-1).
+function ledges(ctx, h, x, z, amount) {
+  const patch = fbm(x, z, ctx.seed ^ 0x2545f491, { wavelength: CLIFFS.patchWavelength, octaves: 2 }) + 0.5;
+  const where = smoothstep(1 - CLIFFS.cover - 0.1, 1 - CLIFFS.cover + 0.1, patch) * amount;
+  if (where <= 0) return h;
+  const step = lerp(CLIFFS.minFt, CLIFFS.maxFt, clamp(fbm(x, z, ctx.seed ^ 0x4f1bbcdc, { wavelength: CLIFFS.stepWavelength }) + 0.5, 0, 1));
+  const shift = fbm(x, z, ctx.seed ^ 0x7f4a7c15, { wavelength: CLIFFS.wander, octaves: 2 }) * step;
+  const q = (h + shift) / step;
+  const ledge = (Math.floor(q) + smoothstep(1 - CLIFFS.riser, 1, q - Math.floor(q))) * step - shift;
+  return h + (ledge - h) * where;
+}
+
 function shoreInset(ctx, x, z) {
   let n = 0;
   SHORE.layers.forEach(({ wavelength, weight }, i) => (n += fbm(x, z, ctx.seed ^ (0x7f4a7c15 + i), { wavelength, octaves: 2 }) * weight));

@@ -48,3 +48,21 @@ export function fbm(x, z, seed, { wavelength, octaves = 3 }) {
   }
   return sum / norm;
 }
+
+const SKEW = (Math.sqrt(3) - 1) / 2;
+
+// Angular noise in [-0.5, 0.5]: random heights on a triangle grid about `wavelength` apart,
+// joined by flat planes, so the surface breaks into facets like broken rock.
+export function facets(x, z, seed, wavelength) {
+  const s = ((x + z) / wavelength) * SKEW;
+  const u = x / wavelength + s;
+  const v = z / wavelength + s;
+  const i = Math.floor(u);
+  const j = Math.floor(v);
+  const fu = u - i;
+  const fv = v - j;
+  const corner = (di, dj) => hash2(i + di, j + dj, seed) - 0.5;
+  // Each grid square is two triangles; inside one, height is a plane through its corners.
+  if (fu > fv) return corner(0, 0) * (1 - fu) + corner(1, 0) * (fu - fv) + corner(1, 1) * fv;
+  return corner(0, 0) * (1 - fv) + corner(0, 1) * (fv - fu) + corner(1, 1) * fu;
+}
