@@ -2,6 +2,7 @@ import "./builder.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
+import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
 import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, WEAPONS, resolveRecipe, saveLook, savedLook } from "./recipe.js";
 
 // The character builder page: one character on a patch of ground, with a control for each setting
@@ -114,6 +115,38 @@ function buildControls() {
       rebuild();
     });
     row(item, box);
+  }
+
+  // Each armor slot: its type, and its main and trim colors beside.
+  heading("Armor");
+  for (const slot of ARMOR_SLOTS) {
+    const select = document.createElement("select");
+    for (const option of ["none", ...ARMOR_TYPES]) select.add(new Option(option, option, false, option === (look.armor[slot]?.type ?? "none")));
+    const pair = Object.assign(document.createElement("span"), { className: "builder-pair" });
+    const colors = [0, 1].map((i) => {
+      const input = Object.assign(document.createElement("input"), { type: "color" });
+      input.addEventListener("input", () => {
+        look.armor[slot].colors[i] = input.value;
+        rebuild();
+      });
+      pair.append(input);
+      return input;
+    });
+    const show = () => {
+      const piece = look.armor[slot];
+      colors.forEach((input, i) => {
+        input.hidden = !piece;
+        if (piece) input.value = piece.colors[i];
+      });
+    };
+    select.addEventListener("change", () => {
+      if (select.value === "none") delete look.armor[slot];
+      else look.armor[slot] = { type: select.value, colors: [...ARMOR_COLORS[select.value]] };
+      show();
+      rebuild();
+    });
+    show();
+    row(slot, select, pair);
   }
 
   heading("Colors");

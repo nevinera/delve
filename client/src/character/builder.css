@@ -54,6 +54,16 @@
   justify-self: start;
 }
 
+.builder-pair {
+  display: flex;
+  gap: 2px;
+}
+
+.builder-pair input {
+  width: 2.1em;
+  padding: 0;
+}
+
 .builder-buttons {
   display: flex;
   gap: 8px;

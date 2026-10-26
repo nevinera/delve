@@ -1,3 +1,5 @@
+import { dressArmor } from "./armor.js";
+
 // A character's body as mesh data, without three.js, so it can be tested: a skeleton and a low-poly
 // skin over it, built from a look (recipe.js's resolveRecipe). Each limb and the trunk are tubes of
 // rings around their bones, each ring following one bone or blending two at a joint. Faces are
@@ -80,8 +82,8 @@ function widths(look) {
   };
 }
 
-// Mesh data for a look: { bones, positions, colors, skinIndex, skinWeight }, one entry per corner
-// of each triangle, so each face keeps its own flat color.
+// Mesh data for a look: { bones, positions, colors, skinIndex, skinWeight, mail }, one entry per
+// corner of each triangle, so each face keeps its own flat color; mail is 1 on chain mail.
 export function bodyMesh(look) {
   const bones = skeleton(look);
   const index = new Map(bones.map((b, i) => [b.name, i]));
@@ -138,7 +140,8 @@ export function bodyMesh(look) {
     const y = trunkRings[band].center[1] / s;
     return y < 3.3 ? c.secondary : y < 3.4 ? belt : y < 4.95 ? c.primary : c.skin;
   };
-  out.tube(trunkRings, 16, trunkColor, { capStart: true });
+  // Each part of the body, kept as rings and colors until armor has been put over it.
+  const parts = { trunk: { rings: trunkRings, sides: 16, color: trunkColor, opts: { capStart: true } } };
 
   for (const side of ["l", "r"]) {
     const n = (name) => name.replace(/_l$/, `_${side}`);
@@ -156,7 +159,7 @@ export function bodyMesh(look) {
       along(n("hand_l"), 0.55, { rx: 0.055 * s, rz: 0.12 * s }),
       along(n("hand_l"), 0.95, { rx: 0.045 * s, rz: 0.08 * s }),
     ];
-    out.tube(arm, 10, (band) => (band < 7 ? c.primary : c.skin), { capStart: true, capEnd: true });
+    parts[`arm_${side}`] = { rings: arm, sides: 10, color: (band) => (band < 7 ? c.primary : c.skin), opts: { capStart: true, capEnd: true } };
 
     // Leg, booted from mid-calf.
     const leg = [
@@ -169,7 +172,7 @@ export function bodyMesh(look) {
       along(n("calf_l"), 0.56, { rx: 0.18 * limb, rz: 0.2 * limb }),
       along(n("calf_l"), 0.97, { rx: 0.13 * limb, rz: 0.14 * limb, bones: [[n("calf_l"), 0.5], [n("foot_l"), 0.5]] }),
     ];
-    out.tube(leg, 8, (band) => (band < 5 ? c.secondary : boots));
+    parts[`leg_${side}`] = { rings: leg, sides: 8, color: (band) => (band < 5 ? c.secondary : boots), opts: {} };
     // Foot, heel to toe, its rings standing upright.
     const [fx, , fz] = at(n("foot_l"));
     const fwd = [0, 0, 1];
@@ -179,10 +182,12 @@ export function bodyMesh(look) {
       { center: [fx, 0.1 * s, fz + 0.48 * s], dir: fwd, rx: 0.14 * s, rz: 0.09 * s, bones: [[n("foot_l"), 0.5], [n("ball_l"), 0.5]] },
       { center: [fx, 0.07 * s, fz + 0.7 * s], dir: fwd, rx: 0.1 * s, rz: 0.06 * s, bones: [[n("ball_l"), 1]] },
     ];
-    out.tube(foot, 8, () => boots, { capStart: true, capEnd: true });
+    parts[`foot_${side}`] = { rings: foot, sides: 8, color: () => boots, opts: { capStart: true, capEnd: true } };
   }
 
-  head(out, look, at("head"), s, c);
+  parts.head = head(out, look, at("head"), s, c);
+  dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, n: (name, side) => name.replace(/_l$/, `_${side}`) });
+  for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
   return { bones, ...out.arrays() };
 }
 
@@ -213,7 +218,9 @@ function head(out, look, [hx, hy, hz], s, c) {
     if (scalp(a) && (band >= 4 || (band === 3 && a > 0.9) || (band === 2 && a > 1.9) || (long && band === 1 && a > 2.1))) return c.hair;
     return c.skin;
   };
-  out.tube(rings, 10, color, { capEnd: true, endColor: hair === "bald" ? c.skin : c.hair });
+  const part = { rings, sides: 10, color, opts: { capEnd: true, endColor: hair === "bald" ? c.skin : c.hair } };
+  // Hair that would stand through a helmet or hood goes.
+  const covered = Boolean(look.armor?.head);
 
   // The face's surface at height dy, x across, between the cheek and brow rings (and a little
   // beyond them).
@@ -265,11 +272,11 @@ function head(out, look, [hx, hy, hz], s, c) {
     const tail = [p(0, 0.55, -0.36), p(0, 0.35, -0.55), p(0, -0.05, -0.6), p(0, -0.45, -0.52)];
     out.path(tail, [0.1, 0.11, 0.08, 0.04].map((r) => r * s), 6, () => c.hair, (i) => (i < 3 ? bones : [["neck_01", 1]]), { capEnd: true });
   }
-  if (hair === "afro") {
+  if (hair === "afro" && !covered) {
     const afro = [ring(0.4, 0.45, 0.38, -0.14), ring(0.58, 0.56, 0.52, -0.09), ring(0.84, 0.52, 0.5, -0.07), ring(1.02, 0.3, 0.3, -0.06)];
     out.tube(afro, 12, () => c.hair, { capStart: true, capEnd: true });
   }
-  if (hair === "mohawk") {
+  if (hair === "mohawk" && !covered) {
     // A crest standing up from the forehead to the nape.
     const crest = [
       [0.5, 0.4],
@@ -339,9 +346,11 @@ function head(out, look, [hx, hy, hz], s, c) {
     out.tube([ringAt(-0.31, 0.25), ringAt(-0.25, 0.22)], 10, () => c.metal);
     out.gem([hx, hy - 0.52 * s, hz + 0.34 * s * (0.85 + 0.4 * look.build)], 0.07 * s, c.metal, [["spine_03", 1]]);
   }
+  return part;
 }
 
-// Collects triangles, each corner with its own position, color and bone weights.
+// Collects triangles, each corner with its own position, color and bone weights. Faces made
+// while `mail` is on are marked for characterMesh.js's mail texture.
 export class MeshOut {
   constructor(index) {
     this.index = index;
@@ -349,6 +358,8 @@ export class MeshOut {
     this.colors = [];
     this.skinIndex = [];
     this.skinWeight = [];
+    this.marks = [];
+    this.mail = false;
   }
 
   // A triangle, turned to face away from `inside`.
@@ -360,6 +371,7 @@ export class MeshOut {
     for (const k of order) {
       this.positions.push(...corners[k]);
       this.colors.push(...color);
+      this.marks.push(this.mail ? 1 : 0);
       const weights = (cornerBones?.[k] ?? bones).slice(0, 4);
       const total = weights.reduce((sum, [, w]) => sum + w, 0);
       for (let n = 0; n < 4; n++) {
@@ -370,8 +382,10 @@ export class MeshOut {
   }
 
   // Bands of faces between rings of `sides` corners, each colored by color(band, angle), angle 0
-  // facing the ring's front. Caps close the first or last ring to a point.
-  tube(rings, sides, color, { capStart = false, capEnd = false, endColor = null } = {}) {
+  // facing the ring's front. Caps close the first or last ring to a point; skip(band, angle) leaves
+  // faces out. A ring's weights(angle), where it has one, weights each corner by its angle instead
+  // of the ring's bones.
+  tube(rings, sides, color, { capStart = false, capEnd = false, endColor = null, skip = null } = {}) {
     const points = rings.map((r) => {
       // The ring's side axis is +x where it can be; its front is square to that and the bone.
       const side = norm(Math.abs(r.dir[0]) > 0.9 ? [0, 0, -1] : sub([1, 0, 0], mul(r.dir, r.dir[0])));
@@ -387,16 +401,19 @@ export class MeshOut {
     // Rings without bones of their own follow the nearest one before them that has some.
     const ringBones = [];
     rings.forEach((r, i) => (ringBones[i] = r.bones ?? ringBones[i - 1] ?? weightsOf(r)));
+    const signed = (angle) => (angle > Math.PI ? angle - Math.PI * 2 : angle);
+    const cornerBones = rings.map((r, i) => Array.from({ length: sides }, (_, k) => r.weights?.(signed((k / sides) * Math.PI * 2)) ?? ringBones[i]));
     for (let i = 0; i < rings.length - 1; i++) {
       const inside = mul(add(rings[i].center, rings[i + 1].center), 0.5);
       for (let k = 0; k < sides; k++) {
         const k1 = (k + 1) % sides;
-        const mid = ((k + 0.5) / sides) * Math.PI * 2;
-        const col = color(i, mid > Math.PI ? mid - Math.PI * 2 : mid);
+        const mid = signed(((k + 0.5) / sides) * Math.PI * 2);
+        if (skip?.(i, mid)) continue;
+        const col = color(i, mid);
         const [a, b, cc, d] = [points[i][k], points[i][k1], points[i + 1][k1], points[i + 1][k]];
-        const [wa, wb] = [ringBones[i], ringBones[i + 1]];
-        this.face([a, b, cc], col, wa, inside, [wa, wa, wb]);
-        this.face([a, cc, d], col, wa, inside, [wa, wb, wb]);
+        const [wa, wb, wc, wd] = [cornerBones[i][k], cornerBones[i][k1], cornerBones[i + 1][k1], cornerBones[i + 1][k]];
+        this.face([a, b, cc], col, wa, inside, [wa, wb, wc]);
+        this.face([a, cc, d], col, wa, inside, [wa, wc, wd]);
       }
     }
     const cap = (i, outward, capColor) => {
@@ -404,7 +421,8 @@ export class MeshOut {
       const tip = add(r.center, mul(r.dir, outward * Math.min(r.rx, r.rz) * 0.5));
       const inside = rings[i - outward]?.center ?? sub(r.center, mul(r.dir, outward));
       for (let k = 0; k < sides; k++) {
-        this.face([points[i][k], points[i][(k + 1) % sides], tip], capColor, ringBones[i], inside);
+        const k1 = (k + 1) % sides;
+        this.face([points[i][k], points[i][k1], tip], capColor, ringBones[i], inside, [cornerBones[i][k], cornerBones[i][k1], ringBones[i]]);
       }
     };
     if (capStart) cap(0, -1, color(0, Math.PI));
@@ -448,6 +466,7 @@ export class MeshOut {
       colors: Float32Array.from(this.colors),
       skinIndex: Uint16Array.from(this.skinIndex),
       skinWeight: Float32Array.from(this.skinWeight),
+      mail: Float32Array.from(this.marks),
     };
   }
 }

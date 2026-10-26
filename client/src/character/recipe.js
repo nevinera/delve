@@ -1,3 +1,5 @@
+import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
+
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
 // enemies' looks and the client builds their models (body.js). A recipe gives each setting either a
 // value or a choice: [low, high] picks a number between, and a list of strings picks one of them.
@@ -13,6 +15,8 @@
 // - bust: 0 to 1.
 // - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY.
 // - weapon: one of weapons.js's WEAPONS, held in hand.
+// - armor: { slot: { type, colors: [main, trim] } } for armor.js's ARMOR_SLOTS and ARMOR_TYPES;
+//   type and each color can be a list to pick from.
 // - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood }, each "#rrggbb" or a list
 //   to pick from. primary is the shirt or tunic, secondary the trousers; boots and belt are darker
 //   shades of those. metal is jewelry and fittings, steel blades, wood hafts and staves.
@@ -36,6 +40,7 @@ export const DEFAULT_LOOK = {
   beard: "none",
   jewelry: [],
   weapon: "none",
+  armor: {},
   colors: {
     skin: "#e0b48c",
     hair: "#4a3020",
@@ -60,10 +65,16 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
     }
     return value;
   };
-  const look = { ...DEFAULT_LOOK, jewelry: [...DEFAULT_LOOK.jewelry], colors: { ...DEFAULT_LOOK.colors } };
+  const look = { ...DEFAULT_LOOK, jewelry: [...DEFAULT_LOOK.jewelry], armor: {}, colors: { ...DEFAULT_LOOK.colors } };
   for (const [key, value] of Object.entries(recipe)) {
     if (key === "colors") {
       for (const [part, color] of Object.entries(value)) look.colors[part] = pick(color);
+    } else if (key === "armor") {
+      for (const slot of ARMOR_SLOTS) {
+        const piece = value?.[slot];
+        const type = piece && pick(piece.type);
+        if (ARMOR_TYPES.includes(type)) look.armor[slot] = { type, colors: [0, 1].map((i) => pick(piece.colors?.[i] ?? ARMOR_COLORS[type][i])) };
+      }
     } else if (key === "jewelry") {
       look.jewelry = value.filter((j) => JEWELRY.includes(j));
     } else {
