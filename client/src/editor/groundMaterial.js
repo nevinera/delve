@@ -138,11 +138,11 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
             // Wheel ruts, wandering a little, a third of the way in from each edge.
             float wander = (texture2D(groundDetail, p * 0.02 + 0.77).g - 0.5) * 1.6;
             float rut = 1.0 - smoothstep(0.2, 1.0, abs(inward - across * 0.35 + wander));
-            earth *= 1.0 - 0.2 * rut;
+            earth *= 1.0 - 0.1 * rut;
             // Hoof and foot prints: small dark dents, thickest down the middle and in the ruts.
             float trodden = 0.5 + 0.5 * smoothstep(0.2, 0.8, inward / across) + rut;
             float prints = smoothstep(0.66, 0.72, texture2D(groundDetail, p * 0.55 + 0.13).r) + smoothstep(0.68, 0.74, texture2D(groundDetail, p.yx * 0.9 + 0.58).r);
-            earth *= 1.0 - 0.22 * min(1.0, prints * trodden);
+            earth *= 1.0 - 0.32 * min(1.0, prints * trodden);
             // A darker lip along the edge, so the border reads.
             earth *= 1.0 - 0.18 * (1.0 - smoothstep(0.0, 0.7, inward));
             diffuseColor.rgb = mix(diffuseColor.rgb, earth, on);
