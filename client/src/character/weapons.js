@@ -192,7 +192,8 @@ export function weaponMesh(type, colors) {
     out.gem([0, top + 0.32, 0], 0.11, c.steel, bones);
   }
   if (type === "bow") {
-    // A curved stave, the grip foremost and the tips swept back toward the string.
+    // A curved stave, the grip foremost and the tips swept back. It has no string: a still one
+    // would stay straight while the hand draws it back.
     const half = 2.0;
     const points = [];
     const radii = [];
@@ -203,16 +204,6 @@ export function weaponMesh(type, colors) {
       radii.push(0.07 - 0.035 * Math.abs(t));
     }
     out.path(points, radii, 5, (band) => (band === 5 || band === 6 ? c.metal : c.wood), () => bones, { capStart: true, capEnd: true });
-    out.path(
-      [
-        [0, -half, -0.4],
-        [0, half, -0.4],
-      ],
-      [0.01, 0.01],
-      3,
-      () => STRING,
-      () => bones,
-    );
   }
   if (type === "crossbow") {
     // A stock gripped behind the trigger, and a short steel bow across its front, strung back.
