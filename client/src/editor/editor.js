@@ -20,6 +20,7 @@ import { ShapePalette } from "./shapePalette.js";
 import { TreeBrush } from "./treeBrush.js";
 import { tileRgba } from "../world/tileImage.js";
 import { TREE_KINDS, TREE_SIZES } from "../world/trees.js";
+import { TILE_FT } from "../world/constants.js";
 
 const HIT_PX = 8;
 const COLORS = {
@@ -39,6 +40,7 @@ const HINTS = {
   tree: "click or drag to plant trees on the zone's generated tiles · hold alt to remove them · regenerating a tile clears its trees",
 };
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · shift sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
+const HINT_PICK_WALK = "click where to start walking · esc cancels";
 const HINT_3D = "drag to orbit · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E to turn · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
 const TREE_TOOLS = TREE_SIZES.map((size) => `tree_${size}`);
 const treeToolSize = (name) => Number(/^tree_(\d)$/.exec(name)?.[1] ?? 0);
@@ -211,8 +213,38 @@ export class Editor {
     this.refreshMarks();
   }
 
-  // Shows the map as cells, terrain or 3D. three.js loads the first time 3D is shown.
-  async setView(view) {
+  // Starts walking at continent tile units [x, z]: from the 3D view, in the scene it shows; from
+  // the map, in a 3D view that loads only the tiles around the walker, and back to the map after.
+  async walkAt([x, z]) {
+    this.walkPicking = false;
+    const at = [x * TILE_FT, z * TILE_FT];
+    if (!this.world.files.has(tilePath(this.continent, Math.floor(x), Math.floor(z)))) {
+      this.say("Generate the tiles here before walking on them.");
+      this.renderPanel();
+      return;
+    }
+    if (this.showing3d) {
+      const { origin, decoded } = this.view3d;
+      if (!decoded.has(`${Math.floor(x)},${Math.floor(z)}`)) {
+        this.say("That spot isn't drawn in full here. Pick a spot in or near the zone.");
+        this.renderPanel();
+        return;
+      }
+      this.view3d.startWalk(() => this.renderPanel(), [at[0] - origin[0], at[1] - origin[1]]);
+    } else {
+      const back = this.view;
+      await this.setView("3d", { walkFrom: at });
+      this.view3d.walkFrom(this.sceneState(), at, () => {
+        if (this.view3d.streaming) this.setView(back);
+        else this.renderPanel();
+      });
+    }
+    this.renderPanel();
+  }
+
+  // Shows the map as cells, terrain or 3D. three.js loads the first time 3D is shown. `walkFrom`
+  // skips drawing the zone, for walkAt to load just what walking needs.
+  async setView(view, { walkFrom } = {}) {
     this.view = view;
     if (view !== "3d") this.view3d?.stopWalk();
     this.showing3d = view === "3d";
@@ -224,8 +256,8 @@ export class Editor {
     this.el.scene.hidden = !this.showing3d;
     this.showTip(null);
     this.renderPanel();
-    if (this.showing3d) this.refresh3d({ keepCamera: false });
-    else this.map.resize();
+    if (this.showing3d && !walkFrom) this.refresh3d({ keepCamera: false });
+    else if (!this.showing3d) this.map.resize();
   }
 
   // Switches to an editing step, with its first tool.
@@ -287,12 +319,14 @@ export class Editor {
     return {
       hover: (hit, e) => this.showTip(hit, e),
       grab: (hit) => {
+        if (this.walkPicking) return false;
         const zone = this.scopeZones().find((z) => z.key === hit.zone);
         this.painting = false;
         this.sceneZone = zone;
         return Boolean(zone) && this.kinds.includes(this.features.kindOf(zone, hit)) && this.features.grab(zone, hit);
       },
       press: (tile, e) => {
+        if (this.walkPicking) return false;
         if (!this.scopeZones().length || !this.brushTree() || !tile) return false;
         this.painting = true;
         this.say();
@@ -309,6 +343,10 @@ export class Editor {
       },
       drop: () => (this.painting ? this.treesDone() : this.features.endDrag(this.sceneZone)),
       click: (hit, tile) => {
+        if (this.walkPicking) {
+          if (tile) this.walkAt(tile);
+          return;
+        }
         if (hit) return;
         const zone = tile && (this.activeZone ?? this.zoneAt(tile));
         if (zone?.region.length && PINS[this.toolName]) this.features.addPin(zone, this.toolName, tile, this.palette.pinProps(this.toolName));
@@ -430,10 +468,11 @@ export class Editor {
     }
     for (const b of this.el.stepTabs.children) b.addEventListener("click", () => this.setStep(b.dataset.step));
     for (const b of this.el.viewTabs.children) b.addEventListener("click", () => this.setView(b.dataset.view));
+    // Walk asks where to start; the next click on the map or the ground starts there.
     this.el.walk.addEventListener("click", (e) => {
       e.currentTarget.blur(); // so space jumps instead of pressing the button again
-      if (this.view3d.walking) this.view3d.stopWalk();
-      else this.view3d.startWalk(() => this.renderPanel());
+      if (this.view3d?.walking) this.view3d.stopWalk();
+      else this.walkPicking = !this.walkPicking;
       this.renderPanel();
     });
     this.el.solidCanopies.addEventListener("change", (e) => {
@@ -550,11 +589,11 @@ export class Editor {
       b.classList.toggle("active", b.dataset.tool === this.toolName);
       b.disabled = !this.scopeZones().length;
     }
-    hint.textContent = this.view3d?.walking ? HINT_WALK : this.showing3d ? HINT_3D : HINTS[this.mode()];
-    this.el.walk.hidden = !this.showing3d;
+    hint.textContent = this.view3d?.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.showing3d ? HINT_3D : HINTS[this.mode()];
+    this.el.walk.hidden = false;
     this.el.solidCanopiesLabel.hidden = !this.showing3d;
-    this.el.walk.textContent = this.view3d?.walking ? "stop walking" : "walk";
-    this.el.walk.classList.toggle("active", Boolean(this.view3d?.walking));
+    this.el.walk.textContent = this.view3d?.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";
+    this.el.walk.classList.toggle("active", Boolean(this.view3d?.walking || this.walkPicking));
   }
 
   // The changed tiles you can regenerate now.
@@ -626,6 +665,7 @@ export class Editor {
   // --- tools ---
 
   tool() {
+    if (this.walkPicking) return { down: (tile) => (this.walkAt(tile), true) };
     const zone = this.activeZone;
     if (this.step === "zones") {
       if (!zone) return null;
@@ -736,6 +776,11 @@ export class Editor {
   }
 
   onKey(e) {
+    if (this.walkPicking && e.key === "Escape") {
+      this.walkPicking = false;
+      this.renderPanel();
+      return;
+    }
     const zone = this.focusZone;
     if (e.target.matches("input, textarea, select") || !zone) return;
     if (this.drawing && this.activeZone) {

@@ -12,7 +12,7 @@ import { clutterMeshes, setClutterFocus } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
-import { surfaceTiles } from "./thumbnails.js";
+import { surfaceTiles, tilePath } from "./thumbnails.js";
 import { groundMaterial } from "./groundMaterial.js";
 import { HORIZON, SUN_DIR, Sky } from "./sky.js";
 
@@ -126,6 +126,10 @@ export class RenderView {
   }
 
   render() {
+    if (this.streaming && this.walking) {
+      const { pos } = this.walker;
+      this.streamAround(Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT));
+    }
     this.sky.update(this.camera, performance.now() / 1000);
     this.showSight();
     this.showClutter();
@@ -211,9 +215,9 @@ export class RenderView {
     if (instances.length) this.clutter.add(...clutterMeshes(instances, this.origin));
   }
 
-  // Walk mode (walker.js): a character dropped where the camera looks. onStop runs when it ends,
-  // however it ends.
-  startWalk(onStop) {
+  // Walk mode (walker.js): a character dropped at scene [x, z], or where the camera looks. onStop
+  // runs when it ends, however it ends.
+  startWalk(onStop, at = [this.controls.target.x, this.controls.target.z]) {
     this.walker ??= new Walker(this, {
       onStop: () => {
         this.controls.enabled = true;
@@ -224,7 +228,7 @@ export class RenderView {
     this.walkStopped = onStop;
     this.controls.enabled = false;
     this.hover(null);
-    this.walker.start([this.controls.target.x, this.controls.target.z]);
+    this.walker.start(at);
     this.showPins();
   }
 
@@ -243,6 +247,7 @@ export class RenderView {
 
   // Rebuilds everything from the world. `keepCamera` leaves the view where it is.
   show(state, { keepCamera = false } = {}) {
+    this.streaming = null;
     if (!keepCamera) this.stopWalk();
     const { world, continent, active, thumbnails } = state;
     this.clear();
@@ -275,35 +280,8 @@ export class RenderView {
     const ground = groundSampler(decoded, this.origin);
     this.ground = ground;
 
-    const terrainMaterial = groundMaterial(this.renderer);
-    const waterMaterials = {
-      sea: new THREE.MeshLambertMaterial({ color: SEA }),
-      fresh: new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 }),
-    };
-    for (const [key, tile] of decoded) {
-      const [tx, tz] = key.split(",").map(Number);
-      const neighbours = {
-        east: decoded.get(`${tx + 1},${tz}`),
-        south: decoded.get(`${tx},${tz + 1}`),
-        southEast: decoded.get(`${tx + 1},${tz + 1}`),
-      };
-      const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), terrainMaterial);
-      terrain.userData.tile = [tx, tz];
-      this.content.add(terrain);
-      this.surfaces.push(terrain);
-      for (const kind of WATER_KINDS) {
-        const water = waterMesh(tile, neighbours, this.origin, kind);
-        if (!water) continue;
-        const mesh = new THREE.Mesh(geometry(water), waterMaterials[kind]);
-        mesh.userData.tile = [tx, tz];
-        this.content.add(mesh);
-      }
-    }
-
-    // Open sea wherever no tile is drawn in full; those tiles draw their own.
-    const ocean = new THREE.Mesh(oceanGeometry([...decoded.keys()], this.origin), waterMaterials.sea);
-    this.content.add(ocean);
-    this.surfaces.push(ocean);
+    for (const key of decoded.keys()) this.buildGround(key);
+    this.buildOcean([...decoded.keys()]);
 
     // Everything farther out is its thumbnail, lying on the sea.
     for (const { tx, tz } of surfaceTiles(world, continent)) {
@@ -336,6 +314,138 @@ export class RenderView {
     this.resize();
   }
 
+  // A tile's ground and water meshes, from its decoded copy and its neighbours to the east and
+  // south, which it reaches over to close the seams.
+  buildGround(key) {
+    const { decoded } = this;
+    const tile = decoded.get(key);
+    const [tx, tz] = key.split(",").map(Number);
+    this.terrainMaterial ??= groundMaterial(this.renderer);
+    this.waterMaterials ??= {
+      sea: new THREE.MeshLambertMaterial({ color: SEA }),
+      fresh: new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 }),
+    };
+    const neighbours = {
+      east: decoded.get(`${tx + 1},${tz}`),
+      south: decoded.get(`${tx},${tz + 1}`),
+      southEast: decoded.get(`${tx + 1},${tz + 1}`),
+    };
+    const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), this.terrainMaterial);
+    terrain.userData.tile = [tx, tz];
+    this.content.add(terrain);
+    this.surfaces.push(terrain);
+    for (const kind of WATER_KINDS) {
+      const water = waterMesh(tile, neighbours, this.origin, kind);
+      if (!water) continue;
+      const mesh = new THREE.Mesh(geometry(water), this.waterMaterials[kind]);
+      mesh.userData.tile = [tx, tz];
+      this.content.add(mesh);
+    }
+  }
+
+  // Open sea wherever no tile is drawn in full (`keys` are the ones that are); those tiles draw
+  // their own.
+  buildOcean(keys) {
+    if (this.ocean) {
+      this.content.remove(this.ocean);
+      this.ocean.geometry.dispose();
+      this.surfaces.splice(this.surfaces.indexOf(this.ocean), 1);
+    }
+    this.ocean = new THREE.Mesh(oceanGeometry(keys, this.origin), this.waterMaterials.sea);
+    this.content.add(this.ocean);
+    this.surfaces.push(this.ocean);
+  }
+
+  // Walk mode straight from the map, without drawing the whole zone: the character starts at
+  // continent feet [x, z], and only the tiles around them load, a tile farther than sight beyond
+  // what's drawn so seams close. They load and drop as the character crosses tiles.
+  walkFrom(state, [x, z], onStop) {
+    this.streaming = null;
+    this.stopWalk();
+    this.clear();
+    this.decoded = new Map();
+    this.sightTile = null;
+    this.clutterTiles.clear();
+    this.clutterAround = null;
+    this.unreadable = [];
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    this.origin = [(tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT];
+    this.ground = groundSampler(this.decoded, this.origin);
+    this.streaming = { world: state.world, continent: state.continent, at: null, built: new Set() };
+    this.streamAround(tx, tz);
+    this.showMarks(state);
+    this.resize();
+    const [sx, sz] = [x - this.origin[0], z - this.origin[1]];
+    const y = this.ground(sx, sz) ?? 0;
+    this.controls.target.set(sx, y, sz);
+    this.camera.position.set(sx, y + 30, sz + 40);
+    this.controls.update();
+    this.startWalk(onStop, [sx, sz]);
+    this.render();
+  }
+
+  // Loads and draws the tiles around tile (tx, tz) while walking from the map, and drops the
+  // ones left behind.
+  streamAround(tx, tz) {
+    const s = this.streaming;
+    const key = `${tx},${tz}`;
+    if (s.at === key) return;
+    s.at = key;
+    const reach = SIGHT.tiles;
+    const within = (k, r) => {
+      const [x, z] = k.split(",").map(Number);
+      return Math.abs(x - tx) <= r && Math.abs(z - tz) <= r;
+    };
+    for (const k of [...s.built]) {
+      if (within(k, reach)) continue;
+      this.dropTile(k);
+      s.built.delete(k);
+    }
+    for (const k of [...this.decoded.keys()]) {
+      if (within(k, reach + 1)) continue;
+      this.decoded.delete(k);
+      this.clutterTiles.delete(k);
+    }
+    for (let dz = -reach - 1; dz <= reach + 1; dz++) {
+      for (let dx = -reach - 1; dx <= reach + 1; dx++) {
+        const k = `${tx + dx},${tz + dz}`;
+        if (this.decoded.has(k)) continue;
+        const bytes = s.world.files.get(tilePath(s.continent, tx + dx, tz + dz));
+        if (!bytes) continue;
+        try {
+          this.decoded.set(k, decodeTile(gunzipSync(bytes)));
+        } catch (err) {
+          console.warn(`couldn't read tile ${k}: ${err.message}`);
+        }
+      }
+    }
+    for (const k of this.decoded.keys()) {
+      if (!within(k, reach) || s.built.has(k)) continue;
+      this.buildGround(k);
+      this.addTrees(this.decoded.get(k));
+      this.addObjects(this.decoded.get(k));
+      s.built.add(k);
+    }
+    this.buildOcean([...s.built]);
+    this.clutterAround = null;
+    this.sightTile = null;
+  }
+
+  // Takes a tile's meshes out of the scene.
+  dropTile(key) {
+    const [tx, tz] = key.split(",").map(Number);
+    for (const group of [this.content, this.trees, this.objects]) {
+      for (const child of [...group.children]) {
+        const at = child.userData.tile;
+        if (!at || at[0] !== tx || at[1] !== tz) continue;
+        group.remove(child);
+        if (child.isInstancedMesh) child.dispose();
+        else child.geometry.dispose();
+        if (group === this.content) this.surfaces.splice(this.surfaces.indexOf(child), 1);
+      }
+    }
+  }
+
   // Swaps in a changed copy of a tile drawn in full, such as one being painted, and redraws the
   // trees. The ground stays as it was until the next show().
   setTile(tx, tz, tile) {
@@ -355,9 +465,16 @@ export class RenderView {
       child.dispose();
       this.objects.remove(child);
     }
-    const objects = [...this.decoded.values()].flatMap((tile) => tile.objects ?? []);
+    for (const tile of this.decoded.values()) this.addObjects(tile);
+  }
+
+  addObjects(tile) {
+    if (!tile.objects?.length) return;
     const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
-    if (objects.length) this.objects.add(...objectMeshes(objects, tileAt, this.origin));
+    for (const mesh of objectMeshes(tile.objects, tileAt, this.origin)) {
+      mesh.userData.tile = tile.coords;
+      this.objects.add(mesh);
+    }
   }
 
   // Every tree on the tiles drawn in full.
@@ -366,23 +483,25 @@ export class RenderView {
       child.dispose();
       this.trees.remove(child);
     }
-    // A set of meshes per tile, so whole tiles can be left out.
-    for (const tile of this.decoded.values()) {
-      const [tx, tz] = tile.coords;
-      const trees = [];
-      for (const { i, j, size, kind } of findTrees(tile)) {
-        let ground = Infinity;
-        for (let dj = 0; dj < size; dj++) {
-          for (let di = 0; di < size; di++) ground = Math.min(ground, tile.layers.height[(j + dj) * tile.cells + i + di]);
-        }
-        const x = (tx * tile.cells + i + size / 2) * tile.cellFt - this.origin[0];
-        const z = (tz * tile.cells + j + size / 2) * tile.cellFt - this.origin[1];
-        trees.push({ x, z, ground, size, kind });
+    for (const tile of this.decoded.values()) this.addTrees(tile);
+  }
+
+  // A tile's trees, as a set of meshes per tile so whole tiles can be left out.
+  addTrees(tile) {
+    const [tx, tz] = tile.coords;
+    const trees = [];
+    for (const { i, j, size, kind } of findTrees(tile)) {
+      let ground = Infinity;
+      for (let dj = 0; dj < size; dj++) {
+        for (let di = 0; di < size; di++) ground = Math.min(ground, tile.layers.height[(j + dj) * tile.cells + i + di]);
       }
-      for (const mesh of treeMeshes(trees)) {
-        mesh.userData.tile = [tx, tz];
-        this.trees.add(mesh);
-      }
+      const x = (tx * tile.cells + i + size / 2) * tile.cellFt - this.origin[0];
+      const z = (tz * tile.cells + j + size / 2) * tile.cellFt - this.origin[1];
+      trees.push({ x, z, ground, size, kind });
+    }
+    for (const mesh of treeMeshes(trees)) {
+      mesh.userData.tile = [tx, tz];
+      this.trees.add(mesh);
     }
   }
 
@@ -473,6 +592,13 @@ export class RenderView {
   clear() {
     empty(this.content);
     this.surfaces.length = 0;
+    this.ocean = null;
+    for (const group of [this.trees, this.objects]) {
+      for (const child of [...group.children]) {
+        child.dispose();
+        group.remove(child);
+      }
+    }
   }
 
   // --- pointer ---
