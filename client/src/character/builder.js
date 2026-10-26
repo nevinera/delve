@@ -4,7 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterClips, clipNames, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
-import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, resolveRecipe, saveLook, savedLook } from "./recipe.js";
+import { BEARD, DEFAULT_LOOK, FACE, HAIR, JEWELRY, resolveRecipe, saveLook, savedLook } from "./recipe.js";
 import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 // The character builder page: one character on a patch of ground, with a control for each setting
@@ -183,13 +183,19 @@ function buildControls() {
     if (!free) $("offhand").value = look.offhand = "none";
   };
   showOffhand();
-  for (const item of JEWELRY) {
-    const box = Object.assign(document.createElement("input"), { type: "checkbox", checked: look.jewelry.includes(item) });
-    box.addEventListener("change", () => {
-      look.jewelry = JEWELRY.filter((j) => (j === item ? box.checked : look.jewelry.includes(j)));
-      rebuild();
-    });
-    row(item, box);
+  // A checkbox for each item of jewelry and each face marking.
+  for (const [key, items] of [
+    ["jewelry", JEWELRY],
+    ["face", FACE],
+  ]) {
+    for (const item of items) {
+      const box = Object.assign(document.createElement("input"), { type: "checkbox", checked: look[key].includes(item) });
+      box.addEventListener("change", () => {
+        look[key] = items.filter((j) => (j === item ? box.checked : look[key].includes(j)));
+        rebuild();
+      });
+      row(item, box);
+    }
   }
 
   // Each armor slot: its type, and its main and trim colors beside.

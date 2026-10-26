@@ -67,7 +67,7 @@ function skirt(out, ctx, heights, widths, color, mail = false) {
   const { s, trunk, hips } = ctx;
   const top = heights[0];
   const rings = heights.map((y, i) => {
-    const sway = Math.min(0.85, ((top - y) / (top - heights[heights.length - 1])) * 0.85);
+    const sway = Math.min(0.45, ((top - y) / (top - heights[heights.length - 1])) * 0.45);
     return ctx.level(y, {
       rx: widths[i][0] * hips * trunk,
       rz: widths[i][1] * trunk,
@@ -111,13 +111,15 @@ const DRESS = {
   chest: {
     cloth: ({ out, parts, ctx, main, trim }) => {
       const { s } = ctx;
-      // A robe: the shirt and sleeves recolored, a sash at the belt, and a skirt to the ankles.
+      // A robe: the shirt and sleeves recolored, a sash at the belt, and a skirt to the ankles. The
+      // legs go above the shins, so a stride can't push them out through the skirt.
       recolor(parts.trunk, (band) => {
         const y = heightOf(parts.trunk.rings[band], s);
         return y >= 3.3 && y < 3.44 ? trim : y >= 3.44 && y < 4.95 ? (y >= 4.85 ? trim : main) : null;
       });
       for (const side of SIDES) recolor(parts[`arm_${side}`], (band) => (band === 6 ? trim : band < 6 ? main : null));
       skirt(out, ctx, [3.36, 2.9, 2.2, 1.4, 0.62, 0.55], [[0.66, 0.46], [0.7, 0.5], [0.78, 0.56], [0.86, 0.62], [0.92, 0.66], [0.9, 0.64]], (band) => (band >= 3 ? trim : main));
+      for (const side of SIDES) parts[`leg_${side}`].opts.skip = (band) => band < 6;
     },
     leather: ({ out, parts, ctx, main, trim }) => {
       const { s } = ctx;

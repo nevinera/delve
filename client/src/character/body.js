@@ -397,7 +397,67 @@ function head(out, look, [hx, hy, hz], s, c) {
     ];
     const points = curve.map(([x, dy]) => add(front(dy, x), [0, 0, (0.03 - Math.abs(x) * 0.15) * s]));
     const radii = curve.map(([x]) => (0.04 - Math.abs(x) * 0.09) * s);
-    out.path(points, radii, 5, () => c.hair, () => bones, { capStart: true, capEnd: true });
+    // An even number of sides, so the ends match: the rings turn half over from one end to the other.
+    out.path(points, radii, 6, () => c.hair, () => bones, { capStart: true, capEnd: true });
+  }
+
+  // Face markings and wear, laid a little proud of the face.
+  const on = (dy, x, proud) => add(front(dy, x), [0, 0, proud * s]);
+  const marked = (name) => look.face?.includes(name);
+  // A flat strip across the face through `points` ([dy, x]), `width` tall.
+  const strip = (points, width, color) => {
+    const edges = points.map(([dy, x]) => [on(dy + width / 2, x, 0.018), on(dy - width / 2, x, 0.018)]);
+    for (let i = 0; i < edges.length - 1; i++) {
+      out.face([edges[i][0], edges[i][1], edges[i + 1][1]], color, bones, inside);
+      out.face([edges[i][0], edges[i + 1][1], edges[i + 1][0]], color, bones, inside);
+    }
+  };
+  if (marked("warpaint")) {
+    // Two slashes down each cheek, under the eyes.
+    const paint = hex(look.colors.paint ?? "#2a4a9a");
+    for (const side of [-1, 1]) {
+      for (const dy of [0.27, 0.205]) strip([0.09, 0.17, 0.25, 0.31].map((x) => [dy - (x - 0.09) * 0.25, side * x]), 0.035, paint);
+    }
+  }
+  if (marked("scar")) {
+    // A pale welt down the left cheek, from under the eye toward the jaw.
+    const scar = [Math.min(1, c.skin[0] * 1.1), c.skin[1] * 0.8, c.skin[2] * 0.8];
+    out.path([on(0.31, 0.2, 0.02), on(0.24, 0.24, 0.02), on(0.16, 0.27, 0.01)], [0.014, 0.016, 0.01].map((r) => r * s), 4, () => scar, () => bones, { capStart: true, capEnd: true });
+  }
+  if (marked("sideburns")) {
+    // Strips of hair down in front of each ear, from the temples to the jaw.
+    for (const side of [-1, 1]) {
+      const burn = [p(side * 0.37, 0.43, 0.08), p(side * 0.375, 0.28, 0.1), p(side * 0.36, 0.12, 0.11)];
+      out.path(burn, [0.025, 0.025, 0.02].map((r) => r * s), 4, () => c.hair, () => bones, { capStart: true, capEnd: true, depth: [0.05, 0.06, 0.05].map((r) => r * s) });
+    }
+  }
+  if (marked("eyepatch")) {
+    // A patch over the right eye, its strap running up across the forehead and round the head.
+    const patch = [0.08, 0.07, 0.06];
+    const [cx, cy, cz] = front(0.34, -0.14);
+    disc([cx, cy, cz + 0.045 * s], 0.1 * s, 0.085 * s, 8, patch);
+    const across = norm(cross(sub(p(0.41, 0.56, 0), p(-0.14, 0.34, 0.42)), sub(p(0, 0.5, -0.43), p(-0.14, 0.34, 0.42))));
+    const middle = p(0.02, 0.45, 0.01);
+    const band = (shift) => ({ center: add(middle, mul(across, shift * s)), dir: across, rx: 0.425 * s, rz: 0.445 * s, bones });
+    out.tube([band(-0.022), band(0.022)], 12, () => patch);
+  }
+  if (marked("glasses")) {
+    // Round wire rims before the eyes, a bridge over the nose and arms back to the ears.
+    const metal = c.metal;
+    const rim = (x) => {
+      const [cx, cy, cz] = front(0.34, x);
+      return Array.from({ length: 11 }, (_, k) => {
+        const angle = (k / 10) * Math.PI * 2;
+        return [cx + Math.cos(angle) * 0.095 * s, cy + Math.sin(angle) * 0.08 * s, cz + 0.06 * s];
+      });
+    };
+    for (const side of [-1, 1]) {
+      out.path(rim(side * 0.14), Array(11).fill(0.012 * s), 4, () => metal, () => bones);
+      const [ex, ey, ez] = front(0.34, side * 0.235);
+      out.path([[ex, ey, ez + 0.06 * s], p(side * 0.38, 0.36, 0.2), p(side * 0.39, 0.33, -0.02)], Array(3).fill(0.01 * s), 4, () => metal, () => bones);
+    }
+    const [bx, by, bz] = front(0.36, 0);
+    out.path([add(front(0.36, -0.045), [0, 0, 0.07 * s]), [bx, by, bz + 0.05 * s], add(front(0.36, 0.045), [0, 0, 0.07 * s])], Array(3).fill(0.012 * s), 4, () => metal, () => bones);
   }
 
   if (look.jewelry.includes("earrings")) {

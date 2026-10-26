@@ -14,19 +14,22 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 // - limbs: 0 thin to 1 thick, the limbs on top of build.
 // - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
 // - bust: 0 to 1.
-// - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY.
+// - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY; face: a list of FACE
+//   markings and wear.
 // - weapon: one of weapons.js's WEAPONS, held in hand.
 // - offhand: one of weapons.js's OFFHANDS, a shield, orb or second weapon; none with a
 //   two-handed weapon.
 // - armor: { slot: { type, colors: [main, trim] } } for armor.js's ARMOR_SLOTS and ARMOR_TYPES;
 //   type and each color can be a list to pick from.
-// - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood }, each "#rrggbb" or a list
-//   to pick from. primary is the shirt or tunic, secondary the trousers; boots and belt are darker
-//   shades of those. metal is jewelry and fittings, steel blades, wood hafts and staves.
+// - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood, paint }, each "#rrggbb" or
+//   a list to pick from. primary is the shirt or tunic, secondary the trousers; boots and belt are
+//   darker shades of those. metal is jewelry, fittings and glasses, steel blades, wood hafts and
+//   staves, paint warpaint.
 
 export const HAIR = ["bald", "short", "receding", "spiky", "topknot", "bun", "ponytail", "pigtails", "bob", "mullet", "long", "braids", "dreadlocks", "mohawk", "afro"];
 export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
 export const JEWELRY = ["earrings", "necklace"];
+export const FACE = ["glasses", "sideburns", "scar", "eyepatch", "warpaint"];
 
 export const DEFAULT_LOOK = {
   body: "humanoid",
@@ -41,6 +44,7 @@ export const DEFAULT_LOOK = {
   hair: "short",
   beard: "none",
   jewelry: [],
+  face: [],
   weapon: "none",
   offhand: "none",
   armor: {},
@@ -53,6 +57,7 @@ export const DEFAULT_LOOK = {
     metal: "#d4b050",
     steel: "#b8bcc4",
     wood: "#6b4a2a",
+    paint: "#2a4a9a",
   },
 };
 
@@ -68,7 +73,7 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
     }
     return value;
   };
-  const look = { ...DEFAULT_LOOK, jewelry: [...DEFAULT_LOOK.jewelry], armor: {}, colors: { ...DEFAULT_LOOK.colors } };
+  const look = { ...DEFAULT_LOOK, jewelry: [...DEFAULT_LOOK.jewelry], face: [...DEFAULT_LOOK.face], armor: {}, colors: { ...DEFAULT_LOOK.colors } };
   for (const [key, value] of Object.entries(recipe)) {
     if (key === "colors") {
       for (const [part, color] of Object.entries(value)) look.colors[part] = pick(color);
@@ -80,6 +85,8 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
       }
     } else if (key === "jewelry") {
       look.jewelry = value.filter((j) => JEWELRY.includes(j));
+    } else if (key === "face") {
+      look.face = value.filter((f) => FACE.includes(f));
     } else {
       look[key] = pick(value);
     }
