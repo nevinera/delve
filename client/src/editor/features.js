@@ -80,16 +80,15 @@ export class Features {
     return this.selected?.id === feature.id;
   }
 
-  // Removes the selection, and a pin's paths with it.
+  // Removes the selection, and a pin's paths with it. Road pins left with no paths go too.
   remove(sketch) {
     const feature = this.find(sketch);
     if (!feature) return;
-    if (this.selected.type === "pin") {
-      sketch.pins.splice(sketch.pins.indexOf(feature), 1);
-      sketch.paths = sketch.paths.filter((p) => p.from !== feature.id && p.to !== feature.id);
-    } else {
-      sketch.paths.splice(sketch.paths.indexOf(feature), 1);
-    }
+    const gone = this.selected.type === "pin" ? sketch.paths.filter((p) => p.from === feature.id || p.to === feature.id) : [feature];
+    if (this.selected.type === "pin") sketch.pins.splice(sketch.pins.indexOf(feature), 1);
+    sketch.paths = sketch.paths.filter((p) => !gone.includes(p));
+    const ends = new Set(gone.flatMap((p) => [p.from, p.to]));
+    sketch.pins = sketch.pins.filter((pin) => !ends.has(pin.id) || sketch.paths.some((p) => p.from === pin.id || p.to === pin.id));
     this.select(null);
     this.editor.saveSketch();
   }
