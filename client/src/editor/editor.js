@@ -830,7 +830,14 @@ export class Editor {
       this.renderPanel();
       return;
     }
-    if (e.target.matches("input, textarea, select") || this.walking) return;
+    if (e.target.matches("input, textarea, select")) return;
+    // G does what the walk button does: pick a spot to walk from, cancel that, or stop walking.
+    if (e.key.toLowerCase() === "g" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      this.el.walk.click();
+      return;
+    }
+    if (this.walking) return;
     if (this.drawing && this.editZone) {
       if (e.key === "Enter") this.finishDrawing(this.editZone);
       if (e.key === "Escape") this.drawing = null;
