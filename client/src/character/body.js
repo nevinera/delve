@@ -113,28 +113,39 @@ export function bodyMesh(look) {
   // The trunk, crotch to neck. The bust pushes the chest's front out either side of the middle.
   const { shoulders, waist, hips } = widths(look);
   const bust = (amount) => (angle) => amount * look.bust * 0.34 * s * Math.exp(-(((Math.abs(angle) - 0.45) / 0.5) ** 2)) * (Math.cos(angle) > 0 ? 1 : 0);
+  // The chest has extra rings, so the bust rounds off rather than coming to a point. The shoulder
+  // ring reaches out over the top of the arms.
   const trunkRings = [
     level(2.92, { rx: 0.5 * hips * trunk, rz: 0.36 * trunk, bones: [["pelvis", 1]] }),
     level(3.18, { rx: 0.62 * hips * trunk, rz: 0.42 * trunk, bones: [["pelvis", 1]] }),
     level(3.32, { rx: 0.6 * hips * trunk, rz: 0.41 * trunk, bones: [["pelvis", 0.6], ["spine_01", 0.4]] }),
     level(3.44, { rx: 0.56 * waist * trunk, rz: 0.39 * trunk, bones: [["spine_01", 1]] }),
     level(3.65, { rx: 0.52 * waist * trunk, rz: 0.37 * trunk, bones: [["spine_01", 1]] }),
-    level(4.05, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, push: bust(0.45), bones: [["spine_02", 1]] }),
-    level(4.27, { rx: 0.64 * shoulders * trunk, rz: 0.43 * trunk, push: bust(1), bones: [["spine_02", 0.5], ["spine_03", 0.5]] }),
-    level(4.47, { rx: 0.68 * shoulders * trunk, rz: 0.42 * trunk, push: bust(0.55), bones: [["spine_03", 1]] }),
-    level(4.8, { rx: 0.58 * shoulders * trunk, rz: 0.33 * trunk, bones: [["spine_03", 1]] }),
-    level(4.95, { rx: 0.2 * trunk, rz: 0.2 * trunk, bones: [["spine_03", 0.5], ["neck_01", 0.5]] }),
+    level(3.92, { rx: 0.57 * shoulders * trunk, rz: 0.4 * trunk, push: bust(0.1), bones: [["spine_01", 0.4], ["spine_02", 0.6]] }),
+    level(4.06, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, push: bust(0.45), bones: [["spine_02", 1]] }),
+    level(4.18, { rx: 0.62 * shoulders * trunk, rz: 0.43 * trunk, push: bust(0.85), bones: [["spine_02", 1]] }),
+    level(4.3, { rx: 0.64 * shoulders * trunk, rz: 0.43 * trunk, push: bust(1), bones: [["spine_02", 0.5], ["spine_03", 0.5]] }),
+    level(4.42, { rx: 0.67 * shoulders * trunk, rz: 0.42 * trunk, push: bust(0.75), bones: [["spine_03", 1]] }),
+    level(4.55, { rx: 0.7 * shoulders * trunk, rz: 0.4 * trunk, push: bust(0.3), bones: [["spine_03", 1]] }),
+    level(4.68, { rx: 0.72 * shoulders * trunk, rz: 0.36 * trunk, bones: [["spine_03", 1]] }),
+    level(4.8, { rx: 0.6 * shoulders * trunk, rz: 0.3 * trunk, bones: [["spine_03", 1]] }),
+    level(4.9, { rx: 0.36 * trunk, rz: 0.24 * trunk, bones: [["spine_03", 0.7], ["neck_01", 0.3]] }),
+    level(4.97, { rx: 0.2 * trunk, rz: 0.2 * trunk, bones: [["spine_03", 0.5], ["neck_01", 0.5]] }),
     level(5.25, { rx: 0.18 * trunk, rz: 0.18 * trunk, bones: [["neck_01", 1]] }),
   ];
-  const trunkColors = [c.secondary, c.secondary, belt, c.primary, c.primary, c.primary, c.primary, c.primary, c.primary, c.skin];
-  out.tube(trunkRings, 12, (band) => trunkColors[band], { capStart: true });
+  // Trousers to the belt, then the shirt to the neck.
+  const trunkColor = (band) => {
+    const y = trunkRings[band].center[1] / s;
+    return y < 3.3 ? c.secondary : y < 3.4 ? belt : y < 4.95 ? c.primary : c.skin;
+  };
+  out.tube(trunkRings, 16, trunkColor, { capStart: true });
 
   for (const side of ["l", "r"]) {
     const n = (name) => name.replace(/_l$/, `_${side}`);
-    // Arm, sleeved to the wrist, rounded over the shoulder.
+    // Arm, sleeved to the wrist, starting under the trunk's shoulder.
     const arm = [
-      along(n("upperarm_l"), -0.15, { rx: 0.15 * limb, rz: 0.16 * limb, bones: [[n("upperarm_l"), 0.6], ["spine_03", 0.4]] }),
-      along(n("upperarm_l"), -0.08, { rx: 0.2 * limb, rz: 0.2 * limb, bones: [[n("upperarm_l"), 0.7], ["spine_03", 0.3]] }),
+      along(n("upperarm_l"), 0, { rx: 0.15 * limb, rz: 0.17 * limb, bones: [[n("upperarm_l"), 0.6], ["spine_03", 0.4]] }),
+      along(n("upperarm_l"), 0.04, { rx: 0.2 * limb, rz: 0.21 * limb, bones: [[n("upperarm_l"), 0.7], ["spine_03", 0.3]] }),
       along(n("upperarm_l"), 0.15, { rx: 0.19 * limb, rz: 0.19 * limb }),
       along(n("upperarm_l"), 0.55, { rx: 0.16 * limb, rz: 0.16 * limb }),
       along(n("upperarm_l"), 1, { rx: 0.13 * limb, rz: 0.13 * limb, bones: [[n("upperarm_l"), 0.5], [n("lowerarm_l"), 0.5]] }),
@@ -145,7 +156,7 @@ export function bodyMesh(look) {
       along(n("hand_l"), 0.55, { rx: 0.055 * s, rz: 0.12 * s }),
       along(n("hand_l"), 0.95, { rx: 0.045 * s, rz: 0.08 * s }),
     ];
-    out.tube(arm, 8, (band) => (band < 7 ? c.primary : c.skin), { capStart: true, capEnd: true });
+    out.tube(arm, 10, (band) => (band < 7 ? c.primary : c.skin), { capStart: true, capEnd: true });
 
     // Leg, booted from mid-calf.
     const leg = [
