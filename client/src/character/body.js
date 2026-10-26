@@ -208,17 +208,17 @@ function head(out, look, [hx, hy, hz], s, c) {
     ring(0.74, 0.21, 0.26, -0.03),
   ];
   const { hair } = look;
-  const long = ["long", "ponytail", "braids", "afro"].includes(hair);
-  // Angles from the front: a mohawk keeps only a strip down the middle, front to back.
-  const scalp = (a) => (hair === "mohawk" ? a < 0.35 || a > Math.PI - 0.35 : hair !== "bald");
+  const long = ["long", "ponytail", "braids", "afro", "bob", "mullet", "dreadlocks"].includes(hair);
+  // Angles from the front: a mohawk keeps only a strip down the middle, front to back, and a
+  // receding hairline only the sides and back.
+  const scalp = (a) => (hair === "mohawk" ? a < 0.35 || a > Math.PI - 0.35 : hair === "receding" ? a > 1.4 : hair !== "bald");
   const color = (band, angle) => {
     const a = Math.abs(angle);
     if (bearded && ((band === 1 && a < 2.1) || (band === 0 && a < 1.6))) return c.hair;
-    if (look.beard === "goatee" && band <= 1 && a < 0.45) return c.hair;
     if (scalp(a) && (band >= 4 || (band === 3 && a > 0.9) || (band === 2 && a > 1.9) || (long && band === 1 && a > 2.1))) return c.hair;
     return c.skin;
   };
-  const part = { rings, sides: 10, color, opts: { capEnd: true, endColor: hair === "bald" ? c.skin : c.hair } };
+  const part = { rings, sides: 10, color, opts: { capEnd: true, endColor: hair === "bald" || hair === "receding" ? c.skin : c.hair } };
   // Hair that would stand through a helmet or hood goes.
   const covered = Boolean(look.armor?.head);
 
@@ -270,6 +270,61 @@ function head(out, look, [hx, hy, hz], s, c) {
     ];
     out.tube(sheet, 8, () => c.hair, { capEnd: true });
   }
+  if (hair === "mullet") {
+    // Short on top, with a shorter sheet behind, down to the top of the back.
+    const sheet = [
+      { center: p(0, 0.45, -0.22), dir: [0, -1, 0], rx: 0.36 * s, rz: 0.24 * s, bones },
+      { center: p(0, 0.1, -0.3), dir: [0, -1, 0], rx: 0.32 * s, rz: 0.12 * s, bones },
+      { center: p(0, -0.25, -0.34), dir: [0, -1, 0], rx: 0.26 * s, rz: 0.06 * s, bones: neck },
+    ];
+    out.tube(sheet, 8, () => c.hair, { capEnd: true });
+  }
+  if (hair === "bob" && !covered) {
+    // A shell of hair to the jaw, open for the face below a fringe across the forehead.
+    const shell = [ring(0.04, 0.38, 0.42, -0.02), ring(0.25, 0.43, 0.46, 0.02), ring(0.45, 0.44, 0.47, 0), ring(0.66, 0.4, 0.44, -0.02), ring(0.78, 0.25, 0.3, -0.03)];
+    out.tube(shell, 10, () => c.hair, { capEnd: true, skip: (band, angle) => (band === 0 && Math.abs(angle) < 1.3) || (band === 1 && Math.abs(angle) < 1.1) });
+  }
+  if (hair === "topknot" && !covered) {
+    const knot = [ring(0.7, 0.1, 0.1, -0.06), ring(0.8, 0.14, 0.14, -0.06), ring(0.93, 0.12, 0.12, -0.06), ring(1.0, 0.05, 0.05, -0.06)];
+    out.tube(knot, 8, () => c.hair, { capEnd: true });
+  }
+  if (hair === "bun") {
+    // A bun low on the back of the head.
+    const bun = [p(0, 0.3, -0.36), p(0, 0.3, -0.47), p(0, 0.3, -0.57), p(0, 0.3, -0.63)];
+    out.path(bun, [0.1, 0.15, 0.13, 0.05].map((r) => r * s), 8, () => c.hair, () => bones, { capEnd: true });
+  }
+  if (hair === "pigtails") {
+    // Two short tails, tied high on either side.
+    for (const side of [-1, 1]) {
+      const tail = [p(side * 0.34, 0.52, -0.14), p(side * 0.47, 0.45, -0.18), p(side * 0.54, 0.22, -0.2), p(side * 0.53, -0.05, -0.17)];
+      out.path(tail, [0.07, 0.085, 0.065, 0.03].map((r) => r * s), 6, () => c.hair, () => bones, { capEnd: true });
+    }
+  }
+  if (hair === "spiky" && !covered) {
+    // Spikes standing out from the crown, each a cone along the way out from the head's middle.
+    const middle = p(0, 0.35, -0.02);
+    const spots = [
+      [0, 1.35],
+      ...[0, 1.25, 2.5, -1.25, -2.5].map((turn) => [turn, 0.85]),
+      ...[0.6, -0.6, Math.PI].map((turn) => [turn, 0.45]),
+    ];
+    for (const [turn, rise] of spots) {
+      const way = [Math.sin(turn) * Math.cos(rise), Math.sin(rise), Math.cos(turn) * Math.cos(rise)];
+      const base = p(way[0] * 0.33, 0.35 + way[1] * 0.38, -0.02 + way[2] * 0.36);
+      const tip = add(base, mul(norm(sub(base, middle)), 0.24 * s));
+      out.path([base, tip], [0.08 * s, 0.004 * s], 5, () => c.hair, () => bones, { capStart: true });
+    }
+  }
+  if (hair === "dreadlocks") {
+    // Ropes hanging from the hairline round the sides and back, longest behind.
+    for (let k = 0; k < 11; k++) {
+      const turn = 1.15 + ((Math.PI * 2 - 2.3) * k) / 10;
+      const [x, z] = [Math.sin(turn), Math.cos(turn)];
+      const reach = 0.25 + 0.45 * Math.abs(z);
+      const rope = [p(x * 0.36, 0.5, z * 0.38), p(x * 0.43, 0.3, z * 0.45), p(x * 0.45, 0.05, z * 0.47), p(x * 0.44, 0.1 - reach, z * 0.47 - 0.03)];
+      out.path(rope, [0.05, 0.045, 0.04, 0.03].map((r) => r * s), 5, () => c.hair, (i) => (i < 2 ? bones : neck), { capEnd: true });
+    }
+  }
   if (hair === "ponytail") {
     const tail = [p(0, 0.55, -0.36), p(0, 0.35, -0.55), p(0, -0.05, -0.6), p(0, -0.45, -0.52)];
     out.path(tail, [0.1, 0.11, 0.08, 0.04].map((r) => r * s), 6, () => c.hair, (i) => (i < 3 ? bones : [["neck_01", 1]]), { capEnd: true });
@@ -317,6 +372,11 @@ function head(out, look, [hx, hy, hz], s, c) {
     }
   }
 
+  if (look.beard === "goatee") {
+    // A small tuft from under the lower lip, down over the point of the chin.
+    const tuft = [p(0, 0.11, 0.42), p(0, 0.02, 0.42), p(0, -0.08, 0.37)];
+    out.path(tuft, [0.05, 0.055, 0.02].map((r) => r * s), 6, () => c.hair, () => bones, { capStart: true, capEnd: true, depth: [0.03, 0.04, 0.02].map((r) => r * s) });
+  }
   if (look.beard === "long") {
     // A beard hanging to the chest.
     const beard = [ring(0.06, 0.28 * jaw, 0.16, 0.26), ring(-0.2, 0.22 * jaw, 0.12, 0.35), ring(-0.45, 0.14 * jaw, 0.08, 0.41), ring(-0.7, 0.05, 0.04, 0.45)];

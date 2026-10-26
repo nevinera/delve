@@ -24,7 +24,7 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 //   to pick from. primary is the shirt or tunic, secondary the trousers; boots and belt are darker
 //   shades of those. metal is jewelry and fittings, steel blades, wood hafts and staves.
 
-export const HAIR = ["bald", "short", "long", "ponytail", "braids", "mohawk", "afro"];
+export const HAIR = ["bald", "short", "receding", "spiky", "topknot", "bun", "ponytail", "pigtails", "bob", "mullet", "long", "braids", "dreadlocks", "mohawk", "afro"];
 export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
 export const JEWELRY = ["earrings", "necklace"];
 
