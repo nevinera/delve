@@ -20,14 +20,14 @@ const DROOP = 0.6; // share of a half turn the bowl runs down from its top
 const bowl = new THREE.SphereGeometry(1, 14, 7, 0, Math.PI * 2, 0, Math.PI * DROOP).translate(0, -Math.cos(Math.PI * DROOP), 0);
 bowl.scale(1, 1 / (1 - Math.cos(Math.PI * DROOP)), 1);
 
-// A crown is four nested shells of a shape, textured with leaf clusters. Up close the outer three
+// A crown is three nested shells of a shape, textured with leaf clusters. Up close the outer two
 // are cut out between the leaves (alpha test, so nothing needs sorting) and the innermost is
 // opaque with dark gaps, so you see into the crown. Farther away a crown draws in stages: at each
 // step its innermost shell drops and the next one out turns opaque, until only an opaque outer
 // shell is left. Opaque shells have no cutout in their shader, so the last stage costs what a
 // solid crown would. `repeat` sets how many leaf tiles go round and up the outer shell; `lift`
 // raises each smaller shell to keep it centered.
-const SHELLS = [1, 0.8, 0.6, 0.42];
+const SHELLS = [1, 0.72, 0.45];
 const HOLE = 0.22; // how bright an opaque shell's gaps are, against its leaves
 
 function shell(shape, n, { repeat: [ru, rv], lift = 0 }) {
@@ -78,8 +78,7 @@ export function setTreeSight(x, z, stages, { band = 40, solid = false } = {}) {
 // A shell's material: `cutout` or opaque, drawn for crowns at stages lo to hi. Across the band
 // either side, the shell dissolves in or out with a 4×4 dither: each pixel has a fixed threshold,
 // and a shell fading out keeps the pixels below its share while one fading in takes the ones
-// above, so a shell's cutout and opaque versions trade pixels without overlapping. Cutouts also
-// use alpha to coverage, which smooths leaf edges where the view is antialiased.
+// above, so a shell's cutout and opaque versions trade pixels without overlapping.
 const leafMaterials = new Map();
 function leafMaterial(cutout, lo, hi) {
   const key = `${cutout ? "cutout" : "opaque"}${lo}-${hi}`;
@@ -90,7 +89,6 @@ function leafMaterial(cutout, lo, hi) {
     side: THREE.DoubleSide,
     map: leafTextureOnce,
     alphaTest: cutout ? 0.5 : 0,
-    alphaToCoverage: cutout,
   });
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, { treeFocus: sight.focus, treeStages: sight.stages, treeBand: sight.band, treeLeast: sight.least });
@@ -137,8 +135,8 @@ function leafMaterial(cutout, lo, hi) {
 }
 let leafTextureOnce;
 
-// A crown's parts: each shell (0 outer) cut out while the stage is at most 2 - n, and opaque at
-// stage 3 - n. The innermost shell is never cut out.
+// A crown's parts: each shell (0 outer) cut out while the stage is at most last - 1 - n, and opaque
+// at stage last - n. The innermost shell is never cut out.
 function crownParts(shape, opts, color, at) {
   const last = SHELLS.length - 1;
   return SHELLS.flatMap((_, n) => {

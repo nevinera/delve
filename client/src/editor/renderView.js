@@ -24,7 +24,7 @@ const RING_TILES = 3; // tiles drawn in full around the active zone's editable t
 // to `smallFt` (or
 // `largeFt` for large ones), and tree crowns drawn in simpler stages past each of `canopyFt`,
 // dissolving from one to the next across `canopyBandFt`.
-export const SIGHT = { fogStartFt: 350, fogEndFt: 3500, tiles: 3, farTiles: 7, farStep: 8, farSkirtFt: 40, smallFt: 500, largeFt: 1000, canopyFt: [250, 350, 450], canopyBandFt: 40 };
+export const SIGHT = { fogStartFt: 350, fogEndFt: 3500, tiles: 3, farTiles: 7, farStep: 8, farSkirtFt: 40, smallFt: 500, largeFt: 1000, canopyFt: [300, 450], canopyBandFt: 40 };
 const ORBIT_FOG = [6000, 30000];
 
 // Fog thickens with straight-line distance from the camera, so turning doesn't move it, and along
