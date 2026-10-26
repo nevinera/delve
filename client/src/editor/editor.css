@@ -284,3 +284,18 @@
   color: #888;
   line-height: 1.5;
 }
+
+/* stats.js's overlay, top left over the 3D view. */
+.editor-stats {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #cfe;
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
+  z-index: 2;
+}

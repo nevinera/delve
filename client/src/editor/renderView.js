@@ -15,6 +15,7 @@ import { Walker } from "./walker.js";
 import { surfaceTiles, tilePath } from "./thumbnails.js";
 import { groundMaterial } from "./groundMaterial.js";
 import { HORIZON, SUN_DIR, Sky } from "./sky.js";
+import { Stats, statsWanted } from "./stats.js";
 
 const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
@@ -130,14 +131,22 @@ export class RenderView {
   }
 
   render() {
-    if (this.streaming && this.walking) {
-      const { pos } = this.walker;
-      this.streamAround(Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT));
+    if (statsWanted()) this.stats ??= new Stats(this);
+    const ours = () => {
+      if (this.streaming && this.walking) {
+        const { pos } = this.walker;
+        this.streamAround(Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT));
+      }
+      this.sky.update(this.camera, performance.now() / 1000);
+      this.showSight();
+      this.showClutter();
+    };
+    const draw = () => this.renderer.render(this.scene, this.camera);
+    if (this.stats) this.stats.measure(ours, draw);
+    else {
+      ours();
+      draw();
     }
-    this.sky.update(this.camera, performance.now() / 1000);
-    this.showSight();
-    this.showClutter();
-    this.renderer.render(this.scene, this.camera);
   }
 
   // Walking limits what you see to SIGHT; orbiting shows everything.
