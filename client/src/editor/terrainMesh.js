@@ -5,6 +5,9 @@ import { decodeFlowDir, decodeFlowSlope } from "../world/generator.js";
 // `perRootSlope` times the square root of its surface's slope.
 const FLOW_SPEED = { base: 1.5, perRootSlope: 30 };
 
+// How far below the ground a shore vertex of water sits at most, so the bank hides the water's edge.
+const SHORE_SINK_FT = 0.5;
+
 // Mesh data for one decoded tile, without three.js, so it can be tested. Vertices sit on cell
 // centers every `step` cells. The last row and column come from the east and south neighbours
 // when they're loaded, so neighbouring tiles meet without gaps; otherwise the edge cells repeat.
@@ -108,7 +111,9 @@ export function waterMesh(tile, neighbours, origin, kind = "fresh") {
       const v = b * side + a;
       let y = level[v];
       if (Number.isNaN(y)) {
-        // A dry vertex takes the mean level of the wet ones around it.
+        const { t, k } = grid(a, b);
+        // A dry vertex takes the mean level of the wet ones around it, but no higher than just under
+        // its ground, so water spilling down a slope meets the bank instead of hanging over it.
         let sum = 0;
         let count = 0;
         for (let db = -1; db <= 1; db++) {
@@ -121,7 +126,7 @@ export function waterMesh(tile, neighbours, origin, kind = "fresh") {
             count++;
           }
         }
-        y = count ? sum / count : NaN;
+        y = count ? Math.min(sum / count, t.layers.height[k] - SHORE_SINK_FT) : NaN;
       }
       usable[v] = Number.isNaN(y) ? 0 : 1;
       const [x, z] = position(tile, a, b, origin);

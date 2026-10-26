@@ -55,12 +55,21 @@ describe("waterMesh", () => {
   });
 
   it("covers a narrow river and runs on into its banks at the river's level", () => {
-    const water = waterMesh(tile(0, 0, 5, true), {}, [0, 0]);
+    const river = tile(0, 0, 9, true); // water at 11 down column 1
+    river.layers.height = Float32Array.from({ length: 16 }, (_, k) => (k % 4 === 1 ? 5 : 12));
+    const water = waterMesh(river, {}, [0, 0]);
     expect(water.indices.length).toBeGreaterThan(0);
-    for (const i of water.indices) expect(water.positions[i * 3 + 1]).toBe(7);
+    for (const i of water.indices) expect(water.positions[i * 3 + 1]).toBe(11);
     const wide = tile(0, 0, 5, true);
     wide.layers.water = new Float32Array(16).fill(7);
     expect(waterMesh(wide, {}, [0, 0]).indices.length).toBe(4 * 4 * 6);
+  });
+
+  it("dips its shore under a bank lower than the water, so it never hangs over dry ground", () => {
+    const river = tile(0, 0, 5, true); // water at 7 down column 1, ground 5 everywhere
+    const water = waterMesh(river, {}, [0, 0]);
+    expect(heightAt(water, 5, 1, 1)).toBe(7);
+    expect(heightAt(water, 5, 2, 1)).toBe(4.5);
   });
 
   it("goes by the water kind layer where a tile has one", () => {
