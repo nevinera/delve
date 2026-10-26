@@ -48,10 +48,15 @@ export function skyLook({ sunDir, moonDir, moonAge }) {
   const sunY = sunDir[1];
   const daylight = smoothstep(-0.12, 0.15, sunY);
   const twilight = 1 - smoothstep(0, 0.3, Math.abs(sunY + 0.02));
-  const bands = PALETTES.day.map((day, i) => mix(mix(rgb(PALETTES.night[i]), rgb(day), daylight), rgb(PALETTES.twilight[i]), twilight * 0.75));
   const sunUp = smoothstep(-0.03, 0.12, sunY);
   const moonUp = smoothstep(-0.03, 0.12, moonDir[1]);
   const fullness = (1 - Math.cos(2 * Math.PI * moonAge)) / 2;
+  // Every night is lit about the same: the moon's share of the light, and the sky's glow making up
+  // the rest. Near full, the moon lights it brighter still.
+  const moonShare = moonUp * (0.3 + 0.7 * fullness);
+  const nearFull = moonUp * smoothstep(0.75, 1, fullness);
+  const night = (i) => rgb(PALETTES.night[i]).map((c) => c * (1 + 0.45 * nearFull));
+  const bands = PALETTES.day.map((day, i) => mix(mix(night(i), rgb(day), daylight), rgb(PALETTES.twilight[i]), twilight * 0.75));
   const warm = smoothstep(0.05, 0.4, sunY);
   return {
     daylight,
@@ -63,12 +68,14 @@ export function skyLook({ sunDir, moonDir, moonAge }) {
     stars: 1 - smoothstep(-0.2, -0.02, sunY),
     clouds: mix(mix([0.13, 0.15, 0.21], [1, 1, 1], daylight), [1, 0.72, 0.6], twilight * 0.6),
     sun: { color: mix(rgb(0xff9a5c), rgb(0xfff6e8), warm), intensity: 1.6 * sunUp },
-    // Even a thin moon lights the night a little, and starlight stands in for it when it's down.
-    moon: { color: rgb(0xc4d4f4), intensity: 1.1 * (0.3 + 0.7 * fullness) * moonUp * (1 - daylight) },
-    sky: { color: mix(mix(rgb(0x7a8cc0), rgb(0xdde8ff), daylight), rgb(0xe8b8a0), twilight * 0.4), intensity: 0.7 + 0.4 * daylight },
+    moon: { color: rgb(0xc4d4f4), intensity: (0.6 * moonShare + 1.1 * nearFull) * (1 - daylight) },
+    sky: {
+      color: mix(mix(rgb(0x7a8cc0), rgb(0xdde8ff), daylight), rgb(0xe8b8a0), twilight * 0.4),
+      intensity: 1.1 * daylight + (0.7 + 0.95 * (1 - moonShare) + 0.15 * nearFull) * (1 - daylight),
+    },
     ground: mix(rgb(0x2a3448), rgb(0x445533), daylight),
     // How far toward moonlit blue-grey the scene's colors go: eyes lose color in the dark.
-    grade: 0.65 * (1 - daylight),
+    grade: (0.65 - 0.12 * nearFull) * (1 - daylight),
   };
 }
 
