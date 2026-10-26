@@ -10,8 +10,8 @@ import { groundCells } from "./terrainMesh.js";
 // with distance before it would shimmer.
 //
 // Roads and highways in use are drawn over that from their middles (the tile's roads), so their
-// surface and edges are sharp, finer than the cells: packed earth with wheel ruts and a rim of
-// stones for roads, pale flagstone with a wider rim for highways.
+// surface and edges are sharp, finer than the cells: packed earth, patchy, rutted and covered in
+// hoof and foot prints, paler and more trodden on highways.
 
 const SIZE = 256;
 const SCALES_FT = [9, 48, 210]; // how far each layer's texture stretches
@@ -22,6 +22,7 @@ const PATTERN_FADE_FT = [500, 1100];
 const PATTERN_FT = { grass: 12, dirt: 14, sand: 16, rock: 30, path: 12, shore: 16, mud: 24, moss: 16, litter: 12 };
 const PATTERNS = Object.keys(PATTERN_FT);
 const LITTER = PATTERNS.indexOf("litter");
+const PATH = PATTERNS.indexOf("path");
 const layerOf = (name) => Math.max(0, PATTERNS.indexOf(name));
 const MAX_ROAD_SEGMENTS = 96; // per tile; any past this are left out
 
@@ -125,18 +126,26 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
           float aa = fwidth(inward) + 0.05;
           float on = smoothstep(-aa, aa, inward);
           if (on > 0.0) {
-            float speck = texture2D(groundDetail, vGroundXZ * 0.4).r;
-            float stones = texture2D(groundDetail, vGroundXZ * 0.7 + 0.17).r;
-            float rimFt = mix(1.4, 2.2, highway);
-            float rim = 1.0 - smoothstep(rimFt - aa, rimFt + aa, inward);
-            vec3 earth = vec3(0.50, 0.40, 0.28) * (0.85 + 0.3 * speck);
-            // Wheel ruts, a third of the way in from each edge.
-            float rut = 1.0 - smoothstep(0.3, 1.1, abs(inward - across * 0.35));
-            earth *= 1.0 - 0.12 * rut;
-            vec3 flag = vec3(0.62, 0.59, 0.52) * (0.86 + 0.28 * stones);
-            vec3 surface = mix(earth, flag, highway);
-            vec3 edge = vec3(0.36, 0.34, 0.31) * (0.7 + 0.6 * stones);
-            diffuseColor.rgb = mix(diffuseColor.rgb, mix(surface, edge, rim), on);
+            vec2 p = vGroundXZ;
+            // Packed earth: the ground's dirt pattern over broad damp and dry patches, paler and
+            // more trodden on highways.
+            vec3 dirt = texture(groundPatterns, vec3(p * PATTERN_SCALE[${PATH}], ${PATH}.0)).rgb * 2.0;
+            float patches = texture2D(groundDetail, p * 0.035 + 0.41).g;
+            float mottle = texture2D(groundDetail, p * 0.16 + 0.23).g;
+            vec3 earth = mix(vec3(0.42, 0.32, 0.21), vec3(0.58, 0.47, 0.33), smoothstep(0.3, 0.7, patches));
+            earth = mix(earth, vec3(0.62, 0.55, 0.43), 0.45 * highway);
+            earth *= dirt * (0.85 + 0.3 * mottle);
+            // Wheel ruts, wandering a little, a third of the way in from each edge.
+            float wander = (texture2D(groundDetail, p * 0.02 + 0.77).g - 0.5) * 1.6;
+            float rut = 1.0 - smoothstep(0.2, 1.0, abs(inward - across * 0.35 + wander));
+            earth *= 1.0 - 0.2 * rut;
+            // Hoof and foot prints: small dark dents, thickest down the middle and in the ruts.
+            float trodden = 0.5 + 0.5 * smoothstep(0.2, 0.8, inward / across) + rut;
+            float prints = smoothstep(0.66, 0.72, texture2D(groundDetail, p * 0.55 + 0.13).r) + smoothstep(0.68, 0.74, texture2D(groundDetail, p.yx * 0.9 + 0.58).r);
+            earth *= 1.0 - 0.22 * min(1.0, prints * trodden);
+            // A darker lip along the edge, so the border reads.
+            earth *= 1.0 - 0.18 * (1.0 - smoothstep(0.0, 0.7, inward));
+            diffuseColor.rgb = mix(diffuseColor.rgb, earth, on);
           }
         }
         #endif`,
