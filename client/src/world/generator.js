@@ -18,7 +18,7 @@ import { prepareHeights } from "./heightField.js";
 import { facets, fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { scatterObjects } from "./objects.js";
-import { makePolyline, nearest, nearBounds, pointAt } from "./polyline.js";
+import { makePolyline, nearest, nearBounds, pointAt, simplify } from "./polyline.js";
 
 export const GENERATOR_VERSION = 21;
 
@@ -90,6 +90,11 @@ export const EDGE_REACH_FT = COAST_REACH_FT + SHORE.maxFt;
 // is still lower somewhere, it's raised to `leveeFt` above the water, easing back into the land
 // across the bank, so the water's always held in.
 const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30, maxBanks: 2, besideFt: 8, leveeFt: 1 };
+// Biome borders follow rivers loosely, so they get each course simplified to within this: a
+// smoothed course has a point every few feet, and every one costs each biome lookup.
+const BIOME_RIVER_TOLERANCE_FT = 24;
+// Channels follow their course to within this, which looks the same but tests far fewer segments.
+const CHANNEL_TOLERANCE_FT = 1;
 export function riverReachFt(width) {
   return width / 2 + Math.max(RIVER.minBankFt, width) * RIVER.maxBanks;
 }
@@ -128,7 +133,7 @@ export function prepareWorld(continent, seedKey) {
         const [x, z] = toFt(p.at);
         return { x, z, biome: p.biome, tags: p.tags };
       }),
-    rivers: rivers.map((r) => r.points.map(toFt)),
+    rivers: rivers.map((r) => simplify(r.points.map(toFt), BIOME_RIVER_TOLERANCE_FT)),
     edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
     seed: ctx.seed,
   });
@@ -137,7 +142,7 @@ export function prepareWorld(continent, seedKey) {
 
   // Rivers always descend: the surface follows the lowest ground seen so far from the source.
   ctx.rivers = rivers.map((s) => {
-    const line = makePolyline(s.points.map(toFt));
+    const line = makePolyline(simplify(s.points.map(toFt), CHANNEL_TOLERANCE_FT));
     const width = s.width ?? 30;
     // The lowest ground across the channel at each step down it.
     const across = width / 2 + RIVER.besideFt;

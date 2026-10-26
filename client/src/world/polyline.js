@@ -52,3 +52,23 @@ export function nearBounds(line, x, z, reach) {
   const [x0, z0, x1, z1] = line.bounds;
   return x > x0 - reach && x < x1 + reach && z > z0 - reach && z < z1 + reach;
 }
+
+// Douglas-Peucker: drops points within `tolerance` of the line between those kept.
+export function simplify(pts, tolerance) {
+  if (pts.length <= 2) return pts;
+  const [a, b] = [pts[0], pts[pts.length - 1]];
+  let worst = 0;
+  let at = 0;
+  for (let k = 1; k < pts.length - 1; k++) {
+    const d = distToSegment(pts[k], a, b);
+    if (d > worst) [worst, at] = [d, k];
+  }
+  if (worst <= tolerance) return [a, b];
+  return [...simplify(pts.slice(0, at + 1), tolerance).slice(0, -1), ...simplify(pts.slice(at), tolerance)];
+}
+
+function distToSegment([x, z], [ax, az], [bx, bz]) {
+  const [dx, dz] = [bx - ax, bz - az];
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+  return Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+}

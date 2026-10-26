@@ -1,5 +1,6 @@
 import { TILE_FT } from "../world/constants.js";
 import { fbm, hashString } from "../world/noise.js";
+import { simplify } from "../world/polyline.js";
 
 // Where the water from a continent's sources goes. It steps across a lattice STEP_FT apart, always
 // to the neighbour it drops to most steeply. Where nothing's lower it fills the hollow, lowest
@@ -240,26 +241,6 @@ function relax(line, reach) {
     for (let m = k - r; m <= k + r; m++) [x, z] = [x + line[m].p[0], z + line[m].p[1]];
     return { p: [x / (2 * r + 1), z / (2 * r + 1)], along };
   });
-}
-
-// Douglas-Peucker: drops points within `tolerance` of the line between those kept.
-function simplify(pts, tolerance) {
-  if (pts.length <= 2) return pts;
-  const [a, b] = [pts[0], pts[pts.length - 1]];
-  let worst = 0;
-  let at = 0;
-  for (let k = 1; k < pts.length - 1; k++) {
-    const d = distToSegment(pts[k], a, b);
-    if (d > worst) [worst, at] = [d, k];
-  }
-  if (worst <= tolerance) return [a, b];
-  return [...simplify(pts.slice(0, at + 1), tolerance).slice(0, -1), ...simplify(pts.slice(at), tolerance)];
-}
-
-function distToSegment([x, z], [ax, az], [bx, bz]) {
-  const [dx, dz] = [bx - ax, bz - az];
-  const t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1), 0, 1);
-  return Math.hypot(x - (ax + t * dx), z - (az + t * dz));
 }
 
 // Points about `spacing` apart along a polyline, each { p, along }.
