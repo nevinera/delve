@@ -5,13 +5,14 @@ import { MeshOut } from "./body.js";
 // along +y, with its front (an axe's edge, a bow's belly) toward +z. characterMesh.js puts it in a
 // hand.
 
-// Which hand holds each weapon, and the way it points from the hand when the arm hangs down: the
-// sword angled down and forward, the rest upright, resting on the ground.
+// Which hand holds each weapon, and the way it points from the hand when the arm hangs down. A
+// fist grips across the hand bone, front to back, so every weapon runs through it that way: the
+// sword's blade tipped down ahead, the rest tipped up ahead, their butts behind.
 export const HELD = {
   sword: { hand: "hand_r", toward: [0, -0.6, 0.8] },
-  axe: { hand: "hand_r", toward: [0, 1, 0] },
-  staff: { hand: "hand_r", toward: [0, 1, 0] },
-  bow: { hand: "hand_l", toward: [0, 1, 0] },
+  axe: { hand: "hand_r", toward: [0, 0.8, 0.6] },
+  staff: { hand: "hand_r", toward: [0, 0.8, 0.6] },
+  bow: { hand: "hand_l", toward: [0, 0.8, 0.6] },
 };
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);

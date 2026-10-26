@@ -239,18 +239,20 @@ function head(out, look, [hx, hy, hz], s, c) {
   out.face([top, left, tip], c.skin, bones, inside);
   out.face([top, tip, right], c.skin, bones, inside);
   out.face([left, right, tip], shade(c.skin, 0.85), bones, inside);
-  // Eyes, a little proud of the face so they don't sink into it: a white, then an iris and a
-  // pupil each a little further out.
-  const disc = (center, rx, ry, sides, color) => {
+  // Eyes, a little proud of the face so they don't sink into it: an almond-shaped white, pointed
+  // at either side, then a round iris as tall as the white and a pupil, each a little further out.
+  // `pointed` pinches the outline to points at the sides.
+  const disc = (center, rx, ry, sides, color, pointed = false) => {
     const rim = Array.from({ length: sides }, (_, k) => {
       const angle = (k / sides) * Math.PI * 2;
-      return add(center, [Math.cos(angle) * rx, Math.sin(angle) * ry, 0]);
+      const y = pointed ? Math.sin(angle) * Math.abs(Math.sin(angle)) : Math.sin(angle);
+      return add(center, [Math.cos(angle) * rx, y * ry, 0]);
     });
     for (let k = 0; k < sides; k++) out.face([center, rim[k], rim[(k + 1) % sides]], color, bones, inside);
   };
   for (const x of [-0.14, 0.14]) {
     const [cx, cy, cz] = front(0.34, x);
-    disc([cx, cy, cz + 0.022 * s], 0.065 * s, 0.038 * s, 8, [0.93, 0.92, 0.88]);
+    disc([cx, cy, cz + 0.022 * s], 0.08 * s, 0.037 * s, 12, [0.93, 0.92, 0.88], true);
     disc([cx, cy, cz + 0.027 * s], 0.032 * s, 0.032 * s, 8, c.eyes);
     disc([cx, cy, cz + 0.031 * s], 0.014 * s, 0.014 * s, 6, [0.05, 0.05, 0.06]);
   }
