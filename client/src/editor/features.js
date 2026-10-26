@@ -23,13 +23,14 @@ const RIVER_COLOR = "#4a90d9";
 const PATH = { color: "#c8a26a", none: "#ff4a4a", pending: "rgba(255, 255, 255, 0.6)", label: "road path" };
 const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
 export const FEATURE_HINTS = {
-  select: "click a pin or road to select it · drag pins · delete removes the selection",
-  pin: "click on land to place · click a pin to select or drag it",
+  select: "click a pin or road to select it · drag pins, and a selected hub's edge to size it · delete removes the selection",
+  pin: "click on land to place · click a pin to select or drag it · drag a selected hub's edge to size it",
   road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · roads don't shape the ground yet",
 };
 
 const DEFAULT_HEIGHT_FT = 20;
 const DEFAULT_HUB_RADIUS_FT = 200;
+const MIN_HUB_RADIUS_FT = 16;
 const DEFAULT_SOURCE_WIDTH_FT = 12;
 const DEFAULT_PATH_WIDTH_FT = 10;
 const SHAPE_PINS = ["height", "biome"];
@@ -107,6 +108,7 @@ export class Features {
   pinTool(sketch, kind) {
     return {
       down: (tile) => {
+        if (this.grabHandle(sketch, tile)) return true;
         const existing = this.pinAt(sketch, tile);
         if (existing) return this.grabPin(sketch, existing);
         this.addPin(sketch, kind, tile, this.editor.palette.pinProps(kind));
@@ -203,6 +205,7 @@ export class Features {
   selectTool(sketch) {
     return {
       down: (tile) => {
+        if (this.grabHandle(sketch, tile)) return true;
         const pin = this.pinAt(sketch, tile);
         if (pin) return this.grabPin(sketch, pin);
         const path = this.kinds.includes("road") ? this.pathAt(sketch, tile) : null;
@@ -216,8 +219,25 @@ export class Features {
 
   endDrag(sketch) {
     if (!this.dragging) return;
+    const sized = this.dragging.key === "radius";
     this.dragging = null;
     this.editor.saveSketch();
+    if (sized) this.editor.renderProps();
+  }
+
+  // The selected hub's handle, on its edge to the east, for sizing it.
+  handleOf(sketch) {
+    const pin = this.selected?.type === "pin" ? this.find(sketch) : null;
+    if (pin?.kind !== "hub" || !this.kinds.includes("hub")) return null;
+    return { pin, at: [pin.at[0] + (pin.radius ?? 0) / TILE_FT, pin.at[1]] };
+  }
+
+  grabHandle(sketch, tile) {
+    const handle = this.handleOf(sketch);
+    // Where the handle's on top of the pin, the pin wins, so it can still be moved.
+    if (!handle || !this.editor.nearScreen(handle.at, tile) || this.editor.nearScreen(handle.pin.at, tile)) return false;
+    this.dragging = { target: handle.pin, key: "radius", kind: "hub" };
+    return true;
   }
 
   grabPin(sketch, pin) {
@@ -228,6 +248,12 @@ export class Features {
 
   dragTo(tile, sketch) {
     if (!this.dragging) return;
+    const { target, key } = this.dragging;
+    if (key === "radius") {
+      const ft = Math.hypot(tile[0] - target.at[0], tile[1] - target.at[1]) * TILE_FT;
+      target.radius = Math.max(MIN_HUB_RADIUS_FT, Math.round(ft));
+      return;
+    }
     const point = snapToCell(tile);
     if (!this.editor.onLand(point)) return;
     this.dragging.target[this.dragging.key] = point;
@@ -281,6 +307,21 @@ export class Features {
     if (kinds.includes("road")) for (const path of sketch.paths) this.drawPath(ctx, sketch, path);
     for (const pin of sketch.pins) {
       if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(pin));
+    }
+    const handle = this.handleOf(sketch);
+    if (handle) {
+      const dpr = this.map.dpr;
+      const [x, y] = this.map.toScreen(handle.at);
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = dpr;
+      ctx.fillRect(x - 4 * dpr, y - 4 * dpr, 8 * dpr, 8 * dpr);
+      ctx.strokeRect(x - 4 * dpr, y - 4 * dpr, 8 * dpr, 8 * dpr);
+      if (this.dragging?.key === "radius") {
+        ctx.fillStyle = "#eee";
+        ctx.font = `${12 * dpr}px ui-monospace, monospace`;
+        ctx.fillText(`${handle.pin.radius} ft`, x + 8 * dpr, y + 4 * dpr);
+      }
     }
   }
 
