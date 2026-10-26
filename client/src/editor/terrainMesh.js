@@ -26,6 +26,23 @@ export function terrainMesh(tile, neighbours, origin, step = 2, { skirtFt = 0 } 
   return skirtFt > 0 ? withSkirt(mesh, side, skirtFt) : mesh;
 }
 
+// The ground's kind and forest cover at each vertex of a full-detail terrainMesh, for the ground's
+// patterns: two bytes per vertex, row by row, the first being `layerOf(terrain name)` and the
+// second the forest cover. Also the scene position of the first vertex.
+export function groundCells(tile, neighbours, origin, layerOf) {
+  const grid = sampler(tile, neighbours);
+  const side = tile.cells + 1;
+  const data = new Uint8Array(side * side * 2);
+  for (let b = 0; b < side; b++) {
+    for (let a = 0; a < side; a++) {
+      const { t, k } = grid(a, b);
+      data[(b * side + a) * 2] = layerOf(t.palettes.terrain[t.layers.terrain[k]]);
+      data[(b * side + a) * 2 + 1] = t.layers.forest[k];
+    }
+  }
+  return { data, side, corner: position(tile, 0, 0, origin) };
+}
+
 // The mesh with a strip hanging `depth` down from each edge, facing both ways. The strip has its
 // own vertices, so it doesn't bend the ground's lighting at the edge; `skirt` says which ground
 // vertex each strip vertex copies, so the strip can be lit like the ground there.

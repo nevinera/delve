@@ -129,7 +129,7 @@ export class Stats {
       canvas: { width: view.canvas.width, height: view.canvas.height, pixelRatio: view.renderer.getPixelRatio() },
       memory: { geometries: info.memory.geometries, textures: info.memory.textures, shaders: info.programs?.length ?? null },
       tiles: {
-        near: view.content.children.filter((c) => c.visible && c.userData.tile && c.material === view.terrainMaterial).length,
+        near: view.content.children.filter((c) => c.visible && c.userData.ground).length,
         far: view.farTiles?.size ?? 0,
       },
       groups: Object.fromEntries(Object.entries(view.parts()).map(([name, group]) => [name, { ...count(group), hidden: view.graphics.hidden.has(name) }])),

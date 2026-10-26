@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { terrainMesh, waterMesh } from "./terrainMesh.js";
+import { groundCells, terrainMesh, waterMesh } from "./terrainMesh.js";
 
 // A 4×4-cell tile with every cell at `height`, river water down column 1 when wet.
 function tile(tx, tz, height, wet = false) {
@@ -76,5 +76,19 @@ describe("waterMesh", () => {
     sea.layers.water = new Float32Array(16).fill(0);
     expect(waterMesh(sea, {}, [0, 0], "fresh")).toBeNull();
     expect(waterMesh(sea, {}, [0, 0], "sea").indices.length).toBe(4 * 4 * 6);
+  });
+});
+
+describe("groundCells", () => {
+  it("gives each vertex its ground's layer and forest cover, the far edge from the neighbours", () => {
+    const here = tile(0, 0, 0);
+    here.layers.forest[1] = 200;
+    const east = tile(1, 0, 0);
+    east.palettes.terrain = ["rock"];
+    const { data, side, corner } = groundCells(here, { east }, [0, 0], (name) => ["grass", "rock"].indexOf(name));
+    expect(side).toBe(5);
+    expect(corner).toEqual([4, 4]);
+    expect([data[0], data[1], data[2], data[3]]).toEqual([0, 0, 0, 200]);
+    expect(data[4 * 2]).toBe(1);
   });
 });

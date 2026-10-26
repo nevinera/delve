@@ -13,7 +13,7 @@ import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
 import { surfaceTiles, tilePath } from "./thumbnails.js";
-import { groundMaterial } from "./groundMaterial.js";
+import { disposeGround, groundMaterial } from "./groundMaterial.js";
 import { HORIZON, SUN_DIR, Sky } from "./sky.js";
 import { Stats, statsWanted } from "./stats.js";
 
@@ -457,8 +457,9 @@ export class RenderView {
       south: decoded.get(`${tx},${tz + 1}`),
       southEast: decoded.get(`${tx + 1},${tz + 1}`),
     };
-    const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), this.terrainMaterial);
+    const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), groundMaterial(this.renderer, { tile, neighbours, origin: this.origin }));
     terrain.userData.tile = [tx, tz];
+    terrain.userData.ground = true;
     this.content.add(terrain);
     this.surfaces.push(terrain);
     for (const kind of WATER_KINDS) {
@@ -569,6 +570,7 @@ export class RenderView {
         group.remove(child);
         if (child.isInstancedMesh) child.dispose();
         else child.geometry.dispose();
+        if (child.userData.ground) disposeGround(child.material);
         if (group === this.content) this.surfaces.splice(this.surfaces.indexOf(child), 1);
       }
     }
@@ -817,7 +819,8 @@ function empty(group) {
   for (const child of [...group.children]) {
     if (!child.isSprite) child.geometry.dispose();
     if (child.material.map && !child.isSprite) child.material.map.dispose();
-    child.material.dispose();
+    if (child.userData.ground) disposeGround(child.material);
+    else child.material.dispose();
     group.remove(child);
   }
 }
