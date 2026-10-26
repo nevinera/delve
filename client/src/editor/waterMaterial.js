@@ -25,7 +25,7 @@ export function setWaterTime(seconds) {
 }
 
 export function waterMaterial(renderer, { color, opacity }) {
-  const material = new THREE.MeshLambertMaterial({ color, transparent: true, opacity });
+  const material = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide });
   material.customProgramCacheKey = () => "flowing-water";
   material.onBeforeCompile = (shader) => {
     shader.uniforms.waterNoise = { value: noiseTexture(renderer) };
