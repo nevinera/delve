@@ -38,4 +38,14 @@ describe("characterClips", () => {
     const tall = posed("Jump_Loop", 0.3, resolveRecipe({ height: 7.5 }));
     expect(tall("pelvis").y / short("pelvis").y).toBeCloseTo(7.5 / 4.5, 1);
   });
+
+  it("sits on the ground with the knees up and the feet down", () => {
+    const at = posed("Sit_Ground_Idle_Loop", 1);
+    expect(at("pelvis").y).toBeGreaterThan(0.25);
+    expect(at("pelvis").y).toBeLessThan(0.8);
+    expect(at("calf_l").y).toBeGreaterThan(at("pelvis").y + 0.3);
+    expect(at("foot_l").y).toBeGreaterThan(0.1);
+    expect(at("foot_l").y).toBeLessThan(0.6);
+    expect(at("hand_l").y).toBeGreaterThan(0.3);
+  });
 });

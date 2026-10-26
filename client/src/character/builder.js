@@ -1,7 +1,7 @@
 import "./builder.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { characterClips, loadAnimations } from "./animations.js";
+import { characterClips, clipNames, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
 import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, WEAPONS, resolveRecipe, saveLook, savedLook } from "./recipe.js";
@@ -12,9 +12,10 @@ import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, WEAPONS, resolveRecipe, saveLook, s
 
 // Clips by what they're for, shown in this order; the rest go under "other".
 const CLIP_GROUPS = [
-  ["moving", /^(Idle_Loop|Walk|Jog|Sprint|Crouch|Jump|NinjaJump|Roll|Slide|Swim|Sitting_(Enter|Idle_Loop|Exit))/],
+  ["moving", /^(Idle_Loop|Walk|Jog|Sprint|Crouch|Jump|NinjaJump|Roll|Slide|Swim|Sit_Ground)/],
   ["combat", /^(Sword|Punch|Melee|Shield|Idle_Shield|Spell|OverhandThrow|Hit|Death|LayToIdle)/],
   ["zombie", /^Zombie/],
+  ["chair", /^Sitting/],
   ["other", /./],
 ];
 const IDLE = "Idle_Loop";
@@ -93,7 +94,7 @@ function play(name, fade = FADE_S) {
 
 function buildAnimations() {
   const panel = $("animations");
-  const names = Object.keys(baked.clips);
+  const names = clipNames(baked);
   const label = (name) => name.replace(/_Loop$/, "").replaceAll("_", " ").toLowerCase();
   const button = (text, clip) => {
     const el = Object.assign(document.createElement("button"), { type: "button", textContent: text });
