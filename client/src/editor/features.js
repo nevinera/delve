@@ -25,7 +25,7 @@ const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
 export const FEATURE_HINTS = {
   select: "click a pin or road to select it · drag pins, and a selected hub's edge to size it · delete removes the selection",
   pin: "click on land to place · click a pin to select or drag it · drag a selected hub's edge to size it",
-  road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · roads don't shape the ground yet",
+  road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · set the width under the selected pin, or select a single path with the select tool · roads don't shape the ground yet",
 };
 
 const DEFAULT_HEIGHT_FT = 20;
@@ -450,6 +450,7 @@ export class Features {
     if (path || !SHAPE_PINS.includes(feature.kind)) fields.push("tags");
     fields.push("notes");
     for (const key of fields) box.append(this.field(sketch, feature, key));
+    if (feature.kind === "road") box.append(this.roadWidthField(sketch, feature));
     if (feature.kind === "source") box.append(this.editor.sourceStatus(feature));
     if (path) {
       this.status = { path: feature, el: document.createElement("p") };
@@ -474,6 +475,28 @@ export class Features {
       none: `No route within a ${cap} grade without crossing a lake or the sea, or a river at an angle, so it's shown as a red dashed line.`,
       pending: "Working out its route…",
     }[this.pathState(path)];
+  }
+
+  // A road pin's paths' width, set for them all at once. New paths from the pin take it too, so
+  // setting it while drawing carries on down the road. Blank when its paths differ.
+  roadWidthField(sketch, pin) {
+    const paths = () => sketch.paths.filter((p) => p.from === pin.id || p.to === pin.id);
+    const label = document.createElement("label");
+    label.className = "editor-field";
+    label.textContent = "road width (ft), for its paths";
+    const input = document.createElement("input");
+    input.type = "number";
+    const widths = new Set(paths().map((p) => p.width));
+    input.value = widths.size === 1 ? [...widths][0] : "";
+    input.disabled = !widths.size;
+    input.addEventListener("input", () => {
+      const width = Number(input.value);
+      if (!input.value.trim() || !(width > 0)) return;
+      for (const path of paths()) path.width = width;
+      this.editor.saveSketch();
+    });
+    label.append(input);
+    return label;
   }
 
   field(sketch, feature, key) {
