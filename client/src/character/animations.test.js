@@ -69,4 +69,23 @@ describe("characterClips", () => {
     expect(at("hand_l").z).toBeGreaterThan(1.3);
     expect(at("hand_r").distanceTo(at("head"))).toBeLessThan(0.8);
   });
+
+  it("runs with the planted foot holding the ground, and both feet off it between steps", () => {
+    const cycle = 0.66;
+    // Halfway through the left foot's time planted, then halfway through the moment in the air.
+    const planted = posed("Run_Fwd_Loop", 0.11 * cycle);
+    expect(planted("foot_l").y).toBeCloseTo(0.32, 1);
+    const later = posed("Run_Fwd_Loop", 0.12 * cycle);
+    expect((planted("foot_l").z - later("foot_l").z) / (0.01 * cycle)).toBeCloseTo(21, -1);
+    const flying = posed("Run_Fwd_Loop", 0.36 * cycle);
+    expect(flying("foot_l").y).toBeGreaterThan(0.4);
+    expect(flying("foot_r").y).toBeGreaterThan(0.4);
+  });
+
+  it("strafes with the feet clear of each other", () => {
+    for (let t = 0; t < 0.66; t += 0.03) {
+      const at = posed("Run_Left_Loop", t);
+      expect(at("foot_l").distanceTo(at("foot_r"))).toBeGreaterThan(0.25);
+    }
+  });
 });

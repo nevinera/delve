@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import url from "./animations.json?url";
-import { POSED, posedClip } from "./posed.js";
+import { POSED, posedClip, posedSpeed } from "./posed.js";
 
 // Animation clips for characters (characterMesh.js), baked onto the skeleton from Quaternius'
 // Universal Animation Library by script/bake_animations.mjs. Each frame holds a quaternion per
@@ -39,7 +39,8 @@ export function decodeClip(baked, name) {
 // The names of every clip: baked, then hand-posed.
 export const clipNames = (baked) => [...Object.keys(baked.clips), ...Object.keys(POSED)];
 
-// Every clip as a three.js AnimationClip for this character, by name.
+// Every clip as a three.js AnimationClip for this character, by name. A clip that moves along the
+// ground keeps its speed, for a 6ft body, in userData.speed.
 export function characterClips(mesh, baked) {
   const s = mesh.userData.scale;
   const rest = mesh.skeleton.getBoneByName("pelvis").position;
@@ -49,7 +50,9 @@ export function characterClips(mesh, baked) {
     const tracks = Object.entries(rotations).map(([bone, values]) => new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));
     const positions = pelvis.map((v, i) => rest.getComponent(i % 3) + v * s);
     tracks.push(new THREE.VectorKeyframeTrack("pelvis.position", times, positions));
-    clips.set(name, new THREE.AnimationClip(name, times[times.length - 1] || 1 / baked.fps, tracks));
+    const clip = new THREE.AnimationClip(name, times[times.length - 1] || 1 / baked.fps, tracks);
+    clip.userData = { speed: POSED[name] ? posedSpeed(name) : baked.clips[name].speed };
+    clips.set(name, clip);
   }
   return clips;
 }

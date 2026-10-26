@@ -2,8 +2,9 @@ import * as THREE from "three";
 import { HELD } from "./weapons.js";
 
 // Hand-posed clips, for what the animation library lacks: sitting on the ground, two-handed
-// weapons and bows. Each is a list of [time, pose] keyframes, eased from one to the next. A pose
-// gives:
+// weapons, bows, and running, strafing, backing up and turning at WoW's pace. Each is a list of
+// [time, pose] keyframes, eased from one to the next, or a gait (below) that gives the pose at
+// any time through its cycle. A pose gives:
 // - pelvis: how far the pelvis moves from rest, in feet for a 6ft body.
 // - bones: each bone's turn from rest, as XYZ euler angles relative to its parent. Every bone
 //   points along its rest direction unturned, so a turn about x swings it: negative forward (+z),
@@ -101,7 +102,76 @@ const DRAWN = { ...ARCHER, bones: SIDE_ON, reach: { hand_l: BOW_OUT, hand_r: { w
 const AIM_SWAY = { ...DRAWN, reach: { ...DRAWN.reach, hand_l: bowAt([0.21, 4.63, 2.0], [0.12, 1, 0], [0, 0, 1]) } };
 const LOOSED = { ...ARCHER, bones: SIDE_ON, reach: { hand_l: BOW_OUT, hand_r: { wrist: [-0.3, 5.1, 0.05], elbow: [-0.5, 0, -1] } } };
 
+// A gait: the feet stepping by turns, each planted for `planted` of every `cycle` seconds and
+// swung forward the rest, carrying the body along `heading` (radians from straight ahead, toward
+// the left) at `speed`. While planted a foot slides back at that speed, so played at it the feet
+// hold the ground. With a foot planted less than half the time there's a moment in the air between
+// steps, as long as the stride's speed and planting allow, and the body rises through it by as
+// much as a jump that long would. The arms swing against the legs, the hips and shoulders turn
+// with them, and the body leans into the going. Sizes are feet for a 6ft body.
+function gait({ speed, cycle, planted, lift, heading = 0, bob, low = 0, lean, swing, elbow, width = 0.25 }) {
+  const reach = speed * planted * cycle;
+  const way = [Math.sin(heading), Math.cos(heading)];
+  const airborne = Math.max(0, (0.5 - planted) * cycle);
+  const rise = (32 * airborne * airborne) / 8;
+  const length = cycle;
+  const at = (t) => {
+    const p = (t / cycle) % 1;
+    const feet = {};
+    for (const [foot, side, offset] of [
+      ["foot_l", 1, 0],
+      ["foot_r", -1, 0.5],
+    ]) {
+      const q = (p + offset) % 1;
+      let along;
+      let up = 0;
+      if (q < planted) along = reach * (0.5 - q / planted);
+      else {
+        const u = (q - planted) / (1 - planted);
+        along = reach * (u * u * (3 - 2 * u) - 0.5);
+        up = lift * Math.sin(Math.PI * u);
+      }
+      feet[foot] = [side * width + way[0] * along, 0.32 + up, way[1] * along];
+    }
+    // Through each step: down onto the planted foot, then up through the air or over the stance.
+    const h = (p % 0.5) / 0.5;
+    let dy;
+    if (planted >= 0.5) dy = -bob * Math.cos(2 * Math.PI * h);
+    else if (h < 2 * planted) dy = -bob * Math.sin((Math.PI * h) / (2 * planted));
+    else dy = rise * Math.sin((Math.PI * (h - 2 * planted)) / (1 - 2 * planted));
+    const turn = Math.cos(2 * Math.PI * p);
+    const forward = Math.cos(heading);
+    return {
+      pelvis: [0, low + dy, 0],
+      feet,
+      bones: {
+        pelvis: [0, -0.15 * turn, 0],
+        spine_01: [lean * forward, 0, -lean * Math.sin(heading) * 0.5],
+        spine_02: [0, 0.25 * turn, 0],
+        upperarm_l: [swing * turn, 0, 0.12],
+        upperarm_r: [-swing * turn, 0, -0.12],
+        lowerarm_l: [elbow, 0, 0],
+        lowerarm_r: [elbow, 0, 0],
+      },
+    };
+  };
+  return { length, at, speed };
+}
+const RUN = { speed: 21, cycle: 0.66, planted: 0.22, lift: 0.75, bob: 0.12, low: -0.2, lean: 0.2, swing: 0.7, elbow: -1.4, width: 0.22 };
+const WALK = { speed: 7.5, cycle: 1.1, planted: 0.6, lift: 0.25, bob: 0.06, low: -0.03, lean: 0.03, swing: 0.3, elbow: -0.35, width: 0.25 };
+// Strafing runs half turned toward the side, the feet a little further apart so they pass.
+const STRAFE = Math.PI / 4;
+
 export const POSED = {
+  Run_Fwd_Loop: gait(RUN),
+  Run_Left_Loop: gait({ ...RUN, heading: STRAFE, width: 0.3 }),
+  Run_Right_Loop: gait({ ...RUN, heading: -STRAFE, width: 0.3 }),
+  Run_Back_Loop: gait({ ...RUN, speed: 13.5, cycle: 0.6, planted: 0.32, lift: 0.5, lean: -0.06, swing: 0.45, heading: Math.PI }),
+  Walk_Left_Loop: gait({ ...WALK, heading: STRAFE, width: 0.3 }),
+  Walk_Right_Loop: gait({ ...WALK, heading: -STRAFE, width: 0.3 }),
+  Walk_Back_Loop: gait({ ...WALK, heading: Math.PI, lean: -0.03 }),
+  // Stepping on the spot, for turning where it stands.
+  Turn_Loop: gait({ speed: 0, cycle: 0.7, planted: 0.5, lift: 0.28, bob: 0.03, lean: 0, swing: 0.08, elbow: -0.3 }),
   Sit_Ground_Enter: [
     [0, STANDING],
     [0.45, CROUCHED],
@@ -172,6 +242,18 @@ function blend(from, to, u) {
   for (const foot of Object.keys(to.feet ?? {})) feet[foot] = lerp(from.feet?.[foot] ?? to.feet[foot], to.feet[foot]);
   return { pelvis: lerp(from.pelvis ?? [0, 0, 0], to.pelvis ?? [0, 0, 0]), bones, reach, feet };
 }
+
+// A keyframed clip's pose at a time, eased from the keyframe before it to the one after.
+function keyed(keys, time) {
+  let k = 0;
+  while (k < keys.length - 2 && keys[k + 1][0] <= time) k++;
+  const [[t0, from], [t1, to]] = [keys[k], keys[k + 1]];
+  const u = THREE.MathUtils.clamp((time - t0) / (t1 - t0), 0, 1);
+  return blend(from, to, u * u * (3 - 2 * u));
+}
+
+// How fast a gait carries the body, in feet per second for a 6ft body, or undefined.
+export const posedSpeed = (name) => POSED[name]?.speed;
 
 // A turn whose +y points along `dir` and +z toward `front`.
 function frame(dir, front) {
@@ -253,7 +335,7 @@ function poseRig(rig, pose, s) {
 // animations.js's decoded form: { times, rotations: { bone: [x, y, z, w per frame] }, pelvis }.
 export function posedClip(name, joints, s, fps = 30) {
   const keys = POSED[name];
-  const end = keys[keys.length - 1][0];
+  const end = Array.isArray(keys) ? keys[keys.length - 1][0] : keys.length;
   const frames = Math.round(end * fps) + 1;
   const at = new Map(joints.map((j) => [j.name, j.at]));
   const rig = new Map(joints.map((j) => [j.name, { parent: j.parent, offset: v3(j.at).sub(v3(j.parent ? at.get(j.parent) : [0, 0, 0])), turn: null }]));
@@ -261,11 +343,7 @@ export function posedClip(name, joints, s, fps = 30) {
   const rotations = Object.fromEntries(joints.map((j) => [j.name, new Float32Array(frames * 4)]));
   const pelvis = new Float32Array(frames * 3);
   for (let f = 0; f < frames; f++) {
-    let k = 0;
-    while (k < keys.length - 2 && keys[k + 1][0] <= times[f]) k++;
-    const [[t0, from], [t1, to]] = [keys[k], keys[k + 1]];
-    const u = THREE.MathUtils.clamp((times[f] - t0) / (t1 - t0), 0, 1);
-    const pose = blend(from, to, u * u * (3 - 2 * u));
+    const pose = Array.isArray(keys) ? keyed(keys, times[f]) : blend(keys.at(times[f]), keys.at(times[f]), 0);
     poseRig(rig, pose, s);
     for (const [bone, { turn }] of rig) {
       // Keep each quaternion on the same side as the frame before, for smooth blending.

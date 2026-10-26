@@ -11,8 +11,9 @@ import { trunkRadius } from "./treeMeshes.js";
 // Left-drag swings the camera around the character, right-drag turns the character with it, and
 // the wheel zooms. Escape stops.
 //
-// Each walk is a new random character, weapons put away, animated to match how it moves. With no
-// clips to back up or strafe, it walks backward and turns its body the way it's going.
+// Each walk is a new random character, weapons put away, animated to match how it moves. Strafing
+// and running on the diagonal turn the legs part way toward the going and twist the chest back
+// toward the front; backing up while strafing turns the other way.
 //
 // The character keeps to the tiles drawn in full, can't climb slopes steeper than MAX_CLIMB or walk
 // through tree trunks, and wades or swims where the water's deep. Positions are scene feet.
@@ -36,13 +37,28 @@ const DRAG = 0.006; // radians per pixel
 // Frames are drawn at most this often, so a fast display doesn't keep the GPU (shared with the rest
 // of the screen) flat out. A little under the 60fps interval, so 60Hz displays don't drop frames.
 const MIN_FRAME_MS = 1000 / 60 - 2;
+const UP = new THREE.Vector3(0, 1, 0);
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
 const TOGGLES = new Set(["/", "x"]);
 
-// The clips for moving at each gait, and how far one stretches to match the character's speed
-// before its feet are left to slide.
-const GAITS = { walk: "Walk_Loop", run: "Jog_Fwd_Loop", sprint: "Sprint_Loop" };
+// The clips for moving at each gait, ahead, to the left and right and back, and how far one
+// stretches to match the character's speed before its feet are left to slide.
+const GAITS = {
+  walk: { ahead: "Walk_Loop", left: "Walk_Left_Loop", right: "Walk_Right_Loop", back: "Walk_Back_Loop" },
+  run: { ahead: "Run_Fwd_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
+  sprint: { ahead: "Sprint_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
+};
 const STRETCH = [0.6, 1.8];
+const QUARTER = Math.PI / 4;
+// How the chest twists against the legs, shared down the spine to the head.
+const TWIST = [
+  ["spine_01", 0.3],
+  ["spine_02", 0.3],
+  ["spine_03", 0.2],
+  ["neck_01", 0.1],
+  ["head", 0.1],
+];
+const TURN_LEAD = 0.35; // how far the chest and head lead a turn on the spot
 const FADE_S = 0.2;
 const AIRBORNE_S = 0.15; // off the ground this long, without jumping, is falling
 const ROLL_FT = 30; // landing faster than this, or moving after a long fall, rolls
@@ -87,10 +103,13 @@ export class Walker {
     this.model = characterMesh({ ...randomLook(), sheathed: true });
     this.view.scene.add(this.model);
     this.mixer = new THREE.AnimationMixer(this.model);
+    this.bones = null;
     this.clips = null;
     this.playing = null;
     this.t = 0;
     this.facing = 0;
+    this.twist = 0;
+    this.turning = 0;
     this.gait = this.gait ?? "run";
     this.sitting = null;
     this.landing = null;
@@ -99,7 +118,6 @@ export class Walker {
     const model = this.model;
     loadAnimations().then((baked) => {
       if (this.model !== model) return;
-      this.speeds = Object.fromEntries(Object.entries(baked.clips).map(([name, clip]) => [name, clip.speed]));
       this.clips = characterClips(model, baked);
     });
     for (const [name, fn] of Object.entries(this.listeners)) window.addEventListener(name, fn);
@@ -147,6 +165,9 @@ export class Walker {
     this.t += dt;
     const key = (k) => (this.held.has(k) ? 1 : 0);
     this.yaw += (key("a") - key("d")) * TURN * dt;
+    // Which way it's turned since the last step, by keys or by dragging.
+    this.turning = Math.sign(this.yaw - (this.lastYaw ?? this.yaw));
+    this.lastYaw = this.yaw;
     const forward = key("w") - key("s");
     const strafe = key("q") - key("e");
     const fx = Math.sin(this.yaw);
@@ -211,10 +232,15 @@ export class Walker {
   animate(dt) {
     const { forward, strafe, speed, gait, swimming } = this.motion;
     const moving = speed > 0;
-    let target = 0;
-    if (moving) target = forward < 0 ? Math.atan2(strafe, forward) - Math.sign(strafe || 1) * Math.PI : Math.atan2(strafe, forward);
-    const turn = Math.atan2(Math.sin(target - this.facing), Math.cos(target - this.facing));
-    this.facing += turn * Math.min(1, dt * 10);
+    // The legs face a quarter turn toward a strafe, away from it when backing up, and the chest
+    // twists back to the front.
+    const facing = moving && !swimming ? strafe * QUARTER * (forward < 0 ? -1 : 1) : 0;
+    const way = forward < 0 ? "back" : forward > 0 || !strafe ? "ahead" : strafe > 0 ? "left" : "right";
+    const still = !moving && !this.sitting && !this.landing && this.airTime === 0;
+    const twist = still ? this.turning * TURN_LEAD : -facing;
+    const ease = Math.min(1, dt * 10);
+    this.facing += (facing - this.facing) * ease;
+    this.twist += (twist - this.twist) * ease;
     this.mixer.update(dt);
     if (!this.clips) return;
 
@@ -227,11 +253,19 @@ export class Walker {
     else if (this.landing) this.play(this.landing.clip);
     else if (this.sitting) this.play(this.sitting.standing ? "Sit_Ground_Exit" : sat < 1 ? "Sit_Ground_Enter" : "Sit_Ground_Idle_Loop");
     else if (moving) {
-      const clip = GAITS[forward < 0 && !strafe ? "walk" : gait] ?? GAITS.run;
-      const s = this.model.userData.scale;
-      const stretch = Math.min(STRETCH[1], Math.max(STRETCH[0], speed / ((this.speeds[clip] ?? speed) * s)));
-      this.play(clip, forward < 0 ? -stretch : stretch);
-    } else this.play("Idle_Loop");
+      const clip = (GAITS[gait] ?? GAITS.run)[way];
+      const ground = (this.clips.get(clip)?.userData.speed ?? speed) * this.model.userData.scale;
+      this.play(clip, Math.min(STRETCH[1], Math.max(STRETCH[0], speed / ground)));
+    } else this.play(still && this.turning ? "Turn_Loop" : "Idle_Loop");
+    this.twistChest();
+  }
+
+  // Twists the chest and head on top of whatever the clip has them doing.
+  twistChest() {
+    if (Math.abs(this.twist) < 0.01) return;
+    this.bones ??= new Map(this.model.skeleton.bones.map((b) => [b.name, b]));
+    const turn = new THREE.Quaternion();
+    for (const [name, share] of TWIST) this.bones.get(name)?.quaternion.multiply(turn.setFromAxisAngle(UP, this.twist * share));
   }
 
   // Fades to a clip, or sets the playing one's speed. One-shot clips hold their last frame.
@@ -246,7 +280,7 @@ export class Walker {
     action.reset();
     action.setLoop(ONCE[name] ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     action.clampWhenFinished = true;
-    action.time = ONCE[name]?.from ?? (speed < 0 ? clip.duration : 0);
+    action.time = ONCE[name]?.from ?? 0;
     action.play();
     if (previous) action.crossFadeFrom(previous, FADE_S, false);
   }

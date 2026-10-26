@@ -14,7 +14,7 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 // Clips by what they're for, shown in this order; the rest go under "other".
 const CLIP_GROUPS = [
-  ["moving", /^(Idle_Loop|Walk|Jog|Sprint|Crouch|Jump|Roll|Swim|Sit_Ground)/],
+  ["moving", /^(Idle_Loop|Walk|Jog|Run|Turn|Sprint|Crouch|Jump|Roll|Swim|Sit_Ground)/],
   ["combat", /^(TwoHand|Bow|Sword|Punch|Melee|Shield|Idle_Shield|Spell|OverhandThrow|Hit|Death|LayToIdle)/],
   ["other", /./],
 ];
