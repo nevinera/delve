@@ -61,7 +61,8 @@ const STEPS = {
   features: { tools: ["select", "river", "info"], kinds: ["river", "info"] },
   population: { tools: TREE_TOOLS, kinds: [] },
 };
-// Steps whose 3D view is a live preview of the whole continent, rather than the generated tiles.
+// Steps that edit every zone at once, whether or not one is selected, and whose 3D view is a live
+// preview of the whole continent rather than the generated tiles.
 const PREVIEW_STEPS = new Set(["heights", "biomes"]);
 
 // Ties the map, the side panel and the in-memory world together. With a zone selected, only that
@@ -181,22 +182,27 @@ export class Editor {
     return this.zones.find((z) => z.key === key) ?? null;
   }
 
-  // The zone an edit is about: the selected zone, or with none selected, the zone of the stroke
-  // being drawn or of the selected feature.
+  // The zone edits are limited to: the selected zone, except on the steps that edit every zone.
+  get editZone() {
+    return PREVIEW_STEPS.has(this.step) ? null : this.activeZone;
+  }
+
+  // The zone an edit is about: the zone edits are limited to, or else the zone of the stroke being
+  // drawn or of the selected feature.
   get focusZone() {
-    return this.activeZone ?? this.zoneByKey(this.features.stroke?.zone ?? this.features.selected?.zone);
+    return this.editZone ?? this.zoneByKey(this.features.stroke?.zone ?? this.features.selected?.zone);
   }
 
-  // The zones you can edit now: the selected one, or every zone with a region.
+  // The zones you can edit now: the one edits are limited to, or every zone with a region.
   scopeZones() {
-    return this.activeZone ? [this.activeZone] : this.zones.filter((z) => z.region.length);
+    return this.editZone ? [this.editZone] : this.zones.filter((z) => z.region.length);
   }
 
-  // Tiles you can generate or edit now, as [tx, tz] pairs.
+  // Tiles you can generate, as [tx, tz] pairs: the selected zone's, or every zone's.
   editableTiles() {
     const keys = new Set();
     const tiles = [];
-    for (const zone of this.scopeZones()) {
+    for (const zone of this.activeZone ? [this.activeZone] : this.zones.filter((z) => z.region.length)) {
       for (const [tx, tz] of tilesTouched(zone.region)) {
         if (keys.has(`${tx},${tz}`)) continue;
         keys.add(`${tx},${tz}`);
@@ -318,7 +324,7 @@ export class Editor {
       world: this.world,
       continent: this.continent,
       zones: this.zones,
-      active: this.activeZone,
+      active: this.editZone,
       thumbnails: this.thumbnails,
       selected: this.features.selected,
       pins: this.el.showPins.checked,
@@ -437,9 +443,10 @@ export class Editor {
           return;
         }
         if (hit) return;
-        const zone = tile && (this.activeZone ?? this.zoneAt(tile));
+        const zone = tile && (this.editZone ?? this.zoneAt(tile));
         if (zone?.region.length && PINS[this.toolName]) this.features.addPin(zone, this.toolName, tile, this.palette.pinProps(this.toolName));
         else this.features.select(null);
+        if (!zone && tile && PINS[this.toolName]) this.say("Pins go inside a zone.");
       },
     };
   }
@@ -655,9 +662,13 @@ export class Editor {
     // Only the zones step needs a zone selected; the others edit the whole continent without one.
     const zonesStep = this.step === "zones";
     for (const section of this.el.steps) section.hidden = section.dataset.step !== this.step || (zonesStep && !zone);
-    this.el.noZone.hidden = Boolean(zone);
+    this.el.noZone.hidden = Boolean(this.editZone) || (zonesStep && Boolean(zone));
     this.el.generateBox.hidden = zonesStep;
-    this.el.noZone.textContent = zonesStep ? "pick a zone to edit, or make a new one" : "no zone selected: editing every zone";
+    this.el.noZone.textContent = zonesStep
+      ? "pick a zone to edit, or make a new one"
+      : PREVIEW_STEPS.has(this.step)
+        ? `${this.step} are edited across every zone`
+        : "no zone selected: editing every zone";
     if (zone) {
       if (document.activeElement !== zoneName) zoneName.value = zone.name;
       regionInfo.textContent = zone.region.length
@@ -761,7 +772,7 @@ export class Editor {
     }
     if (!this.scopeZones().length) return null;
     if (treeToolSize(this.toolName)) return this.trees.tool(() => this.brushTree());
-    return zone ? this.features.tool(zone, this.toolName, this.kinds) : this.worldTool();
+    return this.editZone ? this.features.tool(this.editZone, this.toolName, this.kinds) : this.worldTool();
   }
 
   // With no zone selected, each press goes to the zone it's about: the one a stroke is being drawn
@@ -918,9 +929,9 @@ export class Editor {
   draw(ctx, map) {
     const dpr = map.dpr;
     const pins = this.el.showPins.checked;
-    const world = !this.activeZone; // every zone editable
+    const world = !this.editZone; // every zone editable
     for (const zone of this.zones) {
-      if (zone.key === this.active) continue;
+      if (zone.key === this.editZone?.key) continue;
       this.drawRegion(ctx, map, zone, false);
       if (pins) this.features.draw(ctx, zone, world, this.markKinds());
     }
@@ -931,7 +942,7 @@ export class Editor {
         ctx.fillRect(sx, sy, map.view.scale, map.view.scale);
       }
     }
-    const zone = this.activeZone;
+    const zone = this.editZone;
     if (!zone) {
       this.features.drawInProgress(ctx);
       return;

@@ -135,7 +135,7 @@ export class ShapePreview {
 }
 
 // Mesh data for a grid (three-free, like terrainMesh.js): a vertex per sample, colored by biome
-// or else by height, in feet relative to `origin`.
+// or else by a heat map of height, in feet relative to `origin`.
 export function previewMesh(grid, origin) {
   const { x0, z0, stepFt, nx, nz, heights } = grid;
   const positions = new Float32Array(nx * nz * 3);
@@ -159,26 +159,25 @@ export function previewMesh(grid, origin) {
   return { positions, colors, indices };
 }
 
-// A map-style tint by height (ft): sand at the shore, greens up through the lowlands, browns in the
-// hills, grey rock, then snow.
-const TINTS = [
-  [-60, [0.55, 0.5, 0.38]],
-  [6, [0.82, 0.76, 0.55]],
-  [20, [0.42, 0.6, 0.3]],
-  [300, [0.55, 0.62, 0.33]],
-  [1200, [0.58, 0.47, 0.32]],
-  [4000, [0.5, 0.48, 0.46]],
-  [9000, [0.95, 0.95, 0.97]],
+// An elevation heat map by height (ft): dark blue at sea level up through cyan, green, yellow and
+// red to near-white at the top. It runs on a log scale, like the height slider, so low plains and
+// tall mountains both show their shape.
+const HEAT = [
+  [0.19, 0.07, 0.23],
+  [0.27, 0.45, 0.93],
+  [0.1, 0.81, 0.8],
+  [0.45, 0.95, 0.35],
+  [0.96, 0.84, 0.22],
+  [0.92, 0.36, 0.08],
+  [0.6, 0.06, 0.03],
+  [0.98, 0.92, 0.92],
 ];
+const KNEE_FT = 20;
+const TOP_FT = 21120;
 
 export function heightColor(h) {
-  if (h <= TINTS[0][0]) return TINTS[0][1];
-  for (let k = 1; k < TINTS.length; k++) {
-    const [top, rgb] = TINTS[k];
-    if (h > top) continue;
-    const [bottom, low] = TINTS[k - 1];
-    const t = (h - bottom) / (top - bottom);
-    return low.map((c, i) => c + (rgb[i] - c) * t);
-  }
-  return TINTS.at(-1)[1];
+  const t = Math.log1p(Math.max(0, h) / KNEE_FT) / Math.log1p(TOP_FT / KNEE_FT);
+  const f = Math.min(1, t) * (HEAT.length - 1);
+  const k = Math.min(HEAT.length - 2, Math.floor(f));
+  return HEAT[k].map((c, i) => c + (HEAT[k + 1][i] - c) * (f - k));
 }
