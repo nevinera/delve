@@ -1,11 +1,24 @@
 <canvas id="stage" class="builder-stage"></canvas>
 <aside class="builder-panel">
   <h1>Character builder</h1>
+  <h2>Saved characters</h2>
+  <div class="builder-saved">
+    <select id="saved"></select>
+    <button id="load" type="button">load</button>
+    <button id="delete" type="button">delete</button>
+    <button id="save" type="button">save as…</button>
+  </div>
   <div id="animations"></div>
   <div id="controls"></div>
   <div class="builder-buttons">
     <button id="copy" type="button">copy recipe</button>
     <button id="reset" type="button">reset</button>
+  </div>
+  <h2>Load a recipe</h2>
+  <textarea id="paste" class="builder-paste" rows="4" placeholder="paste a copied recipe here"></textarea>
+  <div class="builder-buttons">
+    <button id="loadPaste" type="button">load recipe</button>
+    <span id="pasteNote" class="builder-note"></span>
   </div>
   <pre id="recipe" class="builder-recipe"></pre>
 </aside>

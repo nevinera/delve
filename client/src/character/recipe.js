@@ -62,7 +62,8 @@ export const DEFAULT_LOOK = {
 };
 
 // A look with every choice made: the recipe's settings over the defaults, ranges and lists picked
-// from by `random` (returning 0-1).
+// from by `random` (returning 0-1). Settings it doesn't know, and values that don't fit, are
+// dropped for the defaults, so recipes saved by older or newer versions still load.
 export function resolveRecipe(recipe = {}, random = Math.random) {
   const pick = (value) => {
     if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number")) {
@@ -74,21 +75,29 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
     return value;
   };
   const look = { ...DEFAULT_LOOK, jewelry: [...DEFAULT_LOOK.jewelry], face: [...DEFAULT_LOOK.face], armor: {}, colors: { ...DEFAULT_LOOK.colors } };
+  const isColor = (v) => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
+  const list = (value) => (Array.isArray(value) ? value : []);
   for (const [key, value] of Object.entries(recipe)) {
+    if (!(key in DEFAULT_LOOK)) continue;
     if (key === "colors") {
-      for (const [part, color] of Object.entries(value)) look.colors[part] = pick(color);
+      for (const [part, color] of Object.entries(value ?? {})) {
+        const picked = pick(color);
+        if (part in DEFAULT_LOOK.colors && isColor(picked)) look.colors[part] = picked;
+      }
     } else if (key === "armor") {
       for (const slot of ARMOR_SLOTS) {
         const piece = value?.[slot];
         const type = piece && pick(piece.type);
-        if (ARMOR_TYPES.includes(type)) look.armor[slot] = { type, colors: [0, 1].map((i) => pick(piece.colors?.[i] ?? ARMOR_COLORS[type][i])) };
+        if (!ARMOR_TYPES.includes(type)) continue;
+        look.armor[slot] = { type, colors: [0, 1].map((i) => [pick(list(piece.colors)[i])].find(isColor) ?? ARMOR_COLORS[type][i]) };
       }
     } else if (key === "jewelry") {
-      look.jewelry = value.filter((j) => JEWELRY.includes(j));
+      look.jewelry = list(value).filter((j) => JEWELRY.includes(j));
     } else if (key === "face") {
-      look.face = value.filter((f) => FACE.includes(f));
+      look.face = list(value).filter((f) => FACE.includes(f));
     } else {
-      look[key] = pick(value);
+      const picked = pick(value);
+      if (typeof picked === typeof DEFAULT_LOOK[key] && (typeof picked !== "number" || Number.isFinite(picked))) look[key] = picked;
     }
   }
   if (!HAIR.includes(look.hair)) look.hair = DEFAULT_LOOK.hair;
@@ -99,6 +108,8 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
 }
 
 // The look saved by the character builder page, which walk mode uses too, or the default.
+// Saved looks and recipes load through resolveRecipe, so a recipe saved before a setting existed
+// takes its default, and one naming a choice since removed falls back to the default too.
 const SAVED = "characterBuilder.look";
 
 export function savedLook() {
@@ -116,5 +127,31 @@ export function saveLook(look) {
     localStorage.setItem(SAVED, JSON.stringify(look));
   } catch {
     // Not saved; the look still shows.
+  }
+}
+
+// Characters saved by name on the builder page, in this browser: { name: look }.
+const NAMED = "characterBuilder.saved";
+
+export function namedLooks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAMED));
+    if (saved && typeof saved === "object") return saved;
+  } catch {
+    // None saved, or unreadable.
+  }
+  return {};
+}
+
+// Saves a look by name, or forgets the name when look is null. False when it couldn't be saved.
+export function nameLook(name, look) {
+  const saved = namedLooks();
+  if (look) saved[name] = look;
+  else delete saved[name];
+  try {
+    localStorage.setItem(NAMED, JSON.stringify(saved));
+    return true;
+  } catch {
+    return false;
   }
 }

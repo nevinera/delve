@@ -24,4 +24,16 @@ describe("resolveRecipe", () => {
     expect(resolveRecipe({ weapon: "sword", offhand: "shield" }).offhand).toBe("shield");
     expect(resolveRecipe({ weapon: "greataxe", offhand: "shield" }).offhand).toBe("none");
   });
+
+  it("loads recipes from other versions, dropping what doesn't fit", () => {
+    const look = resolveRecipe({ femininity: 0.8, height: "tall", build: 0.7, face: "glasses", colors: { hair: "red", eyes: "#00ff00", fur: "#111111" }, armor: { chest: { type: "cloth", colors: [7] } } });
+    expect(look).not.toHaveProperty("femininity");
+    expect(look.height).toBe(DEFAULT_LOOK.height);
+    expect(look.build).toBe(0.7);
+    expect(look.face).toEqual([]);
+    expect(look.colors.hair).toBe(DEFAULT_LOOK.colors.hair);
+    expect(look.colors.eyes).toBe("#00ff00");
+    expect(look.colors).not.toHaveProperty("fur");
+    expect(look.armor.chest.colors[0]).toMatch(/^#/);
+  });
 });

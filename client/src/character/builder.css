@@ -95,6 +95,32 @@
   border-radius: 3px;
 }
 
+.builder-saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.builder-saved select {
+  flex: 1;
+  min-width: 8em;
+}
+
+.builder-paste {
+  width: 100%;
+  box-sizing: border-box;
+  background: #222;
+  color: #ddd;
+  border: 1px solid #555;
+  font: 11px ui-monospace, Menlo, monospace;
+}
+
+.builder-note {
+  align-self: center;
+  color: #c98;
+}
+
 .builder-recipe {
   margin: 10px 0 0;
   padding: 8px;

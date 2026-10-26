@@ -4,7 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterClips, clipNames, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
-import { BEARD, DEFAULT_LOOK, FACE, HAIR, JEWELRY, resolveRecipe, saveLook, savedLook } from "./recipe.js";
+import { BEARD, DEFAULT_LOOK, FACE, HAIR, JEWELRY, nameLook, namedLooks, resolveRecipe, saveLook, savedLook } from "./recipe.js";
 import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 // The character builder page: one character on a patch of ground, with a control for each setting
@@ -241,11 +241,51 @@ function buildControls() {
   }
 }
 
-$("reset").addEventListener("click", () => {
-  look = resolveRecipe();
+// Shows a look, setting every control to match.
+function show(next) {
+  look = next;
   $("controls").replaceChildren();
   buildControls();
   rebuild();
+}
+
+$("reset").addEventListener("click", () => show(resolveRecipe()));
+
+// Saved characters, by name, in this browser.
+function listSaved(selected = null) {
+  const names = Object.keys(namedLooks()).sort((a, b) => a.localeCompare(b));
+  $("saved").replaceChildren(...(names.length ? names.map((name) => new Option(name, name, false, name === selected)) : [new Option("none saved yet", "")]));
+  for (const id of ["saved", "load", "delete"]) $(id).disabled = !names.length;
+}
+$("save").addEventListener("click", () => {
+  const name = prompt("Name this character:", $("saved").value || "")?.trim();
+  if (!name) return;
+  if (namedLooks()[name] && !confirm(`Replace the saved "${name}"?`)) return;
+  if (!nameLook(name, look)) alert("Couldn't save in this browser.");
+  listSaved(name);
+});
+$("load").addEventListener("click", () => {
+  const saved = namedLooks()[$("saved").value];
+  if (saved) show(resolveRecipe(saved));
+});
+$("delete").addEventListener("click", () => {
+  const name = $("saved").value;
+  if (name && confirm(`Delete "${name}"?`)) nameLook(name, null);
+  listSaved();
+});
+listSaved();
+
+// A pasted recipe, read the same way as a saved one.
+$("loadPaste").addEventListener("click", () => {
+  try {
+    const recipe = JSON.parse($("paste").value);
+    if (!recipe || typeof recipe !== "object" || Array.isArray(recipe)) throw new Error("not a recipe");
+    show(resolveRecipe(recipe));
+    $("paste").value = "";
+    $("pasteNote").textContent = "";
+  } catch {
+    $("pasteNote").textContent = "that isn't a recipe";
+  }
 });
 $("copy").addEventListener("click", async () => {
   try {
