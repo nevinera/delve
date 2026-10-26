@@ -8,7 +8,7 @@ import { PINS, STROKES } from "./features.js";
 import { labelPoint, rings, tilesTouched } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
-import { clutterMeshes, setClutterFocus } from "./clutterMeshes.js";
+import { FADE as CLUTTER_FADE, clutterMeshes, gatherClutter, setClutterFocus } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
@@ -49,6 +49,7 @@ const POINT_SIZE = 0.022;
 const DRAG_PX = 4; // a press that moves less than this is a click
 const KEY = { pan: 0.8, zoom: 1.6, turn: 1.5 }; // per second: distances panned, e^zoom, radians
 const CLUTTER_VIEW_FT = 1500; // ground clutter shows when the camera's this close to what it looks at
+const CLUTTER_REGATHER_FT = 40; // clutter drawn round the focus is picked again when it moves this far
 
 // The editor's 3D view: the active zone's tiles plus a ring around them as lit terrain with river
 // water, every other existing tile as its thumbnail on the sea, and every zone's boundary draped
@@ -272,7 +273,11 @@ export class RenderView {
     setClutterFocus(focus.x, focus.z);
     const [tx, tz] = [Math.floor((focus.x + this.origin[0]) / TILE_FT), Math.floor((focus.z + this.origin[1]) / TILE_FT)];
     const key = `${tx},${tz}`;
-    if (key === this.clutterAround) return;
+    if (key === this.clutterAround) {
+      if (this.clutterGathered && Math.hypot(focus.x - this.clutterGathered[0], focus.z - this.clutterGathered[1]) < CLUTTER_REGATHER_FT) return;
+      this.gatherClutter(focus);
+      return;
+    }
     this.clutterAround = key;
     for (const child of [...this.clutter.children]) {
       child.dispose();
@@ -290,6 +295,12 @@ export class RenderView {
       }
     }
     if (instances.length) this.clutter.add(...clutterMeshes(instances, this.origin));
+    this.gatherClutter(focus);
+  }
+
+  gatherClutter(focus) {
+    this.clutterGathered = [focus.x, focus.z];
+    gatherClutter(this.clutter.children, focus.x, focus.z, CLUTTER_FADE.endFt + CLUTTER_REGATHER_FT);
   }
 
   // Walk mode (walker.js): a character dropped at scene [x, z], or where the camera looks. onStop

@@ -10,7 +10,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 // Clutter shrinks away with distance from the focus (scene x, z), from `startFt` to nothing at
 // `endFt`, so it thins out instead of stopping at the edge of the tiles it's drawn on. endFt stays
 // inside a tile, the least distance from the focus to that edge.
-const FADE = { startFt: 250, endFt: 480 };
+export const FADE = { startFt: 250, endFt: 480 };
 const focus = { value: new THREE.Vector2() };
 
 export function setClutterFocus(x, z) {
@@ -293,12 +293,38 @@ export function clutterMeshes(instances, origin) {
           mesh.setMatrixAt(n, m);
           mesh.setColorAt(n, color.setRGB(...item.colors[p], THREE.SRGBColorSpace));
         });
+        mesh.userData.all = { matrices: mesh.instanceMatrix.array.slice(), colors: mesh.instanceColor.array.slice(), count: placed.length };
         mesh.computeBoundingSphere();
         meshes.push(mesh);
       });
     });
   }
   return meshes;
+}
+
+// Draws only the instances within `radiusFt` of scene point (x, z): the rest have shrunk to
+// nothing, but the GPU would still work through their shapes.
+export function gatherClutter(meshes, x, z, radiusFt) {
+  const r2 = radiusFt * radiusFt;
+  for (const mesh of meshes) {
+    const { matrices, colors, count } = mesh.userData.all;
+    const [toM, toC] = [mesh.instanceMatrix.array, mesh.instanceColor.array];
+    let n = 0;
+    for (let i = 0; i < count; i++) {
+      const [dx, dz] = [matrices[i * 16 + 12] - x, matrices[i * 16 + 14] - z];
+      if (dx * dx + dz * dz > r2) continue;
+      if (n !== i) {
+        toM.set(matrices.subarray(i * 16, i * 16 + 16), n * 16);
+        toC.set(colors.subarray(i * 3, i * 3 + 3), n * 3);
+      }
+      n++;
+    }
+    mesh.count = n;
+    mesh.visible = n > 0;
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }
 }
 
 // A steady random sequence, so shapes look the same every load.
