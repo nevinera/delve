@@ -18,6 +18,14 @@
       </span>
       <span class="spacer"></span>
       <button id="walk" type="button" title="walk (G)">walk</button>
+      <button id="timeButton" type="button" popovertarget="timePanel" hidden>time</button>
+      <div id="timePanel" class="editor-popover" popover>
+        <h3>Time</h3>
+        <label class="editor-range">time <input id="timeOfDay" type="range" min="0" max="1" step="0.001"><output id="timeOfDayValue"></output></label>
+        <label class="editor-range">moon <input id="moonDay" type="range" min="0" step="1"><output id="moonDayValue"></output></label>
+        <label class="editor-range">speed <input id="timeSpeed" type="range" min="0" step="1"><output id="timeSpeedValue"></output></label>
+        <button id="timeNow" type="button">now</button>
+      </div>
       <button id="graphicsButton" type="button" popovertarget="graphics" hidden>graphics</button>
       <div id="graphics" class="editor-popover" popover>
         <h3>Resolution</h3>

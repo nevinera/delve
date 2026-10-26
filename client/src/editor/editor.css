@@ -331,3 +331,8 @@
 .editor-popover .editor-check {
   margin-top: 4px;
 }
+
+/* The time popover's readouts, like "waxing crescent", need more room than the graphics ones. */
+#timePanel .editor-range {
+  grid-template-columns: 6em 10em 9.5em;
+}

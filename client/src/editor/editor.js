@@ -22,6 +22,7 @@ import { ShapePreview } from "./shapePreview.js";
 import { WaterSimulator } from "./waterflow.js";
 import { hashString } from "../world/noise.js";
 import { TILE_FT } from "../world/constants.js";
+import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
 const HIT_PX = 8;
 const COLORS = {
@@ -333,8 +334,9 @@ export class Editor {
     }
     if (!this.view3d) {
       const { RenderView, SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT } = await import("./renderView.js");
-      this.view3d = new RenderView(this.el.scene, { onGraphics: (graphics) => this.showGraphics?.(graphics) });
+      this.view3d = new RenderView(this.el.scene, { onGraphics: (graphics) => this.showGraphics?.(graphics), onTime: (clock) => this.showTime?.(clock) });
       this.buildGraphics(SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT);
+      this.buildTime();
     }
     this.el.map.hidden = true;
     this.el.scene.hidden = false;
@@ -388,12 +390,44 @@ export class Editor {
     this.showGraphics(this.view3d.graphics);
     // So keys go back to walking and the stats overlay.
     this.el.graphics.addEventListener("change", (e) => e.target.blur());
-    // Under its button, lined up with its left edge.
-    this.el.graphics.addEventListener("toggle", (e) => {
-      if (e.newState !== "open") return;
-      const at = this.el.graphicsButton.getBoundingClientRect();
-      Object.assign(this.el.graphics.style, { top: `${at.bottom + 4}px`, left: `${at.left}px` });
+    placeUnder(this.el.graphics, this.el.graphicsButton);
+  }
+
+  // The time popover: sliders for the time of day, the day of the moon's month and how fast time
+  // passes while walking, and a button back to the shared clock's time. Its button names the part
+  // of the day.
+  buildTime() {
+    const { timeButton, timePanel, timeOfDay, timeOfDayValue, moonDay, moonDayValue, timeSpeed, timeSpeedValue, timeNow } = this.el;
+    const view = this.view3d;
+    moonDay.max = LUNAR_DAYS - 1;
+    const day = () => Math.floor(view.clock.cycles);
+    timeOfDay.addEventListener("input", () => view.setTime({ cycles: day() + Number(timeOfDay.value) }));
+    moonDay.addEventListener("input", () => {
+      const { cycles } = view.clock;
+      const month = Math.floor(cycles / LUNAR_DAYS) * LUNAR_DAYS;
+      view.setTime({ cycles: month + Number(moonDay.value) + (cycles - Math.floor(cycles)) });
     });
+    timeSpeed.max = TIME_SPEEDS.length - 1;
+    timeSpeed.addEventListener("input", () => view.setTime({ speed: TIME_SPEEDS[timeSpeed.value] }));
+    timeNow.addEventListener("click", () => view.setTime({ cycles: cyclesAt(Date.now()) }));
+    let shown = "";
+    this.showTime = ({ cycles, speed }) => {
+      const { phase, left } = timeLabel(cycles);
+      const moon = MOON_NAMES[Math.floor(moonAge(cycles) * MOON_NAMES.length)];
+      const label = `${phase}|${left}|${moon}|${speed}`;
+      if (label === shown) return;
+      shown = label;
+      timeButton.textContent = phase;
+      timeOfDayValue.textContent = `${phase}, ${left} left`;
+      moonDayValue.textContent = moon;
+      if (document.activeElement !== timeOfDay) timeOfDay.value = cycles - Math.floor(cycles);
+      if (document.activeElement !== moonDay) moonDay.value = ((Math.floor(cycles) % LUNAR_DAYS) + LUNAR_DAYS) % LUNAR_DAYS;
+      timeSpeedValue.textContent = speedLabel(speed);
+      if (document.activeElement !== timeSpeed) timeSpeed.value = nearestSpeed(speed);
+    };
+    this.showTime(view.clock);
+    timePanel.addEventListener("change", (e) => e.target.blur());
+    placeUnder(timePanel, timeButton);
   }
 
   // --- steps and options ---
@@ -604,6 +638,7 @@ export class Editor {
     }
     hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : HINTS[this.mode()] + (this.toolName === "road" ? ` · ${HINT_ROADS}` : "");
     this.el.graphicsButton.hidden = !this.walking;
+    this.el.timeButton.hidden = !this.walking;
     this.el.scaleBar.hidden = this.walking;
     this.el.walk.textContent = this.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";
     this.el.walk.classList.toggle("active", Boolean(this.walking || this.walkPicking));
@@ -1006,4 +1041,40 @@ function polyline(ctx, pts, closed) {
 function handle(ctx, [x, y], r, color) {
   ctx.fillStyle = color;
   ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+}
+
+// Keeps a popover under its button, lined up with its left edge.
+function placeUnder(popover, button) {
+  popover.addEventListener("toggle", (e) => {
+    if (e.newState !== "open") return;
+    const at = button.getBoundingClientRect();
+    Object.assign(popover.style, { top: `${at.bottom + 4}px`, left: `${at.left}px` });
+  });
+}
+
+// How fast time can pass while walking, as multiples of the shared clock.
+const TIME_SPEEDS = [0, 1, 3, CYCLE_MS / (20 * 60 * 1000), 30, 100, 400];
+
+function nearestSpeed(speed) {
+  let best = 0;
+  TIME_SPEEDS.forEach((s, i) => (Math.abs(s - speed) < Math.abs(TIME_SPEEDS[best] - speed) ? (best = i) : null));
+  return best;
+}
+
+// Like "stopped", "real time" or "a day in 20m".
+function speedLabel(speed) {
+  if (!speed) return "stopped";
+  if (speed === 1) return "real time";
+  const minutes = CYCLE_MS / speed / 60000;
+  if (minutes < 1) return `a day in ${Math.round(minutes * 60)}s`;
+  return minutes >= 60 ? `a day in ${Math.floor(minutes / 60)}h ${Math.round(minutes % 60)}m` : `a day in ${Math.round(minutes)}m`;
+}
+
+const MOON_NAMES = ["new moon", "waxing crescent", "first quarter", "waxing gibbous", "full moon", "waning gibbous", "last quarter", "waning crescent"];
+
+// The part of the day at `cycles`, and how long it has left, like "12m" or "1h 5m".
+function timeLabel(cycles) {
+  const { name, through } = phaseAt(cycles);
+  const minutes = Math.ceil(PHASES.find(([phase]) => phase === name)[1] * (1 - through));
+  return { phase: name, left: minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m` };
 }

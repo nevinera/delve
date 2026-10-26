@@ -15,7 +15,8 @@ import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
 import { tilePath } from "./thumbnails.js";
 import { disposeGround, groundMaterial } from "./groundMaterial.js";
-import { HORIZON, SUN_DIR, Sky } from "./sky.js";
+import { HORIZON, Sky } from "./sky.js";
+import { CYCLE_MS, cyclesAt, skyAt } from "../world/dayNight.js";
 import { Stats, statsWanted } from "./stats.js";
 
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
@@ -39,6 +40,9 @@ THREE.ShaderChunk.fog_fragment = THREE.ShaderChunk.fog_fragment.replace(
 );
 const SEA = 0x1d4a6a;
 const SKY = HORIZON;
+// How many times faster than the shared clock time passes while walking, to start with: a whole
+// day and night in 20 minutes (plans/notes.md).
+const WALK_TIME_SPEED = CYCLE_MS / (20 * 60 * 1000);
 const BOUNDARY_LIFT_FT = 6;
 const BOUNDARY_STEP_FT = 32;
 // What the graphics settings can leave out of the scene, and the resolutions they offer: "full" is
@@ -77,10 +81,13 @@ export class RenderView {
     this.controls.maxPolarAngle = Math.PI * 0.49;
     this.controls.addEventListener("change", () => this.render());
 
-    this.scene.add(new THREE.HemisphereLight(0xdde8ff, 0x445533, 1.1));
-    const sun = new THREE.DirectionalLight(0xfff6e8, 1.6);
-    sun.position.copy(SUN_DIR);
-    this.scene.add(sun);
+    this.ambient = new THREE.HemisphereLight();
+    this.sunLight = new THREE.DirectionalLight();
+    this.moonLight = new THREE.DirectionalLight();
+    this.scene.add(this.ambient, this.sunLight, this.moonLight);
+    // The time the sky shows, as dayNight.js cycles. It starts at the shared clock's time, and
+    // passes while walking `speed` times faster than that clock.
+    this.clock = { cycles: cyclesAt(Date.now()), speed: WALK_TIME_SPEED, last: null };
 
     this.content = new THREE.Group();
     this.marks = new THREE.Group();
@@ -139,6 +146,7 @@ export class RenderView {
         const { pos } = this.walker;
         this.streamAround(Math.floor((pos.x + this.origin[0]) / TILE_FT), Math.floor((pos.z + this.origin[1]) / TILE_FT));
       }
+      this.tick();
       this.sky.update(this.camera, performance.now() / 1000);
       setWaterTime(performance.now() / 1000);
       this.showSight();
@@ -151,6 +159,34 @@ export class RenderView {
       ours();
       draw();
     }
+  }
+
+  // Changes the clock: cycles (the time shown) or speed (how fast it moves on while walking).
+  setTime(changes) {
+    Object.assign(this.clock, changes);
+    this.render();
+  }
+
+  // Moves the clock on while walking, and lights the scene and colors the sky for its time.
+  tick() {
+    const now = performance.now();
+    const clock = this.clock;
+    if (this.walking && clock.last !== null) clock.cycles += ((now - clock.last) * clock.speed) / CYCLE_MS;
+    clock.last = now;
+    const at = skyAt(clock.cycles);
+    const look = this.sky.setTime(at);
+    const light = (target, { color, intensity }) => {
+      target.color.setRGB(...color, THREE.SRGBColorSpace);
+      target.intensity = intensity;
+    };
+    light(this.sunLight, look.sun);
+    this.sunLight.position.fromArray(at.sunDir);
+    light(this.moonLight, look.moon);
+    this.moonLight.position.fromArray(at.moonDir);
+    light(this.ambient, look.sky);
+    this.ambient.groundColor.setRGB(...look.ground, THREE.SRGBColorSpace);
+    this.scene.background.setRGB(...look.bands[0], THREE.SRGBColorSpace);
+    this.handlers.onTime?.(clock);
   }
 
   // Walking limits what you see to SIGHT; orbiting shows everything.
