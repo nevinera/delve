@@ -98,14 +98,15 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
-// The continent as { zones, pins, strokes, pools }: every zone as stored ({ region }), and the
-// sketch's pins, strokes and pools (editor/zones.js), in continent tile units. seedKey (the continent's key) seeds
-// the noise.
+// The continent as { zones, pins, watercourses }: every zone as stored ({ region }), and the
+// sketch's pins and watercourses ({ rivers, pools }, editor/waterflow.js), in continent tile units.
+// seedKey (the continent's key) seeds the noise.
 export function prepareWorld(continent, seedKey) {
   const ctx = prepareShape(continent, seedKey);
   ctx.lakeSites = new Map(); // "gi,gj" -> lake or null, filled as tiles need them
   const { zoned, heightPins } = ctx;
-  const { pins, strokes } = continent;
+  const { pins } = continent;
+  const rivers = (continent.watercourses?.rivers ?? []).filter((r) => r.points.length >= 2);
 
   ctx.biomes = prepareBiomes({
     pins: pins
@@ -114,7 +115,7 @@ export function prepareWorld(continent, seedKey) {
         const [x, z] = toFt(p.at);
         return { x, z, biome: p.biome, tags: p.tags };
       }),
-    rivers: strokes.filter((s) => s.kind === "river").map((s) => s.points.map(toFt)),
+    rivers: rivers.map((r) => r.points.map(toFt)),
     edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
     seed: ctx.seed,
   });
@@ -122,7 +123,7 @@ export function prepareWorld(continent, seedKey) {
   ctx.heightAt = withPeaks(ctx.heightAt, summits(heightPins.map((p) => toFt(p.at).concat(p.height)), ctx.biomes));
 
   // Rivers always descend: the surface follows the lowest ground seen so far from the source.
-  ctx.rivers = strokes.filter((s) => s.kind === "river" && s.points.length >= 2).map((s) => {
+  ctx.rivers = rivers.map((s) => {
     const line = makePolyline(s.points.map(toFt));
     const width = s.width ?? 30;
     const ground = sampleAlong(line, (x, z) => land(ctx, x, z, ctx.areaEdges, ctx.biomes).h);
@@ -136,7 +137,7 @@ export function prepareWorld(continent, seedKey) {
     };
   });
 
-  ctx.ponds = (continent.pools ?? []).map(({ region, level }) => {
+  ctx.ponds = (continent.watercourses?.pools ?? []).map(({ region, level }) => {
     const ft = region.map((polygon) => polygon.map((ring) => ring.map(toFt)));
     const xs = ft.flat(2).map(([x]) => x);
     const zs = ft.flat(2).map(([, z]) => z);

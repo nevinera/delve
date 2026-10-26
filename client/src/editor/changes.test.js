@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { changedTiles } from "./changes.js";
 
 const square = (x0, z0, x1, z1) => [[[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]]];
-// A continent of one 20×20-tile zone, with whatever pins and strokes.
-const continent = ({ region = square(0, 0, 20, 20), pins = [], strokes = [] } = {}) => ({ zones: [{ region }], pins, strokes });
+// A continent of one 20×20-tile zone, with whatever pins, strokes, rivers and pools.
+const continent = ({ region = square(0, 0, 20, 20), pins = [], strokes = [], rivers = [], pools = [] } = {}) => ({ zones: [{ region }], pins, strokes, watercourses: { rivers, pools } });
 const has = (tiles, tx, tz) => tiles.has(`${tx},${tz}`);
 
 describe("changedTiles", () => {
@@ -27,8 +27,8 @@ describe("changedTiles", () => {
   });
 
   it("covers a river's whole length", () => {
-    const river = { id: "s1", kind: "river", points: [[1.5, 10.5], [18.5, 10.5]], width: 30 };
-    const tiles = changedTiles(continent(), continent({ strokes: [river] }));
+    const river = { points: [[1.5, 10.5], [18.5, 10.5]], width: 30 };
+    const tiles = changedTiles(continent(), continent({ rivers: [river] }));
     for (let tx = 1; tx <= 18; tx++) expect(has(tiles, tx, 10)).toBe(true);
     expect(has(tiles, 10, 13)).toBe(false);
   });
@@ -61,17 +61,18 @@ describe("changedTiles", () => {
 });
 
 describe("pool changes", () => {
-  const pool = { id: "w1", source: "p1", region: [[[[2.2, 2.2], [2.8, 2.2], [2.8, 2.8], [2.2, 2.8]]]], level: 40 };
-  const base = { zones: [], pins: [], strokes: [], pools: [] };
+  const pool = { region: [[[[2.2, 2.2], [2.8, 2.2], [2.8, 2.8], [2.2, 2.8]]]], level: 40 };
+  const base = { zones: [], pins: [], strokes: [] };
+  const withPools = (pools) => ({ ...base, watercourses: { rivers: [], pools } });
 
   it("marks the tiles round a new pool", () => {
-    const tiles = changedTiles(base, { ...base, pools: [pool] });
+    const tiles = changedTiles(withPools([]), withPools([pool]));
     expect(tiles.has("2,2")).toBe(true);
     expect(tiles.has("3,3")).toBe(true);
     expect(tiles.has("5,5")).toBe(false);
   });
 
   it("ignores pools that didn't change", () => {
-    expect(changedTiles({ ...base, pools: [pool] }, { ...base, pools: [structuredClone(pool)] }).size).toBe(0);
+    expect(changedTiles(withPools([pool]), withPools([structuredClone(pool)])).size).toBe(0);
   });
 });

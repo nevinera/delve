@@ -1,5 +1,5 @@
 import { changedTiles } from "./changes.js";
-import { FEATURE_HINTS, Features, PINS, STROKES, dropWater, nextId } from "./features.js";
+import { FEATURE_HINTS, Features, PINS, STROKES } from "./features.js";
 import { MapView } from "./mapView.js";
 import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
@@ -15,10 +15,10 @@ import {
   subtractZones,
   tilesTouched,
 } from "./region.js";
-import { createZone, dropDrawnRivers, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone } from "./zones.js";
+import { createZone, dropOldWater, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
-import { FlowSimulator } from "./waterflow.js";
+import { WaterSimulator } from "./waterflow.js";
 import { hashString } from "../world/noise.js";
 import { TILE_FT } from "../world/constants.js";
 
@@ -96,8 +96,8 @@ export class Editor {
     this.pending = new Set(); // "x,z" keys of generated tiles whose sketch changed since
     this.previews = new ShapePreview((grid) => this.showPreview(grid));
     this.preview = null; // the latest heights or biomes picture: { step, canvas, grid }
-    this.flows = new FlowSimulator((id, key, result) => this.showFlow(id, key, result));
-    this.proposals = new Map(); // source pin id -> { key, result }, where its water would go now
+    this.water = new WaterSimulator((key, result) => this.showWater(key, result));
+    this.waterKey = null; // what the latest watercourses asked for were worked out from
     this.view3d = null; // the RenderView for walking, loaded the first time you walk
     this.bindPanel();
     this.fillContinents();
@@ -141,10 +141,10 @@ export class Editor {
     this.preview = null;
     const moved = moveIntoSketch(this.world, this.continent);
     if (moved.length) this.dirty = true;
-    this.proposals.clear();
+    this.waterKey = null;
     this.reload();
-    const dropped = dropDrawnRivers(this.sketch);
-    if (dropped) this.saveSketch();
+    const dropped = dropOldWater(this.sketch);
+    if (this.sketch.version !== loadSketch(this.world, this.continent).version) this.saveSketch();
     const older = olderZones(this.world, this.continent);
     const notes = [
       moved.length && `Moved the pins and lines of ${moved.join(", ")} into the continent's sketch.`,
@@ -219,14 +219,14 @@ export class Editor {
 
   // The continent as the generator takes it (generator.js prepareWorld).
   continentState() {
-    const { pins, strokes, pools } = this.sketch;
-    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins, strokes, pools };
+    const { pins, strokes, watercourses } = this.sketch;
+    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins, strokes, watercourses };
   }
 
   // The continent as last stored, from the world's files.
   storedState() {
-    const { pins, strokes, pools } = loadSketch(this.world, this.continent);
-    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, strokes, pools };
+    const { pins, strokes, watercourses } = loadSketch(this.world, this.continent);
+    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, strokes, watercourses };
   }
 
   reload() {
@@ -264,94 +264,46 @@ export class Editor {
 
   // --- water ---
 
-  sources() {
-    return this.sketch.pins.filter((p) => p.kind === "source");
-  }
-
-  // What a source's water depends on, besides other sources' water: the land, and where the source
-  // is and how much it brings.
-  flowKey(pin) {
-    const { zones, pins } = this.continentState();
-    const land = pins.filter((p) => p.kind === "height" || p.kind === "biome");
-    return String(hashString(JSON.stringify([zones, land, pin.at, pin.width])));
-  }
-
-  // Whether the source's kept rivers and pools are the ones it would make now.
-  confirmed(pin) {
-    return pin.confirmed === this.flowKey(pin);
-  }
-
-  // Asks where each source's water goes, for the ones the land or the source changed under since
-  // last asked. Each one runs with the other sources' kept water in place.
-  updateFlows() {
-    if (this.step !== "features") return;
+  // Works out the watercourses again when the land or the water sources changed since they were
+  // last worked out. They're kept in the sketch when they arrive, unless something's being dragged,
+  // in which case they're kept when the drag ends.
+  updateWater() {
     const { zones, pins } = this.continentState();
     const land = { zones, pins: pins.filter((p) => p.kind === "height" || p.kind === "biome") };
-    for (const pin of this.sources()) {
-      if (!(pin.width > 0)) continue;
-      const water = {
-        rivers: this.sketch.strokes.filter((s) => s.kind === "river" && s.source !== pin.id),
-        pools: this.sketch.pools.filter((p) => p.source !== pin.id),
-      };
-      const key = `${this.flowKey(pin)}:${hashString(JSON.stringify(water))}`;
-      if (this.proposals.get(pin.id)?.key === key) continue;
-      this.proposals.set(pin.id, { key, result: this.proposals.get(pin.id)?.result ?? null, waiting: true });
-      this.flows.request({ id: pin.id, key, continent: land, seedKey: this.continent, source: pin.at, width: pin.width, water });
-    }
-    this.renderFlowStatus();
+    const sources = pins.filter((p) => p.kind === "source").map(({ id, at, width }) => ({ id, at, width }));
+    const key = String(hashString(JSON.stringify([land, sources, this.continent])));
+    if (key === this.waterKey) return;
+    this.waterKey = key;
+    this.water.request({ key, continent: land, seedKey: this.continent, sources });
   }
 
-  showFlow(id, key, result) {
-    if (this.proposals.get(id)?.key !== key) return;
-    this.proposals.set(id, { key, result });
-    this.renderFlowStatus();
-    this.map.render();
+  showWater(key, { rivers, pools, ends }) {
+    if (key !== this.waterKey) return;
+    this.waterEnds = ends;
+    this.renderWaterStatus();
+    if (this.sketch.watercourses.key === key) return;
+    this.sketch.watercourses = { key, rivers, pools };
+    if (this.features.dragging) this.map.render();
+    else this.saveSketch();
   }
 
-  // Keeps the source's proposed rivers and pools in place of the ones it had.
-  confirmFlow(pin) {
-    const proposal = this.proposals.get(pin.id);
-    if (!proposal?.result || proposal.waiting) return;
-    dropWater(this.sketch, pin.id);
-    for (const points of proposal.result.rivers) {
-      this.sketch.strokes.push({ id: nextId(this.sketch, "s"), kind: "river", source: pin.id, points, width: pin.width });
-    }
-    for (const { region, level } of proposal.result.pools) {
-      this.sketch.pools.push({ id: nextId(this.sketch, "w"), source: pin.id, region, level: Math.round(level * 10) / 10 });
-    }
-    pin.confirmed = this.flowKey(pin);
-    this.saveSketch();
-    this.renderFlowStatus();
+  // A line under a water source's settings saying where its water ends up.
+  sourceStatus(pin) {
+    this.waterStatus = { pin, el: document.createElement("p") };
+    this.renderWaterStatus();
+    return this.waterStatus.el;
   }
 
-  // The selected source's status line and confirm button, for the properties panel.
-  sourceControls(pin) {
-    const status = document.createElement("p");
-    const confirm = document.createElement("button");
-    confirm.type = "button";
-    confirm.textContent = "confirm water";
-    confirm.addEventListener("click", () => this.confirmFlow(pin));
-    this.flowStatus = { pin, status, confirm };
-    this.renderFlowStatus();
-    const row = document.createElement("div");
-    row.className = "editor-row";
-    row.append(confirm);
-    return [status, row];
-  }
-
-  renderFlowStatus() {
-    const { pin, status, confirm } = this.flowStatus ?? {};
-    if (!pin || !status.isConnected) return;
-    const proposal = this.proposals.get(pin.id);
-    const ends = { water: "reaches water", pool: "fills a pool as far as it can and stops", flat: "spreads out over flat ground", lost: "wanders too far; it's been cut short" };
-    const result = proposal?.result;
-    const pools = result?.pools.length ? `, filling ${result.pools.length} pool${result.pools.length === 1 ? "" : "s"}` : "";
-    status.textContent = this.confirmed(pin)
-      ? "Confirmed: its rivers and pools are kept."
-      : proposal?.waiting || !result
-        ? "Working out where the water goes…"
-        : `Proposed (dashed): the water ${ends[result.end]}${pools}. Confirm to keep it.`;
-    confirm.disabled = this.confirmed(pin) || !result || Boolean(proposal?.waiting);
+  renderWaterStatus() {
+    const { pin, el } = this.waterStatus ?? {};
+    if (!el) return;
+    const ends = {
+      water: "Its water reaches the sea or other water.",
+      pool: "Its water fills a pool as far as its flow allows, and stops there.",
+      flat: "Its water spreads out over flat ground.",
+      lost: "Its water wanders too far, and has been cut short.",
+    };
+    el.textContent = ends[this.waterEnds?.[pin.id]] ?? "Working out where its water goes…";
   }
 
   // --- walking ---
@@ -483,7 +435,7 @@ export class Editor {
   // Asks for a fresh heights or biomes map of what's in sight, from the zones as they are now,
   // mid-drag included.
   updatePreview() {
-    this.updateFlows();
+    this.updateWater();
     const kind = this.previewKind();
     if (!kind) return;
     const [x0, z0, x1, z1] = this.map.bounds();
@@ -939,12 +891,6 @@ export class Editor {
       for (const zone of this.zones) if (zone !== editing) this.drawRegion(ctx, map, zone, false);
     }
     this.features.draw(ctx, this.sketch, this.markKinds());
-    if (this.step === "features") {
-      for (const pin of this.sources()) {
-        const proposal = this.proposals.get(pin.id);
-        if (proposal?.result && !this.confirmed(pin)) this.features.drawWater(ctx, proposal.result, { width: pin.width });
-      }
-    }
     if (!editing) {
       this.features.drawInProgress(ctx);
       return;

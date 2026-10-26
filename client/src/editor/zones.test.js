@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { World } from "./world.js";
-import { createZone, dropDrawnRivers, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveZone, sketchPath, zonePath } from "./zones.js";
+import { createZone, dropOldWater, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveZone, sketchPath, zonePath } from "./zones.js";
 
 describe("zones", () => {
   it("creates a zone file keyed by its name", () => {
@@ -42,7 +42,7 @@ describe("zones", () => {
   });
 
   it("starts with an empty sketch", () => {
-    expect(loadSketch(World.empty(), "main")).toEqual({ version: 2, pins: [], strokes: [], pools: [] });
+    expect(loadSketch(World.empty(), "main")).toEqual({ version: 3, pins: [], strokes: [], watercourses: { key: null, rivers: [], pools: [] } });
   });
 
   it("moves zones' own pins and strokes into the sketch, renumbering clashes", () => {
@@ -59,11 +59,14 @@ describe("zones", () => {
     expect(moveIntoSketch(world, "main")).toEqual([]);
   });
 
-  it("drops hand-drawn rivers from sketches from before water sources", () => {
-    const old = { version: 1, pins: [], strokes: [{ id: "s1", kind: "river", points: [] }, { id: "s2", kind: "road", points: [] }], pools: [] };
-    expect(dropDrawnRivers(old)).toBe(1);
-    expect(old.strokes.map((s) => s.id)).toEqual(["s2"]);
-    expect(old.version).toBe(2);
-    expect(dropDrawnRivers(old)).toBe(0);
+  it("drops rivers kept as strokes, counting hand-drawn ones", () => {
+    const drawn = { version: 1, pins: [], strokes: [{ id: "s1", kind: "river", points: [] }, { id: "s2", kind: "road", points: [] }] };
+    expect(dropOldWater(drawn)).toBe(1);
+    expect(drawn.strokes.map((s) => s.id)).toEqual(["s2"]);
+    expect(drawn.version).toBe(3);
+    expect(dropOldWater(drawn)).toBe(0);
+    const confirmed = { version: 2, pins: [{ id: "p1", kind: "source", confirmed: "1" }], strokes: [{ id: "s1", kind: "river", points: [] }], pools: [{}] };
+    expect(dropOldWater(confirmed)).toBe(0);
+    expect(confirmed).toEqual({ version: 3, pins: [{ id: "p1", kind: "source" }], strokes: [] });
   });
 });

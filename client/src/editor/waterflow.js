@@ -1,150 +1,304 @@
 import { TILE_FT } from "../world/constants.js";
+import { fbm, hashString } from "../world/noise.js";
 
-// Where water from a source goes. It steps across a lattice STEP_FT apart, always to the
-// neighbour it drops to most steeply. Where nothing's lower it fills the hollow, lowest ground
-// first, until the water finds a way out over the rim (and flows on from there) or the pool
+// Where the water from a continent's sources goes. It steps across a lattice STEP_FT apart, always
+// to the neighbour it drops to most steeply. Where nothing's lower it fills the hollow, lowest
+// ground first, until the water finds a way out over the rim (and flows on from there) or the pool
 // reaches its size limit (and the water stops there). It stops on reaching water that's already
-// there: the sea, swamp pools, ponds, and rivers and pools already confirmed.
+// there: the sea, swamp pools, ponds and lakes.
 //
-// A source's `width` (ft) is the river's width, and sets how big a pool it can fill: up to
-// POOL_ACROSS times as wide.
+// Sources run highest first. Water that reaches another source's river or pool joins it, and
+// everything downstream carries both: rivers widen, and a pool that had reached its limit grows,
+// and may spill over and flow on. Flow is counted as width squared, so a source's `width` (ft) is
+// its river's width, and joined rivers are as wide as the square root of their flows added up. A
+// pool can grow up to POOL_ACROSS times as wide as the river feeding it.
+//
+// River courses are smoothed out of the lattice's zig-zags, and meander where the ground is flat.
 
 const STEP_FT = 16;
 export const POOL_ACROSS = 40;
 const MIN_POOL_DEPTH_FT = 1; // shallower hollows are waded through, not kept as pools
-const MAX_STEPS = 50000;
+const MAX_STEPS = 500000; // across every source, so a bad case still ends
 const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+// Meanders: up to `widths` river widths (between minFt and maxFt) to either side, where the ground
+// falls less than `flat` ft per ft, fading out by `steep`. Each bend is `wavelength` widths long
+// (between minWaveFt and maxWaveFt). Points are `spacingFt` apart, and courses are evened out over
+// `bendWidths` river widths (at least minBendFt) either side, so turns are gentle curves.
+const MEANDER = { widths: 2, minFt: 24, maxFt: 160, flat: 0.004, steep: 0.03, wavelength: 14, minWaveFt: 320, maxWaveFt: 1600, spacingFt: 16, bendWidths: 3, minBendFt: 64 };
+const SLOPE_REACH = 4; // cells either side for a river's local slope
 
-// source: [x, z] in tile units. heightAt(xFt, zFt): the ground. isWater(xFt, zFt): whether there's
-// water there already. Returns { rivers, pools, end }: the river's stretches between pools, each
-// as points ([x, z] tile units); the pools it filled ({ region, level }, region as polygons of
-// rings in tile units, level in ft); and how it ended: "water" (it reached water), "pool" (a pool
-// hit its size limit), "flat" (it spread out over level ground) or "lost" (it ran out of steps).
-export function simulateFlow({ source, width, heightAt, isWater }) {
-  const maxCells = (Math.PI / 4) * ((width * POOL_ACROSS) / STEP_FT) ** 2;
-  const key = (i, j) => `${i},${j}`;
+// sources: [{ id, at: [x, z] tile units, width }]. heightAt(xFt, zFt): the ground. isWater(xFt,
+// zFt): whether there's water there already. seed: for the meanders. Returns { rivers, pools,
+// ends }: rivers as { points ([x, z] tile units), width }, split where their width changes; pools
+// as { region, level }, region as polygons of rings in tile units and level in ft; and how each
+// source's water ends up, by id, following it through rivers it joins and pools it spills from:
+// "water" (it reaches water), "pool" (it stops in a pool at its size limit), "flat" (it spreads
+// out over level ground) or "lost" (it ran out of steps).
+export function simulateWater({ sources, heightAt, isWater, seed = 0 }) {
+  const key = ([i, j]) => `${i},${j}`;
   const heights = new Map();
-  const ground = (i, j) => {
-    const k = key(i, j);
-    if (!heights.has(k)) heights.set(k, heightAt(i * STEP_FT, j * STEP_FT));
+  const ground = (c) => {
+    const k = key(c);
+    if (!heights.has(k)) heights.set(k, heightAt(c[0] * STEP_FT, c[1] * STEP_FT));
     return heights.get(k);
   };
-  const filled = new Map(); // cell key -> the water level of a pool over it
-  const height = (i, j) => Math.max(ground(i, j), filled.get(key(i, j)) ?? -Infinity);
+  const poolAt = new Map(); // cell key -> the pool over it
+  const height = (c) => Math.max(ground(c), poolAt.get(key(c))?.level ?? -Infinity);
   const wet = new Map();
-  const water = (i, j) => {
-    const k = key(i, j);
-    if (!wet.has(k)) wet.set(k, isWater(i * STEP_FT, j * STEP_FT));
+  const water = (c) => {
+    const k = key(c);
+    if (!wet.has(k)) wet.set(k, isWater(c[0] * STEP_FT, c[1] * STEP_FT));
     return wet.get(k);
   };
-
-  let [i, j] = source.map((v) => Math.round((v * TILE_FT) / STEP_FT));
-  const path = [[i, j]];
+  const next = new Map(); // cell key -> the cell its water flows on to
+  const flow = new Map(); // cell key -> the flow through it (width squared)
+  const add = (c, q) => flow.set(key(c), (flow.get(key(c)) ?? 0) + q);
   const pools = [];
-  let end = "lost";
-  for (let steps = 0; steps < MAX_STEPS; steps++) {
-    if (water(i, j)) {
-      end = "water";
-      break;
-    }
-    const here = height(i, j);
-    let best = null;
-    let bestDrop = 0;
-    for (const [di, dj] of NEIGHBOURS) {
-      const drop = (here - height(i + di, j + dj)) / Math.hypot(di, dj);
-      if (drop > bestDrop) [best, bestDrop] = [[i + di, j + dj], drop];
-    }
-    if (best) {
-      [i, j] = best;
-      path.push(best);
-      continue;
-    }
+  const starts = []; // where rivers begin: sources, and the outlets of pools deep enough to keep
+  let steps = 0;
 
-    const pool = fill(i, j, { height, ground, water, maxCells, key });
-    for (const [pi, pj] of pool.cells) filled.set(key(pi, pj), pool.level);
-    const deep = pool.depth >= MIN_POOL_DEPTH_FT;
-    if (deep) pools.push({ region: outline(pool.cells), level: pool.level });
-    if (!pool.out) {
-      end = pool.wet ? "water" : deep ? "pool" : "flat";
-      break;
-    }
-    // Water leaves a pool from its outlet, as a new stretch of river, and wades across a hollow
-    // too shallow to keep.
-    if (deep) path.push(null, pool.out);
-    else path.push(...wade(pool.cells, [i, j], pool.out, key).slice(1));
-    [i, j] = pool.out;
-  }
-
-  const rivers = stretches(path).map((stretch) => smooth(stretch).map(([x, z]) => [round((x * STEP_FT) / TILE_FT), round((z * STEP_FT) / TILE_FT)]));
-  return { rivers: rivers.filter((r) => r.length >= 2), pools, end };
-}
-
-// Fills the hollow at (i, j), lowest neighbour first, as a priority flood. Stops when the next
-// lowest cell around the pool is lower than the water (the outlet), is water already, or the pool
-// has maxCells cells. Returns { cells, level, depth, out, wet }.
-function fill(i, j, { height, ground, water, maxCells, key }) {
-  const inPool = new Set([key(i, j)]);
-  const cells = [[i, j]];
-  const edge = new Heap();
-  const queued = new Set(inPool);
-  const queue = (ci, cj) => {
-    for (const [di, dj] of NEIGHBOURS) {
-      const [ni, nj] = [ci + di, cj + dj];
-      const k = key(ni, nj);
-      if (queued.has(k)) continue;
-      queued.add(k);
-      edge.push(height(ni, nj), [ni, nj]);
+  // Water with flow q, from cell c down to wherever it ends.
+  const run = (c, q, start = true) => {
+    if (flow.has(key(c)) || poolAt.has(key(c))) return join(c, q);
+    if (start) starts.push(c);
+    for (; steps < MAX_STEPS; steps++) {
+      if (water(c)) return;
+      add(c, q);
+      const here = height(c);
+      let best = null;
+      let bestDrop = 0;
+      for (const [di, dj] of NEIGHBOURS) {
+        const n = [c[0] + di, c[1] + dj];
+        const drop = (here - height(n)) / Math.hypot(di, dj);
+        if (drop > bestDrop) [best, bestDrop] = [n, drop];
+      }
+      if (!best) {
+        const pool = { cells: [], level: here, bottom: ground(c), q, edge: new Heap(), queued: new Set(), outlet: null, wet: false };
+        pools.push(pool);
+        take(pool, c);
+        return settle(pool);
+      }
+      next.set(key(c), best);
+      if (flow.has(key(best)) || poolAt.has(key(best))) return join(best, q);
+      c = best;
     }
   };
-  let level = height(i, j);
-  const bottom = ground(i, j);
-  queue(i, j);
-  while (edge.size) {
-    const [h, [ni, nj]] = edge.pop();
-    if (water(ni, nj)) return { cells, level, depth: level - bottom, out: null, wet: true };
-    if (h < level) return { cells, level, depth: level - bottom, out: [ni, nj], wet: false };
-    if (cells.length >= maxCells) break;
-    level = h;
-    inPool.add(key(ni, nj));
-    cells.push([ni, nj]);
-    queue(ni, nj);
-  }
-  return { cells, level, depth: level - bottom, out: null, wet: false };
-}
 
-// A way across a shallow pool's cells, from where the water came in to its outlet.
-function wade(cells, from, to, key) {
-  const inside = new Set(cells.map(([i, j]) => key(i, j)));
-  inside.add(key(...to));
-  const back = new Map([[key(...from), null]]);
-  const queue = [from];
-  while (queue.length) {
-    const at = queue.shift();
-    if (key(...at) === key(...to)) break;
-    for (const [di, dj] of NEIGHBOURS) {
-      const next = [at[0] + di, at[1] + dj];
-      if (!inside.has(key(...next)) || back.has(key(...next))) continue;
-      back.set(key(...next), at);
-      queue.push(next);
+  // Water with flow q joining the river or pool at cell c: everything downstream carries it too.
+  const join = (c, q) => {
+    const seen = new Set();
+    while (!seen.has(key(c)) && steps++ < MAX_STEPS) {
+      seen.add(key(c));
+      const pool = poolAt.get(key(c));
+      if (pool) {
+        pool.q += q;
+        if (pool.wet) return;
+        if (!pool.outlet) return settle(pool);
+        for (const w of pool.wade?.slice(0, -1) ?? []) add(w, q);
+        c = pool.outlet;
+        continue;
+      }
+      if (!flow.has(key(c))) return;
+      add(c, q);
+      const n = next.get(key(c));
+      if (!n) return;
+      c = n;
     }
-  }
-  const way = [];
-  for (let at = to; at; at = back.get(key(...at))) way.unshift(at);
-  return way;
+  };
+
+  const take = (pool, c) => {
+    pool.cells.push(c);
+    poolAt.set(key(c), pool);
+    pool.queued.add(key(c));
+    for (const [di, dj] of NEIGHBOURS) {
+      const n = [c[0] + di, c[1] + dj];
+      if (pool.queued.has(key(n))) continue;
+      pool.queued.add(key(n));
+      pool.edge.push(height(n), n);
+    }
+  };
+
+  // Fills the pool, lowest ground round it first, as a priority flood, until the next lowest cell
+  // round it is lower than the water (its outlet), is water already, or the pool's as big as its
+  // flow lets it get. Then sends the water on from the outlet.
+  const settle = (pool) => {
+    const maxCells = (Math.PI / 4) * ((Math.sqrt(pool.q) * POOL_ACROSS) / STEP_FT) ** 2;
+    while (pool.edge.size && pool.cells.length < maxCells && steps++ < MAX_STEPS) {
+      const [h, n] = pool.edge.pop();
+      if (water(n)) {
+        pool.wet = true;
+        return;
+      }
+      if (h < pool.level) {
+        pool.outlet = n;
+        break;
+      }
+      pool.level = h;
+      take(pool, n);
+    }
+    if (!pool.outlet) return;
+    if (pool.level - pool.bottom >= MIN_POOL_DEPTH_FT) return run(pool.outlet, pool.q);
+    // Too shallow to keep: the river wades across it from its lowest point to the outlet.
+    pool.wade = wade(pool.cells, pool.cells[0], pool.outlet, key);
+    for (let k = 0; k < pool.wade.length - 1; k++) next.set(key(pool.wade[k]), pool.wade[k + 1]);
+    pool.wade.slice(1, -1).forEach((w) => add(w, pool.q));
+    return run(pool.outlet, pool.q, false);
+  };
+
+  // Where the water at cell c ends up.
+  const endOf = (c) => {
+    const seen = new Set();
+    while (!seen.has(key(c))) {
+      seen.add(key(c));
+      const pool = poolAt.get(key(c));
+      if (pool?.outlet) c = pool.outlet;
+      else if (pool) return pool.wet ? "water" : pool.level - pool.bottom >= MIN_POOL_DEPTH_FT ? "pool" : "flat";
+      else if (!flow.has(key(c))) return "water";
+      else if (next.has(key(c))) c = next.get(key(c));
+      else return "lost";
+    }
+    return "lost";
+  };
+
+  const placed = sources.filter((s) => s.width > 0).map((s) => ({ ...s, cell: s.at.map((v) => Math.round((v * TILE_FT) / STEP_FT)) }));
+  placed.sort((a, b) => ground(b.cell) - ground(a.cell));
+  for (const s of placed) run(s.cell, s.width ** 2);
+  const ends = Object.fromEntries(placed.map((s) => [s.id, endOf(s.cell)]));
+
+  const rivers = courses(starts, next, flow, key).map(({ cells, q }) => ({
+    points: shape(cells, Math.sqrt(q), ground, seed).map(([x, z]) => [round(x / TILE_FT), round(z / TILE_FT)]),
+    width: Math.round(Math.sqrt(q) * 10) / 10,
+  }));
+  return {
+    rivers: rivers.filter((r) => r.points.length >= 2),
+    pools: pools.filter((p) => p.level - p.bottom >= MIN_POOL_DEPTH_FT).map((p) => ({ region: outline(p.cells), level: Math.round(p.level * 10) / 10 })),
+    ends,
+  };
 }
 
-// The path split at its breaks (null), where it crossed a pool.
-function stretches(path) {
-  const out = [[]];
-  for (const p of path) {
-    if (p) out[out.length - 1].push(p);
-    else out.push([]);
+// The rivers as runs of cells with the same flow, each { cells, q }. A run ends where the flow
+// changes (where another river joins), sharing its last cell with the run after it, or where it
+// reaches water, a pool, or a river already followed.
+function courses(starts, next, flow, key) {
+  const runs = [];
+  const done = new Set();
+  for (const start of starts) {
+    if (done.has(key(start))) continue;
+    let cells = [start];
+    let c = start;
+    for (;;) {
+      done.add(key(c));
+      const n = next.get(key(c));
+      if (!n) break;
+      cells.push(n);
+      if (done.has(key(n)) || !flow.has(key(n))) break;
+      if (flow.get(key(n)) !== flow.get(key(c))) {
+        runs.push({ cells, q: flow.get(key(c)) });
+        cells = [n];
+      }
+      c = n;
+    }
+    runs.push({ cells, q: flow.get(key(cells[0])) });
+  }
+  return runs;
+}
+
+// A run of cells as a river's course in ft: straightened where the lattice zig-zags, given bends
+// where the ground's flat, and rounded off. Its ends stay put, so joined rivers still meet.
+function shape(cells, width, ground, seed) {
+  const pts = simplify(cells.map(([i, j]) => [i * STEP_FT, j * STEP_FT]), STEP_FT * 0.75);
+  // The ground's fall at each cell, over a few cells either way.
+  const slope = cells.map((_, k) => {
+    const [a, b] = [Math.max(0, k - SLOPE_REACH), Math.min(cells.length - 1, k + SLOPE_REACH)];
+    return b > a ? Math.abs(ground(cells[a]) - ground(cells[b])) / ((b - a) * STEP_FT) : 0;
+  });
+  const bend = Math.round(Math.max(MEANDER.minBendFt, width * MEANDER.bendWidths) / MEANDER.spacingFt);
+  const line = relax(resample(pts, MEANDER.spacingFt), bend);
+  const total = line.length > 1 ? line[line.length - 1].along : 0;
+  const wavelength = clamp(width * MEANDER.wavelength, MEANDER.minWaveFt, MEANDER.maxWaveFt);
+  const reach = clamp(width * MEANDER.widths, MEANDER.minFt, MEANDER.maxFt);
+  const bendSeed = seed ^ hashString(cells[0].join(","));
+  const bent = line.map(({ p, along }, k) => {
+    if (k === 0 || k === line.length - 1) return p;
+    const [ax, az] = line[k - 1].p;
+    const [bx, bz] = line[k + 1].p;
+    const len = Math.hypot(bx - ax, bz - az) || 1;
+    const flat = 1 - smoothstep(MEANDER.flat, MEANDER.steep, slope[Math.round((along / total) * (cells.length - 1))]);
+    const taper = smoothstep(0, wavelength / 2, along) * smoothstep(0, wavelength / 2, total - along);
+    const off = fbm(along, 0, bendSeed, { wavelength, octaves: 1 }) * 2 * reach * flat * taper;
+    return [p[0] + (-(bz - az) / len) * off, p[1] + ((bx - ax) / len) * off];
+  });
+  return smooth(relax(bent.map((p, k) => ({ p, along: line[k].along })), bend).map(({ p }) => p), 2);
+}
+
+// Each point moved to the average of those up to `reach` points either side of it, fewer near the
+// ends, so the ends stay put.
+function relax(line, reach) {
+  return line.map(({ along }, k) => {
+    const r = Math.min(reach, k, line.length - 1 - k);
+    let [x, z] = [0, 0];
+    for (let m = k - r; m <= k + r; m++) [x, z] = [x + line[m].p[0], z + line[m].p[1]];
+    return { p: [x / (2 * r + 1), z / (2 * r + 1)], along };
+  });
+}
+
+// Douglas-Peucker: drops points within `tolerance` of the line between those kept.
+function simplify(pts, tolerance) {
+  if (pts.length <= 2) return pts;
+  const [a, b] = [pts[0], pts[pts.length - 1]];
+  let worst = 0;
+  let at = 0;
+  for (let k = 1; k < pts.length - 1; k++) {
+    const d = distToSegment(pts[k], a, b);
+    if (d > worst) [worst, at] = [d, k];
+  }
+  if (worst <= tolerance) return [a, b];
+  return [...simplify(pts.slice(0, at + 1), tolerance).slice(0, -1), ...simplify(pts.slice(at), tolerance)];
+}
+
+function distToSegment([x, z], [ax, az], [bx, bz]) {
+  const [dx, dz] = [bx - ax, bz - az];
+  const t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1), 0, 1);
+  return Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+}
+
+// Points about `spacing` apart along a polyline, each { p, along }.
+function resample(pts, spacing) {
+  const out = [{ p: pts[0], along: 0 }];
+  let along = 0;
+  for (let k = 1; k < pts.length; k++) {
+    const [a, b] = [pts[k - 1], pts[k]];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.max(1, Math.round(len / spacing));
+    for (let s = 1; s <= n; s++) out.push({ p: [a[0] + ((b[0] - a[0]) * s) / n, a[1] + ((b[1] - a[1]) * s) / n], along: along + (len * s) / n });
+    along += len;
   }
   return out;
 }
 
-// The lattice's zig-zags rounded off, keeping the ends.
-function smooth(points, passes = 2) {
+// A way across a shallow pool's cells, from its lowest point to its outlet.
+function wade(cells, from, to, key) {
+  const inside = new Set(cells.map(key));
+  inside.add(key(to));
+  const back = new Map([[key(from), null]]);
+  const queue = [from];
+  while (queue.length) {
+    const at = queue.shift();
+    if (key(at) === key(to)) break;
+    for (const [di, dj] of NEIGHBOURS) {
+      const n = [at[0] + di, at[1] + dj];
+      if (!inside.has(key(n)) || back.has(key(n))) continue;
+      back.set(key(n), at);
+      queue.push(n);
+    }
+  }
+  const way = [];
+  for (let at = to; at; at = back.get(key(at))) way.unshift(at);
+  return way;
+}
+
+// Corners cut off, `passes` times over, keeping the ends.
+function smooth(points, passes) {
   let pts = points;
   for (let n = 0; n < passes && pts.length > 2; n++) {
     const next = [pts[0]];
@@ -158,6 +312,12 @@ function smooth(points, passes = 2) {
   }
   return pts;
 }
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const smoothstep = (a, b, x) => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
 
 // The outline of a set of lattice cells (each a STEP_FT square round its point), as polygons of
 // rings in tile units: an outer ring, then any islands, each rounded off a little.
@@ -277,33 +437,33 @@ class Heap {
   }
 }
 
-// Runs simulateFlow in a worker (waterflowWorker.js), one source at a time. A source asked about
-// again before its turn only runs once, with the latest request. onResult(id, key, result) hears
-// each answer.
-export class FlowSimulator {
+// Runs simulateWater in a worker (waterflowWorker.js). Only the latest request matters: one runs
+// at a time, and requests made meanwhile collapse into one that runs after it. onResult(key,
+// result) hears each answer.
+export class WaterSimulator {
   constructor(onResult) {
     this.onResult = onResult;
     this.worker = null;
     this.busy = false;
-    this.queue = new Map(); // source id -> message
+    this.next = null;
   }
 
-  // message: { id, key, continent: { zones, pins }, seedKey, source, width, water: { rivers, pools } }
+  // message: { key, continent: { zones, pins }, seedKey, sources }
   request(message) {
-    this.queue.set(message.id, structuredClone(message));
+    this.next = structuredClone(message);
     if (!this.busy) this.send();
   }
 
   send() {
-    const [first] = this.queue.values();
-    if (!first) return;
-    this.queue.delete(first.id);
+    const message = this.next;
+    this.next = null;
+    if (!message) return;
     this.busy = true;
     if (!this.worker) {
       this.worker = new Worker(new URL("./waterflowWorker.js", import.meta.url), { type: "module" });
       this.worker.onmessage = ({ data }) => {
         this.busy = false;
-        this.onResult(data.id, data.key, data.result);
+        this.onResult(data.key, data.result);
         this.send();
       };
       this.worker.onerror = (e) => {
@@ -311,6 +471,6 @@ export class FlowSimulator {
         console.warn(`water flow failed: ${e.message}`);
       };
     }
-    this.worker.postMessage(first);
+    this.worker.postMessage(message);
   }
 }

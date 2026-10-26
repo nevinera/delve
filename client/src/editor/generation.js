@@ -8,7 +8,7 @@ export class TileGenerator {
   }
 
   // Calls onTile({ tx, tz, gz, rgba, cells }) as each tile finishes; resolves when all are done.
-  // continent: { zones, pins, strokes }, as generator.js prepareWorld takes it.
+  // continent: { zones, pins, watercourses }, as generator.js prepareWorld takes it.
   run(continent, seedKey, tiles, onTile) {
     this.cancel();
     while (this.workers.length < Math.min(this.size, tiles.length)) {

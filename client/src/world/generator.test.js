@@ -4,8 +4,8 @@ import { generateTile, prepareWorld as prepareContinent } from "./generator.js";
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
 
-// Zones written with their own pins and strokes, gathered into a continent's sketch.
-const prepareWorld = (zones, seedKey) => prepareContinent({ zones, pins: zones.flatMap((z) => z.pins), strokes: zones.flatMap((z) => z.strokes) }, seedKey);
+// Zones written with their own pins and rivers, gathered into a continent's sketch.
+const prepareWorld = (zones, seedKey) => prepareContinent({ zones, pins: zones.flatMap((z) => z.pins), watercourses: { rivers: zones.flatMap((z) => z.rivers ?? []), pools: [] } }, seedKey);
 const square = (x0, z0, x1, z1) => [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]];
 
 // A 6×4-tile zone at (10, -4) with a 100ft height pin and a river flowing west into the sea.
@@ -13,9 +13,7 @@ const zones = [
   {
     region: [square(10, -4, 16, 0)],
     pins: [{ id: "p1", kind: "height", at: [14, -2], height: 100 }],
-    strokes: [
-      { id: "s2", kind: "river", points: [[15.5, -3.5], [13, -3], [10.5, -3]], width: 40 },
-    ],
+    rivers: [{ points: [[15.5, -3.5], [13, -3], [10.5, -3]], width: 40 }],
   },
 ];
 
@@ -85,8 +83,8 @@ describe("generator", () => {
 
   it("floods a kept pool flat at its level, below the ground around it", () => {
     // A square pool over the middle of tile (12, -2), whose cells run 0-63 across it.
-    const pool = { id: "w1", source: "p9", region: [[[[12.25, -1.75], [12.75, -1.75], [12.75, -1.25], [12.25, -1.25]]]], level: 95 };
-    const tile = generateTile(prepareContinent({ zones, pins: zones[0].pins, strokes: [], pools: [pool] }, "test"), 12, -2);
+    const pool = { region: [[[[12.25, -1.75], [12.75, -1.75], [12.75, -1.25], [12.25, -1.25]]]], level: 95 };
+    const tile = generateTile(prepareContinent({ zones, pins: zones[0].pins, watercourses: { rivers: [], pools: [pool] } }, "test"), 12, -2);
     // The ground there is about 92ft; the rim just outside holds the water in.
     expect(cell(tile, 32, 32, "water")).toBe(95);
     expect(cell(tile, 32, 32, "height")).toBeLessThan(94);

@@ -1,13 +1,12 @@
 import { snapToCell } from "./region.js";
 import { TILE_FT } from "../world/constants.js";
 
-// The continent's sketch (zones.js loadSketch): pins ({ id, kind, at, ... }), strokes ({ id,
-// kind, points, width, ... }) and pools ({ id, source, region, level }) anywhere on its land, in
-// continent tile units with sizes in feet. Height pins set the ground height at a spot; biome pins
-// claim the land around them for a biome, adjusted by their tags; info pins carry a name, notes
-// and tags for people and LLMs and don't affect generation. Water source pins send water downhill
-// (waterflow.js), and the rivers and pools it makes are kept once confirmed, marked with their
-// source's id. Roads and hubs don't shape the ground yet. There are no coastlines: the sea is
+// The continent's sketch (zones.js loadSketch): pins ({ id, kind, at, ... }) and strokes ({ id,
+// kind, points, width, ... }) anywhere on its land, in continent tile units with sizes in feet.
+// Height pins set the ground height at a spot; biome pins claim the land around them for a biome,
+// adjusted by their tags; info pins carry a name, notes and tags for people and LLMs and don't
+// affect generation. Water source pins send water downhill, making the sketch's watercourses
+// (waterflow.js). Roads and hubs don't shape the ground yet. There are no coastlines: the sea is
 // wherever no zone is.
 
 export const PINS = {
@@ -18,7 +17,7 @@ export const PINS = {
   source: { color: "#3fb6ff", label: "water source" },
 };
 export const STROKES = {
-  river: { color: "#4a90d9", width: 30, label: "river" },
+  river: { color: "#4a90d9", width: 30, label: "river" }, // only drawn, from the watercourses
   road: { color: "#c8a26a", width: 16, label: "road" },
 };
 const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
@@ -34,7 +33,7 @@ const DEFAULT_SOURCE_WIDTH_FT = 12;
 const SHAPE_PINS = ["height", "biome"];
 
 export function nextId(sketch, prefix) {
-  const used = new Set([...sketch.pins, ...sketch.strokes, ...(sketch.pools ?? [])].map((f) => f.id));
+  const used = new Set([...sketch.pins, ...sketch.strokes].map((f) => f.id));
   let n = 1;
   while (used.has(`${prefix}${n}`)) n++;
   return `${prefix}${n}`;
@@ -70,13 +69,11 @@ export class Features {
     return this.selected?.id === feature.id;
   }
 
-  // Removes the selected feature, and a water source's rivers and pools with it.
   remove(sketch) {
     const feature = this.find(sketch);
     if (!feature) return;
     const list = this.selected.type === "pin" ? sketch.pins : sketch.strokes;
     list.splice(list.indexOf(feature), 1);
-    if (feature.kind === "source") dropWater(sketch, feature.id);
     this.select(null);
     this.editor.saveSketch();
   }
@@ -257,7 +254,7 @@ export class Features {
 
   // Draws the sketch's features of the given kinds, and its rivers and pools when `water` is set.
   draw(ctx, sketch, { kinds, water = false }) {
-    if (water) this.drawWater(ctx, sketch);
+    if (water) this.drawWater(ctx, sketch.watercourses);
     for (const stroke of sketch.strokes) {
       if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, this.isSelected(sketch, stroke));
     }
@@ -266,15 +263,11 @@ export class Features {
     }
   }
 
-  // Rivers and pools, as kept in the sketch or as a water flow proposes them ({ rivers, pools }
-  // with rivers as point lists). A proposal draws as a dashed outline over a faint fill.
-  drawWater(ctx, { strokes = [], pools = [], rivers }, proposed = false) {
-    const dpr = this.map.dpr;
-    const lines = rivers?.map((points) => ({ kind: "river", points, width: proposed.width })) ?? strokes.filter((s) => s.kind === "river");
-    ctx.fillStyle = proposed ? "rgba(140, 220, 255, 0.3)" : POOL_COLOR;
-    ctx.strokeStyle = proposed ? "#bdf" : POOL_COLOR;
-    ctx.lineWidth = (proposed ? 1.5 : 1) * dpr;
-    if (proposed) ctx.setLineDash([5 * dpr, 4 * dpr]);
+  // The watercourses' pools and rivers.
+  drawWater(ctx, { rivers, pools }) {
+    ctx.fillStyle = POOL_COLOR;
+    ctx.strokeStyle = POOL_COLOR;
+    ctx.lineWidth = this.map.dpr;
     for (const { region } of pools) {
       ctx.beginPath();
       for (const ring of region.flat()) {
@@ -284,23 +277,7 @@ export class Features {
       ctx.fill("evenodd");
       ctx.stroke();
     }
-    ctx.setLineDash([]);
-    for (const stroke of lines) {
-      if (!proposed) {
-        this.drawStroke(ctx, stroke, false);
-        continue;
-      }
-      const pts = stroke.points.map((p) => this.map.toScreen(p));
-      ctx.lineCap = "round";
-      ctx.strokeStyle = "rgba(140, 220, 255, 0.45)";
-      ctx.lineWidth = Math.max(2 * dpr, (stroke.width / TILE_FT) * this.map.view.scale);
-      polyline(ctx, pts);
-      ctx.strokeStyle = "#bdf";
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.setLineDash([5 * dpr, 4 * dpr]);
-      polyline(ctx, pts);
-      ctx.setLineDash([]);
-    }
+    for (const river of rivers) this.drawStroke(ctx, { kind: "river", ...river }, false);
   }
 
   drawInProgress(ctx) {
@@ -404,7 +381,7 @@ export class Features {
     if (!SHAPE_PINS.includes(feature.kind)) fields.push("tags");
     fields.push("notes");
     for (const key of fields) box.append(this.field(sketch, feature, key));
-    if (feature.kind === "source") box.append(...this.editor.sourceControls(feature));
+    if (feature.kind === "source") box.append(this.editor.sourceStatus(feature));
 
     const row = document.createElement("div");
     row.className = "editor-row";
@@ -459,12 +436,6 @@ function polyline(ctx, pts) {
   ctx.beginPath();
   pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
   ctx.stroke();
-}
-
-// Takes a water source's rivers and pools out of the sketch.
-export function dropWater(sketch, source) {
-  sketch.strokes = sketch.strokes.filter((s) => s.source !== source);
-  sketch.pools = sketch.pools.filter((p) => p.source !== source);
 }
 
 function button(text, onClick) {

@@ -14,14 +14,14 @@ import { tilesTouched } from "./region.js";
 
 const key = (tx, tz) => `${tx},${tz}`;
 
-// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, strokes,
-// pools } with zones as stored ({ region }) and the sketch's pins, strokes and pools.
+// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins,
+// watercourses } with zones as stored ({ region }) and the sketch's pins and watercourses.
 export function changedTiles(before, after) {
   const tiles = new Set();
   const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
   const regions = (c) => c.zones.map((z) => z.region).filter((r) => r.length);
   const pinsOf = (c, kind) => c.pins.filter((p) => p.kind === kind);
-  const rivers = (c) => c.strokes.filter((s) => s.kind === "river");
+  const rivers = (c) => c.watercourses?.rivers ?? [];
 
   const hasBiomes = [...before.pins, ...after.pins].some((p) => p.kind === "biome");
   const regionsMoved = changed(regions(before), regions(after));
@@ -37,18 +37,11 @@ export function changedTiles(before, after) {
     for (const [tx, tz] of tilesTouched(moved)) addAround(tiles, tx, tz, reach);
   }
 
-  for (const [old, now] of pairs(rivers(before), rivers(after))) {
-    if (!changed(old, now)) continue;
-    for (const stroke of [old, now]) {
-      if (stroke) addNearLine(tiles, stroke.points, riverReachFt(stroke.width ?? 30) / TILE_FT);
-    }
-  }
+  for (const river of unmatched(rivers(before), rivers(after))) addNearLine(tiles, river.points, riverReachFt(river.width) / TILE_FT);
 
   // A pool's rim reaches a little past its shore, well within the neighbours added below.
-  for (const [old, now] of pairs(before.pools ?? [], after.pools ?? [])) {
-    if (!changed(old, now)) continue;
-    for (const pool of [old, now]) if (pool) for (const [tx, tz] of tilesTouched(pool.region)) tiles.add(key(tx, tz));
-  }
+  const pools = (c) => c.watercourses?.pools ?? [];
+  for (const pool of unmatched(pools(before), pools(after))) for (const [tx, tz] of tilesTouched(pool.region)) tiles.add(key(tx, tz));
 
   for (const k of [...tiles]) {
     const [tx, tz] = k.split(",").map(Number);
@@ -57,10 +50,11 @@ export function changedTiles(before, after) {
   return tiles;
 }
 
-// Features matched by id: [before, after], with null for one that was added or removed.
-function pairs(before, after) {
-  const ids = new Set([...before, ...after].map((f) => f.id));
-  return [...ids].map((id) => [before.find((f) => f.id === id) ?? null, after.find((f) => f.id === id) ?? null]);
+// The things in only one of the two lists, compared whole.
+function unmatched(before, after) {
+  const text = (list) => new Set(list.map((f) => JSON.stringify(f)));
+  const [a, b] = [text(before), text(after)];
+  return [...before.filter((f) => !b.has(JSON.stringify(f))), ...after.filter((f) => !a.has(JSON.stringify(f)))];
 }
 
 // polygon-clipping repeats each ring's first corner at the end.

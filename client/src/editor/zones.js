@@ -1,14 +1,15 @@
 import { nextId } from "./features.js";
 
 // Zones live at places/continents/<continent>/zones/<key>.json, each a name and a region. The key
-// is fixed when the zone is made; the name can change. Everything drawn on the land, pins,
-// strokes and pools alike, lives in the continent's sketch at
-// places/continents/<continent>/sketch.json, since the land is generated as one piece and
-// features cross zone edges. Rivers and pools come from water source pins (waterflow.js); sketches
-// from before that (format 1) hold rivers drawn by hand, which the editor drops.
+// is fixed when the zone is made; the name can change. Everything drawn on the land, pins and
+// strokes alike, lives in the continent's sketch at places/continents/<continent>/sketch.json,
+// since the land is generated as one piece and features cross zone edges. The sketch also keeps
+// its watercourses, the rivers and pools its water sources make (waterflow.js), for the
+// generator. Sketches from before that hold rivers drawn by hand (format 1) or confirmed one
+// source at a time (format 2), which the editor drops.
 
 export const ZONE_VERSION = 3;
-export const SKETCH_VERSION = 2;
+export const SKETCH_VERSION = 3;
 const SKETCH_ZONES = 2; // the zone format that held its own pins and strokes
 const ZONE_PATH = /^places\/continents\/([\w-]+)\/zones\/([\w-]+)\.json$/;
 
@@ -63,20 +64,25 @@ export function sketchPath(continent) {
   return `places/continents/${continent}/sketch.json`;
 }
 
-// The continent's pins, strokes and pools: { version, pins, strokes, pools }.
+// The continent's pins, strokes and watercourses: { version, pins, strokes, watercourses }, with
+// watercourses as { key, rivers, pools } (waterflow.js simulateWater), key saying what they were
+// worked out from.
 export function loadSketch(world, continent) {
   const sketch = world.readJson(sketchPath(continent)) ?? { version: SKETCH_VERSION, pins: [], strokes: [] };
-  sketch.pools ??= [];
+  sketch.watercourses ??= { key: null, rivers: [], pools: [] };
   return sketch;
 }
 
-// Drops the rivers drawn by hand from a sketch from before water sources. Returns how many.
-export function dropDrawnRivers(sketch) {
+// Drops the rivers and pools kept in the strokes of a sketch from before watercourses. Returns how
+// many rivers were drawn by hand.
+export function dropOldWater(sketch) {
   if (sketch.version >= SKETCH_VERSION) return 0;
-  const drawn = sketch.strokes.filter((s) => s.kind === "river");
+  const drawn = sketch.version < 2 ? sketch.strokes.filter((s) => s.kind === "river").length : 0;
   sketch.strokes = sketch.strokes.filter((s) => s.kind !== "river");
+  delete sketch.pools;
+  for (const pin of sketch.pins) delete pin.confirmed;
   sketch.version = SKETCH_VERSION;
-  return drawn.length;
+  return drawn;
 }
 
 export function saveSketch(world, continent, sketch) {
