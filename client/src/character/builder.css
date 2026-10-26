@@ -70,6 +70,22 @@
   margin-top: 14px;
 }
 
+.builder-clips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.builder-clips button {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.builder-clips button.playing {
+  background: #3a5a7a;
+  border-color: #7aa;
+}
+
 .builder button {
   font: inherit;
   padding: 4px 10px;

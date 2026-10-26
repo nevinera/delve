@@ -1,13 +1,24 @@
 import "./builder.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { characterClips, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
 import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, WEAPONS, resolveRecipe, saveLook, savedLook } from "./recipe.js";
 
 // The character builder page: one character on a patch of ground, with a control for each setting
-// of its look, and the look as recipe JSON to copy. Walk mode uses the look made here. "Test pose" swings the limbs, to check every
-// part follows its bones.
+// of its look, and the look as recipe JSON to copy. Walk mode uses the look made here. A button
+// for each animation clip plays it: loops until another is picked, one-shots then back to idle.
+
+// Clips by what they're for, shown in this order; the rest go under "other".
+const CLIP_GROUPS = [
+  ["moving", /^(Idle_Loop|Walk|Jog|Sprint|Crouch|Jump|NinjaJump|Roll|Slide|Swim|Sitting_(Enter|Idle_Loop|Exit))/],
+  ["combat", /^(Sword|Punch|Melee|Shield|Idle_Shield|Spell|OverhandThrow|Hit|Death|LayToIdle)/],
+  ["zombie", /^Zombie/],
+  ["other", /./],
+];
+const IDLE = "Idle_Loop";
+const FADE_S = 0.2;
 
 const SLIDERS = [
   ["height", 4.5, 8, 0.05],
@@ -41,32 +52,65 @@ controls.target.set(0, 3, 0);
 controls.update();
 
 let character = null;
+let baked = null;
+let mixer = null;
+let clips = new Map();
+let playing = null;
 function rebuild() {
   if (character) {
     scene.remove(character);
     disposeCharacter(character);
+    mixer.stopAllAction();
   }
   character = characterMesh(look);
   scene.add(character);
+  mixer = new THREE.AnimationMixer(character);
+  mixer.addEventListener("finished", () => play(IDLE));
+  clips = baked ? characterClips(character, baked) : new Map();
+  if (playing) play(playing, 0);
   $("recipe").textContent = JSON.stringify(look, null, 2);
   saveLook(look);
 }
 
-// Swings the arms and legs and turns the head, or puts them back.
-function pose(t) {
-  const bones = Object.fromEntries(character.skeleton.bones.map((b) => [b.name, b]));
-  const on = $("testPose").checked;
-  const swing = on ? Math.sin(t * 3) : 0;
-  bones.upperarm_l.rotation.x = 0.6 * swing;
-  bones.upperarm_r.rotation.x = -0.6 * swing;
-  bones.lowerarm_l.rotation.x = on ? -0.5 - 0.3 * swing : 0;
-  bones.lowerarm_r.rotation.x = on ? -0.5 + 0.3 * swing : 0;
-  bones.thigh_l.rotation.x = -0.5 * swing;
-  bones.thigh_r.rotation.x = 0.5 * swing;
-  bones.calf_l.rotation.x = on ? 0.4 + 0.3 * swing : 0;
-  bones.calf_r.rotation.x = on ? 0.4 - 0.3 * swing : 0;
-  bones.head.rotation.y = 0.4 * swing;
-  bones.spine_02.rotation.y = 0.1 * swing;
+// Plays a clip, fading from the one playing; null stands still in the bind pose.
+function play(name, fade = FADE_S) {
+  const previous = playing && clips.get(playing) && mixer.existingAction(clips.get(playing));
+  playing = name;
+  for (const button of document.querySelectorAll("#animations button")) button.classList.toggle("playing", button.dataset.clip === (name ?? ""));
+  if (!name || !clips.has(name)) {
+    mixer.stopAllAction();
+    character.skeleton.pose();
+    return;
+  }
+  const action = mixer.clipAction(clips.get(name));
+  const loops = /Loop|Idle$/.test(name);
+  action.reset().setLoop(loops ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+  action.clampWhenFinished = true;
+  action.play();
+  if (previous && previous !== action && fade) previous.crossFadeTo(action, fade, false);
+  else if (previous && previous !== action) previous.stop();
+}
+
+function buildAnimations() {
+  const panel = $("animations");
+  const names = Object.keys(baked.clips);
+  const label = (name) => name.replace(/_Loop$/, "").replaceAll("_", " ").toLowerCase();
+  const button = (text, clip) => {
+    const el = Object.assign(document.createElement("button"), { type: "button", textContent: text });
+    el.dataset.clip = clip ?? "";
+    el.addEventListener("click", () => play(clip));
+    return el;
+  };
+  const used = new Set();
+  for (const [group, pattern] of CLIP_GROUPS) {
+    const mine = names.filter((n) => !used.has(n) && pattern.test(n));
+    mine.forEach((n) => used.add(n));
+    panel.append(Object.assign(document.createElement("h2"), { textContent: `animations: ${group}` }));
+    const row = Object.assign(document.createElement("div"), { className: "builder-clips" });
+    if (group === "moving") row.append(button("bind pose", null));
+    row.append(...mine.map((n) => button(label(n), n)));
+    panel.append(row);
+  }
 }
 
 function buildControls() {
@@ -187,7 +231,14 @@ new ResizeObserver(resize).observe(canvas);
 
 buildControls();
 rebuild();
-renderer.setAnimationLoop((ms) => {
-  pose(ms / 1000);
+loadAnimations().then((data) => {
+  baked = data;
+  clips = characterClips(character, baked);
+  buildAnimations();
+  play(IDLE, 0);
+});
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  mixer.update(clock.getDelta());
   renderer.render(scene, camera);
 });

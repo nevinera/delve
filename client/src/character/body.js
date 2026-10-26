@@ -29,7 +29,7 @@ const JOINTS = [
   ["ball_l", "foot_l", [0.36, 0.08, 0.48]],
 ];
 // Where bones with no child end, for their direction.
-const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.05], ball_l: [0.36, 0.06, 0.75] };
+export const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.05], ball_l: [0.36, 0.06, 0.75] };
 const ARM = ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"];
 const LEG = ["thigh_l", "calf_l", "foot_l", "ball_l"];
 

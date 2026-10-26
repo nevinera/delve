@@ -57,6 +57,7 @@ export function characterMesh(look) {
   const root = bones.get("root");
   mesh.add(root);
   mesh.bind(new THREE.Skeleton([...bones.values()]));
+  mesh.userData.scale = look.height / 6;
   holdWeapon(mesh, bones, joints, look);
   return mesh;
 }
